@@ -40,7 +40,7 @@ impl<'t> ApiServerInMemoryStorageTransactionalRo<'t> {
 }
 
 #[async_trait::async_trait]
-impl<'t> ApiServerTransactionRo for ApiServerInMemoryStorageTransactionalRo<'t> {
+impl ApiServerTransactionRo for ApiServerInMemoryStorageTransactionalRo<'_> {
     async fn close(self) -> Result<(), crate::storage::storage_api::ApiServerStorageError> {
         Ok(())
     }
@@ -63,7 +63,7 @@ impl<'t> ApiServerInMemoryStorageTransactionalRw<'t> {
 }
 
 #[async_trait::async_trait]
-impl<'t> ApiServerTransactionRw for ApiServerInMemoryStorageTransactionalRw<'t> {
+impl ApiServerTransactionRw for ApiServerInMemoryStorageTransactionalRw<'_> {
     async fn commit(self) -> Result<(), crate::storage::storage_api::ApiServerStorageError> {
         Ok(())
     }

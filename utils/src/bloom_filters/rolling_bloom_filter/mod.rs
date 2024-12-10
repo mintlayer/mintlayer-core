@@ -41,7 +41,6 @@ const SUBFILTER_COUNT: usize = 3;
 /// 4.023           0.0001
 /// 4.920           0.00001
 /// 5.820           0.000001
-
 pub struct RollingBloomFilter<T> {
     /// The list of subfilters that store items (newest first, oldest last)
     subfilters: CyclicArray<BloomFilter<T>, SUBFILTER_COUNT>,

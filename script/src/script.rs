@@ -719,7 +719,7 @@ impl<'de> serde::Deserialize<'de> for Script {
         } else {
             struct BytesVisitor;
 
-            impl<'de> serde::de::Visitor<'de> for BytesVisitor {
+            impl serde::de::Visitor<'_> for BytesVisitor {
                 type Value = Script;
 
                 fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {

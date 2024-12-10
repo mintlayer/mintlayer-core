@@ -130,7 +130,7 @@ pub struct TransactionRo<'tx, B: Backend, Sch> {
     _schema: core::marker::PhantomData<Sch>,
 }
 
-impl<'tx, B: Backend, Sch: Schema> TransactionRo<'tx, B, Sch> {
+impl<B: Backend, Sch: Schema> TransactionRo<'_, B, Sch> {
     /// Close the read-only transaction early
     pub fn close(self) {
         // Let backend tx destructor do the heavy lifting
@@ -148,7 +148,7 @@ pub struct TransactionRw<'tx, B: Backend, Sch> {
     _schema: core::marker::PhantomData<Sch>,
 }
 
-impl<'tx, B: Backend, Sch: Schema> TransactionRw<'tx, B, Sch> {
+impl<B: Backend, Sch: Schema> TransactionRw<'_, B, Sch> {
     /// Get key-value map mutably (key-to-single-value only for now)
     pub fn get_mut<DbMap: schema::DbMap, I>(&mut self) -> MapMut<Self, DbMap>
     where

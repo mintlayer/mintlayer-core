@@ -52,7 +52,7 @@ impl<'tx, T: ReadOps> ReadOps for TxRo<'tx, T> {
     }
 }
 
-impl<'tx, T: ReadOps> backend::TxRo for TxRo<'tx, T> {}
+impl<T: ReadOps> backend::TxRo for TxRo<'_, T> {}
 
 // Tracker for database changes
 type DeltaMap = BTreeMap<Data, Option<Data>>;
@@ -63,7 +63,7 @@ pub struct TxRw<'tx, T> {
     deltas: DbMapsData<DeltaMap>,
 }
 
-impl<'tx, T> TxRw<'tx, T> {
+impl<T> TxRw<'_, T> {
     fn update(&mut self, map_id: DbMapId, key: Data, val: Option<Data>) -> crate::Result<()> {
         self.deltas[map_id].insert(key, val);
         Ok(())
@@ -120,7 +120,7 @@ fn merge_iterators<'a>(
     )
 }
 
-impl<'tx, T> WriteOps for TxRw<'tx, T> {
+impl<T> WriteOps for TxRw<'_, T> {
     fn put(&mut self, map_id: DbMapId, key: Data, val: Data) -> crate::Result<()> {
         self.update(map_id, key, Some(val))
     }
@@ -130,7 +130,7 @@ impl<'tx, T> WriteOps for TxRw<'tx, T> {
     }
 }
 
-impl<'tx, T: ReadOps + WriteOps> backend::TxRw for TxRw<'tx, T> {
+impl<T: ReadOps + WriteOps> backend::TxRw for TxRw<'_, T> {
     fn commit(mut self) -> crate::Result<()> {
         for (idx, kvmap) in self.deltas.into_iter_with_id() {
             for (key, val) in kvmap {

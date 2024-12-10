@@ -39,8 +39,8 @@ impl<'a, T, S, Getter, Setter, Deleter> BorrowedStorageValue<'a, T, S, Getter, S
     }
 }
 
-impl<'a, T: StorageTag, S: PoSAccountingStorageRead<T>, Getter, Setter, Deleter>
-    BorrowedStorageValue<'a, T, S, Getter, Setter, Deleter>
+impl<T: StorageTag, S: PoSAccountingStorageRead<T>, Getter, Setter, Deleter>
+    BorrowedStorageValue<'_, T, S, Getter, Setter, Deleter>
 {
     pub fn get<K: Ord + Copy, V: Clone>(&self, id: K) -> Result<Option<V>, crate::Error>
     where
@@ -50,8 +50,8 @@ impl<'a, T: StorageTag, S: PoSAccountingStorageRead<T>, Getter, Setter, Deleter>
     }
 }
 
-impl<'a, T: StorageTag, S: PoSAccountingStorageWrite<T>, Getter, Setter, Deleter>
-    BorrowedStorageValue<'a, T, S, Getter, Setter, Deleter>
+impl<T: StorageTag, S: PoSAccountingStorageWrite<T>, Getter, Setter, Deleter>
+    BorrowedStorageValue<'_, T, S, Getter, Setter, Deleter>
 {
     pub fn set<K: Ord + Copy, V: Clone>(&mut self, id: K, value: V) -> Result<(), crate::Error>
     where

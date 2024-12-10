@@ -89,7 +89,7 @@ impl serde::Serialize for H256 {
 impl<'de> serde::Deserialize<'de> for H256 {
     fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
         struct HashVisitor;
-        impl<'de> serde::de::Visitor<'de> for HashVisitor {
+        impl serde::de::Visitor<'_> for HashVisitor {
             type Value = H256;
             fn expecting(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 fmt.write_str("a hex-encoded hash")

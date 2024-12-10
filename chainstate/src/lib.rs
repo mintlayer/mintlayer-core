@@ -59,7 +59,7 @@ pub enum ChainstateEvent {
 /// shortened form.
 pub struct ChainstateEventTracingWrapper<'a>(pub &'a ChainstateEvent);
 
-impl<'a> std::fmt::Display for ChainstateEventTracingWrapper<'a> {
+impl std::fmt::Display for ChainstateEventTracingWrapper<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.0 {
             ChainstateEvent::NewTip(id, height) => {

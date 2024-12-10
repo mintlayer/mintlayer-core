@@ -69,7 +69,7 @@ impl<'a> BlockRewardTransactable<'a> {
     }
 }
 
-impl<'a> Signable for BlockRewardTransactable<'a> {
+impl Signable for BlockRewardTransactable<'_> {
     fn inputs(&self) -> Option<&[TxInput]> {
         self.inputs
     }
@@ -87,7 +87,7 @@ impl<'a> Signable for BlockRewardTransactable<'a> {
     }
 }
 
-impl<'a> Transactable for BlockRewardTransactable<'a> {
+impl Transactable for BlockRewardTransactable<'_> {
     fn signatures(&self) -> Vec<Option<InputWitness>> {
         self.witness.map_or(vec![], |w| w.iter().map(|s| Some(s.clone())).collect())
     }

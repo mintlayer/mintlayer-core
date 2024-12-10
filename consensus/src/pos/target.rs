@@ -333,7 +333,7 @@ mod tests {
         }
     }
 
-    impl<'a> BlockIndexHandle for TestBlockIndexHandle<'a> {
+    impl BlockIndexHandle for TestBlockIndexHandle<'_> {
         fn get_block_index(
             &self,
             block_id: &Id<Block>,

@@ -804,7 +804,7 @@ impl<'a> RandomTxMaker<'a> {
                 }
                 TxOutput::CreateStakePool(pool_id, _)
                 | TxOutput::ProduceBlockFromStake(_, pool_id) => {
-                    if !self.staking_pool.is_some_and(|id| id == *pool_id) && rng.gen_bool(0.1) {
+                    if self.staking_pool.is_none_or(|id| id != *pool_id) && rng.gen_bool(0.1) {
                         let staker_balance = pos_accounting_cache
                             .get_pool_data(*pool_id)
                             .unwrap()

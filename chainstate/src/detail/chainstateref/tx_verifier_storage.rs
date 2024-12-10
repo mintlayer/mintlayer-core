@@ -49,8 +49,8 @@ use tx_verifier::transaction_verifier::{CachedBlockUndo, CachedUtxosBlockUndo, T
 use utils::log_error;
 use utxo::{ConsumedUtxoCache, FlushableUtxoView, UtxosDB, UtxosStorageRead};
 
-impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> TransactionVerifierStorageRef
-    for ChainstateRef<'a, S, V>
+impl<S: BlockchainStorageRead, V: TransactionVerificationStrategy> TransactionVerifierStorageRef
+    for ChainstateRef<'_, S, V>
 {
     type Error = TransactionVerifierStorageError;
 
@@ -178,8 +178,8 @@ pub fn gen_block_index_getter<S: BlockchainStorageRead>(
     }
 }
 
-impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> UtxosStorageRead
-    for ChainstateRef<'a, S, V>
+impl<S: BlockchainStorageRead, V: TransactionVerificationStrategy> UtxosStorageRead
+    for ChainstateRef<'_, S, V>
 {
     type Error = storage_result::Error;
 
@@ -197,8 +197,8 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> UtxosStor
     }
 }
 
-impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> FlushableUtxoView
-    for ChainstateRef<'a, S, V>
+impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> FlushableUtxoView
+    for ChainstateRef<'_, S, V>
 {
     type Error = utxo::Error;
 
@@ -209,8 +209,8 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Flushabl
     }
 }
 
-impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy>
-    TransactionVerifierStorageMut for ChainstateRef<'a, S, V>
+impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> TransactionVerifierStorageMut
+    for ChainstateRef<'_, S, V>
 {
     #[log_error]
     fn set_token_aux_data(
@@ -449,8 +449,8 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy>
     }
 }
 
-impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy>
-    PoSAccountingStorageRead<TipStorageTag> for ChainstateRef<'a, S, V>
+impl<S: BlockchainStorageRead, V: TransactionVerificationStrategy>
+    PoSAccountingStorageRead<TipStorageTag> for ChainstateRef<'_, S, V>
 {
     type Error = storage_result::Error;
 
@@ -510,8 +510,8 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy>
     }
 }
 
-impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> FlushablePoSAccountingView
-    for ChainstateRef<'a, S, V>
+impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> FlushablePoSAccountingView
+    for ChainstateRef<'_, S, V>
 {
     type Error = pos_accounting::Error;
 
@@ -525,8 +525,8 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Flushabl
     }
 }
 
-impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> TokensAccountingStorageRead
-    for ChainstateRef<'a, S, V>
+impl<S: BlockchainStorageRead, V: TransactionVerificationStrategy> TokensAccountingStorageRead
+    for ChainstateRef<'_, S, V>
 {
     type Error = storage_result::Error;
 
@@ -547,8 +547,8 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> TokensAcc
     }
 }
 
-impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy>
-    FlushableTokensAccountingView for ChainstateRef<'a, S, V>
+impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> FlushableTokensAccountingView
+    for ChainstateRef<'_, S, V>
 {
     type Error = tokens_accounting::Error;
 
@@ -562,8 +562,8 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy>
     }
 }
 
-impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> OrdersAccountingStorageRead
-    for ChainstateRef<'a, S, V>
+impl<S: BlockchainStorageRead, V: TransactionVerificationStrategy> OrdersAccountingStorageRead
+    for ChainstateRef<'_, S, V>
 {
     type Error = storage_result::Error;
 
@@ -583,8 +583,8 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> OrdersAcc
     }
 }
 
-impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy>
-    FlushableOrdersAccountingView for ChainstateRef<'a, S, V>
+impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> FlushableOrdersAccountingView
+    for ChainstateRef<'_, S, V>
 {
     type Error = orders_accounting::Error;
 

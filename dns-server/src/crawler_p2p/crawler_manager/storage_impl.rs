@@ -54,7 +54,7 @@ pub type DnsServerStorageImpl<B> = StorageImpl<B, Schema>;
 
 impl<B: storage::Backend + 'static> DnsServerStorage for DnsServerStorageImpl<B> {}
 
-impl<'st, B: storage::Backend> DnsServerStorageWrite for DnsServerStoreTxRw<'st, B> {
+impl<B: storage::Backend> DnsServerStorageWrite for DnsServerStoreTxRw<'_, B> {
     fn set_version(&mut self, version: StorageVersion) -> crate::Result<()> {
         Ok(self.storage().get_mut::<DBValue, _>().put(VALUE_ID_VERSION, version.encode())?)
     }
@@ -79,7 +79,7 @@ impl<'st, B: storage::Backend> DnsServerStorageWrite for DnsServerStoreTxRw<'st,
     }
 }
 
-impl<'st, B: storage::Backend> DnsServerStorageRead for DnsServerStoreTxRo<'st, B> {
+impl<B: storage::Backend> DnsServerStorageRead for DnsServerStoreTxRo<'_, B> {
     fn get_version(&self) -> crate::Result<Option<StorageVersion>> {
         let map = self.storage().get::<DBValue, _>();
         let vec_opt = map.get(VALUE_ID_VERSION)?.as_ref().map(Encoded::decode);

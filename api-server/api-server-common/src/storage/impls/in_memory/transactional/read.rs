@@ -34,7 +34,7 @@ use crate::storage::storage_api::{
 use super::ApiServerInMemoryStorageTransactionalRo;
 
 #[async_trait::async_trait]
-impl<'t> ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'t> {
+impl ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'_> {
     async fn is_initialized(&self) -> Result<bool, ApiServerStorageError> {
         self.transaction.is_initialized()
     }

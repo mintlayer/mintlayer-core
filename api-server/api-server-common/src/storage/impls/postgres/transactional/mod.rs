@@ -48,7 +48,7 @@ pub struct ApiServerPostgresTransactionalRo<'a> {
     _marker: std::marker::PhantomData<&'a ()>,
 }
 
-impl<'a> ApiServerPostgresTransactionalRo<'a> {
+impl ApiServerPostgresTransactionalRo<'_> {
     pub(super) async fn from_connection(
         connection: PooledConnection<'static, PostgresConnectionManager<NoTls>>,
         db_tx_sender: tokio::sync::mpsc::UnboundedSender<
@@ -160,7 +160,7 @@ pub struct ApiServerPostgresTransactionalRw<'a> {
     _marker: std::marker::PhantomData<&'a ()>,
 }
 
-impl<'a> Drop for ApiServerPostgresTransactionalRw<'a> {
+impl Drop for ApiServerPostgresTransactionalRw<'_> {
     fn drop(&mut self) {
         if !self.finished {
             self.db_tx_sender
@@ -174,7 +174,7 @@ impl<'a> Drop for ApiServerPostgresTransactionalRw<'a> {
     }
 }
 
-impl<'a> ApiServerPostgresTransactionalRw<'a> {
+impl ApiServerPostgresTransactionalRw<'_> {
     pub(super) async fn from_connection(
         connection: PooledConnection<'static, PostgresConnectionManager<NoTls>>,
         db_tx_sender: tokio::sync::mpsc::UnboundedSender<
@@ -202,7 +202,7 @@ impl<'a> ApiServerPostgresTransactionalRw<'a> {
 }
 
 #[async_trait::async_trait]
-impl<'a> ApiServerTransactionRw for ApiServerPostgresTransactionalRw<'a> {
+impl ApiServerTransactionRw for ApiServerPostgresTransactionalRw<'_> {
     async fn commit(mut self) -> Result<(), crate::storage::storage_api::ApiServerStorageError> {
         self.connection
             .as_ref()
@@ -227,13 +227,13 @@ impl<'a> ApiServerTransactionRw for ApiServerPostgresTransactionalRw<'a> {
 }
 
 #[async_trait::async_trait]
-impl<'a> ApiServerTransactionRo for ApiServerPostgresTransactionalRo<'a> {
+impl ApiServerTransactionRo for ApiServerPostgresTransactionalRo<'_> {
     async fn close(self) -> Result<(), ApiServerStorageError> {
         Ok(())
     }
 }
 
-impl<'a> Drop for ApiServerPostgresTransactionalRo<'a> {
+impl Drop for ApiServerPostgresTransactionalRo<'_> {
     fn drop(&mut self) {
         if !self.finished {
             self.db_tx_sender

@@ -33,7 +33,7 @@ impl<T> DisplayableOption<T> for Option<T> {
     }
 }
 
-impl<'a, T> Display for DisplayableOptionWrapper<'a, T>
+impl<T> Display for DisplayableOptionWrapper<'_, T>
 where
     T: Display,
 {

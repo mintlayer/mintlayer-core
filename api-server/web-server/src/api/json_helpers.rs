@@ -38,7 +38,7 @@ pub enum TokenDecimals<'a> {
     Single(Option<u8>),
 }
 
-impl<'a> TokenDecimals<'a> {
+impl TokenDecimals<'_> {
     fn get(&self, token_id: &TokenId) -> u8 {
         match self {
             Self::Single(decimals) => decimals.expect("must exist"),

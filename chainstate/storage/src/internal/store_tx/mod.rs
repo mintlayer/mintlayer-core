@@ -67,7 +67,7 @@ pub struct StoreTxRw<'st, B: storage::Backend> {
     db_tx: crate::Result<storage::TransactionRw<'st, B, Schema>>,
 }
 
-impl<'st, B: storage::Backend> StoreTxRo<'st, B> {
+impl<B: storage::Backend> StoreTxRo<'_, B> {
     // Read a value from the database and decode it
     fn read<DbMap, I, K>(&self, key: K) -> crate::Result<Option<DbMap::Value>>
     where
@@ -208,13 +208,13 @@ impl<'st, B: storage::Backend> StoreTxRw<'st, B> {
     }
 }
 
-impl<'st, B: storage::Backend> crate::TransactionRo for StoreTxRo<'st, B> {
+impl<B: storage::Backend> crate::TransactionRo for StoreTxRo<'_, B> {
     fn close(self) {
         self.0.close()
     }
 }
 
-impl<'st, B: storage::Backend> crate::TransactionRw for StoreTxRw<'st, B> {
+impl<B: storage::Backend> crate::TransactionRw for StoreTxRw<'_, B> {
     fn commit(self) -> crate::Result<()> {
         Ok(self.db_tx?.commit()?)
     }

@@ -32,7 +32,7 @@ pub struct SliceRange<'a, T> {
     pub end: std::ops::Bound<&'a [T]>,
 }
 
-impl<'a, T> std::ops::RangeBounds<[T]> for SliceRange<'a, T> {
+impl<T> std::ops::RangeBounds<[T]> for SliceRange<'_, T> {
     fn start_bound(&self) -> std::ops::Bound<&[T]> {
         self.start
     }

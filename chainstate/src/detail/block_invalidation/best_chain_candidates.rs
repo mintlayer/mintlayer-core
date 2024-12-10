@@ -214,7 +214,7 @@ pub trait GenBlockInfo: Clone {
     fn height(&self) -> BlockHeight;
 }
 
-impl<'a, S, V> ChainstateAccessor for ChainstateRef<'a, S, V>
+impl<S, V> ChainstateAccessor for ChainstateRef<'_, S, V>
 where
     S: BlockchainStorageRead,
     V: TransactionVerificationStrategy,

@@ -38,7 +38,7 @@ use crate::storage::{
 use super::{ApiServerPostgresTransactionalRw, CONN_ERR};
 
 #[async_trait::async_trait]
-impl<'a> ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'a> {
+impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'_> {
     async fn reinitialize_storage(
         &mut self,
         chain_config: &ChainConfig,
@@ -349,7 +349,7 @@ impl<'a> ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'a> {
 }
 
 #[async_trait::async_trait]
-impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRw<'a> {
+impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
     async fn is_initialized(&self) -> Result<bool, ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.is_initialized().await?;

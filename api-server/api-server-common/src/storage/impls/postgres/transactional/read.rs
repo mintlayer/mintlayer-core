@@ -38,7 +38,7 @@ use pos_accounting::PoolData;
 use super::{ApiServerPostgresTransactionalRo, CONN_ERR};
 
 #[async_trait::async_trait]
-impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRo<'a> {
+impl ApiServerStorageRead for ApiServerPostgresTransactionalRo<'_> {
     async fn is_initialized(&self) -> Result<bool, ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.is_initialized().await?;

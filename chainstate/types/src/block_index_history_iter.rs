@@ -39,9 +39,9 @@ impl<'a, H: BlockIndexHandle> BlockIndexHistoryIterator<'a, H> {
     }
 }
 
-impl<'a, H: BlockIndexHandle> FusedIterator for BlockIndexHistoryIterator<'a, H> {}
+impl<H: BlockIndexHandle> FusedIterator for BlockIndexHistoryIterator<'_, H> {}
 
-impl<'a, H: BlockIndexHandle> Iterator for BlockIndexHistoryIterator<'a, H> {
+impl<H: BlockIndexHandle> Iterator for BlockIndexHistoryIterator<'_, H> {
     type Item = GenBlockIndex;
 
     fn next(&mut self) -> Option<Self::Item> {

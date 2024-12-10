@@ -237,7 +237,7 @@ impl<'a, T: WalletStorageReadUnlocked> SoftwareSigner<'a, T> {
     }
 }
 
-impl<'a, T: WalletStorageReadUnlocked> Signer for SoftwareSigner<'a, T> {
+impl<T: WalletStorageReadUnlocked> Signer for SoftwareSigner<'_, T> {
     fn sign_tx(
         &self,
         ptx: PartiallySignedTransaction,

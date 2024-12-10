@@ -47,7 +47,7 @@ impl<'a, S: BlockchainStorageRead> TestBlockIndexHandle<'a, S> {
     }
 }
 
-impl<'a, S: BlockchainStorageRead> BlockIndexHandle for TestBlockIndexHandle<'a, S> {
+impl<S: BlockchainStorageRead> BlockIndexHandle for TestBlockIndexHandle<'_, S> {
     fn get_block_index(
         &self,
         block_id: &Id<Block>,

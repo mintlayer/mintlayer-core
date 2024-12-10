@@ -47,7 +47,7 @@ impl<'st, B: storage::Backend, Sch: Schema> StorageTxRo<'st, B, Sch> {
     }
 }
 
-impl<'st, B: storage::Backend, Sch: Schema> TransactionRo for StorageTxRo<'st, B, Sch> {
+impl<B: storage::Backend, Sch: Schema> TransactionRo for StorageTxRo<'_, B, Sch> {
     fn close(self) {
         self.0.close()
     }
@@ -61,7 +61,7 @@ impl<'st, B: storage::Backend, Sch: Schema> StorageTxRw<'st, B, Sch> {
     }
 }
 
-impl<'st, B: storage::Backend, Sch: Schema> TransactionRw for StorageTxRw<'st, B, Sch> {
+impl<B: storage::Backend, Sch: Schema> TransactionRw for StorageTxRw<'_, B, Sch> {
     fn abort(self) {
         self.0.abort()
     }
