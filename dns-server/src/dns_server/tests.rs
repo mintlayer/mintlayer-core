@@ -19,8 +19,8 @@ use std::{
     sync::Arc,
 };
 
-use trust_dns_client::rr::{RData, RecordType};
-use trust_dns_server::{
+use hickory_client::rr::{RData, RecordType};
+use hickory_server::{
     authority::{Authority, ZoneType},
     store::in_memory::InMemoryAuthority,
 };

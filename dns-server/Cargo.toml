@@ -30,8 +30,8 @@ itertools.workspace = true
 parity-scale-codec.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, default-features = false }
-trust-dns-client.workspace = true
-trust-dns-server.workspace = true
+hickory-client.workspace = true
+hickory-server.workspace = true
 
 [dev-dependencies]
 networking = { path = "../networking" }

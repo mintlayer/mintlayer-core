@@ -360,13 +360,13 @@ pub enum BlockInvalidatorError {
 
 #[derive(Debug, Display, PartialEq, Eq, Clone)]
 pub enum DbCommittingContext {
-    #[display(fmt = "committing block {}", _0)]
+    #[display("committing block {}", _0)]
     Block(Id<Block>),
-    #[display(fmt = "committing block status for block {}", _0)]
+    #[display("committing block status for block {}", _0)]
     InvalidatedBlockTreeStatuses(Id<Block>),
-    #[display(fmt = "committing cleared blocks statuses (root block: {})", _0)]
+    #[display("committing cleared blocks statuses (root block: {})", _0)]
     ClearedBlockTreeStatuses(Id<Block>),
-    #[display(fmt = "committing block tree disconnection (root block: {})", _0)]
+    #[display("committing block tree disconnection (root block: {})", _0)]
     BlockTreeDisconnection(Id<Block>),
 }
 
