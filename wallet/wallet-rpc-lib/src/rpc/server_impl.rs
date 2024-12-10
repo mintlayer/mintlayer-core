@@ -20,7 +20,6 @@ use common::{
     address::dehexify::dehexify_all_addresses,
     chain::{
         block::timestamp::BlockTimestamp,
-        partially_signed_transaction::PartiallySignedTransaction,
         tokens::{IsTokenUnfreezable, TokenId},
         Block, DelegationId, Destination, GenBlock, OrderId, PoolId, SignedTransaction,
         SignedTransactionIntent, Transaction, TxOutput,
@@ -30,25 +29,30 @@ use common::{
 use crypto::key::PrivateKey;
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
 use serialization::{hex::HexEncode, json_encoded::JsonEncoded};
+use utils::ensure;
 use utils_networking::IpOrSocketAddress;
 use wallet::{account::TxInfo, version::get_version};
 use wallet_controller::{
-    types::{BlockInfo, CreatedBlockInfo, GenericTokenTransfer, SeedWithPassPhrase, WalletInfo},
+    types::{
+        BlockInfo, CreatedBlockInfo, GenericTokenTransfer, SeedWithPassPhrase, WalletInfo,
+        WalletTypeArgs,
+    },
     ConnectedPeer, ControllerConfig, NodeInterface, UtxoState, UtxoStates, UtxoType, UtxoTypes,
 };
 use wallet_types::{
-    seed_phrase::StoreSeedPhrase, signature_status::SignatureStatus, with_locked::WithLocked,
+    partially_signed_transaction::PartiallySignedTransaction, seed_phrase::StoreSeedPhrase,
+    signature_status::SignatureStatus, with_locked::WithLocked,
 };
 
 use crate::{
     rpc::{ColdWalletRpcServer, WalletEventsRpcServer, WalletRpc, WalletRpcServer},
     types::{
         AccountArg, AddressInfo, AddressWithUsageInfo, Balances, ChainInfo, ComposedTransaction,
-        CreatedWallet, DelegationInfo, HexEncoded, LegacyVrfPublicKeyInfo, MaybeSignedTransaction,
-        NewAccountInfo, NewDelegation, NewTransaction, NftMetadata, NodeVersion, PoolInfo,
-        PublicKeyInfo, RpcAddress, RpcAmountIn, RpcHexString, RpcInspectTransaction,
-        RpcStandaloneAddresses, RpcTokenId, RpcUtxoOutpoint, RpcUtxoState, RpcUtxoType,
-        SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
+        CreatedWallet, DelegationInfo, HardwareWalletType, HexEncoded, LegacyVrfPublicKeyInfo,
+        MaybeSignedTransaction, NewAccountInfo, NewDelegation, NewTransaction, NftMetadata,
+        NodeVersion, PoolInfo, PublicKeyInfo, RpcAddress, RpcAmountIn, RpcHexString,
+        RpcInspectTransaction, RpcStandaloneAddresses, RpcTokenId, RpcUtxoOutpoint, RpcUtxoState,
+        RpcUtxoType, SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
         StandaloneAddressWithDetails, TokenMetadata, TransactionOptions, TxOptionsOverrides,
         UtxoInfo, VrfPublicKeyInfo,
     },
@@ -58,8 +62,9 @@ use crate::{
 use super::types::{NewOrder, RpcHashedTimelockContract};
 
 #[async_trait::async_trait]
-impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletEventsRpcServer
-    for WalletRpc<N>
+impl<N> WalletEventsRpcServer for WalletRpc<N>
+where
+    N: NodeInterface + Clone + Send + Sync + 'static + Debug,
 {
     async fn subscribe_wallet_events(
         &self,
@@ -71,8 +76,9 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletEventsRpcSe
 }
 
 #[async_trait::async_trait]
-impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> ColdWalletRpcServer
-    for WalletRpc<N>
+impl<N> ColdWalletRpcServer for WalletRpc<N>
+where
+    N: NodeInterface + Clone + Send + Sync + 'static + Debug,
 {
     async fn shutdown(&self) -> rpc::RpcResult<()> {
         rpc::handle_result(self.shutdown())
@@ -88,22 +94,88 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> ColdWalletRpcServ
         store_seed_phrase: bool,
         mnemonic: Option<String>,
         passphrase: Option<String>,
+        hardware_wallet: Option<HardwareWalletType>,
     ) -> rpc::RpcResult<CreatedWallet> {
-        let whether_to_store_seed_phrase = if store_seed_phrase {
+        let store_seed_phrase = if store_seed_phrase {
             StoreSeedPhrase::Store
         } else {
             StoreSeedPhrase::DoNotStore
         };
-        rpc::handle_result(
-            self.create_wallet(
-                path.into(),
-                whether_to_store_seed_phrase,
+
+        let args = match hardware_wallet {
+            None => WalletTypeArgs::Software {
                 mnemonic,
                 passphrase,
-                false,
-            )
-            .await
-            .map(Into::<CreatedWallet>::into),
+                store_seed_phrase,
+            },
+            #[cfg(feature = "trezor")]
+            Some(HardwareWalletType::Trezor) => {
+                ensure!(
+                    mnemonic.is_none()
+                        && passphrase.is_none()
+                        && store_seed_phrase == StoreSeedPhrase::DoNotStore,
+                    RpcError::<N>::HardwareWalletWithMnemonicOrPassphrase
+                );
+                WalletTypeArgs::Trezor
+            }
+            #[cfg(not(feature = "trezor"))]
+            Some(_) => {
+                return Err(RpcError::<N>::InvalidHardwareWallet)?;
+            }
+        };
+
+        let scan_blockchain = false;
+        rpc::handle_result(
+            self.create_wallet(path.into(), args, false, scan_blockchain)
+                .await
+                .map(Into::<CreatedWallet>::into),
+        )
+    }
+
+    async fn recover_wallet(
+        &self,
+        path: String,
+        store_seed_phrase: bool,
+        mnemonic: Option<String>,
+        passphrase: Option<String>,
+        hardware_wallet: Option<HardwareWalletType>,
+    ) -> rpc::RpcResult<CreatedWallet> {
+        let store_seed_phrase = if store_seed_phrase {
+            StoreSeedPhrase::Store
+        } else {
+            StoreSeedPhrase::DoNotStore
+        };
+
+        let args = match hardware_wallet {
+            None => {
+                ensure!(mnemonic.is_some(), RpcError::<N>::EmptyMnemonic);
+                WalletTypeArgs::Software {
+                    mnemonic,
+                    passphrase,
+                    store_seed_phrase,
+                }
+            }
+            #[cfg(feature = "trezor")]
+            Some(HardwareWalletType::Trezor) => {
+                ensure!(
+                    mnemonic.is_none()
+                        && passphrase.is_none()
+                        && store_seed_phrase == StoreSeedPhrase::DoNotStore,
+                    RpcError::<N>::HardwareWalletWithMnemonicOrPassphrase
+                );
+                WalletTypeArgs::Trezor
+            }
+            #[cfg(not(feature = "trezor"))]
+            Some(_) => {
+                return Err(RpcError::<N>::InvalidHardwareWallet)?;
+            }
+        };
+
+        let scan_blockchain = true;
+        rpc::handle_result(
+            self.create_wallet(path.into(), args, false, scan_blockchain)
+                .await
+                .map(Into::<CreatedWallet>::into),
         )
     }
 
@@ -112,12 +184,14 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> ColdWalletRpcServ
         path: String,
         password: Option<String>,
         force_migrate_wallet_type: Option<bool>,
+        open_as_hw_wallet: Option<HardwareWalletType>,
     ) -> rpc::RpcResult<()> {
         rpc::handle_result(
             self.open_wallet(
                 path.into(),
                 password,
                 force_migrate_wallet_type.unwrap_or(false),
+                open_as_hw_wallet,
             )
             .await,
         )
@@ -304,7 +378,10 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> ColdWalletRpcServ
 }
 
 #[async_trait::async_trait]
-impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletRpcServer for WalletRpc<N> {
+impl<N> WalletRpcServer for WalletRpc<N>
+where
+    N: NodeInterface + Clone + Send + Sync + 'static + Debug,
+{
     async fn rescan(&self) -> rpc::RpcResult<()> {
         rpc::handle_result(self.rescan().await)
     }
