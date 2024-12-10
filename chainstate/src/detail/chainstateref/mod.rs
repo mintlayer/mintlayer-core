@@ -82,8 +82,8 @@ pub struct ChainstateRef<'a, S, V> {
     time_getter: &'a TimeGetter,
 }
 
-impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> BlockIndexHandle
-    for ChainstateRef<'a, S, V>
+impl<S: BlockchainStorageRead, V: TransactionVerificationStrategy> BlockIndexHandle
+    for ChainstateRef<'_, S, V>
 {
     #[log_error]
     fn get_block_index(
@@ -120,7 +120,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> BlockInde
     }
 }
 
-impl<'a, S: TransactionRw, V> ChainstateRef<'a, S, V> {
+impl<S: TransactionRw, V> ChainstateRef<'_, S, V> {
     #[log_error]
     pub fn commit_db_tx(self) -> chainstate_storage::Result<()> {
         self.db_tx.commit()
@@ -1117,7 +1117,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     }
 }
 
-impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRef<'a, S, V> {
+impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRef<'_, S, V> {
     #[log_error]
     pub fn disconnect_until(
         &mut self,

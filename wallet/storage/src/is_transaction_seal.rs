@@ -16,7 +16,7 @@
 /// Prevent more types from implementing the [crate::IsTransaction] trait
 pub trait Seal {}
 
-impl<'st, B: storage::Backend> Seal for crate::internal::StoreTxRo<'st, B> {}
-impl<'st, B: storage::Backend> Seal for crate::internal::StoreTxRw<'st, B> {}
-impl<'st, B: storage::Backend> Seal for crate::internal::StoreTxRoUnlocked<'st, B> {}
-impl<'st, B: storage::Backend> Seal for crate::internal::StoreTxRwUnlocked<'st, B> {}
+impl<B: storage::Backend> Seal for crate::internal::StoreTxRo<'_, B> {}
+impl<B: storage::Backend> Seal for crate::internal::StoreTxRw<'_, B> {}
+impl<B: storage::Backend> Seal for crate::internal::StoreTxRoUnlocked<'_, B> {}
+impl<B: storage::Backend> Seal for crate::internal::StoreTxRwUnlocked<'_, B> {}

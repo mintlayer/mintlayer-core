@@ -369,7 +369,7 @@ impl_read_ops!(StoreTxRw);
 impl_read_ops!(StoreTxRoUnlocked);
 impl_read_ops!(StoreTxRwUnlocked);
 
-impl<'st, B: storage::Backend> WalletStorageEncryptionRead for StoreTxRo<'st, B> {
+impl<B: storage::Backend> WalletStorageEncryptionRead for StoreTxRo<'_, B> {
     fn get_encryption_key_kdf_challenge(&self) -> crate::Result<Option<KdfChallenge>> {
         self.read_value::<well_known::EncryptionKeyKdfChallenge>()
     }
@@ -625,7 +625,7 @@ macro_rules! impl_write_ops {
 impl_write_ops!(StoreTxRw);
 impl_write_ops!(StoreTxRwUnlocked);
 
-impl<'st, B: storage::Backend> WalletStorageEncryptionWrite for StoreTxRwUnlocked<'st, B> {
+impl<B: storage::Backend> WalletStorageEncryptionWrite for StoreTxRwUnlocked<'_, B> {
     fn set_encryption_kdf_challenge(&mut self, salt: &KdfChallenge) -> crate::Result<()> {
         self.write_value::<well_known::EncryptionKeyKdfChallenge>(salt)
             .map_err(Into::into)
@@ -676,7 +676,7 @@ impl<'st, B: storage::Backend> WalletStorageEncryptionWrite for StoreTxRwUnlocke
 }
 
 /// Wallet data storage transaction
-impl<'st, B: storage::Backend> WalletStorageWriteUnlocked for StoreTxRwUnlocked<'st, B> {
+impl<B: storage::Backend> WalletStorageWriteUnlocked for StoreTxRwUnlocked<'_, B> {
     fn set_root_key(&mut self, tx: &RootKeys) -> crate::Result<()> {
         let value = MaybeEncrypted::new(tx, self.encryption_key);
         self.write::<db::DBRootKeys, _, _, _>(RootKeyConstant, value)
@@ -719,19 +719,19 @@ impl<'st, B: storage::Backend> WalletStorageWriteUnlocked for StoreTxRwUnlocked<
     }
 }
 
-impl<'st, B: storage::Backend> crate::TransactionRoLocked for StoreTxRo<'st, B> {
+impl<B: storage::Backend> crate::TransactionRoLocked for StoreTxRo<'_, B> {
     fn close(self) {
         self.storage.close()
     }
 }
 
-impl<'st, B: storage::Backend> crate::TransactionRoUnlocked for StoreTxRoUnlocked<'st, B> {
+impl<B: storage::Backend> crate::TransactionRoUnlocked for StoreTxRoUnlocked<'_, B> {
     fn close(self) {
         self.storage.close()
     }
 }
 
-impl<'st, B: storage::Backend> crate::TransactionRwLocked for StoreTxRw<'st, B> {
+impl<B: storage::Backend> crate::TransactionRwLocked for StoreTxRw<'_, B> {
     fn commit(self) -> crate::Result<()> {
         self.storage.commit().map_err(Into::into)
     }
@@ -741,7 +741,7 @@ impl<'st, B: storage::Backend> crate::TransactionRwLocked for StoreTxRw<'st, B> 
     }
 }
 
-impl<'st, B: storage::Backend> crate::TransactionRwUnlocked for StoreTxRwUnlocked<'st, B> {
+impl<B: storage::Backend> crate::TransactionRwUnlocked for StoreTxRwUnlocked<'_, B> {
     fn commit(self) -> crate::Result<()> {
         self.storage.commit().map_err(Into::into)
     }
@@ -751,7 +751,7 @@ impl<'st, B: storage::Backend> crate::TransactionRwUnlocked for StoreTxRwUnlocke
     }
 }
 
-impl<'st, B: storage::Backend> crate::IsTransaction for StoreTxRo<'st, B> {}
-impl<'st, B: storage::Backend> crate::IsTransaction for StoreTxRw<'st, B> {}
-impl<'st, B: storage::Backend> crate::IsTransaction for StoreTxRoUnlocked<'st, B> {}
-impl<'st, B: storage::Backend> crate::IsTransaction for StoreTxRwUnlocked<'st, B> {}
+impl<B: storage::Backend> crate::IsTransaction for StoreTxRo<'_, B> {}
+impl<B: storage::Backend> crate::IsTransaction for StoreTxRw<'_, B> {}
+impl<B: storage::Backend> crate::IsTransaction for StoreTxRoUnlocked<'_, B> {}
+impl<B: storage::Backend> crate::IsTransaction for StoreTxRwUnlocked<'_, B> {}

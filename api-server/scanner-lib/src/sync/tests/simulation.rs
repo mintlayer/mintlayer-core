@@ -69,7 +69,7 @@ impl<'a> PoSAccountingAdapterToCheckFees<'a> {
     }
 }
 
-impl<'a> PoSAccountingView for PoSAccountingAdapterToCheckFees<'a> {
+impl PoSAccountingView for PoSAccountingAdapterToCheckFees<'_> {
     type Error = pos_accounting::Error;
 
     fn pool_exists(&self, _pool_id: PoolId) -> Result<bool, Self::Error> {
@@ -157,7 +157,7 @@ impl<'a> OrderAccountingAdapterToCheckFees<'a> {
     }
 }
 
-impl<'a> OrdersAccountingView for OrderAccountingAdapterToCheckFees<'a> {
+impl OrdersAccountingView for OrderAccountingAdapterToCheckFees<'_> {
     type Error = orders_accounting::Error;
 
     fn get_order_data(

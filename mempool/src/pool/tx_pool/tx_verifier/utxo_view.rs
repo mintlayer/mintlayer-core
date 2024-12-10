@@ -45,7 +45,7 @@ impl<'m, M, P> MempoolUtxoView<'m, M, P> {
     }
 }
 
-impl<'m, M, P: UtxosView> UtxosView for MempoolUtxoView<'m, M, P> {
+impl<M, P: UtxosView> UtxosView for MempoolUtxoView<'_, M, P> {
     type Error = Error<P::Error>;
 
     fn utxo(&self, outpoint: &UtxoOutPoint) -> Result<Option<Utxo>, Self::Error> {

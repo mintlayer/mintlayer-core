@@ -121,7 +121,9 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
     }
 
     #[log_error]
-    fn make_db_tx<'a>(&'a mut self) -> chainstate_storage::Result<ChainstateRef<TxRw<'a, S>, V>> {
+    fn make_db_tx<'a>(
+        &'a mut self,
+    ) -> chainstate_storage::Result<ChainstateRef<'a, TxRw<'a, S>, V>> {
         // Note: this is a workaround for log_error's compilation issues, see log_error docs
         // for details.
         let this = self;

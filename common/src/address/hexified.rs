@@ -134,7 +134,7 @@ impl<'a, A: Addressable + DecodeAll + 'a> HexifiedAddress<'a, A> {
     }
 }
 
-impl<'a, A: Addressable> std::fmt::Display for HexifiedAddress<'a, A> {
+impl<A: Addressable> std::fmt::Display for HexifiedAddress<'_, A> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let result = format!(
             "{}{{0x{}}}",
@@ -159,7 +159,7 @@ impl<'a, A: Addressable> AddressableReplacer<'a, A> {
     }
 }
 
-impl<'a, A: Addressable + DecodeAll> regex::Replacer for AddressableReplacer<'a, A> {
+impl<A: Addressable + DecodeAll> regex::Replacer for AddressableReplacer<'_, A> {
     fn replace_append(&mut self, caps: &regex::Captures<'_>, dst: &mut String) {
         let hex_data = caps.get(1).expect("It's already verified it exists").as_str();
         let bytes = match hex::decode(hex_data) {

@@ -107,7 +107,7 @@ impl<'a, P: PoSAccountingView> PoSAccountingOperationImpl<'a, P> {
     }
 }
 
-impl<'a, P: PoSAccountingView> PoSAccountingView for PoSAccountingOperationImpl<'a, P> {
+impl<P: PoSAccountingView> PoSAccountingView for PoSAccountingOperationImpl<'_, P> {
     type Error = pos_accounting::Error;
 
     fn pool_exists(&self, pool_id: PoolId) -> Result<bool, Self::Error> {
@@ -152,8 +152,8 @@ impl<'a, P: PoSAccountingView> PoSAccountingView for PoSAccountingOperationImpl<
     }
 }
 
-impl<'a, P: PoSAccountingView> PoSAccountingOperations<PoSAccountingUndo>
-    for PoSAccountingOperationImpl<'a, P>
+impl<P: PoSAccountingView> PoSAccountingOperations<PoSAccountingUndo>
+    for PoSAccountingOperationImpl<'_, P>
 {
     fn create_pool(
         &mut self,

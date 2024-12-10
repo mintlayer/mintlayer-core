@@ -87,7 +87,7 @@ impl serde::Serialize for HtlcSecretHash {
 impl<'de> serde::Deserialize<'de> for HtlcSecretHash {
     fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
         struct HashVisitor;
-        impl<'de> serde::de::Visitor<'de> for HashVisitor {
+        impl serde::de::Visitor<'_> for HashVisitor {
             type Value = HtlcSecretHash;
             fn expecting(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 fmt.write_str("a hex-encoded hash")

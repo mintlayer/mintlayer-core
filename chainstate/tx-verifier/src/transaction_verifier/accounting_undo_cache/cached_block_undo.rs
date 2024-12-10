@@ -78,7 +78,7 @@ impl<T: Debug + Eq + Clone> CachedBlockUndo<T> {
 
     /// Indicates whether reward and all transactions were used while disconnecting leaving this object empty
     pub(super) fn is_empty(&self) -> bool {
-        !self.reward_undos.as_ref().is_some_and(|u| u.get().is_some())
+        self.reward_undos.as_ref().is_none_or(|u| u.get().is_none())
             && self.tx_undos.iter().all(|(_, op)| op.get().is_none())
     }
 

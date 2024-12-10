@@ -26,7 +26,7 @@ pub enum TransactionSource {
     Mempool,
 }
 
-impl<'a> From<&TransactionSourceForConnect<'a>> for TransactionSource {
+impl From<&TransactionSourceForConnect<'_>> for TransactionSource {
     fn from(t: &TransactionSourceForConnect) -> Self {
         match t {
             TransactionSourceForConnect::Chain { new_block_index } => {

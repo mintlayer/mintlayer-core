@@ -27,7 +27,7 @@ pub fn hash_encoded_to<T: Encode, H: StreamHasher>(val: &T, hasher: &mut H) {
 // externally to avoid exposing (potentially platform-specific) formatting methods.
 struct HashWriter<'a, H: StreamHasher>(&'a mut H);
 
-impl<'a, H: StreamHasher> std::io::Write for HashWriter<'a, H> {
+impl<H: StreamHasher> std::io::Write for HashWriter<'_, H> {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         self.0.write(buf);
         Ok(buf.len())

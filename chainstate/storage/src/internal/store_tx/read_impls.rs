@@ -86,7 +86,7 @@ mod private {
 }
 
 /// Blockchain data storage transaction
-impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRo<'st, B> {
+impl<B: storage::Backend> BlockchainStorageRead for super::StoreTxRo<'_, B> {
     #[log_error]
     fn get_storage_version(&self) -> crate::Result<Option<ChainstateStorageVersion>> {
         self.read_value::<well_known::StoreVersion>()
@@ -246,14 +246,14 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRo<'st, B
     }
 }
 
-impl<'st, B: storage::Backend> EpochStorageRead for super::StoreTxRo<'st, B> {
+impl<B: storage::Backend> EpochStorageRead for super::StoreTxRo<'_, B> {
     #[log_error]
     fn get_epoch_data(&self, epoch_index: u64) -> crate::Result<Option<EpochData>> {
         self.read::<db::DBEpochData, _, _>(epoch_index)
     }
 }
 
-impl<'st, B: storage::Backend> UtxosStorageRead for super::StoreTxRo<'st, B> {
+impl<B: storage::Backend> UtxosStorageRead for super::StoreTxRo<'_, B> {
     type Error = crate::Error;
 
     #[log_error]
@@ -268,9 +268,7 @@ impl<'st, B: storage::Backend> UtxosStorageRead for super::StoreTxRo<'st, B> {
     }
 }
 
-impl<'st, B: storage::Backend> PoSAccountingStorageRead<TipStorageTag>
-    for super::StoreTxRo<'st, B>
-{
+impl<B: storage::Backend> PoSAccountingStorageRead<TipStorageTag> for super::StoreTxRo<'_, B> {
     type Error = crate::Error;
 
     #[log_error]
@@ -316,9 +314,7 @@ impl<'st, B: storage::Backend> PoSAccountingStorageRead<TipStorageTag>
     }
 }
 
-impl<'st, B: storage::Backend> PoSAccountingStorageRead<SealedStorageTag>
-    for super::StoreTxRo<'st, B>
-{
+impl<B: storage::Backend> PoSAccountingStorageRead<SealedStorageTag> for super::StoreTxRo<'_, B> {
     type Error = crate::Error;
 
     #[log_error]
@@ -364,7 +360,7 @@ impl<'st, B: storage::Backend> PoSAccountingStorageRead<SealedStorageTag>
     }
 }
 
-impl<'st, B: storage::Backend> TokensAccountingStorageRead for super::StoreTxRo<'st, B> {
+impl<B: storage::Backend> TokensAccountingStorageRead for super::StoreTxRo<'_, B> {
     type Error = crate::Error;
 
     #[log_error]
@@ -378,7 +374,7 @@ impl<'st, B: storage::Backend> TokensAccountingStorageRead for super::StoreTxRo<
     }
 }
 
-impl<'st, B: storage::Backend> OrdersAccountingStorageRead for super::StoreTxRo<'st, B> {
+impl<B: storage::Backend> OrdersAccountingStorageRead for super::StoreTxRo<'_, B> {
     type Error = crate::Error;
 
     #[log_error]
@@ -398,7 +394,7 @@ impl<'st, B: storage::Backend> OrdersAccountingStorageRead for super::StoreTxRo<
 }
 
 /// Blockchain data storage transaction
-impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRw<'st, B> {
+impl<B: storage::Backend> BlockchainStorageRead for super::StoreTxRw<'_, B> {
     #[log_error]
     fn get_storage_version(&self) -> crate::Result<Option<ChainstateStorageVersion>> {
         self.read_value::<well_known::StoreVersion>()
@@ -563,14 +559,14 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRw<'st, B
     }
 }
 
-impl<'st, B: storage::Backend> EpochStorageRead for super::StoreTxRw<'st, B> {
+impl<B: storage::Backend> EpochStorageRead for super::StoreTxRw<'_, B> {
     #[log_error]
     fn get_epoch_data(&self, epoch_index: u64) -> crate::Result<Option<EpochData>> {
         self.read::<db::DBEpochData, _, _>(epoch_index)
     }
 }
 
-impl<'st, B: storage::Backend> UtxosStorageRead for super::StoreTxRw<'st, B> {
+impl<B: storage::Backend> UtxosStorageRead for super::StoreTxRw<'_, B> {
     type Error = crate::Error;
 
     #[log_error]
@@ -585,9 +581,7 @@ impl<'st, B: storage::Backend> UtxosStorageRead for super::StoreTxRw<'st, B> {
     }
 }
 
-impl<'st, B: storage::Backend> PoSAccountingStorageRead<TipStorageTag>
-    for super::StoreTxRw<'st, B>
-{
+impl<B: storage::Backend> PoSAccountingStorageRead<TipStorageTag> for super::StoreTxRw<'_, B> {
     type Error = crate::Error;
 
     #[log_error]
@@ -633,9 +627,7 @@ impl<'st, B: storage::Backend> PoSAccountingStorageRead<TipStorageTag>
     }
 }
 
-impl<'st, B: storage::Backend> PoSAccountingStorageRead<SealedStorageTag>
-    for super::StoreTxRw<'st, B>
-{
+impl<B: storage::Backend> PoSAccountingStorageRead<SealedStorageTag> for super::StoreTxRw<'_, B> {
     type Error = crate::Error;
 
     #[log_error]
@@ -681,7 +673,7 @@ impl<'st, B: storage::Backend> PoSAccountingStorageRead<SealedStorageTag>
     }
 }
 
-impl<'st, B: storage::Backend> TokensAccountingStorageRead for super::StoreTxRw<'st, B> {
+impl<B: storage::Backend> TokensAccountingStorageRead for super::StoreTxRw<'_, B> {
     type Error = crate::Error;
 
     #[log_error]
@@ -695,7 +687,7 @@ impl<'st, B: storage::Backend> TokensAccountingStorageRead for super::StoreTxRw<
     }
 }
 
-impl<'st, B: storage::Backend> OrdersAccountingStorageRead for super::StoreTxRw<'st, B> {
+impl<B: storage::Backend> OrdersAccountingStorageRead for super::StoreTxRw<'_, B> {
     type Error = crate::Error;
 
     #[log_error]
