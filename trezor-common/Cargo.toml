@@ -11,10 +11,11 @@ rust-version.workspace = true
 num-derive.workspace = true
 num-traits = { version = "0.2", default-features = false, features = ["libm"] }
 parity-scale-codec = { version = "3.1", default-features = false, features = ["derive", "chain-error"] }
+strum = { version = "0.26", default-features = false, features = ["derive"] }
 
 [dev-dependencies]
-test-utils = { path = "../../test-utils" }
-common = { path = "../../common" }
-crypto = { path = "../../crypto/" }
+test-utils = { path = "../test-utils" }
+common = { path = "../common" }
+crypto = { path = "../crypto/" }
 
 rstest.workspace = true

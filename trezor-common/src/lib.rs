@@ -19,6 +19,7 @@
 
 use num_derive::FromPrimitive;
 use parity_scale_codec::{Decode, Encode};
+use strum::{EnumDiscriminants, EnumIter};
 
 /// Specifies which parts of the transaction a signature commits to.
 ///
@@ -75,7 +76,8 @@ pub enum OutputValue {
     TokenV1(H256, Amount),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, EnumDiscriminants)]
+#[strum_discriminants(name(OutputTimeLockIndex), derive(EnumIter))]
 pub enum OutputTimeLock {
     #[codec(index = 0)]
     UntilHeight(#[codec(compact)] u64),
@@ -85,14 +87,6 @@ pub enum OutputTimeLock {
     ForBlockCount(#[codec(compact)] u64),
     #[codec(index = 3)]
     ForSeconds(#[codec(compact)] u64),
-}
-
-#[derive(FromPrimitive)]
-pub enum OutputTimeLockIndex {
-    UntilHeight = 0,
-    UntilTime = 1,
-    ForBlockCount = 2,
-    ForSeconds = 3,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]

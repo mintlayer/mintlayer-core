@@ -8274,6 +8274,7 @@ dependencies = [
  "num-traits",
  "parity-scale-codec",
  "rstest",
+ "strum",
  "test-utils",
 ]
 
