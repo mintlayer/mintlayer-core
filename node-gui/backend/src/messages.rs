@@ -175,7 +175,7 @@ impl Transaction {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TransactionInfo {
     pub wallet_id: WalletId,
     pub tx: Transaction,
