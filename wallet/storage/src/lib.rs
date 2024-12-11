@@ -28,7 +28,9 @@ use crypto::{
     key::{extended::ExtendedPublicKey, PrivateKey},
     symkey::SymmetricKey,
 };
-pub use internal::{Store, StoreTxRo, StoreTxRoUnlocked, StoreTxRw, StoreTxRwUnlocked};
+pub use internal::{
+    Store, StoreLocalReadWriteUnlocked, StoreTxRo, StoreTxRoUnlocked, StoreTxRw, StoreTxRwUnlocked,
+};
 use std::collections::BTreeMap;
 
 use wallet_types::{
@@ -192,7 +194,7 @@ pub trait WalletStorageWriteLocked: WalletStorageReadLocked {
         id: &AccountDerivationPathId,
         content: &ExtendedPublicKey,
     ) -> Result<()>;
-    fn det_public_key(&mut self, id: &AccountDerivationPathId) -> Result<()>;
+    fn del_public_key(&mut self, id: &AccountDerivationPathId) -> Result<()>;
     fn set_median_time(&mut self, median_time: BlockTimestamp) -> Result<()>;
     fn set_lookahead_size(&mut self, lookahead_size: u32) -> Result<()>;
     fn clear_public_keys(&mut self) -> Result<()>;
@@ -200,7 +202,7 @@ pub trait WalletStorageWriteLocked: WalletStorageReadLocked {
 }
 
 /// Modifying operations on persistent wallet data with access to encrypted data
-pub trait WalletStorageWriteUnlocked: WalletStorageReadUnlocked + WalletStorageWriteLocked {
+pub trait WalletStorageWriteUnlocked: WalletStorageWriteLocked + WalletStorageReadUnlocked {
     fn set_root_key(&mut self, content: &RootKeys) -> Result<()>;
     fn del_root_key(&mut self) -> Result<()>;
     fn set_seed_phrase(&mut self, seed_phrase: SerializableSeedPhrase) -> Result<()>;
