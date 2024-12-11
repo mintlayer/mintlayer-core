@@ -18,6 +18,7 @@ pub mod config;
 mod rpc;
 mod service;
 
+#[cfg(feature = "trezor")]
 use rpc::types::HardwareWalletType;
 pub use rpc::{
     types, ColdWalletRpcClient, ColdWalletRpcDescription, ColdWalletRpcServer, RpcCreds, RpcError,
@@ -25,6 +26,7 @@ pub use rpc::{
 };
 pub use service::{Event, EventStream, TxState, WalletHandle, /* WalletResult, */ WalletService,};
 use wallet_controller::{NodeInterface, NodeRpcClient};
+#[cfg(feature = "trezor")]
 use wallet_types::wallet_type::WalletType;
 
 use std::{fmt::Debug, time::Duration};
