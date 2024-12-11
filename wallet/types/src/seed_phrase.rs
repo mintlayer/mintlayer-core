@@ -117,7 +117,7 @@ pub struct SeedPhrase {
 impl SeedPhrase {
     pub fn new(mnemonic: zeroize::Zeroizing<bip39::Mnemonic>) -> Self {
         Self {
-            mnemonic: zeroize::Zeroizing::new(mnemonic.word_iter().map(|w| w.into()).collect()),
+            mnemonic: zeroize::Zeroizing::new(mnemonic.words().map(|w| w.into()).collect()),
         }
     }
 
