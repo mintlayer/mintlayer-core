@@ -19,7 +19,8 @@ use common::{chain, primitives};
 use crypto::key::KeyKind;
 use parity_scale_codec::{DecodeAll, Encode};
 use rstest::rstest;
-use test_utils::random::{make_seedable_rng, CryptoRng, Rng, Seed};
+use strum::IntoEnumIterator;
+use test_utils::random::{make_seedable_rng, CryptoRng, IteratorRandom, Rng, Seed};
 
 impl From<primitives::H256> for crate::H256 {
     fn from(value: primitives::H256) -> Self {
@@ -312,16 +313,18 @@ impl From<chain::TxOutput> for crate::TxOutput {
 }
 
 fn make_random_destination(rng: &mut (impl Rng + CryptoRng)) -> chain::Destination {
-    match rng.gen_range(0..=4) {
-        0 => chain::Destination::AnyoneCanSpend,
-        1 => chain::Destination::PublicKey(
+    match chain::DestinationTag::iter().choose(rng).unwrap() {
+        chain::DestinationTag::AnyoneCanSpend => chain::Destination::AnyoneCanSpend,
+        chain::DestinationTag::PublicKey => chain::Destination::PublicKey(
             crypto::key::PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr).1,
         ),
-        2 => chain::Destination::ScriptHash(primitives::H256(rng.gen()).into()),
-        3 => chain::Destination::ClassicMultisig(
+        chain::DestinationTag::ScriptHash => {
+            chain::Destination::ScriptHash(primitives::H256(rng.gen()).into())
+        }
+        chain::DestinationTag::ClassicMultisig => chain::Destination::ClassicMultisig(
             (&crypto::key::PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr).1).into(),
         ),
-        _ => chain::Destination::PublicKeyHash(
+        chain::DestinationTag::PublicKeyHash => chain::Destination::PublicKeyHash(
             (&crypto::key::PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr).1).into(),
         ),
     }
@@ -332,14 +335,18 @@ fn make_random_bytes(rng: &mut (impl Rng + CryptoRng)) -> Vec<u8> {
 }
 
 fn make_random_account_command(rng: &mut (impl Rng + CryptoRng)) -> chain::AccountCommand {
-    match rng.gen_range(0..=8) {
-        0 => chain::AccountCommand::MintTokens(
+    match crate::AccountCommandIndex::iter().choose(rng).unwrap() {
+        crate::AccountCommandIndex::MintTokens => chain::AccountCommand::MintTokens(
             primitives::H256(rng.gen()).into(),
             primitives::Amount::from_atoms(rng.gen()),
         ),
-        1 => chain::AccountCommand::UnmintTokens(primitives::H256(rng.gen()).into()),
-        2 => chain::AccountCommand::LockTokenSupply(primitives::H256(rng.gen()).into()),
-        3 => chain::AccountCommand::FreezeToken(
+        crate::AccountCommandIndex::UnmintTokens => {
+            chain::AccountCommand::UnmintTokens(primitives::H256(rng.gen()).into())
+        }
+        crate::AccountCommandIndex::LockTokenSupply => {
+            chain::AccountCommand::LockTokenSupply(primitives::H256(rng.gen()).into())
+        }
+        crate::AccountCommandIndex::FreezeToken => chain::AccountCommand::FreezeToken(
             primitives::H256(rng.gen()).into(),
             if rng.gen::<bool>() {
                 chain::tokens::IsTokenUnfreezable::Yes
@@ -347,21 +354,29 @@ fn make_random_account_command(rng: &mut (impl Rng + CryptoRng)) -> chain::Accou
                 chain::tokens::IsTokenUnfreezable::No
             },
         ),
-        4 => chain::AccountCommand::UnfreezeToken(primitives::H256(rng.gen()).into()),
-        5 => chain::AccountCommand::ChangeTokenAuthority(
-            primitives::H256(rng.gen()).into(),
-            make_random_destination(rng),
-        ),
-        6 => chain::AccountCommand::ConcludeOrder(primitives::H256(rng.gen()).into()),
-        7 => chain::AccountCommand::FillOrder(
+        crate::AccountCommandIndex::UnfreezeToken => {
+            chain::AccountCommand::UnfreezeToken(primitives::H256(rng.gen()).into())
+        }
+        crate::AccountCommandIndex::ChangeTokenAuthority => {
+            chain::AccountCommand::ChangeTokenAuthority(
+                primitives::H256(rng.gen()).into(),
+                make_random_destination(rng),
+            )
+        }
+        crate::AccountCommandIndex::ConcludeOrder => {
+            chain::AccountCommand::ConcludeOrder(primitives::H256(rng.gen()).into())
+        }
+        crate::AccountCommandIndex::FillOrder => chain::AccountCommand::FillOrder(
             primitives::H256(rng.gen()).into(),
             primitives::Amount::from_atoms(rng.gen()),
             make_random_destination(rng),
         ),
-        _ => chain::AccountCommand::ChangeTokenMetadataUri(
-            primitives::H256(rng.gen()).into(),
-            make_random_bytes(rng),
-        ),
+        crate::AccountCommandIndex::ChangeTokenMetadataUri => {
+            chain::AccountCommand::ChangeTokenMetadataUri(
+                primitives::H256(rng.gen()).into(),
+                make_random_bytes(rng),
+            )
+        }
     }
 }
 
@@ -397,23 +412,31 @@ fn make_random_value(rng: &mut (impl Rng + CryptoRng)) -> chain::output_value::O
 }
 
 fn make_random_lock(rng: &mut (impl Rng + CryptoRng)) -> chain::timelock::OutputTimeLock {
-    match rng.gen_range(0..=3) {
-        0 => chain::timelock::OutputTimeLock::UntilHeight(primitives::BlockHeight::new(rng.gen())),
-        1 => chain::timelock::OutputTimeLock::UntilTime(
+    match crate::OutputTimeLockIndex::iter().choose(rng).unwrap() {
+        crate::OutputTimeLockIndex::UntilHeight => {
+            chain::timelock::OutputTimeLock::UntilHeight(primitives::BlockHeight::new(rng.gen()))
+        }
+        crate::OutputTimeLockIndex::UntilTime => chain::timelock::OutputTimeLock::UntilTime(
             chain::block::timestamp::BlockTimestamp::from_int_seconds(rng.gen()),
         ),
-        2 => chain::timelock::OutputTimeLock::ForSeconds(rng.gen()),
-        _ => chain::timelock::OutputTimeLock::ForBlockCount(rng.gen()),
+        crate::OutputTimeLockIndex::ForSeconds => {
+            chain::timelock::OutputTimeLock::ForSeconds(rng.gen())
+        }
+        crate::OutputTimeLockIndex::ForBlockCount => {
+            chain::timelock::OutputTimeLock::ForBlockCount(rng.gen())
+        }
     }
 }
 
 fn make_random_token_total_supply(
     rng: &mut (impl Rng + CryptoRng),
 ) -> chain::tokens::TokenTotalSupply {
-    match rng.gen_range(0..=2) {
-        0 => chain::tokens::TokenTotalSupply::Unlimited,
-        1 => chain::tokens::TokenTotalSupply::Lockable,
-        _ => chain::tokens::TokenTotalSupply::Fixed(primitives::Amount::from_atoms(rng.gen())),
+    match crate::TokenTotalSupplyIndex::iter().choose(rng).unwrap() {
+        crate::TokenTotalSupplyIndex::Unlimited => chain::tokens::TokenTotalSupply::Unlimited,
+        crate::TokenTotalSupplyIndex::Lockable => chain::tokens::TokenTotalSupply::Lockable,
+        crate::TokenTotalSupplyIndex::Fixed => {
+            chain::tokens::TokenTotalSupply::Fixed(primitives::Amount::from_atoms(rng.gen()))
+        }
     }
 }
 
@@ -526,32 +549,36 @@ fn make_random_output(rng: &mut (impl Rng + CryptoRng)) -> chain::TxOutput {
 #[trace]
 #[case(Seed::from_entropy())]
 fn check_input_encodings(#[case] seed: Seed) {
-    let mut rng = make_seedable_rng(seed);
+    for _ in 0..1000 {
+        let mut rng = make_seedable_rng(seed);
 
-    let inp = make_random_input(&mut rng);
+        let inp = make_random_input(&mut rng);
 
-    let simple_inp: crate::TxInput = inp.clone().into();
+        let simple_inp: crate::TxInput = inp.clone().into();
 
-    assert_eq!(inp.encode(), simple_inp.encode());
+        assert_eq!(inp.encode(), simple_inp.encode());
 
-    let decoded_simple_inp =
-        chain::TxInput::decode_all(&mut simple_inp.encode().as_slice()).unwrap();
-    assert_eq!(decoded_simple_inp, inp);
+        let decoded_simple_inp =
+            chain::TxInput::decode_all(&mut simple_inp.encode().as_slice()).unwrap();
+        assert_eq!(decoded_simple_inp, inp);
+    }
 }
 
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
 fn check_output_encodings(#[case] seed: Seed) {
-    let mut rng = make_seedable_rng(seed);
+    for _ in 0..1000 {
+        let mut rng = make_seedable_rng(seed);
 
-    let out = make_random_output(&mut rng);
+        let out = make_random_output(&mut rng);
 
-    let simple_out: crate::TxOutput = out.clone().into();
+        let simple_out: crate::TxOutput = out.clone().into();
 
-    assert_eq!(out.encode(), simple_out.encode());
+        assert_eq!(out.encode(), simple_out.encode());
 
-    let decoded_simple_out =
-        chain::TxOutput::decode_all(&mut simple_out.encode().as_slice()).unwrap();
-    assert_eq!(decoded_simple_out, out);
+        let decoded_simple_out =
+            chain::TxOutput::decode_all(&mut simple_out.encode().as_slice()).unwrap();
+        assert_eq!(decoded_simple_out, out);
+    }
 }
