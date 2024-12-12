@@ -77,7 +77,7 @@ pub enum OutputValue {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, EnumDiscriminants)]
-#[strum_discriminants(name(OutputTimeLockIndex), derive(EnumIter))]
+#[strum_discriminants(name(OutputTimeLockIndex), derive(EnumIter, FromPrimitive))]
 pub enum OutputTimeLock {
     #[codec(index = 0)]
     UntilHeight(#[codec(compact)] u64),
@@ -153,7 +153,8 @@ pub enum IsTokenFreezable {
     Yes,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, EnumDiscriminants)]
+#[strum_discriminants(name(TokenTotalSupplyIndex), derive(EnumIter, FromPrimitive))]
 pub enum TokenTotalSupply {
     #[codec(index = 0)]
     Fixed(Amount), // fixed to a certain amount
@@ -161,13 +162,6 @@ pub enum TokenTotalSupply {
     Lockable, // not known in advance but can be locked once at some point in time
     #[codec(index = 2)]
     Unlimited, // limited only by the Amount data type
-}
-
-#[derive(FromPrimitive)]
-pub enum TokenTotalSupplyIndex {
-    Fixed = 0,
-    Lockable = 1,
-    Unlimited = 2,
 }
 
 #[derive(Encode)]
@@ -272,18 +266,13 @@ pub struct H256(pub [u8; 32]);
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug, Encode, Decode)]
 pub struct HtlcSecretHash(pub [u8; 20]);
 
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Ord, PartialOrd)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Ord, PartialOrd, EnumDiscriminants)]
+#[strum_discriminants(name(OutPointSourceIdIndex), derive(EnumIter, FromPrimitive))]
 pub enum OutPointSourceId {
     #[codec(index = 0)]
     Transaction(H256),
     #[codec(index = 1)]
     BlockReward(H256),
-}
-
-#[derive(FromPrimitive)]
-pub enum OutPointSourceIdIndex {
-    Transaction = 0,
-    BlockReward = 1,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Ord, PartialOrd)]
@@ -333,7 +322,8 @@ pub enum IsTokenUnfreezable {
 type OrderId = H256;
 type TokenId = H256;
 
-#[derive(Encode)]
+#[derive(Encode, EnumDiscriminants)]
+#[strum_discriminants(name(AccountCommandIndex), derive(EnumIter, FromPrimitive))]
 pub enum AccountCommand {
     // Create certain amount of tokens and add them to circulating supply
     #[codec(index = 0)]
@@ -363,19 +353,6 @@ pub enum AccountCommand {
     // Change token metadata uri
     #[codec(index = 8)]
     ChangeTokenMetadataUri(TokenId, parity_scale_codec::alloc::vec::Vec<u8>),
-}
-
-#[derive(FromPrimitive)]
-pub enum AccountCommandIndex {
-    MintTokens = 0,
-    UnmintTokens = 1,
-    LockTokenSupply = 2,
-    FreezeToken = 3,
-    UnfreezeToken = 4,
-    ChangeTokenAuthority = 5,
-    ConcludeOrder = 6,
-    FillOrder = 7,
-    ChangeTokenMetadataUri = 8,
 }
 
 #[derive(Encode)]
