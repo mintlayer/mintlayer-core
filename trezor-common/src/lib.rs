@@ -77,7 +77,7 @@ pub enum OutputValue {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, EnumDiscriminants)]
-#[strum_discriminants(name(OutputTimeLockIndex), derive(EnumIter, FromPrimitive))]
+#[strum_discriminants(name(OutputTimeLockTag), derive(EnumIter, FromPrimitive))]
 pub enum OutputTimeLock {
     #[codec(index = 0)]
     UntilHeight(#[codec(compact)] u64),
@@ -154,7 +154,7 @@ pub enum IsTokenFreezable {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, EnumDiscriminants)]
-#[strum_discriminants(name(TokenTotalSupplyIndex), derive(EnumIter, FromPrimitive))]
+#[strum_discriminants(name(TokenTotalSupplyTag), derive(EnumIter, FromPrimitive))]
 pub enum TokenTotalSupply {
     #[codec(index = 0)]
     Fixed(Amount), // fixed to a certain amount
@@ -267,7 +267,7 @@ pub struct H256(pub [u8; 32]);
 pub struct HtlcSecretHash(pub [u8; 20]);
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Ord, PartialOrd, EnumDiscriminants)]
-#[strum_discriminants(name(OutPointSourceIdIndex), derive(EnumIter, FromPrimitive))]
+#[strum_discriminants(name(OutPointSourceIdTag), derive(EnumIter, FromPrimitive))]
 pub enum OutPointSourceId {
     #[codec(index = 0)]
     Transaction(H256),
@@ -323,7 +323,7 @@ type OrderId = H256;
 type TokenId = H256;
 
 #[derive(Encode, EnumDiscriminants)]
-#[strum_discriminants(name(AccountCommandIndex), derive(EnumIter, FromPrimitive))]
+#[strum_discriminants(name(AccountCommandTag), derive(EnumIter, FromPrimitive))]
 pub enum AccountCommand {
     // Create certain amount of tokens and add them to circulating supply
     #[codec(index = 0)]
