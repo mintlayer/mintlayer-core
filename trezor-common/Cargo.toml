@@ -1,0 +1,22 @@
+[package]
+name = "trezor-common"
+license.workspace = true
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+num-derive.workspace = true
+num-traits = { version = "0.2", default-features = false, features = ["libm"] }
+parity-scale-codec = { version = "3.1", default-features = false, features = ["derive", "chain-error"] }
+strum = { version = "0.26", default-features = false, features = ["derive"] }
+
+[dev-dependencies]
+test-utils = { path = "../test-utils" }
+common = { path = "../common" }
+crypto = { path = "../crypto/" }
+trezor-client = { git = "https://github.com/mintlayer/mintlayer-trezor-firmware", branch = "feature/mintlayer-pk", features = ["bitcoin", "mintlayer"] }
+
+rstest.workspace = true
