@@ -335,18 +335,18 @@ fn make_random_bytes(rng: &mut (impl Rng + CryptoRng)) -> Vec<u8> {
 }
 
 fn make_random_account_command(rng: &mut (impl Rng + CryptoRng)) -> chain::AccountCommand {
-    match crate::AccountCommandIndex::iter().choose(rng).unwrap() {
-        crate::AccountCommandIndex::MintTokens => chain::AccountCommand::MintTokens(
+    match crate::AccountCommandTag::iter().choose(rng).unwrap() {
+        crate::AccountCommandTag::MintTokens => chain::AccountCommand::MintTokens(
             primitives::H256(rng.gen()).into(),
             primitives::Amount::from_atoms(rng.gen()),
         ),
-        crate::AccountCommandIndex::UnmintTokens => {
+        crate::AccountCommandTag::UnmintTokens => {
             chain::AccountCommand::UnmintTokens(primitives::H256(rng.gen()).into())
         }
-        crate::AccountCommandIndex::LockTokenSupply => {
+        crate::AccountCommandTag::LockTokenSupply => {
             chain::AccountCommand::LockTokenSupply(primitives::H256(rng.gen()).into())
         }
-        crate::AccountCommandIndex::FreezeToken => chain::AccountCommand::FreezeToken(
+        crate::AccountCommandTag::FreezeToken => chain::AccountCommand::FreezeToken(
             primitives::H256(rng.gen()).into(),
             if rng.gen::<bool>() {
                 chain::tokens::IsTokenUnfreezable::Yes
@@ -354,24 +354,24 @@ fn make_random_account_command(rng: &mut (impl Rng + CryptoRng)) -> chain::Accou
                 chain::tokens::IsTokenUnfreezable::No
             },
         ),
-        crate::AccountCommandIndex::UnfreezeToken => {
+        crate::AccountCommandTag::UnfreezeToken => {
             chain::AccountCommand::UnfreezeToken(primitives::H256(rng.gen()).into())
         }
-        crate::AccountCommandIndex::ChangeTokenAuthority => {
+        crate::AccountCommandTag::ChangeTokenAuthority => {
             chain::AccountCommand::ChangeTokenAuthority(
                 primitives::H256(rng.gen()).into(),
                 make_random_destination(rng),
             )
         }
-        crate::AccountCommandIndex::ConcludeOrder => {
+        crate::AccountCommandTag::ConcludeOrder => {
             chain::AccountCommand::ConcludeOrder(primitives::H256(rng.gen()).into())
         }
-        crate::AccountCommandIndex::FillOrder => chain::AccountCommand::FillOrder(
+        crate::AccountCommandTag::FillOrder => chain::AccountCommand::FillOrder(
             primitives::H256(rng.gen()).into(),
             primitives::Amount::from_atoms(rng.gen()),
             make_random_destination(rng),
         ),
-        crate::AccountCommandIndex::ChangeTokenMetadataUri => {
+        crate::AccountCommandTag::ChangeTokenMetadataUri => {
             chain::AccountCommand::ChangeTokenMetadataUri(
                 primitives::H256(rng.gen()).into(),
                 make_random_bytes(rng),
@@ -412,17 +412,17 @@ fn make_random_value(rng: &mut (impl Rng + CryptoRng)) -> chain::output_value::O
 }
 
 fn make_random_lock(rng: &mut (impl Rng + CryptoRng)) -> chain::timelock::OutputTimeLock {
-    match crate::OutputTimeLockIndex::iter().choose(rng).unwrap() {
-        crate::OutputTimeLockIndex::UntilHeight => {
+    match crate::OutputTimeLockTag::iter().choose(rng).unwrap() {
+        crate::OutputTimeLockTag::UntilHeight => {
             chain::timelock::OutputTimeLock::UntilHeight(primitives::BlockHeight::new(rng.gen()))
         }
-        crate::OutputTimeLockIndex::UntilTime => chain::timelock::OutputTimeLock::UntilTime(
+        crate::OutputTimeLockTag::UntilTime => chain::timelock::OutputTimeLock::UntilTime(
             chain::block::timestamp::BlockTimestamp::from_int_seconds(rng.gen()),
         ),
-        crate::OutputTimeLockIndex::ForSeconds => {
+        crate::OutputTimeLockTag::ForSeconds => {
             chain::timelock::OutputTimeLock::ForSeconds(rng.gen())
         }
-        crate::OutputTimeLockIndex::ForBlockCount => {
+        crate::OutputTimeLockTag::ForBlockCount => {
             chain::timelock::OutputTimeLock::ForBlockCount(rng.gen())
         }
     }
@@ -431,10 +431,10 @@ fn make_random_lock(rng: &mut (impl Rng + CryptoRng)) -> chain::timelock::Output
 fn make_random_token_total_supply(
     rng: &mut (impl Rng + CryptoRng),
 ) -> chain::tokens::TokenTotalSupply {
-    match crate::TokenTotalSupplyIndex::iter().choose(rng).unwrap() {
-        crate::TokenTotalSupplyIndex::Unlimited => chain::tokens::TokenTotalSupply::Unlimited,
-        crate::TokenTotalSupplyIndex::Lockable => chain::tokens::TokenTotalSupply::Lockable,
-        crate::TokenTotalSupplyIndex::Fixed => {
+    match crate::TokenTotalSupplyTag::iter().choose(rng).unwrap() {
+        crate::TokenTotalSupplyTag::Unlimited => chain::tokens::TokenTotalSupply::Unlimited,
+        crate::TokenTotalSupplyTag::Lockable => chain::tokens::TokenTotalSupply::Lockable,
+        crate::TokenTotalSupplyTag::Fixed => {
             chain::tokens::TokenTotalSupply::Fixed(primitives::Amount::from_atoms(rng.gen()))
         }
     }
@@ -580,5 +580,166 @@ fn check_output_encodings(#[case] seed: Seed) {
         let decoded_simple_out =
             chain::TxOutput::decode_all(&mut simple_out.encode().as_slice()).unwrap();
         assert_eq!(decoded_simple_out, out);
+    }
+}
+
+#[rstest]
+fn check_total_supply() {
+    use num_traits::FromPrimitive;
+
+    for x in crate::TokenTotalSupplyTag::iter() {
+        match x {
+            crate::TokenTotalSupplyTag::Fixed => {
+                assert_eq!(
+                    crate::TokenTotalSupplyTag::from_u32(
+                        trezor_client::protos::MintlayerTokenTotalSupplyType::FIXED as u32
+                    ),
+                    Some(x)
+                );
+            }
+            crate::TokenTotalSupplyTag::Lockable => {
+                assert_eq!(
+                    crate::TokenTotalSupplyTag::from_u32(
+                        trezor_client::protos::MintlayerTokenTotalSupplyType::LOCKABLE as u32
+                    ),
+                    Some(x)
+                );
+            }
+            crate::TokenTotalSupplyTag::Unlimited => {
+                assert_eq!(
+                    crate::TokenTotalSupplyTag::from_u32(
+                        trezor_client::protos::MintlayerTokenTotalSupplyType::UNLIMITED as u32
+                    ),
+                    Some(x)
+                );
+            }
+        }
+    }
+}
+
+#[rstest]
+fn check_account_command_tag() {
+    use num_traits::FromPrimitive;
+
+    for x in crate::AccountCommandTag::iter() {
+        match x {
+            crate::AccountCommandTag::MintTokens => {
+                assert_eq!(
+                    crate::AccountCommandTag::from_u32(
+                        trezor_client::protos::MintlayerAccountCommandType::MINT_TOKENS as u32
+                    ),
+                    Some(x)
+                );
+            }
+            crate::AccountCommandTag::UnmintTokens => {
+                assert_eq!(
+                    crate::AccountCommandTag::from_u32(
+                        trezor_client::protos::MintlayerAccountCommandType::UNMINT_TOKENS as u32
+                    ),
+                    Some(x)
+                );
+            }
+            crate::AccountCommandTag::FreezeToken => {
+                assert_eq!(
+                    crate::AccountCommandTag::from_u32(
+                        trezor_client::protos::MintlayerAccountCommandType::FREEZE_TOKEN as u32
+                    ),
+                    Some(x)
+                );
+            }
+            crate::AccountCommandTag::UnfreezeToken => {
+                assert_eq!(
+                    crate::AccountCommandTag::from_u32(
+                        trezor_client::protos::MintlayerAccountCommandType::UNFREEZE_TOKEN as u32
+                    ),
+                    Some(x)
+                );
+            }
+            crate::AccountCommandTag::FillOrder => {
+                assert_eq!(
+                    crate::AccountCommandTag::from_u32(
+                        trezor_client::protos::MintlayerAccountCommandType::FILL_ORDER as u32
+                    ),
+                    Some(x)
+                );
+            }
+            crate::AccountCommandTag::ConcludeOrder => {
+                assert_eq!(
+                    crate::AccountCommandTag::from_u32(
+                        trezor_client::protos::MintlayerAccountCommandType::CONCLUDE_ORDER as u32
+                    ),
+                    Some(x)
+                );
+            }
+            crate::AccountCommandTag::ChangeTokenAuthority => {
+                assert_eq!(
+                    crate::AccountCommandTag::from_u32(
+                        trezor_client::protos::MintlayerAccountCommandType::CHANGE_TOKEN_AUTHORITY
+                            as u32
+                    ),
+                    Some(x)
+                );
+            }
+            crate::AccountCommandTag::ChangeTokenMetadataUri => {
+                assert_eq!(
+                    crate::AccountCommandTag::from_u32(
+                        trezor_client::protos::MintlayerAccountCommandType::CHANGE_TOKEN_METADATA_URI
+                            as u32
+                    ),
+                    Some(x)
+                );
+            }
+            crate::AccountCommandTag::LockTokenSupply => {
+                assert_eq!(
+                    crate::AccountCommandTag::from_u32(
+                        trezor_client::protos::MintlayerAccountCommandType::LOCK_TOKEN_SUPPLY
+                            as u32
+                    ),
+                    Some(x)
+                );
+            }
+        }
+    }
+}
+
+#[rstest]
+fn check_output_timelock_type() {
+    use num_traits::FromPrimitive;
+
+    for x in crate::OutputTimeLockTag::iter() {
+        match x {
+            crate::OutputTimeLockTag::UntilTime => {
+                assert_eq!(
+                    crate::OutputTimeLockTag::from_u32(
+                        trezor_client::protos::MintlayerOutputTimeLockType::UNTIL_TIME as u32
+                    ),
+                    Some(x)
+                );
+            }
+            crate::OutputTimeLockTag::UntilHeight => {
+                assert_eq!(
+                    crate::OutputTimeLockTag::from_u32(
+                        trezor_client::protos::MintlayerOutputTimeLockType::UNTIL_HEIGHT as u32
+                    ),
+                    Some(x)
+                );
+            }
+            crate::OutputTimeLockTag::ForSeconds => {
+                assert_eq!(
+                    crate::OutputTimeLockTag::from_u32(
+                        trezor_client::protos::MintlayerOutputTimeLockType::FOR_SECONDS as u32
+                    ),
+                    Some(x)
+                );
+            }
+            crate::OutputTimeLockTag::ForBlockCount => {
+                assert_eq!(
+                    crate::OutputTimeLockTag::from_u32(
+                        trezor_client::protos::MintlayerOutputTimeLockType::FOR_BLOCK_COUNT as u32
+                    ),
+                    Some(x)
+                );
+            }
+        }
     }
 }

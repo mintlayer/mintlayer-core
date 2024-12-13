@@ -17,5 +17,6 @@ strum = { version = "0.26", default-features = false, features = ["derive"] }
 test-utils = { path = "../test-utils" }
 common = { path = "../common" }
 crypto = { path = "../crypto/" }
+trezor-client = { git = "https://github.com/mintlayer/mintlayer-trezor-firmware", branch = "feature/mintlayer-pk", features = ["bitcoin", "mintlayer"] }
 
 rstest.workspace = true
