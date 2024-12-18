@@ -13,25 +13,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod error;
 pub mod messages;
 
 mod backend_impl;
 mod chainstate_event_handler;
-mod error;
 mod p2p_event_handler;
 mod wallet_events;
 
 mod account_id;
 pub use account_id::AccountId;
 
-use chainstate::ChainInfo;
-use common::address::{Address, AddressError};
-use common::chain::{ChainConfig, Destination};
-use common::primitives::{Amount, BlockHeight};
-use common::time_getter::TimeGetter;
-use node_lib::{Command, RunOptions};
 use std::fmt::Debug;
 use std::sync::Arc;
+
+use chainstate::ChainInfo;
+use common::{
+    address::{Address, AddressError},
+    chain::{ChainConfig, Destination},
+    primitives::{Amount, BlockHeight},
+    time_getter::TimeGetter,
+};
+use node_lib::{Command, RunOptions};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
 use crate::chainstate_event_handler::ChainstateEventHandler;

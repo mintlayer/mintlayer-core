@@ -15,10 +15,6 @@
 
 use std::sync::Arc;
 
-use common::{
-    chain::{ChainConfig, SignedTransaction},
-    text_summary::TextSummary,
-};
 use iced::{
     alignment::Horizontal,
     widget::{self, container, Button, Component, Text},
@@ -26,19 +22,22 @@ use iced::{
 };
 use iced_aw::Card;
 
+use common::chain::ChainConfig;
+use node_gui_backend::messages::Transaction;
+
 pub struct ConfirmBroadcast<Message> {
-    on_submit: Box<dyn Fn(SignedTransaction) -> Message>,
+    on_submit: Box<dyn Fn(Transaction) -> Message>,
     on_close: Box<dyn Fn() -> Message>,
     on_copy_to_clipboard: Box<dyn Fn(String) -> Message>,
-    tx: SignedTransaction,
+    tx: Transaction,
     chain_config: Arc<ChainConfig>,
 }
 
 pub fn new_confirm_broadcast<Message>(
-    on_submit: Box<dyn Fn(SignedTransaction) -> Message>,
+    on_submit: Box<dyn Fn(Transaction) -> Message>,
     on_close: Box<dyn Fn() -> Message>,
     on_copy_to_clipboard: Box<dyn Fn(String) -> Message>,
-    tx: SignedTransaction,
+    tx: Transaction,
     chain_config: Arc<ChainConfig>,
 ) -> ConfirmBroadcast<Message> {
     ConfirmBroadcast {
@@ -73,7 +72,7 @@ impl<Message> Component<Message, Theme, iced::Renderer> for ConfirmBroadcast<Mes
     }
 
     fn view(&self, _state: &Self::State) -> Element<Self::Event, Theme, iced::Renderer> {
-        let summary = self.tx.transaction().text_summary(&self.chain_config);
+        let summary = self.tx.text_summary(&self.chain_config);
 
         let button = Button::new(
             Text::new("Confirm and broadcast").horizontal_alignment(Horizontal::Center),
