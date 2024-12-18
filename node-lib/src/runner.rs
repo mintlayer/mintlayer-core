@@ -233,7 +233,7 @@ async fn initialize(
 }
 
 /// Processes options and potentially runs the node.
-pub async fn setup(options: Options, gui_mode: bool) -> Result<NodeSetupResult> {
+pub async fn setup(options: Options) -> Result<NodeSetupResult> {
     let command = options.command.clone().unwrap_or(Command::Mainnet(RunOptions::default()));
     match command {
         Command::Mainnet(run_options) => {
@@ -244,7 +244,6 @@ pub async fn setup(options: Options, gui_mode: bool) -> Result<NodeSetupResult> 
                 options.create_data_dir_if_missing,
                 run_options,
                 chain_config,
-                gui_mode,
             )
             .await
         }
@@ -256,7 +255,6 @@ pub async fn setup(options: Options, gui_mode: bool) -> Result<NodeSetupResult> 
                 options.create_data_dir_if_missing,
                 run_options,
                 chain_config,
-                gui_mode,
             )
             .await
         }
@@ -268,7 +266,6 @@ pub async fn setup(options: Options, gui_mode: bool) -> Result<NodeSetupResult> 
                 options.create_data_dir_if_missing,
                 regtest_options.run_options,
                 chain_config,
-                gui_mode,
             )
             .await
         }
@@ -304,26 +301,13 @@ fn clean_data_dir(data_dir: &Path, exclude: &[&Path]) -> Result<()> {
     Ok(())
 }
 
-/// For the GUI, we configure different defaults, such as disabling RPC server binding
-fn set_defaults_for_gui_mode(mut opts: RunOptions) -> RunOptions {
-    opts.rpc_enabled = Some(opts.rpc_enabled.unwrap_or(false));
-    opts
-}
-
 async fn start(
     config_path: &Path,
     datadir_path_opt: &Option<PathBuf>,
     create_data_dir_if_missing: Option<bool>,
     run_options: RunOptions,
     chain_config: ChainConfig,
-    gui_mode: bool,
 ) -> Result<NodeSetupResult> {
-    let run_options = if gui_mode {
-        set_defaults_for_gui_mode(run_options)
-    } else {
-        run_options
-    };
-
     run_options.force_allow_run_as_root_outer.ensure_not_running_as_root_user()?;
 
     if let Some(mock_time) = run_options.mock_time {

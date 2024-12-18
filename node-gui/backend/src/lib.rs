@@ -120,10 +120,19 @@ pub async fn node_initialize(
         );
     }
 
-    let mut opts = node_lib::Options::from_args(std::env::args_os());
-    opts.command = match network {
-        InitNetwork::Mainnet => Some(Command::Mainnet(RunOptions::default())),
-        InitNetwork::Testnet => Some(Command::Testnet(RunOptions::default())),
+    let opts = {
+        let mut opts = node_lib::Options::from_args(std::env::args_os());
+        let run_opts = {
+            // For the GUI, we configure different defaults, such as disabling RPC server binding
+            let mut run_opts = RunOptions::default();
+            run_opts.rpc_enabled = Some(run_opts.rpc_enabled.unwrap_or(false));
+            run_opts
+        };
+        opts.command = match network {
+            InitNetwork::Mainnet => Some(Command::Mainnet(run_opts)),
+            InitNetwork::Testnet => Some(Command::Testnet(run_opts)),
+        };
+        opts
     };
 
     logging::init_logging();
@@ -136,7 +145,7 @@ pub async fn node_initialize(
 
     let (chain_config, chain_info) = match mode {
         WalletMode::Hot => {
-            let setup_result = node_lib::setup(opts, true).await?;
+            let setup_result = node_lib::setup(opts).await?;
             let node = match setup_result {
                 node_lib::NodeSetupResult::Node(node) => node,
                 node_lib::NodeSetupResult::DataDirCleanedUp => {
