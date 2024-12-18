@@ -124,8 +124,10 @@ pub async fn node_initialize(
         let mut opts = node_lib::Options::from_args(std::env::args_os());
         let run_opts = {
             // For the GUI, we configure different defaults, such as disabling RPC server binding
+            // and enabling logging to a file.
             let mut run_opts = RunOptions::default();
             run_opts.rpc_enabled = Some(run_opts.rpc_enabled.unwrap_or(false));
+            run_opts.log_to_file = Some(run_opts.log_to_file.unwrap_or(true));
             run_opts
         };
         opts.command = match network {
@@ -134,9 +136,6 @@ pub async fn node_initialize(
         };
         opts
     };
-
-    logging::init_logging();
-    logging::log::info!("Command line options: {opts:?}");
 
     let (request_tx, request_rx) = unbounded_channel();
     let (event_tx, event_rx) = unbounded_channel();
@@ -150,9 +149,7 @@ pub async fn node_initialize(
                 node_lib::NodeSetupResult::Node(node) => node,
                 node_lib::NodeSetupResult::DataDirCleanedUp => {
                     // TODO: find more friendly way to report the message and shut down GUI
-                    anyhow::bail!(
-                "Data directory is now clean. Please restart the node without `--clean-data` flag"
-            );
+                    anyhow::bail!("Data directory is now clean. Please restart the node without `--clean-data` flag");
                 }
             };
 

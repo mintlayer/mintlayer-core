@@ -81,3 +81,191 @@ pub fn prepare_data_dir<F: Fn() -> PathBuf>(
 
     Ok(data_dir)
 }
+
+#[cfg(test)]
+mod test {
+    use std::io::{Read, Write};
+
+    use randomness::{make_pseudo_rng, Rng};
+    use tempfile::TempDir;
+
+    use super::*;
+
+    fn test_file_data(file_path: &std::path::Path, expected_contents: &[u8]) {
+        let mut file = std::fs::File::open(file_path).unwrap();
+        let mut buffer = Vec::new();
+        file.read_to_end(&mut buffer).unwrap();
+        assert_eq!(buffer, expected_contents);
+    }
+
+    #[test]
+    fn default_data_dir_preparation() {
+        let base_dir = TempDir::new().unwrap();
+        let supposed_default_dir = base_dir.path().join("supposed_default");
+
+        let default_data_dir_getter = || supposed_default_dir.clone();
+
+        // Ensure path doesn't exist beforehand
+        assert!(!supposed_default_dir.is_dir());
+
+        // The call must fail if create_data_dir_if_missing is explicitly set to false.
+        let _err = prepare_data_dir(default_data_dir_getter, &None, Some(false)).unwrap_err();
+
+        // With create_data_dir_if_missing equal to None or true, the call must succeed.
+        let returned_data_dir1 = prepare_data_dir(default_data_dir_getter, &None, None).unwrap();
+        let returned_data_dir2 =
+            prepare_data_dir(default_data_dir_getter, &None, Some(true)).unwrap();
+        assert_eq!(returned_data_dir1, returned_data_dir2);
+
+        // The default directory must be returned.
+        assert_eq!(
+            returned_data_dir1.canonicalize().unwrap(),
+            supposed_default_dir.canonicalize().unwrap()
+        );
+
+        // We also expect the directory to exist
+        assert!(supposed_default_dir.is_dir());
+
+        // Now let's use the data directory
+        let file_path = supposed_default_dir.join("SomeFile.txt");
+        let file_data: Vec<u8> = (0..1024).map(|_| make_pseudo_rng().gen::<u8>()).collect();
+        {
+            let mut file = std::fs::File::create(&file_path).unwrap();
+            file.write_all(&file_data).unwrap();
+        }
+
+        test_file_data(&file_path, &file_data);
+
+        // Now we prepare again, and ensure that our file is unchanged
+        let returned_data_dir1 = prepare_data_dir(default_data_dir_getter, &None, None).unwrap();
+        let returned_data_dir2 =
+            prepare_data_dir(default_data_dir_getter, &None, Some(true)).unwrap();
+        let returned_data_dir3 =
+            prepare_data_dir(default_data_dir_getter, &None, Some(false)).unwrap();
+        assert_eq!(returned_data_dir1, returned_data_dir2);
+        assert_eq!(returned_data_dir1, returned_data_dir3);
+
+        // Same path is returned
+        assert_eq!(
+            returned_data_dir1.canonicalize().unwrap(),
+            supposed_default_dir.canonicalize().unwrap()
+        );
+
+        test_file_data(&file_path, &file_data);
+    }
+
+    #[test]
+    fn custom_data_dir_preparation() {
+        let base_dir = TempDir::new().unwrap();
+        let supposed_default_dir = base_dir.path().join("supposed_default");
+        let supposed_custom_dir = base_dir.path().join("supposed_custom");
+
+        let default_data_dir_getter = || supposed_default_dir.clone();
+
+        // Both default and custom directories don't exist beforehand
+        assert!(!supposed_default_dir.is_dir());
+        assert!(!supposed_custom_dir.is_dir());
+
+        // The calls fail because the directory doesn't exist
+        let _err = prepare_data_dir(
+            default_data_dir_getter,
+            &Some(supposed_custom_dir.clone()),
+            None,
+        )
+        .unwrap_err();
+        let _err = prepare_data_dir(
+            default_data_dir_getter,
+            &Some(supposed_custom_dir.clone()),
+            Some(false),
+        )
+        .unwrap_err();
+
+        // Nothing has changed after the calls
+        assert!(!supposed_default_dir.is_dir());
+        assert!(!supposed_custom_dir.is_dir());
+
+        // Now set create_data_dir_if_missing to true, the directory should be created.
+        let returned_data_dir = prepare_data_dir(
+            default_data_dir_getter,
+            &Some(supposed_custom_dir.clone()),
+            Some(true),
+        )
+        .unwrap();
+
+        // The custom directory should be returned.
+        assert_eq!(
+            returned_data_dir.canonicalize().unwrap(),
+            supposed_custom_dir.canonicalize().unwrap()
+        );
+
+        // The custom directory must exist.
+        assert!(!supposed_default_dir.is_dir());
+        assert!(supposed_custom_dir.is_dir());
+
+        // Passing None or false for create_data_dir_if_missing now also works, because the directory
+        // already exists.
+        let returned_data_dir1 = prepare_data_dir(
+            default_data_dir_getter,
+            &Some(supposed_custom_dir.clone()),
+            None,
+        )
+        .unwrap();
+        let returned_data_dir2 = prepare_data_dir(
+            default_data_dir_getter,
+            &Some(supposed_custom_dir.clone()),
+            Some(false),
+        )
+        .unwrap();
+        assert_eq!(returned_data_dir1, returned_data_dir2);
+
+        // The custom directory should be returned.
+        assert_eq!(
+            returned_data_dir1.canonicalize().unwrap(),
+            supposed_custom_dir.canonicalize().unwrap()
+        );
+
+        // Last state of directories didn't change
+        assert!(!supposed_default_dir.is_dir());
+        assert!(supposed_custom_dir.is_dir());
+
+        // Now let's use the data directory
+        let file_path = supposed_custom_dir.join("SomeFile.txt");
+        let file_data: Vec<u8> = (0..1024).map(|_| make_pseudo_rng().gen::<u8>()).collect();
+        {
+            let mut file = std::fs::File::create(&file_path).unwrap();
+            file.write_all(&file_data).unwrap();
+        }
+
+        test_file_data(&file_path, &file_data);
+
+        // Now we prepare again, and ensure that our file is unchanged
+        let returned_data_dir1 = prepare_data_dir(
+            default_data_dir_getter,
+            &Some(supposed_custom_dir.clone()),
+            None,
+        )
+        .unwrap();
+        let returned_data_dir2 = prepare_data_dir(
+            default_data_dir_getter,
+            &Some(supposed_custom_dir.clone()),
+            Some(false),
+        )
+        .unwrap();
+        let returned_data_dir3 = prepare_data_dir(
+            default_data_dir_getter,
+            &Some(supposed_custom_dir.clone()),
+            Some(true),
+        )
+        .unwrap();
+        assert_eq!(returned_data_dir1, returned_data_dir2);
+        assert_eq!(returned_data_dir1, returned_data_dir3);
+
+        // Same path is returned
+        assert_eq!(
+            returned_data_dir1.canonicalize().unwrap(),
+            supposed_custom_dir.canonicalize().unwrap()
+        );
+
+        test_file_data(&file_path, &file_data);
+    }
+}

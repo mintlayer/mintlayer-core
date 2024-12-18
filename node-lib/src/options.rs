@@ -66,6 +66,15 @@ pub enum Command {
     Regtest(Box<RegtestOptions>),
 }
 
+impl Command {
+    pub fn run_options(&self) -> &RunOptions {
+        match self {
+            Command::Mainnet(run_options) | Command::Testnet(run_options) => run_options,
+            Command::Regtest(regtest_options) => &regtest_options.run_options,
+        }
+    }
+}
+
 #[derive(Args, Clone, Debug)]
 pub struct RegtestOptions {
     #[clap(flatten)]
@@ -79,6 +88,11 @@ pub struct RunOptions {
     /// A flag that will clean the data dir before starting
     #[clap(long, short, action = clap::ArgAction::SetTrue)]
     pub clean_data: Option<bool>,
+
+    /// Log to a file instead of stdout
+    #[clap(long, action = clap::ArgAction::SetTrue)]
+    #[arg(hide = true)]
+    pub log_to_file: Option<bool>,
 
     /// Minimum number of connected peers to enable block production.
     #[clap(long, value_name = "COUNT")]

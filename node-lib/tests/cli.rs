@@ -161,6 +161,7 @@ fn read_config_override_values() {
         min_tx_relay_fee_rate: Some(min_tx_relay_fee_rate),
         force_allow_run_as_root_outer: Default::default(),
         enable_chainstate_heavy_checks: Some(enable_chainstate_heavy_checks),
+        log_to_file: Some(false),
     };
     let config = NodeConfigFile::read(&chain_config, &config_path, &options).unwrap();
 
