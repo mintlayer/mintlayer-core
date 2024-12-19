@@ -8518,6 +8518,7 @@ dependencies = [
  "serialization",
  "slave-pool",
  "static_assertions",
+ "tempfile",
  "test-utils",
  "thiserror",
  "tokio",
