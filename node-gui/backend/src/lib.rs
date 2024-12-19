@@ -125,7 +125,8 @@ pub async fn node_initialize(
         let run_opts = {
             // For the GUI, we configure different defaults, such as disabling RPC server binding
             // and enabling logging to a file.
-            let mut run_opts = RunOptions::default();
+            let mut run_opts =
+                opts.command.map_or(RunOptions::default(), |c| c.run_options().clone());
             run_opts.rpc_enabled = Some(run_opts.rpc_enabled.unwrap_or(false));
             run_opts.log_to_file = Some(run_opts.log_to_file.unwrap_or(true));
             run_opts

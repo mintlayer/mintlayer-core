@@ -89,8 +89,8 @@ pub struct RunOptions {
     #[clap(long, short, action = clap::ArgAction::SetTrue)]
     pub clean_data: Option<bool>,
 
-    /// Log to a file instead of stdout
-    #[clap(long, action = clap::ArgAction::SetTrue)]
+    /// Log to a file
+    #[clap(long, action = clap::ArgAction::Set)]
     #[arg(hide = true)]
     pub log_to_file: Option<bool>,
 
