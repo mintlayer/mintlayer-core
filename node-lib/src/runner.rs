@@ -21,6 +21,8 @@ use std::{
     sync::Arc,
 };
 
+use file_rotate::{compression::Compression, suffix::AppendCount, ContentLimit, FileRotate};
+
 use anyhow::{anyhow, Context, Result};
 use blockprod::rpc::BlockProductionRpcServer;
 use chainstate_launcher::{ChainConfig, StorageBackendConfig};
@@ -264,8 +266,14 @@ pub async fn setup(options: Options) -> Result<NodeSetupResult> {
 
     // Init logging
     if run_options.log_to_file.is_some_and(|log_to_file| log_to_file) {
-        let log_file = std::fs::File::create(data_dir.join(LOG_FILE_NAME))
-            .map_err(|e| anyhow!("Cannot create log file in {data_dir:?}: {e}"))?;
+        let log_file = FileRotate::new(
+            data_dir.join(format!("logs/{}", LOG_FILE_NAME)),
+            AppendCount::new(2),              // total 3 file
+            ContentLimit::Bytes(100_000_000), // 100MB each
+            Compression::None,
+            #[cfg(unix)]
+            None,
+        );
         logging::init_logging_to(log_file, false);
     } else {
         logging::init_logging();
