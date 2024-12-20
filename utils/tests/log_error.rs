@@ -852,7 +852,9 @@ mod log_output {
         sync::{Arc, Mutex},
     };
 
-    use logging::init_logging_with_env_var;
+    use logging::{
+        init_logging_generic, write_to_make_writer, LogStyle, ValueOrEnvVar, WriterSettings,
+    };
 
     #[derive(Clone)]
     pub struct LogOutput(Arc<Mutex<Vec<u8>>>);
@@ -863,9 +865,15 @@ mod log_output {
         }
 
         pub fn init_logging(&self) {
-            let env_var_name = "LOGGING_TEST_RUST_LOG_VAR";
-            std::env::set_var(env_var_name, "trace");
-            init_logging_with_env_var(self.clone(), false, env_var_name);
+            init_logging_generic(
+                WriterSettings {
+                    make_writer: write_to_make_writer(self.clone()),
+                    is_terminal: false,
+                    filter: ValueOrEnvVar::Value("trace".to_owned()),
+                    log_style: ValueOrEnvVar::Value(LogStyle::Text(logging::TextColoring::Off)),
+                },
+                logging::no_writer_settings(),
+            );
         }
 
         pub fn take(&self) -> String {
