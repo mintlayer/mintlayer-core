@@ -151,12 +151,12 @@ pub struct SendDelegateToAddressRequest {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Transaction {
+pub struct SignedTransactionWrapper {
     #[serde(with = "hex_encoded_serialization")]
     tx: SignedTransaction,
 }
 
-impl Transaction {
+impl SignedTransactionWrapper {
     pub fn new(tx: SignedTransaction) -> Self {
         Self { tx }
     }
@@ -171,14 +171,14 @@ impl Transaction {
 
     pub fn to_json(&self, config: &ChainConfig) -> Result<serde_json::Value, BackendError> {
         common::address::dehexify::to_dehexified_json(config, self.tx.transaction())
-            .map_err(|e| BackendError::JsonError(e.to_string()))
+            .map_err(|e| BackendError::ConversionToDehexifyJsonError(e.to_string()))
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TransactionInfo {
     pub wallet_id: WalletId,
-    pub tx: Transaction,
+    pub tx: SignedTransactionWrapper,
 }
 
 #[derive(Debug)]
@@ -236,7 +236,7 @@ pub enum BackendRequest {
 
     SubmitTx {
         wallet_id: WalletId,
-        tx: Transaction,
+        tx: SignedTransactionWrapper,
     },
 
     TransactionList {

@@ -23,21 +23,21 @@ use iced::{
 use iced_aw::Card;
 
 use common::chain::ChainConfig;
-use node_gui_backend::messages::Transaction;
+use node_gui_backend::messages::SignedTransactionWrapper;
 
 pub struct ConfirmBroadcast<Message> {
-    on_submit: Box<dyn Fn(Transaction) -> Message>,
+    on_submit: Box<dyn Fn(SignedTransactionWrapper) -> Message>,
     on_close: Box<dyn Fn() -> Message>,
     on_copy_to_clipboard: Box<dyn Fn(String) -> Message>,
-    tx: Transaction,
+    tx: SignedTransactionWrapper,
     chain_config: Arc<ChainConfig>,
 }
 
 pub fn new_confirm_broadcast<Message>(
-    on_submit: Box<dyn Fn(Transaction) -> Message>,
+    on_submit: Box<dyn Fn(SignedTransactionWrapper) -> Message>,
     on_close: Box<dyn Fn() -> Message>,
     on_copy_to_clipboard: Box<dyn Fn(String) -> Message>,
-    tx: Transaction,
+    tx: SignedTransactionWrapper,
     chain_config: Arc<ChainConfig>,
 ) -> ConfirmBroadcast<Message> {
     ConfirmBroadcast {

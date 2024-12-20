@@ -52,8 +52,8 @@ use super::{
     messages::{
         AccountInfo, AddressInfo, BackendEvent, BackendRequest, CreateDelegationRequest,
         DecommissionPoolRequest, DelegateStakingRequest, EncryptionAction, EncryptionState,
-        SendDelegateToAddressRequest, SendRequest, StakeRequest, Transaction, TransactionInfo,
-        WalletId, WalletInfo,
+        SendDelegateToAddressRequest, SendRequest, SignedTransactionWrapper, StakeRequest,
+        TransactionInfo, WalletId, WalletInfo,
     },
     p2p_event_handler::P2pEventHandler,
     parse_address, parse_coin_amount,
@@ -723,7 +723,7 @@ impl Backend {
 
         Ok(TransactionInfo {
             wallet_id,
-            tx: Transaction::new(tx),
+            tx: SignedTransactionWrapper::new(tx),
         })
     }
 
@@ -774,7 +774,7 @@ impl Backend {
 
         Ok(TransactionInfo {
             wallet_id,
-            tx: Transaction::new(tx),
+            tx: SignedTransactionWrapper::new(tx),
         })
     }
 
@@ -806,7 +806,7 @@ impl Backend {
 
         Ok(TransactionInfo {
             wallet_id,
-            tx: Transaction::new(tx),
+            tx: SignedTransactionWrapper::new(tx),
         })
     }
 
@@ -838,7 +838,7 @@ impl Backend {
 
         Ok(TransactionInfo {
             wallet_id,
-            tx: Transaction::new(tx),
+            tx: SignedTransactionWrapper::new(tx),
         })
     }
 
@@ -877,7 +877,7 @@ impl Backend {
 
         Ok(TransactionInfo {
             wallet_id,
-            tx: Transaction::new(tx),
+            tx: SignedTransactionWrapper::new(tx),
         })
     }
 
@@ -920,7 +920,7 @@ impl Backend {
 
         Ok(TransactionInfo {
             wallet_id,
-            tx: Transaction::new(tx),
+            tx: SignedTransactionWrapper::new(tx),
         })
     }
 

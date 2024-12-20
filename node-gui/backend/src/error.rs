@@ -19,10 +19,8 @@ use super::{account_id::AccountId, messages::WalletId};
 pub enum BackendError {
     #[error("Wallet error: {0}")]
     WalletError(String),
-    #[error("RPC error: {0}")]
-    RpcError(String),
-    #[error("Json error: {0}")]
-    JsonError(String),
+    #[error("Convertion to dehexify json error: {0}")]
+    ConversionToDehexifyJsonError(String),
     #[error("Unknown wallet index: {0:?}")]
     UnknownWalletIndex(WalletId),
     #[error("Unknown account index: {0:?}/{0:?}")]

@@ -25,8 +25,8 @@ use iced_aw::widgets::Modal;
 use logging::log;
 use node_gui_backend::{
     messages::{
-        BackendEvent, BackendRequest, EncryptionAction, Transaction, TransactionInfo, WalletId,
-        WalletInfo,
+        BackendEvent, BackendRequest, EncryptionAction, SignedTransactionWrapper, TransactionInfo,
+        WalletId, WalletInfo,
     },
     BackendSender, ImportOrCreate, InitializedNode,
 };
@@ -188,7 +188,7 @@ pub enum MainWindowMessage {
 
     SubmitTx {
         wallet_id: WalletId,
-        tx: Transaction,
+        tx: SignedTransactionWrapper,
     },
 
     CopyToClipboard(String),
