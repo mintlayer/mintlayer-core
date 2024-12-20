@@ -26,7 +26,7 @@ use file_rotate::{compression::Compression, suffix::AppendCount, ContentLimit, F
 use anyhow::{anyhow, Context, Result};
 use blockprod::rpc::BlockProductionRpcServer;
 use chainstate_launcher::{ChainConfig, StorageBackendConfig};
-use common::chain::config::{regtest_options::regtest_chain_config, Builder as ChainConfigBuilder};
+use common::chain::config::regtest_options::regtest_chain_config;
 
 use chainstate::{rpc::ChainstateRpcServer, ChainstateError, InitializationError};
 use common::chain::config::{assert_no_ignore_consensus_in_chain_config, ChainType};
@@ -240,7 +240,7 @@ pub async fn setup(options: Options) -> Result<NodeSetupResult> {
     let run_options = command.run_options();
     let chain_config = match &command {
         Command::Mainnet(_) => common::chain::config::create_mainnet(),
-        Command::Testnet(_) => ChainConfigBuilder::new(ChainType::Testnet).build(),
+        Command::Testnet(_) => common::chain::config::create_testnet(),
         Command::Regtest(regtest_options) => regtest_chain_config(&regtest_options.chain_config)?,
     };
 
