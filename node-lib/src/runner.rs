@@ -264,6 +264,8 @@ pub async fn setup(options: Options) -> Result<NodeSetupResult> {
         return Ok(NodeSetupResult::DataDirCleanedUp);
     }
 
+    let main_log_writer_settings = logging::default_writer_settings();
+
     // Init logging
     if run_options.log_to_file.is_some_and(|log_to_file| log_to_file) {
         let log_file = FileRotate::new(
@@ -274,9 +276,19 @@ pub async fn setup(options: Options) -> Result<NodeSetupResult> {
             #[cfg(unix)]
             None,
         );
-        logging::init_logging_to(log_file, false);
+        logging::init_logging_generic(
+            main_log_writer_settings,
+            Some(logging::WriterSettings {
+                make_writer: logging::write_to_make_writer(log_file),
+                is_terminal: false,
+                filter: logging::ValueOrEnvVar::Value("info".into()),
+                log_style: logging::ValueOrEnvVar::Value(logging::LogStyle::Text(
+                    logging::TextColoring::Off,
+                )),
+            }),
+        );
     } else {
-        logging::init_logging();
+        logging::init_logging_generic(main_log_writer_settings, logging::no_writer_settings());
     }
 
     logging::log::info!("Command line options: {options:?}");
