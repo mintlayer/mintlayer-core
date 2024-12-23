@@ -58,9 +58,10 @@ use trezor_client::{
     client::mintlayer::MintlayerSignature,
     find_devices,
     protos::{
-        MintlayerAccountCommandTxInput, MintlayerAccountTxInput, MintlayerAddressPath,
-        MintlayerBurnTxOutput, MintlayerChangeTokenAuhtority, MintlayerChangeTokenMetadataUri,
-        MintlayerConcludeOrder, MintlayerCreateDelegationIdTxOutput, MintlayerCreateOrderTxOutput,
+        MintlayerAccountCommandTxInput, MintlayerAccountSpendingDelegationBalance,
+        MintlayerAccountTxInput, MintlayerAddressPath, MintlayerAddressType, MintlayerBurnTxOutput,
+        MintlayerChangeTokenAuthority, MintlayerChangeTokenMetadataUri, MintlayerConcludeOrder,
+        MintlayerCreateDelegationIdTxOutput, MintlayerCreateOrderTxOutput,
         MintlayerCreateStakePoolTxOutput, MintlayerDataDepositTxOutput,
         MintlayerDelegateStakingTxOutput, MintlayerFillOrder, MintlayerFreezeToken,
         MintlayerHtlcTxOutput, MintlayerIssueFungibleTokenTxOutput, MintlayerIssueNftTxOutput,
@@ -267,12 +268,13 @@ impl Signer for TrezorSigner {
         let inputs = to_trezor_input_msgs(&ptx, key_chain, &self.chain_config)?;
         let outputs = self.to_trezor_output_msgs(&ptx)?;
         let utxos = to_trezor_utxo_msgs(&ptx, &self.chain_config)?;
+        let coin_name = self.chain_config.chain_type().name().to_owned();
 
         let new_signatures = self
             .client
             .lock()
             .expect("poisoned lock")
-            .mintlayer_sign_tx(inputs, outputs, utxos)
+            .mintlayer_sign_tx(coin_name, inputs, outputs, utxos)
             .map_err(|err| TrezorError::DeviceError(err.to_string()))?;
 
         let inputs_utxo_refs: Vec<_> =
@@ -432,13 +434,33 @@ impl Signer for TrezorSigner {
                     .map(|c| c.into_encoded_index())
                     .collect();
 
-                let addr = Address::new(&self.chain_config, destination.clone())?.into_string();
+                let addr_type = match destination {
+                    Destination::PublicKey(_) => MintlayerAddressType::PUBLIC_KEY,
+                    Destination::PublicKeyHash(_) => MintlayerAddressType::PUBLIC_KEY_HASH,
+                    Destination::AnyoneCanSpend => {
+                        return Err(SignerError::SigningError(
+                            DestinationSigError::AttemptedToProduceSignatureForAnyoneCanSpend,
+                        ))
+                    }
+                    Destination::ClassicMultisig(_) => {
+                        return Err(SignerError::SigningError(
+                            DestinationSigError::AttemptedToProduceClassicalMultisigSignatureInUnipartySignatureCode,
+                        ))
+                    }
+                    Destination::ScriptHash(_) => {
+                        return Err(SignerError::SigningError(
+                            DestinationSigError::Unsupported,
+                        ))
+                    }
+                };
+
+                let coin_name = self.chain_config.chain_type().name().to_owned();
 
                 let sig = self
                     .client
                     .lock()
                     .expect("poisoned lock")
-                    .mintlayer_sign_message(address_n, addr, message.to_vec())
+                    .mintlayer_sign_message(coin_name, address_n, addr_type, message.to_vec())
                     .map_err(|err| TrezorError::DeviceError(err.to_string()))?;
                 let signature =
                     Signature::from_raw_data(&sig).map_err(TrezorError::SignatureError)?;
@@ -534,8 +556,7 @@ fn to_trezor_account_command_input(
     command: &AccountCommand,
 ) -> SignerResult<MintlayerTxInput> {
     let mut inp_req = MintlayerAccountCommandTxInput::new();
-    inp_req.set_address(Address::new(chain_config, dest.clone())?.into_string());
-    inp_req.address_n = destination_to_address_paths(key_chain, dest);
+    inp_req.addresses = destination_to_address_paths(key_chain, dest);
     inp_req.set_nonce(nonce.value());
     match command {
         AccountCommand::MintTokens(token_id, amount) => {
@@ -554,7 +575,7 @@ fn to_trezor_account_command_input(
         AccountCommand::FreezeToken(token_id, unfreezable) => {
             let mut req = MintlayerFreezeToken::new();
             req.set_token_id(Address::new(chain_config, *token_id)?.into_string());
-            req.set_is_token_unfreezabe(unfreezable.as_bool());
+            req.set_is_token_unfreezable(unfreezable.as_bool());
 
             inp_req.freeze_token = Some(req).into();
         }
@@ -571,7 +592,7 @@ fn to_trezor_account_command_input(
             inp_req.lock_token_supply = Some(req).into();
         }
         AccountCommand::ChangeTokenAuthority(token_id, dest) => {
-            let mut req = MintlayerChangeTokenAuhtority::new();
+            let mut req = MintlayerChangeTokenAuthority::new();
             req.set_token_id(Address::new(chain_config, *token_id)?.into_string());
             req.set_destination(Address::new(chain_config, dest.clone())?.into_string());
 
@@ -611,15 +632,15 @@ fn to_trezor_account_input(
     outpoint: &common::chain::AccountOutPoint,
 ) -> SignerResult<MintlayerTxInput> {
     let mut inp_req = MintlayerAccountTxInput::new();
-    inp_req.set_address(Address::new(chain_config, dest.clone())?.into_string());
-    inp_req.address_n = destination_to_address_paths(key_chain, dest);
+    inp_req.addresses = destination_to_address_paths(key_chain, dest);
     inp_req.set_nonce(outpoint.nonce().value());
     match outpoint.account() {
         AccountSpending::DelegationBalance(delegation_id, amount) => {
-            inp_req.set_delegation_id(Address::new(chain_config, *delegation_id)?.into_string());
-            let mut value = MintlayerOutputValue::new();
-            value.set_amount(amount.into_atoms().to_be_bytes().to_vec());
-            inp_req.value = Some(value).into();
+            let mut deleg_balance_req = MintlayerAccountSpendingDelegationBalance::new();
+            deleg_balance_req
+                .set_delegation_id(Address::new(chain_config, *delegation_id)?.into_string());
+            deleg_balance_req.set_amount(amount.into_atoms().to_be_bytes().to_vec());
+            inp_req.delegation_balance = Some(deleg_balance_req).into();
         }
     }
     let mut inp = MintlayerTxInput::new();
@@ -648,7 +669,7 @@ fn to_trezor_utxo_input(
     inp_req.set_prev_index(outpoint.output_index());
 
     inp_req.set_address(Address::new(chain_config, dest.clone())?.into_string());
-    inp_req.address_n = destination_to_address_paths(key_chain, dest);
+    inp_req.addresses = destination_to_address_paths(key_chain, dest);
 
     let mut inp = MintlayerTxInput::new();
     inp.utxo = Some(inp_req).into();
@@ -1083,11 +1104,12 @@ impl TrezorSignerProvider {
         let derivation_path = make_account_path(chain_config, account_index);
         let account_path =
             derivation_path.as_slice().iter().map(|c| c.into_encoded_index()).collect();
+        let coin_name = chain_config.chain_type().name().to_owned();
         let xpub = self
             .client
             .lock()
             .expect("poisoned lock")
-            .mintlayer_get_public_key(account_path)
+            .mintlayer_get_public_key(coin_name, account_path)
             .map_err(|e| SignerError::TrezorError(TrezorError::DeviceError(e.to_string())))?;
         let chain_code = ChainCode::from(xpub.chain_code.0);
         let account_pubkey = Secp256k1ExtendedPublicKey::new(
