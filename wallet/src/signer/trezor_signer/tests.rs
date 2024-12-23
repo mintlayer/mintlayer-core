@@ -18,6 +18,7 @@ use std::ops::{Add, Div, Mul, Sub};
 
 use super::*;
 use crate::key_chain::{MasterKeyChain, LOOKAHEAD_SIZE};
+use crate::send_request::PoolOrTokenId;
 use crate::{Account, SendRequest};
 use common::chain::config::create_regtest;
 use common::chain::htlc::HashedTimelockContract;
@@ -198,6 +199,7 @@ fn sign_transaction(#[case] seed: Seed) {
         .collect();
 
     let total_amount = amounts.iter().fold(Amount::ZERO, |acc, a| acc.add(*a).unwrap());
+    eprintln!("total utxo amounts: {total_amount:?}");
 
     let utxos: Vec<TxOutput> = amounts
         .iter()
@@ -260,20 +262,18 @@ fn sign_transaction(#[case] seed: Seed) {
     let multisig_input = TxInput::from_utxo(source_id, rng.next_u32());
     let multisig_utxo = TxOutput::Transfer(OutputValue::Coin(Amount::from_atoms(1)), multisig_dest);
 
+    let token_id = TokenId::new(H256::random_using(&mut rng));
     let acc_inputs = vec![
         TxInput::Account(AccountOutPoint::new(
             AccountNonce::new(1),
             AccountSpending::DelegationBalance(
                 DelegationId::new(H256::random_using(&mut rng)),
-                Amount::from_atoms(rng.next_u32() as u128),
+                Amount::from_atoms(1 as u128),
             ),
         )),
         TxInput::AccountCommand(
             AccountNonce::new(rng.next_u64()),
-            AccountCommand::MintTokens(
-                TokenId::new(H256::random_using(&mut rng)),
-                Amount::from_atoms(100),
-            ),
+            AccountCommand::MintTokens(token_id, Amount::from_atoms(100)),
         ),
         TxInput::AccountCommand(
             AccountNonce::new(rng.next_u64()),
@@ -349,7 +349,7 @@ fn sign_transaction(#[case] seed: Seed) {
     let pool_id = PoolId::new(H256::random());
     let delegation_id = DelegationId::new(H256::random());
     let pool_data = StakePoolData::new(
-        Amount::from_atoms(5000000),
+        Amount::from_atoms(5),
         Destination::PublicKey(dest_pub.clone()),
         vrf_public_key,
         Destination::PublicKey(dest_pub.clone()),
@@ -394,6 +394,10 @@ fn sign_transaction(#[case] seed: Seed) {
 
     let outputs = vec![
         TxOutput::Transfer(
+            OutputValue::TokenV1(token_id, dest_amount),
+            Destination::PublicKey(dest_pub.clone()),
+        ),
+        TxOutput::Transfer(
             OutputValue::Coin(dest_amount),
             Destination::PublicKey(dest_pub),
         ),
@@ -418,10 +422,6 @@ fn sign_transaction(#[case] seed: Seed) {
         TxOutput::DataDeposit(vec![1, 2, 3]),
         TxOutput::Htlc(OutputValue::Coin(burn_amount), Box::new(hash_lock)),
         TxOutput::CreateOrder(Box::new(order_data)),
-        TxOutput::Transfer(
-            OutputValue::Coin(Amount::from_atoms(100_000_000_000)),
-            account.get_new_address(&mut db_tx, Change).unwrap().1.into_object(),
-        ),
     ];
 
     let req = SendRequest::new()
@@ -435,7 +435,14 @@ fn sign_transaction(#[case] seed: Seed) {
         .with_inputs_and_destinations(acc_inputs.into_iter().zip(acc_dests.clone()))
         .with_outputs(outputs);
     let destinations = req.destinations().to_vec();
-    let additional_info = BTreeMap::new();
+    let mut additional_info = BTreeMap::new();
+    additional_info.insert(
+        PoolOrTokenId::TokenId(token_id),
+        UtxoAdditionalInfo::TokenInfo(TokenAdditionalInfo {
+            num_decimals: 1,
+            ticker: "TKN".as_bytes().to_vec(),
+        }),
+    );
     let ptx = req.into_partially_signed_tx(&additional_info).unwrap();
 
     let mut devices = find_devices(false);
