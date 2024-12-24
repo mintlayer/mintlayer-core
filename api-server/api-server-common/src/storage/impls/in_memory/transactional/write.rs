@@ -16,6 +16,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use common::{
+    address::Address,
     chain::{
         block::timestamp::BlockTimestamp,
         tokens::{NftIssuance, TokenId},
@@ -28,8 +29,8 @@ use pos_accounting::PoolData;
 use crate::storage::storage_api::{
     block_aux_data::{BlockAuxData, BlockWithExtraData},
     ApiServerStorageError, ApiServerStorageRead, ApiServerStorageWrite, BlockInfo,
-    CoinOrTokenStatistic, Delegation, FungibleTokenData, LockedUtxo, Order, PoolBlockStats,
-    TransactionInfo, Utxo, UtxoWithExtraInfo,
+    CoinOrTokenStatistic, Delegation, FungibleTokenData, LockedUtxo, NftWithOwner, Order,
+    PoolBlockStats, TransactionInfo, Utxo, UtxoWithExtraInfo,
 };
 
 use super::ApiServerInMemoryStorageTransactionalRw;
@@ -66,7 +67,7 @@ impl<'t> ApiServerStorageWrite for ApiServerInMemoryStorageTransactionalRw<'t> {
 
     async fn set_address_balance_at_height(
         &mut self,
-        address: &str,
+        address: &Address<Destination>,
         amount: Amount,
         coin_or_token_id: CoinOrTokenId,
         block_height: BlockHeight,
@@ -81,7 +82,7 @@ impl<'t> ApiServerStorageWrite for ApiServerInMemoryStorageTransactionalRw<'t> {
 
     async fn set_address_locked_balance_at_height(
         &mut self,
-        address: &str,
+        address: &Address<Destination>,
         amount: Amount,
         coin_or_token_id: CoinOrTokenId,
         block_height: BlockHeight,
@@ -219,8 +220,9 @@ impl<'t> ApiServerStorageWrite for ApiServerInMemoryStorageTransactionalRw<'t> {
         token_id: TokenId,
         block_height: BlockHeight,
         issuance: NftIssuance,
+        owner: &Destination,
     ) -> Result<(), ApiServerStorageError> {
-        self.transaction.set_nft_token_issuance(token_id, block_height, issuance)
+        self.transaction.set_nft_token_issuance(token_id, block_height, issuance, owner)
     }
 
     async fn del_token_issuance_above_height(
@@ -456,7 +458,7 @@ impl<'t> ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRw<'t> {
     async fn get_nft_token_issuance(
         &self,
         token_id: TokenId,
-    ) -> Result<Option<NftIssuance>, ApiServerStorageError> {
+    ) -> Result<Option<NftWithOwner>, ApiServerStorageError> {
         self.transaction.get_nft_token_issuance(token_id)
     }
 

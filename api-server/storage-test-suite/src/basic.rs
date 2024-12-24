@@ -1071,6 +1071,8 @@ where
 
         drop(db_tx);
 
+        let (_, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+        let random_owner = Destination::PublicKeyHash(PublicKeyHash::from(&pk));
         let nft = NftIssuance::V0(NftIssuanceV0 {
             metadata: common::chain::tokens::Metadata {
                 creator: None,
@@ -1088,13 +1090,60 @@ where
 
         let block_height = BlockHeight::new(rng.gen_range(1..100));
         db_tx
-            .set_nft_token_issuance(random_token_id, block_height, nft.clone())
+            .set_nft_token_issuance(random_token_id, block_height, nft.clone(), &random_owner)
             .await
             .unwrap();
 
         let returned_nft = db_tx.get_nft_token_issuance(random_token_id).await.unwrap().unwrap();
 
-        assert_eq!(returned_nft, nft);
+        assert_eq!(returned_nft.nft, nft);
+        assert_eq!(returned_nft.owner.unwrap(), random_owner);
+
+        // Spend the nft
+        let address = Address::new(&chain_config, random_owner).unwrap();
+        db_tx
+            .set_address_balance_at_height(
+                &address,
+                Amount::ZERO,
+                CoinOrTokenId::TokenId(random_token_id),
+                block_height.next_height(),
+            )
+            .await
+            .unwrap();
+
+        let returned_nft = db_tx.get_nft_token_issuance(random_token_id).await.unwrap().unwrap();
+
+        assert_eq!(returned_nft.nft, nft);
+        // now owner is None
+        assert_eq!(returned_nft.owner, None);
+
+        // Send the nft to a new owner
+        let (_, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+        let random_owner2 = Destination::PublicKeyHash(PublicKeyHash::from(&pk));
+        let address2 = Address::new(&chain_config, random_owner2).unwrap();
+        db_tx
+            .set_address_balance_at_height(
+                &address2,
+                Amount::from_atoms(1),
+                CoinOrTokenId::TokenId(random_token_id),
+                block_height.next_height(),
+            )
+            .await
+            .unwrap();
+
+        let returned_nft = db_tx.get_nft_token_issuance(random_token_id).await.unwrap().unwrap();
+
+        assert_eq!(returned_nft.nft, nft);
+        // now owner is the new owner
+        assert_eq!(&returned_nft.owner.unwrap(), address2.as_object());
+
+        // delete the latest block height
+        db_tx.del_nft_issuance_above_height(block_height).await.unwrap();
+
+        let returned_nft = db_tx.get_nft_token_issuance(random_token_id).await.unwrap().unwrap();
+        assert_eq!(returned_nft.nft, nft);
+        // now owner is the old owner again
+        assert_eq!(&returned_nft.owner.unwrap(), address.as_object());
 
         db_tx
             .del_nft_issuance_above_height(block_height.prev_height().unwrap())
@@ -1232,19 +1281,21 @@ where
             },
         });
 
+        let (_, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+        let random_owner = Destination::PublicKeyHash(PublicKeyHash::from(&pk));
         let random_token_id4 = TokenId::new(H256::random_using(&mut rng));
         db_tx
-            .set_nft_token_issuance(random_token_id4, block_height, nft.clone())
+            .set_nft_token_issuance(random_token_id4, block_height, nft.clone(), &random_owner)
             .await
             .unwrap();
         let random_token_id5 = TokenId::new(H256::random_using(&mut rng));
         db_tx
-            .set_nft_token_issuance(random_token_id5, block_height, nft.clone())
+            .set_nft_token_issuance(random_token_id5, block_height, nft.clone(), &random_owner)
             .await
             .unwrap();
         let random_token_id6 = TokenId::new(H256::random_using(&mut rng));
         db_tx
-            .set_nft_token_issuance(random_token_id6, block_height, nft.clone())
+            .set_nft_token_issuance(random_token_id6, block_height, nft.clone(), &random_owner)
             .await
             .unwrap();
 

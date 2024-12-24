@@ -15,9 +15,8 @@
 
 use common::{
     chain::{
-        block::timestamp::BlockTimestamp,
-        tokens::{NftIssuance, TokenId},
-        DelegationId, Destination, OrderId, PoolId,
+        block::timestamp::BlockTimestamp, tokens::TokenId, DelegationId, Destination, OrderId,
+        PoolId,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
 };
@@ -26,7 +25,7 @@ use crate::storage::{
     impls::postgres::queries::QueryFromConnection,
     storage_api::{
         block_aux_data::BlockAuxData, ApiServerStorageError, ApiServerStorageRead, BlockInfo,
-        CoinOrTokenStatistic, Delegation, FungibleTokenData, Order, PoolBlockStats,
+        CoinOrTokenStatistic, Delegation, FungibleTokenData, NftWithOwner, Order, PoolBlockStats,
         TransactionInfo, Utxo, UtxoWithExtraInfo,
     },
 };
@@ -304,7 +303,7 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRo<'a> {
     async fn get_nft_token_issuance(
         &self,
         token_id: TokenId,
-    ) -> Result<Option<NftIssuance>, ApiServerStorageError> {
+    ) -> Result<Option<NftWithOwner>, ApiServerStorageError> {
         let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_nft_token_issuance(token_id).await?;
 

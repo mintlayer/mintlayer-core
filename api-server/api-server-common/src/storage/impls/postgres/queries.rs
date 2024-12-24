@@ -39,7 +39,7 @@ use crate::storage::{
     storage_api::{
         block_aux_data::{BlockAuxData, BlockWithExtraData},
         ApiServerStorageError, BlockInfo, CoinOrTokenStatistic, Delegation, FungibleTokenData,
-        LockedUtxo, Order, PoolBlockStats, TransactionInfo, Utxo, UtxoWithExtraInfo,
+        LockedUtxo, NftWithOwner, Order, PoolBlockStats, TransactionInfo, Utxo, UtxoWithExtraInfo,
     },
 };
 
@@ -240,7 +240,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
 
     pub async fn set_address_balance_at_height(
         &mut self,
-        address: &str,
+        address: &Address<Destination>,
         amount: Amount,
         coin_or_token_id: CoinOrTokenId,
         block_height: BlockHeight,
@@ -260,12 +260,62 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
 
+        let CoinOrTokenId::TokenId(token_id) = coin_or_token_id else {
+            return Ok(());
+        };
+
+        self.update_nft_owner(token_id, height, (amount > Amount::ZERO).then_some(address))
+            .await?;
+
+        Ok(())
+    }
+
+    async fn update_nft_owner(
+        &mut self,
+        token_id: TokenId,
+        height: i64,
+        owner: Option<&Address<Destination>>,
+    ) -> Result<(), ApiServerStorageError> {
+        self.tx
+            .execute(
+                r#"
+                    WITH LastRow AS (
+                        SELECT
+                            nft_id,
+                            block_height,
+                            ticker,
+                            issuance
+                        FROM
+                            ml.nft_issuance
+                        WHERE
+                            nft_id = $1
+                        ORDER BY
+                            block_height DESC
+                        LIMIT 1
+                    )
+                    INSERT INTO ml.nft_issuance (nft_id, block_height, ticker, issuance, owner)
+                    SELECT
+                        lr.nft_id,
+                        $2,
+                        lr.ticker,
+                        lr.issuance,
+                        $3
+                    FROM
+                        LastRow lr
+                    ON CONFLICT (nft_id, block_height) DO UPDATE
+                    SET
+                        ticker = EXCLUDED.ticker,
+                        owner = EXCLUDED.owner;"#,
+                &[&token_id.encode(), &height, &owner.map(|o| o.as_object().encode())],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
         Ok(())
     }
 
     pub async fn set_address_locked_balance_at_height(
         &mut self,
-        address: &str,
+        address: &Address<Destination>,
         amount: Amount,
         coin_or_token_id: CoinOrTokenId,
         block_height: BlockHeight,
@@ -284,6 +334,13 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        let CoinOrTokenId::TokenId(token_id) = coin_or_token_id else {
+            return Ok(());
+        };
+
+        self.update_nft_owner(token_id, height, (amount > Amount::ZERO).then_some(address))
+            .await?;
 
         Ok(())
     }
@@ -631,7 +688,8 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     block_height bigint NOT NULL,
                     ticker bytea NOT NULL,
                     issuance bytea NOT NULL,
-                    PRIMARY KEY (nft_id)
+                    owner bytea,
+                    PRIMARY KEY (nft_id, block_height)
                 );",
         )
         .await?;
@@ -2030,11 +2088,11 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
     pub async fn get_nft_token_issuance(
         &self,
         token_id: TokenId,
-    ) -> Result<Option<NftIssuance>, ApiServerStorageError> {
+    ) -> Result<Option<NftWithOwner>, ApiServerStorageError> {
         let row = self
             .tx
             .query_opt(
-                "SELECT issuance FROM ml.nft_issuance WHERE nft_id = $1
+                "SELECT issuance, owner FROM ml.nft_issuance WHERE nft_id = $1
                     ORDER BY block_height DESC
                     LIMIT 1;",
                 &[&token_id.encode()],
@@ -2048,15 +2106,26 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         };
 
         let serialized_data: Vec<u8> = row.get(0);
+        let owner: Option<Vec<u8>> = row.get(1);
 
-        let issuance = NftIssuance::decode_all(&mut serialized_data.as_slice()).map_err(|e| {
+        let nft = NftIssuance::decode_all(&mut serialized_data.as_slice()).map_err(|e| {
             ApiServerStorageError::DeserializationError(format!(
                 "Nft issuance data for nft id {} deserialization failed: {}",
                 token_id, e
             ))
         })?;
 
-        Ok(Some(issuance))
+        let owner = owner
+            .map(|owner| {
+                Destination::decode_all(&mut owner.as_slice()).map_err(|e| {
+                    ApiServerStorageError::DeserializationError(format!(
+                        "Deserialization failed for nft owner {token_id}: {e}"
+                    ))
+                })
+            })
+            .transpose()?;
+
+        Ok(Some(NftWithOwner { nft, owner }))
     }
 
     pub async fn set_nft_token_issuance(
@@ -2064,6 +2133,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         token_id: TokenId,
         block_height: BlockHeight,
         issuance: NftIssuance,
+        owner: &Destination,
     ) -> Result<(), ApiServerStorageError> {
         let height = Self::block_height_to_postgres_friendly(block_height);
 
@@ -2073,8 +2143,8 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
 
         self.tx
             .execute(
-                "INSERT INTO ml.nft_issuance (nft_id, block_height, issuance, ticker) VALUES ($1, $2, $3, $4);",
-                &[&token_id.encode(), &height, &issuance.encode(), ticker],
+                "INSERT INTO ml.nft_issuance (nft_id, block_height, issuance, ticker, owner) VALUES ($1, $2, $3, $4, $5);",
+                &[&token_id.encode(), &height, &issuance.encode(), ticker, &owner.encode()],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
