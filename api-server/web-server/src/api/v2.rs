@@ -58,7 +58,7 @@ use utils::ensure;
 
 use crate::ApiServerWebServerState;
 
-use super::json_helpers::{nft_issuance_data_to_json, to_json_string};
+use super::json_helpers::{nft_with_owner_to_json, to_json_string};
 
 pub const API_VERSION: &str = "2.0.0";
 
@@ -1092,7 +1092,7 @@ pub async fn nft<T: ApiServerStorage>(
             ApiServerWebServerNotFoundError::NftNotFound,
         ))?;
 
-    Ok(Json(nft_issuance_data_to_json(&nft, &state.chain_config)))
+    Ok(Json(nft_with_owner_to_json(&nft, &state.chain_config)))
 }
 
 pub async fn coin_statistics<T: ApiServerStorage>(

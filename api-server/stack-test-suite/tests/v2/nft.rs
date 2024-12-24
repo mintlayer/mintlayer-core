@@ -13,7 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use api_web_server::api::json_helpers::nft_issuance_data_to_json;
+use api_server_common::storage::storage_api::NftWithOwner;
+use api_web_server::api::json_helpers::nft_with_owner_to_json;
 use common::{
     chain::tokens::{make_token_id, NftIssuance, TokenId},
     primitives::H256,
@@ -124,7 +125,7 @@ async fn ok(#[case] seed: Seed) {
                         StandardInputSignature::produce_uniparty_signature_for_input(
                             &alice_sk,
                             SigHashType::try_from(SigHashType::ALL).unwrap(),
-                            alice_destination,
+                            alice_destination.clone(),
                             &tx,
                             &[issue_nft_tx.outputs().first()],
                             0,
@@ -145,7 +146,13 @@ async fn ok(#[case] seed: Seed) {
 
                 _ = tx.send([(
                     token_id,
-                    nft_issuance_data_to_json(&NftIssuance::V0(nft), &chain_config),
+                    nft_with_owner_to_json(
+                        &NftWithOwner {
+                            nft: NftIssuance::V0(nft),
+                            owner: Some(alice_destination),
+                        },
+                        &chain_config,
+                    ),
                 )]);
 
                 chainstate_block_ids

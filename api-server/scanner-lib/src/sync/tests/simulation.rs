@@ -954,7 +954,7 @@ async fn check_token(
         RPCTokenInfo::NonFungibleToken(node_data) => {
             let scanner_data = tx.get_nft_token_issuance(token_id).await.unwrap().unwrap();
 
-            match scanner_data {
+            match scanner_data.nft {
                 NftIssuance::V0(scanner_data) => {
                     let scanner_metadata: RPCNonFungibleTokenMetadata =
                         (&scanner_data.metadata).into();
