@@ -24,8 +24,9 @@ use serde::{Deserialize, Serialize};
 
 use chainstate::ChainInfo;
 use common::{
-    chain::{DelegationId, GenBlock, PoolId, SignedTransaction},
+    chain::{ChainConfig, DelegationId, GenBlock, PoolId, SignedTransaction},
     primitives::{Amount, BlockHeight, Id},
+    text_summary::TextSummary,
 };
 use crypto::key::hdkd::child_number::ChildNumber;
 use p2p::P2pEvent;
@@ -149,11 +150,35 @@ pub struct SendDelegateToAddressRequest {
     pub delegation_id: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SignedTransactionWrapper {
+    #[serde(with = "hex_encoded_serialization")]
+    tx: SignedTransaction,
+}
+
+impl SignedTransactionWrapper {
+    pub fn new(tx: SignedTransaction) -> Self {
+        Self { tx }
+    }
+
+    pub fn take_tx(self) -> SignedTransaction {
+        self.tx
+    }
+
+    pub fn text_summary(&self, config: &ChainConfig) -> String {
+        self.tx.transaction().text_summary(config)
+    }
+
+    pub fn to_json(&self, config: &ChainConfig) -> Result<serde_json::Value, BackendError> {
+        common::address::dehexify::to_dehexified_json(config, self.tx.transaction())
+            .map_err(|e| BackendError::ConversionToDehexifyJsonError(e.to_string()))
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TransactionInfo {
     pub wallet_id: WalletId,
-    #[serde(with = "hex_encoded_serialization")]
-    pub tx: SignedTransaction,
+    pub tx: SignedTransactionWrapper,
 }
 
 #[derive(Debug)]
@@ -211,7 +236,7 @@ pub enum BackendRequest {
 
     SubmitTx {
         wallet_id: WalletId,
-        tx: SignedTransaction,
+        tx: SignedTransactionWrapper,
     },
 
     TransactionList {
