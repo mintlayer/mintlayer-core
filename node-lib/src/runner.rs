@@ -21,10 +21,12 @@ use std::{
     sync::Arc,
 };
 
+use file_rotate::{compression::Compression, suffix::AppendCount, ContentLimit, FileRotate};
+
 use anyhow::{anyhow, Context, Result};
 use blockprod::rpc::BlockProductionRpcServer;
 use chainstate_launcher::{ChainConfig, StorageBackendConfig};
-use common::chain::config::{regtest_options::regtest_chain_config, Builder as ChainConfigBuilder};
+use common::chain::config::regtest_options::regtest_chain_config;
 
 use chainstate::{rpc::ChainstateRpcServer, ChainstateError, InitializationError};
 use common::chain::config::{assert_no_ignore_consensus_in_chain_config, ChainType};
@@ -37,7 +39,6 @@ use test_rpc_functions::{empty::make_empty_rpc_test_functions, rpc::RpcTestFunct
 use p2p::{error::P2pError, rpc::P2pRpcServer};
 use rpc::rpc_creds::RpcCreds;
 use test_rpc_functions::make_rpc_test_functions;
-use utils::default_data_dir::prepare_data_dir;
 
 use crate::{
     config_files::{NodeConfigFile, DEFAULT_P2P_NETWORKING_ENABLED, DEFAULT_RPC_ENABLED},
@@ -48,6 +49,7 @@ use crate::{
 };
 
 const LOCK_FILE_NAME: &str = ".lock";
+const DEFAULT_LOG_FILE_NAME: &str = "mintlayer.log";
 
 pub enum NodeSetupResult {
     Node(Node),
@@ -74,7 +76,7 @@ impl Node {
 /// Initialize the node, giving caller the opportunity to add more subsystems before start.
 async fn initialize(
     chain_config: ChainConfig,
-    data_dir: PathBuf,
+    data_dir: &Path,
     node_config: NodeConfigFile,
 ) -> Result<(subsystem::Manager, NodeController)> {
     let chain_config = Arc::new(chain_config);
@@ -88,7 +90,7 @@ async fn initialize(
 
     // Chainstate subsystem
     let chainstate = chainstate_launcher::make_chainstate(
-        &data_dir,
+        data_dir,
         Arc::clone(&chain_config),
         node_config.chainstate.unwrap_or_default().into(),
     )?;
@@ -193,7 +195,7 @@ async fn initialize(
     let rpc_config = node_config.rpc.unwrap_or_default();
     if rpc_config.rpc_enabled.unwrap_or(DEFAULT_RPC_ENABLED) {
         let rpc_creds = RpcCreds::new(
-            &data_dir,
+            data_dir,
             rpc_config.username.as_deref(),
             rpc_config.password.as_deref(),
             rpc_config.cookie_file.as_deref(),
@@ -233,46 +235,74 @@ async fn initialize(
 }
 
 /// Processes options and potentially runs the node.
-pub async fn setup(options: Options, gui_mode: bool) -> Result<NodeSetupResult> {
+pub async fn setup(options: Options) -> Result<NodeSetupResult> {
     let command = options.command.clone().unwrap_or(Command::Mainnet(RunOptions::default()));
-    match command {
-        Command::Mainnet(run_options) => {
-            let chain_config = common::chain::config::create_mainnet();
-            start(
-                &options.config_path(*chain_config.chain_type()),
-                &options.data_dir,
-                options.create_data_dir_if_missing,
-                run_options,
-                chain_config,
-                gui_mode,
-            )
-            .await
-        }
-        Command::Testnet(run_options) => {
-            let chain_config = ChainConfigBuilder::new(ChainType::Testnet).build();
-            start(
-                &options.config_path(*chain_config.chain_type()),
-                &options.data_dir,
-                options.create_data_dir_if_missing,
-                run_options,
-                chain_config,
-                gui_mode,
-            )
-            .await
-        }
-        Command::Regtest(regtest_options) => {
-            let chain_config = regtest_chain_config(&regtest_options.chain_config)?;
-            start(
-                &options.config_path(*chain_config.chain_type()),
-                &options.data_dir,
-                options.create_data_dir_if_missing,
-                regtest_options.run_options,
-                chain_config,
-                gui_mode,
-            )
-            .await
-        }
+    let run_options = command.run_options();
+    let chain_config = match &command {
+        Command::Mainnet(_) => common::chain::config::create_mainnet(),
+        Command::Testnet(_) => common::chain::config::create_testnet(),
+        Command::Regtest(regtest_options) => regtest_chain_config(&regtest_options.chain_config)?,
+    };
+
+    // Prepare data dir
+    let data_dir = utils::default_data_dir::prepare_data_dir(
+        || default_data_dir(*chain_config.chain_type()),
+        &options.data_dir,
+        options.create_data_dir_if_missing,
+    )
+    .expect("Failed to prepare data directory");
+
+    // Lock data dir
+    let lock_file = lock_data_dir(&data_dir)?;
+
+    // Clean data dir if needed
+    if run_options.clean_data.unwrap_or(false) {
+        clean_data_dir(
+            &data_dir,
+            std::slice::from_ref(&data_dir.join(LOCK_FILE_NAME).as_path()),
+        )?;
+        return Ok(NodeSetupResult::DataDirCleanedUp);
     }
+
+    // Init logging
+    if run_options.log_to_file.is_some_and(|log_to_file| log_to_file) {
+        let log_file_name = std::env::current_exe().map_or_else(
+            |_| DEFAULT_LOG_FILE_NAME.to_owned(),
+            |exe| {
+                exe.as_path().file_stem().and_then(|stem| stem.to_str()).map_or_else(
+                    || DEFAULT_LOG_FILE_NAME.to_owned(),
+                    |s| format!("{}.log", s.to_owned()),
+                )
+            },
+        );
+        let log_file = FileRotate::new(
+            data_dir.join(format!("logs/{}", log_file_name)),
+            AppendCount::new(13),            // total 14 files
+            ContentLimit::Bytes(10_000_000), // 10MB each
+            Compression::None,
+            #[cfg(unix)]
+            None,
+        );
+        logging::init_logging_to(log_file, false);
+    } else {
+        logging::init_logging();
+    }
+
+    logging::log::info!("Command line options: {options:?}");
+
+    let (manager, controller) = start(
+        &options.config_path(*chain_config.chain_type()),
+        &data_dir,
+        run_options,
+        chain_config,
+    )
+    .await?;
+
+    Ok(NodeSetupResult::Node(Node {
+        manager,
+        controller,
+        lock_file,
+    }))
 }
 
 /// Creates an exclusive lock file in the specified directory.
@@ -304,50 +334,20 @@ fn clean_data_dir(data_dir: &Path, exclude: &[&Path]) -> Result<()> {
     Ok(())
 }
 
-/// For the GUI, we configure different defaults, such as disabling RPC server binding
-fn set_defaults_for_gui_mode(mut opts: RunOptions) -> RunOptions {
-    opts.rpc_enabled = Some(opts.rpc_enabled.unwrap_or(false));
-    opts
-}
-
 async fn start(
     config_path: &Path,
-    datadir_path_opt: &Option<PathBuf>,
-    create_data_dir_if_missing: Option<bool>,
-    run_options: RunOptions,
+    datadir_path: &Path,
+    run_options: &RunOptions,
     chain_config: ChainConfig,
-    gui_mode: bool,
-) -> Result<NodeSetupResult> {
-    let run_options = if gui_mode {
-        set_defaults_for_gui_mode(run_options)
-    } else {
-        run_options
-    };
-
+) -> Result<(subsystem::Manager, NodeController)> {
     run_options.force_allow_run_as_root_outer.ensure_not_running_as_root_user()?;
 
     if let Some(mock_time) = run_options.mock_time {
         set_mock_time(*chain_config.chain_type(), mock_time)?;
     }
 
-    let node_config = NodeConfigFile::read(&chain_config, config_path, &run_options)
+    let node_config = NodeConfigFile::read(&chain_config, config_path, run_options)
         .context("Failed to initialize config")?;
-
-    let data_dir = prepare_data_dir(
-        || default_data_dir(*chain_config.chain_type()),
-        datadir_path_opt,
-        create_data_dir_if_missing,
-    )
-    .expect("Failed to prepare data directory");
-    let lock_file = lock_data_dir(&data_dir)?;
-
-    if run_options.clean_data.unwrap_or(false) {
-        clean_data_dir(
-            &data_dir,
-            std::slice::from_ref(&data_dir.join(LOCK_FILE_NAME).as_path()),
-        )?;
-        return Ok(NodeSetupResult::DataDirCleanedUp);
-    }
 
     log::info!(
         "Starting mintlayer-core version {}",
@@ -355,9 +355,10 @@ async fn start(
     );
 
     log::info!("Starting with the following config:\n {node_config:#?}");
+
     let (manager, controller) = match initialize(
         chain_config.clone(),
-        data_dir.clone(),
+        datadir_path,
         node_config.clone(),
     )
     .await
@@ -374,210 +375,18 @@ async fn start(
 
                 // cleanup storage directory and retry initialization
                 if let Some(storage_subdir_name) = storage_config.subdirectory_name() {
-                    let path = data_dir.join(storage_subdir_name);
+                    let path = datadir_path.join(storage_subdir_name);
                     if path.exists() {
                         std::fs::remove_dir_all(path)
                             .expect("Removing chainstate storage directory must succeed");
                     }
                 }
 
-                initialize(chain_config, data_dir, node_config).await?
+                initialize(chain_config, datadir_path, node_config).await?
             }
             _ => return Err(error),
         },
     };
 
-    Ok(NodeSetupResult::Node(Node {
-        manager,
-        controller,
-        lock_file,
-    }))
-}
-
-#[cfg(test)]
-mod test {
-    use std::io::{Read, Write};
-
-    use randomness::{make_pseudo_rng, Rng};
-    use tempfile::TempDir;
-
-    use super::*;
-
-    fn test_file_data(file_path: &Path, expected_contents: &[u8]) {
-        let mut file = std::fs::File::open(file_path).unwrap();
-        let mut buffer = Vec::new();
-        file.read_to_end(&mut buffer).unwrap();
-        assert_eq!(buffer, expected_contents);
-    }
-
-    #[test]
-    fn default_data_dir_preparation() {
-        let base_dir = TempDir::new().unwrap();
-        let supposed_default_dir = base_dir.path().join("supposed_default");
-
-        let default_data_dir_getter = || supposed_default_dir.clone();
-
-        // Ensure path doesn't exist beforehand
-        assert!(!supposed_default_dir.is_dir());
-
-        // The call must fail if create_data_dir_if_missing is explicitly set to false.
-        let _err = prepare_data_dir(default_data_dir_getter, &None, Some(false)).unwrap_err();
-
-        // With create_data_dir_if_missing equal to None or true, the call must succeed.
-        let returned_data_dir1 = prepare_data_dir(default_data_dir_getter, &None, None).unwrap();
-        let returned_data_dir2 =
-            prepare_data_dir(default_data_dir_getter, &None, Some(true)).unwrap();
-        assert_eq!(returned_data_dir1, returned_data_dir2);
-
-        // The default directory must be returned.
-        assert_eq!(
-            returned_data_dir1.canonicalize().unwrap(),
-            supposed_default_dir.canonicalize().unwrap()
-        );
-
-        // We also expect the directory to exist
-        assert!(supposed_default_dir.is_dir());
-
-        // Now let's use the data directory
-        let file_path = supposed_default_dir.join("SomeFile.txt");
-        let file_data: Vec<u8> = (0..1024).map(|_| make_pseudo_rng().gen::<u8>()).collect();
-        {
-            let mut file = std::fs::File::create(&file_path).unwrap();
-            file.write_all(&file_data).unwrap();
-        }
-
-        test_file_data(&file_path, &file_data);
-
-        // Now we prepare again, and ensure that our file is unchanged
-        let returned_data_dir1 = prepare_data_dir(default_data_dir_getter, &None, None).unwrap();
-        let returned_data_dir2 =
-            prepare_data_dir(default_data_dir_getter, &None, Some(true)).unwrap();
-        let returned_data_dir3 =
-            prepare_data_dir(default_data_dir_getter, &None, Some(false)).unwrap();
-        assert_eq!(returned_data_dir1, returned_data_dir2);
-        assert_eq!(returned_data_dir1, returned_data_dir3);
-
-        // Same path is returned
-        assert_eq!(
-            returned_data_dir1.canonicalize().unwrap(),
-            supposed_default_dir.canonicalize().unwrap()
-        );
-
-        test_file_data(&file_path, &file_data);
-    }
-
-    #[test]
-    fn custom_data_dir_preparation() {
-        let base_dir = TempDir::new().unwrap();
-        let supposed_default_dir = base_dir.path().join("supposed_default");
-        let supposed_custom_dir = base_dir.path().join("supposed_custom");
-
-        let default_data_dir_getter = || supposed_default_dir.clone();
-
-        // Both default and custom directories don't exist beforehand
-        assert!(!supposed_default_dir.is_dir());
-        assert!(!supposed_custom_dir.is_dir());
-
-        // The calls fail because the directory doesn't exist
-        let _err = prepare_data_dir(
-            default_data_dir_getter,
-            &Some(supposed_custom_dir.clone()),
-            None,
-        )
-        .unwrap_err();
-        let _err = prepare_data_dir(
-            default_data_dir_getter,
-            &Some(supposed_custom_dir.clone()),
-            Some(false),
-        )
-        .unwrap_err();
-
-        // Nothing has changed after the calls
-        assert!(!supposed_default_dir.is_dir());
-        assert!(!supposed_custom_dir.is_dir());
-
-        // Now set create_data_dir_if_missing to true, the directory should be created.
-        let returned_data_dir = prepare_data_dir(
-            default_data_dir_getter,
-            &Some(supposed_custom_dir.clone()),
-            Some(true),
-        )
-        .unwrap();
-
-        // The custom directory should be returned.
-        assert_eq!(
-            returned_data_dir.canonicalize().unwrap(),
-            supposed_custom_dir.canonicalize().unwrap()
-        );
-
-        // The custom directory must exist.
-        assert!(!supposed_default_dir.is_dir());
-        assert!(supposed_custom_dir.is_dir());
-
-        // Passing None or false for create_data_dir_if_missing now also works, because the directory
-        // already exists.
-        let returned_data_dir1 = prepare_data_dir(
-            default_data_dir_getter,
-            &Some(supposed_custom_dir.clone()),
-            None,
-        )
-        .unwrap();
-        let returned_data_dir2 = prepare_data_dir(
-            default_data_dir_getter,
-            &Some(supposed_custom_dir.clone()),
-            Some(false),
-        )
-        .unwrap();
-        assert_eq!(returned_data_dir1, returned_data_dir2);
-
-        // The custom directory should be returned.
-        assert_eq!(
-            returned_data_dir1.canonicalize().unwrap(),
-            supposed_custom_dir.canonicalize().unwrap()
-        );
-
-        // Last state of directories didn't change
-        assert!(!supposed_default_dir.is_dir());
-        assert!(supposed_custom_dir.is_dir());
-
-        // Now let's use the data directory
-        let file_path = supposed_custom_dir.join("SomeFile.txt");
-        let file_data: Vec<u8> = (0..1024).map(|_| make_pseudo_rng().gen::<u8>()).collect();
-        {
-            let mut file = std::fs::File::create(&file_path).unwrap();
-            file.write_all(&file_data).unwrap();
-        }
-
-        test_file_data(&file_path, &file_data);
-
-        // Now we prepare again, and ensure that our file is unchanged
-        let returned_data_dir1 = prepare_data_dir(
-            default_data_dir_getter,
-            &Some(supposed_custom_dir.clone()),
-            None,
-        )
-        .unwrap();
-        let returned_data_dir2 = prepare_data_dir(
-            default_data_dir_getter,
-            &Some(supposed_custom_dir.clone()),
-            Some(false),
-        )
-        .unwrap();
-        let returned_data_dir3 = prepare_data_dir(
-            default_data_dir_getter,
-            &Some(supposed_custom_dir.clone()),
-            Some(true),
-        )
-        .unwrap();
-        assert_eq!(returned_data_dir1, returned_data_dir2);
-        assert_eq!(returned_data_dir1, returned_data_dir3);
-
-        // Same path is returned
-        assert_eq!(
-            returned_data_dir1.canonicalize().unwrap(),
-            supposed_custom_dir.canonicalize().unwrap()
-        );
-
-        test_file_data(&file_path, &file_data);
-    }
+    Ok((manager, controller))
 }
