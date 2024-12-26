@@ -91,7 +91,6 @@ pub struct RunOptions {
 
     /// Log to a file
     #[clap(long, action = clap::ArgAction::Set)]
-    #[arg(hide = true)]
     pub log_to_file: Option<bool>,
 
     /// Minimum number of connected peers to enable block production.

@@ -49,7 +49,7 @@ use crate::{
 };
 
 const LOCK_FILE_NAME: &str = ".lock";
-const LOG_FILE_NAME: &str = "mintlayer.log";
+const DEFAULT_LOG_FILE_NAME: &str = "mintlayer.log";
 
 pub enum NodeSetupResult {
     Node(Node),
@@ -266,10 +266,19 @@ pub async fn setup(options: Options) -> Result<NodeSetupResult> {
 
     // Init logging
     if run_options.log_to_file.is_some_and(|log_to_file| log_to_file) {
+        let log_file_name = std::env::current_exe().map_or_else(
+            |_| DEFAULT_LOG_FILE_NAME.to_owned(),
+            |exe| {
+                exe.as_path().file_stem().and_then(|stem| stem.to_str()).map_or_else(
+                    || DEFAULT_LOG_FILE_NAME.to_owned(),
+                    |s| format!("{}.log", s.to_owned()),
+                )
+            },
+        );
         let log_file = FileRotate::new(
-            data_dir.join(format!("logs/{}", LOG_FILE_NAME)),
-            AppendCount::new(2),              // total 3 file
-            ContentLimit::Bytes(100_000_000), // 100MB each
+            data_dir.join(format!("logs/{}", log_file_name)),
+            AppendCount::new(13),            // total 14 files
+            ContentLimit::Bytes(10_000_000), // 10MB each
             Compression::None,
             #[cfg(unix)]
             None,
