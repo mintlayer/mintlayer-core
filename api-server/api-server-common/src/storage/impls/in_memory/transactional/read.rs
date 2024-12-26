@@ -17,9 +17,8 @@ use std::collections::BTreeMap;
 
 use common::{
     chain::{
-        block::timestamp::BlockTimestamp,
-        tokens::{NftIssuance, TokenId},
-        Block, DelegationId, Destination, OrderId, PoolId, Transaction, UtxoOutPoint,
+        block::timestamp::BlockTimestamp, tokens::TokenId, Block, DelegationId, Destination,
+        OrderId, PoolId, Transaction, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
 };
@@ -27,8 +26,8 @@ use pos_accounting::PoolData;
 
 use crate::storage::storage_api::{
     block_aux_data::BlockAuxData, ApiServerStorageError, ApiServerStorageRead, BlockInfo,
-    CoinOrTokenStatistic, Delegation, FungibleTokenData, Order, PoolBlockStats, TransactionInfo,
-    Utxo, UtxoWithExtraInfo,
+    CoinOrTokenStatistic, Delegation, FungibleTokenData, NftWithOwner, Order, PoolBlockStats,
+    TransactionInfo, Utxo, UtxoWithExtraInfo,
 };
 
 use super::ApiServerInMemoryStorageTransactionalRo;
@@ -217,7 +216,7 @@ impl ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'_> {
     async fn get_nft_token_issuance(
         &self,
         token_id: TokenId,
-    ) -> Result<Option<NftIssuance>, ApiServerStorageError> {
+    ) -> Result<Option<NftWithOwner>, ApiServerStorageError> {
         self.transaction.get_nft_token_issuance(token_id)
     }
 

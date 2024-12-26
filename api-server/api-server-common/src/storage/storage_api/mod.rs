@@ -20,6 +20,7 @@ use std::{
 };
 
 use common::{
+    address::Address,
     chain::{
         block::timestamp::BlockTimestamp,
         timelock::OutputTimeLock,
@@ -415,6 +416,12 @@ impl FungibleTokenData {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct NftWithOwner {
+    pub nft: NftIssuance,
+    pub owner: Option<Destination>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub struct TxAdditionalInfo {
     pub fee: Amount,
@@ -570,7 +577,7 @@ pub trait ApiServerStorageRead: Sync {
     async fn get_nft_token_issuance(
         &self,
         token_id: TokenId,
-    ) -> Result<Option<NftIssuance>, ApiServerStorageError>;
+    ) -> Result<Option<NftWithOwner>, ApiServerStorageError>;
 
     async fn get_token_num_decimals(
         &self,
@@ -641,7 +648,7 @@ pub trait ApiServerStorageWrite: ApiServerStorageRead {
 
     async fn set_address_balance_at_height(
         &mut self,
-        address: &str,
+        address: &Address<Destination>,
         amount: Amount,
         coin_or_token_id: CoinOrTokenId,
         block_height: BlockHeight,
@@ -649,7 +656,7 @@ pub trait ApiServerStorageWrite: ApiServerStorageRead {
 
     async fn set_address_locked_balance_at_height(
         &mut self,
-        address: &str,
+        address: &Address<Destination>,
         amount: Amount,
         coin_or_token_id: CoinOrTokenId,
         block_height: BlockHeight,
@@ -749,6 +756,7 @@ pub trait ApiServerStorageWrite: ApiServerStorageRead {
         token_id: TokenId,
         block_height: BlockHeight,
         issuance: NftIssuance,
+        owner: &Destination,
     ) -> Result<(), ApiServerStorageError>;
 
     async fn del_token_issuance_above_height(
