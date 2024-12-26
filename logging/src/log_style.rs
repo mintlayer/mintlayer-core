@@ -13,11 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::ffi::OsString;
-
 use thiserror::Error;
 
-static DEFAULT_LOG_STYLE: LogStyle = LogStyle::Text(TextColoring::Auto);
+use crate::utils::{get_from_env, GetFromEnvError};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum TextColoring {
@@ -45,26 +43,16 @@ impl LogStyle {
     }
 }
 
-pub fn get_log_style_from_env(env_var_name: &str) -> (LogStyle, Option<LogStyleParseError>) {
-    let (style, parse_err) = match std::env::var(env_var_name) {
-        Ok(str) => match LogStyle::parse(&str) {
-            Ok(style) => (Some(style), None),
-            Err(err) => (None, Some(err)),
-        },
-        Err(std::env::VarError::NotPresent) => (None, None),
-        Err(std::env::VarError::NotUnicode(os_str)) => {
-            (None, Some(LogStyleParseError::BadData(os_str)))
-        }
-    };
-    (style.unwrap_or(DEFAULT_LOG_STYLE), parse_err)
+pub fn get_log_style_from_env(env_var_name: &str) -> Result<Option<LogStyle>, LogStyleParseError> {
+    get_from_env(env_var_name)?.map(|val| LogStyle::parse(&val)).transpose()
 }
 
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum LogStyleParseError {
     #[error("Unrecognized format: {0}")]
     UnrecognizedFormat(String),
-    #[error("Bad data: {0:?}")]
-    BadData(OsString),
+    #[error("Env var error: {0:?}")]
+    GetFromEnvError(#[from] GetFromEnvError),
 }
 
 #[cfg(test)]
@@ -83,59 +71,57 @@ mod tests {
         // Basic tests
         {
             std::env::set_var(TEST_ENV_VAR, "text");
-            let (style, error) = get_log_style_from_env(TEST_ENV_VAR);
-            assert_eq!(style, LogStyle::Text(TextColoring::Auto));
-            assert_eq!(error, None);
+            let result = get_log_style_from_env(TEST_ENV_VAR);
+            assert_eq!(result, Ok(Some(LogStyle::Text(TextColoring::Auto))));
 
             std::env::set_var(TEST_ENV_VAR, "text-colored");
-            let (style, error) = get_log_style_from_env(TEST_ENV_VAR);
-            assert_eq!(style, LogStyle::Text(TextColoring::On));
-            assert_eq!(error, None);
+            let result = get_log_style_from_env(TEST_ENV_VAR);
+            assert_eq!(result, Ok(Some(LogStyle::Text(TextColoring::On))));
 
             std::env::set_var(TEST_ENV_VAR, "text-uncolored");
-            let (style, error) = get_log_style_from_env(TEST_ENV_VAR);
-            assert_eq!(style, LogStyle::Text(TextColoring::Off));
-            assert_eq!(error, None);
+            let result = get_log_style_from_env(TEST_ENV_VAR);
+            assert_eq!(result, Ok(Some(LogStyle::Text(TextColoring::Off))));
 
             std::env::set_var(TEST_ENV_VAR, "json");
-            let (style, error) = get_log_style_from_env(TEST_ENV_VAR);
-            assert_eq!(style, LogStyle::Json);
-            assert_eq!(error, None);
+            let result = get_log_style_from_env(TEST_ENV_VAR);
+            assert_eq!(result, Ok(Some(LogStyle::Json)));
         }
 
         // Case-insensitivity tests
         {
             std::env::set_var(TEST_ENV_VAR, "tEXt");
-            let (style, error) = get_log_style_from_env(TEST_ENV_VAR);
-            assert_eq!(style, LogStyle::Text(TextColoring::Auto));
-            assert_eq!(error, None);
+            let result = get_log_style_from_env(TEST_ENV_VAR);
+            assert_eq!(result, Ok(Some(LogStyle::Text(TextColoring::Auto))));
 
             std::env::set_var(TEST_ENV_VAR, "tEXt-coLoRed");
-            let (style, error) = get_log_style_from_env(TEST_ENV_VAR);
-            assert_eq!(style, LogStyle::Text(TextColoring::On));
-            assert_eq!(error, None);
+            let result = get_log_style_from_env(TEST_ENV_VAR);
+            assert_eq!(result, Ok(Some(LogStyle::Text(TextColoring::On))));
 
             std::env::set_var(TEST_ENV_VAR, "tEXt-uncoLoRed");
-            let (style, error) = get_log_style_from_env(TEST_ENV_VAR);
-            assert_eq!(style, LogStyle::Text(TextColoring::Off));
-            assert_eq!(error, None);
+            let result = get_log_style_from_env(TEST_ENV_VAR);
+            assert_eq!(result, Ok(Some(LogStyle::Text(TextColoring::Off))));
 
             std::env::set_var(TEST_ENV_VAR, "jSoN");
-            let (style, error) = get_log_style_from_env(TEST_ENV_VAR);
-            assert_eq!(style, LogStyle::Json);
-            assert_eq!(error, None);
+            let result = get_log_style_from_env(TEST_ENV_VAR);
+            assert_eq!(result, Ok(Some(LogStyle::Json)));
         }
 
         // Bad value test
         {
             let str = "foo";
             std::env::set_var(TEST_ENV_VAR, str);
-            let (style, error) = get_log_style_from_env(TEST_ENV_VAR);
-            assert_eq!(style, DEFAULT_LOG_STYLE);
+            let result = get_log_style_from_env(TEST_ENV_VAR);
             assert_eq!(
-                error,
-                Some(LogStyleParseError::UnrecognizedFormat(str.to_owned()))
+                result,
+                Err(LogStyleParseError::UnrecognizedFormat(str.to_owned()))
             );
+        }
+
+        // Missing value test
+        {
+            std::env::remove_var(TEST_ENV_VAR);
+            let result = get_log_style_from_env(TEST_ENV_VAR);
+            assert_eq!(result, Ok(None));
         }
     }
 }
