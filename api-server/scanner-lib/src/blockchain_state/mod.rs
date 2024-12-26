@@ -649,6 +649,42 @@ async fn calculate_tx_fee_and_collect_token_info<T: ApiServerStorageWrite>(
                 },
             };
         }
+        for out in tx.outputs().iter() {
+            match out {
+                TxOutput::Transfer(v, _)
+                | TxOutput::Burn(v)
+                | TxOutput::LockThenTransfer(v, _, _)
+                | TxOutput::Htlc(v, _) => match v {
+                    OutputValue::TokenV1(token_id, _) => {
+                        token_ids.insert(*token_id);
+                    }
+                    OutputValue::Coin(_) | OutputValue::TokenV0(_) => {}
+                },
+                TxOutput::IssueNft(token_id, _, _) => {
+                    token_ids.insert(*token_id);
+                }
+                TxOutput::CreateOrder(data) => {
+                    match data.ask() {
+                        OutputValue::TokenV1(token_id, _) => {
+                            token_ids.insert(*token_id);
+                        }
+                        OutputValue::Coin(_) | OutputValue::TokenV0(_) => {}
+                    };
+                    match data.give() {
+                        OutputValue::TokenV1(token_id, _) => {
+                            token_ids.insert(*token_id);
+                        }
+                        OutputValue::Coin(_) | OutputValue::TokenV0(_) => {}
+                    };
+                }
+                TxOutput::CreateStakePool(_, _)
+                | TxOutput::DataDeposit(_)
+                | TxOutput::DelegateStaking(_, _)
+                | TxOutput::CreateDelegationId(_, _)
+                | TxOutput::IssueFungibleToken(_)
+                | TxOutput::ProduceBlockFromStake(_, _) => {}
+            };
+        }
         token_ids
     };
 
