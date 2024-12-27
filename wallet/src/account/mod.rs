@@ -2083,7 +2083,8 @@ impl<K: AccountKeyChains> Account<K> {
                         let tx_state =
                             TxState::Confirmed(block_height, block.timestamp(), idx as u64);
                         let wallet_tx = WalletTx::Tx(TxData::new(signed_tx.clone(), tx_state));
-                        self.update_conflicting_txs(&wallet_tx, block, db_tx)?;
+
+                        self.update_conflicting_txs(signed_tx.transaction(), block, db_tx)?;
 
                         new_tx_was_added |= self
                             .add_wallet_tx_if_relevant_and_remove_from_user_txs(
@@ -2111,15 +2112,17 @@ impl<K: AccountKeyChains> Account<K> {
     /// Check for any conflicting txs and update the new state in the DB
     fn update_conflicting_txs<B: storage::Backend>(
         &mut self,
-        wallet_tx: &WalletTx,
+        confirmed_tx: &Transaction,
         block: &Block,
         db_tx: &mut StoreTxRw<B>,
     ) -> WalletResult<()> {
         let acc_id = self.get_account_id();
-        let conflicting_tx = self.output_cache.check_conflicting(wallet_tx, block.get_id().into());
-        for tx in conflicting_tx {
-            let id = AccountWalletTxId::new(acc_id.clone(), tx.id());
-            db_tx.set_transaction(&id, tx)?;
+        let conflicting_txs =
+            self.output_cache.update_conflicting_txs(confirmed_tx, block.get_id().into())?;
+
+        for tx_id in conflicting_txs {
+            let id = AccountWalletCreatedTxId::new(acc_id.clone(), tx_id);
+            db_tx.del_user_transaction(&id)?;
         }
 
         Ok(())

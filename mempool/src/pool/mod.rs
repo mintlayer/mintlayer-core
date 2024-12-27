@@ -378,7 +378,9 @@ impl<'a> TxFinalizer<'a> {
             TxAdditionOutcome::Rejected { transaction, error } => {
                 let tx_id = *transaction.tx_id();
                 let origin = transaction.origin();
-                log::trace!("Rejected transaction {tx_id}, checking orphan status");
+                log::trace!(
+                    "Rejected transaction {tx_id} with error {error}. Checking orphan status"
+                );
 
                 self.try_add_orphan(tx_pool, transaction, error)
                     .inspect_err(|err| match &mut self.events_mode {
