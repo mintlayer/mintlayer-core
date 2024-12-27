@@ -84,16 +84,6 @@ impl TxState {
             TxState::Abandoned => "Abandoned",
         }
     }
-
-    pub fn is_abandoned(&self) -> bool {
-        match self {
-            TxState::Abandoned => true,
-            TxState::Confirmed(_, _, _)
-            | TxState::Conflicted(_)
-            | TxState::InMempool(_)
-            | TxState::Inactive(_) => false,
-        }
-    }
 }
 
 impl Display for TxState {

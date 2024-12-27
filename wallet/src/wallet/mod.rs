@@ -18,8 +18,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crate::account::{
-    transaction_list::TransactionList, CoinSelectionAlgo, CurrentFeeRate, DelegationData, PoolData,
-    TxInfo, UnconfirmedTokenInfo, UtxoSelectorError,
+    transaction_list::TransactionList, CoinSelectionAlgo, CurrentFeeRate, DelegationData,
+    OrderData, PoolData, TxInfo, UnconfirmedTokenInfo, UtxoSelectorError,
 };
 use crate::key_chain::{
     make_account_path, make_path_to_vrf_key, AccountKeyChainImplSoftware, KeyChainError,
@@ -178,8 +178,8 @@ pub enum WalletError {
     NotUtxoInput,
     #[error("Coin selection error: {0}")]
     CoinSelectionError(#[from] UtxoSelectorError),
-    #[error("Cannot abandon a transaction in {0} state")]
-    CannotAbandonTransaction(TxState),
+    #[error("Cannot change a transaction's state from {0} to {1}")]
+    CannotChangeTransactionState(TxState, TxState),
     #[error("Transaction with Id {0} not found")]
     CannotFindTransactionWithId(Id<Transaction>),
     #[error("Address error: {0}")]
@@ -2050,6 +2050,14 @@ where
                 )
             },
         )
+    }
+
+    pub fn get_orders(
+        &self,
+        account_index: U31,
+    ) -> WalletResult<impl Iterator<Item = (&OrderId, &OrderData)>> {
+        let orders = self.get_account(account_index)?.get_orders();
+        Ok(orders)
     }
 
     #[allow(clippy::too_many_arguments)]
