@@ -30,8 +30,8 @@ use common::{
             RPCFungibleTokenInfo, RPCIsTokenFrozen, RPCTokenTotalSupply, TokenId, TokenIssuance,
             TokenTotalSupply,
         },
-        AccountCommand, AccountNonce, AccountSpending, DelegationId, Destination, GenBlock,
-        OrderId, OutPointSourceId, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
+        AccountCommand, AccountNonce, AccountSpending, AccountType, DelegationId, Destination,
+        GenBlock, OrderId, OutPointSourceId, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{id::WithId, per_thousand::PerThousand, Amount, BlockHeight, Id, Idable},
 };
@@ -621,6 +621,10 @@ impl OutputCache {
         self.token_issuance.get(token_id)
     }
 
+    pub fn orders(&self) -> impl Iterator<Item = (&OrderId, &OrderData)> {
+        self.orders.iter()
+    }
+
     pub fn order_data(&self, order_id: &OrderId) -> Option<&OrderData> {
         self.orders.get(order_id)
     }
@@ -688,37 +692,66 @@ impl OutputCache {
         // Collect all conflicting txs
         let mut conflicting_txs = vec![];
 
-        let frozen_token_id = confirmed_tx.inputs().iter().find_map(|inp| match inp {
-            TxInput::Utxo(_) | TxInput::Account(_) => None,
-            TxInput::AccountCommand(_, cmd) => match cmd {
-                AccountCommand::MintTokens(_, _)
-                | AccountCommand::UnmintTokens(_)
-                | AccountCommand::LockTokenSupply(_)
-                | AccountCommand::ChangeTokenMetadataUri(_, _)
-                | AccountCommand::ChangeTokenAuthority(_, _)
-                | AccountCommand::UnfreezeToken(_)
-                | AccountCommand::ConcludeOrder(_)
-                | AccountCommand::FillOrder(_, _, _) => None,
-                AccountCommand::FreezeToken(frozen_token_id, _) => Some(frozen_token_id),
-            },
-        });
+        let mut frozen_token_id: Option<TokenId> = None;
+        let mut confirmed_account_nonce: Option<(AccountType, AccountNonce)> = None;
 
-        if let Some(frozen_token_id) = frozen_token_id {
-            for unconfirmed in self.unconfirmed_descendants.keys() {
-                let unconfirmed_tx = self.txs.get(unconfirmed).expect("must be present");
-                if self.uses_token(unconfirmed_tx, frozen_token_id) {
-                    let unconfirmed_tx = self.txs.get_mut(unconfirmed).expect("must be present");
-                    match unconfirmed_tx {
-                        WalletTx::Tx(ref mut tx) => {
-                            conflicting_txs.push(tx.get_transaction().get_id());
+        for input in confirmed_tx.inputs() {
+            match input {
+                TxInput::Utxo(_) => {
+                    //TODO: check conflicting utxo spends
+                }
+                TxInput::Account(outpoint) => {
+                    confirmed_account_nonce = Some((outpoint.account().into(), outpoint.nonce()));
+                }
+                TxInput::AccountCommand(nonce, cmd) => {
+                    confirmed_account_nonce = Some((cmd.into(), *nonce));
+                    match cmd {
+                        AccountCommand::MintTokens(_, _)
+                        | AccountCommand::UnmintTokens(_)
+                        | AccountCommand::LockTokenSupply(_)
+                        | AccountCommand::ChangeTokenMetadataUri(_, _)
+                        | AccountCommand::ChangeTokenAuthority(_, _)
+                        | AccountCommand::UnfreezeToken(_)
+                        | AccountCommand::ConcludeOrder(_)
+                        | AccountCommand::FillOrder(_, _, _) => { /* do nothing */ }
+                        | AccountCommand::FreezeToken(token_id, _) => {
+                            frozen_token_id = Some(*token_id);
                         }
-                        WalletTx::Block(_) => {}
-                    };
+                    }
                 }
             }
         }
 
-        // FIXME: check utxos and account nonces here
+        if frozen_token_id.is_some() | confirmed_account_nonce.is_some() {
+            for unconfirmed in self.unconfirmed_descendants.keys() {
+                if let Some(frozen_token_id) = frozen_token_id {
+                    let unconfirmed_tx = self.txs.get(unconfirmed).expect("must be present");
+                    if self.uses_token(unconfirmed_tx, &frozen_token_id) {
+                        let unconfirmed_tx =
+                            self.txs.get_mut(unconfirmed).expect("must be present");
+                        if let WalletTx::Tx(ref mut tx) = unconfirmed_tx {
+                            conflicting_txs.push(tx.get_transaction().get_id());
+                        }
+                    }
+                }
+
+                if let Some((confirmed_account, confirmed_account_nonce)) = confirmed_account_nonce
+                {
+                    let unconfirmed_tx = self.txs.get(unconfirmed).expect("must be present");
+                    if uses_conflicting_nonce(
+                        unconfirmed_tx,
+                        confirmed_account,
+                        confirmed_account_nonce,
+                    ) {
+                        let unconfirmed_tx =
+                            self.txs.get_mut(unconfirmed).expect("must be present");
+                        if let WalletTx::Tx(ref mut tx) = unconfirmed_tx {
+                            conflicting_txs.push(tx.get_transaction().get_id());
+                        }
+                    }
+                }
+            }
+        }
 
         // Remove all descendants of conflicting txs
         let mut conflicting_txs_with_descendants = vec![];
@@ -784,7 +817,10 @@ impl OutputCache {
     }
 
     pub fn add_tx(&mut self, tx_id: OutPointSourceId, tx: WalletTx) -> WalletResult<()> {
-        let already_present = self.txs.get(&tx_id).is_some_and(|tx| !tx.state().is_abandoned());
+        let already_present = self.txs.get(&tx_id).is_some_and(|tx| match tx.state() {
+            TxState::Abandoned | TxState::Conflicted(_) => false,
+            TxState::Confirmed(_, _, _) | TxState::InMempool(_) | TxState::Inactive(_) => true,
+        });
         let is_unconfirmed = match tx.state() {
             TxState::Inactive(_)
             | TxState::InMempool(_)
@@ -1385,10 +1421,9 @@ impl OutputCache {
                 Entry::Occupied(mut entry) => match entry.get_mut() {
                     WalletTx::Block(_) => Err(WalletError::CannotFindTransactionWithId(tx_id)),
                     WalletTx::Tx(tx) => {
-                        ensure!(
-                            new_state != *tx.state(),
-                            WalletError::CannotAbandonTransaction(*tx.state())
-                        );
+                        if new_state == *tx.state() {
+                            continue;
+                        }
 
                         match tx.state() {
                             TxState::Inactive(_) | TxState::Conflicted(_) | TxState::Abandoned => {
@@ -1448,9 +1483,9 @@ impl OutputCache {
                                 }
                                 Ok(())
                             }
-                            TxState::Confirmed(..) | TxState::InMempool(..) => {
-                                Err(WalletError::CannotAbandonTransaction(*tx.state()))
-                            }
+                            TxState::Confirmed(..) | TxState::InMempool(..) => Err(
+                                WalletError::CannotChangeTransactionState(*tx.state(), new_state),
+                            ),
                         }
                     }
                 },
@@ -1711,4 +1746,21 @@ fn apply_total_supply_mutations_from_tx(
     }
 
     Ok(total_supply)
+}
+
+fn uses_conflicting_nonce(
+    unconfirmed_tx: &WalletTx,
+    confirmed_account_type: AccountType,
+    confirmed_nonce: AccountNonce,
+) -> bool {
+    unconfirmed_tx.inputs().iter().all(|inp| match inp {
+        TxInput::Utxo(_) => true,
+        TxInput::AccountCommand(nonce, cmd) => {
+            confirmed_account_type == cmd.into() && *nonce <= confirmed_nonce
+        }
+        TxInput::Account(outpoint) => {
+            confirmed_account_type == outpoint.account().into()
+                && outpoint.nonce() <= confirmed_nonce
+        }
+    })
 }

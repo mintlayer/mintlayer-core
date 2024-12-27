@@ -33,7 +33,6 @@ use common::size_estimation::{
 use common::Uint256;
 use crypto::key::hdkd::child_number::ChildNumber;
 use mempool::FeeRate;
-use output_cache::OrderData;
 use serialization::hex_encoded::HexEncoded;
 use utils::ensure;
 pub use utxo_selector::UtxoSelectorError;
@@ -85,7 +84,8 @@ use wallet_types::{
 };
 
 pub use self::output_cache::{
-    DelegationData, FungibleTokenInfo, PoolData, TxInfo, UnconfirmedTokenInfo, UtxoWithTxOutput,
+    DelegationData, FungibleTokenInfo, OrderData, PoolData, TxInfo, UnconfirmedTokenInfo,
+    UtxoWithTxOutput,
 };
 use self::output_cache::{OutputCache, TokenIssuanceData};
 use self::transaction_list::{get_transaction_list, TransactionList};
@@ -898,6 +898,12 @@ impl Account {
             .token_data(token_id)
             .filter(|data| self.is_destination_mine(&data.authority))
             .ok_or(WalletError::UnknownTokenId(*token_id))
+    }
+
+    pub fn get_orders(&self) -> impl Iterator<Item = (&OrderId, &OrderData)> {
+        self.output_cache
+            .orders()
+            .filter(|(_, data)| self.is_destination_mine(&data.conclude_key))
     }
 
     pub fn find_order(&self, order_id: &OrderId) -> WalletResult<&OrderData> {
