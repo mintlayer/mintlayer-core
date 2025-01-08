@@ -36,10 +36,11 @@ use node_comm::{make_cold_wallet_rpc_client, make_rpc_client, rpc_client::ColdWa
 use rpc::RpcAuthData;
 use tokio::sync::mpsc;
 use utils::{cookie::COOKIE_FILENAME, default_data_dir::default_data_dir_for_chain, ensure};
-use wallet_cli_commands::{
-    CliHardwareWalletType, ManageableWalletCommand, WalletCommand, WalletManagementCommand,
-};
+use wallet_cli_commands::{ManageableWalletCommand, WalletCommand, WalletManagementCommand};
 use wallet_rpc_lib::{cmdline::make_wallet_config, config::WalletRpcConfig, types::NodeInterface};
+
+#[cfg(feature = "trezor")]
+use wallet_cli_commands::CliHardwareWalletType;
 
 enum Mode {
     Interactive {

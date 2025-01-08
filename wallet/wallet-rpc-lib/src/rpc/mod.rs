@@ -39,7 +39,6 @@ use utils::{ensure, shallow_clone::ShallowClone};
 use utils_networking::IpOrSocketAddress;
 use wallet::{
     account::{transaction_list::TransactionList, PoolData, TransactionToSign, TxInfo},
-    send_request::PoolOrTokenId,
     WalletError,
 };
 
@@ -79,7 +78,7 @@ use wallet_controller::{
 use wallet_types::{
     account_info::StandaloneAddressDetails,
     partially_signed_transaction::{
-        PartiallySignedTransaction, TokenAdditionalInfo, UtxoAdditionalInfo,
+        InfoId, PartiallySignedTransaction, TokenAdditionalInfo, TxAdditionalInfo,
     },
     signature_status::SignatureStatus,
     wallet_tx::TxData,
@@ -1509,8 +1508,8 @@ where
                                 .to_amount(token_info.token_number_of_decimals())
                                 .ok_or(RpcError::InvalidCoinAmount)?;
                             additional_utxo_infos.insert(
-                                PoolOrTokenId::TokenId(token_id),
-                                UtxoAdditionalInfo::TokenInfo(TokenAdditionalInfo {
+                                InfoId::TokenId(token_id),
+                                TxAdditionalInfo::TokenInfo(TokenAdditionalInfo {
                                     num_decimals: token_info.token_number_of_decimals(),
                                     ticker: token_info.token_ticker().to_vec(),
                                 }),
@@ -1528,7 +1527,7 @@ where
                     controller
                         .synced_controller(account_index, config)
                         .await?
-                        .create_htlc_tx(value, htlc, &additional_utxo_infos)
+                        .create_htlc_tx(value, htlc, additional_utxo_infos)
                         .await
                         .map_err(RpcError::Controller)
                 })

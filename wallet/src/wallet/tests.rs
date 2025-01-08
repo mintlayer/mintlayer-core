@@ -55,8 +55,7 @@ use wallet_storage::{schema, WalletStorageEncryptionRead};
 use wallet_types::{
     account_info::DEFAULT_ACCOUNT_INDEX,
     partially_signed_transaction::{
-        PartiallySignedTransaction, PartiallySignedTransactionCreationError, UtxoAdditionalInfo,
-        UtxoWithAdditionalInfo,
+        PartiallySignedTransaction, PartiallySignedTransactionCreationError, TxAdditionalInfo,
     },
     seed_phrase::{PassPhrase, StoreSeedPhrase},
     utxo_types::{UtxoState, UtxoType},
@@ -999,7 +998,7 @@ fn wallet_accounts_creation() {
             BTreeMap::new(),
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
-            &BTreeMap::new(),
+            BTreeMap::new(),
         )
         .unwrap();
 
@@ -1159,7 +1158,7 @@ fn locked_wallet_cant_sign_transaction(#[case] seed: Seed) {
             BTreeMap::new(),
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
-            &BTreeMap::new(),
+            BTreeMap::new(),
         ),
         Err(WalletError::DatabaseError(
             wallet_storage::Error::WalletLocked
@@ -1177,7 +1176,7 @@ fn locked_wallet_cant_sign_transaction(#[case] seed: Seed) {
                 BTreeMap::new(),
                 FeeRate::from_amount_per_kb(Amount::ZERO),
                 FeeRate::from_amount_per_kb(Amount::ZERO),
-                &BTreeMap::new(),
+                BTreeMap::new(),
             )
             .unwrap();
     } else {
@@ -1207,7 +1206,7 @@ fn locked_wallet_cant_sign_transaction(#[case] seed: Seed) {
                 BTreeMap::new(),
                 FeeRate::from_amount_per_kb(Amount::ZERO),
                 FeeRate::from_amount_per_kb(Amount::ZERO),
-                &BTreeMap::new(),
+                BTreeMap::new(),
             )
             .unwrap();
     }
@@ -1235,7 +1234,7 @@ fn wallet_get_transaction(#[case] seed: Seed) {
             BTreeMap::new(),
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
-            &BTreeMap::new(),
+            BTreeMap::new(),
         )
         .unwrap();
 
@@ -1295,7 +1294,7 @@ fn wallet_list_mainchain_transactions(#[case] seed: Seed) {
             BTreeMap::new(),
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
-            &BTreeMap::new(),
+            BTreeMap::new(),
         )
         .unwrap();
 
@@ -1318,7 +1317,7 @@ fn wallet_list_mainchain_transactions(#[case] seed: Seed) {
             BTreeMap::new(),
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
-            &BTreeMap::new(),
+            BTreeMap::new(),
         )
         .unwrap();
     let spend_from_tx_id = tx.transaction().get_id();
@@ -1373,7 +1372,7 @@ fn wallet_transaction_with_fees(#[case] seed: Seed) {
                 BTreeMap::new(),
                 very_big_feerate,
                 very_big_feerate,
-                &BTreeMap::new(),
+                BTreeMap::new(),
             )
             .unwrap_err();
 
@@ -1401,7 +1400,7 @@ fn wallet_transaction_with_fees(#[case] seed: Seed) {
             BTreeMap::new(),
             feerate,
             feerate,
-            &BTreeMap::new(),
+            BTreeMap::new(),
         )
         .unwrap();
 
@@ -1488,7 +1487,7 @@ fn spend_from_user_specified_utxos(#[case] seed: Seed) {
                 BTreeMap::new(),
                 FeeRate::from_amount_per_kb(Amount::ZERO),
                 FeeRate::from_amount_per_kb(Amount::ZERO),
-                &BTreeMap::new(),
+                BTreeMap::new(),
             )
             .unwrap_err();
         assert_eq!(err, WalletError::CannotFindUtxo(missing_utxo.clone()));
@@ -1515,7 +1514,7 @@ fn spend_from_user_specified_utxos(#[case] seed: Seed) {
             BTreeMap::new(),
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
-            &BTreeMap::new(),
+            BTreeMap::new(),
         )
         .unwrap();
 
@@ -1553,7 +1552,7 @@ fn spend_from_user_specified_utxos(#[case] seed: Seed) {
                 BTreeMap::new(),
                 FeeRate::from_amount_per_kb(Amount::ZERO),
                 FeeRate::from_amount_per_kb(Amount::ZERO),
-                &BTreeMap::new(),
+                BTreeMap::new(),
             )
             .unwrap_err();
 
@@ -1851,7 +1850,7 @@ fn send_to_unknown_delegation(#[case] seed: Seed) {
             BTreeMap::new(),
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
-            &BTreeMap::new(),
+            BTreeMap::new(),
         )
         .unwrap();
 
@@ -1999,7 +1998,7 @@ fn create_spend_from_delegations(#[case] seed: Seed) {
             BTreeMap::new(),
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
-            &BTreeMap::new(),
+            BTreeMap::new(),
         )
         .unwrap();
 
@@ -2266,7 +2265,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
                 BTreeMap::new(),
                 FeeRate::from_amount_per_kb(Amount::ZERO),
                 FeeRate::from_amount_per_kb(Amount::ZERO),
-                &BTreeMap::new(),
+                BTreeMap::new(),
             )
             .unwrap();
         wallet
@@ -2331,7 +2330,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
                 BTreeMap::new(),
                 FeeRate::from_amount_per_kb(Amount::ZERO),
                 FeeRate::from_amount_per_kb(Amount::ZERO),
-                &BTreeMap::new(),
+                BTreeMap::new(),
             )
             .unwrap();
         (issued_token_id, vec![nft_issuance_transaction, transfer_tx])
@@ -2370,8 +2369,8 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
     );
 
     let additional_info = BTreeMap::from_iter([(
-        PoolOrTokenId::TokenId(*token_id),
-        UtxoAdditionalInfo::TokenInfo(TokenAdditionalInfo {
+        InfoId::TokenId(*token_id),
+        TxAdditionalInfo::TokenInfo(TokenAdditionalInfo {
             num_decimals: number_of_decimals,
             ticker: token_ticker.clone(),
         }),
@@ -2384,7 +2383,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
             BTreeMap::new(),
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
-            &additional_info,
+            additional_info.clone(),
         )
         .unwrap();
     wallet
@@ -2438,7 +2437,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
             BTreeMap::new(),
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
-            &additional_info,
+            additional_info,
         )
         .err()
         .unwrap();
@@ -2502,7 +2501,7 @@ fn check_tokens_v0_are_ignored(#[case] seed: Seed) {
         BTreeMap::new(),
         FeeRate::from_amount_per_kb(Amount::ZERO),
         FeeRate::from_amount_per_kb(Amount::ZERO),
-        &BTreeMap::new(),
+        BTreeMap::new(),
     );
 
     matches!(
@@ -2721,8 +2720,8 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
     );
 
     let additional_info = BTreeMap::from_iter([(
-        PoolOrTokenId::TokenId(issued_token_id),
-        UtxoAdditionalInfo::TokenInfo(TokenAdditionalInfo {
+        InfoId::TokenId(issued_token_id),
+        TxAdditionalInfo::TokenInfo(TokenAdditionalInfo {
             num_decimals: unconfirmed_token_info.num_decimals(),
             ticker: unconfirmed_token_info.token_ticker().to_vec(),
         }),
@@ -2735,7 +2734,7 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
             BTreeMap::new(),
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
-            &additional_info,
+            additional_info,
         )
         .unwrap();
 
@@ -3583,7 +3582,7 @@ fn lock_then_transfer(#[case] seed: Seed) {
             BTreeMap::new(),
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
-            &BTreeMap::new(),
+            BTreeMap::new(),
         )
         .unwrap();
     wallet
@@ -3705,7 +3704,7 @@ fn wallet_multiple_transactions_in_single_block(#[case] seed: Seed) {
                 BTreeMap::new(),
                 FeeRate::from_amount_per_kb(Amount::ZERO),
                 FeeRate::from_amount_per_kb(Amount::ZERO),
-                &BTreeMap::new(),
+                BTreeMap::new(),
             )
             .unwrap();
         wallet.add_unconfirmed_tx(transaction.clone(), &WalletEventsNoOp).unwrap();
@@ -3797,7 +3796,7 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
                 BTreeMap::new(),
                 FeeRate::from_amount_per_kb(Amount::ZERO),
                 FeeRate::from_amount_per_kb(Amount::ZERO),
-                &BTreeMap::new(),
+                BTreeMap::new(),
             )
             .unwrap();
 
@@ -3833,7 +3832,7 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
             BTreeMap::new(),
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
-            &BTreeMap::new(),
+            BTreeMap::new(),
         )
         .unwrap();
     wallet.add_unconfirmed_tx(transaction.clone(), &WalletEventsNoOp).unwrap();
@@ -3873,7 +3872,7 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
             BTreeMap::new(),
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
-            &BTreeMap::new(),
+            BTreeMap::new(),
         )
         .unwrap_err();
     assert_eq!(
@@ -3900,7 +3899,7 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
             BTreeMap::new(),
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
-            &BTreeMap::new(),
+            BTreeMap::new(),
         )
         .unwrap();
     wallet.add_unconfirmed_tx(transaction.clone(), &WalletEventsNoOp).unwrap();
@@ -3985,7 +3984,7 @@ fn wallet_abandone_transactions(#[case] seed: Seed) {
                 BTreeMap::new(),
                 FeeRate::from_amount_per_kb(Amount::ZERO),
                 FeeRate::from_amount_per_kb(Amount::ZERO),
-                &BTreeMap::new(),
+                BTreeMap::new(),
             )
             .unwrap();
         wallet
@@ -4357,14 +4356,13 @@ fn sign_decommission_pool_request_between_accounts(#[case] seed: Seed) {
     // remove the signatures and try to sign it again
     let tx = stake_pool_transaction.transaction().clone();
     let inps = tx.inputs().len();
-    let outs = tx.outputs().len();
     let ptx = PartiallySignedTransaction::new(
         tx,
         vec![None; inps],
-        vec![Some(UtxoWithAdditionalInfo::new(utxo, None))],
+        vec![Some(utxo)],
         vec![Some(addr.into_object())],
         None,
-        vec![None; outs],
+        BTreeMap::new(),
     )
     .unwrap();
     let stake_pool_transaction = wallet
@@ -4653,7 +4651,7 @@ fn sign_send_request_cold_wallet(#[case] seed: Seed) {
             [(Currency::Coin, cold_wallet_address.clone())].into(),
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
-            &BTreeMap::new(),
+            BTreeMap::new(),
         )
         .unwrap();
 
@@ -4756,7 +4754,7 @@ fn test_not_exhaustion_of_keys(#[case] seed: Seed) {
                 [].into(),
                 FeeRate::from_amount_per_kb(Amount::ZERO),
                 FeeRate::from_amount_per_kb(Amount::ZERO),
-                &BTreeMap::new(),
+                BTreeMap::new(),
             )
             .unwrap();
     }
@@ -4890,14 +4888,13 @@ fn test_add_standalone_multisig(#[case] seed: Seed) {
         )],
     )
     .unwrap();
-    let outs = tx.outputs().len();
     let spend_multisig_tx = PartiallySignedTransaction::new(
         spend_multisig_tx,
         vec![None; 1],
-        vec![Some(UtxoWithAdditionalInfo::new(tx.outputs()[0].clone(), None))],
+        vec![Some(tx.outputs()[0].clone())],
         vec![Some(multisig_address.as_object().clone())],
         None,
-        vec![None; outs],
+        BTreeMap::new(),
     )
     .unwrap();
 
@@ -4991,7 +4988,7 @@ fn create_htlc_and_spend(#[case] seed: Seed) {
             htlc.clone(),
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
-            &BTreeMap::new(),
+            BTreeMap::new(),
         )
         .unwrap();
     let create_htlc_tx_id = create_htlc_tx.transaction().get_id();
@@ -5043,20 +5040,14 @@ fn create_htlc_and_spend(#[case] seed: Seed) {
         vec![TxOutput::Transfer(output_value, address2.into_object())],
     )
     .unwrap();
-    let spend_utxos = vec![create_htlc_tx
-        .transaction()
-        .outputs()
-        .first()
-        .cloned()
-        .map(|out| UtxoWithAdditionalInfo::new(out, None))];
-    let outs = create_htlc_tx.outputs().len();
+    let spend_utxos = vec![create_htlc_tx.transaction().outputs().first().cloned()];
     let spend_ptx = PartiallySignedTransaction::new(
         spend_tx,
         vec![None],
         spend_utxos,
         vec![Some(spend_key.into_object())],
         Some(vec![Some(secret)]),
-        vec![None; outs],
+        BTreeMap::new(),
     )
     .unwrap();
 
@@ -5137,7 +5128,7 @@ fn create_htlc_and_refund(#[case] seed: Seed) {
             htlc.clone(),
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
-            &BTreeMap::new(),
+            BTreeMap::new(),
         )
         .unwrap();
     let create_htlc_tx_id = create_htlc_tx.transaction().get_id();
@@ -5148,20 +5139,14 @@ fn create_htlc_and_refund(#[case] seed: Seed) {
         vec![TxOutput::Transfer(output_value, address1.into_object())],
     )
     .unwrap();
-    let refund_utxos = vec![create_htlc_tx
-        .transaction()
-        .outputs()
-        .first()
-        .cloned()
-        .map(|out| UtxoWithAdditionalInfo::new(out, None))];
-    let outs = create_htlc_tx.outputs().len();
+    let refund_utxos = vec![create_htlc_tx.transaction().outputs().first().cloned()];
     let refund_ptx = PartiallySignedTransaction::new(
         refund_tx,
         vec![None],
         refund_utxos,
         vec![Some(refund_key)],
         None,
-        vec![None; outs],
+        BTreeMap::new(),
     )
     .unwrap();
 
@@ -5331,8 +5316,8 @@ fn create_order(#[case] seed: Seed) {
     let ask_value = OutputValue::Coin(Amount::from_atoms(111));
     let give_value = OutputValue::TokenV1(issued_token_id, token_amount_to_mint);
     let additional_info = BTreeMap::from_iter([(
-        PoolOrTokenId::TokenId(issued_token_id),
-        UtxoAdditionalInfo::TokenInfo(TokenAdditionalInfo {
+        InfoId::TokenId(issued_token_id),
+        TxAdditionalInfo::TokenInfo(TokenAdditionalInfo {
             num_decimals: unconfirmed_token_info.num_decimals(),
             ticker: unconfirmed_token_info.token_ticker().to_vec(),
         }),
@@ -5345,7 +5330,7 @@ fn create_order(#[case] seed: Seed) {
             address2.clone(),
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
-            &additional_info,
+            additional_info,
         )
         .unwrap();
 
@@ -5457,8 +5442,8 @@ fn create_order_and_conclude(#[case] seed: Seed) {
     let ask_value = OutputValue::Coin(Amount::from_atoms(111));
     let give_value = OutputValue::TokenV1(issued_token_id, token_amount_to_mint);
     let additional_info = BTreeMap::from_iter([(
-        PoolOrTokenId::TokenId(issued_token_id),
-        UtxoAdditionalInfo::TokenInfo(TokenAdditionalInfo {
+        InfoId::TokenId(issued_token_id),
+        TxAdditionalInfo::TokenInfo(TokenAdditionalInfo {
             num_decimals: unconfirmed_token_info.num_decimals(),
             ticker: unconfirmed_token_info.token_ticker().to_vec(),
         }),
@@ -5471,7 +5456,7 @@ fn create_order_and_conclude(#[case] seed: Seed) {
             address2.clone(),
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
-            &additional_info,
+            additional_info,
         )
         .unwrap();
     let order_info = RpcOrderInfo {
@@ -5501,8 +5486,8 @@ fn create_order_and_conclude(#[case] seed: Seed) {
     assert!(token_balances.is_empty());
 
     let additional_info = BTreeMap::from_iter([(
-        PoolOrTokenId::TokenId(issued_token_id),
-        UtxoAdditionalInfo::TokenInfo(TokenAdditionalInfo {
+        InfoId::TokenId(issued_token_id),
+        TxAdditionalInfo::TokenInfo(TokenAdditionalInfo {
             num_decimals: unconfirmed_token_info.num_decimals(),
             ticker: unconfirmed_token_info.token_ticker().to_vec(),
         }),
@@ -5515,7 +5500,7 @@ fn create_order_and_conclude(#[case] seed: Seed) {
             None,
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
-            &additional_info,
+            additional_info,
         )
         .unwrap();
 
@@ -5646,8 +5631,8 @@ fn create_order_fill_completely_conclude(#[case] seed: Seed) {
     let sell_amount = Amount::from_atoms(1000);
     let give_value = OutputValue::Coin(sell_amount);
     let additional_info = BTreeMap::from_iter([(
-        PoolOrTokenId::TokenId(issued_token_id),
-        UtxoAdditionalInfo::TokenInfo(TokenAdditionalInfo {
+        InfoId::TokenId(issued_token_id),
+        TxAdditionalInfo::TokenInfo(TokenAdditionalInfo {
             num_decimals: unconfirmed_token_info.num_decimals(),
             ticker: unconfirmed_token_info.token_ticker().to_vec(),
         }),
@@ -5660,7 +5645,7 @@ fn create_order_fill_completely_conclude(#[case] seed: Seed) {
             address1.clone(),
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
-            &additional_info,
+            additional_info,
         )
         .unwrap();
     let order_info = RpcOrderInfo {
@@ -5704,8 +5689,8 @@ fn create_order_fill_completely_conclude(#[case] seed: Seed) {
         );
     }
     let additional_info = BTreeMap::from_iter([(
-        PoolOrTokenId::TokenId(issued_token_id),
-        UtxoAdditionalInfo::TokenInfo(TokenAdditionalInfo {
+        InfoId::TokenId(issued_token_id),
+        TxAdditionalInfo::TokenInfo(TokenAdditionalInfo {
             num_decimals: unconfirmed_token_info.num_decimals(),
             ticker: unconfirmed_token_info.token_ticker().to_vec(),
         }),
@@ -5721,7 +5706,7 @@ fn create_order_fill_completely_conclude(#[case] seed: Seed) {
             None,
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
-            &additional_info,
+            additional_info,
         )
         .unwrap();
 
@@ -5770,8 +5755,8 @@ fn create_order_fill_completely_conclude(#[case] seed: Seed) {
     };
 
     let additional_info = BTreeMap::from_iter([(
-        PoolOrTokenId::TokenId(issued_token_id),
-        UtxoAdditionalInfo::TokenInfo(TokenAdditionalInfo {
+        InfoId::TokenId(issued_token_id),
+        TxAdditionalInfo::TokenInfo(TokenAdditionalInfo {
             num_decimals: unconfirmed_token_info.num_decimals(),
             ticker: unconfirmed_token_info.token_ticker().to_vec(),
         }),
@@ -5785,7 +5770,7 @@ fn create_order_fill_completely_conclude(#[case] seed: Seed) {
             None,
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
-            &additional_info,
+            additional_info,
         )
         .unwrap();
 
@@ -5827,8 +5812,8 @@ fn create_order_fill_completely_conclude(#[case] seed: Seed) {
         nonce: Some(AccountNonce::new(1)),
     };
     let additional_info = BTreeMap::from_iter([(
-        PoolOrTokenId::TokenId(issued_token_id),
-        UtxoAdditionalInfo::TokenInfo(TokenAdditionalInfo {
+        InfoId::TokenId(issued_token_id),
+        TxAdditionalInfo::TokenInfo(TokenAdditionalInfo {
             num_decimals: unconfirmed_token_info.num_decimals(),
             ticker: unconfirmed_token_info.token_ticker().to_vec(),
         }),
@@ -5841,7 +5826,7 @@ fn create_order_fill_completely_conclude(#[case] seed: Seed) {
             None,
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
-            &additional_info,
+            additional_info,
         )
         .unwrap();
 
@@ -5983,8 +5968,8 @@ fn create_order_fill_partially_conclude(#[case] seed: Seed) {
     let sell_amount = Amount::from_atoms(1000);
     let give_value = OutputValue::Coin(sell_amount);
     let additional_info = BTreeMap::from_iter([(
-        PoolOrTokenId::TokenId(issued_token_id),
-        UtxoAdditionalInfo::TokenInfo(TokenAdditionalInfo {
+        InfoId::TokenId(issued_token_id),
+        TxAdditionalInfo::TokenInfo(TokenAdditionalInfo {
             num_decimals: unconfirmed_token_info.num_decimals(),
             ticker: unconfirmed_token_info.token_ticker().to_vec(),
         }),
@@ -5997,7 +5982,7 @@ fn create_order_fill_partially_conclude(#[case] seed: Seed) {
             address1.clone(),
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
-            &additional_info,
+            additional_info,
         )
         .unwrap();
     let order_info = RpcOrderInfo {
@@ -6042,8 +6027,8 @@ fn create_order_fill_partially_conclude(#[case] seed: Seed) {
     }
 
     let additional_info = BTreeMap::from_iter([(
-        PoolOrTokenId::TokenId(issued_token_id),
-        UtxoAdditionalInfo::TokenInfo(TokenAdditionalInfo {
+        InfoId::TokenId(issued_token_id),
+        TxAdditionalInfo::TokenInfo(TokenAdditionalInfo {
             num_decimals: unconfirmed_token_info.num_decimals(),
             ticker: unconfirmed_token_info.token_ticker().to_vec(),
         }),
@@ -6058,7 +6043,7 @@ fn create_order_fill_partially_conclude(#[case] seed: Seed) {
             None,
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
-            &additional_info,
+            additional_info,
         )
         .unwrap();
 
@@ -6107,8 +6092,8 @@ fn create_order_fill_partially_conclude(#[case] seed: Seed) {
     };
 
     let additional_info = BTreeMap::from_iter([(
-        PoolOrTokenId::TokenId(issued_token_id),
-        UtxoAdditionalInfo::TokenInfo(TokenAdditionalInfo {
+        InfoId::TokenId(issued_token_id),
+        TxAdditionalInfo::TokenInfo(TokenAdditionalInfo {
             num_decimals: unconfirmed_token_info.num_decimals(),
             ticker: unconfirmed_token_info.token_ticker().to_vec(),
         }),
@@ -6121,7 +6106,7 @@ fn create_order_fill_partially_conclude(#[case] seed: Seed) {
             None,
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
-            &additional_info,
+            additional_info,
         )
         .unwrap();
 
