@@ -13,11 +13,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+
 use common::{
     chain::{
         htlc::HtlcSecret,
+        output_value::OutputValue,
         signature::{inputsig::InputWitness, Signable, Transactable},
-        Destination, SignedTransaction, Transaction, TransactionCreationError, TxInput, TxOutput,
+        tokens::TokenId,
+        Destination, OrderId, PoolId, SignedTransaction, Transaction, TransactionCreationError,
+        TxInput, TxOutput,
     },
     primitives::Amount,
 };
@@ -30,8 +35,6 @@ use utils::ensure;
 pub enum PartiallySignedTransactionCreationError {
     #[error("Failed to convert partially signed tx to signed")]
     FailedToConvertPartiallySignedTx(PartiallySignedTransaction),
-    #[error("The number of output additional infos does not match the number of outputs")]
-    InvalidOutputAdditionalInfoCount,
     #[error("Failed to create transaction: {0}")]
     TxCreationError(#[from] TransactionCreationError),
     #[error("The number of input utxos does not match the number of inputs")]
@@ -42,38 +45,33 @@ pub enum PartiallySignedTransactionCreationError {
     InvalidHtlcSecretsCount,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
+pub enum InfoId {
+    PoolId(PoolId),
+    TokenId(TokenId),
+    OrderId(OrderId),
+}
+
 #[derive(Debug, Eq, PartialEq, Clone, Encode, Decode)]
 pub struct TokenAdditionalInfo {
     pub num_decimals: u8,
     pub ticker: Vec<u8>,
 }
 
-/// Additional info for UTXOs
+/// Additional info for a partially signed Tx mainly used by hardware wallets to show info to the
+/// user
 #[derive(Debug, Eq, PartialEq, Clone, Encode, Decode)]
-pub enum UtxoAdditionalInfo {
+pub enum TxAdditionalInfo {
     TokenInfo(TokenAdditionalInfo),
     PoolInfo {
         staker_balance: Amount,
     },
-    CreateOrder {
-        ask: Option<TokenAdditionalInfo>,
-        give: Option<TokenAdditionalInfo>,
+    OrderInfo {
+        initially_asked: OutputValue,
+        initially_given: OutputValue,
+        ask_balance: Amount,
+        give_balance: Amount,
     },
-}
-
-#[derive(Debug, Eq, PartialEq, Clone, Encode, Decode)]
-pub struct UtxoWithAdditionalInfo {
-    pub utxo: TxOutput,
-    pub additional_info: Option<UtxoAdditionalInfo>,
-}
-
-impl UtxoWithAdditionalInfo {
-    pub fn new(utxo: TxOutput, additional_info: Option<UtxoAdditionalInfo>) -> Self {
-        Self {
-            utxo,
-            additional_info,
-        }
-    }
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Encode, Decode)]
@@ -81,21 +79,21 @@ pub struct PartiallySignedTransaction {
     tx: Transaction,
     witnesses: Vec<Option<InputWitness>>,
 
-    input_utxos: Vec<Option<UtxoWithAdditionalInfo>>,
+    input_utxos: Vec<Option<TxOutput>>,
     destinations: Vec<Option<Destination>>,
 
     htlc_secrets: Vec<Option<HtlcSecret>>,
-    output_additional_infos: Vec<Option<UtxoAdditionalInfo>>,
+    additional_infos: BTreeMap<InfoId, TxAdditionalInfo>,
 }
 
 impl PartiallySignedTransaction {
     pub fn new(
         tx: Transaction,
         witnesses: Vec<Option<InputWitness>>,
-        input_utxos: Vec<Option<UtxoWithAdditionalInfo>>,
+        input_utxos: Vec<Option<TxOutput>>,
         destinations: Vec<Option<Destination>>,
         htlc_secrets: Option<Vec<Option<HtlcSecret>>>,
-        output_additional_infos: Vec<Option<UtxoAdditionalInfo>>,
+        additional_infos: BTreeMap<InfoId, TxAdditionalInfo>,
     ) -> Result<Self, PartiallySignedTransactionCreationError> {
         let htlc_secrets = htlc_secrets.unwrap_or_else(|| vec![None; tx.inputs().len()]);
 
@@ -105,7 +103,7 @@ impl PartiallySignedTransaction {
             input_utxos,
             destinations,
             htlc_secrets,
-            output_additional_infos,
+            additional_infos,
         };
 
         this.ensure_consistency()?;
@@ -134,11 +132,6 @@ impl PartiallySignedTransaction {
             PartiallySignedTransactionCreationError::InvalidHtlcSecretsCount
         );
 
-        ensure!(
-            self.tx.outputs().len() == self.output_additional_infos.len(),
-            PartiallySignedTransactionCreationError::InvalidOutputAdditionalInfoCount
-        );
-
         Ok(())
     }
 
@@ -155,7 +148,7 @@ impl PartiallySignedTransaction {
         self.tx
     }
 
-    pub fn input_utxos(&self) -> &[Option<UtxoWithAdditionalInfo>] {
+    pub fn input_utxos(&self) -> &[Option<TxOutput>] {
         self.input_utxos.as_ref()
     }
 
@@ -173,10 +166,6 @@ impl PartiallySignedTransaction {
 
     pub fn count_inputs(&self) -> usize {
         self.tx.inputs().len()
-    }
-
-    pub fn output_additional_infos(&self) -> &[Option<UtxoAdditionalInfo>] {
-        &self.output_additional_infos
     }
 
     pub fn all_signatures_available(&self) -> bool {
@@ -202,6 +191,10 @@ impl PartiallySignedTransaction {
         } else {
             Err(PartiallySignedTransactionCreationError::FailedToConvertPartiallySignedTx(self))
         }
+    }
+
+    pub fn additional_infos(&self) -> &BTreeMap<InfoId, TxAdditionalInfo> {
+        &self.additional_infos
     }
 }
 

@@ -184,10 +184,10 @@ class WalletHtlcRefund(BitcoinTestFramework):
             alice_refund_ptx = {
                 'tx': tx['transaction'],
                 'witnesses': [None, None],
-                'input_utxos': [{'utxo': out, 'additional_info': None} for out in alice_htlc_outputs],
+                'input_utxos': alice_htlc_outputs,
                 'destinations': [refund_dest_obj, alice_htlc_change_dest],
                 'htlc_secrets': [None, None],
-                'output_additional_infos': [None]
+                'additional_infos': []
             }
             alice_refund_tx_hex = scalecodec.base.RuntimeConfiguration().create_scale_object('PartiallySignedTransaction').encode(alice_refund_ptx).to_hex()[2:]
 
@@ -213,10 +213,10 @@ class WalletHtlcRefund(BitcoinTestFramework):
             bob_refund_ptx = {
                 'tx': tx['transaction'],
                 'witnesses': [None, None],
-                'input_utxos': [{'utxo': out, 'additional_info': None} for out in bob_htlc_outputs],
+                'input_utxos': bob_htlc_outputs,
                 'destinations': [refund_dest_obj, bob_htlc_change_dest],
                 'htlc_secrets': [None, None],
-                'output_additional_infos': [None]
+                'additional_infos': []
             }
             bob_refund_tx_hex = scalecodec.base.RuntimeConfiguration().create_scale_object('PartiallySignedTransaction').encode(bob_refund_ptx).to_hex()[2:]
 

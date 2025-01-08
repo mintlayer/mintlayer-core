@@ -206,21 +206,22 @@ def init_mintlayer_types():
                 ]
             },
 
-            "UtxoAdditionalInfo": {
+            "InfoId": {
+                "type": "enum",
+                "type_mapping": [
+                    ["TokenId", "H256"],
+                    ["PoolId", "H256"],
+                    ["OrderId", "H256"],
+                ],
+            },
+
+            "TxAdditionalInfo": {
                 "type": "enum",
                 "type_mapping": [
                     ["TokenInfo", "TokenAdditionalInfo"],
                     ["PoolInfo", "(Amount)"],
-                    ["AnyoneCanTake", ""], # TODO
+                    ["OrderInfo", ""], # TODO
                 ],
-            },
-
-            "UtxoWithAdditionalInfo": {
-                "type": "struct",
-                "type_mapping": [
-                    ["utxo", "TxOutput"],
-                    ["additional_info", "Option<UtxoAdditionalInfo>"],
-                ]
             },
 
             "StandardInputSignature": {
@@ -244,10 +245,10 @@ def init_mintlayer_types():
                 "type_mapping": [
                     ["tx", "TransactionV1"],
                     ["witnesses", "Vec<Option<InputWitness>>"],
-                    ["input_utxos", "Vec<Option<UtxoWithAdditionalInfo>>"],
+                    ["input_utxos", "Vec<Option<TxOutput>>"],
                     ["destinations", "Vec<Option<Destination>>"],
                     ["htlc_secrets", "Vec<Option<[u8; 32]>>"],
-                    ["output_additional_infos", "Vec<Option<UtxoAdditionalInfo>>"],
+                    ["additional_infos", "BTreeMap<InfoId, TxAdditionalInfo>"],
                 ]
             },
 

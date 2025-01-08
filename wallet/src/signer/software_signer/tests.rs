@@ -437,7 +437,7 @@ fn sign_transaction(#[case] seed: Seed) {
         .with_outputs(outputs);
     let destinations = req.destinations().to_vec();
     let additional_info = BTreeMap::new();
-    let ptx = req.into_partially_signed_tx(&additional_info).unwrap();
+    let ptx = req.into_partially_signed_tx(additional_info).unwrap();
 
     let mut signer = SoftwareSigner::new(chain_config.clone(), DEFAULT_ACCOUNT_INDEX);
     let (ptx, _, _) = signer.sign_tx(ptx, account.key_chain(), &db_tx).unwrap();
@@ -688,7 +688,7 @@ fn fixed_signatures() {
         .with_outputs(outputs);
     let destinations = req.destinations().to_vec();
     let additional_info = BTreeMap::new();
-    let ptx = req.into_partially_signed_tx(&additional_info).unwrap();
+    let ptx = req.into_partially_signed_tx(additional_info).unwrap();
 
     let utxos_ref = utxos
         .iter()

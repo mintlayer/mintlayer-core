@@ -83,8 +83,8 @@ pub enum SignerError {
     MissingDestinationInTransaction,
     #[error("Partially signed tx is missing UTXO type input's UTXO")]
     MissingUtxo,
-    #[error("Partially signed tx is missing extra info for UTXO")]
-    MissingUtxoExtraInfo,
+    #[error("Partially signed tx is missing extra info")]
+    MissingTxExtraInfo,
     #[error("Tokens V0 are not supported")]
     UnsupportedTokensV0,
     #[error("Invalid TxOutput type as UTXO, cannot be spent")]
@@ -93,6 +93,8 @@ pub enum SignerError {
     AddressError(#[from] AddressError),
     #[error("Signature error: {0}")]
     SignatureError(#[from] SignatureError),
+    #[error("Order was filled more than the available balance")]
+    OrderFillUnderflow,
 }
 
 type SignerResult<T> = Result<T, SignerError>;

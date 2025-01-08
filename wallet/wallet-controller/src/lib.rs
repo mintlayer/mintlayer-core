@@ -31,7 +31,9 @@ use chainstate::tx_verifier::{
     self, error::ScriptError, input_check::signature_only_check::SignatureOnlyVerifiable,
 };
 use futures::{never::Never, stream::FuturesOrdered, TryStreamExt};
-use helpers::{fetch_token_info, fetch_utxo, fetch_utxo_extra_info, into_balances};
+use helpers::{
+    fetch_token_info, fetch_utxo, fetch_utxo_extra_info, into_balances, AdditionalInfos,
+};
 use node_comm::rpc_client::ColdWalletClient;
 use runtime_wallet::RuntimeWallet;
 use std::{
@@ -100,7 +102,7 @@ pub use wallet_types::{
     utxo_types::{UtxoState, UtxoStates, UtxoType, UtxoTypes},
 };
 use wallet_types::{
-    partially_signed_transaction::{PartiallySignedTransaction, UtxoWithAdditionalInfo},
+    partially_signed_transaction::PartiallySignedTransaction,
     signature_status::SignatureStatus,
     wallet_type::{WalletControllerMode, WalletType},
     with_locked::WithLocked,
@@ -912,14 +914,9 @@ where
         &self,
         ptx: PartiallySignedTransaction,
     ) -> Result<InspectTransaction, ControllerError<T>> {
-        let input_utxos: Vec<_> =
-            ptx.input_utxos().iter().flatten().map(|utxo| &utxo.utxo).cloned().collect();
+        let input_utxos: Vec<_> = ptx.input_utxos().iter().flatten().cloned().collect();
         let fees = self.get_fees(&input_utxos, ptx.tx().outputs()).await?;
-        let inputs_utxos_refs: Vec<_> = ptx
-            .input_utxos()
-            .iter()
-            .map(|out| out.as_ref().map(|utxo| &utxo.utxo))
-            .collect();
+        let inputs_utxos_refs: Vec<_> = ptx.input_utxos().iter().map(|out| out.as_ref()).collect();
         let signature_statuses: Vec<_> = ptx
             .witnesses()
             .iter()
@@ -1056,20 +1053,31 @@ where
                 .collect::<Result<Vec<_>, WalletError>>()
                 .map_err(ControllerError::WalletError)?;
 
-            let input_utxos = self.fetch_utxos_extra_info(input_utxos).await?;
-            let output_additional_infos = self
+            let (input_utxos, additional_infos) =
+                self.fetch_utxos_extra_info(input_utxos).await?.into_iter().fold(
+                    (Vec::new(), BTreeMap::new()),
+                    |(mut input_utxos, mut additional_infos), (x, y)| {
+                        input_utxos.push(x);
+                        additional_infos.extend(y);
+                        (input_utxos, additional_infos)
+                    },
+                );
+
+            let additional_infos = self
                 .fetch_utxos_extra_info(tx.outputs().to_vec())
                 .await?
                 .into_iter()
-                .map(|x| x.additional_info)
-                .collect();
+                .fold(additional_infos, |mut acc, (_, info)| {
+                    acc.extend(info);
+                    acc
+                });
             let tx = PartiallySignedTransaction::new(
                 tx,
                 vec![None; num_inputs],
                 input_utxos.into_iter().map(Option::Some).collect(),
                 destinations.into_iter().map(Option::Some).collect(),
                 htlc_secrets,
-                output_additional_infos,
+                additional_infos,
             )
             .map_err(WalletError::PartiallySignedTransactionCreation)?;
 
@@ -1155,13 +1163,12 @@ where
     async fn fetch_utxos_extra_info(
         &self,
         inputs: Vec<TxOutput>,
-    ) -> Result<Vec<UtxoWithAdditionalInfo>, ControllerError<T>> {
+    ) -> Result<Vec<(TxOutput, AdditionalInfos)>, ControllerError<T>> {
         let tasks: FuturesOrdered<_> = inputs
             .into_iter()
             .map(|input| fetch_utxo_extra_info(&self.rpc_client, input))
             .collect();
-        let input_utxos: Vec<UtxoWithAdditionalInfo> = tasks.try_collect().await?;
-        Ok(input_utxos)
+        tasks.try_collect().await
     }
 
     async fn fetch_opt_utxo(
