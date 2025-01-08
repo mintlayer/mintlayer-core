@@ -50,7 +50,7 @@ use wallet::{
     destination_getters::{get_tx_output_destination, HtlcSpendingCondition},
     send_request::{
         make_address_output, make_address_output_token, make_create_delegation_output,
-        make_data_deposit_output, PoolOrTokenId, SelectedInputs, StakePoolCreationArguments,
+        make_data_deposit_output, SelectedInputs, StakePoolCreationArguments,
     },
     wallet::WalletPoolsFilter,
     wallet_events::WalletEvents,
@@ -58,7 +58,7 @@ use wallet::{
 };
 use wallet_types::{
     partially_signed_transaction::{
-        PartiallySignedTransaction, TokenAdditionalInfo, UtxoAdditionalInfo,
+        InfoId, PartiallySignedTransaction, TokenAdditionalInfo, TxAdditionalInfo,
     },
     signature_status::SignatureStatus,
     utxo_types::{UtxoState, UtxoType},
@@ -161,7 +161,7 @@ where
     ) -> Result<
         (
             Vec<(UtxoOutPoint, TxOutput)>,
-            BTreeMap<PoolOrTokenId, UtxoAdditionalInfo>,
+            BTreeMap<InfoId, TxAdditionalInfo>,
         ),
         ControllerError<T>,
     > {
@@ -197,8 +197,8 @@ where
                     result.push(utxo);
                     for token_info in token_infos {
                         additional_utxo_infos.insert(
-                            PoolOrTokenId::TokenId(token_info.token_id()),
-                            UtxoAdditionalInfo::TokenInfo(TokenAdditionalInfo {
+                            InfoId::TokenId(token_info.token_id()),
+                            TxAdditionalInfo::TokenInfo(TokenAdditionalInfo {
                                 num_decimals: token_info.token_number_of_decimals(),
                                 ticker: token_info.token_ticker().to_vec(),
                             }),
@@ -531,7 +531,7 @@ where
                     BTreeMap::new(),
                     current_fee_rate,
                     consolidate_fee_rate,
-                    &BTreeMap::new(),
+                    BTreeMap::new(),
                 )
             },
         )
@@ -563,7 +563,7 @@ where
                     BTreeMap::new(),
                     current_fee_rate,
                     consolidate_fee_rate,
-                    &BTreeMap::new(),
+                    BTreeMap::new(),
                 )
             },
         )
@@ -694,7 +694,7 @@ where
                 [(Currency::Coin, change_address)].into(),
                 current_fee_rate,
                 consolidate_fee_rate,
-                &BTreeMap::new(),
+                BTreeMap::new(),
             )
             .map_err(ControllerError::WalletError)?;
 
@@ -745,8 +745,8 @@ where
             for (token_id, outputs_vec) in outputs {
                 let token_info = fetch_token_info(&self.rpc_client, token_id).await?;
                 additional_utxo_infos.insert(
-                    PoolOrTokenId::TokenId(token_id),
-                    UtxoAdditionalInfo::TokenInfo(TokenAdditionalInfo {
+                    InfoId::TokenId(token_id),
+                    TxAdditionalInfo::TokenInfo(TokenAdditionalInfo {
                         num_decimals: token_info.token_number_of_decimals(),
                         ticker: token_info.token_ticker().to_vec(),
                     }),
@@ -846,7 +846,7 @@ where
             change_addresses,
             current_fee_rate,
             consolidate_fee_rate,
-            &additional_utxo_infos,
+            additional_utxo_infos,
         )?;
 
         let fees = into_balances(&self.rpc_client, self.chain_config, fees).await?;
@@ -899,7 +899,7 @@ where
                     BTreeMap::new(),
                     current_fee_rate,
                     consolidate_fee_rate,
-                    &BTreeMap::new(),
+                    BTreeMap::new(),
                 )
             },
         )
@@ -961,8 +961,8 @@ where
                   token_info: &UnconfirmedTokenInfo| {
                 token_info.check_can_be_used()?;
                 let additional_info = BTreeMap::from_iter([(
-                    PoolOrTokenId::TokenId(token_info.token_id()),
-                    UtxoAdditionalInfo::TokenInfo(TokenAdditionalInfo {
+                    InfoId::TokenId(token_info.token_id()),
+                    TxAdditionalInfo::TokenInfo(TokenAdditionalInfo {
                         num_decimals: token_info.num_decimals(),
                         ticker: token_info.token_ticker().to_vec(),
                     }),
@@ -974,7 +974,7 @@ where
                     BTreeMap::new(),
                     current_fee_rate,
                     consolidate_fee_rate,
-                    &additional_info,
+                    additional_info,
                 )
             },
         )
@@ -999,8 +999,8 @@ where
                   token_info: &UnconfirmedTokenInfo| {
                 token_info.check_can_be_used()?;
                 let additional_info = BTreeMap::from_iter([(
-                    PoolOrTokenId::TokenId(token_info.token_id()),
-                    UtxoAdditionalInfo::TokenInfo(TokenAdditionalInfo {
+                    InfoId::TokenId(token_info.token_id()),
+                    TxAdditionalInfo::TokenInfo(TokenAdditionalInfo {
                         num_decimals: token_info.num_decimals(),
                         ticker: token_info.token_ticker().to_vec(),
                     }),
@@ -1013,7 +1013,7 @@ where
                     intent,
                     current_fee_rate,
                     consolidate_fee_rate,
-                    &additional_info,
+                    additional_info,
                 )
             },
         )
@@ -1117,7 +1117,7 @@ where
         &mut self,
         output_value: OutputValue,
         htlc: HashedTimelockContract,
-        additional_utxo_infos: &BTreeMap<PoolOrTokenId, UtxoAdditionalInfo>,
+        additional_utxo_infos: BTreeMap<InfoId, TxAdditionalInfo>,
     ) -> Result<SignedTransaction, ControllerError<T>> {
         let (current_fee_rate, consolidate_fee_rate) =
             self.get_current_and_consolidation_fee_rate().await?;
@@ -1154,7 +1154,7 @@ where
                     conclude_key,
                     current_fee_rate,
                     consolidate_fee_rate,
-                    &additional_info,
+                    additional_info,
                 )
             },
         )
@@ -1181,7 +1181,7 @@ where
                     output_address,
                     current_fee_rate,
                     consolidate_fee_rate,
-                    &additional_info,
+                    additional_info,
                 )
             },
         )
@@ -1210,7 +1210,7 @@ where
                     output_address,
                     current_fee_rate,
                     consolidate_fee_rate,
-                    &additional_info,
+                    additional_info,
                 )
             },
         )
@@ -1220,15 +1220,15 @@ where
     fn additional_token_infos(
         &mut self,
         token_infos: Vec<RPCTokenInfo>,
-    ) -> Result<BTreeMap<PoolOrTokenId, UtxoAdditionalInfo>, ControllerError<T>> {
+    ) -> Result<BTreeMap<InfoId, TxAdditionalInfo>, ControllerError<T>> {
         token_infos
             .into_iter()
             .map(|token_info| {
                 let token_info = self.unconfiremd_token_info(token_info)?;
 
                 Ok((
-                    PoolOrTokenId::TokenId(token_info.token_id()),
-                    UtxoAdditionalInfo::TokenInfo(TokenAdditionalInfo {
+                    InfoId::TokenId(token_info.token_id()),
+                    TxAdditionalInfo::TokenInfo(TokenAdditionalInfo {
                         num_decimals: token_info.num_decimals(),
                         ticker: token_info.token_ticker().to_vec(),
                     }),

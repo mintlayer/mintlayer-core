@@ -14,34 +14,37 @@
 // limitations under the License.
 
 use core::panic;
-use std::ops::{Add, Div, Mul, Sub};
+use std::ops::{Add, Div, Sub};
 
 use super::*;
-use crate::key_chain::{MasterKeyChain, LOOKAHEAD_SIZE};
-use crate::send_request::PoolOrTokenId;
-use crate::{Account, SendRequest};
-use common::chain::config::create_regtest;
-use common::chain::htlc::HashedTimelockContract;
-use common::chain::output_value::OutputValue;
-use common::chain::signature::inputsig::arbitrary_message::produce_message_challenge;
-use common::chain::stakelock::StakePoolData;
-use common::chain::timelock::OutputTimeLock;
-use common::chain::tokens::{NftIssuanceV0, TokenId};
+use crate::{
+    key_chain::{MasterKeyChain, LOOKAHEAD_SIZE},
+    Account, SendRequest,
+};
 use common::chain::{
+    config::create_regtest,
+    htlc::HashedTimelockContract,
+    output_value::OutputValue,
+    signature::inputsig::arbitrary_message::produce_message_challenge,
+    stakelock::StakePoolData,
+    timelock::OutputTimeLock,
+    tokens::{NftIssuanceV0, TokenId},
     AccountNonce, AccountOutPoint, DelegationId, Destination, GenBlock, OrderData, PoolId,
     Transaction, TxInput,
 };
-use common::primitives::per_thousand::PerThousand;
-use common::primitives::{Amount, BlockHeight, Id, H256};
+use common::primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, H256};
 use crypto::key::{KeyKind, PrivateKey};
 use randomness::{Rng, RngCore};
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 use trezor_client::find_devices;
 use wallet_storage::{DefaultBackend, Store, Transactional};
-use wallet_types::account_info::DEFAULT_ACCOUNT_INDEX;
-use wallet_types::seed_phrase::StoreSeedPhrase;
-use wallet_types::KeyPurpose::{Change, ReceiveFunds};
+use wallet_types::{
+    account_info::DEFAULT_ACCOUNT_INDEX,
+    partially_signed_transaction::InfoId,
+    seed_phrase::StoreSeedPhrase,
+    KeyPurpose::{Change, ReceiveFunds},
+};
 
 const MNEMONIC: &str =
     "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
@@ -195,7 +198,7 @@ fn sign_transaction(#[case] seed: Seed) {
     let mut account = Account::new(chain_config.clone(), &mut db_tx, key_chain, None).unwrap();
 
     let amounts: Vec<Amount> = (0..(2 + rng.next_u32() % 5))
-        .map(|_| Amount::from_atoms(rng.gen_range(1..10) as UnsignedIntType))
+        .map(|_| Amount::from_atoms(rng.gen_range(10..100) as UnsignedIntType))
         .collect();
 
     let total_amount = amounts.iter().fold(Amount::ZERO, |acc, a| acc.add(*a).unwrap());
@@ -263,36 +266,44 @@ fn sign_transaction(#[case] seed: Seed) {
     let multisig_utxo = TxOutput::Transfer(OutputValue::Coin(Amount::from_atoms(1)), multisig_dest);
 
     let token_id = TokenId::new(H256::random_using(&mut rng));
+    let order_id = OrderId::new(H256::random_using(&mut rng));
+
+    let dest_amount = total_amount.div(10).unwrap();
+    let lock_amount = total_amount.div(10).unwrap();
+    let burn_amount = total_amount.div(10).unwrap();
+    let change_amount = total_amount.div(10).unwrap();
+    let outputs_amounts_sum = [dest_amount, lock_amount, burn_amount, change_amount]
+        .iter()
+        .fold(Amount::ZERO, |acc, a| acc.add(*a).unwrap());
+    let _fee_amount = total_amount.sub(outputs_amounts_sum).unwrap();
+
     let acc_inputs = vec![
         TxInput::Account(AccountOutPoint::new(
             AccountNonce::new(1),
             AccountSpending::DelegationBalance(
                 DelegationId::new(H256::random_using(&mut rng)),
-                Amount::from_atoms(1 as u128),
+                Amount::from_atoms(1_u128),
             ),
         )),
         TxInput::AccountCommand(
             AccountNonce::new(rng.next_u64()),
-            AccountCommand::MintTokens(token_id, Amount::from_atoms(100)),
+            AccountCommand::MintTokens(token_id, (dest_amount + Amount::from_atoms(100)).unwrap()),
         ),
         TxInput::AccountCommand(
             AccountNonce::new(rng.next_u64()),
-            AccountCommand::UnmintTokens(TokenId::new(H256::random_using(&mut rng))),
+            AccountCommand::UnmintTokens(token_id),
         ),
         TxInput::AccountCommand(
             AccountNonce::new(rng.next_u64()),
-            AccountCommand::LockTokenSupply(TokenId::new(H256::random_using(&mut rng))),
+            AccountCommand::LockTokenSupply(token_id),
         ),
         TxInput::AccountCommand(
             AccountNonce::new(rng.next_u64()),
-            AccountCommand::FreezeToken(
-                TokenId::new(H256::random_using(&mut rng)),
-                IsTokenUnfreezable::Yes,
-            ),
+            AccountCommand::FreezeToken(token_id, IsTokenUnfreezable::Yes),
         ),
         TxInput::AccountCommand(
             AccountNonce::new(rng.next_u64()),
-            AccountCommand::UnfreezeToken(TokenId::new(H256::random_using(&mut rng))),
+            AccountCommand::UnfreezeToken(token_id),
         ),
         TxInput::AccountCommand(
             AccountNonce::new(rng.next_u64()),
@@ -303,15 +314,11 @@ fn sign_transaction(#[case] seed: Seed) {
         ),
         TxInput::AccountCommand(
             AccountNonce::new(rng.next_u64()),
-            AccountCommand::ConcludeOrder(OrderId::new(H256::random_using(&mut rng))),
+            AccountCommand::ConcludeOrder(order_id),
         ),
         TxInput::AccountCommand(
             AccountNonce::new(rng.next_u64()),
-            AccountCommand::FillOrder(
-                OrderId::new(H256::random_using(&mut rng)),
-                Amount::from_atoms(123),
-                Destination::AnyoneCanSpend,
-            ),
+            AccountCommand::FillOrder(order_id, Amount::from_atoms(1), Destination::AnyoneCanSpend),
         ),
         TxInput::AccountCommand(
             AccountNonce::new(rng.next_u64()),
@@ -333,15 +340,6 @@ fn sign_transaction(#[case] seed: Seed) {
             account.get_new_address(&mut db_tx, purpose).unwrap().1.into_object()
         })
         .collect();
-
-    let dest_amount = total_amount.div(10).unwrap().mul(5).unwrap();
-    let lock_amount = total_amount.div(10).unwrap().mul(1).unwrap();
-    let burn_amount = total_amount.div(10).unwrap().mul(1).unwrap();
-    let change_amount = total_amount.div(10).unwrap().mul(2).unwrap();
-    let outputs_amounts_sum = [dest_amount, lock_amount, burn_amount, change_amount]
-        .iter()
-        .fold(Amount::ZERO, |acc, a| acc.add(*a).unwrap());
-    let _fee_amount = total_amount.sub(outputs_amounts_sum).unwrap();
 
     let (_dest_prv, dest_pub) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
     let (_, vrf_public_key) = VRFPrivateKey::new_from_entropy(crypto::vrf::VRFKeyKind::Schnorrkel);
@@ -437,13 +435,22 @@ fn sign_transaction(#[case] seed: Seed) {
     let destinations = req.destinations().to_vec();
     let mut additional_info = BTreeMap::new();
     additional_info.insert(
-        PoolOrTokenId::TokenId(token_id),
-        UtxoAdditionalInfo::TokenInfo(TokenAdditionalInfo {
+        InfoId::TokenId(token_id),
+        TxAdditionalInfo::TokenInfo(TokenAdditionalInfo {
             num_decimals: 1,
             ticker: "TKN".as_bytes().to_vec(),
         }),
     );
-    let ptx = req.into_partially_signed_tx(&additional_info).unwrap();
+    additional_info.insert(
+        InfoId::OrderId(order_id),
+        TxAdditionalInfo::OrderInfo {
+            ask_balance: Amount::from_atoms(10),
+            give_balance: Amount::from_atoms(100),
+            initially_asked: OutputValue::Coin(Amount::from_atoms(20)),
+            initially_given: OutputValue::TokenV1(token_id, Amount::from_atoms(200)),
+        },
+    );
+    let ptx = req.into_partially_signed_tx(additional_info).unwrap();
 
     let mut devices = find_devices(false);
     assert!(!devices.is_empty());

@@ -26,8 +26,7 @@ use crate::key_chain::{
     MasterKeyChain, LOOKAHEAD_SIZE, VRF_INDEX,
 };
 use crate::send_request::{
-    make_issue_token_outputs, IssueNftArguments, PoolOrTokenId, SelectedInputs,
-    StakePoolCreationArguments,
+    make_issue_token_outputs, IssueNftArguments, SelectedInputs, StakePoolCreationArguments,
 };
 use crate::signer::{Signer, SignerError, SignerProvider};
 use crate::wallet_events::{WalletEvents, WalletEventsNoOp};
@@ -75,8 +74,8 @@ use wallet_storage::{
 use wallet_types::account_info::{StandaloneAddressDetails, StandaloneAddresses};
 use wallet_types::chain_info::ChainInfo;
 use wallet_types::partially_signed_transaction::{
-    PartiallySignedTransaction, PartiallySignedTransactionCreationError, TokenAdditionalInfo,
-    UtxoAdditionalInfo,
+    InfoId, PartiallySignedTransaction, PartiallySignedTransactionCreationError,
+    TokenAdditionalInfo, TxAdditionalInfo,
 };
 use wallet_types::seed_phrase::SerializableSeedPhrase;
 use wallet_types::signature_status::SignatureStatus;
@@ -1044,7 +1043,7 @@ where
     fn for_account_rw_unlocked_and_check_tx_generic<AddlData>(
         &mut self,
         account_index: U31,
-        additional_utxo_infos: &BTreeMap<PoolOrTokenId, UtxoAdditionalInfo>,
+        additional_utxo_infos: BTreeMap<InfoId, TxAdditionalInfo>,
         f: impl FnOnce(
             &mut Account<P::K>,
             &mut StoreTxRwUnlocked<B>,
@@ -1065,7 +1064,7 @@ where
                 let ptx = signer.sign_tx(ptx, account.key_chain(), db_tx).map(|(ptx, _, _)| ptx)?;
 
                 let inputs_utxo_refs: Vec<_> =
-                    ptx.input_utxos().iter().map(|u| u.as_ref().map(|x| &x.utxo)).collect();
+                    ptx.input_utxos().iter().map(|u| u.as_ref()).collect();
                 let is_fully_signed =
                     ptx.destinations().iter().enumerate().zip(ptx.witnesses()).all(
                         |((i, destination), witness)| match (witness, destination) {
@@ -1102,7 +1101,7 @@ where
     fn for_account_rw_unlocked_and_check_tx(
         &mut self,
         account_index: U31,
-        additional_utxo_infos: &BTreeMap<PoolOrTokenId, UtxoAdditionalInfo>,
+        additional_utxo_infos: BTreeMap<InfoId, TxAdditionalInfo>,
         f: impl FnOnce(&mut Account<P::K>, &mut StoreTxRwUnlocked<B>) -> WalletResult<SendRequest>,
     ) -> WalletResult<SignedTransaction> {
         Ok(self
@@ -1426,7 +1425,7 @@ where
         change_addresses: BTreeMap<Currency, Address<Destination>>,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
-        additional_utxo_infos: &BTreeMap<PoolOrTokenId, UtxoAdditionalInfo>,
+        additional_utxo_infos: BTreeMap<InfoId, TxAdditionalInfo>,
     ) -> WalletResult<SignedTransaction> {
         Ok(self
             .create_transaction_to_addresses_impl(
@@ -1454,7 +1453,7 @@ where
         intent: String,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
-        additional_utxo_infos: &BTreeMap<PoolOrTokenId, UtxoAdditionalInfo>,
+        additional_utxo_infos: BTreeMap<InfoId, TxAdditionalInfo>,
     ) -> WalletResult<(SignedTransaction, SignedTransactionIntent)> {
         let (signed_tx, input_destinations) = self.create_transaction_to_addresses_impl(
             account_index,
@@ -1496,7 +1495,7 @@ where
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
         additional_data_getter: impl Fn(&SendRequest) -> AddlData,
-        additional_utxo_infos: &BTreeMap<PoolOrTokenId, UtxoAdditionalInfo>,
+        additional_utxo_infos: BTreeMap<InfoId, TxAdditionalInfo>,
     ) -> WalletResult<(SignedTransaction, AddlData)> {
         let request = SendRequest::new().with_outputs(outputs);
         let latest_median_time = self.latest_median_time;
@@ -1533,7 +1532,7 @@ where
         change_addresses: BTreeMap<Currency, Address<Destination>>,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
-        additional_utxo_infos: &BTreeMap<PoolOrTokenId, UtxoAdditionalInfo>,
+        additional_utxo_infos: BTreeMap<InfoId, TxAdditionalInfo>,
     ) -> WalletResult<(PartiallySignedTransaction, BTreeMap<Currency, Amount>)> {
         let request = SendRequest::new().with_outputs(outputs);
         let latest_median_time = self.latest_median_time;
@@ -1560,7 +1559,7 @@ where
         destination: Destination,
         inputs: Vec<(UtxoOutPoint, TxOutput)>,
         current_fee_rate: FeeRate,
-        additional_utxo_infos: &BTreeMap<PoolOrTokenId, UtxoAdditionalInfo>,
+        additional_utxo_infos: BTreeMap<InfoId, TxAdditionalInfo>,
     ) -> WalletResult<SignedTransaction> {
         let request = SendRequest::new().with_inputs(
             inputs.into_iter().map(|(outpoint, output)| (TxInput::Utxo(outpoint), output)),
@@ -1582,7 +1581,7 @@ where
         delegation_share: Amount,
         current_fee_rate: FeeRate,
     ) -> WalletResult<SignedTransaction> {
-        self.for_account_rw_unlocked_and_check_tx(account_index, &BTreeMap::new(), |account, _| {
+        self.for_account_rw_unlocked_and_check_tx(account_index, BTreeMap::new(), |account, _| {
             account.sweep_delegation(address, delegation_id, delegation_share, current_fee_rate)
         })
     }
@@ -1596,7 +1595,7 @@ where
         delegation_share: Amount,
         current_fee_rate: FeeRate,
     ) -> WalletResult<SignedTransaction> {
-        self.for_account_rw_unlocked_and_check_tx(account_index, &BTreeMap::new(), |account, _| {
+        self.for_account_rw_unlocked_and_check_tx(account_index, BTreeMap::new(), |account, _| {
             account.spend_from_delegation(
                 address,
                 amount,
@@ -1620,7 +1619,7 @@ where
         let additional_utxo_infos = to_token_additional_info(token_info);
         self.for_account_rw_unlocked_and_check_tx(
             account_index,
-            &additional_utxo_infos,
+            additional_utxo_infos,
             |account, db_tx| {
                 account.mint_tokens(
                     db_tx,
@@ -1649,7 +1648,7 @@ where
         let additional_utxo_infos = to_token_additional_info(token_info);
         self.for_account_rw_unlocked_and_check_tx(
             account_index,
-            &additional_utxo_infos,
+            additional_utxo_infos,
             |account, db_tx| {
                 account.unmint_tokens(
                     db_tx,
@@ -1676,7 +1675,7 @@ where
         let additional_utxo_infos = to_token_additional_info(token_info);
         self.for_account_rw_unlocked_and_check_tx(
             account_index,
-            &additional_utxo_infos,
+            additional_utxo_infos,
             |account, db_tx| {
                 account.lock_token_supply(
                     db_tx,
@@ -1703,7 +1702,7 @@ where
         let additional_utxo_infos = to_token_additional_info(token_info);
         self.for_account_rw_unlocked_and_check_tx(
             account_index,
-            &additional_utxo_infos,
+            additional_utxo_infos,
             |account, db_tx| {
                 account.freeze_token(
                     db_tx,
@@ -1730,7 +1729,7 @@ where
         let additional_utxo_infos = to_token_additional_info(token_info);
         self.for_account_rw_unlocked_and_check_tx(
             account_index,
-            &additional_utxo_infos,
+            additional_utxo_infos,
             |account, db_tx| {
                 account.unfreeze_token(
                     db_tx,
@@ -1757,7 +1756,7 @@ where
         let additional_utxo_infos = to_token_additional_info(token_info);
         self.for_account_rw_unlocked_and_check_tx(
             account_index,
-            &additional_utxo_infos,
+            additional_utxo_infos,
             |account, db_tx| {
                 account.change_token_authority(
                     db_tx,
@@ -1785,7 +1784,7 @@ where
         let additional_utxo_infos = to_token_additional_info(token_info);
         self.for_account_rw_unlocked_and_check_tx(
             account_index,
-            &additional_utxo_infos,
+            additional_utxo_infos,
             |account, db_tx| {
                 account.change_token_metadata_uri(
                     db_tx,
@@ -1832,7 +1831,7 @@ where
             BTreeMap::new(),
             current_fee_rate,
             consolidate_fee_rate,
-            &BTreeMap::new(),
+            BTreeMap::new(),
         )?;
         let input0_outpoint = crate::utils::get_first_utxo_outpoint(tx.transaction().inputs())?;
         let delegation_id = make_delegation_id(input0_outpoint);
@@ -1855,7 +1854,7 @@ where
             BTreeMap::new(),
             current_fee_rate,
             consolidate_fee_rate,
-            &BTreeMap::new(),
+            BTreeMap::new(),
         )?;
         let token_id =
             make_token_id(tx.transaction().inputs()).ok_or(WalletError::MissingTokenId)?;
@@ -1875,7 +1874,7 @@ where
 
         let signed_transaction = self.for_account_rw_unlocked_and_check_tx(
             account_index,
-            &BTreeMap::new(),
+            BTreeMap::new(),
             |account, db_tx| {
                 account.create_issue_nft_tx(
                     db_tx,
@@ -1906,13 +1905,13 @@ where
         current_fee_rate: FeeRate,
     ) -> WalletResult<SignedTransaction> {
         let additional_utxo_infos = BTreeMap::from_iter([(
-            PoolOrTokenId::PoolId(pool_id),
-            UtxoAdditionalInfo::PoolInfo { staker_balance },
+            InfoId::PoolId(pool_id),
+            TxAdditionalInfo::PoolInfo { staker_balance },
         )]);
         Ok(self
             .for_account_rw_unlocked_and_check_tx_generic(
                 account_index,
-                &additional_utxo_infos,
+                additional_utxo_infos,
                 |account, db_tx| {
                     Ok((
                         account.decommission_stake_pool(
@@ -1939,8 +1938,8 @@ where
         current_fee_rate: FeeRate,
     ) -> WalletResult<PartiallySignedTransaction> {
         let additional_utxo_infos = BTreeMap::from_iter([(
-            PoolOrTokenId::PoolId(pool_id),
-            UtxoAdditionalInfo::PoolInfo { staker_balance },
+            InfoId::PoolId(pool_id),
+            TxAdditionalInfo::PoolInfo { staker_balance },
         )]);
         self.for_account_rw_unlocked(
             account_index,
@@ -1953,7 +1952,7 @@ where
                     current_fee_rate,
                 )?;
 
-                let ptx = request.into_partially_signed_tx(&additional_utxo_infos)?;
+                let ptx = request.into_partially_signed_tx(additional_utxo_infos)?;
 
                 let mut signer =
                     signer_provider.provide(Arc::new(chain_config.clone()), account_index);
@@ -1974,7 +1973,7 @@ where
         htlc: HashedTimelockContract,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
-        additional_utxo_infos: &BTreeMap<PoolOrTokenId, UtxoAdditionalInfo>,
+        additional_utxo_infos: BTreeMap<InfoId, TxAdditionalInfo>,
     ) -> WalletResult<SignedTransaction> {
         let latest_median_time = self.latest_median_time;
         self.for_account_rw_unlocked_and_check_tx(
@@ -2004,7 +2003,7 @@ where
         conclude_key: Address<Destination>,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
-        additional_utxo_infos: &BTreeMap<PoolOrTokenId, UtxoAdditionalInfo>,
+        additional_utxo_infos: BTreeMap<InfoId, TxAdditionalInfo>,
     ) -> WalletResult<(OrderId, SignedTransaction)> {
         let latest_median_time = self.latest_median_time;
         let tx = self.for_account_rw_unlocked_and_check_tx(
@@ -2038,7 +2037,7 @@ where
         output_address: Option<Destination>,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
-        additional_utxo_infos: &BTreeMap<PoolOrTokenId, UtxoAdditionalInfo>,
+        additional_utxo_infos: BTreeMap<InfoId, TxAdditionalInfo>,
     ) -> WalletResult<SignedTransaction> {
         let latest_median_time = self.latest_median_time;
         self.for_account_rw_unlocked_and_check_tx(
@@ -2070,7 +2069,7 @@ where
         output_address: Option<Destination>,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
-        additional_utxo_infos: &BTreeMap<PoolOrTokenId, UtxoAdditionalInfo>,
+        additional_utxo_infos: BTreeMap<InfoId, TxAdditionalInfo>,
     ) -> WalletResult<SignedTransaction> {
         let latest_median_time = self.latest_median_time;
         self.for_account_rw_unlocked_and_check_tx(
@@ -2301,10 +2300,10 @@ where
 
 fn to_token_additional_info(
     token_info: &UnconfirmedTokenInfo,
-) -> BTreeMap<PoolOrTokenId, UtxoAdditionalInfo> {
+) -> BTreeMap<InfoId, TxAdditionalInfo> {
     BTreeMap::from_iter([(
-        PoolOrTokenId::TokenId(token_info.token_id()),
-        UtxoAdditionalInfo::TokenInfo(TokenAdditionalInfo {
+        InfoId::TokenId(token_info.token_id()),
+        TxAdditionalInfo::TokenInfo(TokenAdditionalInfo {
             num_decimals: token_info.num_decimals(),
             ticker: token_info.token_ticker().to_vec(),
         }),
@@ -2351,7 +2350,7 @@ where
         let latest_median_time = self.latest_median_time;
         self.for_account_rw_unlocked_and_check_tx(
             account_index,
-            &BTreeMap::new(),
+            BTreeMap::new(),
             |account, db_tx| {
                 account.create_stake_pool_tx(
                     db_tx,

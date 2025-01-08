@@ -263,8 +263,7 @@ impl Signer for SoftwareSigner {
         Vec<SignatureStatus>,
         Vec<SignatureStatus>,
     )> {
-        let inputs_utxo_refs: Vec<_> =
-            ptx.input_utxos().iter().map(|u| u.as_ref().map(|x| &x.utxo)).collect();
+        let inputs_utxo_refs: Vec<_> = ptx.input_utxos().iter().map(|u| u.as_ref()).collect();
 
         let (witnesses, prev_statuses, new_statuses) = ptx
             .witnesses()

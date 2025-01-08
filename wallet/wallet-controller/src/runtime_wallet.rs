@@ -35,19 +35,22 @@ use crypto::vrf::VRFPublicKey;
 use mempool::FeeRate;
 use wallet::account::transaction_list::TransactionList;
 use wallet::account::{CoinSelectionAlgo, DelegationData, PoolData, TxInfo, UnconfirmedTokenInfo};
-use wallet::send_request::{PoolOrTokenId, SelectedInputs, StakePoolCreationArguments};
+use wallet::send_request::{SelectedInputs, StakePoolCreationArguments};
 use wallet::signer::software_signer::SoftwareSignerProvider;
 
 use wallet::wallet::WalletPoolsFilter;
 use wallet::wallet_events::WalletEvents;
 use wallet::{Wallet, WalletError, WalletResult};
-use wallet_types::account_info::{StandaloneAddressDetails, StandaloneAddresses};
-use wallet_types::partially_signed_transaction::{PartiallySignedTransaction, UtxoAdditionalInfo};
+use wallet_types::partially_signed_transaction::{PartiallySignedTransaction, TxAdditionalInfo};
 use wallet_types::seed_phrase::SerializableSeedPhrase;
 use wallet_types::signature_status::SignatureStatus;
 use wallet_types::utxo_types::{UtxoStates, UtxoTypes};
 use wallet_types::wallet_tx::TxData;
 use wallet_types::with_locked::WithLocked;
+use wallet_types::{
+    account_info::{StandaloneAddressDetails, StandaloneAddresses},
+    partially_signed_transaction::InfoId,
+};
 use wallet_types::{Currency, KeychainUsageState};
 
 #[cfg(feature = "trezor")]
@@ -784,7 +787,7 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
         change_addresses: BTreeMap<Currency, Address<Destination>>,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
-        additional_utxo_infos: &BTreeMap<PoolOrTokenId, UtxoAdditionalInfo>,
+        additional_utxo_infos: BTreeMap<InfoId, TxAdditionalInfo>,
     ) -> WalletResult<SignedTransaction> {
         match self {
             RuntimeWallet::Software(w) => w.create_transaction_to_addresses(
@@ -815,7 +818,7 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
         destination_address: Destination,
         filtered_inputs: Vec<(UtxoOutPoint, TxOutput)>,
         current_fee_rate: FeeRate,
-        additional_utxo_infos: BTreeMap<PoolOrTokenId, UtxoAdditionalInfo>,
+        additional_utxo_infos: BTreeMap<InfoId, TxAdditionalInfo>,
     ) -> WalletResult<SignedTransaction> {
         match self {
             RuntimeWallet::Software(w) => w.create_sweep_transaction(
@@ -823,7 +826,7 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
                 destination_address,
                 filtered_inputs,
                 current_fee_rate,
-                &additional_utxo_infos,
+                additional_utxo_infos,
             ),
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => w.create_sweep_transaction(
@@ -831,7 +834,7 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
                 destination_address,
                 filtered_inputs,
                 current_fee_rate,
-                &additional_utxo_infos,
+                additional_utxo_infos,
             ),
         }
     }
@@ -885,7 +888,7 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
         change_addresses: BTreeMap<Currency, Address<Destination>>,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
-        additional_utxo_infos: &BTreeMap<PoolOrTokenId, UtxoAdditionalInfo>,
+        additional_utxo_infos: BTreeMap<InfoId, TxAdditionalInfo>,
     ) -> WalletResult<(PartiallySignedTransaction, BTreeMap<Currency, Amount>)> {
         match self {
             RuntimeWallet::Software(w) => w.create_unsigned_transaction_to_addresses(
@@ -1046,7 +1049,7 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
         htlc: HashedTimelockContract,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
-        additional_utxo_infos: &BTreeMap<PoolOrTokenId, UtxoAdditionalInfo>,
+        additional_utxo_infos: BTreeMap<InfoId, TxAdditionalInfo>,
     ) -> WalletResult<SignedTransaction> {
         match self {
             RuntimeWallet::Software(w) => w.create_htlc_tx(
@@ -1078,7 +1081,7 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
         conclude_key: Address<Destination>,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
-        additional_utxo_infos: &BTreeMap<PoolOrTokenId, UtxoAdditionalInfo>,
+        additional_utxo_infos: BTreeMap<InfoId, TxAdditionalInfo>,
     ) -> WalletResult<(OrderId, SignedTransaction)> {
         match self {
             RuntimeWallet::Software(w) => w.create_order_tx(
@@ -1112,7 +1115,7 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
         output_address: Option<Destination>,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
-        additional_utxo_infos: &BTreeMap<PoolOrTokenId, UtxoAdditionalInfo>,
+        additional_utxo_infos: BTreeMap<InfoId, TxAdditionalInfo>,
     ) -> WalletResult<SignedTransaction> {
         match self {
             RuntimeWallet::Software(w) => w.create_conclude_order_tx(
@@ -1147,7 +1150,7 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
         output_address: Option<Destination>,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
-        additional_utxo_infos: &BTreeMap<PoolOrTokenId, UtxoAdditionalInfo>,
+        additional_utxo_infos: BTreeMap<InfoId, TxAdditionalInfo>,
     ) -> WalletResult<SignedTransaction> {
         match self {
             RuntimeWallet::Software(w) => w.create_fill_order_tx(
@@ -1213,7 +1216,7 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
         intent: String,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
-        additional_utxo_infos: &BTreeMap<PoolOrTokenId, UtxoAdditionalInfo>,
+        additional_utxo_infos: BTreeMap<InfoId, TxAdditionalInfo>,
     ) -> WalletResult<(SignedTransaction, SignedTransactionIntent)> {
         match self {
             RuntimeWallet::Software(w) => w.create_transaction_to_addresses_with_intent(
