@@ -649,6 +649,42 @@ async fn calculate_tx_fee_and_collect_token_info<T: ApiServerStorageWrite>(
                 },
             };
         }
+        for out in tx.outputs().iter() {
+            match out {
+                TxOutput::Transfer(v, _)
+                | TxOutput::Burn(v)
+                | TxOutput::LockThenTransfer(v, _, _)
+                | TxOutput::Htlc(v, _) => match v {
+                    OutputValue::TokenV1(token_id, _) => {
+                        token_ids.insert(*token_id);
+                    }
+                    OutputValue::Coin(_) | OutputValue::TokenV0(_) => {}
+                },
+                TxOutput::IssueNft(token_id, _, _) => {
+                    token_ids.insert(*token_id);
+                }
+                TxOutput::CreateOrder(data) => {
+                    match data.ask() {
+                        OutputValue::TokenV1(token_id, _) => {
+                            token_ids.insert(*token_id);
+                        }
+                        OutputValue::Coin(_) | OutputValue::TokenV0(_) => {}
+                    };
+                    match data.give() {
+                        OutputValue::TokenV1(token_id, _) => {
+                            token_ids.insert(*token_id);
+                        }
+                        OutputValue::Coin(_) | OutputValue::TokenV0(_) => {}
+                    };
+                }
+                TxOutput::CreateStakePool(_, _)
+                | TxOutput::DataDeposit(_)
+                | TxOutput::DelegateStaking(_, _)
+                | TxOutput::CreateDelegationId(_, _)
+                | TxOutput::IssueFungibleToken(_)
+                | TxOutput::ProduceBlockFromStake(_, _) => {}
+            };
+        }
         token_ids
     };
 
@@ -1584,7 +1620,9 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                 )
                 .await;
 
-                db_tx.set_nft_token_issuance(*token_id, block_height, *issuance.clone()).await?;
+                db_tx
+                    .set_nft_token_issuance(*token_id, block_height, *issuance.clone(), destination)
+                    .await?;
                 set_utxo(
                     outpoint,
                     output,
@@ -1936,7 +1974,7 @@ async fn increase_address_amount<T: ApiServerStorageWrite>(
     let new_amount = current_balance.add(*amount).expect("Balance should not overflow");
 
     db_tx
-        .set_address_balance_at_height(address.as_str(), new_amount, coin_or_token_id, block_height)
+        .set_address_balance_at_height(address, new_amount, coin_or_token_id, block_height)
         .await
         .expect("Unable to update balance")
 }
@@ -1957,12 +1995,7 @@ async fn increase_locked_address_amount<T: ApiServerStorageWrite>(
     let new_amount = current_balance.add(*amount).expect("Balance should not overflow");
 
     db_tx
-        .set_address_locked_balance_at_height(
-            address.as_str(),
-            new_amount,
-            coin_or_token_id,
-            block_height,
-        )
+        .set_address_locked_balance_at_height(address, new_amount, coin_or_token_id, block_height)
         .await
         .expect("Unable to update balance")
 }
@@ -1988,7 +2021,7 @@ async fn decrease_address_amount<T: ApiServerStorageWrite>(
     });
 
     db_tx
-        .set_address_balance_at_height(address.as_str(), new_amount, coin_or_token_id, block_height)
+        .set_address_balance_at_height(&address, new_amount, coin_or_token_id, block_height)
         .await
         .expect("Unable to update balance")
 }
@@ -2014,12 +2047,7 @@ async fn decrease_address_locked_amount<T: ApiServerStorageWrite>(
     });
 
     db_tx
-        .set_address_locked_balance_at_height(
-            address.as_str(),
-            new_amount,
-            coin_or_token_id,
-            block_height,
-        )
+        .set_address_locked_balance_at_height(&address, new_amount, coin_or_token_id, block_height)
         .await
         .expect("Unable to update balance")
 }

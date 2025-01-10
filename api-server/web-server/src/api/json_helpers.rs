@@ -16,7 +16,7 @@
 use std::{collections::BTreeMap, ops::Sub};
 
 use api_server_common::storage::storage_api::{
-    block_aux_data::BlockAuxData, Order, TransactionInfo, TxAdditionalInfo,
+    block_aux_data::BlockAuxData, NftWithOwner, Order, TransactionInfo, TxAdditionalInfo,
 };
 use common::{
     address::Address,
@@ -222,6 +222,23 @@ pub fn txoutput_to_json(
             })
         }
     }
+}
+
+pub fn nft_with_owner_to_json(
+    data: &NftWithOwner,
+    chain_config: &ChainConfig,
+) -> serde_json::Value {
+    let mut json = nft_issuance_data_to_json(&data.nft, chain_config);
+    let obj = json.as_object_mut().expect("object");
+    obj.insert(
+        "owner".into(),
+        data.owner
+            .as_ref()
+            .map(|d| Address::new(chain_config, d.clone()).expect("addressable").to_string())
+            .into(),
+    );
+
+    json
 }
 
 pub fn nft_issuance_data_to_json(
@@ -497,5 +514,6 @@ pub fn order_to_json(
         "ask_currency": coins_or_token_to_json(&order.ask_currency, chain_config),
         "initially_asked": amount_to_json(order.initially_asked, ask_currency_decimals),
         "ask_balance": amount_to_json(order.ask_balance, ask_currency_decimals),
+        "nonce": order.next_nonce,
     })
 }

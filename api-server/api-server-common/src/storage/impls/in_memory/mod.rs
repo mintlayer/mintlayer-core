@@ -18,9 +18,11 @@ pub mod transactional;
 use crate::storage::storage_api::{
     block_aux_data::{BlockAuxData, BlockWithExtraData},
     ApiServerStorageError, BlockInfo, CoinOrTokenStatistic, Delegation, FungibleTokenData,
-    LockedUtxo, Order, PoolBlockStats, TransactionInfo, Utxo, UtxoLock, UtxoWithExtraInfo,
+    LockedUtxo, NftWithOwner, Order, PoolBlockStats, TransactionInfo, Utxo, UtxoLock,
+    UtxoWithExtraInfo,
 };
 use common::{
+    address::Address,
     chain::{
         block::timestamp::BlockTimestamp,
         tokens::{NftIssuance, TokenId},
@@ -55,7 +57,7 @@ struct ApiServerInMemoryStorage {
     locked_utxo_table: BTreeMap<UtxoOutPoint, BTreeMap<BlockHeight, LockedUtxo>>,
     address_locked_utxos: BTreeMap<String, BTreeSet<UtxoOutPoint>>,
     fungible_token_issuances: BTreeMap<TokenId, BTreeMap<BlockHeight, FungibleTokenData>>,
-    nft_token_issuances: BTreeMap<TokenId, BTreeMap<BlockHeight, NftIssuance>>,
+    nft_token_issuances: BTreeMap<TokenId, BTreeMap<BlockHeight, NftWithOwner>>,
     statistics:
         BTreeMap<CoinOrTokenStatistic, BTreeMap<CoinOrTokenId, BTreeMap<BlockHeight, Amount>>>,
     orders_table: BTreeMap<OrderId, BTreeMap<BlockHeight, Order>>,
@@ -599,7 +601,7 @@ impl ApiServerInMemoryStorage {
     fn get_nft_token_issuance(
         &self,
         token_id: TokenId,
-    ) -> Result<Option<NftIssuance>, ApiServerStorageError> {
+    ) -> Result<Option<NftWithOwner>, ApiServerStorageError> {
         Ok(self
             .nft_token_issuances
             .get(&token_id)
@@ -641,7 +643,7 @@ impl ApiServerInMemoryStorage {
                 (value.values().last().expect("not empty").token_ticker == ticker).then_some(key)
             })
             .chain(self.nft_token_issuances.iter().filter_map(|(key, value)| {
-                let value_ticker = match &value.values().last().expect("not empty") {
+                let value_ticker = match &value.values().last().expect("not empty").nft {
                     NftIssuance::V0(data) => data.metadata.ticker(),
                 };
                 (value_ticker == ticker).then_some(key)
@@ -803,7 +805,7 @@ impl ApiServerInMemoryStorage {
 
     fn set_address_balance_at_height(
         &mut self,
-        address: &str,
+        address: &Address<Destination>,
         amount: Amount,
         coin_or_token_id: CoinOrTokenId,
         block_height: BlockHeight,
@@ -815,12 +817,38 @@ impl ApiServerInMemoryStorage {
             .and_modify(|e| *e = amount)
             .or_insert(amount);
 
+        self.update_nft_owner(coin_or_token_id, amount, address, block_height);
+
         Ok(())
+    }
+
+    // The NFT owner is updated in both cases when it is spent as an input and transfered or
+    // created as an output. When the amount is 0 we set the owner to None as in the case of a Burn
+    fn update_nft_owner(
+        &mut self,
+        coin_or_token_id: CoinOrTokenId,
+        amount: Amount,
+        address: &Address<Destination>,
+        block_height: BlockHeight,
+    ) {
+        let CoinOrTokenId::TokenId(token_id) = coin_or_token_id else {
+            return;
+        };
+
+        if let Some(by_height) = self.nft_token_issuances.get_mut(&token_id) {
+            let last = by_height.values().last().expect("not empty");
+            let owner = (amount > Amount::ZERO).then_some(address.as_object().clone());
+            let new = NftWithOwner {
+                nft: last.nft.clone(),
+                owner,
+            };
+            by_height.insert(block_height, new);
+        };
     }
 
     fn set_address_locked_balance_at_height(
         &mut self,
-        address: &str,
+        address: &Address<Destination>,
         amount: Amount,
         coin_or_token_id: CoinOrTokenId,
         block_height: BlockHeight,
@@ -831,6 +859,8 @@ impl ApiServerInMemoryStorage {
             .entry((coin_or_token_id, block_height))
             .and_modify(|e| *e = amount)
             .or_insert(amount);
+
+        self.update_nft_owner(coin_or_token_id, amount, address, block_height);
 
         Ok(())
     }
@@ -1060,11 +1090,15 @@ impl ApiServerInMemoryStorage {
         token_id: TokenId,
         block_height: BlockHeight,
         issuance: NftIssuance,
+        owner: &Destination,
     ) -> Result<(), ApiServerStorageError> {
-        self.nft_token_issuances
-            .entry(token_id)
-            .or_default()
-            .insert(block_height, issuance);
+        self.nft_token_issuances.entry(token_id).or_default().insert(
+            block_height,
+            NftWithOwner {
+                nft: issuance,
+                owner: Some(owner.clone()),
+            },
+        );
         Ok(())
     }
 
