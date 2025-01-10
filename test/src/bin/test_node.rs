@@ -18,8 +18,7 @@ use std::env;
 #[tokio::main]
 async fn main() -> Result<(), node_lib::Error> {
     let opts = node_lib::Options::from_args(env::args_os());
-    node_lib::init_logging(&opts);
-    let setup_result = node_lib::setup(opts, false).await?;
+    let setup_result = node_lib::setup(opts).await?;
     let node = match setup_result {
         node_lib::NodeSetupResult::Node(node) => node,
         node_lib::NodeSetupResult::DataDirCleanedUp => {

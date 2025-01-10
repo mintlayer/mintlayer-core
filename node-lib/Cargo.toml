@@ -24,6 +24,7 @@ utils-networking = { path = "../utils/networking" }
 
 anyhow.workspace = true
 clap = { workspace = true, features = ["derive"] }
+file-rotate.workspace = true
 jsonrpsee = { workspace = true, features = ["macros"] }
 tokio = { workspace = true, default-features = false }
 serde = { workspace = true, features = ["derive"] }
