@@ -40,7 +40,6 @@ use crypto::{
     vrf::VRFPublicKey,
 };
 use futures::{stream::FuturesUnordered, TryStreamExt};
-use itertools::Itertools;
 use logging::log;
 use mempool::FeeRate;
 use node_comm::node_traits::NodeInterface;
@@ -58,7 +57,7 @@ use wallet::{
 };
 use wallet_types::{
     partially_signed_transaction::{
-        InfoId, PartiallySignedTransaction, TokenAdditionalInfo, TxAdditionalInfo,
+        PartiallySignedTransaction, TokenAdditionalInfo, TxAdditionalInfo,
     },
     signature_status::SignatureStatus,
     utxo_types::{UtxoState, UtxoType},
@@ -158,15 +157,9 @@ where
     async fn filter_out_utxos_with_frozen_tokens(
         &self,
         input_utxos: Vec<(UtxoOutPoint, TxOutput)>,
-    ) -> Result<
-        (
-            Vec<(UtxoOutPoint, TxOutput)>,
-            BTreeMap<InfoId, TxAdditionalInfo>,
-        ),
-        ControllerError<T>,
-    > {
+    ) -> Result<(Vec<(UtxoOutPoint, TxOutput)>, TxAdditionalInfo), ControllerError<T>> {
         let mut result = vec![];
-        let mut additional_utxo_infos = BTreeMap::new();
+        let mut additional_info = TxAdditionalInfo::new();
         for utxo in input_utxos {
             let token_ids = get_referenced_token_ids(&utxo.1);
             if token_ids.is_empty() {
@@ -196,19 +189,19 @@ where
                 if ok_to_use {
                     result.push(utxo);
                     for token_info in token_infos {
-                        additional_utxo_infos.insert(
-                            InfoId::TokenId(token_info.token_id()),
-                            TxAdditionalInfo::TokenInfo(TokenAdditionalInfo {
+                        additional_info.add_token_info(
+                            token_info.token_id(),
+                            TokenAdditionalInfo {
                                 num_decimals: token_info.token_number_of_decimals(),
                                 ticker: token_info.token_ticker().to_vec(),
-                            }),
+                            },
                         );
                     }
                 }
             }
         }
 
-        Ok((result, additional_utxo_infos))
+        Ok((result, additional_info))
     }
 
     pub fn abandon_transaction(
@@ -531,7 +524,7 @@ where
                     BTreeMap::new(),
                     current_fee_rate,
                     consolidate_fee_rate,
-                    BTreeMap::new(),
+                    TxAdditionalInfo::new(),
                 )
             },
         )
@@ -563,7 +556,7 @@ where
                     BTreeMap::new(),
                     current_fee_rate,
                     consolidate_fee_rate,
-                    BTreeMap::new(),
+                    TxAdditionalInfo::new(),
                 )
             },
         )
@@ -584,7 +577,7 @@ where
             WithLocked::Unlocked,
         )?;
 
-        let (inputs, additional_utxo_infos) =
+        let (inputs, additional_info) =
             self.filter_out_utxos_with_frozen_tokens(selected_utxos).await?;
 
         let filtered_inputs = inputs
@@ -605,7 +598,7 @@ where
                     destination_address,
                     filtered_inputs,
                     current_fee_rate,
-                    additional_utxo_infos,
+                    additional_info,
                 )
             },
         )
@@ -694,7 +687,7 @@ where
                 [(Currency::Coin, change_address)].into(),
                 current_fee_rate,
                 consolidate_fee_rate,
-                BTreeMap::new(),
+                TxAdditionalInfo::new(),
             )
             .map_err(ControllerError::WalletError)?;
 
@@ -738,18 +731,18 @@ where
             ControllerError::<T>::ExpectingNonEmptyOutputs
         );
 
-        let (outputs, additional_utxo_infos) = {
+        let (outputs, additional_info) = {
             let mut result = Vec::new();
-            let mut additional_utxo_infos = BTreeMap::new();
+            let mut additional_info = TxAdditionalInfo::new();
 
             for (token_id, outputs_vec) in outputs {
                 let token_info = fetch_token_info(&self.rpc_client, token_id).await?;
-                additional_utxo_infos.insert(
-                    InfoId::TokenId(token_id),
-                    TxAdditionalInfo::TokenInfo(TokenAdditionalInfo {
+                additional_info.add_token_info(
+                    token_id,
+                    TokenAdditionalInfo {
                         num_decimals: token_info.token_number_of_decimals(),
                         ticker: token_info.token_ticker().to_vec(),
-                    }),
+                    },
                 );
 
                 match &token_info {
@@ -768,7 +761,7 @@ where
                 .map_err(ControllerError::InvalidTxOutput)?;
             }
 
-            (result, additional_utxo_infos)
+            (result, additional_info)
         };
 
         let (inputs, change_addresses) = {
@@ -846,7 +839,7 @@ where
             change_addresses,
             current_fee_rate,
             consolidate_fee_rate,
-            additional_utxo_infos,
+            additional_info,
         )?;
 
         let fees = into_balances(&self.rpc_client, self.chain_config, fees).await?;
@@ -899,7 +892,7 @@ where
                     BTreeMap::new(),
                     current_fee_rate,
                     consolidate_fee_rate,
-                    BTreeMap::new(),
+                    TxAdditionalInfo::new(),
                 )
             },
         )
@@ -960,13 +953,13 @@ where
                   account_index: U31,
                   token_info: &UnconfirmedTokenInfo| {
                 token_info.check_can_be_used()?;
-                let additional_info = BTreeMap::from_iter([(
-                    InfoId::TokenId(token_info.token_id()),
-                    TxAdditionalInfo::TokenInfo(TokenAdditionalInfo {
+                let additional_info = TxAdditionalInfo::with_token_info(
+                    token_info.token_id(),
+                    TokenAdditionalInfo {
                         num_decimals: token_info.num_decimals(),
                         ticker: token_info.token_ticker().to_vec(),
-                    }),
-                )]);
+                    },
+                );
                 wallet.create_transaction_to_addresses(
                     account_index,
                     [output],
@@ -998,13 +991,13 @@ where
                   account_index: U31,
                   token_info: &UnconfirmedTokenInfo| {
                 token_info.check_can_be_used()?;
-                let additional_info = BTreeMap::from_iter([(
-                    InfoId::TokenId(token_info.token_id()),
-                    TxAdditionalInfo::TokenInfo(TokenAdditionalInfo {
+                let additional_info = TxAdditionalInfo::with_token_info(
+                    token_info.token_id(),
+                    TokenAdditionalInfo {
                         num_decimals: token_info.num_decimals(),
                         ticker: token_info.token_ticker().to_vec(),
-                    }),
-                )]);
+                    },
+                );
                 wallet.create_transaction_to_addresses_with_intent(
                     account_index,
                     [output],
@@ -1117,7 +1110,7 @@ where
         &mut self,
         output_value: OutputValue,
         htlc: HashedTimelockContract,
-        additional_utxo_infos: BTreeMap<InfoId, TxAdditionalInfo>,
+        additional_info: TxAdditionalInfo,
     ) -> Result<SignedTransaction, ControllerError<T>> {
         let (current_fee_rate, consolidate_fee_rate) =
             self.get_current_and_consolidation_fee_rate().await?;
@@ -1128,7 +1121,7 @@ where
             htlc,
             current_fee_rate,
             consolidate_fee_rate,
-            additional_utxo_infos,
+            additional_info,
         )?;
         Ok(result)
     }
@@ -1140,7 +1133,7 @@ where
         conclude_key: Address<Destination>,
         token_infos: Vec<RPCTokenInfo>,
     ) -> Result<(SignedTransaction, OrderId), ControllerError<T>> {
-        let additional_info = self.additional_token_infos(token_infos)?;
+        let additional_info = self.additional_token_info(token_infos)?;
 
         self.create_and_send_tx_with_id(
             move |current_fee_rate: FeeRate,
@@ -1168,7 +1161,7 @@ where
         output_address: Option<Destination>,
         token_infos: Vec<RPCTokenInfo>,
     ) -> Result<SignedTransaction, ControllerError<T>> {
-        let additional_info = self.additional_token_infos(token_infos)?;
+        let additional_info = self.additional_token_info(token_infos)?;
         self.create_and_send_tx(
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
@@ -1196,7 +1189,7 @@ where
         output_address: Option<Destination>,
         token_infos: Vec<RPCTokenInfo>,
     ) -> Result<SignedTransaction, ControllerError<T>> {
-        let additional_info = self.additional_token_infos(token_infos)?;
+        let additional_info = self.additional_token_info(token_infos)?;
         self.create_and_send_tx(
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
@@ -1217,24 +1210,25 @@ where
         .await
     }
 
-    fn additional_token_infos(
+    fn additional_token_info(
         &mut self,
         token_infos: Vec<RPCTokenInfo>,
-    ) -> Result<BTreeMap<InfoId, TxAdditionalInfo>, ControllerError<T>> {
+    ) -> Result<TxAdditionalInfo, ControllerError<T>> {
         token_infos
             .into_iter()
-            .map(|token_info| {
+            .try_fold(TxAdditionalInfo::new(), |mut acc, token_info| {
                 let token_info = self.unconfiremd_token_info(token_info)?;
 
-                Ok((
-                    InfoId::TokenId(token_info.token_id()),
-                    TxAdditionalInfo::TokenInfo(TokenAdditionalInfo {
+                acc.add_token_info(
+                    token_info.token_id(),
+                    TokenAdditionalInfo {
                         num_decimals: token_info.num_decimals(),
                         ticker: token_info.token_ticker().to_vec(),
-                    }),
-                ))
+                    },
+                );
+
+                Ok(acc)
             })
-            .try_collect()
     }
 
     /// Checks if the wallet has stake pools and marks this account for staking.

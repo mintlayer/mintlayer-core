@@ -45,33 +45,93 @@ pub enum PartiallySignedTransactionCreationError {
     InvalidHtlcSecretsCount,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
-pub enum InfoId {
-    PoolId(PoolId),
-    TokenId(TokenId),
-    OrderId(OrderId),
-}
-
 #[derive(Debug, Eq, PartialEq, Clone, Encode, Decode)]
 pub struct TokenAdditionalInfo {
     pub num_decimals: u8,
     pub ticker: Vec<u8>,
 }
 
+#[derive(Debug, Eq, PartialEq, Clone, Encode, Decode)]
+pub struct PoolAdditionalInfo {
+    pub staker_balance: Amount,
+}
+
+#[derive(Debug, Eq, PartialEq, Clone, Encode, Decode)]
+pub struct OrderAdditionalInfo {
+    pub initially_asked: OutputValue,
+    pub initially_given: OutputValue,
+    pub ask_balance: Amount,
+    pub give_balance: Amount,
+}
+
 /// Additional info for a partially signed Tx mainly used by hardware wallets to show info to the
 /// user
 #[derive(Debug, Eq, PartialEq, Clone, Encode, Decode)]
-pub enum TxAdditionalInfo {
-    TokenInfo(TokenAdditionalInfo),
-    PoolInfo {
-        staker_balance: Amount,
-    },
-    OrderInfo {
-        initially_asked: OutputValue,
-        initially_given: OutputValue,
-        ask_balance: Amount,
-        give_balance: Amount,
-    },
+pub struct TxAdditionalInfo {
+    token_info: BTreeMap<TokenId, TokenAdditionalInfo>,
+    pool_info: BTreeMap<PoolId, PoolAdditionalInfo>,
+    order_info: BTreeMap<OrderId, OrderAdditionalInfo>,
+}
+
+impl TxAdditionalInfo {
+    pub fn new() -> Self {
+        Self {
+            token_info: BTreeMap::new(),
+            pool_info: BTreeMap::new(),
+            order_info: BTreeMap::new(),
+        }
+    }
+
+    pub fn with_token_info(token_id: TokenId, info: TokenAdditionalInfo) -> Self {
+        Self {
+            token_info: BTreeMap::from([(token_id, info)]),
+            pool_info: BTreeMap::new(),
+            order_info: BTreeMap::new(),
+        }
+    }
+
+    pub fn with_pool_info(pool_id: PoolId, info: PoolAdditionalInfo) -> Self {
+        Self {
+            token_info: BTreeMap::new(),
+            pool_info: BTreeMap::from([(pool_id, info)]),
+            order_info: BTreeMap::new(),
+        }
+    }
+
+    pub fn with_order_info(order_id: OrderId, info: OrderAdditionalInfo) -> Self {
+        Self {
+            token_info: BTreeMap::new(),
+            pool_info: BTreeMap::new(),
+            order_info: BTreeMap::from([(order_id, info)]),
+        }
+    }
+
+    pub fn add_token_info(&mut self, token_id: TokenId, info: TokenAdditionalInfo) {
+        self.token_info.insert(token_id, info);
+    }
+
+    pub fn join(mut self, other: Self) -> Self {
+        self.token_info.extend(other.token_info);
+        self.pool_info.extend(other.pool_info);
+        self.order_info.extend(other.order_info);
+        Self {
+            token_info: self.token_info,
+            pool_info: self.pool_info,
+            order_info: self.order_info,
+        }
+    }
+
+    pub fn get_token_info(&self, token_id: &TokenId) -> Option<&TokenAdditionalInfo> {
+        self.token_info.get(token_id)
+    }
+
+    pub fn get_pool_info(&self, pool_id: &PoolId) -> Option<&PoolAdditionalInfo> {
+        self.pool_info.get(pool_id)
+    }
+
+    pub fn get_order_info(&self, order_id: &OrderId) -> Option<&OrderAdditionalInfo> {
+        self.order_info.get(order_id)
+    }
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Encode, Decode)]
@@ -83,7 +143,7 @@ pub struct PartiallySignedTransaction {
     destinations: Vec<Option<Destination>>,
 
     htlc_secrets: Vec<Option<HtlcSecret>>,
-    additional_infos: BTreeMap<InfoId, TxAdditionalInfo>,
+    additional_infos: TxAdditionalInfo,
 }
 
 impl PartiallySignedTransaction {
@@ -93,7 +153,7 @@ impl PartiallySignedTransaction {
         input_utxos: Vec<Option<TxOutput>>,
         destinations: Vec<Option<Destination>>,
         htlc_secrets: Option<Vec<Option<HtlcSecret>>>,
-        additional_infos: BTreeMap<InfoId, TxAdditionalInfo>,
+        additional_infos: TxAdditionalInfo,
     ) -> Result<Self, PartiallySignedTransactionCreationError> {
         let htlc_secrets = htlc_secrets.unwrap_or_else(|| vec![None; tx.inputs().len()]);
 
@@ -193,7 +253,7 @@ impl PartiallySignedTransaction {
         }
     }
 
-    pub fn additional_infos(&self) -> &BTreeMap<InfoId, TxAdditionalInfo> {
+    pub fn additional_infos(&self) -> &TxAdditionalInfo {
         &self.additional_infos
     }
 }

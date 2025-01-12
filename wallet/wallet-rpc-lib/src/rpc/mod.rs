@@ -81,7 +81,7 @@ use wallet_controller::{
 use wallet_types::{
     account_info::StandaloneAddressDetails,
     partially_signed_transaction::{
-        InfoId, PartiallySignedTransaction, TokenAdditionalInfo, TxAdditionalInfo,
+        PartiallySignedTransaction, TokenAdditionalInfo, TxAdditionalInfo,
     },
     scan_blockchain::ScanBlockchain,
     signature_status::SignatureStatus,
@@ -1524,34 +1524,35 @@ where
         self.wallet
             .call_async(move |controller| {
                 Box::pin(async move {
-                    let mut additional_utxo_infos = BTreeMap::new();
-                    let value = match token_id {
+                    let (value, additional_info) = match token_id {
                         Some(token_id) => {
                             let token_info = controller.get_token_info(token_id).await?;
                             let amount = amount
                                 .to_amount(token_info.token_number_of_decimals())
                                 .ok_or(RpcError::InvalidCoinAmount)?;
-                            additional_utxo_infos.insert(
-                                InfoId::TokenId(token_id),
-                                TxAdditionalInfo::TokenInfo(TokenAdditionalInfo {
-                                    num_decimals: token_info.token_number_of_decimals(),
-                                    ticker: token_info.token_ticker().to_vec(),
-                                }),
-                            );
-                            OutputValue::TokenV1(token_id, amount)
+                            (
+                                OutputValue::TokenV1(token_id, amount),
+                                TxAdditionalInfo::with_token_info(
+                                    token_id,
+                                    TokenAdditionalInfo {
+                                        num_decimals: token_info.token_number_of_decimals(),
+                                        ticker: token_info.token_ticker().to_vec(),
+                                    },
+                                ),
+                            )
                         }
                         None => {
                             let amount = amount
                                 .to_amount(coin_decimals)
                                 .ok_or(RpcError::InvalidCoinAmount)?;
-                            OutputValue::Coin(amount)
+                            (OutputValue::Coin(amount), TxAdditionalInfo::new())
                         }
                     };
 
                     controller
                         .synced_controller(account_index, config)
                         .await?
-                        .create_htlc_tx(value, htlc, additional_utxo_infos)
+                        .create_htlc_tx(value, htlc, additional_info)
                         .await
                         .map_err(RpcError::Controller)
                 })

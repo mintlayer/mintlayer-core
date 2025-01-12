@@ -38,9 +38,7 @@ use utils::ensure;
 pub use utxo_selector::UtxoSelectorError;
 use wallet_types::account_id::AccountPrefixedId;
 use wallet_types::account_info::{StandaloneAddressDetails, StandaloneAddresses};
-use wallet_types::partially_signed_transaction::{
-    InfoId, PartiallySignedTransaction, TxAdditionalInfo,
-};
+use wallet_types::partially_signed_transaction::{PartiallySignedTransaction, TxAdditionalInfo};
 use wallet_types::with_locked::WithLocked;
 
 use crate::account::utxo_selector::{select_coins, OutputGroup};
@@ -635,7 +633,7 @@ impl<K: AccountKeyChains> Account<K> {
         change_addresses: BTreeMap<Currency, Address<Destination>>,
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
-        additional_utxo_infos: BTreeMap<InfoId, TxAdditionalInfo>,
+        additional_info: TxAdditionalInfo,
     ) -> WalletResult<(PartiallySignedTransaction, BTreeMap<Currency, Amount>)> {
         let mut request = self.select_inputs_for_send_request(
             request,
@@ -649,7 +647,7 @@ impl<K: AccountKeyChains> Account<K> {
         )?;
 
         let fees = request.get_fees();
-        let ptx = request.into_partially_signed_tx(additional_utxo_infos)?;
+        let ptx = request.into_partially_signed_tx(additional_info)?;
 
         Ok((ptx, fees))
     }
