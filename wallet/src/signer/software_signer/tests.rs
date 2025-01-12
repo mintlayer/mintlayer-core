@@ -13,7 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::ops::{Add, Div, Mul, Sub};
 
 use super::*;
@@ -42,6 +41,7 @@ use serialization::Encode;
 use test_utils::random::{make_seedable_rng, Seed};
 use wallet_storage::{DefaultBackend, Store, Transactional};
 use wallet_types::account_info::DEFAULT_ACCOUNT_INDEX;
+use wallet_types::partially_signed_transaction::TxAdditionalInfo;
 use wallet_types::seed_phrase::StoreSeedPhrase;
 use wallet_types::KeyPurpose::{Change, ReceiveFunds};
 
@@ -436,7 +436,7 @@ fn sign_transaction(#[case] seed: Seed) {
         .with_inputs_and_destinations(acc_inputs.into_iter().zip(acc_dests.clone()))
         .with_outputs(outputs);
     let destinations = req.destinations().to_vec();
-    let additional_info = BTreeMap::new();
+    let additional_info = TxAdditionalInfo::new();
     let ptx = req.into_partially_signed_tx(additional_info).unwrap();
 
     let mut signer = SoftwareSigner::new(chain_config.clone(), DEFAULT_ACCOUNT_INDEX);
@@ -687,7 +687,7 @@ fn fixed_signatures() {
         .with_inputs_and_destinations(acc_inputs.into_iter().zip(acc_dests.clone()))
         .with_outputs(outputs);
     let destinations = req.destinations().to_vec();
-    let additional_info = BTreeMap::new();
+    let additional_info = TxAdditionalInfo::new();
     let ptx = req.into_partially_signed_tx(additional_info).unwrap();
 
     let utxos_ref = utxos

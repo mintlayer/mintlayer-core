@@ -21,6 +21,7 @@ use std::{
 use common::{
     address::Address,
     chain::{
+        config::ChainType,
         htlc::HtlcSecret,
         output_value::OutputValue,
         signature::{
@@ -44,7 +45,7 @@ use common::{
         AccountCommand, AccountSpending, ChainConfig, Destination, OutPointSourceId,
         SignedTransactionIntent, Transaction, TxInput, TxOutput,
     },
-    primitives::{Idable, H256},
+    primitives::{Amount, Idable, H256},
 };
 use crypto::key::{
     extended::ExtendedPublicKey,
@@ -60,8 +61,8 @@ use trezor_client::{
     protos::{
         MintlayerAccountCommandTxInput, MintlayerAccountSpendingDelegationBalance,
         MintlayerAccountTxInput, MintlayerAddressPath, MintlayerAddressType, MintlayerBurnTxOutput,
-        MintlayerChangeTokenAuthority, MintlayerChangeTokenMetadataUri, MintlayerConcludeOrder,
-        MintlayerCreateDelegationIdTxOutput, MintlayerCreateOrderTxOutput,
+        MintlayerChainType, MintlayerChangeTokenAuthority, MintlayerChangeTokenMetadataUri,
+        MintlayerConcludeOrder, MintlayerCreateDelegationIdTxOutput, MintlayerCreateOrderTxOutput,
         MintlayerCreateStakePoolTxOutput, MintlayerDataDepositTxOutput,
         MintlayerDelegateStakingTxOutput, MintlayerFillOrder, MintlayerFreezeToken,
         MintlayerHtlcTxOutput, MintlayerIssueFungibleTokenTxOutput, MintlayerIssueNftTxOutput,
@@ -83,7 +84,7 @@ use wallet_storage::{
 use wallet_types::{
     account_info::DEFAULT_ACCOUNT_INDEX,
     partially_signed_transaction::{
-        InfoId, PartiallySignedTransaction, TokenAdditionalInfo, TxAdditionalInfo,
+        OrderAdditionalInfo, PartiallySignedTransaction, TokenAdditionalInfo, TxAdditionalInfo,
     },
     signature_status::SignatureStatus,
     AccountId,
@@ -265,13 +266,13 @@ impl Signer for TrezorSigner {
         let inputs = to_trezor_input_msgs(&ptx, key_chain, &self.chain_config)?;
         let outputs = self.to_trezor_output_msgs(&ptx)?;
         let utxos = to_trezor_utxo_msgs(&ptx, &self.chain_config)?;
-        let coin_name = self.chain_config.chain_type().name().to_owned();
+        let chain_type = to_trezor_chain_type(&self.chain_config);
 
         let new_signatures = self
             .client
             .lock()
             .expect("poisoned lock")
-            .mintlayer_sign_tx(coin_name, inputs, outputs, utxos)
+            .mintlayer_sign_tx(chain_type, inputs, outputs, utxos)
             .map_err(|err| TrezorError::DeviceError(err.to_string()))?;
 
         let inputs_utxo_refs: Vec<_> = ptx.input_utxos().iter().map(|u| u.as_ref()).collect();
@@ -450,13 +451,13 @@ impl Signer for TrezorSigner {
                     }
                 };
 
-                let coin_name = self.chain_config.chain_type().name().to_owned();
+                let chain_type = to_trezor_chain_type(&self.chain_config);
 
                 let sig = self
                     .client
                     .lock()
                     .expect("poisoned lock")
-                    .mintlayer_sign_message(coin_name, address_n, addr_type, message.to_vec())
+                    .mintlayer_sign_message(chain_type, address_n, addr_type, message.to_vec())
                     .map_err(|err| TrezorError::DeviceError(err.to_string()))?;
                 let signature =
                     Signature::from_raw_data(&sig).map_err(TrezorError::SignatureError)?;
@@ -557,7 +558,7 @@ fn to_trezor_account_command_input(
     key_chain: &impl AccountKeyChains,
     nonce: &common::chain::AccountNonce,
     command: &AccountCommand,
-    additional_infos: &BTreeMap<InfoId, TxAdditionalInfo>,
+    additional_info: &TxAdditionalInfo,
 ) -> SignerResult<MintlayerTxInput> {
     let mut inp_req = MintlayerAccountCommandTxInput::new();
     inp_req.addresses = destination_to_address_paths(key_chain, dest);
@@ -613,49 +614,40 @@ fn to_trezor_account_command_input(
             let mut req = MintlayerConcludeOrder::new();
             req.set_order_id(Address::new(chain_config, *order_id)?.into_string());
 
-            match additional_infos.get(&InfoId::OrderId(*order_id)) {
-                Some(TxAdditionalInfo::OrderInfo {
-                    initially_asked,
-                    initially_given,
-                    ask_balance,
-                    give_balance,
-                }) => {
-                    let filled_value = match initially_asked {
-                        OutputValue::Coin(amount) => OutputValue::Coin(
-                            (*amount - *ask_balance).ok_or(SignerError::OrderFillUnderflow)?,
-                        ),
-                        OutputValue::TokenV1(id, amount) => OutputValue::TokenV1(
-                            *id,
-                            (*amount - *ask_balance).ok_or(SignerError::OrderFillUnderflow)?,
-                        ),
-                        OutputValue::TokenV0(_) => return Err(SignerError::UnsupportedTokensV0),
-                    };
-                    let give_value = match initially_given {
-                        OutputValue::Coin(_) => OutputValue::Coin(*give_balance),
-                        OutputValue::TokenV1(id, _) => OutputValue::TokenV1(*id, *give_balance),
-                        OutputValue::TokenV0(_) => return Err(SignerError::UnsupportedTokensV0),
-                    };
+            let OrderAdditionalInfo {
+                initially_asked,
+                initially_given,
+                ask_balance,
+                give_balance,
+            } = additional_info
+                .get_order_info(order_id)
+                .ok_or(SignerError::MissingTxExtraInfo)?;
 
-                    req.filled_ask_amount = Some(to_trezor_output_value(
-                        &filled_value,
-                        additional_infos,
-                        chain_config,
-                    )?)
-                    .into();
+            let filled_value = match initially_asked {
+                OutputValue::Coin(amount) => OutputValue::Coin(
+                    (*amount - *ask_balance).ok_or(SignerError::OrderFillUnderflow)?,
+                ),
+                OutputValue::TokenV1(id, amount) => OutputValue::TokenV1(
+                    *id,
+                    (*amount - *ask_balance).ok_or(SignerError::OrderFillUnderflow)?,
+                ),
+                OutputValue::TokenV0(_) => return Err(SignerError::UnsupportedTokensV0),
+            };
+            let give_value = value_with_new_amount(initially_given, give_balance)?;
 
-                    req.give_balance = Some(to_trezor_output_value(
-                        &give_value,
-                        additional_infos,
-                        chain_config,
-                    )?)
-                    .into();
-                }
-                Some(
-                    TxAdditionalInfo::TokenInfo(_)
-                    | TxAdditionalInfo::PoolInfo { staker_balance: _ },
-                )
-                | None => return Err(SignerError::MissingTxExtraInfo),
-            }
+            req.filled_ask_amount = Some(to_trezor_output_value(
+                &filled_value,
+                additional_info,
+                chain_config,
+            )?)
+            .into();
+
+            req.give_balance = Some(to_trezor_output_value(
+                &give_value,
+                additional_info,
+                chain_config,
+            )?)
+            .into();
 
             inp_req.conclude_order = Some(req).into();
         }
@@ -665,44 +657,31 @@ fn to_trezor_account_command_input(
             req.set_amount(amount.into_atoms().to_be_bytes().to_vec());
             req.set_destination(Address::new(chain_config, dest.clone())?.into_string());
 
-            match additional_infos.get(&InfoId::OrderId(*order_id)) {
-                Some(TxAdditionalInfo::OrderInfo {
-                    initially_asked,
-                    initially_given,
-                    ask_balance,
-                    give_balance,
-                }) => {
-                    let ask_value = match initially_asked {
-                        OutputValue::Coin(_) => OutputValue::Coin(*ask_balance),
-                        OutputValue::TokenV1(id, _) => OutputValue::TokenV1(*id, *ask_balance),
-                        OutputValue::TokenV0(_) => return Err(SignerError::UnsupportedTokensV0),
-                    };
-                    let give_value = match initially_given {
-                        OutputValue::Coin(_) => OutputValue::Coin(*give_balance),
-                        OutputValue::TokenV1(id, _) => OutputValue::TokenV1(*id, *give_balance),
-                        OutputValue::TokenV0(_) => return Err(SignerError::UnsupportedTokensV0),
-                    };
+            let OrderAdditionalInfo {
+                initially_asked,
+                initially_given,
+                ask_balance,
+                give_balance,
+            } = additional_info
+                .get_order_info(order_id)
+                .ok_or(SignerError::MissingTxExtraInfo)?;
 
-                    req.ask_balance = Some(to_trezor_output_value(
-                        &ask_value,
-                        additional_infos,
-                        chain_config,
-                    )?)
-                    .into();
+            let ask_value = value_with_new_amount(initially_asked, ask_balance)?;
+            let give_value = value_with_new_amount(initially_given, give_balance)?;
 
-                    req.give_balance = Some(to_trezor_output_value(
-                        &give_value,
-                        additional_infos,
-                        chain_config,
-                    )?)
-                    .into();
-                }
-                Some(
-                    TxAdditionalInfo::TokenInfo(_)
-                    | TxAdditionalInfo::PoolInfo { staker_balance: _ },
-                )
-                | None => return Err(SignerError::MissingTxExtraInfo),
-            }
+            req.ask_balance = Some(to_trezor_output_value(
+                &ask_value,
+                additional_info,
+                chain_config,
+            )?)
+            .into();
+
+            req.give_balance = Some(to_trezor_output_value(
+                &give_value,
+                additional_info,
+                chain_config,
+            )?)
+            .into();
 
             inp_req.fill_order = Some(req).into();
         }
@@ -710,6 +689,18 @@ fn to_trezor_account_command_input(
     let mut inp = MintlayerTxInput::new();
     inp.account_command = Some(inp_req).into();
     Ok(inp)
+}
+
+/// Construct a new OutputValue with a new amount
+fn value_with_new_amount(
+    initially_value: &OutputValue,
+    new_amount: &Amount,
+) -> Result<OutputValue, SignerError> {
+    match initially_value {
+        OutputValue::Coin(_) => Ok(OutputValue::Coin(*new_amount)),
+        OutputValue::TokenV1(id, _) => Ok(OutputValue::TokenV1(*id, *new_amount)),
+        OutputValue::TokenV0(_) => Err(SignerError::UnsupportedTokensV0),
+    }
 }
 
 fn to_trezor_account_input(
@@ -819,23 +810,12 @@ fn destination_to_address_paths(
 
 fn to_trezor_output_value(
     output_value: &OutputValue,
-    additional_info: &BTreeMap<InfoId, TxAdditionalInfo>,
+    additional_info: &TxAdditionalInfo,
     chain_config: &ChainConfig,
 ) -> SignerResult<MintlayerOutputValue> {
     to_trezor_output_value_with_token_info(
         output_value,
-        |token_id| {
-            additional_info.get(&InfoId::TokenId(token_id)).and_then(|info| match info {
-                TxAdditionalInfo::TokenInfo(info) => Some(info),
-                TxAdditionalInfo::PoolInfo { staker_balance: _ }
-                | TxAdditionalInfo::OrderInfo {
-                    initially_asked: _,
-                    initially_given: _,
-                    ask_balance: _,
-                    give_balance: _,
-                } => None,
-            })
-        },
+        |token_id| additional_info.get_token_info(&token_id),
         chain_config,
     )
 }
@@ -867,7 +847,7 @@ fn to_trezor_utxo_msgs(
 fn to_trezor_output_msg(
     chain_config: &ChainConfig,
     out: &TxOutput,
-    additional_info: &BTreeMap<InfoId, TxAdditionalInfo>,
+    additional_info: &TxAdditionalInfo,
 ) -> SignerResult<MintlayerTxOutput> {
     let res = match out {
         TxOutput::Transfer(value, dest) => {
@@ -957,18 +937,9 @@ fn to_trezor_output_msg(
             out_req.set_pool_id(Address::new(chain_config, *pool_id)?.into_string());
             out_req.set_destination(Address::new(chain_config, dest.clone())?.into_string());
             let staker_balance = additional_info
-                .get(&InfoId::PoolId(*pool_id))
-                .and_then(|info| match info {
-                    TxAdditionalInfo::PoolInfo { staker_balance } => Some(staker_balance),
-                    TxAdditionalInfo::TokenInfo(_)
-                    | TxAdditionalInfo::OrderInfo {
-                        initially_asked: _,
-                        initially_given: _,
-                        ask_balance: _,
-                        give_balance: _,
-                    } => None,
-                })
-                .ok_or(SignerError::MissingTxExtraInfo)?;
+                .get_pool_info(pool_id)
+                .ok_or(SignerError::MissingTxExtraInfo)?
+                .staker_balance;
             out_req.set_staker_balance(staker_balance.into_atoms().to_be_bytes().to_vec());
             let mut out = MintlayerTxOutput::new();
             out.produce_block_from_stake = Some(out_req).into();
@@ -1196,12 +1167,12 @@ impl TrezorSignerProvider {
         let derivation_path = make_account_path(chain_config, account_index);
         let account_path =
             derivation_path.as_slice().iter().map(|c| c.into_encoded_index()).collect();
-        let coin_name = chain_config.chain_type().name().to_owned();
+        let chain_type = to_trezor_chain_type(chain_config);
         let xpub = self
             .client
             .lock()
             .expect("poisoned lock")
-            .mintlayer_get_public_key(coin_name, account_path)
+            .mintlayer_get_public_key(chain_type, account_path)
             .map_err(|e| SignerError::TrezorError(TrezorError::DeviceError(e.to_string())))?;
         let chain_code = ChainCode::from(xpub.chain_code.0);
         let account_pubkey = Secp256k1ExtendedPublicKey::new(
@@ -1212,6 +1183,15 @@ impl TrezorSignerProvider {
         );
         let account_pubkey = ExtendedPublicKey::new(account_pubkey);
         Ok(account_pubkey)
+    }
+}
+
+fn to_trezor_chain_type(chain_config: &ChainConfig) -> MintlayerChainType {
+    match chain_config.chain_type() {
+        ChainType::Mainnet => MintlayerChainType::Mainnet,
+        ChainType::Testnet => MintlayerChainType::Testnet,
+        ChainType::Regtest => MintlayerChainType::Regtest,
+        ChainType::Signet => MintlayerChainType::Signet,
     }
 }
 

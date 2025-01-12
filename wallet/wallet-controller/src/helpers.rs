@@ -38,7 +38,8 @@ use wallet::{
 };
 use wallet_types::{
     partially_signed_transaction::{
-        InfoId, PartiallySignedTransaction, TokenAdditionalInfo, TxAdditionalInfo,
+        OrderAdditionalInfo, PartiallySignedTransaction, PoolAdditionalInfo, TokenAdditionalInfo,
+        TxAdditionalInfo,
     },
     Currency,
 };
@@ -139,26 +140,24 @@ fn pool_id_from_txo(utxo: &TxOutput) -> Option<PoolId> {
     }
 }
 
-pub type AdditionalInfos = BTreeMap<InfoId, TxAdditionalInfo>;
-
 async fn fetch_token_extra_info<T>(
     rpc_client: &T,
     value: &OutputValue,
-) -> Result<Option<(InfoId, TxAdditionalInfo)>, ControllerError<T>>
+) -> Result<TxAdditionalInfo, ControllerError<T>>
 where
     T: NodeInterface,
 {
     match value {
-        OutputValue::Coin(_) | OutputValue::TokenV0(_) => Ok(None),
+        OutputValue::Coin(_) | OutputValue::TokenV0(_) => Ok(TxAdditionalInfo::new()),
         OutputValue::TokenV1(token_id, _) => {
             let info = fetch_token_info(rpc_client, *token_id).await?;
-            Ok(Some((
-                InfoId::TokenId(*token_id),
-                TxAdditionalInfo::TokenInfo(TokenAdditionalInfo {
+            Ok(TxAdditionalInfo::with_token_info(
+                *token_id,
+                TokenAdditionalInfo {
                     num_decimals: info.token_number_of_decimals(),
                     ticker: info.token_ticker().to_vec(),
-                }),
-            )))
+                },
+            ))
         }
     }
 }
@@ -166,7 +165,7 @@ where
 pub async fn fetch_utxo_extra_info<T>(
     rpc_client: &T,
     utxo: TxOutput,
-) -> Result<(TxOutput, AdditionalInfos), ControllerError<T>>
+) -> Result<(TxOutput, TxAdditionalInfo), ControllerError<T>>
 where
     T: NodeInterface,
 {
@@ -176,12 +175,12 @@ where
         | TxOutput::LockThenTransfer(value, _, _)
         | TxOutput::Htlc(value, _) => {
             let additional_info = fetch_token_extra_info(rpc_client, value).await?;
-            Ok((utxo, additional_info.into_iter().collect()))
+            Ok((utxo, additional_info))
         }
         TxOutput::CreateOrder(order) => {
             let ask_info = fetch_token_extra_info(rpc_client, order.ask()).await?;
-            let give_info = fetch_token_extra_info(rpc_client, order.ask()).await?;
-            let additional_info = ask_info.into_iter().chain(give_info).collect();
+            let give_info = fetch_token_extra_info(rpc_client, order.give()).await?;
+            let additional_info = ask_info.join(give_info);
             Ok((utxo, additional_info))
         }
         TxOutput::ProduceBlockFromStake(_, pool_id) => {
@@ -190,10 +189,10 @@ where
                 .await
                 .map_err(ControllerError::NodeCallError)?
                 .map(|staker_balance| {
-                    BTreeMap::from([(
-                        InfoId::PoolId(*pool_id),
-                        TxAdditionalInfo::PoolInfo { staker_balance },
-                    )])
+                    TxAdditionalInfo::with_pool_info(
+                        *pool_id,
+                        PoolAdditionalInfo { staker_balance },
+                    )
                 })
                 .ok_or(WalletError::UnknownPoolId(*pool_id))?;
             Ok((utxo, additional_infos))
@@ -203,7 +202,7 @@ where
         | TxOutput::CreateStakePool(_, _)
         | TxOutput::DelegateStaking(_, _)
         | TxOutput::CreateDelegationId(_, _)
-        | TxOutput::DataDeposit(_) => Ok((utxo, BTreeMap::new())),
+        | TxOutput::DataDeposit(_) => Ok((utxo, TxAdditionalInfo::new())),
     }
 }
 
@@ -247,12 +246,12 @@ pub async fn tx_to_partially_signed_tx<T: NodeInterface, B: storage::Backend>(
         .collect();
     let (input_utxos, additional_infos, destinations) =
         tasks.try_collect::<Vec<_>>().await?.into_iter().fold(
-            (Vec::new(), BTreeMap::new(), Vec::new()),
-            |(mut input_utxos, mut additional_infos, mut destinations), (x, y, z)| {
+            (Vec::new(), TxAdditionalInfo::new(), Vec::new()),
+            |(mut input_utxos, additional_info, mut destinations), (x, y, z)| {
                 input_utxos.push(x);
-                additional_infos.extend(y);
+                let additional_info = additional_info.join(y);
                 destinations.push(z);
-                (input_utxos, additional_infos, destinations)
+                (input_utxos, additional_info, destinations)
             },
         );
 
@@ -263,13 +262,11 @@ pub async fn tx_to_partially_signed_tx<T: NodeInterface, B: storage::Backend>(
         .iter()
         .map(|out| fetch_utxo_extra_info(rpc_client, out.clone()))
         .collect();
-    let additional_infos = tasks.try_collect::<Vec<_>>().await?.into_iter().fold(
-        additional_infos,
-        |mut acc, (_, info)| {
-            acc.extend(info);
-            acc
-        },
-    );
+    let additional_infos = tasks
+        .try_collect::<Vec<_>>()
+        .await?
+        .into_iter()
+        .fold(additional_infos, |acc, (_, info)| acc.join(info));
 
     let ptx = PartiallySignedTransaction::new(
         tx,
@@ -287,7 +284,7 @@ async fn into_utxo_and_destination<T: NodeInterface, B: storage::Backend>(
     rpc_client: &T,
     wallet: &RuntimeWallet<B>,
     tx_inp: &TxInput,
-) -> Result<(Option<TxOutput>, AdditionalInfos, Option<Destination>), ControllerError<T>> {
+) -> Result<(Option<TxOutput>, TxAdditionalInfo, Option<Destination>), ControllerError<T>> {
     Ok(match tx_inp {
         TxInput::Utxo(outpoint) => {
             let (utxo, dest) = fetch_utxo_with_destination(rpc_client, outpoint, wallet).await?;
@@ -301,7 +298,7 @@ async fn into_utxo_and_destination<T: NodeInterface, B: storage::Backend>(
                 #[cfg(feature = "trezor")]
                 RuntimeWallet::Trezor(w) => w.find_account_destination(acc_outpoint),
             };
-            (None, BTreeMap::new(), dest)
+            (None, TxAdditionalInfo::new(), dest)
         }
         TxInput::AccountCommand(_, cmd) => {
             // find authority of the token
@@ -335,19 +332,15 @@ async fn into_utxo_and_destination<T: NodeInterface, B: storage::Backend>(
                     )
                     .await?;
 
-                    ask_token_info
-                        .into_iter()
-                        .chain(give_token_info)
-                        .chain([(
-                            InfoId::OrderId(*order_id),
-                            TxAdditionalInfo::OrderInfo {
-                                initially_asked: order_info.initially_asked.into(),
-                                initially_given: order_info.initially_given.into(),
-                                ask_balance: order_info.ask_balance,
-                                give_balance: order_info.give_balance,
-                            },
-                        )])
-                        .collect()
+                    ask_token_info.join(give_token_info).join(TxAdditionalInfo::with_order_info(
+                        *order_id,
+                        OrderAdditionalInfo {
+                            initially_asked: order_info.initially_asked.into(),
+                            initially_given: order_info.initially_given.into(),
+                            ask_balance: order_info.ask_balance,
+                            give_balance: order_info.give_balance,
+                        },
+                    ))
                 }
                 AccountCommand::MintTokens(_, _)
                 | AccountCommand::UnmintTokens(_)
@@ -355,7 +348,7 @@ async fn into_utxo_and_destination<T: NodeInterface, B: storage::Backend>(
                 | AccountCommand::UnfreezeToken(_)
                 | AccountCommand::LockTokenSupply(_)
                 | AccountCommand::ChangeTokenAuthority(_, _)
-                | AccountCommand::ChangeTokenMetadataUri(_, _) => BTreeMap::new(),
+                | AccountCommand::ChangeTokenMetadataUri(_, _) => TxAdditionalInfo::new(),
             };
             (None, additional_infos, dest)
         }

@@ -31,9 +31,7 @@ use chainstate::tx_verifier::{
     self, error::ScriptError, input_check::signature_only_check::SignatureOnlyVerifiable,
 };
 use futures::{never::Never, stream::FuturesOrdered, TryStreamExt};
-use helpers::{
-    fetch_token_info, fetch_utxo, fetch_utxo_extra_info, into_balances, AdditionalInfos,
-};
+use helpers::{fetch_token_info, fetch_utxo, fetch_utxo_extra_info, into_balances};
 use node_comm::rpc_client::ColdWalletClient;
 use runtime_wallet::RuntimeWallet;
 use std::{
@@ -102,7 +100,7 @@ pub use wallet_types::{
     utxo_types::{UtxoState, UtxoStates, UtxoType, UtxoTypes},
 };
 use wallet_types::{
-    partially_signed_transaction::PartiallySignedTransaction,
+    partially_signed_transaction::{PartiallySignedTransaction, TxAdditionalInfo},
     signature_status::SignatureStatus,
     wallet_type::{WalletControllerMode, WalletType},
     with_locked::WithLocked,
@@ -1055,11 +1053,10 @@ where
 
             let (input_utxos, additional_infos) =
                 self.fetch_utxos_extra_info(input_utxos).await?.into_iter().fold(
-                    (Vec::new(), BTreeMap::new()),
-                    |(mut input_utxos, mut additional_infos), (x, y)| {
+                    (Vec::new(), TxAdditionalInfo::new()),
+                    |(mut input_utxos, additional_info), (x, y)| {
                         input_utxos.push(x);
-                        additional_infos.extend(y);
-                        (input_utxos, additional_infos)
+                        (input_utxos, additional_info.join(y))
                     },
                 );
 
@@ -1067,10 +1064,7 @@ where
                 .fetch_utxos_extra_info(tx.outputs().to_vec())
                 .await?
                 .into_iter()
-                .fold(additional_infos, |mut acc, (_, info)| {
-                    acc.extend(info);
-                    acc
-                });
+                .fold(additional_infos, |acc, (_, info)| acc.join(info));
             let tx = PartiallySignedTransaction::new(
                 tx,
                 vec![None; num_inputs],
@@ -1163,7 +1157,7 @@ where
     async fn fetch_utxos_extra_info(
         &self,
         inputs: Vec<TxOutput>,
-    ) -> Result<Vec<(TxOutput, AdditionalInfos)>, ControllerError<T>> {
+    ) -> Result<Vec<(TxOutput, TxAdditionalInfo)>, ControllerError<T>> {
         let tasks: FuturesOrdered<_> = inputs
             .into_iter()
             .map(|input| fetch_utxo_extra_info(&self.rpc_client, input))
