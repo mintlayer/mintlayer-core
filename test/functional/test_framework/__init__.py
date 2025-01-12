@@ -206,6 +206,23 @@ def init_mintlayer_types():
                 ]
             },
 
+            "PoolAdditionalInfo": {
+                "type": "struct",
+                "type_mapping": [
+                    ["staker_balance", "Amount"],
+                ]
+            },
+
+            "OrderAdditionalInfo": {
+                "type": "struct",
+                "type_mapping": [
+                    ["initially_asked", "OutputValue"],
+                    ["initially_given", "OutputValue"],
+                    ["ask_balance", "Amount"],
+                    ["give_balance", "Amount"],
+                ]
+            },
+
             "InfoId": {
                 "type": "enum",
                 "type_mapping": [
@@ -216,11 +233,11 @@ def init_mintlayer_types():
             },
 
             "TxAdditionalInfo": {
-                "type": "enum",
+                "type": "struct",
                 "type_mapping": [
-                    ["TokenInfo", "TokenAdditionalInfo"],
-                    ["PoolInfo", "(Amount)"],
-                    ["OrderInfo", ""], # TODO
+                    ["token_info", "BTreeMap<H256, TokenAdditionalInfo>"],
+                    ["pool_info", "BTreeMap<H256, PoolAdditionalInfo>"],
+                    ["order_info", "BTreeMap<H256, OrderAdditionalInfo>"],
                 ],
             },
 
@@ -248,7 +265,7 @@ def init_mintlayer_types():
                     ["input_utxos", "Vec<Option<TxOutput>>"],
                     ["destinations", "Vec<Option<Destination>>"],
                     ["htlc_secrets", "Vec<Option<[u8; 32]>>"],
-                    ["additional_infos", "BTreeMap<InfoId, TxAdditionalInfo>"],
+                    ["additional_infos", "TxAdditionalInfo"],
                 ]
             },
 

@@ -41,7 +41,6 @@ use trezor_client::find_devices;
 use wallet_storage::{DefaultBackend, Store, Transactional};
 use wallet_types::{
     account_info::DEFAULT_ACCOUNT_INDEX,
-    partially_signed_transaction::InfoId,
     seed_phrase::StoreSeedPhrase,
     KeyPurpose::{Change, ReceiveFunds},
 };
@@ -433,23 +432,22 @@ fn sign_transaction(#[case] seed: Seed) {
         .with_inputs_and_destinations(acc_inputs.into_iter().zip(acc_dests.clone()))
         .with_outputs(outputs);
     let destinations = req.destinations().to_vec();
-    let mut additional_info = BTreeMap::new();
-    additional_info.insert(
-        InfoId::TokenId(token_id),
-        TxAdditionalInfo::TokenInfo(TokenAdditionalInfo {
+    let additional_info = TxAdditionalInfo::with_token_info(
+        token_id,
+        TokenAdditionalInfo {
             num_decimals: 1,
             ticker: "TKN".as_bytes().to_vec(),
-        }),
-    );
-    additional_info.insert(
-        InfoId::OrderId(order_id),
-        TxAdditionalInfo::OrderInfo {
+        },
+    )
+    .join(TxAdditionalInfo::with_order_info(
+        order_id,
+        OrderAdditionalInfo {
             ask_balance: Amount::from_atoms(10),
             give_balance: Amount::from_atoms(100),
             initially_asked: OutputValue::Coin(Amount::from_atoms(20)),
             initially_given: OutputValue::TokenV1(token_id, Amount::from_atoms(200)),
         },
-    );
+    ));
     let ptx = req.into_partially_signed_tx(additional_info).unwrap();
 
     let mut devices = find_devices(false);
