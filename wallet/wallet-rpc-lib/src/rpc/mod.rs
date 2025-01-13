@@ -73,7 +73,8 @@ pub use rpc::{rpc_creds::RpcCreds, Rpc};
 use wallet_controller::{
     types::{
         Balances, BlockInfo, CreatedBlockInfo, CreatedWallet, GenericTokenTransfer,
-        InspectTransaction, SeedWithPassPhrase, TransactionToInspect, WalletInfo, WalletTypeArgs,
+        InspectTransaction, SeedWithPassPhrase, TransactionToInspect, WalletCreationOptions,
+        WalletInfo, WalletTypeArgs,
     },
     ConnectedPeer, ControllerConfig, ControllerError, NodeInterface, UtxoState, UtxoStates,
     UtxoType, UtxoTypes, DEFAULT_ACCOUNT_INDEX,
@@ -83,7 +84,6 @@ use wallet_types::{
     partially_signed_transaction::{
         PartiallySignedTransaction, TokenAdditionalInfo, TxAdditionalInfo,
     },
-    scan_blockchain::ScanBlockchain,
     signature_status::SignatureStatus,
     wallet_tx::TxData,
     with_locked::WithLocked,
@@ -141,13 +141,11 @@ where
         &self,
         path: PathBuf,
         args: WalletTypeArgs,
-        scan_blockchain: ScanBlockchain,
+        options: WalletCreationOptions,
     ) -> WRpcResult<CreatedWallet, N> {
         self.wallet
             .manage_async(move |wallet_manager| {
-                Box::pin(
-                    async move { wallet_manager.create_wallet(path, args, scan_blockchain).await },
-                )
+                Box::pin(async move { wallet_manager.create_wallet(path, args, options).await })
             })
             .await?
     }

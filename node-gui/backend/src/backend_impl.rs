@@ -37,7 +37,7 @@ use wallet_cli_commands::{
 };
 use wallet_controller::{
     make_cold_wallet_rpc_client,
-    types::{Balances, WalletTypeArgs},
+    types::{Balances, WalletCreationOptions, WalletTypeArgs},
     ControllerConfig, NodeInterface, UtxoState, WalletHandlesClient,
 };
 use wallet_rpc_client::handles_client::WalletRpcHandlesClient;
@@ -410,8 +410,12 @@ impl Backend {
         let chain_config = wallet_service.chain_config().clone();
         let wallet_rpc = WalletRpc::new(wallet_handle, node_rpc.clone(), chain_config.clone());
 
+        let options = WalletCreationOptions {
+            overwrite_wallet_file: true,
+            scan_blockchain: import.should_scan_blockchain(),
+        };
         wallet_rpc
-            .create_wallet(file_path, wallet_args, import.should_scan_blockchain())
+            .create_wallet(file_path, wallet_args, options)
             .await
             .map_err(|err| BackendError::WalletError(err.to_string()))?;
         tokio::spawn(forward_events(

@@ -21,9 +21,8 @@ use tokio::{sync::mpsc, task::JoinHandle};
 
 use logging::log;
 use utils_networking::broadcaster::Broadcaster;
-use wallet_controller::types::{CreatedWallet, WalletTypeArgs};
+use wallet_controller::types::{CreatedWallet, WalletCreationOptions, WalletTypeArgs};
 use wallet_controller::{ControllerError, NodeInterface};
-use wallet_types::scan_blockchain::ScanBlockchain;
 use wallet_types::wallet_type::WalletType;
 
 use crate::types::RpcError;
@@ -195,7 +194,7 @@ where
         &mut self,
         wallet_path: PathBuf,
         args: WalletTypeArgs,
-        scan_blockchain: ScanBlockchain,
+        options: WalletCreationOptions,
     ) -> Result<CreatedWallet, RpcError<N>> {
         utils::ensure!(
             self.controller.is_none(),
@@ -205,7 +204,7 @@ where
         let (computed_args, wallet_created) =
             args.parse_or_generate_mnemonic_if_needed().map_err(RpcError::InvalidMnemonic)?;
 
-        let wallet = if scan_blockchain.skip_scanning_the_blockchain() {
+        let wallet = if options.scan_blockchain.skip_scanning_the_blockchain() {
             let info = self.node_rpc.chainstate_info().await.map_err(RpcError::RpcError)?;
             WalletController::create_wallet(
                 self.chain_config.clone(),
@@ -213,6 +212,7 @@ where
                 computed_args,
                 (info.best_block_height, info.best_block_id),
                 wallet_type,
+                options.overwrite_wallet_file,
             )
         } else {
             WalletController::recover_wallet(
@@ -224,7 +224,7 @@ where
         }
         .map_err(RpcError::Controller)?;
 
-        let controller = if scan_blockchain.should_wait_for_blockchain_scanning() {
+        let controller = if options.scan_blockchain.should_wait_for_blockchain_scanning() {
             WalletController::new(
                 self.chain_config.clone(),
                 self.node_rpc.clone(),

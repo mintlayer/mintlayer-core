@@ -34,8 +34,8 @@ use utils_networking::IpOrSocketAddress;
 use wallet::{account::TxInfo, version::get_version};
 use wallet_controller::{
     types::{
-        BlockInfo, CreatedBlockInfo, GenericTokenTransfer, SeedWithPassPhrase, WalletInfo,
-        WalletTypeArgs,
+        BlockInfo, CreatedBlockInfo, GenericTokenTransfer, SeedWithPassPhrase,
+        WalletCreationOptions, WalletInfo, WalletTypeArgs,
     },
     ConnectedPeer, ControllerConfig, NodeInterface, UtxoState, UtxoStates, UtxoType, UtxoTypes,
 };
@@ -124,8 +124,12 @@ where
             }
         };
 
+        let options = WalletCreationOptions {
+            overwrite_wallet_file: false,
+            scan_blockchain: ScanBlockchain::SkipScanning,
+        };
         rpc::handle_result(
-            self.create_wallet(path.into(), args, ScanBlockchain::SkipScanning)
+            self.create_wallet(path.into(), args, options)
                 .await
                 .map(Into::<CreatedWallet>::into),
         )
@@ -170,8 +174,12 @@ where
             }
         };
 
+        let options = WalletCreationOptions {
+            overwrite_wallet_file: false,
+            scan_blockchain: ScanBlockchain::ScanAndWait,
+        };
         rpc::handle_result(
-            self.create_wallet(path.into(), args, ScanBlockchain::ScanAndWait)
+            self.create_wallet(path.into(), args, options)
                 .await
                 .map(Into::<CreatedWallet>::into),
         )

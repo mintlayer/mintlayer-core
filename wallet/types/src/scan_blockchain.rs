@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#[derive(Debug, Clone, Copy)]
 pub enum ScanBlockchain {
     /// Skips the scanning of the blockchain, used when creating a wallet from a brand new seed
     /// phrase never used before

@@ -35,7 +35,8 @@ use utils_networking::IpOrSocketAddress;
 use wallet::{account::TxInfo, version::get_version};
 use wallet_controller::{
     types::{
-        CreatedBlockInfo, GenericTokenTransfer, SeedWithPassPhrase, WalletInfo, WalletTypeArgs,
+        CreatedBlockInfo, GenericTokenTransfer, SeedWithPassPhrase, WalletCreationOptions,
+        WalletInfo, WalletTypeArgs,
     },
     ConnectedPeer, ControllerConfig, UtxoState, UtxoType,
 };
@@ -127,8 +128,12 @@ where
         path: PathBuf,
         wallet_args: WalletTypeArgs,
     ) -> Result<CreatedWallet, Self::Error> {
+        let options = WalletCreationOptions {
+            overwrite_wallet_file: false,
+            scan_blockchain: ScanBlockchain::SkipScanning,
+        };
         self.wallet_rpc
-            .create_wallet(path, wallet_args, ScanBlockchain::SkipScanning)
+            .create_wallet(path, wallet_args, options)
             .await
             .map(Into::into)
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
@@ -170,8 +175,12 @@ where
             }
         };
 
+        let options = WalletCreationOptions {
+            overwrite_wallet_file: false,
+            scan_blockchain: ScanBlockchain::ScanAndWait,
+        };
         self.wallet_rpc
-            .create_wallet(path, args, ScanBlockchain::ScanAndWait)
+            .create_wallet(path, args, options)
             .await
             .map(Into::into)
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
