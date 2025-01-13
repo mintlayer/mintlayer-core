@@ -40,6 +40,7 @@ pub use transaction::{
 };
 use utils::ensure;
 use wallet_types::{
+    scan_blockchain::ScanBlockchain,
     seed_phrase::StoreSeedPhrase,
     wallet_type::{WalletControllerMode, WalletType},
 };
@@ -162,6 +163,14 @@ pub enum WalletTypeArgs {
     },
     #[cfg(feature = "trezor")]
     Trezor,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct WalletCreationOptions {
+    /// should scan the blokchain and whether to wait for it or not
+    pub scan_blockchain: ScanBlockchain,
+    /// Can overwrite an existing wallet file if selected from the GUI wallet
+    pub overwrite_wallet_file: bool,
 }
 
 impl WalletTypeArgs {

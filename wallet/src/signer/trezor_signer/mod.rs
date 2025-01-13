@@ -59,10 +59,11 @@ use trezor_client::{
     client::mintlayer::MintlayerSignature,
     find_devices,
     protos::{
-        MintlayerAccountCommandTxInput, MintlayerAccountSpendingDelegationBalance,
-        MintlayerAccountTxInput, MintlayerAddressPath, MintlayerAddressType, MintlayerBurnTxOutput,
-        MintlayerChainType, MintlayerChangeTokenAuthority, MintlayerChangeTokenMetadataUri,
-        MintlayerConcludeOrder, MintlayerCreateDelegationIdTxOutput, MintlayerCreateOrderTxOutput,
+        features::Capability, MintlayerAccountCommandTxInput,
+        MintlayerAccountSpendingDelegationBalance, MintlayerAccountTxInput, MintlayerAddressPath,
+        MintlayerAddressType, MintlayerBurnTxOutput, MintlayerChainType,
+        MintlayerChangeTokenAuthority, MintlayerChangeTokenMetadataUri, MintlayerConcludeOrder,
+        MintlayerCreateDelegationIdTxOutput, MintlayerCreateOrderTxOutput,
         MintlayerCreateStakePoolTxOutput, MintlayerDataDepositTxOutput,
         MintlayerDelegateStakingTxOutput, MintlayerFillOrder, MintlayerFreezeToken,
         MintlayerHtlcTxOutput, MintlayerIssueFungibleTokenTxOutput, MintlayerIssueNftTxOutput,
@@ -102,6 +103,12 @@ use super::{Signer, SignerError, SignerProvider, SignerResult};
 pub enum TrezorError {
     #[error("No connected Trezor device found")]
     NoDeviceFound,
+    #[error("There are multiple connected Trezor devices found")]
+    NoUniqueDeviceFound,
+    #[error("Cannot get the supported features for the connected Trezor device")]
+    CannotGetDeviceFeatures,
+    #[error("The connected Trezor device does not support the Mintlayer capabilities, please install the correct firmware")]
+    MintlayerFeaturesNotSupported,
     #[error("Trezor device error: {0}")]
     DeviceError(String),
     #[error("Invalid public key returned from trezor")]
@@ -1220,12 +1227,29 @@ fn check_public_keys(
 }
 
 fn find_trezor_device() -> Result<Trezor, TrezorError> {
-    let device = find_devices(false)
+    let mut devices = find_devices(false)
         .into_iter()
-        .find(|device| device.model == Model::Trezor)
-        .ok_or(TrezorError::NoDeviceFound)?;
+        .filter(|device| device.model == Model::Trezor || device.model == Model::TrezorEmulator)
+        .collect_vec();
+
+    let device = match devices.len() {
+        0 => return Err(TrezorError::NoDeviceFound),
+        1 => devices.remove(0),
+        _ => return Err(TrezorError::NoUniqueDeviceFound),
+    };
     let mut client = device.connect().map_err(|e| TrezorError::DeviceError(e.to_string()))?;
     client.init_device(None).map_err(|e| TrezorError::DeviceError(e.to_string()))?;
+
+    let features = client.features().ok_or(TrezorError::CannotGetDeviceFeatures)?;
+    ensure!(
+        features
+            .capabilities
+            .iter()
+            .filter_map(|c| c.enum_value().ok())
+            .contains(&Capability::Capability_Mintlayer),
+        TrezorError::MintlayerFeaturesNotSupported
+    );
+
     Ok(client)
 }
 

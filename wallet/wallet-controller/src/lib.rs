@@ -234,9 +234,10 @@ where
         args: WalletTypeArgsComputed,
         best_block: (BlockHeight, Id<GenBlock>),
         wallet_type: WalletType,
+        overwrite_wallet_file: bool,
     ) -> Result<RuntimeWallet<DefaultBackend>, ControllerError<T>> {
         utils::ensure!(
-            !file_path.as_ref().exists(),
+            overwrite_wallet_file || !file_path.as_ref().exists(),
             ControllerError::WalletFileError(
                 file_path.as_ref().to_owned(),
                 "File already exists".to_owned()
