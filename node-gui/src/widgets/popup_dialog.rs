@@ -46,16 +46,15 @@ impl<Message: Clone> Component<Message, Theme, iced::Renderer> for PopupDialog<M
     fn view(&self, _state: &Self::State) -> Element<Self::Event, Theme, iced::Renderer> {
         Card::new(
             Text::new(self.popup.title.clone()),
-            Text::new(self.popup.message.clone()).horizontal_alignment(Horizontal::Center),
+            Text::new(self.popup.message.clone()).align_x(Horizontal::Center),
         )
         .foot(
             container(
-                Button::new(Text::new("Ok").horizontal_alignment(Horizontal::Center))
+                Button::new(Text::new("Ok").align_x(Horizontal::Center))
                     .width(100.0)
                     .on_press(()),
             )
-            .width(Length::Fill)
-            .center_x(),
+            .center_x(Length::Fill),
         )
         .max_width(300.0)
         .on_close(())

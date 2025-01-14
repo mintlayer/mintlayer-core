@@ -83,8 +83,7 @@ impl<Message> Component<Message, Theme, iced::Renderer> for WalletMnemonicDialog
         };
 
         let button_enabled = !mnemonic.is_empty();
-        let button = Button::new(Text::new(action_text).horizontal_alignment(Horizontal::Center))
-            .width(100.0);
+        let button = Button::new(Text::new(action_text).align_x(Horizontal::Center)).width(100.0);
         let button = if button_enabled {
             button.on_press(ImportEvent::Ok)
         } else {
@@ -96,7 +95,7 @@ impl<Message> Component<Message, Theme, iced::Renderer> for WalletMnemonicDialog
                 Text::new(action_text),
                 iced::widget::column![text_input("Mnemonic", &mnemonic).padding(15)],
             )
-            .foot(container(text("Loading...")).width(Length::Fill).center_x())
+            .foot(container(text("Loading...")).center_x(Length::Fill))
         } else {
             Card::new(
                 Text::new(action_text),
@@ -104,7 +103,7 @@ impl<Message> Component<Message, Theme, iced::Renderer> for WalletMnemonicDialog
                     .on_input(ImportEvent::EditMnemonic)
                     .padding(15)],
             )
-            .foot(container(button).width(Length::Fill).center_x())
+            .foot(container(button).center_x(Length::Fill))
         }
         .max_width(600.0)
         .on_close(ImportEvent::Cancel)

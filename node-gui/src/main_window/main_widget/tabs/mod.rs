@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use iced::{Command, Element, Length};
+use iced::{Element, Length, Task};
 use iced_aw::{TabLabel, Tabs};
 use strum::EnumCount;
 use wallet_types::wallet_type::WalletType;
@@ -97,7 +97,7 @@ impl TabsWidget {
     pub fn view(&self, node_state: &NodeState) -> Element<TabsMessage> {
         let position = self.settings_tab.settings().tab_bar_position.unwrap_or_default();
 
-        let mut tabs = Tabs::new(TabsMessage::TabSelected).icon_font(iced_aw::BOOTSTRAP_FONT);
+        let mut tabs = Tabs::new(TabsMessage::TabSelected).icon_font(iced_fonts::BOOTSTRAP_FONT);
         tabs = match self.wallet_mode {
             WalletMode::Hot => tabs
                 .push(
@@ -145,11 +145,11 @@ impl TabsWidget {
         &mut self,
         msg: TabsMessage,
         backend_sender: &BackendSender,
-    ) -> Command<TabsMessage> {
+    ) -> Task<TabsMessage> {
         match msg {
             TabsMessage::TabSelected(n) => {
                 self.active_tab = n;
-                Command::none()
+                Task::none()
             }
             TabsMessage::WalletAdded {
                 wallet_id,
@@ -158,14 +158,14 @@ impl TabsWidget {
                 let wallet_tab = WalletTab::new(wallet_id, wallet_type);
                 self.wallets.push(wallet_tab);
                 self.active_tab = self.last_wallet_tab_index();
-                Command::none()
+                Task::none()
             }
             TabsMessage::WalletRemoved(wallet_id) => {
                 self.wallets.retain(|wallet_tab| wallet_tab.wallet_id() != wallet_id);
                 if self.active_tab > self.last_wallet_tab_index() {
                     self.active_tab = self.last_wallet_tab_index();
                 }
-                Command::none()
+                Task::none()
             }
             TabsMessage::Summary(message) => {
                 self.summary_tab.update(message).map(TabsMessage::Summary)
@@ -184,7 +184,7 @@ impl TabsWidget {
                         .update(message, backend_sender)
                         .map(move |msg| TabsMessage::WalletMessage(wallet_id, msg))
                 } else {
-                    Command::none()
+                    Task::none()
                 }
             }
         }

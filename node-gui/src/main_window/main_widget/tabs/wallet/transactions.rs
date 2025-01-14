@@ -69,13 +69,12 @@ pub fn view_transactions(
                         Text::new(full_tx_id_str.clone()),
                         Position::Bottom,
                     )
-                    .gap(5)
-                    .style(iced::theme::Container::Box),
+                    .gap(5),
                     button(
-                        Text::new(iced_aw::Bootstrap::ClipboardCheck.to_string())
-                            .font(iced_aw::BOOTSTRAP_FONT),
+                        Text::new(iced_fonts::Bootstrap::ClipboardCheck.to_string())
+                            .font(iced_fonts::BOOTSTRAP_FONT),
                     )
-                    .style(iced::theme::Button::Text)
+                    .style(iced::widget::button::text)
                     .width(Length::Shrink)
                     .on_press(WalletMessage::CopyToClipboard(full_tx_id_str)),
                 ])
@@ -113,7 +112,7 @@ pub fn view_transactions(
     let transaction_list_controls =
         row![prev_button, Text::new(format!("{}/{}", page_index, page_count)), next_button,]
             .spacing(10)
-            .align_items(Alignment::Center);
+            .align_y(Alignment::Center);
     transactions = transactions.push(transaction_list).push(transaction_list_controls);
 
     transactions.into()

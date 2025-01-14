@@ -52,49 +52,45 @@ impl MainMenu {
     }
 }
 
-struct ButtonStyle;
-impl button::StyleSheet for ButtonStyle {
-    type Style = iced::Theme;
-
-    fn active(&self, style: &Self::Style) -> button::Appearance {
-        button::Appearance {
-            text_color: style.extended_palette().background.base.text,
-            border: iced::Border {
-                radius: 4.0.into(),
-                ..Default::default()
-            },
-            background: Some(Color::TRANSPARENT.into()),
-            ..Default::default()
-        }
-    }
-
-    fn hovered(&self, style: &Self::Style) -> button::Appearance {
-        let plt = style.extended_palette();
-
-        button::Appearance {
-            background: Some(plt.primary.weak.color.into()),
-            text_color: plt.primary.weak.text,
-            ..self.active(style)
-        }
-    }
-}
-
 fn base_button<'a>(
     content: impl Into<Element<'a, MenuMessage>>,
     msg: MenuMessage,
 ) -> button::Button<'a, MenuMessage> {
     button(content)
         .padding([4, 8])
-        .style(iced::theme::Button::Custom(Box::new(ButtonStyle {})))
+        .style(|theme, status| {
+            let plt = theme.extended_palette();
+            match status {
+                button::Status::Active => button::Style {
+                    text_color: plt.background.base.text,
+                    border: iced::Border {
+                        radius: 4.0.into(),
+                        ..Default::default()
+                    },
+                    background: Some(Color::TRANSPARENT.into()),
+                    ..Default::default()
+                },
+                button::Status::Hovered => button::Style {
+                    text_color: plt.primary.weak.text,
+                    background: Some(plt.primary.weak.color.into()),
+                    border: iced::Border {
+                        radius: 4.0.into(),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+                button::Status::Pressed | button::Status::Disabled => button::Style::default(),
+            }
+        })
         .on_press(msg)
 }
 
-fn labeled_button<'a>(label: &str, msg: MenuMessage) -> button::Button<'a, MenuMessage> {
-    base_button(
+fn labeled_button<'a>(label: &'a str, msg: MenuMessage) -> button::Button<'a, MenuMessage> {
+    base_button::<'a>(
         text(label)
             .width(Length::Fixed(220.0))
             .height(Length::Fixed(25.0))
-            .vertical_alignment(alignment::Vertical::Center),
+            .align_y(alignment::Vertical::Center),
         msg,
     )
 }

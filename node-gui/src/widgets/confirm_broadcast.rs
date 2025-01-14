@@ -74,16 +74,15 @@ impl<Message> Component<Message, Theme, iced::Renderer> for ConfirmBroadcast<Mes
     fn view(&self, _state: &Self::State) -> Element<Self::Event, Theme, iced::Renderer> {
         let summary = self.tx.text_summary(&self.chain_config);
 
-        let button = Button::new(
-            Text::new("Confirm and broadcast").horizontal_alignment(Horizontal::Center),
-        )
-        .width(220.0)
-        .on_press(ConfirmBroadcastEvent::Ok);
+        let button = Button::new(Text::new("Confirm and broadcast").align_x(Horizontal::Center))
+            .width(220.0)
+            .on_press(ConfirmBroadcastEvent::Ok);
 
         let copy_to_clipboard = Button::new(
-            Text::new(iced_aw::Bootstrap::ClipboardCheck.to_string()).font(iced_aw::BOOTSTRAP_FONT),
+            Text::new(iced_fonts::Bootstrap::ClipboardCheck.to_string())
+                .font(iced_fonts::BOOTSTRAP_FONT),
         )
-        .style(iced::theme::Button::Text)
+        // .style(iced::theme::Button::Text)
         .on_press(ConfirmBroadcastEvent::CopyToClipboard(summary.clone()));
 
         Card::new(
@@ -98,7 +97,7 @@ impl<Message> Component<Message, Theme, iced::Renderer> for ConfirmBroadcast<Mes
         .foot(
             container(iced::widget::row![
                 iced::widget::Space::new(Length::Fill, Length::Shrink),
-                container(button).center_x(),
+                container(button).center_x(Length::Shrink),
                 iced::widget::Space::new(Length::Fill, Length::Shrink),
                 container(copy_to_clipboard).align_x(Horizontal::Right)
             ])

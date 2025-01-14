@@ -108,13 +108,12 @@ pub fn view_delegation(
                                 Text::new(delegation_address.to_string()),
                                 Position::Bottom,
                             )
-                            .gap(5)
-                            .style(iced::theme::Container::Box),
+                            .gap(5),
                             button(
-                                Text::new(iced_aw::Bootstrap::ClipboardCheck.to_string())
-                                    .font(iced_aw::BOOTSTRAP_FONT),
+                                Text::new(iced_fonts::Bootstrap::ClipboardCheck.to_string())
+                                    .font(iced_fonts::BOOTSTRAP_FONT),
                             )
-                            .style(iced::theme::Button::Text)
+                            .style(iced::widget::button::text)
                             .width(Length::Shrink)
                             .on_press(WalletMessage::CopyToClipboard(
                                 delegation_address.to_string(),
@@ -134,13 +133,12 @@ pub fn view_delegation(
                                 Text::new(pool_address.to_string()),
                                 Position::Bottom,
                             )
-                            .gap(5)
-                            .style(iced::theme::Container::Box),
+                            .gap(5),
                             button(
-                                Text::new(iced_aw::Bootstrap::ClipboardCheck.to_string())
-                                    .font(iced_aw::BOOTSTRAP_FONT),
+                                Text::new(iced_fonts::Bootstrap::ClipboardCheck.to_string())
+                                    .font(iced_fonts::BOOTSTRAP_FONT),
                             )
-                            .style(iced::theme::Button::Text)
+                            .style(iced::widget::button::text)
                             .width(Length::Shrink)
                             .on_press(WalletMessage::CopyToClipboard(pool_address.to_string())),
                         ])
@@ -180,12 +178,12 @@ pub fn view_delegation(
         row![
             Text::new(maturity_period_text).size(13),
             tooltip(
-                Text::new(iced_aw::Bootstrap::Question.to_string()).font(iced_aw::BOOTSTRAP_FONT),
+                Text::new(iced_fonts::Bootstrap::Question.to_string())
+                    .font(iced_fonts::BOOTSTRAP_FONT),
                 MATURITY_PERIOD_TOOLTIP_TEXT,
                 Position::Bottom
             )
             .gap(10)
-            .style(iced::theme::Container::Box)
         ],
         // ----- Create delegation
         row![
@@ -199,12 +197,12 @@ pub fn view_delegation(
                 })
                 .padding(10),
             tooltip(
-                Text::new(iced_aw::Bootstrap::Question.to_string()).font(iced_aw::BOOTSTRAP_FONT),
+                Text::new(iced_fonts::Bootstrap::Question.to_string())
+                    .font(iced_fonts::BOOTSTRAP_FONT),
                 POOL_ID_TOOLTIP_TEXT,
                 Position::Bottom
             )
             .gap(10)
-            .style(iced::theme::Container::Box)
         ],
         row![
             text_input("Delegation address", delegation_address)
@@ -217,24 +215,24 @@ pub fn view_delegation(
                 })
                 .padding(10),
             tooltip(
-                Text::new(iced_aw::Bootstrap::Question.to_string()).font(iced_aw::BOOTSTRAP_FONT),
+                Text::new(iced_fonts::Bootstrap::Question.to_string())
+                    .font(iced_fonts::BOOTSTRAP_FONT),
                 DELEGATION_ADDRESS_TOOLTIP_TEXT,
                 Position::Bottom
             )
             .gap(10)
-            .style(iced::theme::Container::Box)
         ],
         row![
             iced::widget::button(Text::new("Create delegation"))
                 .padding(10)
                 .on_press(still_syncing.clone().unwrap_or(WalletMessage::CreateDelegation)),
             tooltip(
-                Text::new(iced_aw::Bootstrap::Question.to_string()).font(iced_aw::BOOTSTRAP_FONT),
+                Text::new(iced_fonts::Bootstrap::Question.to_string())
+                    .font(iced_fonts::BOOTSTRAP_FONT),
                 CREATE_DELEGATION_BUTTON_TOOLTIP_TEXT,
                 Position::Bottom
             )
             .gap(10)
-            .style(iced::theme::Container::Box)
         ],
         iced::widget::horizontal_rule(10),
         // ----- Send delegation to address
@@ -249,12 +247,12 @@ pub fn view_delegation(
                 })
                 .padding(10),
             tooltip(
-                Text::new(iced_aw::Bootstrap::Question.to_string()).font(iced_aw::BOOTSTRAP_FONT),
+                Text::new(iced_fonts::Bootstrap::Question.to_string())
+                    .font(iced_fonts::BOOTSTRAP_FONT),
                 SEND_DELEGATION_ADDRESS_TOOLTIP_TEXT,
                 Position::Bottom
             )
             .gap(10)
-            .style(iced::theme::Container::Box)
         ],
         row![
             text_input("Amount to send", send_delegation_amount)
@@ -267,12 +265,12 @@ pub fn view_delegation(
                 })
                 .padding(10),
             tooltip(
-                Text::new(iced_aw::Bootstrap::Question.to_string()).font(iced_aw::BOOTSTRAP_FONT),
+                Text::new(iced_fonts::Bootstrap::Question.to_string())
+                    .font(iced_fonts::BOOTSTRAP_FONT),
                 SEND_DELEGATION_AMOUNT_TOOLTIP_TEXT,
                 Position::Bottom
             )
             .gap(10)
-            .style(iced::theme::Container::Box)
         ],
         row![
             text_input("Delegation address", send_delegation_id)
@@ -285,24 +283,24 @@ pub fn view_delegation(
                 })
                 .padding(10),
             tooltip(
-                Text::new(iced_aw::Bootstrap::Question.to_string()).font(iced_aw::BOOTSTRAP_FONT),
+                Text::new(iced_fonts::Bootstrap::Question.to_string())
+                    .font(iced_fonts::BOOTSTRAP_FONT),
                 SEND_DELEGATION_ID_TOOLTIP_TEXT,
                 Position::Bottom
             )
             .gap(10)
-            .style(iced::theme::Container::Box)
         ],
         row![
             iced::widget::button(Text::new("Withdraw from delegation"))
                 .padding(10)
                 .on_press(still_syncing.unwrap_or(WalletMessage::SendDelegationToAddress)),
             tooltip(
-                Text::new(iced_aw::Bootstrap::Question.to_string()).font(iced_aw::BOOTSTRAP_FONT),
+                Text::new(iced_fonts::Bootstrap::Question.to_string())
+                    .font(iced_fonts::BOOTSTRAP_FONT),
                 WITHDRAW_BUTTON_TOOLTIP_TEXT,
                 Position::Bottom
             )
             .gap(10)
-            .style(iced::theme::Container::Box)
         ],
         iced::widget::horizontal_rule(10),
         // ----- Delegation balance grid

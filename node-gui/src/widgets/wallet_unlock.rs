@@ -72,8 +72,7 @@ impl<Message> Component<Message, Theme, iced::Renderer> for WalletUnlockDialog<M
             false => {
                 let button_enabled = !state.password.is_empty();
                 let button =
-                    Button::new(Text::new("Unlock").horizontal_alignment(Horizontal::Center))
-                        .width(100.0);
+                    Button::new(Text::new("Unlock").align_x(Horizontal::Center)).width(100.0);
                 let button = if button_enabled {
                     button.on_press(UnlockEvent::Ok)
                 } else {
@@ -93,7 +92,7 @@ impl<Message> Component<Message, Theme, iced::Renderer> for WalletUnlockDialog<M
             Text::new("Unlock"),
             iced::widget::column![password.padding(15)],
         )
-        .foot(container.width(Length::Fill).center_x())
+        .foot(container.center_x(Length::Fill))
         .max_width(600.0)
         .on_close(UnlockEvent::Cancel)
         .into()

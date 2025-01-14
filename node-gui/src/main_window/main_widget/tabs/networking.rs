@@ -17,7 +17,7 @@ use std::fmt::Debug;
 
 use iced::{
     widget::{column, container, Text},
-    Command, Element, Length,
+    Element, Length, Task,
 };
 use iced_aw::{tab_bar::TabLabel, Grid, GridRow};
 
@@ -35,7 +35,7 @@ impl NetworkingTab {
         NetworkingTab {}
     }
 
-    pub fn update(&mut self, message: NetworkingMessage) -> Command<NetworkingMessage> {
+    pub fn update(&mut self, message: NetworkingMessage) -> Task<NetworkingMessage> {
         match message {}
     }
 }
@@ -48,7 +48,7 @@ impl Tab for NetworkingTab {
     }
 
     fn tab_label(&self) -> TabLabel {
-        TabLabel::IconText(iced_aw::Bootstrap::Wifi.into(), self.title())
+        TabLabel::IconText(iced_fonts::Bootstrap::Wifi.into(), self.title())
     }
 
     fn content(&self, node_state: &NodeState) -> Element<Self::Message> {

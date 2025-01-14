@@ -32,7 +32,7 @@ use iced::{
         scrollable::{snap_to, Id},
         vertical_rule, PaneGrid, Scrollable, Text,
     },
-    Command, Element, Length,
+    Element, Length, Task,
 };
 use iced_aw::tab_bar::TabLabel;
 
@@ -197,7 +197,7 @@ impl WalletTab {
         &mut self,
         message: WalletMessage,
         backend_sender: &BackendSender,
-    ) -> Command<WalletMessage> {
+    ) -> Task<WalletMessage> {
         match message {
             WalletMessage::CopyToClipboard(text) => {
                 // TODO: Show toast notification
@@ -212,13 +212,13 @@ impl WalletTab {
                         iced::widget::scrollable::RelativeOffset { x: 0.0, y: 1.0 },
                     )
                 } else {
-                    Command::none()
+                    Task::none()
                 }
             }
 
             WalletMessage::Resized(pane_grid::ResizeEvent { split, ratio }) => {
                 self.panes.resize(split, ratio);
-                Command::none()
+                Task::none()
             }
 
             WalletMessage::SetPassword
@@ -227,7 +227,7 @@ impl WalletTab {
             | WalletMessage::Unlock
             | WalletMessage::NewAccount => {
                 // Processed by the main_window
-                Command::none()
+                Task::none()
             }
 
             WalletMessage::SelectAccount(account_id) => {
@@ -235,7 +235,7 @@ impl WalletTab {
                     self.selected_account = account_id;
                     self.account_state = AccountState::default();
                 }
-                Command::none()
+                Task::none()
             }
 
             WalletMessage::GetNewAddress => {
@@ -243,15 +243,15 @@ impl WalletTab {
                     self.wallet_id,
                     self.selected_account,
                 ));
-                Command::none()
+                Task::none()
             }
             WalletMessage::SendAmountEdit(value) => {
                 self.account_state.send_amount = value;
-                Command::none()
+                Task::none()
             }
             WalletMessage::SendAddressEdit(value) => {
                 self.account_state.send_address = value;
-                Command::none()
+                Task::none()
             }
             WalletMessage::Send => {
                 let request = SendRequest {
@@ -261,36 +261,36 @@ impl WalletTab {
                     amount: self.account_state.send_amount.clone(),
                 };
                 backend_sender.send(BackendRequest::SendAmount(request));
-                Command::none()
+                Task::none()
             }
             WalletMessage::SendSucceed => {
                 self.account_state.send_address.clear();
                 self.account_state.send_amount.clear();
-                Command::none()
+                Task::none()
             }
             WalletMessage::StakeAmountEdit(value) => {
                 self.account_state.stake_amount = value;
-                Command::none()
+                Task::none()
             }
             WalletMessage::MarginPerThousandEdit(value) => {
                 self.account_state.margin_per_thousand = value;
-                Command::none()
+                Task::none()
             }
             WalletMessage::CostPerBlockEdit(value) => {
                 self.account_state.cost_per_block_amount = value;
-                Command::none()
+                Task::none()
             }
             WalletMessage::DecommissionAddressEdit(value) => {
                 self.account_state.decommission_address = value;
-                Command::none()
+                Task::none()
             }
             WalletMessage::DecommissionPoolIdEdit(value) => {
                 self.account_state.decommission_pool_id = value;
-                Command::none()
+                Task::none()
             }
             WalletMessage::DecommissionPoolAddressEdit(value) => {
                 self.account_state.decommission_pool_address = value;
-                Command::none()
+                Task::none()
             }
 
             WalletMessage::CreateStakingPool => {
@@ -303,14 +303,14 @@ impl WalletTab {
                     decommission_address: self.account_state.decommission_address.clone(),
                 };
                 backend_sender.send(BackendRequest::StakeAmount(request));
-                Command::none()
+                Task::none()
             }
             WalletMessage::CreateStakingPoolSucceed => {
                 self.account_state.stake_amount.clear();
                 self.account_state.margin_per_thousand.clear();
                 self.account_state.cost_per_block_amount.clear();
                 self.account_state.decommission_address.clear();
-                Command::none()
+                Task::none()
             }
             WalletMessage::DecommissionPool => {
                 let request = DecommissionPoolRequest {
@@ -320,12 +320,12 @@ impl WalletTab {
                     output_address: self.account_state.decommission_pool_address.clone(),
                 };
                 backend_sender.send(BackendRequest::DecommissionPool(request));
-                Command::none()
+                Task::none()
             }
             WalletMessage::DecommissionPoolSucceed => {
                 self.account_state.decommission_pool_id.clear();
                 self.account_state.decommission_pool_address.clear();
-                Command::none()
+                Task::none()
             }
             WalletMessage::ToggleStaking(enabled) => {
                 backend_sender.send(BackendRequest::ToggleStaking(
@@ -333,7 +333,7 @@ impl WalletTab {
                     self.selected_account,
                     enabled,
                 ));
-                Command::none()
+                Task::none()
             }
             WalletMessage::TransactionList { skip } => {
                 backend_sender.send(BackendRequest::TransactionList {
@@ -341,11 +341,11 @@ impl WalletTab {
                     account_id: self.selected_account,
                     skip,
                 });
-                Command::none()
+                Task::none()
             }
             WalletMessage::ConsoleInputChange(new_state) => {
                 self.account_state.console_state.console_input = new_state;
-                Command::none()
+                Task::none()
             }
             WalletMessage::ConsoleInputSubmit => {
                 self.account_state
@@ -357,13 +357,13 @@ impl WalletTab {
                     account_id: self.selected_account,
                     command: std::mem::take(&mut self.account_state.console_state.console_input),
                 });
-                Command::none()
+                Task::none()
             }
             WalletMessage::ConsoleClear => {
                 self.account_state.console_state.console_outputs.clear();
                 self.account_state.console_state.console_inputs.clear();
 
-                Command::none()
+                Task::none()
             }
             WalletMessage::ConsoleOutput(output) => {
                 self.account_state.console_state.console_outputs.push(output);
@@ -373,18 +373,18 @@ impl WalletTab {
                     iced::widget::scrollable::RelativeOffset { x: 0.0, y: 1.0 },
                 )
             }
-            WalletMessage::StillSyncing => Command::none(),
+            WalletMessage::StillSyncing => Task::none(),
             WalletMessage::Close => {
                 backend_sender.send(BackendRequest::CloseWallet(self.wallet_id));
-                Command::none()
+                Task::none()
             }
             WalletMessage::DelegationPoolIdEdit(value) => {
                 self.account_state.delegation_pool_id = value;
-                Command::none()
+                Task::none()
             }
             WalletMessage::DelegationAddressEdit(value) => {
                 self.account_state.delegation_address = value;
-                Command::none()
+                Task::none()
             }
             WalletMessage::CreateDelegation => {
                 let request = CreateDelegationRequest {
@@ -394,12 +394,12 @@ impl WalletTab {
                     delegation_address: self.account_state.delegation_address.clone(),
                 };
                 backend_sender.send(BackendRequest::CreateDelegation(request));
-                Command::none()
+                Task::none()
             }
             WalletMessage::CreateDelegationSucceed => {
                 self.account_state.delegation_pool_id.clear();
                 self.account_state.delegation_address.clear();
-                Command::none()
+                Task::none()
             }
             WalletMessage::DelegateStaking(delegation_id) => {
                 let request = DelegateStakingRequest {
@@ -414,27 +414,27 @@ impl WalletTab {
                         .unwrap_or(String::new()),
                 };
                 backend_sender.send(BackendRequest::DelegateStaking(request));
-                Command::none()
+                Task::none()
             }
             WalletMessage::DelegationAmountEdit((delegation_id, amount)) => {
                 self.account_state.delegate_staking_amounts.insert(delegation_id, amount);
-                Command::none()
+                Task::none()
             }
             WalletMessage::DelegateStakingSucceed(delegation_id) => {
                 self.account_state.delegate_staking_amounts.remove(&delegation_id);
-                Command::none()
+                Task::none()
             }
             WalletMessage::SendDelegationAddressEdit(value) => {
                 self.account_state.send_delegation_address = value;
-                Command::none()
+                Task::none()
             }
             WalletMessage::SendDelegationAmountEdit(value) => {
                 self.account_state.send_delegation_amount = value;
-                Command::none()
+                Task::none()
             }
             WalletMessage::SendDelegationIdEdit(value) => {
                 self.account_state.send_delegation_id = value;
-                Command::none()
+                Task::none()
             }
             WalletMessage::SendDelegationToAddress => {
                 let request = SendDelegateToAddressRequest {
@@ -445,15 +445,15 @@ impl WalletTab {
                     delegation_id: self.account_state.send_delegation_id.clone(),
                 };
                 backend_sender.send(BackendRequest::SendDelegationToAddress(request));
-                Command::none()
+                Task::none()
             }
             WalletMessage::SendDelegationToAddressSucceed => {
                 self.account_state.send_delegation_address.clear();
                 self.account_state.send_delegation_amount.clear();
                 self.account_state.send_delegation_id.clear();
-                Command::none()
+                Task::none()
             }
-            WalletMessage::NoOp => Command::none(),
+            WalletMessage::NoOp => Task::none(),
         }
     }
 }
@@ -466,7 +466,7 @@ impl Tab for WalletTab {
     }
 
     fn tab_label(&self) -> TabLabel {
-        TabLabel::IconText(iced_aw::Bootstrap::Wallet.into(), self.title())
+        TabLabel::IconText(iced_fonts::Bootstrap::Wallet.into(), self.title())
     }
 
     fn content(&self, node_state: &NodeState) -> Element<Self::Message> {

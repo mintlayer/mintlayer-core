@@ -15,7 +15,7 @@
 
 use iced::{
     widget::{column, Column, Container, Radio, Text},
-    Command, Element, Length,
+    Element, Length, Task,
 };
 use iced_aw::tab_bar::TabLabel;
 
@@ -74,11 +74,11 @@ impl SettingsTab {
         &self.settings
     }
 
-    pub fn update(&mut self, message: SettingsMessage) -> Command<SettingsMessage> {
+    pub fn update(&mut self, message: SettingsMessage) -> Task<SettingsMessage> {
         match message {
             SettingsMessage::PositionSelected(position) => {
                 self.settings.tab_bar_position = Some(position);
-                Command::none()
+                Task::none()
             }
         }
     }
@@ -92,7 +92,7 @@ impl Tab for SettingsTab {
     }
 
     fn tab_label(&self) -> TabLabel {
-        TabLabel::IconText(iced_aw::Bootstrap::Gear.into(), self.title())
+        TabLabel::IconText(iced_fonts::Bootstrap::Gear.into(), self.title())
     }
 
     fn content(&self, _node_state: &NodeState) -> Element<Self::Message> {

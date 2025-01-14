@@ -20,8 +20,10 @@ use common::{
     chain::{block::timestamp::BlockTimestamp, ChainConfig},
     primitives::{per_thousand::PerThousand, semver::SemVer, user_agent::UserAgent, Amount},
 };
-use iced::{widget::Text, window, Command, Element};
-use iced_aw::widgets::Modal;
+use iced::{
+    widget::{container, Stack, Text},
+    Element, Length, Task,
+};
 use logging::log;
 use node_gui_backend::{
     messages::{
@@ -245,10 +247,10 @@ impl MainWindow {
         &mut self,
         msg: MainWindowMessage,
         backend_sender: &BackendSender,
-    ) -> Command<MainWindowMessage> {
+    ) -> Task<MainWindowMessage> {
         match msg {
             MainWindowMessage::MenuMessage(menu_message) => match menu_message {
-                MenuMessage::NoOp => Command::none(),
+                MenuMessage::NoOp => Task::none(),
                 MenuMessage::CreateNewWallet { wallet_type } => {
                     let generated_mnemonic =
                         wallet_controller::mnemonic::generate_new_mnemonic(self.language);
@@ -256,15 +258,15 @@ impl MainWindow {
                         generated_mnemonic,
                         wallet_type,
                     };
-                    Command::none()
+                    Task::none()
                 }
                 MenuMessage::RecoverWallet { wallet_type } => {
                     self.active_dialog = ActiveDialog::WalletRecover { wallet_type };
-                    Command::none()
+                    Task::none()
                 }
                 MenuMessage::OpenWallet { wallet_type } => {
                     self.file_dialog_active = true;
-                    Command::perform(
+                    Task::perform(
                         async move {
                             let file_opt = AsyncFileDialog::new().pick_file().await;
                             if let Some(file) = file_opt {
@@ -280,14 +282,14 @@ impl MainWindow {
                         identity,
                     )
                 }
-                MenuMessage::Exit => iced::window::close(window::Id::MAIN),
+                MenuMessage::Exit => iced::window::get_latest().and_then(iced::window::close),
             },
 
             MainWindowMessage::MainWidgetMessage(MainWidgetMessage::TabsMessage(
                 TabsMessage::WalletMessage(wallet_id, WalletMessage::SetPassword),
             )) => {
                 self.active_dialog = ActiveDialog::WalletSetPassword { wallet_id };
-                Command::none()
+                Task::none()
             }
 
             MainWindowMessage::MainWidgetMessage(MainWidgetMessage::TabsMessage(
@@ -297,7 +299,7 @@ impl MainWindow {
                     wallet_id,
                     action: EncryptionAction::RemovePassword,
                 });
-                Command::none()
+                Task::none()
             }
 
             MainWindowMessage::MainWidgetMessage(MainWidgetMessage::TabsMessage(
@@ -307,28 +309,28 @@ impl MainWindow {
                     wallet_id,
                     action: EncryptionAction::Lock,
                 });
-                Command::none()
+                Task::none()
             }
 
             MainWindowMessage::MainWidgetMessage(MainWidgetMessage::TabsMessage(
                 TabsMessage::WalletMessage(wallet_id, WalletMessage::Unlock),
             )) => {
                 self.active_dialog = ActiveDialog::WalletUnlock { wallet_id };
-                Command::none()
+                Task::none()
             }
 
             MainWindowMessage::MainWidgetMessage(MainWidgetMessage::TabsMessage(
                 TabsMessage::WalletMessage(wallet_id, WalletMessage::NewAccount),
             )) => {
                 self.active_dialog = ActiveDialog::NewAccount { wallet_id };
-                Command::none()
+                Task::none()
             }
 
             MainWindowMessage::MainWidgetMessage(MainWidgetMessage::TabsMessage(
                 TabsMessage::WalletMessage(_wallet_id, WalletMessage::StillSyncing),
             )) => {
                 self.show_info("The wallet is still syncing...".into());
-                Command::none()
+                Task::none()
             }
 
             MainWindowMessage::MainWidgetMessage(main_widget_message) => self
@@ -339,7 +341,7 @@ impl MainWindow {
             MainWindowMessage::FromBackend(from_msg) => match from_msg {
                 BackendEvent::ChainInfo(chain_info) => {
                     self.node_state.chain_info = chain_info;
-                    Command::none()
+                    Task::none()
                 }
                 BackendEvent::P2p(P2pEvent::PeerConnected {
                     id,
@@ -359,11 +361,11 @@ impl MainWindow {
                             version,
                         },
                     );
-                    Command::none()
+                    Task::none()
                 }
                 BackendEvent::P2p(P2pEvent::PeerDisconnected(peer_id)) => {
                     self.node_state.connected_peers.remove(&peer_id);
-                    Command::none()
+                    Task::none()
                 }
 
                 BackendEvent::OpenWallet(Ok(wallet_info))
@@ -373,7 +375,7 @@ impl MainWindow {
                     let wallet_type = wallet_info.wallet_type;
                     self.node_state.wallets.insert(wallet_id, wallet_info);
 
-                    Command::perform(async {}, move |_| {
+                    Task::perform(async {}, move |_| {
                         MainWindowMessage::MainWidgetMessage(MainWidgetMessage::WalletAdded {
                             wallet_id,
                             wallet_type,
@@ -383,10 +385,10 @@ impl MainWindow {
 
                 BackendEvent::OpenWallet(Err(error)) | BackendEvent::ImportWallet(Err(error)) => {
                     self.show_error(error.to_string());
-                    Command::none()
+                    Task::none()
                 }
 
-                BackendEvent::CloseWallet(wallet_id) => Command::perform(async {}, move |_| {
+                BackendEvent::CloseWallet(wallet_id) => Task::perform(async {}, move |_| {
                     MainWindowMessage::MainWidgetMessage(MainWidgetMessage::WalletRemoved(
                         wallet_id,
                     ))
@@ -397,12 +399,12 @@ impl MainWindow {
                     if let Some(wallet) = self.node_state.wallets.get_mut(&wallet_id) {
                         wallet.encryption = encryption;
                     }
-                    Command::none()
+                    Task::none()
                 }
                 BackendEvent::UpdateEncryption(Err(err)) => {
                     self.active_dialog = ActiveDialog::None;
                     self.show_error(err.to_string());
-                    Command::none()
+                    Task::none()
                 }
 
                 BackendEvent::NewAccount(Ok((wallet_id, account_id, account_info))) => {
@@ -413,11 +415,11 @@ impl MainWindow {
                         .expect("wallet must be known (NewAccount)")
                         .accounts
                         .insert(account_id, account_info);
-                    Command::none()
+                    Task::none()
                 }
                 BackendEvent::NewAccount(Err(err)) => {
                     self.show_error(err.to_string());
-                    Command::none()
+                    Task::none()
                 }
 
                 BackendEvent::WalletBestBlock(wallet_id, best_block) => {
@@ -426,7 +428,7 @@ impl MainWindow {
                         .get_mut(&wallet_id)
                         .expect("wallet must be known (BestBlock)")
                         .best_block = best_block;
-                    Command::none()
+                    Task::none()
                 }
 
                 BackendEvent::Balance(wallet_id, account_id, balance) => {
@@ -438,7 +440,7 @@ impl MainWindow {
                         .get_mut(&account_id)
                         .expect("account must be known (balance)")
                         .balance = balance;
-                    Command::none()
+                    Task::none()
                 }
                 BackendEvent::StakingBalance(wallet_id, account_id, staking_balance) => {
                     self.node_state
@@ -449,7 +451,7 @@ impl MainWindow {
                         .get_mut(&account_id)
                         .expect("account must be known (staking balance)")
                         .staking_balance = staking_balance;
-                    Command::none()
+                    Task::none()
                 }
                 BackendEvent::DelegationsBalance(wallet_id, account_id, delegations_balance) => {
                     self.node_state
@@ -460,7 +462,7 @@ impl MainWindow {
                         .get_mut(&account_id)
                         .expect("account must be known (staking balance)")
                         .delegations_balance = delegations_balance;
-                    Command::none()
+                    Task::none()
                 }
                 BackendEvent::NewAddress(Ok(address_info)) => {
                     self.node_state
@@ -472,11 +474,11 @@ impl MainWindow {
                         .expect("account must be known (NewAddress)")
                         .addresses
                         .insert(address_info.index, address_info.address);
-                    Command::none()
+                    Task::none()
                 }
                 BackendEvent::NewAddress(Err(error)) => {
                     self.show_error(error.to_string());
-                    Command::none()
+                    Task::none()
                 }
                 BackendEvent::ToggleStaking(Ok((wallet_id, account_id, enabled))) => {
                     self.node_state
@@ -487,65 +489,65 @@ impl MainWindow {
                         .get_mut(&account_id)
                         .expect("account must be known (ToggleStaking)")
                         .staking_enabled = enabled;
-                    Command::none()
+                    Task::none()
                 }
                 BackendEvent::ToggleStaking(Err(error)) => {
                     self.show_error(error.to_string());
-                    Command::none()
+                    Task::none()
                 }
                 BackendEvent::SendAmount(Ok(transaction_info)) => {
                     self.wallet_msg = Some(WalletMessage::SendSucceed);
                     self.active_dialog = ActiveDialog::ConfirmTransaction { transaction_info };
-                    Command::none()
+                    Task::none()
                 }
                 BackendEvent::SendAmount(Err(error)) => {
                     self.show_error(error.to_string());
-                    Command::none()
+                    Task::none()
                 }
                 BackendEvent::StakeAmount(Ok(transaction_info)) => {
                     self.wallet_msg = Some(WalletMessage::CreateStakingPoolSucceed);
                     self.active_dialog = ActiveDialog::ConfirmTransaction { transaction_info };
-                    Command::none()
+                    Task::none()
                 }
                 BackendEvent::StakeAmount(Err(error)) => {
                     self.show_error(error.to_string());
-                    Command::none()
+                    Task::none()
                 }
                 BackendEvent::DecommissionPool(Ok(transaction_info)) => {
                     self.wallet_msg = Some(WalletMessage::DecommissionPoolSucceed);
                     self.active_dialog = ActiveDialog::ConfirmTransaction { transaction_info };
-                    Command::none()
+                    Task::none()
                 }
                 BackendEvent::DecommissionPool(Err(error)) => {
                     self.show_error(error.to_string());
-                    Command::none()
+                    Task::none()
                 }
                 BackendEvent::CreateDelegation(Ok(transaction_info)) => {
                     self.wallet_msg = Some(WalletMessage::CreateDelegationSucceed);
                     self.active_dialog = ActiveDialog::ConfirmTransaction { transaction_info };
-                    Command::none()
+                    Task::none()
                 }
                 BackendEvent::CreateDelegation(Err(error)) => {
                     self.show_error(error.to_string());
-                    Command::none()
+                    Task::none()
                 }
                 BackendEvent::DelegateStaking(Ok((transaction_info, delegation_id))) => {
                     self.wallet_msg = Some(WalletMessage::DelegateStakingSucceed(delegation_id));
                     self.active_dialog = ActiveDialog::ConfirmTransaction { transaction_info };
-                    Command::none()
+                    Task::none()
                 }
                 BackendEvent::DelegateStaking(Err(error)) => {
                     self.show_error(error.to_string());
-                    Command::none()
+                    Task::none()
                 }
                 BackendEvent::SendDelegationToAddress(Ok(transaction_info)) => {
                     self.wallet_msg = Some(WalletMessage::SendDelegationToAddressSucceed);
                     self.active_dialog = ActiveDialog::ConfirmTransaction { transaction_info };
-                    Command::none()
+                    Task::none()
                 }
                 BackendEvent::SendDelegationToAddress(Err(error)) => {
                     self.show_error(error.to_string());
-                    Command::none()
+                    Task::none()
                 }
                 BackendEvent::Broadcast(Ok(wallet_id)) => {
                     self.active_dialog = ActiveDialog::None;
@@ -564,12 +566,12 @@ impl MainWindow {
                             )
                             .map(MainWindowMessage::MainWidgetMessage)
                     } else {
-                        Command::none()
+                        Task::none()
                     }
                 }
                 BackendEvent::Broadcast(Err(error)) => {
                     self.show_error(error.to_string());
-                    Command::none()
+                    Task::none()
                 }
                 BackendEvent::TransactionList(wallet_id, account_id, Ok(transaction_list)) => {
                     self.node_state
@@ -580,11 +582,11 @@ impl MainWindow {
                         .get_mut(&account_id)
                         .expect("account must be known (TransactionList)")
                         .transaction_list = transaction_list;
-                    Command::none()
+                    Task::none()
                 }
                 BackendEvent::TransactionList(_wallet_id, _account_id, Err(error)) => {
                     self.show_error(error.to_string());
-                    Command::none()
+                    Task::none()
                 }
                 BackendEvent::ConsoleResponse(wallet_id, _account_id, Ok(command)) => match command
                 {
@@ -636,11 +638,11 @@ impl MainWindow {
                     file_path,
                     wallet_type,
                 });
-                Command::none()
+                Task::none()
             }
             MainWindowMessage::OpenWalletFileCanceled => {
                 self.file_dialog_active = false;
-                Command::none()
+                Task::none()
             }
 
             MainWindowMessage::ImportWalletMnemonic {
@@ -653,7 +655,7 @@ impl MainWindow {
                 match mnemonic_res {
                     Ok(mnemonic) => {
                         self.file_dialog_active = true;
-                        Command::perform(
+                        Task::perform(
                             async move {
                                 let file_opt = AsyncFileDialog::new().save_file().await;
                                 if let Some(file) = file_opt {
@@ -673,7 +675,7 @@ impl MainWindow {
                     }
                     Err(err) => {
                         self.show_error(err.to_string());
-                        Command::none()
+                        Task::none()
                     }
                 }
             }
@@ -690,12 +692,12 @@ impl MainWindow {
                     import,
                     wallet_type,
                 });
-                Command::none()
+                Task::none()
             }
             MainWindowMessage::ImportWalletFileCanceled => {
                 self.file_dialog_active = false;
                 self.active_dialog = ActiveDialog::None;
-                Command::none()
+                Task::none()
             }
 
             MainWindowMessage::WalletSetPassword {
@@ -711,7 +713,7 @@ impl MainWindow {
                         action: EncryptionAction::SetPassword(password1),
                     });
                 }
-                Command::none()
+                Task::none()
             }
 
             MainWindowMessage::WalletUnlock {
@@ -722,28 +724,28 @@ impl MainWindow {
                     wallet_id,
                     action: EncryptionAction::Unlock(password),
                 });
-                Command::none()
+                Task::none()
             }
 
             MainWindowMessage::NewWalletAccount { wallet_id, name } => {
                 backend_sender.send(BackendRequest::NewAccount { wallet_id, name });
-                Command::none()
+                Task::none()
             }
 
             MainWindowMessage::SubmitTx { wallet_id, tx } => {
                 backend_sender.send(BackendRequest::SubmitTx { wallet_id, tx });
-                Command::none()
+                Task::none()
             }
 
             MainWindowMessage::CopyToClipboard(text) => iced::clipboard::write(text),
 
             MainWindowMessage::ClosePopup => {
                 self.popups.pop();
-                Command::none()
+                Task::none()
             }
             MainWindowMessage::CloseDialog => {
                 self.active_dialog = ActiveDialog::None;
-                Command::none()
+                Task::none()
             }
         }
     }
@@ -759,98 +761,95 @@ impl MainWindow {
         ];
 
         let show_dialog = self.active_dialog != ActiveDialog::None;
-        let dialog = show_dialog.then(move || -> Element<MainWindowMessage> {
-            match &self.active_dialog {
-                ActiveDialog::None => Text::new("Nothing to show").into(),
+        let dialog = show_dialog
+            .then(move || -> Element<MainWindowMessage> {
+                match &self.active_dialog {
+                    ActiveDialog::None => Text::new("Nothing to show").into(),
 
-                ActiveDialog::WalletCreate {
-                    generated_mnemonic,
-                    wallet_type,
-                } => {
-                    let wallet_type = *wallet_type;
-                    wallet_mnemonic_dialog(
-                        Some(generated_mnemonic.clone()),
-                        Box::new(move |mnemonic| MainWindowMessage::ImportWalletMnemonic {
-                            mnemonic,
-                            import: ImportOrCreate::Create,
-                            wallet_type,
-                        }),
-                        Box::new(|| MainWindowMessage::CloseDialog),
-                    )
-                    .into()
-                }
+                    ActiveDialog::WalletCreate {
+                        generated_mnemonic,
+                        wallet_type,
+                    } => {
+                        let wallet_type = *wallet_type;
+                        wallet_mnemonic_dialog(
+                            Some(generated_mnemonic.clone()),
+                            Box::new(move |mnemonic| MainWindowMessage::ImportWalletMnemonic {
+                                mnemonic,
+                                import: ImportOrCreate::Create,
+                                wallet_type,
+                            }),
+                            Box::new(|| MainWindowMessage::CloseDialog),
+                        )
+                        .into()
+                    }
 
-                ActiveDialog::WalletRecover { wallet_type } => {
-                    let wallet_type = *wallet_type;
-                    wallet_mnemonic_dialog(
-                        None,
-                        Box::new(move |mnemonic| MainWindowMessage::ImportWalletMnemonic {
-                            mnemonic,
-                            import: ImportOrCreate::Import,
-                            wallet_type,
-                        }),
-                        Box::new(|| MainWindowMessage::CloseDialog),
-                    )
-                    .into()
-                }
+                    ActiveDialog::WalletRecover { wallet_type } => {
+                        let wallet_type = *wallet_type;
+                        wallet_mnemonic_dialog(
+                            None,
+                            Box::new(move |mnemonic| MainWindowMessage::ImportWalletMnemonic {
+                                mnemonic,
+                                import: ImportOrCreate::Import,
+                                wallet_type,
+                            }),
+                            Box::new(|| MainWindowMessage::CloseDialog),
+                        )
+                        .into()
+                    }
 
-                ActiveDialog::WalletSetPassword { wallet_id } => {
-                    let wallet_id = *wallet_id;
-                    wallet_set_password_dialog(
-                        Box::new(move |password1, password2| {
-                            MainWindowMessage::WalletSetPassword {
+                    ActiveDialog::WalletSetPassword { wallet_id } => {
+                        let wallet_id = *wallet_id;
+                        wallet_set_password_dialog(
+                            Box::new(move |password1, password2| {
+                                MainWindowMessage::WalletSetPassword {
+                                    wallet_id,
+                                    password1,
+                                    password2,
+                                }
+                            }),
+                            Box::new(|| MainWindowMessage::CloseDialog),
+                        )
+                        .into()
+                    }
+
+                    ActiveDialog::WalletUnlock { wallet_id } => {
+                        let wallet_id = *wallet_id;
+                        wallet_unlock_dialog(
+                            Box::new(move |password| MainWindowMessage::WalletUnlock {
                                 wallet_id,
-                                password1,
-                                password2,
-                            }
-                        }),
-                        Box::new(|| MainWindowMessage::CloseDialog),
-                    )
-                    .into()
+                                password,
+                            }),
+                            Box::new(|| MainWindowMessage::CloseDialog),
+                        )
+                        .into()
+                    }
+
+                    ActiveDialog::NewAccount { wallet_id } => {
+                        let wallet_id = *wallet_id;
+                        new_wallet_account(
+                            Box::new(move |name| MainWindowMessage::NewWalletAccount {
+                                wallet_id,
+                                name,
+                            }),
+                            Box::new(|| MainWindowMessage::CloseDialog),
+                        )
+                        .into()
+                    }
+
+                    ActiveDialog::ConfirmTransaction { transaction_info } => {
+                        let wallet_id = transaction_info.wallet_id;
+                        new_confirm_broadcast(
+                            Box::new(move |tx| MainWindowMessage::SubmitTx { wallet_id, tx }),
+                            Box::new(|| MainWindowMessage::CloseDialog),
+                            Box::new(MainWindowMessage::CopyToClipboard),
+                            transaction_info.tx.clone(),
+                            self.node_state.chain_config.clone(),
+                        )
+                        .into()
+                    }
                 }
-
-                ActiveDialog::WalletUnlock { wallet_id } => {
-                    let wallet_id = *wallet_id;
-                    wallet_unlock_dialog(
-                        Box::new(move |password| MainWindowMessage::WalletUnlock {
-                            wallet_id,
-                            password,
-                        }),
-                        Box::new(|| MainWindowMessage::CloseDialog),
-                    )
-                    .into()
-                }
-
-                ActiveDialog::NewAccount { wallet_id } => {
-                    let wallet_id = *wallet_id;
-                    new_wallet_account(
-                        Box::new(move |name| MainWindowMessage::NewWalletAccount {
-                            wallet_id,
-                            name,
-                        }),
-                        Box::new(|| MainWindowMessage::CloseDialog),
-                    )
-                    .into()
-                }
-
-                ActiveDialog::ConfirmTransaction { transaction_info } => {
-                    let wallet_id = transaction_info.wallet_id;
-                    new_confirm_broadcast(
-                        Box::new(move |tx| MainWindowMessage::SubmitTx { wallet_id, tx }),
-                        Box::new(|| MainWindowMessage::CloseDialog),
-                        Box::new(MainWindowMessage::CopyToClipboard),
-                        transaction_info.tx.clone(),
-                        self.node_state.chain_config.clone(),
-                    )
-                    .into()
-                }
-            }
-        });
-
-        // Always return Modal or iced will panic with "Downcast on stateless state" error
-
-        let content_with_dialog =
-            Modal::new(main_content, dialog).on_esc(MainWindowMessage::CloseDialog);
+            })
+            .map(|d| container(d).center(Length::Fill).into());
 
         let popup_opt = self.popups.last();
         let show_popup = popup_opt.is_some() || self.file_dialog_active;
@@ -864,11 +863,14 @@ impl MainWindow {
             }
         });
 
-        let popup_modal = Modal::new(content_with_dialog, popup);
-        if self.file_dialog_active {
-            popup_modal.into()
-        } else {
-            popup_modal.on_esc(MainWindowMessage::ClosePopup).into()
-        }
+        Stack::with_children(
+            [main_content.into()]
+                .into_iter()
+                .chain(dialog.into_iter())
+                .chain(popup.into_iter()),
+        )
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .into()
     }
 }
