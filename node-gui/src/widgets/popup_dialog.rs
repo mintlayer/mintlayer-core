@@ -15,8 +15,8 @@
 
 use iced::{
     alignment::Horizontal,
-    widget::{self, container, Button, Component, Text},
-    Element, Length, Theme,
+    widget::{container, Button, Text},
+    Length,
 };
 use iced_aw::Card;
 
@@ -26,47 +26,19 @@ pub struct Popup {
     pub message: String,
 }
 
-pub struct PopupDialog<Message> {
-    pub popup: Popup,
-    pub on_close: Message,
-}
-
-pub fn popup_dialog<Message>(popup: Popup, on_close: Message) -> PopupDialog<Message> {
-    PopupDialog { popup, on_close }
-}
-
-impl<Message: Clone> Component<Message, Theme, iced::Renderer> for PopupDialog<Message> {
-    type State = ();
-    type Event = ();
-
-    fn update(&mut self, _state: &mut Self::State, _event: Self::Event) -> Option<Message> {
-        Some(self.on_close.clone())
-    }
-
-    fn view(&self, _state: &Self::State) -> Element<Self::Event, Theme, iced::Renderer> {
-        Card::new(
-            Text::new(self.popup.title.clone()),
-            Text::new(self.popup.message.clone()).align_x(Horizontal::Center),
+pub fn popup_dialog<'a, Message: Clone + 'a>(popup: Popup, on_close: Message) -> Card<'a, Message> {
+    Card::new(
+        Text::new(popup.title),
+        Text::new(popup.message).align_x(Horizontal::Center),
+    )
+    .foot(
+        container(
+            Button::new(Text::new("Ok").align_x(Horizontal::Center))
+                .width(100.0)
+                .on_press(on_close.clone()),
         )
-        .foot(
-            container(
-                Button::new(Text::new("Ok").align_x(Horizontal::Center))
-                    .width(100.0)
-                    .on_press(()),
-            )
-            .center_x(Length::Fill),
-        )
-        .max_width(300.0)
-        .on_close(())
-        .into()
-    }
-}
-
-impl<'a, Message: Clone> From<PopupDialog<Message>> for Element<'a, Message, Theme, iced::Renderer>
-where
-    Message: 'a,
-{
-    fn from(my_component: PopupDialog<Message>) -> Self {
-        widget::component(my_component)
-    }
+        .center_x(Length::Fill),
+    )
+    .max_width(300.0)
+    .on_close(on_close)
 }

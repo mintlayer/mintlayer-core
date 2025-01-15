@@ -15,108 +15,64 @@
 
 use iced::{
     alignment::Horizontal,
-    widget::{self, container, text, text_input, Button, Component, Text},
-    Element, Length, Theme,
+    widget::{container, text, text_input, Button, Text},
+    Length,
 };
 use iced_aw::Card;
 
-pub struct WalletMnemonicDialog<Message> {
+pub fn wallet_mnemonic_dialog<'a, Message, F>(
     generated_mnemonic_opt: Option<wallet_controller::mnemonic::Mnemonic>,
-    on_import: Box<dyn Fn(String) -> Message>,
-    on_close: Box<dyn Fn() -> Message>,
-}
+    state: ImportState,
+    on_import: Message,
+    on_mnemonic_change: F,
+    on_close: Message,
+) -> Card<'a, Message>
+where
+    Message: Clone + 'a,
+    F: Fn(String) -> Message + 'a,
+{
+    let (mnemonic, action_text) = match &generated_mnemonic_opt {
+        Some(generated_mnemonic) => (generated_mnemonic.to_string(), "Create"),
+        None => (state.entered_mnemonic, "Recover"),
+    };
 
-pub fn wallet_mnemonic_dialog<Message>(
-    generated_mnemonic_opt: Option<wallet_controller::mnemonic::Mnemonic>,
-    on_import: Box<dyn Fn(String) -> Message>,
-    on_close: Box<dyn Fn() -> Message>,
-) -> WalletMnemonicDialog<Message> {
-    WalletMnemonicDialog {
-        generated_mnemonic_opt,
-        on_import,
-        on_close,
+    let button_enabled = !mnemonic.is_empty();
+    let button = Button::new(Text::new(action_text).align_x(Horizontal::Center)).width(100.0);
+    let button = if button_enabled {
+        button.on_press(on_import)
+    } else {
+        button
+    };
+    if state.importing {
+        Card::new(
+            Text::new(action_text),
+            iced::widget::column![text_input("Mnemonic", &mnemonic).padding(15)],
+        )
+        .foot(container(text("Loading...")).center_x(Length::Fill))
+    } else {
+        Card::new(
+            Text::new(action_text),
+            iced::widget::column![text_input("Mnemonic", &mnemonic)
+                .on_input(on_mnemonic_change)
+                .padding(15)],
+        )
+        .foot(container(button).center_x(Length::Fill))
     }
+    .max_width(600.0)
+    .on_close(on_close)
 }
 
-#[derive(Default)]
+#[derive(Debug, Default, PartialEq, Eq, Clone)]
 pub struct ImportState {
-    entered_mnemonic: String,
+    pub entered_mnemonic: String,
     importing: bool,
 }
 
-#[derive(Clone)]
-pub enum ImportEvent {
-    EditMnemonic(String),
-    Ok,
-    Cancel,
-}
-
-impl<Message> Component<Message, Theme, iced::Renderer> for WalletMnemonicDialog<Message> {
-    type State = ImportState;
-    type Event = ImportEvent;
-
-    fn update(&mut self, state: &mut Self::State, event: Self::Event) -> Option<Message> {
-        match event {
-            ImportEvent::EditMnemonic(mnemonic) => {
-                match &self.generated_mnemonic_opt {
-                    Some(_generated_mnemonic) => {}
-                    None => state.entered_mnemonic = mnemonic,
-                }
-                None
-            }
-            ImportEvent::Ok => {
-                state.importing = true;
-                let mnemonic = match &self.generated_mnemonic_opt {
-                    Some(generated_mnemonic) => generated_mnemonic.to_string(),
-                    None => state.entered_mnemonic.clone(),
-                };
-                Some((self.on_import)(mnemonic))
-            }
-            ImportEvent::Cancel => Some((self.on_close)()),
+impl ImportState {
+    pub fn with_changed_mnemonic(&self, new_mnemonic: String) -> Self {
+        Self {
+            entered_mnemonic: new_mnemonic,
+            importing: self.importing,
         }
-    }
-
-    fn view(&self, state: &Self::State) -> Element<Self::Event, Theme, iced::Renderer> {
-        let (mnemonic, action_text) = match &self.generated_mnemonic_opt {
-            Some(generated_mnemonic) => (generated_mnemonic.to_string(), "Create"),
-            None => (state.entered_mnemonic.clone(), "Recover"),
-        };
-
-        let button_enabled = !mnemonic.is_empty();
-        let button = Button::new(Text::new(action_text).align_x(Horizontal::Center)).width(100.0);
-        let button = if button_enabled {
-            button.on_press(ImportEvent::Ok)
-        } else {
-            button
-        };
-
-        if state.importing {
-            Card::new(
-                Text::new(action_text),
-                iced::widget::column![text_input("Mnemonic", &mnemonic).padding(15)],
-            )
-            .foot(container(text("Loading...")).center_x(Length::Fill))
-        } else {
-            Card::new(
-                Text::new(action_text),
-                iced::widget::column![text_input("Mnemonic", &mnemonic)
-                    .on_input(ImportEvent::EditMnemonic)
-                    .padding(15)],
-            )
-            .foot(container(button).center_x(Length::Fill))
-        }
-        .max_width(600.0)
-        .on_close(ImportEvent::Cancel)
-        .into()
-    }
-}
-
-impl<'a, Message> From<WalletMnemonicDialog<Message>>
-    for Element<'a, Message, Theme, iced::Renderer>
-where
-    Message: 'a,
-{
-    fn from(component: WalletMnemonicDialog<Message>) -> Self {
-        widget::component(component)
     }
 }

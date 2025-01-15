@@ -15,95 +15,56 @@
 
 use iced::{
     alignment::Horizontal,
-    widget::{self, container, text, text_input, Button, Component, Text},
-    Element, Length, Theme,
+    widget::{container, text, text_input, Button, Text},
+    Length,
 };
 use iced_aw::Card;
 
-pub struct WalletUnlockDialog<Message> {
-    on_unlock: Box<dyn Fn(String) -> Message>,
-    on_close: Box<dyn Fn() -> Message>,
-}
-
-pub fn wallet_unlock_dialog<Message>(
-    on_unlock: Box<dyn Fn(String) -> Message>,
-    on_close: Box<dyn Fn() -> Message>,
-) -> WalletUnlockDialog<Message> {
-    WalletUnlockDialog {
-        on_unlock,
-        on_close,
-    }
-}
-
-#[derive(Default)]
-pub struct UnlockState {
-    password: String,
-    unlocking: bool,
-}
-
-#[derive(Clone)]
-pub enum UnlockEvent {
-    EditPassword(String),
-    Ok,
-    Cancel,
-}
-
-impl<Message> Component<Message, Theme, iced::Renderer> for WalletUnlockDialog<Message> {
-    type State = UnlockState;
-    type Event = UnlockEvent;
-
-    fn update(&mut self, state: &mut Self::State, event: Self::Event) -> Option<Message> {
-        match event {
-            UnlockEvent::EditPassword(password) => {
-                state.password = password;
-                None
-            }
-            UnlockEvent::Ok => {
-                state.unlocking = true;
-                Some((self.on_unlock)(state.password.clone()))
-            }
-            UnlockEvent::Cancel => Some((self.on_close)()),
-        }
-    }
-
-    fn view(&self, state: &Self::State) -> Element<Self::Event, Theme, iced::Renderer> {
-        let container = match state.unlocking {
-            true => container(text("Unlocking...")),
-            false => {
-                let button_enabled = !state.password.is_empty();
-                let button =
-                    Button::new(Text::new("Unlock").align_x(Horizontal::Center)).width(100.0);
-                let button = if button_enabled {
-                    button.on_press(UnlockEvent::Ok)
-                } else {
-                    button
-                };
-                container(button)
-            }
-        };
-
-        let password = text_input("Password", &state.password).secure(true);
-        let password = match state.unlocking {
-            true => password,
-            false => password.on_input(UnlockEvent::EditPassword),
-        };
-
-        Card::new(
-            Text::new("Unlock"),
-            iced::widget::column![password.padding(15)],
-        )
-        .foot(container.center_x(Length::Fill))
-        .max_width(600.0)
-        .on_close(UnlockEvent::Cancel)
-        .into()
-    }
-}
-
-impl<'a, Message> From<WalletUnlockDialog<Message>> for Element<'a, Message, Theme, iced::Renderer>
+pub fn wallet_unlock_dialog<'a, Message, F>(
+    state: &UnlockState,
+    on_edit_password: F,
+    on_unlock: Message,
+    on_close: Message,
+) -> Card<'a, Message>
 where
-    Message: 'a,
+    Message: Clone + 'a,
+    F: Fn(String) -> Message + 'a,
 {
-    fn from(component: WalletUnlockDialog<Message>) -> Self {
-        widget::component(component)
+    let container = match state.unlocking {
+        true => container(text("Unlocking...")),
+        false => {
+            let button_enabled = !state.password.is_empty();
+            let button = Button::new(Text::new("Unlock").align_x(Horizontal::Center))
+                .width(100.0)
+                .on_press_maybe(button_enabled.then_some(on_unlock));
+            container(button)
+        }
+    };
+
+    let password = text_input("Password", &state.password)
+        .secure(true)
+        .on_input_maybe(state.unlocking.then_some(on_edit_password));
+
+    Card::new(
+        Text::new("Unlock"),
+        iced::widget::column![password.padding(15)],
+    )
+    .foot(container.center_x(Length::Fill))
+    .max_width(600.0)
+    .on_close(on_close)
+}
+
+#[derive(Default, PartialEq, Eq, Clone, Debug)]
+pub struct UnlockState {
+    pub password: String,
+    pub unlocking: bool,
+}
+
+impl UnlockState {
+    pub fn with_changed_password(&self, password: String) -> Self {
+        Self {
+            password,
+            unlocking: self.unlocking,
+        }
     }
 }

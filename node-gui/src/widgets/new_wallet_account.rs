@@ -30,76 +30,26 @@
 
 use iced::{
     alignment::Horizontal,
-    widget::{self, container, text_input, Button, Component, Text},
-    Element, Length, Theme,
+    widget::{container, text_input, Button, Text},
+    Length,
 };
 use iced_aw::Card;
 
-pub struct NewWalletAccount<Message> {
-    on_submit: Box<dyn Fn(String) -> Message>,
-    on_close: Box<dyn Fn() -> Message>,
-}
+pub fn new_wallet_account<'a, Message: Clone + 'a, F: Fn(String) -> Message + 'a>(
+    name: &'a str,
+    on_submit: Message,
+    on_change: F,
+    on_close: Message,
+) -> Card<'a, Message> {
+    let button = Button::new(Text::new("Create").align_x(Horizontal::Center))
+        .width(100.0)
+        .on_press(on_submit);
 
-pub fn new_wallet_account<Message>(
-    on_submit: Box<dyn Fn(String) -> Message>,
-    on_close: Box<dyn Fn() -> Message>,
-) -> NewWalletAccount<Message> {
-    NewWalletAccount {
-        on_submit,
-        on_close,
-    }
-}
-
-#[derive(Default)]
-pub struct NewAccountState {
-    name: String,
-}
-
-#[derive(Clone)]
-pub enum NewAccountEvent {
-    EditName(String),
-    Ok,
-    Cancel,
-}
-
-impl<Message> Component<Message, Theme, iced::Renderer> for NewWalletAccount<Message> {
-    type State = NewAccountState;
-    type Event = NewAccountEvent;
-
-    fn update(&mut self, state: &mut Self::State, event: Self::Event) -> Option<Message> {
-        match event {
-            NewAccountEvent::EditName(password) => {
-                state.name = password;
-                None
-            }
-            NewAccountEvent::Ok => Some((self.on_submit)(state.name.clone())),
-            NewAccountEvent::Cancel => Some((self.on_close)()),
-        }
-    }
-
-    fn view(&self, state: &Self::State) -> Element<Self::Event, Theme, iced::Renderer> {
-        let button = Button::new(Text::new("Create").align_x(Horizontal::Center))
-            .width(100.0)
-            .on_press(NewAccountEvent::Ok);
-
-        Card::new(
-            Text::new("New account"),
-            iced::widget::column![text_input("Account name", &state.name)
-                .on_input(NewAccountEvent::EditName)
-                .padding(15)],
-        )
-        .foot(container(button).center_x(Length::Fill))
-        .max_width(600.0)
-        .on_close(NewAccountEvent::Cancel)
-        .into()
-    }
-}
-
-impl<'a, Message> From<NewWalletAccount<Message>> for Element<'a, Message, Theme, iced::Renderer>
-where
-    Message: 'a,
-{
-    fn from(component: NewWalletAccount<Message>) -> Self {
-        widget::component(component)
-    }
+    Card::new(
+        Text::new("New account"),
+        iced::widget::column![text_input("Account name", name).on_input(on_change).padding(15)],
+    )
+    .foot(container(button).center_x(Length::Fill))
+    .max_width(600.0)
+    .on_close(on_close)
 }

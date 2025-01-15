@@ -21,7 +21,7 @@ use common::{
     primitives::{per_thousand::PerThousand, semver::SemVer, user_agent::UserAgent, Amount},
 };
 use iced::{
-    widget::{container, Stack, Text},
+    widget::{center, Stack, Text},
     Element, Length, Task,
 };
 use logging::log;
@@ -43,9 +43,9 @@ use crate::{
         confirm_broadcast::new_confirm_broadcast,
         new_wallet_account::new_wallet_account,
         popup_dialog::{popup_dialog, Popup},
-        wallet_mnemonic::wallet_mnemonic_dialog,
-        wallet_set_password::wallet_set_password_dialog,
-        wallet_unlock::wallet_unlock_dialog,
+        wallet_mnemonic::{wallet_mnemonic_dialog, ImportState},
+        wallet_set_password::{wallet_set_password_dialog, SetPasswordState},
+        wallet_unlock::{wallet_unlock_dialog, UnlockState},
     },
     WalletMode,
 };
@@ -61,18 +61,23 @@ enum ActiveDialog {
     WalletCreate {
         generated_mnemonic: wallet_controller::mnemonic::Mnemonic,
         wallet_type: WalletType,
+        state: ImportState,
     },
     WalletRecover {
         wallet_type: WalletType,
+        state: ImportState,
     },
     WalletSetPassword {
         wallet_id: WalletId,
+        state: SetPasswordState,
     },
     WalletUnlock {
         wallet_id: WalletId,
+        state: UnlockState,
     },
     NewAccount {
         wallet_id: WalletId,
+        name: String,
     },
     ConfirmTransaction {
         transaction_info: TransactionInfo,
@@ -160,6 +165,10 @@ pub enum MainWindowMessage {
     },
     OpenWalletFileCanceled,
 
+    ImportWalletMnemonicInputChange {
+        wallet_type: WalletType,
+        state: ImportState,
+    },
     ImportWalletMnemonic {
         mnemonic: String,
         import: ImportOrCreate,
@@ -173,14 +182,28 @@ pub enum MainWindowMessage {
     },
     ImportWalletFileCanceled,
 
+    WalletSetPasswordInputChange {
+        wallet_id: WalletId,
+        state: SetPasswordState,
+    },
     WalletSetPassword {
         wallet_id: WalletId,
         password1: String,
         password2: String,
     },
+
+    WalletUnlockInputChange {
+        wallet_id: WalletId,
+        state: UnlockState,
+    },
     WalletUnlock {
         wallet_id: WalletId,
         password: String,
+    },
+
+    NewWalletAccountName {
+        wallet_id: WalletId,
+        name: String,
     },
 
     NewWalletAccount {
@@ -257,11 +280,15 @@ impl MainWindow {
                     self.active_dialog = ActiveDialog::WalletCreate {
                         generated_mnemonic,
                         wallet_type,
+                        state: Default::default(),
                     };
                     Task::none()
                 }
                 MenuMessage::RecoverWallet { wallet_type } => {
-                    self.active_dialog = ActiveDialog::WalletRecover { wallet_type };
+                    self.active_dialog = ActiveDialog::WalletRecover {
+                        wallet_type,
+                        state: Default::default(),
+                    };
                     Task::none()
                 }
                 MenuMessage::OpenWallet { wallet_type } => {
@@ -288,7 +315,10 @@ impl MainWindow {
             MainWindowMessage::MainWidgetMessage(MainWidgetMessage::TabsMessage(
                 TabsMessage::WalletMessage(wallet_id, WalletMessage::SetPassword),
             )) => {
-                self.active_dialog = ActiveDialog::WalletSetPassword { wallet_id };
+                self.active_dialog = ActiveDialog::WalletSetPassword {
+                    wallet_id,
+                    state: Default::default(),
+                };
                 Task::none()
             }
 
@@ -315,14 +345,20 @@ impl MainWindow {
             MainWindowMessage::MainWidgetMessage(MainWidgetMessage::TabsMessage(
                 TabsMessage::WalletMessage(wallet_id, WalletMessage::Unlock),
             )) => {
-                self.active_dialog = ActiveDialog::WalletUnlock { wallet_id };
+                self.active_dialog = ActiveDialog::WalletUnlock {
+                    wallet_id,
+                    state: Default::default(),
+                };
                 Task::none()
             }
 
             MainWindowMessage::MainWidgetMessage(MainWidgetMessage::TabsMessage(
                 TabsMessage::WalletMessage(wallet_id, WalletMessage::NewAccount),
             )) => {
-                self.active_dialog = ActiveDialog::NewAccount { wallet_id };
+                self.active_dialog = ActiveDialog::NewAccount {
+                    wallet_id,
+                    name: String::new(),
+                };
                 Task::none()
             }
 
@@ -645,6 +681,11 @@ impl MainWindow {
                 Task::none()
             }
 
+            MainWindowMessage::ImportWalletMnemonicInputChange { wallet_type, state } => {
+                self.active_dialog = ActiveDialog::WalletRecover { wallet_type, state };
+                Task::none()
+            }
+
             MainWindowMessage::ImportWalletMnemonic {
                 mnemonic,
                 import,
@@ -700,6 +741,11 @@ impl MainWindow {
                 Task::none()
             }
 
+            MainWindowMessage::WalletSetPasswordInputChange { wallet_id, state } => {
+                self.active_dialog = ActiveDialog::WalletSetPassword { wallet_id, state };
+                Task::none()
+            }
+
             MainWindowMessage::WalletSetPassword {
                 wallet_id,
                 password1,
@@ -716,6 +762,11 @@ impl MainWindow {
                 Task::none()
             }
 
+            MainWindowMessage::WalletUnlockInputChange { wallet_id, state } => {
+                self.active_dialog = ActiveDialog::WalletUnlock { wallet_id, state };
+                Task::none()
+            }
+
             MainWindowMessage::WalletUnlock {
                 wallet_id,
                 password,
@@ -724,6 +775,11 @@ impl MainWindow {
                     wallet_id,
                     action: EncryptionAction::Unlock(password),
                 });
+                Task::none()
+            }
+
+            MainWindowMessage::NewWalletAccountName { wallet_id, name } => {
+                self.active_dialog = ActiveDialog::NewAccount { wallet_id, name };
                 Task::none()
             }
 
@@ -769,69 +825,104 @@ impl MainWindow {
                     ActiveDialog::WalletCreate {
                         generated_mnemonic,
                         wallet_type,
+                        state,
                     } => {
                         let wallet_type = *wallet_type;
                         wallet_mnemonic_dialog(
                             Some(generated_mnemonic.clone()),
-                            Box::new(move |mnemonic| MainWindowMessage::ImportWalletMnemonic {
-                                mnemonic,
+                            state.clone(),
+                            MainWindowMessage::ImportWalletMnemonic {
+                                mnemonic: if state.entered_mnemonic.is_empty() {
+                                    generated_mnemonic.to_string()
+                                } else {
+                                    state.entered_mnemonic.clone()
+                                },
                                 import: ImportOrCreate::Create,
                                 wallet_type,
-                            }),
-                            Box::new(|| MainWindowMessage::CloseDialog),
+                            },
+                            move |mnemonic| MainWindowMessage::ImportWalletMnemonicInputChange {
+                                wallet_type,
+                                state: state.with_changed_mnemonic(mnemonic),
+                            },
+                            MainWindowMessage::CloseDialog,
                         )
                         .into()
                     }
 
-                    ActiveDialog::WalletRecover { wallet_type } => {
+                    ActiveDialog::WalletRecover { wallet_type, state } => {
                         let wallet_type = *wallet_type;
                         wallet_mnemonic_dialog(
                             None,
-                            Box::new(move |mnemonic| MainWindowMessage::ImportWalletMnemonic {
-                                mnemonic,
+                            state.clone(),
+                            MainWindowMessage::ImportWalletMnemonic {
+                                mnemonic: state.entered_mnemonic.clone(),
                                 import: ImportOrCreate::Import,
                                 wallet_type,
-                            }),
-                            Box::new(|| MainWindowMessage::CloseDialog),
+                            },
+                            move |mnemonic| MainWindowMessage::ImportWalletMnemonicInputChange {
+                                wallet_type,
+                                state: state.with_changed_mnemonic(mnemonic),
+                            },
+                            MainWindowMessage::CloseDialog,
                         )
                         .into()
                     }
 
-                    ActiveDialog::WalletSetPassword { wallet_id } => {
+                    ActiveDialog::WalletSetPassword { wallet_id, state } => {
                         let wallet_id = *wallet_id;
                         wallet_set_password_dialog(
-                            Box::new(move |password1, password2| {
-                                MainWindowMessage::WalletSetPassword {
-                                    wallet_id,
+                            state,
+                            MainWindowMessage::WalletSetPassword {
+                                wallet_id,
+                                password1: state.password1.clone(),
+                                password2: state.password2.clone(),
+                            },
+                            move |password1| MainWindowMessage::WalletSetPasswordInputChange {
+                                wallet_id,
+                                state: SetPasswordState {
                                     password1,
+                                    password2: state.password2.clone(),
+                                },
+                            },
+                            move |password2| MainWindowMessage::WalletSetPasswordInputChange {
+                                wallet_id,
+                                state: SetPasswordState {
+                                    password1: state.password1.clone(),
                                     password2,
-                                }
-                            }),
-                            Box::new(|| MainWindowMessage::CloseDialog),
+                                },
+                            },
+                            MainWindowMessage::CloseDialog,
                         )
                         .into()
                     }
 
-                    ActiveDialog::WalletUnlock { wallet_id } => {
+                    ActiveDialog::WalletUnlock { wallet_id, state } => {
                         let wallet_id = *wallet_id;
                         wallet_unlock_dialog(
-                            Box::new(move |password| MainWindowMessage::WalletUnlock {
+                            state,
+                            move |password| MainWindowMessage::WalletUnlockInputChange {
                                 wallet_id,
-                                password,
-                            }),
-                            Box::new(|| MainWindowMessage::CloseDialog),
+                                state: state.with_changed_password(password),
+                            },
+                            MainWindowMessage::WalletUnlock {
+                                wallet_id,
+                                password: state.password.clone(),
+                            },
+                            MainWindowMessage::CloseDialog,
                         )
                         .into()
                     }
 
-                    ActiveDialog::NewAccount { wallet_id } => {
+                    ActiveDialog::NewAccount { wallet_id, name } => {
                         let wallet_id = *wallet_id;
                         new_wallet_account(
-                            Box::new(move |name| MainWindowMessage::NewWalletAccount {
+                            name,
+                            MainWindowMessage::NewWalletAccount {
                                 wallet_id,
-                                name,
-                            }),
-                            Box::new(|| MainWindowMessage::CloseDialog),
+                                name: name.clone(),
+                            },
+                            move |name| MainWindowMessage::NewWalletAccountName { wallet_id, name },
+                            MainWindowMessage::CloseDialog,
                         )
                         .into()
                     }
@@ -849,28 +940,25 @@ impl MainWindow {
                     }
                 }
             })
-            .map(|d| container(d).center(Length::Fill).into());
+            .map(|d| center(d).into());
 
         let popup_opt = self.popups.last();
         let show_popup = popup_opt.is_some() || self.file_dialog_active;
-        let popup = show_popup.then(move || -> Element<MainWindowMessage> {
-            match (self.file_dialog_active, popup_opt) {
-                (true, _) => Text::new("File dialog...").into(),
-                (_, Some(popup)) => {
-                    popup_dialog(popup.clone(), MainWindowMessage::ClosePopup).into()
+        let popup = show_popup
+            .then(move || -> Element<MainWindowMessage> {
+                match (self.file_dialog_active, popup_opt) {
+                    (true, _) => Text::new("File dialog...").into(),
+                    (_, Some(popup)) => {
+                        popup_dialog(popup.clone(), MainWindowMessage::ClosePopup).into()
+                    }
+                    (_, None) => Text::new("Nothing to show").into(),
                 }
-                (_, None) => Text::new("Nothing to show").into(),
-            }
-        });
+            })
+            .map(|d| center(d).into());
 
-        Stack::with_children(
-            [main_content.into()]
-                .into_iter()
-                .chain(dialog.into_iter())
-                .chain(popup.into_iter()),
-        )
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .into()
+        Stack::with_children([main_content.into()].into_iter().chain(dialog).chain(popup))
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .into()
     }
 }
