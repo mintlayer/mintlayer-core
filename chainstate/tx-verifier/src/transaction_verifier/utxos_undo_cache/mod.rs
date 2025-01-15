@@ -80,7 +80,7 @@ impl UtxosBlockUndoCache {
             None => fetcher_func(*tx_source).map_err(ConnectTransactionError::from)?,
         };
 
-        Ok(block_undo.map_or(false, |undo| !undo.has_children_of(tx_id)))
+        Ok(block_undo.is_some_and(|undo| !undo.has_children_of(tx_id)))
     }
 
     /// Add undo object for a transaction.

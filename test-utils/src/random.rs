@@ -262,12 +262,14 @@ mod tests {
         let collected = collect_string_with_random_spaces(&mut rng, strings, 0, 0);
         assert_eq!(collected, "foobarbaz");
 
+        let regex1 = Regex::new(r#"^\s+foo\s+bar\s+baz\s+$"#).unwrap();
+        let regex2 = Regex::new(r#"^\s*foo\s*bar\s*baz\s*$"#).unwrap();
         for _ in 0..10 {
             let collected = collect_string_with_random_spaces(&mut rng, strings, 1, 3);
-            assert!(Regex::new(r#"^\s+foo\s+bar\s+baz\s+$"#).unwrap().is_match(&collected));
+            assert!(regex1.is_match(&collected));
 
             let collected = collect_string_with_random_spaces(&mut rng, strings, 0, 3);
-            assert!(Regex::new(r#"^\s*foo\s*bar\s*baz\s*$"#).unwrap().is_match(&collected));
+            assert!(regex2.is_match(&collected));
         }
     }
 }

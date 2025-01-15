@@ -784,7 +784,7 @@ impl OutputCache {
     }
 
     pub fn add_tx(&mut self, tx_id: OutPointSourceId, tx: WalletTx) -> WalletResult<()> {
-        let already_present = self.txs.get(&tx_id).map_or(false, |tx| !tx.state().is_abandoned());
+        let already_present = self.txs.get(&tx_id).is_some_and(|tx| !tx.state().is_abandoned());
         let is_unconfirmed = match tx.state() {
             TxState::Inactive(_)
             | TxState::InMempool(_)
@@ -1166,9 +1166,9 @@ impl OutputCache {
     }
 
     fn is_consumed(&self, utxo_states: UtxoStates, outpoint: &UtxoOutPoint) -> bool {
-        self.consumed.get(outpoint).map_or(false, |consumed_state| {
-            utxo_states.contains(get_utxo_state(consumed_state))
-        })
+        self.consumed
+            .get(outpoint)
+            .is_some_and(|consumed_state| utxo_states.contains(get_utxo_state(consumed_state)))
     }
 
     pub fn find_unspent_unlocked_utxo(
@@ -1351,7 +1351,7 @@ impl OutputCache {
                 .and_then(|txo| {
                     get_all_tx_output_destinations(txo, &|pool_id| self.pools.get(pool_id))
                 })
-                .map_or(false, |output_dest| output_dest.contains(dest)),
+                .is_some_and(|output_dest| output_dest.contains(dest)),
             TxInput::Account(_) | TxInput::AccountCommand(_, _) => false,
         })
     }
@@ -1360,7 +1360,7 @@ impl OutputCache {
     fn destination_in_tx_outputs(&self, tx: &WithId<&Transaction>, dest: &Destination) -> bool {
         tx.outputs().iter().any(|txo| {
             get_all_tx_output_destinations(txo, &|pool_id| self.pools.get(pool_id))
-                .map_or(false, |output_dest| output_dest.contains(dest))
+                .is_some_and(|output_dest| output_dest.contains(dest))
         })
     }
 
@@ -1585,7 +1585,7 @@ fn valid_timelock(
     outpoint: &UtxoOutPoint,
 ) -> bool {
     output.timelock().map_or(true, |timelock| {
-        transaction_block_info.as_ref().map_or(false, |transaction_block_info| {
+        transaction_block_info.as_ref().is_some_and(|transaction_block_info| {
             tx_verifier::timelock_check::check_timelock(
                 &transaction_block_info.height,
                 &transaction_block_info.timestamp,

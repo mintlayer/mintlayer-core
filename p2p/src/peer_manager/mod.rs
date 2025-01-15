@@ -508,7 +508,7 @@ where
         let whitelisted_node =
             self.pending_outbound_connects
                 .get(&peer_address)
-                .map_or(false, |pending_connect| {
+                .is_some_and(|pending_connect| {
                     self.is_whitelisted_node(
                         (&pending_connect.outbound_connect_type).into(),
                         &peer_address,

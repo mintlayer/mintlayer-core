@@ -871,11 +871,11 @@ impl Account {
                 WalletPoolsFilter::Decommission => self
                     .key_chain
                     .get_private_key_for_destination(&pool_data.decommission_key, db_tx)
-                    .map_or(false, |res| res.is_some()),
+                    .is_ok_and(|res| res.is_some()),
                 WalletPoolsFilter::Stake => self
                     .key_chain
                     .get_private_key_for_destination(&pool_data.stake_destination, db_tx)
-                    .map_or(false, |res| res.is_some()),
+                    .is_ok_and(|res| res.is_some()),
             })
             .collect()
     }
@@ -1969,7 +1969,7 @@ impl Account {
             TxInput::Utxo(outpoint) => self
                 .output_cache
                 .get_txo(outpoint)
-                .map_or(false, |txo| self.is_mine_or_watched(txo)),
+                .is_some_and(|txo| self.is_mine_or_watched(txo)),
             TxInput::Account(outpoint) => match outpoint.account() {
                 AccountSpending::DelegationBalance(delegation_id, _) => {
                     self.find_delegation(delegation_id).is_ok()
