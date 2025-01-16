@@ -564,7 +564,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
             .into_iter()
             .filter(|(_, output, _)| {
                 get_tx_output_destination(output, &|_| None, HtlcSpendingCondition::Skip)
-                    .map_or(false, |dest| from_addresses.contains(&dest))
+                    .is_some_and(|dest| from_addresses.contains(&dest))
             })
             .collect::<Vec<_>>();
 

@@ -54,6 +54,7 @@ serial_test.workspace = true
 
 [features]
 expensive-verification = []
+dev = [] # used by fixed-hash
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(kani)'] }

@@ -340,7 +340,7 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
             TxInput::Utxo(outpoint) => outpoint
                 .source_id()
                 .get_tx_id()
-                .map_or(false, |tx_id| self.contains_transaction(tx_id)),
+                .is_some_and(|tx_id| self.contains_transaction(tx_id)),
             TxInput::Account(..) | TxInput::AccountCommand(..) => false,
         }
     }

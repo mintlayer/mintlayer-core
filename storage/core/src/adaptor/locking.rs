@@ -30,7 +30,7 @@ use utils::{const_value::ConstValue, sync};
 // Read-only transaction just holds a read lock to the database
 pub struct TxRo<'tx, T>(sync::RwLockReadGuard<'tx, T>);
 
-impl<'tx, T: ReadOps> ReadOps for TxRo<'tx, T> {
+impl<T: ReadOps> ReadOps for TxRo<'_, T> {
     fn get(&self, map_id: DbMapId, key: &[u8]) -> crate::Result<Option<Cow<[u8]>>> {
         self.0.get(map_id, key)
     }
@@ -70,7 +70,7 @@ impl<T> TxRw<'_, T> {
     }
 }
 
-impl<'tx, T: ReadOps> ReadOps for TxRw<'tx, T> {
+impl<T: ReadOps> ReadOps for TxRw<'_, T> {
     fn get(&self, map_id: DbMapId, key: &[u8]) -> crate::Result<Option<Cow<[u8]>>> {
         self.deltas[map_id].get(key).map_or_else(
             || self.db.get(map_id, key),
