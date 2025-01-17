@@ -2338,7 +2338,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 FROM (
                     SELECT order_id, initially_asked, ask_balance, ask_currency, initially_given, give_balance, give_currency, conclude_destination, next_nonce, creation_block_height, block_height, ROW_NUMBER() OVER(PARTITION BY order_id ORDER BY block_height DESC) as newest
                     FROM ml.orders
-                )
+                ) AS sub
                 WHERE newest = 1
                 ORDER BY creation_block_height DESC
                 OFFSET $1
@@ -2371,7 +2371,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 FROM (
                     SELECT order_id, initially_asked, ask_balance, ask_currency, initially_given, give_balance, give_currency, conclude_destination, next_nonce, creation_block_height, block_height, ROW_NUMBER() OVER(PARTITION BY order_id ORDER BY block_height DESC) as newest
                     FROM ml.orders
-                )
+                ) AS sub
                 WHERE newest = 1 AND ((ask_currency = $1 AND give_currency = $2) OR (ask_currency = $2 AND give_currency = $1))
                 ORDER BY creation_block_height DESC
                 OFFSET $3
