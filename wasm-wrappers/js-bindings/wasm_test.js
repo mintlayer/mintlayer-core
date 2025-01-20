@@ -14,6 +14,9 @@ import {
   make_receiving_address,
   make_change_address,
   pubkey_to_pubkeyhash_address,
+  make_receiving_address_public_key,
+  make_change_address_public_key,
+  extended_public_key_from_extended_private_key,
   Network,
   encode_input_for_utxo,
   encode_output_coin_burn,
@@ -171,6 +174,9 @@ export async function run_test() {
       mnemonic,
       Network.Mainnet
     );
+    console.log(`acc private key = ${account_pubkey}`);
+
+    const extended_public_key = extended_public_key_from_extended_private_key(account_pubkey);
     console.log(`acc pubkey = ${account_pubkey}`);
 
     const receiving_privkey = make_receiving_address(account_pubkey, 0);
@@ -188,6 +194,9 @@ export async function run_test() {
     }
 
     const receiving_pubkey = public_key_from_private_key(receiving_privkey);
+    const receiving_pubkey2 = make_receiving_address_public_key(extended_public_key, 0);
+    assert_eq_arrays(receiving_pubkey, receiving_pubkey2);
+
     const address = pubkey_to_pubkeyhash_address(
       receiving_pubkey,
       Network.Mainnet
@@ -198,7 +207,7 @@ export async function run_test() {
     }
 
     const change_privkey = make_change_address(account_pubkey, 0);
-    console.log(`receiving privkey = ${change_privkey}`);
+    console.log(`change privkey = ${change_privkey}`);
 
     // test bad key index
     try {
@@ -212,6 +221,9 @@ export async function run_test() {
     }
 
     const change_pubkey = public_key_from_private_key(change_privkey);
+    const change_pubkey2 = make_change_address_public_key(extended_public_key, 0);
+    assert_eq_arrays(change_pubkey, change_pubkey2);
+
     const caddress = pubkey_to_pubkeyhash_address(
       change_pubkey,
       Network.Mainnet
@@ -1328,7 +1340,7 @@ function test_signed_transaction_intent() {
   const message = make_transaction_intent_message_to_sign("the intent", tx_id);
   const expected_message = new TextEncoder().encode(
     "<tx_id:dfc2bb0cc4c7f3ed3fe682a48ee9f78bcd4962e55e7bc239bd340ec22aff8657;intent:the intent>");
-    assert_eq_arrays(message, expected_message);
+  assert_eq_arrays(message, expected_message);
 
   try {
     const invalid_signatures = "invalid signatures";

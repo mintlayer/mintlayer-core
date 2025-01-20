@@ -57,7 +57,7 @@ use common::{
     size_estimation::{input_signature_size_from_destination, tx_size_with_outputs},
 };
 use crypto::key::{
-    extended::{ExtendedKeyKind, ExtendedPrivateKey},
+    extended::{ExtendedKeyKind, ExtendedPrivateKey, ExtendedPublicKey},
     hdkd::{child_number::ChildNumber, derivable::Derivable, u31::U31},
     KeyKind, PrivateKey, PublicKey, Signature,
 };
@@ -248,18 +248,7 @@ pub fn make_receiving_address(private_key_bytes: &[u8], key_index: u32) -> Resul
 
     let account_privkey = ExtendedPrivateKey::decode_all(&mut &private_key_bytes[..])
         .map_err(|_| Error::InvalidPrivateKeyEncoding)?;
-
-    let receive_funds_pkey = account_privkey
-        .derive_child(RECEIVE_FUNDS_INDEX)
-        .expect("Should not fail to derive key");
-
-    let private_key: PrivateKey = receive_funds_pkey
-        .derive_child(ChildNumber::from_normal(
-            U31::from_u32(key_index).ok_or(Error::InvalidKeyIndex)?,
-        ))
-        .expect("Should not fail to derive key")
-        .private_key();
-
+    let private_key = derive(account_privkey, RECEIVE_FUNDS_INDEX, key_index)?.private_key();
     Ok(private_key.encode())
 }
 
@@ -271,18 +260,7 @@ pub fn make_change_address(private_key_bytes: &[u8], key_index: u32) -> Result<V
 
     let account_privkey = ExtendedPrivateKey::decode_all(&mut &private_key_bytes[..])
         .map_err(|_| Error::InvalidPrivateKeyEncoding)?;
-
-    let change_funds_pkey = account_privkey
-        .derive_child(CHANGE_FUNDS_INDEX)
-        .expect("Should not fail to derive key");
-
-    let private_key: PrivateKey = change_funds_pkey
-        .derive_child(ChildNumber::from_normal(
-            U31::from_u32(key_index).ok_or(Error::InvalidKeyIndex)?,
-        ))
-        .expect("Should not fail to derive key")
-        .private_key();
-
+    let private_key = derive(account_privkey, CHANGE_FUNDS_INDEX, key_index)?.private_key();
     Ok(private_key.encode())
 }
 
@@ -313,6 +291,62 @@ pub fn public_key_from_private_key(private_key: &[u8]) -> Result<Vec<u8>, Error>
         .map_err(|_| Error::InvalidPrivateKeyEncoding)?;
     let public_key = PublicKey::from_private_key(&private_key);
     Ok(public_key.encode())
+}
+
+/// Return the extended public key from an extended private key
+#[wasm_bindgen]
+pub fn extended_public_key_from_extended_private_key(
+    private_key_bytes: &[u8],
+) -> Result<Vec<u8>, Error> {
+    let extended_private_key = ExtendedPrivateKey::decode_all(&mut &private_key_bytes[..])
+        .map_err(|_| Error::InvalidPrivateKeyEncoding)?;
+    let extended_public_key = extended_private_key.to_public_key();
+    Ok(extended_public_key.encode())
+}
+
+/// From an extended public key create a receiving public key for a given key index
+/// derivation path: 44'/mintlayer_coin_type'/0'/0/key_index
+#[wasm_bindgen]
+pub fn make_receiving_address_public_key(
+    extended_public_key_bytes: &[u8],
+    key_index: u32,
+) -> Result<Vec<u8>, Error> {
+    const RECEIVE_FUNDS_INDEX: ChildNumber = ChildNumber::from_normal(U31::from_u32_with_msb(0).0);
+
+    let account_publickey = ExtendedPublicKey::decode_all(&mut &extended_public_key_bytes[..])
+        .map_err(|_| Error::InvalidPrivateKeyEncoding)?;
+    let public_key = derive(account_publickey, RECEIVE_FUNDS_INDEX, key_index)?.into_public_key();
+    Ok(public_key.encode())
+}
+
+/// From an extended public key create a change public key for a given key index
+/// derivation path: 44'/mintlayer_coin_type'/0'/1/key_index
+#[wasm_bindgen]
+pub fn make_change_address_public_key(
+    extended_public_key_bytes: &[u8],
+    key_index: u32,
+) -> Result<Vec<u8>, Error> {
+    const CHANGE_FUNDS_INDEX: ChildNumber = ChildNumber::from_normal(U31::from_u32_with_msb(1).0);
+
+    let account_publickey = ExtendedPublicKey::decode_all(&mut &extended_public_key_bytes[..])
+        .map_err(|_| Error::InvalidPrivateKeyEncoding)?;
+    let public_key = derive(account_publickey, CHANGE_FUNDS_INDEX, key_index)?.into_public_key();
+    Ok(public_key.encode())
+}
+
+fn derive<D: Derivable>(
+    derivable: D,
+    child_number: ChildNumber,
+    key_index: u32,
+) -> Result<D, Error> {
+    let res = derivable
+        .derive_child(child_number)
+        .expect("Should not fail to derive key")
+        .derive_child(ChildNumber::from_normal(
+            U31::from_u32(key_index).ok_or(Error::InvalidKeyIndex)?,
+        ))
+        .expect("Should not fail to derive key");
+    Ok(res)
 }
 
 /// Given a message and a private key, sign the message with the given private key

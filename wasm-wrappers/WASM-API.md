@@ -33,6 +33,20 @@ return the address public key hash from that public key as an address
 
 Given a private key, as bytes, return the bytes of the corresponding public key
 
+### Function: `extended_public_key_from_extended_private_key`
+
+Return the extended public key from an extended private key
+
+### Function: `make_receiving_address_public_key`
+
+From an extended public key create a receiving public key for a given key index
+derivation path: 44'/mintlayer_coin_type'/0'/0/key_index
+
+### Function: `make_change_address_public_key`
+
+From an extended public key create a change public key for a given key index
+derivation path: 44'/mintlayer_coin_type'/0'/1/key_index
+
 ### Function: `sign_message_for_spending`
 
 Given a message and a private key, sign the message with the given private key
