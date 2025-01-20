@@ -15,8 +15,10 @@
 
 use std::sync::Arc;
 
-use chainstate::ChainstateEvent;
+use anyhow::Context as _;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
+
+use chainstate::ChainstateEvent;
 use utils::tap_log::TapLog;
 
 use super::{backend_impl::Backend, messages::BackendEvent};
@@ -32,7 +34,7 @@ impl ChainstateEventHandler {
     pub async fn new(
         chainstate: chainstate::ChainstateHandle,
         event_tx: UnboundedSender<BackendEvent>,
-    ) -> Self {
+    ) -> anyhow::Result<Self> {
         let (chainstate_event_tx, chainstate_event_rx) = unbounded_channel();
         chainstate
             .call_mut(|this| {
@@ -45,14 +47,14 @@ impl ChainstateEventHandler {
                 ));
             })
             .await
-            .expect("Failed to subscribe to chainstate");
+            .context("Error subscribing to chainstate events")?;
 
-        Self {
+        Ok(Self {
             chainstate,
             chainstate_event_rx,
             event_tx,
             chain_info_updated: false,
-        }
+        })
     }
 
     pub async fn run(&mut self) {

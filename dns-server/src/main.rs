@@ -108,7 +108,7 @@ async fn run(options: DnsServerRunOptions) -> anyhow::Result<Never> {
 
     let data_dir = prepare_data_dir(
         || default_data_dir_for_chain(chain_type.name()),
-        &config.datadir,
+        config.datadir.as_ref(),
         None,
     )
     .expect("Failed to prepare data directory");

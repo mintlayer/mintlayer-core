@@ -22,32 +22,36 @@ mod p2p_event_handler;
 mod wallet_events;
 
 mod account_id;
-pub use account_id::AccountId;
 use wallet_types::scan_blockchain::ScanBlockchain;
 
 use std::fmt::Debug;
 use std::sync::Arc;
+
+use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
 use chainstate::ChainInfo;
 use common::{
     address::{Address, AddressError},
     chain::{ChainConfig, Destination},
     primitives::{Amount, BlockHeight},
-    time_getter::TimeGetter,
 };
-use node_lib::{Command, RunOptions};
-use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
+use logging::log;
+use node_lib::OptionsWithResolvedCommand;
 
-use crate::chainstate_event_handler::ChainstateEventHandler;
-use crate::p2p_event_handler::P2pEventHandler;
+use crate::{chainstate_event_handler::ChainstateEventHandler, p2p_event_handler::P2pEventHandler};
 
-use self::error::BackendError;
-use self::messages::{BackendEvent, BackendRequest};
+use self::{
+    error::BackendError,
+    messages::{BackendEvent, BackendRequest},
+};
+
+pub use account_id::AccountId;
 
 #[derive(Debug, Clone, Copy)]
 pub enum InitNetwork {
     Mainnet,
     Testnet,
+    Regtest,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -112,11 +116,16 @@ pub struct InitializedNode {
     pub chain_info: ChainInfo,
 }
 
+#[derive(Debug)]
+pub enum NodeInitializationOutcome {
+    BackendControls(BackendControls),
+    DataDirCleanedUp,
+}
+
 pub async fn node_initialize(
-    _time_getter: TimeGetter,
-    network: InitNetwork,
+    opts: node_lib::OptionsWithResolvedCommand,
     mode: WalletMode,
-) -> anyhow::Result<BackendControls> {
+) -> anyhow::Result<NodeInitializationOutcome> {
     if std::env::var("RUST_LOG").is_err() {
         std::env::set_var(
             "RUST_LOG",
@@ -125,20 +134,14 @@ pub async fn node_initialize(
     }
 
     let opts = {
-        let mut opts = node_lib::Options::from_args(std::env::args_os());
-        let run_opts = {
-            // For the GUI, we configure different defaults, such as disabling RPC server binding
-            // and enabling logging to a file.
-            let mut run_opts =
-                opts.command.map_or(RunOptions::default(), |c| c.run_options().clone());
-            run_opts.rpc_enabled = Some(run_opts.rpc_enabled.unwrap_or(false));
-            run_opts.log_to_file = Some(run_opts.log_to_file.unwrap_or(true));
-            run_opts
-        };
-        opts.command = match network {
-            InitNetwork::Mainnet => Some(Command::Mainnet(run_opts)),
-            InitNetwork::Testnet => Some(Command::Testnet(run_opts)),
-        };
+        let mut opts = opts;
+        let run_opts = opts.command.run_options_mut();
+
+        // For the GUI, we configure different defaults, such as disabling RPC server binding
+        // and enabling logging to a file.
+        run_opts.rpc_enabled = Some(run_opts.rpc_enabled.unwrap_or(false));
+        opts.top_level.log_to_file = Some(opts.top_level.log_to_file.unwrap_or(true));
+
         opts
     };
 
@@ -153,8 +156,7 @@ pub async fn node_initialize(
             let node = match setup_result {
                 node_lib::NodeSetupResult::Node(node) => node,
                 node_lib::NodeSetupResult::DataDirCleanedUp => {
-                    // TODO: find more friendly way to report the message and shut down GUI
-                    anyhow::bail!("Data directory is now clean. Please restart the node without `--clean-data` flag");
+                    return Ok(NodeInitializationOutcome::DataDirCleanedUp);
                 }
             };
 
@@ -164,9 +166,10 @@ pub async fn node_initialize(
 
             // Subscribe to chainstate before getting the current chain_info!
             let chainstate_event_handler =
-                ChainstateEventHandler::new(controller.chainstate.clone(), event_tx.clone()).await;
+                ChainstateEventHandler::new(controller.chainstate.clone(), event_tx.clone())
+                    .await?;
 
-            let p2p_event_handler = P2pEventHandler::new(&controller.p2p, event_tx.clone()).await;
+            let p2p_event_handler = P2pEventHandler::new(&controller.p2p, event_tx.clone()).await?;
 
             let chain_config =
                 controller.chainstate.call(|this| Arc::clone(this.get_chain_config())).await?;
@@ -193,35 +196,14 @@ pub async fn node_initialize(
             });
             (chain_config, chain_info)
         }
-        WalletMode::Cold => {
-            let chain_config = Arc::new(match network {
-                InitNetwork::Mainnet => common::chain::config::create_mainnet(),
-                InitNetwork::Testnet => common::chain::config::create_testnet(),
-            });
-            let chain_info = ChainInfo {
-                best_block_id: chain_config.genesis_block_id(),
-                best_block_height: BlockHeight::zero(),
-                median_time: chain_config.genesis_block().timestamp(),
-                best_block_timestamp: chain_config.genesis_block().timestamp(),
-                is_initial_block_download: false,
-            };
-
-            let manager_join_handle = tokio::spawn(async move {});
-
-            let backend = backend_impl::Backend::new_cold(
-                chain_config.clone(),
-                event_tx,
-                low_priority_event_tx,
-                wallet_updated_tx,
-                manager_join_handle,
-            );
-
-            tokio::spawn(async move {
-                backend_impl::run_cold(backend, request_rx, wallet_updated_rx).await;
-            });
-
-            (chain_config, chain_info)
-        }
+        WalletMode::Cold => spawn_cold_backend(
+            opts,
+            event_tx,
+            request_rx,
+            low_priority_event_tx,
+            wallet_updated_tx,
+            wallet_updated_rx,
+        )?,
     };
 
     let initialized_node = InitializedNode {
@@ -236,5 +218,57 @@ pub async fn node_initialize(
         low_priority_backend_receiver: low_priority_event_rx,
     };
 
-    Ok(backend_controls)
+    Ok(NodeInitializationOutcome::BackendControls(backend_controls))
+}
+
+fn spawn_cold_backend(
+    options: OptionsWithResolvedCommand,
+    event_tx: UnboundedSender<BackendEvent>,
+    request_rx: UnboundedReceiver<BackendRequest>,
+    low_priority_event_tx: UnboundedSender<BackendEvent>,
+    wallet_updated_tx: UnboundedSender<messages::WalletId>,
+    wallet_updated_rx: UnboundedReceiver<messages::WalletId>,
+) -> anyhow::Result<(Arc<ChainConfig>, ChainInfo)> {
+    logging::init_logging();
+
+    let chain_config = Arc::new(handle_options_in_cold_wallet_mode(options)?);
+    let chain_info = ChainInfo {
+        best_block_id: chain_config.genesis_block_id(),
+        best_block_height: BlockHeight::zero(),
+        median_time: chain_config.genesis_block().timestamp(),
+        best_block_timestamp: chain_config.genesis_block().timestamp(),
+        is_initial_block_download: false,
+    };
+
+    let manager_join_handle = tokio::spawn(async move {});
+
+    let backend = backend_impl::Backend::new_cold(
+        chain_config.clone(),
+        event_tx,
+        low_priority_event_tx,
+        wallet_updated_tx,
+        manager_join_handle,
+    );
+
+    tokio::spawn(async move {
+        backend_impl::run_cold(backend, request_rx, wallet_updated_rx).await;
+    });
+
+    Ok((chain_config, chain_info))
+}
+
+fn handle_options_in_cold_wallet_mode(
+    options: OptionsWithResolvedCommand,
+) -> anyhow::Result<ChainConfig> {
+    if options.clean_data_option_set() {
+        log::warn!("Ignoring clean-data option in cold wallet mode");
+    }
+
+    if options.log_to_file_option_set() {
+        log::warn!("Log-to-file disabled in cold wallet mode");
+    }
+
+    // TODO: check all other options?
+
+    options.command.create_chain_config()
 }

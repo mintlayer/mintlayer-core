@@ -23,7 +23,12 @@ use std::{
 };
 
 use clap::{Args, Parser, Subcommand};
-use common::chain::config::{regtest_options::ChainConfigOptions, ChainType};
+
+use chainstate_launcher::ChainConfig;
+use common::chain::config::{
+    regtest_options::{regtest_chain_config, ChainConfigOptions},
+    ChainType,
+};
 use utils::{
     clap_utils, default_data_dir::default_data_dir_common, root_user::ForceRunAsRootOptions,
 };
@@ -36,10 +41,52 @@ const CONFIG_NAME: &str = "config.toml";
 /// Mintlayer node executable
 // Note: this struct is shared between different node executables, namely, node-daemon and node-gui,
 // so the env vars for both of them will use the same infix; this is intended.
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Clone)]
 #[clap(mut_args(clap_utils::env_adder("NODE")))]
 #[clap(author, version, about)]
 pub struct Options {
+    #[clap(flatten)]
+    pub top_level: TopLevelOptions,
+
+    #[clap(subcommand)]
+    pub command: Option<Command>,
+}
+
+impl Options {
+    /// Constructs an instance by parsing the given arguments.
+    pub fn from_args<A: Into<OsString> + Clone>(args: impl IntoIterator<Item = A>) -> Self {
+        Parser::parse_from(args)
+    }
+
+    /// Returns a different representation of `self`, where `command` is no longer optional.
+    pub fn with_resolved_command(self) -> OptionsWithResolvedCommand {
+        OptionsWithResolvedCommand {
+            top_level: self.top_level,
+            command: self.command.unwrap_or(Command::Mainnet(RunOptions::default())),
+        }
+    }
+}
+
+/// Same as `Options`, but with non-optional `command`.
+#[derive(Debug, Clone)]
+pub struct OptionsWithResolvedCommand {
+    pub top_level: TopLevelOptions,
+    pub command: Command,
+}
+
+impl OptionsWithResolvedCommand {
+    pub fn clean_data_option_set(&self) -> bool {
+        self.command.run_options().clean_data.unwrap_or(false)
+    }
+
+    pub fn log_to_file_option_set(&self) -> bool {
+        self.top_level.log_to_file.is_some_and(|log_to_file| log_to_file)
+    }
+}
+
+/// The top-level options
+#[derive(Parser, Debug, Clone)]
+pub struct TopLevelOptions {
     /// The path to the data directory.
     #[clap(short, long = "datadir")]
     pub data_dir: Option<PathBuf>,
@@ -49,8 +96,26 @@ pub struct Options {
     #[clap(long = "create-datadir-if-missing", value_name = "VAL")]
     pub create_data_dir_if_missing: Option<bool>,
 
-    #[clap(subcommand)]
-    pub command: Option<Command>,
+    /// Log to a file.
+    ///
+    /// If enabled, application logs will also be written to a file inside the "logs" subdirectory
+    /// of the data directory.
+    /// The file will be rotated based on size.
+    /// The log level used in this case doesn't depend on the RUST_LOG env variable and is always INFO.
+    ///
+    /// By default, the option is enabled for node-gui and disabled for node-daemon.
+    #[clap(long, action = clap::ArgAction::Set)]
+    pub log_to_file: Option<bool>,
+}
+
+impl TopLevelOptions {
+    /// Returns a path to the config file
+    pub fn config_path(&self, chain_type: ChainType) -> PathBuf {
+        self.data_dir
+            .clone()
+            .unwrap_or_else(|| default_data_dir(chain_type))
+            .join(CONFIG_NAME)
+    }
 }
 
 #[derive(Subcommand, Clone, Debug)]
@@ -73,9 +138,36 @@ impl Command {
             Command::Regtest(regtest_options) => &regtest_options.run_options,
         }
     }
+
+    pub fn run_options_mut(&mut self) -> &mut RunOptions {
+        match self {
+            Command::Mainnet(run_options) | Command::Testnet(run_options) => run_options,
+            Command::Regtest(regtest_options) => &mut regtest_options.run_options,
+        }
+    }
+
+    pub fn create_chain_config(&self) -> anyhow::Result<ChainConfig> {
+        let chain_config = match self {
+            Command::Mainnet(_) => common::chain::config::create_mainnet(),
+            Command::Testnet(_) => common::chain::config::create_testnet(),
+            Command::Regtest(regtest_options) => {
+                regtest_chain_config(&regtest_options.chain_config)?
+            }
+        };
+
+        Ok(chain_config)
+    }
+
+    pub fn chain_type(&self) -> ChainType {
+        match self {
+            Command::Mainnet(_) => ChainType::Mainnet,
+            Command::Testnet(_) => ChainType::Testnet,
+            Command::Regtest(_) => ChainType::Regtest,
+        }
+    }
 }
 
-#[derive(Args, Clone, Debug)]
+#[derive(Args, Clone, Debug, Default)]
 pub struct RegtestOptions {
     #[clap(flatten)]
     pub run_options: RunOptions,
@@ -85,13 +177,9 @@ pub struct RegtestOptions {
 
 #[derive(Args, Clone, Debug, Default)]
 pub struct RunOptions {
-    /// A flag that will clean the data dir before starting
+    /// If specified, the application will clean the data directory and exit immediately.
     #[clap(long, short, action = clap::ArgAction::SetTrue)]
     pub clean_data: Option<bool>,
-
-    /// Log to a file
-    #[clap(long, action = clap::ArgAction::Set)]
-    pub log_to_file: Option<bool>,
 
     /// Minimum number of connected peers to enable block production.
     #[clap(long, value_name = "COUNT")]
@@ -255,29 +343,6 @@ pub struct RunOptions {
     /// Defaults to true for regtest and false in other cases.
     #[clap(long, value_name = "VAL")]
     pub enable_chainstate_heavy_checks: Option<bool>,
-}
-
-impl Options {
-    /// Constructs an instance by parsing the given arguments.
-    ///
-    /// The data directory is created as a side-effect of the invocation.
-    /// Process is terminated on error.
-    pub fn from_args<A: Into<OsString> + Clone>(args: impl IntoIterator<Item = A>) -> Self {
-        Parser::parse_from(args)
-    }
-
-    /// Returns the data directory
-    pub fn data_dir(&self) -> &Option<PathBuf> {
-        &self.data_dir
-    }
-
-    /// Returns a path to the config file
-    pub fn config_path(&self, chain_type: ChainType) -> PathBuf {
-        self.data_dir
-            .clone()
-            .unwrap_or_else(|| default_data_dir(chain_type))
-            .join(CONFIG_NAME)
-    }
 }
 
 pub fn default_data_dir(chain_type: ChainType) -> PathBuf {

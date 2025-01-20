@@ -21,18 +21,23 @@ mod widgets;
 use std::convert::identity;
 use std::env;
 
-use common::time_getter::TimeGetter;
-use iced::advanced::graphics::core::window;
-use iced::widget::{column, row, text, tooltip, Text};
-use iced::{executor, Element, Length, Settings, Task, Theme};
-use iced::{font, Subscription};
+use heck::ToUpperCamelCase as _;
+use iced::{
+    advanced::graphics::core::window,
+    executor, font,
+    widget::{column, row, text, tooltip, Text},
+    Element, Length, Settings, Subscription, Task, Theme,
+};
 use iced_aw::widgets::spinner::Spinner;
+use tokio::sync::mpsc::UnboundedReceiver;
+
+use common::chain::config::ChainType;
 use main_window::{MainWindow, MainWindowMessage};
 use node_gui_backend::{
     messages::{BackendEvent, BackendRequest},
-    node_initialize, BackendControls, BackendSender, InitNetwork, WalletMode,
+    node_initialize, BackendControls, BackendSender, InitNetwork, NodeInitializationOutcome,
+    WalletMode,
 };
-use tokio::sync::mpsc::UnboundedReceiver;
 
 const COLD_WALLET_TOOLTIP_TEXT: &str =
     "Start the wallet in Cold mode without connecting to the network or any nodes. The Cold mode is made to run the wallet on an air-gapped machine without internet connection for storage of keys of high-value. For example, pool decommission keys.";
@@ -43,6 +48,8 @@ const TEST_NETWORK_TOOLTIP: &str = "The 'Testnet' is the network with coins that
 
 pub fn main() -> iced::Result {
     utils::rust_backtrace::enable();
+
+    let initial_opts = node_lib::Options::from_args(std::env::args_os());
 
     iced::application(title, update, view)
         .executor::<executor::Default>()
@@ -58,16 +65,43 @@ pub fn main() -> iced::Result {
             ..Settings::default()
         })
         .font(iced_fonts::REQUIRED_FONT_BYTES)
-        .run_with(initialize)
+        .run_with(|| initialize(initial_opts))
 }
 
-enum MintlayerNodeGUI {
-    Initial,
-    SelectNetwork,
-    SelectWalletMode(InitNetwork),
-    Loading(WalletMode),
-    Loaded(BackendSender, MainWindow),
-    IntializationError(String),
+enum GuiState {
+    Initial {
+        initial_options: node_lib::Options,
+    },
+    SelectNetwork {
+        top_level_options: node_lib::TopLevelOptions,
+    },
+    SelectWalletMode {
+        resolved_options: node_lib::OptionsWithResolvedCommand,
+    },
+    Loading {
+        wallet_mode: WalletMode,
+        chain_type: ChainType,
+    },
+    Loaded {
+        backend_sender: BackendSender,
+        main_window: MainWindow,
+    },
+    InitializationInterrupted(InitializationInterruptionReason),
+}
+
+impl From<InitializationFailure> for GuiState {
+    fn from(value: InitializationFailure) -> Self {
+        Self::InitializationInterrupted(InitializationInterruptionReason::Failure(value))
+    }
+}
+
+enum InitializationInterruptionReason {
+    Failure(InitializationFailure),
+    DataDirCleanedUp,
+}
+
+struct InitializationFailure {
+    message: String,
 }
 
 #[derive(Debug)]
@@ -79,46 +113,86 @@ pub enum Message {
         UnboundedReceiver<BackendEvent>,
         BackendEvent,
     ),
-    Loaded(anyhow::Result<BackendControls>),
+    Loaded(anyhow::Result<NodeInitializationOutcome>),
     FontLoaded(Result<(), font::Error>),
     EventOccurred(iced::Event),
     ShuttingDownFinished,
     MainWindowMessage(MainWindowMessage),
 }
 
-fn initialize() -> (MintlayerNodeGUI, Task<Message>) {
+fn initialize(initial_options: node_lib::Options) -> (GuiState, Task<Message>) {
     (
-        MintlayerNodeGUI::Initial,
+        GuiState::Initial { initial_options },
         font::load(iced_fonts::BOOTSTRAP_FONT_BYTES).map(Message::FontLoaded),
     )
 }
 
-fn title(state: &MintlayerNodeGUI) -> String {
+fn chain_type_to_string(chain_type: ChainType) -> String {
+    chain_type.name().to_upper_camel_case()
+}
+
+fn title(state: &GuiState) -> String {
     let version = env!("CARGO_PKG_VERSION");
     match state {
-        MintlayerNodeGUI::Initial => "Mintlayer Node - Initializing...".to_string(),
-        MintlayerNodeGUI::SelectNetwork => "Mintlayer Node - Selecting network...".to_string(),
-        MintlayerNodeGUI::SelectWalletMode(_) => "Mintlayer Node - Selecting mode...".to_string(),
-        MintlayerNodeGUI::Loading(_) => "Mintlayer Node - Loading...".to_string(),
-        MintlayerNodeGUI::Loaded(_backend_sender, w) => {
+        GuiState::Initial { .. } => "Mintlayer Node - Initializing...".into(),
+        GuiState::SelectNetwork { .. } => "Mintlayer Node - Selecting network...".into(),
+        GuiState::SelectWalletMode { resolved_options } => {
             format!(
-                "Mintlayer Node - {} - v{version}",
-                w.node_state().chain_config().chain_type().name()
+                "Mintlayer Node - {} - Selecting mode...",
+                chain_type_to_string(resolved_options.command.chain_type())
             )
         }
-        MintlayerNodeGUI::IntializationError(_) => "Mintlayer initialization error".to_string(),
+        GuiState::Loading {
+            wallet_mode: _,
+            chain_type,
+        } => format!(
+            "Mintlayer Node - {} - Loading...",
+            chain_type_to_string(*chain_type)
+        ),
+        GuiState::Loaded {
+            backend_sender: _,
+            main_window,
+        } => {
+            format!(
+                "Mintlayer Node - {} - v{version}",
+                chain_type_to_string(*main_window.node_state().chain_config().chain_type())
+            )
+        }
+        GuiState::InitializationInterrupted(reason) => match reason {
+            InitializationInterruptionReason::Failure(_) => "Mintlayer initialization error".into(),
+            InitializationInterruptionReason::DataDirCleanedUp => {
+                "Mintlayer data directory cleaned up".into()
+            }
+        },
     }
 }
 
-fn update(state: &mut MintlayerNodeGUI, message: Message) -> Task<Message> {
+fn update(state: &mut GuiState, message: Message) -> Task<Message> {
     match state {
-        MintlayerNodeGUI::Initial => match message {
+        GuiState::Initial { initial_options } => match message {
             Message::FontLoaded(Ok(())) => {
-                *state = MintlayerNodeGUI::SelectNetwork;
+                match &initial_options.command {
+                    Some(command) => {
+                        *state = GuiState::SelectWalletMode {
+                            resolved_options: node_lib::OptionsWithResolvedCommand {
+                                top_level: initial_options.top_level.clone(),
+                                command: command.clone(),
+                            },
+                        };
+                    }
+                    None => {
+                        *state = GuiState::SelectNetwork {
+                            top_level_options: initial_options.top_level.clone(),
+                        };
+                    }
+                }
                 Task::none()
             }
             Message::FontLoaded(Err(_)) => {
-                *state = MintlayerNodeGUI::IntializationError("Failed to load font".into());
+                *state = InitializationFailure {
+                    message: "Failed to load font".into(),
+                }
+                .into();
                 Task::none()
             }
             Message::ShuttingDownFinished => {
@@ -138,9 +212,19 @@ fn update(state: &mut MintlayerNodeGUI, message: Message) -> Task<Message> {
             | Message::FromBackend(_, _, _)
             | Message::MainWindowMessage(_) => unreachable!(),
         },
-        MintlayerNodeGUI::SelectNetwork => match message {
+        GuiState::SelectNetwork { top_level_options } => match message {
             Message::InitNetwork(init) => {
-                *state = MintlayerNodeGUI::SelectWalletMode(init);
+                let opts = node_lib::OptionsWithResolvedCommand {
+                    top_level: top_level_options.clone(),
+                    command: match init {
+                        InitNetwork::Mainnet => node_lib::Command::Mainnet(Default::default()),
+                        InitNetwork::Testnet => node_lib::Command::Testnet(Default::default()),
+                        InitNetwork::Regtest => node_lib::Command::Regtest(Default::default()),
+                    },
+                };
+                *state = GuiState::SelectWalletMode {
+                    resolved_options: opts,
+                };
                 Task::none()
             }
             Message::ShuttingDownFinished => {
@@ -160,16 +244,17 @@ fn update(state: &mut MintlayerNodeGUI, message: Message) -> Task<Message> {
             | Message::FromBackend(_, _, _)
             | Message::MainWindowMessage(_) => unreachable!(),
         },
-        MintlayerNodeGUI::SelectWalletMode(init) => {
-            let init = *init;
+        GuiState::SelectWalletMode { resolved_options } => {
             match message {
                 Message::InitWalletMode(mode) => {
-                    *state = MintlayerNodeGUI::Loading(mode);
+                    let opts = resolved_options.clone();
 
-                    Task::perform(
-                        node_initialize(TimeGetter::default(), init, mode),
-                        Message::Loaded,
-                    )
+                    *state = GuiState::Loading {
+                        wallet_mode: mode,
+                        chain_type: opts.command.chain_type(),
+                    };
+
+                    Task::perform(node_initialize(opts, mode), Message::Loaded)
                 }
                 Message::ShuttingDownFinished => {
                     iced::window::get_latest().and_then(iced::window::close)
@@ -189,30 +274,50 @@ fn update(state: &mut MintlayerNodeGUI, message: Message) -> Task<Message> {
                 | Message::MainWindowMessage(_) => unreachable!(),
             }
         }
-        MintlayerNodeGUI::Loading(mode) => match message {
+        GuiState::Loading {
+            wallet_mode,
+            chain_type: _,
+        } => match message {
             Message::InitNetwork(_)
             | Message::InitWalletMode(_)
             | Message::FromBackend(_, _, _) => unreachable!(),
-            Message::Loaded(Ok(backend_controls)) => {
-                let BackendControls {
-                    initialized_node,
-                    backend_sender,
-                    backend_receiver,
-                    low_priority_backend_receiver,
-                } = backend_controls;
-                *state = MintlayerNodeGUI::Loaded(
-                    backend_sender,
-                    MainWindow::new(initialized_node, *mode),
-                );
-                recv_backend_command(backend_receiver, low_priority_backend_receiver)
-            }
+            Message::Loaded(Ok(init_outcome)) => match init_outcome {
+                NodeInitializationOutcome::BackendControls(backend_controls) => {
+                    let BackendControls {
+                        initialized_node,
+                        backend_sender,
+                        backend_receiver,
+                        low_priority_backend_receiver,
+                    } = backend_controls;
+                    *state = GuiState::Loaded {
+                        backend_sender,
+                        main_window: MainWindow::new(initialized_node, *wallet_mode),
+                    };
+
+                    recv_backend_command(backend_receiver, low_priority_backend_receiver)
+                }
+                NodeInitializationOutcome::DataDirCleanedUp => {
+                    *state = GuiState::InitializationInterrupted(
+                        InitializationInterruptionReason::DataDirCleanedUp,
+                    );
+                    Task::none()
+                }
+            },
             Message::Loaded(Err(e)) => {
-                *state = MintlayerNodeGUI::IntializationError(e.to_string());
+                *state = InitializationFailure {
+                    // Note: we need to use the alternate selector in order to show both anyhow::Error's context
+                    // and the original error message.
+                    message: format!("{e:#}"),
+                }
+                .into();
                 Task::none()
             }
             Message::FontLoaded(status) => {
                 if status.is_err() {
-                    *state = MintlayerNodeGUI::IntializationError("Failed to load font".into());
+                    *state = InitializationFailure {
+                        message: "Failed to load font".into(),
+                    }
+                    .into();
                 }
                 Task::none()
             }
@@ -227,17 +332,21 @@ fn update(state: &mut MintlayerNodeGUI, message: Message) -> Task<Message> {
             Message::ShuttingDownFinished => Task::none(),
             Message::MainWindowMessage(_) => Task::none(),
         },
-        MintlayerNodeGUI::Loaded(backend_sender, w) => match message {
+        GuiState::Loaded {
+            backend_sender,
+            main_window,
+        } => match message {
             Message::FromBackend(
                 backend_receiver,
                 low_priority_backend_receiver,
                 backend_event,
             ) => Task::batch([
-                w.update(
-                    MainWindowMessage::FromBackend(backend_event),
-                    backend_sender,
-                )
-                .map(Message::MainWindowMessage),
+                main_window
+                    .update(
+                        MainWindowMessage::FromBackend(backend_event),
+                        backend_sender,
+                    )
+                    .map(Message::MainWindowMessage),
                 recv_backend_command(backend_receiver, low_priority_backend_receiver),
             ]),
             Message::InitNetwork(_) | Message::InitWalletMode(_) | Message::Loaded(_) => {
@@ -245,7 +354,10 @@ fn update(state: &mut MintlayerNodeGUI, message: Message) -> Task<Message> {
             }
             Message::FontLoaded(status) => {
                 if status.is_err() {
-                    *state = MintlayerNodeGUI::IntializationError("Failed to load font".into());
+                    *state = InitializationFailure {
+                        message: "Failed to load font".into(),
+                    }
+                    .into();
                 }
                 Task::none()
             }
@@ -262,10 +374,10 @@ fn update(state: &mut MintlayerNodeGUI, message: Message) -> Task<Message> {
                 iced::window::get_latest().and_then(iced::window::close)
             }
             Message::MainWindowMessage(msg) => {
-                w.update(msg, backend_sender).map(Message::MainWindowMessage)
+                main_window.update(msg, backend_sender).map(Message::MainWindowMessage)
             }
         },
-        MintlayerNodeGUI::IntializationError(_) => match message {
+        GuiState::InitializationInterrupted { .. } => match message {
             Message::InitNetwork(_)
             | Message::InitWalletMode(_)
             | Message::FromBackend(_, _, _) => unreachable!(),
@@ -286,12 +398,12 @@ fn update(state: &mut MintlayerNodeGUI, message: Message) -> Task<Message> {
     }
 }
 
-fn view(state: &MintlayerNodeGUI) -> Element<Message> {
+fn view(state: &GuiState) -> Element<Message> {
     match state {
-        MintlayerNodeGUI::Initial => {
+        GuiState::Initial { .. } => {
             iced::widget::text("Loading fonts...".to_string()).size(32).into()
         }
-        MintlayerNodeGUI::SelectNetwork => {
+        GuiState::SelectNetwork { .. } => {
             let error_box = column![
                 iced::widget::text("Please choose the network you want to use".to_string())
                     .size(32),
@@ -327,7 +439,7 @@ fn view(state: &MintlayerNodeGUI) -> Element<Message> {
             res.map(Message::InitNetwork)
         }
 
-        MintlayerNodeGUI::SelectWalletMode(_) => {
+        GuiState::SelectWalletMode { .. } => {
             let error_box = column![
                 iced::widget::text("Please choose the wallet mode".to_string()).size(32),
                 row![
@@ -362,21 +474,39 @@ fn view(state: &MintlayerNodeGUI) -> Element<Message> {
             res.map(Message::InitWalletMode)
         }
 
-        MintlayerNodeGUI::Loading(_) => {
+        GuiState::Loading { .. } => {
             iced::widget::container(Spinner::new().width(Length::Fill).height(Length::Fill)).into()
         }
 
-        MintlayerNodeGUI::Loaded(_backend_sender, w) => w.view().map(Message::MainWindowMessage),
+        GuiState::Loaded {
+            backend_sender: _,
+            main_window,
+        } => main_window.view().map(Message::MainWindowMessage),
 
-        MintlayerNodeGUI::IntializationError(e) => {
-            let error_box = column![
-                iced::widget::text("Mintlayer-core node initialization failed".to_string())
-                    .size(32),
-                iced::widget::text(e.to_string()).size(20),
-                iced::widget::button(text("Close")).on_press(())
-            ]
-            .align_x(iced::Alignment::Center)
-            .spacing(5);
+        GuiState::InitializationInterrupted(reason) => {
+            let header_font_size = 32;
+            let text_font_size = 20;
+
+            let error_box = match reason {
+                InitializationInterruptionReason::Failure(InitializationFailure { message }) => {
+                    column![
+                        iced::widget::text("Mintlayer-core node initialization failed".to_string())
+                            .size(header_font_size),
+                        iced::widget::text(message.to_string()).size(text_font_size)
+                    ]
+                }
+                InitializationInterruptionReason::DataDirCleanedUp => {
+                    column![
+                        iced::widget::text("Data directory is now clean").size(header_font_size),
+                        iced::widget::text("Please restart the node without `--clean-data` flag")
+                            .size(text_font_size)
+                    ]
+                }
+            };
+            let error_box = error_box
+                .extend([iced::widget::button(text("Close")).on_press(()).into()])
+                .align_x(iced::Alignment::Center)
+                .spacing(5);
 
             let res: Element<()> = iced::widget::container(error_box).center(Length::Fill).into();
 
@@ -385,11 +515,11 @@ fn view(state: &MintlayerNodeGUI) -> Element<Message> {
     }
 }
 
-fn theme(_state: &MintlayerNodeGUI) -> Theme {
+fn theme(_state: &GuiState) -> Theme {
     Theme::Light
 }
 
-fn subscription(_state: &MintlayerNodeGUI) -> Subscription<Message> {
+fn subscription(_state: &GuiState) -> Subscription<Message> {
     iced::event::listen().map(Message::EventOccurred)
 }
 

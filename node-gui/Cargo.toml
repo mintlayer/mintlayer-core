@@ -27,6 +27,7 @@ wallet-cli-commands = { path = "../wallet/wallet-cli-commands"}
 anyhow.workspace = true
 chrono.workspace = true
 futures.workspace = true
+heck.workspace = true
 iced = { workspace = true, features = ["canvas", "debug", "tokio", "lazy"] }
 iced_aw = { workspace = true }
 iced_fonts = { workspace = true, features = ["bootstrap"] }

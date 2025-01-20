@@ -36,7 +36,7 @@ use super::{regtest::GenesisStakingSettings, ChainConfig};
 use anyhow::{anyhow, ensure, Result};
 use paste::paste;
 
-#[derive(Args, Clone, Debug)]
+#[derive(Args, Clone, Debug, Default)]
 pub struct ChainConfigOptions {
     /// Magic bytes.
     #[clap(long)]
