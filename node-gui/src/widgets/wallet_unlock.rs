@@ -43,7 +43,7 @@ where
 
     let password = text_input("Password", &state.password)
         .secure(true)
-        .on_input_maybe(state.unlocking.then_some(on_edit_password));
+        .on_input_maybe((!state.unlocking).then_some(on_edit_password));
 
     Card::new(
         Text::new("Unlock"),

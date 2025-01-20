@@ -15,8 +15,8 @@
 
 use iced::{
     alignment::Horizontal,
-    widget::{container, text, text_input, Button, Text},
-    Length,
+    widget::{container, text, text_input, Button, Row, Text},
+    Element, Length,
 };
 use iced_aw::Card;
 
@@ -26,6 +26,7 @@ pub fn wallet_mnemonic_dialog<'a, Message, F>(
     on_import: Message,
     on_mnemonic_change: F,
     on_close: Message,
+    on_copy_to_clipboard: Message,
 ) -> Card<'a, Message>
 where
     Message: Clone + 'a,
@@ -50,13 +51,31 @@ where
         )
         .foot(container(text("Loading...")).center_x(Length::Fill))
     } else {
-        Card::new(
-            Text::new(action_text),
-            iced::widget::column![text_input("Mnemonic", &mnemonic)
+        let body: Element<_> = if generated_mnemonic_opt.is_none() {
+            text_input("Mnemonic", &mnemonic)
+                // only enable edit if there is not pre-generated mnemonic
                 .on_input(on_mnemonic_change)
-                .padding(15)],
-        )
-        .foot(container(button).center_x(Length::Fill))
+                .padding(15)
+                .into()
+        } else {
+            Row::new()
+                .push(text(mnemonic))
+                .push(
+                    Button::new(
+                        Text::new(iced_fonts::Bootstrap::ClipboardCheck.to_string())
+                            .font(iced_fonts::BOOTSTRAP_FONT),
+                    )
+                    .style(iced::widget::button::text)
+                    // .width(20)
+                    // .height(20)
+                    .on_press(on_copy_to_clipboard),
+                )
+                .spacing(10)
+                .padding(15)
+                .into()
+        };
+
+        Card::new(Text::new(action_text), body).foot(container(button).center_x(Length::Fill))
     }
     .max_width(600.0)
     .on_close(on_close)
@@ -69,6 +88,13 @@ pub struct ImportState {
 }
 
 impl ImportState {
+    pub fn new_importing(entered_mnemonic: String) -> Self {
+        Self {
+            entered_mnemonic,
+            importing: true,
+        }
+    }
+
     pub fn with_changed_mnemonic(&self, new_mnemonic: String) -> Self {
         Self {
             entered_mnemonic: new_mnemonic,

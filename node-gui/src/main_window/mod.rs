@@ -21,7 +21,10 @@ use common::{
     primitives::{per_thousand::PerThousand, semver::SemVer, user_agent::UserAgent, Amount},
 };
 use iced::{
-    widget::{center, Stack, Text},
+    widget::{
+        button::{Button, Style},
+        center, text, Stack, Text,
+    },
     Element, Length, Task,
 };
 use logging::log;
@@ -219,6 +222,7 @@ pub enum MainWindowMessage {
     CopyToClipboard(String),
     ClosePopup,
     CloseDialog,
+    IgnoreEvent,
 }
 
 impl MainWindow {
@@ -411,12 +415,12 @@ impl MainWindow {
                     let wallet_type = wallet_info.wallet_type;
                     self.node_state.wallets.insert(wallet_id, wallet_info);
 
-                    Task::perform(async {}, move |_| {
-                        MainWindowMessage::MainWidgetMessage(MainWidgetMessage::WalletAdded {
+                    Task::done(MainWindowMessage::MainWidgetMessage(
+                        MainWidgetMessage::WalletAdded {
                             wallet_id,
                             wallet_type,
-                        })
-                    })
+                        },
+                    ))
                 }
 
                 BackendEvent::OpenWallet(Err(error)) | BackendEvent::ImportWallet(Err(error)) => {
@@ -726,6 +730,17 @@ impl MainWindow {
                 import,
                 wallet_type,
             } => {
+                self.active_dialog = match import {
+                    ImportOrCreate::Create => ActiveDialog::WalletCreate {
+                        generated_mnemonic: mnemonic.clone(),
+                        wallet_type,
+                        state: ImportState::new_importing(String::new()),
+                    },
+                    ImportOrCreate::Import => ActiveDialog::WalletRecover {
+                        wallet_type,
+                        state: ImportState::new_importing(mnemonic.to_string()),
+                    },
+                };
                 self.file_dialog_active = false;
                 backend_sender.send(BackendRequest::RecoverWallet {
                     mnemonic,
@@ -771,6 +786,13 @@ impl MainWindow {
                 wallet_id,
                 password,
             } => {
+                self.active_dialog = ActiveDialog::WalletUnlock {
+                    wallet_id,
+                    state: UnlockState {
+                        password: password.clone(),
+                        unlocking: true,
+                    },
+                };
                 backend_sender.send(BackendRequest::UpdateEncryption {
                     wallet_id,
                     action: EncryptionAction::Unlock(password),
@@ -803,6 +825,8 @@ impl MainWindow {
                 self.active_dialog = ActiveDialog::None;
                 Task::none()
             }
+
+            MainWindowMessage::IgnoreEvent => Task::none(),
         }
     }
 
@@ -815,6 +839,19 @@ impl MainWindow {
             // TODO: workaround for the tabview component not accounting for the tab labels height
             iced::widget::Column::new().height(70),
         ];
+
+        let overlay = || {
+            Button::new(text(""))
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .style(|_theme, _status| Style {
+                    background: Some(iced::Background::Color(iced::Color::TRANSPARENT)),
+                    text_color: iced::Color::BLACK,
+                    ..Style::default()
+                })
+                .on_press(MainWindowMessage::IgnoreEvent)
+                .into()
+        };
 
         let show_dialog = self.active_dialog != ActiveDialog::None;
         let dialog = show_dialog
@@ -832,11 +869,7 @@ impl MainWindow {
                             Some(generated_mnemonic.clone()),
                             state.clone(),
                             MainWindowMessage::ImportWalletMnemonic {
-                                mnemonic: if state.entered_mnemonic.is_empty() {
-                                    generated_mnemonic.to_string()
-                                } else {
-                                    state.entered_mnemonic.clone()
-                                },
+                                mnemonic: generated_mnemonic.to_string(),
                                 import: ImportOrCreate::Create,
                                 wallet_type,
                             },
@@ -845,6 +878,7 @@ impl MainWindow {
                                 state: state.with_changed_mnemonic(mnemonic),
                             },
                             MainWindowMessage::CloseDialog,
+                            MainWindowMessage::CopyToClipboard(generated_mnemonic.to_string()),
                         )
                         .into()
                     }
@@ -864,6 +898,7 @@ impl MainWindow {
                                 state: state.with_changed_mnemonic(mnemonic),
                             },
                             MainWindowMessage::CloseDialog,
+                            MainWindowMessage::CopyToClipboard(state.entered_mnemonic.clone()),
                         )
                         .into()
                     }
@@ -940,7 +975,7 @@ impl MainWindow {
                     }
                 }
             })
-            .map(|d| center(d).into());
+            .map(|d| [overlay(), center(d).into()]);
 
         let popup_opt = self.popups.last();
         let show_popup = popup_opt.is_some() || self.file_dialog_active;
@@ -954,11 +989,16 @@ impl MainWindow {
                     (_, None) => Text::new("Nothing to show").into(),
                 }
             })
-            .map(|d| center(d).into());
+            .map(|d| [overlay(), center(d).into()]);
 
-        Stack::with_children([main_content.into()].into_iter().chain(dialog).chain(popup))
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .into()
+        Stack::with_children(
+            [main_content.into()]
+                .into_iter()
+                .chain(dialog.into_iter().flatten())
+                .chain(popup.into_iter().flatten()),
+        )
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .into()
     }
 }

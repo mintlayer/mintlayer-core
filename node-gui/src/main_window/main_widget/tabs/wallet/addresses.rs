@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use iced::{
-    widget::{button, column, container, row, tooltip, Text},
+    widget::{button, column, row, tooltip, Text},
     Element,
 };
 use iced_aw::{Grid, GridRow};
@@ -29,7 +29,7 @@ pub fn view_addresses(
     account: &AccountInfo,
     still_syncing: Option<WalletMessage>,
 ) -> Element<'static, WalletMessage> {
-    let field = |text: String| container(Text::new(text)).padding(5);
+    let field = |text: String| iced::widget::container(Text::new(text)).padding(5);
     let addresses = account
         .addresses
         .iter()
@@ -57,6 +57,7 @@ pub fn view_addresses(
                 tooltip::Position::Bottom
             )
             .gap(10)
+            .style(iced::widget::container::bordered_box),
         ],
     ]
     .into()

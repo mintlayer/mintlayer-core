@@ -65,6 +65,7 @@ pub fn view_top_panel(
                 tooltip::Position::Bottom
             )
             .gap(10)
+            .style(iced::widget::container::bordered_box),
         ],
     }
     .align_y(Alignment::Center)

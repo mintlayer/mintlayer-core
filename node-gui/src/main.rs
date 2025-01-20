@@ -23,7 +23,7 @@ use std::env;
 
 use common::time_getter::TimeGetter;
 use iced::advanced::graphics::core::window;
-use iced::widget::{column, container, row, text, tooltip, Text};
+use iced::widget::{column, row, text, tooltip, Text};
 use iced::{executor, Element, Length, Settings, Task, Theme};
 use iced::{font, Subscription};
 use iced_aw::widgets::spinner::Spinner;
@@ -57,6 +57,7 @@ pub fn main() -> iced::Result {
             antialiasing: true,
             ..Settings::default()
         })
+        .font(iced_fonts::REQUIRED_FONT_BYTES)
         .run_with(initialize)
 }
 
@@ -303,6 +304,7 @@ fn view(state: &MintlayerNodeGUI) -> Element<Message> {
                         tooltip::Position::Bottom
                     )
                     .gap(10)
+                    .style(iced::widget::container::bordered_box),
                 ],
                 row![
                     iced::widget::button(text("Testnet")).on_press(InitNetwork::Testnet),
@@ -313,13 +315,14 @@ fn view(state: &MintlayerNodeGUI) -> Element<Message> {
                         tooltip::Position::Bottom
                     )
                     .gap(10)
+                    .style(iced::widget::container::bordered_box),
                 ],
             ]
             .align_x(iced::Alignment::Center)
             .spacing(5);
 
             let res: Element<InitNetwork> =
-                container(error_box).center_x(Length::Fill).center_y(Length::Fill).into();
+                iced::widget::container(error_box).center(Length::Fill).into();
 
             res.map(Message::InitNetwork)
         }
@@ -336,6 +339,7 @@ fn view(state: &MintlayerNodeGUI) -> Element<Message> {
                         tooltip::Position::Bottom
                     )
                     .gap(10)
+                    .style(iced::widget::container::bordered_box),
                 ],
                 row![
                     iced::widget::button(text("Cold")).on_press(WalletMode::Cold),
@@ -346,19 +350,20 @@ fn view(state: &MintlayerNodeGUI) -> Element<Message> {
                         tooltip::Position::Bottom
                     )
                     .gap(10)
+                    .style(iced::widget::container::bordered_box),
                 ],
             ]
             .align_x(iced::Alignment::Center)
             .spacing(5);
 
             let res: Element<WalletMode> =
-                container(error_box).center_x(Length::Fill).center_y(Length::Fill).into();
+                iced::widget::container(error_box).center(Length::Fill).into();
 
             res.map(Message::InitWalletMode)
         }
 
         MintlayerNodeGUI::Loading(_) => {
-            container(Spinner::new().width(Length::Fill).height(Length::Fill)).into()
+            iced::widget::container(Spinner::new().width(Length::Fill).height(Length::Fill)).into()
         }
 
         MintlayerNodeGUI::Loaded(_backend_sender, w) => w.view().map(Message::MainWindowMessage),
@@ -373,8 +378,7 @@ fn view(state: &MintlayerNodeGUI) -> Element<Message> {
             .align_x(iced::Alignment::Center)
             .spacing(5);
 
-            let res: Element<()> =
-                container(error_box).center_x(Length::Fill).center_y(Length::Fill).into();
+            let res: Element<()> = iced::widget::container(error_box).center(Length::Fill).into();
 
             res.map(|_| Message::ShuttingDownFinished)
         }

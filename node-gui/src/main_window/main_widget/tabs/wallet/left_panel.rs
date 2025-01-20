@@ -101,6 +101,7 @@ pub fn view_left_panel(
                 tooltip::Position::Bottom
             )
             .gap(10)
+            .style(iced::widget::container::bordered_box),
         ];
 
         button(label)
@@ -154,7 +155,7 @@ pub fn view_left_panel(
         column![
             text(file_name).size(25),
             row![
-                pick_list.width(100),
+                pick_list,
                 button(Text::new("+"))
                     .style(iced::widget::button::success)
                     .on_press(WalletMessage::NewAccount),
@@ -165,6 +166,7 @@ pub fn view_left_panel(
                     tooltip::Position::Bottom
                 )
                 .gap(10)
+                .style(iced::widget::container::bordered_box),
             ]
             .align_y(Alignment::Center)
             .spacing(10)

@@ -16,7 +16,7 @@
 use std::collections::BTreeMap;
 
 use iced::{
-    widget::{button, column, container, row, text_input, tooltip, tooltip::Position, Text},
+    widget::{button, column, row, text_input, tooltip, tooltip::Position, Text},
     Element, Length,
 };
 use iced_aw::{Grid, GridRow};
@@ -61,7 +61,7 @@ pub fn view_delegation(
     delegate_staking_amounts: &BTreeMap<DelegationId, String>,
     still_syncing: Option<WalletMessage>,
 ) -> Element<'static, WalletMessage> {
-    let field = |text: String| container(Text::new(text)).padding(5);
+    let field = |text: String| iced::widget::container(Text::new(text)).padding(5);
 
     let delegation_balance_grid = {
         // We print the table only if there are delegations
@@ -96,19 +96,22 @@ pub fn view_delegation(
                     GridRow::new()
                         .push(row![
                             tooltip(
-                                container(Text::new(delegation_address.to_short_string()).font(
-                                    iced::font::Font {
-                                        family: iced::font::Family::Monospace,
-                                        weight: Default::default(),
-                                        stretch: Default::default(),
-                                        style: iced::font::Style::Normal,
-                                    }
-                                ))
+                                iced::widget::container(
+                                    Text::new(delegation_address.to_short_string()).font(
+                                        iced::font::Font {
+                                            family: iced::font::Family::Monospace,
+                                            weight: Default::default(),
+                                            stretch: Default::default(),
+                                            style: iced::font::Style::Normal,
+                                        }
+                                    )
+                                )
                                 .padding(5),
                                 Text::new(delegation_address.to_string()),
                                 Position::Bottom,
                             )
-                            .gap(5),
+                            .gap(5)
+                            .style(iced::widget::container::bordered_box),
                             button(
                                 Text::new(iced_fonts::Bootstrap::ClipboardCheck.to_string())
                                     .font(iced_fonts::BOOTSTRAP_FONT),
@@ -121,19 +124,22 @@ pub fn view_delegation(
                         ])
                         .push(row![
                             tooltip(
-                                container(Text::new(pool_address.to_short_string()).font(
-                                    iced::font::Font {
-                                        family: iced::font::Family::Monospace,
-                                        weight: Default::default(),
-                                        stretch: Default::default(),
-                                        style: iced::font::Style::Normal,
-                                    }
-                                ))
+                                iced::widget::container(
+                                    Text::new(pool_address.to_short_string()).font(
+                                        iced::font::Font {
+                                            family: iced::font::Family::Monospace,
+                                            weight: Default::default(),
+                                            stretch: Default::default(),
+                                            style: iced::font::Style::Normal,
+                                        }
+                                    )
+                                )
                                 .padding(5),
                                 Text::new(pool_address.to_string()),
                                 Position::Bottom,
                             )
-                            .gap(5),
+                            .gap(5)
+                            .style(iced::widget::container::bordered_box),
                             button(
                                 Text::new(iced_fonts::Bootstrap::ClipboardCheck.to_string())
                                     .font(iced_fonts::BOOTSTRAP_FONT),
@@ -184,6 +190,7 @@ pub fn view_delegation(
                 Position::Bottom
             )
             .gap(10)
+            .style(iced::widget::container::bordered_box),
         ],
         // ----- Create delegation
         row![
@@ -203,6 +210,7 @@ pub fn view_delegation(
                 Position::Bottom
             )
             .gap(10)
+            .style(iced::widget::container::bordered_box),
         ],
         row![
             text_input("Delegation address", delegation_address)
@@ -221,6 +229,7 @@ pub fn view_delegation(
                 Position::Bottom
             )
             .gap(10)
+            .style(iced::widget::container::bordered_box),
         ],
         row![
             iced::widget::button(Text::new("Create delegation"))
@@ -233,6 +242,7 @@ pub fn view_delegation(
                 Position::Bottom
             )
             .gap(10)
+            .style(iced::widget::container::bordered_box),
         ],
         iced::widget::horizontal_rule(10),
         // ----- Send delegation to address
@@ -253,6 +263,7 @@ pub fn view_delegation(
                 Position::Bottom
             )
             .gap(10)
+            .style(iced::widget::container::bordered_box),
         ],
         row![
             text_input("Amount to send", send_delegation_amount)
@@ -271,6 +282,7 @@ pub fn view_delegation(
                 Position::Bottom
             )
             .gap(10)
+            .style(iced::widget::container::bordered_box),
         ],
         row![
             text_input("Delegation address", send_delegation_id)
@@ -289,6 +301,7 @@ pub fn view_delegation(
                 Position::Bottom
             )
             .gap(10)
+            .style(iced::widget::container::bordered_box),
         ],
         row![
             iced::widget::button(Text::new("Withdraw from delegation"))
@@ -301,6 +314,7 @@ pub fn view_delegation(
                 Position::Bottom
             )
             .gap(10)
+            .style(iced::widget::container::bordered_box),
         ],
         iced::widget::horizontal_rule(10),
         // ----- Delegation balance grid

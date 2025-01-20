@@ -77,6 +77,7 @@ pub fn view_console(
                 tooltip::Position::Bottom
             )
             .gap(10)
+            .style(iced::widget::container::bordered_box),
         ],
     ]
     .into()

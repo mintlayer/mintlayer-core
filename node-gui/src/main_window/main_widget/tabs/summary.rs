@@ -71,7 +71,8 @@ impl Tab for SummaryTab {
                         NETWORK_TOOLTIP,
                         tooltip::Position::Bottom,
                     )
-                    .gap(10),
+                    .gap(10)
+                    .style(iced::widget::container::bordered_box),
                 ),
             )
             .push(
