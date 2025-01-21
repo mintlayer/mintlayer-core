@@ -1,8 +1,10 @@
-version: '3'
-
 x-common: &ml-common
   volumes:
     - ./mintlayer-data:/home/mintlayer
+  # Force pull the images on each invocation of docker compose.
+  # Note: this is mostly needed when IMAGE_TAG is set to "latest"; without it you may end up using
+  # an older version of an image if you happened to pull another "latest" version of it in the past.
+  pull_policy: always
 
 x-common-env: &ml-common-env
   RUST_LOG:
@@ -12,7 +14,7 @@ x-common-env: &ml-common-env
 services:
   node-daemon:
     <<: *ml-common
-    image: $DOCKERHUB_USERNAME/node-daemon:$ML_SOFTWARE_VERSION
+    image: $DOCKERHUB_USERNAME/node-daemon:$IMAGE_TAG
     command: node-daemon mainnet
     environment:
       <<: *ml-common-env
@@ -60,7 +62,7 @@ services:
 
   api-blockchain-scanner-daemon:
     <<: *ml-common
-    image: $DOCKERHUB_USERNAME/api-blockchain-scanner-daemon:$ML_SOFTWARE_VERSION
+    image: $DOCKERHUB_USERNAME/api-blockchain-scanner-daemon:$IMAGE_TAG
     command: api-blockchain-scanner-daemon
     depends_on:
       - api-postgres-db
@@ -77,7 +79,7 @@ services:
 
   api-web-server:
     <<: *ml-common
-    image: $DOCKERHUB_USERNAME/api-web-server:$ML_SOFTWARE_VERSION
+    image: $DOCKERHUB_USERNAME/api-web-server:$IMAGE_TAG
     command: api-web-server
     depends_on:
       - api-postgres-db
@@ -99,7 +101,7 @@ services:
 
   wallet-rpc-daemon:
     <<: *ml-common
-    image: $DOCKERHUB_USERNAME/wallet-rpc-daemon:$ML_SOFTWARE_VERSION
+    image: $DOCKERHUB_USERNAME/wallet-rpc-daemon:$IMAGE_TAG
     command: wallet-rpc-daemon mainnet
     depends_on:
       - node-daemon
@@ -120,7 +122,7 @@ services:
   # to run it via "docker compose run"
   wallet-cli:
     <<: *ml-common
-    image: $DOCKERHUB_USERNAME/wallet-cli:$ML_SOFTWARE_VERSION
+    image: $DOCKERHUB_USERNAME/wallet-cli:$IMAGE_TAG
     command: wallet-cli mainnet
     depends_on:
       - node-daemon
