@@ -225,6 +225,21 @@ where
     coin_balance
 }
 
+fn get_balance_with(
+    wallet: &DefaultWallet,
+    currency: Currency,
+    utxo_states: UtxoStates,
+    with_locked: WithLocked,
+) -> Amount {
+    let coin_balance = wallet
+        .get_balance(DEFAULT_ACCOUNT_INDEX, utxo_states, with_locked)
+        .unwrap()
+        .get(&currency)
+        .copied()
+        .unwrap_or(Amount::ZERO);
+    coin_balance
+}
+
 fn get_coin_balance<B, P>(wallet: &Wallet<B, P>) -> Amount
 where
     B: storage::Backend + 'static,
@@ -6455,10 +6470,237 @@ fn create_order_fill_partially_conclude(#[case] seed: Seed) {
     }
 }
 
+// Create 2 wallet from the same mnemonic.
+// Create a pool and a delegation with some stake for both wallets.
+// Add 2 consequtive txs that spend share from delelgation to the first wallet as unconfirmed.
+// Add 1 txs that spends share from delegation with different amount (so that tx id is different)
+// via the second wallet and submit it to the block.
+// Check that 2 unconfirmed txs from the first wallet conflicts with confirmed tx and got removed.
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
 fn conflicting_delegation_account_nonce(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let chain_config = Arc::new(create_unit_test_config());
+
+    let mut wallet = create_wallet(chain_config.clone());
+    let mut wallet2 = create_wallet(chain_config.clone());
+
+    let coin_balance = get_coin_balance(&wallet);
+    assert_eq!(coin_balance, Amount::ZERO);
+
+    // Generate a new block which sends reward to the wallet
+    let delegation_amount = Amount::from_atoms(rng.gen_range(10..100));
+    let block1_amount = (chain_config.min_stake_pool_pledge() + delegation_amount).unwrap();
+    let (_, block1) = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
+    scan_wallet(&mut wallet2, BlockHeight::new(0), vec![block1]);
+
+    let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
+    assert!(pool_ids.is_empty());
+
+    let coin_balance = get_coin_balance(&wallet);
+    assert_eq!(coin_balance, block1_amount);
+
+    // Create a pool
+    let pool_amount = chain_config.min_stake_pool_pledge();
+
+    let stake_pool_transaction = wallet
+        .create_stake_pool_tx(
+            DEFAULT_ACCOUNT_INDEX,
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            StakePoolCreationArguments {
+                amount: pool_amount,
+                margin_ratio_per_thousand: PerThousand::new_from_rng(&mut rng),
+                cost_per_block: Amount::ZERO,
+                decommission_key: Destination::AnyoneCanSpend,
+                staker_key: None,
+                vrf_public_key: None,
+            },
+        )
+        .unwrap();
+
+    let (address, block2) = create_block(
+        &chain_config,
+        &mut wallet,
+        vec![stake_pool_transaction.clone()],
+        Amount::ZERO,
+        1,
+    );
+    scan_wallet(&mut wallet2, BlockHeight::new(1), vec![block2]);
+
+    let coin_balance = get_coin_balance(&wallet);
+    assert_eq!(coin_balance, (block1_amount - pool_amount).unwrap(),);
+
+    let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
+    assert_eq!(pool_ids.len(), 1);
+
+    // Create a delegation
+    let pool_id = pool_ids.first().unwrap().0;
+    let (delegation_id, delegation_tx) = wallet
+        .create_delegation(
+            DEFAULT_ACCOUNT_INDEX,
+            vec![make_create_delegation_output(address.clone(), pool_id)],
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+        )
+        .unwrap();
+
+    let (_, block3) = create_block(
+        &chain_config,
+        &mut wallet,
+        vec![delegation_tx],
+        Amount::ZERO,
+        2,
+    );
+    scan_wallet(&mut wallet2, BlockHeight::new(2), vec![block3]);
+
+    let mut delegations = wallet.get_delegations(DEFAULT_ACCOUNT_INDEX).unwrap().collect_vec();
+    assert_eq!(delegations.len(), 1);
+    let (deleg_id, deleg_data) = delegations.pop().unwrap();
+    assert_eq!(*deleg_id, delegation_id);
+    assert!(deleg_data.not_staked_yet);
+    assert_eq!(deleg_data.last_nonce, None);
+    assert_eq!(deleg_data.pool_id, pool_id);
+    assert_eq!(&deleg_data.destination, address.as_object());
+
+    // Delegate some coins
+    let delegation_stake_tx = wallet
+        .create_transaction_to_addresses(
+            DEFAULT_ACCOUNT_INDEX,
+            [TxOutput::DelegateStaking(delegation_amount, delegation_id)],
+            SelectedInputs::Utxos(vec![]),
+            BTreeMap::new(),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            TxAdditionalInfo::new(),
+        )
+        .unwrap();
+
+    let (_, block4) = create_block(
+        &chain_config,
+        &mut wallet,
+        vec![delegation_stake_tx],
+        Amount::ZERO,
+        3,
+    );
+    scan_wallet(&mut wallet2, BlockHeight::new(3), vec![block4]);
+
+    let coin_balance_after_delegating = get_coin_balance(&wallet);
+    assert_eq!(
+        coin_balance_after_delegating,
+        (block1_amount - pool_amount).and_then(|v| v - delegation_amount).unwrap(),
+    );
+
+    // Add unconfirmed txs
+    let withdraw_amount_1 = Amount::from_atoms(1);
+    let spend_from_delegation_tx_1 = wallet
+        .create_transaction_to_addresses_from_delegation(
+            DEFAULT_ACCOUNT_INDEX,
+            address.clone(),
+            withdraw_amount_1,
+            delegation_id,
+            delegation_amount,
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+        )
+        .unwrap();
+
+    wallet
+        .add_account_unconfirmed_tx(
+            DEFAULT_ACCOUNT_INDEX,
+            spend_from_delegation_tx_1.clone(),
+            &WalletEventsNoOp,
+        )
+        .unwrap();
+
+    let withdraw_amount_2 = withdraw_amount_1;
+    let spend_from_delegation_tx_2 = wallet
+        .create_transaction_to_addresses_from_delegation(
+            DEFAULT_ACCOUNT_INDEX,
+            address.clone(),
+            withdraw_amount_2,
+            delegation_id,
+            delegation_amount,
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+        )
+        .unwrap();
+
+    wallet
+        .add_account_unconfirmed_tx(
+            DEFAULT_ACCOUNT_INDEX,
+            spend_from_delegation_tx_2.clone(),
+            &WalletEventsNoOp,
+        )
+        .unwrap();
+
+    // Check delegation after unconfirmed tx status
+    let mut delegations = wallet.get_delegations(DEFAULT_ACCOUNT_INDEX).unwrap().collect_vec();
+    assert_eq!(delegations.len(), 1);
+    let (deleg_id, deleg_data) = delegations.pop().unwrap();
+    assert_eq!(*deleg_id, delegation_id);
+    assert_eq!(deleg_data.last_nonce, Some(AccountNonce::new(1)));
+
+    // Create and submit tx with different tx id
+    let withdraw_amount_3 = Amount::from_atoms(5);
+    let spend_from_delegation_tx_3 = wallet2
+        .create_transaction_to_addresses_from_delegation(
+            DEFAULT_ACCOUNT_INDEX,
+            address.clone(),
+            withdraw_amount_3,
+            delegation_id,
+            delegation_amount,
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+        )
+        .unwrap();
+
+    let (_, block5) = create_block(
+        &chain_config,
+        &mut wallet2,
+        vec![spend_from_delegation_tx_3],
+        Amount::ZERO,
+        4,
+    );
+    scan_wallet(&mut wallet, BlockHeight::new(4), vec![block5]);
+
+    // if confirmed tx is added conflicting txs must be removed from the output cache
+    let mut delegations = wallet.get_delegations(DEFAULT_ACCOUNT_INDEX).unwrap().collect_vec();
+    assert_eq!(delegations.len(), 1);
+    let (deleg_id, deleg_data) = delegations.pop().unwrap();
+    assert_eq!(*deleg_id, delegation_id);
+    assert_eq!(deleg_data.last_nonce, Some(AccountNonce::new(0)));
+
+    let coin_balance = get_balance_with(
+        &wallet,
+        Currency::Coin,
+        UtxoState::Confirmed.into(),
+        WithLocked::Any,
+    );
+    assert_eq!(
+        coin_balance,
+        (coin_balance_after_delegating + withdraw_amount_3).unwrap()
+    );
+
+    let coin_balance = get_balance_with(
+        &wallet,
+        Currency::Coin,
+        UtxoState::Confirmed | UtxoState::Inactive,
+        WithLocked::Any,
+    );
+    assert_eq!(
+        coin_balance,
+        (coin_balance_after_delegating + withdraw_amount_3).unwrap()
+    );
+}
+
+// Create a pool and a delegation with some share.
+// Create 2 consequtive txs that spend from delegation account and add them as unconfirmed.
+// Check confirmed/unconfirmed balance and ensure that account nonce is incremented in OutputCache.
+// Submit the first tx in a block.
+// Check that Confirmed balance changed but
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn conflicting_delegation_account_nonce_same_tx(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_unit_test_config());
 
@@ -6472,6 +6714,7 @@ fn conflicting_delegation_account_nonce(#[case] seed: Seed) {
     let block1_amount = (chain_config.min_stake_pool_pledge() + delegation_amount).unwrap();
     let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
 
+    // Create a pool
     let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
     assert!(pool_ids.is_empty());
 
@@ -6510,6 +6753,7 @@ fn conflicting_delegation_account_nonce(#[case] seed: Seed) {
     let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
     assert_eq!(pool_ids.len(), 1);
 
+    // Create a delegation
     let pool_id = pool_ids.first().unwrap().0;
     let (delegation_id, delegation_tx) = wallet
         .create_delegation(
@@ -6537,6 +6781,7 @@ fn conflicting_delegation_account_nonce(#[case] seed: Seed) {
     assert_eq!(deleg_data.pool_id, pool_id);
     assert_eq!(&deleg_data.destination, address.as_object());
 
+    // Delegate some coins
     let delegation_stake_tx = wallet
         .create_transaction_to_addresses(
             DEFAULT_ACCOUNT_INDEX,
@@ -6557,13 +6802,21 @@ fn conflicting_delegation_account_nonce(#[case] seed: Seed) {
         3,
     );
 
+    let coin_balance_after_delegating = get_coin_balance(&wallet);
+    assert_eq!(
+        coin_balance_after_delegating,
+        (block1_amount - pool_amount).and_then(|v| v - delegation_amount).unwrap(),
+    );
+
+    // Create first tx that spends from delegation
+    let withdraw_amount_1 = Amount::from_atoms(1);
     let spend_from_delegation_tx_1 = wallet
         .create_transaction_to_addresses_from_delegation(
             DEFAULT_ACCOUNT_INDEX,
             address.clone(),
-            Amount::from_atoms(1),
+            withdraw_amount_1,
             delegation_id,
-            Amount::from_atoms(2),
+            delegation_amount,
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
         .unwrap();
@@ -6576,13 +6829,15 @@ fn conflicting_delegation_account_nonce(#[case] seed: Seed) {
         )
         .unwrap();
 
+    // Create second tx that spends from delegation
+    let withdraw_amount_2 = withdraw_amount_1;
     let spend_from_delegation_tx_2 = wallet
         .create_transaction_to_addresses_from_delegation(
             DEFAULT_ACCOUNT_INDEX,
             address.clone(),
-            Amount::from_atoms(1),
+            withdraw_amount_2,
             delegation_id,
-            Amount::from_atoms(2),
+            delegation_amount,
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
         .unwrap();
@@ -6602,6 +6857,28 @@ fn conflicting_delegation_account_nonce(#[case] seed: Seed) {
     assert_eq!(*deleg_id, delegation_id);
     assert_eq!(deleg_data.last_nonce, Some(AccountNonce::new(1)));
 
+    let coin_balance = get_balance_with(
+        &wallet,
+        Currency::Coin,
+        UtxoState::Confirmed.into(),
+        WithLocked::Any,
+    );
+    assert_eq!(coin_balance, coin_balance_after_delegating);
+
+    let coin_balance = get_balance_with(
+        &wallet,
+        Currency::Coin,
+        UtxoState::Confirmed | UtxoState::Inactive,
+        WithLocked::Any,
+    );
+    assert_eq!(
+        coin_balance,
+        (coin_balance_after_delegating + withdraw_amount_1)
+            .and_then(|v| v + withdraw_amount_2)
+            .unwrap()
+    );
+
+    // Submit first tx in a block
     let _ = create_block(
         &chain_config,
         &mut wallet,
@@ -6610,12 +6887,36 @@ fn conflicting_delegation_account_nonce(#[case] seed: Seed) {
         4,
     );
 
-    // if confirmed tx is added conflicting txs must be removed from the output cache
+    // Confirmed tx should replace the first one leaving the second one as descendant
     let mut delegations = wallet.get_delegations(DEFAULT_ACCOUNT_INDEX).unwrap().collect_vec();
     assert_eq!(delegations.len(), 1);
     let (deleg_id, deleg_data) = delegations.pop().unwrap();
     assert_eq!(*deleg_id, delegation_id);
-    assert_eq!(deleg_data.last_nonce, Some(AccountNonce::new(0)));
+    assert_eq!(deleg_data.last_nonce, Some(AccountNonce::new(1)));
+
+    let coin_balance = get_balance_with(
+        &wallet,
+        Currency::Coin,
+        UtxoState::Confirmed.into(),
+        WithLocked::Any,
+    );
+    assert_eq!(
+        coin_balance,
+        (coin_balance_after_delegating + withdraw_amount_1).unwrap()
+    );
+
+    let coin_balance = get_balance_with(
+        &wallet,
+        Currency::Coin,
+        UtxoState::Confirmed | UtxoState::Inactive,
+        WithLocked::Any,
+    );
+    assert_eq!(
+        coin_balance,
+        (coin_balance_after_delegating + withdraw_amount_1)
+            .and_then(|v| v + withdraw_amount_2)
+            .unwrap()
+    );
 }
 
 #[rstest]
@@ -6631,8 +6932,7 @@ fn conflicting_order_account_nonce(#[case] seed: Seed) {
     assert_eq!(coin_balance, Amount::ZERO);
 
     // Generate a new block which sends reward to the wallet
-    let delegation_amount = Amount::from_atoms(rng.gen_range(2..100));
-    let block1_amount = (chain_config.min_stake_pool_pledge() + delegation_amount).unwrap();
+    let block1_amount = chain_config.fungible_token_issuance_fee();
     let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
 
     // Issue a token
@@ -6675,7 +6975,8 @@ fn conflicting_order_account_nonce(#[case] seed: Seed) {
     let unconfirmed_token_info =
         wallet.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, token_info).unwrap();
 
-    let token_amount_to_mint = Amount::from_atoms(rng.gen_range(2..100));
+    let token_amount_to_mint = Amount::from_atoms(100);
+    let reward_to_spend_on_orders = Amount::from_atoms(100);
     let mint_transaction = wallet
         .mint_tokens(
             DEFAULT_ACCOUNT_INDEX,
@@ -6691,12 +6992,12 @@ fn conflicting_order_account_nonce(#[case] seed: Seed) {
         &chain_config,
         &mut wallet,
         vec![mint_transaction],
-        Amount::ZERO,
+        reward_to_spend_on_orders,
         2,
     );
 
     // Create an order selling tokens for coins
-    let buy_amount = Amount::from_atoms(111);
+    let buy_amount = reward_to_spend_on_orders;
     let sell_amount = token_amount_to_mint;
     let ask_value = OutputValue::Coin(buy_amount);
     let give_value = OutputValue::TokenV1(issued_token_id, sell_amount);
@@ -6720,6 +7021,11 @@ fn conflicting_order_account_nonce(#[case] seed: Seed) {
         3,
     );
 
+    let (coin_balance_after_create_order, token_balance_after_create_order) =
+        get_currency_balances(&wallet);
+    assert_eq!(coin_balance_after_create_order, reward_to_spend_on_orders);
+    assert!(token_balance_after_create_order.is_empty());
+
     let mut orders = wallet.get_orders(DEFAULT_ACCOUNT_INDEX).unwrap().collect_vec();
     assert_eq!(orders.len(), 1);
     let (actual_order_id, actual_order_data) = orders.pop().unwrap();
@@ -6742,12 +7048,14 @@ fn conflicting_order_account_nonce(#[case] seed: Seed) {
         nonce: None,
     };
 
+    let spend_coins_1 = Amount::from_atoms(10);
+    let recieved_tokens_1 = spend_coins_1;
     let fill_order_tx_1 = wallet
         .create_fill_order_tx(
             DEFAULT_ACCOUNT_INDEX,
             order_id,
             order_info.clone(),
-            Amount::from_atoms(10),
+            spend_coins_1,
             None,
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
@@ -6777,12 +7085,14 @@ fn conflicting_order_account_nonce(#[case] seed: Seed) {
         nonce: Some(AccountNonce::new(0)),
     };
 
+    let spend_coins_2 = Amount::from_atoms(3);
+    let recieved_tokens_2 = spend_coins_2;
     let fill_order_tx_2 = wallet
         .create_fill_order_tx(
             DEFAULT_ACCOUNT_INDEX,
             order_id,
             order_info.clone(),
-            Amount::from_atoms(3),
+            spend_coins_2,
             None,
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
@@ -6813,10 +7123,53 @@ fn conflicting_order_account_nonce(#[case] seed: Seed) {
         4,
     );
 
-    // if confirmed tx is added conflicting txs must be removed from the output cache
+    // if confirmed tx is added conflicting txs must be replaced in the output cache, leaving descendants intact
     let mut orders = wallet.get_orders(DEFAULT_ACCOUNT_INDEX).unwrap().collect_vec();
     assert_eq!(orders.len(), 1);
     let (actual_order_id, order_data) = orders.pop().unwrap();
     assert_eq!(*actual_order_id, order_id);
-    assert_eq!(order_data.last_nonce, Some(AccountNonce::new(0)));
+    assert_eq!(order_data.last_nonce, Some(AccountNonce::new(1)));
+
+    let coin_balance_confirmed = get_balance_with(
+        &wallet,
+        Currency::Coin,
+        UtxoState::Confirmed.into(),
+        WithLocked::Any,
+    );
+    assert_eq!(
+        coin_balance_confirmed,
+        (coin_balance_after_create_order - spend_coins_1).unwrap()
+    );
+
+    let coin_balance_unconfirmed = get_balance_with(
+        &wallet,
+        Currency::Coin,
+        UtxoState::Confirmed | UtxoState::Inactive,
+        WithLocked::Any,
+    );
+    assert_eq!(
+        coin_balance_unconfirmed,
+        (coin_balance_after_create_order - spend_coins_1)
+            .and_then(|v| v - spend_coins_2)
+            .unwrap()
+    );
+
+    let token_balance_confirmed = get_balance_with(
+        &wallet,
+        Currency::Token(issued_token_id),
+        UtxoState::Confirmed.into(),
+        WithLocked::Any,
+    );
+    assert_eq!(token_balance_confirmed, recieved_tokens_1);
+
+    let token_balance_unconfirmed = get_balance_with(
+        &wallet,
+        Currency::Token(issued_token_id),
+        UtxoState::Confirmed | UtxoState::Inactive,
+        WithLocked::Any,
+    );
+    assert_eq!(
+        token_balance_unconfirmed,
+        (recieved_tokens_1 + recieved_tokens_2).unwrap()
+    );
 }
