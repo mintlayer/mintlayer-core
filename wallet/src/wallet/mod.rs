@@ -281,6 +281,8 @@ pub enum WalletError {
     MismatchedTokenAdditionalData(TokenId),
     #[error("Unsupported operation for a Hardware wallet")]
     UnsupportedHardwareWalletOperation,
+    #[error("Transaction from {0:?} is confirmed and among unconfirmed descendants")]
+    ConfirmedTxAmongUnconfirmedDescendants(OutPointSourceId),
 }
 
 /// Result type used for the wallet
