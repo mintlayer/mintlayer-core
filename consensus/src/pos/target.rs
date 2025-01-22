@@ -89,10 +89,10 @@ fn calculate_new_target(
     };
 
     let difficulty_change_limit = {
-        let numerator = (prev_target
-            * Uint512::from_u64(pos_config.difficulty_change_limit().value().into()))
-        .expect("Original types are smaller");
-        let denominator = Uint512::from_u64(1000);
+        let limit = pos_config.difficulty_change_limit();
+        let numerator = (prev_target * Uint512::from_u64(limit.value().into()))
+            .expect("Original types are smaller");
+        let denominator = Uint512::from_u64(limit.denominator().into());
         (numerator / denominator).expect("Denominator is not zero")
     };
 

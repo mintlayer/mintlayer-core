@@ -25,7 +25,10 @@ use common::{
             inputsig::{standard_signature::StandardInputSignature, InputWitness},
             DestinationSigError,
         },
-        tokens::{IsTokenFreezable, TokenId, TokenIssuance, TokenIssuanceV1, TokenTotalSupply},
+        tokens::{
+            make_token_id, IsTokenFreezable, TokenId, TokenIssuance, TokenIssuanceV1,
+            TokenTotalSupply,
+        },
         AccountCommand, AccountNonce, ChainstateUpgrade, Destination, OrderData, SignedTransaction,
         TxInput, TxOutput, UtxoOutPoint,
     },
@@ -36,6 +39,7 @@ use orders_accounting::OrdersAccountingDB;
 use randomness::{CryptoRng, Rng};
 use rstest::rstest;
 use test_utils::{
+    nft_utils::random_nft_issuance,
     random::{make_seedable_rng, Seed},
     random_ascii_alphanumeric_string,
 };
@@ -1592,5 +1596,348 @@ fn test_activation(#[case] seed: Seed) {
             )
             .build_and_process(&mut rng)
             .unwrap();
+    });
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn create_order_with_nft(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+
+        let genesis_input = TxInput::from_utxo(tf.genesis().get_id().into(), 0);
+        let token_id = make_token_id(&[genesis_input.clone()]).unwrap();
+        let nft_issuance = random_nft_issuance(tf.chain_config(), &mut rng);
+        let token_min_issuance_fee =
+            tf.chainstate.get_chain_config().nft_issuance_fee(BlockHeight::zero());
+
+        let ask_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
+
+        // Issue an NFT
+        let issue_nft_tx = TransactionBuilder::new()
+            .add_input(genesis_input, InputWitness::NoSignature(None))
+            .add_output(TxOutput::IssueNft(
+                token_id,
+                Box::new(nft_issuance.into()),
+                Destination::AnyoneCanSpend,
+            ))
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin(ask_amount),
+                Destination::AnyoneCanSpend,
+            ))
+            .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
+            .build();
+        let issue_nft_tx_id = issue_nft_tx.transaction().get_id();
+        tf.make_block_builder()
+            .add_transaction(issue_nft_tx)
+            .build_and_process(&mut rng)
+            .unwrap();
+
+        // Create order selling NFT for coins
+        let give_amount = Amount::from_atoms(1);
+        let order_data = OrderData::new(
+            Destination::AnyoneCanSpend,
+            OutputValue::Coin(ask_amount),
+            OutputValue::TokenV1(token_id, give_amount),
+        );
+
+        let nft_outpoint = UtxoOutPoint::new(issue_nft_tx_id.into(), 0);
+        let order_id = make_order_id(&nft_outpoint);
+        tf.make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(nft_outpoint.into(), InputWitness::NoSignature(None))
+                    .add_output(TxOutput::CreateOrder(Box::new(order_data.clone())))
+                    .build(),
+            )
+            .build_and_process(&mut rng)
+            .unwrap();
+
+        assert_eq!(
+            Some(order_data.clone()),
+            tf.chainstate.get_order_data(&order_id).unwrap()
+        );
+        assert_eq!(
+            Some(ask_amount),
+            tf.chainstate.get_order_ask_balance(&order_id).unwrap()
+        );
+        assert_eq!(
+            Some(give_amount),
+            tf.chainstate.get_order_give_balance(&order_id).unwrap()
+        );
+
+        // Try get 2 nfts out of order
+        {
+            let tx = TransactionBuilder::new()
+                .add_input(
+                    TxInput::from_utxo(issue_nft_tx_id.into(), 1),
+                    InputWitness::NoSignature(None),
+                )
+                .add_input(
+                    TxInput::AccountCommand(
+                        AccountNonce::new(0),
+                        AccountCommand::FillOrder(
+                            order_id,
+                            ask_amount,
+                            Destination::AnyoneCanSpend,
+                        ),
+                    ),
+                    InputWitness::NoSignature(None),
+                )
+                .add_output(TxOutput::Transfer(
+                    OutputValue::TokenV1(token_id, Amount::from_atoms(2)),
+                    Destination::AnyoneCanSpend,
+                ))
+                .build();
+            let tx_id = tx.transaction().get_id();
+            let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
+            assert_eq!(result.unwrap_err(),
+                chainstate::ChainstateError::ProcessBlockError(chainstate::BlockError::StateUpdateFailed(
+                    ConnectTransactionError::ConstrainedValueAccumulatorError(
+                        constraints_value_accumulator::Error::AttemptToPrintMoneyOrViolateTimelockConstraints(
+                            CoinOrTokenId::TokenId(token_id)
+                        ),
+                        tx_id.into()
+                    )
+                ))
+            );
+        }
+
+        // Fill order
+        tf.make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_utxo(issue_nft_tx_id.into(), 1),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_input(
+                        TxInput::AccountCommand(
+                            AccountNonce::new(0),
+                            AccountCommand::FillOrder(
+                                order_id,
+                                ask_amount,
+                                Destination::AnyoneCanSpend,
+                            ),
+                        ),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_output(TxOutput::Transfer(
+                        OutputValue::TokenV1(token_id, Amount::from_atoms(1)),
+                        Destination::AnyoneCanSpend,
+                    ))
+                    .build(),
+            )
+            .build_and_process(&mut rng)
+            .unwrap();
+
+        assert_eq!(
+            Some(order_data),
+            tf.chainstate.get_order_data(&order_id).unwrap()
+        );
+        assert_eq!(
+            None,
+            tf.chainstate.get_order_ask_balance(&order_id).unwrap()
+        );
+        assert_eq!(
+            None,
+            tf.chainstate.get_order_give_balance(&order_id).unwrap()
+        );
+    });
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn partially_fill_order_with_nft(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+
+        let genesis_input = TxInput::from_utxo(tf.genesis().get_id().into(), 0);
+        let token_id = make_token_id(&[genesis_input.clone()]).unwrap();
+        let nft_issuance = random_nft_issuance(tf.chain_config(), &mut rng);
+        let token_min_issuance_fee =
+            tf.chainstate.get_chain_config().nft_issuance_fee(BlockHeight::zero());
+
+        let ask_amount = Amount::from_atoms(rng.gen_range(10u128..1000));
+
+        // Issue an NFT
+        let issue_nft_tx = TransactionBuilder::new()
+            .add_input(genesis_input, InputWitness::NoSignature(None))
+            .add_output(TxOutput::IssueNft(
+                token_id,
+                Box::new(nft_issuance.into()),
+                Destination::AnyoneCanSpend,
+            ))
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin(ask_amount),
+                Destination::AnyoneCanSpend,
+            ))
+            .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
+            .build();
+        let issue_nft_tx_id = issue_nft_tx.transaction().get_id();
+        tf.make_block_builder()
+            .add_transaction(issue_nft_tx)
+            .build_and_process(&mut rng)
+            .unwrap();
+
+        // Create order selling NFT for coins
+        let give_amount = Amount::from_atoms(1);
+        let order_data = OrderData::new(
+            Destination::AnyoneCanSpend,
+            OutputValue::Coin(ask_amount),
+            OutputValue::TokenV1(token_id, give_amount),
+        );
+
+        let nft_outpoint = UtxoOutPoint::new(issue_nft_tx_id.into(), 0);
+        let order_id = make_order_id(&nft_outpoint);
+        tf.make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(nft_outpoint.into(), InputWitness::NoSignature(None))
+                    .add_output(TxOutput::CreateOrder(Box::new(order_data.clone())))
+                    .build(),
+            )
+            .build_and_process(&mut rng)
+            .unwrap();
+
+        assert_eq!(
+            Some(order_data.clone()),
+            tf.chainstate.get_order_data(&order_id).unwrap()
+        );
+        assert_eq!(
+            Some(ask_amount),
+            tf.chainstate.get_order_ask_balance(&order_id).unwrap()
+        );
+        assert_eq!(
+            Some(give_amount),
+            tf.chainstate.get_order_give_balance(&order_id).unwrap()
+        );
+
+        // Try get an nft out of order with 1 atom less
+        {
+            let tx = TransactionBuilder::new()
+                .add_input(
+                    TxInput::from_utxo(issue_nft_tx_id.into(), 1),
+                    InputWitness::NoSignature(None),
+                )
+                .add_input(
+                    TxInput::AccountCommand(
+                        AccountNonce::new(0),
+                        AccountCommand::FillOrder(
+                            order_id,
+                            (ask_amount - Amount::from_atoms(1)).unwrap(),
+                            Destination::AnyoneCanSpend,
+                        ),
+                    ),
+                    InputWitness::NoSignature(None),
+                )
+                .add_output(TxOutput::Transfer(
+                    OutputValue::TokenV1(token_id, Amount::from_atoms(1)),
+                    Destination::AnyoneCanSpend,
+                ))
+                .build();
+            let tx_id = tx.transaction().get_id();
+            let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
+            assert_eq!(result.unwrap_err(),
+                chainstate::ChainstateError::ProcessBlockError(chainstate::BlockError::StateUpdateFailed(
+                    ConnectTransactionError::ConstrainedValueAccumulatorError(
+                        constraints_value_accumulator::Error::AttemptToPrintMoneyOrViolateTimelockConstraints(
+                            CoinOrTokenId::TokenId(token_id)
+                        ),
+                        tx_id.into()
+                    )
+                ))
+            );
+        }
+
+        // Fill order with 1 atom less, getting 0 nfts
+        let partially_fill_tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_utxo(issue_nft_tx_id.into(), 1),
+                InputWitness::NoSignature(None),
+            )
+            .add_input(
+                TxInput::AccountCommand(
+                    AccountNonce::new(0),
+                    AccountCommand::FillOrder(
+                        order_id,
+                        (ask_amount - Amount::from_atoms(1)).unwrap(),
+                        Destination::AnyoneCanSpend,
+                    ),
+                ),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin(Amount::from_atoms(1)),
+                Destination::AnyoneCanSpend,
+            ))
+            .add_output(TxOutput::Transfer(
+                OutputValue::TokenV1(token_id, Amount::from_atoms(0)),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let partially_fill_tx_id = partially_fill_tx.transaction().get_id();
+        tf.make_block_builder()
+            .add_transaction(partially_fill_tx)
+            .build_and_process(&mut rng)
+            .unwrap();
+
+        assert_eq!(
+            Some(order_data.clone()),
+            tf.chainstate.get_order_data(&order_id).unwrap()
+        );
+        assert_eq!(
+            Some(Amount::from_atoms(1)),
+            tf.chainstate.get_order_ask_balance(&order_id).unwrap()
+        );
+        assert_eq!(
+            Some(give_amount),
+            tf.chainstate.get_order_give_balance(&order_id).unwrap()
+        );
+
+        // Fill order and receive 1 nft for 1 atom
+        tf.make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_utxo(partially_fill_tx_id.into(), 0),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_input(
+                        TxInput::AccountCommand(
+                            AccountNonce::new(1),
+                            AccountCommand::FillOrder(
+                                order_id,
+                                Amount::from_atoms(1),
+                                Destination::AnyoneCanSpend,
+                            ),
+                        ),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_output(TxOutput::Transfer(
+                        OutputValue::TokenV1(token_id, Amount::from_atoms(1)),
+                        Destination::AnyoneCanSpend,
+                    ))
+                    .build(),
+            )
+            .build_and_process(&mut rng)
+            .unwrap();
+
+        assert_eq!(
+            Some(order_data),
+            tf.chainstate.get_order_data(&order_id).unwrap()
+        );
+        assert_eq!(
+            None,
+            tf.chainstate.get_order_ask_balance(&order_id).unwrap()
+        );
+        assert_eq!(
+            None,
+            tf.chainstate.get_order_give_balance(&order_id).unwrap()
+        );
     });
 }
