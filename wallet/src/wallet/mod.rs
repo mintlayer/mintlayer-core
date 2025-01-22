@@ -251,6 +251,8 @@ pub enum WalletError {
     OrderInfoMissing(OrderId),
     #[error("Calculating filled amount for order {0} failed")]
     CalculateOrderFilledAmountFailed(OrderId),
+    #[error("Transaction from {0:?} is confirmed and among unconfirmed descendants")]
+    ConfirmedTxAmongUnconfirmedDescendants(OutPointSourceId),
 }
 
 /// Result type used for the wallet
