@@ -63,11 +63,10 @@ where
                 .push(
                     Button::new(
                         Text::new(iced_fonts::Bootstrap::ClipboardCheck.to_string())
-                            .font(iced_fonts::BOOTSTRAP_FONT),
+                            .font(iced_fonts::BOOTSTRAP_FONT)
+                            .size(30),
                     )
                     .style(iced::widget::button::text)
-                    // .width(20)
-                    // .height(20)
                     .on_press(on_copy_to_clipboard),
                 )
                 .spacing(10)

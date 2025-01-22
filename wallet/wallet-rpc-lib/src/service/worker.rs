@@ -23,6 +23,7 @@ use logging::log;
 use utils_networking::broadcaster::Broadcaster;
 use wallet::wallet::Mnemonic;
 use wallet_controller::{ControllerError, NodeInterface};
+use wallet_types::scan_blockchain::ScanBlockchain;
 use wallet_types::seed_phrase::StoreSeedPhrase;
 
 use crate::types::RpcError;
@@ -205,7 +206,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletWorker<N> {
         whether_to_store_seed_phrase: StoreSeedPhrase,
         mnemonic: Option<String>,
         passphrase: Option<String>,
-        skip_syncing: bool,
+        scan_blockchain: ScanBlockchain,
     ) -> Result<CreatedWallet, RpcError<N>> {
         utils::ensure!(
             self.controller.is_none(),
@@ -221,7 +222,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletWorker<N> {
         };
         let passphrase_ref = passphrase.as_ref().map(|x| x.as_ref());
 
-        let wallet = if newly_generated_mnemonic || skip_syncing {
+        let wallet = if newly_generated_mnemonic || scan_blockchain.skip_syncing() {
             let info = self.node_rpc.chainstate_info().await.map_err(RpcError::RpcError)?;
             WalletController::create_wallet(
                 self.chain_config.clone(),
@@ -244,14 +245,23 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletWorker<N> {
         }
         .map_err(RpcError::Controller)?;
 
-        let controller = WalletController::new(
-            self.chain_config.clone(),
-            self.node_rpc.clone(),
-            wallet,
-            self.wallet_events.clone(),
-        )
-        .await
-        .map_err(RpcError::Controller)?;
+        let controller = if scan_blockchain.wait_for_sync() {
+            WalletController::new(
+                self.chain_config.clone(),
+                self.node_rpc.clone(),
+                wallet,
+                self.wallet_events.clone(),
+            )
+            .await
+            .map_err(RpcError::Controller)?
+        } else {
+            WalletController::new_unsynced(
+                self.chain_config.clone(),
+                self.node_rpc.clone(),
+                wallet,
+                self.wallet_events.clone(),
+            )
+        };
 
         self.controller.replace(controller);
 

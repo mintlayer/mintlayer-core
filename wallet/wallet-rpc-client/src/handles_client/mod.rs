@@ -49,8 +49,8 @@ use wallet_rpc_lib::{
     RpcError, WalletRpc,
 };
 use wallet_types::{
-    seed_phrase::StoreSeedPhrase, signature_status::SignatureStatus, utxo_types::UtxoTypes,
-    with_locked::WithLocked,
+    scan_blockchain::ScanBlockchain, seed_phrase::StoreSeedPhrase,
+    signature_status::SignatureStatus, utxo_types::UtxoTypes, with_locked::WithLocked,
 };
 
 use crate::wallet_rpc_traits::{
@@ -132,7 +132,7 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletInterface
                 whether_to_store_seed_phrase,
                 mnemonic,
                 passphrase,
-                false,
+                ScanBlockchain::ScanAndWait,
             )
             .await
             .map(Into::into)

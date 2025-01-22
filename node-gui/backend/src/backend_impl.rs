@@ -368,7 +368,7 @@ impl Backend {
                 StoreSeedPhrase::Store,
                 Some(mnemonic.to_string()),
                 None,
-                import.skip_syncing(),
+                import.scan_blockchain(),
             )
             .await
             .map_err(|err| BackendError::WalletError(err.to_string()))?;

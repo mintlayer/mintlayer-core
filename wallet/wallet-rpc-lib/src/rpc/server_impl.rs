@@ -37,7 +37,8 @@ use wallet_controller::{
     ConnectedPeer, ControllerConfig, NodeInterface, UtxoState, UtxoStates, UtxoType, UtxoTypes,
 };
 use wallet_types::{
-    seed_phrase::StoreSeedPhrase, signature_status::SignatureStatus, with_locked::WithLocked,
+    scan_blockchain::ScanBlockchain, seed_phrase::StoreSeedPhrase,
+    signature_status::SignatureStatus, with_locked::WithLocked,
 };
 
 use crate::{
@@ -100,7 +101,7 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> ColdWalletRpcServ
                 whether_to_store_seed_phrase,
                 mnemonic,
                 passphrase,
-                false,
+                ScanBlockchain::ScanAndWait,
             )
             .await
             .map(Into::<CreatedWallet>::into),
