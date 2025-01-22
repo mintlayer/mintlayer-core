@@ -742,61 +742,67 @@ impl OutputCache {
         confirmed_tx: &Transaction,
         block_id: Id<GenBlock>,
     ) -> WalletResult<Vec<Id<Transaction>>> {
-        let mut frozen_token_id: Option<TokenId> = None;
-        let mut confirmed_account_nonce: Option<(AccountType, AccountNonce)> = None;
+        struct Conflict {
+            frozen_token_id: Option<TokenId>,
+            confirmed_account_nonce: Option<(AccountType, AccountNonce)>,
+        }
 
-        for input in confirmed_tx.inputs() {
+        let conflict = confirmed_tx.inputs().iter().find_map(|input| {
             match input {
                 TxInput::Utxo(_) => {
                     //TODO: check conflicting utxo spends
+                    None
                 }
-                TxInput::Account(outpoint) => {
-                    confirmed_account_nonce = Some((outpoint.account().into(), outpoint.nonce()));
-                }
-                TxInput::AccountCommand(nonce, cmd) => {
-                    confirmed_account_nonce = Some((cmd.into(), *nonce));
-                    match cmd {
-                        AccountCommand::MintTokens(_, _)
-                        | AccountCommand::UnmintTokens(_)
-                        | AccountCommand::LockTokenSupply(_)
-                        | AccountCommand::ChangeTokenMetadataUri(_, _)
-                        | AccountCommand::ChangeTokenAuthority(_, _)
-                        | AccountCommand::UnfreezeToken(_)
-                        | AccountCommand::ConcludeOrder(_)
-                        | AccountCommand::FillOrder(_, _, _) => { /* do nothing */ }
-                        | AccountCommand::FreezeToken(token_id, _) => {
-                            frozen_token_id = Some(*token_id);
-                        }
-                    }
-                }
+                TxInput::Account(outpoint) => Some(Conflict {
+                    frozen_token_id: None,
+                    confirmed_account_nonce: Some((outpoint.account().into(), outpoint.nonce())),
+                }),
+                TxInput::AccountCommand(nonce, cmd) => match cmd {
+                    AccountCommand::MintTokens(_, _)
+                    | AccountCommand::UnmintTokens(_)
+                    | AccountCommand::LockTokenSupply(_)
+                    | AccountCommand::ChangeTokenMetadataUri(_, _)
+                    | AccountCommand::ChangeTokenAuthority(_, _)
+                    | AccountCommand::UnfreezeToken(_)
+                    | AccountCommand::ConcludeOrder(_)
+                    | AccountCommand::FillOrder(_, _, _) => Some(Conflict {
+                        frozen_token_id: None,
+                        confirmed_account_nonce: Some((cmd.into(), *nonce)),
+                    }),
+                    | AccountCommand::FreezeToken(token_id, _) => Some(Conflict {
+                        frozen_token_id: Some(*token_id),
+                        confirmed_account_nonce: Some((cmd.into(), *nonce)),
+                    }),
+                },
                 TxInput::OrderAccountCommand(_) => {}
             }
-        }
+        });
 
         // Collect all conflicting txs
-        let mut conflicting_txs = vec![];
+        let mut conflicting_txs = BTreeSet::new();
 
-        if frozen_token_id.is_some() || confirmed_account_nonce.is_some() {
+        if let Some(conflict) = conflict {
             for unconfirmed in self.unconfirmed_descendants.keys() {
-                if let Some(frozen_token_id) = frozen_token_id {
-                    let unconfirmed_tx = self.txs.get(unconfirmed).expect("must be present");
+                let unconfirmed_tx = self.txs.get(unconfirmed).expect("must be present");
+
+                if let Some(frozen_token_id) = conflict.frozen_token_id {
                     if self.uses_token(unconfirmed_tx, &frozen_token_id) {
                         if let WalletTx::Tx(tx) = unconfirmed_tx {
-                            conflicting_txs.push(tx.get_transaction().get_id());
+                            conflicting_txs.insert(tx.get_transaction().get_id());
                         }
                     }
                 }
 
-                if let Some((confirmed_account, confirmed_account_nonce)) = confirmed_account_nonce
+                if let Some((confirmed_account, confirmed_account_nonce)) =
+                    conflict.confirmed_account_nonce
                 {
-                    let unconfirmed_tx = self.txs.get(unconfirmed).expect("must be present");
                     if uses_conflicting_nonce(
                         unconfirmed_tx,
                         confirmed_account,
                         confirmed_account_nonce,
                     ) {
                         if let WalletTx::Tx(tx) = unconfirmed_tx {
-                            conflicting_txs.push(tx.get_transaction().get_id());
+                            conflicting_txs.insert(tx.get_transaction().get_id());
                         }
                     }
                 }
@@ -898,7 +904,7 @@ impl OutputCache {
 
         if is_unconfirmed && !already_present {
             self.unconfirmed_descendants.insert(tx_id.clone(), BTreeSet::new());
-        } else {
+        } else if !is_unconfirmed {
             self.unconfirmed_descendants.remove(&tx_id);
         }
 
@@ -1017,11 +1023,11 @@ impl OutputCache {
                     if let Some(descendants) =
                         self.unconfirmed_descendants.get_mut(&outpoint.source_id())
                     {
-                        if is_unconfirmed {
-                            descendants.insert(tx_id.clone());
-                        } else {
-                            descendants.remove(tx_id);
-                        }
+                        ensure!(
+                            is_unconfirmed,
+                            WalletError::ConfirmedTxAmongUnconfirmedDescendants(tx_id.clone())
+                        );
+                        descendants.insert(tx_id.clone());
                     }
                 }
                 TxInput::Account(outpoint) => match outpoint.account() {
