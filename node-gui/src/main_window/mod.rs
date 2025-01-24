@@ -21,10 +21,7 @@ use common::{
     primitives::{per_thousand::PerThousand, semver::SemVer, user_agent::UserAgent, Amount},
 };
 use iced::{
-    widget::{
-        button::{Button, Style},
-        center, text, Stack, Text,
-    },
+    widget::{center, container, Stack, Text},
     Element, Length, Task,
 };
 use logging::log;
@@ -44,7 +41,9 @@ use crate::{
     main_window::{main_menu::MenuMessage, main_widget::MainWidgetMessage},
     widgets::{
         confirm_broadcast::new_confirm_broadcast,
+        esc_handler::esc_handler,
         new_wallet_account::new_wallet_account,
+        opaque::opaque,
         popup_dialog::{popup_dialog, Popup},
         wallet_mnemonic::wallet_mnemonic_dialog,
         wallet_set_password::wallet_set_password_dialog,
@@ -774,19 +773,6 @@ impl MainWindow {
             iced::widget::Column::new().height(70),
         ];
 
-        let overlay = || {
-            Button::new(text(""))
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .style(|_theme, _status| Style {
-                    background: Some(iced::Background::Color(iced::Color::TRANSPARENT)),
-                    text_color: iced::Color::BLACK,
-                    ..Style::default()
-                })
-                .on_press(MainWindowMessage::IgnoreEvent)
-                .into()
-        };
-
         let show_dialog = self.active_dialog != ActiveDialog::None;
         let dialog = show_dialog
             .then(move || -> Element<MainWindowMessage> {
@@ -878,30 +864,72 @@ impl MainWindow {
                     }
                 }
             })
-            .map(|d| [overlay(), center(d).into()]);
+            .map(|d| {
+                esc_handler(
+                    centered_with_opaque_blurred_bg(d),
+                    Some(MainWindowMessage::CloseDialog),
+                )
+            });
 
-        let popup_opt = self.popups.last();
-        let show_popup = popup_opt.is_some() || self.file_dialog_active;
-        let popup = show_popup
-            .then(move || -> Element<MainWindowMessage> {
-                match (self.file_dialog_active, popup_opt) {
-                    (true, _) => Text::new("File dialog...").into(),
-                    (_, Some(popup)) => {
-                        popup_dialog(popup.clone(), MainWindowMessage::ClosePopup).into()
-                    }
-                    (_, None) => Text::new("Nothing to show").into(),
+        let popup: Option<Element<MainWindowMessage>> =
+            match (self.file_dialog_active, self.popups.last()) {
+                (true, _) => Some(bordered_text_on_normal_bg("File dialog...")),
+
+                (_, Some(popup)) => {
+                    Some(popup_dialog(popup.clone(), MainWindowMessage::ClosePopup).into())
                 }
-            })
-            .map(|d| [overlay(), center(d).into()]);
+                (_, None) => None,
+            };
+        let popup = popup.map(|d| {
+            esc_handler(
+                centered_with_opaque_blurred_bg(d),
+                (!self.file_dialog_active).then_some(MainWindowMessage::ClosePopup),
+            )
+        });
 
-        Stack::with_children(
-            [main_content.into()]
-                .into_iter()
-                .chain(dialog.into_iter().flatten())
-                .chain(popup.into_iter().flatten()),
-        )
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .into()
+        Stack::with_children(std::iter::once(main_content.into()).chain(dialog).chain(popup))
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .into()
     }
+}
+
+fn bordered_text_on_normal_bg<'a, Message: 'a>(text: &'a str) -> Element<'a, Message> {
+    container(Text::new(text))
+        .style(|theme: &iced::Theme| {
+            let palette = theme.extended_palette();
+
+            container::Style {
+                background: Some(palette.background.base.color.into()),
+                border: iced::Border {
+                    width: 1.0,
+                    radius: 2.0.into(),
+                    color: palette.background.strong.color,
+                },
+                ..container::Style::default()
+            }
+        })
+        .padding([5, 10])
+        .into()
+}
+
+/// Create a container that
+/// 1) fills all the available space and centers the provided content inside;
+/// 2) is opaque to mouse events;
+/// 3) uses semi-transparent white as the background, which creates the blurred background effect.
+fn centered_with_opaque_blurred_bg<'a, Message: 'a>(
+    content: impl Into<Element<'a, Message>>,
+) -> Element<'a, Message> {
+    opaque(center(content).style(|_theme| {
+        container::Style {
+            background: Some(
+                iced::Color {
+                    a: 0.5,
+                    ..iced::Color::WHITE
+                }
+                .into(),
+            ),
+            ..container::Style::default()
+        }
+    }))
 }

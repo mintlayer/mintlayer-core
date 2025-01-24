@@ -114,7 +114,7 @@ impl<Message> Component<Message, Theme, iced::Renderer> for WalletMnemonicDialog
                     .into()
             } else {
                 Row::new()
-                    .push(text(mnemonic.clone()))
+                    .push(text(mnemonic.clone()).width(Length::Fill).center())
                     .push(
                         Button::new(
                             Text::new(iced_fonts::Bootstrap::ClipboardCheck.to_string())
