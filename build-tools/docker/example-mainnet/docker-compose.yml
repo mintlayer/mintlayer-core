@@ -1,10 +1,6 @@
 x-common: &ml-common
   volumes:
     - ./mintlayer-data:/home/mintlayer
-  # Force pull the images on each invocation of docker compose.
-  # Note: this is mostly needed when IMAGE_TAG is set to "latest"; without it you may end up using
-  # an older version of an image if you happened to pull another "latest" version of it in the past.
-  pull_policy: always
 
 x-common-env: &ml-common-env
   RUST_LOG:
@@ -123,14 +119,14 @@ services:
   wallet-cli:
     <<: *ml-common
     image: $DOCKERHUB_USERNAME/wallet-cli:$IMAGE_TAG
-    command: wallet-cli mainnet
+    command: wallet-cli
     depends_on:
       - node-daemon
     environment:
       <<: *ml-common-env
-      ML_MAINNET_WALLET_NODE_RPC_ADDRESS: node-daemon:3030
-      ML_MAINNET_WALLET_NODE_RPC_USERNAME: $NODE_RPC_USERNAME
-      ML_MAINNET_WALLET_NODE_RPC_PASSWORD: $NODE_RPC_PASSWORD
+      ML_WALLET_REMOTE_RPC_WALLET_ADDRESS: wallet-rpc-daemon:3034
+      ML_WALLET_REMOTE_RPC_WALLET_USERNAME: $WALLET_RPC_DAEMON_USERNAME
+      ML_WALLET_REMOTE_RPC_WALLET_PASSWORD: $WALLET_RPC_DAEMON_PASSWORD
     profiles:
       # Put it in a separate profile, so that it's not started automatically by "docker compose up".
       - wallet_cli
