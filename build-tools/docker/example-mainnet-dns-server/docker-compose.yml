@@ -1,8 +1,6 @@
-version: '3'
-
 services:
   dns-server:
-    image: $DOCKERHUB_USERNAME/dns-server:$ML_SOFTWARE_VERSION
+    image: $DOCKERHUB_USERNAME/dns-server:$IMAGE_TAG
     volumes:
       - ./mintlayer-data:/home/mintlayer
     command: dns-server

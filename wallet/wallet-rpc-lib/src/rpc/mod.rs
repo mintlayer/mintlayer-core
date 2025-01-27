@@ -917,7 +917,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
     ) -> WRpcResult<NewTransaction, N> {
         let delegation_id = delegation_id
             .decode_object(&self.chain_config)
-            .map_err(|_| RpcError::InvalidPoolId)?;
+            .map_err(|_| RpcError::InvalidDelegationId)?;
         let destination_address = destination_address
             .into_address(self.chain_config())
             .map_err(|_| RpcError::InvalidAddress)?;
