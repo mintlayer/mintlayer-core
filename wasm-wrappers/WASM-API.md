@@ -17,12 +17,12 @@ derivation path: 44'/mintlayer_coin_type'/0'
 ### Function: `make_receiving_address`
 
 From an extended private key create a receiving private key for a given key index
-derivation path: 44'/mintlayer_coin_type'/0'/0/key_index
+derivation path: current_derivation_path/0/key_index
 
 ### Function: `make_change_address`
 
 From an extended private key create a change private key for a given key index
-derivation path: 44'/mintlayer_coin_type'/0'/1/key_index
+derivation path: current_derivation_path/1/key_index
 
 ### Function: `pubkey_to_pubkeyhash_address`
 
@@ -40,12 +40,12 @@ Return the extended public key from an extended private key
 ### Function: `make_receiving_address_public_key`
 
 From an extended public key create a receiving public key for a given key index
-derivation path: 44'/mintlayer_coin_type'/0'/0/key_index
+derivation path: current_derivation_path/0/key_index
 
 ### Function: `make_change_address_public_key`
 
 From an extended public key create a change public key for a given key index
-derivation path: 44'/mintlayer_coin_type'/0'/1/key_index
+derivation path: current_derivation_path/1/key_index
 
 ### Function: `sign_message_for_spending`
 
@@ -326,6 +326,34 @@ It is recommended to use a strict `Transaction` size and set the second paramete
 Calculate the "effective balance" of a pool, given the total pool balance and pledge by the pool owner/staker.
 The effective balance is how the influence of a pool is calculated due to its balance.
 
+### Function: `encode_input_for_mint_tokens`
+
+Given a token_id, an amount of tokens to mint and nonce return an encoded mint tokens input
+
+### Function: `encode_input_for_unmint_tokens`
+
+Given a token_id and nonce return an encoded unmint tokens input
+
+### Function: `encode_input_for_lock_token_supply`
+
+Given a token_id and nonce return an encoded lock_token_supply input
+
+### Function: `encode_input_for_freeze_token`
+
+Given a token_id, is token unfreezable and nonce return an encoded freeze token input
+
+### Function: `encode_input_for_unfreeze_token`
+
+Given a token_id and nonce return an encoded unfreeze token input
+
+### Function: `encode_input_for_change_token_authority`
+
+Given a token_id, new authority destination and nonce return an encoded change token authority input
+
+### Function: `encode_input_for_change_token_metadata_uri`
+
+Given a token_id, new metadata uri and nonce return an encoded change token metadata uri input
+
 ### Function: `encode_create_order_output`
 
 Given ask and give amounts and a conclude key create output that creates an order.
@@ -349,6 +377,10 @@ The network, for which an operation to be done. Mainnet, testnet, etc.
 ### Enum: `FreezableToken`
 
 Indicates whether a token can be frozen
+
+### Enum: `TokenUnfreezable`
+
+Indicates whether a token can be unfrozen once frozen
 
 ### Enum: `TotalSupply`
 
