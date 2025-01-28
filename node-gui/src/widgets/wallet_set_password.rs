@@ -13,54 +13,104 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#[allow(deprecated)]
+use iced::widget::Component;
+
 use iced::{
     alignment::Horizontal,
-    widget::{container, text_input, Button, Text},
-    Length,
+    widget::{self, container, text_input, Button, Text},
+    Element, Length, Theme,
 };
 use iced_aw::Card;
 
-pub fn wallet_set_password_dialog<'a, Message, F1, F2>(
-    state: &SetPasswordState,
-    on_set_password: Message,
-    on_edit_password1: F1,
-    on_edit_password2: F2,
-    on_close: Message,
-) -> Card<'a, Message>
-where
-    Message: Clone + 'a,
-    F1: Fn(String) -> Message + 'a,
-    F2: Fn(String) -> Message + 'a,
-{
-    let button_enabled = !state.password1.is_empty();
-    let button = Button::new(Text::new("Encrypt wallet").align_x(Horizontal::Center));
-    let button = if button_enabled {
-        button.on_press(on_set_password)
-    } else {
-        button
-    };
-
-    Card::new(
-        Text::new("Encrypt wallet"),
-        iced::widget::column![
-            text_input("Password", &state.password1)
-                .secure(true)
-                .on_input(on_edit_password1)
-                .padding(15),
-            text_input("Repeat", &state.password2)
-                .secure(true)
-                .on_input(on_edit_password2)
-                .padding(15)
-        ]
-        .spacing(10),
-    )
-    .foot(container(button).center_x(Length::Fill))
-    .max_width(600.0)
-    .on_close(on_close)
+pub struct WalletUnlockDialog<Message> {
+    on_set_password: Box<dyn Fn(String, String) -> Message>,
+    on_close: Box<dyn Fn() -> Message>,
 }
 
-#[derive(Default, Debug, PartialEq, Eq, Clone)]
+pub fn wallet_set_password_dialog<Message>(
+    on_set_password: Box<dyn Fn(String, String) -> Message>,
+    on_close: Box<dyn Fn() -> Message>,
+) -> WalletUnlockDialog<Message> {
+    WalletUnlockDialog {
+        on_set_password,
+        on_close,
+    }
+}
+
+#[derive(Default)]
 pub struct SetPasswordState {
-    pub password1: String,
-    pub password2: String,
+    password1: String,
+    password2: String,
+}
+
+#[derive(Clone)]
+pub enum SetPasswordEvent {
+    EditPassword1(String),
+    EditPassword2(String),
+    Ok,
+    Cancel,
+}
+
+#[allow(deprecated)]
+impl<Message> Component<Message, Theme, iced::Renderer> for WalletUnlockDialog<Message> {
+    type State = SetPasswordState;
+    type Event = SetPasswordEvent;
+
+    fn update(&mut self, state: &mut Self::State, event: Self::Event) -> Option<Message> {
+        match event {
+            SetPasswordEvent::EditPassword1(password) => {
+                state.password1 = password;
+                None
+            }
+            SetPasswordEvent::EditPassword2(password) => {
+                state.password2 = password;
+                None
+            }
+            SetPasswordEvent::Ok => Some((self.on_set_password)(
+                state.password1.clone(),
+                state.password2.clone(),
+            )),
+            SetPasswordEvent::Cancel => Some((self.on_close)()),
+        }
+    }
+
+    fn view(&self, state: &Self::State) -> Element<Self::Event, Theme, iced::Renderer> {
+        let button_enabled = !state.password1.is_empty();
+        let button = Button::new(Text::new("Encrypt wallet").align_x(Horizontal::Center));
+        let button = if button_enabled {
+            button.on_press(SetPasswordEvent::Ok)
+        } else {
+            button
+        };
+
+        Card::new(
+            Text::new("Encrypt wallet"),
+            iced::widget::column![
+                text_input("Password", &state.password1)
+                    .secure(true)
+                    .on_input(SetPasswordEvent::EditPassword1)
+                    .padding(15),
+                text_input("Repeat", &state.password2)
+                    .secure(true)
+                    .on_input(SetPasswordEvent::EditPassword2)
+                    .padding(15)
+            ]
+            .spacing(10),
+        )
+        .foot(container(button).center_x(Length::Fill))
+        .max_width(600.0)
+        .on_close(SetPasswordEvent::Cancel)
+        .into()
+    }
+}
+
+impl<'a, Message> From<WalletUnlockDialog<Message>> for Element<'a, Message, Theme, iced::Renderer>
+where
+    Message: 'a,
+{
+    fn from(component: WalletUnlockDialog<Message>) -> Self {
+        #[allow(deprecated)]
+        widget::component(component)
+    }
 }
