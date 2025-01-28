@@ -48,8 +48,8 @@ use wallet_storage::{
     WalletStorageWriteUnlocked,
 };
 use wallet_types::{
-    partially_signed_transaction::PartiallySignedTransaction, seed_phrase::StoreSeedPhrase,
-    signature_status::SignatureStatus, AccountId,
+    hw_data::HardwareWalletData, partially_signed_transaction::PartiallySignedTransaction,
+    seed_phrase::StoreSeedPhrase, signature_status::SignatureStatus, AccountId,
 };
 
 use crate::{
@@ -478,6 +478,10 @@ impl SignerProvider for SoftwareSignerProvider {
         id: &AccountId,
     ) -> WalletResult<Account<Self::K>> {
         Account::load_from_database(chain_config, db_tx, id)
+    }
+
+    fn get_hardware_wallet_data(&mut self) -> Option<HardwareWalletData> {
+        None
     }
 }
 

@@ -260,6 +260,10 @@ pub enum WalletError {
     CannotChangeTrezorWalletType,
     #[error("The file being loaded does not correspond to the connected hardware wallet")]
     HardwareWalletDifferentFile,
+    #[error("The file being loaded does not correspond to the connected hardware wallet: File DeviceId {0}, Connected device {1}, labels {2} and {3}")]
+    HardwareWalletDifferentDevice(String, String, String, String),
+    #[error("The file being loaded correspond to the connected hardware wallet, but public keys are different. Maybe a wrong passphrase was inputed?")]
+    HardwareWalletDifferentPassphrase,
     #[error("Missing additional data for Pool {0}")]
     MissingPoolAdditionalData(PoolId),
     #[error("Missing additional data for Token {0}")]
@@ -345,6 +349,10 @@ where
         db_tx.set_lookahead_size(LOOKAHEAD_SIZE)?;
         db_tx.set_wallet_type(wallet_type)?;
         let mut signer_provider = signer_provider(&mut db_tx)?;
+
+        if let Some(data) = signer_provider.get_hardware_wallet_data() {
+            db_tx.set_hardware_wallet_data(data)?;
+        }
 
         let default_account = Wallet::<B, P>::create_next_unused_account(
             U31::ZERO,

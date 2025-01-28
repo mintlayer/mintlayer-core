@@ -35,6 +35,7 @@ use wallet_types::{
     account_id::{AccountAddress, AccountPublicKey},
     account_info::{AccountVrfKeys, StandaloneMultisig, StandaloneWatchOnlyKey},
     chain_info::ChainInfo,
+    hw_data::HardwareWalletData,
     keys::RootKeys,
     seed_phrase::SerializableSeedPhrase,
     wallet_type::WalletType,
@@ -118,6 +119,7 @@ pub trait WalletStorageReadLocked {
     ) -> Result<BTreeMap<AccountDerivationPathId, ExtendedPublicKey>>;
     fn get_median_time(&self) -> Result<Option<BlockTimestamp>>;
     fn get_lookahead_size(&self) -> Result<u32>;
+    fn get_hardware_wallet_data(&self) -> Result<Option<HardwareWalletData>>;
 }
 
 /// Queries on persistent wallet data with access to encrypted data
@@ -197,6 +199,7 @@ pub trait WalletStorageWriteLocked: WalletStorageReadLocked {
     fn set_lookahead_size(&mut self, lookahead_size: u32) -> Result<()>;
     fn clear_public_keys(&mut self) -> Result<()>;
     fn clear_addresses(&mut self) -> Result<()>;
+    fn set_hardware_wallet_data(&mut self, data: HardwareWalletData) -> Result<()>;
 }
 
 /// Modifying operations on persistent wallet data with access to encrypted data
