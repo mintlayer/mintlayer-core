@@ -17,6 +17,7 @@ pub mod account_id;
 pub mod account_info;
 pub mod chain_info;
 pub mod currency;
+pub mod hw_data;
 pub mod keys;
 pub mod partially_signed_transaction;
 pub mod scan_blockchain;

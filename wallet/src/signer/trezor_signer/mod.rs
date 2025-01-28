@@ -84,6 +84,7 @@ use wallet_storage::{
 };
 use wallet_types::{
     account_info::DEFAULT_ACCOUNT_INDEX,
+    hw_data::{HardwareWalletData, TrezorData},
     partially_signed_transaction::{
         OrderAdditionalInfo, PartiallySignedTransaction, TokenAdditionalInfo, TxAdditionalInfo,
     },
@@ -1133,6 +1134,7 @@ fn to_trezor_output_lock(lock: &OutputTimeLock) -> trezor_client::protos::Mintla
 #[derive(Clone)]
 pub struct TrezorSignerProvider {
     client: Arc<Mutex<Trezor>>,
+    data: TrezorData,
 }
 
 impl std::fmt::Debug for TrezorSignerProvider {
@@ -1143,11 +1145,12 @@ impl std::fmt::Debug for TrezorSignerProvider {
 
 impl TrezorSignerProvider {
     pub fn new() -> Result<Self, TrezorError> {
-        let client =
+        let (client, data) =
             find_trezor_device().map_err(|err| TrezorError::DeviceError(err.to_string()))?;
 
         Ok(Self {
             client: Arc::new(Mutex::new(client)),
+            data,
         })
     }
 
@@ -1155,10 +1158,11 @@ impl TrezorSignerProvider {
         chain_config: Arc<ChainConfig>,
         db_tx: &impl WalletStorageReadLocked,
     ) -> WalletResult<Self> {
-        let client = find_trezor_device().map_err(SignerError::TrezorError)?;
+        let (client, data) = find_trezor_device().map_err(SignerError::TrezorError)?;
 
         let provider = Self {
             client: Arc::new(Mutex::new(client)),
+            data,
         };
 
         check_public_keys(db_tx, &provider, chain_config)?;
@@ -1219,14 +1223,34 @@ fn check_public_keys(
         .ok_or(WalletError::WalletNotInitialized)?;
     let expected_pk = provider.fetch_extended_pub_key(&chain_config, DEFAULT_ACCOUNT_INDEX)?;
     let loaded_acc = provider.load_account_from_database(chain_config, db_tx, &first_acc)?;
-    ensure!(
-        loaded_acc.key_chain().account_public_key() == &expected_pk,
-        WalletError::HardwareWalletDifferentFile
-    );
-    Ok(())
+
+    if loaded_acc.key_chain().account_public_key() == &expected_pk {
+        return Ok(());
+    }
+
+    if let Some(data) = db_tx.get_hardware_wallet_data()? {
+        match data {
+            HardwareWalletData::Trezor(data) => {
+                // If the device_id and label are the same but public keys are different, maybe a
+                // different passphrase was used
+                if data == provider.data {
+                    return Err(WalletError::HardwareWalletDifferentPassphrase);
+                } else {
+                    return Err(WalletError::HardwareWalletDifferentDevice(
+                        data.device_id,
+                        provider.data.device_id.clone(),
+                        data.label,
+                        provider.data.label.clone(),
+                    ));
+                }
+            }
+        }
+    }
+
+    Err(WalletError::HardwareWalletDifferentFile)
 }
 
-fn find_trezor_device() -> Result<Trezor, TrezorError> {
+fn find_trezor_device() -> Result<(Trezor, TrezorData), TrezorError> {
     let mut devices = find_devices(false)
         .into_iter()
         .filter(|device| device.model == Model::Trezor || device.model == Model::TrezorEmulator)
@@ -1250,7 +1274,12 @@ fn find_trezor_device() -> Result<Trezor, TrezorError> {
         TrezorError::MintlayerFeaturesNotSupported
     );
 
-    Ok(client)
+    let data = TrezorData {
+        label: features.label().to_owned(),
+        device_id: features.device_id().to_owned(),
+    };
+
+    Ok((client, data))
 }
 
 impl SignerProvider for TrezorSignerProvider {
@@ -1290,6 +1319,10 @@ impl SignerProvider for TrezorSignerProvider {
         id: &AccountId,
     ) -> WalletResult<Account<Self::K>> {
         Account::load_from_database(chain_config, db_tx, id)
+    }
+
+    fn get_hardware_wallet_data(&mut self) -> Option<HardwareWalletData> {
+        Some(HardwareWalletData::Trezor(self.data.clone()))
     }
 }
 

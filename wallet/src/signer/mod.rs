@@ -37,8 +37,8 @@ use wallet_storage::{
     WalletStorageReadLocked, WalletStorageReadUnlocked, WalletStorageWriteUnlocked,
 };
 use wallet_types::{
-    partially_signed_transaction::PartiallySignedTransaction, signature_status::SignatureStatus,
-    AccountId,
+    hw_data::HardwareWalletData, partially_signed_transaction::PartiallySignedTransaction,
+    signature_status::SignatureStatus, AccountId,
 };
 
 use crate::{
@@ -156,4 +156,6 @@ pub trait SignerProvider {
         db_tx: &impl WalletStorageReadLocked,
         id: &AccountId,
     ) -> WalletResult<Account<Self::K>>;
+
+    fn get_hardware_wallet_data(&mut self) -> Option<HardwareWalletData>;
 }
