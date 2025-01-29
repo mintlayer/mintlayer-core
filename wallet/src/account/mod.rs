@@ -851,12 +851,11 @@ impl<K: AccountKeyChains> Account<K> {
             .into_iter()
             .filter(|(_, pool_data)| match filter {
                 WalletPoolsFilter::All => true,
-                // FIXME for standalone private keys
                 WalletPoolsFilter::Decommission => {
-                    self.key_chain.is_destination_mine(&pool_data.decommission_key)
+                    self.key_chain.has_private_key_for_destination(&pool_data.decommission_key)
                 }
                 WalletPoolsFilter::Stake => {
-                    self.key_chain.is_destination_mine(&pool_data.stake_destination)
+                    self.key_chain.has_private_key_for_destination(&pool_data.stake_destination)
                 }
             })
             .collect()

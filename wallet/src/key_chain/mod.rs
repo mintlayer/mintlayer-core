@@ -187,6 +187,9 @@ where
     // Return true if the provided destination belongs to this key chain
     fn is_destination_mine(&self, destination: &Destination) -> bool;
 
+    // Return true if we have the private key for the provided destination
+    fn has_private_key_for_destination(&self, destination: &Destination) -> bool;
+
     // Return true if the provided public key belongs to this key chain
     fn is_public_key_mine(&self, public_key: &PublicKey) -> bool;
 
