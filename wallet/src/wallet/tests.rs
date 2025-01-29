@@ -4344,6 +4344,13 @@ fn wallet_abandone_transactions(#[case] seed: Seed) {
     wallet.scan_mempool(txs_to_keep.as_slice(), &WalletEventsNoOp).unwrap();
     let coin_balance = get_coin_balance_with_inactive(&wallet);
     assert_eq!(coin_balance, coins_after_abandon);
+
+    // Abandone the same tx again
+    let result = wallet.abandon_transaction(DEFAULT_ACCOUNT_INDEX, transaction_id);
+    assert_eq!(
+        result.unwrap_err(),
+        WalletError::CannotChangeTransactionState(TxState::Abandoned, TxState::Abandoned)
+    );
 }
 
 #[rstest]
@@ -6470,12 +6477,12 @@ fn create_order_fill_partially_conclude(#[case] seed: Seed) {
     }
 }
 
-// Create 2 wallet from the same mnemonic.
+// Create 2 wallets from the same mnemonic.
 // Create a pool and a delegation with some stake for both wallets.
-// Add 2 consequtive txs that spend share from delelgation to the first wallet as unconfirmed.
+// Add 2 consecutive txs that spend share from delegation to the first wallet as unconfirmed.
 // Add 1 txs that spends share from delegation with different amount (so that tx id is different)
 // via the second wallet and submit it to the block.
-// Check that 2 unconfirmed txs from the first wallet conflicts with confirmed tx and got removed.
+// Check that 2 unconfirmed txs from the first wallet conflict with confirmed tx and got removed.
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -6604,6 +6611,7 @@ fn conflicting_delegation_account_nonce(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
         .unwrap();
+    let spend_from_delegation_tx_1_id = spend_from_delegation_tx_1.transaction().get_id();
 
     wallet
         .add_account_unconfirmed_tx(
@@ -6624,6 +6632,7 @@ fn conflicting_delegation_account_nonce(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
         .unwrap();
+    let spend_from_delegation_tx_2_id = spend_from_delegation_tx_2.transaction().get_id();
 
     wallet
         .add_account_unconfirmed_tx(
@@ -6652,6 +6661,7 @@ fn conflicting_delegation_account_nonce(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
         .unwrap();
+    let spend_from_delegation_tx_3_id = spend_from_delegation_tx_3.transaction().get_id();
 
     let (_, block5) = create_block(
         &chain_config,
@@ -6660,6 +6670,7 @@ fn conflicting_delegation_account_nonce(#[case] seed: Seed) {
         Amount::ZERO,
         4,
     );
+    let block5_id = block5.get_id();
     scan_wallet(&mut wallet, BlockHeight::new(4), vec![block5]);
 
     // if confirmed tx is added conflicting txs must be removed from the output cache
@@ -6690,13 +6701,62 @@ fn conflicting_delegation_account_nonce(#[case] seed: Seed) {
         coin_balance,
         (coin_balance_after_delegating + withdraw_amount_3).unwrap()
     );
+
+    assert_eq!(
+        *wallet
+            .get_transaction(DEFAULT_ACCOUNT_INDEX, spend_from_delegation_tx_1_id)
+            .unwrap()
+            .state(),
+        TxState::Conflicted(block5_id.into())
+    );
+    assert_eq!(
+        *wallet
+            .get_transaction(DEFAULT_ACCOUNT_INDEX, spend_from_delegation_tx_2_id)
+            .unwrap()
+            .state(),
+        TxState::Conflicted(block5_id.into())
+    );
+    assert_eq!(
+        *wallet
+            .get_transaction(DEFAULT_ACCOUNT_INDEX, spend_from_delegation_tx_3_id)
+            .unwrap()
+            .state(),
+        TxState::Confirmed(
+            BlockHeight::new(5),
+            chain_config.genesis_block().timestamp(),
+            0
+        )
+    );
+
+    // Abandone conflicting txs
+    wallet
+        .abandon_transaction(DEFAULT_ACCOUNT_INDEX, spend_from_delegation_tx_1_id)
+        .unwrap();
+    assert_eq!(
+        *wallet
+            .get_transaction(DEFAULT_ACCOUNT_INDEX, spend_from_delegation_tx_1_id)
+            .unwrap()
+            .state(),
+        TxState::Abandoned
+    );
+
+    wallet
+        .abandon_transaction(DEFAULT_ACCOUNT_INDEX, spend_from_delegation_tx_2_id)
+        .unwrap();
+    assert_eq!(
+        *wallet
+            .get_transaction(DEFAULT_ACCOUNT_INDEX, spend_from_delegation_tx_2_id)
+            .unwrap()
+            .state(),
+        TxState::Abandoned
+    );
 }
 
 // Create a pool and a delegation with some share.
-// Create 2 consequtive txs that spend from delegation account and add them as unconfirmed.
+// Create 2 consecutive txs that spend from delegation account and add them as unconfirmed.
 // Check confirmed/unconfirmed balance and ensure that account nonce is incremented in OutputCache.
 // Submit the first tx in a block.
-// Check that Confirmed balance changed but
+// Check that confirmed balance changed and unconfirmed stayed the same.
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -6919,6 +6979,11 @@ fn conflicting_delegation_account_nonce_same_tx(#[case] seed: Seed) {
     );
 }
 
+// Issue and mint some tokens
+// Create an order selling tokens for coins
+// Create 2 fill order txs and add them to a wallet as unconfirmed
+// Confirm the first tx in a block and check that it is accounted in confirmed balance
+// and also that unconfirmed balance has second tx.
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -7033,7 +7098,7 @@ fn conflicting_order_account_nonce(#[case] seed: Seed) {
     assert_eq!(actual_order_data.last_nonce, None);
     assert_eq!(&actual_order_data.conclude_key, address2.as_object());
 
-    // Create 2 fill orders txs and put them in unconfirmed
+    // Create 2 fill order txs and put them in unconfirmed
     let order_info = RpcOrderInfo {
         conclude_key: address2.clone().into_object(),
         initially_given: RpcOutputValue::Token {

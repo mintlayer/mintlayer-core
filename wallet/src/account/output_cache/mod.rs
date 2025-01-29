@@ -802,7 +802,9 @@ impl OutputCache {
                         confirmed_account_nonce,
                     ) {
                         if let WalletTx::Tx(tx) = unconfirmed_tx {
-                            conflicting_txs.insert(tx.get_transaction().get_id());
+                            if confirmed_tx.get_id() != tx.get_transaction().get_id() {
+                                conflicting_txs.insert(tx.get_transaction().get_id());
+                            }
                         }
                     }
                 }
@@ -813,14 +815,10 @@ impl OutputCache {
         let mut conflicting_txs_with_descendants = vec![];
 
         for conflicting_tx in conflicting_txs {
-            if conflicting_tx != confirmed_tx.get_id() {
-                let descendants = self.remove_descendants_and_mark_as(
-                    conflicting_tx,
-                    TxState::Conflicted(block_id),
-                )?;
+            let descendants =
+                self.remove_descendants_and_mark_as(conflicting_tx, TxState::Conflicted(block_id))?;
 
-                conflicting_txs_with_descendants.extend(descendants.into_iter());
-            }
+            conflicting_txs_with_descendants.extend(descendants.into_iter());
         }
 
         Ok(conflicting_txs_with_descendants)
