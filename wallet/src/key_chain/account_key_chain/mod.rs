@@ -432,6 +432,11 @@ impl<V: VrfKeyChain> AccountKeyChains for AccountKeyChainImpl<V> {
         Ok(())
     }
 
+    fn has_private_key_for_destination(&self, destination: &Destination) -> bool {
+        self.is_destination_mine(destination)
+            || self.standalone_private_keys.contains_key(destination)
+    }
+
     // Return true if the provided destination belongs to this key chain
     fn is_destination_mine(&self, destination: &Destination) -> bool {
         KeyPurpose::ALL
