@@ -251,41 +251,54 @@ impl MainWindow {
         backend_sender: &BackendSender,
     ) -> Task<MainWindowMessage> {
         match msg {
-            MainWindowMessage::MenuMessage(menu_message) => match menu_message {
-                MenuMessage::NoOp => Task::none(),
-                MenuMessage::CreateNewWallet { wallet_type } => {
-                    let generated_mnemonic =
-                        wallet_controller::mnemonic::generate_new_mnemonic(self.language);
-                    self.active_dialog = ActiveDialog::WalletCreate {
-                        generated_mnemonic,
-                        wallet_type,
-                    };
+            MainWindowMessage::MenuMessage(menu_message) => {
+                // Note: iced_aw's menu has an annoying bug/feature - when a menu item is clicked, the drop down menu
+                // won't close automatically, allowing the user to continue clicking on menu items.
+                // E.g. see https://github.com/iced-rs/iced_aw/issues/312
+                // This allows the user to mess things up by opening dialogs on top of dialogs; to prevent this,
+                // we first check if a dialog is already open and ignore the event in such a case.
+                if self.active_dialog != ActiveDialog::None || self.file_dialog_active {
                     Task::none()
+                } else {
+                    match menu_message {
+                        MenuMessage::NoOp => Task::none(),
+                        MenuMessage::CreateNewWallet { wallet_type } => {
+                            let generated_mnemonic =
+                                wallet_controller::mnemonic::generate_new_mnemonic(self.language);
+                            self.active_dialog = ActiveDialog::WalletCreate {
+                                generated_mnemonic,
+                                wallet_type,
+                            };
+                            Task::none()
+                        }
+                        MenuMessage::RecoverWallet { wallet_type } => {
+                            self.active_dialog = ActiveDialog::WalletRecover { wallet_type };
+                            Task::none()
+                        }
+                        MenuMessage::OpenWallet { wallet_type } => {
+                            self.file_dialog_active = true;
+                            Task::perform(
+                                async move {
+                                    let file_opt = AsyncFileDialog::new().pick_file().await;
+                                    if let Some(file) = file_opt {
+                                        log::info!("Open wallet file: {file:?}");
+                                        MainWindowMessage::OpenWalletFileSelected {
+                                            file_path: file.path().to_owned(),
+                                            wallet_type,
+                                        }
+                                    } else {
+                                        MainWindowMessage::OpenWalletFileCanceled
+                                    }
+                                },
+                                identity,
+                            )
+                        }
+                        MenuMessage::Exit => {
+                            iced::window::get_latest().and_then(iced::window::close)
+                        }
+                    }
                 }
-                MenuMessage::RecoverWallet { wallet_type } => {
-                    self.active_dialog = ActiveDialog::WalletRecover { wallet_type };
-                    Task::none()
-                }
-                MenuMessage::OpenWallet { wallet_type } => {
-                    self.file_dialog_active = true;
-                    Task::perform(
-                        async move {
-                            let file_opt = AsyncFileDialog::new().pick_file().await;
-                            if let Some(file) = file_opt {
-                                log::info!("Open wallet file: {file:?}");
-                                MainWindowMessage::OpenWalletFileSelected {
-                                    file_path: file.path().to_owned(),
-                                    wallet_type,
-                                }
-                            } else {
-                                MainWindowMessage::OpenWalletFileCanceled
-                            }
-                        },
-                        identity,
-                    )
-                }
-                MenuMessage::Exit => iced::window::get_latest().and_then(iced::window::close),
-            },
+            }
 
             MainWindowMessage::MainWidgetMessage(MainWidgetMessage::TabsMessage(
                 TabsMessage::WalletMessage(wallet_id, WalletMessage::SetPassword),
