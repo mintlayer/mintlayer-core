@@ -815,8 +815,40 @@ impl OutputCache {
         let mut conflicting_txs_with_descendants = vec![];
 
         for conflicting_tx in conflicting_txs {
-            let descendants =
-                self.remove_descendants_and_mark_as(conflicting_tx, TxState::Conflicted(block_id))?;
+            let descendants = self.remove_descendants(conflicting_tx);
+
+            // Mark conflicting tx and its descendants as Conflicting and update OutputCache data accordingly
+            for tx_id in descendants.iter().rev().copied() {
+                match self.txs.entry(tx_id.into()) {
+                    Entry::Occupied(mut entry) => match entry.get_mut() {
+                        WalletTx::Block(_) => Err(WalletError::CannotFindTransactionWithId(tx_id)),
+                        WalletTx::Tx(tx) => match tx.state() {
+                            TxState::Inactive(_) => {
+                                tx.set_state(TxState::Conflicted(block_id));
+                                OutputCache::rollback_tx_data(
+                                    tx,
+                                    &self.unconfirmed_descendants,
+                                    &mut self.consumed,
+                                    &mut self.delegations,
+                                    &mut self.token_issuance,
+                                    &mut self.orders,
+                                );
+                                Ok(())
+                            }
+                            TxState::Abandoned
+                            | TxState::Confirmed(..)
+                            | TxState::InMempool(..)
+                            | TxState::Conflicted(..) => {
+                                Err(WalletError::CannotChangeTransactionState(
+                                    *tx.state(),
+                                    TxState::Conflicted(block_id),
+                                ))
+                            }
+                        },
+                    },
+                    Entry::Vacant(_) => Err(WalletError::CannotFindTransactionWithId(tx_id)),
+                }?;
+            }
 
             conflicting_txs_with_descendants.extend(descendants.into_iter());
         }
@@ -1492,11 +1524,7 @@ impl OutputCache {
         })
     }
 
-    fn remove_descendants_and_mark_as(
-        &mut self,
-        tx_id: Id<Transaction>,
-        new_state: TxState,
-    ) -> WalletResult<Vec<Id<Transaction>>> {
+    fn remove_descendants(&mut self, tx_id: Id<Transaction>) -> Vec<Id<Transaction>> {
         let mut all_txs = Vec::new();
         let mut to_update = BTreeSet::from_iter([OutPointSourceId::from(tx_id)]);
 
@@ -1508,87 +1536,65 @@ impl OutputCache {
             }
         }
 
-        for tx_id in all_txs.iter().rev().copied() {
-            match self.txs.entry(tx_id.into()) {
-                Entry::Occupied(mut entry) => match entry.get_mut() {
-                    WalletTx::Block(_) => Err(WalletError::CannotFindTransactionWithId(tx_id)),
-                    WalletTx::Tx(tx) => match tx.state() {
-                        TxState::Inactive(_) | TxState::Conflicted(_) | TxState::Abandoned => {
-                            tx.set_state(new_state);
-                            for input in tx.get_transaction().inputs() {
-                                match input {
-                                    TxInput::Utxo(outpoint) => {
-                                        self.consumed.insert(outpoint.clone(), *tx.state());
-                                    }
-                                    TxInput::Account(outpoint) => match outpoint.account() {
-                                        AccountSpending::DelegationBalance(delegation_id, _) => {
-                                            if let Some(data) =
-                                                self.delegations.get_mut(delegation_id)
-                                            {
-                                                data.last_nonce = outpoint.nonce().decrement();
-                                                data.last_parent = find_parent(
-                                                    &self.unconfirmed_descendants,
-                                                    tx_id.into(),
-                                                );
-                                            }
-                                        }
-                                    },
-                                    TxInput::AccountCommand(nonce, op) => match op {
-                                        AccountCommand::MintTokens(token_id, _)
-                                        | AccountCommand::UnmintTokens(token_id)
-                                        | AccountCommand::LockTokenSupply(token_id)
-                                        | AccountCommand::FreezeToken(token_id, _)
-                                        | AccountCommand::UnfreezeToken(token_id)
-                                        | AccountCommand::ChangeTokenMetadataUri(token_id, _)
-                                        | AccountCommand::ChangeTokenAuthority(token_id, _) => {
-                                            if let Some(data) =
-                                                self.token_issuance.get_mut(token_id)
-                                            {
-                                                data.last_nonce = nonce.decrement();
-                                                data.last_parent = find_parent(
-                                                    &self.unconfirmed_descendants,
-                                                    tx_id.into(),
-                                                );
-                                                data.unconfirmed_txs.remove(&tx_id.into());
-                                            }
-                                        }
-                                        AccountCommand::ConcludeOrder(order_id)
-                                        | AccountCommand::FillOrder(order_id, _, _) => {
-                                            if let Some(data) = self.orders.get_mut(order_id) {
-                                                data.last_nonce = nonce.decrement();
-                                                data.last_parent = find_parent(
-                                                    &self.unconfirmed_descendants,
-                                                    tx_id.into(),
-                                                );
-                                            }
-                                        }
-                                    },
-                                    TxInput::OrderAccountCommand(cmd) => match cmd {
-                                        OrderAccountCommand::FillOrder(order_id, _, _)
-                                        | OrderAccountCommand::FreezeOrder(order_id)
-                                        | OrderAccountCommand::ConcludeOrder(order_id) => {
-                                            if let Some(data) = self.orders.get_mut(order_id) {
-                                                data.last_parent = find_parent(
-                                                    &self.unconfirmed_descendants,
-                                                    tx_id.into(),
-                                                );
-                                            }
-                                        }
-                                    },
-                                }
-                            }
-                            Ok(())
-                        }
-                        TxState::Confirmed(..) | TxState::InMempool(..) => Err(
-                            WalletError::CannotChangeTransactionState(*tx.state(), new_state),
-                        ),
-                    },
-                },
-                Entry::Vacant(_) => Err(WalletError::CannotFindTransactionWithId(tx_id)),
-            }?;
-        }
+        all_txs
+    }
 
-        Ok(all_txs)
+    // After tx is abandoned or marked as conflicted its effect on OutputCache should be rolled back
+    fn rollback_tx_data(
+        tx: &TxData,
+        unconfirmed_descendants: &BTreeMap<OutPointSourceId, BTreeSet<OutPointSourceId>>,
+        consumed: &mut BTreeMap<UtxoOutPoint, TxState>,
+        delegations: &mut BTreeMap<DelegationId, DelegationData>,
+        token_issuance: &mut BTreeMap<TokenId, TokenIssuanceData>,
+        orders: &mut BTreeMap<OrderId, OrderData>,
+    ) {
+        let tx_id = tx.get_transaction().get_id();
+        for input in tx.get_transaction().inputs() {
+            match input {
+                TxInput::Utxo(outpoint) => {
+                    consumed.insert(outpoint.clone(), *tx.state());
+                }
+                TxInput::Account(outpoint) => match outpoint.account() {
+                    AccountSpending::DelegationBalance(delegation_id, _) => {
+                        if let Some(data) = delegations.get_mut(delegation_id) {
+                            data.last_nonce = outpoint.nonce().decrement();
+                            data.last_parent = find_parent(unconfirmed_descendants, tx_id.into());
+                        }
+                    }
+                },
+                TxInput::AccountCommand(nonce, op) => match op {
+                    AccountCommand::MintTokens(token_id, _)
+                    | AccountCommand::UnmintTokens(token_id)
+                    | AccountCommand::LockTokenSupply(token_id)
+                    | AccountCommand::FreezeToken(token_id, _)
+                    | AccountCommand::UnfreezeToken(token_id)
+                    | AccountCommand::ChangeTokenMetadataUri(token_id, _)
+                    | AccountCommand::ChangeTokenAuthority(token_id, _) => {
+                        if let Some(data) = token_issuance.get_mut(token_id) {
+                            data.last_nonce = nonce.decrement();
+                            data.last_parent = find_parent(unconfirmed_descendants, tx_id.into());
+                            data.unconfirmed_txs.remove(&tx_id.into());
+                        }
+                    }
+                    AccountCommand::ConcludeOrder(order_id)
+                    | AccountCommand::FillOrder(order_id, _, _) => {
+                        if let Some(data) = orders.get_mut(order_id) {
+                            data.last_nonce = nonce.decrement();
+                            data.last_parent = find_parent(unconfirmed_descendants, tx_id.into());
+                        }
+                    }
+                },
+                TxInput::OrderAccountCommand(cmd) => match cmd {
+                    OrderAccountCommand::FillOrder(order_id, _, _)
+                    | OrderAccountCommand::FreezeOrder(order_id)
+                    | OrderAccountCommand::ConcludeOrder(order_id) => {
+                        if let Some(data) = orders.get_mut(order_id) {
+                            data.last_parent = find_parent(&unconfirmed_descendants, tx_id.into());
+                        }
+                    }
+                },
+            }
+        }
     }
 
     /// Mark a transaction and its descendants as abandoned
@@ -1597,7 +1603,40 @@ impl OutputCache {
         &mut self,
         tx_id: Id<Transaction>,
     ) -> WalletResult<Vec<Id<Transaction>>> {
-        self.remove_descendants_and_mark_as(tx_id, TxState::Abandoned)
+        let all_abandoned = self.remove_descendants(tx_id);
+
+        for tx_id in all_abandoned.iter().rev().copied() {
+            match self.txs.entry(tx_id.into()) {
+                Entry::Occupied(mut entry) => match entry.get_mut() {
+                    WalletTx::Block(_) => Err(WalletError::CannotFindTransactionWithId(tx_id)),
+                    WalletTx::Tx(tx) => match tx.state() {
+                        TxState::Inactive(_) => {
+                            tx.set_state(TxState::Abandoned);
+                            OutputCache::rollback_tx_data(
+                                tx,
+                                &self.unconfirmed_descendants,
+                                &mut self.consumed,
+                                &mut self.delegations,
+                                &mut self.token_issuance,
+                                &mut self.orders,
+                            );
+                            Ok(())
+                        }
+                        TxState::Conflicted(_) => {
+                            tx.set_state(TxState::Abandoned);
+                            Ok(())
+                        }
+                        state => Err(WalletError::CannotChangeTransactionState(
+                            *state,
+                            TxState::Abandoned,
+                        )),
+                    },
+                },
+                Entry::Vacant(_) => Err(WalletError::CannotFindTransactionWithId(tx_id)),
+            }?;
+        }
+
+        Ok(all_abandoned)
     }
 
     pub fn get_transaction(&self, transaction_id: Id<Transaction>) -> WalletResult<&TxData> {
