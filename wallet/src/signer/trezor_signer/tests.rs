@@ -85,9 +85,14 @@ fn sign_message(#[case] seed: Seed) {
     let pk_destination = Destination::PublicKey(pk);
 
     for destination in [pkh_destination, pk_destination] {
-        let client = find_test_device();
+        let mut client = find_test_device();
+        let session_id = client.initialize(None).unwrap().ok().unwrap().session_id().to_vec();
 
-        let mut signer = TrezorSigner::new(chain_config.clone(), Arc::new(Mutex::new(client)));
+        let mut signer = TrezorSigner::new(
+            chain_config.clone(),
+            Arc::new(Mutex::new(client)),
+            session_id,
+        );
         let message = vec![rng.gen::<u8>(), rng.gen::<u8>(), rng.gen::<u8>()];
         let res = signer
             .sign_challenge(&message, &destination, account.key_chain(), &db_tx)
@@ -125,9 +130,10 @@ fn sign_transaction_intent(#[case] seed: Seed) {
         .unwrap();
     let mut account = Account::new(config.clone(), &mut db_tx, key_chain, None).unwrap();
 
-    let client = find_test_device();
+    let mut client = find_test_device();
+    let session_id = client.initialize(None).unwrap().ok().unwrap().session_id().to_vec();
 
-    let mut signer = TrezorSigner::new(config.clone(), Arc::new(Mutex::new(client)));
+    let mut signer = TrezorSigner::new(config.clone(), Arc::new(Mutex::new(client)), session_id);
 
     let inputs: Vec<TxInput> = (0..rng.gen_range(3..6))
         .map(|_| {
@@ -489,9 +495,14 @@ fn sign_transaction(#[case] seed: Seed) {
     ));
     let ptx = req.into_partially_signed_tx(additional_info).unwrap();
 
-    let client = find_test_device();
+    let mut client = find_test_device();
+    let session_id = client.initialize(None).unwrap().ok().unwrap().session_id().to_vec();
 
-    let mut signer = TrezorSigner::new(chain_config.clone(), Arc::new(Mutex::new(client)));
+    let mut signer = TrezorSigner::new(
+        chain_config.clone(),
+        Arc::new(Mutex::new(client)),
+        session_id,
+    );
     let (ptx, _, _) = signer.sign_tx(ptx, account.key_chain(), &db_tx).unwrap();
 
     eprintln!("num inputs in tx: {} {:?}", inputs.len(), ptx.witnesses());

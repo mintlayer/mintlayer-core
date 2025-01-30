@@ -262,17 +262,6 @@ pub enum WalletError {
     VrfKeyMustBeProvided,
     #[error("Cannot change a Trezor wallet type")]
     CannotChangeTrezorWalletType,
-    #[error("The file being loaded is a software wallet and does not correspond to the connected hardware wallet")]
-    HardwareWalletDifferentFile,
-    #[error("PublicKeys missmatch. Wrong device or passphrase:\nfile DeviceId \"{file_device_id}\", connected device \"{connected_device_id}\",\nfile label \"{file_label}\" and connected device label \"{connected_device_id}\"")]
-    HardwareWalletDifferentMnemonicOrPassphrase {
-        file_device_id: String,
-        connected_device_id: String,
-        file_label: String,
-        connected_device_label: String,
-    },
-    #[error("The file being loaded correspond to the connected hardware wallet, but public keys are different. Maybe a wrong passphrase was entered?")]
-    HardwareWalletDifferentPassphrase,
     #[error("Missing additional data for Pool {0}")]
     MissingPoolAdditionalData(PoolId),
     #[error("Missing additional data for Token {0}")]
