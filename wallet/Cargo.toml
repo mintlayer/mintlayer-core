@@ -26,7 +26,8 @@ utils-networking = { path = "../utils/networking" }
 utxo = { path = "../utxo" }
 wallet-storage = { path = "./storage" }
 wallet-types = { path = "./types" }
-trezor-client = { git = "https://github.com/mintlayer/mintlayer-trezor-firmware", branch = "feature/mintlayer-pk", features = ["bitcoin", "mintlayer"], optional = true }
+trezor-client = { git = "https://github.com/mintlayer/mintlayer-trezor-firmware", branch = "mintlayer-master", features = ["bitcoin", "mintlayer"], optional = true }
+rusb = { version = "0.9", package = "rusb", optional = true }
 
 bip39 = { workspace = true, default-features = false, features = ["std", "zeroize"] }
 hex.workspace = true
@@ -44,6 +45,6 @@ rstest.workspace = true
 tempfile.workspace = true
 
 [features]
-trezor = ["dep:trezor-client", "wallet-types/trezor"]
+trezor = ["dep:trezor-client", "dep:rusb", "wallet-types/trezor"]
 enable-trezor-device-tests = []
 default = ["trezor"]
