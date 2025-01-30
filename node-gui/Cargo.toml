@@ -28,7 +28,7 @@ anyhow.workspace = true
 chrono.workspace = true
 futures.workspace = true
 iced = { workspace = true, features = ["canvas", "debug", "tokio", "lazy"] }
-iced_aw = { workspace = true, features = ["cupertino"] }
+iced_aw = { workspace = true }
 iced_fonts = { workspace = true, features = ["bootstrap"] }
 rfd = { workspace = true, features = ["xdg-portal", "tokio"] }
 strum.workspace = true

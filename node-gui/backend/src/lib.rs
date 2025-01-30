@@ -57,7 +57,7 @@ pub enum ImportOrCreate {
 }
 
 impl ImportOrCreate {
-    pub fn scan_blockchain(&self) -> ScanBlockchain {
+    pub fn should_scan_blockchain(&self) -> ScanBlockchain {
         match self {
             Self::Create => ScanBlockchain::SkipScanning,
             Self::Import => ScanBlockchain::ScanNoWait,

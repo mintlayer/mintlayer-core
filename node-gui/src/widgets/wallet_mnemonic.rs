@@ -92,48 +92,49 @@ impl<Message> Component<Message, Theme, iced::Renderer> for WalletMnemonicDialog
         };
 
         let button_enabled = !mnemonic.is_empty();
-        let button = Button::new(Text::new(action_text).align_x(Horizontal::Center)).width(100.0);
-        let button = if button_enabled {
-            button.on_press(ImportEvent::Ok)
+
+        // only enable edit if there is not pre-generated mnemonic
+        let body: Element<_> = if self.generated_mnemonic_opt.is_none() {
+            text_input("Mnemonic", &mnemonic)
+                .on_input(ImportEvent::EditMnemonic)
+                .padding(15)
+                .into()
         } else {
-            button
+            Row::new()
+                .push(text(mnemonic.clone()).width(Length::Fill).center())
+                .push(
+                    Button::new(
+                        Text::new(iced_fonts::Bootstrap::ClipboardCheck.to_string())
+                            .font(iced_fonts::BOOTSTRAP_FONT)
+                            .size(30),
+                    )
+                    .style(iced::widget::button::text)
+                    .on_press(ImportEvent::CopyMnemonic(mnemonic)),
+                )
+                .spacing(10)
+                .padding(15)
+                .into()
         };
 
-        if state.importing {
-            Card::new(
-                Text::new(action_text),
-                iced::widget::column![text_input("Mnemonic", &mnemonic).padding(15)],
-            )
-            .foot(container(text("Loading...")).center_x(Length::Fill))
+        let footer = if state.importing {
+            container(text("Loading..."))
         } else {
-            let body: Element<_> = if self.generated_mnemonic_opt.is_none() {
-                text_input("Mnemonic", &mnemonic)
-                    // only enable edit if there is not pre-generated mnemonic
-                    .on_input(ImportEvent::EditMnemonic)
-                    .padding(15)
-                    .into()
+            let button =
+                Button::new(Text::new(action_text).align_x(Horizontal::Center)).width(100.0);
+            let button = if button_enabled {
+                button.on_press(ImportEvent::Ok)
             } else {
-                Row::new()
-                    .push(text(mnemonic.clone()).width(Length::Fill).center())
-                    .push(
-                        Button::new(
-                            Text::new(iced_fonts::Bootstrap::ClipboardCheck.to_string())
-                                .font(iced_fonts::BOOTSTRAP_FONT)
-                                .size(30),
-                        )
-                        .style(iced::widget::button::text)
-                        .on_press(ImportEvent::CopyMnemonic(mnemonic)),
-                    )
-                    .spacing(10)
-                    .padding(15)
-                    .into()
+                button
             };
-
-            Card::new(Text::new(action_text), body).foot(container(button).center_x(Length::Fill))
+            container(button)
         }
-        .max_width(600.0)
-        .on_close(ImportEvent::Cancel)
-        .into()
+        .center_x(Length::Fill);
+
+        Card::new(Text::new(action_text), body)
+            .foot(footer)
+            .max_width(600.0)
+            .on_close(ImportEvent::Cancel)
+            .into()
     }
 }
 

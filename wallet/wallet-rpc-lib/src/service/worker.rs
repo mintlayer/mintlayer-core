@@ -222,30 +222,31 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletWorker<N> {
         };
         let passphrase_ref = passphrase.as_ref().map(|x| x.as_ref());
 
-        let wallet = if newly_generated_mnemonic || scan_blockchain.skip_syncing() {
-            let info = self.node_rpc.chainstate_info().await.map_err(RpcError::RpcError)?;
-            WalletController::create_wallet(
-                self.chain_config.clone(),
-                wallet_path,
-                mnemonic.clone(),
-                passphrase_ref,
-                whether_to_store_seed_phrase,
-                (info.best_block_height, info.best_block_id),
-                self.node_rpc.is_cold_wallet_node(),
-            )
-        } else {
-            WalletController::recover_wallet(
-                self.chain_config.clone(),
-                wallet_path,
-                mnemonic.clone(),
-                passphrase_ref,
-                whether_to_store_seed_phrase,
-                self.node_rpc.is_cold_wallet_node(),
-            )
-        }
-        .map_err(RpcError::Controller)?;
+        let wallet =
+            if newly_generated_mnemonic || scan_blockchain.skip_scanning_the_blockchain() {
+                let info = self.node_rpc.chainstate_info().await.map_err(RpcError::RpcError)?;
+                WalletController::create_wallet(
+                    self.chain_config.clone(),
+                    wallet_path,
+                    mnemonic.clone(),
+                    passphrase_ref,
+                    whether_to_store_seed_phrase,
+                    (info.best_block_height, info.best_block_id),
+                    self.node_rpc.is_cold_wallet_node(),
+                )
+            } else {
+                WalletController::recover_wallet(
+                    self.chain_config.clone(),
+                    wallet_path,
+                    mnemonic.clone(),
+                    passphrase_ref,
+                    whether_to_store_seed_phrase,
+                    self.node_rpc.is_cold_wallet_node(),
+                )
+            }
+            .map_err(RpcError::Controller)?;
 
-        let controller = if scan_blockchain.wait_for_sync() {
+        let controller = if scan_blockchain.should_wait_for_blockchain_scanning() {
             WalletController::new(
                 self.chain_config.clone(),
                 self.node_rpc.clone(),

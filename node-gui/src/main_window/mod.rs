@@ -198,7 +198,6 @@ pub enum MainWindowMessage {
     CopyToClipboard(String),
     ClosePopup,
     CloseDialog,
-    IgnoreEvent,
 }
 
 impl MainWindow {
@@ -688,13 +687,6 @@ impl MainWindow {
                 import,
                 wallet_type,
             } => {
-                self.active_dialog = match import {
-                    ImportOrCreate::Create => ActiveDialog::WalletCreate {
-                        generated_mnemonic: mnemonic.clone(),
-                        wallet_type,
-                    },
-                    ImportOrCreate::Import => ActiveDialog::WalletRecover { wallet_type },
-                };
                 self.file_dialog_active = false;
                 backend_sender.send(BackendRequest::RecoverWallet {
                     mnemonic,
@@ -730,7 +722,6 @@ impl MainWindow {
                 wallet_id,
                 password,
             } => {
-                self.active_dialog = ActiveDialog::WalletUnlock { wallet_id };
                 backend_sender.send(BackendRequest::UpdateEncryption {
                     wallet_id,
                     action: EncryptionAction::Unlock(password),
@@ -758,8 +749,6 @@ impl MainWindow {
                 self.active_dialog = ActiveDialog::None;
                 Task::none()
             }
-
-            MainWindowMessage::IgnoreEvent => Task::none(),
         }
     }
 

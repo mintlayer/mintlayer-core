@@ -14,24 +14,24 @@
 // limitations under the License.
 
 pub enum ScanBlockchain {
-    /// Skips the scanning of the blokchain, used when creating a wallet from a brand new seed
+    /// Skips the scanning of the blockchain, used when creating a wallet from a brand new seed
     /// phrase never used before
     SkipScanning,
-    /// Scans the blokchain and waits for the scanning to complete before returning
+    /// Scans the blockchain and waits for the scanning to complete before returning
     ScanAndWait,
-    /// Scans the blokchain in the background
+    /// Scans the blockchain in the background
     ScanNoWait,
 }
 
 impl ScanBlockchain {
-    pub fn skip_syncing(&self) -> bool {
+    pub fn skip_scanning_the_blockchain(&self) -> bool {
         match self {
             Self::SkipScanning => true,
             Self::ScanNoWait | Self::ScanAndWait => false,
         }
     }
 
-    pub fn wait_for_sync(&self) -> bool {
+    pub fn should_wait_for_blockchain_scanning(&self) -> bool {
         match self {
             Self::ScanAndWait => true,
             Self::SkipScanning | Self::ScanNoWait => false,
