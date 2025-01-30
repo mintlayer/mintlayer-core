@@ -116,6 +116,12 @@ pub enum TrezorError {
     InvalidKey,
     #[error("Invalid Signature error: {0}")]
     SignatureError(#[from] SignatureError),
+    #[error("The file being loaded does not correspond to the connected Trezor wallet")]
+    HardwareWalletDifferentFile,
+    #[error("The file being loaded does not correspond to the connected Trezor wallet: File DeviceId {0}, Connected device {1}, labels {2} and {3}")]
+    HardwareWalletDifferentDevice(String, String, String, String),
+    #[error("The file being loaded correspond to the connected Trezor wallet, but public keys are different. Maybe a wrong passphrase was inputed?")]
+    HardwareWalletDifferentPassphrase,
 }
 
 pub struct TrezorSigner {
@@ -128,6 +134,50 @@ impl TrezorSigner {
         Self {
             chain_config,
             client,
+        }
+    }
+
+    /// Attempts to perform an operation on the Trezor client.
+    ///
+    /// If the operation fails due to an I/O error (which may indicate a lost connection to the device),
+    /// the function will attempt to reconnect to the Trezor device once before returning an error.
+    fn perform_trezor_operation<F, R>(
+        &mut self,
+        operation: F,
+        db_tx: &impl WalletStorageReadLocked,
+        key_chain: &impl AccountKeyChains,
+    ) -> SignerResult<R>
+    where
+        F: Fn(&mut Trezor) -> Result<R, trezor_client::Error>,
+    {
+        let mut client = self.client.lock().expect("poisoned lock");
+        let res = operation(&mut client);
+
+        match res {
+            Ok(res) => Ok(res),
+            // In case of a USB IO error try to reconnect, and try again
+            Err(trezor_client::Error::TransportSendMessage(
+                trezor_client::transport::error::Error::Usb(rusb::Error::Io),
+            )) => {
+                let (mut new_client, data) = find_trezor_device()?;
+
+                check_public_keys_against_key_chain(
+                    db_tx,
+                    &mut new_client,
+                    &data,
+                    key_chain,
+                    &self.chain_config,
+                )?;
+
+                *client = new_client;
+
+                operation(&mut client).map_err(|err| {
+                    SignerError::TrezorError(TrezorError::DeviceError(err.to_string()))
+                })
+            }
+            Err(err) => Err(SignerError::TrezorError(TrezorError::DeviceError(
+                err.to_string(),
+            ))),
         }
     }
 
@@ -265,7 +315,7 @@ impl Signer for TrezorSigner {
         &mut self,
         ptx: PartiallySignedTransaction,
         key_chain: &impl AccountKeyChains,
-        _db_tx: &impl WalletStorageReadUnlocked,
+        db_tx: &impl WalletStorageReadUnlocked,
     ) -> SignerResult<(
         PartiallySignedTransaction,
         Vec<SignatureStatus>,
@@ -276,12 +326,13 @@ impl Signer for TrezorSigner {
         let utxos = to_trezor_utxo_msgs(&ptx, &self.chain_config)?;
         let chain_type = to_trezor_chain_type(&self.chain_config);
 
-        let new_signatures = self
-            .client
-            .lock()
-            .expect("poisoned lock")
-            .mintlayer_sign_tx(chain_type, inputs, outputs, utxos)
-            .map_err(|err| TrezorError::DeviceError(err.to_string()))?;
+        let new_signatures = self.perform_trezor_operation(
+            move |client| {
+                client.mintlayer_sign_tx(chain_type, inputs.clone(), outputs.clone(), utxos.clone())
+            },
+            db_tx,
+            key_chain,
+        )?;
 
         let inputs_utxo_refs: Vec<_> = ptx.input_utxos().iter().map(|u| u.as_ref()).collect();
 
@@ -428,11 +479,11 @@ impl Signer for TrezorSigner {
         message: &[u8],
         destination: &Destination,
         key_chain: &impl AccountKeyChains,
-        _db_tx: &impl WalletStorageReadUnlocked,
+        db_tx: &impl WalletStorageReadUnlocked,
     ) -> SignerResult<ArbitraryMessageSignature> {
         let data = match key_chain.find_public_key(destination) {
             Some(FoundPubKey::Hierarchy(xpub)) => {
-                let address_n = xpub
+                let address_n: Vec<_> = xpub
                     .get_derivation_path()
                     .as_slice()
                     .iter()
@@ -461,12 +512,19 @@ impl Signer for TrezorSigner {
 
                 let chain_type = to_trezor_chain_type(&self.chain_config);
 
-                let sig = self
-                    .client
-                    .lock()
-                    .expect("poisoned lock")
-                    .mintlayer_sign_message(chain_type, address_n, addr_type, message.to_vec())
-                    .map_err(|err| TrezorError::DeviceError(err.to_string()))?;
+                let sig = self.perform_trezor_operation(
+                    move |client| {
+                        client.mintlayer_sign_message(
+                            chain_type,
+                            address_n.clone(),
+                            addr_type,
+                            message.to_vec(),
+                        )
+                    },
+                    db_tx,
+                    key_chain,
+                )?;
+
                 let signature =
                     Signature::from_raw_data(&sig).map_err(TrezorError::SignatureError)?;
 
@@ -1165,7 +1223,7 @@ impl TrezorSignerProvider {
             data,
         };
 
-        check_public_keys(db_tx, &provider, chain_config)?;
+        check_public_keys_against_db(db_tx, &provider, chain_config)?;
 
         Ok(provider)
     }
@@ -1175,25 +1233,12 @@ impl TrezorSignerProvider {
         chain_config: &Arc<ChainConfig>,
         account_index: U31,
     ) -> SignerResult<ExtendedPublicKey> {
-        let derivation_path = make_account_path(chain_config, account_index);
-        let account_path =
-            derivation_path.as_slice().iter().map(|c| c.into_encoded_index()).collect();
-        let chain_type = to_trezor_chain_type(chain_config);
-        let xpub = self
-            .client
-            .lock()
-            .expect("poisoned lock")
-            .mintlayer_get_public_key(chain_type, account_path)
-            .map_err(|e| SignerError::TrezorError(TrezorError::DeviceError(e.to_string())))?;
-        let chain_code = ChainCode::from(xpub.chain_code.0);
-        let account_pubkey = Secp256k1ExtendedPublicKey::new(
-            derivation_path,
-            chain_code,
-            Secp256k1PublicKey::from_bytes(&xpub.public_key.serialize())
-                .map_err(|_| SignerError::TrezorError(TrezorError::InvalidKey))?,
-        );
-        let account_pubkey = ExtendedPublicKey::new(account_pubkey);
-        Ok(account_pubkey)
+        fetch_extended_pub_key(
+            &mut self.client.lock().expect("poisoned lock"),
+            chain_config,
+            account_index,
+        )
+        .map_err(SignerError::TrezorError)
     }
 }
 
@@ -1208,7 +1253,67 @@ fn to_trezor_chain_type(chain_config: &ChainConfig) -> MintlayerChainType {
 
 /// Check that the public keys in the DB are the same as the ones with the connected hardware
 /// wallet
-fn check_public_keys(
+fn check_public_keys_against_key_chain(
+    db_tx: &impl WalletStorageReadLocked,
+    client: &mut Trezor,
+    trezor_data: &TrezorData,
+    key_chain: &impl AccountKeyChains,
+    chain_config: &ChainConfig,
+) -> SignerResult<()> {
+    let expected_pk = fetch_extended_pub_key(client, chain_config, key_chain.account_index())?;
+
+    if key_chain.account_public_key() == &expected_pk {
+        return Ok(());
+    }
+
+    if let Some(data) = db_tx.get_hardware_wallet_data()? {
+        match data {
+            HardwareWalletData::Trezor(data) => {
+                // If the device_id and label are the same but public keys are different, maybe a
+                // different passphrase was used
+                if &data == trezor_data {
+                    return Err(TrezorError::HardwareWalletDifferentPassphrase.into());
+                } else {
+                    return Err(TrezorError::HardwareWalletDifferentDevice(
+                        data.device_id,
+                        trezor_data.device_id.clone(),
+                        data.label,
+                        trezor_data.label.clone(),
+                    )
+                    .into());
+                }
+            }
+        }
+    }
+
+    Err(TrezorError::HardwareWalletDifferentFile)?
+}
+
+fn fetch_extended_pub_key(
+    client: &mut Trezor,
+    chain_config: &ChainConfig,
+    account_index: U31,
+) -> Result<ExtendedPublicKey, TrezorError> {
+    let derivation_path = make_account_path(chain_config, account_index);
+    let account_path = derivation_path.as_slice().iter().map(|c| c.into_encoded_index()).collect();
+    let chain_type = to_trezor_chain_type(chain_config);
+    let xpub = client
+        .mintlayer_get_public_key(chain_type, account_path)
+        .map_err(|e| TrezorError::DeviceError(e.to_string()))?;
+    let chain_code = ChainCode::from(xpub.chain_code.0);
+    let account_pubkey = Secp256k1ExtendedPublicKey::new(
+        derivation_path,
+        chain_code,
+        Secp256k1PublicKey::from_bytes(&xpub.public_key.serialize())
+            .map_err(|_| TrezorError::InvalidKey)?,
+    );
+    let account_pubkey = ExtendedPublicKey::new(account_pubkey);
+    Ok(account_pubkey)
+}
+
+/// Check that the public keys in the DB are the same as the ones with the connected hardware
+/// wallet
+fn check_public_keys_against_db(
     db_tx: &impl WalletStorageReadLocked,
     provider: &TrezorSignerProvider,
     chain_config: Arc<ChainConfig>,
@@ -1221,33 +1326,17 @@ fn check_public_keys(
         })
         .cloned()
         .ok_or(WalletError::WalletNotInitialized)?;
-    let expected_pk = provider.fetch_extended_pub_key(&chain_config, DEFAULT_ACCOUNT_INDEX)?;
-    let loaded_acc = provider.load_account_from_database(chain_config, db_tx, &first_acc)?;
+    let loaded_acc =
+        provider.load_account_from_database(chain_config.clone(), db_tx, &first_acc)?;
 
-    if loaded_acc.key_chain().account_public_key() == &expected_pk {
-        return Ok(());
-    }
-
-    if let Some(data) = db_tx.get_hardware_wallet_data()? {
-        match data {
-            HardwareWalletData::Trezor(data) => {
-                // If the device_id and label are the same but public keys are different, maybe a
-                // different passphrase was used
-                if data == provider.data {
-                    return Err(WalletError::HardwareWalletDifferentPassphrase);
-                } else {
-                    return Err(WalletError::HardwareWalletDifferentDevice(
-                        data.device_id,
-                        provider.data.device_id.clone(),
-                        data.label,
-                        provider.data.label.clone(),
-                    ));
-                }
-            }
-        }
-    }
-
-    Err(WalletError::HardwareWalletDifferentFile)
+    check_public_keys_against_key_chain(
+        db_tx,
+        &mut provider.client.lock().expect("poisoned lock"),
+        &provider.data,
+        loaded_acc.key_chain(),
+        &chain_config,
+    )
+    .map_err(WalletError::SignerError)
 }
 
 fn find_trezor_device() -> Result<(Trezor, TrezorData), TrezorError> {
