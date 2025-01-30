@@ -6207,6 +6207,12 @@ fn conflicting_delegation_account_nonce(#[case] seed: Seed) {
         TxState::Abandoned
     );
 
+    let mut delegations = wallet.get_delegations(DEFAULT_ACCOUNT_INDEX).unwrap().collect_vec();
+    assert_eq!(delegations.len(), 1);
+    let (deleg_id, deleg_data) = delegations.pop().unwrap();
+    assert_eq!(*deleg_id, delegation_id);
+    assert_eq!(deleg_data.last_nonce, Some(AccountNonce::new(0)));
+
     wallet
         .abandon_transaction(DEFAULT_ACCOUNT_INDEX, spend_from_delegation_tx_2_id)
         .unwrap();
@@ -6217,6 +6223,12 @@ fn conflicting_delegation_account_nonce(#[case] seed: Seed) {
             .state(),
         TxState::Abandoned
     );
+
+    let mut delegations = wallet.get_delegations(DEFAULT_ACCOUNT_INDEX).unwrap().collect_vec();
+    assert_eq!(delegations.len(), 1);
+    let (deleg_id, deleg_data) = delegations.pop().unwrap();
+    assert_eq!(*deleg_id, delegation_id);
+    assert_eq!(deleg_data.last_nonce, Some(AccountNonce::new(0)));
 }
 
 // Create a pool and a delegation with some share.
