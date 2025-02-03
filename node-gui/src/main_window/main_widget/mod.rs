@@ -15,7 +15,7 @@
 
 pub mod tabs;
 
-use iced::{Command, Element};
+use iced::{Element, Task};
 use node_gui_backend::{messages::WalletId, BackendSender};
 use wallet_types::wallet_type::WalletType;
 
@@ -48,18 +48,18 @@ impl MainWidget {
         &mut self,
         msg: MainWidgetMessage,
         backend_sender: &BackendSender,
-    ) -> Command<MainWidgetMessage> {
+    ) -> Task<MainWidgetMessage> {
         match msg {
             MainWidgetMessage::WalletAdded {
                 wallet_id,
                 wallet_type,
-            } => Command::perform(async {}, move |_| {
+            } => Task::perform(async {}, move |_| {
                 MainWidgetMessage::TabsMessage(tabs::TabsMessage::WalletAdded {
                     wallet_id,
                     wallet_type,
                 })
             }),
-            MainWidgetMessage::WalletRemoved(wallet_id) => Command::perform(async {}, move |_| {
+            MainWidgetMessage::WalletRemoved(wallet_id) => Task::perform(async {}, move |_| {
                 MainWidgetMessage::TabsMessage(tabs::TabsMessage::WalletRemoved(wallet_id))
             }),
             MainWidgetMessage::TabsMessage(tabs_message) => self

@@ -13,9 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#[allow(deprecated)]
+use iced::widget::Component;
+
 use iced::{
     alignment::Horizontal,
-    widget::{self, container, text, text_input, Button, Component, Text},
+    widget::{self, container, text, text_input, Button, Row, Text},
     Element, Length, Theme,
 };
 use iced_aw::Card;
@@ -24,17 +27,20 @@ pub struct WalletMnemonicDialog<Message> {
     generated_mnemonic_opt: Option<wallet_controller::mnemonic::Mnemonic>,
     on_import: Box<dyn Fn(String) -> Message>,
     on_close: Box<dyn Fn() -> Message>,
+    on_copy: Box<dyn Fn(String) -> Message>,
 }
 
-pub fn wallet_mnemonic_dialog<Message>(
+pub fn wallet_mnemonic_dialog<Message: Clone>(
     generated_mnemonic_opt: Option<wallet_controller::mnemonic::Mnemonic>,
     on_import: Box<dyn Fn(String) -> Message>,
     on_close: Box<dyn Fn() -> Message>,
+    on_copy: Box<dyn Fn(String) -> Message>,
 ) -> WalletMnemonicDialog<Message> {
     WalletMnemonicDialog {
         generated_mnemonic_opt,
         on_import,
         on_close,
+        on_copy,
     }
 }
 
@@ -47,10 +53,12 @@ pub struct ImportState {
 #[derive(Clone)]
 pub enum ImportEvent {
     EditMnemonic(String),
+    CopyMnemonic(String),
     Ok,
     Cancel,
 }
 
+#[allow(deprecated)]
 impl<Message> Component<Message, Theme, iced::Renderer> for WalletMnemonicDialog<Message> {
     type State = ImportState;
     type Event = ImportEvent;
@@ -73,6 +81,7 @@ impl<Message> Component<Message, Theme, iced::Renderer> for WalletMnemonicDialog
                 Some((self.on_import)(mnemonic))
             }
             ImportEvent::Cancel => Some((self.on_close)()),
+            ImportEvent::CopyMnemonic(mnemonic) => Some((self.on_copy)(mnemonic)),
         }
     }
 
@@ -83,32 +92,49 @@ impl<Message> Component<Message, Theme, iced::Renderer> for WalletMnemonicDialog
         };
 
         let button_enabled = !mnemonic.is_empty();
-        let button = Button::new(Text::new(action_text).horizontal_alignment(Horizontal::Center))
-            .width(100.0);
-        let button = if button_enabled {
-            button.on_press(ImportEvent::Ok)
+
+        // only enable edit if there is not pre-generated mnemonic
+        let body: Element<_> = if self.generated_mnemonic_opt.is_none() {
+            text_input("Mnemonic", &mnemonic)
+                .on_input(ImportEvent::EditMnemonic)
+                .padding(15)
+                .into()
         } else {
-            button
+            Row::new()
+                .push(text(mnemonic.clone()).width(Length::Fill).center())
+                .push(
+                    Button::new(
+                        Text::new(iced_fonts::Bootstrap::ClipboardCheck.to_string())
+                            .font(iced_fonts::BOOTSTRAP_FONT)
+                            .size(30),
+                    )
+                    .style(iced::widget::button::text)
+                    .on_press(ImportEvent::CopyMnemonic(mnemonic)),
+                )
+                .spacing(10)
+                .padding(15)
+                .into()
         };
 
-        if state.importing {
-            Card::new(
-                Text::new(action_text),
-                iced::widget::column![text_input("Mnemonic", &mnemonic).padding(15)],
-            )
-            .foot(container(text("Loading...")).width(Length::Fill).center_x())
+        let footer = if state.importing {
+            container(text("Loading..."))
         } else {
-            Card::new(
-                Text::new(action_text),
-                iced::widget::column![text_input("Mnemonic", &mnemonic)
-                    .on_input(ImportEvent::EditMnemonic)
-                    .padding(15)],
-            )
-            .foot(container(button).width(Length::Fill).center_x())
+            let button =
+                Button::new(Text::new(action_text).align_x(Horizontal::Center)).width(100.0);
+            let button = if button_enabled {
+                button.on_press(ImportEvent::Ok)
+            } else {
+                button
+            };
+            container(button)
         }
-        .max_width(600.0)
-        .on_close(ImportEvent::Cancel)
-        .into()
+        .center_x(Length::Fill);
+
+        Card::new(Text::new(action_text), body)
+            .foot(footer)
+            .max_width(600.0)
+            .on_close(ImportEvent::Cancel)
+            .into()
     }
 }
 
@@ -118,6 +144,7 @@ where
     Message: 'a,
 {
     fn from(component: WalletMnemonicDialog<Message>) -> Self {
+        #[allow(deprecated)]
         widget::component(component)
     }
 }

@@ -58,17 +58,17 @@ pub fn view_top_panel(
             )
             .on_press(WalletMessage::SetPassword),
             tooltip(
-                Text::new(iced_aw::Bootstrap::Question.to_string())
+                Text::new(iced_fonts::Bootstrap::Question.to_string())
                     .line_height(LineHeight::Relative(1.0))
-                    .font(iced_aw::BOOTSTRAP_FONT),
+                    .font(iced_fonts::BOOTSTRAP_FONT),
                 ENCRYPT_WALLET_TOOLTIP_TEXT,
                 tooltip::Position::Bottom
             )
             .gap(10)
-            .style(iced::theme::Container::Box)
+            .style(iced::widget::container::bordered_box),
         ],
     }
-    .align_items(Alignment::Center)
+    .align_y(Alignment::Center)
     .spacing(10);
 
     row![
@@ -76,13 +76,13 @@ pub fn view_top_panel(
         horizontal_space(),
         password,
         button(Text::new("Close wallet").line_height(LineHeight::Relative(1.0)))
-            .style(iced::theme::Button::Destructive)
+            .style(iced::widget::button::danger)
             .on_press(WalletMessage::Close),
     ]
     .width(Length::Fill)
     .height(Length::Fill)
     .spacing(10)
     .padding(10)
-    .align_items(Alignment::Center)
+    .align_y(Alignment::Center)
     .into()
 }

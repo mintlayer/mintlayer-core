@@ -18,7 +18,7 @@ use std::fmt::Debug;
 use common::chain::ChainConfig;
 use iced::{
     widget::{column, tooltip, Text},
-    Command, Element, Length,
+    Element, Length, Task,
 };
 use iced_aw::{tab_bar::TabLabel, Grid, GridRow};
 
@@ -40,7 +40,7 @@ impl SummaryTab {
         SummaryTab {}
     }
 
-    pub fn update(&mut self, message: SummaryMessage) -> Command<SummaryMessage> {
+    pub fn update(&mut self, message: SummaryMessage) -> Task<SummaryMessage> {
         match message {}
     }
 }
@@ -58,7 +58,7 @@ impl Tab for SummaryTab {
     }
 
     fn tab_label(&self) -> TabLabel {
-        TabLabel::IconText(iced_aw::Bootstrap::Info.into(), self.title())
+        TabLabel::IconText(iced_fonts::Bootstrap::Info.into(), self.title())
     }
 
     fn content(&self, node_state: &NodeState) -> Element<Self::Message> {
@@ -72,7 +72,7 @@ impl Tab for SummaryTab {
                         tooltip::Position::Bottom,
                     )
                     .gap(10)
-                    .style(iced::theme::Container::Box),
+                    .style(iced::widget::container::bordered_box),
                 ),
             )
             .push(

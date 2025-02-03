@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use iced::{
-    widget::{button, column, container, row, tooltip, Text},
+    widget::{button, column, row, tooltip, Text},
     Element,
 };
 use iced_aw::{Grid, GridRow};
@@ -29,17 +29,17 @@ pub fn view_addresses(
     account: &AccountInfo,
     still_syncing: Option<WalletMessage>,
 ) -> Element<'static, WalletMessage> {
-    let field = |text: String| container(Text::new(text)).padding(5);
+    let field = |text: String| iced::widget::container(Text::new(text)).padding(5);
     let addresses = account
         .addresses
         .iter()
         .map(|(index, address)| {
             GridRow::new().push(field(index.to_string())).push(field(address.clone())).push(
                 button(
-                    Text::new(iced_aw::Bootstrap::ClipboardCheck.to_string())
-                        .font(iced_aw::BOOTSTRAP_FONT),
+                    Text::new(iced_fonts::Bootstrap::ClipboardCheck.to_string())
+                        .font(iced_fonts::BOOTSTRAP_FONT),
                 )
-                .style(iced::theme::Button::Text)
+                .style(iced::widget::button::text)
                 .on_press(WalletMessage::CopyToClipboard(address.as_str().to_owned())),
             )
         })
@@ -51,12 +51,13 @@ pub fn view_addresses(
             iced::widget::button(Text::new("New address"))
                 .on_press(still_syncing.unwrap_or(WalletMessage::GetNewAddress)),
             tooltip(
-                Text::new(iced_aw::Bootstrap::Question.to_string()).font(iced_aw::BOOTSTRAP_FONT),
+                Text::new(iced_fonts::Bootstrap::Question.to_string())
+                    .font(iced_fonts::BOOTSTRAP_FONT),
                 NEW_ADDRESS_TOOLTIP_TEXT,
                 tooltip::Position::Bottom
             )
             .gap(10)
-            .style(iced::theme::Container::Box)
+            .style(iced::widget::container::bordered_box),
         ],
     ]
     .into()

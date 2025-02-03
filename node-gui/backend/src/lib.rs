@@ -23,6 +23,7 @@ mod wallet_events;
 
 mod account_id;
 pub use account_id::AccountId;
+use wallet_types::scan_blockchain::ScanBlockchain;
 
 use std::fmt::Debug;
 use std::sync::Arc;
@@ -56,10 +57,10 @@ pub enum ImportOrCreate {
 }
 
 impl ImportOrCreate {
-    pub fn skip_syncing(&self) -> bool {
+    pub fn should_scan_blockchain(&self) -> ScanBlockchain {
         match self {
-            Self::Create => true,
-            Self::Import => false,
+            Self::Create => ScanBlockchain::SkipScanning,
+            Self::Import => ScanBlockchain::ScanNoWait,
         }
     }
 }

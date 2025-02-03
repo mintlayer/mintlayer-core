@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use iced::{
-    widget::{button, column, container, row, text_input, tooltip, tooltip::Position, Text},
+    widget::{button, column, row, text_input, tooltip, tooltip::Position, Text},
     Alignment, Element, Length,
 };
 use iced_aw::{Grid, GridRow};
@@ -78,7 +78,7 @@ pub fn view_stake(
     decommission_pool_address: &str,
     still_syncing: Option<WalletMessage>,
 ) -> Element<'static, WalletMessage> {
-    let field = |text: String| container(Text::new(text)).padding(5);
+    let field = |text: String| iced::widget::container(Text::new(text)).padding(5);
 
     let staking_balance_grid = {
         // We print the table only if there are staking pools
@@ -103,25 +103,27 @@ pub fn view_stake(
                     GridRow::new()
                         .push(row!(
                             tooltip(
-                                container(Text::new(pool_id_address.to_short_string()).font(
-                                    iced::font::Font {
-                                        family: iced::font::Family::Monospace,
-                                        weight: Default::default(),
-                                        stretch: Default::default(),
-                                        style: iced::font::Style::Normal,
-                                    }
-                                ))
+                                iced::widget::container(
+                                    Text::new(pool_id_address.to_short_string()).font(
+                                        iced::font::Font {
+                                            family: iced::font::Family::Monospace,
+                                            weight: Default::default(),
+                                            stretch: Default::default(),
+                                            style: iced::font::Style::Normal,
+                                        }
+                                    )
+                                )
                                 .padding(5),
                                 Text::new(pool_id_address.to_string()),
                                 Position::Bottom,
                             )
                             .gap(5)
-                            .style(iced::theme::Container::Box),
+                            .style(iced::widget::container::bordered_box),
                             button(
-                                Text::new(iced_aw::Bootstrap::ClipboardCheck.to_string())
-                                    .font(iced_aw::BOOTSTRAP_FONT),
+                                Text::new(iced_fonts::Bootstrap::ClipboardCheck.to_string())
+                                    .font(iced_fonts::BOOTSTRAP_FONT),
                             )
-                            .style(iced::theme::Button::Text)
+                            .style(iced::widget::button::text)
                             .on_press(WalletMessage::CopyToClipboard(pool_id_address.to_string())),
                         ))
                         .push(field(print_margin_ratio(
@@ -154,12 +156,13 @@ pub fn view_stake(
             iced::widget::button(Text::new(staking_button))
                 .on_press(still_syncing.clone().unwrap_or(WalletMessage::ToggleStaking(new_state))),
             tooltip(
-                Text::new(iced_aw::Bootstrap::Question.to_string()).font(iced_aw::BOOTSTRAP_FONT),
+                Text::new(iced_fonts::Bootstrap::Question.to_string())
+                    .font(iced_fonts::BOOTSTRAP_FONT),
                 START_STAKING_TOOLTIP_TEXT,
                 Position::Bottom
             )
             .gap(10)
-            .style(iced::theme::Container::Box)
+            .style(iced::widget::container::bordered_box),
         ]
     } else {
         row![]
@@ -182,18 +185,20 @@ pub fn view_stake(
     column![
         row![Text::new(min_pledge_text).size(13),
         tooltip(
-            Text::new(iced_aw::Bootstrap::Question.to_string()).font(iced_aw::BOOTSTRAP_FONT),
+            Text::new(iced_fonts::Bootstrap::Question.to_string()).font(iced_fonts::BOOTSTRAP_FONT),
             MIN_PLEDGE_AMOUNT_TOOLTIP_TEXT,
             Position::Bottom)
         .gap(10)
-        .style(iced::theme::Container::Box)],
+            .style(iced::widget::container::bordered_box),
+        ],
         row![Text::new(maturity_period_text).size(13),
         tooltip(
-            Text::new(iced_aw::Bootstrap::Question.to_string()).font(iced_aw::BOOTSTRAP_FONT),
+            Text::new(iced_fonts::Bootstrap::Question.to_string()).font(iced_fonts::BOOTSTRAP_FONT),
             MATURITY_PERIOD_TOOLTIP_TEXT,
             Position::Bottom)
         .gap(10)
-        .style(iced::theme::Container::Box)],
+            .style(iced::widget::container::bordered_box),
+        ],
         row![
             text_input("Pledge amount for the new staking pool", stake_amount)
                 .on_input(|value| {
@@ -205,11 +210,11 @@ pub fn view_stake(
                  })
                 .padding(15),
             tooltip(
-                Text::new(iced_aw::Bootstrap::Question.to_string()).font(iced_aw::BOOTSTRAP_FONT),
+                Text::new(iced_fonts::Bootstrap::Question.to_string()).font(iced_fonts::BOOTSTRAP_FONT),
                 PLEDGE_AMOUNT_TOOLTIP_TEXT,
                 Position::Bottom)
             .gap(10)
-            .style(iced::theme::Container::Box)
+            .style(iced::widget::container::bordered_box),
         ],
 
         row![
@@ -223,11 +228,11 @@ pub fn view_stake(
                 })
                 .padding(15),
             tooltip(
-                Text::new(iced_aw::Bootstrap::Question.to_string()).font(iced_aw::BOOTSTRAP_FONT),
+                Text::new(iced_fonts::Bootstrap::Question.to_string()).font(iced_fonts::BOOTSTRAP_FONT),
                 COST_PER_BLOCK_TOOLTIP_TEXT,
                 Position::Bottom)
             .gap(10)
-            .style(iced::theme::Container::Box)
+            .style(iced::widget::container::bordered_box),
         ],
 
         row![
@@ -241,11 +246,11 @@ pub fn view_stake(
                 })
                 .padding(15),
             tooltip(
-                Text::new(iced_aw::Bootstrap::Question.to_string()).font(iced_aw::BOOTSTRAP_FONT),
+                Text::new(iced_fonts::Bootstrap::Question.to_string()).font(iced_fonts::BOOTSTRAP_FONT),
                 MARGIN_PER_THOUSAND_TOOLTIP_TEXT,
                 Position::Bottom)
             .gap(10)
-            .style(iced::theme::Container::Box)
+            .style(iced::widget::container::bordered_box),
         ],
 
         row![
@@ -259,11 +264,11 @@ pub fn view_stake(
                 })
                 .padding(15),
             tooltip(
-                Text::new(iced_aw::Bootstrap::Question.to_string()).font(iced_aw::BOOTSTRAP_FONT),
+                Text::new(iced_fonts::Bootstrap::Question.to_string()).font(iced_fonts::BOOTSTRAP_FONT),
                 DECOMMISSION_ADDRESS_TOOLTIP_TEXT,
                 Position::Bottom)
             .gap(10)
-            .style(iced::theme::Container::Box)
+            .style(iced::widget::container::bordered_box),
         ],
 
         row![
@@ -271,15 +276,15 @@ pub fn view_stake(
                 .padding(15)
                 .on_press(still_syncing.clone().unwrap_or(WalletMessage::CreateStakingPool)),
             tooltip(
-                Text::new(iced_aw::Bootstrap::Question.to_string()).font(iced_aw::BOOTSTRAP_FONT),
+                Text::new(iced_fonts::Bootstrap::Question.to_string()).font(iced_fonts::BOOTSTRAP_FONT),
                 CREATE_STAKING_POOL_TOOLTIP_TEXT,
                 Position::Bottom
             )
             .gap(10)
-            .style(iced::theme::Container::Box)
+            .style(iced::widget::container::bordered_box),
         ],
 
-        staking_enabled_row.spacing(10).align_items(Alignment::Center),
+        staking_enabled_row.spacing(10).align_y(Alignment::Center),
         iced::widget::horizontal_rule(10),
         staking_balance_grid,
         iced::widget::horizontal_rule(10),
@@ -294,11 +299,11 @@ pub fn view_stake(
                 })
                 .padding(15),
             tooltip(
-                Text::new(iced_aw::Bootstrap::Question.to_string()).font(iced_aw::BOOTSTRAP_FONT),
+                Text::new(iced_fonts::Bootstrap::Question.to_string()).font(iced_fonts::BOOTSTRAP_FONT),
                 DECOMMISSION_POOL_ADDRESS_TOOLTIP_TEXT,
                 Position::Bottom)
             .gap(10)
-            .style(iced::theme::Container::Box)
+            .style(iced::widget::container::bordered_box),
         ],
         row![
             text_input("Address that will receive the proceeds from the staking pool", decommission_pool_address)
@@ -311,24 +316,24 @@ pub fn view_stake(
                 })
                 .padding(15),
             tooltip(
-                Text::new(iced_aw::Bootstrap::Question.to_string()).font(iced_aw::BOOTSTRAP_FONT),
+                Text::new(iced_fonts::Bootstrap::Question.to_string()).font(iced_fonts::BOOTSTRAP_FONT),
                 DECOMMISSION_COINS_DESTINATION_ADDRESS_TOOLTIP_TEXT,
                 Position::Bottom)
             .gap(10)
-            .style(iced::theme::Container::Box)
+            .style(iced::widget::container::bordered_box),
         ],
         row![
             iced::widget::button(Text::new("Decommission staking pool"))
-                .style(iced::theme::Button::Destructive)
+                .style(iced::widget::button::danger)
                 .padding(15)
                 .on_press(still_syncing.unwrap_or(WalletMessage::DecommissionPool)),
             tooltip(
-                Text::new(iced_aw::Bootstrap::Question.to_string()).font(iced_aw::BOOTSTRAP_FONT),
+                Text::new(iced_fonts::Bootstrap::Question.to_string()).font(iced_fonts::BOOTSTRAP_FONT),
                 DECOMMISSION_POOL_TOOLTIP_TEXT,
                 Position::Bottom
             )
             .gap(10)
-            .style(iced::theme::Container::Box)
+            .style(iced::widget::container::bordered_box),
         ],
     ]
     .spacing(10)

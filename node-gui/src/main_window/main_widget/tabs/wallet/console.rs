@@ -35,7 +35,7 @@ pub fn view_console(
         .collect();
 
     let output = s.join("\n");
-    let console_output = Scrollable::new(iced::widget::text(&output))
+    let console_output = Scrollable::new(iced::widget::text(output.clone()))
         .height(Length::Fixed(350.0))
         .width(Length::Fill)
         .id(Id::new(CONSOLE_OUTPUT_ID));
@@ -47,18 +47,21 @@ pub fn view_console(
     let buttons = row![
         iced::widget::horizontal_space(),
         button(
-            Text::new(iced_aw::Bootstrap::ClipboardCheck.to_string()).font(iced_aw::BOOTSTRAP_FONT),
+            Text::new(iced_fonts::Bootstrap::ClipboardCheck.to_string())
+                .font(iced_fonts::BOOTSTRAP_FONT),
         )
-        .style(iced::theme::Button::Text)
+        .style(iced::widget::button::text)
         .width(Length::Shrink)
         .on_press(WalletMessage::CopyToClipboard(output)),
-        button(Text::new(iced_aw::Bootstrap::Trash.to_string()).font(iced_aw::BOOTSTRAP_FONT),)
-            .style(iced::theme::Button::Text)
-            .width(Length::Shrink)
-            .on_press(WalletMessage::ConsoleClear),
+        button(
+            Text::new(iced_fonts::Bootstrap::Trash.to_string()).font(iced_fonts::BOOTSTRAP_FONT),
+        )
+        .style(iced::widget::button::text)
+        .width(Length::Shrink)
+        .on_press(WalletMessage::ConsoleClear),
     ]
     .width(Length::Fill)
-    .align_items(iced::Alignment::End);
+    .align_y(iced::Alignment::End);
 
     column![
         buttons,
@@ -68,12 +71,13 @@ pub fn view_console(
             iced::widget::button(Text::new("Submit"))
                 .on_press(still_syncing.unwrap_or(WalletMessage::ConsoleInputSubmit)),
             tooltip(
-                Text::new(iced_aw::Bootstrap::Question.to_string()).font(iced_aw::BOOTSTRAP_FONT),
+                Text::new(iced_fonts::Bootstrap::Question.to_string())
+                    .font(iced_fonts::BOOTSTRAP_FONT),
                 SUBMIT_TOOLTIP_TEXT,
                 tooltip::Position::Bottom
             )
             .gap(10)
-            .style(iced::theme::Container::Box)
+            .style(iced::widget::container::bordered_box),
         ],
     ]
     .into()

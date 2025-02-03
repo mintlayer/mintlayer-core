@@ -95,19 +95,20 @@ pub fn view_left_panel(
         let label = row![
             text(label).size(16).width(Length::Fill),
             tooltip(
-                Text::new(iced_aw::Bootstrap::Question.to_string()).font(iced_aw::BOOTSTRAP_FONT),
+                Text::new(iced_fonts::Bootstrap::Question.to_string())
+                    .font(iced_fonts::BOOTSTRAP_FONT),
                 tooltip_text,
                 tooltip::Position::Bottom
             )
             .gap(10)
-            .style(iced::theme::Container::Box)
+            .style(iced::widget::container::bordered_box),
         ];
 
         button(label)
             .style(if panel == selected_panel {
-                iced::theme::Button::Primary
+                iced::widget::button::primary
             } else {
-                iced::theme::Button::Text
+                iced::widget::button::text
             })
             .width(Length::Fill)
             .on_press(WalletMessage::SelectPanel(panel))
@@ -136,14 +137,14 @@ pub fn view_left_panel(
         );
         column![
             text(scan_progress_str)
-                .horizontal_alignment(iced::alignment::Horizontal::Center)
+                .align_x(iced::alignment::Horizontal::Center)
                 .width(Length::Fill)
                 .height(Length::Shrink),
             progress_bar(0.0..=100.0, scan_progress).width(Length::Fill),
         ]
         .padding(10)
         .spacing(10)
-        .align_items(Alignment::End)
+        .align_x(Alignment::End)
         .width(Length::Fill)
         .height(Length::Shrink)
     } else {
@@ -154,20 +155,20 @@ pub fn view_left_panel(
         column![
             text(file_name).size(25),
             row![
-                pick_list.width(100),
+                pick_list,
                 button(Text::new("+"))
-                    .style(iced::theme::Button::Positive)
+                    .style(iced::widget::button::success)
                     .on_press(WalletMessage::NewAccount),
                 tooltip(
-                    Text::new(iced_aw::Bootstrap::Question.to_string())
-                        .font(iced_aw::BOOTSTRAP_FONT),
+                    Text::new(iced_fonts::Bootstrap::Question.to_string())
+                        .font(iced_fonts::BOOTSTRAP_FONT),
                     NEW_ACCOUNT_TOOLTIP_TEXT,
                     tooltip::Position::Bottom
                 )
                 .gap(10)
-                .style(iced::theme::Container::Box)
+                .style(iced::widget::container::bordered_box),
             ]
-            .align_items(Alignment::Center)
+            .align_y(Alignment::Center)
             .spacing(10)
             .width(Length::Fill)
         ]

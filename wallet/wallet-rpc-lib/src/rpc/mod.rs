@@ -75,8 +75,9 @@ use wallet_controller::{
     UtxoType, UtxoTypes, DEFAULT_ACCOUNT_INDEX,
 };
 use wallet_types::{
-    account_info::StandaloneAddressDetails, seed_phrase::StoreSeedPhrase,
-    signature_status::SignatureStatus, wallet_tx::TxData, with_locked::WithLocked, Currency,
+    account_info::StandaloneAddressDetails, scan_blockchain::ScanBlockchain,
+    seed_phrase::StoreSeedPhrase, signature_status::SignatureStatus, wallet_tx::TxData,
+    with_locked::WithLocked, Currency,
 };
 
 use crate::{
@@ -129,13 +130,19 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         store_seed_phrase: StoreSeedPhrase,
         mnemonic: Option<String>,
         passphrase: Option<String>,
-        skip_syncing: bool,
+        scan_blockchain: ScanBlockchain,
     ) -> WRpcResult<CreatedWallet, N> {
         self.wallet
             .manage_async(move |wallet_manager| {
                 Box::pin(async move {
                     wallet_manager
-                        .create_wallet(path, store_seed_phrase, mnemonic, passphrase, skip_syncing)
+                        .create_wallet(
+                            path,
+                            store_seed_phrase,
+                            mnemonic,
+                            passphrase,
+                            scan_blockchain,
+                        )
                         .await
                 })
             })

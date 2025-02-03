@@ -13,9 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#[allow(deprecated)]
+use iced::widget::Component;
+
 use iced::{
     alignment::Horizontal,
-    widget::{self, container, text_input, Button, Component, Text},
+    widget::{self, container, text_input, Button, Text},
     Element, Length, Theme,
 };
 use iced_aw::Card;
@@ -49,6 +52,7 @@ pub enum SetPasswordEvent {
     Cancel,
 }
 
+#[allow(deprecated)]
 impl<Message> Component<Message, Theme, iced::Renderer> for WalletUnlockDialog<Message> {
     type State = SetPasswordState;
     type Event = SetPasswordEvent;
@@ -73,8 +77,7 @@ impl<Message> Component<Message, Theme, iced::Renderer> for WalletUnlockDialog<M
 
     fn view(&self, state: &Self::State) -> Element<Self::Event, Theme, iced::Renderer> {
         let button_enabled = !state.password1.is_empty();
-        let button =
-            Button::new(Text::new("Encrypt wallet").horizontal_alignment(Horizontal::Center));
+        let button = Button::new(Text::new("Encrypt wallet").align_x(Horizontal::Center));
         let button = if button_enabled {
             button.on_press(SetPasswordEvent::Ok)
         } else {
@@ -95,7 +98,7 @@ impl<Message> Component<Message, Theme, iced::Renderer> for WalletUnlockDialog<M
             ]
             .spacing(10),
         )
-        .foot(container(button).width(Length::Fill).center_x())
+        .foot(container(button).center_x(Length::Fill))
         .max_width(600.0)
         .on_close(SetPasswordEvent::Cancel)
         .into()
@@ -107,6 +110,7 @@ where
     Message: 'a,
 {
     fn from(component: WalletUnlockDialog<Message>) -> Self {
+        #[allow(deprecated)]
         widget::component(component)
     }
 }
