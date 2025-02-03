@@ -37,8 +37,10 @@ use rpc::RpcAuthData;
 use tokio::sync::mpsc;
 use utils::{cookie::COOKIE_FILENAME, default_data_dir::default_data_dir_for_chain, ensure};
 use wallet_cli_commands::{ManageableWalletCommand, WalletCommand, WalletManagementCommand};
-use wallet_rpc_lib::types::NodeInterface;
-use wallet_rpc_lib::{cmdline::make_wallet_config, config::WalletRpcConfig};
+use wallet_rpc_lib::{cmdline::make_wallet_config, config::WalletRpcConfig, types::NodeInterface};
+
+#[cfg(feature = "trezor")]
+use wallet_cli_commands::CliHardwareWalletType;
 
 enum Mode {
     Interactive {
@@ -284,6 +286,12 @@ fn setup_events_and_repl<N: NodeInterface + Send + Sync + 'static>(
                         wallet_path,
                         encryption_password: args.wallet_password,
                         force_change_wallet_type: args.force_change_wallet_type,
+                        hardware_wallet: args.hardware_wallet.map(|hw| match hw {
+                            #[cfg(feature = "trezor")]
+                            wallet_rpc_lib::cmdline::CliHardwareWalletType::Trezor => {
+                                CliHardwareWalletType::Trezor
+                            }
+                        }),
                     },
                 ),
                 res_tx,

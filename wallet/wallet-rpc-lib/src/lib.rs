@@ -18,15 +18,16 @@ pub mod config;
 mod rpc;
 mod service;
 
+#[cfg(feature = "trezor")]
+use rpc::types::HardwareWalletType;
 pub use rpc::{
     types, ColdWalletRpcClient, ColdWalletRpcDescription, ColdWalletRpcServer, RpcCreds, RpcError,
     WalletEventsRpcServer, WalletRpc, WalletRpcClient, WalletRpcDescription, WalletRpcServer,
 };
-pub use service::{
-    CreatedWallet, Event, EventStream, TxState, WalletHandle,
-    /* WalletResult, */ WalletService,
-};
+pub use service::{Event, EventStream, TxState, WalletHandle, /* WalletResult, */ WalletService,};
 use wallet_controller::{NodeInterface, NodeRpcClient};
+#[cfg(feature = "trezor")]
+use wallet_types::wallet_type::WalletType;
 
 use std::{fmt::Debug, time::Duration};
 
@@ -99,12 +100,19 @@ pub async fn start_services<N>(
     cold_wallet: bool,
 ) -> Result<(WalletService<N>, rpc::Rpc), StartupError<N>>
 where
-    N: NodeInterface + Clone + Sync + Send + Debug + 'static,
+    N: NodeInterface + Clone + Sync + Send + 'static + Debug,
 {
+    let wallet_type = wallet_config.hardware_wallet_type.map_or_else(
+        || node_rpc.is_cold_wallet_node().into(),
+        |hw| match hw {
+            #[cfg(feature = "trezor")]
+            HardwareWalletType::Trezor => WalletType::Trezor,
+        },
+    );
     // Start the wallet service
     let wallet_service = WalletService::start(
         wallet_config.chain_config,
-        wallet_config.wallet_file,
+        wallet_config.wallet_file.map(|file| (file, wallet_type)),
         wallet_config.force_change_wallet_type,
         wallet_config.start_staking_for_account,
         node_rpc,

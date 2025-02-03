@@ -18,7 +18,6 @@ use std::mem::take;
 
 use common::address::Address;
 use common::chain::output_value::OutputValue;
-use common::chain::partially_signed_transaction::PartiallySignedTransaction;
 use common::chain::stakelock::StakePoolData;
 use common::chain::timelock::OutputTimeLock::ForBlockCount;
 use common::chain::tokens::{Metadata, TokenId, TokenIssuance};
@@ -30,6 +29,7 @@ use common::primitives::{Amount, BlockHeight};
 use crypto::vrf::VRFPublicKey;
 use utils::ensure;
 use wallet_types::currency::Currency;
+use wallet_types::partially_signed_transaction::{PartiallySignedTransaction, TxAdditionalInfo};
 
 use crate::account::PoolData;
 use crate::destination_getters::{get_tx_output_destination, HtlcSpendingCondition};
@@ -288,17 +288,22 @@ impl SendRequest {
         take(&mut self.fees)
     }
 
-    pub fn into_partially_signed_tx(self) -> WalletResult<PartiallySignedTransaction> {
+    pub fn into_partially_signed_tx(
+        self,
+        additional_info: TxAdditionalInfo,
+    ) -> WalletResult<PartiallySignedTransaction> {
         let num_inputs = self.inputs.len();
-        let tx = Transaction::new(self.flags, self.inputs, self.outputs)?;
         let destinations = self.destinations.into_iter().map(Some).collect();
+        let utxos = self.utxos;
+        let tx = Transaction::new(self.flags, self.inputs, self.outputs)?;
 
         let ptx = PartiallySignedTransaction::new(
             tx,
             vec![None; num_inputs],
-            self.utxos,
+            utxos,
             destinations,
             None,
+            additional_info,
         )?;
         Ok(ptx)
     }
