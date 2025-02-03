@@ -3481,17 +3481,17 @@ fn lock_then_transfer(#[case] seed: Seed) {
     scan_wallet(&mut wallet, BlockHeight::new(1), vec![block2]);
 
     // check balance
-    let balance_without_locked_transer =
+    let balance_without_locked_transfer =
         ((block1_amount * 2).unwrap() - amount_to_lock_then_transfer).unwrap();
 
     let coin_balance = get_coin_balance(&wallet);
-    assert_eq!(coin_balance, balance_without_locked_transer);
+    assert_eq!(coin_balance, balance_without_locked_transfer);
 
     // check that for block_count_lock, the amount is not included
     for idx in 0..block_count_lock {
         let coin_balance = get_coin_balance(&wallet);
         // check that the amount is still not unlocked
-        assert_eq!(coin_balance, balance_without_locked_transer);
+        assert_eq!(coin_balance, balance_without_locked_transfer);
 
         let currency_balances = wallet
             .get_balance(
@@ -3524,7 +3524,7 @@ fn lock_then_transfer(#[case] seed: Seed) {
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(
         coin_balance,
-        (balance_without_locked_transer + amount_to_lock_then_transfer).unwrap()
+        (balance_without_locked_transfer + amount_to_lock_then_transfer).unwrap()
     );
 }
 
@@ -3882,15 +3882,15 @@ fn wallet_abandone_transactions(#[case] seed: Seed) {
 
     assert_eq!(abandonable_transactions.len(), transactions.len());
 
-    let txs_to_abandone = rng.gen_range(0..total_num_transactions) as usize;
-    let (txs_to_keep, txs_to_abandone) = transactions.split_at(txs_to_abandone);
+    let txs_to_abandon = rng.gen_range(0..total_num_transactions) as usize;
+    let (txs_to_keep, txs_to_abandon) = transactions.split_at(txs_to_abandon);
 
-    assert!(!txs_to_abandone.is_empty());
+    assert!(!txs_to_abandon.is_empty());
 
-    let transaction_id = txs_to_abandone.first().unwrap().0.transaction().get_id();
+    let transaction_id = txs_to_abandon.first().unwrap().0.transaction().get_id();
     wallet.abandon_transaction(DEFAULT_ACCOUNT_INDEX, transaction_id).unwrap();
 
-    let coins_after_abandon = txs_to_abandone.first().unwrap().1;
+    let coins_after_abandon = txs_to_abandon.first().unwrap().1;
 
     let coin_balance = get_coin_balance_with_inactive(&wallet);
     assert_eq!(coin_balance, coins_after_abandon);
@@ -3900,7 +3900,7 @@ fn wallet_abandone_transactions(#[case] seed: Seed) {
     let coin_balance = get_coin_balance_with_inactive(&wallet);
     assert_eq!(coin_balance, coins_after_abandon);
 
-    // Abandone the same tx again
+    // Abandon the same tx again
     let result = wallet.abandon_transaction(DEFAULT_ACCOUNT_INDEX, transaction_id);
     assert_eq!(
         result.unwrap_err(),
@@ -6195,7 +6195,7 @@ fn conflicting_delegation_account_nonce(#[case] seed: Seed) {
         )
     );
 
-    // Abandone conflicting txs
+    // Abandon conflicting txs
     wallet
         .abandon_transaction(DEFAULT_ACCOUNT_INDEX, spend_from_delegation_tx_1_id)
         .unwrap();
@@ -6455,9 +6455,9 @@ fn conflicting_delegation_account_nonce_same_tx(#[case] seed: Seed) {
     );
 }
 
-// Issue and mint some tokens
-// Create an order selling tokens for coins
-// Create 2 fill order txs and add them to a wallet as unconfirmed
+// Issue and mint some tokens.
+// Create an order selling tokens for coins.
+// Create 2 fill order txs and add them to a wallet as unconfirmed.
 // Confirm the first tx in a block and check that it is accounted in confirmed balance
 // and also that unconfirmed balance has second tx.
 #[rstest]
@@ -6589,7 +6589,7 @@ fn conflicting_order_account_nonce(#[case] seed: Seed) {
     };
 
     let spend_coins_1 = Amount::from_atoms(10);
-    let recieved_tokens_1 = spend_coins_1;
+    let received_tokens_1 = spend_coins_1;
     let fill_order_tx_1 = wallet
         .create_fill_order_tx(
             DEFAULT_ACCOUNT_INDEX,
@@ -6625,7 +6625,7 @@ fn conflicting_order_account_nonce(#[case] seed: Seed) {
     };
 
     let spend_coins_2 = Amount::from_atoms(3);
-    let recieved_tokens_2 = spend_coins_2;
+    let received_tokens_2 = spend_coins_2;
     let fill_order_tx_2 = wallet
         .create_fill_order_tx(
             DEFAULT_ACCOUNT_INDEX,
@@ -6698,7 +6698,7 @@ fn conflicting_order_account_nonce(#[case] seed: Seed) {
         UtxoState::Confirmed.into(),
         WithLocked::Any,
     );
-    assert_eq!(token_balance_confirmed, recieved_tokens_1);
+    assert_eq!(token_balance_confirmed, received_tokens_1);
 
     let token_balance_unconfirmed = get_balance_with(
         &wallet,
@@ -6708,6 +6708,6 @@ fn conflicting_order_account_nonce(#[case] seed: Seed) {
     );
     assert_eq!(
         token_balance_unconfirmed,
-        (recieved_tokens_1 + recieved_tokens_2).unwrap()
+        (received_tokens_1 + received_tokens_2).unwrap()
     );
 }
