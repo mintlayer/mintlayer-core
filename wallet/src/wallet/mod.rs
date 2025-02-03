@@ -180,8 +180,14 @@ pub enum WalletError {
     CoinSelectionError(#[from] UtxoSelectorError),
     #[error("Cannot change a transaction's state from {0} to {1}")]
     CannotChangeTransactionState(TxState, TxState),
+    #[error("Cannot mark as conflicted transaction in {0} state")]
+    CannotMarkTxAsConflictedIfInState(TxState),
     #[error("Transaction with Id {0} not found")]
     CannotFindTransactionWithId(Id<Transaction>),
+    #[error("Transaction with Id {0} cannot map to a block")]
+    TransactionIdCannotMapToBlock(Id<Transaction>),
+    #[error("Descendant transaction with Id {0} not found")]
+    CannotFindDescendantTransactionWithId(Id<Transaction>),
     #[error("Address error: {0}")]
     AddressError(#[from] AddressError),
     #[error("Unknown pool id {0}")]
