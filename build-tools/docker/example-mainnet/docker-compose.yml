@@ -10,7 +10,7 @@ x-common-env: &ml-common-env
 services:
   node-daemon:
     <<: *ml-common
-    image: $DOCKERHUB_USERNAME/node-daemon:$IMAGE_TAG
+    image: $ML_DOCKERHUB_USERNAME/node-daemon:$ML_DOCKER_IMAGE_TAG
     command: node-daemon mainnet
     environment:
       <<: *ml-common-env
@@ -41,7 +41,7 @@ services:
 
   ### Services needed to run the api server ###
   api-postgres-db:
-    image: postgres
+    image: postgres:$API_SERVER_POSTGRES_DOCKER_IMAGE_TAG
     restart: always
     environment:
       POSTGRES_USER: $API_SERVER_POSTGRES_USER
@@ -58,7 +58,7 @@ services:
 
   api-blockchain-scanner-daemon:
     <<: *ml-common
-    image: $DOCKERHUB_USERNAME/api-blockchain-scanner-daemon:$IMAGE_TAG
+    image: $ML_DOCKERHUB_USERNAME/api-blockchain-scanner-daemon:$ML_DOCKER_IMAGE_TAG
     command: api-blockchain-scanner-daemon
     depends_on:
       - api-postgres-db
@@ -75,7 +75,7 @@ services:
 
   api-web-server:
     <<: *ml-common
-    image: $DOCKERHUB_USERNAME/api-web-server:$IMAGE_TAG
+    image: $ML_DOCKERHUB_USERNAME/api-web-server:$ML_DOCKER_IMAGE_TAG
     command: api-web-server
     depends_on:
       - api-postgres-db
@@ -97,7 +97,7 @@ services:
 
   wallet-rpc-daemon:
     <<: *ml-common
-    image: $DOCKERHUB_USERNAME/wallet-rpc-daemon:$IMAGE_TAG
+    image: $ML_DOCKERHUB_USERNAME/wallet-rpc-daemon:$ML_DOCKER_IMAGE_TAG
     command: wallet-rpc-daemon mainnet
     depends_on:
       - node-daemon
@@ -118,7 +118,7 @@ services:
   # to run it via "docker compose run"
   wallet-cli:
     <<: *ml-common
-    image: $DOCKERHUB_USERNAME/wallet-cli:$IMAGE_TAG
+    image: $ML_DOCKERHUB_USERNAME/wallet-cli:$ML_DOCKER_IMAGE_TAG
     command: wallet-cli
     depends_on:
       - node-daemon

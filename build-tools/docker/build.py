@@ -20,11 +20,20 @@ def get_cargo_version(cargo_toml_path):
     return version
 
 
-def build_docker_image(dockerfile_path, image_name, version, num_jobs=None):
+def build_docker_image(dockerfile_path, image_name, tags, num_jobs=None):
     # Docker build command
-    command = f"docker build -t {image_name}:{version} -f {dockerfile_path}"
+    command = f"docker build"
+
+    full_tags = [image_name] if len(tags) == 0 else [f"{image_name}:{tag}" for tag in tags];
+
+    for full_tag in full_tags:
+        command += f" -t {full_tag}"
+
+    command += f" -f {dockerfile_path}"
+
     if num_jobs:
         command += f" --build-arg NUM_JOBS={num_jobs}"
+
     # Note: "plain" output is more verbose, but it makes it easier to understand what went wrong
     # when a problem occurs.
     command += " --progress=plain"
@@ -33,7 +42,7 @@ def build_docker_image(dockerfile_path, image_name, version, num_jobs=None):
     try:
         # Run the command
         subprocess.check_call(command, shell=True)
-        print(f"Built {image_name}:{version} successfully.")
+        print(f"Built {image_name} successfully (the tags are: {full_tags}).")
     except Exception as error:
         print(f"Error occurred: {error}")
         exit(1) # stop the build
@@ -76,26 +85,24 @@ def delete_docker_image(image_name, version):
         print(f"Failed to delete {full_image_name}.")
 
 
-def build_instances(version, docker_hub_user, num_jobs):
-    if num_jobs is None:
-        num_jobs = os.cpu_count() or 1
-
+def build_instances(tags, docker_hub_user, num_jobs):
     build_docker_image("build-tools/docker/Dockerfile.builder",
-                        "mintlayer-builder", "latest", num_jobs)
+                        "mintlayer-builder", ["latest"], num_jobs)
     build_docker_image("build-tools/docker/Dockerfile.runner-base",
-                        "mintlayer-runner-base", "latest", num_jobs)
+                        "mintlayer-runner-base", ["latest"], num_jobs)
+
     build_docker_image("build-tools/docker/Dockerfile.node-daemon",
-                        f"{docker_hub_user}/node-daemon", version)
+                        f"{docker_hub_user}/node-daemon", tags)
     build_docker_image("build-tools/docker/Dockerfile.api-blockchain-scanner-daemon",
-                        f"{docker_hub_user}/api-blockchain-scanner-daemon", version)
+                        f"{docker_hub_user}/api-blockchain-scanner-daemon", tags)
     build_docker_image("build-tools/docker/Dockerfile.api-web-server",
-                        f"{docker_hub_user}/api-web-server", version)
+                        f"{docker_hub_user}/api-web-server", tags)
     build_docker_image("build-tools/docker/Dockerfile.wallet-cli",
-                        f"{docker_hub_user}/wallet-cli", version)
+                        f"{docker_hub_user}/wallet-cli", tags)
     build_docker_image("build-tools/docker/Dockerfile.wallet-rpc-daemon",
-                        f"{docker_hub_user}/wallet-rpc-daemon", version)
+                        f"{docker_hub_user}/wallet-rpc-daemon", tags)
     build_docker_image("build-tools/docker/Dockerfile.dns-server",
-                        f"{docker_hub_user}/dns-server", version)
+                        f"{docker_hub_user}/dns-server", tags)
 #    delete_docker_image("mintlayer-builder", "latest")
 
 
@@ -109,24 +116,25 @@ def push_instances(docker_hub_user, version, latest):
 
 
 def main():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--push', action='store_true', help='Push the Docker image to Docker Hub')
     parser.add_argument('--docker-hub-user', help='Docker Hub username', default='mintlayer')
     parser.add_argument('--latest', action='store_true', help='Tag the Docker image as latest while pushing')
     parser.add_argument('--build', type=lambda x: (str(x).lower() == 'true'), default=True, help="Set to false avoid the build")
     parser.add_argument('--version', help='Override version number', default=None)
-    parser.add_argument('--num_jobs', help='Number of parallel jobs, defaults to # of CPUs', default=None)
+    parser.add_argument('--num_jobs', help='Number of parallel jobs', default=(os.cpu_count() or 1))
+    parser.add_argument('--local_tags', nargs='*', help='Additional tags to apply (these won\'t be pushed)', default=[])
     args = parser.parse_args()
 
     version = args.version if args.version else get_cargo_version("Cargo.toml")
+    tags = [version, *args.local_tags]
 
     if args.build:
-        build_instances(version, args.docker_hub_user, args.num_jobs)
+        build_instances(tags, args.docker_hub_user, args.num_jobs)
 
     # Only push the image if the --push flag is provided
     if args.push:
-        latest = args.latest
-        push_instances(args.docker_hub_user, version, latest)
+        push_instances(args.docker_hub_user, version, args.latest)
 
 
 if __name__ == "__main__":

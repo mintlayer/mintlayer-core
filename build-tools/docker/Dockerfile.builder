@@ -16,7 +16,6 @@ FROM rust AS builder
 
 WORKDIR /usr/src/
 
-# Install necessary build dependencies for the GUI (such as X11, etc.)
 RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
 
 COPY --from=source /src/ /usr/src/
