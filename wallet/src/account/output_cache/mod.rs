@@ -836,9 +836,17 @@ impl OutputCache {
                                 );
                                 Ok(())
                             }
-                            TxState::Abandoned
-                            | TxState::Confirmed(..)
-                            | TxState::Conflicted(..) => {
+                            TxState::Conflicted(..) => {
+                                // It's possible to try to mark descendant as conflicting twice
+                                // because unconfirmed_descendants contains a tx as child and as parent.
+                                // So it's not an error only if done during this function call.
+                                ensure!(
+                                    conflicting_txs_with_descendants.contains(&tx_id),
+                                    WalletError::CannotMarkTxAsConflictedIfInState(*tx.state())
+                                );
+                                Ok(())
+                            }
+                            TxState::Abandoned | TxState::Confirmed(..) => {
                                 Err(WalletError::CannotMarkTxAsConflictedIfInState(*tx.state()))
                             }
                         },
