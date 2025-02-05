@@ -1,6 +1,6 @@
 services:
   dns-server:
-    image: $DOCKERHUB_USERNAME/dns-server:$IMAGE_TAG
+    image: $ML_DOCKERHUB_USERNAME/dns-server:$ML_DOCKER_IMAGE_TAG
     volumes:
       - ./mintlayer-data:/home/mintlayer
     command: dns-server
