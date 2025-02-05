@@ -29,7 +29,10 @@ use std::{
 use chainstate::{
     rpc::RpcOutputValueIn, tx_verifier::check_transaction, ChainInfo, TokenIssuanceError,
 };
-use crypto::key::{hdkd::u31::U31, PrivateKey, PublicKey};
+use crypto::{
+    key::{hdkd::u31::U31, PrivateKey, PublicKey},
+    vrf::VRFPublicKey,
+};
 use mempool::tx_accumulator::PackingStrategy;
 use mempool_types::tx_options::TxOptionsOverrides;
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
@@ -1229,6 +1232,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
             .await?
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn create_stake_pool(
         &self,
         account_index: U31,
@@ -1236,6 +1240,8 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         cost_per_block: RpcAmountIn,
         margin_ratio_per_thousand: String,
         decommission_address: RpcAddress<Destination>,
+        staker_address: Option<RpcAddress<Destination>>,
+        vrf_public_key: Option<RpcAddress<VRFPublicKey>>,
         config: ControllerConfig,
     ) -> WRpcResult<SignedTransaction, N> {
         let decimals = self.chain_config.coin_decimals();
@@ -1250,6 +1256,20 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
             .decode_object(&self.chain_config)
             .map_err(|_| RpcError::InvalidAddress)?;
 
+        let staker_destination = staker_address
+            .map(|staker| {
+                staker.decode_object(&self.chain_config).map_err(|_| RpcError::InvalidAddress)
+            })
+            .transpose()?;
+
+        let vrf_public_key = vrf_public_key
+            .map(|vrf_public_key| {
+                vrf_public_key
+                    .decode_object(&self.chain_config)
+                    .map_err(|_| RpcError::InvalidAddress)
+            })
+            .transpose()?;
+
         self.wallet
             .call_async(move |controller| {
                 Box::pin(async move {
@@ -1261,6 +1281,8 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
                             decommission_destination,
                             margin_ratio_per_thousand,
                             cost_per_block,
+                            staker_destination,
+                            vrf_public_key,
                         )
                         .await
                         .map_err(RpcError::Controller)
