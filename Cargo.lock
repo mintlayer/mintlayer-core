@@ -4828,6 +4828,7 @@ dependencies = [
  "chrono",
  "common",
  "futures",
+ "heck 0.5.0",
  "iced",
  "iced_aw",
  "iced_fonts",

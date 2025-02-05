@@ -21,30 +21,26 @@ use std::{
     sync::Arc,
 };
 
+use anyhow::{anyhow, Context, Result};
 use file_rotate::{compression::Compression, suffix::AppendCount, ContentLimit, FileRotate};
 
-use anyhow::{anyhow, Context, Result};
 use blockprod::rpc::BlockProductionRpcServer;
-use chainstate_launcher::{ChainConfig, StorageBackendConfig};
-use common::chain::config::regtest_options::regtest_chain_config;
-
 use chainstate::{rpc::ChainstateRpcServer, ChainstateError, InitializationError};
+use chainstate_launcher::{ChainConfig, StorageBackendConfig};
 use common::chain::config::{assert_no_ignore_consensus_in_chain_config, ChainType};
 use logging::log;
-
 use mempool::rpc::MempoolRpcServer;
-
-use test_rpc_functions::{empty::make_empty_rpc_test_functions, rpc::RpcTestFunctionsRpcServer};
-
 use p2p::{error::P2pError, rpc::P2pRpcServer};
 use rpc::rpc_creds::RpcCreds;
-use test_rpc_functions::make_rpc_test_functions;
+use test_rpc_functions::{
+    empty::make_empty_rpc_test_functions, make_rpc_test_functions, rpc::RpcTestFunctionsRpcServer,
+};
 
 use crate::{
     config_files::{NodeConfigFile, DEFAULT_P2P_NETWORKING_ENABLED, DEFAULT_RPC_ENABLED},
     mock_time::set_mock_time,
     node_controller::NodeController,
-    options::{default_data_dir, Command, Options, RunOptions},
+    options::{default_data_dir, OptionsWithResolvedCommand, RunOptions},
     RpcConfigFile,
 };
 
@@ -235,20 +231,15 @@ async fn initialize(
 }
 
 /// Processes options and potentially runs the node.
-pub async fn setup(options: Options) -> Result<NodeSetupResult> {
-    let command = options.command.clone().unwrap_or(Command::Mainnet(RunOptions::default()));
-    let run_options = command.run_options();
-    let chain_config = match &command {
-        Command::Mainnet(_) => common::chain::config::create_mainnet(),
-        Command::Testnet(_) => common::chain::config::create_testnet(),
-        Command::Regtest(regtest_options) => regtest_chain_config(&regtest_options.chain_config)?,
-    };
+pub async fn setup(options: OptionsWithResolvedCommand) -> Result<NodeSetupResult> {
+    let run_options = options.command.run_options();
+    let chain_config = options.command.create_chain_config()?;
 
     // Prepare data dir
     let data_dir = utils::default_data_dir::prepare_data_dir(
         || default_data_dir(*chain_config.chain_type()),
-        &options.data_dir,
-        options.create_data_dir_if_missing,
+        options.top_level.data_dir.as_ref(),
+        options.top_level.create_data_dir_if_missing,
     )
     .expect("Failed to prepare data directory");
 
@@ -256,7 +247,7 @@ pub async fn setup(options: Options) -> Result<NodeSetupResult> {
     let lock_file = lock_data_dir(&data_dir)?;
 
     // Clean data dir if needed
-    if run_options.clean_data.unwrap_or(false) {
+    if options.clean_data_option_set() {
         clean_data_dir(
             &data_dir,
             std::slice::from_ref(&data_dir.join(LOCK_FILE_NAME).as_path()),
@@ -267,7 +258,7 @@ pub async fn setup(options: Options) -> Result<NodeSetupResult> {
     let main_log_writer_settings = logging::default_writer_settings();
 
     // Init logging
-    if run_options.log_to_file.is_some_and(|log_to_file| log_to_file) {
+    if options.log_to_file_option_set() {
         let log_file_name = std::env::current_exe().map_or_else(
             |_| DEFAULT_LOG_FILE_NAME.to_owned(),
             |exe| {
@@ -303,7 +294,7 @@ pub async fn setup(options: Options) -> Result<NodeSetupResult> {
     logging::log::info!("Command line options: {options:?}");
 
     let (manager, controller) = start(
-        &options.config_path(*chain_config.chain_type()),
+        &options.top_level.config_path(*chain_config.chain_type()),
         &data_dir,
         run_options,
         chain_config,

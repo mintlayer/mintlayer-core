@@ -59,7 +59,7 @@ pub enum PrepareDataDirError {
 /// Additionally, `create_data_dir_if_missing` allows to override the default behavior.
 pub fn prepare_data_dir<F: Fn() -> PathBuf>(
     default_data_dir_getter: F,
-    datadir_path_opt: &Option<PathBuf>,
+    datadir_path_opt: Option<&PathBuf>,
     create_data_dir_if_missing: Option<bool>,
 ) -> Result<PathBuf, PrepareDataDirError> {
     let (data_dir, create_if_missing_default) = match datadir_path_opt {
@@ -109,12 +109,12 @@ mod test {
         assert!(!supposed_default_dir.is_dir());
 
         // The call must fail if create_data_dir_if_missing is explicitly set to false.
-        let _err = prepare_data_dir(default_data_dir_getter, &None, Some(false)).unwrap_err();
+        let _err = prepare_data_dir(default_data_dir_getter, None, Some(false)).unwrap_err();
 
         // With create_data_dir_if_missing equal to None or true, the call must succeed.
-        let returned_data_dir1 = prepare_data_dir(default_data_dir_getter, &None, None).unwrap();
+        let returned_data_dir1 = prepare_data_dir(default_data_dir_getter, None, None).unwrap();
         let returned_data_dir2 =
-            prepare_data_dir(default_data_dir_getter, &None, Some(true)).unwrap();
+            prepare_data_dir(default_data_dir_getter, None, Some(true)).unwrap();
         assert_eq!(returned_data_dir1, returned_data_dir2);
 
         // The default directory must be returned.
@@ -137,11 +137,11 @@ mod test {
         test_file_data(&file_path, &file_data);
 
         // Now we prepare again, and ensure that our file is unchanged
-        let returned_data_dir1 = prepare_data_dir(default_data_dir_getter, &None, None).unwrap();
+        let returned_data_dir1 = prepare_data_dir(default_data_dir_getter, None, None).unwrap();
         let returned_data_dir2 =
-            prepare_data_dir(default_data_dir_getter, &None, Some(true)).unwrap();
+            prepare_data_dir(default_data_dir_getter, None, Some(true)).unwrap();
         let returned_data_dir3 =
-            prepare_data_dir(default_data_dir_getter, &None, Some(false)).unwrap();
+            prepare_data_dir(default_data_dir_getter, None, Some(false)).unwrap();
         assert_eq!(returned_data_dir1, returned_data_dir2);
         assert_eq!(returned_data_dir1, returned_data_dir3);
 
@@ -167,15 +167,11 @@ mod test {
         assert!(!supposed_custom_dir.is_dir());
 
         // The calls fail because the directory doesn't exist
+        let _err = prepare_data_dir(default_data_dir_getter, Some(&supposed_custom_dir), None)
+            .unwrap_err();
         let _err = prepare_data_dir(
             default_data_dir_getter,
-            &Some(supposed_custom_dir.clone()),
-            None,
-        )
-        .unwrap_err();
-        let _err = prepare_data_dir(
-            default_data_dir_getter,
-            &Some(supposed_custom_dir.clone()),
+            Some(&supposed_custom_dir),
             Some(false),
         )
         .unwrap_err();
@@ -187,7 +183,7 @@ mod test {
         // Now set create_data_dir_if_missing to true, the directory should be created.
         let returned_data_dir = prepare_data_dir(
             default_data_dir_getter,
-            &Some(supposed_custom_dir.clone()),
+            Some(&supposed_custom_dir),
             Some(true),
         )
         .unwrap();
@@ -204,15 +200,11 @@ mod test {
 
         // Passing None or false for create_data_dir_if_missing now also works, because the directory
         // already exists.
-        let returned_data_dir1 = prepare_data_dir(
-            default_data_dir_getter,
-            &Some(supposed_custom_dir.clone()),
-            None,
-        )
-        .unwrap();
+        let returned_data_dir1 =
+            prepare_data_dir(default_data_dir_getter, Some(&supposed_custom_dir), None).unwrap();
         let returned_data_dir2 = prepare_data_dir(
             default_data_dir_getter,
-            &Some(supposed_custom_dir.clone()),
+            Some(&supposed_custom_dir),
             Some(false),
         )
         .unwrap();
@@ -239,21 +231,17 @@ mod test {
         test_file_data(&file_path, &file_data);
 
         // Now we prepare again, and ensure that our file is unchanged
-        let returned_data_dir1 = prepare_data_dir(
-            default_data_dir_getter,
-            &Some(supposed_custom_dir.clone()),
-            None,
-        )
-        .unwrap();
+        let returned_data_dir1 =
+            prepare_data_dir(default_data_dir_getter, Some(&supposed_custom_dir), None).unwrap();
         let returned_data_dir2 = prepare_data_dir(
             default_data_dir_getter,
-            &Some(supposed_custom_dir.clone()),
+            Some(&supposed_custom_dir),
             Some(false),
         )
         .unwrap();
         let returned_data_dir3 = prepare_data_dir(
             default_data_dir_getter,
-            &Some(supposed_custom_dir.clone()),
+            Some(&supposed_custom_dir),
             Some(true),
         )
         .unwrap();

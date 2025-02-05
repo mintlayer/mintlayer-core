@@ -15,9 +15,11 @@
 
 use std::sync::Arc;
 
+use anyhow::Context;
+use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
+
 use p2p::{interface::p2p_interface::P2pInterface, P2pEvent};
 use subsystem::Handle;
-use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use utils::tap_log::TapLog;
 
 use super::{backend_impl::Backend, messages::BackendEvent};
@@ -31,10 +33,16 @@ impl P2pEventHandler {
     pub async fn new(
         p2p: &Handle<dyn P2pInterface>,
         event_tx: UnboundedSender<BackendEvent>,
-    ) -> Self {
+    ) -> anyhow::Result<Self> {
         // TODO: Fix race in p2p events subscribe (if some peers are connected before the subscription is complete)
 
+        // TODO: need a way to propagate subsystem initialization errors. E.g. if the p2p port is busy, we'll
+        // currently report "Error subscribing to P2P events: Callee subsystem did not respond", which is not
+        // very informative.
+        // Same for ChainstateEventHandler.
+
         let (p2p_event_tx, p2p_event_rx) = unbounded_channel();
+        let error_context = "Error subscribing to P2P events";
         p2p.call_mut(|this| {
             this.subscribe_to_events(Arc::new(move |p2p_event: P2pEvent| {
                 _ = p2p_event_tx
@@ -43,13 +51,13 @@ impl P2pEventHandler {
             }))
         })
         .await
-        .expect("Failed to subscribe to P2P event")
-        .expect("Failed to subscribe to P2P event");
+        .context(error_context)?
+        .context(error_context)?;
 
-        Self {
+        Ok(Self {
             p2p_event_rx,
             event_tx,
-        }
+        })
     }
 
     pub async fn run(&mut self) {
