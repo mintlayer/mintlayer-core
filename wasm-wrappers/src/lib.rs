@@ -44,8 +44,8 @@ use common::{
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
         tokens::{
-            make_token_id, IsTokenFreezable, Metadata, NftIssuance, NftIssuanceV0, TokenCreator,
-            TokenId, TokenIssuance, TokenIssuanceV1, TokenTotalSupply,
+            make_token_id, IsTokenFreezable, IsTokenUnfreezable, Metadata, NftIssuance,
+            NftIssuanceV0, TokenCreator, TokenIssuance, TokenIssuanceV1, TokenTotalSupply,
         },
         AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, ChainConfig, Destination,
         OrderData, OutPointSourceId, SignedTransaction, SignedTransactionIntent, Transaction,
@@ -57,7 +57,7 @@ use common::{
     size_estimation::{input_signature_size_from_destination, tx_size_with_outputs},
 };
 use crypto::key::{
-    extended::{ExtendedKeyKind, ExtendedPrivateKey},
+    extended::{ExtendedKeyKind, ExtendedPrivateKey, ExtendedPublicKey},
     hdkd::{child_number::ChildNumber, derivable::Derivable, u31::U31},
     KeyKind, PrivateKey, PublicKey, Signature,
 };
@@ -65,6 +65,9 @@ use error::Error;
 use serialization::{Decode, DecodeAll, Encode};
 
 pub mod error;
+
+const RECEIVE_FUNDS_INDEX: ChildNumber = ChildNumber::from_normal(U31::from_u32_with_msb(0).0);
+const CHANGE_FUNDS_INDEX: ChildNumber = ChildNumber::from_normal(U31::from_u32_with_msb(1).0);
 
 #[wasm_bindgen]
 /// Amount type abstraction. The amount type is stored in a string
@@ -134,6 +137,22 @@ impl From<FreezableToken> for IsTokenFreezable {
         match value {
             FreezableToken::No => IsTokenFreezable::No,
             FreezableToken::Yes => IsTokenFreezable::Yes,
+        }
+    }
+}
+
+/// Indicates whether a token can be unfrozen once frozen
+#[wasm_bindgen]
+pub enum TokenUnfreezable {
+    No,
+    Yes,
+}
+
+impl From<TokenUnfreezable> for IsTokenUnfreezable {
+    fn from(value: TokenUnfreezable) -> Self {
+        match value {
+            TokenUnfreezable::No => IsTokenUnfreezable::No,
+            TokenUnfreezable::Yes => IsTokenUnfreezable::Yes,
         }
     }
 }
@@ -241,48 +260,22 @@ pub fn make_default_account_privkey(mnemonic: &str, network: Network) -> Result<
 }
 
 /// From an extended private key create a receiving private key for a given key index
-/// derivation path: 44'/mintlayer_coin_type'/0'/0/key_index
+/// derivation path: current_derivation_path/0/key_index
 #[wasm_bindgen]
 pub fn make_receiving_address(private_key_bytes: &[u8], key_index: u32) -> Result<Vec<u8>, Error> {
-    const RECEIVE_FUNDS_INDEX: ChildNumber = ChildNumber::from_normal(U31::from_u32_with_msb(0).0);
-
     let account_privkey = ExtendedPrivateKey::decode_all(&mut &private_key_bytes[..])
         .map_err(|_| Error::InvalidPrivateKeyEncoding)?;
-
-    let receive_funds_pkey = account_privkey
-        .derive_child(RECEIVE_FUNDS_INDEX)
-        .expect("Should not fail to derive key");
-
-    let private_key: PrivateKey = receive_funds_pkey
-        .derive_child(ChildNumber::from_normal(
-            U31::from_u32(key_index).ok_or(Error::InvalidKeyIndex)?,
-        ))
-        .expect("Should not fail to derive key")
-        .private_key();
-
+    let private_key = derive(account_privkey, RECEIVE_FUNDS_INDEX, key_index)?.private_key();
     Ok(private_key.encode())
 }
 
 /// From an extended private key create a change private key for a given key index
-/// derivation path: 44'/mintlayer_coin_type'/0'/1/key_index
+/// derivation path: current_derivation_path/1/key_index
 #[wasm_bindgen]
 pub fn make_change_address(private_key_bytes: &[u8], key_index: u32) -> Result<Vec<u8>, Error> {
-    const CHANGE_FUNDS_INDEX: ChildNumber = ChildNumber::from_normal(U31::from_u32_with_msb(1).0);
-
     let account_privkey = ExtendedPrivateKey::decode_all(&mut &private_key_bytes[..])
         .map_err(|_| Error::InvalidPrivateKeyEncoding)?;
-
-    let change_funds_pkey = account_privkey
-        .derive_child(CHANGE_FUNDS_INDEX)
-        .expect("Should not fail to derive key");
-
-    let private_key: PrivateKey = change_funds_pkey
-        .derive_child(ChildNumber::from_normal(
-            U31::from_u32(key_index).ok_or(Error::InvalidKeyIndex)?,
-        ))
-        .expect("Should not fail to derive key")
-        .private_key();
-
+    let private_key = derive(account_privkey, CHANGE_FUNDS_INDEX, key_index)?.private_key();
     Ok(private_key.encode())
 }
 
@@ -313,6 +306,58 @@ pub fn public_key_from_private_key(private_key: &[u8]) -> Result<Vec<u8>, Error>
         .map_err(|_| Error::InvalidPrivateKeyEncoding)?;
     let public_key = PublicKey::from_private_key(&private_key);
     Ok(public_key.encode())
+}
+
+/// Return the extended public key from an extended private key
+#[wasm_bindgen]
+pub fn extended_public_key_from_extended_private_key(
+    private_key_bytes: &[u8],
+) -> Result<Vec<u8>, Error> {
+    let extended_private_key = ExtendedPrivateKey::decode_all(&mut &private_key_bytes[..])
+        .map_err(|_| Error::InvalidPrivateKeyEncoding)?;
+    let extended_public_key = extended_private_key.to_public_key();
+    Ok(extended_public_key.encode())
+}
+
+/// From an extended public key create a receiving public key for a given key index
+/// derivation path: current_derivation_path/0/key_index
+#[wasm_bindgen]
+pub fn make_receiving_address_public_key(
+    extended_public_key_bytes: &[u8],
+    key_index: u32,
+) -> Result<Vec<u8>, Error> {
+    let account_publickey = ExtendedPublicKey::decode_all(&mut &extended_public_key_bytes[..])
+        .map_err(|_| Error::InvalidPrivateKeyEncoding)?;
+    let public_key = derive(account_publickey, RECEIVE_FUNDS_INDEX, key_index)?.into_public_key();
+    Ok(public_key.encode())
+}
+
+/// From an extended public key create a change public key for a given key index
+/// derivation path: current_derivation_path/1/key_index
+#[wasm_bindgen]
+pub fn make_change_address_public_key(
+    extended_public_key_bytes: &[u8],
+    key_index: u32,
+) -> Result<Vec<u8>, Error> {
+    let account_publickey = ExtendedPublicKey::decode_all(&mut &extended_public_key_bytes[..])
+        .map_err(|_| Error::InvalidPrivateKeyEncoding)?;
+    let public_key = derive(account_publickey, CHANGE_FUNDS_INDEX, key_index)?.into_public_key();
+    Ok(public_key.encode())
+}
+
+fn derive<D: Derivable>(
+    derivable: D,
+    child_number: ChildNumber,
+    key_index: u32,
+) -> Result<D, Error> {
+    let res = derivable
+        .derive_child(child_number)
+        .expect("Should not fail to derive key")
+        .derive_child(ChildNumber::from_normal(
+            U31::from_u32(key_index).ok_or(Error::InvalidKeyIndex)?,
+        ))
+        .expect("Should not fail to derive key");
+    Ok(res)
 }
 
 /// Given a message and a private key, sign the message with the given private key
@@ -380,7 +425,7 @@ pub fn verify_challenge(
     message: &[u8],
 ) -> Result<bool, Error> {
     let chain_config = Builder::new(network.into()).build();
-    let destination = parse_addressable::<Destination>(&chain_config, address)?;
+    let destination = parse_addressable(&chain_config, address)?;
     let message_challenge = produce_message_challenge(message);
     let sig = ArbitraryMessageSignature::from_data(signed_challenge.to_vec());
     sig.verify_signature(&chain_config, &destination, &message_challenge)?;
@@ -468,7 +513,7 @@ pub fn verify_transaction_intent(
 
     let input_destinations = input_destinations
         .iter()
-        .map(|addr| parse_addressable::<Destination>(&chain_config, addr))
+        .map(|addr| parse_addressable(&chain_config, addr))
         .collect::<Result<Vec<_>, _>>()?;
 
     signed_intent.verify(
@@ -490,7 +535,7 @@ pub fn encode_output_transfer(
 ) -> Result<Vec<u8>, Error> {
     let chain_config = Builder::new(network.into()).build();
     let amount = amount.as_internal_amount()?;
-    let destination = parse_addressable::<Destination>(&chain_config, address)?;
+    let destination = parse_addressable(&chain_config, address)?;
 
     let output = TxOutput::Transfer(Coin(amount), destination);
     Ok(output.encode())
@@ -507,8 +552,8 @@ pub fn encode_output_token_transfer(
 ) -> Result<Vec<u8>, Error> {
     let chain_config = Builder::new(network.into()).build();
     let amount = amount.as_internal_amount()?;
-    let destination = parse_addressable::<Destination>(&chain_config, address)?;
-    let token = parse_addressable::<TokenId>(&chain_config, token_id)?;
+    let destination = parse_addressable(&chain_config, address)?;
+    let token = parse_addressable(&chain_config, token_id)?;
 
     let output = TxOutput::Transfer(TokenV1(token, amount), destination);
     Ok(output.encode())
@@ -575,7 +620,7 @@ pub fn encode_output_lock_then_transfer(
 ) -> Result<Vec<u8>, Error> {
     let chain_config = Builder::new(network.into()).build();
     let amount = amount.as_internal_amount()?;
-    let destination = parse_addressable::<Destination>(&chain_config, address)?;
+    let destination = parse_addressable(&chain_config, address)?;
     let lock = OutputTimeLock::decode_all(&mut &lock[..]).map_err(|_| Error::InvalidTimeLock)?;
 
     let output = TxOutput::LockThenTransfer(Coin(amount), destination, lock);
@@ -595,9 +640,9 @@ pub fn encode_output_token_lock_then_transfer(
 ) -> Result<Vec<u8>, Error> {
     let chain_config = Builder::new(network.into()).build();
     let amount = amount.as_internal_amount()?;
-    let destination = parse_addressable::<Destination>(&chain_config, address)?;
+    let destination = parse_addressable(&chain_config, address)?;
     let lock = OutputTimeLock::decode_all(&mut &lock[..]).map_err(|_| Error::InvalidTimeLock)?;
-    let token = parse_addressable::<TokenId>(&chain_config, token_id)?;
+    let token = parse_addressable(&chain_config, token_id)?;
 
     let output = TxOutput::LockThenTransfer(TokenV1(token, amount), destination, lock);
     Ok(output.encode())
@@ -622,7 +667,7 @@ pub fn encode_output_token_burn(
 ) -> Result<Vec<u8>, Error> {
     let chain_config = Builder::new(network.into()).build();
     let amount = amount.as_internal_amount()?;
-    let token = parse_addressable::<TokenId>(&chain_config, token_id)?;
+    let token = parse_addressable(&chain_config, token_id)?;
 
     let output = TxOutput::Burn(TokenV1(token, amount));
     Ok(output.encode())
@@ -921,8 +966,8 @@ pub fn encode_output_htlc(
     let secret_hash =
         HtlcSecretHash::from_str(secret_hash).map_err(|_| Error::InvalidHtlcSecretHash)?;
 
-    let spend_key = parse_addressable::<Destination>(&chain_config, spend_address)?;
-    let refund_key = parse_addressable::<Destination>(&chain_config, refund_address)?;
+    let spend_key = parse_addressable(&chain_config, spend_address)?;
+    let refund_key = parse_addressable(&chain_config, refund_address)?;
 
     let htlc = HashedTimelockContract {
         secret_hash,
@@ -1037,7 +1082,7 @@ pub fn estimate_transaction_size(
     let mut total_size = size + inputs_size;
 
     for destination in input_utxos_destinations {
-        let destination = parse_addressable::<Destination>(&chain_config, &destination)?;
+        let destination = parse_addressable(&chain_config, &destination)?;
         let signature_size =
             input_signature_size_from_destination(&destination, Option::<&_>::None).map_err(
                 |err| Error::TransactionSizeEstimationError {
@@ -1098,7 +1143,7 @@ pub fn encode_witness(
     let private_key = PrivateKey::decode_all(&mut &private_key_bytes[..])
         .map_err(|_| Error::InvalidPrivateKeyEncoding)?;
 
-    let destination = parse_addressable::<Destination>(&chain_config, input_owner_destination)?;
+    let destination = parse_addressable(&chain_config, input_owner_destination)?;
 
     let tx = Transaction::decode_all(&mut &transaction_bytes[..])
         .map_err(|_| Error::InvalidTransaction)?;
@@ -1145,7 +1190,7 @@ pub fn encode_witness_htlc_secret(
     let private_key = PrivateKey::decode_all(&mut &private_key_bytes[..])
         .map_err(|_| Error::InvalidPrivateKeyEncoding)?;
 
-    let destination = parse_addressable::<Destination>(&chain_config, input_owner_destination)?;
+    let destination = parse_addressable(&chain_config, input_owner_destination)?;
 
     let tx = Transaction::decode_all(&mut &transaction_bytes[..])
         .map_err(|_| Error::InvalidTransaction)?;
@@ -1353,6 +1398,124 @@ pub fn effective_pool_balance(
     Ok(Amount::from_internal_amount(effective_balance))
 }
 
+/// Given a token_id, an amount of tokens to mint and nonce return an encoded mint tokens input
+#[wasm_bindgen]
+pub fn encode_input_for_mint_tokens(
+    token_id: &str,
+    amount: Amount,
+    nonce: u64,
+    network: Network,
+) -> Result<Vec<u8>, Error> {
+    let chain_config = Builder::new(network.into()).build();
+    let token_id = parse_addressable(&chain_config, token_id)?;
+    let amount = amount.as_internal_amount()?;
+    let input = TxInput::AccountCommand(
+        AccountNonce::new(nonce),
+        AccountCommand::MintTokens(token_id, amount),
+    );
+    Ok(input.encode())
+}
+
+/// Given a token_id and nonce return an encoded unmint tokens input
+#[wasm_bindgen]
+pub fn encode_input_for_unmint_tokens(
+    token_id: &str,
+    nonce: u64,
+    network: Network,
+) -> Result<Vec<u8>, Error> {
+    let chain_config = Builder::new(network.into()).build();
+    let token_id = parse_addressable(&chain_config, token_id)?;
+    let input = TxInput::AccountCommand(
+        AccountNonce::new(nonce),
+        AccountCommand::UnmintTokens(token_id),
+    );
+    Ok(input.encode())
+}
+
+/// Given a token_id and nonce return an encoded lock_token_supply input
+#[wasm_bindgen]
+pub fn encode_input_for_lock_token_supply(
+    token_id: &str,
+    nonce: u64,
+    network: Network,
+) -> Result<Vec<u8>, Error> {
+    let chain_config = Builder::new(network.into()).build();
+    let token_id = parse_addressable(&chain_config, token_id)?;
+    let input = TxInput::AccountCommand(
+        AccountNonce::new(nonce),
+        AccountCommand::LockTokenSupply(token_id),
+    );
+    Ok(input.encode())
+}
+
+/// Given a token_id, is token unfreezable and nonce return an encoded freeze token input
+#[wasm_bindgen]
+pub fn encode_input_for_freeze_token(
+    token_id: &str,
+    is_token_unfreezable: TokenUnfreezable,
+    nonce: u64,
+    network: Network,
+) -> Result<Vec<u8>, Error> {
+    let chain_config = Builder::new(network.into()).build();
+    let token_id = parse_addressable(&chain_config, token_id)?;
+    let input = TxInput::AccountCommand(
+        AccountNonce::new(nonce),
+        AccountCommand::FreezeToken(token_id, is_token_unfreezable.into()),
+    );
+    Ok(input.encode())
+}
+
+/// Given a token_id and nonce return an encoded unfreeze token input
+#[wasm_bindgen]
+pub fn encode_input_for_unfreeze_token(
+    token_id: &str,
+    nonce: u64,
+    network: Network,
+) -> Result<Vec<u8>, Error> {
+    let chain_config = Builder::new(network.into()).build();
+    let token_id = parse_addressable(&chain_config, token_id)?;
+    let input = TxInput::AccountCommand(
+        AccountNonce::new(nonce),
+        AccountCommand::UnfreezeToken(token_id),
+    );
+    Ok(input.encode())
+}
+
+/// Given a token_id, new authority destination and nonce return an encoded change token authority input
+#[wasm_bindgen]
+pub fn encode_input_for_change_token_authority(
+    token_id: &str,
+    new_authority: &str,
+    nonce: u64,
+    network: Network,
+) -> Result<Vec<u8>, Error> {
+    let chain_config = Builder::new(network.into()).build();
+    let token_id = parse_addressable(&chain_config, token_id)?;
+    let new_authority = parse_addressable(&chain_config, new_authority)?;
+    let input = TxInput::AccountCommand(
+        AccountNonce::new(nonce),
+        AccountCommand::ChangeTokenAuthority(token_id, new_authority),
+    );
+    Ok(input.encode())
+}
+
+/// Given a token_id, new metadata uri and nonce return an encoded change token metadata uri input
+#[wasm_bindgen]
+pub fn encode_input_for_change_token_metadata_uri(
+    token_id: &str,
+    new_metadata_uri: &str,
+    nonce: u64,
+    network: Network,
+) -> Result<Vec<u8>, Error> {
+    let chain_config = Builder::new(network.into()).build();
+    let token_id = parse_addressable(&chain_config, token_id)?;
+    let input = TxInput::AccountCommand(
+        AccountNonce::new(nonce),
+        AccountCommand::ChangeTokenMetadataUri(token_id, new_metadata_uri.into()),
+    );
+    Ok(input.encode())
+}
+
 /// Given ask and give amounts and a conclude key create output that creates an order.
 ///
 /// 'ask_token_id': the parameter represents a Token if it's Some and coins otherwise.
@@ -1369,7 +1532,7 @@ pub fn encode_create_order_output(
     let chain_config = Builder::new(network.into()).build();
     let ask = parse_output_value(&chain_config, &ask_amount, ask_token_id)?;
     let give = parse_output_value(&chain_config, &give_amount, give_token_id)?;
-    let conclude_key = parse_addressable::<Destination>(&chain_config, conclude_address)?;
+    let conclude_key = parse_addressable(&chain_config, conclude_address)?;
 
     let order = OrderData::new(conclude_key, ask, give);
     let output = TxOutput::CreateOrder(Box::new(order));
@@ -1389,7 +1552,7 @@ pub fn encode_input_for_fill_order(
     let chain_config = Builder::new(network.into()).build();
     let order_id = parse_addressable(&chain_config, order_id)?;
     let fill_amount = fill_amount.as_internal_amount()?;
-    let destination = parse_addressable::<Destination>(&chain_config, destination)?;
+    let destination = parse_addressable(&chain_config, destination)?;
     let input = TxInput::AccountCommand(
         AccountNonce::new(nonce),
         AccountCommand::FillOrder(order_id, fill_amount, destination),

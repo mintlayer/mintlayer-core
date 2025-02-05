@@ -14,6 +14,9 @@ import {
   make_receiving_address,
   make_change_address,
   pubkey_to_pubkeyhash_address,
+  make_receiving_address_public_key,
+  make_change_address_public_key,
+  extended_public_key_from_extended_private_key,
   Network,
   encode_input_for_utxo,
   encode_output_coin_burn,
@@ -53,6 +56,14 @@ import {
   make_transaction_intent_message_to_sign,
   encode_signed_transaction_intent,
   verify_transaction_intent,
+  encode_input_for_mint_tokens,
+  encode_input_for_unmint_tokens,
+  encode_input_for_lock_token_supply,
+  encode_input_for_freeze_token,
+  TokenUnfreezable,
+  encode_input_for_unfreeze_token,
+  encode_input_for_change_token_authority,
+  encode_input_for_change_token_metadata_uri,
 } from "../pkg/wasm_wrappers.js";
 
 function assert_eq_arrays(arr1, arr2) {
@@ -167,18 +178,20 @@ export async function run_test() {
   const mnemonic =
     "walk exile faculty near leg neutral license matrix maple invite cupboard hat opinion excess coffee leopard latin regret document core limb crew dizzy movie";
   {
-    const account_pubkey = make_default_account_privkey(
+    const account_private_key = make_default_account_privkey(
       mnemonic,
       Network.Mainnet
     );
-    console.log(`acc pubkey = ${account_pubkey}`);
+    console.log(`acc private key = ${account_private_key}`);
 
-    const receiving_privkey = make_receiving_address(account_pubkey, 0);
+    const extended_public_key = extended_public_key_from_extended_private_key(account_private_key);
+
+    const receiving_privkey = make_receiving_address(account_private_key, 0);
     console.log(`receiving privkey = ${receiving_privkey}`);
 
     // test bad key index
     try {
-      make_receiving_address(account_pubkey, 1 << 31);
+      make_receiving_address(account_private_key, 1 << 31);
       throw new Error("Invalid key index worked somehow!");
     } catch (e) {
       if (!e.includes("Invalid key index, MSB bit set")) {
@@ -188,6 +201,9 @@ export async function run_test() {
     }
 
     const receiving_pubkey = public_key_from_private_key(receiving_privkey);
+    const receiving_pubkey2 = make_receiving_address_public_key(extended_public_key, 0);
+    assert_eq_arrays(receiving_pubkey, receiving_pubkey2);
+
     const address = pubkey_to_pubkeyhash_address(
       receiving_pubkey,
       Network.Mainnet
@@ -197,12 +213,12 @@ export async function run_test() {
       throw new Error("Incorrect address generated");
     }
 
-    const change_privkey = make_change_address(account_pubkey, 0);
-    console.log(`receiving privkey = ${change_privkey}`);
+    const change_privkey = make_change_address(account_private_key, 0);
+    console.log(`change privkey = ${change_privkey}`);
 
     // test bad key index
     try {
-      make_change_address(account_pubkey, 1 << 31);
+      make_change_address(account_private_key, 1 << 31);
       throw new Error("Invalid key index worked somehow!");
     } catch (e) {
       if (!e.includes("Invalid key index, MSB bit set")) {
@@ -212,6 +228,9 @@ export async function run_test() {
     }
 
     const change_pubkey = public_key_from_private_key(change_privkey);
+    const change_pubkey2 = make_change_address_public_key(extended_public_key, 0);
+    assert_eq_arrays(change_pubkey, change_pubkey2);
+
     const caddress = pubkey_to_pubkeyhash_address(
       change_pubkey,
       Network.Mainnet
@@ -224,13 +243,13 @@ export async function run_test() {
 
   {
     // Test generating an address for Testnet
-    const account_pubkey = make_default_account_privkey(
+    const account_private_key = make_default_account_privkey(
       mnemonic,
       Network.Testnet
     );
-    console.log(`acc pubkey = ${account_pubkey}`);
+    console.log(`acc private key = ${account_private_key}`);
 
-    const receiving_privkey = make_receiving_address(account_pubkey, 0);
+    const receiving_privkey = make_receiving_address(account_private_key, 0);
     console.log(`receiving privkey = ${receiving_privkey}`);
 
     const receiving_pubkey = public_key_from_private_key(receiving_privkey);
@@ -790,6 +809,125 @@ export async function run_test() {
     );
     console.log("htlc with tokens encoding ok");
 
+    const mint_tokens_input = encode_input_for_mint_tokens(
+      token_id,
+      Amount.from_atoms("100"),
+      BigInt(1),
+      Network.Testnet
+    );
+    const expected_mint_tokens_input = [
+      2, 4, 0, 162, 208, 145, 194, 165, 27,
+      14, 118, 31, 139, 199, 254, 11, 190, 108,
+      15, 64, 180, 50, 106, 211, 26, 107, 242,
+      121, 29, 55, 172, 185, 5, 196, 119, 145,
+      1
+    ];
+
+    assert_eq_arrays(mint_tokens_input, expected_mint_tokens_input);
+    console.log("mint tokens encoding ok");
+
+    const unmint_tokens_input = encode_input_for_unmint_tokens(
+      token_id,
+      BigInt(2),
+      Network.Testnet
+    );
+    const expected_unmint_tokens_input = [
+      2, 8, 1, 162, 208, 145, 194, 165,
+      27, 14, 118, 31, 139, 199, 254, 11,
+      190, 108, 15, 64, 180, 50, 106, 211,
+      26, 107, 242, 121, 29, 55, 172, 185,
+      5, 196, 119
+    ];
+
+    assert_eq_arrays(unmint_tokens_input, expected_unmint_tokens_input);
+    console.log("unmint tokens encoding ok");
+
+    const lock_token_supply_input = encode_input_for_lock_token_supply(
+      token_id,
+      BigInt(2),
+      Network.Testnet
+    );
+    const expected_lock_token_supply_input = [
+      2, 8, 2, 162, 208, 145, 194, 165,
+      27, 14, 118, 31, 139, 199, 254, 11,
+      190, 108, 15, 64, 180, 50, 106, 211,
+      26, 107, 242, 121, 29, 55, 172, 185,
+      5, 196, 119
+    ];
+
+    assert_eq_arrays(lock_token_supply_input, expected_lock_token_supply_input);
+    console.log("lock token supply encoding ok");
+
+    const freeze_token_input = encode_input_for_freeze_token(
+      token_id,
+      TokenUnfreezable.Yes,
+      BigInt(2),
+      Network.Testnet
+    );
+    const expected_freeze_token_input = [
+      2, 8, 3, 162, 208, 145, 194, 165,
+      27, 14, 118, 31, 139, 199, 254, 11,
+      190, 108, 15, 64, 180, 50, 106, 211,
+      26, 107, 242, 121, 29, 55, 172, 185,
+      5, 196, 119, 1
+    ];
+
+    assert_eq_arrays(freeze_token_input, expected_freeze_token_input);
+    console.log("freeze token encoding ok");
+
+    const unfreeze_token_input = encode_input_for_unfreeze_token(
+      token_id,
+      BigInt(2),
+      Network.Testnet
+    );
+    const expected_unfreeze_token_input = [
+      2, 8, 4, 162, 208, 145, 194, 165,
+      27, 14, 118, 31, 139, 199, 254, 11,
+      190, 108, 15, 64, 180, 50, 106, 211,
+      26, 107, 242, 121, 29, 55, 172, 185,
+      5, 196, 119
+    ];
+
+    assert_eq_arrays(unfreeze_token_input, expected_unfreeze_token_input);
+    console.log("unfreeze token encoding ok");
+
+    const change_token_authority_input = encode_input_for_change_token_authority(
+      token_id,
+      address,
+      BigInt(2),
+      Network.Testnet
+    );
+    const expected_change_token_authority_input = [
+      2, 8, 5, 162, 208, 145, 194, 165, 27, 14, 118,
+      31, 139, 199, 254, 11, 190, 108, 15, 64, 180, 50,
+      106, 211, 26, 107, 242, 121, 29, 55, 172, 185, 5,
+      196, 119, 1, 91, 58, 110, 176, 100, 207, 6, 194,
+      41, 193, 30, 91, 4, 195, 202, 103, 207, 80, 217,
+      178
+    ];
+
+    assert_eq_arrays(change_token_authority_input, expected_change_token_authority_input);
+    console.log("change token authority encoding ok");
+
+    const change_token_metadata_uri = encode_input_for_change_token_metadata_uri(
+      token_id,
+      address,
+      BigInt(2),
+      Network.Testnet
+    );
+    const expected_change_token_metadata_uri = [
+      2, 8, 8, 162, 208, 145, 194, 165, 27, 14, 118, 31,
+      139, 199, 254, 11, 190, 108, 15, 64, 180, 50, 106, 211,
+      26, 107, 242, 121, 29, 55, 172, 185, 5, 196, 119, 176,
+      116, 109, 116, 49, 113, 57, 100, 110, 53, 109, 52, 115,
+      118, 110, 56, 115, 100, 115, 51, 102, 99, 121, 48, 57,
+      107, 112, 120, 114, 101, 102, 110, 117, 55, 53, 120, 101,
+      107, 103, 114, 53, 119, 97, 51, 110
+    ];
+
+    assert_eq_arrays(change_token_metadata_uri, expected_change_token_metadata_uri);
+    console.log("change token metadata uri encoding ok");
+
     const order_output = encode_create_order_output(
       Amount.from_atoms("40000"),
       undefined,
@@ -1328,7 +1466,7 @@ function test_signed_transaction_intent() {
   const message = make_transaction_intent_message_to_sign("the intent", tx_id);
   const expected_message = new TextEncoder().encode(
     "<tx_id:dfc2bb0cc4c7f3ed3fe682a48ee9f78bcd4962e55e7bc239bd340ec22aff8657;intent:the intent>");
-    assert_eq_arrays(message, expected_message);
+  assert_eq_arrays(message, expected_message);
 
   try {
     const invalid_signatures = "invalid signatures";
