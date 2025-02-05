@@ -42,7 +42,8 @@ use wallet_controller::{
 use wallet_rpc_client::handles_client::WalletRpcHandlesClient;
 use wallet_rpc_lib::{EventStream, WalletRpc, WalletService};
 use wallet_types::{
-    seed_phrase::StoreSeedPhrase, wallet_type::WalletType, with_locked::WithLocked,
+    scan_blockchain::ScanBlockchain, seed_phrase::StoreSeedPhrase, wallet_type::WalletType,
+    with_locked::WithLocked,
 };
 
 use super::{
@@ -527,7 +528,7 @@ impl Backend {
         let chain_config = wallet_service.chain_config().clone();
         let wallet_rpc = WalletRpc::new(wallet_handle, node_rpc.clone(), chain_config.clone());
         wallet_rpc
-            .open_wallet(file_path, None, false)
+            .open_wallet(file_path, None, false, ScanBlockchain::ScanNoWait)
             .await
             .map_err(|err| BackendError::WalletError(err.to_string()))?;
         tokio::spawn(forward_events(

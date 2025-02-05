@@ -174,6 +174,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletWorker<N> {
         wallet_path: PathBuf,
         password: Option<String>,
         force_migrate_wallet_type: bool,
+        scan_blockchain: ScanBlockchain,
     ) -> Result<(), ControllerError<N>> {
         utils::ensure!(
             self.controller.is_none(),
@@ -188,13 +189,22 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletWorker<N> {
             force_migrate_wallet_type,
         )?;
 
-        let controller = WalletController::new(
-            self.chain_config.clone(),
-            self.node_rpc.clone(),
-            wallet,
-            self.wallet_events.clone(),
-        )
-        .await?;
+        let controller = if scan_blockchain.should_wait_for_blockchain_scanning() {
+            WalletController::new(
+                self.chain_config.clone(),
+                self.node_rpc.clone(),
+                wallet,
+                self.wallet_events.clone(),
+            )
+            .await?
+        } else {
+            WalletController::new_unsynced(
+                self.chain_config.clone(),
+                self.node_rpc.clone(),
+                wallet,
+                self.wallet_events.clone(),
+            )
+        };
         self.controller.replace(controller);
 
         Ok(())

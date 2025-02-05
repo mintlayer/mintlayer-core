@@ -70,6 +70,7 @@ class WalletOrders(BitcoinTestFramework):
     async def switch_to_wallet(self, wallet, wallet_name):
         await wallet.close_wallet()
         await wallet.open_wallet(wallet_name)
+        await wallet.sync()
 
     def run_test(self):
         if 'win32' in sys.platform:

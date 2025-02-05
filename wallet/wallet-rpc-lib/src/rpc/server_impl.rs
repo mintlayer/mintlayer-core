@@ -101,7 +101,7 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> ColdWalletRpcServ
                 whether_to_store_seed_phrase,
                 mnemonic,
                 passphrase,
-                ScanBlockchain::ScanAndWait,
+                ScanBlockchain::ScanNoWait,
             )
             .await
             .map(Into::<CreatedWallet>::into),
@@ -119,6 +119,7 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> ColdWalletRpcServ
                 path.into(),
                 password,
                 force_migrate_wallet_type.unwrap_or(false),
+                ScanBlockchain::ScanNoWait,
             )
             .await,
         )
