@@ -313,7 +313,7 @@ pub async fn setup(options: OptionsWithResolvedCommand) -> Result<NodeSetupResul
 fn lock_data_dir(data_dir: &PathBuf) -> Result<std::fs::File> {
     let lock = std::fs::File::create(data_dir.join(LOCK_FILE_NAME))
         .map_err(|e| anyhow!("Cannot create lock file in {data_dir:?}: {e}"))?;
-    fs4::FileExt::try_lock_exclusive(&lock)
+    fs4::fs_std::FileExt::try_lock_exclusive(&lock)
         .map_err(|e| anyhow!("Cannot lock directory {data_dir:?}: {e}"))?;
     Ok(lock)
 }
