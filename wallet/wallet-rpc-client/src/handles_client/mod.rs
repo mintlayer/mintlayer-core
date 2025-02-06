@@ -146,7 +146,12 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletInterface
         force_migrate_wallet_type: Option<bool>,
     ) -> Result<(), Self::Error> {
         self.wallet_rpc
-            .open_wallet(path, password, force_migrate_wallet_type.unwrap_or(false))
+            .open_wallet(
+                path,
+                password,
+                force_migrate_wallet_type.unwrap_or(false),
+                ScanBlockchain::ScanAndWait,
+            )
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
