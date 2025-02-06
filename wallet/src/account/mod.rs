@@ -33,7 +33,6 @@ use common::size_estimation::{
 use common::Uint256;
 use crypto::key::hdkd::child_number::ChildNumber;
 use mempool::FeeRate;
-use output_cache::OrderData;
 use serialization::hex_encoded::HexEncoded;
 use utils::ensure;
 pub use utxo_selector::UtxoSelectorError;
@@ -85,7 +84,8 @@ use wallet_types::{
 };
 
 pub use self::output_cache::{
-    DelegationData, FungibleTokenInfo, PoolData, TxInfo, UnconfirmedTokenInfo, UtxoWithTxOutput,
+    DelegationData, FungibleTokenInfo, OrderData, PoolData, TxInfo, UnconfirmedTokenInfo,
+    UtxoWithTxOutput,
 };
 use self::output_cache::{OutputCache, TokenIssuanceData};
 use self::transaction_list::{get_transaction_list, TransactionList};
@@ -898,6 +898,12 @@ impl Account {
             .token_data(token_id)
             .filter(|data| self.is_destination_mine(&data.authority))
             .ok_or(WalletError::UnknownTokenId(*token_id))
+    }
+
+    pub fn get_orders(&self) -> impl Iterator<Item = (&OrderId, &OrderData)> {
+        self.output_cache
+            .orders()
+            .filter(|(_, data)| self.is_destination_mine(&data.conclude_key))
     }
 
     pub fn find_order(&self, order_id: &OrderId) -> WalletResult<&OrderData> {
@@ -2056,7 +2062,8 @@ impl Account {
                         let tx_state =
                             TxState::Confirmed(block_height, block.timestamp(), idx as u64);
                         let wallet_tx = WalletTx::Tx(TxData::new(signed_tx.clone(), tx_state));
-                        self.update_conflicting_txs(&wallet_tx, block, db_tx)?;
+
+                        self.update_conflicting_txs(signed_tx.transaction(), block, db_tx)?;
 
                         new_tx_was_added |= self
                             .add_wallet_tx_if_relevant_and_remove_from_user_txs(
@@ -2084,15 +2091,17 @@ impl Account {
     /// Check for any conflicting txs and update the new state in the DB
     fn update_conflicting_txs<B: storage::Backend>(
         &mut self,
-        wallet_tx: &WalletTx,
+        confirmed_tx: &Transaction,
         block: &Block,
         db_tx: &mut StoreTxRw<B>,
     ) -> WalletResult<()> {
         let acc_id = self.get_account_id();
-        let conflicting_tx = self.output_cache.check_conflicting(wallet_tx, block.get_id().into());
-        for tx in conflicting_tx {
-            let id = AccountWalletTxId::new(acc_id.clone(), tx.id());
-            db_tx.set_transaction(&id, tx)?;
+        let conflicting_txs =
+            self.output_cache.update_conflicting_txs(confirmed_tx, block.get_id().into())?;
+
+        for tx_id in conflicting_txs {
+            let id = AccountWalletCreatedTxId::new(acc_id.clone(), tx_id);
+            db_tx.del_user_transaction(&id)?;
         }
 
         Ok(())

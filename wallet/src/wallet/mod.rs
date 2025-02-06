@@ -20,7 +20,7 @@ use std::sync::Arc;
 use crate::account::transaction_list::TransactionList;
 use crate::account::{CoinSelectionAlgo, TxInfo};
 use crate::account::{
-    CurrentFeeRate, DelegationData, PoolData, TransactionToSign, UnconfirmedTokenInfo,
+    CurrentFeeRate, DelegationData, OrderData, PoolData, TransactionToSign, UnconfirmedTokenInfo,
     UtxoSelectorError,
 };
 use crate::key_chain::{
@@ -175,10 +175,16 @@ pub enum WalletError {
     NotUtxoInput,
     #[error("Coin selection error: {0}")]
     CoinSelectionError(#[from] UtxoSelectorError),
-    #[error("Cannot abandon a transaction in {0} state")]
-    CannotAbandonTransaction(TxState),
+    #[error("Cannot change a transaction's state from {0} to {1}")]
+    CannotChangeTransactionState(TxState, TxState),
+    #[error("Cannot mark as conflicted transaction in {0} state")]
+    CannotMarkTxAsConflictedIfInState(TxState),
     #[error("Transaction with Id {0} not found")]
     CannotFindTransactionWithId(Id<Transaction>),
+    #[error("Transaction with Id {0} cannot map to a block")]
+    TransactionIdCannotMapToBlock(Id<Transaction>),
+    #[error("Descendant transaction with Id {0} not found")]
+    CannotFindDescendantTransactionWithId(Id<Transaction>),
     #[error("Address error: {0}")]
     AddressError(#[from] AddressError),
     #[error("Unknown pool id {0}")]
@@ -251,6 +257,8 @@ pub enum WalletError {
     OrderInfoMissing(OrderId),
     #[error("Calculating filled amount for order {0} failed")]
     CalculateOrderFilledAmountFailed(OrderId),
+    #[error("Transaction from {0:?} is confirmed and among unconfirmed descendants")]
+    ConfirmedTxAmongUnconfirmedDescendants(OutPointSourceId),
 }
 
 /// Result type used for the wallet
@@ -1883,6 +1891,14 @@ impl<B: storage::Backend> Wallet<B> {
                 },
             )
         })
+    }
+
+    pub fn get_orders(
+        &self,
+        account_index: U31,
+    ) -> WalletResult<impl Iterator<Item = (&OrderId, &OrderData)>> {
+        let orders = self.get_account(account_index)?.get_orders();
+        Ok(orders)
     }
 
     pub fn create_order_tx(
