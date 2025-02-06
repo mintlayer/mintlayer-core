@@ -305,7 +305,8 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     ON CONFLICT (nft_id, block_height) DO UPDATE
                     SET
                         ticker = EXCLUDED.ticker,
-                        owner = EXCLUDED.owner;"#,
+                        owner = EXCLUDED.owner;
+                "#,
                 &[&token_id.encode(), &height, &owner.map(|o| o.as_object().encode())],
             )
             .await
@@ -553,10 +554,10 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         .await?;
 
         // Add ml.blocks indexes on height and timestamp
-        self.just_execute("CREATE INDEX blocks_block_height_index ON ml.blocks (block_height);")
+        self.just_execute("CREATE INDEX blocks_block_height_index ON ml.blocks (block_height) WHERE block_height IS NOT NULL;")
             .await?;
         self.just_execute(
-            "CREATE INDEX blocks_block_timestamp_index ON ml.blocks (block_timestamp);",
+            "CREATE INDEX blocks_block_timestamp_index ON ml.blocks (block_timestamp) WHERE block_height IS NOT NULL;",
         )
         .await?;
 
@@ -575,7 +576,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     block_height bigint NOT NULL,
                     coin_or_token_id bytea NOT NULL,
                     amount bytea NOT NULL,
-                    PRIMARY KEY (address, block_height, coin_or_token_id)
+                    PRIMARY KEY (address, coin_or_token_id, block_height)
                 );",
         )
         .await?;
@@ -586,7 +587,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     block_height bigint NOT NULL,
                     coin_or_token_id bytea NOT NULL,
                     amount bytea NOT NULL,
-                    PRIMARY KEY (address, block_height, coin_or_token_id)
+                    PRIMARY KEY (address, coin_or_token_id, block_height)
                 );",
         )
         .await?;
@@ -612,6 +613,10 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 );",
         )
         .await?;
+
+        // index for reorgs
+        self.just_execute("CREATE INDEX utxo_block_height ON ml.utxo (block_height DESC);")
+            .await?;
 
         self.just_execute(
             "CREATE TABLE ml.locked_utxo (
@@ -645,6 +650,12 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         )
         .await?;
 
+        // index when searching for number of minted blocks
+        self.just_execute(
+            "CREATE INDEX pool_data_block_height ON ml.pool_data (pool_id, block_height DESC) WHERE (staker_balance::NUMERIC != 0);",
+        )
+        .await?;
+
         self.just_execute(
             "CREATE TABLE ml.delegations (
                     delegation_id TEXT NOT NULL,
@@ -661,7 +672,13 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
 
         // index when searching for delegations by address
         self.just_execute(
-            "CREATE INDEX delegations_spend_destination_index ON ml.delegations (spend_destination);",
+            "CREATE INDEX delegations_spend_destination_index ON ml.delegations (spend_destination, block_height DESC);",
+        )
+        .await?;
+
+        // index when searching for a specific pool's latest delegations
+        self.just_execute(
+            "CREATE INDEX latest_pool_delegations_index ON ml.delegations (pool_id, block_height DESC);"
         )
         .await?;
 
@@ -708,6 +725,12 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             amount bytea NOT NULL,
             PRIMARY KEY (statistic, coin_or_token_id, block_height)
         );",
+        )
+        .await?;
+
+        // index for reorgs
+        self.just_execute(
+            "CREATE INDEX statistics_block_height ON ml.statistics (block_height DESC);",
         )
         .await?;
 
@@ -957,10 +980,12 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         let row = self
             .tx
             .query_opt(
-                r#"SELECT pool_id, balance, spend_destination, next_nonce, creation_block_height
+                r#"
+                SELECT pool_id, balance, spend_destination, next_nonce, creation_block_height
                 FROM ml.delegations
                 WHERE delegation_id = $1
-                AND block_height = (SELECT MAX(block_height) FROM ml.delegations WHERE delegation_id = $1);
+                ORDER BY block_height DESC
+                LIMIT 1;
                 "#,
                 &[&delegation_id.as_str()],
             )
@@ -1020,13 +1045,11 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         let rows = self
             .tx
             .query(
-                r#"SELECT delegation_id, pool_id, balance, spend_destination, next_nonce, creation_block_height
-                FROM (
-                    SELECT delegation_id, pool_id, balance, spend_destination, next_nonce, creation_block_height, ROW_NUMBER() OVER(PARTITION BY delegation_id ORDER BY block_height DESC) as newest
-                    FROM ml.delegations
-                    WHERE spend_destination = $1
-                ) AS sub
-                WHERE newest = 1;
+                r#"
+                SELECT DISTINCT ON (delegation_id) delegation_id, pool_id, balance, spend_destination, next_nonce, creation_block_height
+                FROM ml.delegations
+                WHERE spend_destination = $1
+                ORDER BY delegation_id, block_height DESC;
                 "#,
                 &[&address.encode()],
             )
@@ -1095,6 +1118,33 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .map_err(|_| ApiServerStorageError::AddressableError)?;
         let delegation_id = Address::new(chain_config, delegation_id)
             .map_err(|_| ApiServerStorageError::AddressableError)?;
+
+        // copy all delegations for the same pool_id as the new delegation with the new
+        // block_height, and ignore duplicates
+        self.tx.execute(
+            r#"
+            WITH latest_block_height AS (
+                SELECT MAX(block_height) AS max_block_height
+                FROM ml.delegations
+                WHERE pool_id = $2
+            )
+            INSERT INTO ml.delegations (delegation_id, block_height, creation_block_height, pool_id, balance, next_nonce, spend_destination)
+            SELECT delegation_id,
+                   $1,
+                   creation_block_height,
+                   pool_id,
+                   balance,
+                   next_nonce,
+                   spend_destination
+            FROM ml.delegations
+            WHERE pool_id = $2
+              AND block_height = (SELECT max_block_height FROM latest_block_height)
+            ON CONFLICT DO NOTHING;
+            "#,
+            &[&height, &pool_id.as_str()]
+        )
+        .await
+        .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
 
         self.tx
             .execute(
@@ -1167,7 +1217,8 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         let row = self
             .tx
             .query_one(
-                r#"SELECT COUNT(*)
+                r#"
+                SELECT COUNT(*)
                     FROM ml.pool_data
                     WHERE pool_id = $1 AND block_height BETWEEN $2 AND $3
                     AND block_height != (SELECT COALESCE(MIN(block_height), 0) FROM ml.pool_data WHERE pool_id = $1)
@@ -1193,13 +1244,16 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .map_err(|_| ApiServerStorageError::AddressableError)?;
         self.tx
             .query(
-                r#"SELECT delegation_id, balance, spend_destination, next_nonce, creation_block_height
+                r#"
+                WITH latest_block_height AS (
+                    SELECT MAX(block_height) AS max_block_height
                     FROM ml.delegations
                     WHERE pool_id = $1
-                    AND (delegation_id, block_height) in (SELECT delegation_id, MAX(block_height)
-                                                            FROM ml.delegations
-                                                            WHERE pool_id = $1
-                                                            GROUP BY delegation_id)
+                )
+                SELECT d.delegation_id, d.balance, d.spend_destination, d.next_nonce, d.creation_block_height
+                FROM ml.delegations d
+                JOIN latest_block_height lb ON d.block_height = lb.max_block_height
+                WHERE d.pool_id = $1;
                 "#,
                 &[&pool_id_str.as_str()],
             )
@@ -2247,10 +2301,12 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         let row = self
             .tx
             .query_opt(
-                r#"SELECT order_id, initially_asked, ask_balance, ask_currency, initially_given, give_balance, give_currency, conclude_destination, next_nonce, creation_block_height
+                r#"
+                SELECT order_id, initially_asked, ask_balance, ask_currency, initially_given, give_balance, give_currency, conclude_destination, next_nonce, creation_block_height
                 FROM ml.orders
                 WHERE order_id = $1
-                AND block_height = (SELECT MAX(block_height) FROM ml.orders WHERE order_id = $1);
+                ORDER BY block_height DESC
+                LIMIT 1;
                 "#,
                 &[&order_id_addr.as_str()],
             )
