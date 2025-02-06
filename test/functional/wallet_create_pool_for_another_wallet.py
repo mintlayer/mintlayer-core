@@ -114,6 +114,7 @@ class WalletCreatePoolForAnotherWalletCLI(WalletPOSTestBase):
 
         async with self.wallet_controller(node, self.config, self.log, chain_config_args=chain_config_args) as wallet:
             await wallet.open_wallet("staker")
+            assert_in("Success", await wallet.sync())
 
             # The staking wallet has the pool
             pools = await wallet.list_pool_ids()
@@ -130,6 +131,9 @@ class WalletCreatePoolForAnotherWalletCLI(WalletPOSTestBase):
             assert_equal("Staking", await wallet.staking_status())
             self.wait_until(lambda: node.chainstate_best_block_id() != tip_id_with_genesis_pool, timeout = 15)
             assert_in("Success", await wallet.stop_staking())
+            assert_in("Not staking", await wallet.staking_status())
+
+            assert_in("Success", await wallet.sync())
 
             tip_height_after_staking = int(await wallet.get_best_block_height())
 
