@@ -28,7 +28,7 @@ use crate::key_chain::{
     VRF_INDEX,
 };
 use crate::send_request::{
-    make_issue_token_outputs, IssueNftArguments, SelectedInputs, StakePoolDataArguments,
+    make_issue_token_outputs, IssueNftArguments, SelectedInputs, StakePoolCreationArguments,
 };
 use crate::signer::software_signer::SoftwareSigner;
 use crate::signer::{Signer, SignerError};
@@ -251,6 +251,8 @@ pub enum WalletError {
     OrderInfoMissing(OrderId),
     #[error("Calculating filled amount for order {0} failed")]
     CalculateOrderFilledAmountFailed(OrderId),
+    #[error("Staker destination must be a public key")]
+    StakerDestinationMustBePublicKey,
 }
 
 /// Result type used for the wallet
@@ -1789,7 +1791,7 @@ impl<B: storage::Backend> Wallet<B> {
         account_index: U31,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
-        stake_pool_arguments: StakePoolDataArguments,
+        stake_pool_arguments: StakePoolCreationArguments,
     ) -> WalletResult<SignedTransaction> {
         let latest_median_time = self.latest_median_time;
         self.for_account_rw_unlocked_and_check_tx(account_index, |account, db_tx| {

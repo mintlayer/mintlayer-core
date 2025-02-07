@@ -13,6 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Note: can't specify this on individual functions because the `rpc` proc macro doesn't propagate
+// extra attributes.
+#![allow(clippy::too_many_arguments)]
+
 use std::{collections::BTreeMap, num::NonZeroUsize};
 
 use chainstate::rpc::RpcOutputValueIn;
@@ -26,7 +30,7 @@ use common::{
     },
     primitives::{BlockHeight, Id},
 };
-use crypto::key::PrivateKey;
+use crypto::{key::PrivateKey, vrf::VRFPublicKey};
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
 use rpc::types::RpcHexString;
 use wallet::account::TxInfo;
@@ -413,12 +417,23 @@ trait WalletRpc {
 
     /// Create a staking pool. The pool will be capable of creating blocks and gaining rewards,
     /// and will be capable of taking delegations from other users and staking.
+    ///
     /// The decommission key is the key that can decommission the pool.
+    ///
     /// Cost per block, and margin ratio are parameters that control how delegators receive rewards.
     /// The cost per block is an amount in coins to be subtracted from the total rewards in a block first,
     /// and handed to the staking pool. After subtracting the cost per block, a fraction equal to
     /// margin ratio is taken from what is left, and given to the staking pool. Finally, what is left
     /// is distributed among delegators, pro-rata, based on their delegation amounts.
+    ///
+    /// The optional parameters `staker_address` and `vrf_public_key` specify the key that will sign new blocks
+    /// and the VRF key that will be used to produce POS hashes during staking.
+    /// You only need to specify them if the wallet where the pool is being created differs from
+    /// the one where the actual staking will be performed.
+    /// In such a case, make sure that the specified keys are owned by the wallet that will be used to stake.
+    /// On the other hand, if the current wallet will be used for staking, just leave them empty
+    /// and the wallet will select appropriate values itself.
+    /// Note: staker_address must be a "public key" address and not a "public key hash" one.
     #[method(name = "staking_create_pool")]
     async fn create_stake_pool(
         &self,
@@ -427,6 +442,8 @@ trait WalletRpc {
         cost_per_block: RpcAmountIn,
         margin_ratio_per_thousand: String,
         decommission_address: RpcAddress<Destination>,
+        staker_address: Option<RpcAddress<Destination>>,
+        vrf_public_key: Option<RpcAddress<VRFPublicKey>>,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction>;
 

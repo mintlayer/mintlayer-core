@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-#  Copyright (c) 2023 RBB S.r.l
+#  Copyright (c) 2023-2025 RBB S.r.l
 #  Copyright (c) 2017-2021 The Bitcoin Core developers
 #  opensource@mintlayer.org
 #  SPDX-License-Identifier: MIT
@@ -14,26 +14,14 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
-"""Wallet delegations test
-
-Check that:
-* We can create a new wallet,
-* get an address
-* send coins to the wallet's address
-* sync the wallet with the node
-* check balance
-* create a stake pool
-* in another account create a delegation to that pool
-* stake to that delegation
-* transfer from that delegation
-* get reward to that delegation
+"""Same as WalletCreatePoolForAnotherWalletCLI, but using RPC instead of CLI
 """
 
-from wallet_delegations import WalletDelegationsCLI
+from wallet_create_pool_for_another_wallet import WalletCreatePoolForAnotherWalletCLI
 from test_framework.wallet_rpc_controller import WalletRpcController
 
 
-class WalletDelegationsRPC(WalletDelegationsCLI):
+class WalletCreatePoolForAnotherWalletRPC(WalletCreatePoolForAnotherWalletCLI):
 
     def set_test_params(self):
         super().set_test_params()
@@ -41,5 +29,4 @@ class WalletDelegationsRPC(WalletDelegationsCLI):
 
 
 if __name__ == '__main__':
-    WalletDelegationsRPC().main()
-
+    WalletCreatePoolForAnotherWalletRPC().main()

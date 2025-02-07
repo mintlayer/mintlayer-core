@@ -489,6 +489,8 @@ impl WalletInterface for ClientWalletRpc {
         cost_per_block: DecimalAmount,
         margin_ratio_per_thousand: String,
         decommission_address: String,
+        staker_address: Option<String>,
+        vrf_public_key: Option<String>,
         config: ControllerConfig,
     ) -> Result<NewTransaction, Self::Error> {
         let options = TransactionOptions::from_controller_config(&config);
@@ -499,6 +501,8 @@ impl WalletInterface for ClientWalletRpc {
             cost_per_block.into(),
             margin_ratio_per_thousand,
             decommission_address.into(),
+            staker_address.map(Into::into),
+            vrf_public_key.map(Into::into),
             options,
         )
         .await

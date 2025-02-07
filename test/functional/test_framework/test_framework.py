@@ -57,27 +57,7 @@ class SkipTest(Exception):
         self.message = message
 
 
-class BitcoinTestMetaClass(type):
-    """Metaclass for BitcoinTestFramework.
-
-    Ensures that any attempt to register a subclass of `BitcoinTestFramework`
-    adheres to a standard whereby the subclass overrides `set_test_params` and
-    `run_test` but DOES NOT override either `__init__` or `main`. If any of
-    those standards are violated, a ``TypeError`` is raised."""
-
-    def __new__(cls, clsname, bases, dct):
-        if not clsname == 'BitcoinTestFramework':
-            if not ('run_test' in dct and 'set_test_params' in dct):
-                raise TypeError("BitcoinTestFramework subclasses must override "
-                                "'run_test' and 'set_test_params'")
-            if '__init__' in dct or 'main' in dct:
-                raise TypeError("BitcoinTestFramework subclasses may not override "
-                                "'__init__' or 'main'")
-
-        return super().__new__(cls, clsname, bases, dct)
-
-
-class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
+class BitcoinTestFramework:
     """Base class for a bitcoin test script.
 
     Individual bitcoin test scripts should subclass this class and override the set_test_params() and run_test() methods.
@@ -95,6 +75,17 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
 
     def __init__(self):
         """Sets test framework defaults. Do not override this method. Instead, override the set_test_params() method"""
+
+        if (type(self).run_test == BitcoinTestFramework.run_test or
+                type(self).set_test_params == BitcoinTestFramework.set_test_params):
+            raise TypeError("BitcoinTestFramework subclasses must override "
+                            "'run_test' and 'set_test_params'")
+
+        if (type(self).__init__ != BitcoinTestFramework.__init__ or
+                type(self).main != BitcoinTestFramework.main):
+            raise TypeError("BitcoinTestFramework subclasses may not override "
+                            "'__init__' or 'main'")
+
         self.chain: str = 'regtest'
         self.setup_clean_chain: bool = False
         self.nodes: List[TestNode] = []

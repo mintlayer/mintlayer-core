@@ -131,24 +131,34 @@ pub fn make_decommission_stake_pool_output(
     ))
 }
 
-/// Helper struct to reduce the number of arguments passed around
-pub struct StakePoolDataArguments {
+/// Helper struct to reduce the number of arguments passed around.
+pub struct StakePoolCreationArguments {
     pub amount: Amount,
     pub margin_ratio_per_thousand: PerThousand,
     pub cost_per_block: Amount,
     pub decommission_key: Destination,
+    pub staker_key: Option<Destination>,
+    pub vrf_public_key: Option<VRFPublicKey>,
+}
+
+/// Same as StakePoolCreationArguments, but with non-optional staker_key and vrf_public_key.
+pub struct StakePoolCreationResolvedArguments {
+    pub amount: Amount,
+    pub margin_ratio_per_thousand: PerThousand,
+    pub cost_per_block: Amount,
+    pub decommission_key: Destination,
+    pub staker_key: Destination,
+    pub vrf_public_key: VRFPublicKey,
 }
 
 pub fn make_stake_output(
     pool_id: PoolId,
-    arguments: StakePoolDataArguments,
-    staker: Destination,
-    vrf_public_key: VRFPublicKey,
+    arguments: StakePoolCreationResolvedArguments,
 ) -> TxOutput {
     let stake_data = StakePoolData::new(
         arguments.amount,
-        staker,
-        vrf_public_key,
+        arguments.staker_key,
+        arguments.vrf_public_key,
         arguments.decommission_key,
         arguments.margin_ratio_per_thousand,
         arguments.cost_per_block,

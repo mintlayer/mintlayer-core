@@ -49,7 +49,7 @@ use wallet::{
     destination_getters::{get_tx_output_destination, HtlcSpendingCondition},
     send_request::{
         make_address_output, make_address_output_token, make_create_delegation_output,
-        make_data_deposit_output, SelectedInputs, StakePoolDataArguments,
+        make_data_deposit_output, SelectedInputs, StakePoolCreationArguments,
     },
     wallet::WalletPoolsFilter,
     wallet_events::WalletEvents,
@@ -982,6 +982,8 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         decommission_key: Destination,
         margin_ratio_per_thousand: PerThousand,
         cost_per_block: Amount,
+        staker_key: Option<Destination>,
+        vrf_public_key: Option<VRFPublicKey>,
     ) -> Result<SignedTransaction, ControllerError<T>> {
         self.create_and_send_tx(
             move |current_fee_rate: FeeRate,
@@ -992,11 +994,13 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
                     account_index,
                     current_fee_rate,
                     consolidate_fee_rate,
-                    StakePoolDataArguments {
+                    StakePoolCreationArguments {
                         amount,
                         margin_ratio_per_thousand,
                         cost_per_block,
                         decommission_key,
+                        staker_key,
+                        vrf_public_key,
                     },
                 )
             },

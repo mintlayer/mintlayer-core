@@ -91,7 +91,7 @@ impl DelegationData {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct PoolData {
     pub utxo_outpoint: UtxoOutPoint,
     pub creation_block: BlockInfo,

@@ -1143,12 +1143,23 @@ Returns:
 
 Create a staking pool. The pool will be capable of creating blocks and gaining rewards,
 and will be capable of taking delegations from other users and staking.
+
 The decommission key is the key that can decommission the pool.
+
 Cost per block, and margin ratio are parameters that control how delegators receive rewards.
 The cost per block is an amount in coins to be subtracted from the total rewards in a block first,
 and handed to the staking pool. After subtracting the cost per block, a fraction equal to
 margin ratio is taken from what is left, and given to the staking pool. Finally, what is left
 is distributed among delegators, pro-rata, based on their delegation amounts.
+
+The optional parameters `staker_address` and `vrf_public_key` specify the key that will sign new blocks
+and the VRF key that will be used to produce POS hashes during staking.
+You only need to specify them if the wallet where the pool is being created differs from
+the one where the actual staking will be performed.
+In such a case, make sure that the specified keys are owned by the wallet that will be used to stake.
+On the other hand, if the current wallet will be used for staking, just leave them empty
+and the wallet will select appropriate values itself.
+Note: staker_address must be a "public key" address and not a "public key hash" one.
 
 
 Parameters:
@@ -1163,6 +1174,12 @@ Parameters:
          2) { "decimal": decimal string },
     "margin_ratio_per_thousand": string,
     "decommission_address": bech32 string,
+    "staker_address": EITHER OF
+         1) bech32 string
+         2) null,
+    "vrf_public_key": EITHER OF
+         1) bech32 string
+         2) null,
     "options": { "in_top_x_mb": EITHER OF
          1) number
          2) null },

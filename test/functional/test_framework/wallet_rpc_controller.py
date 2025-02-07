@@ -352,9 +352,22 @@ class WalletRpcController(WalletCliControllerBase):
                                 amount: int,
                                 cost_per_block: int,
                                 margin_ratio_per_thousand: float,
-                                decommission_key: Optional[str] = None) -> str:
-        #decommission_key = decommission_key if decommission_key else 'NULL'
-        self._write_command("staking_create_pool", [self.account, {'decimal': str(amount)}, {'decimal': str(cost_per_block)}, str(margin_ratio_per_thousand), decommission_key, {'in_top_x_mb': 5}])['result']
+                                decommission_key: Optional[str] = None,
+                                staker_addr: Optional[str] = None,
+                                vrf_pub_key: Optional[str] = None) -> str:
+        self._write_command(
+            "staking_create_pool",
+            [
+                self.account,
+                {'decimal': str(amount)},
+                {'decimal': str(cost_per_block)},
+                str(margin_ratio_per_thousand),
+                decommission_key,
+                staker_addr,
+                vrf_pub_key,
+                {'in_top_x_mb': 5}
+            ]
+        )['result']
         return "The transaction was submitted successfully"
 
     async def decommission_stake_pool(self, pool_id: str, address: str) -> str:
@@ -431,6 +444,10 @@ class WalletRpcController(WalletCliControllerBase):
 
         # Mimic the output of wallet_cli_controller's 'get_balance'
         return "\n".join([f"Coins amount: {coins}"] + [f"Token: {token} amount: {amount}" for token, amount in tokens.items()])
+
+    async def new_vrf_public_key(self) -> str:
+        result = self._write_command("staking_new_vrf_public_key", [self.account])
+        return result['result']['vrf_public_key']
 
     async def list_pending_transactions(self) -> List[str]:
         output = self._write_command("transaction_list_pending", [self.account])['result']

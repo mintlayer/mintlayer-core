@@ -137,6 +137,8 @@ BASE_SCRIPTS = [
     'wallet_sign_message_rpc.py',
     'wallet_cold_wallet_send.py',
     'wallet_cold_wallet_send_rpc.py',
+    'wallet_create_pool_for_another_wallet.py',
+    'wallet_create_pool_for_another_wallet_rpc.py',
     'wallet_tx_compose.py',
     'wallet_tx_intent.py',
     'wallet_data_deposit.py',

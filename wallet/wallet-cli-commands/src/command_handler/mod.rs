@@ -1547,6 +1547,8 @@ where
                 cost_per_block,
                 margin_ratio_per_thousand,
                 decommission_address,
+                staker_address,
+                vrf_public_key,
             } => {
                 let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
                 let new_tx = wallet
@@ -1556,6 +1558,8 @@ where
                         cost_per_block,
                         margin_ratio_per_thousand,
                         decommission_address,
+                        staker_address,
+                        vrf_public_key,
                         self.config,
                     )
                     .await?;

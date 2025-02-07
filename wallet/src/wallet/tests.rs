@@ -13,20 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{
-    key_chain::{make_account_path, LOOKAHEAD_SIZE},
-    send_request::{make_address_output, make_create_delegation_output},
-    wallet_events::WalletEventsNoOp,
-    DefaultWallet,
-};
-use serialization::hex::HexEncode;
-use serialization::Encode;
 use std::{
     collections::BTreeSet,
     num::{NonZeroU8, NonZeroUsize},
 };
 
-use super::*;
+use itertools::Itertools;
+use rstest::rstest;
+
 use common::{
     address::pubkeyhash::PublicKeyHash,
     chain::{
@@ -34,30 +28,42 @@ use common::{
         config::{create_mainnet, create_regtest, create_unit_test_config, Builder, ChainType},
         output_value::{OutputValue, RpcOutputValue},
         signature::inputsig::InputWitness,
+        stakelock::StakePoolData,
         timelock::OutputTimeLock,
         tokens::{RPCIsTokenFrozen, TokenData, TokenIssuanceV0, TokenIssuanceV1},
         Destination, Genesis, OutPointSourceId, TxInput,
     },
     primitives::{per_thousand::PerThousand, Idable, H256},
 };
-use crypto::key::hdkd::{
-    child_number::ChildNumber, derivable::Derivable, derivation_path::DerivationPath,
+use crypto::{
+    key::hdkd::{child_number::ChildNumber, derivable::Derivable, derivation_path::DerivationPath},
+    vrf::transcript::no_rng::VRFTranscript,
 };
-use itertools::Itertools;
 use randomness::{CryptoRng, Rng, SliceRandom};
-use rstest::rstest;
-use serialization::extras::non_empty_vec::DataOrNoVec;
+use serialization::{extras::non_empty_vec::DataOrNoVec, hex::HexEncode, Encode};
 use storage::raw::DbMapId;
-use test_utils::nft_utils::random_token_issuance_v1;
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::{
+    assert_matches, assert_matches_return_val,
+    nft_utils::random_token_issuance_v1,
+    random::{make_seedable_rng, Seed},
+};
 use wallet_storage::{schema, WalletStorageEncryptionRead};
 use wallet_types::{
     account_info::DEFAULT_ACCOUNT_INDEX,
     seed_phrase::PassPhrase,
+    seed_phrase::SeedPhraseLanguage,
     utxo_types::{UtxoState, UtxoType},
-    Currency,
+    AccountWalletTxId, Currency,
 };
-use wallet_types::{seed_phrase::SeedPhraseLanguage, AccountWalletTxId};
+
+use crate::{
+    key_chain::{make_account_path, LOOKAHEAD_SIZE},
+    send_request::{make_address_output, make_create_delegation_output},
+    wallet_events::WalletEventsNoOp,
+    DefaultWallet,
+};
+
+use super::*;
 
 // TODO: Many of these tests require randomization...
 
@@ -1481,8 +1487,6 @@ fn spend_from_user_specified_utxos(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
-    use crypto::vrf::transcript::no_rng::VRFTranscript;
-
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_regtest());
 
@@ -1510,11 +1514,13 @@ fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
             DEFAULT_ACCOUNT_INDEX,
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
-            StakePoolDataArguments {
+            StakePoolCreationArguments {
                 amount: pool_amount,
                 margin_ratio_per_thousand: PerThousand::new_from_rng(&mut rng),
                 cost_per_block: Amount::ZERO,
                 decommission_key: decommission_key.as_object().clone(),
+                staker_key: None,
+                vrf_public_key: None,
             },
         )
         .unwrap();
@@ -1625,6 +1631,255 @@ fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
     assert_eq!(coin_balance, pool_amount,);
 }
 
+// Create a pool in wallet1 using staker destination and vrf public key from wallet2 and
+// decommission address from wallet1.
+// Check that the pool is returned by wallet1.get_pool_ids(WalletPoolsFilter::Decommission) and
+// wallet2.get_pool_ids(WalletPoolsFilter::Stake) but not vice versa.
+// Also check that using Destination::PublicKeyHash as the staker destination returns an error.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn create_stake_pool_for_different_wallet_and_list_pool_ids(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let chain_config = Arc::new(create_regtest());
+
+    let mut wallet1 = create_wallet_with_mnemonic(chain_config.clone(), MNEMONIC);
+    let mut wallet2 = create_wallet_with_mnemonic(chain_config.clone(), MNEMONIC2);
+
+    let coin_balance1 = get_coin_balance(&wallet1);
+    assert_eq!(coin_balance1, Amount::ZERO);
+    let coin_balance2 = get_coin_balance(&wallet2);
+    assert_eq!(coin_balance2, Amount::ZERO);
+
+    // Generate a new block which sends reward to the wallet
+    let block1_amount = Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
+    let (_, block1) = create_block(&chain_config, &mut wallet1, vec![], block1_amount, 0);
+    scan_wallet(&mut wallet2, BlockHeight::new(0), vec![block1]);
+
+    let pool_ids1 = wallet1.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
+    assert!(pool_ids1.is_empty());
+    let pool_ids2 = wallet2.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
+    assert!(pool_ids2.is_empty());
+
+    let coin_balance1 = get_coin_balance(&wallet1);
+    assert_eq!(coin_balance1, block1_amount);
+    let coin_balance2 = get_coin_balance(&wallet2);
+    assert_eq!(coin_balance2, Amount::ZERO);
+
+    let pool_amount = block1_amount;
+    let margin_ratio_per_thousand = PerThousand::new_from_rng(&mut rng);
+    let cost_per_block =
+        Amount::from_atoms(rng.gen_range(0..10) * 10_u128.pow(chain_config.coin_decimals() as u32));
+
+    let decommission_dest = wallet1.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1.into_object();
+
+    let staker_key_hash_dest =
+        wallet2.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1.into_object();
+    assert_matches!(&staker_key_hash_dest, Destination::PublicKeyHash(_));
+    let staker_key = wallet2
+        .find_public_key(DEFAULT_ACCOUNT_INDEX, staker_key_hash_dest.clone())
+        .unwrap();
+    let staker_key_dest = Destination::PublicKey(staker_key);
+    let staker_vrf_public_key = wallet2.get_vrf_key(DEFAULT_ACCOUNT_INDEX).unwrap().1.into_object();
+
+    // First, try to create the pool using staker_key_hash_dest as the staker address; this should fail.
+    let err = wallet1
+        .create_stake_pool_tx(
+            DEFAULT_ACCOUNT_INDEX,
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            StakePoolCreationArguments {
+                amount: pool_amount,
+                margin_ratio_per_thousand,
+                cost_per_block,
+                decommission_key: decommission_dest.clone(),
+                staker_key: Some(staker_key_hash_dest),
+                vrf_public_key: Some(staker_vrf_public_key.clone()),
+            },
+        )
+        .unwrap_err();
+    assert_eq!(err, WalletError::StakerDestinationMustBePublicKey);
+
+    let coin_balance1 = get_coin_balance(&wallet1);
+    assert_eq!(coin_balance1, block1_amount);
+    let coin_balance2 = get_coin_balance(&wallet2);
+    assert_eq!(coin_balance2, Amount::ZERO);
+
+    // Now use staker_key_dest.
+    let stake_pool_transaction = wallet1
+        .create_stake_pool_tx(
+            DEFAULT_ACCOUNT_INDEX,
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            StakePoolCreationArguments {
+                amount: pool_amount,
+                margin_ratio_per_thousand,
+                cost_per_block,
+                decommission_key: decommission_dest.clone(),
+                staker_key: Some(staker_key_dest.clone()),
+                vrf_public_key: Some(staker_vrf_public_key.clone()),
+            },
+        )
+        .unwrap();
+    let stake_pool_transaction_id = stake_pool_transaction.transaction().get_id();
+    let (_, block2) = create_block(
+        &chain_config,
+        &mut wallet1,
+        vec![stake_pool_transaction],
+        Amount::ZERO,
+        1,
+    );
+    scan_wallet(&mut wallet2, BlockHeight::new(1), vec![block2.clone()]);
+
+    let coin_balance1 = get_coin_balance(&wallet1);
+    assert_eq!(coin_balance1, Amount::ZERO);
+    let coin_balance2 = get_coin_balance(&wallet2);
+    assert_eq!(coin_balance2, Amount::ZERO);
+
+    let pool_ids_for_staking1 =
+        wallet1.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::Stake).unwrap();
+    assert!(pool_ids_for_staking1.is_empty());
+    let pool_ids_for_decommission1 = wallet1
+        .get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::Decommission)
+        .unwrap();
+    assert_eq!(pool_ids_for_decommission1.len(), 1);
+
+    let pool_ids_for_decommission2 = wallet2
+        .get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::Decommission)
+        .unwrap();
+    assert!(pool_ids_for_decommission2.is_empty());
+    let pool_ids_for_staking2 =
+        wallet2.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::Stake).unwrap();
+    assert_eq!(pool_ids_for_staking2.len(), 1);
+
+    assert_eq!(pool_ids_for_decommission1[0], pool_ids_for_staking2[0]);
+
+    let (pool_id, pool_data) = pool_ids_for_staking2.first().unwrap();
+    assert_eq!(pool_data.decommission_key, decommission_dest);
+    assert_eq!(pool_data.stake_destination, staker_key_dest);
+    assert_eq!(pool_data.vrf_public_key, staker_vrf_public_key);
+    assert_eq!(
+        pool_data.margin_ratio_per_thousand,
+        margin_ratio_per_thousand
+    );
+    assert_eq!(pool_data.cost_per_block, cost_per_block);
+    assert_eq!(
+        &pool_data.utxo_outpoint,
+        &UtxoOutPoint::new(OutPointSourceId::Transaction(stake_pool_transaction_id), 0)
+    );
+
+    let mut create_stake_pool_utxos = wallet2
+        .get_utxos(
+            DEFAULT_ACCOUNT_INDEX,
+            UtxoType::CreateStakePool.into(),
+            UtxoState::Confirmed.into(),
+            WithLocked::Unlocked,
+        )
+        .unwrap();
+    assert_eq!(create_stake_pool_utxos.len(), 1);
+    let (_, output, _) = create_stake_pool_utxos.pop().unwrap();
+    let (pool_id_in_utxo, stake_pool_data_in_utxo) =
+        assert_matches_return_val!(output, TxOutput::CreateStakePool(id, data), (id, *data));
+    let expected_stake_pool_data = StakePoolData::new(
+        pool_amount,
+        staker_key_dest.clone(),
+        staker_vrf_public_key.clone(),
+        decommission_dest.clone(),
+        margin_ratio_per_thousand,
+        cost_per_block,
+    );
+    assert_eq!(pool_id_in_utxo, *pool_id);
+    assert_eq!(stake_pool_data_in_utxo, expected_stake_pool_data);
+
+    let pos_data = wallet2.get_pos_gen_block_data(DEFAULT_ACCOUNT_INDEX, *pool_id).unwrap();
+
+    let block3 = Block::new(
+        vec![],
+        chain_config.genesis_block_id(),
+        chain_config.genesis_block().timestamp(),
+        ConsensusData::PoS(Box::new(PoSData::new(
+            vec![TxInput::Utxo(UtxoOutPoint::new(
+                OutPointSourceId::Transaction(stake_pool_transaction_id),
+                0,
+            ))],
+            vec![],
+            *pool_id,
+            pos_data.vrf_private_key().produce_vrf_data(VRFTranscript::new(&[])),
+            common::primitives::Compact(0),
+        ))),
+        BlockReward::new(vec![TxOutput::ProduceBlockFromStake(
+            staker_key_dest.clone(),
+            *pool_id,
+        )]),
+    )
+    .unwrap();
+
+    scan_wallet(&mut wallet1, BlockHeight::new(2), vec![block3.clone()]);
+    scan_wallet(&mut wallet2, BlockHeight::new(2), vec![block3.clone()]);
+
+    let pool_ids_for_staking1 =
+        wallet1.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::Stake).unwrap();
+    assert!(pool_ids_for_staking1.is_empty());
+    let pool_ids_for_decommission1 = wallet1
+        .get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::Decommission)
+        .unwrap();
+    assert_eq!(pool_ids_for_decommission1.len(), 1);
+
+    let pool_ids_for_decommission2 = wallet2
+        .get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::Decommission)
+        .unwrap();
+    assert!(pool_ids_for_decommission2.is_empty());
+    let pool_ids_for_staking2 =
+        wallet2.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::Stake).unwrap();
+    assert_eq!(pool_ids_for_staking2.len(), 1);
+
+    assert_eq!(pool_ids_for_decommission1[0], pool_ids_for_staking2[0]);
+
+    let (pool_id_after_block3, pool_data_after_block) = pool_ids_for_staking2.first().unwrap();
+    assert_eq!(pool_id_after_block3, pool_id);
+    assert_eq!(pool_data_after_block.decommission_key, decommission_dest);
+    assert_eq!(pool_data_after_block.stake_destination, staker_key_dest);
+    assert_eq!(pool_data_after_block.vrf_public_key, staker_vrf_public_key);
+    assert_eq!(
+        pool_data_after_block.margin_ratio_per_thousand,
+        margin_ratio_per_thousand
+    );
+    assert_eq!(pool_data_after_block.cost_per_block, cost_per_block);
+    assert_eq!(
+        &pool_data_after_block.utxo_outpoint,
+        &UtxoOutPoint::new(OutPointSourceId::BlockReward(block3.get_id().into()), 0)
+    );
+
+    let decommission_tx = wallet1
+        .decommission_stake_pool(
+            DEFAULT_ACCOUNT_INDEX,
+            *pool_id,
+            pool_amount,
+            None,
+            FeeRate::from_amount_per_kb(Amount::from_atoms(0)),
+        )
+        .unwrap();
+
+    let (_, block4) = create_block(
+        &chain_config,
+        &mut wallet1,
+        vec![decommission_tx],
+        Amount::ZERO,
+        3,
+    );
+    scan_wallet(&mut wallet2, BlockHeight::new(3), vec![block4]);
+
+    let pool_ids1 = wallet1.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
+    assert!(pool_ids1.is_empty());
+    let pool_ids2 = wallet2.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
+    assert!(pool_ids2.is_empty());
+
+    let coin_balance1 = get_coin_balance(&wallet1);
+    assert_eq!(coin_balance1, pool_amount);
+    let coin_balance2 = get_coin_balance(&wallet2);
+    assert_eq!(coin_balance2, Amount::ZERO);
+}
+
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -1653,11 +1908,13 @@ fn reset_keys_after_failed_transaction(#[case] seed: Seed) {
         DEFAULT_ACCOUNT_INDEX,
         FeeRate::from_amount_per_kb(Amount::ZERO),
         FeeRate::from_amount_per_kb(Amount::ZERO),
-        StakePoolDataArguments {
+        StakePoolCreationArguments {
             amount: not_enough,
             margin_ratio_per_thousand: PerThousand::new_from_rng(&mut rng),
             cost_per_block: Amount::ZERO,
             decommission_key: Destination::AnyoneCanSpend,
+            staker_key: None,
+            vrf_public_key: None,
         },
     );
     // check that result is an error and we last issued address is still the same
@@ -1853,11 +2110,13 @@ fn create_spend_from_delegations(#[case] seed: Seed) {
             DEFAULT_ACCOUNT_INDEX,
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
-            StakePoolDataArguments {
+            StakePoolCreationArguments {
                 amount: pool_amount,
                 margin_ratio_per_thousand: PerThousand::new_from_rng(&mut rng),
                 cost_per_block: Amount::ZERO,
                 decommission_key: Destination::AnyoneCanSpend,
+                staker_key: None,
+                vrf_public_key: None,
             },
         )
         .unwrap();
@@ -4020,11 +4279,13 @@ fn decommission_pool_wrong_account(#[case] seed: Seed) {
             acc_0_index,
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
-            StakePoolDataArguments {
+            StakePoolCreationArguments {
                 amount: pool_amount,
                 margin_ratio_per_thousand: PerThousand::new_from_rng(&mut rng),
                 cost_per_block: Amount::ZERO,
                 decommission_key: decommission_key.into_object(),
+                staker_key: None,
+                vrf_public_key: None,
             },
         )
         .unwrap();
@@ -4113,11 +4374,13 @@ fn decommission_pool_request_wrong_account(#[case] seed: Seed) {
             acc_0_index,
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
-            StakePoolDataArguments {
+            StakePoolCreationArguments {
                 amount: pool_amount,
                 margin_ratio_per_thousand: PerThousand::new_from_rng(&mut rng),
                 cost_per_block: Amount::ZERO,
                 decommission_key: decommission_key.into_object(),
+                staker_key: None,
+                vrf_public_key: None,
             },
         )
         .unwrap();
@@ -4199,11 +4462,13 @@ fn sign_decommission_pool_request_between_accounts(#[case] seed: Seed) {
             acc_0_index,
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
-            StakePoolDataArguments {
+            StakePoolCreationArguments {
                 amount: pool_amount,
                 margin_ratio_per_thousand: PerThousand::new_from_rng(&mut rng),
                 cost_per_block: Amount::ZERO,
                 decommission_key: decommission_key.into_object(),
+                staker_key: None,
+                vrf_public_key: None,
             },
         )
         .unwrap();
@@ -4307,11 +4572,13 @@ fn sign_decommission_pool_request_cold_wallet(#[case] seed: Seed) {
             DEFAULT_ACCOUNT_INDEX,
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
-            StakePoolDataArguments {
+            StakePoolCreationArguments {
                 amount: pool_amount,
                 margin_ratio_per_thousand: PerThousand::new_from_rng(&mut rng),
                 cost_per_block: Amount::ZERO,
                 decommission_key: decommission_key.into_object(),
+                staker_key: None,
+                vrf_public_key: None,
             },
         )
         .unwrap();
@@ -4408,11 +4675,13 @@ fn filter_pools(#[case] seed: Seed) {
             DEFAULT_ACCOUNT_INDEX,
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
-            StakePoolDataArguments {
+            StakePoolCreationArguments {
                 amount: pool_amount,
                 margin_ratio_per_thousand: PerThousand::new_from_rng(&mut rng),
                 cost_per_block: Amount::ZERO,
                 decommission_key: decommission_key.into_object(),
+                staker_key: None,
+                vrf_public_key: None,
             },
         )
         .unwrap();

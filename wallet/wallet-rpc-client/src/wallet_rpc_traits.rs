@@ -279,6 +279,7 @@ pub trait WalletInterface {
         transaction: String,
     ) -> Result<RpcInspectTransaction, Self::Error>;
 
+    #[allow(clippy::too_many_arguments)]
     async fn create_stake_pool(
         &self,
         account_index: U31,
@@ -286,6 +287,8 @@ pub trait WalletInterface {
         cost_per_block: DecimalAmount,
         margin_ratio_per_thousand: String,
         decommission_address: String,
+        staker_address: Option<String>,
+        vrf_public_key: Option<String>,
         config: ControllerConfig,
     ) -> Result<NewTransaction, Self::Error>;
 

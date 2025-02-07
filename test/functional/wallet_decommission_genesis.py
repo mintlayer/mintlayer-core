@@ -28,13 +28,13 @@ Check that:
 
 from test_framework.authproxy import JSONRPCException
 from test_framework.mintlayer import (
-    block_input_data_obj,
     ATOMS_PER_COIN,
+    block_input_data_obj,
+    make_tx,
+    reward_input
 )
 from test_framework.test_framework import BitcoinTestFramework
-from test_framework.mintlayer import (make_tx, reward_input)
 from test_framework.util import assert_equal, assert_in
-from test_framework.mintlayer import block_input_data_obj
 from test_framework.wallet_cli_controller import DEFAULT_ACCOUNT_INDEX, WalletCliController
 
 import asyncio
@@ -259,7 +259,7 @@ class WalletDecommissionGenesis(BitcoinTestFramework):
 
             # Submit a valid transaction
             output = {
-                    'Transfer': [ { 'Coin': 50_000 * ATOMS_PER_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': pub_key_bytes}}} } ],
+                'Transfer': [ { 'Coin': 50_000 * ATOMS_PER_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': pub_key_bytes}}} } ],
             }
             encoded_tx, tx_id = make_tx([reward_input(tip_id)], [output], 0)
             self.log.debug(f"Encoded transaction {tx_id}: {encoded_tx}")
