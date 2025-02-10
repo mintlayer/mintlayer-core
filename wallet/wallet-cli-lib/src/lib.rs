@@ -155,6 +155,7 @@ async fn start_hot_wallet(
         cli_args.node_rpc_address.clone().unwrap_or(default_addr)
     };
 
+    let no_qr = cli_args.no_qr;
     let (repl_handle, wallet_rpc_config) =
         setup_events_and_repl(cli_args, mode, output, input, event_tx, chain_type)?;
 
@@ -168,6 +169,7 @@ async fn start_hot_wallet(
             wallet_rpc_config,
         },
         false,
+        no_qr,
     )
     .await?;
     Ok(repl_handle.join().expect("Should not panic")?)
@@ -183,6 +185,7 @@ async fn start_cold_wallet(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let (event_tx, event_rx) = mpsc::unbounded_channel();
 
+    let no_qr = cli_args.no_qr;
     let (repl_handle, wallet_rpc_config) = setup_events_and_repl(
         cli_args,
         mode,
@@ -201,6 +204,7 @@ async fn start_cold_wallet(
             wallet_rpc_config,
         },
         true,
+        no_qr,
     )
     .await?;
     Ok(repl_handle.join().expect("Should not panic")?)
@@ -241,6 +245,7 @@ async fn connect_to_rpc_wallet(
         _ => panic!("Should not happen due to arg constraints"),
     };
 
+    let no_qr = cli_args.no_qr;
     let remote_socket_address = cli_args.remote_rpc_wallet_address.clone().expect("checked");
     let (repl_handle, _wallet_rpc_config) =
         setup_events_and_repl(cli_args, mode, output, input, event_tx, chain_type)?;
@@ -254,6 +259,7 @@ async fn connect_to_rpc_wallet(
             rpc_auth,
         },
         false,
+        no_qr,
     )
     .await?;
     Ok(repl_handle.join().expect("Should not panic")?)
