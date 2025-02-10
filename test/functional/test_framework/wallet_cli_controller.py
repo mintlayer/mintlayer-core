@@ -387,8 +387,14 @@ class WalletCliController(WalletCliControllerBase):
                                 amount: int,
                                 cost_per_block: int,
                                 margin_ratio_per_thousand: float,
-                                decommission_addr: str) -> str:
-        return await self._write_command(f"staking-create-pool {amount} {cost_per_block} {margin_ratio_per_thousand} {decommission_addr}\n")
+                                decommission_addr: str,
+                                staker_addr: Optional[str] = None,
+                                vrf_pub_key: Optional[str] = None) -> str:
+        staker_addr = "" if staker_addr is None else f'{staker_addr}'
+        vrf_pub_key = "" if vrf_pub_key is None else f'{vrf_pub_key}'
+        return await self._write_command(
+            f"staking-create-pool {amount} {cost_per_block} {margin_ratio_per_thousand} {decommission_addr} {staker_addr} {vrf_pub_key}\n"
+        )
 
     async def decommission_stake_pool(self, pool_id: str, address: str) -> str:
         return await self._write_command(f"staking-decommission-pool {pool_id} {address}\n")
@@ -496,6 +502,14 @@ class WalletCliController(WalletCliControllerBase):
 
     async def get_legacy_vrf_public_key(self) -> str:
         return await self._write_command("staking-show-legacy-vrf-key\n")
+
+    async def new_vrf_public_key(self) -> str:
+        output = await self._write_command("staking-new-vrf-public-key\n")
+
+        match = re.search(r'New VRF public key: (\w+) with index (\d+)', output)
+        assert match is not None
+
+        return match.group(1)
 
     async def get_balance(self, with_locked: str = 'unlocked', utxo_states: List[str] = ['confirmed']) -> str:
         return await self._write_command(f"account-balance {with_locked} {' '.join(utxo_states)}\n")

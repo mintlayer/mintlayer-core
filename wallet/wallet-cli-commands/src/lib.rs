@@ -524,7 +524,7 @@ pub enum WalletCommand {
 
     #[clap(name = "delegation-create")]
     CreateDelegation {
-        /// The address, that will have the authority to sign withdrawals from a pool.
+        /// The address, that will have the authority to sign withdrawals from the delegation.
         owner: String,
         /// The pool id of the pool that will get the delegation and stake the coins.
         pool_id: String,
@@ -594,6 +594,22 @@ pub enum WalletCommand {
 
         /// The key that can decommission the pool. It's recommended to keep the decommission key in a cold storage.
         decommission_address: String,
+
+        /// This specifies the key that will sign new blocks.
+        ///
+        /// The key must be owned by the wallet that will do the actual staking. Leave it empty if the current
+        /// wallet will be the staking wallet.
+        ///
+        /// Note that this must be a "public key address" and not a "public key hash address", which would normally be used
+        /// in a transaction. Use the address-reveal-public-key-as-address command to convert the latter to the former
+        /// (run it in the wallet that owns the key).
+        staker_address: Option<String>,
+
+        /// This specifies the VRF key that will be used to produce POS hashes during staking.
+        ///
+        /// The key must be owned by the wallet that will do the actual staking. Leave it empty if the current
+        /// wallet will be the staking wallet.
+        vrf_public_key: Option<String>,
     },
 
     #[clap(name = "staking-decommission-pool")]

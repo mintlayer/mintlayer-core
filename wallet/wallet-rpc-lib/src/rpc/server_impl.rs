@@ -27,7 +27,7 @@ use common::{
     },
     primitives::{time::Time, BlockHeight, Id, Idable},
 };
-use crypto::key::PrivateKey;
+use crypto::{key::PrivateKey, vrf::VRFPublicKey};
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
 use serialization::{hex::HexEncode, json_encoded::JsonEncoded};
 use utils_networking::IpOrSocketAddress;
@@ -599,6 +599,8 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletRpcServer f
         cost_per_block: RpcAmountIn,
         margin_ratio_per_thousand: String,
         decommission_address: RpcAddress<Destination>,
+        staker_address: Option<RpcAddress<Destination>>,
+        vrf_public_key: Option<RpcAddress<VRFPublicKey>>,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction> {
         let config = ControllerConfig {
@@ -612,6 +614,8 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletRpcServer f
                 cost_per_block,
                 margin_ratio_per_thousand,
                 decommission_address,
+                staker_address,
+                vrf_public_key,
                 config,
             )
             .await
