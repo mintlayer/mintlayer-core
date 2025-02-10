@@ -387,6 +387,7 @@ impl Backend {
                 broadcast_to_mempool: true,
             },
             WalletRpcHandlesClient::new(wallet_rpc.clone(), None),
+            None,
         )
         .await;
         let best_block = wallet_rpc
@@ -545,6 +546,7 @@ impl Backend {
                 broadcast_to_mempool: true,
             },
             WalletRpcHandlesClient::new(wallet_rpc.clone(), None),
+            None,
         )
         .await;
         let encryption_state = match wallet_rpc.remove_private_key_encryption().await {

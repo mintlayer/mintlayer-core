@@ -182,6 +182,10 @@ pub struct CliArgs {
     /// For a remote RPC wallet, this will not use any authentication
     #[arg(long, conflicts_with_all(["remote_rpc_wallet_password", "remote_rpc_wallet_username", "remote_rpc_wallet_cookie_file"]))]
     pub remote_rpc_wallet_no_authentication: bool,
+
+    /// Disable QR code output for wallet commands
+    #[arg(long)]
+    pub no_qr: bool,
 }
 
 impl From<&Network> for ChainType {

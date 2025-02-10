@@ -52,6 +52,7 @@ pub async fn run<N: NodeInterface + Clone + Send + Sync + Debug + 'static>(
     in_top_x_mb: usize,
     wallet_type: WalletType<N>,
     cold_wallet: bool,
+    no_qr: bool,
 ) -> Result<(), WalletCliError<N>> {
     match wallet_type {
         WalletType::Local {
@@ -95,6 +96,7 @@ pub async fn run<N: NodeInterface + Clone + Send + Sync + Debug + 'static>(
                     broadcast_to_mempool: true,
                 },
                 wallet,
+                Some(no_qr),
             )
             .await;
 
@@ -126,6 +128,7 @@ pub async fn run<N: NodeInterface + Clone + Send + Sync + Debug + 'static>(
                     broadcast_to_mempool: true,
                 },
                 wallet,
+                Some(no_qr),
             )
             .await;
 
