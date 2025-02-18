@@ -23,6 +23,7 @@ use logging::log;
 use utils_networking::broadcaster::Broadcaster;
 use wallet_controller::types::{CreatedWallet, WalletCreationOptions, WalletTypeArgs};
 use wallet_controller::{ControllerError, NodeInterface};
+use wallet_types::scan_blockchain::ScanBlockchain;
 use wallet_types::wallet_type::WalletType;
 
 use crate::types::RpcError;

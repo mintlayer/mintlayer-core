@@ -59,18 +59,19 @@ use trezor_client::{
     client::mintlayer::MintlayerSignature,
     find_devices,
     protos::{
-        features::Capability, MintlayerAccountCommandTxInput,
-        MintlayerAccountSpendingDelegationBalance, MintlayerAccountTxInput, MintlayerAddressPath,
-        MintlayerAddressType, MintlayerBurnTxOutput, MintlayerChainType,
-        MintlayerChangeTokenAuthority, MintlayerChangeTokenMetadataUri, MintlayerConcludeOrder,
-        MintlayerCreateDelegationIdTxOutput, MintlayerCreateOrderTxOutput,
+        features::Capability,
+        mintlayer_tx_ack::{MintlayerTxInput, MintlayerTxOutput},
+        MintlayerAccountCommandTxInput, MintlayerAccountSpendingDelegationBalance,
+        MintlayerAccountTxInput, MintlayerAddressPath, MintlayerAddressType, MintlayerBurnTxOutput,
+        MintlayerChainType, MintlayerChangeTokenAuthority, MintlayerChangeTokenMetadataUri,
+        MintlayerConcludeOrder, MintlayerCreateDelegationIdTxOutput, MintlayerCreateOrderTxOutput,
         MintlayerCreateStakePoolTxOutput, MintlayerDataDepositTxOutput,
         MintlayerDelegateStakingTxOutput, MintlayerFillOrder, MintlayerFreezeToken,
         MintlayerHtlcTxOutput, MintlayerIssueFungibleTokenTxOutput, MintlayerIssueNftTxOutput,
         MintlayerLockThenTransferTxOutput, MintlayerLockTokenSupply, MintlayerMintTokens,
         MintlayerOutputValue, MintlayerProduceBlockFromStakeTxOutput, MintlayerTokenOutputValue,
-        MintlayerTokenTotalSupply, MintlayerTokenTotalSupplyType, MintlayerTxInput,
-        MintlayerTxOutput, MintlayerUnfreezeToken, MintlayerUnmintTokens, MintlayerUtxoType,
+        MintlayerTokenTotalSupply, MintlayerTokenTotalSupplyType, MintlayerUnfreezeToken,
+        MintlayerUnmintTokens, MintlayerUtxoType,
     },
     Model,
 };
@@ -539,7 +540,7 @@ fn to_trezor_input_msgs(
         .zip(ptx.destinations())
         .map(|((inp, utxo), dest)| match (inp, utxo, dest) {
             (TxInput::Utxo(outpoint), Some(_), Some(dest)) => {
-                to_trezor_utxo_input(outpoint, chain_config, dest, key_chain)
+                to_trezor_utxo_input(outpoint, dest, key_chain)
             }
             (TxInput::Account(outpoint), _, Some(dest)) => {
                 to_trezor_account_input(chain_config, dest, key_chain, outpoint)
@@ -588,7 +589,7 @@ fn to_trezor_account_command_input(
         AccountCommand::FreezeToken(token_id, unfreezable) => {
             let mut req = MintlayerFreezeToken::new();
             req.set_token_id(Address::new(chain_config, *token_id)?.into_string());
-            req.set_is_token_unfreezable(unfreezable.as_bool());
+            req.set_is_token_unfreezeable(unfreezable.as_bool());
 
             inp_req.freeze_token = Some(req).into();
         }
@@ -736,7 +737,6 @@ fn to_trezor_account_input(
 
 fn to_trezor_utxo_input(
     outpoint: &common::chain::UtxoOutPoint,
-    chain_config: &ChainConfig,
     dest: &Destination,
     key_chain: &impl AccountKeyChains,
 ) -> SignerResult<MintlayerTxInput> {
@@ -754,7 +754,6 @@ fn to_trezor_utxo_input(
     inp_req.set_prev_hash(id.to_vec());
     inp_req.set_prev_index(outpoint.output_index());
 
-    inp_req.set_address(Address::new(chain_config, dest.clone())?.into_string());
     inp_req.addresses = destination_to_address_paths(key_chain, dest);
 
     let mut inp = MintlayerTxInput::new();

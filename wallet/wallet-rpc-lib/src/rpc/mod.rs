@@ -84,6 +84,7 @@ use wallet_types::{
     partially_signed_transaction::{
         PartiallySignedTransaction, TokenAdditionalInfo, TxAdditionalInfo,
     },
+    scan_blockchain::ScanBlockchain,
     signature_status::SignatureStatus,
     wallet_tx::TxData,
     with_locked::WithLocked,
