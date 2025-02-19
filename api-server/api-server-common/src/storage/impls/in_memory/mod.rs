@@ -18,8 +18,8 @@ pub mod transactional;
 use crate::storage::storage_api::{
     block_aux_data::{BlockAuxData, BlockWithExtraData},
     ApiServerStorageError, BlockInfo, CoinOrTokenStatistic, Delegation, FungibleTokenData,
-    LockedUtxo, NftWithOwner, Order, PoolBlockStats, TransactionInfo, Utxo, UtxoLock,
-    UtxoWithExtraInfo,
+    LockedUtxo, NftWithOwner, Order, PoolBlockStats, PoolDataWithExtraInfo, TransactionInfo, Utxo,
+    UtxoLock, UtxoWithExtraInfo,
 };
 use common::{
     address::Address,
@@ -31,7 +31,6 @@ use common::{
     },
     primitives::{id::WithId, Amount, BlockHeight, CoinOrTokenId, Id},
 };
-use pos_accounting::PoolData;
 use std::{
     cmp::Reverse,
     collections::{BTreeMap, BTreeSet},
@@ -50,7 +49,7 @@ struct ApiServerInMemoryStorage {
     address_transactions_table: BTreeMap<String, BTreeMap<BlockHeight, Vec<Id<Transaction>>>>,
     delegation_table: BTreeMap<DelegationId, BTreeMap<BlockHeight, Delegation>>,
     main_chain_blocks_table: BTreeMap<BlockHeight, Id<Block>>,
-    pool_data_table: BTreeMap<PoolId, BTreeMap<BlockHeight, PoolData>>,
+    pool_data_table: BTreeMap<PoolId, BTreeMap<BlockHeight, PoolDataWithExtraInfo>>,
     transaction_table: BTreeMap<Id<Transaction>, (Id<Block>, TransactionInfo)>,
     utxo_table: BTreeMap<UtxoOutPoint, BTreeMap<BlockHeight, Utxo>>,
     address_utxos: BTreeMap<String, BTreeSet<UtxoOutPoint>>,
@@ -416,7 +415,7 @@ impl ApiServerInMemoryStorage {
         &self,
         len: u32,
         offset: u32,
-    ) -> Result<Vec<(PoolId, PoolData)>, ApiServerStorageError> {
+    ) -> Result<Vec<(PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError> {
         let len = len as usize;
         let offset = offset as usize;
         let mut pool_data: Vec<_> = self
@@ -447,7 +446,7 @@ impl ApiServerInMemoryStorage {
         &self,
         len: u32,
         offset: u32,
-    ) -> Result<Vec<(PoolId, PoolData)>, ApiServerStorageError> {
+    ) -> Result<Vec<(PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError> {
         let len = len as usize;
         let offset = offset as usize;
         let mut pool_data: Vec<_> = self
@@ -482,7 +481,10 @@ impl ApiServerInMemoryStorage {
         Ok(Some(*block_id))
     }
 
-    fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, ApiServerStorageError> {
+    fn get_pool_data(
+        &self,
+        pool_id: PoolId,
+    ) -> Result<Option<PoolDataWithExtraInfo>, ApiServerStorageError> {
         let pool_data_result = self.pool_data_table.get(&pool_id);
         match pool_data_result {
             Some(data) => Ok(data.last_key_value().map(|(_, v)| v.clone())),
@@ -963,7 +965,7 @@ impl ApiServerInMemoryStorage {
     fn set_pool_data_at_height(
         &mut self,
         pool_id: PoolId,
-        pool_data: &PoolData,
+        pool_data: &PoolDataWithExtraInfo,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
         self.pool_data_table

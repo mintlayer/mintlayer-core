@@ -15,8 +15,8 @@
 
 use crate::{
     api::json_helpers::{
-        self, amount_to_json, block_header_to_json, to_tx_json_with_block_info, tx_to_json,
-        txoutput_to_json, utxo_outpoint_to_json, TokenDecimals,
+        self, amount_to_json, block_header_to_json, pool_data_to_json, to_tx_json_with_block_info,
+        tx_to_json, txoutput_to_json, utxo_outpoint_to_json, TokenDecimals,
     },
     error::{
         ApiServerWebServerClientError, ApiServerWebServerError, ApiServerWebServerForbiddenError,
@@ -807,22 +807,9 @@ pub async fn pools<T: ApiServerStorage>(
             })?,
     };
 
-    let pools = pools.into_iter().map(|(pool_id, pool_data)| {
-        let decommission_destination =
-            Address::new(&state.chain_config, pool_data.decommission_destination().clone())
-                .expect("no error in encoding");
-        let pool_id = Address::new(&state.chain_config, pool_id).expect("no error in encoding");
-        let vrf_key = Address::new(&state.chain_config, pool_data.vrf_public_key().clone())
-            .expect("no error in encoding");
-        json!({
-            "pool_id": pool_id.as_str(),
-            "decommission_destination": decommission_destination.as_str(),
-            "staker_balance": amount_to_json(pool_data.staker_balance().expect("no overflow"), state.chain_config.coin_decimals()),
-            "margin_ratio_per_thousand": pool_data.margin_ratio_per_thousand(),
-            "cost_per_block": amount_to_json(pool_data.cost_per_block(), state.chain_config.coin_decimals()),
-            "vrf_public_key": vrf_key.as_str(),
-        })
-    });
+    let pools = pools
+        .into_iter()
+        .map(|(pool_id, pool_data)| pool_data_to_json(&state.chain_config, pool_data, pool_id));
 
     Ok(Json(pools.collect::<Vec<_>>()))
 }
@@ -855,20 +842,11 @@ pub async fn pool<T: ApiServerStorage>(
             ApiServerWebServerNotFoundError::PoolNotFound,
         ))?;
 
-    let decommission_destination = Address::new(
+    Ok(Json(pool_data_to_json(
         &state.chain_config,
-        pool_data.decommission_destination().clone(),
-    )
-    .expect("no error in encoding");
-    let vrf_key = Address::new(&state.chain_config, pool_data.vrf_public_key().clone())
-        .expect("no error in encoding");
-    Ok(Json(json!({
-        "decommission_destination": decommission_destination.as_str(),
-        "staker_balance": amount_to_json(pool_data.staker_balance().expect("no overflow"), state.chain_config.coin_decimals()),
-        "margin_ratio_per_thousand": pool_data.margin_ratio_per_thousand(),
-        "cost_per_block": amount_to_json(pool_data.cost_per_block(), state.chain_config.coin_decimals()),
-        "vrf_public_key": vrf_key.as_str(),
-    })))
+        pool_data,
+        pool_id,
+    )))
 }
 
 #[derive(Debug, Deserialize)]
