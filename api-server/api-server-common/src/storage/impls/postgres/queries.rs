@@ -19,7 +19,6 @@ use std::{
 };
 
 use bb8_postgres::{bb8::PooledConnection, PostgresConnectionManager};
-use pos_accounting::PoolData;
 use serialization::{DecodeAll, Encode};
 
 use common::{
@@ -39,7 +38,8 @@ use crate::storage::{
     storage_api::{
         block_aux_data::{BlockAuxData, BlockWithExtraData},
         ApiServerStorageError, BlockInfo, CoinOrTokenStatistic, Delegation, FungibleTokenData,
-        LockedUtxo, NftWithOwner, Order, PoolBlockStats, TransactionInfo, Utxo, UtxoWithExtraInfo,
+        LockedUtxo, NftWithOwner, Order, PoolBlockStats, PoolDataWithExtraInfo, TransactionInfo,
+        Utxo, UtxoWithExtraInfo,
     },
 };
 
@@ -1360,7 +1360,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         &mut self,
         pool_id: PoolId,
         chain_config: &ChainConfig,
-    ) -> Result<Option<PoolData>, ApiServerStorageError> {
+    ) -> Result<Option<PoolDataWithExtraInfo>, ApiServerStorageError> {
         let pool_id = Address::new(chain_config, pool_id)
             .map_err(|_| ApiServerStorageError::AddressableError)?;
         self.tx
@@ -1380,8 +1380,8 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 || Ok(None),
                 |row| {
                     let pool_data: Vec<u8> = row.get(0);
-                    let pool_data =
-                        PoolData::decode_all(&mut pool_data.as_slice()).map_err(|e| {
+                    let pool_data = PoolDataWithExtraInfo::decode_all(&mut pool_data.as_slice())
+                        .map_err(|e| {
                             ApiServerStorageError::DeserializationError(format!(
                                 "Pool data deserialization failed: {}",
                                 e
@@ -1398,7 +1398,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         len: u32,
         offset: u32,
         chain_config: &ChainConfig,
-    ) -> Result<Vec<(PoolId, PoolData)>, ApiServerStorageError> {
+    ) -> Result<Vec<(PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError> {
         let len = len as i64;
         let offset = offset as i64;
         self.tx
@@ -1419,13 +1419,13 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?
             .into_iter()
-            .map(|row| -> Result<(PoolId, PoolData), ApiServerStorageError> {
+            .map(|row| -> Result<(PoolId, PoolDataWithExtraInfo), ApiServerStorageError> {
                 let pool_id: String = row.get(0);
                 let pool_id = Address::<PoolId>::from_string(chain_config, pool_id)
                     .map_err(|_| ApiServerStorageError::AddressableError)?
                     .into_object();
                 let pool_data: Vec<u8> = row.get(1);
-                let pool_data = PoolData::decode_all(&mut pool_data.as_slice()).map_err(|e| {
+                let pool_data = PoolDataWithExtraInfo::decode_all(&mut pool_data.as_slice()).map_err(|e| {
                     ApiServerStorageError::DeserializationError(format!(
                         "Pool data deserialization failed: {}",
                         e
@@ -1442,7 +1442,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         len: u32,
         offset: u32,
         chain_config: &ChainConfig,
-    ) -> Result<Vec<(PoolId, PoolData)>, ApiServerStorageError> {
+    ) -> Result<Vec<(PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError> {
         let len = len as i64;
         let offset = offset as i64;
         self.tx
@@ -1463,13 +1463,13 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?
             .into_iter()
-            .map(|row| -> Result<(PoolId, PoolData), ApiServerStorageError> {
+            .map(|row| -> Result<(PoolId, PoolDataWithExtraInfo), ApiServerStorageError> {
                 let pool_id: String = row.get(0);
                 let pool_id = Address::<PoolId>::from_string(chain_config, pool_id)
                     .map_err(|_| ApiServerStorageError::AddressableError)?
                     .into_object();
                 let pool_data: Vec<u8> = row.get(1);
-                let pool_data = PoolData::decode_all(&mut pool_data.as_slice()).map_err(|e| {
+                let pool_data = PoolDataWithExtraInfo::decode_all(&mut pool_data.as_slice()).map_err(|e| {
                     ApiServerStorageError::DeserializationError(format!(
                         "Pool data deserialization failed: {}",
                         e
@@ -1484,7 +1484,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
     pub async fn set_pool_data_at_height(
         &mut self,
         pool_id: PoolId,
-        pool_data: &PoolData,
+        pool_data: &PoolDataWithExtraInfo,
         block_height: BlockHeight,
         chain_config: &ChainConfig,
     ) -> Result<(), ApiServerStorageError> {

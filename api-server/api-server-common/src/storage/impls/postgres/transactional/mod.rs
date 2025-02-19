@@ -23,12 +23,11 @@ use common::{
     chain::{Block, ChainConfig, PoolId, Transaction},
     primitives::{BlockHeight, Id},
 };
-use pos_accounting::PoolData;
 use tokio_postgres::NoTls;
 
 use crate::storage::storage_api::{
     block_aux_data::BlockAuxData, ApiServerStorage, ApiServerStorageError, ApiServerTransactionRo,
-    ApiServerTransactionRw, BlockInfo, TransactionInfo, Transactional,
+    ApiServerTransactionRw, BlockInfo, PoolDataWithExtraInfo, TransactionInfo, Transactional,
 };
 
 use super::{queries::QueryFromConnection, TransactionalApiServerPostgresStorage};
@@ -118,7 +117,7 @@ impl ApiServerPostgresTransactionalRo<'_> {
     pub async fn get_pool_data(
         &mut self,
         pool_id: PoolId,
-    ) -> Result<Option<PoolData>, ApiServerStorageError> {
+    ) -> Result<Option<PoolDataWithExtraInfo>, ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_pool_data(pool_id, &self.chain_config).await?;
 

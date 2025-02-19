@@ -27,8 +27,8 @@ use api_server_common::storage::{
         block_aux_data::{BlockAuxData, BlockWithExtraData},
         ApiServerStorage, ApiServerStorageError, ApiServerStorageRead, ApiServerStorageWrite,
         ApiServerTransactionRw, BlockInfo, CoinOrTokenStatistic, Delegation, FungibleTokenData,
-        LockedUtxo, Order, TransactionInfo, Transactional, TxAdditionalInfo, Utxo, UtxoLock,
-        UtxoWithExtraInfo,
+        LockedUtxo, Order, PoolDataWithExtraInfo, TransactionInfo, Transactional, TxAdditionalInfo,
+        Utxo, UtxoLock, UtxoWithExtraInfo,
     },
 };
 use crypto::{
@@ -730,6 +730,10 @@ where
                 PerThousand::new(margin_ratio_per_thousand).unwrap(),
                 cost_per_block,
             );
+            let random_pool_data = PoolDataWithExtraInfo {
+                pool_data: random_pool_data,
+                delegations_balance: Amount::from_atoms(rng.gen_range(0..=1000)),
+            };
 
             db_tx
                 .set_pool_data_at_height(random_pool_id, &random_pool_data, random_block_height)
@@ -766,6 +770,10 @@ where
                     height = BlockHeight::new(rng.gen::<u32>() as u64)
                 }
                 height
+            };
+            let random_pool_data2 = PoolDataWithExtraInfo {
+                pool_data: random_pool_data2,
+                delegations_balance: Amount::from_atoms(rng.gen_range(0..=1000)),
             };
 
             db_tx
@@ -819,6 +827,10 @@ where
                 PerThousand::new(margin_ratio_per_thousand).unwrap(),
                 cost_per_block,
             );
+            let random_pool_data_new = PoolDataWithExtraInfo {
+                pool_data: random_pool_data_new,
+                delegations_balance: Amount::from_atoms(rng.gen_range(0..=1000)),
+            };
 
             // update pool data in next block height
             db_tx
@@ -862,6 +874,10 @@ where
                 PerThousand::new(margin_ratio_per_thousand).unwrap(),
                 cost_per_block,
             );
+            let decommissioned_random_pool_data = PoolDataWithExtraInfo {
+                pool_data: decommissioned_random_pool_data,
+                delegations_balance: Amount::from_atoms(rng.gen_range(0..=1000)),
+            };
             eprintln!("setting pledge to 0 for pool {random_pool_id:?}");
             db_tx
                 .set_pool_data_at_height(

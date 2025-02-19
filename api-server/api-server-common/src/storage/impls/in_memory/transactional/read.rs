@@ -22,12 +22,11 @@ use common::{
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
 };
-use pos_accounting::PoolData;
 
 use crate::storage::storage_api::{
     block_aux_data::BlockAuxData, ApiServerStorageError, ApiServerStorageRead, BlockInfo,
     CoinOrTokenStatistic, Delegation, FungibleTokenData, NftWithOwner, Order, PoolBlockStats,
-    TransactionInfo, Utxo, UtxoWithExtraInfo,
+    PoolDataWithExtraInfo, TransactionInfo, Utxo, UtxoWithExtraInfo,
 };
 
 use super::ApiServerInMemoryStorageTransactionalRo;
@@ -116,7 +115,7 @@ impl ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'_> {
         &self,
         len: u32,
         offset: u32,
-    ) -> Result<Vec<(PoolId, PoolData)>, ApiServerStorageError> {
+    ) -> Result<Vec<(PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError> {
         self.transaction.get_latest_pool_ids(len, offset)
     }
 
@@ -124,7 +123,7 @@ impl ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'_> {
         &self,
         len: u32,
         offset: u32,
-    ) -> Result<Vec<(PoolId, PoolData)>, ApiServerStorageError> {
+    ) -> Result<Vec<(PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError> {
         self.transaction.get_pool_data_with_largest_staker_balance(len, offset)
     }
 
@@ -166,7 +165,7 @@ impl ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'_> {
     async fn get_pool_data(
         &self,
         pool_id: PoolId,
-    ) -> Result<Option<PoolData>, ApiServerStorageError> {
+    ) -> Result<Option<PoolDataWithExtraInfo>, ApiServerStorageError> {
         self.transaction.get_pool_data(pool_id)
     }
 
