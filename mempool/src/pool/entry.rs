@@ -50,23 +50,23 @@ pub enum TxDependency {
 }
 
 impl TxDependency {
-    fn from_utxo(outpt: &UtxoOutPoint) -> Option<Self> {
-        outpt
+    fn from_utxo(output: &UtxoOutPoint) -> Option<Self> {
+        output
             .source_id()
             .get_tx_id()
-            .map(|id| Self::TxOutput(*id, outpt.output_index()))
+            .map(|id| Self::TxOutput(*id, output.output_index()))
     }
 
-    fn from_account(acct: &AccountSpending, nonce: AccountNonce) -> Self {
-        match acct {
+    fn from_account(account: &AccountSpending, nonce: AccountNonce) -> Self {
+        match account {
             AccountSpending::DelegationBalance(_, _) => {
-                Self::DelegationAccount(TxAccountDependency::new(acct.clone().into(), nonce))
+                Self::DelegationAccount(TxAccountDependency::new(account.clone().into(), nonce))
             }
         }
     }
 
-    fn from_account_op(acct: &AccountCommand, nonce: AccountNonce) -> Self {
-        match acct {
+    fn from_account_op(cmd: &AccountCommand, nonce: AccountNonce) -> Self {
+        match cmd {
             AccountCommand::MintTokens(_, _)
             | AccountCommand::UnmintTokens(_)
             | AccountCommand::LockTokenSupply(_)
@@ -74,10 +74,10 @@ impl TxDependency {
             | AccountCommand::UnfreezeToken(_)
             | AccountCommand::ChangeTokenMetadataUri(_, _)
             | AccountCommand::ChangeTokenAuthority(_, _) => {
-                Self::TokenSupplyAccount(TxAccountDependency::new(acct.clone().into(), nonce))
+                Self::TokenSupplyAccount(TxAccountDependency::new(cmd.clone().into(), nonce))
             }
             AccountCommand::ConcludeOrder(_) | AccountCommand::FillOrder(_, _, _) => {
-                Self::OrderAccount(TxAccountDependency::new(acct.clone().into(), nonce))
+                Self::OrderAccount(TxAccountDependency::new(cmd.clone().into(), nonce))
             }
         }
     }

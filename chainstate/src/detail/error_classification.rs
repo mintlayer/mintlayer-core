@@ -301,7 +301,8 @@ impl BlockProcessingErrorClassification for ConnectTransactionError {
             | ConnectTransactionError::IOPolicyError(_, _)
             | ConnectTransactionError::TotalFeeRequiredOverflow
             | ConnectTransactionError::InsufficientCoinsFee(_, _)
-            | ConnectTransactionError::AttemptToSpendFrozenToken(_) => {
+            | ConnectTransactionError::AttemptToSpendFrozenToken(_)
+            | ConnectTransactionError::AttemptToFillOrderWithZero(_) => {
                 BlockProcessingErrorClass::BadBlock
             }
 

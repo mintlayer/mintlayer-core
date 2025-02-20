@@ -840,6 +840,15 @@ where
                         Some(res)
                     }
                     AccountCommand::FillOrder(order_id, fill, _) => {
+                        // FIXME: add fork
+                        if *fill == Amount::ZERO {
+                            // Forbidding fills with zero ensures that tx has utxo and therefor is unique.
+                            // Unique txs cannot be replayed.
+                            return Some(Err(ConnectTransactionError::AttemptToFillOrderWithZero(
+                                *order_id,
+                            )));
+                        }
+
                         let res = self
                             .spend_input_from_account(*nonce, account_op.clone().into())
                             .and_then(|_| {

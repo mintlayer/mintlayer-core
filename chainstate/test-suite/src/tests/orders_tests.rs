@@ -1941,3 +1941,76 @@ fn partially_fill_order_with_nft(#[case] seed: Seed) {
         );
     });
 }
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn fill_order_with_zero(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+
+        let (token_id, tokens_outpoint, _) = issue_and_mint_token_from_genesis(&mut rng, &mut tf);
+        let tokens_circulating_supply =
+            tf.chainstate.get_token_circulating_supply(&token_id).unwrap().unwrap();
+
+        let ask_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
+        let give_amount =
+            Amount::from_atoms(rng.gen_range(1u128..=tokens_circulating_supply.into_atoms()));
+        let order_data = OrderData::new(
+            Destination::AnyoneCanSpend,
+            OutputValue::Coin(ask_amount),
+            OutputValue::TokenV1(token_id, give_amount),
+        );
+
+        let order_id = make_order_id(&tokens_outpoint);
+        let tx = TransactionBuilder::new()
+            .add_input(tokens_outpoint.into(), InputWitness::NoSignature(None))
+            .add_output(TxOutput::CreateOrder(Box::new(order_data.clone())))
+            .build();
+        tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
+
+        // Fill the order with 0 amount
+        let tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::AccountCommand(
+                    AccountNonce::new(0),
+                    AccountCommand::FillOrder(order_id, Amount::ZERO, Destination::AnyoneCanSpend),
+                ),
+                InputWitness::NoSignature(None),
+            )
+            .build();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
+
+        assert_eq!(
+            result.unwrap_err(),
+            chainstate::ChainstateError::ProcessBlockError(
+                chainstate::BlockError::StateUpdateFailed(
+                    ConnectTransactionError::AttemptToFillOrderWithZero(order_id)
+                )
+            )
+        );
+
+        // FIXME: test for a fork
+
+        // // Check that order has not changed except nonce
+        // assert_eq!(
+        //     Some(AccountNonce::new(0)),
+        //     tf.chainstate
+        //         .get_account_nonce_count(common::chain::AccountType::Order(order_id))
+        //         .unwrap()
+        // );
+        // assert_eq!(
+        //     Some(order_data),
+        //     tf.chainstate.get_order_data(&order_id).unwrap()
+        // );
+        // assert_eq!(
+        //     Some(ask_amount),
+        //     tf.chainstate.get_order_ask_balance(&order_id).unwrap()
+        // );
+        // assert_eq!(
+        //     Some(give_amount),
+        //     tf.chainstate.get_order_give_balance(&order_id).unwrap()
+        // );
+    });
+}
