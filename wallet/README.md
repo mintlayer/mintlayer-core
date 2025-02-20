@@ -18,7 +18,7 @@ All the data of the wallet is stored in what is called a "wallet file". The wall
 
 The node, by default, simplifies RPC security by creating what is called a "cookie file". A cookie file is a file that is created in the data directory of the node. In order to prevent any users of the computer from accessing the node with no proper permissions, the cookie file is created with randomly generated passwords on every run of the node. The wallet can automatically detect the cookie file and attempt to use it to reach the node. This way, the experience for the users, especially novice users, is seamless and is also secure, where unauthorized access to another account in the machine does not entail a breach in the node.
 
-In case a different mode of authentication is desired, the user can check the available security options by running the node with the `--help` command line argument. Using simple username and password is possible. It is also designed to be timing resistent, hence, brute-forcing the password will only work if the password is short. We recommend using very long and randomized passwords for good security.
+In case a different mode of authentication is desired, the user can check the available security options by running the node with the `--help` command line argument. Using simple username and password is possible. It is also designed to be timing resistant, hence, brute-forcing the password will only work if the password is short. We recommend using very long and randomized passwords for good security.
 
 ### Port accessibility of RPC servers in the node (and wallet)
 
