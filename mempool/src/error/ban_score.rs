@@ -144,6 +144,7 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::AttemptToCreateOrderFromAccounts => 100,
             ConnectTransactionError::TotalFeeRequiredOverflow => 100,
             ConnectTransactionError::InsufficientCoinsFee(_, _) => 100,
+            ConnectTransactionError::AttemptToFillOrderWithZero(_) => 100,
 
             // Need to drill down deeper into the error in these cases
             ConnectTransactionError::IOPolicyError(err, _) => err.ban_score(),
