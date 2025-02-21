@@ -356,12 +356,22 @@ fn fill_order_partially_and_flush(#[case] seed: Seed) {
 
     let _ = cache.fill_order(order_id, Amount::from_atoms(1)).unwrap();
 
+    assert_eq!(
+        Some(&order_data),
+        cache.get_order_data(&order_id).unwrap().as_ref()
+    );
+    assert_eq!(Amount::ZERO, cache.get_ask_balance(&order_id).unwrap());
+    assert_eq!(
+        Amount::from_atoms(1),
+        cache.get_give_balance(&order_id).unwrap()
+    );
+
     db.batch_write_orders_data(cache.consume()).unwrap();
 
     let expected_storage = InMemoryOrdersAccounting::from_values(
         BTreeMap::from_iter([(order_id, order_data)]),
         BTreeMap::new(),
-        BTreeMap::new(),
+        BTreeMap::from_iter([(order_id, Amount::from_atoms(1))]),
     );
     assert_eq!(expected_storage, storage);
 }
@@ -400,7 +410,10 @@ fn fill_order_partially_and_undo(#[case] seed: Seed) {
         cache.get_order_data(&order_id).unwrap().as_ref()
     );
     assert_eq!(Amount::ZERO, cache.get_ask_balance(&order_id).unwrap());
-    assert_eq!(Amount::ZERO, cache.get_give_balance(&order_id).unwrap());
+    assert_eq!(
+        Amount::from_atoms(1),
+        cache.get_give_balance(&order_id).unwrap()
+    );
 
     cache.undo(undo3).unwrap();
 
@@ -504,8 +517,10 @@ fn fill_order_partially_and_conclude(#[case] seed: Seed) {
 fn fill_order_must_converge(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
-    let ask_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
-    let give_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
+    let ask_atoms = rng.gen_range(1u128..1_000_000_000);
+    let give_atoms = rng.gen_range(1u128..1_000_000_000);
+    let ask_amount = Amount::from_atoms(ask_atoms);
+    let give_amount = Amount::from_atoms(give_atoms);
     let fill_orders = test_utils::split_value(&mut rng, ask_amount.into_atoms());
 
     let ask = OutputValue::Coin(ask_amount);
@@ -521,16 +536,27 @@ fn fill_order_must_converge(#[case] seed: Seed) {
     let mut db = OrdersAccountingDB::new(&mut storage);
     let mut cache = OrdersAccountingCache::new(&db);
 
+    let mut remainder = 0f64;
+
     for fill in fill_orders {
         let _ = cache.fill_order(order_id, Amount::from_atoms(fill)).unwrap();
+
+        remainder += ((give_atoms * fill) as f64 / ask_atoms as f64) % 1.0;
     }
 
     db.batch_write_orders_data(cache.consume()).unwrap();
 
+    let tolerance: f64 = 1e-8;
+    let give_dust_balance = if remainder.abs() < tolerance {
+        BTreeMap::new()
+    } else {
+        BTreeMap::from_iter([(order_id, Amount::from_atoms(remainder.round() as u128))])
+    };
+
     let expected_storage = InMemoryOrdersAccounting::from_values(
         BTreeMap::from_iter([(order_id, order_data)]),
         BTreeMap::new(),
-        BTreeMap::new(),
+        give_dust_balance,
     );
     assert_eq!(expected_storage, storage);
 }
