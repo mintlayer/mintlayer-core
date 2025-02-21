@@ -20,22 +20,17 @@ use chainstate_test_framework::{
     create_stake_pool_data_with_all_reward_to_staker, empty_witness, TestFramework, TestStore,
     TransactionBuilder,
 };
-use common::chain::{
-    config::create_unit_test_config, AccountCommand, AccountNonce, AccountSpending,
-    RewardDistributionVersion,
-};
 use common::{
     chain::{
-        config::ChainType,
+        config::{create_unit_test_config, ChainType},
         output_value::OutputValue,
         timelock::OutputTimeLock,
         tokens::{
             make_token_id, IsTokenFreezable, TokenIssuance, TokenIssuanceV0, TokenIssuanceV1,
             TokenTotalSupply,
         },
-        ChainConfig, ChainstateUpgrade, ChangeTokenMetadataUriActivated, DataDepositFeeVersion,
-        Destination, FrozenTokensValidationVersion, HtlcActivated, NetUpgrades, OrdersActivated,
-        TokenIssuanceVersion, TokensFeeVersion, TxInput, TxOutput, UtxoOutPoint,
+        AccountCommand, AccountNonce, AccountSpending, ChainConfig, Destination, NetUpgrades,
+        TokenIssuanceVersion, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, Fee, Idable},
 };
@@ -43,6 +38,8 @@ use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
 use randomness::CryptoRng;
 use test_utils::random_ascii_alphanumeric_string;
 use tx_verifier::transaction_verifier::{TransactionSourceForConnect, TransactionVerifier};
+
+use crate::tests::helpers::chainstate_upgrade_builder::ChainstateUpgradeBuilder;
 
 fn setup(rng: &mut (impl Rng + CryptoRng)) -> (ChainConfig, InMemoryStorageWrapper, TestFramework) {
     let storage = TestStore::new_empty().unwrap();
@@ -573,16 +570,9 @@ fn issue_fungible_token_v0(#[case] seed: Seed) {
                     .chainstate_upgrades(
                         common::chain::NetUpgrades::initialize(vec![(
                             BlockHeight::zero(),
-                            ChainstateUpgrade::new(
-                                TokenIssuanceVersion::V0,
-                                RewardDistributionVersion::V1,
-                                TokensFeeVersion::V1,
-                                DataDepositFeeVersion::V1,
-                                ChangeTokenMetadataUriActivated::Yes,
-                                FrozenTokensValidationVersion::V1,
-                                HtlcActivated::Yes,
-                                OrdersActivated::Yes,
-                            ),
+                            ChainstateUpgradeBuilder::latest()
+                                .token_issuance_version(TokenIssuanceVersion::V0)
+                                .build(),
                         )])
                         .unwrap(),
                     )

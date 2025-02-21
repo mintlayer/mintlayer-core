@@ -38,10 +38,8 @@ use common::{
         signed_transaction::SignedTransaction,
         timelock::OutputTimeLock,
         tokens::{make_token_id, TokenData, TokenIssuance, TokenTransfer},
-        AccountCommand, AccountNonce, ChainConfig, ChainstateUpgrade,
-        ChangeTokenMetadataUriActivated, DataDepositFeeVersion, Destination,
-        FrozenTokensValidationVersion, HtlcActivated, OrdersActivated, RewardDistributionVersion,
-        TokenIssuanceVersion, TokensFeeVersion, TxInput, TxOutput,
+        AccountCommand, AccountNonce, ChainConfig, Destination, HtlcActivated,
+        TokenIssuanceVersion, TxInput, TxOutput,
     },
     primitives::{Amount, Idable},
 };
@@ -53,6 +51,8 @@ use tx_verifier::{
     error::{InputCheckError, TranslationError},
     input_check::HashlockError,
 };
+
+use crate::tests::helpers::chainstate_upgrade_builder::ChainstateUpgradeBuilder;
 
 struct TestFixture {
     alice_sk: PrivateKey,
@@ -580,29 +580,15 @@ fn fork_activation(#[case] seed: Seed) {
                         common::chain::NetUpgrades::initialize(vec![
                             (
                                 BlockHeight::zero(),
-                                ChainstateUpgrade::new(
-                                    TokenIssuanceVersion::V0,
-                                    RewardDistributionVersion::V1,
-                                    TokensFeeVersion::V1,
-                                    DataDepositFeeVersion::V1,
-                                    ChangeTokenMetadataUriActivated::Yes,
-                                    FrozenTokensValidationVersion::V1,
-                                    HtlcActivated::No,
-                                    OrdersActivated::No,
-                                ),
+                                ChainstateUpgradeBuilder::latest()
+                                    .htlc_activated(HtlcActivated::No)
+                                    .build(),
                             ),
                             (
                                 BlockHeight::new(2),
-                                ChainstateUpgrade::new(
-                                    TokenIssuanceVersion::V0,
-                                    RewardDistributionVersion::V1,
-                                    TokensFeeVersion::V1,
-                                    DataDepositFeeVersion::V1,
-                                    ChangeTokenMetadataUriActivated::Yes,
-                                    FrozenTokensValidationVersion::V1,
-                                    HtlcActivated::Yes,
-                                    OrdersActivated::No,
-                                ),
+                                ChainstateUpgradeBuilder::latest()
+                                    .htlc_activated(HtlcActivated::Yes)
+                                    .build(),
                             ),
                         ])
                         .unwrap(),
@@ -685,29 +671,15 @@ fn spend_tokens(#[case] seed: Seed) {
                         common::chain::NetUpgrades::initialize(vec![
                             (
                                 BlockHeight::zero(),
-                                ChainstateUpgrade::new(
-                                    TokenIssuanceVersion::V0,
-                                    RewardDistributionVersion::V1,
-                                    TokensFeeVersion::V1,
-                                    DataDepositFeeVersion::V1,
-                                    ChangeTokenMetadataUriActivated::Yes,
-                                    FrozenTokensValidationVersion::V1,
-                                    HtlcActivated::Yes,
-                                    OrdersActivated::Yes,
-                                ),
+                                ChainstateUpgradeBuilder::latest()
+                                    .token_issuance_version(TokenIssuanceVersion::V0)
+                                    .build(),
                             ),
                             (
                                 BlockHeight::new(2),
-                                ChainstateUpgrade::new(
-                                    TokenIssuanceVersion::V1,
-                                    RewardDistributionVersion::V1,
-                                    TokensFeeVersion::V1,
-                                    DataDepositFeeVersion::V1,
-                                    ChangeTokenMetadataUriActivated::Yes,
-                                    FrozenTokensValidationVersion::V1,
-                                    HtlcActivated::Yes,
-                                    OrdersActivated::Yes,
-                                ),
+                                ChainstateUpgradeBuilder::latest()
+                                    .token_issuance_version(TokenIssuanceVersion::V1)
+                                    .build(),
                             ),
                         ])
                         .unwrap(),
