@@ -15,7 +15,7 @@
 
 use accounting::combine_amount_delta;
 use common::{
-    chain::{output_value::OutputValue, OrderData, OrderId},
+    chain::{OrderData, OrderId},
     primitives::Amount,
 };
 use logging::log;
@@ -32,13 +32,6 @@ use crate::{
     view::OrdersAccountingView,
     FlushableOrdersAccountingView, OrdersAccountingDeltaUndoData,
 };
-
-fn output_value_amount(value: &OutputValue) -> Result<Amount> {
-    match value {
-        OutputValue::Coin(amount) | OutputValue::TokenV1(_, amount) => Ok(*amount),
-        OutputValue::TokenV0(_) => Err(Error::UnsupportedTokenVersion),
-    }
-}
 
 pub struct OrdersAccountingCache<P> {
     parent: P,
@@ -153,8 +146,8 @@ impl<P: OrdersAccountingView> OrdersAccountingOperations for OrdersAccountingCac
             Error::OrderAlreadyExists(id)
         );
 
-        let ask_amount = output_value_amount(data.ask())?;
-        let give_amount = output_value_amount(data.give())?;
+        let ask_amount = crate::output_value_amount(data.ask())?;
+        let give_amount = crate::output_value_amount(data.give())?;
 
         ensure!(
             ask_amount > Amount::ZERO && give_amount > Amount::ZERO,

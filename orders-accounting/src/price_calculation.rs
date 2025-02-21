@@ -18,11 +18,30 @@ use utils::ensure;
 
 use crate::{error::Result, Error, OrdersAccountingView};
 
+// FIXME: fork
 pub fn calculate_fill_order(
     view: &impl OrdersAccountingView,
     order_id: OrderId,
     fill_amount_in_ask_currency: Amount,
 ) -> Result<Amount> {
+    let is_fork_activated = true;
+    if !is_fork_activated {
+        calculate_fill_order_based_on_remaining_balances(
+            view,
+            order_id,
+            fill_amount_in_ask_currency,
+        )
+    } else {
+        calculate_fill_order_based_on_original_price(view, order_id, fill_amount_in_ask_currency)
+    }
+}
+
+fn calculate_fill_order_based_on_remaining_balances(
+    view: &impl OrdersAccountingView,
+    order_id: OrderId,
+    fill_amount_in_ask_currency: Amount,
+) -> Result<Amount> {
+    // Take remaining balances to calculate price
     let ask_balance = view.get_ask_balance(&order_id).map_err(|_| crate::Error::ViewFail)?;
     let give_balance = view.get_give_balance(&order_id).map_err(|_| crate::Error::ViewFail)?;
 
@@ -32,6 +51,32 @@ pub fn calculate_fill_order(
     );
 
     calculate_filled_amount(ask_balance, give_balance, fill_amount_in_ask_currency)
+        .ok_or(Error::OrderOverflow(order_id))
+}
+
+fn calculate_fill_order_based_on_original_price(
+    view: &impl OrdersAccountingView,
+    order_id: OrderId,
+    fill_amount_in_ask_currency: Amount,
+) -> Result<Amount> {
+    // Take original balances to calculate price
+    let order_data = view
+        .get_order_data(&order_id)
+        .map_err(|_| crate::Error::ViewFail)?
+        .ok_or(crate::Error::OrderDataNotFound(order_id))?;
+
+    let original_ask = crate::output_value_amount(order_data.ask())?;
+    let original_give = crate::output_value_amount(order_data.give())?;
+
+    // Check overbid anyway
+    let current_ask_balance =
+        view.get_ask_balance(&order_id).map_err(|_| crate::Error::ViewFail)?;
+    ensure!(
+        current_ask_balance >= fill_amount_in_ask_currency,
+        Error::OrderOverbid(order_id, current_ask_balance, fill_amount_in_ask_currency)
+    );
+
+    calculate_filled_amount(original_ask, original_give, fill_amount_in_ask_currency)
         .ok_or(Error::OrderOverflow(order_id))
 }
 
@@ -164,20 +209,48 @@ mod tests {
         #[case] result: u128,
     ) {
         let order_id = OrderId::zero();
-        let orders_store = InMemoryOrdersAccounting::from_values(
-            BTreeMap::from_iter([(
-                order_id,
-                OrderData::new(Destination::AnyoneCanSpend, ask.clone(), give.clone()),
-            )]),
-            BTreeMap::from_iter([(order_id, output_value_amount(&ask))]),
-            BTreeMap::from_iter([(order_id, output_value_amount(&give))]),
-        );
-        let orders_db = OrdersAccountingDB::new(&orders_store);
 
-        assert_eq!(
-            calculate_fill_order(&orders_db, order_id, fill),
-            Ok(Amount::from_atoms(result))
-        );
+        {
+            // V0
+            // Original balances are irrelevant for price
+            let orders_store = InMemoryOrdersAccounting::from_values(
+                BTreeMap::from_iter([(
+                    order_id,
+                    OrderData::new(
+                        Destination::AnyoneCanSpend,
+                        OutputValue::Coin(Amount::ZERO),
+                        OutputValue::Coin(Amount::ZERO),
+                    ),
+                )]),
+                BTreeMap::from_iter([(order_id, output_value_amount(&ask))]),
+                BTreeMap::from_iter([(order_id, output_value_amount(&give))]),
+            );
+            let orders_db = OrdersAccountingDB::new(&orders_store);
+
+            assert_eq!(
+                calculate_fill_order_based_on_remaining_balances(&orders_db, order_id, fill),
+                Ok(Amount::from_atoms(result))
+            );
+        }
+
+        {
+            // V1
+            // Current balances are irrelevant for price
+            let orders_store = InMemoryOrdersAccounting::from_values(
+                BTreeMap::from_iter([(
+                    order_id,
+                    OrderData::new(Destination::AnyoneCanSpend, ask.clone(), give.clone()),
+                )]),
+                BTreeMap::from_iter([(order_id, fill)]),
+                BTreeMap::from_iter([(order_id, Amount::ZERO)]),
+            );
+            let orders_db = OrdersAccountingDB::new(&orders_store);
+
+            assert_eq!(
+                calculate_fill_order_based_on_original_price(&orders_db, order_id, fill),
+                Ok(Amount::from_atoms(result))
+            );
+        }
     }
 
     #[rstest]
@@ -202,6 +275,14 @@ mod tests {
         );
         let orders_db = OrdersAccountingDB::new(&orders_store);
 
-        assert_eq!(calculate_fill_order(&orders_db, order_id, fill), Err(error));
+        assert_eq!(
+            calculate_fill_order_based_on_remaining_balances(&orders_db, order_id, fill),
+            Err(error.clone())
+        );
+
+        assert_eq!(
+            calculate_fill_order_based_on_original_price(&orders_db, order_id, fill),
+            Err(error)
+        );
     }
 }
