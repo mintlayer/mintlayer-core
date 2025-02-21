@@ -30,8 +30,9 @@ use crate::{
         pow::PoWChainConfigBuilder,
         ChainstateUpgrade, ChangeTokenMetadataUriActivated, CoinUnit, ConsensusUpgrade,
         DataDepositFeeVersion, Destination, FrozenTokensValidationVersion, GenBlock, Genesis,
-        HtlcActivated, NetUpgrades, OrdersActivated, PoSChainConfig, PoSConsensusVersion,
-        PoWChainConfig, RewardDistributionVersion, TokenIssuanceVersion, TokensFeeVersion,
+        HtlcActivated, NetUpgrades, OrdersActivated, OrdersVersion, PoSChainConfig,
+        PoSConsensusVersion, PoWChainConfig, RewardDistributionVersion, TokenIssuanceVersion,
+        TokensFeeVersion,
     },
     primitives::{
         id::WithId, per_thousand::PerThousand, semver::SemVer, Amount, BlockCount, BlockDistance,
@@ -55,8 +56,11 @@ const TESTNET_STAKER_REWARD_AND_TOKENS_FEE_FORK_HEIGHT: BlockHeight = BlockHeigh
 const TESTNET_HTLC_AND_DATA_DEPOSIT_FEE_FORK_HEIGHT: BlockHeight = BlockHeight::new(297_550);
 // The fork, at which order outputs become valid
 const TESTNET_ORDERS_FORK_HEIGHT: BlockHeight = BlockHeight::new(325_180);
+const TESTNET_ORDERS_V1_FORK_HEIGHT: BlockHeight = BlockHeight::new(999_999_999);
+
 // The fork, at which txs with htlc and orders outputs become valid
 const MAINNET_HTLC_AND_ORDERS_FORK_HEIGHT: BlockHeight = BlockHeight::new(254_740);
+const MAINNET_ORDERS_V1_FORK_HEIGHT: BlockHeight = BlockHeight::new(999_999_999);
 
 impl ChainType {
     fn default_genesis_init(&self) -> GenesisBlockInit {
@@ -175,6 +179,7 @@ impl ChainType {
                             FrozenTokensValidationVersion::V0,
                             HtlcActivated::No,
                             OrdersActivated::No,
+                            OrdersVersion::V0,
                         ),
                     ),
                     (
@@ -188,6 +193,21 @@ impl ChainType {
                             FrozenTokensValidationVersion::V1,
                             HtlcActivated::Yes,
                             OrdersActivated::Yes,
+                            OrdersVersion::V0,
+                        ),
+                    ),
+                    (
+                        MAINNET_ORDERS_V1_FORK_HEIGHT,
+                        ChainstateUpgrade::new(
+                            TokenIssuanceVersion::V1,
+                            RewardDistributionVersion::V1,
+                            TokensFeeVersion::V1,
+                            DataDepositFeeVersion::V1,
+                            ChangeTokenMetadataUriActivated::Yes,
+                            FrozenTokensValidationVersion::V1,
+                            HtlcActivated::Yes,
+                            OrdersActivated::Yes,
+                            OrdersVersion::V1,
                         ),
                     ),
                 ];
@@ -205,6 +225,7 @@ impl ChainType {
                         FrozenTokensValidationVersion::V1,
                         HtlcActivated::Yes,
                         OrdersActivated::Yes,
+                        OrdersVersion::V1,
                     ),
                 )];
                 NetUpgrades::initialize(upgrades).expect("net upgrades")
@@ -222,6 +243,7 @@ impl ChainType {
                             FrozenTokensValidationVersion::V0,
                             HtlcActivated::No,
                             OrdersActivated::No,
+                            OrdersVersion::V0,
                         ),
                     ),
                     (
@@ -235,6 +257,7 @@ impl ChainType {
                             FrozenTokensValidationVersion::V0,
                             HtlcActivated::No,
                             OrdersActivated::No,
+                            OrdersVersion::V0,
                         ),
                     ),
                     (
@@ -248,6 +271,7 @@ impl ChainType {
                             FrozenTokensValidationVersion::V0,
                             HtlcActivated::No,
                             OrdersActivated::No,
+                            OrdersVersion::V0,
                         ),
                     ),
                     (
@@ -261,6 +285,7 @@ impl ChainType {
                             FrozenTokensValidationVersion::V0,
                             HtlcActivated::Yes,
                             OrdersActivated::No,
+                            OrdersVersion::V0,
                         ),
                     ),
                     (
@@ -274,6 +299,21 @@ impl ChainType {
                             FrozenTokensValidationVersion::V1,
                             HtlcActivated::Yes,
                             OrdersActivated::Yes,
+                            OrdersVersion::V0,
+                        ),
+                    ),
+                    (
+                        TESTNET_ORDERS_V1_FORK_HEIGHT,
+                        ChainstateUpgrade::new(
+                            TokenIssuanceVersion::V1,
+                            RewardDistributionVersion::V1,
+                            TokensFeeVersion::V1,
+                            DataDepositFeeVersion::V1,
+                            ChangeTokenMetadataUriActivated::Yes,
+                            FrozenTokensValidationVersion::V1,
+                            HtlcActivated::Yes,
+                            OrdersActivated::Yes,
+                            OrdersVersion::V1,
                         ),
                     ),
                 ];
