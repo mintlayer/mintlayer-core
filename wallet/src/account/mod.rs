@@ -1122,6 +1122,7 @@ impl Account {
             self.get_new_address(db_tx, KeyPurpose::ReceiveFunds)?.1.into_object()
         };
 
+        // FIXME: use initial balance
         let filled_amount = orders_accounting::calculate_filled_amount(
             order_info.ask_balance,
             order_info.give_balance,
@@ -2500,6 +2501,7 @@ fn group_preselected_inputs(
                         .and_then(|info| info.get(order_id))
                         .ok_or(WalletError::OrderInfoMissing(*order_id))?;
 
+                    // FIXME: use initial balance
                     let filled_amount = orders_accounting::calculate_filled_amount(
                         order_info.ask_balance,
                         order_info.give_balance,

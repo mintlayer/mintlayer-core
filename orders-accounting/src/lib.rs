@@ -34,5 +34,14 @@ pub use {
     view::{FlushableOrdersAccountingView, OrdersAccountingView},
 };
 
+use common::{chain::output_value::OutputValue, primitives::Amount};
+
+fn output_value_amount(value: &OutputValue) -> error::Result<Amount> {
+    match value {
+        OutputValue::Coin(amount) | OutputValue::TokenV1(_, amount) => Ok(*amount),
+        OutputValue::TokenV0(_) => Err(Error::UnsupportedTokenVersion),
+    }
+}
+
 #[cfg(test)]
 mod tests;
