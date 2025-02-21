@@ -15,8 +15,8 @@
 
 use common::chain::{
     ChainstateUpgrade, ChangeTokenMetadataUriActivated, DataDepositFeeVersion,
-    FrozenTokensValidationVersion, HtlcActivated, OrdersActivated, RewardDistributionVersion,
-    TokenIssuanceVersion, TokensFeeVersion,
+    FrozenTokensValidationVersion, HtlcActivated, OrdersActivated, OrdersVersion,
+    RewardDistributionVersion, TokenIssuanceVersion, TokensFeeVersion,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
@@ -29,6 +29,7 @@ pub struct ChainstateUpgradeBuilder {
     frozen_tokens_validation_version: FrozenTokensValidationVersion,
     htlc_activated: HtlcActivated,
     orders_activated: OrdersActivated,
+    orders_version: OrdersVersion,
 }
 
 macro_rules! builder_method {
@@ -53,6 +54,7 @@ impl ChainstateUpgradeBuilder {
             frozen_tokens_validation_version: FrozenTokensValidationVersion::V1,
             htlc_activated: HtlcActivated::Yes,
             orders_activated: OrdersActivated::Yes,
+            orders_version: OrdersVersion::V1,
         }
     }
 
@@ -66,6 +68,7 @@ impl ChainstateUpgradeBuilder {
             self.frozen_tokens_validation_version,
             self.htlc_activated,
             self.orders_activated,
+            self.orders_version,
         )
     }
 
@@ -73,4 +76,5 @@ impl ChainstateUpgradeBuilder {
     builder_method!(change_token_metadata_uri_activated: ChangeTokenMetadataUriActivated);
     builder_method!(htlc_activated: HtlcActivated);
     builder_method!(orders_activated: OrdersActivated);
+    builder_method!(orders_version: OrdersVersion);
 }
