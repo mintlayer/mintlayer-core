@@ -15,6 +15,8 @@
 
 use std::collections::BTreeMap;
 
+use crate::tests::helpers::chainstate_upgrade_builder::ChainstateUpgradeBuilder;
+
 use super::*;
 use chainstate_storage::{BlockchainStorageRead, Transactional};
 use chainstate_test_framework::{
@@ -24,10 +26,8 @@ use common::{
     chain::{
         output_value::OutputValue,
         tokens::{make_token_id, NftIssuance, TokenAuxiliaryData, TokenIssuanceV0},
-        ChainstateUpgrade, ChangeTokenMetadataUriActivated, DataDepositFeeVersion, Destination,
-        FrozenTokensValidationVersion, HtlcActivated, NetUpgrades, OrdersActivated,
-        OutPointSourceId, RewardDistributionVersion, TokenIssuanceVersion, TokensFeeVersion,
-        Transaction, TxInput, TxOutput, UtxoOutPoint,
+        Destination, OutPointSourceId, TokenIssuanceVersion, Transaction, TxInput, TxOutput,
+        UtxoOutPoint,
     },
     primitives::{Amount, Id, Idable},
 };
@@ -116,16 +116,9 @@ fn store_fungible_token_v0(#[case] seed: Seed) {
                     .chainstate_upgrades(
                         common::chain::NetUpgrades::initialize(vec![(
                             BlockHeight::zero(),
-                            ChainstateUpgrade::new(
-                                TokenIssuanceVersion::V0,
-                                RewardDistributionVersion::V1,
-                                TokensFeeVersion::V1,
-                                DataDepositFeeVersion::V1,
-                                ChangeTokenMetadataUriActivated::Yes,
-                                FrozenTokensValidationVersion::V1,
-                                HtlcActivated::Yes,
-                                OrdersActivated::Yes,
-                            ),
+                            ChainstateUpgradeBuilder::latest()
+                                .token_issuance_version(TokenIssuanceVersion::V0)
+                                .build(),
                         )])
                         .unwrap(),
                     )
@@ -199,16 +192,9 @@ fn store_nft_v0(#[case] seed: Seed) {
                     .chainstate_upgrades(
                         common::chain::NetUpgrades::initialize(vec![(
                             BlockHeight::zero(),
-                            ChainstateUpgrade::new(
-                                TokenIssuanceVersion::V0,
-                                RewardDistributionVersion::V1,
-                                TokensFeeVersion::V1,
-                                DataDepositFeeVersion::V1,
-                                ChangeTokenMetadataUriActivated::Yes,
-                                FrozenTokensValidationVersion::V1,
-                                HtlcActivated::Yes,
-                                OrdersActivated::Yes,
-                            ),
+                            ChainstateUpgradeBuilder::latest()
+                                .token_issuance_version(TokenIssuanceVersion::V0)
+                                .build(),
                         )])
                         .unwrap(),
                     )
@@ -507,29 +493,7 @@ fn reorg_store_coin_disposable(#[case] seed: Seed) {
 fn store_aux_data_from_issue_nft(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::builder(&mut rng)
-            .with_chain_config(
-                common::chain::config::Builder::test_chain()
-                    .chainstate_upgrades(
-                        NetUpgrades::initialize(vec![(
-                            BlockHeight::zero(),
-                            ChainstateUpgrade::new(
-                                TokenIssuanceVersion::V1,
-                                RewardDistributionVersion::V1,
-                                TokensFeeVersion::V1,
-                                DataDepositFeeVersion::V1,
-                                ChangeTokenMetadataUriActivated::Yes,
-                                FrozenTokensValidationVersion::V1,
-                                HtlcActivated::Yes,
-                                OrdersActivated::Yes,
-                            ),
-                        )])
-                        .unwrap(),
-                    )
-                    .genesis_unittest(Destination::AnyoneCanSpend)
-                    .build(),
-            )
-            .build();
+        let mut tf = TestFramework::builder(&mut rng).build();
 
         let token_id =
             make_token_id(&[TxInput::from_utxo(tf.genesis().get_id().into(), 0)]).unwrap();
