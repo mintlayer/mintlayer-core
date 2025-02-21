@@ -29,8 +29,8 @@ use common::{
             make_token_id, IsTokenFreezable, TokenId, TokenIssuance, TokenIssuanceV1,
             TokenTotalSupply,
         },
-        AccountCommand, AccountNonce, ChainstateUpgrade, Destination, OrderData, SignedTransaction,
-        TxInput, TxOutput, UtxoOutPoint,
+        AccountCommand, AccountNonce, Destination, OrderData, SignedTransaction, TxInput, TxOutput,
+        UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Idable},
 };
@@ -45,7 +45,10 @@ use test_utils::{
 };
 use tx_verifier::error::{InputCheckError, ScriptError};
 
-use crate::tests::helpers::{issue_token_from_block, mint_tokens_in_block};
+use crate::tests::helpers::{
+    chainstate_upgrade_builder::ChainstateUpgradeBuilder, issue_token_from_block,
+    mint_tokens_in_block,
+};
 
 fn issue_and_mint_token_from_genesis(
     rng: &mut (impl Rng + CryptoRng),
@@ -1514,29 +1517,15 @@ fn test_activation(#[case] seed: Seed) {
                         common::chain::NetUpgrades::initialize(vec![
                             (
                                 BlockHeight::zero(),
-                                ChainstateUpgrade::new(
-                                    common::chain::TokenIssuanceVersion::V1,
-                                    common::chain::RewardDistributionVersion::V1,
-                                    common::chain::TokensFeeVersion::V1,
-                                    common::chain::DataDepositFeeVersion::V1,
-                                    common::chain::ChangeTokenMetadataUriActivated::Yes,
-                                    common::chain::FrozenTokensValidationVersion::V1,
-                                    common::chain::HtlcActivated::No,
-                                    common::chain::OrdersActivated::No,
-                                ),
+                                ChainstateUpgradeBuilder::latest()
+                                    .orders_activated(common::chain::OrdersActivated::No)
+                                    .build(),
                             ),
                             (
                                 BlockHeight::new(4),
-                                ChainstateUpgrade::new(
-                                    common::chain::TokenIssuanceVersion::V1,
-                                    common::chain::RewardDistributionVersion::V1,
-                                    common::chain::TokensFeeVersion::V1,
-                                    common::chain::DataDepositFeeVersion::V1,
-                                    common::chain::ChangeTokenMetadataUriActivated::Yes,
-                                    common::chain::FrozenTokensValidationVersion::V1,
-                                    common::chain::HtlcActivated::No,
-                                    common::chain::OrdersActivated::Yes,
-                                ),
+                                ChainstateUpgradeBuilder::latest()
+                                    .orders_activated(common::chain::OrdersActivated::Yes)
+                                    .build(),
                             ),
                         ])
                         .unwrap(),
