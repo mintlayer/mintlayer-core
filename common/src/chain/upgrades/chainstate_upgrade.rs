@@ -69,6 +69,14 @@ pub enum FrozenTokensValidationVersion {
     V1,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
+pub enum OrdersVersion {
+    /// Initial orders implementation
+    V0,
+    // FIXME: document changes
+    V1,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub struct ChainstateUpgrade {
     token_issuance_version: TokenIssuanceVersion,
@@ -79,6 +87,7 @@ pub struct ChainstateUpgrade {
     frozen_tokens_validation_version: FrozenTokensValidationVersion,
     htlc_activated: HtlcActivated,
     orders_activated: OrdersActivated,
+    orders_version: OrdersVersion,
 }
 
 impl ChainstateUpgrade {
@@ -92,6 +101,7 @@ impl ChainstateUpgrade {
         frozen_tokens_validation_version: FrozenTokensValidationVersion,
         htlc_activated: HtlcActivated,
         orders_activated: OrdersActivated,
+        orders_version: OrdersVersion,
     ) -> Self {
         Self {
             token_issuance_version,
@@ -102,6 +112,7 @@ impl ChainstateUpgrade {
             frozen_tokens_validation_version,
             htlc_activated,
             orders_activated,
+            orders_version,
         }
     }
 
@@ -135,6 +146,10 @@ impl ChainstateUpgrade {
 
     pub fn frozen_tokens_validation_version(&self) -> FrozenTokensValidationVersion {
         self.frozen_tokens_validation_version
+    }
+
+    pub fn orders_version(&self) -> OrdersVersion {
+        self.orders_version
     }
 }
 
