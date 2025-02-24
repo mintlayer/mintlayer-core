@@ -15,7 +15,7 @@
 
 use accounting::DataDeltaUndo;
 use common::{
-    chain::{OrderData, OrderId},
+    chain::{OrderData, OrderId, OrdersVersion},
     primitives::Amount,
 };
 use serialization::{Decode, Encode};
@@ -61,6 +61,7 @@ pub trait OrdersAccountingOperations {
         &mut self,
         id: OrderId,
         fill_amount_in_ask_currency: Amount,
+        orders_version: OrdersVersion,
     ) -> Result<OrdersAccountingUndo>;
 
     fn undo(&mut self, undo_data: OrdersAccountingUndo) -> Result<()>;

@@ -123,8 +123,6 @@ pub enum ConnectTransactionError {
     OrdersAccountingError(#[from] orders_accounting::Error),
     #[error(transparent)]
     InputCheck(#[from] InputCheckError),
-    #[error("Cannot fill order with Zero amount {0}")]
-    AttemptToFillOrderWithZero(OrderId),
 }
 
 impl From<std::convert::Infallible> for ConnectTransactionError {

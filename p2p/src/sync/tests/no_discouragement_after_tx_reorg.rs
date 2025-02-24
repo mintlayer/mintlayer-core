@@ -831,8 +831,13 @@ impl TestFixture {
         let filled_amount = {
             let db_tx = self.tfrm.storage.transaction_ro().unwrap();
             let orders_db = OrdersAccountingDB::new(&db_tx);
-            orders_accounting::calculate_fill_order(&orders_db, order_id, coin_amount_to_fill)
-                .unwrap()
+            orders_accounting::calculate_fill_order(
+                &orders_db,
+                order_id,
+                coin_amount_to_fill,
+                common::chain::OrdersVersion::V1,
+            )
+            .unwrap()
         };
 
         TransactionBuilder::new()

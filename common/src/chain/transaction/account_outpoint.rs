@@ -118,10 +118,12 @@ pub enum AccountCommand {
     ChangeTokenAuthority(TokenId, Destination),
     // Close an order and withdraw all remaining funds from both give and ask balances.
     // Only the address specified as `conclude_key` can authorize this command.
+    // FIXME: add original balances here so that they are included into the signature
     #[codec(index = 6)]
     ConcludeOrder(OrderId),
     // Satisfy an order completely or partially.
     // Second parameter is an amount provided to fill an order which corresponds to order's ask currency.
+    // FIXME: for fill order inputs there should be createorder utxo in the signature
     #[codec(index = 7)]
     FillOrder(OrderId, Amount, Destination),
     // Change token metadata uri

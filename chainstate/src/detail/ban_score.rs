@@ -143,7 +143,6 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::InputCheck(e) => e.ban_score(),
             ConnectTransactionError::OrdersAccountingError(err) => err.ban_score(),
             ConnectTransactionError::AttemptToCreateOrderFromAccounts => 100,
-            ConnectTransactionError::AttemptToFillOrderWithZero(_) => 100,
         }
     }
 }
@@ -365,6 +364,7 @@ impl BanScore for CheckTransactionError {
             CheckTransactionError::DeprecatedTokenOperationVersion(_, _) => 100,
             CheckTransactionError::HtlcsAreNotActivated => 100,
             CheckTransactionError::OrdersAreNotActivated(_) => 100,
+            CheckTransactionError::AttemptToFillOrderWithZero(_, _) => 100,
             CheckTransactionError::OrdersCurrenciesMustBeDifferent(_) => 100,
             CheckTransactionError::ChangeTokenMetadataUriNotActivated => 100,
         }
@@ -677,6 +677,7 @@ impl BanScore for orders_accounting::Error {
             Error::InvariantOrderGiveBalanceExistForConcludeUndo(_) => 100,
             Error::OrderOverflow(_) => 100,
             Error::OrderOverbid(_, _, _) => 100,
+            Error::OrderUnderbid(_, _) => 100,
             Error::AttemptedConcludeNonexistingOrderData(_) => 100,
             Error::InvariantNonzeroAskBalanceForMissingOrder(_) => 100,
             Error::InvariantNonzeroGiveBalanceForMissingOrder(_) => 100,
