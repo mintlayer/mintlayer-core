@@ -840,20 +840,19 @@ where
                         Some(res)
                     }
                     AccountCommand::FillOrder(order_id, fill, _) => {
-                        // FIXME: add fork
-                        if *fill == Amount::ZERO {
-                            // Forbidding fills with zero ensures that tx has utxo and therefor is unique.
-                            // Unique txs cannot be replayed.
-                            return Some(Err(ConnectTransactionError::AttemptToFillOrderWithZero(
-                                *order_id,
-                            )));
-                        }
+                        let orders_version = self
+                            .chain_config
+                            .as_ref()
+                            .chainstate_upgrades()
+                            .version_at_height(tx_source.expected_block_height())
+                            .1
+                            .orders_version();
 
                         let res = self
                             .spend_input_from_account(*nonce, account_op.clone().into())
                             .and_then(|_| {
                                 self.orders_accounting_cache
-                                    .fill_order(*order_id, *fill)
+                                    .fill_order(*order_id, *fill, orders_version)
                                     .map_err(ConnectTransactionError::OrdersAccountingError)
                             });
                         Some(res)

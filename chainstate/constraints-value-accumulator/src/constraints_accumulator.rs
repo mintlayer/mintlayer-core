@@ -332,16 +332,25 @@ impl ConstrainedValueAccumulator {
                     .get_order_data(id)
                     .map_err(|_| orders_accounting::Error::ViewFail)?
                     .ok_or(orders_accounting::Error::OrderDataNotFound(*id))?;
+                let orders_version = chain_config
+                    .chainstate_upgrades()
+                    .version_at_height(block_height)
+                    .1
+                    .orders_version();
                 let filled_amount = orders_accounting::calculate_fill_order(
                     &orders_accounting_delta,
                     *id,
                     *fill_amount_in_ask_currency,
+                    orders_version,
                 )?;
 
                 {
                     // Ensure that spending won't result in negative balance
-                    let _ =
-                        orders_accounting_delta.fill_order(*id, *fill_amount_in_ask_currency)?;
+                    let _ = orders_accounting_delta.fill_order(
+                        *id,
+                        *fill_amount_in_ask_currency,
+                        orders_version,
+                    )?;
                     let _ = orders_accounting_delta.get_ask_balance(id)?;
                     let _ = orders_accounting_delta.get_give_balance(id)?;
                 }
