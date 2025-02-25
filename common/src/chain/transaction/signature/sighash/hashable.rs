@@ -205,7 +205,7 @@ mod tests {
             assert!(hashable_inputs
                 .signature_hash(
                     &mut stream,
-                    SigHashType::try_from(SigHashType::ALL).unwrap(),
+                    SigHashType::all(),
                     &inputs[index_to_hash],
                     index_to_hash,
                 )
@@ -215,7 +215,7 @@ mod tests {
             assert_eq!(
                 hashable_inputs.signature_hash(
                     &mut stream,
-                    SigHashType::try_from(SigHashType::ALL).unwrap(),
+                    SigHashType::all(),
                     &inputs[index_to_hash],
                     inputs_count,
                 ),

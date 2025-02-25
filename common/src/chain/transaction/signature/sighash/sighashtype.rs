@@ -32,6 +32,10 @@ impl SigHashType {
     const MASK_OUT: u8 = 0x7f;
     const MASK_IN: u8 = 0x80;
 
+    pub fn all() -> Self {
+        Self(Self::ALL)
+    }
+
     pub fn inputs_mode(&self) -> InputsMode {
         match self.0 & Self::MASK_IN {
             Self::ANYONECANPAY => InputsMode::AnyoneCanPay,

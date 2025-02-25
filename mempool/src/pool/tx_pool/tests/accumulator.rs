@@ -544,7 +544,7 @@ async fn timelocked_htlc_refund(
         let mut authorization = AuthorizedClassicalMultisigSpend::new_empty(refund_challenge);
 
         let sighash = signature_hash(
-            SigHashType::try_from(SigHashType::ALL).unwrap(),
+            SigHashType::all(),
             &tx,
             &[Some(&tx0.transaction().outputs()[0])],
             0,
@@ -563,7 +563,7 @@ async fn timelocked_htlc_refund(
     let input_sign = produce_classical_multisig_signature_for_htlc_input(
         &chain_config,
         &authorization,
-        SigHashType::try_from(SigHashType::ALL).unwrap(),
+        SigHashType::all(),
         &tx,
         &[Some(&tx0.transaction().outputs()[0])],
         0,

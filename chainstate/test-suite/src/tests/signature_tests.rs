@@ -124,7 +124,7 @@ fn signed_tx(#[case] seed: Seed) {
                 SignedTransaction::new(
                     tx.clone(),
                     vec![InputWitness::Standard(StandardInputSignature::new(
-                        SigHashType::try_from(SigHashType::ALL).unwrap(),
+                        SigHashType::all(),
                         gen_random_bytes(&mut rng, 100, 200),
                     ))],
                 )
@@ -154,7 +154,7 @@ fn signed_tx(#[case] seed: Seed) {
             let tx_2 = {
                 let input_sign = StandardInputSignature::produce_uniparty_signature_for_input(
                     &private_key,
-                    SigHashType::try_from(SigHashType::ALL).unwrap(),
+                    SigHashType::all(),
                     Destination::PublicKey(public_key),
                     &tx,
                     &[Some(&tx_1.transaction().outputs()[0])],
@@ -242,7 +242,7 @@ fn signed_classical_multisig_tx(#[case] seed: Seed) {
             let mut authorization = AuthorizedClassicalMultisigSpend::new_empty(challenge);
 
             let sighash = signature_hash(
-                SigHashType::try_from(SigHashType::ALL).unwrap(),
+                SigHashType::all(),
                 &tx,
                 &[Some(&tx_1.transaction().outputs()[0])],
                 0,
@@ -291,7 +291,7 @@ fn signed_classical_multisig_tx(#[case] seed: Seed) {
                 SignedTransaction::new(
                     tx.clone(),
                     vec![InputWitness::Standard(StandardInputSignature::new(
-                        SigHashType::try_from(SigHashType::ALL).unwrap(),
+                        SigHashType::all(),
                         gen_random_bytes(&mut rng, 100, 200),
                     ))],
                 )
@@ -322,7 +322,7 @@ fn signed_classical_multisig_tx(#[case] seed: Seed) {
                     StandardInputSignature::produce_classical_multisig_signature_for_input(
                         &chain_config,
                         &authorization,
-                        SigHashType::try_from(SigHashType::ALL).unwrap(),
+                        SigHashType::all(),
                         &tx,
                         &[Some(&tx_1.transaction().outputs()[0])],
                         0,
@@ -411,7 +411,7 @@ fn signed_classical_multisig_tx_missing_sigs(#[case] seed: Seed) {
         let mut authrorizations = vec![authorization.clone()];
 
         let sighash = signature_hash(
-            SigHashType::try_from(SigHashType::ALL).unwrap(),
+            SigHashType::all(),
             &tx,
             &[Some(&tx_1.transaction().outputs()[0])],
             0,
@@ -433,7 +433,7 @@ fn signed_classical_multisig_tx_missing_sigs(#[case] seed: Seed) {
                     StandardInputSignature::produce_classical_multisig_signature_for_input(
                         &chain_config,
                         &authorization,
-                        SigHashType::try_from(SigHashType::ALL).unwrap(),
+                        SigHashType::all(),
                         &tx,
                         &[Some(&tx_1.transaction().outputs()[0])],
                         0,

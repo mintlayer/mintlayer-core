@@ -161,7 +161,7 @@ async fn ok_tokens(#[case] seed: Seed) {
                 let token_witness = InputWitness::Standard(
                     StandardInputSignature::produce_uniparty_signature_for_input(
                         &alice_sk,
-                        SigHashType::try_from(SigHashType::ALL).unwrap(),
+                        SigHashType::all(),
                         alice_destination.clone(),
                         &mint_transaction,
                         &[Some(&issue_token_transaction.outputs()[0]), None],

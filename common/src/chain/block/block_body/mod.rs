@@ -104,10 +104,7 @@ mod tests {
                 let witness_size = rng.next_u32();
                 let witness_size = 1 + witness_size % 1000;
                 let witness = generate_random_bytes(rng, witness_size as usize);
-                InputWitness::Standard(StandardInputSignature::new(
-                    SigHashType::try_from(SigHashType::ALL).unwrap(),
-                    witness,
-                ))
+                InputWitness::Standard(StandardInputSignature::new(SigHashType::all(), witness))
             })
             .collect::<Vec<_>>()
     }

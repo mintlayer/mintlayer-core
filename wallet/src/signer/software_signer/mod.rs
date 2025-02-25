@@ -111,8 +111,7 @@ impl<'a, T: WalletStorageReadUnlocked> SoftwareSigner<'a, T> {
                 let sig = self
                     .get_private_key_for_destination(destination, key_chain)?
                     .map(|private_key| {
-                        let sighash_type =
-                            SigHashType::try_from(SigHashType::ALL).expect("Should not fail");
+                        let sighash_type = SigHashType::all();
                         match htlc_secret {
                             Some(htlc_secret) => produce_uniparty_signature_for_htlc_input(
                                 &private_key,
@@ -183,7 +182,7 @@ impl<'a, T: WalletStorageReadUnlocked> SoftwareSigner<'a, T> {
         SignatureStatus,
         SignatureStatus,
     )> {
-        let sighash_type = SigHashType::try_from(SigHashType::ALL).expect("Should not fail");
+        let sighash_type = SigHashType::all();
 
         let challenge = current_signatures.challenge().clone();
         let sighash = signature_hash(sighash_type, tx, input_utxos, input_index)?;
