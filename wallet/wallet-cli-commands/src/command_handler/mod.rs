@@ -61,16 +61,19 @@ pub struct CommandHandler<W> {
     config: ControllerConfig,
 
     wallet: WalletWithState<W>,
+
+    no_qr: bool,
 }
 
 impl<W, E> CommandHandler<W>
 where
     W: WalletInterface<Error = E> + Send + Sync + 'static,
 {
-    pub async fn new(config: ControllerConfig, wallet: W) -> Self {
+    pub async fn new(config: ControllerConfig, wallet: W, no_qr: Option<bool>) -> Self {
         CommandHandler {
             config,
             wallet: WalletWithState::new(wallet).await,
+            no_qr: no_qr.unwrap_or(false),
         }
     }
 
@@ -537,19 +540,29 @@ where
                         let summary = signed_tx.transaction().text_summary(chain_config);
                         let result_hex: HexEncoded<SignedTransaction> = signed_tx.into();
 
-                        let qr_code_string = qrcode_or_error_string(&result_hex.to_string());
+                        let qr_code_string = (!self.no_qr)
+                            .then(|| {
+                                let qr_code = qrcode_or_error_string(&result_hex.to_string());
+                                format!("\n\nOr scan the Qr code with it:\n\n{qr_code}")
+                            })
+                            .unwrap_or_default();
 
                         format!(
                             "The transaction has been fully signed and is ready to be broadcast to network. \
                              You can use the command `node-submit-transaction` in a wallet connected to the internet (this one or elsewhere). \
-                             Pass the following data to the wallet to broadcast:\n\n{result_hex}\n\n\
-                             Or scan the Qr code with it:\n\n{qr_code_string}\n\n{summary}")
+                             Pass the following data to the wallet to broadcast:\n\n{result_hex}\
+                             {qr_code_string}\n\n{summary}")
                     }
                     PartialOrSignedTx::Partial(partially_signed_tx) => {
                         let result_hex: HexEncoded<PartiallySignedTransaction> =
                             partially_signed_tx.into();
 
-                        let qr_code_string = qrcode_or_error_string(&result_hex.to_string());
+                        let qr_code_string = (!self.no_qr)
+                            .then(|| {
+                                let qr_code = qrcode_or_error_string(&result_hex.to_string());
+                                format!("\n\nOr scan the Qr code with it:\n\n{qr_code}")
+                            })
+                            .unwrap_or_default();
 
                         let prev_sigs = result
                             .previous_signatures
@@ -568,8 +581,8 @@ where
                             "Not all transaction inputs have been signed. This wallet does not have all the keys for that.\n\
                              The signatures states before signing were:\n{prev_sigs}\n\
                              and the current signature states are:\n{current_sigs}\n\
-                             Pass the following string into the wallet that has appropriate keys for the inputs to sign what is left:\n\n{result_hex}\n\n\
-                             Or scan the Qr code with it:\n\n{qr_code_string}"
+                             Pass the following string into the wallet that has appropriate keys for the inputs to sign what is left:\n\n{result_hex}\
+                             {qr_code_string}"
                         )
                     }
                 };
@@ -585,12 +598,15 @@ where
                 let result =
                     wallet.sign_challenge_hex(selected_account, challenge, address).await?;
 
-                let qr_code_string = qrcode_or_error_string(&result);
+                let qr_code_string = (!self.no_qr)
+                    .then(|| {
+                        let qr_code = qrcode_or_error_string(&result);
+                        format!("\n\nThe following qr code also contains the signature for easy transport:\n{qr_code}")
+                    })
+                    .unwrap_or_default();
 
                 Ok(ConsoleCommand::Print(format!(
-                    "The generated hex encoded signature is\n\n{result}
-                    \n\n\
-                    The following qr code also contains the signature for easy transport:\n{qr_code_string}",
+                    "The generated hex encoded signature is\n\n{result}{qr_code_string}",
                 )))
             }
 
@@ -601,12 +617,15 @@ where
                 let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
                 let result = wallet.sign_challenge(selected_account, challenge, address).await?;
 
-                let qr_code_string = qrcode_or_error_string(&result);
+                let qr_code_string = (!self.no_qr)
+                    .then(|| {
+                        let qr_code = qrcode_or_error_string(&result);
+                        format!("\n\nThe following qr code also contains the signature for easy transport:\n{qr_code}")
+                    })
+                    .unwrap_or_default();
 
                 Ok(ConsoleCommand::Print(format!(
-                    "The generated hex encoded signature is\n\n{result}
-                    \n\n\
-                    The following qr code also contains the signature for easy transport:\n{qr_code_string}",
+                    "The generated hex encoded signature is\n\n{result}{qr_code_string}",
                 )))
             }
 
@@ -1314,12 +1333,17 @@ where
 
                 let summary = tx.tx().text_summary(chain_config);
 
-                let qr_code_string = qrcode_or_error_string(&hex);
+                let qr_code_string = (!self.no_qr)
+                    .then(|| {
+                        let qr_code = qrcode_or_error_string(&hex);
+                        format!("\n\nOr scan the Qr code with it:\n\n{qr_code}")
+                    })
+                    .unwrap_or_default();
 
                 let mut output_str = format!(
                     "Send transaction created. \
-                    Pass the following string into the cold wallet with private key to sign:\n\n{hex}\n\n\
-                    Or scan the Qr code with it:\n\n{qr_code_string}\n\n{summary}\n"
+                    Pass the following string into the cold wallet with private key to sign:\n\n{hex}\
+                    {qr_code_string}\n\n{summary}\n"
                 );
                 format_fees(&mut output_str, &fees);
 
@@ -1597,12 +1621,17 @@ where
                     )
                     .await?;
 
-                let qr_code_string = qrcode_or_error_string(&result_hex.to_string());
+                let qr_code_string = (!self.no_qr)
+                    .then(|| {
+                        let qr_code = qrcode_or_error_string(&result_hex.to_string());
+                        format!("\n\nOr scan the Qr code with it:\n\n{qr_code}")
+                    })
+                    .unwrap_or_default();
 
                 let output_str = format!(
                     "Decommission transaction created. \
-                    Pass the following string into the wallet with private key to sign:\n\n{result_hex}\n\n\
-                    Or scan the Qr code with it:\n\n{qr_code_string}"
+                    Pass the following string into the wallet with private key to sign:\n\n{result_hex}\
+                    {qr_code_string}"
                 );
                 Ok(ConsoleCommand::Print(output_str))
             }
