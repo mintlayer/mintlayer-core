@@ -92,7 +92,7 @@ async fn create_fill_conclude_order(#[case] seed: Seed) {
                 let tx3 = TransactionBuilder::new()
                     .add_input(
                         TxInput::AccountCommand(
-                            AccountNonce::new(1),
+                            AccountNonce::new(0),
                             AccountCommand::ConcludeOrder(order_id),
                         ),
                         InputWitness::NoSignature(None),

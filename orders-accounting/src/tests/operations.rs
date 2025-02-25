@@ -599,6 +599,49 @@ fn fill_order_must_converge(#[case] seed: Seed, #[case] version: OrdersVersion) 
 
 #[rstest]
 #[trace]
+#[case(Seed::from_entropy(), vec![214, 487, 21, 354, 13, 139, 213, 1319, 112, 461])]
+fn fill_order_commutativity(#[case] seed: Seed, #[case] fills: Vec<u128>) {
+    use randomness::SliceRandom;
+
+    let mut rng = make_seedable_rng(seed);
+
+    let ask_atoms = 3333;
+    let give_atoms = 1_000_000_000;
+    let ask_amount = Amount::from_atoms(ask_atoms);
+    let give_amount = Amount::from_atoms(give_atoms);
+    let mut fill_orders = fills.clone();
+    fill_orders.shuffle(&mut rng);
+    assert_eq!(ask_amount.into_atoms(), fill_orders.iter().sum());
+
+    let ask = OutputValue::Coin(ask_amount);
+    let give = OutputValue::Coin(give_amount);
+
+    let order_id = OrderId::random_using(&mut rng);
+    let order_data = OrderData::new(Destination::AnyoneCanSpend, ask.clone(), give.clone());
+    let mut storage = InMemoryOrdersAccounting::from_values(
+        BTreeMap::from_iter([(order_id, order_data.clone())]),
+        BTreeMap::from_iter([(order_id, ask_amount)]),
+        BTreeMap::from_iter([(order_id, give_amount)]),
+    );
+    let mut db = OrdersAccountingDB::new(&mut storage);
+    let mut cache = OrdersAccountingCache::new(&db);
+
+    for fill in fill_orders {
+        let _ = cache.fill_order(order_id, Amount::from_atoms(fill), OrdersVersion::V1).unwrap();
+    }
+
+    db.batch_write_orders_data(cache.consume()).unwrap();
+
+    let expected_storage = InMemoryOrdersAccounting::from_values(
+        BTreeMap::from_iter([(order_id, order_data)]),
+        BTreeMap::new(),
+        BTreeMap::from_iter([(order_id, Amount::from_atoms(4))]),
+    );
+    assert_eq!(expected_storage, storage);
+}
+
+#[rstest]
+#[trace]
 #[case(Seed::from_entropy(), OrdersVersion::V0)]
 #[trace]
 #[case(Seed::from_entropy(), OrdersVersion::V1)]
