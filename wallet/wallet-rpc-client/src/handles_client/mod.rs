@@ -29,8 +29,6 @@ use node_comm::node_traits::NodeInterface;
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
 use rpc::types::RpcHexString;
 use serialization::{hex::HexEncode, hex_encoded::HexEncoded, json_encoded::JsonEncoded};
-#[cfg(feature = "trezor")]
-use utils::ensure;
 use utils_networking::IpOrSocketAddress;
 use wallet::{account::TxInfo, version::get_version};
 use wallet_controller::{
@@ -54,8 +52,7 @@ use wallet_rpc_lib::{
 };
 use wallet_types::{
     partially_signed_transaction::PartiallySignedTransaction, scan_blockchain::ScanBlockchain,
-    seed_phrase::StoreSeedPhrase, signature_status::SignatureStatus, utxo_types::UtxoTypes,
-    with_locked::WithLocked,
+    signature_status::SignatureStatus, utxo_types::UtxoTypes, with_locked::WithLocked,
 };
 
 use crate::wallet_rpc_traits::{
@@ -147,33 +144,12 @@ where
         passphrase: Option<String>,
         hardware_wallet: Option<HardwareWalletType>,
     ) -> Result<CreatedWallet, Self::Error> {
-        let store_seed_phrase = if store_seed_phrase {
-            StoreSeedPhrase::Store
-        } else {
-            StoreSeedPhrase::DoNotStore
-        };
-
-        let args = match hardware_wallet {
-            None => WalletTypeArgs::Software {
-                mnemonic,
-                passphrase,
-                store_seed_phrase,
-            },
-            #[cfg(feature = "trezor")]
-            Some(HardwareWalletType::Trezor) => {
-                ensure!(
-                    mnemonic.is_none()
-                        && passphrase.is_none()
-                        && store_seed_phrase == StoreSeedPhrase::DoNotStore,
-                    RpcError::HardwareWalletWithMnemonicOrPassphrase
-                );
-                WalletTypeArgs::Trezor
-            }
-            #[cfg(not(feature = "trezor"))]
-            Some(_) => {
-                return Err(RpcError::<N>::InvalidHardwareWallet)?;
-            }
-        };
+        let args = HardwareWalletType::into_wallet_args::<N>(
+            hardware_wallet,
+            store_seed_phrase,
+            mnemonic,
+            passphrase,
+        )?;
 
         let options = WalletCreationOptions {
             overwrite_wallet_file: false,

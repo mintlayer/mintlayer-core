@@ -65,11 +65,7 @@ pub async fn fetch_utxo<T: NodeInterface, B: storage::Backend>(
     wallet: &RuntimeWallet<B>,
 ) -> Result<TxOutput, ControllerError<T>> {
     // search locally for the unspent utxo
-    if let Some(out) = match &wallet {
-        RuntimeWallet::Software(w) => w.find_unspent_utxo_with_destination(input),
-        #[cfg(feature = "trezor")]
-        RuntimeWallet::Trezor(w) => w.find_unspent_utxo_with_destination(input),
-    } {
+    if let Some(out) = wallet.find_unspent_utxo_and_destination(input) {
         return Ok(out.0);
     }
 
@@ -83,17 +79,13 @@ pub async fn fetch_utxo<T: NodeInterface, B: storage::Backend>(
         )))
 }
 
-pub async fn fetch_utxo_with_destination<T: NodeInterface, B: storage::Backend>(
+async fn fetch_utxo_and_destination<T: NodeInterface, B: storage::Backend>(
     rpc_client: &T,
     input: &UtxoOutPoint,
     wallet: &RuntimeWallet<B>,
 ) -> Result<(TxOutput, Destination), ControllerError<T>> {
     // search locally for the unspent utxo
-    if let Some(out) = match &wallet {
-        RuntimeWallet::Software(w) => w.find_unspent_utxo_with_destination(input),
-        #[cfg(feature = "trezor")]
-        RuntimeWallet::Trezor(w) => w.find_unspent_utxo_with_destination(input),
-    } {
+    if let Some(out) = wallet.find_unspent_utxo_and_destination(input) {
         return Ok(out);
     }
 
@@ -287,26 +279,18 @@ async fn into_utxo_and_destination<T: NodeInterface, B: storage::Backend>(
 ) -> Result<(Option<TxOutput>, TxAdditionalInfo, Option<Destination>), ControllerError<T>> {
     Ok(match tx_inp {
         TxInput::Utxo(outpoint) => {
-            let (utxo, dest) = fetch_utxo_with_destination(rpc_client, outpoint, wallet).await?;
+            let (utxo, dest) = fetch_utxo_and_destination(rpc_client, outpoint, wallet).await?;
             let (utxo, additional_infos) = fetch_utxo_extra_info(rpc_client, utxo).await?;
             (Some(utxo), additional_infos, Some(dest))
         }
         TxInput::Account(acc_outpoint) => {
             // find delegation destination
-            let dest = match &wallet {
-                RuntimeWallet::Software(w) => w.find_account_destination(acc_outpoint),
-                #[cfg(feature = "trezor")]
-                RuntimeWallet::Trezor(w) => w.find_account_destination(acc_outpoint),
-            };
+            let dest = wallet.find_account_destination(acc_outpoint);
             (None, TxAdditionalInfo::new(), dest)
         }
         TxInput::AccountCommand(_, cmd) => {
             // find authority of the token
-            let dest = match &wallet {
-                RuntimeWallet::Software(w) => w.find_account_command_destination(cmd),
-                #[cfg(feature = "trezor")]
-                RuntimeWallet::Trezor(w) => w.find_account_command_destination(cmd),
-            };
+            let dest = wallet.find_account_command_destination(cmd);
 
             let additional_infos = match cmd {
                 AccountCommand::FillOrder(order_id, _, _)

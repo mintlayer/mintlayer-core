@@ -8895,6 +8895,7 @@ dependencies = [
  "rpc-description",
  "rstest",
  "serde",
+ "serial_test",
  "serialization",
  "storage",
  "tempfile",

@@ -143,7 +143,7 @@ pub struct PartiallySignedTransaction {
     destinations: Vec<Option<Destination>>,
 
     htlc_secrets: Vec<Option<HtlcSecret>>,
-    additional_infos: TxAdditionalInfo,
+    additional_info: TxAdditionalInfo,
 }
 
 impl PartiallySignedTransaction {
@@ -153,7 +153,7 @@ impl PartiallySignedTransaction {
         input_utxos: Vec<Option<TxOutput>>,
         destinations: Vec<Option<Destination>>,
         htlc_secrets: Option<Vec<Option<HtlcSecret>>>,
-        additional_infos: TxAdditionalInfo,
+        additional_info: TxAdditionalInfo,
     ) -> Result<Self, PartiallySignedTransactionCreationError> {
         let htlc_secrets = htlc_secrets.unwrap_or_else(|| vec![None; tx.inputs().len()]);
 
@@ -163,7 +163,7 @@ impl PartiallySignedTransaction {
             input_utxos,
             destinations,
             htlc_secrets,
-            additional_infos,
+            additional_info,
         };
 
         this.ensure_consistency()?;
@@ -253,8 +253,8 @@ impl PartiallySignedTransaction {
         }
     }
 
-    pub fn additional_infos(&self) -> &TxAdditionalInfo {
-        &self.additional_infos
+    pub fn additional_info(&self) -> &TxAdditionalInfo {
+        &self.additional_info
     }
 }
 

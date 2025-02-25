@@ -258,11 +258,16 @@ pub enum WalletError {
     StakerDestinationMustBePublicKey,
     #[error("Cannot change a Trezor wallet type")]
     CannotChangeTrezorWalletType,
-    #[error("The file being loaded does not correspond to the connected hardware wallet")]
+    #[error("The file being loaded is a software wallet and does not correspond to the connected hardware wallet")]
     HardwareWalletDifferentFile,
-    #[error("The file being loaded does not correspond to the connected hardware wallet: File DeviceId {0}, Connected device {1}, labels {2} and {3}")]
-    HardwareWalletDifferentDevice(String, String, String, String),
-    #[error("The file being loaded correspond to the connected hardware wallet, but public keys are different. Maybe a wrong passphrase was inputed?")]
+    #[error("PublicKeys missmatch. Wrong device or passphrase:\nfile DeviceId \"{file_device_id}\", connected device \"{connected_device_id}\",\nfile label \"{file_label}\" and connected device label \"{connected_device_id}\"")]
+    HardwareWalletDifferentMnemonicOrPassphrase {
+        file_device_id: String,
+        connected_device_id: String,
+        file_label: String,
+        connected_device_label: String,
+    },
+    #[error("The file being loaded correspond to the connected hardware wallet, but public keys are different. Maybe a wrong passphrase was entered?")]
     HardwareWalletDifferentPassphrase,
     #[error("Missing additional data for Pool {0}")]
     MissingPoolAdditionalData(PoolId),
@@ -1198,7 +1203,7 @@ where
             .find_map(|acc| acc.find_account_command_destination(cmd).ok())
     }
 
-    pub fn find_unspent_utxo_with_destination(
+    pub fn find_unspent_utxo_and_destination(
         &self,
         outpoint: &UtxoOutPoint,
     ) -> Option<(TxOutput, Destination)> {
@@ -1207,7 +1212,7 @@ where
                 height: acc.best_block().1,
                 timestamp: self.latest_median_time,
             };
-            acc.find_unspent_utxo_with_destination(outpoint, current_block_info).ok()
+            acc.find_unspent_utxo_and_destination(outpoint, current_block_info).ok()
         })
     }
 
@@ -1418,7 +1423,7 @@ where
     ///    current_fee_rate is lower than the consolidate_fee_rate then the wallet will tend to
     ///    use and consolidate multiple smaller inputs, else if the current_fee_rate is higher it will
     ///    tend to use inputs with lowest fee.
-    /// * `additional__info` - Any additional info for Tokens or Pools used in the UTXOs of
+    /// * `additional_info` - Any additional info for Tokens or Pools used in the UTXOs of
     ///    the transaction to be created
     ///
     /// # Returns

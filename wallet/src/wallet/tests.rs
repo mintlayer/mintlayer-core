@@ -37,7 +37,10 @@ use common::{
     primitives::{per_thousand::PerThousand, Idable, H256},
 };
 use crypto::{
-    key::hdkd::{child_number::ChildNumber, derivable::Derivable, derivation_path::DerivationPath},
+    key::{
+        hdkd::{child_number::ChildNumber, derivable::Derivable, derivation_path::DerivationPath},
+        KeyKind,
+    },
     vrf::transcript::no_rng::VRFTranscript,
 };
 use randomness::{CryptoRng, Rng, SliceRandom};
@@ -109,7 +112,7 @@ fn gen_random_password(rng: &mut (impl Rng + CryptoRng)) -> String {
 
 fn gen_random_transfer(rng: &mut (impl Rng + CryptoRng), amount: Amount) -> TxOutput {
     let destination = Destination::PublicKey(
-        crypto::key::PrivateKey::new_from_rng(rng, crypto::key::KeyKind::Secp256k1Schnorr).1,
+        crypto::key::PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr).1,
     );
     match rng.gen::<bool>() {
         true => TxOutput::Transfer(OutputValue::Coin(amount), destination),
@@ -1594,7 +1597,12 @@ fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
 
     let pool_amount = block1_amount;
 
-    let decommission_key = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1;
+    let (stadalone_private_key, stadalone_public_key) =
+        PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+    wallet
+        .add_standalone_private_key(DEFAULT_ACCOUNT_INDEX, stadalone_private_key, None)
+        .unwrap();
+    let decommission_key = Destination::PublicKey(stadalone_public_key);
 
     let stake_pool_transaction = wallet
         .create_stake_pool_tx(
@@ -1605,7 +1613,7 @@ fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
                 amount: pool_amount,
                 margin_ratio_per_thousand: PerThousand::new_from_rng(&mut rng),
                 cost_per_block: Amount::ZERO,
-                decommission_key: decommission_key.as_object().clone(),
+                decommission_key: decommission_key.clone(),
                 staker_key: None,
                 vrf_public_key: None,
             },
@@ -1625,9 +1633,15 @@ fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
 
     let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
     assert_eq!(pool_ids.len(), 1);
+    let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::Stake).unwrap();
+    assert_eq!(pool_ids.len(), 1);
+    let pool_ids = wallet
+        .get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::Decommission)
+        .unwrap();
+    assert_eq!(pool_ids.len(), 1);
 
     let (pool_id, pool_data) = pool_ids.first().unwrap();
-    assert_eq!(&pool_data.decommission_key, decommission_key.as_object());
+    assert_eq!(&pool_data.decommission_key, &decommission_key);
     assert_eq!(
         &pool_data.utxo_outpoint,
         &UtxoOutPoint::new(OutPointSourceId::Transaction(stake_pool_transaction_id), 0)
@@ -1712,6 +1726,12 @@ fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
         2,
     );
     let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
+    assert!(pool_ids.is_empty());
+    let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::Stake).unwrap();
+    assert!(pool_ids.is_empty());
+    let pool_ids = wallet
+        .get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::Decommission)
+        .unwrap();
     assert!(pool_ids.is_empty());
 
     let coin_balance = get_coin_balance(&wallet);
@@ -3948,11 +3968,7 @@ fn wallet_multiple_transactions_in_single_block(#[case] seed: Seed) {
         let new_output = TxOutput::Transfer(
             OutputValue::Coin(amount_to_transfer),
             Destination::PublicKey(
-                crypto::key::PrivateKey::new_from_rng(
-                    &mut rng,
-                    crypto::key::KeyKind::Secp256k1Schnorr,
-                )
-                .1,
+                crypto::key::PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr).1,
             ),
         );
 
@@ -4040,11 +4056,7 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
         let new_output = TxOutput::Transfer(
             OutputValue::Coin(amount_to_transfer),
             Destination::PublicKey(
-                crypto::key::PrivateKey::new_from_rng(
-                    &mut rng,
-                    crypto::key::KeyKind::Secp256k1Schnorr,
-                )
-                .1,
+                crypto::key::PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr).1,
             ),
         );
 
@@ -4080,8 +4092,7 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
     let new_output = TxOutput::Transfer(
         OutputValue::Coin(Amount::from_atoms(amount_to_transfer)),
         Destination::PublicKey(
-            crypto::key::PrivateKey::new_from_rng(&mut rng, crypto::key::KeyKind::Secp256k1Schnorr)
-                .1,
+            crypto::key::PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr).1,
         ),
     );
     let transaction = wallet
@@ -4120,8 +4131,7 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
     let new_output = TxOutput::Transfer(
         OutputValue::Coin(should_fail_to_send),
         Destination::PublicKey(
-            crypto::key::PrivateKey::new_from_rng(&mut rng, crypto::key::KeyKind::Secp256k1Schnorr)
-                .1,
+            crypto::key::PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr).1,
         ),
     );
     let err = wallet
@@ -4146,8 +4156,7 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
     let new_output = TxOutput::Transfer(
         OutputValue::Coin(amount_to_keep),
         Destination::PublicKey(
-            crypto::key::PrivateKey::new_from_rng(&mut rng, crypto::key::KeyKind::Secp256k1Schnorr)
-                .1,
+            crypto::key::PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr).1,
         ),
     );
 
@@ -4228,11 +4237,7 @@ fn wallet_abandone_transactions(#[case] seed: Seed) {
         let new_output = TxOutput::Transfer(
             OutputValue::Coin(amount_to_transfer),
             Destination::PublicKey(
-                crypto::key::PrivateKey::new_from_rng(
-                    &mut rng,
-                    crypto::key::KeyKind::Secp256k1Schnorr,
-                )
-                .1,
+                crypto::key::PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr).1,
             ),
         );
 
@@ -5043,7 +5048,7 @@ fn test_add_standalone_private_key(#[case] seed: Seed) {
     assert_eq!(coin_balance, Amount::ZERO);
     // generate a random private key unrelated to the wallet and add it
     let (private_key, pub_key) =
-        crypto::key::PrivateKey::new_from_rng(&mut rng, crypto::key::KeyKind::Secp256k1Schnorr);
+        crypto::key::PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
 
     wallet
         .add_standalone_private_key(DEFAULT_ACCOUNT_INDEX, private_key, None)

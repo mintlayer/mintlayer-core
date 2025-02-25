@@ -79,10 +79,17 @@ impl Signature {
         Ok(decoded_sig)
     }
 
-    pub fn from_raw_data<T: AsRef<[u8]>>(data: T) -> Result<Self, SignatureError> {
-        let decoded_sig = secp256k1::schnorr::Signature::from_slice(data.as_ref())
-            .map_err(|_| SignatureError::SignatureConstructionError)?;
-        Ok(Self::Secp256k1Schnorr(decoded_sig))
+    pub fn from_raw_data<T: AsRef<[u8]>>(
+        data: T,
+        kind: SignatureKind,
+    ) -> Result<Self, SignatureError> {
+        match kind {
+            SignatureKind::Secp256k1Schnorr => {
+                let decoded_sig = secp256k1::schnorr::Signature::from_slice(data.as_ref())
+                    .map_err(|_| SignatureError::SignatureConstructionError)?;
+                Ok(Self::Secp256k1Schnorr(decoded_sig))
+            }
+        }
     }
 
     pub fn is_aggregable(&self) -> bool {

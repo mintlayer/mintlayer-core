@@ -39,9 +39,6 @@ use utils::{cookie::COOKIE_FILENAME, default_data_dir::default_data_dir_for_chai
 use wallet_cli_commands::{ManageableWalletCommand, WalletCommand, WalletManagementCommand};
 use wallet_rpc_lib::{cmdline::make_wallet_config, config::WalletRpcConfig, types::NodeInterface};
 
-#[cfg(feature = "trezor")]
-use wallet_cli_commands::CliHardwareWalletType;
-
 enum Mode {
     Interactive {
         logger: repl::interactive::log::InteractiveLogger,
@@ -292,12 +289,7 @@ fn setup_events_and_repl<N: NodeInterface + Send + Sync + 'static>(
                         wallet_path,
                         encryption_password: args.wallet_password,
                         force_change_wallet_type: args.force_change_wallet_type,
-                        hardware_wallet: args.hardware_wallet.map(|hw| match hw {
-                            #[cfg(feature = "trezor")]
-                            wallet_rpc_lib::cmdline::CliHardwareWalletType::Trezor => {
-                                CliHardwareWalletType::Trezor
-                            }
-                        }),
+                        hardware_wallet: args.hardware_wallet,
                     },
                 ),
                 res_tx,

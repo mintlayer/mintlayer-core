@@ -22,7 +22,6 @@ use common::{
     address::Address,
     chain::{
         config::ChainType,
-        htlc::HtlcSecret,
         output_value::OutputValue,
         signature::{
             inputsig::{
@@ -51,12 +50,13 @@ use crypto::key::{
     extended::ExtendedPublicKey,
     hdkd::{chain_code::ChainCode, derivable::Derivable, u31::U31},
     secp256k1::{extended_keys::Secp256k1ExtendedPublicKey, Secp256k1PublicKey},
+    signature::SignatureKind,
     Signature, SignatureError,
 };
 use itertools::Itertools;
 use serialization::Encode;
 use trezor_client::{
-    client::mintlayer::MintlayerSignature,
+    client::{mintlayer::MintlayerSignature, TransactionId},
     find_devices,
     protos::{
         features::Capability,
@@ -117,6 +117,12 @@ pub enum TrezorError {
     InvalidKey,
     #[error("Invalid Signature error: {0}")]
     SignatureError(#[from] SignatureError),
+    #[error("Missing multisig index for signature returned from Device")]
+    MissingMultisigIndexForSignature,
+    #[error("Multiple signatures returned for a single address from Device")]
+    MultipleSignaturesReturned,
+    #[error("A multisig signature was returned for a single address from Device")]
+    MultisigSignatureReturned,
 }
 
 pub struct TrezorSigner {
@@ -132,44 +138,34 @@ impl TrezorSigner {
         }
     }
 
-    fn make_signature(
+    fn make_signature<F>(
         &self,
-        signature: &[MintlayerSignature],
+        signatures: &[MintlayerSignature],
         destination: &Destination,
         sighash_type: SigHashType,
         sighash: H256,
-        secret: Option<HtlcSecret>,
         key_chain: &impl AccountKeyChains,
-    ) -> SignerResult<(Option<InputWitness>, SignatureStatus)> {
-        let add_secret_if_needed = |sig: StandardInputSignature| {
-            let sig = if let Some(htlc_secret) = secret {
-                let sig_with_secret = AuthorizedHashedTimelockContractSpend::Secret(
-                    htlc_secret,
-                    sig.raw_signature().to_owned(),
-                );
-                let serialized_sig = sig_with_secret.encode();
-
-                StandardInputSignature::new(sig.sighash_type(), serialized_sig)
-            } else {
-                sig
-            };
-
-            InputWitness::Standard(sig)
-        };
-
+        add_secret_if_needed: F,
+    ) -> SignerResult<(Option<InputWitness>, SignatureStatus)>
+    where
+        F: Fn(StandardInputSignature) -> InputWitness,
+    {
         match destination {
             Destination::AnyoneCanSpend => Ok((
                 Some(InputWitness::NoSignature(None)),
                 SignatureStatus::FullySigned,
             )),
             Destination::PublicKeyHash(_) => {
-                if let Some(signature) = signature.first() {
+                if let Some(signature) = single_signature(signatures)? {
                     let pk = key_chain
                         .find_public_key(destination)
                         .ok_or(SignerError::DestinationNotFromThisWallet)?
                         .into_public_key();
-                    let sig = Signature::from_raw_data(&signature.signature)
-                        .map_err(TrezorError::SignatureError)?;
+                    let sig = Signature::from_raw_data(
+                        &signature.signature,
+                        SignatureKind::Secp256k1Schnorr,
+                    )
+                    .map_err(TrezorError::SignatureError)?;
                     let sig = AuthorizedPublicKeyHashSpend::new(pk, sig);
                     let sig = add_secret_if_needed(StandardInputSignature::new(
                         sighash_type,
@@ -182,9 +178,12 @@ impl TrezorSigner {
                 }
             }
             Destination::PublicKey(_) => {
-                if let Some(signature) = signature.first() {
-                    let sig = Signature::from_raw_data(&signature.signature)
-                        .map_err(TrezorError::SignatureError)?;
+                if let Some(signature) = single_signature(signatures)? {
+                    let sig = Signature::from_raw_data(
+                        &signature.signature,
+                        SignatureKind::Secp256k1Schnorr,
+                    )
+                    .map_err(TrezorError::SignatureError)?;
                     let sig = AuthorizedPublicKeySpend::new(sig);
                     let sig = add_secret_if_needed(StandardInputSignature::new(
                         sighash_type,
@@ -198,41 +197,11 @@ impl TrezorSigner {
             }
             Destination::ClassicMultisig(_) => {
                 if let Some(challenge) = key_chain.find_multisig_challenge(destination) {
-                    let mut current_signatures =
-                        AuthorizedClassicalMultisigSpend::new_empty(challenge.clone());
-
-                    for sig in signature {
-                        if let Some(idx) = sig.multisig_idx {
-                            let sig = Signature::from_raw_data(&sig.signature)
-                                .map_err(TrezorError::SignatureError)?;
-                            current_signatures.add_signature(idx as u8, sig);
-                        }
-                    }
-
-                    let msg = sighash.encode();
-                    // Check the signatures status again after adding that last signature
-                    let verifier = PartiallySignedMultisigChallenge::from_partial(
-                        &self.chain_config,
-                        &msg,
-                        &current_signatures,
+                    let (current_signatures, status) = self.update_and_check_multisig(
+                        signatures,
+                        AuthorizedClassicalMultisigSpend::new_empty(challenge.clone()),
+                        sighash,
                     )?;
-
-                    let status = match verifier.verify_signatures(&self.chain_config)? {
-                        multisig_partial_signature::SigsVerifyResult::CompleteAndValid => {
-                            SignatureStatus::FullySigned
-                        }
-                        multisig_partial_signature::SigsVerifyResult::Incomplete => {
-                            SignatureStatus::PartialMultisig {
-                                required_signatures: challenge.min_required_signatures(),
-                                num_signatures: current_signatures.signatures().len() as u8,
-                            }
-                        }
-                        multisig_partial_signature::SigsVerifyResult::Invalid => {
-                            unreachable!(
-                                "We checked the signatures then added a signature, so this should be unreachable"
-                            )
-                        }
-                    };
 
                     let sig = add_secret_if_needed(StandardInputSignature::new(
                         sighash_type,
@@ -255,9 +224,56 @@ impl TrezorSigner {
             .tx()
             .outputs()
             .iter()
-            .map(|out| to_trezor_output_msg(&self.chain_config, out, ptx.additional_infos()))
+            .map(|out| to_trezor_output_msg(&self.chain_config, out, ptx.additional_info()))
             .collect();
         outputs
+    }
+
+    fn check_signature_status(
+        &self,
+        sighash: H256,
+        current_signatures: &AuthorizedClassicalMultisigSpend,
+    ) -> Result<SignatureStatus, SignerError> {
+        let msg = sighash.encode();
+        let verifier = PartiallySignedMultisigChallenge::from_partial(
+            &self.chain_config,
+            &msg,
+            current_signatures,
+        )?;
+        let status = match verifier.verify_signatures(&self.chain_config)? {
+            multisig_partial_signature::SigsVerifyResult::CompleteAndValid => {
+                SignatureStatus::FullySigned
+            }
+            multisig_partial_signature::SigsVerifyResult::Incomplete => {
+                let challenge = current_signatures.challenge();
+                SignatureStatus::PartialMultisig {
+                    required_signatures: challenge.min_required_signatures(),
+                    num_signatures: current_signatures.signatures().len() as u8,
+                }
+            }
+            multisig_partial_signature::SigsVerifyResult::Invalid => {
+                SignatureStatus::InvalidSignature
+            }
+        };
+        Ok(status)
+    }
+
+    fn update_and_check_multisig(
+        &self,
+        signature: &[MintlayerSignature],
+        mut current_signatures: AuthorizedClassicalMultisigSpend,
+        sighash: H256,
+    ) -> SignerResult<(AuthorizedClassicalMultisigSpend, SignatureStatus)> {
+        for sig in signature {
+            let idx = sig.multisig_idx.ok_or(TrezorError::MissingMultisigIndexForSignature)?;
+            let sig = Signature::from_raw_data(&sig.signature, SignatureKind::Secp256k1Schnorr)
+                .map_err(TrezorError::SignatureError)?;
+            current_signatures.add_signature(idx as u8, sig);
+        }
+
+        let status = self.check_signature_status(sighash, &current_signatures)?;
+
+        Ok((current_signatures, status))
     }
 }
 
@@ -292,130 +308,121 @@ impl Signer for TrezorSigner {
             .enumerate()
             .zip(ptx.destinations())
             .zip(ptx.htlc_secrets())
-            .map(|(((i, witness), destination), secret)| match witness {
-                Some(w) => match w {
-                    InputWitness::NoSignature(_) => Ok((
-                        Some(w.clone()),
-                        SignatureStatus::FullySigned,
-                        SignatureStatus::FullySigned,
-                    )),
-                    InputWitness::Standard(sig) => match destination {
-                        Some(destination) => {
-                            if tx_verifier::input_check::signature_only_check::verify_tx_signature(
-                                &self.chain_config,
-                                destination,
-                                &ptx,
-                                &inputs_utxo_refs,
-                                i,
-                            ).is_ok()
-                            {
-                                Ok((
-                                    Some(w.clone()),
-                                    SignatureStatus::FullySigned,
-                                    SignatureStatus::FullySigned,
-                                ))
-                            } else if let Destination::ClassicMultisig(_) = destination {
-                                let sighash =
-                                    signature_hash(sig.sighash_type(), ptx.tx(), &inputs_utxo_refs, i)?;
+            .map(|(((i, witness), destination), secret)| {
+                let add_secret_if_needed = |sig: StandardInputSignature| {
+                    let sig = if let Some(htlc_secret) = secret {
+                        let sighash_type = sig.sighash_type();
+                        let sig_with_secret = AuthorizedHashedTimelockContractSpend::Secret(
+                            htlc_secret.clone(),
+                            sig.into_raw_signature(),
+                        );
+                        let serialized_sig = sig_with_secret.encode();
 
-                                let mut current_signatures = AuthorizedClassicalMultisigSpend::from_data(
-                                    sig.raw_signature(),
-                                )?;
+                        StandardInputSignature::new(sighash_type, serialized_sig)
+                    } else {
+                        sig
+                    };
 
-                                let previous_status = SignatureStatus::PartialMultisig {
-                                    required_signatures: current_signatures.challenge().min_required_signatures(),
-                                    num_signatures: current_signatures.signatures().len() as u8,
-                                };
+                    InputWitness::Standard(sig)
+                };
 
-                                if let Some(signature) = new_signatures.get(i) {
-                                for sig in signature {
-                                    if let Some(idx) = sig.multisig_idx {
-                                        let sig = Signature::from_raw_data(&sig.signature)
-                                            .map_err(TrezorError::SignatureError)?;
-                                        current_signatures.add_signature(idx as u8, sig);
-                                    }
-                                }
-
-                                let msg = sighash.encode();
-                                // Check the signatures status again after adding that last signature
-                                let verifier = PartiallySignedMultisigChallenge::from_partial(
-                                    &self.chain_config,
-                                    &msg,
-                                    &current_signatures,
-                                )?;
-
-                                let status = match verifier.verify_signatures(&self.chain_config)? {
-                                    multisig_partial_signature::SigsVerifyResult::CompleteAndValid => {
-                                        SignatureStatus::FullySigned
-                                    }
-                                    multisig_partial_signature::SigsVerifyResult::Incomplete => {
-                                        let challenge = current_signatures.challenge();
-                                        SignatureStatus::PartialMultisig {
-                                            required_signatures: challenge.min_required_signatures(),
-                                            num_signatures: current_signatures.signatures().len() as u8,
-                                        }
-                                    }
-                                    multisig_partial_signature::SigsVerifyResult::Invalid => {
-                                        unreachable!(
-                                            "We checked the signatures then added a signature, so this should be unreachable"
-                                        )
-                                    }
-                                };
-
-                                let sighash_type =
-                                    SigHashType::try_from(SigHashType::ALL).expect("Should not fail");
-                                let sig = InputWitness::Standard(StandardInputSignature::new(
-                                    sighash_type,
-                                    current_signatures.encode(),
-                                ));
-                                return Ok((Some(sig),
-                                        previous_status,
-                                        status));
-                                }
-                                else {
-                                Ok((
-                                    None,
-                                    SignatureStatus::InvalidSignature,
-                                    SignatureStatus::NotSigned,
-                                ))
-
-                                }
-
-
-                            } else {
-                                Ok((
-                                    None,
-                                    SignatureStatus::InvalidSignature,
-                                    SignatureStatus::NotSigned,
-                                ))
-                            }
-                        }
-                        None => Ok((
+                match witness {
+                    Some(w) => match w {
+                        InputWitness::NoSignature(_) => Ok((
                             Some(w.clone()),
-                            SignatureStatus::UnknownSignature,
-                            SignatureStatus::UnknownSignature,
+                            SignatureStatus::FullySigned,
+                            SignatureStatus::FullySigned,
                         )),
+                        InputWitness::Standard(sig) => match destination {
+                            Some(destination) => {
+                                if tx_verifier::input_check::signature_only_check::verify_tx_signature(
+                                    &self.chain_config,
+                                    destination,
+                                    &ptx,
+                                    &inputs_utxo_refs,
+                                    i,
+                                )
+                                .is_ok()
+                                {
+                                    Ok((
+                                        Some(w.clone()),
+                                        SignatureStatus::FullySigned,
+                                        SignatureStatus::FullySigned,
+                                    ))
+                                } else if let Destination::ClassicMultisig(_) = destination {
+                                    let sighash = signature_hash(
+                                        sig.sighash_type(),
+                                        ptx.tx(),
+                                        &inputs_utxo_refs,
+                                        i,
+                                    )?;
+
+                                    let current_signatures =
+                                        AuthorizedClassicalMultisigSpend::from_data(
+                                            sig.raw_signature(),
+                                        )?;
+
+                                    let previous_status = SignatureStatus::PartialMultisig {
+                                        required_signatures: current_signatures
+                                            .challenge()
+                                            .min_required_signatures(),
+                                        num_signatures: current_signatures.signatures().len() as u8,
+                                    };
+
+                                    if let Some(signature) = new_signatures.get(i) {
+                                        let (current_signatures, status) = self
+                                            .update_and_check_multisig(
+                                                signature,
+                                                current_signatures,
+                                                sighash,
+                                            )?;
+
+                                        let sighash_type = SigHashType::try_from(SigHashType::ALL)
+                                            .expect("Should not fail");
+                                        let sig = add_secret_if_needed(StandardInputSignature::new(
+                                            sighash_type,
+                                            current_signatures.encode(),
+                                        ));
+
+                                        return Ok((Some(sig), previous_status, status));
+                                    } else {
+                                        Ok((None, previous_status, previous_status))
+                                    }
+                                } else {
+                                    Ok((
+                                        None,
+                                        SignatureStatus::InvalidSignature,
+                                        SignatureStatus::NotSigned,
+                                    ))
+                                }
+                            }
+                            None => Ok((
+                                Some(w.clone()),
+                                SignatureStatus::UnknownSignature,
+                                SignatureStatus::UnknownSignature,
+                            )),
+                        },
                     },
-                },
-                None => match (destination, new_signatures.get(i)) {
-                    (Some(destination), Some(sig)) => {
-                        let sighash_type =
-                            SigHashType::try_from(SigHashType::ALL).expect("Should not fail");
-                        let sighash = signature_hash(sighash_type, ptx.tx(), &inputs_utxo_refs, i)?;
-                        let (sig, status) = self.make_signature(
-                            sig,
-                            destination,
-                            sighash_type,
-                            sighash,
-                            secret.clone(),
-                            key_chain,
-                        )?;
-                        Ok((sig, SignatureStatus::NotSigned, status))
-                    }
-                    (Some(_) | None, None) | (None, Some(_)) => {
-                        Ok((None, SignatureStatus::NotSigned, SignatureStatus::NotSigned))
-                    }
-                },
+                    None => match (destination, new_signatures.get(i)) {
+                        (Some(destination), Some(sig)) => {
+                            let sighash_type =
+                                SigHashType::try_from(SigHashType::ALL).expect("Should not fail");
+                            let sighash = signature_hash(sighash_type, ptx.tx(), &inputs_utxo_refs, i)?;
+                            let (sig, status) = self.make_signature(
+                                sig,
+                                destination,
+                                sighash_type,
+                                sighash,
+                                key_chain,
+                                add_secret_if_needed,
+                            )?;
+                            Ok((sig, SignatureStatus::NotSigned, status))
+                        }
+                        (Some(_) | None, None) | (None, Some(_)) => {
+                            Ok((None, SignatureStatus::NotSigned, SignatureStatus::NotSigned))
+                        }
+                    },
+                }
             })
             .collect::<Result<Vec<_>, SignerError>>()?
             .into_iter()
@@ -468,8 +475,8 @@ impl Signer for TrezorSigner {
                     .expect("poisoned lock")
                     .mintlayer_sign_message(chain_type, address_n, addr_type, message.to_vec())
                     .map_err(|err| TrezorError::DeviceError(err.to_string()))?;
-                let signature =
-                    Signature::from_raw_data(&sig).map_err(TrezorError::SignatureError)?;
+                let signature = Signature::from_raw_data(&sig, SignatureKind::Secp256k1Schnorr)
+                    .map_err(TrezorError::SignatureError)?;
 
                 match &destination {
                     Destination::PublicKey(_) => AuthorizedPublicKeySpend::new(signature).encode(),
@@ -517,14 +524,17 @@ impl Signer for TrezorSigner {
 
         let mut signatures = Vec::with_capacity(input_destinations.len());
         for dest in input_destinations {
-            let sig = self.sign_challenge(message_to_sign.as_bytes(), dest, key_chain, db_tx)?;
+            let dest = SignedTransactionIntent::normalize_destination(dest);
+            let sig = self.sign_challenge(message_to_sign.as_bytes(), &dest, key_chain, db_tx)?;
             signatures.push(sig.into_raw());
         }
 
-        Ok(SignedTransactionIntent::new_unchecked(
+        Ok(SignedTransactionIntent::from_components(
             message_to_sign,
             signatures,
-        ))
+            input_destinations,
+            &self.chain_config,
+        )?)
     }
 }
 
@@ -552,7 +562,7 @@ fn to_trezor_input_msgs(
                     key_chain,
                     nonce,
                     command,
-                    ptx.additional_infos(),
+                    ptx.additional_info(),
                 )
             }
             (_, _, None) => Err(SignerError::MissingDestinationInTransaction),
@@ -702,10 +712,10 @@ fn to_trezor_account_command_input(
 
 /// Construct a new OutputValue with a new amount
 fn value_with_new_amount(
-    initially_value: &OutputValue,
+    initial_value: &OutputValue,
     new_amount: &Amount,
 ) -> Result<OutputValue, SignerError> {
-    match initially_value {
+    match initial_value {
         OutputValue::Coin(_) => Ok(OutputValue::Coin(*new_amount)),
         OutputValue::TokenV1(id, _) => Ok(OutputValue::TokenV1(*id, *new_amount)),
         OutputValue::TokenV0(_) => Err(SignerError::UnsupportedTokensV0),
@@ -830,8 +840,8 @@ fn to_trezor_output_value(
 fn to_trezor_utxo_msgs(
     ptx: &PartiallySignedTransaction,
     chain_config: &ChainConfig,
-) -> SignerResult<BTreeMap<[u8; 32], BTreeMap<u32, MintlayerTxOutput>>> {
-    let mut utxos: BTreeMap<[u8; 32], BTreeMap<u32, MintlayerTxOutput>> = BTreeMap::new();
+) -> SignerResult<BTreeMap<TransactionId, BTreeMap<u32, MintlayerTxOutput>>> {
+    let mut utxos: BTreeMap<TransactionId, BTreeMap<u32, MintlayerTxOutput>> = BTreeMap::new();
 
     for (utxo, inp) in ptx.input_utxos().iter().zip(ptx.tx().inputs()) {
         match inp {
@@ -841,7 +851,7 @@ fn to_trezor_utxo_msgs(
                     OutPointSourceId::Transaction(id) => id.to_hash().0,
                     OutPointSourceId::BlockReward(id) => id.to_hash().0,
                 };
-                let out = to_trezor_output_msg(chain_config, utxo, ptx.additional_infos())?;
+                let out = to_trezor_output_msg(chain_config, utxo, ptx.additional_info())?;
                 utxos.entry(id).or_default().insert(outpoint.output_index(), out);
             }
             TxInput::Account(_) | TxInput::AccountCommand(_, _) => {}
@@ -1185,7 +1195,7 @@ impl TrezorSignerProvider {
             .mintlayer_get_public_key(chain_type, account_path)
             .map_err(|e| SignerError::TrezorError(TrezorError::DeviceError(e.to_string())))?;
         let chain_code = ChainCode::from(xpub.chain_code.0);
-        let account_pubkey = Secp256k1ExtendedPublicKey::new(
+        let account_pubkey = Secp256k1ExtendedPublicKey::new_unchecked(
             derivation_path,
             chain_code,
             Secp256k1PublicKey::from_bytes(&xpub.public_key.serialize())
@@ -1230,17 +1240,17 @@ fn check_public_keys(
     if let Some(data) = db_tx.get_hardware_wallet_data()? {
         match data {
             HardwareWalletData::Trezor(data) => {
-                // If the device_id and label are the same but public keys are different, maybe a
+                // If the device_id is the same but public keys are different, maybe a
                 // different passphrase was used
-                if data == provider.data {
+                if data.device_id == provider.data.device_id {
                     return Err(WalletError::HardwareWalletDifferentPassphrase);
                 } else {
-                    return Err(WalletError::HardwareWalletDifferentDevice(
-                        data.device_id,
-                        provider.data.device_id.clone(),
-                        data.label,
-                        provider.data.label.clone(),
-                    ));
+                    return Err(WalletError::HardwareWalletDifferentMnemonicOrPassphrase {
+                        file_device_id: data.device_id,
+                        connected_device_id: provider.data.device_id.clone(),
+                        file_label: data.label,
+                        connected_device_label: provider.data.label.clone(),
+                    });
                 }
             }
         }
@@ -1325,6 +1335,22 @@ impl SignerProvider for TrezorSignerProvider {
     }
 }
 
-#[cfg(feature = "trezor-emulator")]
+fn single_signature(
+    signatures: &[MintlayerSignature],
+) -> Result<Option<&MintlayerSignature>, TrezorError> {
+    match signatures {
+        [] => Ok(None),
+        [single] => {
+            ensure!(
+                single.multisig_idx.is_none(),
+                TrezorError::MultisigSignatureReturned
+            );
+            Ok(Some(single))
+        }
+        _ => Err(TrezorError::MultipleSignaturesReturned),
+    }
+}
+
+#[cfg(feature = "enable-trezor-device-tests")]
 #[cfg(test)]
 mod tests;

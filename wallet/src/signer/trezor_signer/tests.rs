@@ -36,6 +36,7 @@ use common::primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, H25
 use crypto::key::{KeyKind, PrivateKey};
 use randomness::{Rng, RngCore};
 use rstest::rstest;
+use serial_test::serial;
 use test_utils::random::{make_seedable_rng, Seed};
 use trezor_client::find_devices;
 use wallet_storage::{DefaultBackend, Store, Transactional};
@@ -50,6 +51,7 @@ const MNEMONIC: &str =
 
 #[rstest]
 #[trace]
+#[serial]
 #[case(Seed::from_entropy())]
 fn sign_message(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
@@ -72,24 +74,35 @@ fn sign_message(#[case] seed: Seed) {
         .unwrap();
     let mut account = Account::new(chain_config.clone(), &mut db_tx, key_chain, None).unwrap();
 
-    let destination = account.get_new_address(&mut db_tx, ReceiveFunds).unwrap().1.into_object();
-    let mut devices = find_devices(false);
-    assert!(!devices.is_empty());
-    let client = devices.pop().unwrap().connect().unwrap();
+    let pkh_destination =
+        account.get_new_address(&mut db_tx, ReceiveFunds).unwrap().1.into_object();
+    let pkh = match pkh_destination {
+        Destination::PublicKeyHash(pkh) => pkh,
+        _ => panic!("not a public key hash destination"),
+    };
+    let pk = account.find_corresponding_pub_key(&pkh).unwrap();
+    let pk_destination = Destination::PublicKey(pk);
 
-    let mut signer = TrezorSigner::new(chain_config.clone(), Arc::new(Mutex::new(client)));
-    let message = vec![rng.gen::<u8>(), rng.gen::<u8>(), rng.gen::<u8>()];
-    let res = signer
-        .sign_challenge(&message, &destination, account.key_chain(), &db_tx)
-        .unwrap();
+    for destination in [pkh_destination, pk_destination] {
+        let mut devices = find_devices(false);
+        assert!(!devices.is_empty());
+        let client = devices.pop().unwrap().connect().unwrap();
 
-    let message_challenge = produce_message_challenge(&message);
-    res.verify_signature(&chain_config, &destination, &message_challenge).unwrap();
+        let mut signer = TrezorSigner::new(chain_config.clone(), Arc::new(Mutex::new(client)));
+        let message = vec![rng.gen::<u8>(), rng.gen::<u8>(), rng.gen::<u8>()];
+        let res = signer
+            .sign_challenge(&message, &destination, account.key_chain(), &db_tx)
+            .unwrap();
+
+        let message_challenge = produce_message_challenge(&message);
+        res.verify_signature(&chain_config, &destination, &message_challenge).unwrap();
+    }
 }
 
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
+#[serial]
 fn sign_transaction_intent(#[case] seed: Seed) {
     use common::primitives::Idable;
 
@@ -119,7 +132,7 @@ fn sign_transaction_intent(#[case] seed: Seed) {
 
     let mut signer = TrezorSigner::new(config.clone(), Arc::new(Mutex::new(client)));
 
-    let inputs: Vec<TxInput> = (0..rng.gen_range(1..5))
+    let inputs: Vec<TxInput> = (0..rng.gen_range(3..6))
         .map(|_| {
             let source_id = if rng.gen_bool(0.5) {
                 Id::<Transaction>::new(H256::random_using(&mut rng)).into()
@@ -130,7 +143,20 @@ fn sign_transaction_intent(#[case] seed: Seed) {
         })
         .collect();
     let input_destinations: Vec<_> = (0..inputs.len())
-        .map(|_| account.get_new_address(&mut db_tx, ReceiveFunds).unwrap().1.into_object())
+        .map(|_| {
+            let pkh_destination =
+                account.get_new_address(&mut db_tx, ReceiveFunds).unwrap().1.into_object();
+            if rng.gen::<bool>() {
+                pkh_destination
+            } else {
+                let pkh = match pkh_destination {
+                    Destination::PublicKeyHash(pkh) => pkh,
+                    _ => panic!("not a public key hash destination"),
+                };
+                let pk = account.find_corresponding_pub_key(&pkh).unwrap();
+                Destination::PublicKey(pk)
+            }
+        })
         .collect();
 
     let tx = Transaction::new(
@@ -162,6 +188,7 @@ fn sign_transaction_intent(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
+#[serial]
 fn sign_transaction(#[case] seed: Seed) {
     use std::num::NonZeroU8;
 

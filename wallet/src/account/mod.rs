@@ -1366,7 +1366,7 @@ impl<K: AccountKeyChains> Account<K> {
         }
     }
 
-    pub fn find_unspent_utxo_with_destination(
+    pub fn find_unspent_utxo_and_destination(
         &self,
         outpoint: &UtxoOutPoint,
         current_block_info: BlockInfo,

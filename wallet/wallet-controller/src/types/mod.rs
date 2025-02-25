@@ -151,7 +151,7 @@ impl rpc_description::HasValueHint for GenericTokenTransfer {
 
 pub enum CreatedWallet {
     UserProvidedMnemonic,
-    NewlyGeneratedMnemonic(Mnemonic, Option<String>),
+    NewlyGeneratedMnemonic(Mnemonic),
 }
 
 #[derive(Debug, Clone)]
@@ -167,7 +167,7 @@ pub enum WalletTypeArgs {
 
 #[derive(Debug, Clone, Copy)]
 pub struct WalletCreationOptions {
-    /// should scan the blokchain and whether to wait for it or not
+    /// should scan the blockchain and whether to wait for it or not
     pub scan_blockchain: ScanBlockchain,
     /// Can overwrite an existing wallet file if selected from the GUI wallet
     pub overwrite_wallet_file: bool,
@@ -183,17 +183,6 @@ impl WalletTypeArgs {
             } => controller_mode.into(),
             #[cfg(feature = "trezor")]
             Self::Trezor => WalletType::Trezor,
-        }
-    }
-    pub fn user_supplied_mnemonic(&self) -> bool {
-        match self {
-            Self::Software {
-                mnemonic,
-                passphrase: _,
-                store_seed_phrase: _,
-            } => mnemonic.is_some(),
-            #[cfg(feature = "trezor")]
-            Self::Trezor => true,
         }
     }
 
@@ -216,7 +205,7 @@ impl WalletTypeArgs {
                         let mnemonic = mnemonic::generate_new_mnemonic(language);
                         (
                             mnemonic.clone(),
-                            CreatedWallet::NewlyGeneratedMnemonic(mnemonic, passphrase.clone()),
+                            CreatedWallet::NewlyGeneratedMnemonic(mnemonic),
                         )
                     }
                 };

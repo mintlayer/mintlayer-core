@@ -23,32 +23,41 @@ use common::{
         output_value::OutputValue,
         signature::inputsig::arbitrary_message::ArbitraryMessageSignature,
         tokens::{IsTokenUnfreezable, Metadata, RPCFungibleTokenInfo, TokenId, TokenIssuance},
-        DelegationId, Destination, GenBlock, OrderId, PoolId, RpcOrderInfo, SignedTransaction,
-        SignedTransactionIntent, Transaction, TxOutput, UtxoOutPoint,
+        AccountCommand, AccountOutPoint, DelegationId, Destination, GenBlock, OrderId, PoolId,
+        RpcOrderInfo, SignedTransaction, SignedTransactionIntent, Transaction, TxOutput,
+        UtxoOutPoint,
     },
     primitives::{id::WithId, Amount, BlockHeight, Id, H256},
 };
-use crypto::key::hdkd::child_number::ChildNumber;
-use crypto::key::hdkd::u31::U31;
-use crypto::key::{PrivateKey, PublicKey};
-use crypto::vrf::VRFPublicKey;
+use crypto::{
+    key::{
+        hdkd::{child_number::ChildNumber, u31::U31},
+        PrivateKey, PublicKey,
+    },
+    vrf::VRFPublicKey,
+};
 use mempool::FeeRate;
-use wallet::account::transaction_list::TransactionList;
-use wallet::account::{CoinSelectionAlgo, DelegationData, PoolData, TxInfo, UnconfirmedTokenInfo};
-use wallet::send_request::{SelectedInputs, StakePoolCreationArguments};
-use wallet::signer::software_signer::SoftwareSignerProvider;
-
-use wallet::wallet::WalletPoolsFilter;
-use wallet::wallet_events::WalletEvents;
-use wallet::{Wallet, WalletError, WalletResult};
-use wallet_types::account_info::{StandaloneAddressDetails, StandaloneAddresses};
-use wallet_types::partially_signed_transaction::{PartiallySignedTransaction, TxAdditionalInfo};
-use wallet_types::seed_phrase::SerializableSeedPhrase;
-use wallet_types::signature_status::SignatureStatus;
-use wallet_types::utxo_types::{UtxoStates, UtxoTypes};
-use wallet_types::wallet_tx::TxData;
-use wallet_types::with_locked::WithLocked;
-use wallet_types::{Currency, KeychainUsageState};
+use wallet::{
+    account::{
+        transaction_list::TransactionList, CoinSelectionAlgo, DelegationData, PoolData, TxInfo,
+        UnconfirmedTokenInfo,
+    },
+    send_request::{SelectedInputs, StakePoolCreationArguments},
+    signer::software_signer::SoftwareSignerProvider,
+    wallet::WalletPoolsFilter,
+    wallet_events::WalletEvents,
+    Wallet, WalletError, WalletResult,
+};
+use wallet_types::{
+    account_info::{StandaloneAddressDetails, StandaloneAddresses},
+    partially_signed_transaction::{PartiallySignedTransaction, TxAdditionalInfo},
+    seed_phrase::SerializableSeedPhrase,
+    signature_status::SignatureStatus,
+    utxo_types::{UtxoStates, UtxoTypes},
+    wallet_tx::TxData,
+    with_locked::WithLocked,
+    Currency, KeychainUsageState,
+};
 
 #[cfg(feature = "trezor")]
 use wallet::signer::trezor_signer::TrezorSignerProvider;
@@ -60,6 +69,33 @@ pub enum RuntimeWallet<B: storage::Backend + 'static> {
 }
 
 impl<B: storage::Backend + 'static> RuntimeWallet<B> {
+    pub fn find_unspent_utxo_and_destination(
+        &self,
+        input: &UtxoOutPoint,
+    ) -> Option<(TxOutput, Destination)> {
+        match self {
+            RuntimeWallet::Software(w) => w.find_unspent_utxo_and_destination(input),
+            #[cfg(feature = "trezor")]
+            RuntimeWallet::Trezor(w) => w.find_unspent_utxo_and_destination(input),
+        }
+    }
+
+    pub fn find_account_destination(&self, acc_outpoint: &AccountOutPoint) -> Option<Destination> {
+        match self {
+            RuntimeWallet::Software(w) => w.find_account_destination(acc_outpoint),
+            #[cfg(feature = "trezor")]
+            RuntimeWallet::Trezor(w) => w.find_account_destination(acc_outpoint),
+        }
+    }
+
+    pub fn find_account_command_destination(&self, cmd: &AccountCommand) -> Option<Destination> {
+        match self {
+            RuntimeWallet::Software(w) => w.find_account_command_destination(cmd),
+            #[cfg(feature = "trezor")]
+            RuntimeWallet::Trezor(w) => w.find_account_command_destination(cmd),
+        }
+    }
+
     pub fn seed_phrase(&self) -> Result<Option<SerializableSeedPhrase>, WalletError> {
         match self {
             RuntimeWallet::Software(w) => w.seed_phrase(),

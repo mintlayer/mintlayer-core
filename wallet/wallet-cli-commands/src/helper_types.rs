@@ -444,12 +444,6 @@ impl YesNo {
     }
 }
 
-#[derive(Debug, Clone, Copy, ValueEnum)]
-pub enum CliHardwareWalletType {
-    #[cfg(feature = "trezor")]
-    Trezor,
-}
-
 #[cfg(test)]
 mod tests {
     use rstest::rstest;

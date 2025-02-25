@@ -66,11 +66,20 @@ pub struct SignedTransactionIntent {
 }
 
 impl SignedTransactionIntent {
-    pub fn new_unchecked(signed_message: String, signatures: Vec<Vec<u8>>) -> Self {
-        Self {
+    pub fn from_components(
+        signed_message: String,
+        signatures: Vec<Vec<u8>>,
+        input_destinations: &[Destination],
+        chain_config: &ChainConfig,
+    ) -> Result<Self, SignedTransactionIntentError> {
+        let intent = Self {
             signed_message,
             signatures,
-        }
+        };
+
+        intent.verify(chain_config, input_destinations, intent.signed_message())?;
+
+        Ok(intent)
     }
 
     /// Create a signed intent given the id of the transaction and its input destinations.
@@ -192,14 +201,7 @@ impl SignedTransactionIntent {
         for (idx, (signature, destination)) in
             self.signatures.iter().zip(input_destinations).enumerate()
         {
-            let destination = match destination {
-                | Destination::PublicKey(pubkey) => Destination::PublicKeyHash(pubkey.into()),
-
-                dest @ (Destination::PublicKeyHash(_)
-                | Destination::AnyoneCanSpend
-                | Destination::ScriptHash(_)
-                | Destination::ClassicMultisig(_)) => dest.clone(),
-            };
+            let destination = Self::normalize_destination(destination);
 
             let signature = ArbitraryMessageSignatureRef::from_data(signature);
 
@@ -226,6 +228,18 @@ impl SignedTransactionIntent {
 
     pub fn get_message_to_sign(intent: &str, tx_id: &Id<Transaction>) -> String {
         format!("<tx_id:{tx_id:x};intent:{intent}>")
+    }
+
+    /// Converts PublicKey to PublicKeyHash destination
+    pub fn normalize_destination(destination: &Destination) -> Destination {
+        match destination {
+            | Destination::PublicKey(pubkey) => Destination::PublicKeyHash(pubkey.into()),
+
+            dest @ (Destination::PublicKeyHash(_)
+            | Destination::AnyoneCanSpend
+            | Destination::ScriptHash(_)
+            | Destination::ClassicMultisig(_)) => dest.clone(),
+        }
     }
 }
 

@@ -201,7 +201,7 @@ impl Secp256k1ExtendedPublicKey {
         }
     }
 
-    pub fn new(
+    pub fn new_unchecked(
         derivation_path: DerivationPath,
         chain_code: ChainCode,
         public_key: Secp256k1PublicKey,

@@ -29,10 +29,7 @@ use common::{
         Transaction,
     },
 };
-use crypto::key::{
-    hdkd::{derivable::DerivationError, u31::U31},
-    SignatureError,
-};
+use crypto::key::hdkd::{derivable::DerivationError, u31::U31};
 use wallet_storage::{
     WalletStorageReadLocked, WalletStorageReadUnlocked, WalletStorageWriteUnlocked,
 };
@@ -91,8 +88,6 @@ pub enum SignerError {
     InvalidUtxo,
     #[error("Address error: {0}")]
     AddressError(#[from] AddressError),
-    #[error("Signature error: {0}")]
-    SignatureError(#[from] SignatureError),
     #[error("Order was filled more than the available balance")]
     OrderFillUnderflow,
 }

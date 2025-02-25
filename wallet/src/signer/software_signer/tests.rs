@@ -464,8 +464,7 @@ fn sign_transaction(#[case] seed: Seed) {
     }
 }
 
-#[rstest]
-#[trace]
+#[test]
 fn fixed_signatures() {
     use std::num::NonZeroU8;
 
