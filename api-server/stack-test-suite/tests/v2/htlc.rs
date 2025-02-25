@@ -126,7 +126,7 @@ async fn spend(#[case] seed: Seed) {
 
                 let input_sign = produce_uniparty_signature_for_htlc_input(
                     &bob_sk,
-                    SigHashType::try_from(SigHashType::ALL).unwrap(),
+                    SigHashType::all(),
                     Destination::PublicKeyHash((&PublicKey::from_private_key(&bob_sk)).into()),
                     &tx2,
                     &[Some(&tx_1.transaction().outputs()[0])],
@@ -282,7 +282,7 @@ async fn refund(#[case] seed: Seed) {
                         AuthorizedClassicalMultisigSpend::new_empty(refund_challenge);
 
                     let sighash = signature_hash(
-                        SigHashType::try_from(SigHashType::ALL).unwrap(),
+                        SigHashType::all(),
                         &tx2,
                         &[Some(&tx_1.transaction().outputs()[0])],
                         0,
@@ -301,7 +301,7 @@ async fn refund(#[case] seed: Seed) {
                 let input_sign = produce_classical_multisig_signature_for_htlc_input(
                     &chain_config,
                     &authorization,
-                    SigHashType::try_from(SigHashType::ALL).unwrap(),
+                    SigHashType::all(),
                     &tx2,
                     &[Some(&tx_1.transaction().outputs()[0])],
                     0,

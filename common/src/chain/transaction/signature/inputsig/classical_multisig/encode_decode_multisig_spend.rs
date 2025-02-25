@@ -44,7 +44,7 @@ pub fn encode_multisig_spend(
         None => sig_component.encode(),
     };
 
-    let sighash_type = SigHashType::try_from(SigHashType::ALL).expect("Should not fail");
+    let sighash_type = SigHashType::all();
     StandardInputSignature::new(sighash_type, raw_signature)
 }
 

@@ -102,7 +102,7 @@ async fn multiple_tx_in_same_block(#[case] seed: Seed) {
                 let mut previous_witness = InputWitness::Standard(
                     StandardInputSignature::produce_uniparty_signature_for_input(
                         &alice_sk,
-                        SigHashType::try_from(SigHashType::ALL).unwrap(),
+                        SigHashType::all(),
                         alice_destination.clone(),
                         &signed_tx1,
                         &[Some(&previous_tx_out)],
@@ -149,7 +149,7 @@ async fn multiple_tx_in_same_block(#[case] seed: Seed) {
                 previous_witness = InputWitness::Standard(
                     StandardInputSignature::produce_uniparty_signature_for_input(
                         &alice_sk,
-                        SigHashType::try_from(SigHashType::ALL).unwrap(),
+                        SigHashType::all(),
                         alice_destination.clone(),
                         &transaction2,
                         &[Some(&previous_tx_out)],

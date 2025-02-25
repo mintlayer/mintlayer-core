@@ -125,7 +125,7 @@ async fn multiple_utxos_to_single_address(#[case] seed: Seed) {
                 let mut previous_witness = InputWitness::Standard(
                     StandardInputSignature::produce_uniparty_signature_for_input(
                         &alice_sk,
-                        SigHashType::try_from(SigHashType::ALL).unwrap(),
+                        SigHashType::all(),
                         alice_destination.clone(),
                         &transaction,
                         &[Some(&previous_tx_out)],
@@ -200,7 +200,7 @@ async fn multiple_utxos_to_single_address(#[case] seed: Seed) {
                 previous_witness = InputWitness::Standard(
                     StandardInputSignature::produce_uniparty_signature_for_input(
                         &alice_sk,
-                        SigHashType::try_from(SigHashType::ALL).unwrap(),
+                        SigHashType::all(),
                         alice_destination.clone(),
                         &transaction,
                         &[Some(&previous_tx_out)],
@@ -374,7 +374,7 @@ async fn ok(#[case] seed: Seed) {
                 let mut previous_witness = InputWitness::Standard(
                     StandardInputSignature::produce_uniparty_signature_for_input(
                         &alice_sk,
-                        SigHashType::try_from(SigHashType::ALL).unwrap(),
+                        SigHashType::all(),
                         alice_destination.clone(),
                         &transaction,
                         &[Some(&previous_tx_out)],
@@ -442,7 +442,7 @@ async fn ok(#[case] seed: Seed) {
                     previous_witness = InputWitness::Standard(
                         StandardInputSignature::produce_uniparty_signature_for_input(
                             &alice_sk,
-                            SigHashType::try_from(SigHashType::ALL).unwrap(),
+                            SigHashType::all(),
                             alice_destination.clone(),
                             &transaction,
                             &[Some(&previous_tx_out)],

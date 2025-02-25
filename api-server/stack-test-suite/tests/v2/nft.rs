@@ -124,7 +124,7 @@ async fn ok(#[case] seed: Seed) {
                     let sig = InputWitness::Standard(
                         StandardInputSignature::produce_uniparty_signature_for_input(
                             &alice_sk,
-                            SigHashType::try_from(SigHashType::ALL).unwrap(),
+                            SigHashType::all(),
                             alice_destination.clone(),
                             &tx,
                             &[issue_nft_tx.outputs().first()],

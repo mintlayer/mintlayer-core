@@ -156,8 +156,7 @@ impl KeyManager {
             Destination::AnyoneCanSpend => Some(InputWitness::NoSignature(None)),
             Destination::PublicKey(pub_key) => {
                 let private_key = self.public_keys.get(pub_key).unwrap();
-                let sighash_type =
-                    SigHashType::try_from(SigHashType::ALL).expect("Should not fail");
+                let sighash_type = SigHashType::all();
 
                 let sig = StandardInputSignature::produce_uniparty_signature_for_input(
                     private_key,
@@ -174,8 +173,7 @@ impl KeyManager {
             }
             Destination::PublicKeyHash(pub_key) => {
                 let private_key = self.public_key_hashes.get(pub_key).unwrap();
-                let sighash_type =
-                    SigHashType::try_from(SigHashType::ALL).expect("Should not fail");
+                let sighash_type = SigHashType::all();
 
                 let sig = StandardInputSignature::produce_uniparty_signature_for_input(
                     private_key,
@@ -195,8 +193,7 @@ impl KeyManager {
                 let challenge = multisig.challenge(chain_config);
                 let mut current_signatures =
                     AuthorizedClassicalMultisigSpend::new_empty(challenge.clone());
-                let sighash_type =
-                    SigHashType::try_from(SigHashType::ALL).expect("Should not fail");
+                let sighash_type = SigHashType::all();
 
                 let sighash = signature_hash(sighash_type, tx, inputs_utxos, input_num).unwrap();
 

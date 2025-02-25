@@ -122,7 +122,7 @@ fn modify_and_verify(#[case] seed: Seed) {
     let destination = Destination::PublicKey(public_key);
 
     {
-        let sighash_type = SigHashType::try_from(SigHashType::ALL).unwrap();
+        let sighash_type = SigHashType::all();
         let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, 3);
         let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
         let tx = sign_mutate_then_verify(
@@ -371,7 +371,7 @@ fn mutate_all(#[case] seed: Seed) {
 
     let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
     let destination = Destination::PublicKey(public_key);
-    let sighash_type = SigHashType::try_from(SigHashType::ALL).unwrap();
+    let sighash_type = SigHashType::all();
     let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, INPUTS);
     let tx = generate_and_sign_tx(
         &chain_config,

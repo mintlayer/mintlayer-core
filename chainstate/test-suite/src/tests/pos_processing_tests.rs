@@ -2132,7 +2132,7 @@ fn pos_decommission_genesis_pool(#[case] seed: Seed) {
 
         let input_sign = StandardInputSignature::produce_uniparty_signature_for_input(
             &genesis_staking_sk,
-            SigHashType::try_from(SigHashType::ALL).unwrap(),
+            SigHashType::all(),
             Destination::PublicKey(genesis_staking_pk),
             &tx,
             &[Some(input_utxo.output())],

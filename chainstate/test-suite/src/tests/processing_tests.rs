@@ -1458,7 +1458,7 @@ fn spend_timelocked_signed_output(#[case] seed: Seed) {
             let tx = {
                 let input_sign = StandardInputSignature::produce_uniparty_signature_for_input(
                     &private_key,
-                    SigHashType::try_from(SigHashType::ALL).unwrap(),
+                    SigHashType::all(),
                     Destination::PublicKey(public_key.clone()),
                     &tx_2,
                     &[Some(&tx_1.transaction().outputs()[0])],
@@ -1512,7 +1512,7 @@ fn spend_timelocked_signed_output(#[case] seed: Seed) {
                     PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
                 let input_sign = StandardInputSignature::produce_uniparty_signature_for_input(
                     &random_private_key,
-                    SigHashType::try_from(SigHashType::ALL).unwrap(),
+                    SigHashType::all(),
                     Destination::PublicKey(random_public_key),
                     &tx_2,
                     &[Some(&tx_1.transaction().outputs()[0])],
@@ -1540,7 +1540,7 @@ fn spend_timelocked_signed_output(#[case] seed: Seed) {
         let tx = {
             let input_sign = StandardInputSignature::produce_uniparty_signature_for_input(
                 &private_key,
-                SigHashType::try_from(SigHashType::ALL).unwrap(),
+                SigHashType::all(),
                 Destination::PublicKey(public_key),
                 &tx_2,
                 &[Some(&tx_1.transaction().outputs()[0])],

@@ -144,7 +144,7 @@ fn spend_htlc_with_secret(#[case] seed: Seed) {
 
             let input_sign = produce_uniparty_signature_for_htlc_input(
                 &test_fixture.alice_sk,
-                SigHashType::try_from(SigHashType::ALL).unwrap(),
+                SigHashType::all(),
                 Destination::PublicKeyHash(
                     (&PublicKey::from_private_key(&test_fixture.alice_sk)).into(),
                 ),
@@ -191,7 +191,7 @@ fn spend_htlc_with_secret(#[case] seed: Seed) {
 
             let input_sign = StandardInputSignature::produce_uniparty_signature_for_input(
                 &test_fixture.bob_sk,
-                SigHashType::try_from(SigHashType::ALL).unwrap(),
+                SigHashType::all(),
                 Destination::PublicKeyHash(
                     (&PublicKey::from_private_key(&test_fixture.bob_sk)).into(),
                 ),
@@ -239,7 +239,7 @@ fn spend_htlc_with_secret(#[case] seed: Seed) {
 
             let input_sign = produce_uniparty_signature_for_htlc_input(
                 &test_fixture.bob_sk,
-                SigHashType::try_from(SigHashType::ALL).unwrap(),
+                SigHashType::all(),
                 Destination::PublicKeyHash(
                     (&PublicKey::from_private_key(&test_fixture.bob_sk)).into(),
                 ),
@@ -283,7 +283,7 @@ fn spend_htlc_with_secret(#[case] seed: Seed) {
 
         let input_sign = produce_uniparty_signature_for_htlc_input(
             &test_fixture.bob_sk,
-            SigHashType::try_from(SigHashType::ALL).unwrap(),
+            SigHashType::all(),
             Destination::PublicKeyHash((&PublicKey::from_private_key(&test_fixture.bob_sk)).into()),
             &tx,
             &[Some(&tx_1.transaction().outputs()[0])],
@@ -352,7 +352,7 @@ fn refund_htlc(#[case] seed: Seed) {
                     AuthorizedClassicalMultisigSpend::new_empty(refund_challenge.clone());
 
                 let sighash = signature_hash(
-                    SigHashType::try_from(SigHashType::ALL).unwrap(),
+                    SigHashType::all(),
                     &tx,
                     &[Some(&tx_1.transaction().outputs()[0])],
                     0,
@@ -371,7 +371,7 @@ fn refund_htlc(#[case] seed: Seed) {
             let input_sign = produce_classical_multisig_signature_for_htlc_input(
                 &chain_config,
                 &authorization,
-                SigHashType::try_from(SigHashType::ALL).unwrap(),
+                SigHashType::all(),
                 &tx,
                 &[Some(&tx_1.transaction().outputs()[0])],
                 0,
@@ -423,7 +423,7 @@ fn refund_htlc(#[case] seed: Seed) {
                     AuthorizedClassicalMultisigSpend::new_empty(refund_challenge.clone());
 
                 let sighash = signature_hash(
-                    SigHashType::try_from(SigHashType::ALL).unwrap(),
+                    SigHashType::all(),
                     &tx,
                     &[Some(&tx_1.transaction().outputs()[0])],
                     0,
@@ -437,10 +437,8 @@ fn refund_htlc(#[case] seed: Seed) {
                 AuthorizedHashedTimelockContractSpend::Multisig(authorization.encode())
             };
 
-            let input_sign = StandardInputSignature::new(
-                SigHashType::try_from(SigHashType::ALL).unwrap(),
-                authorization.encode(),
-            );
+            let input_sign =
+                StandardInputSignature::new(SigHashType::all(), authorization.encode());
 
             let result = tf
                 .make_block_builder()
@@ -480,7 +478,7 @@ fn refund_htlc(#[case] seed: Seed) {
                     AuthorizedClassicalMultisigSpend::new_empty(refund_challenge.clone());
 
                 let sighash = signature_hash(
-                    SigHashType::try_from(SigHashType::ALL).unwrap(),
+                    SigHashType::all(),
                     &tx,
                     &[Some(&tx_1.transaction().outputs()[0])],
                     0,
@@ -494,10 +492,8 @@ fn refund_htlc(#[case] seed: Seed) {
                 AuthorizedHashedTimelockContractSpend::Multisig(authorization.encode())
             };
 
-            let input_sign = StandardInputSignature::new(
-                SigHashType::try_from(SigHashType::ALL).unwrap(),
-                authorization.encode(),
-            );
+            let input_sign =
+                StandardInputSignature::new(SigHashType::all(), authorization.encode());
 
             let result = tf
                 .make_block_builder()
@@ -535,7 +531,7 @@ fn refund_htlc(#[case] seed: Seed) {
             let mut authorization = AuthorizedClassicalMultisigSpend::new_empty(refund_challenge);
 
             let sighash = signature_hash(
-                SigHashType::try_from(SigHashType::ALL).unwrap(),
+                SigHashType::all(),
                 &tx,
                 &[Some(&tx_1.transaction().outputs()[0])],
                 0,
@@ -554,7 +550,7 @@ fn refund_htlc(#[case] seed: Seed) {
         let input_sign = produce_classical_multisig_signature_for_htlc_input(
             &chain_config,
             &authorization,
-            SigHashType::try_from(SigHashType::ALL).unwrap(),
+            SigHashType::all(),
             &tx,
             &[Some(&tx_1.transaction().outputs()[0])],
             0,
@@ -843,7 +839,7 @@ fn spend_tokens(#[case] seed: Seed) {
 
         let input_sign = produce_uniparty_signature_for_htlc_input(
             &test_fixture.bob_sk,
-            SigHashType::try_from(SigHashType::ALL).unwrap(),
+            SigHashType::all(),
             Destination::PublicKeyHash((&PublicKey::from_private_key(&test_fixture.bob_sk)).into()),
             &tx,
             &[Some(&mint_token_v1_tx.transaction().outputs()[0])],

@@ -91,10 +91,7 @@ mod multisig_signature_size_impl {
                 let raw_signature =
                     AuthorizedClassicalMultisigSpend::new(signatures, challenge).encode();
 
-                let standard = StandardInputSignature::new(
-                    SigHashType::try_from(SigHashType::ALL).expect("should not fail"),
-                    raw_signature,
-                );
+                let standard = StandardInputSignature::new(SigHashType::all(), raw_signature);
                 let size = InputWitness::Standard(standard).encoded_size();
                 *entry.insert(size)
             }
@@ -115,7 +112,7 @@ lazy_static::lazy_static! {
         let raw_signature =
             AuthorizedPublicKeySpend::new(BOGUS_KEY_PAIR_AND_SIGNATURE.2.clone()).encode();
         let standard = StandardInputSignature::new(
-            SigHashType::try_from(SigHashType::ALL).expect("should not fail"),
+            SigHashType::all(),
             raw_signature,
         );
         InputWitness::Standard(standard).encoded_size()
@@ -130,7 +127,7 @@ lazy_static::lazy_static! {
         )
         .encode();
         let standard = StandardInputSignature::new(
-            SigHashType::try_from(SigHashType::ALL).expect("should not fail"),
+            SigHashType::all(),
             raw_signature,
         );
         InputWitness::Standard(standard).encoded_size()
