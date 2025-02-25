@@ -88,7 +88,7 @@ impl<B: storage::Backend> Store<B> {
     /// Encrypts the root keys in the DB with the provided new_password
     /// expects that the wallet is already unlocked
     pub fn encrypt_private_keys(&mut self, new_password: &Option<String>) -> crate::Result<()> {
-        let mut tx = self.transaction_rw_unlocked(None).map_err(crate::Error::from)?;
+        let mut tx = self.transaction_rw_unlocked(None)?;
         let sym_key = match new_password {
             None => {
                 tx.del_encryption_kdf_challenge()?;
@@ -96,7 +96,7 @@ impl<B: storage::Backend> Store<B> {
             }
             Some(pass) => {
                 let (sym_key, kdf_challenge) = password_to_sym_key(pass)?;
-                tx.set_encryption_kdf_challenge(&kdf_challenge).map_err(crate::Error::from)?;
+                tx.set_encryption_kdf_challenge(&kdf_challenge)?;
                 Some(sym_key)
             }
         };

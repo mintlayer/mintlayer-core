@@ -760,7 +760,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         let now = self.time_getter.get_time().as_duration_since_epoch();
         time.as_duration_since_epoch()
             .checked_add(self.chainstate_config().max_tip_age.clone().into())
-            .map_or(true, |max_tip_time| max_tip_time > now)
+            .is_none_or(|max_tip_time| max_tip_time > now)
     }
 
     /// Update `is_initial_block_download_finished` when tip changes (can only be set once)

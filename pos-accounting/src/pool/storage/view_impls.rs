@@ -39,35 +39,31 @@ impl<S: PoSAccountingStorageRead<T>, T: StorageTag> PoSAccountingView for PoSAcc
     }
 
     fn get_pool_balance(&self, pool_id: PoolId) -> Result<Amount, Self::Error> {
-        self.store
-            .get_pool_balance(pool_id)
-            .map(|v| v.unwrap_or(Amount::ZERO))
-            .map_err(Self::Error::from)
+        self.store.get_pool_balance(pool_id).map(|v| v.unwrap_or(Amount::ZERO))
     }
 
     fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, Self::Error> {
-        self.store.get_pool_data(pool_id).map_err(Self::Error::from)
+        self.store.get_pool_data(pool_id)
     }
 
     fn get_pool_delegations_shares(
         &self,
         pool_id: PoolId,
     ) -> Result<Option<BTreeMap<DelegationId, Amount>>, Self::Error> {
-        self.store.get_pool_delegations_shares(pool_id).map_err(Self::Error::from)
+        self.store.get_pool_delegations_shares(pool_id)
     }
 
     fn get_delegation_balance(&self, delegation_id: DelegationId) -> Result<Amount, Self::Error> {
         self.store
             .get_delegation_balance(delegation_id)
             .map(|v| v.unwrap_or(Amount::ZERO))
-            .map_err(Self::Error::from)
     }
 
     fn get_delegation_data(
         &self,
         delegation_id: DelegationId,
     ) -> Result<Option<DelegationData>, Self::Error> {
-        self.store.get_delegation_data(delegation_id).map_err(Self::Error::from)
+        self.store.get_delegation_data(delegation_id)
     }
 
     fn get_pool_delegation_share(
@@ -78,7 +74,6 @@ impl<S: PoSAccountingStorageRead<T>, T: StorageTag> PoSAccountingView for PoSAcc
         self.store
             .get_pool_delegation_share(pool_id, delegation_id)
             .map(|v| v.unwrap_or(Amount::ZERO))
-            .map_err(Self::Error::from)
     }
 }
 
@@ -101,32 +96,32 @@ impl<S: PoSAccountingStorageRead<T>, T: StorageTag> PoSAccountingStorageRead
     type Error = S::Error;
 
     fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Self::Error> {
-        self.store.get_pool_balance(pool_id).map_err(Self::Error::from)
+        self.store.get_pool_balance(pool_id)
     }
 
     fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, Self::Error> {
-        self.store.get_pool_data(pool_id).map_err(Self::Error::from)
+        self.store.get_pool_data(pool_id)
     }
 
     fn get_pool_delegations_shares(
         &self,
         pool_id: PoolId,
     ) -> Result<Option<BTreeMap<DelegationId, Amount>>, Self::Error> {
-        self.store.get_pool_delegations_shares(pool_id).map_err(Self::Error::from)
+        self.store.get_pool_delegations_shares(pool_id)
     }
 
     fn get_delegation_balance(
         &self,
         delegation_id: DelegationId,
     ) -> Result<Option<Amount>, Self::Error> {
-        self.store.get_delegation_balance(delegation_id).map_err(Self::Error::from)
+        self.store.get_delegation_balance(delegation_id)
     }
 
     fn get_delegation_data(
         &self,
         delegation_id: DelegationId,
     ) -> Result<Option<DelegationData>, Self::Error> {
-        self.store.get_delegation_data(delegation_id).map_err(Self::Error::from)
+        self.store.get_delegation_data(delegation_id)
     }
 
     fn get_pool_delegation_share(
@@ -134,8 +129,6 @@ impl<S: PoSAccountingStorageRead<T>, T: StorageTag> PoSAccountingStorageRead
         pool_id: PoolId,
         delegation_id: DelegationId,
     ) -> Result<Option<Amount>, Self::Error> {
-        self.store
-            .get_pool_delegation_share(pool_id, delegation_id)
-            .map_err(Self::Error::from)
+        self.store.get_pool_delegation_share(pool_id, delegation_id)
     }
 }

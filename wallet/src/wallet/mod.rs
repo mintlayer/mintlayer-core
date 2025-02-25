@@ -856,7 +856,7 @@ impl<B: storage::Backend> Wallet<B> {
         name: Option<String>,
     ) -> WalletResult<(U31, Account)> {
         ensure!(
-            name.as_ref().map_or(true, |name| !name.is_empty()),
+            name.as_ref().is_none_or(|name| !name.is_empty()),
             WalletError::EmptyAccountName
         );
 
@@ -884,7 +884,7 @@ impl<B: storage::Backend> Wallet<B> {
             WalletError::EmptyLastAccount
         );
         ensure!(
-            name.as_ref().map_or(true, |name| !name.is_empty()),
+            name.as_ref().is_none_or(|name| !name.is_empty()),
             WalletError::EmptyAccountName
         );
 

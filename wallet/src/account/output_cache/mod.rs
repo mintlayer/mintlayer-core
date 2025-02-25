@@ -1584,7 +1584,7 @@ fn valid_timelock(
     transaction_block_info: &Option<BlockInfo>,
     outpoint: &UtxoOutPoint,
 ) -> bool {
-    output.timelock().map_or(true, |timelock| {
+    output.timelock().is_none_or(|timelock| {
         transaction_block_info.as_ref().is_some_and(|transaction_block_info| {
             tx_verifier::timelock_check::check_timelock(
                 &transaction_block_info.height,

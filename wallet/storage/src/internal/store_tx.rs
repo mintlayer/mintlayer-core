@@ -628,10 +628,9 @@ impl_write_ops!(StoreTxRwUnlocked);
 impl<B: storage::Backend> WalletStorageEncryptionWrite for StoreTxRwUnlocked<'_, B> {
     fn set_encryption_kdf_challenge(&mut self, salt: &KdfChallenge) -> crate::Result<()> {
         self.write_value::<well_known::EncryptionKeyKdfChallenge>(salt)
-            .map_err(Into::into)
     }
     fn del_encryption_kdf_challenge(&mut self) -> crate::Result<()> {
-        self.delete_value::<well_known::EncryptionKeyKdfChallenge>().map_err(Into::into)
+        self.delete_value::<well_known::EncryptionKeyKdfChallenge>()
     }
 
     fn encrypt_root_keys(

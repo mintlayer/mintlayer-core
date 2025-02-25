@@ -79,9 +79,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         &self,
         height: &BlockHeight,
     ) -> Result<Option<Id<GenBlock>>, PropertyQueryError> {
-        self.chainstate_ref
-            .get_block_id_by_height(height)
-            .map(|res| res.map(Into::into))
+        self.chainstate_ref.get_block_id_by_height(height)
     }
 
     pub fn get_block(&self, id: Id<Block>) -> Result<Option<Block>, PropertyQueryError> {
