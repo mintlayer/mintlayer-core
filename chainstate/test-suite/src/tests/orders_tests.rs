@@ -36,7 +36,7 @@ use common::{
 };
 use crypto::key::{KeyKind, PrivateKey};
 use orders_accounting::OrdersAccountingDB;
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, Rng, RngCore, SliceRandom};
 use rstest::rstest;
 use test_utils::{
     nft_utils::random_nft_issuance,
@@ -845,12 +845,13 @@ fn fill_partially_then_conclude(#[case] seed: Seed, #[case] version: OrdersVersi
         }
 
         // conclude the order
+        let conclude_nonce = match version {
+            OrdersVersion::V0 => AccountNonce::new(1),
+            OrdersVersion::V1 => AccountNonce::new(0),
+        };
         let tx = TransactionBuilder::new()
             .add_input(
-                TxInput::AccountCommand(
-                    AccountNonce::new(1),
-                    AccountCommand::ConcludeOrder(order_id),
-                ),
+                TxInput::AccountCommand(conclude_nonce, AccountCommand::ConcludeOrder(order_id)),
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::Transfer(
@@ -1167,7 +1168,7 @@ fn fill_completely_then_conclude(#[case] seed: Seed) {
         let tx = TransactionBuilder::new()
             .add_input(
                 TxInput::AccountCommand(
-                    AccountNonce::new(1),
+                    AccountNonce::new(0),
                     AccountCommand::ConcludeOrder(order_id),
                 ),
                 InputWitness::NoSignature(None),
@@ -1522,7 +1523,7 @@ fn reorg_after_create(#[case] seed: Seed) {
                 TransactionBuilder::new()
                     .add_input(
                         TxInput::AccountCommand(
-                            AccountNonce::new(1),
+                            AccountNonce::new(0),
                             AccountCommand::ConcludeOrder(order_id),
                         ),
                         InputWitness::NoSignature(None),
@@ -2265,5 +2266,95 @@ fn fill_order_with_zero(#[case] seed: Seed, #[case] version: OrdersVersion) {
                 );
             }
         }
+    });
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy(), vec![108, 56, 65, 38, 217, 22, 244, 28, 38, 184])]
+fn fill_orders_shuffle(#[case] seed: Seed, #[case] fills: Vec<u128>) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+
+        let mut fill_order_atoms = fills.clone();
+        fill_order_atoms.shuffle(&mut rng);
+
+        let (token_id, tokens_outpoint, coins_outpoint) =
+            issue_and_mint_token_from_genesis(&mut rng, &mut tf);
+
+        let ask_amount = Amount::from_atoms(1000);
+        let give_amount = Amount::from_atoms(1001);
+        let order_data = OrderData::new(
+            Destination::AnyoneCanSpend,
+            OutputValue::Coin(ask_amount),
+            OutputValue::TokenV1(token_id, give_amount),
+        );
+        assert_eq!(ask_amount.into_atoms(), fill_order_atoms.iter().sum());
+
+        let order_id = make_order_id(&tokens_outpoint);
+        let tx = TransactionBuilder::new()
+            .add_input(tokens_outpoint.into(), InputWitness::NoSignature(None))
+            .add_output(TxOutput::CreateOrder(Box::new(order_data.clone())))
+            .build();
+        tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
+
+        // Create a tx with utxos per fill
+        let mut tx_builder = TransactionBuilder::new()
+            .add_input(coins_outpoint.into(), InputWitness::NoSignature(None));
+        for to_fill in &fill_order_atoms {
+            tx_builder = tx_builder.add_output(TxOutput::Transfer(
+                OutputValue::Coin(Amount::from_atoms(*to_fill)),
+                Destination::AnyoneCanSpend,
+            ));
+        }
+        let tx_with_coins_to_fill = tx_builder.build();
+        let tx_with_coins_to_fill_id = tx_with_coins_to_fill.transaction().get_id();
+        tf.make_block_builder()
+            .add_transaction(tx_with_coins_to_fill)
+            .build_and_process(&mut rng)
+            .unwrap();
+
+        let mut fill_txs = Vec::new();
+        for (i, fill_atoms) in fill_order_atoms.iter().enumerate() {
+            let tx = TransactionBuilder::new()
+                .add_input(
+                    TxInput::from_utxo(tx_with_coins_to_fill_id.into(), i as u32),
+                    InputWitness::NoSignature(None),
+                )
+                .add_input(
+                    TxInput::AccountCommand(
+                        // nonce is irrelevant
+                        AccountNonce::new(rng.next_u64()),
+                        AccountCommand::FillOrder(
+                            order_id,
+                            Amount::from_atoms(*fill_atoms),
+                            Destination::AnyoneCanSpend,
+                        ),
+                    ),
+                    InputWitness::NoSignature(None),
+                )
+                // ignore outputs for simplicity
+                .build();
+            fill_txs.push(tx);
+        }
+
+        tf.make_block_builder()
+            .with_transactions(fill_txs)
+            .build_and_process(&mut rng)
+            .unwrap();
+
+        assert_eq!(
+            Some(order_data.clone()),
+            tf.chainstate.get_order_data(&order_id).unwrap()
+        );
+        assert_eq!(
+            None,
+            tf.chainstate.get_order_ask_balance(&order_id).unwrap()
+        );
+        assert_eq!(
+            Some(Amount::from_atoms(1)),
+            tf.chainstate.get_order_give_balance(&order_id).unwrap()
+        );
     });
 }
