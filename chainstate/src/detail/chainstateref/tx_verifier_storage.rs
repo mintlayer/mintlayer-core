@@ -456,16 +456,12 @@ impl<S: BlockchainStorageRead, V: TransactionVerificationStrategy>
 
     #[log_error]
     fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Self::Error> {
-        PoSAccountingDB::<_, TipStorageTag>::new(&self.db_tx)
-            .get_pool_balance(pool_id)
-            .map_err(Self::Error::from)
+        PoSAccountingDB::<_, TipStorageTag>::new(&self.db_tx).get_pool_balance(pool_id)
     }
 
     #[log_error]
     fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, Self::Error> {
-        PoSAccountingDB::<_, TipStorageTag>::new(&self.db_tx)
-            .get_pool_data(pool_id)
-            .map_err(Self::Error::from)
+        PoSAccountingDB::<_, TipStorageTag>::new(&self.db_tx).get_pool_data(pool_id)
     }
 
     #[log_error]
@@ -473,9 +469,7 @@ impl<S: BlockchainStorageRead, V: TransactionVerificationStrategy>
         &self,
         delegation_id: DelegationId,
     ) -> Result<Option<Amount>, Self::Error> {
-        PoSAccountingDB::<_, TipStorageTag>::new(&self.db_tx)
-            .get_delegation_balance(delegation_id)
-            .map_err(Self::Error::from)
+        PoSAccountingDB::<_, TipStorageTag>::new(&self.db_tx).get_delegation_balance(delegation_id)
     }
 
     #[log_error]
@@ -483,9 +477,7 @@ impl<S: BlockchainStorageRead, V: TransactionVerificationStrategy>
         &self,
         delegation_id: DelegationId,
     ) -> Result<Option<DelegationData>, Self::Error> {
-        PoSAccountingDB::<_, TipStorageTag>::new(&self.db_tx)
-            .get_delegation_data(delegation_id)
-            .map_err(Self::Error::from)
+        PoSAccountingDB::<_, TipStorageTag>::new(&self.db_tx).get_delegation_data(delegation_id)
     }
 
     #[log_error]
@@ -493,9 +485,7 @@ impl<S: BlockchainStorageRead, V: TransactionVerificationStrategy>
         &self,
         pool_id: PoolId,
     ) -> Result<Option<BTreeMap<DelegationId, Amount>>, Self::Error> {
-        PoSAccountingDB::<_, TipStorageTag>::new(&self.db_tx)
-            .get_pool_delegations_shares(pool_id)
-            .map_err(Self::Error::from)
+        PoSAccountingDB::<_, TipStorageTag>::new(&self.db_tx).get_pool_delegations_shares(pool_id)
     }
 
     #[log_error]
@@ -506,7 +496,6 @@ impl<S: BlockchainStorageRead, V: TransactionVerificationStrategy>
     ) -> Result<Option<Amount>, Self::Error> {
         PoSAccountingDB::<_, TipStorageTag>::new(&self.db_tx)
             .get_pool_delegation_share(pool_id, delegation_id)
-            .map_err(Self::Error::from)
     }
 }
 

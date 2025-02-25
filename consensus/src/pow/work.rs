@@ -215,7 +215,6 @@ impl PoW {
             prev_block_bits,
             self.difficulty_limit(),
         )
-        .map_err(Into::into)
     }
 
     fn next_work_required_for_min_difficulty(

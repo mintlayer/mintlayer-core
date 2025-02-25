@@ -267,9 +267,7 @@ where
         tx_source: TransactionSource,
         delta: &PoSAccountingDeltaData,
     ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error> {
-        self.pos_accounting_adapter
-            .apply_accounting_delta(tx_source, delta)
-            .map_err(TransactionVerifierStorageError::from)?;
+        self.pos_accounting_adapter.apply_accounting_delta(tx_source, delta)?;
         Ok(())
     }
 

@@ -97,7 +97,7 @@ impl KeychainUsageState {
     /// Increments the last index used in the blockchain until up_to_last_used. This has no effect
     /// if the up_to_last_used is smaller than the self value. The last issued index can also be updated.
     pub fn increment_up_to_last_used(&mut self, up_to_last_used: U31) {
-        if self.last_used.map_or(true, |old_value| old_value < up_to_last_used) {
+        if self.last_used.is_none_or(|old_value| old_value < up_to_last_used) {
             self.last_used = Some(up_to_last_used);
             // If the wallet has been used before and the `up_to_last_used` address is now seen on the network,
             // then the `up_to_last_used` address has been issued before and the issued counter should be updated as well.
@@ -113,7 +113,7 @@ impl KeychainUsageState {
     /// Increments the last index issued in the blockchain until up_to_last_issued.
     /// This has no effect if the up_to_last_issued is smaller than the self value
     pub fn increment_up_to_last_issued(&mut self, up_to_last_issued: U31) {
-        if self.last_issued.map_or(true, |old_value| old_value < up_to_last_issued) {
+        if self.last_issued.is_none_or(|old_value| old_value < up_to_last_issued) {
             self.last_issued = Some(up_to_last_issued);
         }
     }
