@@ -75,8 +75,8 @@ use common::{
         signed_transaction::SignedTransaction,
         tokens::make_token_id,
         AccountCommand, AccountNonce, AccountSpending, AccountType, Block, ChainConfig,
-        DelegationId, FrozenTokensValidationVersion, GenBlock, Transaction, TxInput, TxOutput,
-        UtxoOutPoint,
+        DelegationId, FrozenTokensValidationVersion, GenBlock, OrdersVersion, Transaction, TxInput,
+        TxOutput, UtxoOutPoint,
     },
     primitives::{id::WithId, Amount, BlockHeight, Fee, Id, Idable},
 };
@@ -498,8 +498,8 @@ where
                 TxInput::Account(outpoint) => {
                     self.unspend_input_from_account(outpoint.account().clone().into())?;
                 }
-                TxInput::AccountCommand(_, account_op) => {
-                    self.unspend_input_from_account(account_op.clone().into())?;
+                TxInput::AccountCommand(_, cmd) => {
+                    self.unspend_input_from_account(cmd.clone().into())?;
                 }
             };
         }
@@ -848,13 +848,19 @@ where
                             .1
                             .orders_version();
 
-                        let res = self
-                            .spend_input_from_account(*nonce, account_op.clone().into())
-                            .and_then(|_| {
-                                self.orders_accounting_cache
-                                    .fill_order(*order_id, *fill, orders_version)
-                                    .map_err(ConnectTransactionError::OrdersAccountingError)
-                            });
+                        let res = match orders_version {
+                            OrdersVersion::V0 => self
+                                .spend_input_from_account(*nonce, account_op.clone().into())
+                                .and_then(|_| {
+                                    self.orders_accounting_cache
+                                        .fill_order(*order_id, *fill, orders_version)
+                                        .map_err(ConnectTransactionError::OrdersAccountingError)
+                                }),
+                            OrdersVersion::V1 => self
+                                .orders_accounting_cache
+                                .fill_order(*order_id, *fill, orders_version)
+                                .map_err(ConnectTransactionError::OrdersAccountingError),
+                        };
                         Some(res)
                     }
                 },
