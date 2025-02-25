@@ -851,7 +851,14 @@ async fn check_pool(
 
     if let Some(node_data) = tf.chainstate.get_stake_pool_data(pool_id).unwrap() {
         // check all fields are the same
-        assert_eq!(node_data, scanner_data);
+        assert_eq!(node_data, scanner_data.pool_data);
+
+        // check delegations_balance
+        let node_pool_balance =
+            tf.chainstate.get_stake_pool_balance(pool_id).unwrap().unwrap_or(Amount::ZERO);
+        let scanner_pool_balance =
+            (scanner_data.staker_balance().unwrap() + scanner_data.delegations_balance).unwrap();
+        assert_eq!(node_pool_balance, scanner_pool_balance);
     } else {
         // the pool has been decommissioned
         assert_eq!(Amount::ZERO, scanner_data.pledge_amount());
