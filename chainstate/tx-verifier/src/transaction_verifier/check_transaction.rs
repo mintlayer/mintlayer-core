@@ -391,16 +391,19 @@ fn check_order_inputs_outputs(
                         .1
                         .orders_version();
 
-                    if let OrdersVersion::V1 = orders_version {
-                        // Forbidding fills with zero ensures that tx has utxo and therefor is unique.
-                        // Unique txs cannot be replayed.
-                        ensure!(
-                            *fill > Amount::ZERO,
-                            CheckTransactionError::AttemptToFillOrderWithZero(
-                                *id,
-                                tx.transaction().get_id()
-                            )
-                        );
+                    match orders_version {
+                        OrdersVersion::V0 => { /*do nothing */ }
+                        OrdersVersion::V1 => {
+                            // Forbidding fills with zero ensures that tx has utxo and therefor is unique.
+                            // Unique txs cannot be replayed.
+                            ensure!(
+                                *fill > Amount::ZERO,
+                                CheckTransactionError::AttemptToFillOrderWithZero(
+                                    *id,
+                                    tx.transaction().get_id()
+                                )
+                            );
+                        }
                     }
                 }
             },

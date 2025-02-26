@@ -1197,6 +1197,7 @@ where
                   account_index: U31| {
                 wallet.create_fill_order_tx(
                     account_index,
+                    account_best_block_height,
                     order_id,
                     order_info,
                     fill_amount_in_ask_currency,

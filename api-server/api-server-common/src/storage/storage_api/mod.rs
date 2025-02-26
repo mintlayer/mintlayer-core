@@ -260,10 +260,9 @@ pub struct Order {
 
 impl Order {
     pub fn fill(self, fill_amount_in_ask_currency: Amount) -> Self {
-        // FIXME: use initial balance
         let filled_amount = orders_accounting::calculate_filled_amount(
-            self.ask_balance,
-            self.give_balance,
+            self.initially_asked,
+            self.initially_given,
             fill_amount_in_ask_currency,
         )
         .expect("must succeed");
