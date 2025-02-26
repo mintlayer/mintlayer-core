@@ -17,6 +17,7 @@ use std::collections::BTreeMap;
 use std::mem::take;
 
 use common::address::Address;
+use common::chain::htlc::HtlcSecret;
 use common::chain::output_value::OutputValue;
 use common::chain::stakelock::StakePoolData;
 use common::chain::timelock::OutputTimeLock::ForBlockCount;
@@ -50,6 +51,8 @@ pub struct SendRequest {
     inputs: Vec<TxInput>,
 
     outputs: Vec<TxOutput>,
+
+    htlc_secrets: Vec<Option<HtlcSecret>>,
 
     fees: BTreeMap<Currency, Amount>,
 }
@@ -196,6 +199,7 @@ impl SendRequest {
             destinations: Vec::new(),
             inputs: Vec::new(),
             outputs: Vec::new(),
+            htlc_secrets: Vec::new(),
             fees: BTreeMap::new(),
         }
     }
@@ -230,6 +234,7 @@ impl SendRequest {
             destinations,
             inputs: transaction.inputs().to_vec(),
             outputs: transaction.outputs().to_vec(),
+            htlc_secrets: vec![None; transaction.inputs().len()],
             fees: BTreeMap::new(),
         })
     }
@@ -258,6 +263,7 @@ impl SendRequest {
             self.inputs.push(outpoint);
             self.destinations.push(destination);
             self.utxos.push(None);
+            self.htlc_secrets.push(None);
         }
 
         self
@@ -265,21 +271,27 @@ impl SendRequest {
 
     pub fn with_inputs<'a, PoolDataGetter>(
         mut self,
-        utxos: impl IntoIterator<Item = (TxInput, TxOutput)>,
+        utxos: impl IntoIterator<Item = (TxInput, TxOutput, Option<HtlcSecret>)>,
         pool_data_getter: &PoolDataGetter,
     ) -> WalletResult<Self>
     where
         PoolDataGetter: Fn(&PoolId) -> Option<&'a PoolData>,
     {
-        for (outpoint, txo) in utxos {
+        for (outpoint, txo, secret) in utxos {
             self.inputs.push(outpoint);
+            let htlc_spending_condition = match &secret {
+                Some(_) => HtlcSpendingCondition::WithSecret,
+                None => HtlcSpendingCondition::WithMultisig,
+            };
+
             self.destinations.push(
-                get_tx_output_destination(&txo, &pool_data_getter, HtlcSpendingCondition::Skip)
+                get_tx_output_destination(&txo, &pool_data_getter, htlc_spending_condition)
                     .ok_or_else(|| {
                         WalletError::UnsupportedTransactionOutput(Box::new(txo.clone()))
                     })?,
             );
             self.utxos.push(Some(txo));
+            self.htlc_secrets.push(secret);
         }
 
         Ok(self)
@@ -312,7 +324,7 @@ impl SendRequest {
             vec![None; num_inputs],
             utxos,
             destinations,
-            None,
+            Some(self.htlc_secrets),
             additional_info,
         )?;
         Ok(ptx)

@@ -256,6 +256,10 @@ pub enum WalletError {
     CalculateOrderFilledAmountFailed(OrderId),
     #[error("Staker destination must be a public key")]
     StakerDestinationMustBePublicKey,
+    #[error(
+        "A VRF public key must be specified when creating a staking pool using a hardware wallet"
+    )]
+    VrfKeyMustBeProvided,
     #[error("Cannot change a Trezor wallet type")]
     CannotChangeTrezorWalletType,
     #[error("The file being loaded is a software wallet and does not correspond to the connected hardware wallet")]
@@ -1575,7 +1579,9 @@ where
         additional_info: TxAdditionalInfo,
     ) -> WalletResult<SignedTransaction> {
         let request = SendRequest::new().with_inputs(
-            inputs.into_iter().map(|(outpoint, output)| (TxInput::Utxo(outpoint), output)),
+            inputs
+                .into_iter()
+                .map(|(outpoint, output)| (TxInput::Utxo(outpoint), output, None)),
             &|_| None,
         )?;
 
@@ -1913,6 +1919,31 @@ where
         let token_id = make_token_id(signed_transaction.transaction().inputs())
             .ok_or(WalletError::MissingTokenId)?;
         Ok((token_id, signed_transaction))
+    }
+
+    pub fn create_stake_pool_tx_with_vrf_key(
+        &mut self,
+        account_index: U31,
+        current_fee_rate: FeeRate,
+        consolidate_fee_rate: FeeRate,
+        stake_pool_arguments: StakePoolCreationArguments,
+    ) -> WalletResult<SignedTransaction> {
+        let latest_median_time = self.latest_median_time;
+        self.for_account_rw_unlocked_and_check_tx(
+            account_index,
+            TxAdditionalInfo::new(),
+            |account, db_tx| {
+                account.create_stake_pool_tx_with_vrf_key(
+                    db_tx,
+                    stake_pool_arguments,
+                    latest_median_time,
+                    CurrentFeeRate {
+                        current_fee_rate,
+                        consolidate_fee_rate,
+                    },
+                )
+            },
+        )
     }
 
     pub fn decommission_stake_pool(
@@ -2377,6 +2408,7 @@ where
             },
         )
     }
+
     pub fn get_pos_gen_block_data(
         &self,
         account_index: U31,

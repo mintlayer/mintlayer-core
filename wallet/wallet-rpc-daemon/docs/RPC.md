@@ -2736,12 +2736,7 @@ Returns:
      1) { "type": "UserProvided" }
      2) {
             "type": "NewlyGenerated",
-            "content": {
-                "mnemonic": string,
-                "passphrase": EITHER OF
-                     1) string
-                     2) null,
-            },
+            "content": { "mnemonic": string },
         } }
 ```
 
@@ -2773,12 +2768,7 @@ Returns:
      1) { "type": "UserProvided" }
      2) {
             "type": "NewlyGenerated",
-            "content": {
-                "mnemonic": string,
-                "passphrase": EITHER OF
-                     1) string
-                     2) null,
-            },
+            "content": { "mnemonic": string },
         } }
 ```
 

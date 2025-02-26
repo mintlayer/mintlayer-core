@@ -23,7 +23,7 @@ use crate::{
 };
 use common::chain::{
     config::create_regtest,
-    htlc::HashedTimelockContract,
+    htlc::{HashedTimelockContract, HtlcSecret},
     output_value::OutputValue,
     signature::inputsig::arbitrary_message::produce_message_challenge,
     stakelock::StakePoolData,
@@ -34,6 +34,7 @@ use common::chain::{
 };
 use common::primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, H256};
 use crypto::key::{KeyKind, PrivateKey};
+use itertools::izip;
 use randomness::{Rng, RngCore};
 use rstest::rstest;
 use serial_test::serial;
@@ -276,20 +277,34 @@ fn sign_transaction(#[case] seed: Seed) {
     let challenge = ClassicMultisigChallenge::new(
         &chain_config,
         NonZeroU8::new(min_required_signatures).unwrap(),
-        vec![pub_key1, pub_key2, pub_key3],
+        vec![pub_key1.clone(), pub_key2.clone(), pub_key3],
     )
     .unwrap();
     let multisig_hash = account.add_standalone_multisig(&mut db_tx, challenge, None).unwrap();
 
     let multisig_dest = Destination::ClassicMultisig(multisig_hash);
 
-    let source_id = if rng.gen_bool(0.5) {
+    let source_id: OutPointSourceId = if rng.gen_bool(0.5) {
         Id::<Transaction>::new(H256::random_using(&mut rng)).into()
     } else {
         Id::<GenBlock>::new(H256::random_using(&mut rng)).into()
     };
-    let multisig_input = TxInput::from_utxo(source_id, rng.next_u32());
+    let multisig_input = TxInput::from_utxo(source_id.clone(), rng.next_u32());
     let multisig_utxo = TxOutput::Transfer(OutputValue::Coin(Amount::from_atoms(1)), multisig_dest);
+
+    let secret = HtlcSecret::new_from_rng(&mut rng);
+    let hash_lock = HashedTimelockContract {
+        secret_hash: secret.hash(),
+        spend_key: Destination::PublicKey(pub_key2.clone()),
+        refund_timelock: OutputTimeLock::UntilHeight(BlockHeight::new(0)),
+        refund_key: Destination::PublicKey(pub_key1),
+    };
+
+    let htlc_input = TxInput::from_utxo(source_id, rng.next_u32());
+    let htlc_utxo = TxOutput::Htlc(
+        OutputValue::Coin(Amount::from_atoms(rng.gen::<u32>() as u128)),
+        Box::new(hash_lock.clone()),
+    );
 
     let token_id = TokenId::new(H256::random_using(&mut rng));
     let order_id = OrderId::new(H256::random_using(&mut rng));
@@ -403,13 +418,6 @@ fn sign_transaction(#[case] seed: Seed) {
     });
     let nft_id = TokenId::new(H256::random());
 
-    let hash_lock = HashedTimelockContract {
-        secret_hash: common::chain::htlc::HtlcSecretHash([1; 20]),
-        spend_key: Destination::PublicKey(dest_pub.clone()),
-        refund_timelock: OutputTimeLock::UntilHeight(BlockHeight::new(123)),
-        refund_key: Destination::AnyoneCanSpend,
-    };
-
     let order_data = OrderData::new(
         Destination::PublicKey(dest_pub.clone()),
         OutputValue::Coin(Amount::from_atoms(100)),
@@ -449,10 +457,18 @@ fn sign_transaction(#[case] seed: Seed) {
     ];
 
     let req = SendRequest::new()
-        .with_inputs(inputs.clone().into_iter().zip(utxos.clone()), &|_| None)
+        .with_inputs(
+            izip!(inputs.clone(), utxos.clone(), vec![None; inputs.len()]),
+            &|_| None,
+        )
         .unwrap()
         .with_inputs(
-            [multisig_input.clone()].into_iter().zip([multisig_utxo.clone()]),
+            [(htlc_input.clone(), htlc_utxo.clone(), Some(secret))],
+            &|_| None,
+        )
+        .unwrap()
+        .with_inputs(
+            [(multisig_input.clone(), multisig_utxo.clone(), None)],
             &|_| None,
         )
         .unwrap()
@@ -490,7 +506,7 @@ fn sign_transaction(#[case] seed: Seed) {
     let utxos_ref = utxos
         .iter()
         .map(Some)
-        .chain([Some(&multisig_utxo)])
+        .chain([Some(&htlc_utxo), Some(&multisig_utxo)])
         .chain(acc_dests.iter().map(|_| None))
         .collect::<Vec<_>>();
 

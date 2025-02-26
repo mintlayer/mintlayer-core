@@ -433,7 +433,10 @@ impl<K: AccountKeyChains> Account<K> {
             }
         }
 
-        let selected_inputs = selected_inputs.into_iter().flat_map(|x| x.1.into_output_pairs());
+        let selected_inputs = selected_inputs
+            .into_iter()
+            .flat_map(|x| x.1.into_output_pairs())
+            .map(|(inp, out)| (inp, out, None));
 
         let pool_data_getter = |pool_id: &PoolId| self.output_cache.pool_data(*pool_id).ok();
         request.with_inputs(selected_inputs, &pool_data_getter)
@@ -728,7 +731,7 @@ impl<K: AccountKeyChains> Account<K> {
             .ok_or(WalletError::NoUtxos)?;
 
         let mut req = SendRequest::new()
-            .with_inputs([(tx_input, input_utxo.clone())], &|id| {
+            .with_inputs([(tx_input, input_utxo.clone(), None)], &|id| {
                 (*id == pool_id).then_some(pool_data)
             })?
             .with_outputs([output]);
@@ -1322,6 +1325,107 @@ impl<K: AccountKeyChains> Account<K> {
             fee_rate,
             None,
         )
+    }
+
+    pub fn create_stake_pool_tx_with_vrf_key(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteUnlocked,
+        mut stake_pool_arguments: StakePoolCreationArguments,
+        median_time: BlockTimestamp,
+        fee_rate: CurrentFeeRate,
+    ) -> WalletResult<SendRequest> {
+        let Some(vrf_public_key) = stake_pool_arguments.vrf_public_key.take() else {
+            return Err(WalletError::VrfKeyMustBeProvided);
+        };
+
+        self.create_stake_pool_tx_impl(
+            stake_pool_arguments,
+            db_tx,
+            vrf_public_key,
+            median_time,
+            fee_rate,
+        )
+    }
+
+    fn create_stake_pool_tx_impl(
+        &mut self,
+        stake_pool_arguments: StakePoolCreationArguments,
+        db_tx: &mut impl WalletStorageWriteUnlocked,
+        vrf_public_key: VRFPublicKey,
+        median_time: BlockTimestamp,
+        fee_rate: CurrentFeeRate,
+    ) -> Result<SendRequest, WalletError> {
+        let staker = match stake_pool_arguments.staker_key {
+            Some(staker) => match staker {
+                Destination::PublicKey(_) => staker,
+                // Note: technically it's possible to create a pool with PublicKeyHash as the staker,
+                // the pool will seem to work and will actually try producing blocks. However,
+                // the produced blocks will be rejected by chainstate, see get_staking_kernel_destination
+                // in `consensus`.
+                Destination::AnyoneCanSpend
+                | Destination::PublicKeyHash(_)
+                | Destination::ScriptHash(_)
+                | Destination::ClassicMultisig(_) => {
+                    return Err(WalletError::StakerDestinationMustBePublicKey)
+                }
+            },
+            None => Destination::PublicKey(
+                self.key_chain.issue_key(db_tx, KeyPurpose::ReceiveFunds)?.into_public_key(),
+            ),
+        };
+
+        // the first UTXO is needed in advance to calculate pool_id, so just make a dummy one
+        // and then replace it with when we can calculate the pool_id
+        let dummy_pool_id = PoolId::new(Uint256::from_u64(0).into());
+        let dummy_stake_output = make_stake_output(
+            dummy_pool_id,
+            StakePoolCreationResolvedArguments {
+                amount: stake_pool_arguments.amount,
+                margin_ratio_per_thousand: stake_pool_arguments.margin_ratio_per_thousand,
+                cost_per_block: stake_pool_arguments.cost_per_block,
+                decommission_key: stake_pool_arguments.decommission_key,
+                staker_key: staker,
+                vrf_public_key,
+            },
+        );
+        let request = SendRequest::new().with_outputs([dummy_stake_output]);
+        let mut request = self.select_inputs_for_send_request(
+            request,
+            SelectedInputs::Utxos(vec![]),
+            None,
+            BTreeMap::new(),
+            db_tx,
+            median_time,
+            fee_rate,
+            None,
+        )?;
+
+        let input0_outpoint = crate::utils::get_first_utxo_outpoint(request.inputs())?;
+        let new_pool_id = pos_accounting::make_pool_id(input0_outpoint);
+
+        // update the dummy_pool_id with the new pool_id
+        let old_pool_id = request
+            .get_outputs_mut()
+            .iter_mut()
+            .find_map(|out| match out {
+                TxOutput::CreateStakePool(pool_id, _) if *pool_id == dummy_pool_id => Some(pool_id),
+                TxOutput::CreateStakePool(_, _)
+                | TxOutput::Burn(_)
+                | TxOutput::Transfer(_, _)
+                | TxOutput::DelegateStaking(_, _)
+                | TxOutput::LockThenTransfer(_, _, _)
+                | TxOutput::CreateDelegationId(_, _)
+                | TxOutput::ProduceBlockFromStake(_, _)
+                | TxOutput::IssueFungibleToken(_)
+                | TxOutput::IssueNft(_, _, _)
+                | TxOutput::DataDeposit(_)
+                | TxOutput::Htlc(_, _)
+                | TxOutput::CreateOrder(_) => None,
+            })
+            .expect("find output with dummy_pool_id");
+        *old_pool_id = new_pool_id;
+
+        Ok(request)
     }
 
     pub fn pool_exists(&self, pool_id: PoolId) -> bool {
@@ -2200,86 +2304,21 @@ impl<K: AccountKeyChains + VRFAccountKeyChains> Account<K> {
     pub fn create_stake_pool_tx(
         &mut self,
         db_tx: &mut impl WalletStorageWriteUnlocked,
-        stake_pool_arguments: StakePoolCreationArguments,
+        mut stake_pool_arguments: StakePoolCreationArguments,
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
     ) -> WalletResult<SendRequest> {
-        // TODO: Use other accounts here
-        let staker = match stake_pool_arguments.staker_key {
-            Some(staker) => match staker {
-                Destination::PublicKey(_) => staker,
-                // Note: technically it's possible to create a pool with PublicKeyHash as the staker,
-                // the pool will seem to work and will actually try producing blocks. However,
-                // the produced blocks will be rejected by chainstate, see get_staking_kernel_destination
-                // in `consensus`.
-                Destination::AnyoneCanSpend
-                | Destination::PublicKeyHash(_)
-                | Destination::ScriptHash(_)
-                | Destination::ClassicMultisig(_) => {
-                    return Err(WalletError::StakerDestinationMustBePublicKey)
-                }
-            },
-            None => Destination::PublicKey(
-                self.key_chain.issue_key(db_tx, KeyPurpose::ReceiveFunds)?.into_public_key(),
-            ),
-        };
-        let vrf_public_key = match stake_pool_arguments.vrf_public_key {
+        let vrf_public_key = match stake_pool_arguments.vrf_public_key.take() {
             Some(vrf_public_key) => vrf_public_key,
             None => self.get_vrf_public_key(db_tx)?,
         };
-
-        // the first UTXO is needed in advance to calculate pool_id, so just make a dummy one
-        // and then replace it with when we can calculate the pool_id
-        let dummy_pool_id = PoolId::new(Uint256::from_u64(0).into());
-        let dummy_stake_output = make_stake_output(
-            dummy_pool_id,
-            StakePoolCreationResolvedArguments {
-                amount: stake_pool_arguments.amount,
-                margin_ratio_per_thousand: stake_pool_arguments.margin_ratio_per_thousand,
-                cost_per_block: stake_pool_arguments.cost_per_block,
-                decommission_key: stake_pool_arguments.decommission_key,
-                staker_key: staker,
-                vrf_public_key,
-            },
-        );
-        let request = SendRequest::new().with_outputs([dummy_stake_output]);
-        let mut request = self.select_inputs_for_send_request(
-            request,
-            SelectedInputs::Utxos(vec![]),
-            None,
-            BTreeMap::new(),
+        self.create_stake_pool_tx_impl(
+            stake_pool_arguments,
             db_tx,
+            vrf_public_key,
             median_time,
             fee_rate,
-            None,
-        )?;
-
-        let input0_outpoint = crate::utils::get_first_utxo_outpoint(request.inputs())?;
-        let new_pool_id = pos_accounting::make_pool_id(input0_outpoint);
-
-        // update the dummy_pool_id with the new pool_id
-        let old_pool_id = request
-            .get_outputs_mut()
-            .iter_mut()
-            .find_map(|out| match out {
-                TxOutput::CreateStakePool(pool_id, _) if *pool_id == dummy_pool_id => Some(pool_id),
-                TxOutput::CreateStakePool(_, _)
-                | TxOutput::Burn(_)
-                | TxOutput::Transfer(_, _)
-                | TxOutput::DelegateStaking(_, _)
-                | TxOutput::LockThenTransfer(_, _, _)
-                | TxOutput::CreateDelegationId(_, _)
-                | TxOutput::ProduceBlockFromStake(_, _)
-                | TxOutput::IssueFungibleToken(_)
-                | TxOutput::IssueNft(_, _, _)
-                | TxOutput::DataDeposit(_)
-                | TxOutput::Htlc(_, _)
-                | TxOutput::CreateOrder(_) => None,
-            })
-            .expect("find output with dummy_pool_id");
-        *old_pool_id = new_pool_id;
-
-        Ok(request)
+        )
     }
 }
 

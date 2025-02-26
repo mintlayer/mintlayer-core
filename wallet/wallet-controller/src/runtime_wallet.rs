@@ -1017,7 +1017,12 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
                 stake_pool_arguments,
             ),
             #[cfg(feature = "trezor")]
-            RuntimeWallet::Trezor(_) => Err(WalletError::UnsupportedHardwareWalletOperation),
+            RuntimeWallet::Trezor(w) => w.create_stake_pool_tx_with_vrf_key(
+                account_index,
+                current_fee_rate,
+                consolidate_fee_rate,
+                stake_pool_arguments,
+            ),
         }
     }
 

@@ -1604,6 +1604,23 @@ fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
         .unwrap();
     let decommission_key = Destination::PublicKey(stadalone_public_key);
 
+    let err = wallet
+        .create_stake_pool_tx_with_vrf_key(
+            DEFAULT_ACCOUNT_INDEX,
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            StakePoolCreationArguments {
+                amount: pool_amount,
+                margin_ratio_per_thousand: PerThousand::new_from_rng(&mut rng),
+                cost_per_block: Amount::ZERO,
+                decommission_key: decommission_key.clone(),
+                staker_key: None,
+                vrf_public_key: None,
+            },
+        )
+        .unwrap_err();
+    assert_eq!(err, WalletError::VrfKeyMustBeProvided);
+
     let stake_pool_transaction = wallet
         .create_stake_pool_tx(
             DEFAULT_ACCOUNT_INDEX,
@@ -1829,6 +1846,25 @@ fn create_stake_pool_for_different_wallet_and_list_pool_ids(#[case] seed: Seed) 
         )
         .unwrap();
     let stake_pool_transaction_id = stake_pool_transaction.transaction().get_id();
+
+    let stake_pool_transaction2 = wallet1
+        .create_stake_pool_tx_with_vrf_key(
+            DEFAULT_ACCOUNT_INDEX,
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            StakePoolCreationArguments {
+                amount: pool_amount,
+                margin_ratio_per_thousand,
+                cost_per_block,
+                decommission_key: decommission_dest.clone(),
+                staker_key: Some(staker_key_dest.clone()),
+                vrf_public_key: Some(staker_vrf_public_key.clone()),
+            },
+        )
+        .unwrap();
+    let stake_pool_transaction_id2 = stake_pool_transaction2.transaction().get_id();
+    assert_eq!(stake_pool_transaction_id, stake_pool_transaction_id2);
+
     let (_, block2) = create_block(
         &chain_config,
         &mut wallet1,
