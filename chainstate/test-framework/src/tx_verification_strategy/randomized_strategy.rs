@@ -27,13 +27,10 @@ use pos_accounting::PoSAccountingView;
 use randomness::{Rng, RngCore};
 use test_utils::random::{make_seedable_rng, Seed};
 use tokens_accounting::TokensAccountingView;
-use tx_verifier::{
-    transaction_verifier::{
-        error::ConnectTransactionError, flush::flush_to_storage,
-        storage::TransactionVerifierStorageRef, TransactionSourceForConnect, TransactionVerifier,
-        TransactionVerifierDelta,
-    },
-    TransactionSource,
+use tx_verifier::transaction_verifier::{
+    error::ConnectTransactionError, flush::flush_to_storage,
+    storage::TransactionVerifierStorageRef, TransactionSourceWithHeight, TransactionVerifier,
+    TransactionVerifierDelta,
 };
 use utils::{shallow_clone::ShallowClone, tap_log::TapLog};
 use utxo::UtxosView;
@@ -105,6 +102,7 @@ impl TransactionVerificationStrategy for RandomizedTransactionVerificationStrate
         tx_verifier_maker: M,
         storage_backend: S,
         chain_config: C,
+        block_index: &BlockIndex,
         block: &WithId<Block>,
     ) -> Result<TransactionVerifier<C, S, U, A, T, O>, ConnectTransactionError>
     where
@@ -117,8 +115,13 @@ impl TransactionVerificationStrategy for RandomizedTransactionVerificationStrate
         M: TransactionVerifierMakerFn<C, S, U, A, T, O>,
         <S as utxo::UtxosStorageRead>::Error: From<U::Error>,
     {
-        let mut tx_verifier =
-            self.disconnect_with_base(tx_verifier_maker, storage_backend, chain_config, block)?;
+        let mut tx_verifier = self.disconnect_with_base(
+            tx_verifier_maker,
+            storage_backend,
+            chain_config,
+            block_index,
+            block,
+        )?;
 
         tx_verifier.set_best_block(block.prev_block_id());
 
@@ -173,7 +176,7 @@ impl RandomizedTransactionVerificationStrategy {
                 // connect transactable using current verifier
 
                 let fee = tx_verifier.connect_transaction(
-                    &TransactionSourceForConnect::Chain {
+                    &TransactionSourceWithHeight::Chain {
                         new_block_index: block_index,
                     },
                     &block.transactions()[tx_num],
@@ -239,7 +242,7 @@ impl RandomizedTransactionVerificationStrategy {
             } else {
                 // connect transactable using current verifier
                 let fee = tx_verifier.connect_transaction(
-                    &TransactionSourceForConnect::Chain {
+                    &TransactionSourceWithHeight::Chain {
                         new_block_index: block_index,
                     },
                     &block.transactions()[tx_num],
@@ -261,6 +264,7 @@ impl RandomizedTransactionVerificationStrategy {
         tx_verifier_maker: M,
         storage_backend: S,
         chain_config: C,
+        block_index: &BlockIndex,
         block: &WithId<Block>,
     ) -> Result<TransactionVerifier<C, S, U, A, T, O>, ConnectTransactionError>
     where
@@ -282,7 +286,7 @@ impl RandomizedTransactionVerificationStrategy {
             if self.rng.lock().unwrap().gen::<bool>() {
                 // derive a new cache
                 let (consumed_cache, new_tx_index) =
-                    self.disconnect_with_derived(&tx_verifier, block, tx_num)?;
+                    self.disconnect_with_derived(&tx_verifier, block_index, block, tx_num)?;
 
                 flush_to_storage(&mut tx_verifier, consumed_cache)
                     .map_err(ConnectTransactionError::from)?;
@@ -291,7 +295,9 @@ impl RandomizedTransactionVerificationStrategy {
                 // disconnect transactable using current verifier
                 tx_verifier
                     .disconnect_transaction(
-                        &TransactionSource::Chain(block.get_id()),
+                        &TransactionSourceWithHeight::Chain {
+                            new_block_index: block_index,
+                        },
                         &block.transactions()[tx_num as usize],
                     )
                     .log_err()?;
@@ -305,6 +311,7 @@ impl RandomizedTransactionVerificationStrategy {
     fn disconnect_with_derived<C, S, U, A, T, O>(
         &self,
         base_tx_verifier: &TransactionVerifier<C, S, U, A, T, O>,
+        block_index: &BlockIndex,
         block: &WithId<Block>,
         mut tx_num: i32,
     ) -> Result<(TransactionVerifierDelta, i32), ConnectTransactionError>
@@ -325,7 +332,9 @@ impl RandomizedTransactionVerificationStrategy {
             } else {
                 // disconnect transactable using current verifier
                 tx_verifier.disconnect_transaction(
-                    &TransactionSource::Chain(block.get_id()),
+                    &TransactionSourceWithHeight::Chain {
+                        new_block_index: block_index,
+                    },
                     &block.transactions()[tx_num as usize],
                 )?;
                 tx_num -= 1;

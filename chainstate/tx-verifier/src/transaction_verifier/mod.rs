@@ -39,7 +39,7 @@ use tokens_accounting::{
     TokenAccountingUndo, TokensAccountingCache, TokensAccountingDB, TokensAccountingDeltaData,
     TokensAccountingOperations, TokensAccountingStorageRead, TokensAccountingView,
 };
-pub use tx_source::{TransactionSource, TransactionSourceForConnect};
+pub use tx_source::{TransactionSource, TransactionSourceWithHeight};
 
 mod cached_operation;
 pub use cached_operation::CachedOperation;
@@ -343,7 +343,7 @@ where
 
     fn connect_pos_accounting_outputs(
         &mut self,
-        tx_source: &TransactionSourceForConnect,
+        tx_source: &TransactionSourceWithHeight,
         tx: &Transaction,
     ) -> Result<(), ConnectTransactionError> {
         let mut check_delegation: Option<DelegationId> = None;
@@ -488,7 +488,7 @@ where
 
     fn disconnect_accounting_outputs(
         &mut self,
-        tx_source: TransactionSource,
+        tx_source: &TransactionSourceWithHeight,
         tx: &Transaction,
     ) -> Result<(), ConnectTransactionError> {
         // decrement nonce if disconnected input spent from an account
@@ -498,11 +498,37 @@ where
                 TxInput::Account(outpoint) => {
                     self.unspend_input_from_account(outpoint.account().clone().into())?;
                 }
-                TxInput::AccountCommand(_, cmd) => {
-                    self.unspend_input_from_account(cmd.clone().into())?;
-                }
+                TxInput::AccountCommand(_, cmd) => match cmd {
+                    AccountCommand::MintTokens(..)
+                    | AccountCommand::UnmintTokens(..)
+                    | AccountCommand::LockTokenSupply(..)
+                    | AccountCommand::FreezeToken(..)
+                    | AccountCommand::UnfreezeToken(..)
+                    | AccountCommand::ChangeTokenAuthority(..)
+                    | AccountCommand::ConcludeOrder(..)
+                    | AccountCommand::ChangeTokenMetadataUri(..) => {
+                        self.unspend_input_from_account(cmd.clone().into())?;
+                    }
+                    AccountCommand::FillOrder(..) => {
+                        let orders_version = self
+                            .chain_config
+                            .as_ref()
+                            .chainstate_upgrades()
+                            .version_at_height(tx_source.expected_block_height())
+                            .1
+                            .orders_version();
+                        match orders_version {
+                            OrdersVersion::V0 => {
+                                self.unspend_input_from_account(cmd.clone().into())?;
+                            }
+                            OrdersVersion::V1 => { /* ignore nonce */ }
+                        }
+                    }
+                },
             };
         }
+
+        let tx_source = tx_source.into();
 
         self.disconnect_pos_accounting_outputs(tx_source, tx)?;
 
@@ -540,7 +566,7 @@ where
 
     fn connect_tokens_outputs(
         &mut self,
-        tx_source: &TransactionSourceForConnect,
+        tx_source: &TransactionSourceWithHeight,
         tx: &Transaction,
     ) -> Result<(), ConnectTransactionError> {
         self.check_operations_with_frozen_tokens(tx, tx_source.expected_block_height())?;
@@ -813,7 +839,7 @@ where
 
     fn connect_orders_outputs(
         &mut self,
-        tx_source: &TransactionSourceForConnect,
+        tx_source: &TransactionSourceWithHeight,
         tx: &Transaction,
     ) -> Result<(), ConnectTransactionError> {
         let input_undos = tx
@@ -941,7 +967,7 @@ where
 
     pub fn connect_transaction(
         &mut self,
-        tx_source: &TransactionSourceForConnect,
+        tx_source: &TransactionSourceWithHeight,
         tx: &SignedTransaction,
         median_time_past: &BlockTimestamp,
     ) -> Result<AccumulatedFee, ConnectTransactionError> {
@@ -1004,7 +1030,7 @@ where
     ) -> Result<(), ConnectTransactionError> {
         // TODO: test spending block rewards from chains outside the mainchain
         if reward_transactable.inputs().is_some() {
-            let tx_source = TransactionSourceForConnect::for_chain(block_index);
+            let tx_source = TransactionSourceWithHeight::for_chain(block_index);
             self.verify_inputs(&reward_transactable, &tx_source, median_time_past)?;
         }
 
@@ -1114,7 +1140,7 @@ where
 
     pub fn disconnect_transaction(
         &mut self,
-        tx_source: &TransactionSource,
+        tx_source: &TransactionSourceWithHeight,
         tx: &SignedTransaction,
     ) -> Result<(), ConnectTransactionError> {
         let block_undo_fetcher = |tx_source: TransactionSource| {
@@ -1123,12 +1149,12 @@ where
                 .map_err(|_| ConnectTransactionError::UndoFetchFailure)
         };
         let tx_undo = self.utxo_block_undo.take_tx_undo(
-            tx_source,
+            &TransactionSource::from(tx_source),
             &tx.transaction().get_id(),
             block_undo_fetcher,
         )?;
 
-        self.disconnect_accounting_outputs(*tx_source, tx.transaction())?;
+        self.disconnect_accounting_outputs(tx_source, tx.transaction())?;
 
         self.utxo_cache.disconnect_transaction(tx.transaction(), tx_undo)?;
 
@@ -1192,7 +1218,7 @@ where
     pub fn verify_inputs<Tx>(
         &self,
         tx: &Tx,
-        tx_source: &TransactionSourceForConnect,
+        tx_source: &TransactionSourceWithHeight,
         median_time_past: BlockTimestamp,
     ) -> Result<(), input_check::InputCheckError>
     where
