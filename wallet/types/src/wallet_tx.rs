@@ -180,6 +180,13 @@ impl WalletTx {
             WalletTx::Tx(tx) => tx.tx.outputs(),
         }
     }
+
+    pub fn block_height(&self) -> Option<BlockHeight> {
+        match self {
+            WalletTx::Block(block_data) => Some(block_data.height()),
+            WalletTx::Tx(tx_data) => tx_data.state().block_height(),
+        }
+    }
 }
 
 impl TxData {

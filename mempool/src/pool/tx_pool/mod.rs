@@ -665,7 +665,7 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
     ) {
         let result = self.store.drop_tx_and_descendants(tx_id, reason).try_for_each(|entry| {
             self.tx_verifier
-                .disconnect_transaction(&source, entry.transaction())
+                .disconnect_transaction(source, entry.transaction())
                 .map_err(|err| (*entry.tx_id(), err))
         });
 
