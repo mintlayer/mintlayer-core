@@ -25,12 +25,9 @@ use constraints_value_accumulator::AccumulatedFee;
 use orders_accounting::OrdersAccountingView;
 use pos_accounting::PoSAccountingView;
 use tokens_accounting::TokensAccountingView;
-use tx_verifier::{
-    transaction_verifier::{
-        error::ConnectTransactionError, flush::flush_to_storage,
-        storage::TransactionVerifierStorageRef, TransactionSourceForConnect, TransactionVerifier,
-    },
-    TransactionSource,
+use tx_verifier::transaction_verifier::{
+    error::ConnectTransactionError, flush::flush_to_storage,
+    storage::TransactionVerifierStorageRef, TransactionSourceWithHeight, TransactionVerifier,
 };
 use utils::{shallow_clone::ShallowClone, tap_log::TapLog};
 use utxo::UtxosView;
@@ -81,7 +78,7 @@ impl TransactionVerificationStrategy for DisposableTransactionVerificationStrate
                 let mut tx_verifier = base_tx_verifier.derive_child();
                 let fee = tx_verifier
                     .connect_transaction(
-                        &TransactionSourceForConnect::Chain {
+                        &TransactionSourceWithHeight::Chain {
                             new_block_index: block_index,
                         },
                         tx,
@@ -128,6 +125,7 @@ impl TransactionVerificationStrategy for DisposableTransactionVerificationStrate
         tx_verifier_maker: M,
         storage_backend: S,
         chain_config: C,
+        block_index: &BlockIndex,
         block: &WithId<Block>,
     ) -> Result<TransactionVerifier<C, S, U, A, T, O>, ConnectTransactionError>
     where
@@ -155,7 +153,12 @@ impl TransactionVerificationStrategy for DisposableTransactionVerificationStrate
                 let mut tx_verifier = base_tx_verifier.derive_child();
 
                 tx_verifier
-                    .disconnect_transaction(&TransactionSource::Chain(block.get_id()), tx)
+                    .disconnect_transaction(
+                        &TransactionSourceWithHeight::Chain {
+                            new_block_index: block_index,
+                        },
+                        tx,
+                    )
                     .log_err()?;
 
                 let consumed_cache = tx_verifier.consume()?;

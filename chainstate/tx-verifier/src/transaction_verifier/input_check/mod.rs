@@ -32,7 +32,7 @@ use mintscript::{
 
 use crate::TransactionVerifierStorageRef;
 
-use super::TransactionSourceForConnect;
+use super::TransactionSourceWithHeight;
 
 pub mod signature_only_check;
 
@@ -339,15 +339,15 @@ impl<'a, S> VerifyContextTimelock<'a, S> {
     fn for_verifier(
         chain_config: &'a ChainConfig,
         storage: &'a S,
-        tx_source: &TransactionSourceForConnect,
+        tx_source: &TransactionSourceWithHeight,
         spending_time: BlockTimestamp,
         core_ctx: &'a CoreContext<'a>,
     ) -> Self {
         let tip = match tx_source {
-            TransactionSourceForConnect::Chain { new_block_index } => {
+            TransactionSourceWithHeight::Chain { new_block_index } => {
                 (*new_block_index.block_id()).into()
             }
-            TransactionSourceForConnect::Mempool {
+            TransactionSourceWithHeight::Mempool {
                 current_best,
                 effective_height: _,
             } => current_best.block_id(),
@@ -535,7 +535,7 @@ pub fn verify_full<T, S, UV, AV, TV, OV>(
     tokens_accounting: &TV,
     orders_accounting: &OV,
     storage: &S,
-    tx_source: &TransactionSourceForConnect,
+    tx_source: &TransactionSourceWithHeight,
     spending_time: BlockTimestamp,
 ) -> Result<(), InputCheckError>
 where
