@@ -1141,6 +1141,8 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         fill_amount_in_ask_currency: Amount,
         output_address: Option<Destination>,
     ) -> Result<SignedTransaction, ControllerError<T>> {
+        let (_, account_best_block_height) =
+            self.wallet.get_best_block_for_account(self.account_index)?;
         self.create_and_send_tx(
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
@@ -1148,6 +1150,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
                   account_index: U31| {
                 wallet.create_fill_order_tx(
                     account_index,
+                    account_best_block_height,
                     order_id,
                     order_info,
                     fill_amount_in_ask_currency,

@@ -1944,6 +1944,7 @@ impl<B: storage::Backend> Wallet<B> {
     pub fn create_fill_order_tx(
         &mut self,
         account_index: U31,
+        account_best_block: BlockHeight,
         order_id: OrderId,
         order_info: RpcOrderInfo,
         fill_amount_in_ask_currency: Amount,
@@ -1964,6 +1965,7 @@ impl<B: storage::Backend> Wallet<B> {
                     current_fee_rate,
                     consolidate_fee_rate,
                 },
+                account_best_block,
             )
         })
     }

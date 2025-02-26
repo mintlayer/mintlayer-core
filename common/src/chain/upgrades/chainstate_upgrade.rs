@@ -73,7 +73,7 @@ pub enum FrozenTokensValidationVersion {
 pub enum OrdersVersion {
     /// Initial orders implementation
     V0,
-    // FIXME: document changes
+    /// Calculate fill amount based on original balances; ignore nonce for fill operations
     V1,
 }
 
