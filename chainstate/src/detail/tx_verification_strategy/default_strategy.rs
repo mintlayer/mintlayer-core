@@ -24,12 +24,9 @@ use constraints_value_accumulator::AccumulatedFee;
 use orders_accounting::OrdersAccountingView;
 use pos_accounting::PoSAccountingView;
 use tokens_accounting::TokensAccountingView;
-use tx_verifier::{
-    transaction_verifier::{
-        error::ConnectTransactionError, storage::TransactionVerifierStorageRef,
-        TransactionSourceForConnect, TransactionVerifier,
-    },
-    TransactionSource,
+use tx_verifier::transaction_verifier::{
+    error::ConnectTransactionError, storage::TransactionVerifierStorageRef,
+    TransactionSourceWithHeight, TransactionVerifier,
 };
 use utils::{shallow_clone::ShallowClone, tap_log::TapLog};
 use utxo::UtxosView;
@@ -76,7 +73,7 @@ impl TransactionVerificationStrategy for DefaultTransactionVerificationStrategy 
             .try_fold(AccumulatedFee::new(), |total, tx| {
                 let fee = tx_verifier
                     .connect_transaction(
-                        &TransactionSourceForConnect::Chain {
+                        &TransactionSourceWithHeight::Chain {
                             new_block_index: block_index,
                         },
                         tx,
@@ -120,6 +117,7 @@ impl TransactionVerificationStrategy for DefaultTransactionVerificationStrategy 
         tx_verifier_maker: M,
         storage_backend: S,
         chain_config: C,
+        block_index: &BlockIndex,
         block: &WithId<Block>,
     ) -> Result<TransactionVerifier<C, S, U, A, T, O>, ConnectTransactionError>
     where
@@ -141,7 +139,12 @@ impl TransactionVerificationStrategy for DefaultTransactionVerificationStrategy 
             .iter()
             .rev()
             .try_for_each(|tx| {
-                tx_verifier.disconnect_transaction(&TransactionSource::Chain(block.get_id()), tx)
+                tx_verifier.disconnect_transaction(
+                    &TransactionSourceWithHeight::Chain {
+                        new_block_index: block_index,
+                    },
+                    tx,
+                )
             })
             .log_err()?;
 

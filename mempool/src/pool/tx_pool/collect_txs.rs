@@ -25,7 +25,7 @@ use std::{
     ops::Deref,
 };
 
-use chainstate::tx_verifier::transaction_verifier::TransactionSourceForConnect;
+use chainstate::tx_verifier::transaction_verifier::TransactionSourceWithHeight;
 use common::{
     chain::transaction::Transaction,
     primitives::{Id, Idable},
@@ -97,7 +97,7 @@ pub fn collect_txs<M>(
         .blocking_chainstate_handle()
         .call(|c| c.get_best_block_index())?
         .expect("best index to exist");
-    let tx_source = TransactionSourceForConnect::for_mempool(&best_index);
+    let tx_source = TransactionSourceWithHeight::for_mempool(&best_index);
 
     // Use transactions already in the Accumulator to check for uniqueness and to update the
     // verifier state to update UTXOs they consume / provide.

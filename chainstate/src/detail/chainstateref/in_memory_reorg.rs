@@ -160,6 +160,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                         TransactionVerifier::new,
                         &tx_verifier,
                         self.chain_config,
+                        &cur_index,
                         &block.into(),
                     )?
                     .consume()?;
