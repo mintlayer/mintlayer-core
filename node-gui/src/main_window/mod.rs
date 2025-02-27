@@ -424,6 +424,8 @@ impl MainWindow {
 
                 BackendEvent::OpenWallet(Err(error)) | BackendEvent::ImportWallet(Err(error)) => {
                     self.show_error(error.to_string());
+                    self.file_dialog_active = false;
+                    self.active_dialog = ActiveDialog::None;
                     Task::none()
                 }
 

@@ -36,7 +36,6 @@ use crypto::{
     vrf::VRFPublicKey,
 };
 use rpc::description::HasValueHint;
-#[cfg(feature = "trezor")]
 use utils::ensure;
 use wallet::account::PoolData;
 
@@ -101,9 +100,6 @@ pub enum RpcError<N: NodeInterface> {
 
     #[error("Cannot specify a mnemonic or passphrase when creating a hardware wallet")]
     HardwareWalletWithMnemonicOrPassphrase,
-
-    #[error("Invalid hardware wallet selection")]
-    InvalidHardwareWallet,
 
     #[error("Invalid ip address")]
     InvalidIpAddress,
@@ -822,18 +818,18 @@ impl HardwareWalletType {
                 passphrase,
                 store_seed_phrase,
             }),
-            #[cfg(feature = "trezor")]
-            Some(HardwareWalletType::Trezor) => {
+            Some(hw_type) => {
                 ensure!(
                     mnemonic.is_none()
                         && passphrase.is_none()
                         && store_seed_phrase == StoreSeedPhrase::DoNotStore,
                     RpcError::HardwareWalletWithMnemonicOrPassphrase
                 );
-                Ok(WalletTypeArgs::Trezor)
+                match hw_type {
+                    #[cfg(feature = "trezor")]
+                    HardwareWalletType::Trezor => Ok(WalletTypeArgs::Trezor),
+                }
             }
-            #[cfg(not(feature = "trezor"))]
-            Some(_) => Err(RpcError::<N>::InvalidHardwareWallet),
         }
     }
 }

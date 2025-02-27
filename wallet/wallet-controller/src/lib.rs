@@ -31,7 +31,7 @@ use chainstate::tx_verifier::{
     self, error::ScriptError, input_check::signature_only_check::SignatureOnlyVerifiable,
 };
 use futures::{never::Never, stream::FuturesOrdered, TryStreamExt};
-use helpers::{fetch_token_info, fetch_utxo, fetch_utxo_extra_info, into_balances};
+use helpers::{fetch_token_info, fetch_utxo, fetch_utxo_extra_info_for_hw_wallet, into_balances};
 use node_comm::rpc_client::ColdWalletClient;
 use runtime_wallet::RuntimeWallet;
 use std::{
@@ -1053,7 +1053,7 @@ where
                 .map_err(ControllerError::WalletError)?;
 
             let (input_utxos, additional_infos) =
-                self.fetch_utxos_extra_info(input_utxos).await?.into_iter().fold(
+                self.fetch_utxos_extra_info_for_hw_wallet(input_utxos).await?.into_iter().fold(
                     (Vec::new(), TxAdditionalInfo::new()),
                     |(mut input_utxos, additional_info), (x, y)| {
                         input_utxos.push(x);
@@ -1062,7 +1062,7 @@ where
                 );
 
             let additional_infos = self
-                .fetch_utxos_extra_info(tx.outputs().to_vec())
+                .fetch_utxos_extra_info_for_hw_wallet(tx.outputs().to_vec())
                 .await?
                 .into_iter()
                 .fold(additional_infos, |acc, (_, info)| acc.join(info));
@@ -1155,13 +1155,13 @@ where
         Ok(input_utxos)
     }
 
-    async fn fetch_utxos_extra_info(
+    async fn fetch_utxos_extra_info_for_hw_wallet(
         &self,
         inputs: Vec<TxOutput>,
     ) -> Result<Vec<(TxOutput, TxAdditionalInfo)>, ControllerError<T>> {
         let tasks: FuturesOrdered<_> = inputs
             .into_iter()
-            .map(|input| fetch_utxo_extra_info(&self.rpc_client, input))
+            .map(|input| fetch_utxo_extra_info_for_hw_wallet(&self.rpc_client, input))
             .collect();
         tasks.try_collect().await
     }

@@ -85,9 +85,7 @@ fn sign_message(#[case] seed: Seed) {
     let pk_destination = Destination::PublicKey(pk);
 
     for destination in [pkh_destination, pk_destination] {
-        let mut devices = find_devices(false);
-        assert!(!devices.is_empty());
-        let client = devices.pop().unwrap().connect().unwrap();
+        let client = find_test_device();
 
         let mut signer = TrezorSigner::new(chain_config.clone(), Arc::new(Mutex::new(client)));
         let message = vec![rng.gen::<u8>(), rng.gen::<u8>(), rng.gen::<u8>()];
@@ -127,9 +125,7 @@ fn sign_transaction_intent(#[case] seed: Seed) {
         .unwrap();
     let mut account = Account::new(config.clone(), &mut db_tx, key_chain, None).unwrap();
 
-    let mut devices = find_devices(false);
-    assert!(!devices.is_empty());
-    let client = devices.pop().unwrap().connect().unwrap();
+    let client = find_test_device();
 
     let mut signer = TrezorSigner::new(config.clone(), Arc::new(Mutex::new(client)));
 
@@ -493,9 +489,7 @@ fn sign_transaction(#[case] seed: Seed) {
     ));
     let ptx = req.into_partially_signed_tx(additional_info).unwrap();
 
-    let mut devices = find_devices(false);
-    assert!(!devices.is_empty());
-    let client = devices.pop().unwrap().connect().unwrap();
+    let client = find_test_device();
 
     let mut signer = TrezorSigner::new(chain_config.clone(), Arc::new(Mutex::new(client)));
     let (ptx, _, _) = signer.sign_tx(ptx, account.key_chain(), &db_tx).unwrap();
@@ -520,4 +514,27 @@ fn sign_transaction(#[case] seed: Seed) {
         )
         .unwrap();
     }
+}
+
+fn find_test_device() -> Trezor {
+    let use_real_device = std::env::var_os("TEST_REAL_DEVICE").is_some();
+
+    let mut devices = find_devices(false)
+        .into_iter()
+        .filter(|device| device.model == Model::Trezor || device.model == Model::TrezorEmulator)
+        .collect_vec();
+
+    if use_real_device {
+        // Try to find the first real device
+        if let Some(idx) = devices.iter().position(|d| d.model == Model::Trezor) {
+            return devices.swap_remove(idx).connect().unwrap();
+        }
+    }
+
+    devices
+        .into_iter()
+        .find(|d| d.model == Model::TrezorEmulator)
+        .unwrap()
+        .connect()
+        .unwrap()
 }

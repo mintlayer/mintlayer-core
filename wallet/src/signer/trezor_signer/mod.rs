@@ -377,8 +377,7 @@ impl Signer for TrezorSigner {
                                                 sighash,
                                             )?;
 
-                                        let sighash_type = SigHashType::try_from(SigHashType::ALL)
-                                            .expect("Should not fail");
+                                        let sighash_type = SigHashType::all();
                                         let sig = add_secret_if_needed(StandardInputSignature::new(
                                             sighash_type,
                                             current_signatures.encode(),
@@ -405,8 +404,7 @@ impl Signer for TrezorSigner {
                     },
                     None => match (destination, new_signatures.get(i)) {
                         (Some(destination), Some(sig)) => {
-                            let sighash_type =
-                                SigHashType::try_from(SigHashType::ALL).expect("Should not fail");
+                            let sighash_type = SigHashType::all();
                             let sighash = signature_hash(sighash_type, ptx.tx(), &inputs_utxo_refs, i)?;
                             let (sig, status) = self.make_signature(
                                 sig,

@@ -130,11 +130,14 @@ impl<Message> Component<Message, Theme, iced::Renderer> for WalletMnemonicDialog
         }
         .center_x(Length::Fill);
 
-        Card::new(Text::new(action_text), body)
-            .foot(footer)
-            .max_width(600.0)
-            .on_close(ImportEvent::Cancel)
-            .into()
+        let card = Card::new(Text::new(action_text), body).foot(footer).max_width(600.0);
+
+        if state.importing {
+            card
+        } else {
+            card.on_close(ImportEvent::Cancel)
+        }
+        .into()
     }
 }
 
