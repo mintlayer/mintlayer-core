@@ -164,6 +164,10 @@ impl BlockHeight {
         self.0
     }
 
+    pub fn iter_up_to(&self, other: BlockHeight) -> impl Iterator<Item = BlockHeight> {
+        (self.0..other.0).map(BlockHeight::new)
+    }
+
     pub fn iter_up_to_including(&self, other: BlockHeight) -> impl Iterator<Item = BlockHeight> {
         (self.0..=other.0).map(BlockHeight::new)
     }
@@ -342,6 +346,10 @@ mod tests {
 
     #[test]
     fn iteration() {
+        let heights = BlockHeight::new(1).iter_up_to(BlockHeight::new(3)).collect::<Vec<_>>();
+        let expected_heights = vec![BlockHeight::new(1), BlockHeight::new(2)];
+        assert_eq!(heights, expected_heights);
+
         let heights = BlockHeight::new(1)
             .iter_up_to_including(BlockHeight::new(3))
             .collect::<Vec<_>>();

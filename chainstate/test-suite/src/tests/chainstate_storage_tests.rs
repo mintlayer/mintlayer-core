@@ -15,9 +15,6 @@
 
 use std::collections::BTreeMap;
 
-use crate::tests::helpers::chainstate_upgrade_builder::ChainstateUpgradeBuilder;
-
-use super::*;
 use chainstate_storage::{BlockchainStorageRead, Transactional};
 use chainstate_test_framework::{
     anyonecanspend_address, empty_witness, TestFramework, TestStore, TransactionBuilder,
@@ -31,8 +28,11 @@ use common::{
     },
     primitives::{Amount, Id, Idable},
 };
+use common_test_helpers::chainstate_upgrade_builder::ChainstateUpgradeBuilder;
 use test_utils::nft_utils::random_nft_issuance;
 use utxo::{Utxo, UtxosStorageRead, UtxosTxUndo};
+
+use super::*;
 
 // Process a tx with a coin. Check that new utxo and tx index are stored, best block is updated.
 #[rstest]

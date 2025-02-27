@@ -145,6 +145,7 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::TotalFeeRequiredOverflow => 100,
             ConnectTransactionError::InsufficientCoinsFee(_, _) => 100,
             ConnectTransactionError::AttemptToSpendFrozenToken(_) => 100,
+            ConnectTransactionError::ProduceBlockFromStakeChangesStakerDestination(_, _) => 100,
 
             // Need to drill down deeper into the error in these cases
             ConnectTransactionError::IOPolicyError(err, _) => err.ban_score(),
