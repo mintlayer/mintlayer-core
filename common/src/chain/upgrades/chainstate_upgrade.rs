@@ -13,8 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::Activate;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
 pub enum TokenIssuanceVersion {
     /// Initial issuance implementation
@@ -47,6 +45,12 @@ pub enum HtlcActivated {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
 pub enum OrdersActivated {
+    Yes,
+    No,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
+pub enum StakerDestinationUpdateForbidden {
     Yes,
     No,
 }
@@ -88,6 +92,7 @@ pub struct ChainstateUpgrade {
     htlc_activated: HtlcActivated,
     orders_activated: OrdersActivated,
     orders_version: OrdersVersion,
+    staker_destination_update_forbidden: StakerDestinationUpdateForbidden,
 }
 
 impl ChainstateUpgrade {
@@ -102,6 +107,7 @@ impl ChainstateUpgrade {
         htlc_activated: HtlcActivated,
         orders_activated: OrdersActivated,
         orders_version: OrdersVersion,
+        staker_destination_update_forbidden: StakerDestinationUpdateForbidden,
     ) -> Self {
         Self {
             token_issuance_version,
@@ -113,6 +119,7 @@ impl ChainstateUpgrade {
             htlc_activated,
             orders_activated,
             orders_version,
+            staker_destination_update_forbidden,
         }
     }
 
@@ -136,6 +143,10 @@ impl ChainstateUpgrade {
         self.orders_activated
     }
 
+    pub fn staker_destination_update_forbidden(&self) -> StakerDestinationUpdateForbidden {
+        self.staker_destination_update_forbidden
+    }
+
     pub fn data_deposit_fee_version(&self) -> DataDepositFeeVersion {
         self.data_deposit_fee_version
     }
@@ -152,5 +163,3 @@ impl ChainstateUpgrade {
         self.orders_version
     }
 }
-
-impl Activate for ChainstateUpgrade {}

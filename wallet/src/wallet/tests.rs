@@ -13,7 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::signer::software_signer::SoftwareSignerProvider;
 use std::{
     collections::BTreeSet,
     num::{NonZeroU8, NonZeroUsize},
@@ -36,6 +35,7 @@ use common::{
     },
     primitives::{per_thousand::PerThousand, Idable, H256},
 };
+use common_test_helpers::chainstate_upgrade_builder::ChainstateUpgradeBuilder;
 use crypto::{
     key::{
         hdkd::{child_number::ChildNumber, derivable::Derivable, derivation_path::DerivationPath},
@@ -65,6 +65,7 @@ use wallet_types::{
 use crate::{
     key_chain::{make_account_path, LOOKAHEAD_SIZE},
     send_request::{make_address_output, make_create_delegation_output},
+    signer::software_signer::SoftwareSignerProvider,
     wallet_events::WalletEventsNoOp,
     DefaultWallet,
 };
@@ -7005,17 +7006,9 @@ fn conflicting_order_account_nonce(#[case] seed: Seed) {
         .chainstate_upgrades(
             common::chain::NetUpgrades::initialize(vec![(
                 BlockHeight::zero(),
-                common::chain::ChainstateUpgrade::new(
-                    common::chain::TokenIssuanceVersion::V1,
-                    common::chain::RewardDistributionVersion::V1,
-                    common::chain::TokensFeeVersion::V1,
-                    common::chain::DataDepositFeeVersion::V1,
-                    common::chain::ChangeTokenMetadataUriActivated::Yes,
-                    common::chain::FrozenTokensValidationVersion::V1,
-                    common::chain::HtlcActivated::Yes,
-                    common::chain::OrdersActivated::Yes,
-                    common::chain::OrdersVersion::V0,
-                ),
+                ChainstateUpgradeBuilder::latest()
+                    .orders_version(common::chain::OrdersVersion::V0)
+                    .build(),
             )])
             .expect("cannot fail"),
         )

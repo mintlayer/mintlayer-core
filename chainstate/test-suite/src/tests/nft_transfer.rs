@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use rstest::rstest;
+
 use chainstate::{BlockError, ChainstateError, ConnectTransactionError};
 use chainstate_test_framework::{get_output_value, TestFramework, TransactionBuilder};
 use common::{
@@ -24,12 +26,10 @@ use common::{
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Idable},
 };
+use common_test_helpers::chainstate_upgrade_builder::ChainstateUpgradeBuilder;
 use randomness::Rng;
-use rstest::rstest;
 use test_utils::nft_utils::random_nft_issuance;
 use test_utils::random::{make_seedable_rng, Seed};
-
-use crate::tests::helpers::chainstate_upgrade_builder::ChainstateUpgradeBuilder;
 
 #[rstest]
 #[trace]

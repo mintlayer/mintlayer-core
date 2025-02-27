@@ -21,7 +21,7 @@ use crate::primitives::per_thousand::PerThousand;
 use crate::primitives::{BlockHeight, Compact};
 use crate::Uint256;
 
-use super::{Activate, NetUpgrades};
+use super::NetUpgrades;
 
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub enum ConsensusUpgrade {
@@ -179,5 +179,3 @@ impl NetUpgrades<ConsensusUpgrade> {
         }
     }
 }
-
-impl Activate for ConsensusUpgrade {}

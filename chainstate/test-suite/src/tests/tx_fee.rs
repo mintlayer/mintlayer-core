@@ -34,12 +34,11 @@ use common::{
     },
     primitives::{Amount, Fee, Idable},
 };
+use common_test_helpers::chainstate_upgrade_builder::ChainstateUpgradeBuilder;
 use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
 use randomness::CryptoRng;
 use test_utils::random_ascii_alphanumeric_string;
 use tx_verifier::transaction_verifier::{TransactionSourceForConnect, TransactionVerifier};
-
-use crate::tests::helpers::chainstate_upgrade_builder::ChainstateUpgradeBuilder;
 
 fn setup(rng: &mut (impl Rng + CryptoRng)) -> (ChainConfig, InMemoryStorageWrapper, TestFramework) {
     let storage = TestStore::new_empty().unwrap();

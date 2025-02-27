@@ -1,4 +1,4 @@
-// Copyright (c) 2022 RBB S.r.l
+// Copyright (c) 2021-2025 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,19 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod chainstate_upgrade;
-mod consensus_upgrade;
-mod netupgrade;
+#![allow(clippy::unwrap_used)]
 
-pub use chainstate_upgrade::{
-    ChainstateUpgrade, ChangeTokenMetadataUriActivated, DataDepositFeeVersion,
-    FrozenTokensValidationVersion, HtlcActivated, OrdersActivated, OrdersVersion,
-    RewardDistributionVersion, StakerDestinationUpdateForbidden, TokenIssuanceVersion,
-    TokensFeeVersion,
-};
-pub use consensus_upgrade::{ConsensusUpgrade, PoSStatus, PoWStatus, RequiredConsensus};
-pub use netupgrade::NetUpgrades;
+//! A crate for test utilities that depend on the `common` crate and are supposed to be used
+//! by tests in other crates and `common`'s integration tests.
 
-pub enum NetUpgradeError {
-    GenerateConfigFailed,
-}
+pub mod chainstate_upgrade_builder;

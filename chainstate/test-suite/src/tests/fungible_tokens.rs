@@ -15,36 +15,36 @@
 
 use std::vec;
 
+use expect_test::expect;
+use rstest::rstest;
+
 use chainstate::{
     BlockError, BlockSource, ChainstateError, CheckBlockError, CheckBlockTransactionsError,
     ConnectTransactionError, TokensError,
 };
 use chainstate_test_framework::{get_output_value, TestFramework, TransactionBuilder};
-use common::chain::tokens::{Metadata, NftIssuanceV0, TokenIssuanceV0, TokenTransfer};
-use common::chain::UtxoOutPoint;
-use common::primitives::{id, BlockHeight, Id};
 use common::{
     chain::{
         output_value::OutputValue,
         signature::inputsig::InputWitness,
-        tokens::{make_token_id, TokenData, TokenId},
-        Destination, OutPointSourceId, TokenIssuanceVersion, TxInput, TxOutput,
+        tokens::{
+            make_token_id, Metadata, NftIssuanceV0, TokenData, TokenId, TokenIssuanceV0,
+            TokenTransfer,
+        },
+        Destination, OutPointSourceId, TokenIssuanceVersion, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{Amount, Idable},
+    primitives::{id, Amount, BlockHeight, Id, Idable},
 };
+use common_test_helpers::chainstate_upgrade_builder::ChainstateUpgradeBuilder;
 use crypto::hash::StreamHasher;
-use expect_test::expect;
 use randomness::{CryptoRng, Rng};
-use rstest::rstest;
 use serialization::extras::non_empty_vec::DataOrNoVec;
-use test_utils::nft_utils::random_token_issuance;
 use test_utils::{
+    nft_utils::random_token_issuance,
     random::{make_seedable_rng, Seed},
     random_ascii_alphanumeric_string,
 };
 use tx_verifier::CheckTransactionError;
-
-use super::helpers::chainstate_upgrade_builder::ChainstateUpgradeBuilder;
 
 fn make_test_framework_with_v0(rng: &mut (impl Rng + CryptoRng)) -> TestFramework {
     TestFramework::builder(rng)

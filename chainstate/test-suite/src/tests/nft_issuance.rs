@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use rstest::rstest;
+
 use chainstate::{
     BlockError, ChainstateError, CheckBlockError, CheckBlockTransactionsError,
     ConnectTransactionError, TokensError,
@@ -25,8 +27,8 @@ use common::chain::{
     Block, Destination, OutPointSourceId, TokenIssuanceVersion, TxInput, TxOutput,
 };
 use common::primitives::{BlockHeight, Idable};
+use common_test_helpers::chainstate_upgrade_builder::ChainstateUpgradeBuilder;
 use randomness::{CryptoRng, Rng};
-use rstest::rstest;
 use serialization::extras::non_empty_vec::DataOrNoVec;
 use test_utils::{
     gen_text_with_non_ascii,
@@ -35,8 +37,6 @@ use test_utils::{
     random_ascii_alphanumeric_string,
 };
 use tx_verifier::{error::TokenIssuanceError, CheckTransactionError};
-
-use crate::tests::helpers::chainstate_upgrade_builder::ChainstateUpgradeBuilder;
 
 #[rstest]
 #[trace]

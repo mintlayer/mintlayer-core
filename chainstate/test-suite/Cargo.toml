@@ -33,10 +33,12 @@ hex.workspace = true
 itertools.workspace = true
 
 [dev-dependencies]
+common-test-helpers = { path = "../../common/test-helpers" }
+tokio = { workspace = true, features = ["rt", "time"] }
+
 criterion.workspace = true
 expect-test.workspace = true
 rstest.workspace = true
-tokio = { workspace = true, features = ["rt", "time"] }
 
 [[bench]]
 name = "benches"

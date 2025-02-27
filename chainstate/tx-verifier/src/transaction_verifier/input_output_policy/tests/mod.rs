@@ -22,9 +22,10 @@ use common::{
     },
     primitives::{Compact, Id, H256},
 };
-use crypto::vrf::{transcript::no_rng::VRFTranscript, VRFKeyKind, VRFPrivateKey};
+use crypto::vrf::{transcript::no_rng::VRFTranscript, VRFKeyKind, VRFPrivateKey, VRFPublicKey};
 use itertools::Itertools;
 use randomness::{seq::IteratorRandom, Rng};
+use test_utils::random::{make_seedable_rng, Seed};
 use utxo::{Utxo, UtxosDBInMemoryImpl};
 
 use super::*;
@@ -64,9 +65,15 @@ fn get_random_outputs_combination(
         .collect::<Vec<_>>()
 }
 
+lazy_static::lazy_static! {
+    static ref VRF_KEYS: (VRFPrivateKey, VRFPublicKey) = {
+        let mut rng = make_seedable_rng(Seed(0));
+        VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel)
+    };
+}
+
 fn make_block(kernels: Vec<TxInput>, reward_outputs: Vec<TxOutput>) -> Block {
-    let (sk, _) = VRFPrivateKey::new_from_entropy(VRFKeyKind::Schnorrkel);
-    let vrf_data = sk.produce_vrf_data(VRFTranscript::new(b"abc"));
+    let vrf_data = VRF_KEYS.0.produce_vrf_data(VRFTranscript::new(b"abc"));
     Block::new(
         vec![],
         Id::<GenBlock>::new(H256::zero()),

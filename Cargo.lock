@@ -347,6 +347,7 @@ dependencies = [
  "chainstate",
  "chainstate-test-framework",
  "common",
+ "common-test-helpers",
  "crypto",
  "hex",
  "libtest-mimic",
@@ -1331,6 +1332,7 @@ dependencies = [
  "chainstate-test-framework",
  "chainstate-types",
  "common",
+ "common-test-helpers",
  "consensus",
  "constraints-value-accumulator",
  "criterion",
@@ -1608,6 +1610,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-test-helpers"
+version = "1.0.2"
+dependencies = [
+ "common",
+]
+
+[[package]]
 name = "concurrent-queue"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1663,6 +1672,7 @@ version = "1.0.2"
 dependencies = [
  "accounting",
  "common",
+ "common-test-helpers",
  "crypto",
  "orders-accounting",
  "pos-accounting",
@@ -4257,7 +4267,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc2f4eb4bc735547cfed7c0a4922cbd04a4655978c09b54f1f7b228750664c34"
 dependencies = [
  "cfg-if",
- "windows-targets 0.52.6",
+ "windows-targets 0.48.5",
 ]
 
 [[package]]
@@ -6610,12 +6620,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "19b30a45b0cd0bcca8037f3d0dc3421eaf95327a17cad11964fb8179b4fc4832"
 
 [[package]]
-name = "replace_with"
-version = "0.1.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e3a8614ee435691de62bcffcf4a66d91b3594bf1428a5722e79103249a095690"
-
-[[package]]
 name = "reqwest"
 version = "0.11.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8679,18 +8683,19 @@ dependencies = [
  "chainstate-storage",
  "chainstate-types",
  "common",
+ "common-test-helpers",
  "consensus",
  "constraints-value-accumulator",
  "crypto",
  "fallible-iterator 0.3.0",
  "itertools 0.14.0",
+ "lazy_static",
  "logging",
  "mintscript",
  "mockall",
  "orders-accounting",
  "pos-accounting",
  "randomness",
- "replace_with",
  "rstest",
  "serialization",
  "static_assertions",
@@ -8990,6 +8995,7 @@ dependencies = [
  "chainstate",
  "chainstate-test-framework",
  "common",
+ "common-test-helpers",
  "consensus",
  "crypto",
  "hex",
@@ -9632,7 +9638,7 @@ dependencies = [
  "js-sys",
  "log",
  "naga",
- "parking_lot 0.12.3",
+ "parking_lot 0.11.2",
  "profiling",
  "raw-window-handle",
  "smallvec",
@@ -9660,7 +9666,7 @@ dependencies = [
  "log",
  "naga",
  "once_cell",
- "parking_lot 0.12.3",
+ "parking_lot 0.11.2",
  "profiling",
  "raw-window-handle",
  "rustc-hash 1.1.0",
@@ -9702,7 +9708,7 @@ dependencies = [
  "ndk-sys 0.5.0+25.2.9519653",
  "objc",
  "once_cell",
- "parking_lot 0.12.3",
+ "parking_lot 0.11.2",
  "profiling",
  "range-alloc",
  "raw-window-handle",
