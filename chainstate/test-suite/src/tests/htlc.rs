@@ -13,7 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::*;
 use chainstate::{BlockError, ChainstateError, ConnectTransactionError};
 use chainstate_test_framework::{TestFramework, TransactionBuilder};
 use common::{
@@ -43,6 +42,7 @@ use common::{
     },
     primitives::{Amount, Idable},
 };
+use common_test_helpers::chainstate_upgrade_builder::ChainstateUpgradeBuilder;
 use crypto::key::{KeyKind, PrivateKey, PublicKey};
 use randomness::CryptoRng;
 use serialization::Encode;
@@ -52,7 +52,7 @@ use tx_verifier::{
     input_check::HashlockError,
 };
 
-use crate::tests::helpers::chainstate_upgrade_builder::ChainstateUpgradeBuilder;
+use super::*;
 
 struct TestFixture {
     alice_sk: PrivateKey,

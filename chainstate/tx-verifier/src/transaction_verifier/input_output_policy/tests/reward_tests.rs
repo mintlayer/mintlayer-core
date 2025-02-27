@@ -155,13 +155,11 @@ fn check_block_reward_pos(#[case] seed: Seed) {
     .unwrap();
 }
 
-// Create 2 pools with different balances.
-// For block reward total inputs and total outputs must be equal.
-// Check that if different balances are used for inputs and outputs an error is produced.
+// Check that if different pool ids are used for inputs and outputs an error is produced.
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn check_block_reward_pos_amount_mismatch(#[case] seed: Seed) {
+fn check_block_reward_pos_pool_id_mismatch(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = common::chain::config::Builder::new(ChainType::Mainnet).build();
 
