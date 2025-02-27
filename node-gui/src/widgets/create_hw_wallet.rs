@@ -87,9 +87,9 @@ impl<Message> Component<Message, Theme, iced::Renderer> for CreateHwWalletDialog
             card.foot(container(text("Loading...")).center_x(Length::Fill))
         } else {
             card.foot(container(button).center_x(Length::Fill))
+                .on_close(ImportEvent::Cancel)
         }
         .max_width(600.0)
-        .on_close(ImportEvent::Cancel)
         .into()
     }
 }

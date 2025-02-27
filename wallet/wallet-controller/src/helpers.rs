@@ -154,7 +154,7 @@ where
     }
 }
 
-pub async fn fetch_utxo_extra_info<T>(
+pub async fn fetch_utxo_extra_info_for_hw_wallet<T>(
     rpc_client: &T,
     utxo: TxOutput,
 ) -> Result<(TxOutput, TxAdditionalInfo), ControllerError<T>>
@@ -226,6 +226,7 @@ pub async fn into_balances<T: NodeInterface>(
     Ok(Balances::new(coins, tasks.try_collect().await?))
 }
 
+// TODO: optimize RPC calls to the Node
 pub async fn tx_to_partially_signed_tx<T: NodeInterface, B: storage::Backend>(
     rpc_client: &T,
     wallet: &RuntimeWallet<B>,
@@ -252,7 +253,7 @@ pub async fn tx_to_partially_signed_tx<T: NodeInterface, B: storage::Backend>(
     let tasks: FuturesOrdered<_> = tx
         .outputs()
         .iter()
-        .map(|out| fetch_utxo_extra_info(rpc_client, out.clone()))
+        .map(|out| fetch_utxo_extra_info_for_hw_wallet(rpc_client, out.clone()))
         .collect();
     let additional_infos = tasks
         .try_collect::<Vec<_>>()
@@ -280,7 +281,8 @@ async fn into_utxo_and_destination<T: NodeInterface, B: storage::Backend>(
     Ok(match tx_inp {
         TxInput::Utxo(outpoint) => {
             let (utxo, dest) = fetch_utxo_and_destination(rpc_client, outpoint, wallet).await?;
-            let (utxo, additional_infos) = fetch_utxo_extra_info(rpc_client, utxo).await?;
+            let (utxo, additional_infos) =
+                fetch_utxo_extra_info_for_hw_wallet(rpc_client, utxo).await?;
             (Some(utxo), additional_infos, Some(dest))
         }
         TxInput::Account(acc_outpoint) => {

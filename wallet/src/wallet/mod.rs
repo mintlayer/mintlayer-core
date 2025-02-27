@@ -64,7 +64,7 @@ use mempool::FeeRate;
 use pos_accounting::make_delegation_id;
 use tx_verifier::error::TokenIssuanceError;
 use tx_verifier::{check_transaction, CheckTransactionError};
-use utils::ensure;
+use utils::{debug_panic_or_log, ensure};
 pub use wallet_storage::Error;
 use wallet_storage::{
     DefaultBackend, Store, StoreTxRo, StoreTxRw, StoreTxRwUnlocked, TransactionRoLocked,
@@ -571,7 +571,10 @@ where
             let version = db.transaction_ro()?.get_storage_version()?;
 
             match version {
-                WALLET_VERSION_UNINITIALIZED => return Err(WalletError::WalletNotInitialized),
+                WALLET_VERSION_UNINITIALIZED => {
+                    debug_panic_or_log!("A migration went wrong");
+                    return Err(WalletError::WalletNotInitialized);
+                }
                 WALLET_VERSION_V1 => {
                     pre_migration(WALLET_VERSION_V1)?;
                     Self::migration_v2(db, chain_config.clone(), &mut signer_provider)?;

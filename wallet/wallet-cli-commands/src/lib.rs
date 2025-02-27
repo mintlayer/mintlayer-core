@@ -68,8 +68,9 @@ pub enum WalletManagementCommand {
         passphrase: Option<String>,
 
         /// Create a wallet using a connected hardware wallet. Only the public keys will be kept in
-        /// the software wallet. Cannot specify a mnemonic or passphrase here, input them on the
-        /// hardware wallet instead when initializing the device.
+        /// the software wallet. Cannot specify a mnemonic or passphrase here,
+        /// the former must have been entered on the hardware during the device setup
+        /// and the latter will have to be entered every time the device is connected to the host machine.
         #[arg(long, conflicts_with_all(["mnemonic", "passphrase", "whether_to_store_seed_phrase"]))]
         hardware_wallet: Option<CliHardwareWalletType>,
     },
@@ -95,8 +96,9 @@ pub enum WalletManagementCommand {
         passphrase: Option<String>,
 
         /// Create a wallet using a connected hardware wallet. Only the public keys will be kept in
-        /// the software wallet. Cannot specify a mnemonic or passphrase here, input them on the
-        /// hardware wallet instead when initializing the device.
+        /// the software wallet. Cannot specify a mnemonic or passphrase here,
+        /// the former must have been entered on the hardware during the device setup
+        /// and the latter will have to be entered every time the device is connected to the host machine.
         #[arg(long, conflicts_with_all(["passphrase", "mnemonic", "whether_to_store_seed_phrase"]))]
         hardware_wallet: Option<CliHardwareWalletType>,
     },
