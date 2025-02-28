@@ -20,6 +20,7 @@ use std::sync::Arc;
 
 use common::address::AddressError;
 use common::chain::ChainConfig;
+use common::primitives::per_thousand::PerThousandParseError;
 use rpc::new_http_client;
 use rpc::ClientError;
 use rpc::RpcAuthData;
@@ -39,6 +40,8 @@ pub enum NodeRpcError {
     ResponseError(ClientError),
     #[error("Address error: {0}")]
     AddressError(#[from] AddressError),
+    #[error("PerThousand parse error: {0}")]
+    PerThousandParseError(#[from] PerThousandParseError),
 }
 
 #[derive(Clone, Debug)]

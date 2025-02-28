@@ -21,11 +21,11 @@ use common::{
         classic_multisig::ClassicMultisigChallenge,
         htlc::HashedTimelockContract,
         output_value::OutputValue,
-        partially_signed_transaction::PartiallySignedTransaction,
         signature::inputsig::arbitrary_message::ArbitraryMessageSignature,
         tokens::{
-            IsTokenFreezable, IsTokenUnfreezable, Metadata, RPCFungibleTokenInfo, RPCTokenInfo,
-            TokenId, TokenIssuance, TokenIssuanceV1, TokenTotalSupply,
+            get_referenced_token_ids, IsTokenFreezable, IsTokenUnfreezable, Metadata,
+            RPCFungibleTokenInfo, RPCTokenInfo, TokenId, TokenIssuance, TokenIssuanceV1,
+            TokenTotalSupply,
         },
         ChainConfig, DelegationId, Destination, OrderId, PoolId, RpcOrderInfo, SignedTransaction,
         SignedTransactionIntent, Transaction, TxOutput, UtxoOutPoint,
@@ -53,9 +53,12 @@ use wallet::{
     },
     wallet::WalletPoolsFilter,
     wallet_events::WalletEvents,
-    DefaultWallet, WalletError, WalletResult,
+    WalletError, WalletResult,
 };
 use wallet_types::{
+    partially_signed_transaction::{
+        PartiallySignedTransaction, TokenAdditionalInfo, TxAdditionalInfo,
+    },
     signature_status::SignatureStatus,
     utxo_types::{UtxoState, UtxoType},
     with_locked::WithLocked,
@@ -63,13 +66,14 @@ use wallet_types::{
 };
 
 use crate::{
-    into_balances,
+    helpers::{fetch_token_info, fetch_utxo, into_balances, tx_to_partially_signed_tx},
+    runtime_wallet::RuntimeWallet,
     types::{Balances, GenericCurrencyTransfer},
     ControllerConfig, ControllerError,
 };
 
-pub struct SyncedController<'a, T, W> {
-    wallet: &'a mut DefaultWallet,
+pub struct SyncedController<'a, T, W, B: storage::Backend + 'static> {
+    wallet: &'a mut RuntimeWallet<B>,
     rpc_client: T,
     chain_config: &'a ChainConfig,
     wallet_events: &'a W,
@@ -78,9 +82,14 @@ pub struct SyncedController<'a, T, W> {
     config: ControllerConfig,
 }
 
-impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
+impl<'a, T, W, B> SyncedController<'a, T, W, B>
+where
+    B: storage::Backend + 'static,
+    T: NodeInterface,
+    W: WalletEvents,
+{
     pub fn new(
-        wallet: &'a mut DefaultWallet,
+        wallet: &'a mut RuntimeWallet<B>,
         rpc_client: T,
         chain_config: &'a ChainConfig,
         wallet_events: &'a W,
@@ -99,25 +108,14 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         }
     }
 
-    pub async fn get_token_info(
-        &self,
-        token_id: TokenId,
-    ) -> Result<RPCTokenInfo, ControllerError<T>> {
-        self.rpc_client
-            .get_token_info(token_id)
-            .await
-            .map_err(ControllerError::NodeCallError)?
-            .ok_or(ControllerError::WalletError(WalletError::UnknownTokenId(
-                token_id,
-            )))
-    }
-
     async fn fetch_token_infos(
         &self,
         tokens: BTreeSet<TokenId>,
     ) -> Result<Vec<RPCTokenInfo>, ControllerError<T>> {
-        let tasks: FuturesUnordered<_> =
-            tokens.into_iter().map(|token_id| self.get_token_info(token_id)).collect();
+        let tasks: FuturesUnordered<_> = tokens
+            .into_iter()
+            .map(|token_id| fetch_token_info(&self.rpc_client, token_id))
+            .collect();
         tasks.try_collect().await
     }
 
@@ -134,7 +132,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         for token_info in self.fetch_token_infos(token_ids).await? {
             match token_info {
                 RPCTokenInfo::FungibleToken(token_info) => {
-                    self.check_fungible_token_is_usable(&token_info)?
+                    self.check_fungible_token_is_usable(token_info)?
                 }
                 RPCTokenInfo::NonFungibleToken(_) => {}
             }
@@ -144,7 +142,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
 
     pub fn check_fungible_token_is_usable(
         &self,
-        token_info: &RPCFungibleTokenInfo,
+        token_info: RPCFungibleTokenInfo,
     ) -> Result<(), ControllerError<T>> {
         self.wallet
             .get_token_unconfirmed_info(self.account_index, token_info)
@@ -158,30 +156,52 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
     /// Filter out utxos that contain tokens that are frozen and can't be used
     async fn filter_out_utxos_with_frozen_tokens(
         &self,
-        input_utxos: Vec<(UtxoOutPoint, TxOutput, Option<TokenId>)>,
-    ) -> Result<Vec<(UtxoOutPoint, TxOutput, Option<TokenId>)>, ControllerError<T>> {
+        input_utxos: Vec<(UtxoOutPoint, TxOutput)>,
+    ) -> Result<(Vec<(UtxoOutPoint, TxOutput)>, TxAdditionalInfo), ControllerError<T>> {
         let mut result = vec![];
+        let mut additional_info = TxAdditionalInfo::new();
         for utxo in input_utxos {
-            if let Some(token_id) = utxo.2 {
-                let token_info = self.get_token_info(token_id).await?;
+            let token_ids = get_referenced_token_ids(&utxo.1);
+            if token_ids.is_empty() {
+                result.push(utxo);
+            } else {
+                let token_infos = self.fetch_token_infos(token_ids).await?;
+                let ok_to_use = token_infos.iter().try_fold(
+                    true,
+                    |all_ok, token_info| -> Result<bool, ControllerError<T>> {
+                        let all_ok = all_ok
+                            && match &token_info {
+                                RPCTokenInfo::FungibleToken(token_info) => self
+                                    .wallet
+                                    .get_token_unconfirmed_info(
+                                        self.account_index,
+                                        token_info.clone(),
+                                    )
+                                    .map_err(ControllerError::WalletError)?
+                                    .check_can_be_used()
+                                    .is_ok(),
+                                RPCTokenInfo::NonFungibleToken(_) => true,
+                            };
+                        Ok(all_ok)
+                    },
+                )?;
 
-                let ok_to_use = match token_info {
-                    RPCTokenInfo::FungibleToken(token_info) => self
-                        .wallet
-                        .get_token_unconfirmed_info(self.account_index, &token_info)
-                        .map_err(ControllerError::WalletError)?
-                        .check_can_be_used()
-                        .is_ok(),
-                    RPCTokenInfo::NonFungibleToken(_) => true,
-                };
                 if ok_to_use {
                     result.push(utxo);
+                    for token_info in token_infos {
+                        additional_info.add_token_info(
+                            token_info.token_id(),
+                            TokenAdditionalInfo {
+                                num_decimals: token_info.token_number_of_decimals(),
+                                ticker: token_info.token_ticker().to_vec(),
+                            },
+                        );
+                    }
                 }
-            } else {
-                result.push(utxo);
             }
         }
-        Ok(result)
+
+        Ok((result, additional_info))
     }
 
     pub fn abandon_transaction(
@@ -270,7 +290,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         self.create_and_send_tx_with_id(
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
-                  wallet: &mut DefaultWallet,
+                  wallet: &mut RuntimeWallet<B>,
                   account_index: U31| {
                 wallet.issue_new_token(
                     account_index,
@@ -298,7 +318,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         self.create_and_send_tx_with_id(
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
-                  wallet: &mut DefaultWallet,
+                  wallet: &mut RuntimeWallet<B>,
                   account_index: U31| {
                 wallet.issue_new_nft(
                     account_index,
@@ -319,10 +339,10 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         address: Address<Destination>,
     ) -> Result<SignedTransaction, ControllerError<T>> {
         self.create_and_send_token_tx(
-            &token_info,
+            token_info,
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
-                  wallet: &mut DefaultWallet,
+                  wallet: &mut RuntimeWallet<B>,
                   account_index: U31,
                   token_info: &UnconfirmedTokenInfo| {
                 token_info.check_can_be_used()?;
@@ -344,10 +364,10 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         amount: Amount,
     ) -> Result<SignedTransaction, ControllerError<T>> {
         self.create_and_send_token_tx(
-            &token_info,
+            token_info,
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
-                  wallet: &mut DefaultWallet,
+                  wallet: &mut RuntimeWallet<B>,
                   account_index: U31,
                   token_info: &UnconfirmedTokenInfo| {
                 token_info.check_can_be_used()?;
@@ -368,10 +388,10 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         token_info: RPCTokenInfo,
     ) -> Result<SignedTransaction, ControllerError<T>> {
         self.create_and_send_token_tx(
-            &token_info,
+            token_info,
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
-                  wallet: &mut DefaultWallet,
+                  wallet: &mut RuntimeWallet<B>,
                   account_index: U31,
                   token_info: &UnconfirmedTokenInfo| {
                 token_info.check_can_be_used()?;
@@ -394,10 +414,10 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         is_token_unfreezable: IsTokenUnfreezable,
     ) -> Result<SignedTransaction, ControllerError<T>> {
         self.create_and_send_token_tx(
-            &token_info,
+            token_info,
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
-                  wallet: &mut DefaultWallet,
+                  wallet: &mut RuntimeWallet<B>,
                   account_index: U31,
                   token_info: &UnconfirmedTokenInfo| {
                 wallet.freeze_token(
@@ -418,10 +438,10 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         token_info: RPCTokenInfo,
     ) -> Result<SignedTransaction, ControllerError<T>> {
         self.create_and_send_token_tx(
-            &token_info,
+            token_info,
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
-                  wallet: &mut DefaultWallet,
+                  wallet: &mut RuntimeWallet<B>,
                   account_index: U31,
                   token_info: &UnconfirmedTokenInfo| {
                 wallet.unfreeze_token(
@@ -443,10 +463,10 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         address: Address<Destination>,
     ) -> Result<SignedTransaction, ControllerError<T>> {
         self.create_and_send_token_tx(
-            &token_info,
+            token_info,
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
-                  wallet: &mut DefaultWallet,
+                  wallet: &mut RuntimeWallet<B>,
                   account_index: U31,
                   token_info: &UnconfirmedTokenInfo| {
                 wallet.change_token_authority(
@@ -467,10 +487,10 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         metadata_uri: Vec<u8>,
     ) -> Result<SignedTransaction, ControllerError<T>> {
         self.create_and_send_token_tx(
-            &token_info,
+            token_info,
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
-                  wallet: &mut DefaultWallet,
+                  wallet: &mut RuntimeWallet<B>,
                   account_index: U31,
                   token_info: &UnconfirmedTokenInfo| {
                 wallet.change_token_metadata_uri(
@@ -495,7 +515,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         self.create_and_send_tx(
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
-                  wallet: &mut DefaultWallet,
+                  wallet: &mut RuntimeWallet<B>,
                   account_index: U31| {
                 wallet.create_transaction_to_addresses(
                     account_index,
@@ -504,6 +524,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
                     BTreeMap::new(),
                     current_fee_rate,
                     consolidate_fee_rate,
+                    TxAdditionalInfo::new(),
                 )
             },
         )
@@ -526,7 +547,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         self.create_and_send_tx(
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
-                  wallet: &mut DefaultWallet,
+                  wallet: &mut RuntimeWallet<B>,
                   account_index: U31| {
                 wallet.create_transaction_to_addresses(
                     account_index,
@@ -535,6 +556,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
                     BTreeMap::new(),
                     current_fee_rate,
                     consolidate_fee_rate,
+                    TxAdditionalInfo::new(),
                 )
             },
         )
@@ -548,21 +570,19 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         destination_address: Destination,
         from_addresses: BTreeSet<Destination>,
     ) -> Result<SignedTransaction, ControllerError<T>> {
-        let selected_utxos = self
-            .wallet
-            .get_utxos(
-                self.account_index,
-                UtxoType::Transfer | UtxoType::LockThenTransfer | UtxoType::IssueNft,
-                UtxoState::Confirmed | UtxoState::Inactive,
-                WithLocked::Unlocked,
-            )
-            .map_err(ControllerError::WalletError)?;
+        let selected_utxos = self.wallet.get_utxos(
+            self.account_index,
+            UtxoType::Transfer | UtxoType::LockThenTransfer | UtxoType::IssueNft,
+            UtxoState::Confirmed | UtxoState::Inactive,
+            WithLocked::Unlocked,
+        )?;
 
-        let filtered_inputs = self
-            .filter_out_utxos_with_frozen_tokens(selected_utxos)
-            .await?
+        let (inputs, additional_info) =
+            self.filter_out_utxos_with_frozen_tokens(selected_utxos).await?;
+
+        let filtered_inputs = inputs
             .into_iter()
-            .filter(|(_, output, _)| {
+            .filter(|(_, output)| {
                 get_tx_output_destination(output, &|_| None, HtlcSpendingCondition::Skip)
                     .is_some_and(|dest| from_addresses.contains(&dest))
             })
@@ -571,13 +591,14 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         self.create_and_send_tx(
             move |current_fee_rate: FeeRate,
                   _consolidate_fee_rate: FeeRate,
-                  wallet: &mut DefaultWallet,
+                  wallet: &mut RuntimeWallet<B>,
                   account_index: U31| {
                 wallet.create_sweep_transaction(
                     account_index,
                     destination_address,
                     filtered_inputs,
                     current_fee_rate,
+                    additional_info,
                 )
             },
         )
@@ -609,7 +630,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         self.create_and_send_tx(
             move |current_fee_rate: FeeRate,
                   _consolidate_fee_rate: FeeRate,
-                  wallet: &mut DefaultWallet,
+                  wallet: &mut RuntimeWallet<B>,
                   account_index: U31| {
                 wallet.create_sweep_from_delegation_transaction(
                     account_index,
@@ -637,7 +658,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
     ) -> Result<(PartiallySignedTransaction, Balances), ControllerError<T>> {
         let output = make_address_output(address, amount);
 
-        let utxo_output = self.fetch_utxo(&selected_utxo).await?;
+        let utxo_output = fetch_utxo(&self.rpc_client, &selected_utxo, self.wallet).await?;
         let change_address = if let Some(change_address) = change_address {
             change_address
         } else {
@@ -666,6 +687,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
                 [(Currency::Coin, change_address)].into(),
                 current_fee_rate,
                 consolidate_fee_rate,
+                TxAdditionalInfo::new(),
             )
             .map_err(ControllerError::WalletError)?;
 
@@ -709,15 +731,23 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
             ControllerError::<T>::ExpectingNonEmptyOutputs
         );
 
-        let outputs = {
+        let (outputs, additional_info) = {
             let mut result = Vec::new();
+            let mut additional_info = TxAdditionalInfo::new();
 
             for (token_id, outputs_vec) in outputs {
-                let token_info = self.get_token_info(token_id).await?;
+                let token_info = fetch_token_info(&self.rpc_client, token_id).await?;
+                additional_info.add_token_info(
+                    token_id,
+                    TokenAdditionalInfo {
+                        num_decimals: token_info.token_number_of_decimals(),
+                        ticker: token_info.token_ticker().to_vec(),
+                    },
+                );
 
                 match &token_info {
                     RPCTokenInfo::FungibleToken(token_info) => {
-                        self.check_fungible_token_is_usable(token_info)?
+                        self.check_fungible_token_is_usable(token_info.clone())?
                     }
                     RPCTokenInfo::NonFungibleToken(_) => {
                         return Err(ControllerError::<T>::NotFungibleToken(token_id));
@@ -731,26 +761,23 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
                 .map_err(ControllerError::InvalidTxOutput)?;
             }
 
-            result
+            (result, additional_info)
         };
 
         let (inputs, change_addresses) = {
             let mut inputs = inputs;
             let mut change_addresses = change_addresses;
 
-            let all_utxos = self
-                .wallet
-                .get_utxos(
-                    self.account_index,
-                    UtxoType::Transfer | UtxoType::LockThenTransfer,
-                    UtxoState::Confirmed | UtxoState::InMempool | UtxoState::Inactive,
-                    WithLocked::Unlocked,
-                )
-                .map_err(ControllerError::WalletError)?;
+            let all_utxos = self.wallet.get_utxos(
+                self.account_index,
+                UtxoType::Transfer | UtxoType::LockThenTransfer,
+                UtxoState::Confirmed | UtxoState::InMempool | UtxoState::Inactive,
+                WithLocked::Unlocked,
+            )?;
 
             let all_coin_utxos = all_utxos
                 .into_iter()
-                .filter_map(|(o, txo, _)| {
+                .filter_map(|(o, txo)| {
                     let (val, dest) = match &txo {
                         TxOutput::Transfer(val, dest)
                         | TxOutput::LockThenTransfer(val, dest, _) => (val, dest),
@@ -804,18 +831,16 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         let (current_fee_rate, consolidate_fee_rate) =
             self.get_current_and_consolidation_fee_rate().await?;
 
-        let (tx, fees) = self
-            .wallet
-            .create_unsigned_transaction_to_addresses(
-                self.account_index,
-                outputs,
-                selected_inputs,
-                Some(CoinSelectionAlgo::Randomize),
-                change_addresses,
-                current_fee_rate,
-                consolidate_fee_rate,
-            )
-            .map_err(ControllerError::WalletError)?;
+        let (tx, fees) = self.wallet.create_unsigned_transaction_to_addresses(
+            self.account_index,
+            outputs,
+            selected_inputs,
+            Some(CoinSelectionAlgo::Randomize),
+            change_addresses,
+            current_fee_rate,
+            consolidate_fee_rate,
+            additional_info,
+        )?;
 
         let fees = into_balances(&self.rpc_client, self.chain_config, fees).await?;
 
@@ -834,11 +859,11 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         self.create_and_send_tx_with_id(
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
-                  wallet: &mut DefaultWallet,
+                  wallet: &mut RuntimeWallet<B>,
                   account_index: U31| {
                 wallet.create_delegation(
                     account_index,
-                    vec![output],
+                    output,
                     current_fee_rate,
                     consolidate_fee_rate,
                 )
@@ -858,7 +883,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         self.create_and_send_tx(
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
-                  wallet: &mut DefaultWallet,
+                  wallet: &mut RuntimeWallet<B>,
                   account_index: U31| {
                 wallet.create_transaction_to_addresses(
                     account_index,
@@ -867,6 +892,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
                     BTreeMap::new(),
                     current_fee_rate,
                     consolidate_fee_rate,
+                    TxAdditionalInfo::new(),
                 )
             },
         )
@@ -881,11 +907,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         amount: Amount,
         delegation_id: DelegationId,
     ) -> Result<SignedTransaction, ControllerError<T>> {
-        let pool_id = self
-            .wallet
-            .get_delegation(self.account_index, delegation_id)
-            .map_err(ControllerError::WalletError)?
-            .pool_id;
+        let pool_id = self.wallet.get_delegation(self.account_index, delegation_id)?.pool_id;
 
         let delegation_share = self
             .rpc_client
@@ -899,7 +921,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         self.create_and_send_tx(
             move |current_fee_rate: FeeRate,
                   _consolidate_fee_rate: FeeRate,
-                  wallet: &mut DefaultWallet,
+                  wallet: &mut RuntimeWallet<B>,
                   account_index: U31| {
                 wallet.create_transaction_to_addresses_from_delegation(
                     account_index,
@@ -924,13 +946,20 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
     ) -> Result<SignedTransaction, ControllerError<T>> {
         let output = make_address_output_token(address, amount, token_info.token_id());
         self.create_and_send_token_tx(
-            &token_info,
+            token_info,
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
-                  wallet: &mut DefaultWallet,
+                  wallet: &mut RuntimeWallet<B>,
                   account_index: U31,
                   token_info: &UnconfirmedTokenInfo| {
                 token_info.check_can_be_used()?;
+                let additional_info = TxAdditionalInfo::with_token_info(
+                    token_info.token_id(),
+                    TokenAdditionalInfo {
+                        num_decimals: token_info.num_decimals(),
+                        ticker: token_info.token_ticker().to_vec(),
+                    },
+                );
                 wallet.create_transaction_to_addresses(
                     account_index,
                     [output],
@@ -938,6 +967,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
                     BTreeMap::new(),
                     current_fee_rate,
                     consolidate_fee_rate,
+                    additional_info,
                 )
             },
         )
@@ -954,13 +984,20 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
     ) -> Result<(SignedTransaction, SignedTransactionIntent), ControllerError<T>> {
         let output = make_address_output_token(address, amount, token_info.token_id());
         self.create_token_tx(
-            &token_info,
+            token_info,
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
-                  wallet: &mut DefaultWallet,
+                  wallet: &mut RuntimeWallet<B>,
                   account_index: U31,
                   token_info: &UnconfirmedTokenInfo| {
                 token_info.check_can_be_used()?;
+                let additional_info = TxAdditionalInfo::with_token_info(
+                    token_info.token_id(),
+                    TokenAdditionalInfo {
+                        num_decimals: token_info.num_decimals(),
+                        ticker: token_info.token_ticker().to_vec(),
+                    },
+                );
                 wallet.create_transaction_to_addresses_with_intent(
                     account_index,
                     [output],
@@ -969,6 +1006,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
                     intent,
                     current_fee_rate,
                     consolidate_fee_rate,
+                    additional_info,
                 )
             },
         )
@@ -988,7 +1026,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         self.create_and_send_tx(
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
-                  wallet: &mut DefaultWallet,
+                  wallet: &mut RuntimeWallet<B>,
                   account_index: U31| {
                 wallet.create_stake_pool_tx(
                     account_index,
@@ -1026,7 +1064,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         self.create_and_send_tx(
             move |current_fee_rate: FeeRate,
                   _consolidate_fee_rate: FeeRate,
-                  wallet: &mut DefaultWallet,
+                  wallet: &mut RuntimeWallet<B>,
                   account_index: U31| {
                 wallet.decommission_stake_pool(
                     account_index,
@@ -1072,6 +1110,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         &mut self,
         output_value: OutputValue,
         htlc: HashedTimelockContract,
+        additional_info: TxAdditionalInfo,
     ) -> Result<SignedTransaction, ControllerError<T>> {
         let (current_fee_rate, consolidate_fee_rate) =
             self.get_current_and_consolidation_fee_rate().await?;
@@ -1082,6 +1121,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
             htlc,
             current_fee_rate,
             consolidate_fee_rate,
+            additional_info,
         )?;
         Ok(result)
     }
@@ -1091,11 +1131,14 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         ask_value: OutputValue,
         give_value: OutputValue,
         conclude_key: Address<Destination>,
+        token_infos: Vec<RPCTokenInfo>,
     ) -> Result<(SignedTransaction, OrderId), ControllerError<T>> {
+        let additional_info = self.additional_token_info(token_infos)?;
+
         self.create_and_send_tx_with_id(
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
-                  wallet: &mut DefaultWallet,
+                  wallet: &mut RuntimeWallet<B>,
                   account_index: U31| {
                 wallet.create_order_tx(
                     account_index,
@@ -1104,6 +1147,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
                     conclude_key,
                     current_fee_rate,
                     consolidate_fee_rate,
+                    additional_info,
                 )
             },
         )
@@ -1115,11 +1159,13 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         order_id: OrderId,
         order_info: RpcOrderInfo,
         output_address: Option<Destination>,
+        token_infos: Vec<RPCTokenInfo>,
     ) -> Result<SignedTransaction, ControllerError<T>> {
+        let additional_info = self.additional_token_info(token_infos)?;
         self.create_and_send_tx(
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
-                  wallet: &mut DefaultWallet,
+                  wallet: &mut RuntimeWallet<B>,
                   account_index: U31| {
                 wallet.create_conclude_order_tx(
                     account_index,
@@ -1128,6 +1174,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
                     output_address,
                     current_fee_rate,
                     consolidate_fee_rate,
+                    additional_info,
                 )
             },
         )
@@ -1140,11 +1187,13 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         order_info: RpcOrderInfo,
         fill_amount_in_ask_currency: Amount,
         output_address: Option<Destination>,
+        token_infos: Vec<RPCTokenInfo>,
     ) -> Result<SignedTransaction, ControllerError<T>> {
+        let additional_info = self.additional_token_info(token_infos)?;
         self.create_and_send_tx(
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
-                  wallet: &mut DefaultWallet,
+                  wallet: &mut RuntimeWallet<B>,
                   account_index: U31| {
                 wallet.create_fill_order_tx(
                     account_index,
@@ -1154,20 +1203,39 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
                     output_address,
                     current_fee_rate,
                     consolidate_fee_rate,
+                    additional_info,
                 )
             },
         )
         .await
     }
 
+    fn additional_token_info(
+        &mut self,
+        token_infos: Vec<RPCTokenInfo>,
+    ) -> Result<TxAdditionalInfo, ControllerError<T>> {
+        token_infos
+            .into_iter()
+            .try_fold(TxAdditionalInfo::new(), |mut acc, token_info| {
+                let token_info = self.unconfiremd_token_info(token_info)?;
+
+                acc.add_token_info(
+                    token_info.token_id(),
+                    TokenAdditionalInfo {
+                        num_decimals: token_info.num_decimals(),
+                        ticker: token_info.token_ticker().to_vec(),
+                    },
+                );
+
+                Ok(acc)
+            })
+    }
+
     /// Checks if the wallet has stake pools and marks this account for staking.
     pub fn start_staking(&mut self) -> Result<(), ControllerError<T>> {
         utils::ensure!(!self.wallet.is_locked(), ControllerError::WalletIsLocked);
         // Make sure that account_index is valid and that pools exist
-        let pool_ids = self
-            .wallet
-            .get_pool_ids(self.account_index, WalletPoolsFilter::Stake)
-            .map_err(ControllerError::WalletError)?;
+        let pool_ids = self.wallet.get_pool_ids(self.account_index, WalletPoolsFilter::Stake)?;
         utils::ensure!(!pool_ids.is_empty(), ControllerError::NoStakingPool);
         log::info!("Start staking, account_index: {}", self.account_index);
         self.staking_started.insert(self.account_index);
@@ -1176,7 +1244,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
 
     /// Tries to sign any unsigned inputs of a raw or partially signed transaction with the private
     /// keys in this wallet.
-    pub fn sign_raw_transaction(
+    pub async fn sign_raw_transaction(
         &mut self,
         tx: TransactionToSign,
     ) -> Result<
@@ -1187,8 +1255,15 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         ),
         ControllerError<T>,
     > {
+        let ptx = match tx {
+            TransactionToSign::Partial(ptx) => ptx,
+            TransactionToSign::Tx(tx) => {
+                tx_to_partially_signed_tx(&self.rpc_client, self.wallet, tx).await?
+            }
+        };
+
         self.wallet
-            .sign_raw_transaction(self.account_index, tx)
+            .sign_raw_transaction(self.account_index, ptx)
             .map_err(ControllerError::WalletError)
     }
 
@@ -1227,7 +1302,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         tx: SignedTransaction,
     ) -> Result<SignedTransaction, ControllerError<T>> {
         self.wallet
-            .add_account_unconfirmed_tx(self.account_index, tx.clone(), self.wallet_events)
+            .add_account_unconfirmed_tx(self.account_index, &tx, self.wallet_events)
             .map_err(ControllerError::WalletError)?;
 
         self.rpc_client
@@ -1252,12 +1327,14 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
     }
 
     /// Create a transaction and broadcast it
-    async fn create_and_send_tx<
-        F: FnOnce(FeeRate, FeeRate, &mut DefaultWallet, U31) -> WalletResult<SignedTransaction>,
-    >(
+    async fn create_and_send_tx<E, F>(
         &mut self,
         tx_maker: F,
-    ) -> Result<SignedTransaction, ControllerError<T>> {
+    ) -> Result<SignedTransaction, ControllerError<T>>
+    where
+        F: FnOnce(FeeRate, FeeRate, &mut RuntimeWallet<B>, U31) -> Result<SignedTransaction, E>,
+        ControllerError<T>: From<E>,
+    {
         let (current_fee_rate, consolidate_fee_rate) =
             self.get_current_and_consolidation_fee_rate().await?;
 
@@ -1266,8 +1343,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
             consolidate_fee_rate,
             self.wallet,
             self.account_index,
-        )
-        .map_err(ControllerError::WalletError)?;
+        )?;
 
         self.broadcast_to_mempool_if_needed(tx).await
     }
@@ -1275,28 +1351,19 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
     /// Create a transaction that uses a token, check if that token can be used i.e. not frozen.
     async fn create_token_tx<F, R>(
         &mut self,
-        token_info: &RPCTokenInfo,
+        token_info: RPCTokenInfo,
         tx_maker: F,
     ) -> Result<R, ControllerError<T>>
     where
         F: FnOnce(
             FeeRate,
             FeeRate,
-            &mut DefaultWallet,
+            &mut RuntimeWallet<B>,
             U31,
             &UnconfirmedTokenInfo,
         ) -> WalletResult<R>,
     {
-        // make sure we can use the token before create an tx using it
-        let token_freezable_info = match token_info {
-            RPCTokenInfo::FungibleToken(token_info) => self
-                .wallet
-                .get_token_unconfirmed_info(self.account_index, token_info)
-                .map_err(ControllerError::WalletError)?,
-            RPCTokenInfo::NonFungibleToken(info) => {
-                UnconfirmedTokenInfo::NonFungibleToken(info.token_id)
-            }
-        };
+        let token_freezable_info = self.unconfiremd_token_info(token_info)?;
 
         let (current_fee_rate, consolidate_fee_rate) =
             self.get_current_and_consolidation_fee_rate().await?;
@@ -1319,24 +1386,44 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         F: FnOnce(
             FeeRate,
             FeeRate,
-            &mut DefaultWallet,
+            &mut RuntimeWallet<B>,
             U31,
             &UnconfirmedTokenInfo,
         ) -> WalletResult<SignedTransaction>,
     >(
         &mut self,
-        token_info: &RPCTokenInfo,
+        token_info: RPCTokenInfo,
         tx_maker: F,
     ) -> Result<SignedTransaction, ControllerError<T>> {
         let tx = self.create_token_tx(token_info, tx_maker).await?;
         self.broadcast_to_mempool_if_needed(tx).await
     }
 
+    fn unconfiremd_token_info(
+        &mut self,
+        token_info: RPCTokenInfo,
+    ) -> Result<UnconfirmedTokenInfo, ControllerError<T>> {
+        let token_freezable_info = match token_info {
+            RPCTokenInfo::FungibleToken(token_info) => {
+                self.wallet.get_token_unconfirmed_info(self.account_index, token_info)?
+            }
+            RPCTokenInfo::NonFungibleToken(info) => {
+                UnconfirmedTokenInfo::NonFungibleToken(info.token_id, info.as_ref().into())
+            }
+        };
+        Ok(token_freezable_info)
+    }
+
     /// Similar to create_and_send_tx but some transactions also create an ID
     /// e.g. newly issued token, nft or delegation id
     async fn create_and_send_tx_with_id<
         ID,
-        F: FnOnce(FeeRate, FeeRate, &mut DefaultWallet, U31) -> WalletResult<(ID, SignedTransaction)>,
+        F: FnOnce(
+            FeeRate,
+            FeeRate,
+            &mut RuntimeWallet<B>,
+            U31,
+        ) -> WalletResult<(ID, SignedTransaction)>,
     >(
         &mut self,
         tx_maker: F,
@@ -1354,17 +1441,5 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
 
         let tx = self.broadcast_to_mempool_if_needed(tx).await?;
         Ok((tx, id))
-    }
-
-    async fn fetch_utxo(&self, input: &UtxoOutPoint) -> Result<TxOutput, ControllerError<T>> {
-        let utxo = self
-            .rpc_client
-            .get_utxo(input.clone())
-            .await
-            .map_err(ControllerError::NodeCallError)?;
-
-        utxo.ok_or(ControllerError::WalletError(WalletError::CannotFindUtxo(
-            input.clone(),
-        )))
     }
 }

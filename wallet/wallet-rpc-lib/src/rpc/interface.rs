@@ -23,10 +23,9 @@ use chainstate::rpc::RpcOutputValueIn;
 use common::{
     address::RpcAddress,
     chain::{
-        block::timestamp::BlockTimestamp, tokens::TokenId,
-        transaction::partially_signed_transaction::PartiallySignedTransaction, Block, DelegationId,
-        Destination, GenBlock, OrderId, PoolId, SignedTransaction, SignedTransactionIntent,
-        Transaction, TxOutput,
+        block::timestamp::BlockTimestamp, tokens::TokenId, Block, DelegationId, Destination,
+        GenBlock, OrderId, PoolId, SignedTransaction, SignedTransactionIntent, Transaction,
+        TxOutput,
     },
     primitives::{BlockHeight, Id},
 };
@@ -38,15 +37,17 @@ use wallet_controller::{
     types::{BlockInfo, CreatedBlockInfo, GenericTokenTransfer, SeedWithPassPhrase, WalletInfo},
     ConnectedPeer,
 };
-use wallet_types::with_locked::WithLocked;
+use wallet_types::{
+    partially_signed_transaction::PartiallySignedTransaction, with_locked::WithLocked,
+};
 
 use crate::types::{
     AccountArg, AddressInfo, AddressWithUsageInfo, Balances, ChainInfo, ComposedTransaction,
-    CreatedWallet, DelegationInfo, HexEncoded, LegacyVrfPublicKeyInfo, MaybeSignedTransaction,
-    NewAccountInfo, NewDelegation, NewOrder, NewTransaction, NftMetadata, NodeVersion, PoolInfo,
-    PublicKeyInfo, RpcAmountIn, RpcHashedTimelockContract, RpcInspectTransaction,
-    RpcStandaloneAddresses, RpcTokenId, RpcUtxoOutpoint, RpcUtxoState, RpcUtxoType,
-    SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
+    CreatedWallet, DelegationInfo, HardwareWalletType, HexEncoded, LegacyVrfPublicKeyInfo,
+    MaybeSignedTransaction, NewAccountInfo, NewDelegation, NewOrder, NewTransaction, NftMetadata,
+    NodeVersion, PoolInfo, PublicKeyInfo, RpcAmountIn, RpcHashedTimelockContract,
+    RpcInspectTransaction, RpcStandaloneAddresses, RpcTokenId, RpcUtxoOutpoint, RpcUtxoState,
+    RpcUtxoType, SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
     StandaloneAddressWithDetails, TokenMetadata, TransactionOptions, TxOptionsOverrides,
     VrfPublicKeyInfo,
 };
@@ -70,7 +71,7 @@ trait ColdWalletRpc {
     #[method(name = "version")]
     async fn version(&self) -> rpc::RpcResult<String>;
 
-    /// Create new wallet
+    /// Create a new wallet, this will skip scanning the blockchain
     #[method(name = "wallet_create")]
     async fn create_wallet(
         &self,
@@ -78,6 +79,18 @@ trait ColdWalletRpc {
         store_seed_phrase: bool,
         mnemonic: Option<String>,
         passphrase: Option<String>,
+        hardware_wallet: Option<HardwareWalletType>,
+    ) -> rpc::RpcResult<CreatedWallet>;
+
+    /// Recover new wallet, this will rescan the blockchain upon creation
+    #[method(name = "wallet_recover")]
+    async fn recover_wallet(
+        &self,
+        path: String,
+        store_seed_phrase: bool,
+        mnemonic: Option<String>,
+        passphrase: Option<String>,
+        hardware_wallet: Option<HardwareWalletType>,
     ) -> rpc::RpcResult<CreatedWallet>;
 
     /// Open an exiting wallet by specifying the file location of the wallet file
@@ -87,6 +100,7 @@ trait ColdWalletRpc {
         path: String,
         password: Option<String>,
         force_migrate_wallet_type: Option<bool>,
+        hardware_wallet: Option<HardwareWalletType>,
     ) -> rpc::RpcResult<()>;
 
     /// Close the currently open wallet file

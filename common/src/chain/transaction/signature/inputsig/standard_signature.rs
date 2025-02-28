@@ -175,6 +175,10 @@ impl StandardInputSignature {
     pub fn raw_signature(&self) -> &[u8] {
         &self.raw_signature
     }
+
+    pub fn into_raw_signature(self) -> Vec<u8> {
+        self.raw_signature
+    }
 }
 
 impl Decode for StandardInputSignature {

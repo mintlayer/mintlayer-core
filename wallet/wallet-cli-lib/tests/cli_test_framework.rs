@@ -98,6 +98,7 @@ impl CliTestFramework {
                     wallet_file: None,
                     wallet_password: None,
                     force_change_wallet_type: false,
+                    hardware_wallet: None,
                     start_staking: false,
                     start_staking_for_account: vec![],
                     node_rpc_address: Some(rpc_address.into()),
@@ -128,6 +129,7 @@ impl CliTestFramework {
                 wallet_file: None,
                 wallet_password: None,
                 force_change_wallet_type: false,
+                hardware_wallet: None,
                 start_staking: false,
                 start_staking_for_account: vec![],
                 node_rpc_address: Some(rpc_address.into()),
@@ -200,10 +202,10 @@ impl CliTestFramework {
             .unwrap()
             .to_owned();
         let cmd = format!(
-            "wallet-create \"{}\" store-seed-phrase \"{}\"",
+            "wallet-recover \"{}\" store-seed-phrase \"{}\"",
             file_name, MNEMONIC
         );
-        assert_eq!(self.exec(&cmd), "New wallet created successfully");
+        assert_eq!(self.exec(&cmd), "Wallet recovered successfully");
     }
 
     #[allow(dead_code)]

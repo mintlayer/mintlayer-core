@@ -25,6 +25,7 @@ use common::{
 use wallet_controller::types::{GenericCurrencyTransfer, GenericTokenTransfer};
 use wallet_rpc_lib::types::{NodeInterface, PoolInfo, TokenTotalSupply};
 use wallet_types::{
+    seed_phrase::StoreSeedPhrase,
     utxo_types::{UtxoState, UtxoType},
     with_locked::WithLocked,
 };
@@ -138,6 +139,15 @@ impl CliStoreSeedPhrase {
         match self {
             Self::StoreSeedPhrase => true,
             Self::DoNotStoreSeedPhrase => false,
+        }
+    }
+}
+
+impl From<CliStoreSeedPhrase> for StoreSeedPhrase {
+    fn from(value: CliStoreSeedPhrase) -> Self {
+        match value {
+            CliStoreSeedPhrase::StoreSeedPhrase => StoreSeedPhrase::Store,
+            CliStoreSeedPhrase::DoNotStoreSeedPhrase => StoreSeedPhrase::DoNotStore,
         }
     }
 }

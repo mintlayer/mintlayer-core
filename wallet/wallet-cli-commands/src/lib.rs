@@ -21,7 +21,10 @@ pub use command_handler::CommandHandler;
 pub use errors::WalletCliCommandError;
 use helper_types::YesNo;
 use rpc::description::{Described, Module};
-use wallet_rpc_lib::{types::NodeInterface, ColdWalletRpcDescription, WalletRpcDescription};
+use wallet_rpc_lib::{
+    cmdline::CliHardwareWalletType, types::NodeInterface, ColdWalletRpcDescription,
+    WalletRpcDescription,
+};
 
 use std::{fmt::Debug, num::NonZeroUsize, path::PathBuf, time::Duration};
 
@@ -54,7 +57,8 @@ pub enum WalletManagementCommand {
         /// Not storing the seed-phrase can be seen as a security measure
         /// to ensure sufficient secrecy in case that seed-phrase is reused
         /// elsewhere if this wallet is compromised.
-        whether_to_store_seed_phrase: CliStoreSeedPhrase,
+        #[arg(required_unless_present("hardware_wallet"))]
+        whether_to_store_seed_phrase: Option<CliStoreSeedPhrase>,
 
         /// Mnemonic phrase (12, 15, or 24 words as a single quoted argument). If not specified, a new mnemonic phrase is generated and printed.
         mnemonic: Option<String>,
@@ -62,6 +66,41 @@ pub enum WalletManagementCommand {
         /// Passphrase along the mnemonic
         #[arg(long = "passphrase")]
         passphrase: Option<String>,
+
+        /// Create a wallet using a connected hardware wallet. Only the public keys will be kept in
+        /// the software wallet. Cannot specify a mnemonic or passphrase here,
+        /// the former must have been entered on the hardware during the device setup
+        /// and the latter will have to be entered every time the device is connected to the host machine.
+        #[arg(long, conflicts_with_all(["mnemonic", "passphrase", "whether_to_store_seed_phrase"]))]
+        hardware_wallet: Option<CliHardwareWalletType>,
+    },
+
+    #[clap(name = "wallet-recover")]
+    RecoverWallet {
+        /// File path of the wallet file
+        wallet_path: PathBuf,
+
+        /// If 'store-seed-phrase', the seed-phrase will be stored in the wallet file.
+        /// Not storing the seed-phrase can be seen as a security measure
+        /// to ensure sufficient secrecy in case that seed-phrase is reused
+        /// elsewhere if this wallet is compromised.
+        #[arg(required_unless_present("hardware_wallet"))]
+        whether_to_store_seed_phrase: Option<CliStoreSeedPhrase>,
+
+        /// Mnemonic phrase (12, 15, or 24 words as a single quoted argument).
+        #[arg(required_unless_present("hardware_wallet"))]
+        mnemonic: Option<String>,
+
+        /// Passphrase along the mnemonic
+        #[arg(long = "passphrase")]
+        passphrase: Option<String>,
+
+        /// Create a wallet using a connected hardware wallet. Only the public keys will be kept in
+        /// the software wallet. Cannot specify a mnemonic or passphrase here,
+        /// the former must have been entered on the hardware during the device setup
+        /// and the latter will have to be entered every time the device is connected to the host machine.
+        #[arg(long, conflicts_with_all(["passphrase", "mnemonic", "whether_to_store_seed_phrase"]))]
+        hardware_wallet: Option<CliHardwareWalletType>,
     },
 
     #[clap(name = "wallet-open")]
@@ -73,6 +112,10 @@ pub enum WalletManagementCommand {
         /// Force change the wallet type from hot to cold or from cold to hot
         #[arg(long)]
         force_change_wallet_type: bool,
+
+        /// Open a wallet file related to a connected hardware wallet.
+        #[arg(long, conflicts_with_all(["force_change_wallet_type"]))]
+        hardware_wallet: Option<CliHardwareWalletType>,
     },
 
     #[clap(name = "wallet-close")]

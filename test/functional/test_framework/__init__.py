@@ -198,6 +198,49 @@ def init_mintlayer_types():
                 ],
             },
 
+            "TokenAdditionalInfo": {
+                "type": "struct",
+                "type_mapping": [
+                    ["num_decimals", "u8"],
+                    ["ticker", "Vec<u8>"],
+                ]
+            },
+
+            "PoolAdditionalInfo": {
+                "type": "struct",
+                "type_mapping": [
+                    ["staker_balance", "Amount"],
+                ]
+            },
+
+            "OrderAdditionalInfo": {
+                "type": "struct",
+                "type_mapping": [
+                    ["initially_asked", "OutputValue"],
+                    ["initially_given", "OutputValue"],
+                    ["ask_balance", "Amount"],
+                    ["give_balance", "Amount"],
+                ]
+            },
+
+            "InfoId": {
+                "type": "enum",
+                "type_mapping": [
+                    ["TokenId", "H256"],
+                    ["PoolId", "H256"],
+                    ["OrderId", "H256"],
+                ],
+            },
+
+            "TxAdditionalInfo": {
+                "type": "struct",
+                "type_mapping": [
+                    ["token_info", "BTreeMap<H256, TokenAdditionalInfo>"],
+                    ["pool_info", "BTreeMap<H256, PoolAdditionalInfo>"],
+                    ["order_info", "BTreeMap<H256, OrderAdditionalInfo>"],
+                ],
+            },
+
             "StandardInputSignature": {
                 "type": "struct",
                 "type_mapping": [
@@ -222,6 +265,7 @@ def init_mintlayer_types():
                     ["input_utxos", "Vec<Option<TxOutput>>"],
                     ["destinations", "Vec<Option<Destination>>"],
                     ["htlc_secrets", "Vec<Option<[u8; 32]>>"],
+                    ["additional_infos", "TxAdditionalInfo"],
                 ]
             },
 

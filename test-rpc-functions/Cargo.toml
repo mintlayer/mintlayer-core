@@ -16,6 +16,7 @@ randomness = { path = "../randomness/" }
 rpc = { path = "../rpc/" }
 serialization = { path = "../serialization" }
 subsystem = { path = "../subsystem/" }
+wallet-types = { path = "../wallet/types" }
 
 async-trait.workspace = true
 futures.workspace = true

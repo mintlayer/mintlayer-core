@@ -20,9 +20,8 @@ use std::{fmt::Write, str::FromStr};
 use common::{
     address::Address,
     chain::{
-        config::checkpoints_data::print_block_heights_ids_as_checkpoints_data,
-        partially_signed_transaction::PartiallySignedTransaction, ChainConfig, Destination,
-        SignedTransaction, TxOutput, UtxoOutPoint,
+        config::checkpoints_data::print_block_heights_ids_as_checkpoints_data, ChainConfig,
+        Destination, SignedTransaction, TxOutput, UtxoOutPoint,
     },
     primitives::{Idable as _, H256},
     text_summary::TextSummary,
@@ -34,12 +33,16 @@ use node_comm::node_traits::NodeInterface;
 use serialization::{hex::HexEncode, hex_encoded::HexEncoded};
 use utils::qrcode::{QrCode, QrCodeError};
 use wallet::version::get_version;
-use wallet_controller::types::GenericTokenTransfer;
+use wallet_controller::types::{GenericTokenTransfer, WalletTypeArgs};
 use wallet_rpc_client::wallet_rpc_traits::{PartialOrSignedTx, WalletInterface};
 use wallet_rpc_lib::types::{
     Balances, ComposedTransaction, ControllerConfig, MnemonicInfo, NewTransaction, NftMetadata,
     RpcInspectTransaction, RpcSignatureStats, RpcSignatureStatus, RpcStandaloneAddressDetails,
     RpcValidatedSignatures, TokenMetadata,
+};
+
+use wallet_types::{
+    partially_signed_transaction::PartiallySignedTransaction, seed_phrase::StoreSeedPhrase,
 };
 
 use crate::{
@@ -148,32 +151,27 @@ where
                 mnemonic,
                 whether_to_store_seed_phrase,
                 passphrase,
+                hardware_wallet,
             } => {
-                let newly_generated_mnemonic = self
-                    .wallet()
-                    .await?
-                    .create_wallet(
-                        wallet_path,
-                        whether_to_store_seed_phrase.to_bool(),
+                let store_seed_phrase =
+                    whether_to_store_seed_phrase.map_or(StoreSeedPhrase::DoNotStore, Into::into);
+                let wallet_args = hardware_wallet.map_or(
+                    WalletTypeArgs::Software {
                         mnemonic,
                         passphrase,
-                    )
-                    .await?;
+                        store_seed_phrase,
+                    },
+                    Into::into,
+                );
+                let newly_generated_mnemonic =
+                    self.wallet().await?.create_wallet(wallet_path, wallet_args).await?;
 
                 self.wallet.update_wallet::<N>().await;
 
                 let msg = match newly_generated_mnemonic.mnemonic {
-                    MnemonicInfo::NewlyGenerated {
-                        mnemonic,
-                        passphrase,
-                    } => {
-                        let passphrase = if let Some(passphrase) = passphrase {
-                            format!("passphrase: {passphrase}\n")
-                        } else {
-                            String::new()
-                        };
+                    MnemonicInfo::NewlyGenerated { mnemonic } => {
                         format!(
-                            "New wallet created successfully\nYour mnemonic: {}\n{passphrase}\
+                            "New wallet created successfully\nYour mnemonic: {}\
                         Please write it somewhere safe to be able to restore your wallet. \
                         It's recommended that you attempt to recover the wallet now as practice\
                         to check that you arrive at the same addresses, \
@@ -191,17 +189,50 @@ where
                 })
             }
 
+            WalletManagementCommand::RecoverWallet {
+                wallet_path,
+                mnemonic,
+                whether_to_store_seed_phrase,
+                passphrase,
+                hardware_wallet,
+            } => {
+                let hardware_wallet = hardware_wallet.map(Into::into);
+
+                self.wallet()
+                    .await?
+                    .recover_wallet(
+                        wallet_path,
+                        whether_to_store_seed_phrase.is_some_and(|x| x.to_bool()),
+                        mnemonic,
+                        passphrase,
+                        hardware_wallet,
+                    )
+                    .await?;
+
+                self.wallet.update_wallet::<N>().await;
+
+                let msg = "Wallet recovered successfully";
+
+                Ok(ConsoleCommand::SetStatus {
+                    status: self.repl_status().await?,
+                    print_message: msg.to_owned(),
+                })
+            }
+
             WalletManagementCommand::OpenWallet {
                 wallet_path,
                 encryption_password,
                 force_change_wallet_type,
+                hardware_wallet,
             } => {
+                let hardware_wallet = hardware_wallet.map(Into::into);
                 self.wallet()
                     .await?
                     .open_wallet(
                         wallet_path,
                         encryption_password,
                         Some(force_change_wallet_type),
+                        hardware_wallet,
                     )
                     .await?;
                 self.wallet.update_wallet::<N>().await;

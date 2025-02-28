@@ -17,8 +17,8 @@ use std::collections::BTreeMap;
 use std::mem::take;
 
 use common::address::Address;
+use common::chain::htlc::HtlcSecret;
 use common::chain::output_value::OutputValue;
-use common::chain::partially_signed_transaction::PartiallySignedTransaction;
 use common::chain::stakelock::StakePoolData;
 use common::chain::timelock::OutputTimeLock::ForBlockCount;
 use common::chain::tokens::{Metadata, TokenId, TokenIssuance};
@@ -30,6 +30,7 @@ use common::primitives::{Amount, BlockHeight};
 use crypto::vrf::VRFPublicKey;
 use utils::ensure;
 use wallet_types::currency::Currency;
+use wallet_types::partially_signed_transaction::{PartiallySignedTransaction, TxAdditionalInfo};
 
 use crate::account::PoolData;
 use crate::destination_getters::{get_tx_output_destination, HtlcSpendingCondition};
@@ -50,6 +51,8 @@ pub struct SendRequest {
     inputs: Vec<TxInput>,
 
     outputs: Vec<TxOutput>,
+
+    htlc_secrets: Vec<Option<HtlcSecret>>,
 
     fees: BTreeMap<Currency, Amount>,
 }
@@ -196,6 +199,7 @@ impl SendRequest {
             destinations: Vec::new(),
             inputs: Vec::new(),
             outputs: Vec::new(),
+            htlc_secrets: Vec::new(),
             fees: BTreeMap::new(),
         }
     }
@@ -230,6 +234,7 @@ impl SendRequest {
             destinations,
             inputs: transaction.inputs().to_vec(),
             outputs: transaction.outputs().to_vec(),
+            htlc_secrets: vec![None; transaction.inputs().len()],
             fees: BTreeMap::new(),
         })
     }
@@ -258,6 +263,7 @@ impl SendRequest {
             self.inputs.push(outpoint);
             self.destinations.push(destination);
             self.utxos.push(None);
+            self.htlc_secrets.push(None);
         }
 
         self
@@ -265,21 +271,27 @@ impl SendRequest {
 
     pub fn with_inputs<'a, PoolDataGetter>(
         mut self,
-        utxos: impl IntoIterator<Item = (TxInput, TxOutput)>,
+        utxos: impl IntoIterator<Item = (TxInput, TxOutput, Option<HtlcSecret>)>,
         pool_data_getter: &PoolDataGetter,
     ) -> WalletResult<Self>
     where
         PoolDataGetter: Fn(&PoolId) -> Option<&'a PoolData>,
     {
-        for (outpoint, txo) in utxos {
+        for (outpoint, txo, secret) in utxos {
             self.inputs.push(outpoint);
+            let htlc_spending_condition = match &secret {
+                Some(_) => HtlcSpendingCondition::WithSecret,
+                None => HtlcSpendingCondition::WithMultisig,
+            };
+
             self.destinations.push(
-                get_tx_output_destination(&txo, &pool_data_getter, HtlcSpendingCondition::Skip)
+                get_tx_output_destination(&txo, &pool_data_getter, htlc_spending_condition)
                     .ok_or_else(|| {
                         WalletError::UnsupportedTransactionOutput(Box::new(txo.clone()))
                     })?,
             );
             self.utxos.push(Some(txo));
+            self.htlc_secrets.push(secret);
         }
 
         Ok(self)
@@ -298,17 +310,22 @@ impl SendRequest {
         take(&mut self.fees)
     }
 
-    pub fn into_partially_signed_tx(self) -> WalletResult<PartiallySignedTransaction> {
+    pub fn into_partially_signed_tx(
+        self,
+        additional_info: TxAdditionalInfo,
+    ) -> WalletResult<PartiallySignedTransaction> {
         let num_inputs = self.inputs.len();
-        let tx = Transaction::new(self.flags, self.inputs, self.outputs)?;
         let destinations = self.destinations.into_iter().map(Some).collect();
+        let utxos = self.utxos;
+        let tx = Transaction::new(self.flags, self.inputs, self.outputs)?;
 
         let ptx = PartiallySignedTransaction::new(
             tx,
             vec![None; num_inputs],
-            self.utxos,
+            utxos,
             destinations,
-            None,
+            Some(self.htlc_secrets),
+            additional_info,
         )?;
         Ok(ptx)
     }

@@ -23,10 +23,10 @@ use serde::Serialize;
 use wallet_types::{
     currency::Currency,
     wallet_tx::{TxData, TxState},
-    KeyPurpose, WalletTx,
+    WalletTx,
 };
 
-use crate::{key_chain::AccountKeyChainImpl, WalletError, WalletResult};
+use crate::{key_chain::AccountKeyChains, WalletError, WalletResult};
 
 use super::{currency_grouper::group_outputs, output_cache::OutputCache};
 
@@ -110,11 +110,11 @@ fn compare_tx_ref(a: &TxRef, b: &TxRef) -> Ordering {
     }
 }
 
-fn own_output(key_chain: &AccountKeyChainImpl, output: &TxOutput) -> bool {
+fn own_output(key_chain: &impl AccountKeyChains, output: &TxOutput) -> bool {
     match output {
-        TxOutput::Transfer(_, dest) | TxOutput::LockThenTransfer(_, dest, _) => KeyPurpose::ALL
-            .iter()
-            .any(|purpose| key_chain.get_leaf_key_chain(*purpose).is_destination_mine(dest)),
+        TxOutput::Transfer(_, dest) | TxOutput::LockThenTransfer(_, dest, _) => {
+            key_chain.is_destination_mine(dest)
+        }
         TxOutput::Burn(_)
         | TxOutput::CreateStakePool(_, _)
         | TxOutput::ProduceBlockFromStake(_, _)
@@ -129,7 +129,7 @@ fn own_output(key_chain: &AccountKeyChainImpl, output: &TxOutput) -> bool {
 }
 
 fn own_input<'a>(
-    key_chain: &AccountKeyChainImpl,
+    key_chain: &impl AccountKeyChains,
     output_cache: &'a OutputCache,
     input: &TxInput,
 ) -> Option<&'a TxOutput> {
@@ -146,7 +146,7 @@ fn own_input<'a>(
 }
 
 fn get_transaction(
-    key_chain: &AccountKeyChainImpl,
+    key_chain: &impl AccountKeyChains,
     output_cache: &OutputCache,
     tx_data: &TxData,
 ) -> WalletResult<TransactionInfo> {
@@ -213,7 +213,7 @@ fn get_transaction(
 }
 
 pub fn get_transaction_list(
-    key_chain: &AccountKeyChainImpl,
+    key_chain: &impl AccountKeyChains,
     output_cache: &OutputCache,
     skip: usize,
     count: usize,
