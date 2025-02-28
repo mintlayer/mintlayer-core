@@ -1194,7 +1194,8 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                 }
                 AccountCommand::FillOrder(order_id, fill_amount_in_ask_currency, _) => {
                     let order = db_tx.get_order(*order_id).await?.expect("must exist");
-                    let order = order.fill(*fill_amount_in_ask_currency);
+                    let order =
+                        order.fill(&chain_config, block_height, *fill_amount_in_ask_currency);
 
                     db_tx.set_order_at_height(*order_id, &order, block_height).await?;
                 }

@@ -1515,6 +1515,7 @@ async fn orders<'a, S: for<'b> Transactional<'b>>(
     rng: &mut (impl Rng + CryptoRng),
     storage: &'a mut S,
 ) {
+    let chain_config = common::chain::config::create_regtest();
     {
         let db_tx = storage.transaction_ro().await.unwrap();
         let random_order_id = OrderId::new(H256::random_using(rng));
@@ -1627,7 +1628,7 @@ async fn orders<'a, S: for<'b> Transactional<'b>>(
     );
 
     // Fill one order
-    let order2_filled = order2.clone().fill(Amount::from_atoms(1));
+    let order2_filled = order2.clone().fill(&chain_config, block_height, Amount::from_atoms(1));
     db_tx
         .set_order_at_height(order2_id, &order2_filled, block_height.next_height())
         .await

@@ -259,10 +259,24 @@ pub struct Order {
 }
 
 impl Order {
-    pub fn fill(self, fill_amount_in_ask_currency: Amount) -> Self {
+    pub fn fill(
+        self,
+        chain_config: &ChainConfig,
+        block_height: BlockHeight,
+        fill_amount_in_ask_currency: Amount,
+    ) -> Self {
+        let (ask_balance, give_balance) = match chain_config
+            .chainstate_upgrades()
+            .version_at_height(block_height)
+            .1
+            .orders_version()
+        {
+            common::chain::OrdersVersion::V0 => (self.ask_balance, self.give_balance),
+            common::chain::OrdersVersion::V1 => (self.initially_asked, self.initially_given),
+        };
         let filled_amount = orders_accounting::calculate_filled_amount(
-            self.initially_asked,
-            self.initially_given,
+            ask_balance,
+            give_balance,
             fill_amount_in_ask_currency,
         )
         .expect("must succeed");
