@@ -1206,11 +1206,16 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
     }
 
     #[log_error]
-    fn disconnect_transactions(&mut self, block: &WithId<Block>) -> Result<(), BlockError> {
+    fn disconnect_transactions(
+        &mut self,
+        block_index: &BlockIndex,
+        block: &WithId<Block>,
+    ) -> Result<(), BlockError> {
         let cached_inputs = self.tx_verification_strategy.disconnect_block(
             TransactionVerifier::new,
             &*self,
             self.chain_config,
+            block_index,
             block,
         )?;
         let cached_inputs = cached_inputs.consume()?;
@@ -1302,7 +1307,7 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
             .expect("Best block index not present in the database");
         let block = self.get_block_from_index(&block_index)?.expect("Inconsistent DB");
         // Disconnect transactions
-        self.disconnect_transactions(&block.into())?;
+        self.disconnect_transactions(&block_index, &block.into())?;
         self.db_tx.set_best_block_id(block_index.prev_block_id())?;
         // Disconnect block
         self.db_tx.del_block_id_at_height(&block_index.block_height())?;

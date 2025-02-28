@@ -53,7 +53,10 @@ use tx_verifier::{
     CheckTransactionError,
 };
 
-use crate::tests::helpers::{issue_token_from_block, mint_tokens_in_block};
+use crate::tests::helpers::{
+    chainstate_upgrade_builder::ChainstateUpgradeBuilder, issue_token_from_block,
+    mint_tokens_in_block,
+};
 
 fn make_issuance(
     rng: &mut impl Rng,
@@ -6066,29 +6069,19 @@ fn test_change_metadata_uri_activation(#[case] seed: Seed) {
                         common::chain::NetUpgrades::initialize(vec![
                             (
                                 BlockHeight::zero(),
-                                common::chain::ChainstateUpgrade::new(
-                                    common::chain::TokenIssuanceVersion::V1,
-                                    common::chain::RewardDistributionVersion::V1,
-                                    common::chain::TokensFeeVersion::V1,
-                                    common::chain::DataDepositFeeVersion::V1,
-                                    common::chain::ChangeTokenMetadataUriActivated::No,
-                                    common::chain::FrozenTokensValidationVersion::V1,
-                                    common::chain::HtlcActivated::Yes,
-                                    common::chain::OrdersActivated::Yes,
-                                ),
+                                ChainstateUpgradeBuilder::latest()
+                                    .change_token_metadata_uri_activated(
+                                        common::chain::ChangeTokenMetadataUriActivated::No,
+                                    )
+                                    .build(),
                             ),
                             (
                                 BlockHeight::new(3),
-                                common::chain::ChainstateUpgrade::new(
-                                    common::chain::TokenIssuanceVersion::V1,
-                                    common::chain::RewardDistributionVersion::V1,
-                                    common::chain::TokensFeeVersion::V1,
-                                    common::chain::DataDepositFeeVersion::V1,
-                                    common::chain::ChangeTokenMetadataUriActivated::Yes,
-                                    common::chain::FrozenTokensValidationVersion::V1,
-                                    common::chain::HtlcActivated::Yes,
-                                    common::chain::OrdersActivated::Yes,
-                                ),
+                                ChainstateUpgradeBuilder::latest()
+                                    .change_token_metadata_uri_activated(
+                                        common::chain::ChangeTokenMetadataUriActivated::Yes,
+                                    )
+                                    .build(),
                             ),
                         ])
                         .unwrap(),

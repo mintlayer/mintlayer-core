@@ -57,8 +57,8 @@ use crate::{
 use super::{
     output_value::OutputValue, stakelock::StakePoolData, ChainstateUpgrade,
     ChangeTokenMetadataUriActivated, ConsensusUpgrade, DataDepositFeeVersion, DestinationTag,
-    FrozenTokensValidationVersion, HtlcActivated, OrdersActivated, RequiredConsensus,
-    RewardDistributionVersion, TokenIssuanceVersion, TokensFeeVersion,
+    FrozenTokensValidationVersion, HtlcActivated, OrdersActivated, OrdersVersion,
+    RequiredConsensus, RewardDistributionVersion, TokenIssuanceVersion, TokensFeeVersion,
 };
 
 use self::{
@@ -915,6 +915,7 @@ pub fn create_unit_test_config_builder() -> Builder {
                     FrozenTokensValidationVersion::V1,
                     HtlcActivated::Yes,
                     OrdersActivated::Yes,
+                    OrdersVersion::V1,
                 ),
             )])
             .expect("cannot fail"),

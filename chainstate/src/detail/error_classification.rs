@@ -802,6 +802,7 @@ impl BlockProcessingErrorClassification for CheckTransactionError {
             | CheckTransactionError::DeprecatedTokenOperationVersion(_, _)
             | CheckTransactionError::HtlcsAreNotActivated
             | CheckTransactionError::OrdersAreNotActivated(_)
+            | CheckTransactionError::AttemptToFillOrderWithZero(_, _)
             | CheckTransactionError::ChangeTokenMetadataUriNotActivated
             | CheckTransactionError::OrdersCurrenciesMustBeDifferent(_) => {
                 BlockProcessingErrorClass::BadBlock
@@ -913,6 +914,7 @@ impl BlockProcessingErrorClassification for orders_accounting::Error {
             | Error::InvariantOrderGiveBalanceExistForConcludeUndo(_)
             | Error::OrderOverflow(_)
             | Error::OrderOverbid(_, _, _)
+            | Error::OrderUnderbid(_, _)
             | Error::AttemptedConcludeNonexistingOrderData(_)
             | Error::UnsupportedTokenVersion
             | Error::InvariantNonzeroAskBalanceForMissingOrder(_)

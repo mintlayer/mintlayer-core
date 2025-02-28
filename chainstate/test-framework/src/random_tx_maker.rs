@@ -34,8 +34,8 @@ use common::{
             TokenTotalSupply,
         },
         AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, AccountType, DelegationId,
-        Destination, GenBlockId, OrderData, OrderId, OutPointSourceId, PoolId, Transaction,
-        TxInput, TxOutput, UtxoOutPoint,
+        Destination, GenBlockId, OrderData, OrderId, OrdersVersion, OutPointSourceId, PoolId,
+        Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, CoinOrTokenId, Id, Idable, H256},
 };
@@ -1024,7 +1024,9 @@ impl<'a> RandomTxMaker<'a> {
                             key_manager.new_destination(self.chainstate.get_chain_config(), rng),
                         );
 
-                        let _ = orders_cache.fill_order(order_id, amount_to_spend).unwrap();
+                        let _ = orders_cache
+                            .fill_order(order_id, amount_to_spend, OrdersVersion::V1)
+                            .unwrap();
                         self.account_command_used = true;
 
                         result_inputs.push(input);
@@ -1250,7 +1252,7 @@ impl<'a> RandomTxMaker<'a> {
                             ));
 
                             let _ = orders_cache
-                                .fill_order(order_id, Amount::from_atoms(atoms))
+                                .fill_order(order_id, Amount::from_atoms(atoms), OrdersVersion::V1)
                                 .unwrap();
                             self.account_command_used = true;
                         }
@@ -1476,7 +1478,8 @@ fn calculate_filled_order_value(
 ) -> OutputValue {
     let order_data = view.get_order_data(&order_id).unwrap().unwrap();
 
-    let filled_amount = orders_accounting::calculate_fill_order(view, order_id, fill).unwrap();
+    let filled_amount =
+        orders_accounting::calculate_fill_order(view, order_id, fill, OrdersVersion::V1).unwrap();
 
     output_value_with_amount(order_data.give(), filled_amount)
 }

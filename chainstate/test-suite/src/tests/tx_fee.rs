@@ -20,29 +20,26 @@ use chainstate_test_framework::{
     create_stake_pool_data_with_all_reward_to_staker, empty_witness, TestFramework, TestStore,
     TransactionBuilder,
 };
-use common::chain::{
-    config::create_unit_test_config, AccountCommand, AccountNonce, AccountSpending,
-    RewardDistributionVersion,
-};
 use common::{
     chain::{
-        config::ChainType,
+        config::{create_unit_test_config, ChainType},
         output_value::OutputValue,
         timelock::OutputTimeLock,
         tokens::{
             make_token_id, IsTokenFreezable, TokenIssuance, TokenIssuanceV0, TokenIssuanceV1,
             TokenTotalSupply,
         },
-        ChainConfig, ChainstateUpgrade, ChangeTokenMetadataUriActivated, DataDepositFeeVersion,
-        Destination, FrozenTokensValidationVersion, HtlcActivated, NetUpgrades, OrdersActivated,
-        TokenIssuanceVersion, TokensFeeVersion, TxInput, TxOutput, UtxoOutPoint,
+        AccountCommand, AccountNonce, AccountSpending, ChainConfig, Destination, NetUpgrades,
+        TokenIssuanceVersion, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, Fee, Idable},
 };
 use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
 use randomness::CryptoRng;
 use test_utils::random_ascii_alphanumeric_string;
-use tx_verifier::transaction_verifier::{TransactionSourceForConnect, TransactionVerifier};
+use tx_verifier::transaction_verifier::{TransactionSourceWithHeight, TransactionVerifier};
+
+use crate::tests::helpers::chainstate_upgrade_builder::ChainstateUpgradeBuilder;
 
 fn setup(rng: &mut (impl Rng + CryptoRng)) -> (ChainConfig, InMemoryStorageWrapper, TestFramework) {
     let storage = TestStore::new_empty().unwrap();
@@ -92,7 +89,7 @@ fn simple_fee_from_coin_transfer(#[case] seed: Seed) {
 
         let mut verifier = TransactionVerifier::new(&storage, &chain_config);
 
-        let tx_source = TransactionSourceForConnect::Mempool {
+        let tx_source = TransactionSourceWithHeight::Mempool {
             current_best: &tf.best_block_index(),
             effective_height: BlockHeight::new(1),
         };
@@ -164,7 +161,7 @@ fn transfer_lock_and_burn_outputs_fee(#[case] seed: Seed) {
 
         let mut verifier = TransactionVerifier::new(&storage, &chain_config);
 
-        let tx_source = TransactionSourceForConnect::Mempool {
+        let tx_source = TransactionSourceWithHeight::Mempool {
             current_best: &tf.best_block_index(),
             effective_height: BlockHeight::new(1),
         };
@@ -235,7 +232,7 @@ fn locked_outputs_can_go_to_fee(#[case] seed: Seed) {
 
         let mut verifier = TransactionVerifier::new(&storage, &chain_config);
 
-        let tx_source = TransactionSourceForConnect::Mempool {
+        let tx_source = TransactionSourceWithHeight::Mempool {
             current_best: &tf.best_block_index(),
             effective_height: BlockHeight::new(2),
         };
@@ -287,7 +284,7 @@ fn create_stake_pool(#[case] seed: Seed) {
 
         let mut verifier = TransactionVerifier::new(&storage, &chain_config);
 
-        let tx_source = TransactionSourceForConnect::Mempool {
+        let tx_source = TransactionSourceWithHeight::Mempool {
             current_best: &tf.best_block_index(),
             effective_height: BlockHeight::new(1),
         };
@@ -374,7 +371,7 @@ fn delegate_staking(#[case] seed: Seed) {
 
         let mut verifier = TransactionVerifier::new(&storage, &chain_config);
 
-        let tx_source = TransactionSourceForConnect::Mempool {
+        let tx_source = TransactionSourceWithHeight::Mempool {
             current_best: &tf.best_block_index(),
             effective_height: BlockHeight::new(1),
         };
@@ -454,7 +451,7 @@ fn fee_from_decommissioning_stake_pool(#[case] seed: Seed) {
 
         let mut verifier = TransactionVerifier::new(&storage, &chain_config);
 
-        let tx_source = TransactionSourceForConnect::Mempool {
+        let tx_source = TransactionSourceWithHeight::Mempool {
             current_best: &tf.best_block_index(),
             effective_height: BlockHeight::new(2),
         };
@@ -544,7 +541,7 @@ fn fee_from_spending_delegation_share(#[case] seed: Seed) {
 
         let mut verifier = TransactionVerifier::new(&storage, &chain_config);
 
-        let tx_source = TransactionSourceForConnect::Mempool {
+        let tx_source = TransactionSourceWithHeight::Mempool {
             current_best: &tf.best_block_index(),
             effective_height: BlockHeight::new(2),
         };
@@ -573,16 +570,9 @@ fn issue_fungible_token_v0(#[case] seed: Seed) {
                     .chainstate_upgrades(
                         common::chain::NetUpgrades::initialize(vec![(
                             BlockHeight::zero(),
-                            ChainstateUpgrade::new(
-                                TokenIssuanceVersion::V0,
-                                RewardDistributionVersion::V1,
-                                TokensFeeVersion::V1,
-                                DataDepositFeeVersion::V1,
-                                ChangeTokenMetadataUriActivated::Yes,
-                                FrozenTokensValidationVersion::V1,
-                                HtlcActivated::Yes,
-                                OrdersActivated::Yes,
-                            ),
+                            ChainstateUpgradeBuilder::latest()
+                                .token_issuance_version(TokenIssuanceVersion::V0)
+                                .build(),
                         )])
                         .unwrap(),
                     )
@@ -621,7 +611,7 @@ fn issue_fungible_token_v0(#[case] seed: Seed) {
 
         let mut verifier = TransactionVerifier::new(&storage, tf.chain_config().as_ref());
 
-        let tx_source = TransactionSourceForConnect::Mempool {
+        let tx_source = TransactionSourceWithHeight::Mempool {
             current_best: &tf.best_block_index(),
             effective_height: BlockHeight::new(1),
         };
@@ -669,7 +659,7 @@ fn issue_fungible_token_v1(#[case] seed: Seed) {
 
         let mut verifier = TransactionVerifier::new(&storage, &chain_config);
 
-        let tx_source = TransactionSourceForConnect::Mempool {
+        let tx_source = TransactionSourceWithHeight::Mempool {
             current_best: &tf.best_block_index(),
             effective_height: BlockHeight::new(1),
         };
@@ -758,7 +748,7 @@ fn tokens_cannot_be_used_in_fee(#[case] seed: Seed) {
 
         let mut verifier = TransactionVerifier::new(&storage, &chain_config);
 
-        let tx_source = TransactionSourceForConnect::Mempool {
+        let tx_source = TransactionSourceWithHeight::Mempool {
             current_best: &tf.best_block_index(),
             effective_height: BlockHeight::new(1),
         };
