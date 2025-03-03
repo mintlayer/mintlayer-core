@@ -160,3 +160,30 @@ impl AccountOutPoint {
         &self.account
     }
 }
+
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Ord,
+    PartialOrd,
+    Encode,
+    Decode,
+    serde::Serialize,
+    serde::Deserialize,
+)]
+pub enum OrderAccountCommand {
+    // Satisfy an order completely or partially.
+    // Second parameter is an amount provided to fill an order which corresponds to order's ask currency.
+    #[codec(index = 0)]
+    FillOrder(OrderId, Amount, Destination),
+    // Close an order and withdraw all remaining funds from both give and ask balances.
+    // Only the address specified as `conclude_key` can authorize this command.
+    #[codec(index = 1)]
+    ConcludeOrder {
+        order_id: OrderId,
+        ask_balance: Amount,
+        give_balance: Amount,
+    },
+}

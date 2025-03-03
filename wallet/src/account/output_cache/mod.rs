@@ -756,7 +756,7 @@ impl OutputCache {
         }
 
         let frozen_token_id = tx.inputs().iter().find_map(|inp| match inp {
-            TxInput::Utxo(_) | TxInput::Account(_) => None,
+            TxInput::Utxo(_) | TxInput::Account(_) | TxInput::OrderAccountCommand(_) => None,
             TxInput::AccountCommand(_, cmd) => match cmd {
                 AccountCommand::MintTokens(_, _)
                 | AccountCommand::UnmintTokens(_)
@@ -842,6 +842,7 @@ impl OutputCache {
                 }
             },
             TxInput::Account(_) => false,
+            TxInput::OrderAccountCommand(..) => todo!(),
         })
     }
 
@@ -1095,6 +1096,7 @@ impl OutputCache {
                         };
                     }
                 },
+                TxInput::OrderAccountCommand(..) => todo!(),
             }
         }
         Ok(())
@@ -1216,6 +1218,7 @@ impl OutputCache {
                             }
                         }
                     },
+                    TxInput::OrderAccountCommand(..) => todo!(),
                     TxInput::AccountCommand(nonce, op) => match op {
                         AccountCommand::MintTokens(token_id, _)
                         | AccountCommand::UnmintTokens(token_id)
@@ -1463,7 +1466,9 @@ impl OutputCache {
                     get_all_tx_output_destinations(txo, &|pool_id| self.pools.get(pool_id))
                 })
                 .is_some_and(|output_dest| output_dest.contains(dest)),
-            TxInput::Account(_) | TxInput::AccountCommand(_, _) => false,
+            TxInput::Account(_)
+            | TxInput::AccountCommand(_, _)
+            | TxInput::OrderAccountCommand(_) => false,
         })
     }
 
@@ -1519,6 +1524,7 @@ impl OutputCache {
                                             }
                                         }
                                     },
+                                    TxInput::OrderAccountCommand(..) => todo!(),
                                     TxInput::AccountCommand(nonce, op) => match op {
                                         AccountCommand::MintTokens(token_id, _)
                                         | AccountCommand::UnmintTokens(token_id)
@@ -1618,7 +1624,9 @@ impl OutputCache {
         is_mine: &F,
     ) -> Option<PoolId> {
         match inp {
-            TxInput::Account(_) | TxInput::AccountCommand(_, _) => None,
+            TxInput::Account(_)
+            | TxInput::AccountCommand(_, _)
+            | TxInput::OrderAccountCommand(_) => None,
             TxInput::Utxo(outpoint) => self
                 .txs
                 .get(&outpoint.source_id())
@@ -1783,6 +1791,7 @@ fn apply_freeze_mutations_from_tx(
                 | AccountCommand::ConcludeOrder(_)
                 | AccountCommand::FillOrder(_, _, _) => {}
             },
+            TxInput::OrderAccountCommand(..) => {}
         }
     }
 
@@ -1825,6 +1834,7 @@ fn apply_total_supply_mutations_from_tx(
                 | AccountCommand::ConcludeOrder(_)
                 | AccountCommand::FillOrder(_, _, _) => {}
             },
+            TxInput::OrderAccountCommand(..) => {}
         }
     }
 

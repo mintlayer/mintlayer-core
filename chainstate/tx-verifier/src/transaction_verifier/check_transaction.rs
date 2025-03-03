@@ -212,7 +212,7 @@ fn check_tokens_tx(
 
     // Check token metadata uri change
     tx.inputs().iter().try_for_each(|input| match input {
-        TxInput::Utxo(_) | TxInput::Account(_) => Ok(()),
+        TxInput::Utxo(_) | TxInput::Account(_) | TxInput::OrderAccountCommand(_) => Ok(()),
         TxInput::AccountCommand(_, command) => match command {
             AccountCommand::MintTokens(_, _)
             | AccountCommand::UnmintTokens(_)
@@ -372,6 +372,9 @@ fn check_order_inputs_outputs(
     block_height: BlockHeight,
     tx: &SignedTransaction,
 ) -> Result<(), CheckTransactionError> {
+    // FIXME: check OrderAccountCommand is not used in V0
+    // FIXME: OrderAccountCommand::FillOrder must check for 0
+
     for input in tx.inputs() {
         match input {
             TxInput::Utxo(_) | TxInput::Account(_) => { /*do nothing */ }
@@ -407,6 +410,7 @@ fn check_order_inputs_outputs(
                     }
                 }
             },
+            TxInput::OrderAccountCommand(_) => todo!(),
         }
     }
 

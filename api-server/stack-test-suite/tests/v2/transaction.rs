@@ -181,7 +181,9 @@ async fn multiple_tx_in_same_block(#[case] seed: Seed) {
                     TxInput::Utxo(outpoint) => {
                         Some(signed_tx1.outputs()[outpoint.output_index() as usize].clone())
                     }
-                    TxInput::Account(_) | TxInput::AccountCommand(_, _) => None,
+                    TxInput::Account(_)
+                    | TxInput::AccountCommand(_, _)
+                    | TxInput::OrderAccountCommand(_) => None,
                 });
 
                 let transaction = signed_tx2.transaction();
@@ -327,7 +329,9 @@ async fn ok(#[case] seed: Seed) {
                     TxInput::Utxo(outpoint) => {
                         Some(prev_tx.outputs()[outpoint.output_index() as usize].clone())
                     }
-                    TxInput::Account(_) | TxInput::AccountCommand(_, _) => None,
+                    TxInput::Account(_)
+                    | TxInput::AccountCommand(_, _)
+                    | TxInput::OrderAccountCommand(_) => None,
                 });
 
                 let expected_transaction = json!({

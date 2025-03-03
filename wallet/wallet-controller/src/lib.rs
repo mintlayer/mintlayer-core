@@ -955,7 +955,7 @@ where
             .filter_map(|inp| match inp {
                 TxInput::Utxo(utxo) => Some(utxo.clone()),
                 TxInput::Account(_) => None,
-                TxInput::AccountCommand(_, _) => None,
+                TxInput::AccountCommand(_, _) | TxInput::OrderAccountCommand(_) => None,
             })
             .collect();
         let fees = match self.fetch_utxos(&inputs).await {

@@ -1059,6 +1059,7 @@ fn mutate_first_input(
                 TxInput::AccountCommand(new_nonce, op.clone())
             }
         }
+        TxInput::OrderAccountCommand(_) => todo!(),
     };
     updater.inputs[0] = mutated_input;
 

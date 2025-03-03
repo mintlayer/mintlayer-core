@@ -612,6 +612,7 @@ fn update_statistics(
                 *staked = (*staked - *to_spend).unwrap();
             }
         },
+        TxInput::OrderAccountCommand(..) => todo!(),
         TxInput::AccountCommand(_, cmd) => match cmd {
             AccountCommand::MintTokens(token_id, to_mint) => {
                 statistics

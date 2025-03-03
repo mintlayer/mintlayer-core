@@ -279,7 +279,9 @@ async fn get_tx_additional_data(
                 TxInput::Utxo(outpoint) => {
                     db_tx.get_utxo(outpoint.clone()).await.unwrap().map(|utxo| utxo.into_output())
                 }
-                TxInput::Account(_) | TxInput::AccountCommand(_, _) => None,
+                TxInput::Account(_)
+                | TxInput::AccountCommand(_, _)
+                | TxInput::OrderAccountCommand(_) => None,
             };
             input_utxos.push(utxo);
         }

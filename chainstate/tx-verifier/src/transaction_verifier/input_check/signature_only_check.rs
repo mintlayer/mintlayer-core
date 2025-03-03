@@ -152,6 +152,7 @@ pub fn verify_tx_signature<T: Transactable + SignatureOnlyVerifiable>(
         }
         TxInput::Account(outpoint) => InputInfo::Account { outpoint },
         TxInput::AccountCommand(_, command) => InputInfo::AccountCommand { command },
+        TxInput::OrderAccountCommand(_) => todo!(),
     };
     let input_witness = tx.signatures()[input_num]
         .clone()

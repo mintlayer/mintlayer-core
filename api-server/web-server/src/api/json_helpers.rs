@@ -318,6 +318,7 @@ pub fn tx_input_to_json(inp: &TxInput, chain_config: &ChainConfig) -> serde_json
                 })
             }
         },
+        TxInput::OrderAccountCommand(..) => todo!(),
         TxInput::AccountCommand(nonce, cmd) => match cmd {
             AccountCommand::MintTokens(token_id, amount) => {
                 json!({

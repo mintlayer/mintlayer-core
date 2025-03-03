@@ -604,6 +604,7 @@ async fn calculate_tx_fee_and_collect_token_info<T: ApiServerStorageWrite>(
                     ));
                 }
                 TxInput::Account(_) => {}
+                TxInput::OrderAccountCommand(..) => todo!(),
                 TxInput::AccountCommand(_, cmd) => match cmd {
                     AccountCommand::MintTokens(token_id, _)
                     | AccountCommand::FreezeToken(token_id, _)
@@ -675,7 +676,9 @@ async fn fetch_utxo<T: ApiServerStorageRead>(
                 .expect("must be present");
             Ok(Some(utxo))
         }
-        TxInput::Account(_) | TxInput::AccountCommand(_, _) => Ok(None),
+        TxInput::Account(_) | TxInput::AccountCommand(_, _) | TxInput::OrderAccountCommand(_) => {
+            Ok(None)
+        }
     }
 }
 
@@ -845,6 +848,7 @@ async fn prefetch_orders<T: ApiServerStorageRead>(
     for input in inputs {
         match input {
             TxInput::Utxo(_) | TxInput::Account(_) => {}
+            TxInput::OrderAccountCommand(..) => todo!(),
             TxInput::AccountCommand(_, account_command) => match account_command {
                 AccountCommand::MintTokens(_, _)
                 | AccountCommand::UnmintTokens(_)
@@ -922,7 +926,9 @@ async fn update_tables_from_consensus_data<T: ApiServerStorageWrite>(
                         )
                         .await;
                     }
-                    TxInput::Account(_) | TxInput::AccountCommand(_, _) => {}
+                    TxInput::Account(_)
+                    | TxInput::AccountCommand(_, _)
+                    | TxInput::OrderAccountCommand(_) => {}
                 }
             }
 
@@ -1033,6 +1039,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
 
     for input in inputs {
         match input {
+            TxInput::OrderAccountCommand(..) => todo!(),
             TxInput::AccountCommand(_, cmd) => match cmd {
                 AccountCommand::MintTokens(token_id, amount) => {
                     let issuance =

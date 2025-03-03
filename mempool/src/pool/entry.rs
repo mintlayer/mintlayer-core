@@ -91,6 +91,7 @@ impl TxDependency {
             TxInput::AccountCommand(nonce, op) => {
                 nonce.decrement().map(|nonce| Self::from_account_op(op, nonce))
             }
+            TxInput::OrderAccountCommand(..) => todo!(),
         }
     }
 
@@ -99,6 +100,7 @@ impl TxDependency {
             TxInput::Utxo(_) => None,
             TxInput::Account(acct) => Some(Self::from_account(acct.account(), acct.nonce())),
             TxInput::AccountCommand(nonce, op) => Some(Self::from_account_op(op, *nonce)),
+            TxInput::OrderAccountCommand(..) => todo!(),
         }
     }
 }

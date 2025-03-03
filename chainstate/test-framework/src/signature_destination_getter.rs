@@ -184,6 +184,7 @@ impl<'a> SignatureDestinationGetter<'a> {
                         }
                         AccountCommand::FillOrder(_, _, d) => Ok(d.clone()),
                     },
+                    TxInput::OrderAccountCommand(..) => todo!(),
                 }
             };
 
