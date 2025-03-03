@@ -17,8 +17,8 @@ use std::num::NonZeroUsize;
 
 use common::{
     chain::{
-        AccountCommand, AccountNonce, AccountSpending, AccountType, SignedTransaction, Transaction,
-        TxInput, UtxoOutPoint,
+        AccountCommand, AccountNonce, AccountSpending, AccountType, OrderAccountCommand,
+        SignedTransaction, Transaction, TxInput, UtxoOutPoint,
     },
     primitives::{Id, Idable},
 };
@@ -45,6 +45,8 @@ pub enum TxDependency {
     DelegationAccount(TxAccountDependency),
     TokenSupplyAccount(TxAccountDependency),
     OrderAccount(TxAccountDependency),
+    // TODO: keep only V1 version after OrdersVersion::V1 is activated
+    OrderV1Account(AccountType),
     TxOutput(Id<Transaction>, u32),
     // TODO: Block reward?
 }
@@ -65,7 +67,7 @@ impl TxDependency {
         }
     }
 
-    fn from_account_op(cmd: &AccountCommand, nonce: AccountNonce) -> Self {
+    fn from_account_cmd(cmd: &AccountCommand, nonce: AccountNonce) -> Self {
         match cmd {
             AccountCommand::MintTokens(_, _)
             | AccountCommand::UnmintTokens(_)
@@ -81,6 +83,9 @@ impl TxDependency {
             }
         }
     }
+    fn from_order_account_cmd(cmd: &OrderAccountCommand) -> Self {
+        Self::OrderV1Account(cmd.clone().into())
+    }
 
     fn from_input_requires(input: &TxInput) -> Option<Self> {
         match input {
@@ -89,9 +94,9 @@ impl TxDependency {
                 acct.nonce().decrement().map(|nonce| Self::from_account(acct.account(), nonce))
             }
             TxInput::AccountCommand(nonce, op) => {
-                nonce.decrement().map(|nonce| Self::from_account_op(op, nonce))
+                nonce.decrement().map(|nonce| Self::from_account_cmd(op, nonce))
             }
-            TxInput::OrderAccountCommand(..) => todo!(),
+            TxInput::OrderAccountCommand(cmd) => Some(Self::from_order_account_cmd(cmd)),
         }
     }
 
@@ -99,8 +104,8 @@ impl TxDependency {
         match input {
             TxInput::Utxo(_) => None,
             TxInput::Account(acct) => Some(Self::from_account(acct.account(), acct.nonce())),
-            TxInput::AccountCommand(nonce, op) => Some(Self::from_account_op(op, *nonce)),
-            TxInput::OrderAccountCommand(..) => todo!(),
+            TxInput::AccountCommand(nonce, op) => Some(Self::from_account_cmd(op, *nonce)),
+            TxInput::OrderAccountCommand(cmd) => Some(Self::from_order_account_cmd(cmd)),
         }
     }
 }

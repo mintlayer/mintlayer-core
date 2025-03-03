@@ -19,7 +19,7 @@ use common::{
     primitives::Id,
 };
 
-use super::account::{RpcAccountCommand, RpcAccountSpending};
+use super::account::{RpcAccountCommand, RpcAccountSpending, RpcOrderAccountCommand};
 
 #[derive(Debug, Clone, serde::Serialize, rpc_description::HasValueHint)]
 #[serde(tag = "type", content = "content")]
@@ -35,6 +35,9 @@ pub enum RpcTxInput {
     AccountCommand {
         nonce: u64,
         command: RpcAccountCommand,
+    },
+    OrderAccountCommand {
+        command: RpcOrderAccountCommand,
     },
 }
 
@@ -59,7 +62,9 @@ impl RpcTxInput {
                 nonce: nonce.value(),
                 command: RpcAccountCommand::new(chain_config, command)?,
             },
-            TxInput::OrderAccountCommand(..) => todo!(),
+            TxInput::OrderAccountCommand(cmd) => RpcTxInput::OrderAccountCommand {
+                command: RpcOrderAccountCommand::new(chain_config, cmd)?,
+            },
         };
         Ok(result)
     }

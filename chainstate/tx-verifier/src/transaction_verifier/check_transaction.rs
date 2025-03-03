@@ -61,6 +61,10 @@ pub enum CheckTransactionError {
     HtlcsAreNotActivated,
     #[error("Orders from tx {0} are not yet activated")]
     OrdersAreNotActivated(Id<Transaction>),
+    #[error("Orders V1 from tx {0} are not yet activated")]
+    OrdersV1AreNotActivated(Id<Transaction>),
+    #[error("Order inputs from tx {0} are deprecated")]
+    DeprecatedOrdersCommands(Id<Transaction>),
     #[error("Orders currencies from tx {0} are the same")]
     OrdersCurrenciesMustBeDifferent(Id<Transaction>),
     #[error("Change token metadata uri not activated yet")]
@@ -372,12 +376,15 @@ fn check_order_inputs_outputs(
     block_height: BlockHeight,
     tx: &SignedTransaction,
 ) -> Result<(), CheckTransactionError> {
-    // FIXME: check OrderAccountCommand is not used in V0
-    // FIXME: OrderAccountCommand::FillOrder must check for 0
+    let orders_version = chain_config
+        .chainstate_upgrades()
+        .version_at_height(block_height)
+        .1
+        .orders_version();
 
     for input in tx.inputs() {
         match input {
-            TxInput::Utxo(_) | TxInput::Account(_) => { /*do nothing */ }
+            TxInput::Utxo(_) | TxInput::Account(_) => {}
             TxInput::AccountCommand(_, account_command) => match account_command {
                 AccountCommand::MintTokens(..)
                 | AccountCommand::UnmintTokens(..)
@@ -385,32 +392,42 @@ fn check_order_inputs_outputs(
                 | AccountCommand::FreezeToken(..)
                 | AccountCommand::UnfreezeToken(..)
                 | AccountCommand::ChangeTokenAuthority(..)
-                | AccountCommand::ChangeTokenMetadataUri(..)
-                | AccountCommand::ConcludeOrder(..) => { /* do nothing */ }
-                AccountCommand::FillOrder(id, fill, _) => {
-                    let orders_version = chain_config
-                        .chainstate_upgrades()
-                        .version_at_height(block_height)
-                        .1
-                        .orders_version();
-
+                | AccountCommand::ChangeTokenMetadataUri(..) => { /* do nothing */ }
+                AccountCommand::FillOrder(..) | AccountCommand::ConcludeOrder(..) => {
                     match orders_version {
-                        OrdersVersion::V0 => { /*do nothing */ }
+                        OrdersVersion::V0 => {}
                         OrdersVersion::V1 => {
-                            // Forbidding fills with zero ensures that tx has utxo and therefor is unique.
-                            // Unique txs cannot be replayed.
-                            ensure!(
-                                *fill > Amount::ZERO,
-                                CheckTransactionError::AttemptToFillOrderWithZero(
-                                    *id,
-                                    tx.transaction().get_id()
-                                )
-                            );
+                            return Err(CheckTransactionError::DeprecatedOrdersCommands(
+                                tx.transaction().get_id(),
+                            ));
                         }
-                    }
+                    };
                 }
             },
-            TxInput::OrderAccountCommand(_) => todo!(),
+            TxInput::OrderAccountCommand(cmd) => {
+                match orders_version {
+                    OrdersVersion::V0 => {
+                        return Err(CheckTransactionError::OrdersV1AreNotActivated(
+                            tx.transaction().get_id(),
+                        ));
+                    }
+                    OrdersVersion::V1 => {}
+                };
+                match cmd {
+                    common::chain::OrderAccountCommand::FillOrder(id, fill, _) => {
+                        // Forbidding fills with zero ensures that tx has utxo and therefor is unique.
+                        // Unique txs cannot be replayed.
+                        ensure!(
+                            *fill > Amount::ZERO,
+                            CheckTransactionError::AttemptToFillOrderWithZero(
+                                *id,
+                                tx.transaction().get_id()
+                            )
+                        );
+                    }
+                    common::chain::OrderAccountCommand::ConcludeOrder { .. } => {}
+                }
+            }
         }
     }
 
