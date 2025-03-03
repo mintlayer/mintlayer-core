@@ -46,7 +46,7 @@ jobs:
 
     - name: Build
       run: |
-        cargo build --release --target ${{ matrix.arch }}-unknown-linux-gnu
+        cargo build --release --target ${{ matrix.arch }}-unknown-linux-gnu --features trezor
 
     - name: Create Debian package for GUI
       run: |

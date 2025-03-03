@@ -57,3 +57,7 @@ test-utils = { path = "../../test-utils" }
 wallet-test-node = { path = "../wallet-test-node" }
 
 rstest.workspace = true
+
+[features]
+trezor = ["wallet-types/trezor", "wallet-rpc-lib/trezor"]
+default = ["trezor"]

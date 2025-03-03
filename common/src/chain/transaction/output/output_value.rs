@@ -75,7 +75,14 @@ impl From<TokenIssuanceV0> for OutputValue {
 }
 
 #[derive(
-    Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, rpc_description::HasValueHint,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    serde::Serialize,
+    serde::Deserialize,
+    rpc_description::HasValueHint,
 )]
 #[serde(tag = "type", content = "content")]
 pub enum RpcOutputValue {
@@ -97,6 +104,22 @@ impl RpcOutputValue {
     pub fn amount(&self) -> Amount {
         match self {
             RpcOutputValue::Coin { amount } | RpcOutputValue::Token { id: _, amount } => *amount,
+        }
+    }
+
+    pub fn token_id(&self) -> Option<TokenId> {
+        match self {
+            RpcOutputValue::Coin { amount: _ } => None,
+            RpcOutputValue::Token { id, amount: _ } => Some(*id),
+        }
+    }
+}
+
+impl From<RpcOutputValue> for OutputValue {
+    fn from(value: RpcOutputValue) -> Self {
+        match value {
+            RpcOutputValue::Coin { amount } => OutputValue::Coin(amount),
+            RpcOutputValue::Token { id, amount } => OutputValue::TokenV1(id, amount),
         }
     }
 }

@@ -15,6 +15,7 @@
 
 use std::path::PathBuf;
 
+use clap::ValueEnum;
 use common::chain::config::{regtest_options::ChainConfigOptions, ChainType};
 use crypto::key::hdkd::u31::U31;
 use rpc::{
@@ -25,8 +26,12 @@ use utils::{
     clap_utils, cookie::COOKIE_FILENAME, default_data_dir::default_data_dir_for_chain, ensure,
 };
 use utils_networking::NetworkAddressWithPort;
+use wallet_controller::types::WalletTypeArgs;
 
-use crate::config::{WalletRpcConfig, WalletServiceConfig};
+use crate::{
+    config::{WalletRpcConfig, WalletServiceConfig},
+    types::HardwareWalletType,
+};
 
 /// Service providing an RPC interface to a wallet
 #[derive(clap::Parser)]
@@ -78,6 +83,30 @@ impl WalletRpcDaemonCommand {
     }
 }
 
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum CliHardwareWalletType {
+    #[cfg(feature = "trezor")]
+    Trezor,
+}
+
+impl From<CliHardwareWalletType> for HardwareWalletType {
+    fn from(value: CliHardwareWalletType) -> Self {
+        match value {
+            #[cfg(feature = "trezor")]
+            CliHardwareWalletType::Trezor => Self::Trezor,
+        }
+    }
+}
+
+impl From<CliHardwareWalletType> for WalletTypeArgs {
+    fn from(value: CliHardwareWalletType) -> Self {
+        match value {
+            #[cfg(feature = "trezor")]
+            CliHardwareWalletType::Trezor => Self::Trezor,
+        }
+    }
+}
+
 #[derive(clap::Args)]
 #[command(
     version,
@@ -97,6 +126,10 @@ pub struct WalletRpcDaemonChainArgs {
     /// Force change the wallet type from hot to cold or from cold to hot
     #[arg(long, requires("wallet_file"))]
     force_change_wallet_type: bool,
+
+    /// Specified if the wallet file is of a hardware wallet type e.g. Trezor
+    #[arg(long, requires("wallet_file"))]
+    hardware_wallet: Option<CliHardwareWalletType>,
 
     /// Start staking for the specified account after starting the wallet
     #[arg(long, value_name("ACC_NUMBER"), requires("wallet_file"))]
@@ -161,6 +194,7 @@ impl WalletRpcDaemonChainArgs {
         let Self {
             wallet_file,
             force_change_wallet_type,
+            hardware_wallet,
             rpc_bind_address,
             start_staking_for_account,
             node_rpc_address,
@@ -185,6 +219,7 @@ impl WalletRpcDaemonChainArgs {
                 wallet_file,
                 force_change_wallet_type,
                 start_staking_for_account,
+                hardware_wallet.map(Into::into),
             );
 
             if cold_wallet {

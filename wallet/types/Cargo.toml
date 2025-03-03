@@ -10,6 +10,7 @@ rust-version.workspace = true
 [dependencies]
 common = { path = "../../common/" }
 crypto = { path = "../../crypto/" }
+tx-verifier = { path = "../../chainstate/tx-verifier" }
 rpc-description = { path = "../../rpc/description" }
 randomness = { path = "../../randomness" }
 serialization = { path = "../../serialization" }
@@ -28,3 +29,7 @@ zeroize.workspace = true
 test-utils = { path = "../../test-utils" }
 
 rstest.workspace = true
+
+[features]
+trezor = []
+default = ["trezor"]

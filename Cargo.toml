@@ -275,3 +275,7 @@ overflow-checks = true
 
 [profile.test.package.script]
 opt-level = 2
+
+[features]
+trezor = []
+default = ["trezor"]

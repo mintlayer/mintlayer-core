@@ -347,6 +347,25 @@ EITHER OF
      2) null
 ```
 
+### Method `chainstate_pool_decommission_destination`
+
+Returns the pool's decommission destination associated with the given pool address.
+
+Returns `None` (null) if the pool is not found.
+
+
+Parameters:
+```
+{ "pool_address": string }
+```
+
+Returns:
+```
+EITHER OF
+     1) bech32 string
+     2) null
+```
+
 ### Method `chainstate_delegation_share`
 
 Given a pool defined by a pool address, and a delegation address,

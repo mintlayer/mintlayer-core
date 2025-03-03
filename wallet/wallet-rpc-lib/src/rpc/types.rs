@@ -20,7 +20,6 @@ use common::{
     chain::{
         block::timestamp::BlockTimestamp,
         classic_multisig::ClassicMultisigChallengeError,
-        partially_signed_transaction::PartiallySignedTransaction,
         signature::DestinationSigError,
         timelock::OutputTimeLock,
         tokens::{self, IsTokenFreezable, Metadata, TokenCreator, TokenId},
@@ -37,6 +36,7 @@ use crypto::{
     vrf::VRFPublicKey,
 };
 use rpc::description::HasValueHint;
+use utils::ensure;
 use wallet::account::PoolData;
 
 pub use chainstate::{
@@ -56,9 +56,12 @@ pub use serialization::hex_encoded::HexEncoded;
 pub use wallet_controller::types::{
     Balances, BlockInfo, InspectTransaction, SignatureStats, ValidatedSignatures,
 };
+use wallet_controller::{types::WalletTypeArgs, UtxoState, UtxoType};
 pub use wallet_controller::{ControllerConfig, NodeInterface};
-use wallet_controller::{UtxoState, UtxoType};
-use wallet_types::signature_status::SignatureStatus;
+use wallet_types::{
+    partially_signed_transaction::PartiallySignedTransaction, seed_phrase::StoreSeedPhrase,
+    signature_status::SignatureStatus,
+};
 
 use crate::service::SubmitError;
 
@@ -91,6 +94,12 @@ pub enum RpcError<N: NodeInterface> {
 
     #[error("Invalid mnemonic: {0}")]
     InvalidMnemonic(wallet_controller::mnemonic::Error),
+
+    #[error("Cannot recover a software wallet without providing a mnemonic")]
+    EmptyMnemonic,
+
+    #[error("Cannot specify a mnemonic or passphrase when creating a hardware wallet")]
+    HardwareWalletWithMnemonicOrPassphrase,
 
     #[error("Invalid ip address")]
     InvalidIpAddress,
@@ -636,10 +645,7 @@ impl StakingStatus {
 #[serde(tag = "type", content = "content")]
 pub enum MnemonicInfo {
     UserProvided,
-    NewlyGenerated {
-        mnemonic: String,
-        passphrase: Option<String>,
-    },
+    NewlyGenerated { mnemonic: String },
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
@@ -647,14 +653,15 @@ pub struct CreatedWallet {
     pub mnemonic: MnemonicInfo,
 }
 
-impl From<crate::CreatedWallet> for CreatedWallet {
-    fn from(value: crate::CreatedWallet) -> Self {
+impl From<wallet_controller::types::CreatedWallet> for CreatedWallet {
+    fn from(value: wallet_controller::types::CreatedWallet) -> Self {
         let mnemonic = match value {
-            crate::CreatedWallet::UserProvidedMnemonic => MnemonicInfo::UserProvided,
-            crate::CreatedWallet::NewlyGeneratedMnemonic(mnemonic, passphrase) => {
+            wallet_controller::types::CreatedWallet::UserProvidedMnemonic => {
+                MnemonicInfo::UserProvided
+            }
+            wallet_controller::types::CreatedWallet::NewlyGeneratedMnemonic(mnemonic) => {
                 MnemonicInfo::NewlyGenerated {
                     mnemonic: mnemonic.to_string(),
-                    passphrase,
                 }
             }
         };
@@ -784,6 +791,47 @@ pub struct NewOrder {
 pub enum RpcCurrency {
     Coin,
     Token { token_id: RpcAddress<TokenId> },
+}
+
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize, HasValueHint)]
+pub enum HardwareWalletType {
+    #[cfg(feature = "trezor")]
+    Trezor,
+}
+
+impl HardwareWalletType {
+    pub fn into_wallet_args<N: NodeInterface>(
+        hardware_wallet: Option<Self>,
+        store_seed_phrase: bool,
+        mnemonic: Option<String>,
+        passphrase: Option<String>,
+    ) -> Result<WalletTypeArgs, RpcError<N>> {
+        let store_seed_phrase = if store_seed_phrase {
+            StoreSeedPhrase::Store
+        } else {
+            StoreSeedPhrase::DoNotStore
+        };
+
+        match hardware_wallet {
+            None => Ok(WalletTypeArgs::Software {
+                mnemonic,
+                passphrase,
+                store_seed_phrase,
+            }),
+            Some(hw_type) => {
+                ensure!(
+                    mnemonic.is_none()
+                        && passphrase.is_none()
+                        && store_seed_phrase == StoreSeedPhrase::DoNotStore,
+                    RpcError::HardwareWalletWithMnemonicOrPassphrase
+                );
+                match hw_type {
+                    #[cfg(feature = "trezor")]
+                    HardwareWalletType::Trezor => Ok(WalletTypeArgs::Trezor),
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]

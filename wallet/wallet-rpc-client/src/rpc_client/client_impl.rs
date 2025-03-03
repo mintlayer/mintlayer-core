@@ -24,9 +24,8 @@ use super::{ClientWalletRpc, WalletRpcError};
 use chainstate::{rpc::RpcOutputValueIn, ChainInfo};
 use common::{
     chain::{
-        block::timestamp::BlockTimestamp, partially_signed_transaction::PartiallySignedTransaction,
-        Block, GenBlock, SignedTransaction, SignedTransactionIntent, Transaction, TxOutput,
-        UtxoOutPoint,
+        block::timestamp::BlockTimestamp, Block, GenBlock, SignedTransaction,
+        SignedTransactionIntent, Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{BlockHeight, DecimalAmount, Id},
 };
@@ -38,14 +37,17 @@ use serialization::DecodeAll;
 use utils_networking::IpOrSocketAddress;
 use wallet::account::TxInfo;
 use wallet_controller::{
-    types::{Balances, CreatedBlockInfo, GenericTokenTransfer, SeedWithPassPhrase, WalletInfo},
+    types::{
+        Balances, CreatedBlockInfo, GenericTokenTransfer, SeedWithPassPhrase, WalletInfo,
+        WalletTypeArgs,
+    },
     ConnectedPeer, ControllerConfig, UtxoState, UtxoType,
 };
 use wallet_rpc_lib::{
     types::{
         AddressInfo, AddressWithUsageInfo, BlockInfo, ComposedTransaction, CreatedWallet,
-        DelegationInfo, LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegation, NewOrder,
-        NewTransaction, NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo,
+        DelegationInfo, HardwareWalletType, LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegation,
+        NewOrder, NewTransaction, NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo,
         RpcHashedTimelockContract, RpcInspectTransaction, RpcStandaloneAddresses, RpcTokenId,
         SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
         StandaloneAddressWithDetails, TokenMetadata, TransactionOptions, TxOptionsOverrides,
@@ -53,7 +55,9 @@ use wallet_rpc_lib::{
     },
     ColdWalletRpcClient, WalletRpcClient,
 };
-use wallet_types::with_locked::WithLocked;
+use wallet_types::{
+    partially_signed_transaction::PartiallySignedTransaction, with_locked::WithLocked,
+};
 
 #[async_trait::async_trait]
 impl WalletInterface for ClientWalletRpc {
@@ -82,16 +86,45 @@ impl WalletInterface for ClientWalletRpc {
     async fn create_wallet(
         &self,
         path: PathBuf,
-        store_seed_phrase: bool,
-        mnemonic: Option<String>,
-        passphrase: Option<String>,
+        wallet_args: WalletTypeArgs,
     ) -> Result<CreatedWallet, Self::Error> {
+        let (mnemonic, passphrase, store_seed_phrase, hardware_wallet) = match wallet_args {
+            WalletTypeArgs::Software {
+                mnemonic,
+                passphrase,
+                store_seed_phrase,
+            } => (mnemonic, passphrase, store_seed_phrase.should_save(), None),
+            #[cfg(feature = "trezor")]
+            WalletTypeArgs::Trezor => (None, None, false, Some(HardwareWalletType::Trezor)),
+        };
+
         ColdWalletRpcClient::create_wallet(
             &self.http_client,
             path.to_string_lossy().to_string(),
             store_seed_phrase,
             mnemonic,
             passphrase,
+            hardware_wallet,
+        )
+        .await
+        .map_err(WalletRpcError::ResponseError)
+    }
+
+    async fn recover_wallet(
+        &self,
+        path: PathBuf,
+        store_seed_phrase: bool,
+        mnemonic: Option<String>,
+        passphrase: Option<String>,
+        hardware_wallet: Option<HardwareWalletType>,
+    ) -> Result<CreatedWallet, Self::Error> {
+        ColdWalletRpcClient::recover_wallet(
+            &self.http_client,
+            path.to_string_lossy().to_string(),
+            store_seed_phrase,
+            mnemonic,
+            passphrase,
+            hardware_wallet,
         )
         .await
         .map_err(WalletRpcError::ResponseError)
@@ -102,12 +135,14 @@ impl WalletInterface for ClientWalletRpc {
         path: PathBuf,
         password: Option<String>,
         force_migrate_wallet_type: Option<bool>,
+        hardware_wallet: Option<HardwareWalletType>,
     ) -> Result<(), Self::Error> {
         ColdWalletRpcClient::open_wallet(
             &self.http_client,
             path.to_string_lossy().to_string(),
             password,
             force_migrate_wallet_type,
+            hardware_wallet,
         )
         .await
         .map_err(WalletRpcError::ResponseError)

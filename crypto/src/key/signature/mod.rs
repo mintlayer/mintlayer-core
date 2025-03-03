@@ -19,6 +19,8 @@ use std::io::BufWriter;
 use num_derive::FromPrimitive;
 use serialization::{hex_encoded::HexEncoded, Decode, DecodeAll, Encode};
 
+use super::SignatureError;
+
 #[derive(FromPrimitive)]
 pub enum SignatureKind {
     Secp256k1Schnorr = 0,
@@ -75,6 +77,19 @@ impl Signature {
     pub fn from_data<T: AsRef<[u8]>>(data: T) -> Result<Self, serialization::Error> {
         let decoded_sig = Signature::decode_all(&mut data.as_ref())?;
         Ok(decoded_sig)
+    }
+
+    pub fn from_raw_data<T: AsRef<[u8]>>(
+        data: T,
+        kind: SignatureKind,
+    ) -> Result<Self, SignatureError> {
+        match kind {
+            SignatureKind::Secp256k1Schnorr => {
+                let decoded_sig = secp256k1::schnorr::Signature::from_slice(data.as_ref())
+                    .map_err(|_| SignatureError::SignatureConstructionError)?;
+                Ok(Self::Secp256k1Schnorr(decoded_sig))
+            }
+        }
     }
 
     pub fn is_aggregable(&self) -> bool {

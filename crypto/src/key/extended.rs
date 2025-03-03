@@ -122,6 +122,12 @@ impl ExtendedPublicKey {
         }
     }
 
+    pub fn new(public_key: Secp256k1ExtendedPublicKey) -> Self {
+        Self {
+            pub_key: ExtendedPublicKeyHolder::Secp256k1Schnorr(public_key),
+        }
+    }
+
     pub fn into_public_key(self) -> PublicKey {
         match self.pub_key {
             ExtendedPublicKeyHolder::Secp256k1Schnorr(k) => k.into_public_key().into(),

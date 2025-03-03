@@ -17,12 +17,14 @@ node-gui-backend = { path = "./backend" }
 node-lib = { path = "../node-lib" }
 node-comm = { path = "../wallet/wallet-node-client" }
 p2p = { path = "../p2p" }
+storage = { path = "../storage" }
 serialization = { path = "../serialization" }
 utils = { path = "../utils" }
 wallet = { path = "../wallet" }
 wallet-controller = { path = "../wallet/wallet-controller" }
 wallet-types = { path = "../wallet/types" }
 wallet-cli-commands = { path = "../wallet/wallet-cli-commands"}
+wallet-storage = { path = "../wallet/storage" }
 
 anyhow.workspace = true
 chrono.workspace = true
@@ -38,3 +40,7 @@ tokio.workspace = true
 
 [target.'cfg(windows)'.build-dependencies]
 winres = "0.1"
+
+[features]
+trezor = ["wallet-controller/trezor", "wallet-types/trezor", "wallet-cli-commands/trezor", "node-gui-backend/trezor"]
+default = ["trezor"]

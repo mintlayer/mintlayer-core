@@ -52,11 +52,12 @@ use common::{
         classic_multisig::ClassicMultisigChallenge,
         htlc::{HashedTimelockContract, HtlcSecret, HtlcSecretHash},
         output_value::{OutputValue, RpcOutputValue},
-        partially_signed_transaction::PartiallySignedTransaction,
         signature::inputsig::arbitrary_message::{
             produce_message_challenge, ArbitraryMessageSignature,
         },
-        tokens::{IsTokenFreezable, IsTokenUnfreezable, Metadata, TokenId, TokenTotalSupply},
+        tokens::{
+            IsTokenFreezable, IsTokenUnfreezable, Metadata, RPCTokenInfo, TokenId, TokenTotalSupply,
+        },
         Block, ChainConfig, DelegationId, Destination, GenBlock, OrderId, PoolId,
         SignedTransaction, SignedTransactionIntent, Transaction, TxOutput, UtxoOutPoint,
     },
@@ -71,27 +72,34 @@ pub use interface::{
 pub use rpc::{rpc_creds::RpcCreds, Rpc};
 use wallet_controller::{
     types::{
-        Balances, BlockInfo, CreatedBlockInfo, GenericTokenTransfer, InspectTransaction,
-        SeedWithPassPhrase, TransactionToInspect, WalletInfo,
+        Balances, BlockInfo, CreatedBlockInfo, CreatedWallet, GenericTokenTransfer,
+        InspectTransaction, SeedWithPassPhrase, TransactionToInspect, WalletCreationOptions,
+        WalletInfo, WalletTypeArgs,
     },
     ConnectedPeer, ControllerConfig, ControllerError, NodeInterface, UtxoState, UtxoStates,
     UtxoType, UtxoTypes, DEFAULT_ACCOUNT_INDEX,
 };
 use wallet_types::{
-    account_info::StandaloneAddressDetails, scan_blockchain::ScanBlockchain,
-    seed_phrase::StoreSeedPhrase, signature_status::SignatureStatus, wallet_tx::TxData,
-    with_locked::WithLocked, Currency,
+    account_info::StandaloneAddressDetails,
+    partially_signed_transaction::{
+        PartiallySignedTransaction, TokenAdditionalInfo, TxAdditionalInfo,
+    },
+    scan_blockchain::ScanBlockchain,
+    signature_status::SignatureStatus,
+    wallet_tx::TxData,
+    with_locked::WithLocked,
+    Currency,
 };
 
-use crate::{
-    service::{CreatedWallet, WalletController},
-    WalletHandle, WalletRpcConfig,
-};
+use crate::{service::WalletController, WalletHandle, WalletRpcConfig};
+
+#[cfg(feature = "trezor")]
+use wallet_types::wallet_type::WalletType;
 
 pub use self::types::RpcError;
 use self::types::{
-    AddressInfo, AddressWithUsageInfo, DelegationInfo, LegacyVrfPublicKeyInfo, NewAccountInfo,
-    NewTransaction, PoolInfo, PublicKeyInfo, RpcAddress, RpcAmountIn, RpcHexString,
+    AddressInfo, AddressWithUsageInfo, DelegationInfo, HardwareWalletType, LegacyVrfPublicKeyInfo,
+    NewAccountInfo, NewTransaction, PoolInfo, PublicKeyInfo, RpcAddress, RpcAmountIn, RpcHexString,
     RpcStandaloneAddress, RpcStandaloneAddressDetails, RpcStandaloneAddresses,
     RpcStandalonePrivateKeyAddress, RpcTokenId, RpcUtxoOutpoint, StakingStatus,
     StandaloneAddressWithDetails, VrfPublicKeyInfo,
@@ -106,7 +114,10 @@ pub struct WalletRpc<N: Clone> {
 
 type WRpcResult<T, N> = Result<T, RpcError<N>>;
 
-impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
+impl<N> WalletRpc<N>
+where
+    N: NodeInterface + Clone + Send + Sync + 'static,
+{
     pub fn new(wallet: WalletHandle<N>, node: N, chain_config: Arc<ChainConfig>) -> Self {
         Self {
             wallet,
@@ -130,24 +141,12 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
     pub async fn create_wallet(
         &self,
         path: PathBuf,
-        store_seed_phrase: StoreSeedPhrase,
-        mnemonic: Option<String>,
-        passphrase: Option<String>,
-        scan_blockchain: ScanBlockchain,
+        args: WalletTypeArgs,
+        options: WalletCreationOptions,
     ) -> WRpcResult<CreatedWallet, N> {
         self.wallet
             .manage_async(move |wallet_manager| {
-                Box::pin(async move {
-                    wallet_manager
-                        .create_wallet(
-                            path,
-                            store_seed_phrase,
-                            mnemonic,
-                            passphrase,
-                            scan_blockchain,
-                        )
-                        .await
-                })
+                Box::pin(async move { wallet_manager.create_wallet(path, args, options).await })
             })
             .await?
     }
@@ -158,7 +157,13 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         password: Option<String>,
         force_migrate_wallet_type: bool,
         scan_blockchain: ScanBlockchain,
+        open_as_hw_wallet: Option<HardwareWalletType>,
     ) -> WRpcResult<(), N> {
+        let open_as_wallet_type =
+            open_as_hw_wallet.map_or(self.node.is_cold_wallet_node().into(), |hw| match hw {
+                #[cfg(feature = "trezor")]
+                HardwareWalletType::Trezor => WalletType::Trezor,
+            });
         Ok(self
             .wallet
             .manage_async(move |wallet_manager| {
@@ -169,6 +174,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
                             password,
                             force_migrate_wallet_type,
                             scan_blockchain,
+                            open_as_wallet_type,
                         )
                         .await
                 })
@@ -843,6 +849,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
                         .synced_controller(account_index, config)
                         .await?
                         .sign_raw_transaction(tx_to_sign)
+                        .await
                         .map_err(RpcError::Controller)
                 })
             })
@@ -1230,6 +1237,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
 
                     let (tx, _, cur_signatures) = synced_controller
                         .sign_raw_transaction(TransactionToSign::Partial(tx))
+                        .await
                         .map_err(RpcError::Controller)?;
 
                     Ok::<_, RpcError<N>>((tx, cur_signatures, fees))
@@ -1515,26 +1523,35 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         self.wallet
             .call_async(move |controller| {
                 Box::pin(async move {
-                    let value = match token_id {
+                    let (value, additional_info) = match token_id {
                         Some(token_id) => {
                             let token_info = controller.get_token_info(token_id).await?;
                             let amount = amount
                                 .to_amount(token_info.token_number_of_decimals())
                                 .ok_or(RpcError::InvalidCoinAmount)?;
-                            OutputValue::TokenV1(token_id, amount)
+                            (
+                                OutputValue::TokenV1(token_id, amount),
+                                TxAdditionalInfo::with_token_info(
+                                    token_id,
+                                    TokenAdditionalInfo {
+                                        num_decimals: token_info.token_number_of_decimals(),
+                                        ticker: token_info.token_ticker().to_vec(),
+                                    },
+                                ),
+                            )
                         }
                         None => {
                             let amount = amount
                                 .to_amount(coin_decimals)
                                 .ok_or(RpcError::InvalidCoinAmount)?;
-                            OutputValue::Coin(amount)
+                            (OutputValue::Coin(amount), TxAdditionalInfo::new())
                         }
                     };
 
                     controller
                         .synced_controller(account_index, config)
                         .await?
-                        .create_htlc_tx(value, htlc)
+                        .create_htlc_tx(value, htlc, additional_info)
                         .await
                         .map_err(RpcError::Controller)
                 })
@@ -1547,19 +1564,19 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         currency: Currency,
         amount: RpcAmountIn,
         coin_decimals: u8,
-    ) -> Result<OutputValue, RpcError<N>> {
+    ) -> Result<(OutputValue, Option<RPCTokenInfo>), RpcError<N>> {
         match currency {
             Currency::Coin => {
                 let amount =
                     amount.to_amount(coin_decimals).ok_or(RpcError::<N>::InvalidCoinAmount)?;
-                Ok::<_, RpcError<N>>(OutputValue::Coin(amount))
+                Ok::<_, RpcError<N>>((OutputValue::Coin(amount), None))
             }
             Currency::Token(token_id) => {
                 let token_info = controller.get_token_info(token_id).await?;
                 let amount = amount
                     .to_amount(token_info.token_number_of_decimals())
                     .ok_or(RpcError::InvalidCoinAmount)?;
-                Ok(OutputValue::TokenV1(token_id, amount))
+                Ok((OutputValue::TokenV1(token_id, amount), Some(token_info)))
             }
         }
     }
@@ -1596,14 +1613,14 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         self.wallet
             .call_async(move |controller| {
                 Box::pin(async move {
-                    let ask_value = Self::convert_currency_to_output_value(
+                    let (ask_value, ask_token_info) = Self::convert_currency_to_output_value(
                         controller,
                         ask_currency,
                         ask_amount,
                         coin_decimals,
                     )
                     .await?;
-                    let give_value = Self::convert_currency_to_output_value(
+                    let (give_value, give_token_info) = Self::convert_currency_to_output_value(
                         controller,
                         give_currency,
                         give_amount,
@@ -1611,10 +1628,12 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
                     )
                     .await?;
 
+                    let token_infos = ask_token_info.into_iter().chain(give_token_info).collect();
+
                     controller
                         .synced_controller(account_index, config)
                         .await?
-                        .create_order(ask_value, give_value, conclude_dest)
+                        .create_order(ask_value, give_value, conclude_dest, token_infos)
                         .await
                         .map_err(RpcError::Controller)
                 })
@@ -1646,9 +1665,23 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
                 Box::pin(async move {
                     let order_info = w.get_order_info(order_id).await?;
 
+                    let ask_token_info =
+                        if let Some(token_id) = order_info.initially_asked.token_id() {
+                            Some(w.get_token_info(token_id).await?)
+                        } else {
+                            None
+                        };
+                    let give_token_info =
+                        if let Some(token_id) = order_info.initially_given.token_id() {
+                            Some(w.get_token_info(token_id).await?)
+                        } else {
+                            None
+                        };
+                    let token_infos = ask_token_info.into_iter().chain(give_token_info).collect();
+
                     w.synced_controller(account_index, config)
                         .await?
-                        .conclude_order(order_id, order_info, output_address)
+                        .conclude_order(order_id, order_info, output_address, token_infos)
                         .await
                         .map_err(RpcError::Controller)
                         .map(NewTransaction::new)
@@ -1677,17 +1710,32 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
             .call_async(move |w| {
                 Box::pin(async move {
                     let order_info = w.get_order_info(order_id).await?;
-                    let fill_amount_in_ask_currency = match order_info.initially_asked {
-                        RpcOutputValue::Coin { .. } => fill_amount_in_ask_currency
-                            .to_amount(coin_decimals)
-                            .ok_or(RpcError::<N>::InvalidCoinAmount)?,
-                        RpcOutputValue::Token { id, amount: _ } => {
-                            let token_info = w.get_token_info(id).await?;
-                            fill_amount_in_ask_currency
-                                .to_amount(token_info.token_number_of_decimals())
-                                .ok_or(RpcError::InvalidCoinAmount)?
-                        }
-                    };
+                    let (fill_amount_in_ask_currency, ask_token_info) =
+                        match order_info.initially_asked {
+                            RpcOutputValue::Coin { .. } => (
+                                fill_amount_in_ask_currency
+                                    .to_amount(coin_decimals)
+                                    .ok_or(RpcError::<N>::InvalidCoinAmount)?,
+                                None,
+                            ),
+                            RpcOutputValue::Token { id, amount: _ } => {
+                                let token_info = w.get_token_info(id).await?;
+                                (
+                                    fill_amount_in_ask_currency
+                                        .to_amount(token_info.token_number_of_decimals())
+                                        .ok_or(RpcError::InvalidCoinAmount)?,
+                                    Some(token_info),
+                                )
+                            }
+                        };
+                    let give_token_info =
+                        if let Some(token_id) = order_info.initially_given.token_id() {
+                            Some(w.get_token_info(token_id).await?)
+                        } else {
+                            None
+                        };
+
+                    let token_infos = ask_token_info.into_iter().chain(give_token_info).collect();
 
                     w.synced_controller(account_index, config)
                         .await?
@@ -1696,6 +1744,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
                             order_info,
                             fill_amount_in_ask_currency,
                             output_address,
+                            token_infos,
                         )
                         .await
                         .map_err(RpcError::Controller)
@@ -2271,13 +2320,16 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
     }
 }
 
-pub async fn start<N: NodeInterface + Clone + Send + Sync + Debug + 'static>(
+pub async fn start<N>(
     wallet_handle: WalletHandle<N>,
     node_rpc: N,
     config: WalletRpcConfig,
     chain_config: Arc<ChainConfig>,
     cold_wallet: bool,
-) -> anyhow::Result<rpc::Rpc> {
+) -> anyhow::Result<rpc::Rpc>
+where
+    N: NodeInterface + Clone + Send + Sync + 'static + Debug,
+{
     let WalletRpcConfig {
         bind_addr,
         auth_credentials,

@@ -31,7 +31,10 @@ pub use crate::service::worker::EventStream;
 #[derive(Clone)]
 pub struct WalletHandle<N: Clone>(worker::CommandSender<N>);
 
-impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletHandle<N> {
+impl<N> WalletHandle<N>
+where
+    N: NodeInterface + Clone + Send + Sync + 'static,
+{
     /// Asynchronous wallet service call
     pub fn call_async<R: Send + 'static, E: Into<RpcError<N>> + Send + 'static>(
         &self,

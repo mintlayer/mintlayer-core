@@ -47,9 +47,13 @@ use wallet_types::{
     AccountDerivationPathId, AccountId, AccountInfo, AccountKeyPurposeId, AccountWalletCreatedTxId,
     AccountWalletTxId, KeychainUsageState, WalletTx,
 };
+
+use wallet_types::hw_data;
+
 mod well_known {
     use common::chain::block::timestamp::BlockTimestamp;
     use crypto::kdf::KdfChallenge;
+    use wallet_types::hw_data;
     use wallet_types::{account_info::AccountVrfKeys, chain_info::ChainInfo, wallet_type};
 
     use super::Codec;
@@ -79,6 +83,7 @@ mod well_known {
     declare_entry!(LookaheadSize: u32);
     declare_entry!(LegacyVfrPubKey: AccountVrfKeys);
     declare_entry!(WalletType: wallet_type::WalletType);
+    declare_entry!(HardwareWalletData: hw_data::HardwareWalletData);
 }
 
 #[derive(PartialEq, Clone)]
@@ -336,6 +341,12 @@ macro_rules! impl_read_ops {
             fn get_lookahead_size(&self) -> crate::Result<u32> {
                 let lookahead = self.read_value::<well_known::LookaheadSize>()?;
                 lookahead.ok_or(crate::Error::WalletDbInconsistentState)
+            }
+
+            fn get_hardware_wallet_data(
+                &self,
+            ) -> crate::Result<Option<hw_data::HardwareWalletData>> {
+                self.read_value::<well_known::HardwareWalletData>()
             }
         }
 
@@ -599,6 +610,13 @@ macro_rules! impl_write_ops {
 
             fn set_lookahead_size(&mut self, lookahead_size: u32) -> crate::Result<()> {
                 self.write_value::<well_known::LookaheadSize>(&lookahead_size)
+            }
+
+            fn set_hardware_wallet_data(
+                &mut self,
+                data: hw_data::HardwareWalletData,
+            ) -> crate::Result<()> {
+                self.write_value::<well_known::HardwareWalletData>(&data)
             }
         }
 

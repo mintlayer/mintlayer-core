@@ -154,7 +154,7 @@ class WalletAddressGenerator(BitcoinTestFramework):
 
             # close this wallet and create a new one with the new seed phrase
             await wallet.close_wallet()
-            assert_in("New wallet created successfully", await wallet.recover_wallet(seed_phrase))
+            assert_in("Wallet recovered successfully", await wallet.recover_wallet(seed_phrase))
             assert_in("Success", await wallet.sync())
             assert_in(f"Coins amount: {len(addresses)}", await wallet.get_balance())
 

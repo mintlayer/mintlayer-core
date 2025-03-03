@@ -176,7 +176,7 @@ class WalletCliController(WalletCliControllerBase):
 
     async def recover_wallet(self, mnemonic: str, name: str = "recovered_wallet") -> str:
         wallet_file = os.path.join(self.node.datadir, name)
-        return await self._write_command(f"wallet-create \"{wallet_file}\" store-seed-phrase \"{mnemonic}\"\n")
+        return await self._write_command(f"wallet-recover \"{wallet_file}\" store-seed-phrase \"{mnemonic}\"\n")
 
     async def close_wallet(self) -> str:
         return await self._write_command("wallet-close\n")

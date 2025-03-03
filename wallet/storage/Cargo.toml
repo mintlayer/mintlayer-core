@@ -25,3 +25,7 @@ bip39 = { workspace = true, default-features = false, features = ["std", "zeroiz
 test-utils = { path = "../../test-utils" }
 
 rstest.workspace = true
+
+[features]
+trezor = ["wallet-types/trezor"]
+default = ["trezor"]

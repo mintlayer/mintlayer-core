@@ -18,6 +18,7 @@ p2p-types = { path = "../../p2p/types" }
 rpc = { path = "../../rpc" }
 serialization = { path = "../../serialization" }
 subsystem = { path = "../../subsystem" }
+utils = { path = "../../utils" }
 utils-networking = { path = "../../utils/networking" }
 wallet = { path = ".." }
 wallet-controller = { path = "../wallet-controller" }
@@ -35,3 +36,7 @@ tower.workspace = true
 chainstate-storage = { path = "../../chainstate/storage" }
 
 tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "sync"] }
+
+[features]
+trezor = ["wallet/trezor", "wallet-types/trezor", "wallet-rpc-lib/trezor", "wallet-controller/trezor"]
+default = ["trezor"]

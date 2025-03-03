@@ -13,7 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::key_chain::account_key_chain::AccountKeyChainImpl;
 use crate::key_chain::{KeyChainError, KeyChainResult, DEFAULT_KEY_KIND};
 use common::chain::ChainConfig;
 use crypto::key::extended::ExtendedPrivateKey;
@@ -27,8 +26,9 @@ use wallet_storage::{
 };
 use wallet_types::seed_phrase::{SerializableSeedPhrase, StoreSeedPhrase};
 
-use super::DEFAULT_VRF_KEY_KIND;
+use super::{AccountKeyChainImplSoftware, DEFAULT_VRF_KEY_KIND};
 
+#[derive(Clone, Debug)]
 pub struct MasterKeyChain {
     /// The specific chain this KeyChain is based on, this will affect the address format
     chain_config: Arc<ChainConfig>,
@@ -134,10 +134,10 @@ impl MasterKeyChain {
         db_tx: &mut impl WalletStorageWriteUnlocked,
         account_index: U31,
         lookahead_size: u32,
-    ) -> KeyChainResult<AccountKeyChainImpl> {
+    ) -> KeyChainResult<AccountKeyChainImplSoftware> {
         let root_key = Self::load_root_key(db_tx)?;
         let root_vrf_key = Self::load_root_vrf_key(db_tx)?;
-        AccountKeyChainImpl::new_from_root_key(
+        AccountKeyChainImplSoftware::new_from_root_key(
             self.chain_config.clone(),
             db_tx,
             root_key,

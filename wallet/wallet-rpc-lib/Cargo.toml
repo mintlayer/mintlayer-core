@@ -22,6 +22,7 @@ utils = { path = "../../utils" }
 utils-networking = { path = "../../utils/networking" }
 wallet = { path = ".." }
 wallet-controller = { path = "../wallet-controller" }
+wallet-storage = { path = "../storage" }
 wallet-types = { path = "../types" }
 p2p-types = { path = "../../p2p/types" }
 
@@ -48,3 +49,7 @@ wallet-test-node = { path = "../wallet-test-node" }
 wallet-types = { path = "../types" }
 
 rstest.workspace = true
+
+[features]
+trezor = ["wallet-types/trezor", "wallet/trezor", "wallet-controller/trezor"]
+default = ["trezor"]

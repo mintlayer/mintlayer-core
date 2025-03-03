@@ -14,3 +14,7 @@ wallet-cli-lib = { path = "../wallet-cli-lib" }
 
 clap = { workspace = true, features = ["derive"] }
 tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "sync"] }
+
+[features]
+trezor = ["wallet-cli-lib/trezor"]
+default = ["trezor"]

@@ -19,9 +19,8 @@ use chainstate::{rpc::RpcOutputValueIn, ChainInfo};
 use common::{
     address::{dehexify::dehexify_all_addresses, AddressError},
     chain::{
-        block::timestamp::BlockTimestamp, partially_signed_transaction::PartiallySignedTransaction,
-        tokens::IsTokenUnfreezable, Block, GenBlock, SignedTransaction, SignedTransactionIntent,
-        Transaction, TxOutput, UtxoOutPoint,
+        block::timestamp::BlockTimestamp, tokens::IsTokenUnfreezable, Block, GenBlock,
+        SignedTransaction, SignedTransactionIntent, Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{BlockHeight, DecimalAmount, Id, Idable, H256},
 };
@@ -33,14 +32,17 @@ use serialization::{hex::HexEncode, hex_encoded::HexEncoded, json_encoded::JsonE
 use utils_networking::IpOrSocketAddress;
 use wallet::{account::TxInfo, version::get_version};
 use wallet_controller::{
-    types::{CreatedBlockInfo, GenericTokenTransfer, SeedWithPassPhrase, WalletInfo},
+    types::{
+        CreatedBlockInfo, GenericTokenTransfer, SeedWithPassPhrase, WalletCreationOptions,
+        WalletInfo, WalletTypeArgs,
+    },
     ConnectedPeer, ControllerConfig, UtxoState, UtxoType,
 };
 use wallet_rpc_lib::{
     types::{
         AddressInfo, AddressWithUsageInfo, Balances, BlockInfo, ComposedTransaction, CreatedWallet,
-        DelegationInfo, LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegation, NewOrder,
-        NewTransaction, NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo,
+        DelegationInfo, HardwareWalletType, LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegation,
+        NewOrder, NewTransaction, NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo,
         RpcHashedTimelockContract, RpcInspectTransaction, RpcStandaloneAddresses, RpcTokenId,
         SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
         StandaloneAddressWithDetails, TokenMetadata, TxOptionsOverrides, UtxoInfo,
@@ -49,7 +51,7 @@ use wallet_rpc_lib::{
     RpcError, WalletRpc,
 };
 use wallet_types::{
-    scan_blockchain::ScanBlockchain, seed_phrase::StoreSeedPhrase,
+    partially_signed_transaction::PartiallySignedTransaction, scan_blockchain::ScanBlockchain,
     signature_status::SignatureStatus, utxo_types::UtxoTypes, with_locked::WithLocked,
 };
 
@@ -77,7 +79,10 @@ pub enum WalletRpcHandlesClientError<N: NodeInterface> {
     AddressError(#[from] AddressError),
 }
 
-impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletRpcHandlesClient<N> {
+impl<N> WalletRpcHandlesClient<N>
+where
+    N: NodeInterface + Clone + Send + Sync + 'static + Debug,
+{
     pub fn new(wallet_rpc: WalletRpc<N>, server_rpc: Option<rpc::Rpc>) -> Self {
         Self {
             wallet_rpc,
@@ -87,8 +92,9 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletRpcHandlesC
 }
 
 #[async_trait::async_trait]
-impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletInterface
-    for WalletRpcHandlesClient<N>
+impl<N> WalletInterface for WalletRpcHandlesClient<N>
+where
+    N: NodeInterface + Clone + Send + Sync + 'static + Debug,
 {
     type Error = WalletRpcHandlesClientError<N>;
 
@@ -117,23 +123,40 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletInterface
     async fn create_wallet(
         &self,
         path: PathBuf,
+        wallet_args: WalletTypeArgs,
+    ) -> Result<CreatedWallet, Self::Error> {
+        let options = WalletCreationOptions {
+            overwrite_wallet_file: false,
+            scan_blockchain: ScanBlockchain::SkipScanning,
+        };
+        self.wallet_rpc
+            .create_wallet(path, wallet_args, options)
+            .await
+            .map(Into::into)
+            .map_err(WalletRpcHandlesClientError::WalletRpcError)
+    }
+
+    async fn recover_wallet(
+        &self,
+        path: PathBuf,
         store_seed_phrase: bool,
         mnemonic: Option<String>,
         passphrase: Option<String>,
+        hardware_wallet: Option<HardwareWalletType>,
     ) -> Result<CreatedWallet, Self::Error> {
-        let whether_to_store_seed_phrase = if store_seed_phrase {
-            StoreSeedPhrase::Store
-        } else {
-            StoreSeedPhrase::DoNotStore
+        let args = HardwareWalletType::into_wallet_args::<N>(
+            hardware_wallet,
+            store_seed_phrase,
+            mnemonic,
+            passphrase,
+        )?;
+
+        let options = WalletCreationOptions {
+            overwrite_wallet_file: false,
+            scan_blockchain: ScanBlockchain::ScanAndWait,
         };
         self.wallet_rpc
-            .create_wallet(
-                path,
-                whether_to_store_seed_phrase,
-                mnemonic,
-                passphrase,
-                ScanBlockchain::ScanAndWait,
-            )
+            .create_wallet(path, args, options)
             .await
             .map(Into::into)
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
@@ -144,6 +167,7 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletInterface
         path: PathBuf,
         password: Option<String>,
         force_migrate_wallet_type: Option<bool>,
+        hardware_wallet: Option<HardwareWalletType>,
     ) -> Result<(), Self::Error> {
         self.wallet_rpc
             .open_wallet(
@@ -151,6 +175,7 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletInterface
                 password,
                 force_migrate_wallet_type.unwrap_or(false),
                 ScanBlockchain::ScanAndWait,
+                hardware_wallet,
             )
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)

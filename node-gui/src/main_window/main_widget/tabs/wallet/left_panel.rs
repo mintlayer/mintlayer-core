@@ -118,6 +118,10 @@ pub fn view_left_panel(
     // `next_height` is used to prevent flickering when a new block is found
     let show_scan_progress = match wallet_info.wallet_type {
         WalletType::Cold => false,
+        #[cfg(feature = "trezor")]
+        WalletType::Trezor => {
+            wallet_info.best_block.1.next_height() < node_state.chain_info.best_block_height
+        }
         WalletType::Hot => {
             wallet_info.best_block.1.next_height() < node_state.chain_info.best_block_height
         }
@@ -175,6 +179,41 @@ pub fn view_left_panel(
         .spacing(10)
         .padding(10),
         match wallet_info.wallet_type {
+            #[cfg(feature = "trezor")]
+            WalletType::Trezor => {
+                column![
+                    panel_button(
+                        "Transactions",
+                        SelectedPanel::Transactions,
+                        selected_panel,
+                        TRANSACTIONS_TOOLTIP_TEXT
+                    ),
+                    panel_button(
+                        "Addresses",
+                        SelectedPanel::Addresses,
+                        selected_panel,
+                        ADDRESSES_TOOLTIP_TEXT
+                    ),
+                    panel_button(
+                        "Send",
+                        SelectedPanel::Send,
+                        selected_panel,
+                        SEND_TOOLTIP_TEXT
+                    ),
+                    panel_button(
+                        "Delegation",
+                        SelectedPanel::Delegation,
+                        selected_panel,
+                        DELEGATION_TOOLTIP_TEXT
+                    ),
+                    panel_button(
+                        "Console",
+                        SelectedPanel::Console,
+                        selected_panel,
+                        CONSOLE_TOOLTIP_TEXT,
+                    )
+                ]
+            }
             WalletType::Cold => {
                 column![
                     panel_button(

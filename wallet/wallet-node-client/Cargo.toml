@@ -33,3 +33,7 @@ tower.workspace = true
 chainstate-storage = { path = "../../chainstate/storage" }
 
 tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "sync"] }
+
+[features]
+trezor = ["wallet-types/trezor"]
+default = ["trezor"]

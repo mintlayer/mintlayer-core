@@ -32,23 +32,34 @@ mod master_key_chain;
 mod vrf_key_chain;
 mod with_purpose;
 
+use std::collections::BTreeMap;
+use std::sync::Arc;
+
 pub use account_key_chain::AccountKeyChainImpl;
 use common::chain::classic_multisig::ClassicMultisigChallenge;
 use crypto::key::hdkd::u31::U31;
-use crypto::vrf::VRFKeyKind;
+use crypto::key::{PrivateKey, PublicKey};
+use crypto::vrf::{ExtendedVRFPrivateKey, ExtendedVRFPublicKey, VRFKeyKind, VRFPublicKey};
 pub use master_key_chain::MasterKeyChain;
 
-use common::address::pubkeyhash::PublicKeyHashError;
-use common::address::{AddressError, RpcAddress};
+use common::address::pubkeyhash::{PublicKeyHash, PublicKeyHashError};
+use common::address::{Address, AddressError, RpcAddress};
 use common::chain::config::BIP44_PATH;
 use common::chain::{ChainConfig, Destination};
 use crypto::key::extended::{ExtendedKeyKind, ExtendedPublicKey};
 use crypto::key::hdkd::child_number::ChildNumber;
 use crypto::key::hdkd::derivable::DerivationError;
 use crypto::key::hdkd::derivation_path::DerivationPath;
+use wallet_storage::{
+    WalletStorageReadLocked, WalletStorageReadUnlocked, WalletStorageWriteLocked,
+    WalletStorageWriteUnlocked,
+};
 use wallet_types::account_id::AccountPublicKey;
+use wallet_types::account_info::{StandaloneAddressDetails, StandaloneAddresses};
 use wallet_types::keys::{KeyPurpose, KeyPurposeError};
-use wallet_types::AccountId;
+use wallet_types::{AccountId, AccountInfo, KeychainUsageState};
+
+use self::vrf_key_chain::{EmptyVrfKeyChain, VrfKeySoftChain};
 
 /// The number of nodes in a BIP44 path
 pub const BIP44_PATH_LENGTH: usize = 5;
@@ -112,13 +123,187 @@ pub enum FoundPubKey {
     Standalone(AccountPublicKey),
 }
 
-pub trait AccountKeyChains {
+impl FoundPubKey {
+    pub fn into_public_key(self) -> PublicKey {
+        match self {
+            Self::Hierarchy(xpub) => xpub.into_public_key(),
+            Self::Standalone(acc_pk) => acc_pk.into_item_id(),
+        }
+    }
+}
+
+pub type AccountKeyChainImplSoftware = AccountKeyChainImpl<VrfKeySoftChain>;
+pub type AccountKeyChainImplHardware = AccountKeyChainImpl<EmptyVrfKeyChain>;
+
+pub trait AccountKeyChains
+where
+    Self: Sized,
+{
+    fn load_from_database(
+        chain_config: Arc<ChainConfig>,
+        db_tx: &impl WalletStorageReadLocked,
+        id: &AccountId,
+        account_info: &AccountInfo,
+    ) -> KeyChainResult<Self>;
+
     fn find_public_key(&self, destination: &Destination) -> Option<FoundPubKey>;
 
     fn find_multisig_challenge(
         &self,
         destination: &Destination,
     ) -> Option<&ClassicMultisigChallenge>;
+
+    fn account_index(&self) -> U31;
+
+    fn get_account_id(&self) -> AccountId;
+
+    fn account_public_key(&self) -> &ExtendedPublicKey;
+
+    /// Return the next unused address and don't mark it as issued
+    fn next_unused_address(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteLocked,
+        purpose: KeyPurpose,
+    ) -> KeyChainResult<(ChildNumber, Address<Destination>)>;
+
+    /// Issue a new address that hasn't been used before
+    fn issue_address(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteLocked,
+        purpose: KeyPurpose,
+    ) -> KeyChainResult<(ChildNumber, Address<Destination>)>;
+
+    /// Issue a new derived key that hasn't been used before
+    fn issue_key(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteLocked,
+        purpose: KeyPurpose,
+    ) -> KeyChainResult<ExtendedPublicKey>;
+
+    /// Reload the sub chain keys from DB to restore the cache
+    /// Should be called after issuing a new key but not using committing it to the DB
+    fn reload_keys(&mut self, db_tx: &impl WalletStorageReadLocked) -> KeyChainResult<()>;
+
+    // Return true if the provided destination belongs to this key chain
+    fn is_destination_mine(&self, destination: &Destination) -> bool;
+
+    // Return true if we have the private key for the provided destination
+    fn has_private_key_for_destination(&self, destination: &Destination) -> bool;
+
+    // Return true if the provided public key belongs to this key chain
+    fn is_public_key_mine(&self, public_key: &PublicKey) -> bool;
+
+    // Return true if the provided public key hash belongs to this key chain
+    fn is_public_key_hash_mine(&self, pubkey_hash: &PublicKeyHash) -> bool;
+
+    // Return true if the provided public key hash is one the standalone added keys
+    fn is_public_key_hash_watched(&self, pubkey_hash: PublicKeyHash) -> bool;
+
+    // Return true if the provided public key hash belongs to this key chain
+    // or is one the standalone added keys
+    fn is_public_key_hash_mine_or_watched(&self, pubkey_hash: PublicKeyHash) -> bool;
+
+    /// Find the corresponding public key for a given public key hash
+    fn get_public_key_from_public_key_hash(&self, pubkey_hash: &PublicKeyHash)
+        -> Option<PublicKey>;
+
+    /// Derive addresses until there are lookahead unused ones
+    fn top_up_all(&mut self, db_tx: &mut impl WalletStorageWriteLocked) -> KeyChainResult<()>;
+
+    fn lookahead_size(&self) -> u32;
+
+    /// Marks a public key as being used. Returns true if a key was found and set to used.
+    fn mark_public_key_as_used(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteLocked,
+        public_key: &PublicKey,
+    ) -> KeyChainResult<bool>;
+
+    fn mark_public_key_hash_as_used(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteLocked,
+        pub_key_hash: &PublicKeyHash,
+    ) -> KeyChainResult<bool>;
+
+    /// Marks a vrf public key as being used. Returns true if a key was found and set to used.
+    fn mark_vrf_public_key_as_used(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteLocked,
+        public_key: &VRFPublicKey,
+    ) -> KeyChainResult<bool>;
+
+    fn get_multisig_challenge(
+        &self,
+        destination: &Destination,
+    ) -> Option<&ClassicMultisigChallenge>;
+
+    /// Add, rename or delete a label for a standalone address not from the keys derived from this account
+    fn standalone_address_label_rename(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteLocked,
+        new_address: Destination,
+        new_label: Option<String>,
+    ) -> KeyChainResult<()>;
+
+    /// Adds a new public key hash to be watched, standalone from the keys derived from this account
+    fn add_standalone_watch_only_address(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteLocked,
+        new_address: PublicKeyHash,
+        label: Option<String>,
+    ) -> KeyChainResult<()>;
+
+    ///  Adds a new private key to be watched, standalone from the keys derived from this account
+    fn add_standalone_private_key(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteUnlocked,
+        new_private_key: PrivateKey,
+        label: Option<String>,
+    ) -> KeyChainResult<()>;
+
+    /// Adds a multisig to be watched
+    fn add_standalone_multisig(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteLocked,
+        challenge: ClassicMultisigChallenge,
+        label: Option<String>,
+    ) -> KeyChainResult<PublicKeyHash>;
+
+    fn get_all_issued_addresses(&self) -> BTreeMap<ChildNumber, Address<Destination>>;
+
+    fn get_all_standalone_addresses(&self) -> StandaloneAddresses;
+
+    fn get_all_standalone_address_details(
+        &self,
+        address: Destination,
+    ) -> Option<(Destination, StandaloneAddressDetails)>;
+
+    fn get_addresses_usage_state(&self) -> &KeychainUsageState;
+}
+
+pub trait VRFAccountKeyChains {
+    fn issue_vrf_key(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteLocked,
+    ) -> KeyChainResult<(ChildNumber, ExtendedVRFPublicKey)>;
+
+    fn get_vrf_private_key_for_public_key(
+        &self,
+        public_key: &VRFPublicKey,
+        db_tx: &impl WalletStorageReadUnlocked,
+    ) -> KeyChainResult<Option<ExtendedVRFPrivateKey>>;
+
+    fn get_all_issued_vrf_public_keys(
+        &self,
+    ) -> BTreeMap<ChildNumber, (Address<VRFPublicKey>, bool)>;
+
+    fn get_legacy_vrf_public_key(&self) -> Address<VRFPublicKey>;
+
+    fn get_private_key_for_destination(
+        &self,
+        destination: &Destination,
+        db_tx: &impl WalletStorageReadUnlocked,
+    ) -> KeyChainResult<Option<PrivateKey>>;
 }
 
 /// Result type used for the key chain

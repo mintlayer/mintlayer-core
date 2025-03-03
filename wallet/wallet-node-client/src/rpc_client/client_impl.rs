@@ -21,8 +21,8 @@ use common::{
     address::Address,
     chain::{
         tokens::{RPCTokenInfo, TokenId},
-        Block, DelegationId, GenBlock, OrderId, PoolId, RpcOrderInfo, SignedTransaction,
-        Transaction, TxOutput, UtxoOutPoint,
+        Block, DelegationId, Destination, GenBlock, OrderId, PoolId, RpcOrderInfo,
+        SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{time::Time, Amount, BlockHeight, Id},
 };
@@ -38,7 +38,7 @@ use p2p::{
 };
 use serialization::hex_encoded::HexEncoded;
 use utils_networking::IpOrSocketAddress;
-use wallet_types::wallet_type::WalletType;
+use wallet_types::wallet_type::WalletControllerMode;
 
 use crate::node_traits::NodeInterface;
 
@@ -48,8 +48,8 @@ use super::{NodeRpcClient, NodeRpcError};
 impl NodeInterface for NodeRpcClient {
     type Error = NodeRpcError;
 
-    fn is_cold_wallet_node(&self) -> WalletType {
-        WalletType::Hot
+    fn is_cold_wallet_node(&self) -> WalletControllerMode {
+        WalletControllerMode::Hot
     }
 
     async fn chainstate_info(&self) -> Result<ChainInfo, Self::Error> {
@@ -139,6 +139,19 @@ impl NodeInterface for NodeRpcClient {
         ChainstateRpcClient::staker_balance(&self.http_client, pool_address.into_string())
             .await
             .map_err(NodeRpcError::ResponseError)
+    }
+
+    async fn get_pool_decommission_destination(
+        &self,
+        pool_id: PoolId,
+    ) -> Result<Option<Destination>, Self::Error> {
+        let pool_address = Address::new(&self.chain_config, pool_id)?;
+        ChainstateRpcClient::pool_decommission_destination(
+            &self.http_client,
+            pool_address.into_string(),
+        )
+        .await
+        .map_err(NodeRpcError::ResponseError)
     }
 
     async fn get_delegation_share(

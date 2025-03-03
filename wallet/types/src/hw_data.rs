@@ -1,4 +1,4 @@
-// Copyright (c) 2023 RBB S.r.l
+// Copyright (c) 2025 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,20 +13,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod account;
-pub mod destination_getters;
-pub mod key_chain;
-pub mod send_request;
-pub mod signer;
-pub mod version;
-pub mod wallet;
-pub mod wallet_events;
+use serialization::{Decode, Encode};
 
-mod utils;
-use signer::software_signer::SoftwareSignerProvider;
+#[cfg(feature = "trezor")]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+pub struct TrezorData {
+    pub device_id: String,
+    pub label: String,
+}
 
-pub use crate::account::Account;
-pub use crate::send_request::SendRequest;
-pub use crate::wallet::{Wallet, WalletError, WalletResult};
-
-pub type DefaultWallet = Wallet<wallet_storage::DefaultBackend, SoftwareSignerProvider>;
+#[derive(Debug, Clone, Encode, Decode)]
+pub enum HardwareWalletData {
+    #[cfg(feature = "trezor")]
+    #[codec(index = 0)]
+    Trezor(TrezorData),
+}

@@ -26,7 +26,8 @@ use utils::shallow_clone::ShallowClone;
 pub use events::{Event, TxState};
 pub use handle::{EventStream, SubmitError, WalletHandle};
 use wallet_controller::{ControllerConfig, NodeInterface};
-pub use worker::{CreatedWallet, WalletController, WalletControllerError};
+use wallet_types::wallet_type::WalletType;
+pub use worker::{WalletController, WalletControllerError};
 
 use events::WalletServiceEvents;
 
@@ -50,10 +51,13 @@ pub enum InitError<N: NodeInterface> {
     Controller(#[from] WalletControllerError<N>),
 }
 
-impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletService<N> {
+impl<N> WalletService<N>
+where
+    N: NodeInterface + Clone + Send + Sync + 'static,
+{
     pub async fn start(
         chain_config: Arc<ChainConfig>,
-        wallet_file: Option<PathBuf>,
+        wallet_file: Option<(PathBuf, WalletType)>,
         force_change_wallet_type: bool,
         start_staking_for_account: Vec<U31>,
         node_rpc: N,
@@ -61,7 +65,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletService<N> {
         let (wallet_events, events_rx) = WalletServiceEvents::new();
         let (command_tx, command_rx) = tokio::sync::mpsc::unbounded_channel();
 
-        let controller = if let Some(wallet_file) = &wallet_file {
+        let controller = if let Some((wallet_file, open_as_wallet_type)) = &wallet_file {
             let wallet = {
                 // TODO: Allow user to set password (config file only)
                 let wallet_password = None;
@@ -71,6 +75,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletService<N> {
                     wallet_password,
                     node_rpc.is_cold_wallet_node(),
                     force_change_wallet_type,
+                    *open_as_wallet_type,
                 )?
             };
 

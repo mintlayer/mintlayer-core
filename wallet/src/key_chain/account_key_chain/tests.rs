@@ -60,4 +60,6 @@ fn check_mine_methods(#[case] public: &str) {
     assert!(key_chain.is_public_key_hash_mine(&pkh));
     assert!(key_chain.is_destination_mine(&addr_destination));
     assert!(key_chain.is_destination_mine(&pk_destination));
+    assert!(key_chain.has_private_key_for_destination(&addr_destination));
+    assert!(key_chain.has_private_key_for_destination(&pk_destination));
 }
