@@ -143,6 +143,7 @@ impl<'a> PerInputData<'a> {
             }
             TxInput::Account(outpoint) => InputInfo::Account { outpoint },
             TxInput::AccountCommand(_, command) => InputInfo::AccountCommand { command },
+            TxInput::OrderAccountCommand(_) => todo!(),
         };
         Ok(Self::new(info, witness))
     }

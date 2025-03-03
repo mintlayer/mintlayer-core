@@ -59,6 +59,7 @@ impl RpcTxInput {
                 nonce: nonce.value(),
                 command: RpcAccountCommand::new(chain_config, command)?,
             },
+            TxInput::OrderAccountCommand(..) => todo!(),
         };
         Ok(result)
     }

@@ -112,6 +112,7 @@ impl ConstrainedValueAccumulator {
 
                     insert_or_increase(&mut total_to_deduct, id, to_deduct)?;
                 }
+                TxInput::OrderAccountCommand(_) => todo!(),
             }
         }
 

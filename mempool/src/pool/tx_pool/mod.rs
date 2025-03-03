@@ -338,7 +338,9 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
                 .source_id()
                 .get_tx_id()
                 .is_some_and(|tx_id| self.contains_transaction(tx_id)),
-            TxInput::Account(..) | TxInput::AccountCommand(..) => false,
+            TxInput::Account(..)
+            | TxInput::AccountCommand(..)
+            | TxInput::OrderAccountCommand(..) => false,
         }
     }
 }

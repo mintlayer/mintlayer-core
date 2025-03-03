@@ -384,7 +384,7 @@ where
                         }
                     }
                 }
-                TxInput::AccountCommand(..) => None,
+                TxInput::AccountCommand(..) | TxInput::OrderAccountCommand(..) => None,
             })
             .collect::<Result<Vec<_>, _>>()?;
 
@@ -525,6 +525,7 @@ where
                         }
                     }
                 },
+                TxInput::OrderAccountCommand(_) => todo!(),
             };
         }
 
@@ -576,6 +577,7 @@ where
             .iter()
             .filter_map(|input| match input {
                 TxInput::Utxo(_) | TxInput::Account(_) => None,
+                TxInput::OrderAccountCommand(_) => todo!(),
                 TxInput::AccountCommand(nonce, account_op) => match account_op {
                     AccountCommand::MintTokens(token_id, amount) => {
                         let res = self
@@ -800,6 +802,7 @@ where
                             })
                         }
                     },
+                    TxInput::OrderAccountCommand(_) => todo!(),
                 }
             })?;
 
@@ -890,6 +893,7 @@ where
                         Some(res)
                     }
                 },
+                TxInput::OrderAccountCommand(_) => todo!(),
             })
             .collect::<Result<Vec<_>, _>>()?;
 

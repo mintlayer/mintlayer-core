@@ -141,7 +141,9 @@ fn own_input<'a>(
                 .filter(|&output| own_output(key_chain, output)),
             None => None,
         },
-        TxInput::Account(..) | TxInput::AccountCommand(..) => None,
+        TxInput::Account(..) | TxInput::AccountCommand(..) | TxInput::OrderAccountCommand(..) => {
+            None
+        }
     }
 }
 

@@ -22,7 +22,6 @@ use common::address::pubkeyhash::PublicKeyHash;
 use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::classic_multisig::ClassicMultisigChallenge;
 use common::chain::htlc::HashedTimelockContract;
-use common::chain::partially_signed_transaction::PartiallySignedTransaction;
 use common::chain::{
     AccountCommand, AccountOutPoint, AccountSpending, OrderId, OrdersVersion, RpcOrderInfo,
 };
@@ -1925,6 +1924,7 @@ impl<K: AccountKeyChains> Account<K> {
                     self.find_delegation(delegation_id).is_ok()
                 }
             },
+            TxInput::OrderAccountCommand(..) => todo!(),
             TxInput::AccountCommand(_, op) => match op {
                 AccountCommand::MintTokens(token_id, _)
                 | AccountCommand::UnmintTokens(token_id)
@@ -2436,6 +2436,7 @@ fn group_preselected_inputs(
                     update_preselected_inputs(Currency::Coin, *amount, *fee, Amount::ZERO)?;
                 }
             },
+            TxInput::OrderAccountCommand(..) => todo!(),
             TxInput::AccountCommand(_, op) => match op {
                 AccountCommand::MintTokens(token_id, amount) => {
                     update_preselected_inputs(

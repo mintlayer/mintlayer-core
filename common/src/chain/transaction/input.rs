@@ -17,7 +17,10 @@ use serialization::{Decode, Encode};
 
 use crate::{chain::AccountNonce, text_summary::TextSummary};
 
-use super::{AccountCommand, AccountOutPoint, AccountSpending, OutPointSourceId, UtxoOutPoint};
+use super::{
+    AccountCommand, AccountOutPoint, AccountSpending, OrderAccountCommand, OutPointSourceId,
+    UtxoOutPoint,
+};
 
 #[derive(
     Debug,
@@ -39,6 +42,8 @@ pub enum TxInput {
     Account(AccountOutPoint),
     #[codec(index = 2)]
     AccountCommand(AccountNonce, AccountCommand),
+    #[codec(index = 3)]
+    OrderAccountCommand(OrderAccountCommand),
 }
 
 impl TxInput {
@@ -57,7 +62,9 @@ impl TxInput {
     pub fn utxo_outpoint(&self) -> Option<&UtxoOutPoint> {
         match self {
             TxInput::Utxo(outpoint) => Some(outpoint),
-            TxInput::Account(_) | TxInput::AccountCommand(_, _) => None,
+            TxInput::Account(_)
+            | TxInput::AccountCommand(_, _)
+            | TxInput::OrderAccountCommand(_) => None,
         }
     }
 }
@@ -87,6 +94,7 @@ impl TextSummary for TxInput {
             }
             TxInput::Account(acc_out) => format!("{acc_out:?}"),
             TxInput::AccountCommand(nonce, cmd) => format!("AccountCommand({nonce}, {cmd:?})"),
+            TxInput::OrderAccountCommand(cmd) => format!("OrderAccountCommand({cmd:?})"),
         }
     }
 }

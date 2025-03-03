@@ -53,7 +53,7 @@ pub fn get_token_supply_change_count(inputs: &[TxInput]) -> usize {
     inputs
         .iter()
         .filter(|&input| match input {
-            TxInput::Utxo(_) | TxInput::Account(_) => false,
+            TxInput::Utxo(_) | TxInput::Account(_) | TxInput::OrderAccountCommand(_) => false,
             TxInput::AccountCommand(_, op) => match op {
                 AccountCommand::FreezeToken(_, _)
                 | AccountCommand::UnfreezeToken(_)
