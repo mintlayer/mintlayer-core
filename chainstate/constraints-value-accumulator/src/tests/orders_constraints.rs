@@ -276,7 +276,7 @@ fn fill_order_constraints(#[case] seed: Seed) {
     );
 
     let orders_store = InMemoryOrdersAccounting::from_values(
-        BTreeMap::from_iter([(order_id, order_data.clone())]),
+        BTreeMap::from_iter([(order_id, order_data.clone().into())]),
         BTreeMap::from_iter([(order_id, ask_amount)]),
         BTreeMap::from_iter([(order_id, give_amount)]),
     );
@@ -583,7 +583,7 @@ fn conclude_order_constraints(#[case] seed: Seed) {
     );
 
     let orders_store = InMemoryOrdersAccounting::from_values(
-        BTreeMap::from_iter([(order_id, order_data.clone())]),
+        BTreeMap::from_iter([(order_id, order_data.clone().into())]),
         BTreeMap::from_iter([(order_id, ask_amount)]),
         BTreeMap::from_iter([(order_id, give_amount)]),
     );

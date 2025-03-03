@@ -35,11 +35,12 @@ use common::{
         block::{signed_block_header::SignedBlockHeader, Block, BlockReward, GenBlock},
         config::ChainConfig,
         tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
-        AccountNonce, AccountType, DelegationId, OrderData, OrderId, PoolId, RpcOrderInfo,
-        Transaction, TxInput, TxOutput, UtxoOutPoint,
+        AccountNonce, AccountType, DelegationId, OrderId, PoolId, RpcOrderInfo, Transaction,
+        TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{id::WithId, Amount, BlockHeight, Id, Idable},
 };
+use orders_accounting::OrderData;
 use pos_accounting::{DelegationData, PoSAccountingStorageRead, PoolData};
 use utils::{displayable_option::DisplayableOption, eventhandler::EventHandler};
 use utils_networking::broadcaster;

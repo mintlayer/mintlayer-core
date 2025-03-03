@@ -4705,6 +4705,7 @@ dependencies = [
  "common",
  "mempool",
  "mockall",
+ "orders-accounting",
  "p2p-types",
  "pos-accounting",
  "subsystem",

@@ -17,10 +17,10 @@ use chainstate_test_framework::{TestFramework, TestStore};
 use common::chain::config::Builder as ConfigBuilder;
 use common::primitives::Amount;
 use common::{
-    chain::{DelegationId, OrderData, OrderId, PoolId, UtxoOutPoint},
+    chain::{DelegationId, OrderId, PoolId, UtxoOutPoint},
     primitives::{Id, H256},
 };
-use orders_accounting::OrdersAccountingView;
+use orders_accounting::{OrderData, OrdersAccountingView};
 use pos_accounting::PoSAccountingView;
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};

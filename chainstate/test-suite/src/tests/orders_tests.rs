@@ -155,7 +155,7 @@ fn create_order_check_storage(#[case] seed: Seed) {
         tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
         assert_eq!(
-            Some(order_data),
+            Some(order_data.into()),
             tf.chainstate.get_order_data(&order_id).unwrap()
         );
         assert_eq!(
@@ -683,7 +683,7 @@ fn fill_order_check_storage(#[case] seed: Seed, #[case] version: OrdersVersion) 
         tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
         assert_eq!(
-            Some(order_data.clone()),
+            Some(order_data.clone().into()),
             tf.chainstate.get_order_data(&order_id).unwrap()
         );
         assert_eq!(
@@ -729,7 +729,7 @@ fn fill_order_check_storage(#[case] seed: Seed, #[case] version: OrdersVersion) 
         tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
         assert_eq!(
-            Some(order_data),
+            Some(order_data.into()),
             tf.chainstate.get_order_data(&order_id).unwrap()
         );
         assert_eq!(
@@ -1547,7 +1547,7 @@ fn reorg_before_create(#[case] seed: Seed, #[case] version: OrdersVersion) {
         tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
         assert_eq!(
-            Some(order_data),
+            Some(order_data.into()),
             tf.chainstate.get_order_data(&order_id).unwrap()
         );
         assert_eq!(
@@ -1688,16 +1688,16 @@ fn reorg_after_create(#[case] seed: Seed, #[case] version: OrdersVersion) {
         assert_eq!(tf.best_block_id(), new_best_block);
 
         assert_eq!(
-            Some(order_data.clone()),
-            tf.chainstate.get_order_data(&order_id).unwrap()
-        );
-        assert_eq!(
             Some(output_value_amount(order_data.ask())),
             tf.chainstate.get_order_ask_balance(&order_id).unwrap()
         );
         assert_eq!(
             Some(output_value_amount(order_data.give())),
             tf.chainstate.get_order_give_balance(&order_id).unwrap()
+        );
+        assert_eq!(
+            Some(order_data.into()),
+            tf.chainstate.get_order_data(&order_id).unwrap()
         );
     });
 }
@@ -1846,7 +1846,7 @@ fn create_order_with_nft(#[case] seed: Seed, #[case] version: OrdersVersion) {
             .unwrap();
 
         assert_eq!(
-            Some(order_data.clone()),
+            Some(order_data.clone().into()),
             tf.chainstate.get_order_data(&order_id).unwrap()
         );
         assert_eq!(
@@ -1926,7 +1926,7 @@ fn create_order_with_nft(#[case] seed: Seed, #[case] version: OrdersVersion) {
             .unwrap();
 
         assert_eq!(
-            Some(order_data),
+            Some(order_data.into()),
             tf.chainstate.get_order_data(&order_id).unwrap()
         );
         assert_eq!(
@@ -2011,7 +2011,7 @@ fn partially_fill_order_with_nft_v0(#[case] seed: Seed) {
             .unwrap();
 
         assert_eq!(
-            Some(order_data.clone()),
+            Some(order_data.clone().into()),
             tf.chainstate.get_order_data(&order_id).unwrap()
         );
         assert_eq!(
@@ -2093,7 +2093,7 @@ fn partially_fill_order_with_nft_v0(#[case] seed: Seed) {
             .unwrap();
 
         assert_eq!(
-            Some(order_data.clone()),
+            Some(order_data.clone().into()),
             tf.chainstate.get_order_data(&order_id).unwrap()
         );
         assert_eq!(
@@ -2134,7 +2134,7 @@ fn partially_fill_order_with_nft_v0(#[case] seed: Seed) {
             .unwrap();
 
         assert_eq!(
-            Some(order_data),
+            Some(order_data.into()),
             tf.chainstate.get_order_data(&order_id).unwrap()
         );
         assert_eq!(
@@ -2219,7 +2219,7 @@ fn partially_fill_order_with_nft_v1(#[case] seed: Seed) {
             .unwrap();
 
         assert_eq!(
-            Some(order_data.clone()),
+            Some(order_data.clone().into()),
             tf.chainstate.get_order_data(&order_id).unwrap()
         );
         assert_eq!(
@@ -2295,7 +2295,7 @@ fn partially_fill_order_with_nft_v1(#[case] seed: Seed) {
             .unwrap();
 
         assert_eq!(
-            Some(order_data),
+            Some(order_data.into()),
             tf.chainstate.get_order_data(&order_id).unwrap()
         );
         assert_eq!(
@@ -2368,7 +2368,7 @@ fn fill_order_with_zero(#[case] seed: Seed, #[case] version: OrdersVersion) {
                         .unwrap()
                 );
                 assert_eq!(
-                    Some(order_data),
+                    Some(order_data.into()),
                     tf.chainstate.get_order_data(&order_id).unwrap()
                 );
                 assert_eq!(
@@ -2474,7 +2474,7 @@ fn fill_orders_shuffle(#[case] seed: Seed, #[case] fills: Vec<u128>) {
             .unwrap();
 
         assert_eq!(
-            Some(order_data.clone()),
+            Some(order_data.into()),
             tf.chainstate.get_order_data(&order_id).unwrap()
         );
         assert_eq!(

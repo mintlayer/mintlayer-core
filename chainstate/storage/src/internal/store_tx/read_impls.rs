@@ -22,12 +22,12 @@ use common::{
         block::{signed_block_header::SignedBlockHeader, BlockReward},
         config::{EpochIndex, MagicBytes},
         tokens::{TokenAuxiliaryData, TokenId},
-        AccountNonce, AccountType, Block, DelegationId, GenBlock, OrderData, OrderId, PoolId,
-        Transaction, UtxoOutPoint,
+        AccountNonce, AccountType, Block, DelegationId, GenBlock, OrderId, PoolId, Transaction,
+        UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id, H256},
 };
-use orders_accounting::{OrdersAccountingStorageRead, OrdersAccountingUndo};
+use orders_accounting::{OrderData, OrdersAccountingStorageRead, OrdersAccountingUndo};
 use pos_accounting::{
     DelegationData, DeltaMergeUndo, PoSAccountingDeltaData, PoSAccountingStorageRead,
     PoSAccountingUndo, PoolData,
