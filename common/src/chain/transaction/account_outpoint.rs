@@ -61,6 +61,19 @@ impl From<AccountCommand> for AccountType {
     }
 }
 
+impl From<OrderAccountCommand> for AccountType {
+    fn from(cmd: OrderAccountCommand) -> Self {
+        match cmd {
+            OrderAccountCommand::FillOrder(order_id, _, _)
+            | OrderAccountCommand::ConcludeOrder {
+                order_id,
+                ask_balance: _,
+                give_balance: _,
+            } => AccountType::Order(order_id),
+        }
+    }
+}
+
 /// The type represents the amount to withdraw from a particular account.
 /// Otherwise it's unclear how much should be deducted from an account balance.
 /// It also helps solving 2 additional problems: calculating fees and providing ability to sign input balance with the witness.

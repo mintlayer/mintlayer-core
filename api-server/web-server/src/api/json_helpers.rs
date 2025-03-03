@@ -24,8 +24,8 @@ use common::{
         block::ConsensusData,
         output_value::OutputValue,
         tokens::{IsTokenUnfreezable, NftIssuance, TokenId, TokenTotalSupply},
-        AccountCommand, AccountSpending, Block, ChainConfig, Destination, OrderId,
-        OutPointSourceId, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
+        AccountCommand, AccountSpending, Block, ChainConfig, Destination, OrderAccountCommand,
+        OrderId, OutPointSourceId, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Idable},
     Uint256,
@@ -318,7 +318,30 @@ pub fn tx_input_to_json(inp: &TxInput, chain_config: &ChainConfig) -> serde_json
                 })
             }
         },
-        TxInput::OrderAccountCommand(..) => todo!(),
+        TxInput::OrderAccountCommand(cmd) => match cmd {
+            OrderAccountCommand::FillOrder(id, fill, dest) => {
+                json!({
+                    "input_type": "OrderAccountCommand",
+                    "command": "FillOrder",
+                    "order_id": Address::new(chain_config, *id).expect("addressable").to_string(),
+                    "fill_atoms": json!({"atoms": fill.into_atoms().to_string()}),
+                    "destination": Address::new(chain_config, dest.clone()).expect("no error").as_str(),
+                })
+            }
+            OrderAccountCommand::ConcludeOrder {
+                order_id,
+                ask_balance,
+                give_balance,
+            } => {
+                json!({
+                    "input_type": "OrderAccountCommand",
+                    "command": "ConcludeOrder",
+                    "order_id": Address::new(chain_config, *order_id).expect("addressable").to_string(),
+                    "ask_atoms": json!({"atoms": ask_balance.into_atoms().to_string()}),
+                    "give_atoms": json!({"atoms": give_balance.into_atoms().to_string()}),
+                })
+            }
+        },
         TxInput::AccountCommand(nonce, cmd) => match cmd {
             AccountCommand::MintTokens(token_id, amount) => {
                 json!({

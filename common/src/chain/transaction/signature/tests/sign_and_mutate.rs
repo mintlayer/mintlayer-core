@@ -32,7 +32,7 @@ use crate::{
         signed_transaction::SignedTransaction,
         tokens::TokenId,
         AccountCommand, AccountOutPoint, AccountSpending, ChainConfig, DelegationId, Destination,
-        OutPointSourceId, Transaction, TxInput, TxOutput, UtxoOutPoint,
+        OrderAccountCommand, OutPointSourceId, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, Id, H256},
 };
@@ -1059,7 +1059,24 @@ fn mutate_first_input(
                 TxInput::AccountCommand(new_nonce, op.clone())
             }
         }
-        TxInput::OrderAccountCommand(_) => todo!(),
+        TxInput::OrderAccountCommand(cmd) => match cmd {
+            OrderAccountCommand::FillOrder(id, amount, destination) => {
+                TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(
+                    *id,
+                    Amount::from_atoms(amount.into_atoms() + 1),
+                    destination.clone(),
+                ))
+            }
+            OrderAccountCommand::ConcludeOrder {
+                order_id,
+                ask_balance,
+                give_balance,
+            } => TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder {
+                order_id: *order_id,
+                ask_balance: Amount::from_atoms(ask_balance.into_atoms() + 1),
+                give_balance: *give_balance,
+            }),
+        },
     };
     updater.inputs[0] = mutated_input;
 

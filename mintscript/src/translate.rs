@@ -23,8 +23,8 @@ use common::chain::{
         DestinationSigError, EvaluatedInputWitness,
     },
     tokens::TokenId,
-    AccountCommand, AccountOutPoint, AccountSpending, DelegationId, Destination, OrderId, PoolId,
-    SignedTransaction, TxOutput, UtxoOutPoint,
+    AccountCommand, AccountOutPoint, AccountSpending, DelegationId, Destination,
+    OrderAccountCommand, OrderId, PoolId, SignedTransaction, TxOutput, UtxoOutPoint,
 };
 use utxo::UtxoSource;
 
@@ -80,6 +80,9 @@ pub enum InputInfo<'a> {
     AccountCommand {
         command: &'a AccountCommand,
     },
+    OrderAccountCommand {
+        command: &'a OrderAccountCommand,
+    },
 }
 
 impl InputInfo<'_> {
@@ -90,7 +93,9 @@ impl InputInfo<'_> {
                 utxo,
                 utxo_source: _,
             } => Some(utxo),
-            InputInfo::Account { .. } | InputInfo::AccountCommand { .. } => None,
+            InputInfo::Account { .. }
+            | InputInfo::AccountCommand { .. }
+            | InputInfo::OrderAccountCommand { .. } => None,
         }
     }
 }
@@ -241,6 +246,19 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for SignedTransaction {
                 }
                 AccountCommand::FillOrder(_, _, _) => Ok(WitnessScript::TRUE),
             },
+            InputInfo::OrderAccountCommand { command } => match command {
+                OrderAccountCommand::FillOrder(_, _, _) => Ok(WitnessScript::TRUE),
+                OrderAccountCommand::ConcludeOrder {
+                    order_id,
+                    ask_balance: _,
+                    give_balance: _,
+                } => {
+                    let dest = ctx
+                        .get_orders_conclude_destination(order_id)?
+                        .ok_or(TranslationError::OrderNotFound(*order_id))?;
+                    Ok(to_signature_witness_script(ctx, &dest))
+                }
+            },
         }
     }
 }
@@ -279,9 +297,9 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for BlockRewardTransactable<'_>
                     }
                 }
             }
-            InputInfo::Account { .. } | InputInfo::AccountCommand { .. } => {
-                Err(TranslationError::IllegalAccountSpend)
-            }
+            InputInfo::Account { .. }
+            | InputInfo::AccountCommand { .. }
+            | InputInfo::OrderAccountCommand { .. } => Err(TranslationError::IllegalAccountSpend),
         }
     }
 }
@@ -339,6 +357,11 @@ impl<C: InputInfoProvider> TranslateInput<C> for TimelockOnly {
                 | AccountCommand::ChangeTokenMetadataUri(_token_id, _)
                 | AccountCommand::ChangeTokenAuthority(_token_id, _) => Ok(WitnessScript::TRUE),
                 AccountCommand::ConcludeOrder(_) | AccountCommand::FillOrder(_, _, _) => {
+                    Ok(WitnessScript::TRUE)
+                }
+            },
+            InputInfo::OrderAccountCommand { command } => match command {
+                OrderAccountCommand::FillOrder(..) | OrderAccountCommand::ConcludeOrder { .. } => {
                     Ok(WitnessScript::TRUE)
                 }
             },
@@ -446,6 +469,19 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for SignatureOnlyTx {
                     Ok(to_signature_witness_script(ctx, &dest))
                 }
                 AccountCommand::FillOrder(_, _, _) => Ok(WitnessScript::TRUE),
+            },
+            InputInfo::OrderAccountCommand { command } => match command {
+                OrderAccountCommand::FillOrder(_, _, _) => Ok(WitnessScript::TRUE),
+                OrderAccountCommand::ConcludeOrder {
+                    order_id,
+                    ask_balance: _,
+                    give_balance: _,
+                } => {
+                    let dest = ctx
+                        .get_orders_conclude_destination(order_id)?
+                        .ok_or(TranslationError::OrderNotFound(*order_id))?;
+                    Ok(to_signature_witness_script(ctx, &dest))
+                }
             },
         }
     }

@@ -143,7 +143,7 @@ impl<'a> PerInputData<'a> {
             }
             TxInput::Account(outpoint) => InputInfo::Account { outpoint },
             TxInput::AccountCommand(_, command) => InputInfo::AccountCommand { command },
-            TxInput::OrderAccountCommand(_) => todo!(),
+            TxInput::OrderAccountCommand(command) => InputInfo::OrderAccountCommand { command },
         };
         Ok(Self::new(info, witness))
     }
@@ -401,9 +401,9 @@ impl<S: TransactionVerifierStorageRef> TimelockContext for InputVerifyContextTim
                 utxo::UtxoSource::Blockchain(height) => Ok(*height),
                 utxo::UtxoSource::Mempool => Ok(self.ctx.spending_height),
             },
-            InputInfo::Account { .. } | InputInfo::AccountCommand { .. } => {
-                Err(TimelockContextError::TimelockedAccount)
-            }
+            InputInfo::Account { .. }
+            | InputInfo::AccountCommand { .. }
+            | InputInfo::OrderAccountCommand { .. } => Err(TimelockContextError::TimelockedAccount),
         }
     }
 
@@ -432,9 +432,9 @@ impl<S: TransactionVerifierStorageRef> TimelockContext for InputVerifyContextTim
                 }
                 utxo::UtxoSource::Mempool => Ok(self.ctx.spending_time),
             },
-            InputInfo::Account { .. } | InputInfo::AccountCommand { .. } => {
-                Err(TimelockContextError::TimelockedAccount)
-            }
+            InputInfo::Account { .. }
+            | InputInfo::AccountCommand { .. }
+            | InputInfo::OrderAccountCommand { .. } => Err(TimelockContextError::TimelockedAccount),
         }
     }
 }

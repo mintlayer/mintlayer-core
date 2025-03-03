@@ -306,7 +306,8 @@ impl<'p> PoolEntry<'p> {
             // Always consider account deps. TODO: can be optimized in the future
             TxDependency::DelegationAccount(_)
             | TxDependency::TokenSupplyAccount(_)
-            | TxDependency::OrderAccount(_) => false,
+            | TxDependency::OrderAccount(_)
+            | TxDependency::OrderV1Account(_) => false,
             TxDependency::TxOutput(tx_id, _) => self.pool.maps.by_tx_id.contains_key(&tx_id),
         })
     }

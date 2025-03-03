@@ -804,10 +804,11 @@ impl BlockProcessingErrorClassification for CheckTransactionError {
             | CheckTransactionError::OrdersAreNotActivated(_)
             | CheckTransactionError::AttemptToFillOrderWithZero(_, _)
             | CheckTransactionError::ChangeTokenMetadataUriNotActivated
+            | CheckTransactionError::OrdersV1AreNotActivated(_)
+            | CheckTransactionError::DeprecatedOrdersCommands(_)
             | CheckTransactionError::OrdersCurrenciesMustBeDifferent(_) => {
                 BlockProcessingErrorClass::BadBlock
             }
-
             CheckTransactionError::PropertyQueryError(err) => err.classify(),
             CheckTransactionError::TokensError(err) => err.classify(),
         }

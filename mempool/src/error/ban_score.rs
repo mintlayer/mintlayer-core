@@ -491,6 +491,8 @@ impl MempoolBanScore for CheckTransactionError {
             CheckTransactionError::AttemptToFillOrderWithZero(_, _) => 100,
             CheckTransactionError::OrdersCurrenciesMustBeDifferent(_) => 100,
             CheckTransactionError::ChangeTokenMetadataUriNotActivated => 100,
+            CheckTransactionError::OrdersV1AreNotActivated(_) => 100,
+            CheckTransactionError::DeprecatedOrdersCommands(_) => 100,
         }
     }
 }
