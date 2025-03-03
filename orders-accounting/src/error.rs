@@ -35,6 +35,8 @@ pub enum Error {
     InvariantOrderGiveBalanceChangedForUndo(OrderId),
     #[error("Data for order `{0}` still exist on conclude undo")]
     InvariantOrderDataExistForConcludeUndo(OrderId),
+    #[error("Data for order `{0}` doesn't exist on freeze undo")]
+    InvariantOrderDataNotExistForFreezeUndo(OrderId),
     #[error("Ask balance for order `{0}` still exist on conclude undo")]
     InvariantOrderAskBalanceExistForConcludeUndo(OrderId),
     #[error("Give balance for order `{0}` still exist on conclude undo")]
@@ -51,6 +53,12 @@ pub enum Error {
     OrderUnderbid(OrderId, Amount),
     #[error("Attempt to conclude non-existing order data `{0}`")]
     AttemptedConcludeNonexistingOrderData(OrderId),
+    #[error("Attempt to freeze non-existing order data `{0}`")]
+    AttemptedFreezeNonexistingOrderData(OrderId),
+    #[error("Attempt to freeze already freezed order `{0}`")]
+    AttemptedFreezeAlreadyFreezedOrder(OrderId),
+    #[error("Attempt to fill freezed order `{0}`")]
+    AttemptedFillFreezedOrder(OrderId),
     #[error("Unsupported token version")]
     UnsupportedTokenVersion,
 
