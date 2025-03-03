@@ -46,3 +46,4 @@ tempfile.workspace = true
 [features]
 trezor = ["dep:trezor-client", "wallet-types/trezor"]
 enable-trezor-device-tests = []
+default = ["trezor"]

@@ -91,9 +91,9 @@ impl SoftwareSigner {
         key_chain: &impl AccountKeyChains,
         db_tx: &impl WalletStorageReadUnlocked,
     ) -> SignerResult<Option<PrivateKey>> {
-        let xpriv = self.derive_account_private_key(db_tx)?;
         match key_chain.find_public_key(destination) {
             Some(FoundPubKey::Hierarchy(xpub)) => {
+                let xpriv = self.derive_account_private_key(db_tx)?;
                 get_private_key(&xpriv, &xpub).map(|pk| Some(pk.private_key()))
             }
             Some(FoundPubKey::Standalone(acc_public_key)) => {

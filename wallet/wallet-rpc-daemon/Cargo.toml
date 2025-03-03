@@ -26,3 +26,4 @@ expect-test.workspace = true
 
 [features]
 trezor = ["wallet-rpc-lib/trezor"]
+default = ["trezor"]

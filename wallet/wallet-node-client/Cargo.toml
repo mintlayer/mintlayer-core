@@ -36,3 +36,4 @@ tokio = { workspace = true, default-features = false, features = ["io-util", "ma
 
 [features]
 trezor = ["wallet-types/trezor"]
+default = ["trezor"]

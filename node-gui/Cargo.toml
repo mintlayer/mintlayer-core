@@ -43,3 +43,4 @@ winres = "0.1"
 
 [features]
 trezor = ["wallet-controller/trezor", "wallet-types/trezor", "wallet-cli-commands/trezor", "node-gui-backend/trezor"]
+default = ["trezor"]

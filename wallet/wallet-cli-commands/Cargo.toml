@@ -60,3 +60,4 @@ rstest.workspace = true
 
 [features]
 trezor = ["wallet-types/trezor", "wallet-rpc-lib/trezor"]
+default = ["trezor"]

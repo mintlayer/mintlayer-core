@@ -40,9 +40,11 @@ zeroize.workspace = true
 chainstate-test-framework = { path = "../../chainstate/test-framework" }
 p2p-types = { path = "../../p2p/types" }
 test-utils = { path = "../../test-utils" }
+futures = { workspace = true, features = ["executor"] }
 
 anyhow.workspace = true
 rstest.workspace = true
 
 [features]
 trezor = ["wallet-types/trezor"]
+default = ["trezor"]

@@ -32,3 +32,4 @@ rstest.workspace = true
 
 [features]
 trezor = []
+default = ["trezor"]
