@@ -15,7 +15,7 @@
 
 use accounting::combine_amount_delta;
 use common::{
-    chain::{OrderData, OrderId, OrdersVersion},
+    chain::{OrderId, OrdersVersion},
     primitives::Amount,
 };
 use logging::log;
@@ -30,7 +30,7 @@ use crate::{
         OrdersAccountingUndo,
     },
     view::OrdersAccountingView,
-    FlushableOrdersAccountingView, OrdersAccountingDeltaUndoData,
+    FlushableOrdersAccountingView, OrderData, OrdersAccountingDeltaUndoData,
 };
 
 pub struct OrdersAccountingCache<P> {

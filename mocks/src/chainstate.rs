@@ -26,11 +26,12 @@ use common::{
             GenBlock,
         },
         tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
-        AccountNonce, AccountType, ChainConfig, DelegationId, OrderData, OrderId, PoolId,
-        RpcOrderInfo, TxInput, UtxoOutPoint,
+        AccountNonce, AccountType, ChainConfig, DelegationId, OrderId, PoolId, RpcOrderInfo,
+        TxInput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
 };
+use orders_accounting::OrderData;
 use pos_accounting::PoolData;
 use utils::eventhandler::EventHandler;
 use utxo::Utxo;

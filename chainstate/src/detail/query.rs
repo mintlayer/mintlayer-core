@@ -25,11 +25,11 @@ use common::{
             NftIssuance, RPCFungibleTokenInfo, RPCIsTokenFrozen, RPCNonFungibleTokenInfo,
             RPCTokenInfo, TokenAuxiliaryData, TokenId,
         },
-        AccountType, Block, GenBlock, OrderData, OrderId, RpcOrderInfo, Transaction, TxOutput,
+        AccountType, Block, GenBlock, OrderId, RpcOrderInfo, Transaction, TxOutput,
     },
     primitives::{Amount, BlockDistance, BlockHeight, Id, Idable},
 };
-use orders_accounting::OrdersAccountingStorageRead;
+use orders_accounting::{OrderData, OrdersAccountingStorageRead};
 use tokens_accounting::TokensAccountingStorageRead;
 use utils::ensure;
 

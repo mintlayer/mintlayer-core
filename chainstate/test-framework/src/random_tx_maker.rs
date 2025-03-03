@@ -1418,7 +1418,8 @@ impl<'a> RandomTxMaker<'a> {
                 }
                 TxOutput::CreateOrder(data) => {
                     let order_id = make_order_id(inputs[0].utxo_outpoint().unwrap());
-                    let _ = orders_cache.create_order(order_id, *data.clone()).unwrap();
+                    let _ =
+                        orders_cache.create_order(order_id, data.as_ref().clone().into()).unwrap();
                     Some(output)
                 }
             })
