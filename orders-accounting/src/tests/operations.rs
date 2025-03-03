@@ -16,9 +16,7 @@
 use std::collections::BTreeMap;
 
 use common::{
-    chain::{
-        output_value::OutputValue, tokens::TokenId, Destination, OrderData, OrderId, OrdersVersion,
-    },
+    chain::{output_value::OutputValue, tokens::TokenId, Destination, OrderId, OrdersVersion},
     primitives::Amount,
 };
 use randomness::Rng;
@@ -27,8 +25,8 @@ use test_utils::random::{make_seedable_rng, Seed};
 
 use crate::{
     cache::OrdersAccountingCache, operations::OrdersAccountingOperations,
-    view::FlushableOrdersAccountingView, Error, InMemoryOrdersAccounting, OrdersAccountingDB,
-    OrdersAccountingView,
+    view::FlushableOrdersAccountingView, Error, InMemoryOrdersAccounting, OrderData,
+    OrdersAccountingDB, OrdersAccountingView,
 };
 
 fn make_order_data(rng: &mut impl Rng) -> OrderData {

@@ -20,12 +20,12 @@ use common::{
     chain::{
         config::{EpochIndex, MagicBytes},
         tokens::{TokenAuxiliaryData, TokenId},
-        AccountNonce, AccountType, Block, DelegationId, GenBlock, OrderData, OrderId, PoolId,
-        Transaction, UtxoOutPoint,
+        AccountNonce, AccountType, Block, DelegationId, GenBlock, OrderId, PoolId, Transaction,
+        UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id, Idable},
 };
-use orders_accounting::{OrdersAccountingStorageWrite, OrdersAccountingUndo};
+use orders_accounting::{OrderData, OrdersAccountingStorageWrite, OrdersAccountingUndo};
 use pos_accounting::{
     DelegationData, DeltaMergeUndo, PoSAccountingDeltaData, PoSAccountingStorageWrite,
     PoSAccountingUndo, PoolData,

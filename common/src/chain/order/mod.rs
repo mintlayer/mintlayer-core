@@ -58,4 +58,8 @@ impl OrderData {
     pub fn give(&self) -> &OutputValue {
         &self.give
     }
+
+    pub fn consume(self) -> (Destination, OutputValue, OutputValue) {
+        (self.conclude_key, self.ask, self.give)
+    }
 }
