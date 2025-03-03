@@ -46,12 +46,19 @@ pub struct FillOrderUndo {
     pub(crate) give_balance: Amount,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
+pub struct FreezeOrderUndo {
+    pub(crate) id: OrderId,
+    pub(crate) undo_data: DataDeltaUndo<OrderData>,
+}
+
 #[must_use]
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, EnumCount)]
 pub enum OrdersAccountingUndo {
     CreateOrder(CreateOrderUndo),
     ConcludeOrder(ConcludeOrderUndo),
     FillOrder(FillOrderUndo),
+    FreezeOrder(FreezeOrderUndo),
 }
 
 pub trait OrdersAccountingOperations {
@@ -63,6 +70,7 @@ pub trait OrdersAccountingOperations {
         fill_amount_in_ask_currency: Amount,
         orders_version: OrdersVersion,
     ) -> Result<OrdersAccountingUndo>;
+    fn freeze_order(&mut self, id: OrderId) -> Result<OrdersAccountingUndo>;
 
     fn undo(&mut self, undo_data: OrdersAccountingUndo) -> Result<()>;
 }
