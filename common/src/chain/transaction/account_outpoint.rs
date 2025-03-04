@@ -196,6 +196,7 @@ pub enum OrderAccountCommand {
     #[codec(index = 1)]
     ConcludeOrder {
         order_id: OrderId,
+        //FIXME: check these amounts on connect
         ask_balance: Amount,
         give_balance: Amount,
     },

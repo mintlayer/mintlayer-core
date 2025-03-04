@@ -35,8 +35,8 @@ use common::{
             TokenIssuanceV1, TokenTotalSupply,
         },
         AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, CoinUnit, DelegationId,
-        Destination, Genesis, OrderData, OrderId, OutPointSourceId, PoolId, SignedTransaction,
-        TxInput, TxOutput, UtxoOutPoint,
+        Destination, Genesis, OrderAccountCommand, OrderData, OrderId, OutPointSourceId, PoolId,
+        SignedTransaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, Idable as _},
 };
@@ -846,14 +846,11 @@ impl TestFixture {
                 InputWitness::NoSignature(None),
             )
             .add_input(
-                TxInput::AccountCommand(
-                    AccountNonce::new(0),
-                    AccountCommand::FillOrder(
-                        order_id,
-                        coin_amount_to_fill,
-                        Destination::AnyoneCanSpend,
-                    ),
-                ),
+                TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(
+                    order_id,
+                    coin_amount_to_fill,
+                    Destination::AnyoneCanSpend,
+                )),
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::Transfer(
@@ -871,10 +868,11 @@ impl TestFixture {
     ) -> SignedTransaction {
         TransactionBuilder::new()
             .add_input(
-                TxInput::AccountCommand(
-                    AccountNonce::new(0),
-                    AccountCommand::ConcludeOrder(order_id),
-                ),
+                TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder {
+                    order_id,
+                    ask_balance: give_amount,
+                    give_balance: give_amount,
+                }),
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::Transfer(
