@@ -31,7 +31,8 @@ use common::{
             TokenId, TokenIssuance, TokenTotalSupply,
         },
         AccountCommand, AccountNonce, AccountSpending, DelegationId, Destination, GenBlock,
-        OrderId, OutPointSourceId, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
+        OrderAccountCommand, OrderId, OutPointSourceId, PoolId, Transaction, TxInput, TxOutput,
+        UtxoOutPoint,
     },
     primitives::{id::WithId, per_thousand::PerThousand, Amount, BlockHeight, Id, Idable},
 };
@@ -832,7 +833,19 @@ impl OutputCache {
                 }
             },
             TxInput::Account(_) => false,
-            TxInput::OrderAccountCommand(..) => todo!(),
+            TxInput::OrderAccountCommand(cmd) => match cmd {
+                OrderAccountCommand::FillOrder(order_id, _, _)
+                | OrderAccountCommand::ConcludeOrder {
+                    order_id,
+                    ask_balance: _,
+                    give_balance: _,
+                } => self.order_data(order_id).is_some_and(|data| {
+                    [data.ask_currency, data.give_currency].iter().any(|v| match v {
+                        Currency::Coin => false,
+                        Currency::Token(token_id) => frozen_token_id == token_id,
+                    })
+                }),
+            },
         })
     }
 
@@ -985,7 +998,6 @@ impl OutputCache {
                         }
                     }
                 },
-                TxInput::OrderAccountCommand(_) => todo!(),
                 TxInput::AccountCommand(nonce, op) => match op {
                     AccountCommand::MintTokens(token_id, _)
                     | AccountCommand::UnmintTokens(token_id)
@@ -1048,6 +1060,9 @@ impl OutputCache {
                         }
                     }
                 },
+                TxInput::OrderAccountCommand(_) => {
+                    // TODO: support OrdersVersion::V1
+                }
             }
         }
         Ok(())
@@ -1164,7 +1179,6 @@ impl OutputCache {
                             }
                         }
                     },
-                    TxInput::OrderAccountCommand(..) => todo!(),
                     TxInput::AccountCommand(nonce, op) => match op {
                         AccountCommand::MintTokens(token_id, _)
                         | AccountCommand::UnmintTokens(token_id)
@@ -1184,6 +1198,19 @@ impl OutputCache {
                         | AccountCommand::FillOrder(order_id, _, _) => {
                             if let Some(data) = self.orders.get_mut(order_id) {
                                 data.last_nonce = nonce.decrement();
+                                data.last_parent =
+                                    find_parent(&self.unconfirmed_descendants, tx_id.clone());
+                            }
+                        }
+                    },
+                    TxInput::OrderAccountCommand(cmd) => match cmd {
+                        OrderAccountCommand::FillOrder(order_id, _, _)
+                        | OrderAccountCommand::ConcludeOrder {
+                            order_id,
+                            ask_balance: _,
+                            give_balance: _,
+                        } => {
+                            if let Some(data) = self.orders.get_mut(order_id) {
                                 data.last_parent =
                                     find_parent(&self.unconfirmed_descendants, tx_id.clone());
                             }
@@ -1448,7 +1475,6 @@ impl OutputCache {
                                             }
                                         }
                                     },
-                                    TxInput::OrderAccountCommand(..) => todo!(),
                                     TxInput::AccountCommand(nonce, op) => match op {
                                         AccountCommand::MintTokens(token_id, _)
                                         | AccountCommand::UnmintTokens(token_id)
@@ -1472,6 +1498,21 @@ impl OutputCache {
                                         | AccountCommand::FillOrder(order_id, _, _) => {
                                             if let Some(data) = self.orders.get_mut(order_id) {
                                                 data.last_nonce = nonce.decrement();
+                                                data.last_parent = find_parent(
+                                                    &self.unconfirmed_descendants,
+                                                    tx_id.into(),
+                                                );
+                                            }
+                                        }
+                                    },
+                                    TxInput::OrderAccountCommand(cmd) => match cmd {
+                                        OrderAccountCommand::FillOrder(order_id, _, _)
+                                        | OrderAccountCommand::ConcludeOrder {
+                                            order_id,
+                                            ask_balance: _,
+                                            give_balance: _,
+                                        } => {
+                                            if let Some(data) = self.orders.get_mut(order_id) {
                                                 data.last_parent = find_parent(
                                                     &self.unconfirmed_descendants,
                                                     tx_id.into(),
