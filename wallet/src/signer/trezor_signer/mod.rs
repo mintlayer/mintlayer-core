@@ -563,6 +563,10 @@ fn to_trezor_input_msgs(
                     ptx.additional_info(),
                 )
             }
+            (TxInput::OrderAccountCommand(_), _, _) => {
+                //TODO: support OrdersVersion::V1
+                unimplemented!();
+            }
             (_, _, None) => Err(SignerError::MissingDestinationInTransaction),
             (TxInput::Utxo(_), _, _) => Err(SignerError::MissingUtxo),
         })
@@ -852,7 +856,9 @@ fn to_trezor_utxo_msgs(
                 let out = to_trezor_output_msg(chain_config, utxo, ptx.additional_info())?;
                 utxos.entry(id).or_default().insert(outpoint.output_index(), out);
             }
-            TxInput::Account(_) | TxInput::AccountCommand(_, _) => {}
+            TxInput::Account(_)
+            | TxInput::AccountCommand(_, _)
+            | TxInput::OrderAccountCommand(_) => {}
         }
     }
 

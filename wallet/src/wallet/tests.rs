@@ -6011,7 +6011,6 @@ fn create_order_fill_completely_conclude(#[case] seed: Seed) {
     let fill_order_tx_1 = wallet2
         .create_fill_order_tx(
             DEFAULT_ACCOUNT_INDEX,
-            BlockHeight::zero(),
             order_id,
             order_info,
             Amount::from_atoms(10),
@@ -6076,7 +6075,6 @@ fn create_order_fill_completely_conclude(#[case] seed: Seed) {
     let fill_order_tx_2 = wallet2
         .create_fill_order_tx(
             DEFAULT_ACCOUNT_INDEX,
-            BlockHeight::zero(),
             order_id,
             order_info,
             (token_amount_to_mint - Amount::from_atoms(10)).unwrap(),
@@ -6122,7 +6120,7 @@ fn create_order_fill_completely_conclude(#[case] seed: Seed) {
         },
         give_balance: Amount::ZERO,
         ask_balance: Amount::ZERO,
-        nonce: None,
+        nonce: Some(AccountNonce::new(1)),
     };
     let additional_info = TxAdditionalInfo::with_token_info(
         issued_token_id,
@@ -6350,7 +6348,6 @@ fn create_order_fill_partially_conclude(#[case] seed: Seed) {
     let fill_order_tx_1 = wallet2
         .create_fill_order_tx(
             DEFAULT_ACCOUNT_INDEX,
-            BlockHeight::zero(),
             order_id,
             order_info,
             Amount::from_atoms(10),
@@ -6402,7 +6399,7 @@ fn create_order_fill_partially_conclude(#[case] seed: Seed) {
         },
         give_balance: (sell_amount - Amount::from_atoms(100)).unwrap(),
         ask_balance: (token_amount_to_mint - Amount::from_atoms(10)).unwrap(),
-        nonce: None,
+        nonce: Some(AccountNonce::new(0)),
     };
 
     let additional_info = TxAdditionalInfo::with_token_info(

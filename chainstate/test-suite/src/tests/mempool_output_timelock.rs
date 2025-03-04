@@ -30,7 +30,7 @@ use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 use tx_verifier::{
     error::{InputCheckError, ScriptError, TimelockError},
-    transaction_verifier::{TransactionSourceWithHeight, TransactionVerifier},
+    transaction_verifier::{TransactionSourceForConnect, TransactionVerifier},
 };
 
 fn setup(rng: &mut (impl Rng + CryptoRng)) -> (ChainConfig, InMemoryStorageWrapper, TestFramework) {
@@ -73,7 +73,7 @@ fn output_lock_until_height(#[case] seed: Seed) {
             let best_block_index = tf.best_block_index();
             assert_eq!(
                 verifier.connect_transaction(
-                    &TransactionSourceWithHeight::for_mempool(&best_block_index),
+                    &TransactionSourceForConnect::for_mempool(&best_block_index),
                     &spend_locked_tx,
                     &BlockTimestamp::from_time(tf.current_time()),
                 ),
@@ -97,7 +97,7 @@ fn output_lock_until_height(#[case] seed: Seed) {
         let best_block_index = tf.best_block_index();
         verifier
             .connect_transaction(
-                &TransactionSourceWithHeight::for_mempool(&best_block_index),
+                &TransactionSourceForConnect::for_mempool(&best_block_index),
                 &spend_locked_tx,
                 &BlockTimestamp::from_time(tf.current_time()),
             )
@@ -138,7 +138,7 @@ fn output_lock_for_block_count(#[case] seed: Seed) {
             let best_block_index = tf.best_block_index();
             assert_eq!(
                 verifier.connect_transaction(
-                    &TransactionSourceWithHeight::for_mempool(&best_block_index),
+                    &TransactionSourceForConnect::for_mempool(&best_block_index),
                     &spend_locked_tx,
                     &BlockTimestamp::from_time(tf.current_time()),
                 ),
@@ -165,7 +165,7 @@ fn output_lock_for_block_count(#[case] seed: Seed) {
         let best_block_index = tf.best_block_index();
         verifier
             .connect_transaction(
-                &TransactionSourceWithHeight::for_mempool(&best_block_index),
+                &TransactionSourceForConnect::for_mempool(&best_block_index),
                 &spend_locked_tx,
                 &BlockTimestamp::from_time(tf.current_time()),
             )
@@ -226,7 +226,7 @@ fn output_lock_until_time(#[case] seed: Seed) {
             let best_block_index = tf.best_block_index();
             assert_eq!(
                 verifier.connect_transaction(
-                    &TransactionSourceWithHeight::for_mempool(&best_block_index),
+                    &TransactionSourceForConnect::for_mempool(&best_block_index),
                     &spend_locked_tx,
                     &mtp,
                 ),
@@ -254,7 +254,7 @@ fn output_lock_until_time(#[case] seed: Seed) {
         let best_block_index = tf.best_block_index();
         verifier
             .connect_transaction(
-                &TransactionSourceWithHeight::for_mempool(&best_block_index),
+                &TransactionSourceForConnect::for_mempool(&best_block_index),
                 &spend_locked_tx,
                 &BlockTimestamp::from_time(tf.current_time()),
             )
@@ -316,7 +316,7 @@ fn output_lock_for_seconds(#[case] seed: Seed) {
             let best_block_index = tf.best_block_index();
             assert_eq!(
                 verifier.connect_transaction(
-                    &TransactionSourceWithHeight::for_mempool(&best_block_index),
+                    &TransactionSourceForConnect::for_mempool(&best_block_index),
                     &spend_locked_tx,
                     &mtp,
                 ),
@@ -349,7 +349,7 @@ fn output_lock_for_seconds(#[case] seed: Seed) {
         let best_block_index = tf.best_block_index();
         verifier
             .connect_transaction(
-                &TransactionSourceWithHeight::for_mempool(&best_block_index),
+                &TransactionSourceForConnect::for_mempool(&best_block_index),
                 &spend_locked_tx,
                 &BlockTimestamp::from_time(time::get_time()),
             )

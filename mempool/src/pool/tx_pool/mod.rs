@@ -32,8 +32,11 @@ use utxo::UtxosStorageRead;
 
 use chainstate::{
     chainstate_interface::ChainstateInterface,
-    tx_verifier::transaction_verifier::{TransactionSourceWithHeight, TransactionVerifierDelta},
-    ConnectTransactionError, GenBlockIndex,
+    tx_verifier::{
+        transaction_verifier::{TransactionSourceForConnect, TransactionVerifierDelta},
+        TransactionSource,
+    },
+    ConnectTransactionError,
 };
 use common::{
     chain::{
@@ -540,7 +543,7 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
         let tx_id = *entry.tx_id();
         self.store.add_transaction(entry)?;
 
-        self.remove_expired_transactions()?;
+        self.remove_expired_transactions();
         ensure!(
             self.store.contains(&tx_id),
             MempoolPolicyError::DescendantOfExpiredTransaction
@@ -575,7 +578,7 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
         Ok(())
     }
 
-    fn remove_expired_transactions(&mut self) -> Result<(), Error> {
+    fn remove_expired_transactions(&mut self) {
         let expired_ids: Vec<_> = self
             .store
             .txs_by_creation_time
@@ -597,45 +600,13 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
             .map(|entry| *entry.tx_id())
             .collect();
 
-        let current_best = self.current_best_block_index()?;
-        let effective_height = (current_best.block_height()
-            + config::FUTURE_TIMELOCK_TOLERANCE_BLOCKS)
-            .expect("Block height overflow");
-        let source =
-            TransactionSourceWithHeight::for_mempool_with_height(&current_best, effective_height);
-
         for tx_id in expired_ids.iter() {
-            self.remove_tx_and_descendants(tx_id, &source, MempoolRemovalReason::Expiry);
+            self.remove_tx_and_descendants(tx_id, MempoolRemovalReason::Expiry);
         }
-
-        Ok(())
     }
 
-    fn current_best_block_index(&self) -> Result<GenBlockIndex, Error> {
-        let chainstate_handle = self.blocking_chainstate_handle();
-        let current_best = chainstate_handle
-            .call(|chainstate| {
-                let tip = chainstate.get_best_block_id()?;
-                let tip_index = chainstate
-                    .get_gen_block_index_for_persisted_block(&tip)?
-                    .expect("tip block index to exist");
-                Ok::<_, chainstate::ChainstateError>(tip_index)
-            })
-            .map_err(|e| Error::Validity(TxValidationError::CallError(e)))?
-            .map_err(|e| Error::Validity(TxValidationError::ChainstateError(e)))?;
-        Ok(current_best)
-    }
-
-    fn trim(&mut self) -> Result<Vec<FeeRate>, Error> {
+    fn trim(&mut self) -> Result<Vec<FeeRate>, MempoolPolicyError> {
         let mut removed_fees = Vec::new();
-
-        let current_best = self.current_best_block_index()?;
-        let effective_height = (current_best.block_height()
-            + config::FUTURE_TIMELOCK_TOLERANCE_BLOCKS)
-            .expect("Block height overflow");
-        let source =
-            TransactionSourceWithHeight::for_mempool_with_height(&current_best, effective_height);
-
         while !self.store.is_empty() && self.memory_usage() > self.max_size.as_bytes() {
             // TODO sort by descendant score, not by fee
             let removed_id = self
@@ -654,20 +625,17 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
                 removed.size()
             );
             removed_fees.push(FeeRate::from_total_tx_fee(removed.fee(), removed.size())?);
-            self.remove_tx_and_descendants(&removed_id, &source, MempoolRemovalReason::SizeLimit);
+            self.remove_tx_and_descendants(&removed_id, MempoolRemovalReason::SizeLimit);
         }
         Ok(removed_fees)
     }
 
-    fn remove_tx_and_descendants(
-        &mut self,
-        tx_id: &Id<Transaction>,
-        source: &TransactionSourceWithHeight,
-        reason: MempoolRemovalReason,
-    ) {
+    fn remove_tx_and_descendants(&mut self, tx_id: &Id<Transaction>, reason: MempoolRemovalReason) {
+        let source = TransactionSource::Mempool;
+
         let result = self.store.drop_tx_and_descendants(tx_id, reason).try_for_each(|entry| {
             self.tx_verifier
-                .disconnect_transaction(source, entry.transaction())
+                .disconnect_transaction(&source, entry.transaction())
                 .map_err(|err| (*entry.tx_id(), err))
         });
 
@@ -857,7 +825,7 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
             .expect("Block height overflow");
 
         let connect_result = tx_verifier.connect_transaction(
-            &TransactionSourceWithHeight::for_mempool_with_height(&current_best, effective_height),
+            &TransactionSourceForConnect::for_mempool_with_height(&current_best, effective_height),
             transaction.transaction(),
             &BlockTimestamp::from_time(verifier_time),
         );

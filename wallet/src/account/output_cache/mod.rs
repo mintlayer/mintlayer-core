@@ -30,9 +30,8 @@ use common::{
             RPCFungibleTokenInfo, RPCIsTokenFrozen, RPCNonFungibleTokenInfo, RPCTokenTotalSupply,
             TokenId, TokenIssuance, TokenTotalSupply,
         },
-        AccountCommand, AccountNonce, AccountSpending, ChainConfig, DelegationId, Destination,
-        GenBlock, OrderId, OrdersVersion, OutPointSourceId, PoolId, Transaction, TxInput, TxOutput,
-        UtxoOutPoint,
+        AccountCommand, AccountNonce, AccountSpending, DelegationId, Destination, GenBlock,
+        OrderId, OutPointSourceId, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{id::WithId, per_thousand::PerThousand, Amount, BlockHeight, Id, Idable},
 };
@@ -583,21 +582,12 @@ impl OutputCache {
         }
     }
 
-    pub fn new(
-        chain_config: &ChainConfig,
-        account_best_block_height: BlockHeight,
-        mut txs: Vec<(AccountWalletTxId, WalletTx)>,
-    ) -> WalletResult<Self> {
+    pub fn new(mut txs: Vec<(AccountWalletTxId, WalletTx)>) -> WalletResult<Self> {
         let mut cache = Self::empty();
 
         txs.sort_by(|x, y| wallet_tx_order(&x.1, &y.1));
         for (tx_id, tx) in txs {
-            cache.add_tx(
-                chain_config,
-                tx_id.into_item_id(),
-                tx,
-                account_best_block_height,
-            )?;
+            cache.add_tx(tx_id.into_item_id(), tx)?;
         }
         Ok(cache)
     }
@@ -846,13 +836,7 @@ impl OutputCache {
         })
     }
 
-    pub fn add_tx(
-        &mut self,
-        chain_config: &ChainConfig,
-        tx_id: OutPointSourceId,
-        tx: WalletTx,
-        account_best_block_height: BlockHeight,
-    ) -> WalletResult<()> {
+    pub fn add_tx(&mut self, tx_id: OutPointSourceId, tx: WalletTx) -> WalletResult<()> {
         let already_present = self.txs.get(&tx_id).is_some_and(|tx| !tx.state().is_abandoned());
         let is_unconfirmed = match tx.state() {
             TxState::Inactive(_)
@@ -865,14 +849,7 @@ impl OutputCache {
             self.unconfirmed_descendants.insert(tx_id.clone(), BTreeSet::new());
         }
 
-        self.update_inputs(
-            chain_config,
-            &tx,
-            account_best_block_height,
-            is_unconfirmed,
-            &tx_id,
-            already_present,
-        )?;
+        self.update_inputs(&tx, is_unconfirmed, &tx_id, already_present)?;
 
         self.update_outputs(&tx, get_block_info(&tx), already_present)?;
 
@@ -975,9 +952,7 @@ impl OutputCache {
     /// balances
     fn update_inputs(
         &mut self,
-        chain_config: &ChainConfig,
         tx: &WalletTx,
-        account_best_block_height: BlockHeight,
         is_unconfirmed: bool,
         tx_id: &OutPointSourceId,
         already_present: bool,
@@ -1010,6 +985,7 @@ impl OutputCache {
                         }
                     }
                 },
+                TxInput::OrderAccountCommand(_) => todo!(),
                 TxInput::AccountCommand(nonce, op) => match op {
                     AccountCommand::MintTokens(token_id, _)
                     | AccountCommand::UnmintTokens(token_id)
@@ -1057,7 +1033,8 @@ impl OutputCache {
                             self.token_issuance.insert(*token_id, data);
                         }
                     }
-                    AccountCommand::ConcludeOrder(order_id) => {
+                    AccountCommand::ConcludeOrder(order_id)
+                    | AccountCommand::FillOrder(order_id, _, _) => {
                         if !already_present {
                             if let Some(data) = self.orders.get_mut(order_id) {
                                 Self::update_order_state(
@@ -1070,33 +1047,7 @@ impl OutputCache {
                             }
                         }
                     }
-                    AccountCommand::FillOrder(order_id, _, _) => {
-                        match chain_config
-                            .chainstate_upgrades()
-                            .version_at_height(
-                                tx.block_height().unwrap_or(account_best_block_height),
-                            )
-                            .1
-                            .orders_version()
-                        {
-                            OrdersVersion::V0 => {
-                                if !already_present {
-                                    if let Some(data) = self.orders.get_mut(order_id) {
-                                        Self::update_order_state(
-                                            &mut self.unconfirmed_descendants,
-                                            data,
-                                            order_id,
-                                            *nonce,
-                                            tx_id,
-                                        )?;
-                                    }
-                                }
-                            }
-                            OrdersVersion::V1 => { /*  fill order cannot have any descendants*/ }
-                        };
-                    }
                 },
-                TxInput::OrderAccountCommand(..) => todo!(),
             }
         }
         Ok(())
@@ -1195,12 +1146,7 @@ impl OutputCache {
         Ok(())
     }
 
-    pub fn remove_tx(
-        &mut self,
-        chain_config: &ChainConfig,
-        account_best_block_height: BlockHeight,
-        tx_id: &OutPointSourceId,
-    ) -> WalletResult<()> {
+    pub fn remove_tx(&mut self, tx_id: &OutPointSourceId) -> WalletResult<()> {
         let tx_opt = self.txs.remove(tx_id);
         if let Some(tx) = tx_opt {
             for input in tx.inputs() {
@@ -1234,33 +1180,13 @@ impl OutputCache {
                                 data.unconfirmed_txs.remove(tx_id);
                             }
                         }
-                        AccountCommand::ConcludeOrder(order_id) => {
+                        AccountCommand::ConcludeOrder(order_id)
+                        | AccountCommand::FillOrder(order_id, _, _) => {
                             if let Some(data) = self.orders.get_mut(order_id) {
                                 data.last_nonce = nonce.decrement();
                                 data.last_parent =
                                     find_parent(&self.unconfirmed_descendants, tx_id.clone());
                             }
-                        }
-                        AccountCommand::FillOrder(order_id, _, _) => {
-                            match chain_config
-                                .chainstate_upgrades()
-                                .version_at_height(
-                                    tx.block_height().unwrap_or(account_best_block_height),
-                                )
-                                .1
-                                .orders_version()
-                            {
-                                OrdersVersion::V0 => {
-                                    if let Some(data) = self.orders.get_mut(order_id) {
-                                        data.last_nonce = nonce.decrement();
-                                        data.last_parent = find_parent(
-                                            &self.unconfirmed_descendants,
-                                            tx_id.clone(),
-                                        );
-                                    }
-                                }
-                                OrdersVersion::V1 => { /* fill order cannot have any descendants*/ }
-                            };
                         }
                     },
                 }
@@ -1484,8 +1410,6 @@ impl OutputCache {
     /// Returns a Vec of the transaction Ids that have been abandoned
     pub fn abandon_transaction(
         &mut self,
-        chain_config: &ChainConfig,
-        account_best_block_height: BlockHeight,
         tx_id: Id<Transaction>,
     ) -> WalletResult<Vec<Id<Transaction>>> {
         let mut all_abandoned = Vec::new();
@@ -1544,7 +1468,8 @@ impl OutputCache {
                                                 data.unconfirmed_txs.remove(&tx_id.into());
                                             }
                                         }
-                                        AccountCommand::ConcludeOrder(order_id) => {
+                                        AccountCommand::ConcludeOrder(order_id)
+                                        | AccountCommand::FillOrder(order_id, _, _) => {
                                             if let Some(data) = self.orders.get_mut(order_id) {
                                                 data.last_nonce = nonce.decrement();
                                                 data.last_parent = find_parent(
@@ -1552,32 +1477,6 @@ impl OutputCache {
                                                     tx_id.into(),
                                                 );
                                             }
-                                        }
-                                        AccountCommand::FillOrder(order_id, _, _) => {
-                                            match chain_config
-                                                .chainstate_upgrades()
-                                                .version_at_height(
-                                                    tx.state()
-                                                        .block_height()
-                                                        .unwrap_or(account_best_block_height),
-                                                )
-                                                .1
-                                                .orders_version()
-                                            {
-                                                OrdersVersion::V0 => {
-                                                    if let Some(data) =
-                                                        self.orders.get_mut(order_id)
-                                                    {
-                                                        data.last_nonce = nonce.decrement();
-                                                        data.last_parent = find_parent(
-                                                            &self.unconfirmed_descendants,
-                                                            tx_id.into(),
-                                                        );
-                                                    }
-                                                }
-                                                OrdersVersion::V1 => { /*  fill order cannot have any descendants*/
-                                                }
-                                            };
                                         }
                                     },
                                 }
