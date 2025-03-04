@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::chain::{make_order_id, AccountCommand, AccountNonce, OrderData};
+use common::chain::{make_order_id, OrderAccountCommand, OrderData};
 
 use super::*;
 
@@ -68,14 +68,11 @@ async fn create_fill_conclude_order(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_input(
-                        TxInput::AccountCommand(
-                            AccountNonce::new(0),
-                            AccountCommand::FillOrder(
-                                order_id,
-                                Amount::from_atoms(1),
-                                Destination::AnyoneCanSpend,
-                            ),
-                        ),
+                        TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(
+                            order_id,
+                            Amount::from_atoms(1),
+                            Destination::AnyoneCanSpend,
+                        )),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -91,10 +88,11 @@ async fn create_fill_conclude_order(#[case] seed: Seed) {
                 // Conclude order
                 let tx3 = TransactionBuilder::new()
                     .add_input(
-                        TxInput::AccountCommand(
-                            AccountNonce::new(0),
-                            AccountCommand::ConcludeOrder(order_id),
-                        ),
+                        TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder {
+                            order_id,
+                            ask_balance: Amount::from_atoms(1),
+                            give_balance: Amount::from_atoms(9),
+                        }),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
