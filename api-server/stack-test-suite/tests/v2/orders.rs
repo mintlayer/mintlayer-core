@@ -90,8 +90,8 @@ async fn create_fill_conclude_order(#[case] seed: Seed) {
                     .add_input(
                         TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder {
                             order_id,
-                            ask_balance: Amount::from_atoms(1),
-                            give_balance: Amount::from_atoms(9),
+                            filled_amount: Amount::from_atoms(1),
+                            remaining_give_amount: Amount::from_atoms(9),
                         }),
                         InputWitness::NoSignature(None),
                     )

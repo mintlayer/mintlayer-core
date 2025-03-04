@@ -1069,12 +1069,12 @@ fn mutate_first_input(
             }
             OrderAccountCommand::ConcludeOrder {
                 order_id,
-                ask_balance,
-                give_balance,
+                filled_amount,
+                remaining_give_amount,
             } => TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder {
                 order_id: *order_id,
-                ask_balance: Amount::from_atoms(ask_balance.into_atoms() + 1),
-                give_balance: *give_balance,
+                filled_amount: Amount::from_atoms(filled_amount.into_atoms() + 1),
+                remaining_give_amount: *remaining_give_amount,
             }),
         },
     };

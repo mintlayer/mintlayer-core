@@ -141,8 +141,8 @@ impl RpcAccountCommand {
 pub enum RpcOrderAccountCommand {
     ConcludeOrder {
         order_id: RpcAddress<OrderId>,
-        ask_balance: RpcAmountOut,
-        give_balance: RpcAmountOut,
+        filled_amount: RpcAmountOut,
+        remaining_give_amount: RpcAmountOut,
     },
     FillOrder {
         order_id: RpcAddress<OrderId>,
@@ -159,13 +159,16 @@ impl RpcOrderAccountCommand {
         let result = match command {
             OrderAccountCommand::ConcludeOrder {
                 order_id,
-                ask_balance,
-                give_balance,
+                filled_amount,
+                remaining_give_amount,
             } => RpcOrderAccountCommand::ConcludeOrder {
                 order_id: RpcAddress::new(chain_config, *order_id)?,
-                ask_balance: RpcAmountOut::from_amount(*ask_balance, chain_config.coin_decimals()),
-                give_balance: RpcAmountOut::from_amount(
-                    *give_balance,
+                filled_amount: RpcAmountOut::from_amount(
+                    *filled_amount,
+                    chain_config.coin_decimals(),
+                ),
+                remaining_give_amount: RpcAmountOut::from_amount(
+                    *remaining_give_amount,
                     chain_config.coin_decimals(),
                 ),
             },

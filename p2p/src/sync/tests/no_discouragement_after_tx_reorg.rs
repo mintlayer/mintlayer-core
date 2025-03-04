@@ -265,7 +265,7 @@ async fn no_discouragement_after_tx_reorg(#[case] seed: Seed) {
                 token_id,
                 another_order1_ask_amount_to_fill,
             ),
-            tfxt.make_tx_to_conclude_order(order_give_amount, order_id, token_id),
+            tfxt.make_tx_to_conclude_order(order_id, token_id, Amount::ZERO, order_give_amount),
         ];
 
         let future_block = tfxt
@@ -862,21 +862,22 @@ impl TestFixture {
 
     fn make_tx_to_conclude_order(
         &mut self,
-        give_amount: Amount,
         order_id: OrderId,
         token_id: TokenId,
+        filled_amount: Amount,
+        remaining_give_amount: Amount,
     ) -> SignedTransaction {
         TransactionBuilder::new()
             .add_input(
                 TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder {
                     order_id,
-                    ask_balance: give_amount,
-                    give_balance: give_amount,
+                    filled_amount,
+                    remaining_give_amount,
                 }),
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::Transfer(
-                OutputValue::TokenV1(token_id, give_amount),
+                OutputValue::TokenV1(token_id, remaining_give_amount),
                 Destination::AnyoneCanSpend,
             ))
             .build()

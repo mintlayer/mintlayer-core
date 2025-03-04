@@ -601,8 +601,8 @@ async fn calculate_tx_fee_and_collect_token_info<T: ApiServerStorageWrite>(
                     OrderAccountCommand::FillOrder(order_id, _, _)
                     | OrderAccountCommand::ConcludeOrder {
                         order_id,
-                        ask_balance: _,
-                        give_balance: _,
+                        filled_amount: _,
+                        remaining_give_amount: _,
                     } => {
                         let order = db_tx.get_order(*order_id).await?.expect("must exist");
                         match order.ask_currency {
@@ -855,8 +855,8 @@ async fn prefetch_orders<T: ApiServerStorageRead>(
                 OrderAccountCommand::FillOrder(order_id, _, _)
                 | OrderAccountCommand::ConcludeOrder {
                     order_id,
-                    ask_balance: _,
-                    give_balance: _,
+                    filled_amount: _,
+                    remaining_give_amount: _,
                 } => {
                     let order = db_tx.get_order(*order_id).await?.expect("must be present ");
                     let order_data = to_order_data(&order);
@@ -1262,8 +1262,8 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                 }
                 OrderAccountCommand::ConcludeOrder {
                     order_id,
-                    ask_balance: _,
-                    give_balance: _,
+                    filled_amount: _,
+                    remaining_give_amount: _,
                 } => {
                     let order = db_tx.get_order(*order_id).await?.expect("must exist");
                     let order = order.conclude();

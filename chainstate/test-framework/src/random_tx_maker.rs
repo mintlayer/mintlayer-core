@@ -536,8 +536,8 @@ impl<'a> RandomTxMaker<'a> {
                             result_inputs.push(TxInput::OrderAccountCommand(
                                 OrderAccountCommand::ConcludeOrder {
                                     order_id,
-                                    ask_balance: current_ask_balance,
-                                    give_balance: filled_amount,
+                                    filled_amount,
+                                    remaining_give_amount: available_give_balance,
                                 },
                             ));
 
