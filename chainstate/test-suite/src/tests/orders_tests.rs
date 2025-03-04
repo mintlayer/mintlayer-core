@@ -487,8 +487,8 @@ fn conclude_order_check_storage(#[case] seed: Seed, #[case] version: OrdersVersi
             ),
             OrdersVersion::V1 => TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder {
                 order_id,
-                ask_balance: ask_amount,
-                give_balance: give_amount,
+                filled_amount: Amount::ZERO,
+                remaining_give_amount: give_amount,
             }),
         };
         let tx = TransactionBuilder::new()
@@ -549,8 +549,8 @@ fn conclude_order_multiple_txs(#[case] seed: Seed, #[case] version: OrdersVersio
             ),
             OrdersVersion::V1 => TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder {
                 order_id,
-                ask_balance: ask_amount,
-                give_balance: give_amount,
+                filled_amount: Amount::ZERO,
+                remaining_give_amount: give_amount,
             }),
         };
         let tx1 = TransactionBuilder::new()
@@ -568,8 +568,8 @@ fn conclude_order_multiple_txs(#[case] seed: Seed, #[case] version: OrdersVersio
             ),
             OrdersVersion::V1 => TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder {
                 order_id,
-                ask_balance: (ask_amount - Amount::from_atoms(1)).unwrap(), // avoid duplicating input in a block
-                give_balance: give_amount,
+                filled_amount: Amount::ZERO,
+                remaining_give_amount: give_amount,
             }),
         };
         let tx2 = TransactionBuilder::new()
@@ -581,22 +581,37 @@ fn conclude_order_multiple_txs(#[case] seed: Seed, #[case] version: OrdersVersio
             .build();
         let tx2_id = tx2.transaction().get_id();
 
-        let res = tf
-            .make_block_builder()
-            .with_transactions(vec![tx1, tx2])
-            .build_and_process(&mut rng);
+        let block = tf.make_block_builder().with_transactions(vec![tx1, tx2]).build(&mut rng);
+        let block_id = block.get_id();
+        let res = tf.process_block(block, chainstate::BlockSource::Local);
 
-        assert_eq!(
-            res.unwrap_err(),
-            chainstate::ChainstateError::ProcessBlockError(
-                chainstate::BlockError::StateUpdateFailed(
-                    ConnectTransactionError::ConstrainedValueAccumulatorError(
-                        orders_accounting::Error::OrderDataNotFound(order_id).into(),
-                        tx2_id.into()
+        match version {
+            OrdersVersion::V0 => {
+                assert_eq!(
+                    res.unwrap_err(),
+                    chainstate::ChainstateError::ProcessBlockError(
+                        chainstate::BlockError::StateUpdateFailed(
+                            ConnectTransactionError::ConstrainedValueAccumulatorError(
+                                orders_accounting::Error::OrderDataNotFound(order_id).into(),
+                                tx2_id.into()
+                            )
+                        )
                     )
-                )
-            )
-        );
+                );
+            }
+            OrdersVersion::V1 => {
+                assert_eq!(
+                    res.unwrap_err(),
+                    chainstate::ChainstateError::ProcessBlockError(
+                        chainstate::BlockError::CheckBlockFailed(
+                            chainstate::CheckBlockError::CheckTransactionFailed(
+                                CheckBlockTransactionsError::DuplicateInputInBlock(block_id)
+                            )
+                        )
+                    )
+                );
+            }
+        }
     });
 }
 
@@ -814,8 +829,8 @@ fn fill_partially_then_conclude(#[case] seed: Seed, #[case] version: OrdersVersi
                 OrdersVersion::V1 => {
                     TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder {
                         order_id,
-                        ask_balance: ask_amount,
-                        give_balance: give_amount,
+                        filled_amount: fill_amount,
+                        remaining_give_amount: (give_amount - filled_amount).unwrap(),
                     })
                 }
             };
@@ -859,8 +874,8 @@ fn fill_partially_then_conclude(#[case] seed: Seed, #[case] version: OrdersVersi
                 OrdersVersion::V1 => {
                     TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder {
                         order_id,
-                        ask_balance: ask_amount,
-                        give_balance: give_amount,
+                        filled_amount: fill_amount,
+                        remaining_give_amount: (give_amount - filled_amount).unwrap(),
                     })
                 }
             };
@@ -897,8 +912,8 @@ fn fill_partially_then_conclude(#[case] seed: Seed, #[case] version: OrdersVersi
             ),
             OrdersVersion::V1 => TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder {
                 order_id,
-                ask_balance: ask_amount,
-                give_balance: give_amount,
+                filled_amount: fill_amount,
+                remaining_give_amount: (give_amount - filled_amount).unwrap(),
             }),
         };
         let tx = TransactionBuilder::new()
@@ -1232,8 +1247,8 @@ fn fill_completely_then_conclude(#[case] seed: Seed, #[case] version: OrdersVers
                 OrdersVersion::V1 => {
                     TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder {
                         order_id,
-                        ask_balance: ask_amount,
-                        give_balance: give_amount,
+                        filled_amount: ask_amount,
+                        remaining_give_amount: Amount::ZERO,
                     })
                 }
             };
@@ -1266,8 +1281,8 @@ fn fill_completely_then_conclude(#[case] seed: Seed, #[case] version: OrdersVers
             ),
             OrdersVersion::V1 => TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder {
                 order_id,
-                ask_balance: ask_amount,
-                give_balance: give_amount,
+                filled_amount: ask_amount,
+                remaining_give_amount: Amount::ZERO,
             }),
         };
         let tx = TransactionBuilder::new()
@@ -1333,8 +1348,8 @@ fn conclude_order_check_signature(#[case] seed: Seed, #[case] version: OrdersVer
                 OrdersVersion::V1 => {
                     TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder {
                         order_id,
-                        ask_balance: ask_amount,
-                        give_balance: give_amount,
+                        filled_amount: Amount::ZERO,
+                        remaining_give_amount: give_amount,
                     })
                 }
             };
@@ -1370,8 +1385,8 @@ fn conclude_order_check_signature(#[case] seed: Seed, #[case] version: OrdersVer
                 OrdersVersion::V1 => {
                     TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder {
                         order_id,
-                        ask_balance: ask_amount,
-                        give_balance: give_amount,
+                        filled_amount: Amount::ZERO,
+                        remaining_give_amount: give_amount,
                     })
                 }
             };
@@ -1428,8 +1443,8 @@ fn conclude_order_check_signature(#[case] seed: Seed, #[case] version: OrdersVer
             ),
             OrdersVersion::V1 => TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder {
                 order_id,
-                ask_balance: ask_amount,
-                give_balance: give_amount,
+                filled_amount: Amount::ZERO,
+                remaining_give_amount: give_amount,
             }),
         };
         let tx = TransactionBuilder::new()
@@ -1645,8 +1660,8 @@ fn reorg_after_create(#[case] seed: Seed, #[case] version: OrdersVersion) {
             ),
             OrdersVersion::V1 => TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder {
                 order_id,
-                ask_balance: ask_amount,
-                give_balance: give_amount,
+                filled_amount: fill_amount,
+                remaining_give_amount: (give_amount - filled_amount).unwrap(),
             }),
         };
         tf.make_block_builder()

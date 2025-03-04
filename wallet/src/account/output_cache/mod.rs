@@ -837,8 +837,8 @@ impl OutputCache {
                 OrderAccountCommand::FillOrder(order_id, _, _)
                 | OrderAccountCommand::ConcludeOrder {
                     order_id,
-                    ask_balance: _,
-                    give_balance: _,
+                    filled_amount: _,
+                    remaining_give_amount: _,
                 } => self.order_data(order_id).is_some_and(|data| {
                     [data.ask_currency, data.give_currency].iter().any(|v| match v {
                         Currency::Coin => false,
@@ -1207,8 +1207,8 @@ impl OutputCache {
                         OrderAccountCommand::FillOrder(order_id, _, _)
                         | OrderAccountCommand::ConcludeOrder {
                             order_id,
-                            ask_balance: _,
-                            give_balance: _,
+                            filled_amount: _,
+                            remaining_give_amount: _,
                         } => {
                             if let Some(data) = self.orders.get_mut(order_id) {
                                 data.last_parent =
@@ -1509,8 +1509,8 @@ impl OutputCache {
                                         OrderAccountCommand::FillOrder(order_id, _, _)
                                         | OrderAccountCommand::ConcludeOrder {
                                             order_id,
-                                            ask_balance: _,
-                                            give_balance: _,
+                                            filled_amount: _,
+                                            remaining_give_amount: _,
                                         } => {
                                             if let Some(data) = self.orders.get_mut(order_id) {
                                                 data.last_parent = find_parent(

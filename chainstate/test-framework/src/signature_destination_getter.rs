@@ -190,8 +190,8 @@ impl<'a> SignatureDestinationGetter<'a> {
                         OrderAccountCommand::FillOrder(_, _, d) => Ok(d.clone()),
                         OrderAccountCommand::ConcludeOrder {
                             order_id,
-                            ask_balance: _,
-                            give_balance: _,
+                            filled_amount: _,
+                            remaining_give_amount: _,
                         } => {
                             let order_data = orders_view
                                 .get_order_data(order_id)

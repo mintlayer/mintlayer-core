@@ -67,8 +67,8 @@ impl From<OrderAccountCommand> for AccountType {
             OrderAccountCommand::FillOrder(order_id, _, _)
             | OrderAccountCommand::ConcludeOrder {
                 order_id,
-                ask_balance: _,
-                give_balance: _,
+                filled_amount: _,
+                remaining_give_amount: _,
             } => AccountType::Order(order_id),
         }
     }
@@ -193,11 +193,12 @@ pub enum OrderAccountCommand {
     FillOrder(OrderId, Amount, Destination),
     // Close an order and withdraw all remaining funds from both give and ask balances.
     // Only the address specified as `conclude_key` can authorize this command.
+    // Amounts are important because they get into a signature so that such a tx cannot be applied
+    // to an altered state.
     #[codec(index = 1)]
     ConcludeOrder {
         order_id: OrderId,
-        //FIXME: check these amounts on connect
-        ask_balance: Amount,
-        give_balance: Amount,
+        filled_amount: Amount,
+        remaining_give_amount: Amount,
     },
 }

@@ -250,8 +250,8 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for SignedTransaction {
                 OrderAccountCommand::FillOrder(_, _, _) => Ok(WitnessScript::TRUE),
                 OrderAccountCommand::ConcludeOrder {
                     order_id,
-                    ask_balance: _,
-                    give_balance: _,
+                    filled_amount: _,
+                    remaining_give_amount: _,
                 } => {
                     let dest = ctx
                         .get_orders_conclude_destination(order_id)?
@@ -474,8 +474,8 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for SignatureOnlyTx {
                 OrderAccountCommand::FillOrder(_, _, _) => Ok(WitnessScript::TRUE),
                 OrderAccountCommand::ConcludeOrder {
                     order_id,
-                    ask_balance: _,
-                    give_balance: _,
+                    filled_amount: _,
+                    remaining_give_amount: _,
                 } => {
                     let dest = ctx
                         .get_orders_conclude_destination(order_id)?

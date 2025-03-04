@@ -144,6 +144,7 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::AttemptToCreateOrderFromAccounts => 100,
             ConnectTransactionError::TotalFeeRequiredOverflow => 100,
             ConnectTransactionError::InsufficientCoinsFee(_, _) => 100,
+            ConnectTransactionError::AttemptToSpendFrozenToken(_) => 100,
 
             // Need to drill down deeper into the error in these cases
             ConnectTransactionError::IOPolicyError(err, _) => err.ban_score(),
@@ -166,7 +167,7 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::MissingTxUndo(_) => 0,
             ConnectTransactionError::MissingTransactionNonce(_) => 0,
             ConnectTransactionError::FailedToIncrementAccountNonce => 0,
-            ConnectTransactionError::AttemptToSpendFrozenToken(_) => 0,
+            ConnectTransactionError::ConcludeInputAmountsDoesntMatch(_, _) => 0,
         }
     }
 }
