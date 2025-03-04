@@ -31,7 +31,7 @@ use randomness::CryptoRng;
 
 use tx_verifier::{
     flush_to_storage,
-    transaction_verifier::{TransactionSource, TransactionSourceWithHeight, TransactionVerifier},
+    transaction_verifier::{TransactionSource, TransactionSourceForConnect, TransactionVerifier},
 };
 
 fn setup(rng: &mut (impl Rng + CryptoRng)) -> (ChainConfig, InMemoryStorageWrapper, TestFramework) {
@@ -63,7 +63,6 @@ fn attempt_to_disconnect_tx_mainchain(#[case] seed: Seed, #[case] num_blocks: us
                 GenBlockId::Block(id) => id,
             };
             let block = tf.block(block_id);
-            let block_index = tf.block_index(&block_id);
             let tx = block.transactions().first().unwrap();
             let tx_id = tx.transaction().get_id();
 
@@ -75,12 +74,7 @@ fn attempt_to_disconnect_tx_mainchain(#[case] seed: Seed, #[case] num_blocks: us
             // try to disconnect anyway
             let mut tmp_verifier = verifier.derive_child();
             assert_eq!(
-                tmp_verifier.disconnect_transaction(
-                    &TransactionSourceWithHeight::Chain {
-                        new_block_index: &block_index
-                    },
-                    tx
-                ),
+                tmp_verifier.disconnect_transaction(&TransactionSource::Chain(block_id), tx),
                 Err(ConnectTransactionError::UtxoError(utxo::Error::NoUtxoFound))
             );
         }
@@ -91,7 +85,6 @@ fn attempt_to_disconnect_tx_mainchain(#[case] seed: Seed, #[case] num_blocks: us
             GenBlockId::Block(id) => id,
         };
         let block = tf.block(block_id);
-        let block_index = tf.block_index(&block_id);
         let tx = block.transactions().first().unwrap();
         let tx_id = tx.transaction().get_id();
 
@@ -99,12 +92,7 @@ fn attempt_to_disconnect_tx_mainchain(#[case] seed: Seed, #[case] num_blocks: us
             .can_disconnect_transaction(&TransactionSource::Chain(block_id), &tx_id)
             .unwrap());
         verifier
-            .disconnect_transaction(
-                &TransactionSourceWithHeight::Chain {
-                    new_block_index: &block_index,
-                },
-                tx,
-            )
+            .disconnect_transaction(&TransactionSource::Chain(block_id), tx)
             .unwrap();
     });
 }
@@ -142,7 +130,7 @@ fn connect_disconnect_tx_mempool(#[case] seed: Seed) {
 
         let mut verifier = TransactionVerifier::new(&storage, &chain_config);
         let best_block_idx = best_block.into();
-        let tx_source = TransactionSourceWithHeight::for_mempool(&best_block_idx);
+        let tx_source = TransactionSourceForConnect::for_mempool(&best_block_idx);
 
         // create and connect a tx from mempool based on best block
         let tx1 = TransactionBuilder::new()
@@ -184,22 +172,18 @@ fn connect_disconnect_tx_mempool(#[case] seed: Seed) {
             .can_disconnect_transaction(&TransactionSource::Mempool, &tx2.transaction().get_id())
             .unwrap());
 
-        let source = TransactionSourceWithHeight::Mempool {
-            current_best: &best_block_idx,
-            effective_height: best_block_idx.block_height(),
-        };
         assert_eq!(
-            verifier.disconnect_transaction(&source, &tx1),
+            verifier.disconnect_transaction(&TransactionSource::Mempool, &tx1),
             Err(ConnectTransactionError::UtxoBlockUndoError(
                 utxo::UtxosBlockUndoError::TxUndoWithDependency(tx1.transaction().get_id())
             ))
         );
-        verifier.disconnect_transaction(&source, &tx2).unwrap();
+        verifier.disconnect_transaction(&TransactionSource::Mempool, &tx2).unwrap();
 
         assert!(verifier
             .can_disconnect_transaction(&TransactionSource::Mempool, &tx1.transaction().get_id())
             .unwrap());
-        verifier.disconnect_transaction(&source, &tx1).unwrap();
+        verifier.disconnect_transaction(&TransactionSource::Mempool, &tx1).unwrap();
     });
 }
 
@@ -236,7 +220,7 @@ fn connect_disconnect_tx_mempool_derived(#[case] seed: Seed) {
 
         let mut verifier = TransactionVerifier::new(&storage, &chain_config);
         let best_block_idx = best_block.into();
-        let tx_source = TransactionSourceWithHeight::for_mempool(&best_block_idx);
+        let tx_source = TransactionSourceForConnect::for_mempool(&best_block_idx);
 
         // create and connect a tx from mempool based on best block
         let tx1 = TransactionBuilder::new()
@@ -281,12 +265,14 @@ fn connect_disconnect_tx_mempool_derived(#[case] seed: Seed) {
             .unwrap());
 
         assert_eq!(
-            child_verifier.disconnect_transaction(&tx_source, &tx1),
+            child_verifier.disconnect_transaction(&TransactionSource::Mempool, &tx1),
             Err(ConnectTransactionError::UtxoBlockUndoError(
                 utxo::UtxosBlockUndoError::TxUndoWithDependency(tx1.transaction().get_id())
             ))
         );
-        child_verifier.disconnect_transaction(&tx_source, &tx2).unwrap();
+        child_verifier
+            .disconnect_transaction(&TransactionSource::Mempool, &tx2)
+            .unwrap();
 
         let consumed = child_verifier.consume().unwrap();
         flush_to_storage(&mut verifier, consumed).unwrap();
@@ -296,7 +282,9 @@ fn connect_disconnect_tx_mempool_derived(#[case] seed: Seed) {
         assert!(child_verifier
             .can_disconnect_transaction(&TransactionSource::Mempool, &tx1.transaction().get_id())
             .unwrap());
-        child_verifier.disconnect_transaction(&tx_source, &tx1).unwrap();
+        child_verifier
+            .disconnect_transaction(&TransactionSource::Mempool, &tx1)
+            .unwrap();
 
         let consumed = child_verifier.consume().unwrap();
         flush_to_storage(&mut verifier, consumed).unwrap();

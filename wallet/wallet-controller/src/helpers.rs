@@ -290,6 +290,7 @@ async fn into_utxo_and_destination<T: NodeInterface, B: storage::Backend>(
             let dest = wallet.find_account_destination(acc_outpoint);
             (None, TxAdditionalInfo::new(), dest)
         }
+        TxInput::OrderAccountCommand(_) => todo!(),
         TxInput::AccountCommand(_, cmd) => {
             // find authority of the token
             let dest = wallet.find_account_command_destination(cmd);

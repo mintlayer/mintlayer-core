@@ -22,9 +22,7 @@ use common::address::pubkeyhash::PublicKeyHash;
 use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::classic_multisig::ClassicMultisigChallenge;
 use common::chain::htlc::HashedTimelockContract;
-use common::chain::{
-    AccountCommand, AccountOutPoint, AccountSpending, OrderId, OrdersVersion, RpcOrderInfo,
-};
+use common::chain::{AccountCommand, AccountOutPoint, AccountSpending, OrderId, RpcOrderInfo};
 use common::primitives::id::WithId;
 use common::primitives::{Idable, H256};
 use common::size_estimation::{
@@ -1014,7 +1012,6 @@ impl<K: AccountKeyChains> Account<K> {
         output_address: Option<Destination>,
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
-        account_best_block: BlockHeight,
     ) -> WalletResult<SendRequest> {
         let output_destination = if let Some(dest) = output_address {
             dest
@@ -1022,23 +1019,9 @@ impl<K: AccountKeyChains> Account<K> {
             self.get_new_address(db_tx, KeyPurpose::ReceiveFunds)?.1.into_object()
         };
 
-        let (ask_balance, give_balance) = match self
-            .chain_config
-            .chainstate_upgrades()
-            .version_at_height(account_best_block)
-            .1
-            .orders_version()
-        {
-            OrdersVersion::V0 => (order_info.ask_balance, order_info.give_balance),
-            OrdersVersion::V1 => (
-                order_info.initially_asked.amount(),
-                order_info.initially_given.amount(),
-            ),
-        };
-
         let filled_amount = orders_accounting::calculate_filled_amount(
-            ask_balance,
-            give_balance,
+            order_info.ask_balance,
+            order_info.give_balance,
             fill_amount_in_ask_currency,
         )
         .ok_or(WalletError::CalculateOrderFilledAmountFailed(order_id))?;
@@ -1048,7 +1031,6 @@ impl<K: AccountKeyChains> Account<K> {
         };
         let outputs = vec![TxOutput::Transfer(output_value, output_destination.clone())];
 
-        // Keep nonce for fill order for backward compatibility
         let nonce = order_info
             .nonce
             .map_or(Some(AccountNonce::new(0)), |n| n.increment())
@@ -1895,11 +1877,7 @@ impl<K: AccountKeyChains> Account<K> {
         for (tx_id, _) in revoked_txs {
             db_tx.del_transaction(&tx_id)?;
             let source = tx_id.into_item_id();
-            self.output_cache.remove_tx(
-                &self.chain_config,
-                self.account_info.best_block_height(),
-                &source,
-            )?;
+            self.output_cache.remove_tx(&source)?;
             wallet_events.del_transaction(self.account_index(), source);
         }
 
@@ -1949,12 +1927,7 @@ impl<K: AccountKeyChains> Account<K> {
             let id = AccountWalletTxId::new(self.get_account_id(), tx.id());
             db_tx.set_transaction(&id, &tx)?;
             wallet_events.set_transaction(self.account_index(), &tx);
-            self.output_cache.add_tx(
-                &self.chain_config,
-                id.into_item_id(),
-                tx,
-                self.account_info.best_block_height(),
-            )?;
+            self.output_cache.add_tx(id.into_item_id(), tx)?;
             Ok(true)
         } else {
             Ok(false)
@@ -2204,11 +2177,7 @@ impl<K: AccountKeyChains> Account<K> {
         tx_id: Id<Transaction>,
         db_tx: &mut impl WalletStorageWriteLocked,
     ) -> WalletResult<()> {
-        let abandoned_txs = self.output_cache.abandon_transaction(
-            &self.chain_config,
-            self.account_info.best_block_height(),
-            tx_id,
-        )?;
+        let abandoned_txs = self.output_cache.abandon_transaction(tx_id)?;
         let acc_id = self.get_account_id();
 
         for tx_id in abandoned_txs {
@@ -2521,22 +2490,9 @@ fn group_preselected_inputs(
                         .and_then(|info| info.get(order_id))
                         .ok_or(WalletError::OrderInfoMissing(*order_id))?;
 
-                    let (ask_balance, give_balance) = match chain_config
-                        .chainstate_upgrades()
-                        .version_at_height(block_height)
-                        .1
-                        .orders_version()
-                    {
-                        OrdersVersion::V0 => (order_info.ask_balance, order_info.give_balance),
-                        OrdersVersion::V1 => (
-                            order_info.initially_asked.amount(),
-                            order_info.initially_given.amount(),
-                        ),
-                    };
-
                     let filled_amount = orders_accounting::calculate_filled_amount(
-                        ask_balance,
-                        give_balance,
+                        order_info.ask_balance,
+                        order_info.give_balance,
                         *fill_amount_in_ask_currency,
                     )
                     .ok_or(WalletError::CalculateOrderFilledAmountFailed(*order_id))?;

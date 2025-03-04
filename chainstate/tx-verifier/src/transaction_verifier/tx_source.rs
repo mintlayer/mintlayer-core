@@ -26,13 +26,13 @@ pub enum TransactionSource {
     Mempool,
 }
 
-impl From<&TransactionSourceWithHeight<'_>> for TransactionSource {
-    fn from(t: &TransactionSourceWithHeight) -> Self {
+impl From<&TransactionSourceForConnect<'_>> for TransactionSource {
+    fn from(t: &TransactionSourceForConnect) -> Self {
         match t {
-            TransactionSourceWithHeight::Chain { new_block_index } => {
+            TransactionSourceForConnect::Chain { new_block_index } => {
                 TransactionSource::Chain(*new_block_index.block_id())
             }
-            TransactionSourceWithHeight::Mempool {
+            TransactionSourceForConnect::Mempool {
                 current_best: _,
                 effective_height: _,
             } => TransactionSource::Mempool,
@@ -45,7 +45,7 @@ impl From<&TransactionSourceWithHeight<'_>> for TransactionSource {
 /// it's more complicated because it may either be for the possible next block,
 /// or it might have some required tolerance for calculating the height, due
 /// to timelocks depending on timestamps of blocks that haven't yet been created.
-pub enum TransactionSourceWithHeight<'a> {
+pub enum TransactionSourceForConnect<'a> {
     Chain {
         new_block_index: &'a BlockIndex,
     },
@@ -57,7 +57,7 @@ pub enum TransactionSourceWithHeight<'a> {
     },
 }
 
-impl<'a> TransactionSourceWithHeight<'a> {
+impl<'a> TransactionSourceForConnect<'a> {
     pub fn for_chain(new_block_index: &'a BlockIndex) -> Self {
         Self::Chain { new_block_index }
     }
@@ -92,10 +92,10 @@ impl<'a> TransactionSourceWithHeight<'a> {
     /// * For the chain, it's for the block being connected
     pub fn expected_block_height(&self) -> BlockHeight {
         match self {
-            TransactionSourceWithHeight::Chain { new_block_index } => {
+            TransactionSourceForConnect::Chain { new_block_index } => {
                 new_block_index.block_height()
             }
-            TransactionSourceWithHeight::Mempool {
+            TransactionSourceForConnect::Mempool {
                 current_best: _,
                 effective_height,
             } => *effective_height,
@@ -104,8 +104,8 @@ impl<'a> TransactionSourceWithHeight<'a> {
 
     pub fn chain_block_index(&self) -> Option<&BlockIndex> {
         match self {
-            TransactionSourceWithHeight::Chain { new_block_index } => Some(new_block_index),
-            TransactionSourceWithHeight::Mempool {
+            TransactionSourceForConnect::Chain { new_block_index } => Some(new_block_index),
+            TransactionSourceForConnect::Mempool {
                 current_best: _,
                 effective_height: _,
             } => None,

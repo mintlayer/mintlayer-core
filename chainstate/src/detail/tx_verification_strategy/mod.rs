@@ -84,7 +84,6 @@ pub trait TransactionVerificationStrategy: Sized + Send {
         tx_verifier_maker: M,
         storage_backend: S,
         chain_config: C,
-        block_index: &BlockIndex,
         block: &WithId<Block>,
     ) -> Result<TransactionVerifier<C, S, U, A, T, O>, ConnectTransactionError>
     where
