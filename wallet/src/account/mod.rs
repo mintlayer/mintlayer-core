@@ -1902,7 +1902,10 @@ impl<K: AccountKeyChains> Account<K> {
                     self.find_delegation(delegation_id).is_ok()
                 }
             },
-            TxInput::OrderAccountCommand(..) => todo!(),
+            TxInput::OrderAccountCommand(..) => {
+                // TODO: support OrdersVersion::V1
+                unimplemented!()
+            }
             TxInput::AccountCommand(_, op) => match op {
                 AccountCommand::MintTokens(token_id, _)
                 | AccountCommand::UnmintTokens(token_id)
@@ -2405,7 +2408,9 @@ fn group_preselected_inputs(
                     update_preselected_inputs(Currency::Coin, *amount, *fee, Amount::ZERO)?;
                 }
             },
-            TxInput::OrderAccountCommand(..) => todo!(),
+            TxInput::OrderAccountCommand(..) => {
+                // TODO: support OrdersVersion::V1
+            }
             TxInput::AccountCommand(_, op) => match op {
                 AccountCommand::MintTokens(token_id, amount) => {
                     update_preselected_inputs(
