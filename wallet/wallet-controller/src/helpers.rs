@@ -22,8 +22,8 @@ use common::{
     chain::{
         output_value::OutputValue,
         tokens::{RPCTokenInfo, TokenId},
-        AccountCommand, ChainConfig, Destination, PoolId, Transaction, TxInput, TxOutput,
-        UtxoOutPoint,
+        AccountCommand, ChainConfig, Destination, OrderAccountCommand, OrderId, PoolId,
+        Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{amount::RpcAmountOut, Amount},
 };
@@ -290,44 +290,14 @@ async fn into_utxo_and_destination<T: NodeInterface, B: storage::Backend>(
             let dest = wallet.find_account_destination(acc_outpoint);
             (None, TxAdditionalInfo::new(), dest)
         }
-        TxInput::OrderAccountCommand(_) => todo!(),
         TxInput::AccountCommand(_, cmd) => {
-            // find authority of the token
+            // find authority of the order
             let dest = wallet.find_account_command_destination(cmd);
 
             let additional_infos = match cmd {
                 AccountCommand::FillOrder(order_id, _, _)
                 | AccountCommand::ConcludeOrder(order_id) => {
-                    let order_info = rpc_client
-                        .get_order_info(*order_id)
-                        .await
-                        .map_err(ControllerError::NodeCallError)?
-                        .ok_or(ControllerError::WalletError(WalletError::OrderInfoMissing(
-                            *order_id,
-                        )))?;
-
-                    let ask_token_info = fetch_token_extra_info(
-                        rpc_client,
-                        &Currency::from_rpc_output_value(&order_info.initially_asked)
-                            .into_output_value(order_info.ask_balance),
-                    )
-                    .await?;
-                    let give_token_info = fetch_token_extra_info(
-                        rpc_client,
-                        &Currency::from_rpc_output_value(&order_info.initially_given)
-                            .into_output_value(order_info.give_balance),
-                    )
-                    .await?;
-
-                    ask_token_info.join(give_token_info).join(TxAdditionalInfo::with_order_info(
-                        *order_id,
-                        OrderAdditionalInfo {
-                            initially_asked: order_info.initially_asked.into(),
-                            initially_given: order_info.initially_given.into(),
-                            ask_balance: order_info.ask_balance,
-                            give_balance: order_info.give_balance,
-                        },
-                    ))
+                    fetch_order_additional_info(rpc_client, *order_id).await?
                 }
                 AccountCommand::MintTokens(_, _)
                 | AccountCommand::UnmintTokens(_)
@@ -339,5 +309,56 @@ async fn into_utxo_and_destination<T: NodeInterface, B: storage::Backend>(
             };
             (None, additional_infos, dest)
         }
+        TxInput::OrderAccountCommand(cmd) => {
+            let dest = wallet.find_order_account_command_destination(cmd);
+
+            let additional_infos = match cmd {
+                OrderAccountCommand::FillOrder(order_id, _, _)
+                | OrderAccountCommand::ConcludeOrder {
+                    order_id,
+                    filled_amount: _,
+                    remaining_give_amount: _,
+                } => fetch_order_additional_info(rpc_client, *order_id).await?,
+            };
+
+            (None, additional_infos, dest)
+        }
     })
+}
+
+async fn fetch_order_additional_info<T: NodeInterface>(
+    rpc_client: &T,
+    order_id: OrderId,
+) -> Result<TxAdditionalInfo, ControllerError<T>> {
+    let order_info = rpc_client
+        .get_order_info(order_id)
+        .await
+        .map_err(ControllerError::NodeCallError)?
+        .ok_or(ControllerError::WalletError(WalletError::OrderInfoMissing(
+            order_id,
+        )))?;
+
+    let ask_token_info = fetch_token_extra_info(
+        rpc_client,
+        &Currency::from_rpc_output_value(&order_info.initially_asked)
+            .into_output_value(order_info.ask_balance),
+    )
+    .await?;
+    let give_token_info = fetch_token_extra_info(
+        rpc_client,
+        &Currency::from_rpc_output_value(&order_info.initially_given)
+            .into_output_value(order_info.give_balance),
+    )
+    .await?;
+
+    let result = ask_token_info.join(give_token_info).join(TxAdditionalInfo::with_order_info(
+        order_id,
+        OrderAdditionalInfo {
+            initially_asked: order_info.initially_asked.into(),
+            initially_given: order_info.initially_given.into(),
+            ask_balance: order_info.ask_balance,
+            give_balance: order_info.give_balance,
+        },
+    ));
+    Ok(result)
 }
