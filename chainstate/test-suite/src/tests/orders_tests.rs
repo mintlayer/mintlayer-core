@@ -748,7 +748,8 @@ fn fill_order_check_storage(#[case] seed: Seed, #[case] version: OrdersVersion) 
                     (give_amount.into_atoms() * fill_amount.into_atoms()) / ask_amount.into_atoms();
                 let filled2 = (give_amount.into_atoms() * left_to_fill.into_atoms())
                     / ask_amount.into_atoms();
-                let remainder = give_amount - Amount::from_atoms(filled1 + filled2);
+                let remainder = (give_amount - Amount::from_atoms(filled1 + filled2))
+                    .filter(|v| *v != Amount::ZERO);
                 assert_eq!(
                     remainder,
                     tf.chainstate.get_order_give_balance(&order_id).unwrap()

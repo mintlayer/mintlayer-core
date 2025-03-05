@@ -26,10 +26,7 @@ use common::{
     address::pubkeyhash::PublicKeyHash,
     chain::{
         block::{consensus_data::PoSData, timestamp::BlockTimestamp, BlockReward, ConsensusData},
-        config::{
-            create_mainnet, create_regtest, create_unit_test_config,
-            create_unit_test_config_builder, Builder, ChainType,
-        },
+        config::{create_mainnet, create_regtest, create_unit_test_config, Builder, ChainType},
         output_value::{OutputValue, RpcOutputValue},
         signature::inputsig::InputWitness,
         stakelock::StakePoolData,
@@ -5666,26 +5663,7 @@ fn create_order(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn create_order_and_conclude(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let chain_config = create_unit_test_config_builder()
-        .chainstate_upgrades(
-            common::chain::NetUpgrades::initialize(vec![(
-                BlockHeight::zero(),
-                common::chain::ChainstateUpgrade::new(
-                    common::chain::TokenIssuanceVersion::V1,
-                    common::chain::RewardDistributionVersion::V1,
-                    common::chain::TokensFeeVersion::V1,
-                    common::chain::DataDepositFeeVersion::V1,
-                    common::chain::ChangeTokenMetadataUriActivated::Yes,
-                    common::chain::FrozenTokensValidationVersion::V1,
-                    common::chain::HtlcActivated::Yes,
-                    common::chain::OrdersActivated::Yes,
-                    common::chain::OrdersVersion::V0,
-                ),
-            )])
-            .expect("cannot fail"),
-        )
-        .build();
-    let chain_config = Arc::new(chain_config);
+    let chain_config = Arc::new(create_unit_test_config());
 
     let mut wallet = create_wallet(chain_config.clone());
 
@@ -5858,26 +5836,7 @@ fn create_order_and_conclude(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn create_order_fill_completely_conclude(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let chain_config = create_unit_test_config_builder()
-        .chainstate_upgrades(
-            common::chain::NetUpgrades::initialize(vec![(
-                BlockHeight::zero(),
-                common::chain::ChainstateUpgrade::new(
-                    common::chain::TokenIssuanceVersion::V1,
-                    common::chain::RewardDistributionVersion::V1,
-                    common::chain::TokensFeeVersion::V1,
-                    common::chain::DataDepositFeeVersion::V1,
-                    common::chain::ChangeTokenMetadataUriActivated::Yes,
-                    common::chain::FrozenTokensValidationVersion::V1,
-                    common::chain::HtlcActivated::Yes,
-                    common::chain::OrdersActivated::Yes,
-                    common::chain::OrdersVersion::V0,
-                ),
-            )])
-            .expect("cannot fail"),
-        )
-        .build();
-    let chain_config = Arc::new(chain_config);
+    let chain_config = Arc::new(create_unit_test_config());
 
     let mut wallet1 = create_wallet_with_mnemonic(chain_config.clone(), MNEMONIC);
     let mut wallet2 = create_wallet_with_mnemonic(chain_config.clone(), MNEMONIC2);
@@ -6214,26 +6173,7 @@ fn create_order_fill_completely_conclude(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn create_order_fill_partially_conclude(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let chain_config = create_unit_test_config_builder()
-        .chainstate_upgrades(
-            common::chain::NetUpgrades::initialize(vec![(
-                BlockHeight::zero(),
-                common::chain::ChainstateUpgrade::new(
-                    common::chain::TokenIssuanceVersion::V1,
-                    common::chain::RewardDistributionVersion::V1,
-                    common::chain::TokensFeeVersion::V1,
-                    common::chain::DataDepositFeeVersion::V1,
-                    common::chain::ChangeTokenMetadataUriActivated::Yes,
-                    common::chain::FrozenTokensValidationVersion::V1,
-                    common::chain::HtlcActivated::Yes,
-                    common::chain::OrdersActivated::Yes,
-                    common::chain::OrdersVersion::V0,
-                ),
-            )])
-            .expect("cannot fail"),
-        )
-        .build();
-    let chain_config = Arc::new(chain_config);
+    let chain_config = Arc::new(create_unit_test_config());
 
     let mut wallet1 = create_wallet_with_mnemonic(chain_config.clone(), MNEMONIC);
     let mut wallet2 = create_wallet_with_mnemonic(chain_config.clone(), MNEMONIC2);

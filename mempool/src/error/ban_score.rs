@@ -167,7 +167,7 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::MissingTxUndo(_) => 0,
             ConnectTransactionError::MissingTransactionNonce(_) => 0,
             ConnectTransactionError::FailedToIncrementAccountNonce => 0,
-            ConnectTransactionError::ConcludeInputAmountsDoesntMatch(_, _) => 0,
+            ConnectTransactionError::ConcludeInputAmountsDontMatch(_, _) => 0,
         }
     }
 }

@@ -832,7 +832,6 @@ impl OutputCache {
                     })
                 }
             },
-            TxInput::Account(_) => false,
             TxInput::OrderAccountCommand(cmd) => match cmd {
                 OrderAccountCommand::FillOrder(order_id, _, _)
                 | OrderAccountCommand::ConcludeOrder {
@@ -846,6 +845,7 @@ impl OutputCache {
                     })
                 }),
             },
+            TxInput::Account(_) => false,
         })
     }
 

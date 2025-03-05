@@ -143,7 +143,7 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::InputCheck(e) => e.ban_score(),
             ConnectTransactionError::OrdersAccountingError(err) => err.ban_score(),
             ConnectTransactionError::AttemptToCreateOrderFromAccounts => 100,
-            ConnectTransactionError::ConcludeInputAmountsDoesntMatch(_, _) => 100,
+            ConnectTransactionError::ConcludeInputAmountsDontMatch(_, _) => 100,
         }
     }
 }

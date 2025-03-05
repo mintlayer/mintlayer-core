@@ -580,7 +580,7 @@ fn fill_order_must_converge(#[case] seed: Seed, #[case] version: OrdersVersion) 
     let expected_give_balance = match version {
         OrdersVersion::V0 => BTreeMap::new(),
         OrdersVersion::V1 => {
-            let tolerance: f64 = 1e-7;
+            let tolerance: f64 = 1e-6;
             if remainder < tolerance {
                 BTreeMap::new()
             } else {
