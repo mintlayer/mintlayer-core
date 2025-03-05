@@ -198,7 +198,7 @@ class WalletConflictTransaction(BitcoinTestFramework):
 
             # check we cannot abandon an already confirmed transaction
             assert_in("Success", await wallet.select_account(1))
-            assert_in("Cannot abandon a transaction in Confirmed at height 6", await wallet.abandon_transaction(new_transfer_tx_id))
+            assert_in("Cannot change a transaction's state from Confirmed", await wallet.abandon_transaction(new_transfer_tx_id))
 
 
 
