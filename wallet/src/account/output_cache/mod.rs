@@ -1053,16 +1053,33 @@ impl OutputCache {
                                     &mut self.unconfirmed_descendants,
                                     data,
                                     order_id,
-                                    *nonce,
+                                    Some(*nonce),
                                     tx_id,
                                 )?;
                             }
                         }
                     }
                 },
-                TxInput::OrderAccountCommand(_) => {
-                    // TODO: support OrdersVersion::V1
-                }
+                TxInput::OrderAccountCommand(cmd) => match cmd {
+                    OrderAccountCommand::FillOrder(order_id, _, _)
+                    | OrderAccountCommand::ConcludeOrder {
+                        order_id,
+                        filled_amount: _,
+                        remaining_give_amount: _,
+                    } => {
+                        if !already_present {
+                            if let Some(data) = self.orders.get_mut(order_id) {
+                                Self::update_order_state(
+                                    &mut self.unconfirmed_descendants,
+                                    data,
+                                    order_id,
+                                    None,
+                                    tx_id,
+                                )?;
+                            }
+                        }
+                    }
+                },
             }
         }
         Ok(())
@@ -1135,20 +1152,23 @@ impl OutputCache {
         unconfirmed_descendants: &mut BTreeMap<OutPointSourceId, BTreeSet<OutPointSourceId>>,
         data: &mut OrderData,
         order_id: &OrderId,
-        nonce: AccountNonce,
+        nonce: Option<AccountNonce>,
         tx_id: &OutPointSourceId,
     ) -> Result<(), WalletError> {
-        let next_nonce = data
-            .last_nonce
-            .map_or(Some(AccountNonce::new(0)), |nonce| nonce.increment())
-            .ok_or(WalletError::OrderNonceOverflow(*order_id))?;
+        if let Some(nonce) = nonce {
+            let next_nonce = data
+                .last_nonce
+                .map_or(Some(AccountNonce::new(0)), |nonce| nonce.increment())
+                .ok_or(WalletError::OrderNonceOverflow(*order_id))?;
 
-        ensure!(
-            nonce == next_nonce,
-            WalletError::InconsistentOrderDuplicateNonce(*order_id, nonce)
-        );
+            ensure!(
+                nonce == next_nonce,
+                WalletError::InconsistentOrderDuplicateNonce(*order_id, nonce)
+            );
 
-        data.last_nonce = Some(nonce);
+            data.last_nonce = Some(nonce);
+        }
+
         // update unconfirmed descendants
         if let Some(descendants) = data
             .last_parent
