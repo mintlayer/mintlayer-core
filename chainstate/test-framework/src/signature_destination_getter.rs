@@ -188,7 +188,8 @@ impl<'a> SignatureDestinationGetter<'a> {
                     },
                     TxInput::OrderAccountCommand(command) => match command {
                         OrderAccountCommand::FillOrder(_, _, d) => Ok(d.clone()),
-                        OrderAccountCommand::ConcludeOrder {
+                        OrderAccountCommand::FreezeOrder(order_id)
+                        | OrderAccountCommand::ConcludeOrder {
                             order_id,
                             filled_amount: _,
                             remaining_give_amount: _,

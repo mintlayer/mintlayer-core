@@ -1532,7 +1532,8 @@ impl<K: AccountKeyChains> Account<K> {
     ) -> WalletResult<Destination> {
         match cmd {
             OrderAccountCommand::FillOrder(_, _, destination) => Ok(destination.clone()),
-            OrderAccountCommand::ConcludeOrder {
+            OrderAccountCommand::FreezeOrder(order_id)
+            | OrderAccountCommand::ConcludeOrder {
                 order_id,
                 filled_amount: _,
                 remaining_give_amount: _,
@@ -1980,7 +1981,8 @@ impl<K: AccountKeyChains> Account<K> {
                 OrderAccountCommand::FillOrder(order_id, _, dest) => {
                     self.find_order(order_id).is_ok() || self.is_destination_mine_or_watched(dest)
                 }
-                OrderAccountCommand::ConcludeOrder {
+                OrderAccountCommand::FreezeOrder(order_id)
+                | OrderAccountCommand::ConcludeOrder {
                     order_id,
                     filled_amount: _,
                     remaining_give_amount: _,
@@ -2576,6 +2578,7 @@ fn group_preselected_inputs(
                         &mut update_preselected_inputs,
                     )?;
                 }
+                OrderAccountCommand::FreezeOrder(_) => todo!(),
             },
         }
     }

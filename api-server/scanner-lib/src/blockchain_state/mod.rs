@@ -634,6 +634,7 @@ async fn calculate_tx_fee_and_collect_token_info<T: ApiServerStorageWrite>(
                 },
                 TxInput::OrderAccountCommand(cmd) => match cmd {
                     OrderAccountCommand::FillOrder(order_id, _, _)
+                    | OrderAccountCommand::FreezeOrder(order_id)
                     | OrderAccountCommand::ConcludeOrder {
                         order_id,
                         filled_amount: _,
@@ -888,6 +889,7 @@ async fn prefetch_orders<T: ApiServerStorageRead>(
             TxInput::Utxo(_) | TxInput::Account(_) => {}
             TxInput::OrderAccountCommand(cmd) => match cmd {
                 OrderAccountCommand::FillOrder(order_id, _, _)
+                | OrderAccountCommand::FreezeOrder(order_id)
                 | OrderAccountCommand::ConcludeOrder {
                     order_id,
                     filled_amount: _,
@@ -1292,6 +1294,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
 
                     db_tx.set_order_at_height(*order_id, &order, block_height).await?;
                 }
+                OrderAccountCommand::FreezeOrder(_) => todo!(),
             },
             TxInput::Account(outpoint) => {
                 match outpoint.account() {

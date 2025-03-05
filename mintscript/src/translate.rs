@@ -248,7 +248,8 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for SignedTransaction {
             },
             InputInfo::OrderAccountCommand { command } => match command {
                 OrderAccountCommand::FillOrder(_, _, _) => Ok(WitnessScript::TRUE),
-                OrderAccountCommand::ConcludeOrder {
+                OrderAccountCommand::FreezeOrder(order_id)
+                | OrderAccountCommand::ConcludeOrder {
                     order_id,
                     filled_amount: _,
                     remaining_give_amount: _,
@@ -361,9 +362,9 @@ impl<C: InputInfoProvider> TranslateInput<C> for TimelockOnly {
                 }
             },
             InputInfo::OrderAccountCommand { command } => match command {
-                OrderAccountCommand::FillOrder(..) | OrderAccountCommand::ConcludeOrder { .. } => {
-                    Ok(WitnessScript::TRUE)
-                }
+                OrderAccountCommand::FillOrder(..)
+                | OrderAccountCommand::ConcludeOrder { .. }
+                | OrderAccountCommand::FreezeOrder(_) => Ok(WitnessScript::TRUE),
             },
         }
     }
@@ -472,7 +473,8 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for SignatureOnlyTx {
             },
             InputInfo::OrderAccountCommand { command } => match command {
                 OrderAccountCommand::FillOrder(_, _, _) => Ok(WitnessScript::TRUE),
-                OrderAccountCommand::ConcludeOrder {
+                OrderAccountCommand::FreezeOrder(order_id)
+                | OrderAccountCommand::ConcludeOrder {
                     order_id,
                     filled_amount: _,
                     remaining_give_amount: _,

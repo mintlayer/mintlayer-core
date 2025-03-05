@@ -791,6 +791,7 @@ where
                                 OutputValue::TokenV1(token_id, _) => check_not_frozen(*token_id),
                             })
                         }
+                        OrderAccountCommand::FreezeOrder(_) => Ok(()),
                     },
                 }
             })?;
@@ -933,6 +934,13 @@ where
                                 .conclude_order(*order_id)
                                 .map_err(ConnectTransactionError::OrdersAccountingError)
                         });
+                        Some(res)
+                    }
+                    OrderAccountCommand::FreezeOrder(order_id) => {
+                        let res = self
+                            .orders_accounting_cache
+                            .freeze_order(*order_id)
+                            .map_err(ConnectTransactionError::OrdersAccountingError);
                         Some(res)
                     }
                 },

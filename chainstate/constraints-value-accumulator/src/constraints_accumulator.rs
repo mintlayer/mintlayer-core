@@ -113,14 +113,14 @@ impl ConstrainedValueAccumulator {
                     insert_or_increase(&mut total_to_deduct, id, to_deduct)?;
                 }
                 TxInput::OrderAccountCommand(command) => {
-                    let (id, to_deduct) = accumulator.process_input_order_account_command(
+                    if let Some((id, to_deduct)) = accumulator.process_input_order_account_command(
                         chain_config,
                         block_height,
                         command,
                         &mut temp_orders_accounting,
-                    )?;
-
-                    insert_or_increase(&mut total_to_deduct, id, to_deduct)?;
+                    )? {
+                        insert_or_increase(&mut total_to_deduct, id, to_deduct)?;
+                    }
                 }
             }
         }
@@ -324,24 +324,28 @@ impl ConstrainedValueAccumulator {
         block_height: BlockHeight,
         command: &OrderAccountCommand,
         orders_accounting_delta: &mut O,
-    ) -> Result<(CoinOrTokenId, Amount), Error>
+    ) -> Result<Option<(CoinOrTokenId, Amount)>, Error>
     where
         O: OrdersAccountingOperations + OrdersAccountingView<Error = orders_accounting::Error>,
     {
-        match command {
-            OrderAccountCommand::FillOrder(id, amount, _) => self.process_fill_order_command(
-                chain_config,
-                block_height,
-                *id,
-                *amount,
-                orders_accounting_delta,
-            ),
+        let result = match command {
+            OrderAccountCommand::FillOrder(id, amount, _) => {
+                Some(self.process_fill_order_command(
+                    chain_config,
+                    block_height,
+                    *id,
+                    *amount,
+                    orders_accounting_delta,
+                )?)
+            }
             OrderAccountCommand::ConcludeOrder {
                 order_id,
                 filled_amount: _,
                 remaining_give_amount: _,
-            } => self.process_conclude_order_command(*order_id, orders_accounting_delta),
-        }
+            } => Some(self.process_conclude_order_command(*order_id, orders_accounting_delta)?),
+            OrderAccountCommand::FreezeOrder(_) => None,
+        };
+        Ok(result)
     }
 
     fn process_conclude_order_command<O>(
