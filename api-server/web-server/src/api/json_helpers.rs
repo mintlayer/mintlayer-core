@@ -341,6 +341,13 @@ pub fn tx_input_to_json(inp: &TxInput, chain_config: &ChainConfig) -> serde_json
                     "remaining_give_atoms": json!({"atoms": remaining_give_amount.into_atoms().to_string()}),
                 })
             }
+            OrderAccountCommand::FreezeOrder(order_id) => {
+                json!({
+                    "input_type": "OrderAccountCommand",
+                    "command": "FreezeOrder",
+                    "order_id": Address::new(chain_config, *order_id).expect("addressable").to_string(),
+                })
+            }
         },
         TxInput::AccountCommand(nonce, cmd) => match cmd {
             AccountCommand::MintTokens(token_id, amount) => {

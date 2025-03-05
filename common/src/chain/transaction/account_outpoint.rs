@@ -65,6 +65,7 @@ impl From<OrderAccountCommand> for AccountType {
     fn from(cmd: OrderAccountCommand) -> Self {
         match cmd {
             OrderAccountCommand::FillOrder(order_id, _, _)
+            | OrderAccountCommand::FreezeOrder(order_id)
             | OrderAccountCommand::ConcludeOrder {
                 order_id,
                 filled_amount: _,
@@ -201,4 +202,9 @@ pub enum OrderAccountCommand {
         filled_amount: Amount,
         remaining_give_amount: Amount,
     },
+    // Freeze an order which effectively forbids any fill operations.
+    // Freezed order can only be concluded.
+    // Only the address specified as `conclude_key` can authorize this command.
+    #[codec(index = 2)]
+    FreezeOrder(OrderId),
 }

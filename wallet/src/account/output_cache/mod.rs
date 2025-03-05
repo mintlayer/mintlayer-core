@@ -844,6 +844,7 @@ impl OutputCache {
                         Currency::Token(token_id) => frozen_token_id == token_id,
                     })
                 }),
+                OrderAccountCommand::FreezeOrder(_) => false,
             },
             TxInput::Account(_) => false,
         })
@@ -1062,6 +1063,7 @@ impl OutputCache {
                 },
                 TxInput::OrderAccountCommand(cmd) => match cmd {
                     OrderAccountCommand::FillOrder(order_id, _, _)
+                    | OrderAccountCommand::FreezeOrder(order_id)
                     | OrderAccountCommand::ConcludeOrder {
                         order_id,
                         filled_amount: _,
@@ -1225,6 +1227,7 @@ impl OutputCache {
                     },
                     TxInput::OrderAccountCommand(cmd) => match cmd {
                         OrderAccountCommand::FillOrder(order_id, _, _)
+                        | OrderAccountCommand::FreezeOrder(order_id)
                         | OrderAccountCommand::ConcludeOrder {
                             order_id,
                             filled_amount: _,
@@ -1527,6 +1530,7 @@ impl OutputCache {
                                     },
                                     TxInput::OrderAccountCommand(cmd) => match cmd {
                                         OrderAccountCommand::FillOrder(order_id, _, _)
+                                        | OrderAccountCommand::FreezeOrder(order_id)
                                         | OrderAccountCommand::ConcludeOrder {
                                             order_id,
                                             filled_amount: _,
