@@ -842,6 +842,7 @@ impl OutputCache {
                         })
                     })
                 }
+                OrderAccountCommand::FreezeOrder(_) => false,
             },
             TxInput::Account(_) => false,
         })
@@ -1060,6 +1061,7 @@ impl OutputCache {
                 },
                 TxInput::OrderAccountCommand(cmd) => match cmd {
                     OrderAccountCommand::FillOrder(order_id, _, _)
+                    | OrderAccountCommand::FreezeOrder(order_id)
                     | OrderAccountCommand::ConcludeOrder(order_id) => {
                         if !already_present {
                             if let Some(data) = self.orders.get_mut(order_id) {
@@ -1219,6 +1221,7 @@ impl OutputCache {
                     },
                     TxInput::OrderAccountCommand(cmd) => match cmd {
                         OrderAccountCommand::FillOrder(order_id, _, _)
+                        | OrderAccountCommand::FreezeOrder(order_id)
                         | OrderAccountCommand::ConcludeOrder(order_id) => {
                             if let Some(data) = self.orders.get_mut(order_id) {
                                 data.last_parent =
@@ -1517,6 +1520,7 @@ impl OutputCache {
                                     },
                                     TxInput::OrderAccountCommand(cmd) => match cmd {
                                         OrderAccountCommand::FillOrder(order_id, _, _)
+                                        | OrderAccountCommand::FreezeOrder(order_id)
                                         | OrderAccountCommand::ConcludeOrder(order_id) => {
                                             if let Some(data) = self.orders.get_mut(order_id) {
                                                 data.last_parent = find_parent(
