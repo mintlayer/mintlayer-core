@@ -123,8 +123,8 @@ pub enum ConnectTransactionError {
     OrdersAccountingError(#[from] orders_accounting::Error),
     #[error(transparent)]
     InputCheck(#[from] InputCheckError),
-    #[error("Transaction {0} has conclude order input {1} with amounts that doesn't match the db")]
-    ConcludeInputAmountsDoesntMatch(Id<Transaction>, OrderId),
+    #[error("Transaction {0} has conclude order input {1} with amounts that don't match the db")]
+    ConcludeInputAmountsDontMatch(Id<Transaction>, OrderId),
 }
 
 impl From<std::convert::Infallible> for ConnectTransactionError {

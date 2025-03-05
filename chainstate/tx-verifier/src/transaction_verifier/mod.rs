@@ -852,18 +852,18 @@ where
         };
         let current_ask_balance = view.get_ask_balance(&order_id)?;
         let expected_filled_amount = (original_ask_balance - current_ask_balance).ok_or(
-            ConnectTransactionError::ConcludeInputAmountsDoesntMatch(tx_id, order_id),
+            ConnectTransactionError::ConcludeInputAmountsDontMatch(tx_id, order_id),
         )?;
 
         ensure!(
             filled_amount == expected_filled_amount,
-            ConnectTransactionError::ConcludeInputAmountsDoesntMatch(tx_id, order_id)
+            ConnectTransactionError::ConcludeInputAmountsDontMatch(tx_id, order_id)
         );
 
         let current_give_balance = view.get_give_balance(&order_id)?;
         ensure!(
             current_give_balance == remaining_give_amount,
-            ConnectTransactionError::ConcludeInputAmountsDoesntMatch(tx_id, order_id)
+            ConnectTransactionError::ConcludeInputAmountsDontMatch(tx_id, order_id)
         );
 
         Ok(())
