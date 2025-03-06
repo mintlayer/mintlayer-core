@@ -514,7 +514,9 @@ impl<'a> RandomTxMaker<'a> {
                     result_outputs.extend(outputs);
                 }
                 AccountType::Order(order_id) => {
-                    if !self.account_command_used {
+                    let switch = rng.gen_range(0..3);
+
+                    if !self.account_command_used && switch != 0 {
                         // conclude an order
                         let order_data = orders_cache.get_order_data(&order_id).unwrap().unwrap();
                         if !is_frozen_token(order_data.ask(), tokens_cache)
@@ -553,6 +555,16 @@ impl<'a> RandomTxMaker<'a> {
                                 ),
                             ]);
                         }
+                    } else if !self.account_command_used
+                        && !is_frozen_order(&orders_cache, order_id)
+                    {
+                        // freeze an order
+                        result_inputs.push(TxInput::OrderAccountCommand(
+                            OrderAccountCommand::FreezeOrder(order_id),
+                        ));
+
+                        let _ = orders_cache.freeze_order(order_id).unwrap();
+                        self.account_command_used = true;
                     }
                 }
             }
@@ -1007,7 +1019,9 @@ impl<'a> RandomTxMaker<'a> {
                             .unwrap();
 
                     if let Some(filled_value) = filled_value {
-                        if !is_frozen_token(&filled_value, tokens_cache) {
+                        if !is_frozen_token(&filled_value, tokens_cache)
+                            && !is_frozen_order(&orders_cache, order_id)
+                        {
                             let input =
                                 TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(
                                     order_id,
@@ -1234,7 +1248,9 @@ impl<'a> RandomTxMaker<'a> {
                         .unwrap();
 
                         if let Some(filled_value) = filled_value {
-                            if !is_frozen_token(&filled_value, tokens_cache) {
+                            if !is_frozen_token(&filled_value, tokens_cache)
+                                && !is_frozen_order(orders_cache, order_id)
+                            {
                                 result_outputs.push(TxOutput::Transfer(
                                     filled_value,
                                     key_manager
@@ -1476,6 +1492,10 @@ fn is_frozen_token(value: &OutputValue, view: &impl TokensAccountingView) -> boo
             })
         }
     }
+}
+
+fn is_frozen_order(view: &impl OrdersAccountingView, order_id: OrderId) -> bool {
+    view.get_order_data(&order_id).unwrap().unwrap().is_freezed()
 }
 
 fn calculate_filled_order_value(
