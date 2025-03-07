@@ -767,7 +767,7 @@ fn freeze_order_and_undo(#[case] seed: Seed) {
 
     let order_id = OrderId::random_using(&mut rng);
     let original_data = make_order_data(&mut rng);
-    assert!(!original_data.is_freezed());
+    assert!(!original_data.is_frozen());
 
     let mut storage = InMemoryOrdersAccounting::from_values(
         BTreeMap::from_iter([(order_id, original_data.clone())]),
@@ -822,7 +822,7 @@ fn conclude_freezed_order_and_undo(#[case] seed: Seed) {
 
     let order_id = OrderId::random_using(&mut rng);
     let original_data = make_order_data(&mut rng);
-    assert!(!original_data.is_freezed());
+    assert!(!original_data.is_frozen());
 
     let mut storage = InMemoryOrdersAccounting::from_values(
         BTreeMap::from_iter([(order_id, original_data.clone())]),
@@ -840,21 +840,21 @@ fn conclude_freezed_order_and_undo(#[case] seed: Seed) {
         cache.get_order_data(&order_id).unwrap().as_ref()
     );
 
-    // Try filling freezed order
+    // Try filling frozen order
     let fill_result = cache.fill_order(order_id, Amount::from_atoms(1), OrdersVersion::V1);
     assert_eq!(
         fill_result.unwrap_err(),
-        Error::AttemptedFillFreezedOrder(order_id)
+        Error::AttemptedFillFrozenOrder(order_id)
     );
 
     // Try freezing again
     let freeze_result = cache.freeze_order(order_id);
     assert_eq!(
         freeze_result.unwrap_err(),
-        Error::AttemptedFreezeAlreadyFreezedOrder(order_id)
+        Error::AttemptedFreezeAlreadyFrozenOrder(order_id)
     );
 
-    // Conclude freezed order
+    // Conclude frozen order
     let conclude_undo = cache.conclude_order(order_id).unwrap();
     assert_eq!(None, cache.get_order_data(&order_id).unwrap());
 

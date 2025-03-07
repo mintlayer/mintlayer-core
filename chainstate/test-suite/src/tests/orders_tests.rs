@@ -3114,7 +3114,7 @@ fn fill_freeze_conclude_order(#[case] seed: Seed) {
                 chainstate::ChainstateError::ProcessBlockError(
                     chainstate::BlockError::StateUpdateFailed(
                         ConnectTransactionError::ConstrainedValueAccumulatorError(
-                            orders_accounting::Error::AttemptedFillFreezedOrder(order_id,).into(),
+                            orders_accounting::Error::AttemptedFillFrozenOrder(order_id,).into(),
                             tx_id.into()
                         )
                     )
@@ -3143,7 +3143,7 @@ fn fill_freeze_conclude_order(#[case] seed: Seed) {
                 chainstate::ChainstateError::ProcessBlockError(
                     chainstate::BlockError::StateUpdateFailed(
                         ConnectTransactionError::OrdersAccountingError(
-                            orders_accounting::Error::AttemptedFreezeAlreadyFreezedOrder(order_id,)
+                            orders_accounting::Error::AttemptedFreezeAlreadyFrozenOrder(order_id,)
                                 .into()
                         )
                     )
@@ -3151,7 +3151,7 @@ fn fill_freeze_conclude_order(#[case] seed: Seed) {
             );
         }
 
-        // Conclude freezed order
+        // Conclude frozen order
         let conclude_tx = TransactionBuilder::new()
             .add_input(
                 TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder(order_id)),

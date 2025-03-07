@@ -1495,7 +1495,7 @@ fn is_frozen_token(value: &OutputValue, view: &impl TokensAccountingView) -> boo
 }
 
 fn is_frozen_order(view: &impl OrdersAccountingView, order_id: OrderId) -> bool {
-    view.get_order_data(&order_id).unwrap().unwrap().is_freezed()
+    view.get_order_data(&order_id).unwrap().unwrap().is_frozen()
 }
 
 fn calculate_filled_order_value(

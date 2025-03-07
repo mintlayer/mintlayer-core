@@ -55,10 +55,10 @@ pub enum Error {
     AttemptedConcludeNonexistingOrderData(OrderId),
     #[error("Attempt to freeze non-existing order data `{0}`")]
     AttemptedFreezeNonexistingOrderData(OrderId),
-    #[error("Attempt to freeze already freezed order `{0}`")]
-    AttemptedFreezeAlreadyFreezedOrder(OrderId),
-    #[error("Attempt to fill freezed order `{0}`")]
-    AttemptedFillFreezedOrder(OrderId),
+    #[error("Attempt to freeze already frozen order `{0}`")]
+    AttemptedFreezeAlreadyFrozenOrder(OrderId),
+    #[error("Attempt to fill frozen order `{0}`")]
+    AttemptedFillFrozenOrder(OrderId),
     #[error("Unsupported token version")]
     UnsupportedTokenVersion,
 

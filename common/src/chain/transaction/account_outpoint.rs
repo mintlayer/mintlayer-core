@@ -199,7 +199,7 @@ pub enum OrderAccountCommand {
     #[codec(index = 1)]
     ConcludeOrder(OrderId),
     // Freeze an order which effectively forbids any fill operations.
-    // Freezed order can only be concluded.
+    // frozen order can only be concluded.
     // Only the address specified as `conclude_key` can authorize this command.
     #[codec(index = 2)]
     FreezeOrder(OrderId),
