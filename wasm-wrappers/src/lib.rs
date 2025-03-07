@@ -1006,7 +1006,9 @@ pub fn extract_htlc_secret(
         .iter()
         .position(|input| match input {
             TxInput::Utxo(outpoint) => *outpoint == htlc_utxo_outpoint,
-            TxInput::Account(_) | TxInput::AccountCommand(_, _) => false,
+            TxInput::Account(_)
+            | TxInput::AccountCommand(_, _)
+            | TxInput::OrderAccountCommand(_) => false,
         })
         .ok_or(Error::NoInputOutpointFound)?;
 

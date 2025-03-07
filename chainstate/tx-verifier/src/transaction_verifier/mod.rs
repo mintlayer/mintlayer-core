@@ -75,8 +75,8 @@ use common::{
         signed_transaction::SignedTransaction,
         tokens::make_token_id,
         AccountCommand, AccountNonce, AccountSpending, AccountType, Block, ChainConfig,
-        DelegationId, FrozenTokensValidationVersion, GenBlock, Transaction, TxInput, TxOutput,
-        UtxoOutPoint,
+        DelegationId, FrozenTokensValidationVersion, GenBlock, OrderAccountCommand, OrderId,
+        OrdersVersion, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{id::WithId, Amount, BlockHeight, Fee, Id, Idable},
 };
@@ -384,7 +384,7 @@ where
                         }
                     }
                 }
-                TxInput::AccountCommand(..) => None,
+                TxInput::AccountCommand(..) | TxInput::OrderAccountCommand(..) => None,
             })
             .collect::<Result<Vec<_>, _>>()?;
 
@@ -494,12 +494,12 @@ where
         // decrement nonce if disconnected input spent from an account
         for input in tx.inputs() {
             match input {
-                TxInput::Utxo(_) => { /* do nothing */ }
+                TxInput::Utxo(_) | TxInput::OrderAccountCommand(_) => { /* do nothing */ }
                 TxInput::Account(outpoint) => {
                     self.unspend_input_from_account(outpoint.account().clone().into())?;
                 }
-                TxInput::AccountCommand(_, account_op) => {
-                    self.unspend_input_from_account(account_op.clone().into())?;
+                TxInput::AccountCommand(_, cmd) => {
+                    self.unspend_input_from_account(cmd.clone().into())?;
                 }
             };
         }
@@ -549,7 +549,7 @@ where
             .inputs()
             .iter()
             .filter_map(|input| match input {
-                TxInput::Utxo(_) | TxInput::Account(_) => None,
+                TxInput::Utxo(_) | TxInput::Account(_) | TxInput::OrderAccountCommand(_) => None,
                 TxInput::AccountCommand(nonce, account_op) => match account_op {
                     AccountCommand::MintTokens(token_id, amount) => {
                         let res = self
@@ -774,6 +774,24 @@ where
                             })
                         }
                     },
+                    TxInput::OrderAccountCommand(cmd) => match cmd {
+                        OrderAccountCommand::FillOrder(order_id, _, _)
+                        | OrderAccountCommand::ConcludeOrder {
+                            order_id,
+                            filled_amount: _,
+                            remaining_give_amount: _,
+                        } => {
+                            let order_data = self.get_order_data(order_id)?.ok_or(
+                                ConnectTransactionError::OrdersAccountingError(
+                                    orders_accounting::Error::OrderDataNotFound(*order_id),
+                                ),
+                            )?;
+                            [order_data.ask(), order_data.give()].iter().try_for_each(|v| match v {
+                                OutputValue::TokenV0(_) | OutputValue::Coin(_) => Ok(()),
+                                OutputValue::TokenV1(token_id, _) => check_not_frozen(*token_id),
+                            })
+                        }
+                    },
                 }
             })?;
 
@@ -811,6 +829,46 @@ where
         Ok(())
     }
 
+    fn check_conclude_command_amounts(
+        view: &impl OrdersAccountingView<Error = orders_accounting::Error>,
+        tx_id: Id<Transaction>,
+        order_id: OrderId,
+        filled_amount: Amount,
+        remaining_give_amount: Amount,
+    ) -> Result<(), ConnectTransactionError> {
+        let order_data = view.get_order_data(&order_id)?.ok_or(
+            ConnectTransactionError::OrdersAccountingError(
+                orders_accounting::Error::OrderDataNotFound(order_id),
+            ),
+        )?;
+
+        let original_ask_balance = match order_data.ask() {
+            OutputValue::TokenV0(_) => {
+                return Err(ConnectTransactionError::OrdersAccountingError(
+                    orders_accounting::Error::UnsupportedTokenVersion,
+                ))
+            }
+            OutputValue::Coin(amount) | OutputValue::TokenV1(_, amount) => *amount,
+        };
+        let current_ask_balance = view.get_ask_balance(&order_id)?;
+        let expected_filled_amount = (original_ask_balance - current_ask_balance).ok_or(
+            ConnectTransactionError::ConcludeInputAmountsDontMatch(tx_id, order_id),
+        )?;
+
+        ensure!(
+            filled_amount == expected_filled_amount,
+            ConnectTransactionError::ConcludeInputAmountsDontMatch(tx_id, order_id)
+        );
+
+        let current_give_balance = view.get_give_balance(&order_id)?;
+        ensure!(
+            current_give_balance == remaining_give_amount,
+            ConnectTransactionError::ConcludeInputAmountsDontMatch(tx_id, order_id)
+        );
+
+        Ok(())
+    }
+
     fn connect_orders_outputs(
         &mut self,
         tx_source: &TransactionSourceForConnect,
@@ -844,9 +902,37 @@ where
                             .spend_input_from_account(*nonce, account_op.clone().into())
                             .and_then(|_| {
                                 self.orders_accounting_cache
-                                    .fill_order(*order_id, *fill)
+                                    .fill_order(*order_id, *fill, OrdersVersion::V0)
                                     .map_err(ConnectTransactionError::OrdersAccountingError)
                             });
+                        Some(res)
+                    }
+                },
+                TxInput::OrderAccountCommand(cmd) => match cmd {
+                    OrderAccountCommand::FillOrder(order_id, fill, _) => {
+                        let res = self
+                            .orders_accounting_cache
+                            .fill_order(*order_id, *fill, OrdersVersion::V1)
+                            .map_err(ConnectTransactionError::OrdersAccountingError);
+                        Some(res)
+                    }
+                    OrderAccountCommand::ConcludeOrder {
+                        order_id,
+                        filled_amount,
+                        remaining_give_amount,
+                    } => {
+                        let res = Self::check_conclude_command_amounts(
+                            &self.orders_accounting_cache,
+                            tx.get_id(),
+                            *order_id,
+                            *filled_amount,
+                            *remaining_give_amount,
+                        )
+                        .and_then(|_| {
+                            self.orders_accounting_cache
+                                .conclude_order(*order_id)
+                                .map_err(ConnectTransactionError::OrdersAccountingError)
+                        });
                         Some(res)
                     }
                 },

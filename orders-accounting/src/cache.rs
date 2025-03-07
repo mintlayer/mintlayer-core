@@ -15,7 +15,7 @@
 
 use accounting::combine_amount_delta;
 use common::{
-    chain::{output_value::OutputValue, OrderData, OrderId},
+    chain::{OrderData, OrderId, OrdersVersion},
     primitives::Amount,
 };
 use logging::log;
@@ -32,13 +32,6 @@ use crate::{
     view::OrdersAccountingView,
     FlushableOrdersAccountingView, OrdersAccountingDeltaUndoData,
 };
-
-fn output_value_amount(value: &OutputValue) -> Result<Amount> {
-    match value {
-        OutputValue::Coin(amount) | OutputValue::TokenV1(_, amount) => Ok(*amount),
-        OutputValue::TokenV0(_) => Err(Error::UnsupportedTokenVersion),
-    }
-}
 
 pub struct OrdersAccountingCache<P> {
     parent: P,
@@ -153,8 +146,8 @@ impl<P: OrdersAccountingView> OrdersAccountingOperations for OrdersAccountingCac
             Error::OrderAlreadyExists(id)
         );
 
-        let ask_amount = output_value_amount(data.ask())?;
-        let give_amount = output_value_amount(data.give())?;
+        let ask_amount = crate::output_value_amount(data.ask())?;
+        let give_amount = crate::output_value_amount(data.give())?;
 
         ensure!(
             ask_amount > Amount::ZERO && give_amount > Amount::ZERO,
@@ -206,6 +199,7 @@ impl<P: OrdersAccountingView> OrdersAccountingOperations for OrdersAccountingCac
         &mut self,
         id: OrderId,
         fill_amount_in_ask_currency: Amount,
+        orders_version: OrdersVersion,
     ) -> Result<OrdersAccountingUndo> {
         log::debug!(
             "Filling an order: {:?} {:?}",
@@ -218,7 +212,8 @@ impl<P: OrdersAccountingView> OrdersAccountingOperations for OrdersAccountingCac
             Error::OrderDataNotFound(id)
         );
 
-        let filled_amount = calculate_fill_order(self, id, fill_amount_in_ask_currency)?;
+        let filled_amount =
+            calculate_fill_order(self, id, fill_amount_in_ask_currency, orders_version)?;
 
         self.data.give_balances.sub_unsigned(id, filled_amount)?;
         self.data.ask_balances.sub_unsigned(id, fill_amount_in_ask_currency)?;

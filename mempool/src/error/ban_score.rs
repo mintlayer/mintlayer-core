@@ -144,6 +144,7 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::AttemptToCreateOrderFromAccounts => 100,
             ConnectTransactionError::TotalFeeRequiredOverflow => 100,
             ConnectTransactionError::InsufficientCoinsFee(_, _) => 100,
+            ConnectTransactionError::AttemptToSpendFrozenToken(_) => 100,
 
             // Need to drill down deeper into the error in these cases
             ConnectTransactionError::IOPolicyError(err, _) => err.ban_score(),
@@ -166,7 +167,7 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::MissingTxUndo(_) => 0,
             ConnectTransactionError::MissingTransactionNonce(_) => 0,
             ConnectTransactionError::FailedToIncrementAccountNonce => 0,
-            ConnectTransactionError::AttemptToSpendFrozenToken(_) => 0,
+            ConnectTransactionError::ConcludeInputAmountsDontMatch(_, _) => 0,
         }
     }
 }
@@ -488,8 +489,11 @@ impl MempoolBanScore for CheckTransactionError {
             CheckTransactionError::DeprecatedTokenOperationVersion(_, _) => 100,
             CheckTransactionError::HtlcsAreNotActivated => 100,
             CheckTransactionError::OrdersAreNotActivated(_) => 100,
+            CheckTransactionError::AttemptToFillOrderWithZero(_, _) => 100,
             CheckTransactionError::OrdersCurrenciesMustBeDifferent(_) => 100,
             CheckTransactionError::ChangeTokenMetadataUriNotActivated => 100,
+            CheckTransactionError::OrdersV1AreNotActivated(_) => 100,
+            CheckTransactionError::DeprecatedOrdersCommands(_) => 100,
         }
     }
 }
@@ -514,6 +518,7 @@ impl MempoolBanScore for orders_accounting::Error {
             Error::InvariantNonzeroGiveBalanceForMissingOrder(_) => 100,
             Error::OrderOverflow(_) => 100,
             Error::OrderOverbid(_, _, _) => 100,
+            Error::OrderUnderbid(_, _) => 100,
             Error::AttemptedConcludeNonexistingOrderData(_) => 0,
             Error::UnsupportedTokenVersion => 100,
             Error::ViewFail => 0,
