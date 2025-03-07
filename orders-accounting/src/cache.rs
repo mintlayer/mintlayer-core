@@ -218,10 +218,7 @@ impl<P: OrdersAccountingView> OrdersAccountingOperations for OrdersAccountingCac
         );
 
         let order_data = self.get_order_data(&id)?.ok_or(Error::OrderDataNotFound(id))?;
-        ensure!(
-            !order_data.is_freezed(),
-            Error::AttemptedFillFreezedOrder(id)
-        );
+        ensure!(!order_data.is_frozen(), Error::AttemptedFillFrozenOrder(id));
 
         let filled_amount =
             calculate_fill_order(self, id, fill_amount_in_ask_currency, orders_version)?;
@@ -256,7 +253,7 @@ impl<P: OrdersAccountingView> OrdersAccountingOperations for OrdersAccountingCac
         let new_data = old_data
             .clone()
             .try_freeze()
-            .map_err(|_| Error::AttemptedFreezeAlreadyFreezedOrder(id))?;
+            .map_err(|_| Error::AttemptedFreezeAlreadyFrozenOrder(id))?;
 
         let undo_data = self.data.order_data.merge_delta_data_element(
             id,

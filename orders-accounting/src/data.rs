@@ -27,7 +27,7 @@ pub struct OrderData {
     conclude_key: Destination,
     ask: OutputValue,
     give: OutputValue,
-    is_freezed: bool,
+    is_frozen: bool,
 }
 
 impl OrderData {
@@ -36,7 +36,7 @@ impl OrderData {
             conclude_key,
             ask,
             give,
-            is_freezed: false,
+            is_frozen: false,
         }
     }
 
@@ -52,19 +52,19 @@ impl OrderData {
         &self.give
     }
 
-    pub fn is_freezed(&self) -> bool {
-        self.is_freezed
+    pub fn is_frozen(&self) -> bool {
+        self.is_frozen
     }
 
     pub fn try_freeze(self) -> Result<Self, Self> {
-        if self.is_freezed() {
+        if self.is_frozen() {
             Err(self)
         } else {
             Ok(Self {
                 conclude_key: self.conclude_key,
                 ask: self.ask,
                 give: self.give,
-                is_freezed: true,
+                is_frozen: true,
             })
         }
     }

@@ -920,8 +920,8 @@ impl BlockProcessingErrorClassification for orders_accounting::Error {
             | Error::OrderUnderbid(_, _)
             | Error::AttemptedConcludeNonexistingOrderData(_)
             | Error::AttemptedFreezeNonexistingOrderData(_)
-            | Error::AttemptedFreezeAlreadyFreezedOrder(_)
-            | Error::AttemptedFillFreezedOrder(_)
+            | Error::AttemptedFreezeAlreadyFrozenOrder(_)
+            | Error::AttemptedFillFrozenOrder(_)
             | Error::UnsupportedTokenVersion
             | Error::InvariantNonzeroAskBalanceForMissingOrder(_)
             | Error::InvariantNonzeroGiveBalanceForMissingOrder(_) => {
