@@ -1754,6 +1754,32 @@ where
             .await?
     }
 
+    pub async fn freeze_order(
+        &self,
+        account_index: U31,
+        order_id: RpcAddress<OrderId>,
+        config: ControllerConfig,
+    ) -> WRpcResult<NewTransaction, N> {
+        let order_id = order_id
+            .decode_object(&self.chain_config)
+            .map_err(|_| RpcError::InvalidTokenId)?;
+
+        self.wallet
+            .call_async(move |w| {
+                Box::pin(async move {
+                    let order_info = w.get_order_info(order_id).await?;
+
+                    w.synced_controller(account_index, config)
+                        .await?
+                        .freeze_order(order_id, order_info)
+                        .await
+                        .map_err(RpcError::Controller)
+                        .map(NewTransaction::new)
+                })
+            })
+            .await?
+    }
+
     pub async fn compose_transaction(
         &self,
         inputs: Vec<RpcUtxoOutpoint>,

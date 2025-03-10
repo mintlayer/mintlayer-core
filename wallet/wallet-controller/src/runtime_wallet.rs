@@ -1226,6 +1226,27 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
         }
     }
 
+    pub fn create_freeze_order_tx(
+        &mut self,
+        account_index: U31,
+        order_id: OrderId,
+        order_info: RpcOrderInfo,
+        current_fee_rate: FeeRate,
+        consolidate_fee_rate: FeeRate,
+    ) -> WalletResult<SignedTransaction> {
+        match self {
+            RuntimeWallet::Software(w) => w.create_freeze_order_tx(
+                account_index,
+                order_id,
+                order_info,
+                current_fee_rate,
+                consolidate_fee_rate,
+            ),
+            #[cfg(feature = "trezor")]
+            RuntimeWallet::Trezor(_w) => unimplemented!(),
+        }
+    }
+
     pub fn sign_raw_transaction(
         &mut self,
         account_index: U31,

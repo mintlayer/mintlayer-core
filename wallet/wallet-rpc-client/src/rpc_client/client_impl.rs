@@ -1066,6 +1066,23 @@ impl WalletInterface for ClientWalletRpc {
         .map_err(WalletRpcError::ResponseError)
     }
 
+    async fn freeze_order(
+        &self,
+        account_index: U31,
+        order_id: String,
+        config: ControllerConfig,
+    ) -> Result<NewTransaction, Self::Error> {
+        let options = TransactionOptions::from_controller_config(&config);
+        WalletRpcClient::freeze_order(
+            &self.http_client,
+            account_index.into(),
+            order_id.into(),
+            options,
+        )
+        .await
+        .map_err(WalletRpcError::ResponseError)
+    }
+
     async fn node_version(&self) -> Result<NodeVersion, Self::Error> {
         WalletRpcClient::node_version(&self.http_client)
             .await
