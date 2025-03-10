@@ -1692,12 +1692,33 @@ async fn orders<'a, S: for<'b> Transactional<'b>>(
     assert_eq!(
         all_orders,
         vec![
+            (order6_id, order6.clone()),
+            (order5_id, order5.clone()),
+            (order4_id, order4.clone()),
+            (order3_id, order3.clone()),
+            (order2_id, order2.clone()),
+            (order1_id, order1.clone()),
+        ]
+    );
+
+    // Freeze an order
+    let order1_frozen = order1.clone().freeze();
+    db_tx
+        .set_order_at_height(order1_id, &order1_frozen, block_height.next_height())
+        .await
+        .unwrap();
+
+    let all_orders = db_tx.get_all_orders(10, 0).await.unwrap();
+    assert_eq!(all_orders.len(), 6);
+    assert_eq!(
+        all_orders,
+        vec![
             (order6_id, order6),
             (order5_id, order5),
             (order4_id, order4),
             (order3_id, order3),
             (order2_id, order2),
-            (order1_id, order1),
+            (order1_id, order1_frozen),
         ]
     );
 }
@@ -1722,6 +1743,7 @@ fn random_order(
         ask_currency,
         initially_asked: ask_amount,
         ask_balance: ask_amount,
+        is_frozen: false,
         next_nonce: AccountNonce::new(rng.gen::<u64>()),
     };
     (order_id, order)

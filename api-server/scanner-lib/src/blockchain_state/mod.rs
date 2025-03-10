@@ -1239,7 +1239,12 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
 
                     db_tx.set_order_at_height(*order_id, &order, block_height).await?;
                 }
-                OrderAccountCommand::FreezeOrder(_) => todo!(),
+                OrderAccountCommand::FreezeOrder(order_id) => {
+                    let order = db_tx.get_order(*order_id).await?.expect("must exist");
+                    let order = order.freeze();
+
+                    db_tx.set_order_at_height(*order_id, &order, block_height).await?;
+                }
             },
             TxInput::Account(outpoint) => {
                 match outpoint.account() {
@@ -1884,6 +1889,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                         ask_currency,
                         give_balance,
                         give_currency,
+                        is_frozen: false,
                         next_nonce: AccountNonce::new(0),
                     };
 
