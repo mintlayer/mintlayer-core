@@ -1210,6 +1210,28 @@ where
         .await
     }
 
+    pub async fn freeze_order(
+        &mut self,
+        order_id: OrderId,
+        order_info: RpcOrderInfo,
+    ) -> Result<SignedTransaction, ControllerError<T>> {
+        self.create_and_send_tx(
+            move |current_fee_rate: FeeRate,
+                  consolidate_fee_rate: FeeRate,
+                  wallet: &mut RuntimeWallet<B>,
+                  account_index: U31| {
+                wallet.create_freeze_order_tx(
+                    account_index,
+                    order_id,
+                    order_info,
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                )
+            },
+        )
+        .await
+    }
+
     fn additional_token_info(
         &mut self,
         token_infos: Vec<RPCTokenInfo>,

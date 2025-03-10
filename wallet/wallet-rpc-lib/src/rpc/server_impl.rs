@@ -1174,6 +1174,20 @@ where
         )
     }
 
+    async fn freeze_order(
+        &self,
+        account_arg: AccountArg,
+        order_id: RpcAddress<OrderId>,
+        options: TransactionOptions,
+    ) -> rpc::RpcResult<NewTransaction> {
+        let config = ControllerConfig {
+            in_top_x_mb: options.in_top_x_mb(),
+            broadcast_to_mempool: true,
+        };
+
+        rpc::handle_result(self.freeze_order(account_arg.index::<N>()?, order_id, config).await)
+    }
+
     async fn stake_pool_balance(
         &self,
         pool_id: RpcAddress<PoolId>,

@@ -606,6 +606,11 @@ class WalletRpcController(WalletCliControllerBase):
         result = self._write_command("fill_order", object)
         return result
 
+    async def freeze_order(self, order_id: str) -> str:
+        object = [self.account, order_id, {'in_top_x_mb': 5}]
+        result = self._write_command("freeze_order", object)
+        return result
+
     async def conclude_order(self,
                          order_id: str,
                          output_address: Optional[str] = None) -> str:
