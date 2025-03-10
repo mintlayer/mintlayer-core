@@ -139,15 +139,15 @@ impl RpcAccountCommand {
 #[derive(Debug, Clone, serde::Serialize, rpc_description::HasValueHint)]
 #[serde(tag = "type", content = "content")]
 pub enum RpcOrderAccountCommand {
-    ConcludeOrder {
+    Conclude {
         order_id: RpcAddress<OrderId>,
     },
-    FillOrder {
+    Fill {
         order_id: RpcAddress<OrderId>,
         fill_value: RpcAmountOut,
         destination: RpcAddress<Destination>,
     },
-    FreezeOrder {
+    Freeze {
         order_id: RpcAddress<OrderId>,
     },
 }
@@ -158,15 +158,15 @@ impl RpcOrderAccountCommand {
         command: &OrderAccountCommand,
     ) -> Result<Self, AddressError> {
         let result = match command {
-            OrderAccountCommand::ConcludeOrder(order_id) => RpcOrderAccountCommand::ConcludeOrder {
+            OrderAccountCommand::ConcludeOrder(order_id) => RpcOrderAccountCommand::Conclude {
                 order_id: RpcAddress::new(chain_config, *order_id)?,
             },
-            OrderAccountCommand::FillOrder(id, fill, dest) => RpcOrderAccountCommand::FillOrder {
+            OrderAccountCommand::FillOrder(id, fill, dest) => RpcOrderAccountCommand::Fill {
                 order_id: RpcAddress::new(chain_config, *id)?,
                 fill_value: RpcAmountOut::from_amount(*fill, chain_config.coin_decimals()),
                 destination: RpcAddress::new(chain_config, dest.clone())?,
             },
-            OrderAccountCommand::FreezeOrder(id) => RpcOrderAccountCommand::FreezeOrder {
+            OrderAccountCommand::FreezeOrder(id) => RpcOrderAccountCommand::Freeze {
                 order_id: RpcAddress::new(chain_config, *id)?,
             },
         };

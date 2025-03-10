@@ -3144,7 +3144,6 @@ fn fill_freeze_conclude_order(#[case] seed: Seed) {
                     chainstate::BlockError::StateUpdateFailed(
                         ConnectTransactionError::OrdersAccountingError(
                             orders_accounting::Error::AttemptedFreezeAlreadyFrozenOrder(order_id,)
-                                .into()
                         )
                     )
                 )
