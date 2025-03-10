@@ -36,16 +36,16 @@ pub enum AccountType {
     Order(OrderId),
 }
 
-impl From<AccountSpending> for AccountType {
-    fn from(spending: AccountSpending) -> Self {
+impl From<&AccountSpending> for AccountType {
+    fn from(spending: &AccountSpending) -> Self {
         match spending {
-            AccountSpending::DelegationBalance(id, _) => AccountType::Delegation(id),
+            AccountSpending::DelegationBalance(id, _) => AccountType::Delegation(*id),
         }
     }
 }
 
-impl From<AccountCommand> for AccountType {
-    fn from(op: AccountCommand) -> Self {
+impl From<&AccountCommand> for AccountType {
+    fn from(op: &AccountCommand) -> Self {
         match op {
             AccountCommand::MintTokens(id, _)
             | AccountCommand::UnmintTokens(id)
@@ -53,9 +53,9 @@ impl From<AccountCommand> for AccountType {
             | AccountCommand::FreezeToken(id, _)
             | AccountCommand::UnfreezeToken(id)
             | AccountCommand::ChangeTokenAuthority(id, _)
-            | AccountCommand::ChangeTokenMetadataUri(id, _) => AccountType::Token(id),
+            | AccountCommand::ChangeTokenMetadataUri(id, _) => AccountType::Token(*id),
             AccountCommand::ConcludeOrder(id) | AccountCommand::FillOrder(id, _, _) => {
-                AccountType::Order(id)
+                AccountType::Order(*id)
             }
         }
     }
