@@ -57,7 +57,7 @@ Each message starts with a 4-bytes header that contains the length of the messag
 | 4 bytes | Message length | `u32` | The length of the message body that follows.
 | Variable | Message body | `enum Message` | An encoded `Rust` enum.
 
-The message body is a SCALE-encoded `Rust` enum. With this encoding, the first byte of the encoded data specifes the enum variant contained in the enum; the rest is that variant's encoded data.
+The message body is a SCALE-encoded `Rust` enum. With this encoding, the first byte of the encoded data specifies the enum variant contained in the enum; the rest is that variant's encoded data.
 
 The encoded `enum Message`:
 | Length | Description | Type | Comments |
