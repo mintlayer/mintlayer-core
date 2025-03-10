@@ -597,7 +597,7 @@ fn to_trezor_account_command_input(
         AccountCommand::FreezeToken(token_id, unfreezable) => {
             let mut req = MintlayerFreezeToken::new();
             req.set_token_id(Address::new(chain_config, *token_id)?.into_string());
-            req.set_is_token_unfreezeable(unfreezable.as_bool());
+            req.set_is_token_unfreezable(unfreezable.as_bool());
 
             inp_req.freeze_token = Some(req).into();
         }
