@@ -21,16 +21,14 @@ use chainstate::{
 };
 use chainstate_test_framework::{get_output_value, TestFramework, TransactionBuilder};
 use common::chain::tokens::{Metadata, NftIssuanceV0, TokenIssuanceV0, TokenTransfer};
-use common::chain::{FrozenTokensValidationVersion, RewardDistributionVersion, UtxoOutPoint};
+use common::chain::UtxoOutPoint;
 use common::primitives::{id, BlockHeight, Id};
 use common::{
     chain::{
         output_value::OutputValue,
         signature::inputsig::InputWitness,
         tokens::{make_token_id, TokenData, TokenId},
-        ChainstateUpgrade, ChangeTokenMetadataUriActivated, DataDepositFeeVersion, Destination,
-        HtlcActivated, OrdersActivated, OutPointSourceId, TokenIssuanceVersion, TokensFeeVersion,
-        TxInput, TxOutput,
+        Destination, OutPointSourceId, TokenIssuanceVersion, TxInput, TxOutput,
     },
     primitives::{Amount, Idable},
 };
@@ -46,6 +44,8 @@ use test_utils::{
 };
 use tx_verifier::CheckTransactionError;
 
+use super::helpers::chainstate_upgrade_builder::ChainstateUpgradeBuilder;
+
 fn make_test_framework_with_v0(rng: &mut (impl Rng + CryptoRng)) -> TestFramework {
     TestFramework::builder(rng)
         .with_chain_config(
@@ -53,16 +53,9 @@ fn make_test_framework_with_v0(rng: &mut (impl Rng + CryptoRng)) -> TestFramewor
                 .chainstate_upgrades(
                     common::chain::NetUpgrades::initialize(vec![(
                         BlockHeight::zero(),
-                        ChainstateUpgrade::new(
-                            TokenIssuanceVersion::V0,
-                            RewardDistributionVersion::V1,
-                            TokensFeeVersion::V1,
-                            DataDepositFeeVersion::V1,
-                            ChangeTokenMetadataUriActivated::Yes,
-                            FrozenTokensValidationVersion::V1,
-                            HtlcActivated::Yes,
-                            OrdersActivated::Yes,
-                        ),
+                        ChainstateUpgradeBuilder::latest()
+                            .token_issuance_version(TokenIssuanceVersion::V0)
+                            .build(),
                     )])
                     .unwrap(),
                 )
@@ -961,16 +954,9 @@ fn no_v0_issuance_after_v1(#[case] seed: Seed) {
                     .chainstate_upgrades(
                         common::chain::NetUpgrades::initialize(vec![(
                             BlockHeight::zero(),
-                            ChainstateUpgrade::new(
-                                TokenIssuanceVersion::V1,
-                                RewardDistributionVersion::V1,
-                                TokensFeeVersion::V1,
-                                DataDepositFeeVersion::V1,
-                                ChangeTokenMetadataUriActivated::Yes,
-                                FrozenTokensValidationVersion::V1,
-                                HtlcActivated::Yes,
-                                OrdersActivated::Yes,
-                            ),
+                            ChainstateUpgradeBuilder::latest()
+                                .token_issuance_version(TokenIssuanceVersion::V1)
+                                .build(),
                         )])
                         .unwrap(),
                     )
@@ -1028,29 +1014,15 @@ fn no_v0_transfer_after_v1(#[case] seed: Seed) {
                         common::chain::NetUpgrades::initialize(vec![
                             (
                                 BlockHeight::zero(),
-                                ChainstateUpgrade::new(
-                                    TokenIssuanceVersion::V0,
-                                    RewardDistributionVersion::V1,
-                                    TokensFeeVersion::V1,
-                                    DataDepositFeeVersion::V1,
-                                    ChangeTokenMetadataUriActivated::Yes,
-                                    FrozenTokensValidationVersion::V1,
-                                    HtlcActivated::Yes,
-                                    OrdersActivated::Yes,
-                                ),
+                                ChainstateUpgradeBuilder::latest()
+                                    .token_issuance_version(TokenIssuanceVersion::V0)
+                                    .build(),
                             ),
                             (
                                 BlockHeight::new(2),
-                                ChainstateUpgrade::new(
-                                    TokenIssuanceVersion::V1,
-                                    RewardDistributionVersion::V1,
-                                    TokensFeeVersion::V1,
-                                    DataDepositFeeVersion::V1,
-                                    ChangeTokenMetadataUriActivated::Yes,
-                                    FrozenTokensValidationVersion::V1,
-                                    HtlcActivated::Yes,
-                                    OrdersActivated::Yes,
-                                ),
+                                ChainstateUpgradeBuilder::latest()
+                                    .token_issuance_version(TokenIssuanceVersion::V1)
+                                    .build(),
                             ),
                         ])
                         .unwrap(),

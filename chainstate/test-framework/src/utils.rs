@@ -372,7 +372,9 @@ pub fn sign_witnesses(
             TxInput::Utxo(outpoint) => {
                 Some(utxo_view.utxo(outpoint).unwrap().unwrap().output().clone())
             }
-            TxInput::Account(..) | TxInput::AccountCommand(..) => None,
+            TxInput::Account(..)
+            | TxInput::AccountCommand(..)
+            | TxInput::OrderAccountCommand(..) => None,
         })
         .collect::<Vec<_>>();
     let input_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();

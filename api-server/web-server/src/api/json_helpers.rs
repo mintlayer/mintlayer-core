@@ -24,8 +24,8 @@ use common::{
         block::ConsensusData,
         output_value::OutputValue,
         tokens::{IsTokenUnfreezable, NftIssuance, TokenId, TokenTotalSupply},
-        AccountCommand, AccountSpending, Block, ChainConfig, Destination, OrderId,
-        OutPointSourceId, Transaction, TxInput, TxOutput, UtxoOutPoint,
+        AccountCommand, AccountSpending, Block, ChainConfig, Destination, OrderAccountCommand,
+        OrderId, OutPointSourceId, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Idable},
     Uint256,
@@ -315,6 +315,30 @@ pub fn tx_input_to_json(inp: &TxInput, chain_config: &ChainConfig) -> serde_json
                     "delegation_id": Address::new(chain_config, *delegation_id).expect("addressable").to_string(),
                     "amount": amount_to_json(*amount, chain_config.coin_decimals()),
                     "nonce": acc.nonce(),
+                })
+            }
+        },
+        TxInput::OrderAccountCommand(cmd) => match cmd {
+            OrderAccountCommand::FillOrder(id, fill, dest) => {
+                json!({
+                    "input_type": "OrderAccountCommand",
+                    "command": "FillOrder",
+                    "order_id": Address::new(chain_config, *id).expect("addressable").to_string(),
+                    "fill_atoms": json!({"atoms": fill.into_atoms().to_string()}),
+                    "destination": Address::new(chain_config, dest.clone()).expect("no error").as_str(),
+                })
+            }
+            OrderAccountCommand::ConcludeOrder {
+                order_id,
+                filled_amount,
+                remaining_give_amount,
+            } => {
+                json!({
+                    "input_type": "OrderAccountCommand",
+                    "command": "ConcludeOrder",
+                    "order_id": Address::new(chain_config, *order_id).expect("addressable").to_string(),
+                    "filled_atoms": json!({"atoms": filled_amount.into_atoms().to_string()}),
+                    "remaining_give_atoms": json!({"atoms": remaining_give_amount.into_atoms().to_string()}),
                 })
             }
         },
