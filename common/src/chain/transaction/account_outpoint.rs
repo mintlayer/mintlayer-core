@@ -203,7 +203,7 @@ pub enum OrderAccountCommand {
         remaining_give_amount: Amount,
     },
     // Freeze an order which effectively forbids any fill operations.
-    // frozen order can only be concluded.
+    // Frozen order can only be concluded.
     // Only the address specified as `conclude_key` can authorize this command.
     #[codec(index = 2)]
     FreezeOrder(OrderId),
