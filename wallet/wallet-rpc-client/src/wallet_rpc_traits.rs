@@ -532,6 +532,13 @@ pub trait WalletInterface {
         config: ControllerConfig,
     ) -> Result<NewTransaction, Self::Error>;
 
+    async fn freeze_order(
+        &self,
+        account_index: U31,
+        order_id: String,
+        config: ControllerConfig,
+    ) -> Result<NewTransaction, Self::Error>;
+
     async fn node_version(&self) -> Result<NodeVersion, Self::Error>;
 
     async fn node_shutdown(&self) -> Result<(), Self::Error>;

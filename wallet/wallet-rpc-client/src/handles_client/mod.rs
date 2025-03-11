@@ -1177,6 +1177,18 @@ where
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
 
+    async fn freeze_order(
+        &self,
+        account_index: U31,
+        order_id: String,
+        config: ControllerConfig,
+    ) -> Result<NewTransaction, Self::Error> {
+        self.wallet_rpc
+            .freeze_order(account_index, order_id.into(), config)
+            .await
+            .map_err(WalletRpcHandlesClientError::WalletRpcError)
+    }
+
     async fn node_version(&self) -> Result<NodeVersion, Self::Error> {
         self.wallet_rpc
             .node_version()

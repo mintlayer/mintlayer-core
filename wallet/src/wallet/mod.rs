@@ -2150,6 +2150,33 @@ where
         )
     }
 
+    pub fn create_freeze_order_tx(
+        &mut self,
+        account_index: U31,
+        order_id: OrderId,
+        order_info: RpcOrderInfo,
+        current_fee_rate: FeeRate,
+        consolidate_fee_rate: FeeRate,
+    ) -> WalletResult<SignedTransaction> {
+        let latest_median_time = self.latest_median_time;
+        self.for_account_rw_unlocked_and_check_tx(
+            account_index,
+            TxAdditionalInfo::new(),
+            |account, db_tx| {
+                account.create_freeze_order_tx(
+                    db_tx,
+                    order_id,
+                    order_info,
+                    latest_median_time,
+                    CurrentFeeRate {
+                        current_fee_rate,
+                        consolidate_fee_rate,
+                    },
+                )
+            },
+        )
+    }
+
     pub fn sign_raw_transaction(
         &mut self,
         account_index: U31,

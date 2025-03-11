@@ -791,6 +791,7 @@ where
                                 OutputValue::TokenV1(token_id, _) => check_not_frozen(*token_id),
                             })
                         }
+                        OrderAccountCommand::FreezeOrder(_) => Ok(()),
                     },
                 }
             })?;
@@ -935,6 +936,13 @@ where
                         });
                         Some(res)
                     }
+                    OrderAccountCommand::FreezeOrder(order_id) => {
+                        let res = self
+                            .orders_accounting_cache
+                            .freeze_order(*order_id)
+                            .map_err(ConnectTransactionError::OrdersAccountingError);
+                        Some(res)
+                    }
                 },
             })
             .collect::<Result<Vec<_>, _>>()?;
@@ -960,7 +968,7 @@ where
                         let order_id = make_order_id(input_utxo_outpoint);
                         let result = self
                             .orders_accounting_cache
-                            .create_order(order_id, *order_data.clone())
+                            .create_order(order_id, order_data.as_ref().clone().into())
                             .map_err(ConnectTransactionError::OrdersAccountingError);
                         Some(result)
                     }

@@ -1115,6 +1115,31 @@ impl<K: AccountKeyChains> Account<K> {
         )
     }
 
+    pub fn create_freeze_order_tx(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteUnlocked,
+        order_id: OrderId,
+        order_info: RpcOrderInfo,
+        median_time: BlockTimestamp,
+        fee_rate: CurrentFeeRate,
+    ) -> WalletResult<SendRequest> {
+        let request = SendRequest::new().with_inputs_and_destinations([(
+            TxInput::OrderAccountCommand(OrderAccountCommand::FreezeOrder(order_id)),
+            order_info.conclude_key.clone(),
+        )]);
+
+        self.select_inputs_for_send_request(
+            request,
+            SelectedInputs::Utxos(vec![]),
+            None,
+            BTreeMap::new(),
+            db_tx,
+            median_time,
+            fee_rate,
+            Some(BTreeMap::from_iter([(order_id, &order_info)])),
+        )
+    }
+
     pub fn create_issue_nft_tx(
         &mut self,
         db_tx: &mut impl WalletStorageWriteUnlocked,
@@ -1532,7 +1557,8 @@ impl<K: AccountKeyChains> Account<K> {
     ) -> WalletResult<Destination> {
         match cmd {
             OrderAccountCommand::FillOrder(_, _, destination) => Ok(destination.clone()),
-            OrderAccountCommand::ConcludeOrder {
+            OrderAccountCommand::FreezeOrder(order_id)
+            | OrderAccountCommand::ConcludeOrder {
                 order_id,
                 filled_amount: _,
                 remaining_give_amount: _,
@@ -1980,7 +2006,8 @@ impl<K: AccountKeyChains> Account<K> {
                 OrderAccountCommand::FillOrder(order_id, _, dest) => {
                     self.find_order(order_id).is_ok() || self.is_destination_mine_or_watched(dest)
                 }
-                OrderAccountCommand::ConcludeOrder {
+                OrderAccountCommand::FreezeOrder(order_id)
+                | OrderAccountCommand::ConcludeOrder {
                     order_id,
                     filled_amount: _,
                     remaining_give_amount: _,
@@ -2575,6 +2602,9 @@ fn group_preselected_inputs(
                         *fee,
                         &mut update_preselected_inputs,
                     )?;
+                }
+                OrderAccountCommand::FreezeOrder(_) => {
+                    update_preselected_inputs(Currency::Coin, Amount::ZERO, *fee, Amount::ZERO)?;
                 }
             },
         }

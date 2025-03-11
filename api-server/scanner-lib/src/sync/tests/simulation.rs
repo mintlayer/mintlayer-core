@@ -52,7 +52,7 @@ use crypto::{
     key::{KeyKind, PrivateKey},
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
-use orders_accounting::{OrdersAccountingOperations, OrdersAccountingView};
+use orders_accounting::{OrderData, OrdersAccountingOperations, OrdersAccountingView};
 use pos_accounting::{make_delegation_id, PoSAccountingView};
 use randomness::Rng;
 use rstest::rstest;
@@ -160,10 +160,7 @@ impl<'a> OrderAccountingAdapterToCheckFees<'a> {
 impl OrdersAccountingView for OrderAccountingAdapterToCheckFees<'_> {
     type Error = orders_accounting::Error;
 
-    fn get_order_data(
-        &self,
-        id: &OrderId,
-    ) -> Result<Option<common::chain::OrderData>, Self::Error> {
+    fn get_order_data(&self, id: &OrderId) -> Result<Option<OrderData>, Self::Error> {
         Ok(self.chainstate.get_order_data(id).unwrap())
     }
 
@@ -400,7 +397,7 @@ async fn simulation(
                     TxOutput::CreateOrder(order_data) => {
                         let order_id = make_order_id(input0_outpoint.unwrap());
                         let _ = new_orders_cache
-                            .create_order(order_id, order_data.as_ref().clone())
+                            .create_order(order_id, order_data.as_ref().clone().into())
                             .unwrap();
                         order_ids.insert(order_id);
                     }

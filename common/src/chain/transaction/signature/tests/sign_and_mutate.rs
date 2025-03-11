@@ -32,7 +32,8 @@ use crate::{
         signed_transaction::SignedTransaction,
         tokens::TokenId,
         AccountCommand, AccountOutPoint, AccountSpending, ChainConfig, DelegationId, Destination,
-        OrderAccountCommand, OutPointSourceId, Transaction, TxInput, TxOutput, UtxoOutPoint,
+        OrderAccountCommand, OrderId, OutPointSourceId, Transaction, TxInput, TxOutput,
+        UtxoOutPoint,
     },
     primitives::{Amount, Id, H256},
 };
@@ -1076,6 +1077,9 @@ fn mutate_first_input(
                 filled_amount: Amount::from_atoms(filled_amount.into_atoms() + 1),
                 remaining_give_amount: *remaining_give_amount,
             }),
+            OrderAccountCommand::FreezeOrder(_) => TxInput::OrderAccountCommand(
+                OrderAccountCommand::FreezeOrder(OrderId::new(H256::random_using(rng))),
+            ),
         },
     };
     updater.inputs[0] = mutated_input;

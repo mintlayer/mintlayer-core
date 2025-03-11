@@ -724,6 +724,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     give_currency bytea NOT NULL,
                     next_nonce bytea NOT NULL,
                     conclude_destination bytea NOT NULL,
+                    frozen BOOLEAN NOT NULL,
                     PRIMARY KEY (order_id, block_height)
                 );",
         )
@@ -2247,7 +2248,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         let row = self
             .tx
             .query_opt(
-                r#"SELECT order_id, initially_asked, ask_balance, ask_currency, initially_given, give_balance, give_currency, conclude_destination, next_nonce, creation_block_height
+                r#"SELECT order_id, initially_asked, ask_balance, ask_currency, initially_given, give_balance, give_currency, conclude_destination, next_nonce, creation_block_height, frozen
                 FROM ml.orders
                 WHERE order_id = $1
                 AND block_height = (SELECT MAX(block_height) FROM ml.orders WHERE order_id = $1);
@@ -2284,10 +2285,10 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         self.tx
             .execute(
                 r#"
-                    INSERT INTO ml.orders (order_id, block_height, initially_asked, ask_balance, ask_currency, initially_given, give_balance, give_currency, conclude_destination, next_nonce, creation_block_height)
-                    VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                    INSERT INTO ml.orders (order_id, block_height, initially_asked, ask_balance, ask_currency, initially_given, give_balance, give_currency, conclude_destination, next_nonce, creation_block_height, frozen)
+                    VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
                     ON CONFLICT (order_id, block_height) DO UPDATE
-                    SET initially_asked = $3, ask_balance = $4, ask_currency = $5, initially_given = $6, give_balance = $7, give_currency = $8, conclude_destination = $9, next_nonce = $10, creation_block_height = $11;
+                    SET initially_asked = $3, ask_balance = $4, ask_currency = $5, initially_given = $6, give_balance = $7, give_currency = $8, conclude_destination = $9, next_nonce = $10, creation_block_height = $11, frozen = $12;
                 "#,
                 &[
                     &order_id.as_str(),
@@ -2301,6 +2302,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     &order.conclude_destination.encode(),
                     &order.next_nonce.encode(),
                     &creation_block_height,
+                    &order.is_frozen
                 ],
             )
             .await
@@ -2334,9 +2336,9 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         self.tx
             .query(
                 r#"
-                SELECT order_id, initially_asked, ask_balance, ask_currency, initially_given, give_balance, give_currency, conclude_destination, next_nonce, creation_block_height
+                SELECT order_id, initially_asked, ask_balance, ask_currency, initially_given, give_balance, give_currency, conclude_destination, next_nonce, creation_block_height, frozen
                 FROM (
-                    SELECT order_id, initially_asked, ask_balance, ask_currency, initially_given, give_balance, give_currency, conclude_destination, next_nonce, creation_block_height, block_height, ROW_NUMBER() OVER(PARTITION BY order_id ORDER BY block_height DESC) as newest
+                    SELECT order_id, initially_asked, ask_balance, ask_currency, initially_given, give_balance, give_currency, conclude_destination, next_nonce, creation_block_height, frozen, block_height, ROW_NUMBER() OVER(PARTITION BY order_id ORDER BY block_height DESC) as newest
                     FROM ml.orders
                 ) AS sub
                 WHERE newest = 1
@@ -2367,9 +2369,9 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         self.tx
             .query(
                 r#"
-                SELECT order_id, initially_asked, ask_balance, ask_currency, initially_given, give_balance, give_currency, conclude_destination, next_nonce, creation_block_height
+                SELECT order_id, initially_asked, ask_balance, ask_currency, initially_given, give_balance, give_currency, conclude_destination, next_nonce, creation_block_height, frozen
                 FROM (
-                    SELECT order_id, initially_asked, ask_balance, ask_currency, initially_given, give_balance, give_currency, conclude_destination, next_nonce, creation_block_height, block_height, ROW_NUMBER() OVER(PARTITION BY order_id ORDER BY block_height DESC) as newest
+                    SELECT order_id, initially_asked, ask_balance, ask_currency, initially_given, give_balance, give_currency, conclude_destination, next_nonce, creation_block_height, frozen, block_height, ROW_NUMBER() OVER(PARTITION BY order_id ORDER BY block_height DESC) as newest
                     FROM ml.orders
                 ) AS sub
                 WHERE newest = 1 AND ((ask_currency = $1 AND give_currency = $2) OR (ask_currency = $2 AND give_currency = $1))
@@ -2403,6 +2405,7 @@ fn decode_order_from_row(
     let conclude_destination: Vec<u8> = data.get("conclude_destination");
     let next_nonce: Vec<u8> = data.get("next_nonce");
     let creation_block_height: i64 = data.get("creation_block_height");
+    let is_frozen: bool = data.get("frozen");
 
     let order_id = Address::<OrderId>::from_string(chain_config, order_id)
         .map_err(|_| ApiServerStorageError::AddressableError)?
@@ -2466,6 +2469,7 @@ fn decode_order_from_row(
         give_balance,
         give_currency,
         initially_given,
+        is_frozen,
         next_nonce,
     };
     Ok((order_id, order))

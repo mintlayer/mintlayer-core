@@ -34,12 +34,13 @@ use common::{
         tokens::{get_referenced_token_ids, make_token_id, IsTokenFrozen, TokenId, TokenIssuance},
         transaction::OutPointSourceId,
         AccountCommand, AccountNonce, AccountSpending, Block, DelegationId, Destination, GenBlock,
-        Genesis, OrderAccountCommand, OrderData, OrderId, PoolId, SignedTransaction, Transaction,
-        TxInput, TxOutput, UtxoOutPoint,
+        Genesis, OrderAccountCommand, OrderId, PoolId, SignedTransaction, Transaction, TxInput,
+        TxOutput, UtxoOutPoint,
     },
     primitives::{id::WithId, Amount, BlockHeight, CoinOrTokenId, Fee, Id, Idable, H256},
 };
 use futures::{stream::FuturesOrdered, TryStreamExt};
+use orders_accounting::OrderData;
 use pos_accounting::{make_delegation_id, PoSAccountingView, PoolData};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -633,6 +634,7 @@ async fn calculate_tx_fee_and_collect_token_info<T: ApiServerStorageWrite>(
                 },
                 TxInput::OrderAccountCommand(cmd) => match cmd {
                     OrderAccountCommand::FillOrder(order_id, _, _)
+                    | OrderAccountCommand::FreezeOrder(order_id)
                     | OrderAccountCommand::ConcludeOrder {
                         order_id,
                         filled_amount: _,
@@ -887,6 +889,7 @@ async fn prefetch_orders<T: ApiServerStorageRead>(
             TxInput::Utxo(_) | TxInput::Account(_) => {}
             TxInput::OrderAccountCommand(cmd) => match cmd {
                 OrderAccountCommand::FillOrder(order_id, _, _)
+                | OrderAccountCommand::FreezeOrder(order_id)
                 | OrderAccountCommand::ConcludeOrder {
                     order_id,
                     filled_amount: _,
@@ -1288,6 +1291,12 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                 } => {
                     let order = db_tx.get_order(*order_id).await?.expect("must exist");
                     let order = order.conclude();
+
+                    db_tx.set_order_at_height(*order_id, &order, block_height).await?;
+                }
+                OrderAccountCommand::FreezeOrder(order_id) => {
+                    let order = db_tx.get_order(*order_id).await?.expect("must exist");
+                    let order = order.freeze();
 
                     db_tx.set_order_at_height(*order_id, &order, block_height).await?;
                 }
@@ -1907,6 +1916,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                         ask_currency,
                         give_balance,
                         give_currency,
+                        is_frozen: false,
                         next_nonce: AccountNonce::new(0),
                     };
 

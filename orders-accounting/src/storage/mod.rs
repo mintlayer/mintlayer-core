@@ -13,11 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::{
-    chain::{OrderData, OrderId},
-    primitives::Amount,
-};
+use common::{chain::OrderId, primitives::Amount};
 use std::ops::{Deref, DerefMut};
+
+use crate::OrderData;
 
 pub mod db;
 pub mod in_memory;
