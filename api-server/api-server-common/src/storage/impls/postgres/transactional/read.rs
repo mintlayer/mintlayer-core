@@ -62,6 +62,16 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRo<'_> {
         Ok(res)
     }
 
+    async fn get_address_balances(
+        &self,
+        address: &str,
+    ) -> Result<Vec<(CoinOrTokenId, Amount, u8)>, ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_address_balances(address).await?;
+
+        Ok(res)
+    }
+
     async fn get_address_locked_balance(
         &self,
         address: &str,

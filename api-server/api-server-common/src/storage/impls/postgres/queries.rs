@@ -145,9 +145,8 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .query_opt(
                 r#"
                     SELECT amount
-                    FROM ml.address_balance
+                    FROM ml.latest_address_balance_cache
                     WHERE address = $1 AND coin_or_token_id = $2
-                    ORDER BY block_height DESC
                     LIMIT 1;
                 "#,
                 &[&address, &coin_or_token_id.encode()],
@@ -168,6 +167,49 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     Ok(Some(amount))
                 },
             )
+    }
+
+    pub async fn get_address_balances(
+        &self,
+        address: &str,
+    ) -> Result<Vec<(CoinOrTokenId, Amount, u8)>, ApiServerStorageError> {
+        let rows = self
+            .tx
+            .query(
+                r#"
+                    SELECT coin_or_token_id, amount, number_of_decimals
+                    FROM ml.latest_address_balance_cache
+                    WHERE address = $1;
+                "#,
+                &[&address],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        rows.into_iter()
+            .map(|row| {
+                let coin_or_token_id: Vec<u8> = row.get(0);
+                let amount: Vec<u8> = row.get(1);
+                let number_of_decimals: i16 = row.get(2);
+
+                let amount = Amount::decode_all(&mut amount.as_slice()).map_err(|e| {
+                    ApiServerStorageError::DeserializationError(format!(
+                        "Amount deserialization failed: {}",
+                        e
+                    ))
+                })?;
+
+                let coin_or_token_id = CoinOrTokenId::decode_all(&mut coin_or_token_id.as_slice())
+                    .map_err(|e| {
+                        ApiServerStorageError::DeserializationError(format!(
+                            "CoinOrTokenId deserialization failed: {}",
+                            e
+                        ))
+                    })?;
+
+                Ok((coin_or_token_id, amount, number_of_decimals as u8))
+            })
+            .collect()
     }
 
     pub async fn get_address_locked_balance(
@@ -218,6 +260,45 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
 
+        // delete and update the address balance from the cache table
+        self.tx
+            .execute(
+                r#"
+                WITH deleted_cache_rows AS (
+                    DELETE FROM ml.latest_address_balance_cache
+                    WHERE block_height > $1
+                    RETURNING address, coin_or_token_id
+                ),
+                latest_address_balances_for_deleted AS (
+                    SELECT
+                        dcr.address,
+                        dcr.coin_or_token_id,
+                        ld.block_height,
+                        ld.amount,
+                        dec.number_of_decimals
+                    FROM deleted_cache_rows dcr, ml.coin_or_token_decimals dec
+                    CROSS JOIN LATERAL (
+                        SELECT block_height, amount, dec.number_of_decimals
+                        FROM ml.address_balance d_inner
+                        WHERE d_inner.address = dcr.address AND d_inner.coin_or_token_id = dcr.coin_or_token_id AND d_inner.coin_or_token_id = dec.coin_or_token_id
+                        ORDER BY block_height DESC
+                        LIMIT 1
+                    ) AS ld
+                )
+                INSERT INTO ml.latest_address_balance_cache (address, block_height, coin_or_token_id, amount, number_of_decimals)
+                SELECT
+                    ld.address,
+                    ld.block_height,
+                    ld.coin_or_token_id,
+                    ld.amount,
+                    ld.number_of_decimals
+                FROM latest_address_balances_for_deleted ld;
+                "#,
+                &[&height],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
         Ok(())
     }
 
@@ -246,6 +327,24 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
         let height = Self::block_height_to_postgres_friendly(block_height);
+
+        self.tx
+            .execute(
+                r#"
+                    INSERT INTO ml.latest_address_balance_cache (address, block_height, coin_or_token_id, amount, number_of_decimals)
+                    VALUES($1, $2, $3, $4,
+                        (SELECT number_of_decimals
+                         FROM ml.coin_or_token_decimals
+                         WHERE coin_or_token_id = $3
+                         LIMIT 1)
+                     )
+                    ON CONFLICT (address, coin_or_token_id) DO UPDATE
+                    SET block_height = $2, amount = $4;
+                "#,
+                &[&address.to_string(), &height, &coin_or_token_id.encode(), &amount.encode()],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
 
         self.tx
             .execute(
@@ -582,6 +681,22 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         .await?;
 
         self.just_execute(
+            "CREATE TABLE ml.latest_address_balance_cache (
+                    address TEXT NOT NULL,
+                    block_height bigint NOT NULL,
+                    coin_or_token_id bytea NOT NULL,
+                    amount bytea NOT NULL,
+                    number_of_decimals smallint NOT NULL,
+                    PRIMARY KEY (address, coin_or_token_id)
+                );",
+        )
+        .await?;
+
+        // index for reorgs
+        self.just_execute("CREATE INDEX latest_address_balance_cache_block_height ON ml.latest_address_balance_cache (block_height DESC);")
+            .await?;
+
+        self.just_execute(
             "CREATE TABLE ml.address_locked_balance (
                     address TEXT NOT NULL,
                     block_height bigint NOT NULL,
@@ -732,6 +847,22 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         .await?;
 
         self.just_execute(
+            "CREATE TABLE ml.coin_or_token_decimals (
+                    coin_or_token_id bytea NOT NULL,
+                    block_height bigint NOT NULL,
+                    number_of_decimals smallint NOT NULL,
+                    PRIMARY KEY (coin_or_token_id)
+                );",
+        )
+        .await?;
+
+        // index for reorgs
+        self.just_execute(
+            "CREATE INDEX coin_or_token_decimals_block_height ON ml.coin_or_token_decimals (block_height DESC);",
+        )
+        .await?;
+
+        self.just_execute(
             "CREATE TABLE ml.statistics (
             statistic TEXT NOT NULL,
             coin_or_token_id bytea NOT NULL,
@@ -835,6 +966,15 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             )
             .await
             .map_err(|e| ApiServerStorageError::InitializationError(e.to_string()))?;
+
+        let coin_or_token_id = CoinOrTokenId::Coin;
+        self.tx
+            .execute(
+                "INSERT INTO ml.coin_or_token_decimals (coin_or_token_id, block_height, number_of_decimals) VALUES ($1, $2, $3);",
+                &[&coin_or_token_id.encode(), &0_i64, &(chain_config.coin_decimals() as i16)],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
 
         Ok(())
     }
@@ -1941,7 +2081,21 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 "INSERT INTO ml.fungible_token (token_id, block_height, issuance, ticker) VALUES ($1, $2, $3, $4)
                     ON CONFLICT (token_id, block_height) DO UPDATE
                     SET issuance = $3, ticker = $4;",
-                &[&token_id.encode(), &height, &issuance.encode(), &issuance.token_ticker],
+                &[
+                    &token_id.encode(),
+                    &height,
+                    &issuance.encode(),
+                    &issuance.token_ticker,
+                ],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        let coin_or_token_id = CoinOrTokenId::TokenId(token_id);
+        self.tx
+            .execute(
+                "INSERT INTO ml.coin_or_token_decimals (coin_or_token_id, block_height, number_of_decimals) VALUES ($1, $2, $3) ON CONFLICT (coin_or_token_id) DO NOTHING;",
+                &[&coin_or_token_id.encode(), &height, &(issuance.number_of_decimals as i16)],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
@@ -2192,6 +2346,23 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         Ok(())
     }
 
+    pub async fn del_coin_or_token_decimals_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        let height = Self::block_height_to_postgres_friendly(block_height);
+
+        self.tx
+            .execute(
+                "DELETE FROM ml.coin_or_token_decimals WHERE block_height > $1;",
+                &[&height],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        Ok(())
+    }
+
     pub async fn get_nft_token_issuance(
         &self,
         token_id: TokenId,
@@ -2252,6 +2423,15 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .execute(
                 "INSERT INTO ml.nft_issuance (nft_id, block_height, issuance, ticker, owner) VALUES ($1, $2, $3, $4, $5);",
                 &[&token_id.encode(), &height, &issuance.encode(), ticker, &owner.encode()],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        let coin_or_token_id = CoinOrTokenId::TokenId(token_id);
+        self.tx
+            .execute(
+                "INSERT INTO ml.coin_or_token_decimals (coin_or_token_id, block_height, number_of_decimals) VALUES ($1, $2, $3);",
+                &[&coin_or_token_id.encode(), &height, &0_i16],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;

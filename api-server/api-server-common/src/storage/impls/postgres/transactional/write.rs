@@ -302,6 +302,16 @@ impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'_> {
         Ok(())
     }
 
+    async fn del_coin_or_token_decimals_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        conn.del_coin_or_token_decimals_above_height(block_height).await?;
+
+        Ok(())
+    }
+
     async fn set_statistic(
         &mut self,
         statistic: CoinOrTokenStatistic,
@@ -372,6 +382,16 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
     ) -> Result<Option<Amount>, ApiServerStorageError> {
         let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_address_balance(address, coin_or_token_id).await?;
+
+        Ok(res)
+    }
+
+    async fn get_address_balances(
+        &self,
+        address: &str,
+    ) -> Result<Vec<(CoinOrTokenId, Amount, u8)>, ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_address_balances(address).await?;
 
         Ok(res)
     }

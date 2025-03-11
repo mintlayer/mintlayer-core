@@ -362,6 +362,11 @@ async fn disconnect_tables_above_height<T: ApiServerStorageWrite>(
         .expect("Unable to disconnect nft issuances");
 
     db_tx
+        .del_coin_or_token_decimals_above_height(block_height)
+        .await
+        .expect("Unable to disconnect coin or token decimals");
+
+    db_tx
         .del_main_chain_blocks_above_height(block_height)
         .await
         .expect("Unable to disconnect block");
@@ -1567,6 +1572,10 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                     .expect("Unable to encode destination");
                 address_transactions.entry(address.clone()).or_default().insert(transaction_id);
 
+                db_tx
+                    .set_nft_token_issuance(*token_id, block_height, *issuance.clone(), destination)
+                    .await?;
+
                 increase_address_amount(
                     db_tx,
                     &address,
@@ -1601,9 +1610,6 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                 )
                 .await;
 
-                db_tx
-                    .set_nft_token_issuance(*token_id, block_height, *issuance.clone(), destination)
-                    .await?;
                 set_utxo(
                     outpoint,
                     output,

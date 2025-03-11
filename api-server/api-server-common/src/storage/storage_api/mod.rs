@@ -522,6 +522,11 @@ pub trait ApiServerStorageRead: Sync {
         coin_or_token_id: CoinOrTokenId,
     ) -> Result<Option<Amount>, ApiServerStorageError>;
 
+    async fn get_address_balances(
+        &self,
+        address: &str,
+    ) -> Result<Vec<(CoinOrTokenId, Amount, u8)>, ApiServerStorageError>;
+
     async fn get_address_locked_balance(
         &self,
         address: &str,
@@ -830,6 +835,11 @@ pub trait ApiServerStorageWrite: ApiServerStorageRead {
     ) -> Result<(), ApiServerStorageError>;
 
     async fn del_nft_issuance_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError>;
+
+    async fn del_coin_or_token_decimals_above_height(
         &mut self,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError>;

@@ -237,6 +237,13 @@ impl ApiServerStorageWrite for ApiServerInMemoryStorageTransactionalRw<'_> {
         self.transaction.del_nft_issuance_above_height(block_height)
     }
 
+    async fn del_coin_or_token_decimals_above_height(
+        &mut self,
+        _block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        Ok(())
+    }
+
     async fn set_statistic(
         &mut self,
         statistic: CoinOrTokenStatistic,
@@ -288,6 +295,13 @@ impl ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRw<'_> {
         coin_or_token_id: CoinOrTokenId,
     ) -> Result<Option<Amount>, ApiServerStorageError> {
         self.transaction.get_address_balance(address, coin_or_token_id)
+    }
+
+    async fn get_address_balances(
+        &self,
+        address: &str,
+    ) -> Result<Vec<(CoinOrTokenId, Amount, u8)>, ApiServerStorageError> {
+        self.transaction.get_address_balances(address)
     }
 
     async fn get_address_locked_balance(

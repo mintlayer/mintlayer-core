@@ -602,14 +602,10 @@ pub async fn address<T: ApiServerStorage>(
         ApiServerWebServerError::NotFound(ApiServerWebServerNotFoundError::AddressNotFound,)
     );
 
-    let coin_balance = tx
-        .get_address_balance(&address.to_string(), CoinOrTokenId::Coin)
-        .await
-        .map_err(|e| {
-            logging::log::error!("internal error: {e}");
-            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
-        })?
-        .unwrap_or(Amount::ZERO);
+    let address_balances = tx.get_address_balances(&address.to_string()).await.map_err(|e| {
+        logging::log::error!("internal error: {e}");
+        ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+    })?;
 
     let locked_coin_balance = tx
         .get_address_locked_balance(&address.to_string(), CoinOrTokenId::Coin)
@@ -620,11 +616,28 @@ pub async fn address<T: ApiServerStorage>(
         })?
         .unwrap_or(Amount::ZERO);
 
+    let mut tokens = Vec::with_capacity(address_balances.len());
+    let mut coin_balance = Amount::ZERO;
+
+    for (coin_or_token_id, amount, decimals) in address_balances {
+        match coin_or_token_id {
+            CoinOrTokenId::Coin => {
+                coin_balance = amount;
+            }
+            CoinOrTokenId::TokenId(token_id) => {
+                tokens.push(json!({
+                    "token_id": Address::new(&state.chain_config, token_id).expect("no error").as_str(),
+                    "amount": amount_to_json(amount, decimals),
+                }));
+            }
+        }
+    }
+
     Ok(Json(json!({
-    "coin_balance": amount_to_json(coin_balance, state.chain_config.coin_decimals()),
-    "locked_coin_balance": amount_to_json(locked_coin_balance, state.chain_config.coin_decimals()),
-    "transaction_history": transaction_history
-    //TODO "token_balances": destination_summary.token_balances(),
+        "coin_balance": amount_to_json(coin_balance, state.chain_config.coin_decimals()),
+        "locked_coin_balance": amount_to_json(locked_coin_balance, state.chain_config.coin_decimals()),
+        "transaction_history": transaction_history,
+        "tokens": tokens
     })))
 }
 

@@ -1147,6 +1147,13 @@ where
             .await
             .unwrap();
 
+        let balances = db_tx.get_address_balances(address2.as_str()).await.unwrap();
+        assert_eq!(balances.len(), 1);
+        let balance = balances[0];
+        assert_eq!(balance.0, CoinOrTokenId::TokenId(random_token_id));
+        assert_eq!(balance.1, Amount::from_atoms(1));
+        assert_eq!(balance.2, 0);
+
         let returned_nft = db_tx.get_nft_token_issuance(random_token_id).await.unwrap().unwrap();
 
         assert_eq!(returned_nft.nft, nft);
@@ -1185,16 +1192,17 @@ where
         let (_, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
 
         let random_destination = Destination::PublicKeyHash(PublicKeyHash::from(&pk));
+        let random_num_decimals = rng.gen_range(1..18);
 
         let token_data = FungibleTokenData {
             token_ticker: "XXXX".as_bytes().to_vec(),
-            number_of_decimals: rng.gen_range(1..18),
+            number_of_decimals: random_num_decimals,
             metadata_uri: "http://uri".as_bytes().to_vec(),
             circulating_supply: Amount::ZERO,
             total_supply: TokenTotalSupply::Unlimited,
             is_locked: false,
             frozen: IsTokenFrozen::No(IsTokenFreezable::Yes),
-            authority: random_destination,
+            authority: random_destination.clone(),
         };
 
         let mut db_tx = storage.transaction_rw().await.unwrap();
@@ -1228,6 +1236,25 @@ where
             db_tx.get_fungible_token_issuance(random_token_id).await.unwrap().unwrap();
 
         assert_eq!(returned_token, locked_token_data);
+
+        let address = Address::new(&chain_config, random_destination).unwrap();
+        let random_amount = Amount::from_atoms(rng.gen_range(0..100_000));
+        db_tx
+            .set_address_balance_at_height(
+                &address,
+                random_amount,
+                CoinOrTokenId::TokenId(random_token_id),
+                block_height.next_height(),
+            )
+            .await
+            .unwrap();
+
+        let balances = db_tx.get_address_balances(address.as_str()).await.unwrap();
+        assert_eq!(balances.len(), 1);
+        let balance = balances[0];
+        assert_eq!(balance.0, CoinOrTokenId::TokenId(random_token_id));
+        assert_eq!(balance.1, random_amount);
+        assert_eq!(balance.2, random_num_decimals);
 
         // after reorg go back to the previous token data
         db_tx.del_token_issuance_above_height(block_height).await.unwrap();

@@ -45,6 +45,13 @@ impl ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'_> {
         self.transaction.get_address_balance(address, coin_or_token_id)
     }
 
+    async fn get_address_balances(
+        &self,
+        address: &str,
+    ) -> Result<Vec<(CoinOrTokenId, Amount, u8)>, ApiServerStorageError> {
+        self.transaction.get_address_balances(address)
+    }
+
     async fn get_address_locked_balance(
         &self,
         address: &str,
