@@ -19,7 +19,6 @@ use std::{
 };
 
 use bb8_postgres::{bb8::PooledConnection, PostgresConnectionManager};
-use pos_accounting::PoolData;
 use serialization::{DecodeAll, Encode};
 
 use common::{
@@ -39,7 +38,8 @@ use crate::storage::{
     storage_api::{
         block_aux_data::{BlockAuxData, BlockWithExtraData},
         ApiServerStorageError, BlockInfo, CoinOrTokenStatistic, Delegation, FungibleTokenData,
-        LockedUtxo, NftWithOwner, Order, PoolBlockStats, TransactionInfo, Utxo, UtxoWithExtraInfo,
+        LockedUtxo, NftWithOwner, Order, PoolBlockStats, PoolDataWithExtraInfo, TransactionInfo,
+        Utxo, UtxoWithExtraInfo,
     },
 };
 
@@ -145,9 +145,8 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .query_opt(
                 r#"
                     SELECT amount
-                    FROM ml.address_balance
+                    FROM ml.latest_address_balance_cache
                     WHERE address = $1 AND coin_or_token_id = $2
-                    ORDER BY block_height DESC
                     LIMIT 1;
                 "#,
                 &[&address, &coin_or_token_id.encode()],
@@ -168,6 +167,49 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     Ok(Some(amount))
                 },
             )
+    }
+
+    pub async fn get_address_balances(
+        &self,
+        address: &str,
+    ) -> Result<Vec<(CoinOrTokenId, Amount, u8)>, ApiServerStorageError> {
+        let rows = self
+            .tx
+            .query(
+                r#"
+                    SELECT coin_or_token_id, amount, number_of_decimals
+                    FROM ml.latest_address_balance_cache
+                    WHERE address = $1;
+                "#,
+                &[&address],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        rows.into_iter()
+            .map(|row| {
+                let coin_or_token_id: Vec<u8> = row.get(0);
+                let amount: Vec<u8> = row.get(1);
+                let number_of_decimals: i16 = row.get(2);
+
+                let amount = Amount::decode_all(&mut amount.as_slice()).map_err(|e| {
+                    ApiServerStorageError::DeserializationError(format!(
+                        "Amount deserialization failed: {}",
+                        e
+                    ))
+                })?;
+
+                let coin_or_token_id = CoinOrTokenId::decode_all(&mut coin_or_token_id.as_slice())
+                    .map_err(|e| {
+                        ApiServerStorageError::DeserializationError(format!(
+                            "CoinOrTokenId deserialization failed: {}",
+                            e
+                        ))
+                    })?;
+
+                Ok((coin_or_token_id, amount, number_of_decimals as u8))
+            })
+            .collect()
     }
 
     pub async fn get_address_locked_balance(
@@ -218,6 +260,45 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
 
+        // delete and update the address balance from the cache table
+        self.tx
+            .execute(
+                r#"
+                WITH deleted_cache_rows AS (
+                    DELETE FROM ml.latest_address_balance_cache
+                    WHERE block_height > $1
+                    RETURNING address, coin_or_token_id
+                ),
+                latest_address_balances_for_deleted AS (
+                    SELECT
+                        dcr.address,
+                        dcr.coin_or_token_id,
+                        ld.block_height,
+                        ld.amount,
+                        dec.number_of_decimals
+                    FROM deleted_cache_rows dcr, ml.coin_or_token_decimals dec
+                    CROSS JOIN LATERAL (
+                        SELECT block_height, amount, dec.number_of_decimals
+                        FROM ml.address_balance d_inner
+                        WHERE d_inner.address = dcr.address AND d_inner.coin_or_token_id = dcr.coin_or_token_id AND d_inner.coin_or_token_id = dec.coin_or_token_id
+                        ORDER BY block_height DESC
+                        LIMIT 1
+                    ) AS ld
+                )
+                INSERT INTO ml.latest_address_balance_cache (address, block_height, coin_or_token_id, amount, number_of_decimals)
+                SELECT
+                    ld.address,
+                    ld.block_height,
+                    ld.coin_or_token_id,
+                    ld.amount,
+                    ld.number_of_decimals
+                FROM latest_address_balances_for_deleted ld;
+                "#,
+                &[&height],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
         Ok(())
     }
 
@@ -246,6 +327,24 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
         let height = Self::block_height_to_postgres_friendly(block_height);
+
+        self.tx
+            .execute(
+                r#"
+                    INSERT INTO ml.latest_address_balance_cache (address, block_height, coin_or_token_id, amount, number_of_decimals)
+                    VALUES($1, $2, $3, $4,
+                        (SELECT number_of_decimals
+                         FROM ml.coin_or_token_decimals
+                         WHERE coin_or_token_id = $3
+                         LIMIT 1)
+                     )
+                    ON CONFLICT (address, coin_or_token_id) DO UPDATE
+                    SET block_height = $2, amount = $4;
+                "#,
+                &[&address.to_string(), &height, &coin_or_token_id.encode(), &amount.encode()],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
 
         self.tx
             .execute(
@@ -305,7 +404,8 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     ON CONFLICT (nft_id, block_height) DO UPDATE
                     SET
                         ticker = EXCLUDED.ticker,
-                        owner = EXCLUDED.owner;"#,
+                        owner = EXCLUDED.owner;
+                "#,
                 &[&token_id.encode(), &height, &owner.map(|o| o.as_object().encode())],
             )
             .await
@@ -553,10 +653,10 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         .await?;
 
         // Add ml.blocks indexes on height and timestamp
-        self.just_execute("CREATE INDEX blocks_block_height_index ON ml.blocks (block_height);")
+        self.just_execute("CREATE INDEX blocks_block_height_index ON ml.blocks (block_height) WHERE block_height IS NOT NULL;")
             .await?;
         self.just_execute(
-            "CREATE INDEX blocks_block_timestamp_index ON ml.blocks (block_timestamp);",
+            "CREATE INDEX blocks_block_timestamp_index ON ml.blocks (block_timestamp) WHERE block_height IS NOT NULL;",
         )
         .await?;
 
@@ -575,10 +675,26 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     block_height bigint NOT NULL,
                     coin_or_token_id bytea NOT NULL,
                     amount bytea NOT NULL,
-                    PRIMARY KEY (address, block_height, coin_or_token_id)
+                    PRIMARY KEY (address, coin_or_token_id, block_height)
                 );",
         )
         .await?;
+
+        self.just_execute(
+            "CREATE TABLE ml.latest_address_balance_cache (
+                    address TEXT NOT NULL,
+                    block_height bigint NOT NULL,
+                    coin_or_token_id bytea NOT NULL,
+                    amount bytea NOT NULL,
+                    number_of_decimals smallint NOT NULL,
+                    PRIMARY KEY (address, coin_or_token_id)
+                );",
+        )
+        .await?;
+
+        // index for reorgs
+        self.just_execute("CREATE INDEX latest_address_balance_cache_block_height ON ml.latest_address_balance_cache (block_height DESC);")
+            .await?;
 
         self.just_execute(
             "CREATE TABLE ml.address_locked_balance (
@@ -586,7 +702,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     block_height bigint NOT NULL,
                     coin_or_token_id bytea NOT NULL,
                     amount bytea NOT NULL,
-                    PRIMARY KEY (address, block_height, coin_or_token_id)
+                    PRIMARY KEY (address, coin_or_token_id, block_height)
                 );",
         )
         .await?;
@@ -612,6 +728,10 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 );",
         )
         .await?;
+
+        // index for reorgs
+        self.just_execute("CREATE INDEX utxo_block_height ON ml.utxo (block_height DESC);")
+            .await?;
 
         self.just_execute(
             "CREATE TABLE ml.locked_utxo (
@@ -645,6 +765,12 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         )
         .await?;
 
+        // index when searching for number of minted blocks
+        self.just_execute(
+            "CREATE INDEX pool_data_block_height ON ml.pool_data (pool_id, block_height DESC) WHERE (staker_balance::NUMERIC != 0);",
+        )
+        .await?;
+
         self.just_execute(
             "CREATE TABLE ml.delegations (
                     delegation_id TEXT NOT NULL,
@@ -659,9 +785,29 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         )
         .await?;
 
+        self.just_execute(
+            "CREATE TABLE ml.latest_delegations_cache (
+                    delegation_id TEXT NOT NULL,
+                    block_height bigint NOT NULL,
+                    creation_block_height bigint NOT NULL,
+                    pool_id TEXT NOT NULL,
+                    balance TEXT NOT NULL,
+                    next_nonce bytea NOT NULL,
+                    spend_destination bytea NOT NULL,
+                    PRIMARY KEY (pool_id, delegation_id)
+                );",
+        )
+        .await?;
+
         // index when searching for delegations by address
         self.just_execute(
-            "CREATE INDEX delegations_spend_destination_index ON ml.delegations (spend_destination);",
+            "CREATE INDEX latest_delegations_spend_destination_index ON ml.latest_delegations_cache (spend_destination);",
+        )
+        .await?;
+
+        // index for reorgs for latest_delegations_cache
+        self.just_execute(
+            "CREATE INDEX latest_delegations_by_block_height_index ON ml.latest_delegations_cache (block_height);",
         )
         .await?;
 
@@ -701,6 +847,22 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         .await?;
 
         self.just_execute(
+            "CREATE TABLE ml.coin_or_token_decimals (
+                    coin_or_token_id bytea NOT NULL,
+                    block_height bigint NOT NULL,
+                    number_of_decimals smallint NOT NULL,
+                    PRIMARY KEY (coin_or_token_id)
+                );",
+        )
+        .await?;
+
+        // index for reorgs
+        self.just_execute(
+            "CREATE INDEX coin_or_token_decimals_block_height ON ml.coin_or_token_decimals (block_height DESC);",
+        )
+        .await?;
+
+        self.just_execute(
             "CREATE TABLE ml.statistics (
             statistic TEXT NOT NULL,
             coin_or_token_id bytea NOT NULL,
@@ -708,6 +870,12 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             amount bytea NOT NULL,
             PRIMARY KEY (statistic, coin_or_token_id, block_height)
         );",
+        )
+        .await?;
+
+        // index for reorgs
+        self.just_execute(
+            "CREATE INDEX statistics_block_height ON ml.statistics (block_height DESC);",
         )
         .await?;
 
@@ -798,6 +966,15 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             )
             .await
             .map_err(|e| ApiServerStorageError::InitializationError(e.to_string()))?;
+
+        let coin_or_token_id = CoinOrTokenId::Coin;
+        self.tx
+            .execute(
+                "INSERT INTO ml.coin_or_token_decimals (coin_or_token_id, block_height, number_of_decimals) VALUES ($1, $2, $3);",
+                &[&coin_or_token_id.encode(), &0_i64, &(chain_config.coin_decimals() as i16)],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
 
         Ok(())
     }
@@ -957,10 +1134,11 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         let row = self
             .tx
             .query_opt(
-                r#"SELECT pool_id, balance, spend_destination, next_nonce, creation_block_height
-                FROM ml.delegations
+                r#"
+                SELECT pool_id, balance, spend_destination, next_nonce, creation_block_height
+                FROM ml.latest_delegations_cache
                 WHERE delegation_id = $1
-                AND block_height = (SELECT MAX(block_height) FROM ml.delegations WHERE delegation_id = $1);
+                LIMIT 1;
                 "#,
                 &[&delegation_id.as_str()],
             )
@@ -1020,13 +1198,10 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         let rows = self
             .tx
             .query(
-                r#"SELECT delegation_id, pool_id, balance, spend_destination, next_nonce, creation_block_height
-                FROM (
-                    SELECT delegation_id, pool_id, balance, spend_destination, next_nonce, creation_block_height, ROW_NUMBER() OVER(PARTITION BY delegation_id ORDER BY block_height DESC) as newest
-                    FROM ml.delegations
-                    WHERE spend_destination = $1
-                ) AS sub
-                WHERE newest = 1;
+                r#"
+                SELECT delegation_id, pool_id, balance, spend_destination, next_nonce, creation_block_height
+                FROM ml.latest_delegations_cache
+                WHERE spend_destination = $1
                 "#,
                 &[&address.encode()],
             )
@@ -1099,6 +1274,27 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         self.tx
             .execute(
                 r#"
+                    INSERT INTO ml.latest_delegations_cache (delegation_id, block_height, pool_id, balance, spend_destination, next_nonce, creation_block_height)
+                    VALUES($1, $2, $3, $4, $5, $6, $7)
+                    ON CONFLICT (pool_id, delegation_id) DO UPDATE
+                    SET block_height = $2, balance = $4, spend_destination = $5, next_nonce = $6, creation_block_height = $7;
+                "#,
+                &[
+                    &delegation_id.as_str(),
+                    &height,
+                    &pool_id.as_str(),
+                    &amount_to_str(*delegation.balance()),
+                    &delegation.spend_destination().encode(),
+                    &delegation.next_nonce().encode(),
+                    &creation_block_height,
+                ],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        self.tx
+            .execute(
+                r#"
                     INSERT INTO ml.delegations (delegation_id, block_height, pool_id, balance, spend_destination, next_nonce, creation_block_height)
                     VALUES($1, $2, $3, $4, $5, $6, $7)
                     ON CONFLICT (delegation_id, block_height) DO UPDATE
@@ -1126,9 +1322,60 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
     ) -> Result<(), ApiServerStorageError> {
         let height = Self::block_height_to_postgres_friendly(block_height);
 
+        // delete the delegations from the main table
         self.tx
             .execute(
                 "DELETE FROM ml.delegations WHERE block_height > $1;",
+                &[&height],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        // delete and update the delegations from the cache table
+        self.tx
+            .execute(
+                r#"
+                WITH deleted_cache_rows AS (
+                    DELETE FROM ml.latest_delegations_cache
+                    WHERE block_height > $1
+                    RETURNING delegation_id
+                ),
+                latest_delegations_for_deleted AS (
+                    SELECT
+                        dcr.delegation_id,
+                        ld.block_height,
+                        ld.creation_block_height,
+                        ld.pool_id,
+                        ld.balance,
+                        ld.next_nonce,
+                        ld.spend_destination
+                    FROM deleted_cache_rows dcr
+                    CROSS JOIN LATERAL (
+                        SELECT
+                            delegation_id,
+                            block_height,
+                            creation_block_height,
+                            pool_id,
+                            balance,
+                            next_nonce,
+                            spend_destination
+                        FROM ml.delegations d_inner
+                        WHERE d_inner.delegation_id = dcr.delegation_id
+                        ORDER BY block_height DESC
+                        LIMIT 1
+                    ) AS ld
+                )
+                INSERT INTO ml.latest_delegations_cache (delegation_id, block_height, creation_block_height, pool_id, balance, next_nonce, spend_destination)
+                SELECT
+                    ld.delegation_id,
+                    ld.block_height,
+                    ld.creation_block_height,
+                    ld.pool_id,
+                    ld.balance,
+                    ld.next_nonce,
+                    ld.spend_destination
+                FROM latest_delegations_for_deleted ld;
+                "#,
                 &[&height],
             )
             .await
@@ -1167,7 +1414,8 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         let row = self
             .tx
             .query_one(
-                r#"SELECT COUNT(*)
+                r#"
+                SELECT COUNT(*)
                     FROM ml.pool_data
                     WHERE pool_id = $1 AND block_height BETWEEN $2 AND $3
                     AND block_height != (SELECT COALESCE(MIN(block_height), 0) FROM ml.pool_data WHERE pool_id = $1)
@@ -1193,13 +1441,10 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .map_err(|_| ApiServerStorageError::AddressableError)?;
         self.tx
             .query(
-                r#"SELECT delegation_id, balance, spend_destination, next_nonce, creation_block_height
-                    FROM ml.delegations
-                    WHERE pool_id = $1
-                    AND (delegation_id, block_height) in (SELECT delegation_id, MAX(block_height)
-                                                            FROM ml.delegations
-                                                            WHERE pool_id = $1
-                                                            GROUP BY delegation_id)
+                r#"
+                SELECT delegation_id, balance, spend_destination, next_nonce, creation_block_height
+                FROM ml.latest_delegations_cache
+                WHERE pool_id = $1;
                 "#,
                 &[&pool_id_str.as_str()],
             )
@@ -1255,7 +1500,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         &mut self,
         pool_id: PoolId,
         chain_config: &ChainConfig,
-    ) -> Result<Option<PoolData>, ApiServerStorageError> {
+    ) -> Result<Option<PoolDataWithExtraInfo>, ApiServerStorageError> {
         let pool_id = Address::new(chain_config, pool_id)
             .map_err(|_| ApiServerStorageError::AddressableError)?;
         self.tx
@@ -1275,8 +1520,8 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 || Ok(None),
                 |row| {
                     let pool_data: Vec<u8> = row.get(0);
-                    let pool_data =
-                        PoolData::decode_all(&mut pool_data.as_slice()).map_err(|e| {
+                    let pool_data = PoolDataWithExtraInfo::decode_all(&mut pool_data.as_slice())
+                        .map_err(|e| {
                             ApiServerStorageError::DeserializationError(format!(
                                 "Pool data deserialization failed: {}",
                                 e
@@ -1293,7 +1538,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         len: u32,
         offset: u32,
         chain_config: &ChainConfig,
-    ) -> Result<Vec<(PoolId, PoolData)>, ApiServerStorageError> {
+    ) -> Result<Vec<(PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError> {
         let len = len as i64;
         let offset = offset as i64;
         self.tx
@@ -1314,13 +1559,13 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?
             .into_iter()
-            .map(|row| -> Result<(PoolId, PoolData), ApiServerStorageError> {
+            .map(|row| -> Result<(PoolId, PoolDataWithExtraInfo), ApiServerStorageError> {
                 let pool_id: String = row.get(0);
                 let pool_id = Address::<PoolId>::from_string(chain_config, pool_id)
                     .map_err(|_| ApiServerStorageError::AddressableError)?
                     .into_object();
                 let pool_data: Vec<u8> = row.get(1);
-                let pool_data = PoolData::decode_all(&mut pool_data.as_slice()).map_err(|e| {
+                let pool_data = PoolDataWithExtraInfo::decode_all(&mut pool_data.as_slice()).map_err(|e| {
                     ApiServerStorageError::DeserializationError(format!(
                         "Pool data deserialization failed: {}",
                         e
@@ -1337,7 +1582,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         len: u32,
         offset: u32,
         chain_config: &ChainConfig,
-    ) -> Result<Vec<(PoolId, PoolData)>, ApiServerStorageError> {
+    ) -> Result<Vec<(PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError> {
         let len = len as i64;
         let offset = offset as i64;
         self.tx
@@ -1358,13 +1603,13 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?
             .into_iter()
-            .map(|row| -> Result<(PoolId, PoolData), ApiServerStorageError> {
+            .map(|row| -> Result<(PoolId, PoolDataWithExtraInfo), ApiServerStorageError> {
                 let pool_id: String = row.get(0);
                 let pool_id = Address::<PoolId>::from_string(chain_config, pool_id)
                     .map_err(|_| ApiServerStorageError::AddressableError)?
                     .into_object();
                 let pool_data: Vec<u8> = row.get(1);
-                let pool_data = PoolData::decode_all(&mut pool_data.as_slice()).map_err(|e| {
+                let pool_data = PoolDataWithExtraInfo::decode_all(&mut pool_data.as_slice()).map_err(|e| {
                     ApiServerStorageError::DeserializationError(format!(
                         "Pool data deserialization failed: {}",
                         e
@@ -1379,7 +1624,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
     pub async fn set_pool_data_at_height(
         &mut self,
         pool_id: PoolId,
-        pool_data: &PoolData,
+        pool_data: &PoolDataWithExtraInfo,
         block_height: BlockHeight,
         chain_config: &ChainConfig,
     ) -> Result<(), ApiServerStorageError> {
@@ -1393,6 +1638,8 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 r#"
                     INSERT INTO ml.pool_data (pool_id, block_height, staker_balance, data)
                     VALUES ($1, $2, $3, $4)
+                    ON CONFLICT (pool_id, block_height) DO UPDATE
+                    SET staker_balance = $3, data = $4;
                 "#,
                 &[&pool_id.as_str(), &height, &amount_str, &pool_data.encode()],
             )
@@ -1834,7 +2081,21 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 "INSERT INTO ml.fungible_token (token_id, block_height, issuance, ticker) VALUES ($1, $2, $3, $4)
                     ON CONFLICT (token_id, block_height) DO UPDATE
                     SET issuance = $3, ticker = $4;",
-                &[&token_id.encode(), &height, &issuance.encode(), &issuance.token_ticker],
+                &[
+                    &token_id.encode(),
+                    &height,
+                    &issuance.encode(),
+                    &issuance.token_ticker,
+                ],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        let coin_or_token_id = CoinOrTokenId::TokenId(token_id);
+        self.tx
+            .execute(
+                "INSERT INTO ml.coin_or_token_decimals (coin_or_token_id, block_height, number_of_decimals) VALUES ($1, $2, $3) ON CONFLICT (coin_or_token_id) DO NOTHING;",
+                &[&coin_or_token_id.encode(), &height, &(issuance.number_of_decimals as i16)],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
@@ -2085,6 +2346,23 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         Ok(())
     }
 
+    pub async fn del_coin_or_token_decimals_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        let height = Self::block_height_to_postgres_friendly(block_height);
+
+        self.tx
+            .execute(
+                "DELETE FROM ml.coin_or_token_decimals WHERE block_height > $1;",
+                &[&height],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        Ok(())
+    }
+
     pub async fn get_nft_token_issuance(
         &self,
         token_id: TokenId,
@@ -2145,6 +2423,15 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .execute(
                 "INSERT INTO ml.nft_issuance (nft_id, block_height, issuance, ticker, owner) VALUES ($1, $2, $3, $4, $5);",
                 &[&token_id.encode(), &height, &issuance.encode(), ticker, &owner.encode()],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        let coin_or_token_id = CoinOrTokenId::TokenId(token_id);
+        self.tx
+            .execute(
+                "INSERT INTO ml.coin_or_token_decimals (coin_or_token_id, block_height, number_of_decimals) VALUES ($1, $2, $3);",
+                &[&coin_or_token_id.encode(), &height, &0_i16],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
@@ -2247,10 +2534,12 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         let row = self
             .tx
             .query_opt(
-                r#"SELECT order_id, initially_asked, ask_balance, ask_currency, initially_given, give_balance, give_currency, conclude_destination, next_nonce, creation_block_height
+                r#"
+                SELECT order_id, initially_asked, ask_balance, ask_currency, initially_given, give_balance, give_currency, conclude_destination, next_nonce, creation_block_height
                 FROM ml.orders
                 WHERE order_id = $1
-                AND block_height = (SELECT MAX(block_height) FROM ml.orders WHERE order_id = $1);
+                ORDER BY block_height DESC
+                LIMIT 1;
                 "#,
                 &[&order_id_addr.as_str()],
             )

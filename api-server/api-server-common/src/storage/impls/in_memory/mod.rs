@@ -18,8 +18,8 @@ pub mod transactional;
 use crate::storage::storage_api::{
     block_aux_data::{BlockAuxData, BlockWithExtraData},
     ApiServerStorageError, BlockInfo, CoinOrTokenStatistic, Delegation, FungibleTokenData,
-    LockedUtxo, NftWithOwner, Order, PoolBlockStats, TransactionInfo, Utxo, UtxoLock,
-    UtxoWithExtraInfo,
+    LockedUtxo, NftWithOwner, Order, PoolBlockStats, PoolDataWithExtraInfo, TransactionInfo, Utxo,
+    UtxoLock, UtxoWithExtraInfo,
 };
 use common::{
     address::Address,
@@ -31,7 +31,6 @@ use common::{
     },
     primitives::{id::WithId, Amount, BlockHeight, CoinOrTokenId, Id},
 };
-use pos_accounting::PoolData;
 use std::{
     cmp::Reverse,
     collections::{BTreeMap, BTreeSet},
@@ -45,12 +44,12 @@ use super::CURRENT_STORAGE_VERSION;
 struct ApiServerInMemoryStorage {
     block_table: BTreeMap<Id<Block>, BlockWithExtraData>,
     block_aux_data_table: BTreeMap<Id<Block>, BlockAuxData>,
-    address_balance_table: BTreeMap<String, BTreeMap<(CoinOrTokenId, BlockHeight), Amount>>,
+    address_balance_table: BTreeMap<String, BTreeMap<CoinOrTokenId, BTreeMap<BlockHeight, Amount>>>,
     address_locked_balance_table: BTreeMap<String, BTreeMap<(CoinOrTokenId, BlockHeight), Amount>>,
     address_transactions_table: BTreeMap<String, BTreeMap<BlockHeight, Vec<Id<Transaction>>>>,
     delegation_table: BTreeMap<DelegationId, BTreeMap<BlockHeight, Delegation>>,
     main_chain_blocks_table: BTreeMap<BlockHeight, Id<Block>>,
-    pool_data_table: BTreeMap<PoolId, BTreeMap<BlockHeight, PoolData>>,
+    pool_data_table: BTreeMap<PoolId, BTreeMap<BlockHeight, PoolDataWithExtraInfo>>,
     transaction_table: BTreeMap<Id<Transaction>, (Id<Block>, TransactionInfo)>,
     utxo_table: BTreeMap<UtxoOutPoint, BTreeMap<BlockHeight, Utxo>>,
     address_utxos: BTreeMap<String, BTreeSet<UtxoOutPoint>>,
@@ -63,6 +62,7 @@ struct ApiServerInMemoryStorage {
     orders_table: BTreeMap<OrderId, BTreeMap<BlockHeight, Order>>,
     best_block: BlockAuxData,
     genesis_block: Arc<WithId<Genesis>>,
+    number_of_coin_decimals: u8,
     storage_version: u32,
 }
 
@@ -92,6 +92,7 @@ impl ApiServerInMemoryStorage {
                 0.into(),
                 chain_config.genesis_block().timestamp(),
             ),
+            number_of_coin_decimals: chain_config.coin_decimals(),
             storage_version: super::CURRENT_STORAGE_VERSION,
         };
         result
@@ -109,15 +110,49 @@ impl ApiServerInMemoryStorage {
         address: &str,
         coin_or_token_id: CoinOrTokenId,
     ) -> Result<Option<Amount>, ApiServerStorageError> {
-        self.address_balance_table.get(address).map_or_else(
-            || Ok(None),
-            |balance| {
-                let range_begin = (coin_or_token_id, BlockHeight::zero());
-                let range_end = (coin_or_token_id, BlockHeight::max());
-                let range = balance.range(range_begin..=range_end);
-                Ok(range.last().map(|(_, v)| *v))
-            },
-        )
+        self.address_balance_table
+            .get(address)
+            .and_then(|by_coin_or_token| by_coin_or_token.get(&coin_or_token_id))
+            .map_or_else(
+                || Ok(None),
+                |by_height| Ok(by_height.values().last().copied()),
+            )
+    }
+
+    fn get_address_balances(
+        &self,
+        address: &str,
+    ) -> Result<Vec<(CoinOrTokenId, Amount, u8)>, ApiServerStorageError> {
+        let res =
+            self.address_balance_table
+                .get(address)
+                .map_or_else(Vec::new, |by_coin_or_token| {
+                    by_coin_or_token
+                        .iter()
+                        .map(|(coin_or_token_id, by_height)| {
+                            let number_of_decimals = match coin_or_token_id {
+                                CoinOrTokenId::Coin => self.number_of_coin_decimals,
+                                CoinOrTokenId::TokenId(token_id) => self
+                                    .fungible_token_issuances
+                                    .get(token_id)
+                                    .map_or(0, |by_height| {
+                                        by_height
+                                            .values()
+                                            .last()
+                                            .expect("not empty")
+                                            .number_of_decimals
+                                    }),
+                            };
+
+                            (
+                                *coin_or_token_id,
+                                *by_height.values().last().expect("not empty"),
+                                number_of_decimals,
+                            )
+                        })
+                        .collect()
+                });
+        Ok(res)
     }
 
     fn get_address_locked_balance(
@@ -416,7 +451,7 @@ impl ApiServerInMemoryStorage {
         &self,
         len: u32,
         offset: u32,
-    ) -> Result<Vec<(PoolId, PoolData)>, ApiServerStorageError> {
+    ) -> Result<Vec<(PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError> {
         let len = len as usize;
         let offset = offset as usize;
         let mut pool_data: Vec<_> = self
@@ -447,7 +482,7 @@ impl ApiServerInMemoryStorage {
         &self,
         len: u32,
         offset: u32,
-    ) -> Result<Vec<(PoolId, PoolData)>, ApiServerStorageError> {
+    ) -> Result<Vec<(PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError> {
         let len = len as usize;
         let offset = offset as usize;
         let mut pool_data: Vec<_> = self
@@ -482,7 +517,10 @@ impl ApiServerInMemoryStorage {
         Ok(Some(*block_id))
     }
 
-    fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, ApiServerStorageError> {
+    fn get_pool_data(
+        &self,
+        pool_id: PoolId,
+    ) -> Result<Option<PoolDataWithExtraInfo>, ApiServerStorageError> {
         let pool_data_result = self.pool_data_table.get(&pool_id);
         match pool_data_result {
             Some(data) => Ok(data.last_key_value().map(|(_, v)| v.clone())),
@@ -747,16 +785,12 @@ impl ApiServerInMemoryStorage {
     ) -> Result<(), ApiServerStorageError> {
         // Inefficient, but acceptable for testing with InMemoryStorage
 
-        self.address_balance_table.iter_mut().for_each(|(_, balance)| {
-            balance
-                .iter()
-                .filter(|((_, height), _)| *height > block_height)
-                .map(|(key, _)| *key)
-                .collect::<Vec<_>>()
-                .iter()
-                .for_each(|key| {
-                    balance.remove(key);
-                })
+        self.address_balance_table.retain(|_, by_coin_or_token| {
+            by_coin_or_token.retain(|_, by_block_height| {
+                by_block_height.retain(|height, _| height <= &block_height);
+                !by_block_height.is_empty()
+            });
+            !by_coin_or_token.is_empty()
         });
 
         Ok(())
@@ -813,7 +847,9 @@ impl ApiServerInMemoryStorage {
         self.address_balance_table
             .entry(address.to_string())
             .or_default()
-            .entry((coin_or_token_id, block_height))
+            .entry(coin_or_token_id)
+            .or_default()
+            .entry(block_height)
             .and_modify(|e| *e = amount)
             .or_insert(amount);
 
@@ -963,7 +999,7 @@ impl ApiServerInMemoryStorage {
     fn set_pool_data_at_height(
         &mut self,
         pool_id: PoolId,
-        pool_data: &PoolData,
+        pool_data: &PoolDataWithExtraInfo,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
         self.pool_data_table
