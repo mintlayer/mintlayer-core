@@ -52,6 +52,7 @@ fn to_line_output<N: NodeInterface>(
 ) -> Result<LineOutput, WalletCliError<N>> {
     match command_output {
         ConsoleCommand::Print(text) => Ok(LineOutput::Print(text)),
+        ConsoleCommand::PaginatedPrint { header, body } => Ok(LineOutput::Print(header + &body)),
         ConsoleCommand::SetStatus {
             status: _,
             print_message,
