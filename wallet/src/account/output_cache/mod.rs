@@ -561,9 +561,18 @@ impl OrderData {
 /// In case of reorg, top blocks (and the transactions they contain) are simply removed from the DB/cache.
 /// A similar approach is used by the Bitcoin Core wallet.
 pub struct OutputCache {
+    // Contains all txs both confirmed and unconfirmed
     txs: BTreeMap<OutPointSourceId, WalletTx>,
-    consumed: BTreeMap<UtxoOutPoint, TxState>,
+    // The collection contains only unconfirmed txs and their descendants.
+    // E.g. if there are 3 dependant txs A -> B -> C the layout would be as follows:
+    //  {A: {B, C}, B: {C}, C: {}}
+    // There are certain invariants associated with it:
+    //  - entries must be present in `txs`;
+    //  - no confirmed txs are allowed;
+    //  - confirmed tx cannot have unconfirmed parent.
     unconfirmed_descendants: BTreeMap<OutPointSourceId, BTreeSet<OutPointSourceId>>,
+    consumed: BTreeMap<UtxoOutPoint, TxState>,
+
     pools: BTreeMap<PoolId, PoolData>,
     delegations: BTreeMap<DelegationId, DelegationData>,
     token_issuance: BTreeMap<TokenId, TokenIssuanceData>,
@@ -742,59 +751,67 @@ impl OutputCache {
         confirmed_tx: &Transaction,
         block_id: Id<GenBlock>,
     ) -> WalletResult<Vec<Id<Transaction>>> {
-        struct Conflict {
+        struct ConflictCheck {
             frozen_token_id: Option<TokenId>,
             confirmed_account_nonce: Option<(AccountType, AccountNonce)>,
         }
 
-        let conflict = confirmed_tx.inputs().iter().find_map(|input| {
-            match input {
-                TxInput::Utxo(_) => {
-                    //TODO: check conflicting utxo spends
-                    // See https://github.com/mintlayer/mintlayer-core/issues/1875
-                    None
-                }
-                TxInput::Account(outpoint) => Some(Conflict {
-                    frozen_token_id: None,
-                    confirmed_account_nonce: Some((outpoint.account().into(), outpoint.nonce())),
-                }),
-                TxInput::AccountCommand(nonce, cmd) => match cmd {
-                    AccountCommand::MintTokens(_, _)
-                    | AccountCommand::UnmintTokens(_)
-                    | AccountCommand::LockTokenSupply(_)
-                    | AccountCommand::ChangeTokenMetadataUri(_, _)
-                    | AccountCommand::ChangeTokenAuthority(_, _)
-                    | AccountCommand::UnfreezeToken(_)
-                    | AccountCommand::ConcludeOrder(_)
-                    | AccountCommand::FillOrder(_, _, _) => Some(Conflict {
+        let conflict_checks = confirmed_tx
+            .inputs()
+            .iter()
+            .filter_map(|input| {
+                match input {
+                    TxInput::Utxo(_) => {
+                        // TODO: check conflicting utxo spends
+                        // See https://github.com/mintlayer/mintlayer-core/issues/1875
+                        None
+                    }
+                    TxInput::Account(outpoint) => Some(ConflictCheck {
                         frozen_token_id: None,
-                        confirmed_account_nonce: Some((cmd.into(), *nonce)),
+                        confirmed_account_nonce: Some((
+                            outpoint.account().into(),
+                            outpoint.nonce(),
+                        )),
                     }),
-                    | AccountCommand::FreezeToken(token_id, _) => Some(Conflict {
-                        frozen_token_id: Some(*token_id),
-                        confirmed_account_nonce: Some((cmd.into(), *nonce)),
-                    }),
-                },
-                TxInput::OrderAccountCommand(_) => {}
-            }
-        });
+                    TxInput::AccountCommand(nonce, cmd) => match cmd {
+                        AccountCommand::MintTokens(_, _)
+                        | AccountCommand::UnmintTokens(_)
+                        | AccountCommand::LockTokenSupply(_)
+                        | AccountCommand::ChangeTokenMetadataUri(_, _)
+                        | AccountCommand::ChangeTokenAuthority(_, _)
+                        | AccountCommand::UnfreezeToken(_)
+                        | AccountCommand::ConcludeOrder(_)
+                        | AccountCommand::FillOrder(_, _, _) => Some(ConflictCheck {
+                            frozen_token_id: None,
+                            confirmed_account_nonce: Some((cmd.into(), *nonce)),
+                        }),
+                        | AccountCommand::FreezeToken(token_id, _) => Some(ConflictCheck {
+                            frozen_token_id: Some(*token_id),
+                            confirmed_account_nonce: Some((cmd.into(), *nonce)),
+                        }),
+                    },
+                    TxInput::OrderAccountCommand(_) => None,
+                }
+            })
+            .collect::<Vec<_>>();
 
         // Collect all conflicting txs
         let mut conflicting_txs = BTreeSet::new();
 
-        if let Some(conflict) = conflict {
+        for conflict_check in conflict_checks {
             for unconfirmed in self.unconfirmed_descendants.keys() {
                 let unconfirmed_tx = self.txs.get(unconfirmed).expect("must be present");
 
                 if let WalletTx::Tx(tx) = unconfirmed_tx {
-                    if let Some(frozen_token_id) = conflict.frozen_token_id {
-                        if self.uses_token(unconfirmed_tx, &frozen_token_id) {
+                    if let Some(frozen_token_id) = conflict_check.frozen_token_id {
+                        if self.violates_frozen_token(unconfirmed_tx, &frozen_token_id) {
                             conflicting_txs.insert(tx.get_transaction().get_id());
+                            continue;
                         }
                     }
 
                     if let Some((confirmed_account, confirmed_account_nonce)) =
-                        conflict.confirmed_account_nonce
+                        conflict_check.confirmed_account_nonce
                     {
                         if confirmed_tx.get_id() != tx.get_transaction().get_id()
                             && uses_conflicting_nonce(
@@ -804,6 +821,7 @@ impl OutputCache {
                             )
                         {
                             conflicting_txs.insert(tx.get_transaction().get_id());
+                            continue;
                         }
                     }
                 }
@@ -817,6 +835,7 @@ impl OutputCache {
             let txs_to_rollback = self.remove_from_unconfirmed_descendants(conflicting_tx);
 
             // Mark conflicting tx and its descendants as Conflicting and update OutputCache data accordingly
+            let mut tx_to_rollback_data = vec![];
             for tx_id in txs_to_rollback.iter().rev().copied() {
                 match self.txs.entry(tx_id.into()) {
                     Entry::Occupied(mut entry) => match entry.get_mut() {
@@ -826,27 +845,12 @@ impl OutputCache {
                         WalletTx::Tx(tx) => match tx.state() {
                             TxState::Inactive(_) | TxState::InMempool(_) => {
                                 tx.set_state(TxState::Conflicted(block_id));
-                                OutputCache::rollback_tx_data(
-                                    tx,
-                                    &self.unconfirmed_descendants,
-                                    &mut self.consumed,
-                                    &mut self.delegations,
-                                    &mut self.token_issuance,
-                                    &mut self.orders,
-                                );
+                                tx_to_rollback_data.push(entry.get().clone());
                                 Ok(())
                             }
-                            TxState::Conflicted(..) => {
-                                // It's possible to try to mark descendant as conflicting twice
-                                // because unconfirmed_descendants contains a tx as child and as parent.
-                                // So it's not an error only if done during this function call.
-                                ensure!(
-                                    conflicting_txs_with_descendants.contains(&tx_id),
-                                    WalletError::CannotMarkTxAsConflictedIfInState(*tx.state())
-                                );
-                                Ok(())
-                            }
-                            TxState::Abandoned | TxState::Confirmed(..) => {
+                            TxState::Conflicted(..)
+                            | TxState::Abandoned
+                            | TxState::Confirmed(..) => {
                                 Err(WalletError::CannotMarkTxAsConflictedIfInState(*tx.state()))
                             }
                         },
@@ -857,13 +861,17 @@ impl OutputCache {
                 }?;
             }
 
+            for tx in tx_to_rollback_data {
+                self.rollback_tx_data(&tx);
+            }
+
             conflicting_txs_with_descendants.extend(txs_to_rollback.into_iter());
         }
 
         Ok(conflicting_txs_with_descendants)
     }
 
-    fn uses_token(&self, unconfirmed_tx: &WalletTx, frozen_token_id: &TokenId) -> bool {
+    fn violates_frozen_token(&self, unconfirmed_tx: &WalletTx, frozen_token_id: &TokenId) -> bool {
         unconfirmed_tx.inputs().iter().any(|inp| match inp {
             TxInput::Utxo(outpoint) => self.txs.get(&outpoint.source_id()).is_some_and(|tx| {
                 let output =
@@ -896,10 +904,10 @@ impl OutputCache {
                 AccountCommand::LockTokenSupply(token_id)
                 | AccountCommand::MintTokens(token_id, _)
                 | AccountCommand::FreezeToken(token_id, _)
-                | AccountCommand::UnfreezeToken(token_id)
                 | AccountCommand::ChangeTokenMetadataUri(token_id, _)
                 | AccountCommand::ChangeTokenAuthority(token_id, _)
                 | AccountCommand::UnmintTokens(token_id) => frozen_token_id == token_id,
+                AccountCommand::UnfreezeToken(_) => false, // Frozen token can be unfrozen
                 AccountCommand::ConcludeOrder(order_id)
                 | AccountCommand::FillOrder(order_id, _, _) => {
                     self.order_data(order_id).is_some_and(|data| {
@@ -1189,6 +1197,7 @@ impl OutputCache {
         if let Some(descendants) = data
             .last_parent
             .as_ref()
+            .filter(|parent_tx_id| *parent_tx_id != tx_id)
             .and_then(|parent_tx_id| unconfirmed_descendants.get_mut(parent_tx_id))
         {
             descendants.insert(tx_id.clone());
@@ -1220,6 +1229,7 @@ impl OutputCache {
         if let Some(descendants) = data
             .last_parent
             .as_ref()
+            .filter(|parent_tx_id| *parent_tx_id != tx_id)
             .and_then(|parent_tx_id| unconfirmed_descendants.get_mut(parent_tx_id))
         {
             descendants.insert(tx_id.clone());
@@ -1254,6 +1264,7 @@ impl OutputCache {
         if let Some(descendants) = data
             .last_parent
             .as_ref()
+            .filter(|parent_tx_id| *parent_tx_id != tx_id)
             .and_then(|parent_tx_id| unconfirmed_descendants.get_mut(parent_tx_id))
         {
             descendants.insert(tx_id.clone());
@@ -1262,86 +1273,17 @@ impl OutputCache {
         Ok(())
     }
 
-    pub fn remove_tx(&mut self, tx_id: &OutPointSourceId) -> WalletResult<()> {
-        let tx_opt = self.txs.remove(tx_id);
-        if let Some(tx) = tx_opt {
-            for input in tx.inputs() {
-                match input {
-                    TxInput::Utxo(outpoint) => {
-                        self.consumed.remove(outpoint);
-                        self.unconfirmed_descendants.remove(tx_id);
-                    }
-                    TxInput::Account(outpoint) => match outpoint.account() {
-                        AccountSpending::DelegationBalance(delegation_id, _) => {
-                            if let Some(data) = self.delegations.get_mut(delegation_id) {
-                                data.last_nonce = outpoint.nonce().decrement();
-                                data.last_parent =
-                                    find_parent(&self.unconfirmed_descendants, tx_id.clone());
-                            }
-                        }
-                    },
-                    TxInput::AccountCommand(nonce, op) => match op {
-                        AccountCommand::MintTokens(token_id, _)
-                        | AccountCommand::UnmintTokens(token_id)
-                        | AccountCommand::LockTokenSupply(token_id)
-                        | AccountCommand::FreezeToken(token_id, _)
-                        | AccountCommand::UnfreezeToken(token_id)
-                        | AccountCommand::ChangeTokenMetadataUri(token_id, _)
-                        | AccountCommand::ChangeTokenAuthority(token_id, _) => {
-                            if let Some(data) = self.token_issuance.get_mut(token_id) {
-                                data.last_nonce = nonce.decrement();
-                                data.last_parent =
-                                    find_parent(&self.unconfirmed_descendants, tx_id.clone());
-                                data.unconfirmed_txs.remove(tx_id);
-                            }
-                        }
-                        AccountCommand::ConcludeOrder(order_id)
-                        | AccountCommand::FillOrder(order_id, _, _) => {
-                            if let Some(data) = self.orders.get_mut(order_id) {
-                                data.last_nonce = nonce.decrement();
-                                data.last_parent =
-                                    find_parent(&self.unconfirmed_descendants, tx_id.clone());
-                            }
-                        }
-                    },
-                    TxInput::OrderAccountCommand(cmd) => match cmd {
-                        OrderAccountCommand::FillOrder(order_id, _, _)
-                        | OrderAccountCommand::FreezeOrder(order_id)
-                        | OrderAccountCommand::ConcludeOrder(order_id) => {
-                            if let Some(data) = self.orders.get_mut(order_id) {
-                                data.last_parent =
-                                    find_parent(&self.unconfirmed_descendants, tx_id.clone());
-                            }
-                        }
-                    },
-                }
-            }
-            for output in tx.outputs() {
-                match output {
-                    TxOutput::CreateStakePool(pool_id, _) => {
-                        self.pools.remove(pool_id);
-                    }
-                    TxOutput::ProduceBlockFromStake(_, pool_id) => {
-                        if self.pools.contains_key(pool_id) {
-                            let latest_utxo = self.find_latest_utxo_for_pool(*pool_id);
-                            if let Some(pool_data) = self.pools.get_mut(pool_id) {
-                                pool_data.utxo_outpoint = latest_utxo.expect("must be present");
-                            }
-                        }
-                    }
-                    TxOutput::Burn(_)
-                    | TxOutput::Transfer(_, _)
-                    | TxOutput::IssueNft(_, _, _)
-                    | TxOutput::DataDeposit(_)
-                    | TxOutput::DelegateStaking(_, _)
-                    | TxOutput::LockThenTransfer(_, _, _)
-                    | TxOutput::CreateDelegationId(_, _)
-                    | TxOutput::IssueFungibleToken(_)
-                    | TxOutput::Htlc(_, _)
-                    | TxOutput::CreateOrder(_) => {}
-                }
-            }
+    pub fn remove_confirmed_tx(&mut self, tx_id: &OutPointSourceId) -> WalletResult<()> {
+        if let Some(tx) = self.txs.remove(tx_id) {
+            matches!(tx.state(), TxState::Confirmed(..));
+            self.rollback_tx_data(&tx);
         }
+
+        ensure!(
+            !self.unconfirmed_descendants.contains_key(tx_id),
+            WalletError::ConfirmedTxAmongUnconfirmedDescendants(tx_id.clone())
+        );
+
         Ok(())
     }
 
@@ -1531,8 +1473,8 @@ impl OutputCache {
         })
     }
 
-    // Removes a tx from unconfirmed descendant.
-    // Returns provided tx and all the descendants.
+    // Removes a tx and all its descendants from unconfirmed descendants collection.
+    // Returns provided tx and all the descendants in that specific order.
     fn remove_from_unconfirmed_descendants(
         &mut self,
         tx_id: Id<Transaction>,
@@ -1551,26 +1493,22 @@ impl OutputCache {
         all_txs
     }
 
-    // After tx is abandoned or marked as conflicted its effect on OutputCache should be rolled back
-    fn rollback_tx_data(
-        tx: &TxData,
-        unconfirmed_descendants: &BTreeMap<OutPointSourceId, BTreeSet<OutPointSourceId>>,
-        consumed: &mut BTreeMap<UtxoOutPoint, TxState>,
-        delegations: &mut BTreeMap<DelegationId, DelegationData>,
-        token_issuance: &mut BTreeMap<TokenId, TokenIssuanceData>,
-        orders: &mut BTreeMap<OrderId, OrderData>,
-    ) {
-        let tx_id = tx.get_transaction().get_id();
-        for input in tx.get_transaction().inputs() {
+    // After tx is removed as a result of reorg, abandoning or marking as conflicted
+    // its effect on OutputCache's data fields should be rolled back
+    fn rollback_tx_data(&mut self, tx: &WalletTx) {
+        let tx_id = tx.id();
+
+        // Iterate in reverse to handle situations where an account is modified twice in the same tx
+        for input in tx.inputs().iter().rev() {
             match input {
                 TxInput::Utxo(outpoint) => {
-                    consumed.insert(outpoint.clone(), *tx.state());
+                    self.consumed.remove(outpoint);
                 }
                 TxInput::Account(outpoint) => match outpoint.account() {
                     AccountSpending::DelegationBalance(delegation_id, _) => {
-                        if let Some(data) = delegations.get_mut(delegation_id) {
+                        if let Some(data) = self.delegations.get_mut(delegation_id) {
                             data.last_nonce = outpoint.nonce().decrement();
-                            data.last_parent = find_parent(unconfirmed_descendants, tx_id.into());
+                            data.last_parent = find_parent(&self.unconfirmed_descendants, &tx_id);
                         }
                     }
                 },
@@ -1582,17 +1520,17 @@ impl OutputCache {
                     | AccountCommand::UnfreezeToken(token_id)
                     | AccountCommand::ChangeTokenMetadataUri(token_id, _)
                     | AccountCommand::ChangeTokenAuthority(token_id, _) => {
-                        if let Some(data) = token_issuance.get_mut(token_id) {
+                        if let Some(data) = self.token_issuance.get_mut(token_id) {
                             data.last_nonce = nonce.decrement();
-                            data.last_parent = find_parent(unconfirmed_descendants, tx_id.into());
-                            data.unconfirmed_txs.remove(&tx_id.into());
+                            data.last_parent = find_parent(&self.unconfirmed_descendants, &tx_id);
+                            data.unconfirmed_txs.remove(&tx_id);
                         }
                     }
                     AccountCommand::ConcludeOrder(order_id)
                     | AccountCommand::FillOrder(order_id, _, _) => {
-                        if let Some(data) = orders.get_mut(order_id) {
+                        if let Some(data) = self.orders.get_mut(order_id) {
                             data.last_nonce = nonce.decrement();
-                            data.last_parent = find_parent(unconfirmed_descendants, tx_id.into());
+                            data.last_parent = find_parent(&self.unconfirmed_descendants, &tx_id);
                         }
                     }
                 },
@@ -1600,11 +1538,63 @@ impl OutputCache {
                     OrderAccountCommand::FillOrder(order_id, _, _)
                     | OrderAccountCommand::FreezeOrder(order_id)
                     | OrderAccountCommand::ConcludeOrder(order_id) => {
-                        if let Some(data) = orders.get_mut(order_id) {
+                        if let Some(data) = self.orders.get_mut(order_id) {
                             data.last_parent = find_parent(&unconfirmed_descendants, tx_id.into());
                         }
                     }
                 },
+            }
+        }
+
+        for output in tx.outputs() {
+            match output {
+                TxOutput::CreateStakePool(pool_id, _) => {
+                    self.pools.remove(pool_id);
+                }
+                TxOutput::ProduceBlockFromStake(_, pool_id) => {
+                    if self.pools.contains_key(pool_id) {
+                        let latest_utxo = self.find_latest_utxo_for_pool(*pool_id);
+                        if let Some(pool_data) = self.pools.get_mut(pool_id) {
+                            pool_data.utxo_outpoint = latest_utxo.expect("must be present");
+                        }
+                    }
+                }
+                TxOutput::Burn(_)
+                | TxOutput::Transfer(_, _)
+                | TxOutput::IssueNft(_, _, _)
+                | TxOutput::DataDeposit(_)
+                | TxOutput::DelegateStaking(_, _)
+                | TxOutput::LockThenTransfer(_, _, _)
+                | TxOutput::CreateDelegationId(_, _)
+                | TxOutput::IssueFungibleToken(_)
+                | TxOutput::Htlc(_, _)
+                | TxOutput::CreateOrder(_) => {}
+            }
+        }
+
+        for output in tx.outputs() {
+            match output {
+                TxOutput::CreateStakePool(pool_id, _) => {
+                    self.pools.remove(pool_id);
+                }
+                TxOutput::ProduceBlockFromStake(_, pool_id) => {
+                    if self.pools.contains_key(pool_id) {
+                        let latest_utxo = self.find_latest_utxo_for_pool(*pool_id);
+                        if let Some(pool_data) = self.pools.get_mut(pool_id) {
+                            pool_data.utxo_outpoint = latest_utxo.expect("must be present");
+                        }
+                    }
+                }
+                TxOutput::Burn(_)
+                | TxOutput::Transfer(_, _)
+                | TxOutput::IssueNft(_, _, _)
+                | TxOutput::DataDeposit(_)
+                | TxOutput::DelegateStaking(_, _)
+                | TxOutput::LockThenTransfer(_, _, _)
+                | TxOutput::CreateDelegationId(_, _)
+                | TxOutput::IssueFungibleToken(_)
+                | TxOutput::Htlc(_, _)
+                | TxOutput::CreateOrder(_) => {}
             }
         }
     }
@@ -1617,6 +1607,7 @@ impl OutputCache {
     ) -> WalletResult<Vec<Id<Transaction>>> {
         let all_abandoned = self.remove_from_unconfirmed_descendants(tx_id);
 
+        let mut txs_to_rollback = vec![];
         for tx_id in all_abandoned.iter().rev().copied() {
             match self.txs.entry(tx_id.into()) {
                 Entry::Occupied(mut entry) => match entry.get_mut() {
@@ -1624,14 +1615,7 @@ impl OutputCache {
                     WalletTx::Tx(tx) => match tx.state() {
                         TxState::Inactive(_) => {
                             tx.set_state(TxState::Abandoned);
-                            OutputCache::rollback_tx_data(
-                                tx,
-                                &self.unconfirmed_descendants,
-                                &mut self.consumed,
-                                &mut self.delegations,
-                                &mut self.token_issuance,
-                                &mut self.orders,
-                            );
+                            txs_to_rollback.push(entry.get().clone());
                             Ok(())
                         }
                         TxState::Conflicted(_) => {
@@ -1646,6 +1630,10 @@ impl OutputCache {
                 },
                 Entry::Vacant(_) => Err(WalletError::CannotFindTransactionWithId(tx_id)),
             }?;
+        }
+
+        for tx in txs_to_rollback {
+            self.rollback_tx_data(&tx);
         }
 
         Ok(all_abandoned)
@@ -1810,11 +1798,11 @@ fn is_in_state(tx: &WalletTx, utxo_states: UtxoStates) -> bool {
 /// Find the parent tx if it is in the unconfirmed transactions
 fn find_parent(
     unconfirmed_descendants: &BTreeMap<OutPointSourceId, BTreeSet<OutPointSourceId>>,
-    tx_id: OutPointSourceId,
+    tx_id: &OutPointSourceId,
 ) -> Option<OutPointSourceId> {
     unconfirmed_descendants
         .iter()
-        .find_map(|(parent_id, descendants)| descendants.contains(&tx_id).then_some(parent_id))
+        .find_map(|(parent_id, descendants)| descendants.contains(tx_id).then_some(parent_id))
         .cloned()
 }
 

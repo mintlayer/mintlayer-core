@@ -1953,16 +1953,10 @@ impl<K: AccountKeyChains> Account<K> {
             .txs_with_unconfirmed()
             .iter()
             .filter_map(|(id, tx)| match tx.state() {
-                TxState::Confirmed(height, _, idx) => {
-                    if height > common_block_height {
-                        Some((
-                            AccountWalletTxId::new(self.get_account_id(), id.clone()),
-                            (height, idx),
-                        ))
-                    } else {
-                        None
-                    }
-                }
+                TxState::Confirmed(height, _, idx) => (height > common_block_height).then_some((
+                    AccountWalletTxId::new(self.get_account_id(), id.clone()),
+                    (height, idx),
+                )),
                 TxState::Inactive(_)
                 | TxState::Conflicted(_)
                 | TxState::InMempool(_)
@@ -1976,7 +1970,7 @@ impl<K: AccountKeyChains> Account<K> {
         for (tx_id, _) in revoked_txs {
             db_tx.del_transaction(&tx_id)?;
             let source = tx_id.into_item_id();
-            self.output_cache.remove_tx(&source)?;
+            self.output_cache.remove_confirmed_tx(&source)?;
             wallet_events.del_transaction(self.account_index(), source);
         }
 
