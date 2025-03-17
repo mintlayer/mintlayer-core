@@ -16,7 +16,7 @@
 use api_web_server::api::json_helpers::amount_to_json;
 use common::{
     chain::{PoolId, UtxoOutPoint},
-    primitives::H256,
+    primitives::{DecimalAmount, H256},
 };
 
 use super::{
@@ -60,6 +60,8 @@ async fn pool_id_not_fund() {
 #[case(Seed::from_entropy())]
 #[tokio::test]
 async fn ok(#[case] seed: Seed) {
+    use std::str::FromStr;
+
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
 
@@ -237,6 +239,8 @@ async fn ok(#[case] seed: Seed) {
             &serde_json::json!(vrf_key.as_str())
         );
 
+        let delegations_balance = body.get("delegations_balance").unwrap();
+
         let url = format!("/api/v2/pool/{pool_id}/delegations");
         let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
             .await
@@ -249,6 +253,7 @@ async fn ok(#[case] seed: Seed) {
         let body = body.as_array().unwrap();
 
         assert_eq!(delegations.len(), body.len());
+        let mut total_balance = Amount::ZERO;
         for delegation in &delegations {
             let delegation_id = Address::new(&chain_config, delegation.0).unwrap();
             let resp = body
@@ -263,14 +268,28 @@ async fn ok(#[case] seed: Seed) {
                 &serde_json::json!(delegation_id.as_str())
             );
 
+            let balance = resp.get("balance").unwrap();
             assert_eq!(
-                resp.get("balance").unwrap(),
+                balance,
                 &serde_json::json!(amount_to_json(delegation.1, chain_config.coin_decimals()))
             );
+
+            let decimal = balance.get("decimal").unwrap().as_str().unwrap();
+            let decimal = DecimalAmount::from_str(decimal)
+                .unwrap()
+                .to_amount(chain_config.coin_decimals())
+                .unwrap();
+
+            total_balance = (total_balance + decimal).unwrap();
 
             let destination = Address::new(&chain_config, delegation.2.clone()).unwrap();
             assert_eq!(resp.get("spend_destination").unwrap(), destination.as_str());
         }
+
+        assert_eq!(
+            delegations_balance,
+            &serde_json::json!(amount_to_json(total_balance, chain_config.coin_decimals()))
+        );
 
         for (delegation_id, balance, destination, _) in delegations {
             let delegation_id = Address::new(&chain_config, delegation_id).unwrap();

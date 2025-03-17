@@ -24,7 +24,6 @@ use common::{
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
 };
-use pos_accounting::PoolData;
 
 use crate::storage::{
     impls::postgres::queries::QueryFromConnection,
@@ -32,7 +31,7 @@ use crate::storage::{
         block_aux_data::{BlockAuxData, BlockWithExtraData},
         ApiServerStorageError, ApiServerStorageRead, ApiServerStorageWrite, BlockInfo,
         CoinOrTokenStatistic, Delegation, FungibleTokenData, LockedUtxo, NftWithOwner, Order,
-        PoolBlockStats, TransactionInfo, Utxo, UtxoWithExtraInfo,
+        PoolBlockStats, PoolDataWithExtraInfo, TransactionInfo, Utxo, UtxoWithExtraInfo,
     },
 };
 
@@ -182,7 +181,7 @@ impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'_> {
     async fn set_pool_data_at_height(
         &mut self,
         pool_id: PoolId,
-        pool_data: &PoolData,
+        pool_data: &PoolDataWithExtraInfo,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
@@ -303,6 +302,16 @@ impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'_> {
         Ok(())
     }
 
+    async fn del_coin_or_token_decimals_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        conn.del_coin_or_token_decimals_above_height(block_height).await?;
+
+        Ok(())
+    }
+
     async fn set_statistic(
         &mut self,
         statistic: CoinOrTokenStatistic,
@@ -373,6 +382,16 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
     ) -> Result<Option<Amount>, ApiServerStorageError> {
         let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_address_balance(address, coin_or_token_id).await?;
+
+        Ok(res)
+    }
+
+    async fn get_address_balances(
+        &self,
+        address: &str,
+    ) -> Result<Vec<(CoinOrTokenId, Amount, u8)>, ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_address_balances(address).await?;
 
         Ok(res)
     }
@@ -488,7 +507,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
     async fn get_pool_data(
         &self,
         pool_id: PoolId,
-    ) -> Result<Option<PoolData>, ApiServerStorageError> {
+    ) -> Result<Option<PoolDataWithExtraInfo>, ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_pool_data(pool_id, &self.chain_config).await?;
 
@@ -499,7 +518,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
         &self,
         len: u32,
         offset: u32,
-    ) -> Result<Vec<(PoolId, PoolData)>, ApiServerStorageError> {
+    ) -> Result<Vec<(PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError> {
         let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_latest_pool_data(len, offset, &self.chain_config).await?;
 
@@ -510,7 +529,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
         &self,
         len: u32,
         offset: u32,
-    ) -> Result<Vec<(PoolId, PoolData)>, ApiServerStorageError> {
+    ) -> Result<Vec<(PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError> {
         let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn
             .get_pool_data_with_largest_staker_balance(len, offset, &self.chain_config)

@@ -25,7 +25,7 @@ use common::{
         output_value::OutputValue,
         tokens::{IsTokenUnfreezable, NftIssuance, TokenId, TokenTotalSupply},
         AccountCommand, AccountSpending, Block, ChainConfig, Destination, OrderId,
-        OutPointSourceId, Transaction, TxInput, TxOutput, UtxoOutPoint,
+        OutPointSourceId, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Idable},
     Uint256,
@@ -515,5 +515,27 @@ pub fn order_to_json(
         "initially_asked": amount_to_json(order.initially_asked, ask_currency_decimals),
         "ask_balance": amount_to_json(order.ask_balance, ask_currency_decimals),
         "nonce": order.next_nonce,
+    })
+}
+
+pub fn pool_data_to_json(
+    chain_config: &ChainConfig,
+    pool_data: api_server_common::storage::storage_api::PoolDataWithExtraInfo,
+    pool_id: PoolId,
+) -> serde_json::Value {
+    let decommission_destination =
+        Address::new(chain_config, pool_data.decommission_destination().clone())
+            .expect("no error in encoding");
+    let pool_id = Address::new(chain_config, pool_id).expect("no error in encoding");
+    let vrf_key = Address::new(chain_config, pool_data.vrf_public_key().clone())
+        .expect("no error in encoding");
+    json!({
+        "pool_id": pool_id.as_str(),
+        "decommission_destination": decommission_destination.as_str(),
+        "staker_balance": amount_to_json(pool_data.staker_balance().expect("no overflow"), chain_config.coin_decimals()),
+        "margin_ratio_per_thousand": pool_data.margin_ratio_per_thousand(),
+        "cost_per_block": amount_to_json(pool_data.cost_per_block(), chain_config.coin_decimals()),
+        "vrf_public_key": vrf_key.as_str(),
+        "delegations_balance": amount_to_json(pool_data.delegations_balance, chain_config.coin_decimals()),
     })
 }

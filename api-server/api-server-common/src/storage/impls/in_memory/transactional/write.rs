@@ -15,6 +15,12 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use crate::storage::storage_api::{
+    block_aux_data::{BlockAuxData, BlockWithExtraData},
+    ApiServerStorageError, ApiServerStorageRead, ApiServerStorageWrite, BlockInfo,
+    CoinOrTokenStatistic, Delegation, FungibleTokenData, LockedUtxo, NftWithOwner, Order,
+    PoolBlockStats, PoolDataWithExtraInfo, TransactionInfo, Utxo, UtxoWithExtraInfo,
+};
 use common::{
     address::Address,
     chain::{
@@ -23,14 +29,6 @@ use common::{
         Block, ChainConfig, DelegationId, Destination, OrderId, PoolId, Transaction, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
-};
-use pos_accounting::PoolData;
-
-use crate::storage::storage_api::{
-    block_aux_data::{BlockAuxData, BlockWithExtraData},
-    ApiServerStorageError, ApiServerStorageRead, ApiServerStorageWrite, BlockInfo,
-    CoinOrTokenStatistic, Delegation, FungibleTokenData, LockedUtxo, NftWithOwner, Order,
-    PoolBlockStats, TransactionInfo, Utxo, UtxoWithExtraInfo,
 };
 
 use super::ApiServerInMemoryStorageTransactionalRw;
@@ -151,7 +149,7 @@ impl ApiServerStorageWrite for ApiServerInMemoryStorageTransactionalRw<'_> {
     async fn set_pool_data_at_height(
         &mut self,
         pool_id: PoolId,
-        pool_data: &PoolData,
+        pool_data: &PoolDataWithExtraInfo,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
         self.transaction.set_pool_data_at_height(pool_id, pool_data, block_height)
@@ -239,6 +237,13 @@ impl ApiServerStorageWrite for ApiServerInMemoryStorageTransactionalRw<'_> {
         self.transaction.del_nft_issuance_above_height(block_height)
     }
 
+    async fn del_coin_or_token_decimals_above_height(
+        &mut self,
+        _block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        Ok(())
+    }
+
     async fn set_statistic(
         &mut self,
         statistic: CoinOrTokenStatistic,
@@ -290,6 +295,13 @@ impl ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRw<'_> {
         coin_or_token_id: CoinOrTokenId,
     ) -> Result<Option<Amount>, ApiServerStorageError> {
         self.transaction.get_address_balance(address, coin_or_token_id)
+    }
+
+    async fn get_address_balances(
+        &self,
+        address: &str,
+    ) -> Result<Vec<(CoinOrTokenId, Amount, u8)>, ApiServerStorageError> {
+        self.transaction.get_address_balances(address)
     }
 
     async fn get_address_locked_balance(
@@ -385,7 +397,7 @@ impl ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRw<'_> {
     async fn get_pool_data(
         &self,
         pool_id: PoolId,
-    ) -> Result<Option<PoolData>, ApiServerStorageError> {
+    ) -> Result<Option<PoolDataWithExtraInfo>, ApiServerStorageError> {
         self.transaction.get_pool_data(pool_id)
     }
 
@@ -393,7 +405,7 @@ impl ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRw<'_> {
         &self,
         len: u32,
         offset: u32,
-    ) -> Result<Vec<(PoolId, PoolData)>, ApiServerStorageError> {
+    ) -> Result<Vec<(PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError> {
         self.transaction.get_latest_pool_ids(len, offset)
     }
 
@@ -401,7 +413,7 @@ impl ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRw<'_> {
         &self,
         len: u32,
         offset: u32,
-    ) -> Result<Vec<(PoolId, PoolData)>, ApiServerStorageError> {
+    ) -> Result<Vec<(PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError> {
         self.transaction.get_pool_data_with_largest_staker_balance(len, offset)
     }
 
