@@ -78,6 +78,7 @@ impl OrphanType {
             | CTE::CheckTransactionError(_)
             | CTE::OrdersAccountingError(_)
             | CTE::AttemptToCreateOrderFromAccounts
+            | CTE::ConcludeInputAmountsDontMatch(_, _)
             | CTE::IOPolicyError(_, _) => Err(err),
         }
     }

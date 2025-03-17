@@ -19,8 +19,8 @@ mod netupgrade;
 
 pub use chainstate_upgrade::{
     ChainstateUpgrade, ChangeTokenMetadataUriActivated, DataDepositFeeVersion,
-    FrozenTokensValidationVersion, HtlcActivated, OrdersActivated, RewardDistributionVersion,
-    TokenIssuanceVersion, TokensFeeVersion,
+    FrozenTokensValidationVersion, HtlcActivated, OrdersActivated, OrdersVersion,
+    RewardDistributionVersion, TokenIssuanceVersion, TokensFeeVersion,
 };
 pub use consensus_upgrade::{ConsensusUpgrade, PoSStatus, PoWStatus, RequiredConsensus};
 pub use netupgrade::{Activate, NetUpgrades};
