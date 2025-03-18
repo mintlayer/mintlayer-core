@@ -35,10 +35,13 @@ use utils::qrcode::{QrCode, QrCodeError};
 use wallet::version::get_version;
 use wallet_controller::types::{GenericTokenTransfer, WalletTypeArgs};
 use wallet_rpc_client::wallet_rpc_traits::{PartialOrSignedTx, WalletInterface};
-use wallet_rpc_lib::types::{
-    Balances, ComposedTransaction, ControllerConfig, MnemonicInfo, NewTransaction, NftMetadata,
-    RpcInspectTransaction, RpcSignatureStats, RpcSignatureStatus, RpcStandaloneAddressDetails,
-    RpcValidatedSignatures, TokenMetadata,
+use wallet_rpc_lib::{
+    cmdline::CliHardwareWalletType,
+    types::{
+        Balances, ComposedTransaction, ControllerConfig, MnemonicInfo, NewTransaction, NftMetadata,
+        RpcInspectTransaction, RpcSignatureStats, RpcSignatureStatus, RpcStandaloneAddressDetails,
+        RpcValidatedSignatures, TokenMetadata,
+    },
 };
 
 use wallet_types::{
@@ -47,7 +50,7 @@ use wallet_types::{
 
 use crate::{
     errors::WalletCliCommandError, helper_types::parse_generic_token_transfer,
-    ManageableWalletCommand, WalletManagementCommand,
+    CreateWalletDeviceSelectMenu, ManageableWalletCommand, WalletManagementCommand,
 };
 
 use self::local_state::WalletWithState;
@@ -152,6 +155,8 @@ where
                 whether_to_store_seed_phrase,
                 passphrase,
                 hardware_wallet,
+                trezor_device_name,
+                trezor_device_id,
             } => {
                 let store_seed_phrase =
                     whether_to_store_seed_phrase.map_or(StoreSeedPhrase::DoNotStore, Into::into);
@@ -161,14 +166,28 @@ where
                         passphrase,
                         store_seed_phrase,
                     },
-                    Into::into,
+                    |h| h.into_wallet_args(trezor_device_name, trezor_device_id),
                 );
-                let newly_generated_mnemonic =
-                    self.wallet().await?.create_wallet(wallet_path, wallet_args).await?;
+                let response =
+                    self.wallet().await?.create_wallet(wallet_path.clone(), wallet_args).await?;
+
+                if let Some(devices) = response.multiple_devices_available {
+                    match devices {
+                        wallet_rpc_lib::types::MultipleDevicesAvailable::Trezor { devices } => {
+                            let choices = CreateWalletDeviceSelectMenu::new(
+                                devices,
+                                wallet_path,
+                                CliHardwareWalletType::Trezor,
+                                false,
+                            );
+                            return Ok(ConsoleCommand::ChoiceMenu(Box::new(choices)));
+                        }
+                    }
+                }
 
                 self.wallet.update_wallet::<N>().await;
 
-                let msg = match newly_generated_mnemonic.mnemonic {
+                let msg = match response.mnemonic {
                     MnemonicInfo::NewlyGenerated { mnemonic } => {
                         format!(
                             "New wallet created successfully\nYour mnemonic: {}\
@@ -195,19 +214,38 @@ where
                 whether_to_store_seed_phrase,
                 passphrase,
                 hardware_wallet,
+                trezor_device_name,
+                trezor_device_id,
             } => {
                 let hardware_wallet = hardware_wallet.map(Into::into);
 
-                self.wallet()
+                let response = self
+                    .wallet()
                     .await?
                     .recover_wallet(
-                        wallet_path,
+                        wallet_path.clone(),
                         whether_to_store_seed_phrase.is_some_and(|x| x.to_bool()),
                         mnemonic,
                         passphrase,
                         hardware_wallet,
+                        trezor_device_name,
+                        trezor_device_id,
                     )
                     .await?;
+
+                if let Some(devices) = response.multiple_devices_available {
+                    match devices {
+                        wallet_rpc_lib::types::MultipleDevicesAvailable::Trezor { devices } => {
+                            let choices = CreateWalletDeviceSelectMenu::new(
+                                devices,
+                                wallet_path,
+                                CliHardwareWalletType::Trezor,
+                                true,
+                            );
+                            return Ok(ConsoleCommand::ChoiceMenu(Box::new(choices)));
+                        }
+                    }
+                }
 
                 self.wallet.update_wallet::<N>().await;
 

@@ -16,7 +16,6 @@
 pub mod interactive;
 pub mod non_interactive;
 
-use clap::Command;
 use tokio::sync::mpsc;
 use wallet_cli_commands::{ConsoleCommand, ManageableWalletCommand};
 use wallet_rpc_lib::types::NodeInterface;

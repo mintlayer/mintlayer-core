@@ -75,6 +75,7 @@ pub trait WalletInterface {
         wallet_args: WalletTypeArgs,
     ) -> Result<CreatedWallet, Self::Error>;
 
+    #[allow(clippy::too_many_arguments)]
     async fn recover_wallet(
         &self,
         path: PathBuf,
@@ -82,6 +83,8 @@ pub trait WalletInterface {
         mnemonic: Option<String>,
         passphrase: Option<String>,
         hardware_wallet: Option<HardwareWalletType>,
+        device_name: Option<String>,
+        device_id: Option<String>,
     ) -> Result<CreatedWallet, Self::Error>;
 
     async fn open_wallet(

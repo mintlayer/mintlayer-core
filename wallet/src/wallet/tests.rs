@@ -315,6 +315,8 @@ fn create_wallet_with_mnemonic(chain_config: Arc<ChainConfig>, mnemonic: &str) -
         },
     )
     .unwrap()
+    .wallet()
+    .unwrap()
 }
 
 #[track_caller]
@@ -436,7 +438,10 @@ fn wallet_migration_to_v2(#[case] seed: Seed) {
             )?)
         },
     )
+    .unwrap()
+    .wallet()
     .unwrap();
+
     verify_wallet_balance(&chain_config, &wallet, genesis_amount);
 
     let password = Some("password".into());
@@ -543,6 +548,8 @@ fn wallet_seed_phrase_retrieval(#[case] seed: Seed) {
             )?)
         },
     )
+    .unwrap()
+    .wallet()
     .unwrap();
 
     let wallet_passphrase = PassPhrase::new(zeroize::Zeroizing::new(wallet_passphrase));
@@ -638,6 +645,8 @@ fn wallet_seed_phrase_check_address() {
             )?)
         },
     )
+    .unwrap()
+    .wallet()
     .unwrap();
 
     let address = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap();
@@ -664,6 +673,8 @@ fn wallet_seed_phrase_check_address() {
             )?)
         },
     )
+    .unwrap()
+    .wallet()
     .unwrap();
 
     let address = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap();
