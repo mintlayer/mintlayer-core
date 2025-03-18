@@ -664,6 +664,11 @@ impl From<wallet_controller::types::CreatedWallet> for CreatedWallet {
                     mnemonic: mnemonic.to_string(),
                 }
             }
+            #[cfg(feature = "trezor")]
+            wallet_controller::types::CreatedWallet::TrezorDeviceSelection(devices) => {
+                //FIXME
+                MnemonicInfo::UserProvided
+            }
         };
         Self { mnemonic }
     }

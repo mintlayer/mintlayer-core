@@ -39,6 +39,7 @@ pub use transaction::{
     InspectTransaction, SignatureStats, TransactionToInspect, ValidatedSignatures,
 };
 use utils::ensure;
+use wallet::signer::trezor_signer::FoundDevice;
 use wallet_types::{
     scan_blockchain::ScanBlockchain,
     seed_phrase::StoreSeedPhrase,
@@ -152,6 +153,8 @@ impl rpc_description::HasValueHint for GenericTokenTransfer {
 pub enum CreatedWallet {
     UserProvidedMnemonic,
     NewlyGeneratedMnemonic(Mnemonic),
+    #[cfg(feature = "trezor")]
+    TrezorDeviceSelection(Vec<FoundDevice>),
 }
 
 #[derive(Debug, Clone)]

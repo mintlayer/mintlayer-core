@@ -225,6 +225,14 @@ where
         }
         .map_err(RpcError::Controller)?;
 
+        let wallet = match wallet {
+            wallet::wallet::WalletCreation::Wallet(w) => w,
+            #[cfg(feature = "trezor")]
+            wallet::wallet::WalletCreation::MultipleAvalableTrezorDevices(devices) => {
+                return Ok(CreatedWallet::TrezorDeviceSelection(devices));
+            }
+        };
+
         let controller = if options.scan_blockchain.should_wait_for_blockchain_scanning() {
             WalletController::new(
                 self.chain_config.clone(),

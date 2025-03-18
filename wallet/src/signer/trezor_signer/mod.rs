@@ -108,13 +108,19 @@ use crate::{
 
 use super::{Signer, SignerError, SignerProvider, SignerResult};
 
+#[derive(Debug, Eq, PartialEq)]
+pub struct FoundDevice {
+    pub name: String,
+    pub device_id: String,
+}
+
 /// Signer errors
 #[derive(thiserror::Error, Debug, Eq, PartialEq)]
 pub enum TrezorError {
     #[error("No connected Trezor device found")]
     NoDeviceFound,
-    #[error("There are multiple connected Trezor devices found")]
-    NoUniqueDeviceFound,
+    #[error("There are multiple connected Trezor devices found {0:?}")]
+    NoUniqueDeviceFound(Vec<FoundDevice>),
     #[error("Cannot get the supported features for the connected Trezor device")]
     CannotGetDeviceFeatures,
     #[error("The connected Trezor device does not support the Mintlayer capabilities, please install the correct firmware")]
@@ -1440,6 +1446,7 @@ impl TrezorSignerProvider {
         chain_config: Arc<ChainConfig>,
         db_tx: &impl WalletStorageReadLocked,
     ) -> WalletResult<Self> {
+        //FIXME: find device with by device_id
         let (client, data, session_id) = find_trezor_device().map_err(SignerError::TrezorError)?;
 
         let provider = Self {
@@ -1573,8 +1580,25 @@ fn find_trezor_device() -> Result<(Trezor, TrezorData, Vec<u8>), TrezorError> {
     let device = match devices.len() {
         0 => return Err(TrezorError::NoDeviceFound),
         1 => devices.remove(0),
-        _ => return Err(TrezorError::NoUniqueDeviceFound),
+        _ => {
+            let available_devices = devices
+                .into_iter()
+                .filter_map(|d| {
+                    d.connect().ok().and_then(|mut c| {
+                        c.init_device(None).ok()?;
+
+                        c.features().map(|f| FoundDevice {
+                            name: f.label().to_owned(),
+                            device_id: f.device_id().to_owned(),
+                        })
+                    })
+                })
+                .collect_vec();
+
+            return Err(TrezorError::NoUniqueDeviceFound(available_devices));
+        }
     };
+
     let mut client = device.connect().map_err(|e| TrezorError::DeviceError(e.to_string()))?;
     client.init_device(None).map_err(|e| TrezorError::DeviceError(e.to_string()))?;
 

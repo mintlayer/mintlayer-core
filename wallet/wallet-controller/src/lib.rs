@@ -90,7 +90,7 @@ use wallet::{
     },
     destination_getters::{get_tx_output_destination, HtlcSpendingCondition},
     signer::software_signer::SoftwareSignerProvider,
-    wallet::WalletPoolsFilter,
+    wallet::{WalletCreation, WalletPoolsFilter},
     wallet_events::WalletEvents,
     WalletError, WalletResult,
 };
@@ -235,7 +235,7 @@ where
         best_block: (BlockHeight, Id<GenBlock>),
         wallet_type: WalletType,
         overwrite_wallet_file: bool,
-    ) -> Result<RuntimeWallet<DefaultBackend>, ControllerError<T>> {
+    ) -> Result<WalletCreation<RuntimeWallet<DefaultBackend>>, ControllerError<T>> {
         utils::ensure!(
             overwrite_wallet_file || !file_path.as_ref().exists(),
             ControllerError::WalletFileError(
@@ -270,7 +270,7 @@ where
                     },
                 )
                 .map_err(ControllerError::WalletError)?;
-                Ok(RuntimeWallet::Software(wallet))
+                Ok(wallet.map_wallet(RuntimeWallet::Software))
             }
             #[cfg(feature = "trezor")]
             WalletTypeArgsComputed::Trezor => {
@@ -282,7 +282,7 @@ where
                     |_db_tx| Ok(TrezorSignerProvider::new().map_err(SignerError::TrezorError)?),
                 )
                 .map_err(ControllerError::WalletError)?;
-                Ok(RuntimeWallet::Trezor(wallet))
+                Ok(wallet.map_wallet(RuntimeWallet::Trezor))
             }
         }
     }
@@ -292,7 +292,7 @@ where
         file_path: impl AsRef<Path>,
         args: WalletTypeArgsComputed,
         wallet_type: WalletType,
-    ) -> Result<RuntimeWallet<DefaultBackend>, ControllerError<T>> {
+    ) -> Result<WalletCreation<RuntimeWallet<DefaultBackend>>, ControllerError<T>> {
         utils::ensure!(
             !file_path.as_ref().exists(),
             ControllerError::WalletFileError(
@@ -327,7 +327,7 @@ where
                     },
                 )
                 .map_err(ControllerError::WalletError)?;
-                Ok(RuntimeWallet::Software(wallet))
+                Ok(wallet.map_wallet(RuntimeWallet::Software))
             }
             #[cfg(feature = "trezor")]
             WalletTypeArgsComputed::Trezor => {
@@ -338,7 +338,7 @@ where
                     |_db_tx| Ok(TrezorSignerProvider::new().map_err(SignerError::TrezorError)?),
                 )
                 .map_err(ControllerError::WalletError)?;
-                Ok(RuntimeWallet::Trezor(wallet))
+                Ok(wallet.map_wallet(RuntimeWallet::Trezor))
             }
         }
     }
