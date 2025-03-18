@@ -1234,7 +1234,10 @@ where
             WalletCommand::ListPendingTransactions => {
                 let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
                 let utxos = wallet.list_pending_transactions(selected_account).await?;
-                Ok(ConsoleCommand::Print(format!("{utxos:#?}")))
+                Ok(ConsoleCommand::PaginatedPrint {
+                    header: "Pending Transactions".to_owned(),
+                    body: format!("{utxos:#?}"),
+                })
             }
 
             WalletCommand::ListMainchainTransactions { address, limit } => {
@@ -1257,7 +1260,10 @@ where
                     table
                 };
 
-                Ok(ConsoleCommand::Print(table.to_string()))
+                Ok(ConsoleCommand::PaginatedPrint {
+                    header: String::new(),
+                    body: table.to_string(),
+                })
             }
 
             WalletCommand::GetTransaction { transaction_id } => {
