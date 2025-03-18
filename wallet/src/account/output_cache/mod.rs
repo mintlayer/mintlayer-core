@@ -862,7 +862,7 @@ impl OutputCache {
             }
 
             for tx in tx_to_rollback_data {
-                self.rollback_tx_data(&tx);
+                self.rollback_tx_data(&tx)?;
             }
 
             conflicting_txs_with_descendants.extend(txs_to_rollback.into_iter());
@@ -1276,7 +1276,7 @@ impl OutputCache {
     pub fn remove_confirmed_tx(&mut self, tx_id: &OutPointSourceId) -> WalletResult<()> {
         if let Some(tx) = self.txs.remove(tx_id) {
             matches!(tx.state(), TxState::Confirmed(..));
-            self.rollback_tx_data(&tx);
+            self.rollback_tx_data(&tx)?;
         }
 
         ensure!(
@@ -1495,7 +1495,7 @@ impl OutputCache {
 
     // After tx is removed as a result of reorg, abandoning or marking as conflicted
     // its effect on OutputCache's data fields should be rolled back
-    fn rollback_tx_data(&mut self, tx: &WalletTx) {
+    fn rollback_tx_data(&mut self, tx: &WalletTx) -> WalletResult<()> {
         let tx_id = tx.id();
 
         // Iterate in reverse to handle situations where an account is modified twice in the same tx
@@ -1585,18 +1585,31 @@ impl OutputCache {
                         }
                     }
                 }
+                TxOutput::CreateDelegationId(_, _) => {
+                    let input0_outpoint = crate::utils::get_first_utxo_outpoint(tx.inputs())?;
+                    let delegation_id = make_delegation_id(input0_outpoint);
+                    self.delegations.remove(&delegation_id);
+                }
+                TxOutput::IssueFungibleToken(_) => {
+                    let token_id = make_token_id(tx.inputs()).ok_or(WalletError::NoUtxos)?;
+                    self.token_issuance.remove(&token_id);
+                }
+                TxOutput::CreateOrder(_) => {
+                    let input0_outpoint = crate::utils::get_first_utxo_outpoint(tx.inputs())?;
+                    let order_id = make_order_id(input0_outpoint);
+                    self.orders.remove(&order_id);
+                }
                 TxOutput::Burn(_)
                 | TxOutput::Transfer(_, _)
                 | TxOutput::IssueNft(_, _, _)
                 | TxOutput::DataDeposit(_)
                 | TxOutput::DelegateStaking(_, _)
                 | TxOutput::LockThenTransfer(_, _, _)
-                | TxOutput::CreateDelegationId(_, _)
-                | TxOutput::IssueFungibleToken(_)
-                | TxOutput::Htlc(_, _)
-                | TxOutput::CreateOrder(_) => {}
+                | TxOutput::Htlc(_, _) => {}
             }
         }
+
+        Ok(())
     }
 
     /// Mark a transaction and its descendants as abandoned
@@ -1633,7 +1646,7 @@ impl OutputCache {
         }
 
         for tx in txs_to_rollback {
-            self.rollback_tx_data(&tx);
+            self.rollback_tx_data(&tx)?;
         }
 
         Ok(all_abandoned)
