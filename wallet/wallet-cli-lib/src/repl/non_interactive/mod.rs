@@ -59,6 +59,7 @@ fn to_line_output<N: NodeInterface>(
         } => Ok(LineOutput::Print(print_message)),
         ConsoleCommand::ClearScreen
         | ConsoleCommand::PrintHistory
+        | ConsoleCommand::ChoiceMenu(_)
         | ConsoleCommand::ClearHistory => Err(WalletCliError::InvalidInput(format!(
             "Unsupported command in non-interactive mode: {}",
             line,

@@ -24,13 +24,15 @@ use clap::Command;
 use itertools::Itertools;
 use reedline::{
     default_emacs_keybindings, default_vi_insert_keybindings, default_vi_normal_keybindings,
-    ColumnarMenu, DefaultValidator, EditMode, Emacs, FileBackedHistory, ListMenu, MenuBuilder,
-    Reedline, ReedlineMenu, Signal, Vi,
+    ColumnarMenu, DefaultPrompt, DefaultValidator, EditMode, Emacs, FileBackedHistory, History,
+    ListMenu, MenuBuilder, Reedline, ReedlineMenu, Signal, Vi,
 };
 
 use tokio::sync::{mpsc, oneshot};
 use utils::once_destructor::OnceDestructor;
-use wallet_cli_commands::{get_repl_command, parse_input, ConsoleCommand};
+use wallet_cli_commands::{
+    get_repl_command, parse_input, ChoiceMenu, ConsoleCommand, ManageableWalletCommand,
+};
 use wallet_rpc_lib::types::NodeInterface;
 
 use crate::{
@@ -43,19 +45,12 @@ const HISTORY_MAX_LINES: usize = 1000;
 const HISTORY_MENU_NAME: &str = "history_menu";
 const COMPLETION_MENU_NAME: &str = "completion_menu";
 
-fn create_line_editor<N: NodeInterface>(
+fn create_line_editor(
     printer: reedline::ExternalPrinter<String>,
-    repl_command: super::Command,
-    history_file: Option<PathBuf>,
+    commands: Vec<String>,
+    history: Option<Box<dyn History>>,
     vi_mode: bool,
-) -> Result<Reedline, WalletCliError<N>> {
-    let commands = repl_command
-        .get_subcommands()
-        .filter(|command| !command.is_hide_set())
-        .map(|command| command.get_name().to_owned())
-        .chain(std::iter::once("help".to_owned()))
-        .collect::<Vec<_>>();
-
+) -> Reedline {
     let completer = Box::new(wallet_completions::WalletCompletions::new(commands));
 
     let mut line_editor = Reedline::create()
@@ -66,11 +61,7 @@ fn create_line_editor<N: NodeInterface>(
         .with_validator(Box::new(DefaultValidator))
         .with_ansi_colors(true);
 
-    if let Some(file_name) = history_file {
-        let history = Box::new(
-            FileBackedHistory::with_file(HISTORY_MAX_LINES, file_name.clone())
-                .map_err(|e| WalletCliError::FileError(file_name, e.to_string()))?,
-        );
+    if let Some(history) = history {
         line_editor = line_editor.with_history(history);
     }
 
@@ -98,9 +89,7 @@ fn create_line_editor<N: NodeInterface>(
         Box::new(Emacs::new(keybindings))
     };
 
-    line_editor = line_editor.with_edit_mode(edit_mode);
-
-    Ok(line_editor)
+    line_editor.with_edit_mode(edit_mode)
 }
 
 fn process_line<N: NodeInterface>(
@@ -142,26 +131,43 @@ pub fn run<N: NodeInterface>(
 ) -> Result<(), WalletCliError<N>> {
     let repl_command = get_repl_command(cold_wallet, true);
 
-    let mut line_editor = create_line_editor(
-        logger.printer().clone(),
-        repl_command.clone(),
-        history_file,
-        vi_mode,
-    )?;
+    let commands = repl_command
+        .get_subcommands()
+        .filter(|command| !command.is_hide_set())
+        .map(|command| command.get_name().to_owned())
+        .chain(std::iter::once("help".to_owned()))
+        .collect::<Vec<_>>();
+
+    let history = if let Some(file_name) = history_file {
+        let h: Box<dyn History> = Box::new(
+            FileBackedHistory::with_file(HISTORY_MAX_LINES, file_name.clone())
+                .map_err(|e| WalletCliError::FileError(file_name, e.to_string()))?,
+        );
+        Some(h)
+    } else {
+        None
+    };
+
+    let mut line_editor = create_line_editor(logger.printer().clone(), commands, history, vi_mode);
 
     let mut prompt = wallet_prompt::WalletPrompt::new();
 
     // first wait for the results of any startup command before processing the rest
     for res_rx in startup_command_futures {
         let res = res_rx.blocking_recv().expect("Channel must be open");
-        if let Some(value) = handle_response(
+        match handle_response(
             res.map(Some),
             &mut console,
             &mut prompt,
             &mut line_editor,
+            logger.printer(),
+            vi_mode,
             true,
         ) {
-            return value;
+            CommandResponse::Exit => return Ok(()),
+            CommandResponse::Error(err) => return Err(err),
+            CommandResponse::Command(_) => return Err(WalletCliError::UnexpectedInteraction),
+            CommandResponse::Continue => {}
         }
     }
 
@@ -170,23 +176,40 @@ pub fn run<N: NodeInterface>(
     console.print_line("Press TAB on your keyboard to auto-complete any command you write.");
     console.print_line("Use 'exit' or Ctrl-D to quit.");
 
+    let mut cmd = None;
     loop {
-        logger.set_print_directly(false);
-        let sig = line_editor.read_line(&prompt).expect("Should not fail normally");
-        logger.set_print_directly(true);
+        let res = if let Some(command) = cmd.take() {
+            super::run_command_blocking(&event_tx, command).map(Option::Some)
+        } else {
+            logger.set_print_directly(false);
+            let sig = line_editor.read_line(&prompt).expect("Should not fail normally");
+            logger.set_print_directly(true);
 
-        let res = process_line(&repl_command, &event_tx, sig);
+            process_line(&repl_command, &event_tx, sig)
+        };
 
-        if let Some(value) = handle_response(
+        match handle_response(
             res,
             &mut console,
             &mut prompt,
             &mut line_editor,
+            logger.printer(),
+            vi_mode,
             exit_on_error,
         ) {
-            return value;
+            CommandResponse::Exit => return Ok(()),
+            CommandResponse::Error(err) => return Err(err),
+            CommandResponse::Continue => {}
+            CommandResponse::Command(command) => cmd = Some(*command),
         }
     }
+}
+
+enum CommandResponse<N: NodeInterface> {
+    Exit,
+    Continue,
+    Error(WalletCliError<N>),
+    Command(Box<ManageableWalletCommand>),
 }
 
 fn handle_response<N: NodeInterface>(
@@ -194,8 +217,10 @@ fn handle_response<N: NodeInterface>(
     console: &mut impl ConsoleOutput,
     prompt: &mut wallet_prompt::WalletPrompt,
     line_editor: &mut Reedline,
+    printer: &reedline::ExternalPrinter<String>,
+    vi_mode: bool,
     exit_on_error: bool,
-) -> Option<Result<(), WalletCliError<N>>> {
+) -> CommandResponse<N> {
     match res {
         Ok(Some(ConsoleCommand::Print(text))) => {
             console.print_line(&text);
@@ -219,18 +244,70 @@ fn handle_response<N: NodeInterface>(
         Ok(Some(ConsoleCommand::PrintHistory)) => {
             line_editor.print_history().expect("Should not fail normally");
         }
-        Ok(Some(ConsoleCommand::Exit)) => return Some(Ok(())),
+        Ok(Some(ConsoleCommand::Exit)) => return CommandResponse::Exit,
+
+        Ok(Some(ConsoleCommand::ChoiceMenu(choice))) => {
+            let line_editor_helper = create_line_editor(printer.clone(), vec![], None, vi_mode);
+            let cmd = handle_choice_menu(choice.as_ref(), line_editor_helper);
+            if let Some(cmd) = cmd {
+                return CommandResponse::Command(Box::new(cmd));
+            }
+        }
 
         Ok(None) => {}
 
         Err(err) => {
             if exit_on_error {
-                return Some(Err(err));
+                return CommandResponse::Error(err);
             }
             console.print_error(err);
         }
     }
-    None
+
+    CommandResponse::Continue
+}
+
+fn handle_choice_menu(
+    choice_menu: &dyn ChoiceMenu,
+    mut line_editor: Reedline,
+) -> Option<ManageableWalletCommand> {
+    let completer = Box::new(wallet_completions::WalletCompletions::new(
+        choice_menu.completion_list(),
+    ));
+
+    line_editor = line_editor.with_completer(completer);
+
+    let prompt = DefaultPrompt::new(
+        reedline::DefaultPromptSegment::Empty,
+        reedline::DefaultPromptSegment::Empty,
+    );
+
+    loop {
+        println!("{}", choice_menu.header());
+        for choice in choice_menu.completion_list() {
+            println!("{}", choice);
+        }
+
+        match line_editor.read_line(&prompt).expect("Should not fail normally") {
+            Signal::Success(input) => {
+                let input = input.trim();
+
+                if input.eq_ignore_ascii_case("Exit") {
+                    return None;
+                }
+
+                if let Some(cmd) = choice_menu.choose(input) {
+                    println!("You selected: {}", input);
+                    return Some(cmd);
+                }
+
+                println!("Invalid choice! Please select a valid option.");
+            }
+            Signal::CtrlD | Signal::CtrlC => {
+                return None;
+            }
+        }
+    }
 }
 
 fn paginate_output(

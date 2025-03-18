@@ -18,12 +18,14 @@ mod errors;
 mod helper_types;
 
 pub use command_handler::CommandHandler;
+use dyn_clone::DynClone;
 pub use errors::WalletCliCommandError;
 use helper_types::YesNo;
 use rpc::description::{Described, Module};
 use wallet_rpc_lib::{
-    cmdline::CliHardwareWalletType, types::NodeInterface, ColdWalletRpcDescription,
-    WalletRpcDescription,
+    cmdline::CliHardwareWalletType,
+    types::{FoundDevice, NodeInterface},
+    ColdWalletRpcDescription, WalletRpcDescription,
 };
 
 use std::{fmt::Debug, num::NonZeroUsize, path::PathBuf, time::Duration};
@@ -73,6 +75,18 @@ pub enum WalletManagementCommand {
         /// and the latter will have to be entered every time the device is connected to the host machine.
         #[arg(long, conflicts_with_all(["mnemonic", "passphrase", "whether_to_store_seed_phrase"]))]
         hardware_wallet: Option<CliHardwareWalletType>,
+
+        /// Optionally specify the name for the trezor device to connect to in case there
+        /// are multiple trezor devices connected at the same time.
+        /// If not specified and there are multiple devices connected a choice will be presented
+        #[arg(long, conflicts_with_all(["mnemonic", "passphrase", "whether_to_store_seed_phrase"]))]
+        trezor_device_name: Option<String>,
+
+        /// Optionally specify the ID for the trezor device to connect to in case there
+        /// are multiple trezor devices connected at the same time.
+        /// If not specified and there are multiple devices connected a choice will be presented
+        #[arg(long, conflicts_with_all(["mnemonic", "passphrase", "whether_to_store_seed_phrase"]))]
+        trezor_device_id: Option<String>,
     },
 
     #[clap(name = "wallet-recover")]
@@ -101,6 +115,18 @@ pub enum WalletManagementCommand {
         /// and the latter will have to be entered every time the device is connected to the host machine.
         #[arg(long, conflicts_with_all(["passphrase", "mnemonic", "whether_to_store_seed_phrase"]))]
         hardware_wallet: Option<CliHardwareWalletType>,
+
+        /// Optionally specify the name for the trezor device to connect to in case there
+        /// are multiple trezor devices connected at the same time.
+        /// If not specified and there are multiple devices connected a choice will be presented
+        #[arg(long, conflicts_with_all(["mnemonic", "passphrase", "whether_to_store_seed_phrase"]))]
+        trezor_device_name: Option<String>,
+
+        /// Optionally specify the ID for the trezor device to connect to in case there
+        /// are multiple trezor devices connected at the same time.
+        /// If not specified and there are multiple devices connected a choice will be presented
+        #[arg(long, conflicts_with_all(["mnemonic", "passphrase", "whether_to_store_seed_phrase"]))]
+        trezor_device_id: Option<String>,
     },
 
     #[clap(name = "wallet-open")]
@@ -875,7 +901,79 @@ pub enum ManageableWalletCommand {
     WalletCommands(WalletCommand),
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
+pub trait ChoiceMenu: DynClone + Debug {
+    fn header(&self) -> &str;
+
+    fn completion_list(&self) -> Vec<String>;
+
+    fn choose(&self, choice: &str) -> Option<ManageableWalletCommand>;
+}
+dyn_clone::clone_trait_object!(ChoiceMenu);
+
+#[derive(Debug, Clone)]
+pub struct CreateWalletDeviceSelectMenu {
+    available_devices: Vec<FoundDevice>,
+
+    wallet_path: PathBuf,
+    hardware_wallet: CliHardwareWalletType,
+    recover: bool,
+}
+
+impl CreateWalletDeviceSelectMenu {
+    pub fn new(
+        available_devices: Vec<FoundDevice>,
+        wallet_path: PathBuf,
+        hardware_wallet: CliHardwareWalletType,
+        recover: bool,
+    ) -> Self {
+        Self {
+            available_devices,
+            wallet_path,
+            hardware_wallet,
+            recover,
+        }
+    }
+}
+
+impl ChoiceMenu for CreateWalletDeviceSelectMenu {
+    fn header(&self) -> &str {
+        "Please chose one of the available Trezor devices:"
+    }
+
+    fn completion_list(&self) -> Vec<String> {
+        self.available_devices.iter().map(|d| d.to_string()).collect()
+    }
+
+    fn choose(&self, choice: &str) -> Option<ManageableWalletCommand> {
+        self.available_devices.iter().find(|d| d.to_string() == choice).map(|d| {
+            if self.recover {
+                ManageableWalletCommand::ManagementCommands(
+                    WalletManagementCommand::RecoverWallet {
+                        wallet_path: self.wallet_path.clone(),
+                        whether_to_store_seed_phrase: None,
+                        mnemonic: None,
+                        passphrase: None,
+                        hardware_wallet: Some(self.hardware_wallet),
+                        trezor_device_name: Some(d.name.clone()),
+                        trezor_device_id: Some(d.device_id.clone()),
+                    },
+                )
+            } else {
+                ManageableWalletCommand::ManagementCommands(WalletManagementCommand::CreateWallet {
+                    wallet_path: self.wallet_path.clone(),
+                    whether_to_store_seed_phrase: None,
+                    mnemonic: None,
+                    passphrase: None,
+                    hardware_wallet: Some(self.hardware_wallet),
+                    trezor_device_name: Some(d.name.clone()),
+                    trezor_device_id: Some(d.device_id.clone()),
+                })
+            }
+        })
+    }
+}
+
+#[derive(Debug, Clone)]
 pub enum ConsoleCommand {
     Print(String),
     PaginatedPrint {
@@ -890,6 +988,7 @@ pub enum ConsoleCommand {
         status: String,
         print_message: String,
     },
+    ChoiceMenu(Box<dyn ChoiceMenu + Sync + Send>),
     Exit,
 }
 
