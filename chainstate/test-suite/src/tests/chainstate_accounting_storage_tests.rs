@@ -27,12 +27,12 @@ use chainstate_test_framework::{
 use common::{
     chain::{
         config::Builder as ConfigBuilder, output_value::OutputValue, stakelock::StakePoolData,
-        Destination, OutPointSourceId, PoolId, SignedTransaction, TxInput, TxOutput, UtxoOutPoint,
+        Destination, OutPointSourceId, PoolData, PoolId, SignedTransaction, TxInput, TxOutput,
+        UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, Idable},
 };
 use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
-use pos_accounting::PoolData;
 use randomness::{CryptoRng, Rng};
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};

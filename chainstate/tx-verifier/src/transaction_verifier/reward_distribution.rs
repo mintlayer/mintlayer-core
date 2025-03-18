@@ -88,7 +88,7 @@ pub fn distribute_pos_reward<
         RewardDistributionVersion::V1 => calculate_staker_reward_v1(
             total_reward,
             pool_balance,
-            pool_data.staker_balance()?,
+            pool_data.staker_balance().ok_or(pos_accounting::Error::StakerBalanceOverflow)?,
             pool_data.cost_per_block(),
             pool_data.margin_ratio_per_thousand(),
             pool_id,
@@ -324,13 +324,12 @@ mod tests {
     use super::*;
     use common::{
         amount_sum,
-        chain::{DelegationId, Destination, PoolId},
+        chain::{DelegationId, Destination, PoolData, PoolId},
         primitives::{per_thousand::PerThousand, Amount, H256},
     };
     use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
     use pos_accounting::{
         DelegationData, FlushablePoSAccountingView, InMemoryPoSAccounting, PoSAccountingDB,
-        PoolData,
     };
     use randomness::Rng;
     use rstest::rstest;

@@ -48,14 +48,16 @@ pub fn get_pool_staker_balance<CS: ChainstateInterface + ?Sized>(
 ) -> Result<Amount, BlockProductionError> {
     let balance = chainstate
         .get_stake_pool_data(*pool_id)
-        .map_err(|err| {
+        .map_err(|err: chainstate::ChainstateError| {
             BlockProductionError::ChainstateError(
                 consensus::ChainstateError::StakePoolDataReadError(*pool_id, err.to_string()),
             )
         })?
         .ok_or(BlockProductionError::PoolDataNotFound(*pool_id))?
         .staker_balance()
-        .map_err(|err| PoSAccountingError::StakerBalanceRetrievalError(err.to_string()))?;
+        .ok_or(PoSAccountingError::StakerBalanceRetrievalError(
+            "Staler balance overflow".to_owned(),
+        ))?;
 
     Ok(balance)
 }

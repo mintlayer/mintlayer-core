@@ -43,7 +43,7 @@ pub enum Error {
     #[error("Tokens accounting error: `{0}`")]
     TokensAccountingError(#[from] tokens_accounting::Error),
     #[error("Pledge amount not found for pool: `{0}`")]
-    PledgeAmountNotFound(PoolId),
+    StakerBalanceNotFound(PoolId),
     #[error("Spending non-spendable output: `{0:?}`")]
     SpendingNonSpendableOutput(UtxoOutPoint),
     #[error("Balance not found for delegation `{0}`")]

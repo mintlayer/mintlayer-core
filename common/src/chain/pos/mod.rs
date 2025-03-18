@@ -28,6 +28,7 @@ use super::{config::ChainType, ChainConfig};
 
 pub mod config;
 pub mod config_builder;
+pub mod pool_data;
 
 pub const DEFAULT_BLOCK_COUNT_TO_AVERAGE: usize = 100;
 pub const DEFAULT_MATURITY_BLOCK_COUNT_V0: BlockCount = BlockCount::new(2000);

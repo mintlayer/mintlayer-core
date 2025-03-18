@@ -184,10 +184,8 @@ impl ConstrainedValueAccumulator {
                 let staker_balance = pos_accounting_view
                     .get_pool_data(*pool_id)
                     .map_err(|_| pos_accounting::Error::ViewFail)?
-                    .map(|pool_data| pool_data.staker_balance())
-                    .transpose()
-                    .map_err(Error::PoSAccountingError)?
-                    .ok_or(Error::PledgeAmountNotFound(*pool_id))?;
+                    .and_then(|pool_data| pool_data.staker_balance())
+                    .ok_or(Error::StakerBalanceNotFound(*pool_id))?;
 
                 let maturity_distance =
                     chain_config.staking_pool_spend_maturity_block_count(block_height);

@@ -17,7 +17,7 @@ use std::collections::BTreeMap;
 
 use accounting::combine_amount_delta;
 use common::{
-    chain::{DelegationId, PoolId},
+    chain::{DelegationId, PoolData, PoolId},
     primitives::{amount::SignedAmount, Amount},
 };
 use utils::tap_log::TapLog;
@@ -26,7 +26,6 @@ use crate::{
     error::Error,
     pool::{
         delegation::DelegationData,
-        pool_data::PoolData,
         view::{FlushablePoSAccountingView, PoSAccountingView},
     },
     DeltaMergeUndo,

@@ -18,11 +18,10 @@ use std::collections::BTreeMap;
 use common::{
     chain::{
         block::timestamp::BlockTimestamp, tokens::TokenId, Block, DelegationId, Destination,
-        OrderId, PoolId, Transaction, UtxoOutPoint,
+        OrderId, PoolData, PoolId, Transaction, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
 };
-use pos_accounting::PoolData;
 
 use crate::storage::storage_api::{
     block_aux_data::BlockAuxData, ApiServerStorageError, ApiServerStorageRead, BlockInfo,

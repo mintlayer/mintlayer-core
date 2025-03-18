@@ -16,13 +16,13 @@
 use std::{collections::BTreeMap, ops::Deref};
 
 use common::{
-    chain::{DelegationId, PoolId},
+    chain::{DelegationId, PoolData, PoolId},
     primitives::Amount,
 };
 
 use crate::DeltaMergeUndo;
 
-use super::{delegation::DelegationData, delta::data::PoSAccountingDeltaData, pool_data::PoolData};
+use super::{delegation::DelegationData, delta::data::PoSAccountingDeltaData};
 
 pub trait PoSAccountingView {
     type Error: std::error::Error;

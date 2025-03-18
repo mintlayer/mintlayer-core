@@ -24,7 +24,7 @@ use common::{
         timelock::OutputTimeLock,
         tokens::{NftIssuance, TokenId, TokenIssuance},
         AccountCommand, AccountNonce, AccountSpending, ConsensusUpgrade, DelegationId, Destination,
-        NetUpgrades, OutPointSourceId, PoSChainConfigBuilder, PoolId, TxInput, TxOutput,
+        NetUpgrades, OutPointSourceId, PoSChainConfigBuilder, PoolData, PoolId, TxInput, TxOutput,
         UtxoOutPoint,
     },
     primitives::{
@@ -33,7 +33,7 @@ use common::{
 };
 use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
 use orders_accounting::{InMemoryOrdersAccounting, OrdersAccountingDB};
-use pos_accounting::{DelegationData, InMemoryPoSAccounting, PoSAccountingDB, PoolData};
+use pos_accounting::{DelegationData, InMemoryPoSAccounting, PoSAccountingDB};
 use randomness::{CryptoRng, Rng};
 use rstest::rstest;
 use test_utils::{

@@ -17,7 +17,7 @@ use std::collections::BTreeMap;
 
 use accounting::{DeltaAmountCollection, DeltaDataUndoCollection};
 use common::{
-    chain::{DelegationId, PoolId},
+    chain::{DelegationId, PoolData, PoolId},
     primitives::{amount::SignedAmount, Amount, H256},
 };
 use serialization::{Decode, Encode};
@@ -26,7 +26,7 @@ use crate::error::Error;
 
 use self::data::PoSAccountingDeltaData;
 
-use super::{delegation::DelegationData, pool_data::PoolData, view::PoSAccountingView};
+use super::{delegation::DelegationData, view::PoSAccountingView};
 
 pub mod data;
 pub mod operator_impls;

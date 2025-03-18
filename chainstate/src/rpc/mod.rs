@@ -337,9 +337,7 @@ impl ChainstateRpcServer for super::ChainstateHandle {
                     dynamize_err(Address::<PoolId>::from_string(chain_config, pool_address))
                         .map(|address| address.into_object())
                         .and_then(|pool_id| dynamize_err(this.get_stake_pool_data(pool_id)))
-                        .and_then(|pool_data| {
-                            dynamize_err(pool_data.map(|d| d.staker_balance()).transpose())
-                        });
+                        .and_then(|pool_data| Ok(pool_data.and_then(|d| d.staker_balance())));
 
                 result
             })

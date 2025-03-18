@@ -38,7 +38,7 @@ pub use genesis::Genesis;
 pub use order::{make_order_id, OrderData, OrderId, RpcOrderInfo};
 pub use pos::{
     config::PoSChainConfig, config_builder::PoSChainConfigBuilder, get_initial_randomness,
-    pos_initial_difficulty, DelegationId, PoSConsensusVersion, PoolId,
+    pool_data::PoolData, pos_initial_difficulty, DelegationId, PoSConsensusVersion, PoolId,
 };
 pub use pow::{PoWChainConfig, PoWChainConfigBuilder};
 pub use upgrades::*;

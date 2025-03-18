@@ -35,13 +35,13 @@ use common::{
         block::{signed_block_header::SignedBlockHeader, Block, BlockReward, GenBlock},
         config::ChainConfig,
         tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
-        AccountNonce, AccountType, DelegationId, OrderId, PoolId, RpcOrderInfo, Transaction,
-        TxInput, TxOutput, UtxoOutPoint,
+        AccountNonce, AccountType, DelegationId, OrderId, PoolData, PoolId, RpcOrderInfo,
+        Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{id::WithId, Amount, BlockHeight, Id, Idable},
 };
 use orders_accounting::OrderData;
-use pos_accounting::{DelegationData, PoSAccountingStorageRead, PoolData};
+use pos_accounting::{DelegationData, PoSAccountingStorageRead};
 use utils::{displayable_option::DisplayableOption, eventhandler::EventHandler};
 use utils_networking::broadcaster;
 use utxo::{Utxo, UtxosView};
@@ -828,11 +828,9 @@ fn get_output_coin_amount(
                     PropertyQueryError::StakePoolDataNotFound(*pool_id),
                 ))?
                 .staker_balance()
-                .map_err(|_| {
-                    ChainstateError::FailedToReadProperty(
-                        PropertyQueryError::StakerBalanceOverflow(*pool_id),
-                    )
-                })?;
+                .ok_or(ChainstateError::FailedToReadProperty(
+                    PropertyQueryError::StakerBalanceOverflow(*pool_id),
+                ))?;
             Some(pledge_amount)
         }
         TxOutput::DelegateStaking(v, _) => Some(*v),

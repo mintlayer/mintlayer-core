@@ -29,7 +29,7 @@ use common::{
     chain::{
         tokens::{TokenAuxiliaryData, TokenId},
         AccountNonce, AccountType, ChainConfig, DelegationId, GenBlock, GenBlockId, OrderId,
-        PoolId, Transaction,
+        PoolData, PoolId, Transaction,
     },
     primitives::{Amount, Id},
 };
@@ -39,7 +39,7 @@ use orders_accounting::{
 };
 use pos_accounting::{
     DelegationData, DeltaMergeUndo, FlushablePoSAccountingView, PoSAccountingDB,
-    PoSAccountingDeltaData, PoSAccountingStorageRead, PoSAccountingUndo, PoolData,
+    PoSAccountingDeltaData, PoSAccountingStorageRead, PoSAccountingUndo,
 };
 use tokens_accounting::{
     FlushableTokensAccountingView, TokenAccountingUndo, TokensAccountingDB,

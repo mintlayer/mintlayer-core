@@ -28,12 +28,11 @@ use common::{
             IsTokenFreezable, IsTokenFrozen, IsTokenUnfreezable, NftIssuance, RPCFungibleTokenInfo,
             TokenId, TokenTotalSupply,
         },
-        AccountNonce, Block, ChainConfig, DelegationId, Destination, OrderId, PoolId,
+        AccountNonce, Block, ChainConfig, DelegationId, Destination, OrderId, PoolData, PoolId,
         SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
 };
-use pos_accounting::PoolData;
 use serialization::{Decode, Encode};
 
 use self::block_aux_data::{BlockAuxData, BlockWithExtraData};

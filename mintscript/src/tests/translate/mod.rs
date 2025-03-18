@@ -22,12 +22,12 @@ use common::{
         htlc::{HashedTimelockContract, HtlcSecret, HtlcSecretHash},
         signature::inputsig::authorize_hashed_timelock_contract_spend::AuthorizedHashedTimelockContractSpend,
         stakelock::StakePoolData,
-        tokens, AccountNonce, AccountSpending, OrderData, OrderId,
+        tokens, AccountNonce, AccountSpending, OrderData, OrderId, PoolData,
     },
     primitives::per_thousand::PerThousand,
 };
 use crypto::vrf::{VRFPrivateKey, VRFPublicKey};
-use pos_accounting::{DelegationData, PoolData};
+use pos_accounting::DelegationData;
 use serialization::Encode;
 use tokens_accounting::TokenData;
 

@@ -26,12 +26,11 @@ use common::{
     chain::{
         block::timestamp::BlockTimestamp,
         tokens::{NftIssuance, TokenId},
-        Block, ChainConfig, DelegationId, Destination, Genesis, OrderId, PoolId, Transaction,
-        UtxoOutPoint,
+        Block, ChainConfig, DelegationId, Destination, Genesis, OrderId, PoolData, PoolId,
+        Transaction, UtxoOutPoint,
     },
     primitives::{id::WithId, Amount, BlockHeight, CoinOrTokenId, Id},
 };
-use pos_accounting::PoolData;
 use std::{
     cmp::Reverse,
     collections::{BTreeMap, BTreeSet},

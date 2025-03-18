@@ -19,11 +19,11 @@ use std::{
 };
 
 use common::{
-    chain::{DelegationId, PoolId},
+    chain::{DelegationId, PoolData, PoolId},
     primitives::Amount,
 };
 
-use crate::pool::{delegation::DelegationData, pool_data::PoolData};
+use crate::pool::delegation::DelegationData;
 
 pub mod in_memory;
 

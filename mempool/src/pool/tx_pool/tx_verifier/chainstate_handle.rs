@@ -27,7 +27,7 @@ use chainstate_types::{storage_result, TipStorageTag};
 use common::{
     chain::{
         tokens::{TokenAuxiliaryData, TokenId},
-        AccountNonce, AccountType, DelegationId, GenBlock, OrderId, PoolId, Transaction,
+        AccountNonce, AccountType, DelegationId, GenBlock, OrderId, PoolData, PoolId, Transaction,
         UtxoOutPoint,
     },
     primitives::{Amount, Id},
@@ -36,7 +36,7 @@ use orders_accounting::{
     OrderData, OrdersAccountingStorageRead, OrdersAccountingUndo, OrdersAccountingView,
 };
 use pos_accounting::{
-    DelegationData, PoSAccountingStorageRead, PoSAccountingUndo, PoSAccountingView, PoolData,
+    DelegationData, PoSAccountingStorageRead, PoSAccountingUndo, PoSAccountingView,
 };
 use subsystem::blocking::BlockingHandle;
 use tokens_accounting::{TokenAccountingUndo, TokensAccountingStorageRead, TokensAccountingView};

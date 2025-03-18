@@ -15,13 +15,13 @@
 
 use accounting::DataDeltaUndo;
 use common::{
-    chain::{DelegationId, Destination, PoolId, UtxoOutPoint},
+    chain::{DelegationId, Destination, PoolData, PoolId, UtxoOutPoint},
     primitives::Amount,
 };
 use serialization::{Decode, Encode};
 use strum::EnumCount;
 
-use crate::error::Error;
+use crate::{error::Error, DelegationData};
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub struct CreatePoolUndo {
@@ -86,8 +86,6 @@ pub enum PoSAccountingUndo {
     #[codec(index = 6)]
     IncreaseStakerRewards(IncreaseStakerRewardsUndo),
 }
-
-use super::{delegation::DelegationData, pool_data::PoolData};
 
 pub trait PoSAccountingOperations<U> {
     fn create_pool(&mut self, pool_id: PoolId, pool_data: PoolData) -> Result<U, Error>;

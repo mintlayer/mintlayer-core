@@ -14,11 +14,10 @@
 // limitations under the License.
 
 use chainstate_test_framework::{TestFramework, TestStore};
-use common::chain::config::Builder as ConfigBuilder;
-use common::primitives::Amount;
 use common::{
-    chain::{DelegationId, OrderId, PoolId, UtxoOutPoint},
-    primitives::{Id, H256},
+    chain::config::Builder as ConfigBuilder,
+    chain::{DelegationId, OrderId, PoolData, PoolId, UtxoOutPoint},
+    primitives::{Amount, Id, H256},
 };
 use orders_accounting::{OrderData, OrdersAccountingView};
 use pos_accounting::PoSAccountingView;
@@ -65,10 +64,7 @@ impl PoSAccountingView for EmptyAccountingView {
         Ok(Amount::ZERO)
     }
 
-    fn get_pool_data(
-        &self,
-        _pool_id: PoolId,
-    ) -> Result<Option<pos_accounting::PoolData>, pos_accounting::Error> {
+    fn get_pool_data(&self, _pool_id: PoolId) -> Result<Option<PoolData>, pos_accounting::Error> {
         Ok(None)
     }
 

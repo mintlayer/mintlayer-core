@@ -22,15 +22,15 @@ use common::{
         block::{signed_block_header::SignedBlockHeader, BlockReward},
         config::{EpochIndex, MagicBytes},
         tokens::{TokenAuxiliaryData, TokenId},
-        AccountNonce, AccountType, Block, DelegationId, GenBlock, OrderId, PoolId, Transaction,
-        UtxoOutPoint,
+        AccountNonce, AccountType, Block, DelegationId, GenBlock, OrderId, PoolData, PoolId,
+        Transaction, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id, H256},
 };
 use orders_accounting::{OrderData, OrdersAccountingStorageRead, OrdersAccountingUndo};
 use pos_accounting::{
     DelegationData, DeltaMergeUndo, PoSAccountingDeltaData, PoSAccountingStorageRead,
-    PoSAccountingUndo, PoolData,
+    PoSAccountingUndo,
 };
 use serialization::{Decode, Encode};
 use storage::MakeMapRef;

@@ -1514,7 +1514,9 @@ impl NonZeroPoolBalances {
 
         match (total_balance, pool_data) {
             (Some(total_balance), Some(pool_data)) => {
-                let staker_balance = pool_data.staker_balance()?;
+                let staker_balance = pool_data
+                    .staker_balance()
+                    .ok_or(pos_accounting::Error::StakerBalanceOverflow)?;
 
                 ensure!(
                     total_balance >= staker_balance,

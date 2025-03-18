@@ -593,7 +593,7 @@ impl BanScore for constraints_value_accumulator::Error {
             constraints_value_accumulator::Error::InputsAndInputsUtxosLengthMismatch(_, _) => 100,
             constraints_value_accumulator::Error::MissingOutputOrSpent(_) => 100,
             constraints_value_accumulator::Error::PoSAccountingError(err) => err.ban_score(),
-            constraints_value_accumulator::Error::PledgeAmountNotFound(_) => 100,
+            constraints_value_accumulator::Error::StakerBalanceNotFound(_) => 100,
             constraints_value_accumulator::Error::SpendingNonSpendableOutput(_) => 100,
             constraints_value_accumulator::Error::AttemptToViolateFeeRequirements => 100,
             constraints_value_accumulator::Error::DelegationBalanceNotFound(_) => 0,

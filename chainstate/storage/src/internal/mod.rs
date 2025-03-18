@@ -22,12 +22,10 @@ use std::collections::BTreeMap;
 
 use chainstate_types::{SealedStorageTag, TipStorageTag};
 use common::{
-    chain::{ChainConfig, DelegationId, PoolId},
+    chain::{ChainConfig, DelegationId, PoolData, PoolId},
     primitives::Amount,
 };
-use pos_accounting::{
-    DelegationData, PoSAccountingStorageRead, PoSAccountingStorageWrite, PoolData,
-};
+use pos_accounting::{DelegationData, PoSAccountingStorageRead, PoSAccountingStorageWrite};
 use utils::log_error;
 
 use crate::{

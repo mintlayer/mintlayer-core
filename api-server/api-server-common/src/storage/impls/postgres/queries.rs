@@ -19,7 +19,6 @@ use std::{
 };
 
 use bb8_postgres::{bb8::PooledConnection, PostgresConnectionManager};
-use pos_accounting::PoolData;
 use serialization::{DecodeAll, Encode};
 
 use common::{
@@ -27,8 +26,8 @@ use common::{
     chain::{
         block::timestamp::BlockTimestamp,
         tokens::{NftIssuance, TokenId},
-        AccountNonce, Block, ChainConfig, DelegationId, Destination, GenBlock, OrderId, PoolId,
-        Transaction, UtxoOutPoint,
+        AccountNonce, Block, ChainConfig, DelegationId, Destination, GenBlock, OrderId, PoolData,
+        PoolId, Transaction, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
 };

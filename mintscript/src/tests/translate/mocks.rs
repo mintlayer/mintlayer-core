@@ -16,8 +16,8 @@
 use super::super::*;
 use crate::translate::InputInfo;
 
-use common::chain::{OrderData, OrderId};
-use pos_accounting::{DelegationData, PoolData};
+use common::chain::{OrderData, OrderId, PoolData};
+use pos_accounting::DelegationData;
 use tokens_accounting::TokenData;
 
 use std::collections::BTreeMap;

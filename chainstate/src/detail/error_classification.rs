@@ -887,7 +887,7 @@ impl BlockProcessingErrorClassification for constraints_value_accumulator::Error
             | Error::AttemptToViolateFeeRequirements
             | Error::InputsAndInputsUtxosLengthMismatch(_, _)
             | Error::MissingOutputOrSpent(_)
-            | Error::PledgeAmountNotFound(_)
+            | Error::StakerBalanceNotFound(_)
             | Error::SpendingNonSpendableOutput(_)
             | Error::NegativeAccountBalance(_)
             | Error::UnsupportedTokenVersion => BlockProcessingErrorClass::BadBlock,

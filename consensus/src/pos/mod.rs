@@ -186,7 +186,8 @@ where
     let staker_balance = pos_accounting_view
         .get_pool_data(stake_pool_id)?
         .ok_or(ConsensusPoSError::PoolDataNotFound(stake_pool_id))?
-        .staker_balance()?;
+        .staker_balance()
+        .ok_or(pos_accounting::Error::StakerBalanceOverflow)?;
     let final_supply = chain_config
         .final_supply()
         .ok_or(ConsensusPoSError::FiniteTotalSupplyIsRequired)?;

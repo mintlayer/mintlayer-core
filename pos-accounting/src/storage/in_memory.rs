@@ -16,14 +16,11 @@
 use std::collections::BTreeMap;
 
 use common::{
-    chain::{DelegationId, PoolId},
+    chain::{DelegationId, PoolData, PoolId},
     primitives::{Amount, H256},
 };
 
-use crate::{
-    pool::{delegation::DelegationData, pool_data::PoolData},
-    PoSAccountingData,
-};
+use crate::{pool::delegation::DelegationData, PoSAccountingData};
 
 use super::{PoSAccountingStorageRead, PoSAccountingStorageWrite};
 

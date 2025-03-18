@@ -20,10 +20,9 @@ use std::sync::Arc;
 
 use bb8_postgres::{bb8::PooledConnection, PostgresConnectionManager};
 use common::{
-    chain::{Block, ChainConfig, PoolId, Transaction},
+    chain::{Block, ChainConfig, PoolData, PoolId, Transaction},
     primitives::{BlockHeight, Id},
 };
-use pos_accounting::PoolData;
 use tokio_postgres::NoTls;
 
 use crate::storage::storage_api::{

@@ -16,7 +16,7 @@
 use common::{
     chain::{
         block::timestamp::BlockTimestamp, tokens::TokenId, DelegationId, Destination, OrderId,
-        PoolId,
+        PoolData, PoolId,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
 };
@@ -32,7 +32,6 @@ use crate::storage::{
 use std::collections::BTreeMap;
 
 use common::chain::UtxoOutPoint;
-use pos_accounting::PoolData;
 
 use super::{ApiServerPostgresTransactionalRo, CONN_ERR};
 

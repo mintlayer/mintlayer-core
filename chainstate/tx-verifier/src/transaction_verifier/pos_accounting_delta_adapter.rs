@@ -18,13 +18,13 @@ use std::collections::BTreeMap;
 use super::{storage::TransactionVerifierStorageError, TransactionSource};
 
 use common::{
-    chain::{PoolId, UtxoOutPoint},
+    chain::{PoolData, PoolId, UtxoOutPoint},
     primitives::Amount,
 };
 use logging::log;
 use pos_accounting::{
     DeltaMergeUndo, FlushablePoSAccountingView, PoSAccountingDelta, PoSAccountingDeltaData,
-    PoSAccountingOperations, PoSAccountingUndo, PoSAccountingView, PoolData,
+    PoSAccountingOperations, PoSAccountingUndo, PoSAccountingView,
 };
 
 /// Adapter over `PosAccountingDelta` that implements `PoSAccountingOperations`.

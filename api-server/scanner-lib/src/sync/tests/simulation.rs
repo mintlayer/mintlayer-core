@@ -43,7 +43,7 @@ use common::{
         },
         AccountCommand, AccountNonce, AccountSpending, AccountType, ChainConfig, ConsensusUpgrade,
         DelegationId, Destination, GenBlockId, NetUpgrades, OrderId, OutPointSourceId,
-        PoSChainConfigBuilder, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
+        PoSChainConfigBuilder, PoolData, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockCount, BlockHeight, CoinOrTokenId, Idable, H256},
 };
@@ -80,10 +80,7 @@ impl PoSAccountingView for PoSAccountingAdapterToCheckFees<'_> {
         unimplemented!()
     }
 
-    fn get_pool_data(
-        &self,
-        pool_id: PoolId,
-    ) -> Result<Option<pos_accounting::PoolData>, Self::Error> {
+    fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, Self::Error> {
         Ok(self.chainstate.get_stake_pool_data(pool_id).unwrap())
     }
 

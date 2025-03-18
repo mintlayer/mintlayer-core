@@ -15,7 +15,7 @@
 
 use accounting::DataDelta;
 use common::{
-    chain::{DelegationId, Destination, PoolId, UtxoOutPoint},
+    chain::{DelegationId, Destination, PoolData, PoolId, UtxoOutPoint},
     primitives::Amount,
 };
 use utils::ensure;
@@ -30,7 +30,6 @@ use crate::{
             DeleteDelegationIdUndo, IncreaseStakerRewardsUndo, PoSAccountingOperations,
             PoSAccountingUndo, SpendFromShareUndo,
         },
-        pool_data::PoolData,
         view::PoSAccountingView,
     },
 };
@@ -100,7 +99,10 @@ impl<P: PoSAccountingView> PoSAccountingOperations<PoSAccountingUndo> for PoSAcc
 
         self.add_balance_to_pool(pool_id, amount_to_add)?;
 
-        let new_pool_data = pool_data.clone().increase_staker_rewards(amount_to_add)?;
+        let new_pool_data = pool_data
+            .clone()
+            .increase_staker_rewards(amount_to_add)
+            .ok_or(Error::StakerBalanceOverflow)?;
         let data_undo = self.data.pool_data.merge_delta_data_element(
             pool_id,
             DataDelta::new(Some(pool_data), Some(new_pool_data)),

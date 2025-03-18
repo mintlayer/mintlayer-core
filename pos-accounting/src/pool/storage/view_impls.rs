@@ -16,7 +16,7 @@
 use std::collections::BTreeMap;
 
 use common::{
-    chain::{DelegationId, PoolId},
+    chain::{DelegationId, PoolData, PoolId},
     primitives::Amount,
 };
 
@@ -24,7 +24,6 @@ use crate::{
     pool::{
         delegation::DelegationData,
         delta::data::PoSAccountingDeltaData,
-        pool_data::PoolData,
         view::{FlushablePoSAccountingView, PoSAccountingView},
     },
     storage::{PoSAccountingStorageRead, PoSAccountingStorageWrite},

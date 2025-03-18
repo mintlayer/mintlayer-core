@@ -14,11 +14,11 @@
 // limitations under the License.
 
 use api_server_common::storage::storage_api::Delegation;
-use common::chain::{DelegationId, Destination, PoolId, UtxoOutPoint};
+use common::chain::{DelegationId, Destination, PoolData, PoolId, UtxoOutPoint};
 use common::primitives::Amount;
 use pos_accounting::{
     DelegationData, FlushablePoSAccountingView, InMemoryPoSAccounting, PoSAccountingDB,
-    PoSAccountingDelta, PoSAccountingOperations, PoSAccountingView, PoolData,
+    PoSAccountingDelta, PoSAccountingOperations, PoSAccountingView,
 };
 use std::collections::BTreeMap;
 

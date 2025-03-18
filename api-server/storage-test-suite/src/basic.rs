@@ -19,7 +19,6 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use crate::helpers::make_trial;
 use crate::make_test;
-use pos_accounting::PoolData;
 
 use api_server_common::storage::{
     impls::CURRENT_STORAGE_VERSION,
@@ -47,8 +46,8 @@ use common::{
         tokens::{
             IsTokenFreezable, IsTokenFrozen, NftIssuance, NftIssuanceV0, TokenId, TokenTotalSupply,
         },
-        AccountNonce, Block, DelegationId, Destination, OrderId, OutPointSourceId, PoolId,
-        SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
+        AccountNonce, Block, DelegationId, Destination, OrderId, OutPointSourceId, PoolData,
+        PoolId, SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, CoinOrTokenId, Id, Idable, H256},
 };

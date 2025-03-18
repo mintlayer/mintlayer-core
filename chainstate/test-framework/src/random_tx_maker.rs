@@ -35,7 +35,7 @@ use common::{
         },
         AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, AccountType, DelegationId,
         Destination, GenBlockId, OrderAccountCommand, OrderData, OrderId, OrdersVersion,
-        OutPointSourceId, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
+        OutPointSourceId, PoolData, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, CoinOrTokenId, Id, Idable, H256},
 };
@@ -50,7 +50,6 @@ use orders_accounting::{
 use pos_accounting::{
     make_pool_id, DelegationData, InMemoryPoSAccounting, PoSAccountingDB, PoSAccountingDelta,
     PoSAccountingDeltaData, PoSAccountingOperations, PoSAccountingUndo, PoSAccountingView,
-    PoolData,
 };
 use randomness::{seq::IteratorRandom, CryptoRng, Rng, SliceRandom};
 use test_utils::{nft_utils::*, random_ascii_alphanumeric_string};

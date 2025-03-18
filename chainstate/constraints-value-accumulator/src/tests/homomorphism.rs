@@ -17,7 +17,7 @@ use common::{
     chain::{
         config::ChainType, output_value::OutputValue, stakelock::StakePoolData,
         timelock::OutputTimeLock, AccountNonce, AccountSpending, DelegationId, Destination,
-        NetUpgrades, OutPointSourceId, PoolId, Transaction, TxInput, TxOutput,
+        NetUpgrades, OutPointSourceId, PoolData, PoolId, Transaction, TxInput, TxOutput,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Fee, Id, H256},
 };
@@ -61,7 +61,7 @@ fn accumulators_homomorphism(#[case] seed: Seed) {
     use std::collections::BTreeMap;
 
     use orders_accounting::{InMemoryOrdersAccounting, OrdersAccountingDB};
-    use pos_accounting::{InMemoryPoSAccounting, PoSAccountingDB, PoolData};
+    use pos_accounting::{InMemoryPoSAccounting, PoSAccountingDB};
 
     let mut rng = make_seedable_rng(seed);
 

@@ -13,14 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::{
+use crate::{
     chain::{stakelock::StakePoolData, Destination},
     primitives::{per_thousand::PerThousand, Amount},
 };
 use crypto::vrf::VRFPublicKey;
 use serialization::{Decode, Encode};
-
-use crate::Error;
 
 #[derive(Debug, Eq, PartialEq, Clone, Encode, Decode)]
 pub struct PoolData {
@@ -63,8 +61,8 @@ impl PoolData {
         self.staker_rewards
     }
 
-    pub fn staker_balance(&self) -> Result<Amount, Error> {
-        (self.pledge_amount + self.staker_rewards).ok_or(Error::StakerBalanceOverflow)
+    pub fn staker_balance(&self) -> Option<Amount> {
+        self.pledge_amount + self.staker_rewards
     }
 
     pub fn vrf_public_key(&self) -> &VRFPublicKey {
@@ -85,9 +83,9 @@ impl PoolData {
         self
     }
 
-    pub fn increase_staker_rewards(mut self, reward: Amount) -> Result<Self, Error> {
-        self.staker_rewards = (self.staker_rewards + reward).ok_or(Error::StakerBalanceOverflow)?;
-        Ok(self)
+    pub fn increase_staker_rewards(mut self, reward: Amount) -> Option<Self> {
+        self.staker_rewards = (self.staker_rewards + reward)?;
+        Some(self)
     }
 
     pub fn is_decommissioned(&self) -> bool {

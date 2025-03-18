@@ -25,13 +25,13 @@ use common::{
     chain::{
         tokens::{TokenAuxiliaryData, TokenId},
         AccountNonce, AccountType, ChainConfig, DelegationId, GenBlock, GenBlockId, OrderId,
-        PoolId, Transaction,
+        PoolData, PoolId, Transaction,
     },
     primitives::{Amount, Id},
 };
 use orders_accounting::{OrderData, OrdersAccountingStorageRead, OrdersAccountingUndo};
 use pos_accounting::{
-    DelegationData, PoSAccountingDB, PoSAccountingStorageRead, PoSAccountingUndo, PoolData,
+    DelegationData, PoSAccountingDB, PoSAccountingStorageRead, PoSAccountingUndo,
 };
 use tokens_accounting::{TokenAccountingUndo, TokensAccountingStorageRead};
 use tx_verifier::{

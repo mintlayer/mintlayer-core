@@ -26,13 +26,13 @@ use common::{
         block::{signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp, BlockReward},
         config::ChainConfig,
         tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
-        AccountNonce, AccountType, Block, DelegationId, GenBlock, OrderId, PoolId, RpcOrderInfo,
-        Transaction, TxInput, UtxoOutPoint,
+        AccountNonce, AccountType, Block, DelegationId, GenBlock, OrderId, PoolData, PoolId,
+        RpcOrderInfo, Transaction, TxInput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
 };
 use orders_accounting::OrderData;
-use pos_accounting::{DelegationData, PoolData};
+use pos_accounting::DelegationData;
 use utils::eventhandler::EventHandler;
 use utils_networking::broadcaster;
 use utxo::Utxo;

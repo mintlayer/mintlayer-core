@@ -186,13 +186,7 @@ impl NodeInterface for WalletHandlesClient {
             .chainstate
             .call(move |this| this.get_stake_pool_data(pool_id))
             .await??
-            .map(|data| data.staker_balance())
-            .transpose()
-            .map_err(|_| {
-                ChainstateError::FailedToReadProperty(
-                    chainstate::PropertyQueryError::StakerBalanceOverflow(pool_id),
-                )
-            })?;
+            .and_then(|data| data.staker_balance());
         Ok(result)
     }
 

@@ -20,11 +20,11 @@ use common::{
     chain::{
         block::timestamp::BlockTimestamp,
         tokens::{NftIssuance, TokenId},
-        Block, ChainConfig, DelegationId, Destination, OrderId, PoolId, Transaction, UtxoOutPoint,
+        Block, ChainConfig, DelegationId, Destination, OrderId, PoolData, PoolId, Transaction,
+        UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
 };
-use pos_accounting::PoolData;
 
 use crate::storage::storage_api::{
     block_aux_data::{BlockAuxData, BlockWithExtraData},
