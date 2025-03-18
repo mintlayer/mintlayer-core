@@ -88,15 +88,33 @@ impl WalletInterface for ClientWalletRpc {
         path: PathBuf,
         wallet_args: WalletTypeArgs,
     ) -> Result<CreatedWallet, Self::Error> {
-        let (mnemonic, passphrase, store_seed_phrase, hardware_wallet) = match wallet_args {
-            WalletTypeArgs::Software {
-                mnemonic,
-                passphrase,
-                store_seed_phrase,
-            } => (mnemonic, passphrase, store_seed_phrase.should_save(), None),
-            #[cfg(feature = "trezor")]
-            WalletTypeArgs::Trezor => (None, None, false, Some(HardwareWalletType::Trezor)),
-        };
+        let (mnemonic, passphrase, store_seed_phrase, hardware_wallet, device_name, device_id) =
+            match wallet_args {
+                WalletTypeArgs::Software {
+                    mnemonic,
+                    passphrase,
+                    store_seed_phrase,
+                } => (
+                    mnemonic,
+                    passphrase,
+                    store_seed_phrase.should_save(),
+                    None,
+                    None,
+                    None,
+                ),
+                #[cfg(feature = "trezor")]
+                WalletTypeArgs::Trezor {
+                    device_name,
+                    device_id,
+                } => (
+                    None,
+                    None,
+                    false,
+                    Some(HardwareWalletType::Trezor),
+                    device_name,
+                    device_id,
+                ),
+            };
 
         ColdWalletRpcClient::create_wallet(
             &self.http_client,
@@ -105,6 +123,8 @@ impl WalletInterface for ClientWalletRpc {
             mnemonic,
             passphrase,
             hardware_wallet,
+            device_name,
+            device_id,
         )
         .await
         .map_err(WalletRpcError::ResponseError)
@@ -117,6 +137,8 @@ impl WalletInterface for ClientWalletRpc {
         mnemonic: Option<String>,
         passphrase: Option<String>,
         hardware_wallet: Option<HardwareWalletType>,
+        device_name: Option<String>,
+        device_id: Option<String>,
     ) -> Result<CreatedWallet, Self::Error> {
         ColdWalletRpcClient::recover_wallet(
             &self.http_client,
@@ -125,6 +147,8 @@ impl WalletInterface for ClientWalletRpc {
             mnemonic,
             passphrase,
             hardware_wallet,
+            device_name,
+            device_id,
         )
         .await
         .map_err(WalletRpcError::ResponseError)

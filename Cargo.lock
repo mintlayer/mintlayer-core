@@ -8994,6 +8994,7 @@ dependencies = [
  "crossterm",
  "crypto",
  "directories",
+ "dyn-clone",
  "futures",
  "hex",
  "humantime",
