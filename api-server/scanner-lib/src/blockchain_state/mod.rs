@@ -34,13 +34,12 @@ use common::{
         tokens::{get_referenced_token_ids, make_token_id, IsTokenFrozen, TokenId, TokenIssuance},
         transaction::OutPointSourceId,
         AccountCommand, AccountNonce, AccountSpending, Block, DelegationId, Destination, GenBlock,
-        Genesis, OrderAccountCommand, OrderId, PoolData, PoolId, SignedTransaction, Transaction,
-        TxInput, TxOutput, UtxoOutPoint,
+        Genesis, OrderAccountCommand, OrderData, OrderId, PoolData, PoolId, SignedTransaction,
+        Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{id::WithId, Amount, BlockHeight, CoinOrTokenId, Fee, Id, Idable, H256},
 };
 use futures::{stream::FuturesOrdered, TryStreamExt};
-use orders_accounting::OrderData;
 use pos_accounting::{make_delegation_id, PoSAccountingView};
 use std::{
     collections::{BTreeMap, BTreeSet},

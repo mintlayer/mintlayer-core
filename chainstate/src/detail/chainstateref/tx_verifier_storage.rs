@@ -28,13 +28,13 @@ use chainstate_types::{storage_result, GenBlockIndex, TipStorageTag};
 use common::{
     chain::{
         tokens::{TokenAuxiliaryData, TokenId},
-        AccountNonce, AccountType, ChainConfig, DelegationId, GenBlock, GenBlockId, OrderId,
-        PoolData, PoolId, Transaction,
+        AccountNonce, AccountType, ChainConfig, DelegationId, GenBlock, GenBlockId, OrderData,
+        OrderId, PoolData, PoolId, Transaction,
     },
     primitives::{Amount, Id},
 };
 use orders_accounting::{
-    FlushableOrdersAccountingView, OrderData, OrdersAccountingDB, OrdersAccountingStorageRead,
+    FlushableOrdersAccountingView, OrdersAccountingDB, OrdersAccountingStorageRead,
     OrdersAccountingUndo,
 };
 use pos_accounting::{

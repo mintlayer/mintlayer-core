@@ -23,9 +23,7 @@ mod view;
 
 pub use {
     cache::OrdersAccountingCache,
-    data::{
-        OrderData, OrdersAccountingData, OrdersAccountingDeltaData, OrdersAccountingDeltaUndoData,
-    },
+    data::{OrdersAccountingData, OrdersAccountingDeltaData, OrdersAccountingDeltaUndoData},
     error::Error,
     operations::{OrdersAccountingOperations, OrdersAccountingUndo},
     price_calculation::{calculate_fill_order, calculate_filled_amount},
@@ -36,7 +34,7 @@ pub use {
     view::{FlushableOrdersAccountingView, OrdersAccountingView},
 };
 
-use common::{chain::output_value::OutputValue, primitives::Amount};
+use common::{chain::output_value::OutputValue, chain::OrderData, primitives::Amount};
 
 fn output_value_amount(value: &OutputValue) -> error::Result<Amount> {
     match value {

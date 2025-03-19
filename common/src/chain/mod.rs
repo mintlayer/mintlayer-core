@@ -35,7 +35,7 @@ pub use coin_unit::CoinUnit;
 pub use config::ChainConfig;
 pub use gen_block::{GenBlock, GenBlockId};
 pub use genesis::Genesis;
-pub use order::{make_order_id, CreateOrderData, OrderId, RpcOrderInfo};
+pub use order::{make_order_id, CreateOrderData, OrderData, OrderId, RpcOrderInfo};
 pub use pos::{
     config::PoSChainConfig, config_builder::PoSChainConfigBuilder, get_initial_randomness,
     pool_data::PoolData, pos_initial_difficulty, DelegationId, PoSConsensusVersion, PoolId,

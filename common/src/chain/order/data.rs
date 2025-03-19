@@ -13,40 +13,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::chain::{output_value::OutputValue, Destination};
 use serialization::{Decode, Encode};
 
-use super::{output_value::OutputValue, Destination};
-
-mod data;
-pub use data::OrderData;
-
-mod order_id;
-pub use order_id::{make_order_id, OrderId};
-
-mod rpc;
-pub use rpc::RpcOrderInfo;
-
-/// Order data provides unified data structure to represent an order.
-/// There are no buy or sell types of orders per se but rather exchanges.
-/// The fields represent currencies and amounts to be exchanged and the trading pair can be deducted from it.
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serde::Serialize, serde::Deserialize)]
-pub struct CreateOrderData {
-    /// The key that can authorize conclusion of an order.
-    /// Conclusion closes an order and withdraws available funds.
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+pub struct OrderData {
     conclude_key: Destination,
-    /// `Ask` and `give` fields represent amounts of currencies
-    /// that an order maker wants to exchange.
-    /// E.g. Creator of an order asks for 5 coins and gives 10 tokens in exchange.
     ask: OutputValue,
     give: OutputValue,
+    is_frozen: bool,
 }
 
-impl CreateOrderData {
+impl OrderData {
     pub fn new(conclude_key: Destination, ask: OutputValue, give: OutputValue) -> Self {
         Self {
             conclude_key,
             ask,
             give,
+            is_frozen: false,
         }
     }
 
@@ -62,7 +46,27 @@ impl CreateOrderData {
         &self.give
     }
 
-    pub fn consume(self) -> (Destination, OutputValue, OutputValue) {
-        (self.conclude_key, self.ask, self.give)
+    pub fn is_frozen(&self) -> bool {
+        self.is_frozen
+    }
+
+    pub fn try_freeze(self) -> Result<Self, Self> {
+        if self.is_frozen() {
+            Err(self)
+        } else {
+            Ok(Self {
+                conclude_key: self.conclude_key,
+                ask: self.ask,
+                give: self.give,
+                is_frozen: true,
+            })
+        }
+    }
+}
+
+impl From<super::CreateOrderData> for OrderData {
+    fn from(other: super::CreateOrderData) -> Self {
+        let (conclude_key, ask, give) = other.consume();
+        OrderData::new(conclude_key, ask, give)
     }
 }

@@ -15,13 +15,13 @@
 
 use accounting::DataDeltaUndo;
 use common::{
-    chain::{OrderId, OrdersVersion},
+    chain::{OrderData, OrderId, OrdersVersion},
     primitives::Amount,
 };
 use serialization::{Decode, Encode};
 use strum::EnumCount;
 
-use crate::{error::Result, OrderData};
+use crate::error::Result;
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub struct CreateOrderUndo {

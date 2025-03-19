@@ -29,7 +29,7 @@ use common::{
             make_token_id, IsTokenFreezable, TokenId, TokenIssuance, TokenIssuanceV1,
             TokenTotalSupply,
         },
-        AccountCommand, AccountNonce, CreateOrderData, Destination, OrderAccountCommand,
+        AccountCommand, AccountNonce, CreateOrderData, Destination, OrderAccountCommand, OrderData,
         OrdersVersion, SignedTransaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Idable},
@@ -2548,8 +2548,7 @@ fn freeze_order_check_storage(#[case] seed: Seed, #[case] version: OrdersVersion
             OrdersVersion::V1 => {
                 assert!(result.is_ok());
 
-                let expecter_order_data =
-                    orders_accounting::OrderData::from(order_data).try_freeze().unwrap();
+                let expecter_order_data = OrderData::from(order_data).try_freeze().unwrap();
                 assert_eq!(
                     Some(expecter_order_data),
                     tf.chainstate.get_order_data(&order_id).unwrap()

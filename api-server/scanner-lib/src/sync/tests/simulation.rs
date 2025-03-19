@@ -42,7 +42,7 @@ use common::{
             TokenId,
         },
         AccountCommand, AccountNonce, AccountSpending, AccountType, ChainConfig, ConsensusUpgrade,
-        DelegationId, Destination, GenBlockId, NetUpgrades, OrderId, OutPointSourceId,
+        DelegationId, Destination, GenBlockId, NetUpgrades, OrderData, OrderId, OutPointSourceId,
         PoSChainConfigBuilder, PoolData, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockCount, BlockHeight, CoinOrTokenId, Idable, H256},
@@ -52,7 +52,7 @@ use crypto::{
     key::{KeyKind, PrivateKey},
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
-use orders_accounting::{OrderData, OrdersAccountingOperations, OrdersAccountingView};
+use orders_accounting::{OrdersAccountingOperations, OrdersAccountingView};
 use pos_accounting::{make_delegation_id, PoSAccountingView};
 use randomness::Rng;
 use rstest::rstest;
