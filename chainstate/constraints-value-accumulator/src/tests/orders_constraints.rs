@@ -20,7 +20,7 @@ use common::{
         config::{create_unit_test_config, create_unit_test_config_builder},
         output_value::OutputValue,
         tokens::TokenId,
-        AccountCommand, AccountNonce, Destination, OrderAccountCommand, OrderData, OrderId,
+        AccountCommand, AccountNonce, CreateOrderData, Destination, OrderAccountCommand, OrderId,
         OrdersVersion, OutPointSourceId, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Fee, Id, H256},
@@ -48,7 +48,7 @@ fn create_order_constraints(#[case] seed: Seed) {
     let give_amount = Amount::from_atoms(rng.gen_range(100..1000));
     let token_id = TokenId::random_using(&mut rng);
     let ask_amount = Amount::from_atoms(rng.gen_range(100..1000));
-    let order_data = Box::new(OrderData::new(
+    let order_data = Box::new(CreateOrderData::new(
         Destination::AnyoneCanSpend,
         OutputValue::TokenV1(token_id, ask_amount),
         OutputValue::Coin(give_amount),
@@ -291,7 +291,7 @@ fn fill_order_constraints(#[case] seed: Seed, #[case] version: OrdersVersion) {
     let give_amount = Amount::from_atoms(rng.gen_range(100..1000));
     let token_id = TokenId::random_using(&mut rng);
     let ask_amount = Amount::from_atoms(rng.gen_range(100..1000));
-    let order_data = OrderData::new(
+    let order_data = CreateOrderData::new(
         Destination::AnyoneCanSpend,
         OutputValue::TokenV1(token_id, ask_amount),
         OutputValue::Coin(give_amount),
@@ -666,7 +666,7 @@ fn conclude_order_constraints(#[case] seed: Seed, #[case] version: OrdersVersion
     let give_amount = Amount::from_atoms(rng.gen_range(100..1000));
     let token_id = TokenId::random_using(&mut rng);
     let ask_amount = Amount::from_atoms(rng.gen_range(100..1000));
-    let order_data = OrderData::new(
+    let order_data = CreateOrderData::new(
         Destination::AnyoneCanSpend,
         OutputValue::TokenV1(token_id, ask_amount),
         OutputValue::Coin(give_amount),

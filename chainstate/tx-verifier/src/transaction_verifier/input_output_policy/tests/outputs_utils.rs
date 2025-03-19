@@ -23,7 +23,7 @@ use common::{
             IsTokenFreezable, IsTokenUnfreezable, Metadata, NftIssuance, NftIssuanceV0, TokenId,
             TokenIssuance, TokenIssuanceV1, TokenTotalSupply,
         },
-        AccountCommand, AccountNonce, AccountSpending, DelegationId, Destination, OrderData,
+        AccountCommand, AccountNonce, AccountSpending, CreateOrderData, DelegationId, Destination,
         OrderId, PoolId, TxInput, TxOutput,
     },
     primitives::{per_thousand::PerThousand, Amount, H256},
@@ -234,7 +234,7 @@ pub fn data_deposit() -> TxOutput {
 }
 
 pub fn create_order() -> TxOutput {
-    TxOutput::CreateOrder(Box::new(OrderData::new(
+    TxOutput::CreateOrder(Box::new(CreateOrderData::new(
         Destination::AnyoneCanSpend,
         OutputValue::Coin(Amount::ZERO),
         OutputValue::Coin(Amount::ZERO),

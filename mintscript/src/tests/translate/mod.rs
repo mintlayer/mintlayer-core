@@ -22,7 +22,7 @@ use common::{
         htlc::{HashedTimelockContract, HtlcSecret, HtlcSecretHash},
         signature::inputsig::authorize_hashed_timelock_contract_spend::AuthorizedHashedTimelockContractSpend,
         stakelock::StakePoolData,
-        tokens, AccountNonce, AccountSpending, OrderData, OrderId, PoolData,
+        tokens, AccountNonce, AccountSpending, CreateOrderData, OrderId, PoolData,
     },
     primitives::per_thousand::PerThousand,
 };
@@ -211,8 +211,8 @@ fn pool0() -> (PoolId, PoolData) {
     (fake_id(0xbc), data)
 }
 
-fn order0() -> (OrderId, OrderData) {
-    let data = OrderData::new(
+fn order0() -> (OrderId, CreateOrderData) {
+    let data = CreateOrderData::new(
         dest_pk(0x33),
         OutputValue::Coin(Amount::from_atoms(100)),
         OutputValue::Coin(Amount::from_atoms(200)),
@@ -220,7 +220,7 @@ fn order0() -> (OrderId, OrderData) {
     (fake_id(0x44), data)
 }
 
-fn create_order(data: OrderData) -> TestInputInfo {
+fn create_order(data: CreateOrderData) -> TestInputInfo {
     tii(TxOutput::CreateOrder(Box::new(data)))
 }
 

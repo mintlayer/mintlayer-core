@@ -188,8 +188,8 @@ impl From<chain::htlc::HashedTimelockContract> for crate::HashedTimelockContract
     }
 }
 
-impl From<chain::OrderData> for crate::OrderData {
-    fn from(value: chain::OrderData) -> Self {
+impl From<chain::CreateOrderData> for crate::OrderData {
+    fn from(value: chain::CreateOrderData) -> Self {
         Self {
             conclude_key: value.conclude_key().clone().into(),
             ask: value.ask().clone().into(),
@@ -541,7 +541,7 @@ fn make_random_output(rng: &mut (impl Rng + CryptoRng)) -> chain::TxOutput {
                 refund_key: make_random_destination(rng),
             }),
         ),
-        _ => chain::TxOutput::CreateOrder(Box::new(chain::OrderData::new(
+        _ => chain::TxOutput::CreateOrder(Box::new(chain::CreateOrderData::new(
             make_random_destination(rng),
             make_random_value(rng),
             make_random_value(rng),

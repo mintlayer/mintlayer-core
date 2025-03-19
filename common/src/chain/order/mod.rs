@@ -27,7 +27,7 @@ pub use rpc::RpcOrderInfo;
 /// There are no buy or sell types of orders per se but rather exchanges.
 /// The fields represent currencies and amounts to be exchanged and the trading pair can be deducted from it.
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serde::Serialize, serde::Deserialize)]
-pub struct OrderData {
+pub struct CreateOrderData {
     /// The key that can authorize conclusion of an order.
     /// Conclusion closes an order and withdraws available funds.
     conclude_key: Destination,
@@ -38,7 +38,7 @@ pub struct OrderData {
     give: OutputValue,
 }
 
-impl OrderData {
+impl CreateOrderData {
     pub fn new(conclude_key: Destination, ask: OutputValue, give: OutputValue) -> Self {
         Self {
             conclude_key,

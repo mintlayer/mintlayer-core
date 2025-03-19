@@ -22,7 +22,7 @@ use crate::{
         AddressError,
     },
     chain::{
-        order::OrderData,
+        order::CreateOrderData,
         output_value::OutputValue,
         tokens::{IsTokenFreezable, NftIssuance, TokenId, TokenIssuance, TokenTotalSupply},
         ChainConfig, DelegationId, PoolId,
@@ -152,7 +152,7 @@ pub enum TxOutput {
     /// At the same time only the destination specified in OrderData::conclude_key can conclude the order
     /// and transfer remaining balances out closing the account.
     #[codec(index = 11)]
-    CreateOrder(Box<OrderData>),
+    CreateOrder(Box<CreateOrderData>),
 }
 
 impl TxOutput {

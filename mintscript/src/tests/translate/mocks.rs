@@ -16,7 +16,7 @@
 use super::super::*;
 use crate::translate::InputInfo;
 
-use common::chain::{OrderData, OrderId, PoolData};
+use common::chain::{CreateOrderData, OrderId, PoolData};
 use pos_accounting::DelegationData;
 use tokens_accounting::TokenData;
 
@@ -28,7 +28,7 @@ pub struct MockSigInfoProvider<'a> {
     tokens: BTreeMap<TokenId, TokenData>,
     pools: BTreeMap<PoolId, PoolData>,
     delegations: BTreeMap<DelegationId, DelegationData>,
-    orders: BTreeMap<OrderId, OrderData>,
+    orders: BTreeMap<OrderId, CreateOrderData>,
 }
 
 impl<'a> MockSigInfoProvider<'a> {
@@ -38,7 +38,7 @@ impl<'a> MockSigInfoProvider<'a> {
         tokens: impl IntoIterator<Item = (TokenId, TokenData)>,
         pools: impl IntoIterator<Item = (PoolId, PoolData)>,
         delegations: impl IntoIterator<Item = (DelegationId, DelegationData)>,
-        orders: impl IntoIterator<Item = (OrderId, OrderData)>,
+        orders: impl IntoIterator<Item = (OrderId, CreateOrderData)>,
     ) -> Self {
         Self {
             input_info,

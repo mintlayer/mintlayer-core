@@ -33,7 +33,7 @@ use common::{
             make_token_id, IsTokenFreezable, IsTokenUnfreezable, TokenId, TokenIssuance,
             TokenIssuanceV1, TokenTotalSupply,
         },
-        AccountCommand, AccountNonce, AccountType, Block, Destination, GenBlock, OrderData,
+        AccountCommand, AccountNonce, AccountType, Block, CreateOrderData, Destination, GenBlock,
         OutPointSourceId, SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{amount::SignedAmount, Amount, BlockHeight, CoinOrTokenId, Id, Idable},
@@ -4263,7 +4263,7 @@ fn check_freezable_supply(#[case] seed: Seed) {
         );
 
         // Try to create an order with frozen token
-        let order_data = OrderData::new(
+        let order_data = CreateOrderData::new(
             Destination::AnyoneCanSpend,
             OutputValue::TokenV1(token_id, amount_to_mint),
             OutputValue::Coin(Amount::ZERO),
@@ -4289,7 +4289,7 @@ fn check_freezable_supply(#[case] seed: Seed) {
         );
 
         // Try to create an order with frozen token
-        let order_data = OrderData::new(
+        let order_data = CreateOrderData::new(
             Destination::AnyoneCanSpend,
             OutputValue::Coin(Amount::ZERO),
             OutputValue::TokenV1(token_id, amount_to_mint),

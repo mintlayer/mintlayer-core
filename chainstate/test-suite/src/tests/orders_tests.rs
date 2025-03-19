@@ -29,8 +29,8 @@ use common::{
             make_token_id, IsTokenFreezable, TokenId, TokenIssuance, TokenIssuanceV1,
             TokenTotalSupply,
         },
-        AccountCommand, AccountNonce, Destination, OrderAccountCommand, OrderData, OrdersVersion,
-        SignedTransaction, TxInput, TxOutput, UtxoOutPoint,
+        AccountCommand, AccountNonce, CreateOrderData, Destination, OrderAccountCommand,
+        OrdersVersion, SignedTransaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Idable},
 };
@@ -141,7 +141,7 @@ fn create_order_check_storage(#[case] seed: Seed) {
         let ask_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
         let give_amount =
             Amount::from_atoms(rng.gen_range(1u128..=tokens_circulating_supply.into_atoms()));
-        let order_data = OrderData::new(
+        let order_data = CreateOrderData::new(
             Destination::AnyoneCanSpend,
             OutputValue::Coin(ask_amount),
             OutputValue::TokenV1(token_id, give_amount),
@@ -185,7 +185,7 @@ fn create_two_same_orders_in_tx(#[case] seed: Seed) {
         let ask_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
         let give_amount =
             Amount::from_atoms(rng.gen_range(1u128..=half_tokens_circulating_supply.into_atoms()));
-        let order_data = Box::new(OrderData::new(
+        let order_data = Box::new(CreateOrderData::new(
             Destination::AnyoneCanSpend,
             OutputValue::Coin(ask_amount),
             OutputValue::TokenV1(token_id, give_amount),
@@ -228,13 +228,13 @@ fn create_two_orders_same_tx(#[case] seed: Seed) {
         let amount1 = Amount::from_atoms(rng.gen_range(1u128..1000));
         let amount2 =
             Amount::from_atoms(rng.gen_range(1u128..=tokens_circulating_supply.into_atoms()));
-        let order_data_1 = OrderData::new(
+        let order_data_1 = CreateOrderData::new(
             Destination::AnyoneCanSpend,
             OutputValue::Coin(amount1),
             OutputValue::TokenV1(token_id, half_tokens_circulating_supply),
         );
 
-        let order_data_2 = OrderData::new(
+        let order_data_2 = CreateOrderData::new(
             Destination::PublicKeyHash(PublicKeyHash::random()),
             OutputValue::Coin(amount2),
             OutputValue::TokenV1(token_id, half_tokens_circulating_supply),
@@ -276,7 +276,7 @@ fn create_two_orders_same_block(#[case] seed: Seed) {
         let ask_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
         let give_amount =
             Amount::from_atoms(rng.gen_range(1u128..=tokens_circulating_supply.into_atoms()));
-        let order_data = Box::new(OrderData::new(
+        let order_data = Box::new(CreateOrderData::new(
             Destination::AnyoneCanSpend,
             OutputValue::Coin(ask_amount),
             OutputValue::TokenV1(token_id, give_amount),
@@ -328,7 +328,7 @@ fn create_order_check_currencies(#[case] seed: Seed) {
 
         // Check coins for coins trade
         {
-            let order_data = OrderData::new(
+            let order_data = CreateOrderData::new(
                 Destination::AnyoneCanSpend,
                 OutputValue::Coin(ask_amount),
                 OutputValue::Coin(give_amount),
@@ -361,7 +361,7 @@ fn create_order_check_currencies(#[case] seed: Seed) {
 
         // Check tokens for tokens trade
         {
-            let order_data = OrderData::new(
+            let order_data = CreateOrderData::new(
                 Destination::AnyoneCanSpend,
                 OutputValue::TokenV1(token_id, ask_amount),
                 OutputValue::TokenV1(token_id, give_amount),
@@ -393,7 +393,7 @@ fn create_order_check_currencies(#[case] seed: Seed) {
         }
 
         // Trade tokens for coins
-        let order_data = OrderData::new(
+        let order_data = CreateOrderData::new(
             Destination::AnyoneCanSpend,
             OutputValue::Coin(ask_amount),
             OutputValue::TokenV1(token_id, give_amount),
@@ -432,7 +432,7 @@ fn create_order_tokens_for_tokens(#[case] seed: Seed) {
             Amount::from_atoms(rng.gen_range(1u128..tokens_circulating_supply_2.into_atoms()));
 
         // Trade tokens for coins
-        let order_data = OrderData::new(
+        let order_data = CreateOrderData::new(
             Destination::AnyoneCanSpend,
             OutputValue::TokenV1(token_id_1, ask_amount),
             OutputValue::TokenV1(token_id_2, give_amount),
@@ -467,7 +467,7 @@ fn conclude_order_check_storage(#[case] seed: Seed, #[case] version: OrdersVersi
         let ask_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
         let give_amount =
             Amount::from_atoms(rng.gen_range(1u128..=tokens_circulating_supply.into_atoms()));
-        let order_data = OrderData::new(
+        let order_data = CreateOrderData::new(
             Destination::AnyoneCanSpend,
             OutputValue::Coin(ask_amount),
             OutputValue::TokenV1(token_id, give_amount),
@@ -529,7 +529,7 @@ fn conclude_order_multiple_txs(#[case] seed: Seed, #[case] version: OrdersVersio
         let ask_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
         let give_amount =
             Amount::from_atoms(rng.gen_range(1u128..=tokens_circulating_supply.into_atoms()));
-        let order_data = OrderData::new(
+        let order_data = CreateOrderData::new(
             Destination::AnyoneCanSpend,
             OutputValue::Coin(ask_amount),
             OutputValue::TokenV1(token_id, give_amount),
@@ -633,7 +633,7 @@ fn fill_order_check_storage(#[case] seed: Seed, #[case] version: OrdersVersion) 
         let ask_amount = Amount::from_atoms(rng.gen_range(10u128..1000));
         let give_amount =
             Amount::from_atoms(rng.gen_range(10u128..=tokens_circulating_supply.into_atoms()));
-        let order_data = OrderData::new(
+        let order_data = CreateOrderData::new(
             Destination::AnyoneCanSpend,
             OutputValue::Coin(ask_amount),
             OutputValue::TokenV1(token_id, give_amount),
@@ -777,7 +777,7 @@ fn fill_partially_then_conclude(#[case] seed: Seed, #[case] version: OrdersVersi
         let ask_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
         let give_amount =
             Amount::from_atoms(rng.gen_range(1u128..=tokens_circulating_supply.into_atoms()));
-        let order_data = OrderData::new(
+        let order_data = CreateOrderData::new(
             Destination::AnyoneCanSpend,
             OutputValue::Coin(ask_amount),
             OutputValue::TokenV1(token_id, give_amount),
@@ -1001,7 +1001,7 @@ fn try_overbid_order_in_multiple_txs(#[case] seed: Seed, #[case] version: Orders
         let ask_amount = Amount::from_atoms(rng.gen_range(2u128..1000));
         let give_amount =
             Amount::from_atoms(rng.gen_range(1u128..=tokens_circulating_supply.into_atoms()));
-        let order_data = OrderData::new(
+        let order_data = CreateOrderData::new(
             Destination::AnyoneCanSpend,
             OutputValue::Coin(ask_amount),
             OutputValue::TokenV1(token_id, give_amount),
@@ -1117,7 +1117,7 @@ fn fill_completely_then_conclude(#[case] seed: Seed, #[case] version: OrdersVers
         let ask_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
         let give_amount =
             Amount::from_atoms(rng.gen_range(1u128..=tokens_circulating_supply.into_atoms()));
-        let order_data = OrderData::new(
+        let order_data = CreateOrderData::new(
             Destination::AnyoneCanSpend,
             OutputValue::Coin(ask_amount),
             OutputValue::TokenV1(token_id, give_amount),
@@ -1326,7 +1326,7 @@ fn conclude_order_check_signature(#[case] seed: Seed, #[case] version: OrdersVer
         let ask_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
         let give_amount =
             Amount::from_atoms(rng.gen_range(1u128..=tokens_circulating_supply.into_atoms()));
-        let order_data = OrderData::new(
+        let order_data = CreateOrderData::new(
             Destination::PublicKey(order_pk.clone()),
             OutputValue::Coin(ask_amount),
             OutputValue::TokenV1(token_id, give_amount),
@@ -1499,7 +1499,7 @@ fn reorg_before_create(#[case] seed: Seed, #[case] version: OrdersVersion) {
         let ask_amount = Amount::from_atoms(rng.gen_range(10u128..1000));
         let give_amount =
             Amount::from_atoms(rng.gen_range(1u128..=tokens_circulating_supply.into_atoms()));
-        let order_data = OrderData::new(
+        let order_data = CreateOrderData::new(
             Destination::AnyoneCanSpend,
             OutputValue::Coin(ask_amount),
             OutputValue::TokenV1(token_id, give_amount),
@@ -1596,7 +1596,7 @@ fn reorg_after_create(#[case] seed: Seed, #[case] version: OrdersVersion) {
         let ask_amount = Amount::from_atoms(rng.gen_range(10u128..1000));
         let give_amount =
             Amount::from_atoms(rng.gen_range(1u128..=tokens_circulating_supply.into_atoms()));
-        let order_data = OrderData::new(
+        let order_data = CreateOrderData::new(
             Destination::AnyoneCanSpend,
             OutputValue::Coin(ask_amount),
             OutputValue::TokenV1(token_id, give_amount),
@@ -1739,7 +1739,7 @@ fn test_activation(#[case] seed: Seed) {
         let tokens_circulating_supply =
             tf.chainstate.get_token_circulating_supply(&token_id).unwrap().unwrap();
 
-        let order_data = Box::new(OrderData::new(
+        let order_data = Box::new(CreateOrderData::new(
             Destination::AnyoneCanSpend,
             OutputValue::Coin(Amount::from_atoms(rng.gen_range(1u128..1000))),
             OutputValue::TokenV1(
@@ -1828,7 +1828,7 @@ fn create_order_with_nft(#[case] seed: Seed, #[case] version: OrdersVersion) {
 
         // Create order selling NFT for coins
         let give_amount = Amount::from_atoms(1);
-        let order_data = OrderData::new(
+        let order_data = CreateOrderData::new(
             Destination::AnyoneCanSpend,
             OutputValue::Coin(ask_amount),
             OutputValue::TokenV1(token_id, give_amount),
@@ -1993,7 +1993,7 @@ fn partially_fill_order_with_nft_v0(#[case] seed: Seed) {
 
         // Create order selling NFT for coins
         let give_amount = Amount::from_atoms(1);
-        let order_data = OrderData::new(
+        let order_data = CreateOrderData::new(
             Destination::AnyoneCanSpend,
             OutputValue::Coin(ask_amount),
             OutputValue::TokenV1(token_id, give_amount),
@@ -2201,7 +2201,7 @@ fn partially_fill_order_with_nft_v1(#[case] seed: Seed) {
 
         // Create order selling NFT for coins
         let give_amount = Amount::from_atoms(1);
-        let order_data = OrderData::new(
+        let order_data = CreateOrderData::new(
             Destination::AnyoneCanSpend,
             OutputValue::Coin(ask_amount),
             OutputValue::TokenV1(token_id, give_amount),
@@ -2327,7 +2327,7 @@ fn fill_order_with_zero(#[case] seed: Seed, #[case] version: OrdersVersion) {
         let ask_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
         let give_amount =
             Amount::from_atoms(rng.gen_range(1u128..=tokens_circulating_supply.into_atoms()));
-        let order_data = OrderData::new(
+        let order_data = CreateOrderData::new(
             Destination::AnyoneCanSpend,
             OutputValue::Coin(ask_amount),
             OutputValue::TokenV1(token_id, give_amount),
@@ -2417,7 +2417,7 @@ fn fill_orders_shuffle(#[case] seed: Seed, #[case] fills: Vec<u128>) {
 
         let ask_amount = Amount::from_atoms(1000);
         let give_amount = Amount::from_atoms(1001);
-        let order_data = OrderData::new(
+        let order_data = CreateOrderData::new(
             Destination::AnyoneCanSpend,
             OutputValue::Coin(ask_amount),
             OutputValue::TokenV1(token_id, give_amount),
@@ -2506,7 +2506,7 @@ fn freeze_order_check_storage(#[case] seed: Seed, #[case] version: OrdersVersion
         let ask_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
         let give_amount =
             Amount::from_atoms(rng.gen_range(1u128..=tokens_circulating_supply.into_atoms()));
-        let order_data = OrderData::new(
+        let order_data = CreateOrderData::new(
             Destination::AnyoneCanSpend,
             OutputValue::Coin(ask_amount),
             OutputValue::TokenV1(token_id, give_amount),
@@ -2584,7 +2584,7 @@ fn freeze_order_check_signature(#[case] seed: Seed) {
         let ask_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
         let give_amount =
             Amount::from_atoms(rng.gen_range(1u128..=tokens_circulating_supply.into_atoms()));
-        let order_data = OrderData::new(
+        let order_data = CreateOrderData::new(
             Destination::PublicKey(order_pk.clone()),
             OutputValue::Coin(ask_amount),
             OutputValue::TokenV1(token_id, give_amount),
@@ -2712,7 +2712,7 @@ fn fill_freeze_conclude_order(#[case] seed: Seed) {
         let ask_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
         let give_amount =
             Amount::from_atoms(rng.gen_range(1u128..=tokens_circulating_supply.into_atoms()));
-        let order_data = OrderData::new(
+        let order_data = CreateOrderData::new(
             Destination::AnyoneCanSpend,
             OutputValue::Coin(ask_amount),
             OutputValue::TokenV1(token_id, give_amount),

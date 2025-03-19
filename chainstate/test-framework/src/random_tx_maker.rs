@@ -33,9 +33,10 @@ use common::{
             make_token_id, IsTokenUnfreezable, NftIssuance, TokenId, TokenIssuance,
             TokenTotalSupply,
         },
-        AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, AccountType, DelegationId,
-        Destination, GenBlockId, OrderAccountCommand, OrderData, OrderId, OrdersVersion,
-        OutPointSourceId, PoolData, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
+        AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, AccountType,
+        CreateOrderData, DelegationId, Destination, GenBlockId, OrderAccountCommand, OrderId,
+        OrdersVersion, OutPointSourceId, PoolData, PoolId, Transaction, TxInput, TxOutput,
+        UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, CoinOrTokenId, Id, Idable, H256},
 };
@@ -988,7 +989,7 @@ impl<'a> RandomTxMaker<'a> {
                         let ask_amount =
                             Amount::from_atoms(rng.gen_range(1u128..=token_supply.into_atoms()));
                         let give_amount = Amount::from_atoms(rng.gen_range(1u128..=atoms_to_spend));
-                        let order_data = OrderData::new(
+                        let order_data = CreateOrderData::new(
                             Destination::AnyoneCanSpend,
                             OutputValue::TokenV1(token_id, ask_amount),
                             OutputValue::Coin(give_amount),
@@ -1342,7 +1343,8 @@ impl<'a> RandomTxMaker<'a> {
                 };
 
                 let give_value = OutputValue::TokenV1(token_id, Amount::from_atoms(atoms));
-                let order_data = OrderData::new(Destination::AnyoneCanSpend, ask_value, give_value);
+                let order_data =
+                    CreateOrderData::new(Destination::AnyoneCanSpend, ask_value, give_value);
                 result_outputs.push(TxOutput::CreateOrder(Box::new(order_data)));
                 self.order_can_be_created = false;
             } else {

@@ -935,8 +935,11 @@ impl<K: AccountKeyChains> Account<K> {
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
     ) -> WalletResult<SendRequest> {
-        let order_data =
-            common::chain::OrderData::new(conclude_address.into_object(), ask_value, give_value);
+        let order_data = common::chain::CreateOrderData::new(
+            conclude_address.into_object(),
+            ask_value,
+            give_value,
+        );
         let output = TxOutput::CreateOrder(Box::new(order_data));
         let request = SendRequest::new().with_outputs([output]);
 

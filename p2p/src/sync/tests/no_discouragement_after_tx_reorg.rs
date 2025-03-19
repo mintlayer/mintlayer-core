@@ -34,8 +34,8 @@ use common::{
             make_token_id, IsTokenFreezable, IsTokenUnfreezable, TokenId, TokenIssuance,
             TokenIssuanceV1, TokenTotalSupply,
         },
-        AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, CoinUnit, DelegationId,
-        Destination, Genesis, OrderAccountCommand, OrderData, OrderId, OutPointSourceId, PoolId,
+        AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, CoinUnit, CreateOrderData,
+        DelegationId, Destination, Genesis, OrderAccountCommand, OrderId, OutPointSourceId, PoolId,
         SignedTransaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, Idable as _},
@@ -789,7 +789,7 @@ impl TestFixture {
         token_id: TokenId,
         outpoint: UtxoOutPoint,
     ) -> (SignedTransaction, OrderId) {
-        let order_data = OrderData::new(
+        let order_data = CreateOrderData::new(
             Destination::AnyoneCanSpend,
             OutputValue::Coin(coin_ask_amount),
             OutputValue::TokenV1(token_id, token_give_amount),

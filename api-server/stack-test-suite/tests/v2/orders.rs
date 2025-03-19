@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::chain::{make_order_id, OrderAccountCommand, OrderData};
+use common::chain::{make_order_id, CreateOrderData, OrderAccountCommand};
 
 use super::*;
 
@@ -43,7 +43,7 @@ async fn create_fill_conclude_order(#[case] seed: Seed) {
                     helpers::issue_and_mint_tokens_from_genesis(&mut rng, &mut tf);
 
                 // Create order
-                let order_data = OrderData::new(
+                let order_data = CreateOrderData::new(
                     Destination::AnyoneCanSpend,
                     OutputValue::Coin(Amount::from_atoms(10)),
                     OutputValue::TokenV1(issue_and_mint_result.token_id, Amount::from_atoms(10)),
@@ -204,7 +204,7 @@ async fn order_pairs(#[case] seed: Seed) {
                     helpers::issue_and_mint_tokens_from_genesis(&mut rng, &mut tf);
 
                 // Create order
-                let order_data = OrderData::new(
+                let order_data = CreateOrderData::new(
                     Destination::AnyoneCanSpend,
                     OutputValue::Coin(Amount::from_atoms(10)),
                     OutputValue::TokenV1(issue_and_mint_result.token_id, Amount::from_atoms(10)),

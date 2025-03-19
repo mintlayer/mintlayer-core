@@ -70,8 +70,8 @@ impl OrderData {
     }
 }
 
-impl From<common::chain::OrderData> for OrderData {
-    fn from(other: common::chain::OrderData) -> Self {
+impl From<common::chain::CreateOrderData> for OrderData {
+    fn from(other: common::chain::CreateOrderData) -> Self {
         let (conclude_key, ask, give) = other.consume();
         OrderData::new(conclude_key, ask, give)
     }

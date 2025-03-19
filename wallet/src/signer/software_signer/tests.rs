@@ -28,8 +28,8 @@ use common::chain::stakelock::StakePoolData;
 use common::chain::timelock::OutputTimeLock;
 use common::chain::tokens::{NftIssuance, NftIssuanceV0, TokenId, TokenIssuance};
 use common::chain::{
-    AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, DelegationId, GenBlock,
-    OrderData, OutPointSourceId, PoolId, TxInput,
+    AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, CreateOrderData, DelegationId,
+    GenBlock, OutPointSourceId, PoolId, TxInput,
 };
 use common::primitives::per_thousand::PerThousand;
 use common::primitives::{Amount, BlockHeight, Id, H256};
@@ -167,8 +167,8 @@ fn sign_transaction(#[case] seed: Seed) {
                 IsTokenUnfreezable, Metadata, NftIssuance, NftIssuanceV0, TokenId, TokenIssuance,
                 TokenIssuanceV1,
             },
-            AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, DelegationId,
-            OrderData, OrderId, PoolId,
+            AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, CreateOrderData,
+            DelegationId, OrderId, PoolId,
         },
         primitives::amount::UnsignedIntType,
     };
@@ -396,7 +396,7 @@ fn sign_transaction(#[case] seed: Seed) {
     });
     let nft_id = TokenId::new(H256::random());
 
-    let order_data = OrderData::new(
+    let order_data = CreateOrderData::new(
         Destination::PublicKey(dest_pub.clone()),
         OutputValue::Coin(Amount::from_atoms(100)),
         OutputValue::Coin(total_amount),
@@ -652,7 +652,7 @@ fn fixed_signatures() {
         refund_key: Destination::AnyoneCanSpend,
     };
 
-    let order_data = OrderData::new(
+    let order_data = CreateOrderData::new(
         Destination::AnyoneCanSpend,
         OutputValue::Coin(amount_1),
         OutputValue::Coin(amount_1),

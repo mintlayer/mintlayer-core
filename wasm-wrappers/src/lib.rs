@@ -47,9 +47,9 @@ use common::{
             make_token_id, IsTokenFreezable, IsTokenUnfreezable, Metadata, NftIssuance,
             NftIssuanceV0, TokenCreator, TokenIssuance, TokenIssuanceV1, TokenTotalSupply,
         },
-        AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, ChainConfig, Destination,
-        OrderData, OutPointSourceId, SignedTransaction, SignedTransactionIntent, Transaction,
-        TxInput, TxOutput, UtxoOutPoint,
+        AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, ChainConfig,
+        CreateOrderData, Destination, OutPointSourceId, SignedTransaction, SignedTransactionIntent,
+        Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{
         self, amount::UnsignedIntType, per_thousand::PerThousand, BlockHeight, Id, Idable, H256,
@@ -1536,7 +1536,7 @@ pub fn encode_create_order_output(
     let give = parse_output_value(&chain_config, &give_amount, give_token_id)?;
     let conclude_key = parse_addressable(&chain_config, conclude_address)?;
 
-    let order = OrderData::new(conclude_key, ask, give);
+    let order = CreateOrderData::new(conclude_key, ask, give);
     let output = TxOutput::CreateOrder(Box::new(order));
     Ok(output.encode())
 }
