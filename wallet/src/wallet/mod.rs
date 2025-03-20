@@ -28,6 +28,9 @@ use crate::key_chain::{
 use crate::send_request::{
     make_issue_token_outputs, IssueNftArguments, SelectedInputs, StakePoolCreationArguments,
 };
+#[cfg(feature = "trezor")]
+use crate::signer::trezor_signer::{FoundDevice, TrezorError};
+
 use crate::signer::{Signer, SignerError, SignerProvider};
 use crate::wallet_events::{WalletEvents, WalletEventsNoOp};
 use crate::{Account, SendRequest};
@@ -306,6 +309,35 @@ pub fn create_wallet_in_memory() -> WalletResult<Store<DefaultBackend>> {
     Ok(Store::new(DefaultBackend::new_in_memory())?)
 }
 
+pub enum WalletCreation<W> {
+    Wallet(W),
+    #[cfg(feature = "trezor")]
+    MultipleAvalableTrezorDevices(Vec<FoundDevice>),
+}
+
+impl<W> WalletCreation<W> {
+    pub fn map_wallet<F, W2>(self, f: F) -> WalletCreation<W2>
+    where
+        F: Fn(W) -> W2,
+    {
+        match self {
+            Self::Wallet(w) => WalletCreation::Wallet(f(w)),
+            #[cfg(feature = "trezor")]
+            Self::MultipleAvalableTrezorDevices(devices) => {
+                WalletCreation::MultipleAvalableTrezorDevices(devices)
+            }
+        }
+    }
+
+    pub fn wallet(self) -> Option<W> {
+        match self {
+            WalletCreation::Wallet(w) => Some(w),
+            #[cfg(feature = "trezor")]
+            WalletCreation::MultipleAvalableTrezorDevices(_) => None,
+        }
+    }
+}
+
 impl<B, P> Wallet<B, P>
 where
     B: storage::Backend + 'static,
@@ -317,10 +349,12 @@ where
         best_block: (BlockHeight, Id<GenBlock>),
         wallet_type: WalletType,
         signer_provider: F,
-    ) -> WalletResult<Self> {
+    ) -> WalletResult<WalletCreation<Self>> {
         let mut wallet = Self::new_wallet(chain_config, db, wallet_type, signer_provider)?;
 
-        wallet.set_best_block(best_block.0, best_block.1)?;
+        if let WalletCreation::Wallet(ref mut w) = wallet {
+            w.set_best_block(best_block.0, best_block.1)?;
+        }
 
         Ok(wallet)
     }
@@ -330,7 +364,7 @@ where
         db: Store<B>,
         wallet_type: WalletType,
         signer_provider: F,
-    ) -> WalletResult<Self> {
+    ) -> WalletResult<WalletCreation<Self>> {
         Self::new_wallet(chain_config, db, wallet_type, signer_provider)
     }
 
@@ -339,14 +373,21 @@ where
         db: Store<B>,
         wallet_type: WalletType,
         signer_provider: F,
-    ) -> WalletResult<Self> {
+    ) -> WalletResult<WalletCreation<Self>> {
         let mut db_tx = db.transaction_rw_unlocked(None)?;
 
         db_tx.set_storage_version(CURRENT_WALLET_VERSION)?;
         db_tx.set_chain_info(&ChainInfo::new(chain_config.as_ref()))?;
         db_tx.set_lookahead_size(LOOKAHEAD_SIZE)?;
         db_tx.set_wallet_type(wallet_type)?;
-        let mut signer_provider = signer_provider(&mut db_tx)?;
+        let mut signer_provider = match signer_provider(&mut db_tx) {
+            Ok(x) => x,
+            #[cfg(feature = "trezor")]
+            Err(WalletError::SignerError(SignerError::TrezorError(
+                TrezorError::NoUniqueDeviceFound(devices),
+            ))) => return Ok(WalletCreation::MultipleAvalableTrezorDevices(devices)),
+            Err(err) => return Err(err),
+        };
 
         if let Some(data) = signer_provider.get_hardware_wallet_data() {
             db_tx.set_hardware_wallet_data(data)?;
@@ -380,7 +421,7 @@ where
             signer_provider,
         };
 
-        Ok(wallet)
+        Ok(WalletCreation::Wallet(wallet))
     }
 
     /// Migrate the wallet DB from version 1 to version 2
