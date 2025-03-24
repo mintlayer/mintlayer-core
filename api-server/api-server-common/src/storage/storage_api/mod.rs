@@ -645,6 +645,11 @@ pub trait ApiServerStorageRead: Sync {
         address: &Destination,
     ) -> Result<Vec<(DelegationId, Delegation)>, ApiServerStorageError>;
 
+    async fn get_fungible_tokens_by_authority(
+        &self,
+        authority: Destination,
+    ) -> Result<Vec<TokenId>, ApiServerStorageError>;
+
     async fn get_fungible_token_issuance(
         &self,
         token_id: TokenId,

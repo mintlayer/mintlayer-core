@@ -264,7 +264,8 @@ impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'_> {
         issuance: FungibleTokenData,
     ) -> Result<(), ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
-        conn.set_fungible_token_issuance(token_id, block_height, issuance).await?;
+        conn.set_fungible_token_issuance(token_id, block_height, issuance, &self.chain_config)
+            .await?;
 
         Ok(())
     }
@@ -276,7 +277,8 @@ impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'_> {
         data: FungibleTokenData,
     ) -> Result<(), ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
-        conn.set_fungible_token_data(token_id, block_height, data).await?;
+        conn.set_fungible_token_data(token_id, block_height, data, &self.chain_config)
+            .await?;
 
         Ok(())
     }
@@ -628,6 +630,16 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
     ) -> Result<Vec<(DelegationId, Delegation)>, ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_delegations_from_address(address, &self.chain_config).await?;
+
+        Ok(res)
+    }
+
+    async fn get_fungible_tokens_by_authority(
+        &self,
+        authority: Destination,
+    ) -> Result<Vec<TokenId>, ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_fungible_tokens_by_authority(authority, &self.chain_config).await?;
 
         Ok(res)
     }

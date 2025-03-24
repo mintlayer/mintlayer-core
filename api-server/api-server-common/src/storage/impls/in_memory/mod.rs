@@ -623,6 +623,23 @@ impl ApiServerInMemoryStorage {
             .collect())
     }
 
+    fn get_fungible_tokens_by_authority(
+        &self,
+        authority: Destination,
+    ) -> Result<Vec<TokenId>, ApiServerStorageError> {
+        Ok(self
+            .fungible_token_data
+            .iter()
+            .filter_map(|(token_id, by_height)| {
+                by_height
+                    .values()
+                    .last()
+                    .filter(|last| last.authority == authority)
+                    .map(|_| *token_id)
+            })
+            .collect())
+    }
+
     fn get_fungible_token_issuance(
         &self,
         token_id: TokenId,
