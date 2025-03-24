@@ -17,9 +17,9 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::storage::storage_api::{
     block_aux_data::{BlockAuxData, BlockWithExtraData},
-    ApiServerStorageError, ApiServerStorageRead, ApiServerStorageWrite, BlockInfo,
-    CoinOrTokenStatistic, Delegation, FungibleTokenData, LockedUtxo, NftWithOwner, Order,
-    PoolBlockStats, PoolDataWithExtraInfo, TransactionInfo, Utxo, UtxoWithExtraInfo,
+    AmountWithDecimals, ApiServerStorageError, ApiServerStorageRead, ApiServerStorageWrite,
+    BlockInfo, CoinOrTokenStatistic, Delegation, FungibleTokenData, LockedUtxo, NftWithOwner,
+    Order, PoolBlockStats, PoolDataWithExtraInfo, TransactionInfo, Utxo, UtxoWithExtraInfo,
 };
 use common::{
     address::Address,
@@ -210,7 +210,16 @@ impl ApiServerStorageWrite for ApiServerInMemoryStorageTransactionalRw<'_> {
         block_height: BlockHeight,
         issuance: FungibleTokenData,
     ) -> Result<(), ApiServerStorageError> {
-        self.transaction.set_fungible_token_issuance(token_id, block_height, issuance)
+        self.transaction.set_fungible_token_data(token_id, block_height, issuance)
+    }
+
+    async fn set_fungible_token_data(
+        &mut self,
+        token_id: TokenId,
+        block_height: BlockHeight,
+        data: FungibleTokenData,
+    ) -> Result<(), ApiServerStorageError> {
+        self.transaction.set_fungible_token_data(token_id, block_height, data)
     }
 
     async fn set_nft_token_issuance(
@@ -300,7 +309,7 @@ impl ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRw<'_> {
     async fn get_address_balances(
         &self,
         address: &str,
-    ) -> Result<Vec<(CoinOrTokenId, Amount, u8)>, ApiServerStorageError> {
+    ) -> Result<BTreeMap<CoinOrTokenId, AmountWithDecimals>, ApiServerStorageError> {
         self.transaction.get_address_balances(address)
     }
 

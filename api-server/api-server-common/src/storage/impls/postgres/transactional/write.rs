@@ -29,9 +29,9 @@ use crate::storage::{
     impls::postgres::queries::QueryFromConnection,
     storage_api::{
         block_aux_data::{BlockAuxData, BlockWithExtraData},
-        ApiServerStorageError, ApiServerStorageRead, ApiServerStorageWrite, BlockInfo,
-        CoinOrTokenStatistic, Delegation, FungibleTokenData, LockedUtxo, NftWithOwner, Order,
-        PoolBlockStats, PoolDataWithExtraInfo, TransactionInfo, Utxo, UtxoWithExtraInfo,
+        AmountWithDecimals, ApiServerStorageError, ApiServerStorageRead, ApiServerStorageWrite,
+        BlockInfo, CoinOrTokenStatistic, Delegation, FungibleTokenData, LockedUtxo, NftWithOwner,
+        Order, PoolBlockStats, PoolDataWithExtraInfo, TransactionInfo, Utxo, UtxoWithExtraInfo,
     },
 };
 
@@ -269,6 +269,18 @@ impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'_> {
         Ok(())
     }
 
+    async fn set_fungible_token_data(
+        &mut self,
+        token_id: TokenId,
+        block_height: BlockHeight,
+        data: FungibleTokenData,
+    ) -> Result<(), ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        conn.set_fungible_token_data(token_id, block_height, data).await?;
+
+        Ok(())
+    }
+
     async fn set_nft_token_issuance(
         &mut self,
         token_id: TokenId,
@@ -389,7 +401,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
     async fn get_address_balances(
         &self,
         address: &str,
-    ) -> Result<Vec<(CoinOrTokenId, Amount, u8)>, ApiServerStorageError> {
+    ) -> Result<BTreeMap<CoinOrTokenId, AmountWithDecimals>, ApiServerStorageError> {
         let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_address_balances(address).await?;
 

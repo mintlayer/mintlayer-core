@@ -17,9 +17,9 @@ pub mod transactional;
 
 use crate::storage::storage_api::{
     block_aux_data::{BlockAuxData, BlockWithExtraData},
-    ApiServerStorageError, BlockInfo, CoinOrTokenStatistic, Delegation, FungibleTokenData,
-    LockedUtxo, NftWithOwner, Order, PoolBlockStats, PoolDataWithExtraInfo, TransactionInfo, Utxo,
-    UtxoLock, UtxoWithExtraInfo,
+    AmountWithDecimals, ApiServerStorageError, BlockInfo, CoinOrTokenStatistic, Delegation,
+    FungibleTokenData, LockedUtxo, NftWithOwner, Order, PoolBlockStats, PoolDataWithExtraInfo,
+    TransactionInfo, Utxo, UtxoLock, UtxoWithExtraInfo,
 };
 use common::{
     address::Address,
@@ -55,7 +55,7 @@ struct ApiServerInMemoryStorage {
     address_utxos: BTreeMap<String, BTreeSet<UtxoOutPoint>>,
     locked_utxo_table: BTreeMap<UtxoOutPoint, BTreeMap<BlockHeight, LockedUtxo>>,
     address_locked_utxos: BTreeMap<String, BTreeSet<UtxoOutPoint>>,
-    fungible_token_issuances: BTreeMap<TokenId, BTreeMap<BlockHeight, FungibleTokenData>>,
+    fungible_token_data: BTreeMap<TokenId, BTreeMap<BlockHeight, FungibleTokenData>>,
     nft_token_issuances: BTreeMap<TokenId, BTreeMap<BlockHeight, NftWithOwner>>,
     statistics:
         BTreeMap<CoinOrTokenStatistic, BTreeMap<CoinOrTokenId, BTreeMap<BlockHeight, Amount>>>,
@@ -82,7 +82,7 @@ impl ApiServerInMemoryStorage {
             address_utxos: BTreeMap::new(),
             locked_utxo_table: BTreeMap::new(),
             address_locked_utxos: BTreeMap::new(),
-            fungible_token_issuances: BTreeMap::new(),
+            fungible_token_data: BTreeMap::new(),
             nft_token_issuances: BTreeMap::new(),
             statistics: BTreeMap::new(),
             orders_table: BTreeMap::new(),
@@ -122,36 +122,33 @@ impl ApiServerInMemoryStorage {
     fn get_address_balances(
         &self,
         address: &str,
-    ) -> Result<Vec<(CoinOrTokenId, Amount, u8)>, ApiServerStorageError> {
-        let res =
-            self.address_balance_table
-                .get(address)
-                .map_or_else(Vec::new, |by_coin_or_token| {
-                    by_coin_or_token
-                        .iter()
-                        .map(|(coin_or_token_id, by_height)| {
-                            let number_of_decimals = match coin_or_token_id {
-                                CoinOrTokenId::Coin => self.number_of_coin_decimals,
-                                CoinOrTokenId::TokenId(token_id) => self
-                                    .fungible_token_issuances
-                                    .get(token_id)
-                                    .map_or(0, |by_height| {
-                                        by_height
-                                            .values()
-                                            .last()
-                                            .expect("not empty")
-                                            .number_of_decimals
-                                    }),
-                            };
+    ) -> Result<BTreeMap<CoinOrTokenId, AmountWithDecimals>, ApiServerStorageError> {
+        let res = self.address_balance_table.get(address).map_or_else(
+            BTreeMap::new,
+            |by_coin_or_token| {
+                by_coin_or_token
+                    .iter()
+                    .map(|(coin_or_token_id, by_height)| {
+                        let number_of_decimals = match coin_or_token_id {
+                            CoinOrTokenId::Coin => self.number_of_coin_decimals,
+                            CoinOrTokenId::TokenId(token_id) => {
+                                self.fungible_token_data.get(token_id).map_or(0, |by_height| {
+                                    by_height.values().last().expect("not empty").number_of_decimals
+                                })
+                            }
+                        };
 
-                            (
-                                *coin_or_token_id,
-                                *by_height.values().last().expect("not empty"),
-                                number_of_decimals,
-                            )
-                        })
-                        .collect()
-                });
+                        (
+                            *coin_or_token_id,
+                            AmountWithDecimals {
+                                amount: *by_height.values().last().expect("not empty"),
+                                decimals: number_of_decimals,
+                            },
+                        )
+                    })
+                    .collect()
+            },
+        );
         Ok(res)
     }
 
@@ -631,7 +628,7 @@ impl ApiServerInMemoryStorage {
         token_id: TokenId,
     ) -> Result<Option<FungibleTokenData>, ApiServerStorageError> {
         Ok(self
-            .fungible_token_issuances
+            .fungible_token_data
             .get(&token_id)
             .map(|by_height| by_height.values().last().cloned().expect("not empty")))
     }
@@ -651,7 +648,7 @@ impl ApiServerInMemoryStorage {
         token_id: TokenId,
     ) -> Result<Option<u8>, ApiServerStorageError> {
         Ok(self
-            .fungible_token_issuances
+            .fungible_token_data
             .get(&token_id)
             .map(|data| data.values().last().expect("not empty").number_of_decimals)
             .or_else(|| self.nft_token_issuances.get(&token_id).map(|_| 0)))
@@ -659,7 +656,7 @@ impl ApiServerInMemoryStorage {
 
     fn get_token_ids(&self, len: u32, offset: u32) -> Result<Vec<TokenId>, ApiServerStorageError> {
         Ok(self
-            .fungible_token_issuances
+            .fungible_token_data
             .keys()
             .chain(self.nft_token_issuances.keys())
             .skip(offset as usize)
@@ -675,7 +672,7 @@ impl ApiServerInMemoryStorage {
         ticker: &[u8],
     ) -> Result<Vec<TokenId>, ApiServerStorageError> {
         Ok(self
-            .fungible_token_issuances
+            .fungible_token_data
             .iter()
             .filter_map(|(key, value)| {
                 (value.values().last().expect("not empty").token_ticker == ticker).then_some(key)
@@ -772,7 +769,7 @@ impl ApiServerInMemoryStorage {
         self.transaction_table.clear();
         self.utxo_table.clear();
         self.address_utxos.clear();
-        self.fungible_token_issuances.clear();
+        self.fungible_token_data.clear();
         self.nft_token_issuances.clear();
         self.orders_table.clear();
 
@@ -1108,16 +1105,13 @@ impl ApiServerInMemoryStorage {
         Ok(())
     }
 
-    fn set_fungible_token_issuance(
+    fn set_fungible_token_data(
         &mut self,
         token_id: TokenId,
         block_height: BlockHeight,
-        issuance: FungibleTokenData,
+        data: FungibleTokenData,
     ) -> Result<(), ApiServerStorageError> {
-        self.fungible_token_issuances
-            .entry(token_id)
-            .or_default()
-            .insert(block_height, issuance);
+        self.fungible_token_data.entry(token_id).or_default().insert(block_height, data);
         Ok(())
     }
 
@@ -1128,13 +1122,19 @@ impl ApiServerInMemoryStorage {
         issuance: NftIssuance,
         owner: &Destination,
     ) -> Result<(), ApiServerStorageError> {
-        self.nft_token_issuances.entry(token_id).or_default().insert(
-            block_height,
-            NftWithOwner {
-                nft: issuance,
-                owner: Some(owner.clone()),
-            },
+        let res = self.nft_token_issuances.insert(
+            token_id,
+            BTreeMap::from([(
+                block_height,
+                NftWithOwner {
+                    nft: issuance,
+                    owner: Some(owner.clone()),
+                },
+            )]),
         );
+
+        assert!(res.is_none(), "multiple nft issuances with same token_id");
+
         Ok(())
     }
 
@@ -1142,7 +1142,7 @@ impl ApiServerInMemoryStorage {
         &mut self,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
-        self.fungible_token_issuances.retain(|_, v| {
+        self.fungible_token_data.retain(|_, v| {
             v.retain(|k, _| k <= &block_height);
             !v.is_empty()
         });

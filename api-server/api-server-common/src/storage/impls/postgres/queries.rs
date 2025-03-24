@@ -37,9 +37,9 @@ use crate::storage::{
     impls::CURRENT_STORAGE_VERSION,
     storage_api::{
         block_aux_data::{BlockAuxData, BlockWithExtraData},
-        ApiServerStorageError, BlockInfo, CoinOrTokenStatistic, Delegation, FungibleTokenData,
-        LockedUtxo, NftWithOwner, Order, PoolBlockStats, PoolDataWithExtraInfo, TransactionInfo,
-        Utxo, UtxoWithExtraInfo,
+        AmountWithDecimals, ApiServerStorageError, BlockInfo, CoinOrTokenStatistic, Delegation,
+        FungibleTokenData, LockedUtxo, NftWithOwner, Order, PoolBlockStats, PoolDataWithExtraInfo,
+        TransactionInfo, Utxo, UtxoWithExtraInfo,
     },
 };
 
@@ -172,7 +172,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
     pub async fn get_address_balances(
         &self,
         address: &str,
-    ) -> Result<Vec<(CoinOrTokenId, Amount, u8)>, ApiServerStorageError> {
+    ) -> Result<BTreeMap<CoinOrTokenId, AmountWithDecimals>, ApiServerStorageError> {
         let rows = self
             .tx
             .query(
@@ -207,7 +207,13 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                         ))
                     })?;
 
-                Ok((coin_or_token_id, amount, number_of_decimals as u8))
+                Ok((
+                    coin_or_token_id,
+                    AmountWithDecimals {
+                        amount,
+                        decimals: number_of_decimals as u8,
+                    },
+                ))
             })
             .collect()
     }
@@ -339,7 +345,8 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                          LIMIT 1)
                      )
                     ON CONFLICT (address, coin_or_token_id) DO UPDATE
-                    SET block_height = $2, amount = $4;
+                    SET block_height = EXCLUDED.block_height, amount = EXCLUDED.amount
+                    WHERE ml.latest_address_balance_cache.block_height <= EXCLUDED.block_height;
                 "#,
                 &[&address.to_string(), &height, &coin_or_token_id.encode(), &amount.encode()],
             )
@@ -352,7 +359,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     INSERT INTO ml.address_balance (address, block_height, coin_or_token_id, amount)
                     VALUES ($1, $2, $3, $4)
                     ON CONFLICT (address, block_height, coin_or_token_id)
-                    DO UPDATE SET amount = $4;
+                    DO UPDATE SET amount = EXCLUDED.amount;
                 "#,
                 &[&address.to_string(), &height, &coin_or_token_id.encode(), &amount.encode()],
             )
@@ -1277,7 +1284,12 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     INSERT INTO ml.latest_delegations_cache (delegation_id, block_height, pool_id, balance, spend_destination, next_nonce, creation_block_height)
                     VALUES($1, $2, $3, $4, $5, $6, $7)
                     ON CONFLICT (pool_id, delegation_id) DO UPDATE
-                    SET block_height = $2, balance = $4, spend_destination = $5, next_nonce = $6, creation_block_height = $7;
+                    SET block_height = EXCLUDED.block_height,
+                    balance = EXCLUDED.balance,
+                    spend_destination = EXCLUDED.spend_destination,
+                    next_nonce = EXCLUDED.next_nonce,
+                    creation_block_height = EXCLUDED.creation_block_height
+                    WHERE ml.latest_delegations_cache.block_height <= EXCLUDED.block_height;
                 "#,
                 &[
                     &delegation_id.as_str(),
@@ -1298,7 +1310,11 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     INSERT INTO ml.delegations (delegation_id, block_height, pool_id, balance, spend_destination, next_nonce, creation_block_height)
                     VALUES($1, $2, $3, $4, $5, $6, $7)
                     ON CONFLICT (delegation_id, block_height) DO UPDATE
-                    SET pool_id = $3, balance = $4, spend_destination = $5, next_nonce = $6, creation_block_height = $7;
+                    SET pool_id = EXCLUDED.pool_id,
+                    balance = EXCLUDED.balance,
+                    spend_destination = EXCLUDED.spend_destination,
+                    next_nonce = EXCLUDED.next_nonce,
+                    creation_block_height = EXCLUDED.creation_block_height;
                 "#,
                 &[
                     &delegation_id.as_str(),
@@ -2078,9 +2094,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
 
         self.tx
             .execute(
-                "INSERT INTO ml.fungible_token (token_id, block_height, issuance, ticker) VALUES ($1, $2, $3, $4)
-                    ON CONFLICT (token_id, block_height) DO UPDATE
-                    SET issuance = $3, ticker = $4;",
+                "INSERT INTO ml.fungible_token (token_id, block_height, issuance, ticker) VALUES ($1, $2, $3, $4);",
                 &[
                     &token_id.encode(),
                     &height,
@@ -2094,12 +2108,37 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         let coin_or_token_id = CoinOrTokenId::TokenId(token_id);
         self.tx
             .execute(
-                "INSERT INTO ml.coin_or_token_decimals (coin_or_token_id, block_height, number_of_decimals) VALUES ($1, $2, $3) ON CONFLICT (coin_or_token_id) DO NOTHING;",
+                "INSERT INTO ml.coin_or_token_decimals (coin_or_token_id, block_height, number_of_decimals) VALUES ($1, $2, $3);",
                 &[&coin_or_token_id.encode(), &height, &(issuance.number_of_decimals as i16)],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
 
+        Ok(())
+    }
+
+    pub async fn set_fungible_token_data(
+        &mut self,
+        token_id: TokenId,
+        block_height: BlockHeight,
+        issuance: FungibleTokenData,
+    ) -> Result<(), ApiServerStorageError> {
+        let height = Self::block_height_to_postgres_friendly(block_height);
+
+        self.tx
+            .execute(
+                "INSERT INTO ml.fungible_token (token_id, block_height, issuance, ticker) VALUES ($1, $2, $3, $4)
+                    ON CONFLICT (token_id, block_height) DO UPDATE
+                    SET issuance = $3, ticker = $4;",
+                &[
+                    &token_id.encode(),
+                    &height,
+                    &issuance.encode(),
+                    &issuance.token_ticker,
+                ],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
         Ok(())
     }
 

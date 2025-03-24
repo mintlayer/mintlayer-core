@@ -25,8 +25,8 @@ use crate::{
     TxSubmitClient,
 };
 use api_server_common::storage::storage_api::{
-    block_aux_data::BlockAuxData, ApiServerStorage, ApiServerStorageRead, BlockInfo,
-    CoinOrTokenStatistic, Order, TransactionInfo,
+    block_aux_data::BlockAuxData, AmountWithDecimals, ApiServerStorage, ApiServerStorageRead,
+    BlockInfo, CoinOrTokenStatistic, Order, TransactionInfo,
 };
 use axum::{
     extract::{DefaultBodyLimit, Path, Query, State},
@@ -617,24 +617,27 @@ pub async fn address<T: ApiServerStorage>(
         .unwrap_or(Amount::ZERO);
 
     let mut tokens = Vec::with_capacity(address_balances.len());
-    let mut coin_balance = Amount::ZERO;
+    let mut coin_balance = AmountWithDecimals {
+        amount: Amount::ZERO,
+        decimals: state.chain_config.coin_decimals(),
+    };
 
-    for (coin_or_token_id, amount, decimals) in address_balances {
+    for (coin_or_token_id, balance) in address_balances {
         match coin_or_token_id {
             CoinOrTokenId::Coin => {
-                coin_balance = amount;
+                coin_balance = balance;
             }
             CoinOrTokenId::TokenId(token_id) => {
                 tokens.push(json!({
                     "token_id": Address::new(&state.chain_config, token_id).expect("no error").as_str(),
-                    "amount": amount_to_json(amount, decimals),
+                    "amount": amount_to_json(balance.amount, balance.decimals),
                 }));
             }
         }
     }
 
     Ok(Json(json!({
-        "coin_balance": amount_to_json(coin_balance, state.chain_config.coin_decimals()),
+        "coin_balance": amount_to_json(coin_balance.amount, coin_balance.decimals),
         "locked_coin_balance": amount_to_json(locked_coin_balance, state.chain_config.coin_decimals()),
         "transaction_history": transaction_history,
         "tokens": tokens

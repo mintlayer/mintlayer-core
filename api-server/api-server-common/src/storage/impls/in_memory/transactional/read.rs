@@ -24,9 +24,9 @@ use common::{
 };
 
 use crate::storage::storage_api::{
-    block_aux_data::BlockAuxData, ApiServerStorageError, ApiServerStorageRead, BlockInfo,
-    CoinOrTokenStatistic, Delegation, FungibleTokenData, NftWithOwner, Order, PoolBlockStats,
-    PoolDataWithExtraInfo, TransactionInfo, Utxo, UtxoWithExtraInfo,
+    block_aux_data::BlockAuxData, AmountWithDecimals, ApiServerStorageError, ApiServerStorageRead,
+    BlockInfo, CoinOrTokenStatistic, Delegation, FungibleTokenData, NftWithOwner, Order,
+    PoolBlockStats, PoolDataWithExtraInfo, TransactionInfo, Utxo, UtxoWithExtraInfo,
 };
 
 use super::ApiServerInMemoryStorageTransactionalRo;
@@ -48,7 +48,7 @@ impl ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'_> {
     async fn get_address_balances(
         &self,
         address: &str,
-    ) -> Result<Vec<(CoinOrTokenId, Amount, u8)>, ApiServerStorageError> {
+    ) -> Result<BTreeMap<CoinOrTokenId, AmountWithDecimals>, ApiServerStorageError> {
         self.transaction.get_address_balances(address)
     }
 

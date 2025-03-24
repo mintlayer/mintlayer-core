@@ -316,70 +316,31 @@ async fn disconnect_tables_above_height<T: ApiServerStorageWrite>(
     block_height: BlockHeight,
 ) -> Result<(), ApiServerStorageError> {
     logging::log::info!("Disconnecting blocks above: {:?}", block_height);
-    db_tx
-        .del_address_balance_above_height(block_height)
-        .await
-        .expect("Unable to disconnect address balance");
+    db_tx.del_address_balance_above_height(block_height).await?;
 
-    db_tx
-        .del_address_locked_balance_above_height(block_height)
-        .await
-        .expect("Unable to disconnect address balance");
+    db_tx.del_address_locked_balance_above_height(block_height).await?;
 
-    db_tx
-        .del_address_transactions_above_height(block_height)
-        .await
-        .expect("Unable to disconnect address transactions");
+    db_tx.del_address_transactions_above_height(block_height).await?;
 
-    db_tx
-        .del_utxo_above_height(block_height)
-        .await
-        .expect("Unable to disconnect UTXOs");
+    db_tx.del_utxo_above_height(block_height).await?;
 
-    db_tx
-        .del_locked_utxo_above_height(block_height)
-        .await
-        .expect("Unable to disconnect locked UTXOs");
+    db_tx.del_locked_utxo_above_height(block_height).await?;
 
-    db_tx
-        .del_delegations_above_height(block_height)
-        .await
-        .expect("Unable to disconnect address transactions");
+    db_tx.del_delegations_above_height(block_height).await?;
 
-    db_tx
-        .del_pools_above_height(block_height)
-        .await
-        .expect("Unable to disconnect pool data");
+    db_tx.del_pools_above_height(block_height).await?;
 
-    db_tx
-        .del_token_issuance_above_height(block_height)
-        .await
-        .expect("Unable to disconnect token issuances");
+    db_tx.del_token_issuance_above_height(block_height).await?;
 
-    db_tx
-        .del_nft_issuance_above_height(block_height)
-        .await
-        .expect("Unable to disconnect nft issuances");
+    db_tx.del_nft_issuance_above_height(block_height).await?;
 
-    db_tx
-        .del_coin_or_token_decimals_above_height(block_height)
-        .await
-        .expect("Unable to disconnect coin or token decimals");
+    db_tx.del_coin_or_token_decimals_above_height(block_height).await?;
 
-    db_tx
-        .del_main_chain_blocks_above_height(block_height)
-        .await
-        .expect("Unable to disconnect block");
+    db_tx.del_main_chain_blocks_above_height(block_height).await?;
 
-    db_tx
-        .del_statistics_above_height(block_height)
-        .await
-        .expect("Unable to disconnect block");
+    db_tx.del_statistics_above_height(block_height).await?;
 
-    db_tx
-        .del_orders_above_height(block_height)
-        .await
-        .expect("Unable to disconnect block");
+    db_tx.del_orders_above_height(block_height).await?;
 
     Ok(())
 }
@@ -1057,7 +1018,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                         db_tx.get_fungible_token_issuance(*token_id).await?.expect("must exist");
 
                     let issuance = issuance.mint_tokens(*amount);
-                    db_tx.set_fungible_token_issuance(*token_id, block_height, issuance).await?;
+                    db_tx.set_fungible_token_data(*token_id, block_height, issuance).await?;
                     increase_statistic_amount(
                         db_tx,
                         CoinOrTokenStatistic::CirculatingSupply,
@@ -1092,7 +1053,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                         db_tx.get_fungible_token_issuance(*token_id).await?.expect("must exist");
 
                     let issuance = issuance.unmint_tokens(total_burned);
-                    db_tx.set_fungible_token_issuance(*token_id, block_height, issuance).await?;
+                    db_tx.set_fungible_token_data(*token_id, block_height, issuance).await?;
                     let amount = chain_config.token_supply_change_fee(block_height);
                     increase_statistic_amount(
                         db_tx,
@@ -1116,7 +1077,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                         db_tx.get_fungible_token_issuance(*token_id).await?.expect("must exist");
 
                     let issuance = issuance.freeze(*is_unfreezable);
-                    db_tx.set_fungible_token_issuance(*token_id, block_height, issuance).await?;
+                    db_tx.set_fungible_token_data(*token_id, block_height, issuance).await?;
                     let amount = chain_config.token_freeze_fee(block_height);
                     increase_statistic_amount(
                         db_tx,
@@ -1140,7 +1101,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                         db_tx.get_fungible_token_issuance(*token_id).await?.expect("must exist");
 
                     let issuance = issuance.unfreeze();
-                    db_tx.set_fungible_token_issuance(*token_id, block_height, issuance).await?;
+                    db_tx.set_fungible_token_data(*token_id, block_height, issuance).await?;
                     let amount = chain_config.token_freeze_fee(block_height);
                     increase_statistic_amount(
                         db_tx,
@@ -1164,7 +1125,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                         db_tx.get_fungible_token_issuance(*token_id).await?.expect("must exist");
 
                     let issuance = issuance.lock();
-                    db_tx.set_fungible_token_issuance(*token_id, block_height, issuance).await?;
+                    db_tx.set_fungible_token_data(*token_id, block_height, issuance).await?;
                     let amount = chain_config.token_supply_change_fee(block_height);
                     increase_statistic_amount(
                         db_tx,
@@ -1188,7 +1149,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                         db_tx.get_fungible_token_issuance(*token_id).await?.expect("must exist");
 
                     let issuance = issuance.change_authority(destination.clone());
-                    db_tx.set_fungible_token_issuance(*token_id, block_height, issuance).await?;
+                    db_tx.set_fungible_token_data(*token_id, block_height, issuance).await?;
                     let amount = chain_config.token_change_authority_fee(block_height);
                     increase_statistic_amount(
                         db_tx,
@@ -1212,7 +1173,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                         db_tx.get_fungible_token_issuance(*token_id).await?.expect("must exist");
 
                     let issuance = issuance.change_metadata_uri(metadata_uri.clone());
-                    db_tx.set_fungible_token_issuance(*token_id, block_height, issuance).await?;
+                    db_tx.set_fungible_token_data(*token_id, block_height, issuance).await?;
                     let amount = chain_config.token_change_metadata_uri_fee();
                     increase_statistic_amount(
                         db_tx,

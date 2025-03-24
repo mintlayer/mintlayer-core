@@ -510,6 +510,12 @@ pub struct BlockInfo {
     pub height: Option<BlockHeight>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AmountWithDecimals {
+    pub amount: Amount,
+    pub decimals: u8,
+}
+
 #[async_trait::async_trait]
 pub trait ApiServerStorageRead: Sync {
     async fn is_initialized(&self) -> Result<bool, ApiServerStorageError>;
@@ -525,7 +531,7 @@ pub trait ApiServerStorageRead: Sync {
     async fn get_address_balances(
         &self,
         address: &str,
-    ) -> Result<Vec<(CoinOrTokenId, Amount, u8)>, ApiServerStorageError>;
+    ) -> Result<BTreeMap<CoinOrTokenId, AmountWithDecimals>, ApiServerStorageError>;
 
     async fn get_address_locked_balance(
         &self,
@@ -819,6 +825,13 @@ pub trait ApiServerStorageWrite: ApiServerStorageRead {
         token_id: TokenId,
         block_height: BlockHeight,
         issuance: FungibleTokenData,
+    ) -> Result<(), ApiServerStorageError>;
+
+    async fn set_fungible_token_data(
+        &mut self,
+        token_id: TokenId,
+        block_height: BlockHeight,
+        data: FungibleTokenData,
     ) -> Result<(), ApiServerStorageError>;
 
     async fn set_nft_token_issuance(

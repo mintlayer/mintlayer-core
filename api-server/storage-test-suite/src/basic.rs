@@ -1149,10 +1149,10 @@ where
 
         let balances = db_tx.get_address_balances(address2.as_str()).await.unwrap();
         assert_eq!(balances.len(), 1);
-        let balance = balances[0];
+        let balance = balances.into_iter().next().unwrap();
         assert_eq!(balance.0, CoinOrTokenId::TokenId(random_token_id));
-        assert_eq!(balance.1, Amount::from_atoms(1));
-        assert_eq!(balance.2, 0);
+        assert_eq!(balance.1.amount, Amount::from_atoms(1));
+        assert_eq!(balance.1.decimals, 0);
 
         let returned_nft = db_tx.get_nft_token_issuance(random_token_id).await.unwrap().unwrap();
 
@@ -1224,7 +1224,7 @@ where
             .lock();
 
         db_tx
-            .set_fungible_token_issuance(
+            .set_fungible_token_data(
                 random_token_id,
                 block_height.next_height(),
                 locked_token_data.clone(),
@@ -1251,10 +1251,10 @@ where
 
         let balances = db_tx.get_address_balances(address.as_str()).await.unwrap();
         assert_eq!(balances.len(), 1);
-        let balance = balances[0];
+        let balance = balances.into_iter().next().unwrap();
         assert_eq!(balance.0, CoinOrTokenId::TokenId(random_token_id));
-        assert_eq!(balance.1, random_amount);
-        assert_eq!(balance.2, random_num_decimals);
+        assert_eq!(balance.1.amount, random_amount);
+        assert_eq!(balance.1.decimals, random_num_decimals);
 
         // after reorg go back to the previous token data
         db_tx.del_token_issuance_above_height(block_height).await.unwrap();

@@ -24,9 +24,10 @@ use common::{
 use crate::storage::{
     impls::postgres::queries::QueryFromConnection,
     storage_api::{
-        block_aux_data::BlockAuxData, ApiServerStorageError, ApiServerStorageRead, BlockInfo,
-        CoinOrTokenStatistic, Delegation, FungibleTokenData, NftWithOwner, Order, PoolBlockStats,
-        PoolDataWithExtraInfo, TransactionInfo, Utxo, UtxoWithExtraInfo,
+        block_aux_data::BlockAuxData, AmountWithDecimals, ApiServerStorageError,
+        ApiServerStorageRead, BlockInfo, CoinOrTokenStatistic, Delegation, FungibleTokenData,
+        NftWithOwner, Order, PoolBlockStats, PoolDataWithExtraInfo, TransactionInfo, Utxo,
+        UtxoWithExtraInfo,
     },
 };
 use std::collections::BTreeMap;
@@ -65,7 +66,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRo<'_> {
     async fn get_address_balances(
         &self,
         address: &str,
-    ) -> Result<Vec<(CoinOrTokenId, Amount, u8)>, ApiServerStorageError> {
+    ) -> Result<BTreeMap<CoinOrTokenId, AmountWithDecimals>, ApiServerStorageError> {
         let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_address_balances(address).await?;
 
