@@ -125,14 +125,14 @@ pub enum TrezorError {
     MultisigSignatureReturned,
     #[error("The file being loaded is a software wallet and does not correspond to the connected hardware wallet")]
     HardwareWalletDifferentFile,
-    #[error("PublicKeys missmatch. Wrong device or passphrase:\nfile DeviceId \"{file_device_id}\", connected device \"{connected_device_id}\",\nfile label \"{file_label}\" and connected device label \"{connected_device_id}\"")]
+    #[error("Public keys mismatch. Wrong device or passphrase:\nfile DeviceId \"{file_device_id}\", connected device \"{connected_device_id}\",\nfile label \"{file_label}\" and connected device label \"{connected_device_id}\"")]
     HardwareWalletDifferentMnemonicOrPassphrase {
         file_device_id: String,
         connected_device_id: String,
         file_label: String,
         connected_device_label: String,
     },
-    #[error("The file being loaded correspond to the connected hardware wallet, but public keys are different. Maybe a wrong passphrase was entered?")]
+    #[error("The file being loaded corresponds to the connected hardware wallet, but public keys are different. Maybe a wrong passphrase was entered?")]
     HardwareWalletDifferentPassphrase,
 }
 
@@ -157,7 +157,7 @@ impl TrezorSigner {
 
     /// Calls initialize on the device with the current session_id.
     ///
-    /// If the operation fails due to an I/O error (which may indicate a lost connection to the device),
+    /// If the operation fails due to an USB error (which may indicate a lost connection to the device),
     /// the function will attempt to reconnect to the Trezor device once before returning an error.
     fn check_session(
         &mut self,
@@ -168,9 +168,9 @@ impl TrezorSigner {
 
         match client.init_device(Some(self.session_id.clone())) {
             Ok(_) => Ok(()),
-            // In case of a USB IO error try to reconnect, and try again
+            // In case of a USB error try to reconnect, and try again
             Err(trezor_client::Error::TransportSendMessage(
-                trezor_client::transport::error::Error::Usb(rusb::Error::Io),
+                trezor_client::transport::error::Error::Usb(_),
             )) => {
                 let (mut new_client, data, session_id) = find_trezor_device()?;
 
@@ -194,7 +194,7 @@ impl TrezorSigner {
 
     /// Attempts to perform an operation on the Trezor client.
     ///
-    /// If the operation fails due to an I/O error (which may indicate a lost connection to the device),
+    /// If the operation fails due to an USB error (which may indicate a lost connection to the device),
     /// the function will attempt to reconnect to the Trezor device once before returning an error.
     fn perform_trezor_operation<F, R>(
         &mut self,
@@ -1290,8 +1290,8 @@ fn to_trezor_chain_type(chain_config: &ChainConfig) -> MintlayerChainType {
     }
 }
 
-/// Check that the public keys in the DB are the same as the ones with the connected hardware
-/// wallet
+/// Check that the public keys in the provided key chain are the same as the ones with the
+/// connected hardware wallet
 fn check_public_keys_against_key_chain(
     db_tx: &impl WalletStorageReadLocked,
     client: &mut Trezor,
