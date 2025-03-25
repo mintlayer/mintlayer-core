@@ -8923,7 +8923,6 @@ dependencies = [
  "randomness",
  "rpc-description",
  "rstest",
- "rusb",
  "serde",
  "serial_test",
  "serialization",
