@@ -171,7 +171,7 @@ impl SignedTransactionWrapper {
 
     pub fn to_json(&self, config: &ChainConfig) -> Result<serde_json::Value, BackendError> {
         common::address::dehexify::to_dehexified_json(config, self.tx.transaction())
-            .map_err(|e| BackendError::ConversionToDehexifyJsonError(e.to_string()))
+            .map_err(|e| BackendError::ConversionToDehexifiedJsonError(e.to_string()))
     }
 }
 
