@@ -20,16 +20,33 @@ mod hashable;
 pub mod sighashtype;
 
 use crate::{
-    chain::TxOutput,
+    chain::{OrderData, PoolData, TxOutput},
     primitives::{
         id::{hash_encoded_to, DefaultHashAlgoStream},
-        H256,
+        Amount, H256,
     },
 };
 
 use self::hashable::{SignatureHashableElement, SignatureHashableInputs};
 
 use super::{DestinationSigError, Signable};
+
+// FIXME: document
+#[derive(Clone, Debug, Encode)]
+pub enum InputInfo<'a> {
+    #[codec(index = 0)]
+    None,
+    #[codec(index = 1)]
+    Utxo(&'a TxOutput),
+    #[codec(index = 2)]
+    Order {
+        data: &'a OrderData,
+        ask_balance: Amount,
+        give_balance: Amount,
+    },
+    #[codec(index = 3)]
+    Pool(&'a PoolData),
+}
 
 fn hash_encoded_if_some<T: Encode>(val: &Option<T>, stream: &mut DefaultHashAlgoStream) {
     if let Some(v) = val {
@@ -39,18 +56,15 @@ fn hash_encoded_if_some<T: Encode>(val: &Option<T>, stream: &mut DefaultHashAlgo
 
 fn stream_signature_hash<T: Signable>(
     tx: &T,
-    inputs_utxos: &[Option<&TxOutput>],
+    inputs_info: &[InputInfo],
     stream: &mut DefaultHashAlgoStream,
     mode: sighashtype::SigHashType,
-    target_input_num: usize,
+    target_input_index: usize,
 ) -> Result<(), DestinationSigError> {
-    let inputs = match tx.inputs() {
-        Some(ins) => ins,
-        None => return Err(DestinationSigError::SigHashRequestWithoutInputs),
-    };
+    let inputs = tx.inputs().ok_or(DestinationSigError::SigHashRequestWithoutInputs)?;
 
-    let target_input = inputs.get(target_input_num).ok_or(
-        DestinationSigError::InvalidInputIndex(target_input_num, inputs.len()),
+    let target_input = inputs.get(target_input_index).ok_or(
+        DestinationSigError::InvalidInputIndex(target_input_index, inputs.len()),
     )?;
 
     hash_encoded_to(&mode.get(), stream);
@@ -58,11 +72,11 @@ fn stream_signature_hash<T: Signable>(
     hash_encoded_if_some(&tx.version_byte(), stream);
     hash_encoded_if_some(&tx.flags(), stream);
 
-    let inputs_hashable = SignatureHashableInputs::new(inputs, inputs_utxos)?;
-    inputs_hashable.signature_hash(stream, mode, target_input, target_input_num)?;
+    let inputs_hashable = SignatureHashableInputs::new(inputs, inputs_info)?;
+    inputs_hashable.signature_hash(stream, mode, target_input, target_input_index)?;
 
     let outputs_hashable = tx.outputs().unwrap_or_default();
-    outputs_hashable.signature_hash(stream, mode, target_input, target_input_num)?;
+    outputs_hashable.signature_hash(stream, mode, target_input, target_input_index)?;
 
     Ok(())
 }
@@ -70,12 +84,12 @@ fn stream_signature_hash<T: Signable>(
 pub fn signature_hash<T: Signable>(
     mode: sighashtype::SigHashType,
     tx: &T,
-    inputs_utxos: &[Option<&TxOutput>],
-    input_num: usize,
+    inputs_info: &[InputInfo],
+    input_index: usize,
 ) -> Result<H256, DestinationSigError> {
     let mut stream = DefaultHashAlgoStream::new();
 
-    stream_signature_hash(tx, inputs_utxos, &mut stream, mode, input_num)?;
+    stream_signature_hash(tx, inputs_info, &mut stream, mode, input_index)?;
 
     let result = stream.finalize().into();
     Ok(result)

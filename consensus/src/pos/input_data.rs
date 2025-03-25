@@ -32,7 +32,7 @@ use common::{
                 authorize_pubkey_spend::sign_public_key_spending,
                 standard_signature::StandardInputSignature, InputWitness,
             },
-            sighash::{sighashtype::SigHashType, signature_hash},
+            sighash::{sighashtype::SigHashType, signature_hash, InputInfo},
         },
         ChainConfig, Destination, PoSStatus, PoolId, TxInput, TxOutput,
     },
@@ -241,10 +241,15 @@ where
         None,
     );
 
+    let inputs_info_refs = pos_input_data
+        .kernel_input_utxos()
+        .iter()
+        .map(|utxo| InputInfo::Utxo(utxo))
+        .collect::<Vec<_>>();
     let sighash = signature_hash(
         SigHashType::default(),
         &block_reward_transactable,
-        &pos_input_data.kernel_input_utxos().iter().map(Some).collect::<Vec<_>>(),
+        &inputs_info_refs,
         0,
     )
     .map_err(|_| ConsensusPoSError::FailedToSignKernel)?;

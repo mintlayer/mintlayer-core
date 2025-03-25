@@ -100,10 +100,11 @@ fn sign_public_key_hash_spending_impl<R: Rng + CryptoRng>(
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::chain::signature::tests::utils::generate_inputs_utxos;
     use crate::chain::{
-        signature::{inputsig::StandardInputSignature, sighash::signature_hash},
-        transaction::signature::tests::utils::{generate_unsigned_tx, sig_hash_types},
+        signature::{sighash::signature_hash, StandardInputSignature},
+        transaction::signature::tests::utils::{
+            generate_inputs_infos, generate_unsigned_tx, sig_hash_types,
+        },
         Destination,
     };
     use crypto::key::{KeyKind, PrivateKey};
@@ -126,10 +127,10 @@ mod test {
         let pubkey_hash = PublicKeyHash::from(&public_key);
         let destination = Destination::PublicKeyHash(pubkey_hash);
 
-        let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, 1);
-        let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
+        let (inputs_info, _) = generate_inputs_infos(&mut rng, 1);
+        let inputs_info_refs = inputs_info.iter().map(|info| info.into()).collect::<Vec<_>>();
 
-        let tx = generate_unsigned_tx(&mut rng, &destination, &inputs_utxos, 2).unwrap();
+        let tx = generate_unsigned_tx(&mut rng, &destination, &inputs_info_refs, 2).unwrap();
 
         for sighash_type in sig_hash_types() {
             let res = StandardInputSignature::produce_uniparty_signature_for_input(
@@ -137,7 +138,7 @@ mod test {
                 sighash_type,
                 destination.clone(),
                 &tx,
-                &inputs_utxos_refs,
+                &inputs_info_refs,
                 1,
                 &mut rng,
             );
@@ -156,10 +157,10 @@ mod test {
             PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         let destination = Destination::PublicKey(public_key);
 
-        let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, INPUTS);
-        let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
+        let (inputs_info, _) = generate_inputs_infos(&mut rng, INPUTS);
+        let inputs_info_refs = inputs_info.iter().map(|info| info.into()).collect::<Vec<_>>();
 
-        let tx = generate_unsigned_tx(&mut rng, &destination, &inputs_utxos, OUTPUTS).unwrap();
+        let tx = generate_unsigned_tx(&mut rng, &destination, &inputs_info_refs, OUTPUTS).unwrap();
 
         for sighash_type in sig_hash_types() {
             let witness = StandardInputSignature::produce_uniparty_signature_for_input(
@@ -167,8 +168,8 @@ mod test {
                 sighash_type,
                 destination.clone(),
                 &tx,
-                &inputs_utxos_refs,
-                rng.gen_range(0..inputs_utxos.len()),
+                &inputs_info_refs,
+                rng.gen_range(0..INPUTS),
                 &mut rng,
             )
             .unwrap();
@@ -193,10 +194,10 @@ mod test {
         let pubkey_hash = PublicKeyHash::from(&public_key);
         let destination = Destination::PublicKeyHash(pubkey_hash);
 
-        let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, INPUTS);
-        let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
+        let (inputs_info, _) = generate_inputs_infos(&mut rng, INPUTS);
+        let inputs_info_refs = inputs_info.iter().map(|info| info.into()).collect::<Vec<_>>();
 
-        let tx = generate_unsigned_tx(&mut rng, &destination, &inputs_utxos, OUTPUTS).unwrap();
+        let tx = generate_unsigned_tx(&mut rng, &destination, &inputs_info_refs, OUTPUTS).unwrap();
 
         for sighash_type in sig_hash_types() {
             let witness = StandardInputSignature::produce_uniparty_signature_for_input(
@@ -204,8 +205,8 @@ mod test {
                 sighash_type,
                 destination.clone(),
                 &tx,
-                &inputs_utxos_refs,
-                rng.gen_range(0..inputs_utxos.len()),
+                &inputs_info_refs,
+                rng.gen_range(0..INPUTS),
                 &mut rng,
             )
             .unwrap();
@@ -237,10 +238,10 @@ mod test {
         let pubkey_hash = PublicKeyHash::from(&public_key);
         let destination = Destination::PublicKeyHash(pubkey_hash);
 
-        let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, INPUTS);
-        let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
+        let (inputs_info, _) = generate_inputs_infos(&mut rng, INPUTS);
+        let inputs_info_refs = inputs_info.iter().map(|info| info.into()).collect::<Vec<_>>();
 
-        let tx = generate_unsigned_tx(&mut rng, &destination, &inputs_utxos, OUTPUTS).unwrap();
+        let tx = generate_unsigned_tx(&mut rng, &destination, &inputs_info_refs, OUTPUTS).unwrap();
 
         for sighash_type in sig_hash_types() {
             let input = rng.gen_range(0..INPUTS);
@@ -249,7 +250,7 @@ mod test {
                 sighash_type,
                 destination.clone(),
                 &tx,
-                &inputs_utxos_refs,
+                &inputs_info_refs,
                 input,
                 &mut rng,
             )
@@ -257,7 +258,7 @@ mod test {
             let spender_signature =
                 AuthorizedPublicKeyHashSpend::from_data(witness.raw_signature()).unwrap();
             let sighash =
-                signature_hash(witness.sighash_type(), &tx, &inputs_utxos_refs, input).unwrap();
+                signature_hash(witness.sighash_type(), &tx, &inputs_info_refs, input).unwrap();
 
             verify_public_key_hash_spending(&pubkey_hash, &spender_signature, &sighash)
                 .unwrap_or_else(|_| panic!("{sighash_type:X?}"));
@@ -275,25 +276,25 @@ mod test {
         let destination = Destination::PublicKey(public_key.clone());
         let pubkey_hash = PublicKeyHash::from(&public_key);
 
-        let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, INPUTS);
-        let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
+        let (inputs_info, _) = generate_inputs_infos(&mut rng, INPUTS);
+        let inputs_info_refs = inputs_info.iter().map(|info| info.into()).collect::<Vec<_>>();
 
-        let tx = generate_unsigned_tx(&mut rng, &destination, &inputs_utxos, OUTPUTS).unwrap();
+        let tx = generate_unsigned_tx(&mut rng, &destination, &inputs_info_refs, OUTPUTS).unwrap();
 
         for sighash_type in sig_hash_types() {
-            let input = rng.gen_range(0..inputs_utxos.len());
+            let input = rng.gen_range(0..INPUTS);
             let witness = StandardInputSignature::produce_uniparty_signature_for_input(
                 &private_key,
                 sighash_type,
                 destination.clone(),
                 &tx,
-                &inputs_utxos_refs,
+                &inputs_info_refs,
                 input,
                 &mut rng,
             )
             .unwrap();
             let sighash =
-                signature_hash(witness.sighash_type(), &tx, &inputs_utxos_refs, input).unwrap();
+                signature_hash(witness.sighash_type(), &tx, &inputs_info_refs, input).unwrap();
 
             sign_public_key_hash_spending(&private_key, &pubkey_hash, &sighash, &mut rng)
                 .unwrap_or_else(|_| panic!("{sighash_type:X?}"));

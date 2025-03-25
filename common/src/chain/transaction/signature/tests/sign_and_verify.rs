@@ -52,14 +52,14 @@ fn sign_and_verify_all_and_none(#[case] seed: Seed) {
         .cartesian_product(sig_hash_types().filter(|t| t.outputs_mode() != OutputsMode::Single))
         .cartesian_product(test_data)
     {
-        let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, inputs);
-        let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
+        let (inputs_info, _) = generate_inputs_infos(&mut rng, inputs);
+        let inputs_info_refs = inputs_info.iter().map(|info| info.into()).collect::<Vec<_>>();
 
-        let tx = generate_unsigned_tx(&mut rng, &destination, &inputs_utxos, outputs).unwrap();
+        let tx = generate_unsigned_tx(&mut rng, &destination, &inputs_info_refs, outputs).unwrap();
         let signed_tx = sign_whole_tx(
             &mut rng,
             tx,
-            &inputs_utxos_refs,
+            &inputs_info_refs,
             &private_key,
             sighash_type,
             &destination,
@@ -75,7 +75,7 @@ fn sign_and_verify_all_and_none(#[case] seed: Seed) {
             assert_eq!(signed_tx, Err(DestinationSigError::Unsupported));
         } else {
             let signed_tx = signed_tx.expect("{sighash_type:?} {destination:?}");
-            verify_signed_tx(&chain_config, &signed_tx, &inputs_utxos_refs, &destination)
+            verify_signed_tx(&chain_config, &signed_tx, &inputs_info_refs, &destination)
                 .expect("{sighash_type:?} {destination:?}")
         }
     }
@@ -246,20 +246,20 @@ fn sign_and_verify_single(#[case] seed: Seed) {
     ];
 
     for (destination, sighash_type, inputs, outputs, expected) in test_data.into_iter() {
-        let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, inputs);
-        let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
+        let (inputs_info, _) = generate_inputs_infos(&mut rng, inputs);
+        let inputs_info_refs = inputs_info.iter().map(|info| info.into()).collect::<Vec<_>>();
 
-        let tx = generate_unsigned_tx(&mut rng, &destination, &inputs_utxos, outputs).unwrap();
+        let tx = generate_unsigned_tx(&mut rng, &destination, &inputs_info_refs, outputs).unwrap();
         match sign_whole_tx(
             &mut rng,
             tx,
-            &inputs_utxos_refs,
+            &inputs_info_refs,
             &private_key,
             sighash_type,
             &destination,
         ) {
             Ok(signed_tx) => {
-                verify_signed_tx(&chain_config, &signed_tx, &inputs_utxos_refs, &destination)
+                verify_signed_tx(&chain_config, &signed_tx, &inputs_info_refs, &destination)
                     .expect("{sighash_type:X?}, {destination:?}")
             }
             Err(err) => assert_eq!(Err(err), expected, "{sighash_type:X?}, {destination:?}"),

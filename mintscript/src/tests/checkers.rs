@@ -33,8 +33,10 @@ fn make_dummy_tx(
     let utxos: Vec<_> = (0_usize..n_inputs)
         .map(|_| TxOutput::Transfer(gen_value(), Destination::AnyoneCanSpend))
         .collect();
-
-    let utxo_refs: Vec<_> = utxos.iter().map(Some).collect();
+    let inputs_info_refs = utxos
+        .iter()
+        .map(|utxo| common::chain::signature::sighash::InputInfo::Utxo(utxo))
+        .collect::<Vec<_>>();
 
     let transaction = {
         let output = TxOutput::Burn(gen_value());
@@ -53,7 +55,7 @@ fn make_dummy_tx(
                     SigHashType::default(),
                     Destination::PublicKey(PublicKey::from_private_key(private_key)),
                     &tx,
-                    &utxo_refs,
+                    &inputs_info_refs,
                     input_num,
                     &mut rng,
                 )

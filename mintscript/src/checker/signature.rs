@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use common::chain::{
-    signature::{DestinationSigError, EvaluatedInputWitness, Transactable},
+    signature::{sighash::InputInfo, DestinationSigError, EvaluatedInputWitness, Transactable},
     ChainConfig, Destination, TxOutput,
 };
 
@@ -78,12 +78,20 @@ impl<C: SignatureContext> SignatureChecker<C> for StandardSignatureChecker {
         let input_num = ctx.input_num();
         let chain_config = ctx.chain_config();
 
+        // FIXME: check height and version
+        // FIXME: get from context
+        let inputs_info_refs = ctx
+            .input_utxos()
+            .iter()
+            .map(|utxo| utxo.map_or(InputInfo::None, |utxo| InputInfo::Utxo(utxo)))
+            .collect::<Vec<_>>();
+
         common::chain::signature::verify_signature(
             chain_config,
             destination,
             tx,
             witness,
-            ctx.input_utxos(),
+            &inputs_info_refs,
             input_num,
         )
     }
