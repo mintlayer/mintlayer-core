@@ -37,12 +37,12 @@ pub fn check_reward_inputs_outputs_purposes(
             // accounts cannot be used in block reward
             inputs.iter().try_for_each(|input| match input {
                 TxInput::Utxo(_) => Ok(()),
-                TxInput::Account(..) | TxInput::AccountCommand(..) => {
-                    Err(ConnectTransactionError::IOPolicyError(
-                        IOPolicyError::AttemptToUseAccountInputInReward,
-                        block_id.into(),
-                    ))
-                }
+                TxInput::Account(..)
+                | TxInput::AccountCommand(..)
+                | TxInput::OrderAccountCommand(..) => Err(ConnectTransactionError::IOPolicyError(
+                    IOPolicyError::AttemptToUseAccountInputInReward,
+                    block_id.into(),
+                )),
             })?;
 
             let inputs_utxos = super::collect_inputs_utxos(&utxo_view, inputs)?;
@@ -184,7 +184,7 @@ pub fn check_tx_inputs_outputs_purposes(
         .iter()
         .filter(|input| match input {
             TxInput::Utxo(_) | TxInput::Account(..) => false,
-            TxInput::AccountCommand(..) => true,
+            TxInput::AccountCommand(..) | TxInput::OrderAccountCommand(..) => true,
         })
         .count();
 

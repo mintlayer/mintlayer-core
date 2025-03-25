@@ -455,6 +455,7 @@ impl<'f> PoSBlockBuilder<'f> {
                     TxInput::AccountCommand(nonce, op) => {
                         self.account_nonce_tracker.insert(op.clone().into(), *nonce);
                     }
+                    TxInput::OrderAccountCommand(..) => {}
                 };
             });
 

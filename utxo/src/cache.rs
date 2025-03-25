@@ -154,7 +154,9 @@ impl<P: UtxosView> UtxosCache<P> {
             .iter()
             .filter_map(|input| match input {
                 TxInput::Utxo(outpoint) => Some(outpoint.source_id()),
-                TxInput::Account(..) | TxInput::AccountCommand(..) => None,
+                TxInput::Account(..)
+                | TxInput::AccountCommand(..)
+                | TxInput::OrderAccountCommand(..) => None,
             })
             .collect();
 
@@ -163,7 +165,9 @@ impl<P: UtxosView> UtxosCache<P> {
             .iter()
             .map(|input| match input {
                 TxInput::Utxo(outpoint) => self.spend_utxo(outpoint).map(Some),
-                TxInput::Account(..) | TxInput::AccountCommand(..) => Ok(None),
+                TxInput::Account(..)
+                | TxInput::AccountCommand(..)
+                | TxInput::OrderAccountCommand(..) => Ok(None),
             })
             .collect::<Result<Vec<_>, Error>>()?;
 
@@ -194,7 +198,9 @@ impl<P: UtxosView> UtxosCache<P> {
             .filter_map(|(input, undo)| {
                 undo.map(|utxo| match input {
                     TxInput::Utxo(outpoint) => Ok((outpoint, utxo)),
-                    TxInput::Account(..) | TxInput::AccountCommand(..) => {
+                    TxInput::Account(..)
+                    | TxInput::AccountCommand(..)
+                    | TxInput::OrderAccountCommand(..) => {
                         Err(Error::TxInputAndUndoMismatch(tx.get_id()))
                     }
                 })
@@ -220,7 +226,9 @@ impl<P: UtxosView> UtxosCache<P> {
                     .iter()
                     .filter_map(|input| match input {
                         TxInput::Utxo(outpoint) => Some(self.spend_utxo(outpoint)),
-                        TxInput::Account(..) | TxInput::AccountCommand(..) => None,
+                        TxInput::Account(..)
+                        | TxInput::AccountCommand(..)
+                        | TxInput::OrderAccountCommand(..) => None,
                     })
                     .collect::<Result<Vec<_>, _>>()?;
                 (!utxos.is_empty()).then(|| UtxosBlockRewardUndo::new(utxos))
@@ -263,7 +271,9 @@ impl<P: UtxosView> UtxosCache<P> {
                 .zip(block_undo.into_inner().into_iter())
                 .filter_map(|(tx_in, utxo)| match tx_in {
                     TxInput::Utxo(outpoint) => Some((outpoint, utxo)),
-                    TxInput::Account(..) | TxInput::AccountCommand(..) => None,
+                    TxInput::Account(..)
+                    | TxInput::AccountCommand(..)
+                    | TxInput::OrderAccountCommand(..) => None,
                 })
                 .try_for_each(|(outpoint, utxo)| self.add_utxo(outpoint, utxo, false))?;
         }

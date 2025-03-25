@@ -61,6 +61,19 @@ impl From<AccountCommand> for AccountType {
     }
 }
 
+impl From<OrderAccountCommand> for AccountType {
+    fn from(cmd: OrderAccountCommand) -> Self {
+        match cmd {
+            OrderAccountCommand::FillOrder(order_id, _, _)
+            | OrderAccountCommand::ConcludeOrder {
+                order_id,
+                filled_amount: _,
+                remaining_give_amount: _,
+            } => AccountType::Order(order_id),
+        }
+    }
+}
+
 /// The type represents the amount to withdraw from a particular account.
 /// Otherwise it's unclear how much should be deducted from an account balance.
 /// It also helps solving 2 additional problems: calculating fees and providing ability to sign input balance with the witness.
@@ -159,4 +172,33 @@ impl AccountOutPoint {
     pub fn account(&self) -> &AccountSpending {
         &self.account
     }
+}
+
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Ord,
+    PartialOrd,
+    Encode,
+    Decode,
+    serde::Serialize,
+    serde::Deserialize,
+)]
+pub enum OrderAccountCommand {
+    // Satisfy an order completely or partially.
+    // Second parameter is an amount provided to fill an order which corresponds to order's ask currency.
+    #[codec(index = 0)]
+    FillOrder(OrderId, Amount, Destination),
+    // Close an order and withdraw all remaining funds from both give and ask balances.
+    // Only the address specified as `conclude_key` can authorize this command.
+    // Amounts are important because they get into a signature so that such a tx cannot be applied
+    // to an altered state.
+    #[codec(index = 1)]
+    ConcludeOrder {
+        order_id: OrderId,
+        filled_amount: Amount,
+        remaining_give_amount: Amount,
+    },
 }
