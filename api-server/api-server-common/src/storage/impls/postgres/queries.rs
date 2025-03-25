@@ -80,7 +80,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         block_timestamp
             .as_int_seconds()
             .try_into()
-            .map_err(|_| ApiServerStorageError::TimestampToHigh(block_timestamp))
+            .map_err(|_| ApiServerStorageError::TimestampTooHigh(block_timestamp))
     }
 
     pub async fn is_initialized(&mut self) -> Result<bool, ApiServerStorageError> {

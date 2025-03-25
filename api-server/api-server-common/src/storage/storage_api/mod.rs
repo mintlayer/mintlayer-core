@@ -65,8 +65,8 @@ pub enum ApiServerStorageError {
     InvalidBlock(String),
     #[error("Addressable error")]
     AddressableError,
-    #[error("Block timestamp to high {0}")]
-    TimestampToHigh(BlockTimestamp),
+    #[error("Block timestamp too high {0}")]
+    TimestampTooHigh(BlockTimestamp),
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]

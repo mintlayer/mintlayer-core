@@ -33,17 +33,17 @@ fn tx_witness_hasher(tx: &SignedTransaction) -> H256 {
 pub fn calculate_tx_merkle_tree(
     body: &BlockBody,
 ) -> Result<MerkleTree<H256, MerkleHasher>, MerkleTreeFormError> {
-    calcualte_generic_merkle_tree(tx_hasher, body)
+    calculate_generic_merkle_tree(tx_hasher, body)
 }
 
 pub fn calculate_witness_merkle_tree(
     body: &BlockBody,
 ) -> Result<MerkleTree<H256, MerkleHasher>, MerkleTreeFormError> {
-    calcualte_generic_merkle_tree(tx_witness_hasher, body)
+    calculate_generic_merkle_tree(tx_witness_hasher, body)
 }
 
 /// Calculate the merkle tree for the given body of the block.
-fn calcualte_generic_merkle_tree(
+fn calculate_generic_merkle_tree(
     tx_hasher: fn(&SignedTransaction) -> H256,
     body: &BlockBody,
 ) -> Result<MerkleTree<H256, MerkleHasher>, MerkleTreeFormError> {
