@@ -80,7 +80,6 @@ trait ColdWalletRpc {
         mnemonic: Option<String>,
         passphrase: Option<String>,
         hardware_wallet: Option<HardwareWalletType>,
-        device_name: Option<String>,
         device_id: Option<String>,
     ) -> rpc::RpcResult<CreatedWallet>;
 
@@ -93,7 +92,6 @@ trait ColdWalletRpc {
         mnemonic: Option<String>,
         passphrase: Option<String>,
         hardware_wallet: Option<HardwareWalletType>,
-        device_name: Option<String>,
         device_id: Option<String>,
     ) -> rpc::RpcResult<CreatedWallet>;
 

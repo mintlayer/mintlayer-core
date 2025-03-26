@@ -165,10 +165,7 @@ pub enum WalletTypeArgs {
         store_seed_phrase: StoreSeedPhrase,
     },
     #[cfg(feature = "trezor")]
-    Trezor {
-        device_name: Option<String>,
-        device_id: Option<String>,
-    },
+    Trezor { device_id: Option<String> },
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -188,10 +185,7 @@ impl WalletTypeArgs {
                 store_seed_phrase: _,
             } => controller_mode.into(),
             #[cfg(feature = "trezor")]
-            Self::Trezor {
-                device_name: _,
-                device_id: _,
-            } => WalletType::Trezor,
+            Self::Trezor { device_id: _ } => WalletType::Trezor,
         }
     }
 
@@ -230,14 +224,8 @@ impl WalletTypeArgs {
             }
 
             #[cfg(feature = "trezor")]
-            Self::Trezor {
-                device_name,
-                device_id,
-            } => Ok((
-                WalletTypeArgsComputed::Trezor {
-                    device_name,
-                    device_id,
-                },
+            Self::Trezor { device_id } => Ok((
+                WalletTypeArgsComputed::Trezor { device_id },
                 CreatedWallet::UserProvidedMnemonic,
             )),
         }
@@ -251,8 +239,5 @@ pub enum WalletTypeArgsComputed {
         store_seed_phrase: StoreSeedPhrase,
     },
     #[cfg(feature = "trezor")]
-    Trezor {
-        device_name: Option<String>,
-        device_id: Option<String>,
-    },
+    Trezor { device_id: Option<String> },
 }

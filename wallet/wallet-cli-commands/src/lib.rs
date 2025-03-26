@@ -76,12 +76,6 @@ pub enum WalletManagementCommand {
         #[arg(long, conflicts_with_all(["mnemonic", "passphrase", "whether_to_store_seed_phrase"]))]
         hardware_wallet: Option<CliHardwareWalletType>,
 
-        /// Optionally specify the name for the trezor device to connect to in case there
-        /// are multiple trezor devices connected at the same time.
-        /// If not specified and there are multiple devices connected a choice will be presented
-        #[arg(long, conflicts_with_all(["mnemonic", "passphrase", "whether_to_store_seed_phrase"]))]
-        trezor_device_name: Option<String>,
-
         /// Optionally specify the ID for the trezor device to connect to in case there
         /// are multiple trezor devices connected at the same time.
         /// If not specified and there are multiple devices connected a choice will be presented
@@ -115,12 +109,6 @@ pub enum WalletManagementCommand {
         /// and the latter will have to be entered every time the device is connected to the host machine.
         #[arg(long, conflicts_with_all(["passphrase", "mnemonic", "whether_to_store_seed_phrase"]))]
         hardware_wallet: Option<CliHardwareWalletType>,
-
-        /// Optionally specify the name for the trezor device to connect to in case there
-        /// are multiple trezor devices connected at the same time.
-        /// If not specified and there are multiple devices connected a choice will be presented
-        #[arg(long, conflicts_with_all(["mnemonic", "passphrase", "whether_to_store_seed_phrase"]))]
-        trezor_device_name: Option<String>,
 
         /// Optionally specify the ID for the trezor device to connect to in case there
         /// are multiple trezor devices connected at the same time.
@@ -954,7 +942,6 @@ impl ChoiceMenu for CreateWalletDeviceSelectMenu {
                         mnemonic: None,
                         passphrase: None,
                         hardware_wallet: Some(self.hardware_wallet),
-                        trezor_device_name: Some(d.name.clone()),
                         trezor_device_id: Some(d.device_id.clone()),
                     },
                 )
@@ -965,7 +952,6 @@ impl ChoiceMenu for CreateWalletDeviceSelectMenu {
                     mnemonic: None,
                     passphrase: None,
                     hardware_wallet: Some(self.hardware_wallet),
-                    trezor_device_name: Some(d.name.clone()),
                     trezor_device_id: Some(d.device_id.clone()),
                 })
             }

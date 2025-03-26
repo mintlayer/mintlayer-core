@@ -273,19 +273,15 @@ where
                 .map(|w| w.map_wallet(RuntimeWallet::Software))
             }
             #[cfg(feature = "trezor")]
-            WalletTypeArgsComputed::Trezor {
-                device_name,
-                device_id,
-            } => wallet::Wallet::create_new_wallet(
+            WalletTypeArgsComputed::Trezor { device_id } => wallet::Wallet::create_new_wallet(
                 Arc::clone(&chain_config),
                 db,
                 best_block,
                 wallet_type,
                 |_db_tx| {
-                    Ok(TrezorSignerProvider::new(SelectedDevice {
-                        name: device_name,
-                        device_id,
-                    })
+                    Ok(TrezorSignerProvider::new(
+                        device_id.map(|device_id| SelectedDevice { device_id }),
+                    )
                     .map_err(SignerError::TrezorError)?)
                 },
             )
@@ -346,19 +342,15 @@ where
                 Ok(wallet.map_wallet(RuntimeWallet::Software))
             }
             #[cfg(feature = "trezor")]
-            WalletTypeArgsComputed::Trezor {
-                device_name,
-                device_id,
-            } => {
+            WalletTypeArgsComputed::Trezor { device_id } => {
                 let wallet = wallet::Wallet::recover_wallet(
                     Arc::clone(&chain_config),
                     db,
                     wallet_type,
                     |_db_tx| {
-                        Ok(TrezorSignerProvider::new(SelectedDevice {
-                            name: device_name,
-                            device_id,
-                        })
+                        Ok(TrezorSignerProvider::new(
+                            device_id.map(|device_id| SelectedDevice { device_id }),
+                        )
                         .map_err(SignerError::TrezorError)?)
                     },
                 )

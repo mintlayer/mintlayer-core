@@ -155,7 +155,6 @@ where
                 whether_to_store_seed_phrase,
                 passphrase,
                 hardware_wallet,
-                trezor_device_name,
                 trezor_device_id,
             } => {
                 let store_seed_phrase =
@@ -166,7 +165,7 @@ where
                         passphrase,
                         store_seed_phrase,
                     },
-                    |h| h.into_wallet_args(trezor_device_name, trezor_device_id),
+                    |h| h.into_wallet_args(trezor_device_id),
                 );
                 let response =
                     self.wallet().await?.create_wallet(wallet_path.clone(), wallet_args).await?;
@@ -214,7 +213,6 @@ where
                 whether_to_store_seed_phrase,
                 passphrase,
                 hardware_wallet,
-                trezor_device_name,
                 trezor_device_id,
             } => {
                 let hardware_wallet = hardware_wallet.map(Into::into);
@@ -228,7 +226,6 @@ where
                         mnemonic,
                         passphrase,
                         hardware_wallet,
-                        trezor_device_name,
                         trezor_device_id,
                     )
                     .await?;

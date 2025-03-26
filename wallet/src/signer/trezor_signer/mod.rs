@@ -116,22 +116,7 @@ pub struct FoundDevice {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct SelectedDevice {
-    pub name: Option<String>,
-    pub device_id: Option<String>,
-}
-
-impl PartialEq<FoundDevice> for SelectedDevice {
-    fn eq(&self, other: &FoundDevice) -> bool {
-        self.name.as_ref().is_none_or(|name| name == &other.name)
-            && self.device_id.as_ref().is_none_or(|id| id == &other.device_id)
-    }
-}
-
-impl SelectedDevice {
-    const NONE: Self = SelectedDevice {
-        name: None,
-        device_id: None,
-    };
+    pub device_id: String,
 }
 
 /// Signer errors
@@ -139,6 +124,8 @@ impl SelectedDevice {
 pub enum TrezorError {
     #[error("No connected Trezor device found")]
     NoDeviceFound,
+    #[error("No compatible Trezor device found with Mintlayer compatibilities")]
+    NoCompatibleDeviceFound,
     #[error("There are multiple connected Trezor devices found {0:?}")]
     NoUniqueDeviceFound(Vec<FoundDevice>),
     #[error("Cannot get the supported features for the connected Trezor device")]
@@ -208,7 +195,7 @@ impl TrezorSigner {
             Err(trezor_client::Error::TransportSendMessage(
                 trezor_client::transport::error::Error::Usb(rusb::Error::Io),
             )) => {
-                let selected = SelectedDevice::NONE;
+                let selected = None;
                 let (mut new_client, data, session_id) = find_trezor_device(selected)?;
 
                 check_public_keys_against_key_chain(
@@ -1454,7 +1441,7 @@ impl std::fmt::Debug for TrezorSignerProvider {
 }
 
 impl TrezorSignerProvider {
-    pub fn new(selected: SelectedDevice) -> Result<Self, TrezorError> {
+    pub fn new(selected: Option<SelectedDevice>) -> Result<Self, TrezorError> {
         let (client, data, session_id) = find_trezor_device(selected)?;
 
         Ok(Self {
@@ -1468,17 +1455,16 @@ impl TrezorSignerProvider {
         chain_config: Arc<ChainConfig>,
         db_tx: &impl WalletStorageReadLocked,
     ) -> WalletResult<Self> {
-        let selected = SelectedDevice::NONE;
+        let selected = None;
         let (client, data, session_id) = match find_trezor_device(selected) {
             Ok(data) => (data.0, data.1, data.2),
             Err(TrezorError::NoUniqueDeviceFound(_)) => {
                 if let Some(HardwareWalletData::Trezor(data)) = db_tx.get_hardware_wallet_data()? {
                     let selected = SelectedDevice {
-                        device_id: Some(data.device_id),
-                        name: Some(data.label),
+                        device_id: data.device_id,
                     };
 
-                    find_trezor_device(selected).map_err(SignerError::TrezorError)?
+                    find_trezor_device(Some(selected)).map_err(SignerError::TrezorError)?
                 } else {
                     return Err(
                         SignerError::TrezorError(TrezorError::MissingHardwareWalletData).into(),
@@ -1611,45 +1597,58 @@ fn check_public_keys_against_db(
 }
 
 fn find_trezor_device(
-    selected: SelectedDevice,
+    selected: Option<SelectedDevice>,
 ) -> Result<(Trezor, TrezorData, Vec<u8>), TrezorError> {
-    let mut devices = find_devices(false)
+    let devices = find_devices(false);
+    ensure!(!devices.is_empty(), TrezorError::NoDeviceFound);
+
+    let mut devices = devices
         .into_iter()
         .filter(|device| device.model == Model::Trezor || device.model == Model::TrezorEmulator)
         .filter_map(|d| {
             d.connect().ok().and_then(|mut c| {
                 c.init_device(None).ok()?;
 
-                c.features()
-                    .map(|f| FoundDevice {
-                        name: f.label().to_owned(),
-                        device_id: f.device_id().to_owned(),
-                    })
-                    .filter(|d| selected == *d)
-                    .map(|found| (c, found))
+                c.features()?
+                    .capabilities
+                    .iter()
+                    .filter_map(|c| c.enum_value().ok())
+                    .contains(&Capability::Capability_Mintlayer)
+                    .then_some(c)
             })
         })
         .collect_vec();
 
-    let client = match devices.len() {
-        0 => return Err(TrezorError::NoDeviceFound),
-        1 => devices.remove(0).0,
-        _ => {
-            let devices = devices.into_iter().map(|(_, d)| d).collect();
-            return Err(TrezorError::NoUniqueDeviceFound(devices));
+    let client = if let Some(position) = devices.iter().position(|d| {
+        d.features()
+            .is_some_and(|f| selected.as_ref().is_none_or(|s| s.device_id == f.device_id()))
+    }) {
+        devices.remove(position)
+    } else {
+        match devices.len() {
+            0 => return Err(TrezorError::NoCompatibleDeviceFound),
+            1 => devices.remove(0),
+            _ => {
+                let devices = devices
+                    .into_iter()
+                    .filter_map(|c| {
+                        c.features().map(|f| FoundDevice {
+                            name: if !f.label().is_empty() {
+                                f.label()
+                            } else {
+                                f.model()
+                            }
+                            .to_owned(),
+                            device_id: f.device_id().to_owned(),
+                        })
+                    })
+                    .collect();
+                return Err(TrezorError::NoUniqueDeviceFound(devices));
+            }
         }
     };
 
     let features = client.features().ok_or(TrezorError::CannotGetDeviceFeatures)?;
-    ensure!(
-        features
-            .capabilities
-            .iter()
-            .filter_map(|c| c.enum_value().ok())
-            .contains(&Capability::Capability_Mintlayer),
-        TrezorError::MintlayerFeaturesNotSupported
-    );
-
     let data = TrezorData {
         label: features.label().to_owned(),
         device_id: features.device_id().to_owned(),
