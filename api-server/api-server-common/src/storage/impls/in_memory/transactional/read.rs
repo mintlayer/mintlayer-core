@@ -212,6 +212,13 @@ impl ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'_> {
         self.transaction.get_delegations_from_address(address)
     }
 
+    async fn get_fungible_tokens_by_authority(
+        &self,
+        authority: Destination,
+    ) -> Result<Vec<TokenId>, ApiServerStorageError> {
+        self.transaction.get_fungible_tokens_by_authority(authority)
+    }
+
     async fn get_fungible_token_issuance(
         &self,
         token_id: TokenId,

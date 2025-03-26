@@ -823,6 +823,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     token_id bytea NOT NULL,
                     block_height bigint NOT NULL,
                     ticker bytea NOT NULL,
+                    authority TEXT NOT NULL,
                     issuance bytea NOT NULL,
                     PRIMARY KEY (token_id, block_height)
                 );",
@@ -832,6 +833,12 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         // index when searching for token tickers
         self.just_execute(
             "CREATE INDEX fungible_token_ticker_index ON ml.fungible_token USING HASH (ticker);",
+        )
+        .await?;
+
+        // index for searching token_ids by authority
+        self.just_execute(
+            "CREATE INDEX fungible_token_authority_index ON ml.fungible_token (authority, token_id, block_height DESC);",
         )
         .await?;
 
@@ -2089,17 +2096,22 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         token_id: TokenId,
         block_height: BlockHeight,
         issuance: FungibleTokenData,
+        chain_config: &ChainConfig,
     ) -> Result<(), ApiServerStorageError> {
         let height = Self::block_height_to_postgres_friendly(block_height);
 
+        let authority = Address::new(chain_config, issuance.authority.clone())
+            .map_err(|_| ApiServerStorageError::AddressableError)?;
+
         self.tx
             .execute(
-                "INSERT INTO ml.fungible_token (token_id, block_height, issuance, ticker) VALUES ($1, $2, $3, $4);",
+                "INSERT INTO ml.fungible_token (token_id, block_height, issuance, ticker, authority) VALUES ($1, $2, $3, $4, $5);",
                 &[
                     &token_id.encode(),
                     &height,
                     &issuance.encode(),
                     &issuance.token_ticker,
+                    &authority.into_string(),
                 ],
             )
             .await
@@ -2122,12 +2134,15 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         token_id: TokenId,
         block_height: BlockHeight,
         issuance: FungibleTokenData,
+        chain_config: &ChainConfig,
     ) -> Result<(), ApiServerStorageError> {
         let height = Self::block_height_to_postgres_friendly(block_height);
+        let authority = Address::new(chain_config, issuance.authority.clone())
+            .map_err(|_| ApiServerStorageError::AddressableError)?;
 
         self.tx
             .execute(
-                "INSERT INTO ml.fungible_token (token_id, block_height, issuance, ticker) VALUES ($1, $2, $3, $4)
+                "INSERT INTO ml.fungible_token (token_id, block_height, issuance, ticker, authority) VALUES ($1, $2, $3, $4, $5)
                     ON CONFLICT (token_id, block_height) DO UPDATE
                     SET issuance = $3, ticker = $4;",
                 &[
@@ -2135,11 +2150,56 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     &height,
                     &issuance.encode(),
                     &issuance.token_ticker,
+                    &authority.into_string(),
                 ],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
         Ok(())
+    }
+
+    pub async fn get_fungible_tokens_by_authority(
+        &self,
+        authority: Destination,
+        chain_config: &ChainConfig,
+    ) -> Result<Vec<TokenId>, ApiServerStorageError> {
+        let authority = Address::new(chain_config, authority)
+            .map_err(|_| ApiServerStorageError::AddressableError)?;
+        let rows = self
+            .tx
+            .query(
+                r#"WITH candidate AS (
+                        SELECT token_id, MAX(block_height) AS block_height
+                        FROM ml.fungible_token
+                        WHERE authority = $1
+                        GROUP BY token_id
+                    )
+                    SELECT c.token_id
+                    FROM candidate c
+                    WHERE c.block_height = (
+                            SELECT MAX(block_height)
+                            FROM ml.fungible_token
+                            WHERE token_id = c.token_id);
+                "#,
+                &[&authority.into_string()],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        rows.into_iter()
+            .map(|row| {
+                let token_id: Vec<u8> = row.get(0);
+
+                let token_id = TokenId::decode_all(&mut token_id.as_slice()).map_err(|e| {
+                    ApiServerStorageError::DeserializationError(format!(
+                        "TokenId deserialization failed: {}",
+                        e
+                    ))
+                })?;
+
+                Ok(token_id)
+            })
+            .collect()
     }
 
     pub async fn get_fungible_token_issuance(

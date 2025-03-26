@@ -103,7 +103,11 @@ pub fn routes<
         .route("/address/:address", get(address))
         .route("/address/:address/all-utxos", get(all_address_utxos))
         .route("/address/:address/spendable-utxos", get(address_utxos))
-        .route("/address/:address/delegations", get(address_delegations));
+        .route("/address/:address/delegations", get(address_delegations))
+        .route(
+            "/address/:address/token-authority",
+            get(address_token_authority),
+        );
 
     let router = router
         .route("/pool", get(pools))
@@ -756,6 +760,42 @@ pub async fn address_delegations<T: ApiServerStorage>(
             "balance": amount_to_json(*delegation.balance(), state.chain_config.coin_decimals()),
         })
         ).collect::<Vec<_>>(),
+    ))
+}
+
+pub async fn address_token_authority<T: ApiServerStorage>(
+    Path(address): Path<String>,
+    State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
+) -> Result<impl IntoResponse, ApiServerWebServerError> {
+    let address =
+        Address::<Destination>::from_string(&state.chain_config, &address).map_err(|_| {
+            ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidAddress)
+        })?;
+
+    let tokens = state
+        .db
+        .transaction_ro()
+        .await
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?
+        .get_fungible_tokens_by_authority(address.into_object())
+        .await
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?;
+
+    Ok(Json(
+        tokens
+            .into_iter()
+            .map(|token_id| {
+                Address::new(&state.chain_config, token_id)
+                    .expect("no error in encoding")
+                    .into_string()
+            })
+            .collect::<Vec<_>>(),
     ))
 }
 

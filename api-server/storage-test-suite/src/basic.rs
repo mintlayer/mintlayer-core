@@ -1218,6 +1218,13 @@ where
 
         assert_eq!(returned_token, token_data);
 
+        let tokens = db_tx
+            .get_fungible_tokens_by_authority(random_destination.clone())
+            .await
+            .unwrap();
+        assert_eq!(tokens.len(), 1);
+        assert_eq!(tokens[0], random_token_id);
+
         let locked_token_data = token_data
             .clone()
             .mint_tokens(Amount::from_atoms(rng.gen_range(1..1000)))
@@ -1237,7 +1244,7 @@ where
 
         assert_eq!(returned_token, locked_token_data);
 
-        let address = Address::new(&chain_config, random_destination).unwrap();
+        let address = Address::new(&chain_config, random_destination.clone()).unwrap();
         let random_amount = Amount::from_atoms(rng.gen_range(0..100_000));
         db_tx
             .set_address_balance_at_height(
@@ -1256,12 +1263,47 @@ where
         assert_eq!(balance.1.amount, random_amount);
         assert_eq!(balance.1.decimals, random_num_decimals);
 
+        let (_, pk2) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+        let random_destination2 = Destination::PublicKeyHash(PublicKeyHash::from(&pk2));
+        let token_change_authority =
+            locked_token_data.clone().change_authority(random_destination2.clone());
+
+        db_tx
+            .set_fungible_token_data(
+                random_token_id,
+                block_height.next_height().next_height(),
+                token_change_authority.clone(),
+            )
+            .await
+            .unwrap();
+        let returned_token =
+            db_tx.get_fungible_token_issuance(random_token_id).await.unwrap().unwrap();
+
+        assert_eq!(returned_token, token_change_authority);
+
+        let tokens = db_tx
+            .get_fungible_tokens_by_authority(random_destination.clone())
+            .await
+            .unwrap();
+        assert!(tokens.is_empty());
+
+        let tokens = db_tx
+            .get_fungible_tokens_by_authority(random_destination2.clone())
+            .await
+            .unwrap();
+        assert_eq!(tokens.len(), 1);
+        assert_eq!(tokens[0], random_token_id);
+
         // after reorg go back to the previous token data
         db_tx.del_token_issuance_above_height(block_height).await.unwrap();
         let returned_token =
             db_tx.get_fungible_token_issuance(random_token_id).await.unwrap().unwrap();
 
         assert_eq!(returned_token, token_data);
+
+        let tokens = db_tx.get_fungible_tokens_by_authority(random_destination).await.unwrap();
+        assert_eq!(tokens.len(), 1);
+        assert_eq!(tokens[0], random_token_id);
 
         db_tx
             .del_token_issuance_above_height(block_height.prev_height().unwrap())

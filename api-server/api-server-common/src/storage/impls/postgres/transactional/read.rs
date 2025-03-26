@@ -301,6 +301,16 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRo<'_> {
         Ok(res)
     }
 
+    async fn get_fungible_tokens_by_authority(
+        &self,
+        authority: Destination,
+    ) -> Result<Vec<TokenId>, ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_fungible_tokens_by_authority(authority, &self.chain_config).await?;
+
+        Ok(res)
+    }
+
     async fn get_fungible_token_issuance(
         &self,
         token_id: TokenId,
