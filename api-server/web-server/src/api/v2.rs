@@ -178,20 +178,26 @@ pub async fn block<T: ApiServerStorage>(
     let BlockInfo { block, height } = get_block(&block_id, &state).await?;
 
     Ok(Json(json!({
-    "height": height,
-    "header": block_header_to_json(&block.block),
-    "body": {
-        "reward": block.block.block_reward()
-            .outputs()
-            .iter()
-            .map(|out| txoutput_to_json(out, &state.chain_config, &TokenDecimals::Single(None)))
-            .collect::<Vec<_>>(),
-        "transactions": block.block.transactions()
-                            .iter()
-                            .zip(block.tx_additional_infos.iter())
-                            .map(|(tx, additinal_info)| tx_to_json(tx.transaction(), additinal_info, &state.chain_config))
-                            .collect::<Vec<_>>(),
-    },
+        "height": height,
+        "header": block_header_to_json(&block.block),
+        "body": {
+            "reward": block
+                .block
+                .block_reward()
+                .outputs()
+                .iter()
+                .map(|out| txoutput_to_json(out, &state.chain_config, &TokenDecimals::Single(None)))
+                .collect::<Vec<_>>(),
+            "transactions": block
+                .block
+                .transactions()
+                .iter()
+                .zip(block.tx_additional_infos.iter())
+                .map(|(tx, additinal_info)| {
+                    tx_to_json(tx.transaction(), additinal_info, &state.chain_config)
+                })
+                .collect::<Vec<_>>(),
+        },
     })))
 }
 
@@ -251,10 +257,11 @@ pub async fn chain_genesis<T: ApiServerStorage>(
         "block_id": genesis.get_id(),
         "genesis_message": genesis.genesis_message(),
         "timestamp": genesis.timestamp(),
-        "utxos": genesis.utxos()
-                 .iter()
-                 .map(|out| txoutput_to_json(out, &state.chain_config, &TokenDecimals::Single(None)))
-                 .collect::<Vec<_>>(),
+        "utxos": genesis
+            .utxos()
+            .iter()
+            .map(|out| txoutput_to_json(out, &state.chain_config, &TokenDecimals::Single(None)))
+            .collect::<Vec<_>>(),
     })))
 }
 
@@ -295,8 +302,8 @@ pub async fn chain_tip<T: ApiServerStorage>(
     let best_block = best_block(&state).await?;
 
     Ok(Json(json!({
-      "block_height": best_block.block_height(),
-      "block_id": best_block.block_id().to_hash().encode_hex::<String>(),
+        "block_height": best_block.block_height(),
+        "block_id": best_block.block_id().to_hash().encode_hex::<String>(),
     })))
 }
 
@@ -570,10 +577,10 @@ pub async fn transaction_merkle_path<T: ApiServerStorage>(
         .collect::<Vec<_>>();
 
     Ok(Json(json!({
-    "block_id": block.block.get_id(),
-    "transaction_index": transaction_index,
-    "merkle_root": block.block.merkle_root().encode_hex::<String>(),
-    "merkle_path": merkle_tree,
+        "block_id": block.block.get_id(),
+        "transaction_index": transaction_index,
+        "merkle_root": block.block.merkle_root().encode_hex::<String>(),
+        "merkle_path": merkle_tree,
     })))
 }
 
@@ -677,8 +684,13 @@ pub async fn address_utxos<T: ApiServerStorage>(
             .into_iter()
             .map(|utxo| {
                 json!({
-                "outpoint": utxo_outpoint_to_json(&utxo.0),
-                "utxo": txoutput_to_json(&utxo.1.output, &state.chain_config, &TokenDecimals::Single(utxo.1.token_decimals))})
+                    "outpoint": utxo_outpoint_to_json(&utxo.0),
+                    "utxo": txoutput_to_json(
+                        &utxo.1.output,
+                        &state.chain_config,
+                        &TokenDecimals::Single(utxo.1.token_decimals),
+                    ),
+                })
             })
             .collect::<Vec<_>>(),
     ))
@@ -713,8 +725,13 @@ pub async fn all_address_utxos<T: ApiServerStorage>(
             .into_iter()
             .map(|utxo| {
                 json!({
-                "outpoint": utxo_outpoint_to_json(&utxo.0),
-                "utxo": txoutput_to_json(&utxo.1.output, &state.chain_config, &TokenDecimals::Single(utxo.1.token_decimals))})
+                    "outpoint": utxo_outpoint_to_json(&utxo.0),
+                    "utxo": txoutput_to_json(
+                        &utxo.1.output,
+                        &state.chain_config,
+                        &TokenDecimals::Single(utxo.1.token_decimals),
+                    ),
+                })
             })
             .collect::<Vec<_>>(),
     ))
@@ -747,18 +764,21 @@ pub async fn address_delegations<T: ApiServerStorage>(
     Ok(Json(
         delegations.into_iter().map(|(delegation_id, delegation)|
             json!({
-            "delegation_id": Address::new(&state.chain_config, delegation_id).expect(
-                "no error in encoding"
-            ).as_str(),
-            "pool_id": Address::new(&state.chain_config, *delegation.pool_id()).expect(
-                "no error in encoding"
-            ).as_str(),
-            "next_nonce": delegation.next_nonce(),
-            "spend_destination": Address::new(&state.chain_config, delegation.spend_destination().clone()).expect(
-                "no error in encoding"
-            ).as_str(),
-            "balance": amount_to_json(*delegation.balance(), state.chain_config.coin_decimals()),
-        })
+                "delegation_id": Address::new(&state.chain_config, delegation_id)
+                    .expect("no error in encoding")
+                    .as_str(),
+                "pool_id": Address::new(&state.chain_config, *delegation.pool_id())
+                    .expect("no error in encoding")
+                    .as_str(),
+                "next_nonce": delegation.next_nonce(),
+                "spend_destination": Address::new(
+                    &state.chain_config,
+                    delegation.spend_destination().clone(),
+                )
+                .expect("no error in encoding")
+                .as_str(),
+                "balance": amount_to_json(*delegation.balance(), state.chain_config.coin_decimals()),
+            })
         ).collect::<Vec<_>>(),
     ))
 }
@@ -982,16 +1002,19 @@ pub async fn pool_delegations<T: ApiServerStorage>(
     Ok(Json(
         delegations.into_iter().map(|(delegation_id, delegation)|
             json!({
-            "delegation_id": Address::new(&state.chain_config, delegation_id).expect(
-                "no error in encoding"
-            ).as_str(),
-            "next_nonce": delegation.next_nonce(),
-            "spend_destination": Address::new(&state.chain_config, delegation.spend_destination().clone()).expect(
-                "no error in encoding"
-            ).as_str(),
-            "balance": amount_to_json(*delegation.balance(), state.chain_config.coin_decimals()),
-            "creation_block_height": delegation.creation_block_height(),
-        })
+                "delegation_id": Address::new(&state.chain_config, delegation_id)
+                    .expect("no error in encoding")
+                    .as_str(),
+                "next_nonce": delegation.next_nonce(),
+                "spend_destination": Address::new(
+                    &state.chain_config,
+                    delegation.spend_destination().clone(),
+                )
+                .expect("no error in encoding")
+                .as_str(),
+                "balance": amount_to_json(*delegation.balance(), state.chain_config.coin_decimals()),
+                "creation_block_height": delegation.creation_block_height(),
+            })
         ).collect::<Vec<_>>(),
     ))
 }
@@ -1025,15 +1048,18 @@ pub async fn delegation<T: ApiServerStorage>(
         ))?;
 
     Ok(Json(json!({
-        "spend_destination": Address::new(&state.chain_config, delegation.spend_destination().clone()).expect(
-            "no error in encoding"
-        ).as_str(),
+        "spend_destination": Address::new(
+            &state.chain_config,
+            delegation.spend_destination().clone(),
+        )
+        .expect("no error in encoding")
+        .as_str(),
         "balance": amount_to_json(*delegation.balance(), state.chain_config.coin_decimals()),
         "creation_block_height": delegation.creation_block_height(),
         "next_nonce": delegation.next_nonce(),
-        "pool_id": Address::new(&state.chain_config, *delegation.pool_id()).expect(
-            "no error in encoding"
-        ).as_str(),
+        "pool_id": Address::new(&state.chain_config, *delegation.pool_id())
+            .expect("no error in encoding")
+            .as_str(),
     })))
 }
 
@@ -1083,9 +1109,9 @@ pub async fn token<T: ApiServerStorage>(
     };
 
     Ok(Json(json!({
-        "authority": Address::new(&state.chain_config, token.authority).expect(
-            "no error in encoding"
-        ).as_str(),
+        "authority": Address::new(&state.chain_config, token.authority)
+            .expect("no error in encoding")
+            .as_str(),
         "is_locked": token.is_locked,
         "circulating_supply": amount_to_json(token.circulating_supply, token.number_of_decimals),
         "token_ticker": to_json_string(&token.token_ticker),
@@ -1147,10 +1173,24 @@ pub async fn coin_statistics<T: ApiServerStorage>(
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?;
     Ok(Json(json!({
-        "circulating_supply": amount_to_json(statistics.remove(&CoinOrTokenStatistic::CirculatingSupply).unwrap_or(Amount::ZERO), state.chain_config.coin_decimals()),
-        "preminted": amount_to_json(statistics.remove(&CoinOrTokenStatistic::Preminted).unwrap_or(Amount::ZERO), state.chain_config.coin_decimals()),
-        "burned": amount_to_json(statistics.remove(&CoinOrTokenStatistic::Burned).unwrap_or(Amount::ZERO), state.chain_config.coin_decimals()),
-        "staked": amount_to_json(statistics.remove(&CoinOrTokenStatistic::Staked).unwrap_or(Amount::ZERO), state.chain_config.coin_decimals()),
+        "circulating_supply": amount_to_json(
+            statistics
+                .remove(&CoinOrTokenStatistic::CirculatingSupply)
+                .unwrap_or(Amount::ZERO),
+            state.chain_config.coin_decimals(),
+        ),
+        "preminted": amount_to_json(
+            statistics.remove(&CoinOrTokenStatistic::Preminted).unwrap_or(Amount::ZERO),
+            state.chain_config.coin_decimals(),
+        ),
+        "burned": amount_to_json(
+            statistics.remove(&CoinOrTokenStatistic::Burned).unwrap_or(Amount::ZERO),
+            state.chain_config.coin_decimals(),
+        ),
+        "staked": amount_to_json(
+            statistics.remove(&CoinOrTokenStatistic::Staked).unwrap_or(Amount::ZERO),
+            state.chain_config.coin_decimals(),
+        ),
     })))
 }
 
@@ -1187,10 +1227,24 @@ pub async fn token_statistics<T: ApiServerStorage>(
         })?;
 
     Ok(Json(json!({
-        "circulating_supply": amount_to_json(statistics.remove(&CoinOrTokenStatistic::CirculatingSupply).unwrap_or(Amount::ZERO), token_decimals),
-        "preminted": amount_to_json(statistics.remove(&CoinOrTokenStatistic::Preminted).unwrap_or(Amount::ZERO), token_decimals),
-        "burned": amount_to_json(statistics.remove(&CoinOrTokenStatistic::Burned).unwrap_or(Amount::ZERO), token_decimals),
-        "staked": amount_to_json(statistics.remove(&CoinOrTokenStatistic::Staked).unwrap_or(Amount::ZERO), token_decimals),
+        "circulating_supply": amount_to_json(
+            statistics
+                .remove(&CoinOrTokenStatistic::CirculatingSupply)
+                .unwrap_or(Amount::ZERO),
+            token_decimals,
+        ),
+        "preminted": amount_to_json(
+            statistics.remove(&CoinOrTokenStatistic::Preminted).unwrap_or(Amount::ZERO),
+            token_decimals,
+        ),
+        "burned": amount_to_json(
+            statistics.remove(&CoinOrTokenStatistic::Burned).unwrap_or(Amount::ZERO),
+            token_decimals,
+        ),
+        "staked": amount_to_json(
+            statistics.remove(&CoinOrTokenStatistic::Staked).unwrap_or(Amount::ZERO),
+            token_decimals,
+        ),
     })))
 }
 
