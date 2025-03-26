@@ -655,6 +655,7 @@ pub struct FoundDevice {
     pub device_id: String,
 }
 
+#[cfg(feature = "trezor")]
 impl std::fmt::Display for FoundDevice {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}-{}", self.name, self.device_id)
@@ -848,7 +849,6 @@ impl HardwareWalletType {
         store_seed_phrase: bool,
         mnemonic: Option<String>,
         passphrase: Option<String>,
-        device_name: Option<String>,
         device_id: Option<String>,
     ) -> Result<WalletTypeArgs, RpcError<N>> {
         let store_seed_phrase = if store_seed_phrase {
@@ -872,10 +872,7 @@ impl HardwareWalletType {
                 );
                 match hw_type {
                     #[cfg(feature = "trezor")]
-                    HardwareWalletType::Trezor => Ok(WalletTypeArgs::Trezor {
-                        device_name,
-                        device_id,
-                    }),
+                    HardwareWalletType::Trezor => Ok(WalletTypeArgs::Trezor { device_id }),
                 }
             }
         }

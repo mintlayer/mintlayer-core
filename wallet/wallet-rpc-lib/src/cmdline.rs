@@ -90,16 +90,9 @@ pub enum CliHardwareWalletType {
 }
 
 impl CliHardwareWalletType {
-    pub fn into_wallet_args(
-        &self,
-        device_name: Option<String>,
-        device_id: Option<String>,
-    ) -> WalletTypeArgs {
+    pub fn into_wallet_args(&self, device_id: Option<String>) -> WalletTypeArgs {
         match self {
-            Self::Trezor => WalletTypeArgs::Trezor {
-                device_name,
-                device_id,
-            },
+            Self::Trezor => WalletTypeArgs::Trezor { device_id },
         }
     }
 }

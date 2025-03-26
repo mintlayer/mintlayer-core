@@ -94,16 +94,14 @@ where
         mnemonic: Option<String>,
         passphrase: Option<String>,
         hardware_wallet: Option<HardwareWalletType>,
-        device_name: Option<String>,
-        device_id: Option<String>,
+        trezor_device_id: Option<String>,
     ) -> rpc::RpcResult<CreatedWallet> {
         let args = HardwareWalletType::into_wallet_args::<N>(
             hardware_wallet,
             store_seed_phrase,
             mnemonic,
             passphrase,
-            device_name,
-            device_id,
+            trezor_device_id,
         )?;
 
         let options = WalletCreationOptions {
@@ -124,16 +122,14 @@ where
         mnemonic: Option<String>,
         passphrase: Option<String>,
         hardware_wallet: Option<HardwareWalletType>,
-        device_name: Option<String>,
-        device_id: Option<String>,
+        trezor_device_id: Option<String>,
     ) -> rpc::RpcResult<CreatedWallet> {
         let args = HardwareWalletType::into_wallet_args::<N>(
             hardware_wallet,
             store_seed_phrase,
             mnemonic,
             passphrase,
-            device_name,
-            device_id,
+            trezor_device_id,
         )?;
 
         let options = WalletCreationOptions {
