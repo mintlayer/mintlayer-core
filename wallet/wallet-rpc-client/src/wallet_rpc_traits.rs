@@ -83,7 +83,6 @@ pub trait WalletInterface {
         mnemonic: Option<String>,
         passphrase: Option<String>,
         hardware_wallet: Option<HardwareWalletType>,
-        device_name: Option<String>,
         device_id: Option<String>,
     ) -> Result<CreatedWallet, Self::Error>;
 

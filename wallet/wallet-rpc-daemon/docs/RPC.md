@@ -2727,10 +2727,7 @@ Parameters:
     "hardware_wallet": EITHER OF
          1) "Trezor"
          2) null,
-    "device_name": EITHER OF
-         1) string
-         2) null,
-    "device_id": EITHER OF
+    "trezor_device_id": EITHER OF
          1) string
          2) null,
 }
@@ -2776,10 +2773,7 @@ Parameters:
     "hardware_wallet": EITHER OF
          1) "Trezor"
          2) null,
-    "device_name": EITHER OF
-         1) string
-         2) null,
-    "device_id": EITHER OF
+    "trezor_device_id": EITHER OF
          1) string
          2) null,
 }
