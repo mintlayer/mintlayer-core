@@ -833,6 +833,12 @@ where
             )?;
         }
 
+        if let Some(data) = signer_provider.get_hardware_wallet_data() {
+            let mut db_tx = db.transaction_rw(None)?;
+            db_tx.set_hardware_wallet_data(data)?;
+            db_tx.commit()?;
+        }
+
         // Please continue to use read-only transaction here.
         // Some unit tests expect that loading the wallet does not change the DB.
         let db_tx = db.transaction_ro()?;

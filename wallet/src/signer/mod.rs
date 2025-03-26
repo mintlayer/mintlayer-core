@@ -155,5 +155,5 @@ pub trait SignerProvider {
         id: &AccountId,
     ) -> WalletResult<Account<Self::K>>;
 
-    fn get_hardware_wallet_data(&mut self) -> Option<HardwareWalletData>;
+    fn get_hardware_wallet_data(&self) -> Option<HardwareWalletData>;
 }

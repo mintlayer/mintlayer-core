@@ -732,10 +732,7 @@ impl MainWindow {
                         }
                     }
                     #[cfg(feature = "trezor")]
-                    WalletArgs::Trezor => WalletTypeArgs::Trezor {
-                        device_name: None,
-                        device_id: None,
-                    },
+                    WalletArgs::Trezor => WalletTypeArgs::Trezor { device_id: None },
                 };
 
                 self.file_dialog_active = true;

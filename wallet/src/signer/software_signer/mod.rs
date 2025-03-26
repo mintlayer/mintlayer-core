@@ -480,7 +480,7 @@ impl SignerProvider for SoftwareSignerProvider {
         Account::load_from_database(chain_config, db_tx, id)
     }
 
-    fn get_hardware_wallet_data(&mut self) -> Option<HardwareWalletData> {
+    fn get_hardware_wallet_data(&self) -> Option<HardwareWalletData> {
         None
     }
 }
