@@ -60,7 +60,7 @@ impl TxDependency {
     fn from_account(acct: &AccountSpending, nonce: AccountNonce) -> Self {
         match acct {
             AccountSpending::DelegationBalance(_, _) => {
-                Self::DelegationAccount(TxAccountDependency::new(acct.clone().into(), nonce))
+                Self::DelegationAccount(TxAccountDependency::new(acct.into(), nonce))
             }
         }
     }
@@ -74,10 +74,10 @@ impl TxDependency {
             | AccountCommand::UnfreezeToken(_)
             | AccountCommand::ChangeTokenMetadataUri(_, _)
             | AccountCommand::ChangeTokenAuthority(_, _) => {
-                Self::TokenSupplyAccount(TxAccountDependency::new(acct.clone().into(), nonce))
+                Self::TokenSupplyAccount(TxAccountDependency::new(acct.into(), nonce))
             }
             AccountCommand::ConcludeOrder(_) | AccountCommand::FillOrder(_, _, _) => {
-                Self::OrderAccount(TxAccountDependency::new(acct.clone().into(), nonce))
+                Self::OrderAccount(TxAccountDependency::new(acct.into(), nonce))
             }
         }
     }
