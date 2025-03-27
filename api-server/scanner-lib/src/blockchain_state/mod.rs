@@ -18,7 +18,7 @@ use api_server_common::storage::storage_api::{
     block_aux_data::{BlockAuxData, BlockWithExtraData},
     ApiServerStorage, ApiServerStorageError, ApiServerStorageRead, ApiServerStorageWrite,
     ApiServerTransactionRw, CoinOrTokenStatistic, Delegation, FungibleTokenData, LockedUtxo, Order,
-    TransactionInfo, TxAdditionalInfo, Utxo, UtxoLock,
+    PoolDataWithExtraInfo, TransactionInfo, TxAdditionalInfo, Utxo, UtxoLock,
 };
 use chainstate::{
     calculate_median_time_past_from_blocktimestamps,
@@ -316,65 +316,31 @@ async fn disconnect_tables_above_height<T: ApiServerStorageWrite>(
     block_height: BlockHeight,
 ) -> Result<(), ApiServerStorageError> {
     logging::log::info!("Disconnecting blocks above: {:?}", block_height);
-    db_tx
-        .del_address_balance_above_height(block_height)
-        .await
-        .expect("Unable to disconnect address balance");
+    db_tx.del_address_balance_above_height(block_height).await?;
 
-    db_tx
-        .del_address_locked_balance_above_height(block_height)
-        .await
-        .expect("Unable to disconnect address balance");
+    db_tx.del_address_locked_balance_above_height(block_height).await?;
 
-    db_tx
-        .del_address_transactions_above_height(block_height)
-        .await
-        .expect("Unable to disconnect address transactions");
+    db_tx.del_address_transactions_above_height(block_height).await?;
 
-    db_tx
-        .del_utxo_above_height(block_height)
-        .await
-        .expect("Unable to disconnect UTXOs");
+    db_tx.del_utxo_above_height(block_height).await?;
 
-    db_tx
-        .del_locked_utxo_above_height(block_height)
-        .await
-        .expect("Unable to disconnect locked UTXOs");
+    db_tx.del_locked_utxo_above_height(block_height).await?;
 
-    db_tx
-        .del_delegations_above_height(block_height)
-        .await
-        .expect("Unable to disconnect address transactions");
+    db_tx.del_delegations_above_height(block_height).await?;
 
-    db_tx
-        .del_pools_above_height(block_height)
-        .await
-        .expect("Unable to disconnect pool data");
+    db_tx.del_pools_above_height(block_height).await?;
 
-    db_tx
-        .del_token_issuance_above_height(block_height)
-        .await
-        .expect("Unable to disconnect token issuances");
+    db_tx.del_token_issuance_above_height(block_height).await?;
 
-    db_tx
-        .del_nft_issuance_above_height(block_height)
-        .await
-        .expect("Unable to disconnect nft issuances");
+    db_tx.del_nft_issuance_above_height(block_height).await?;
 
-    db_tx
-        .del_main_chain_blocks_above_height(block_height)
-        .await
-        .expect("Unable to disconnect block");
+    db_tx.del_coin_or_token_decimals_above_height(block_height).await?;
 
-    db_tx
-        .del_statistics_above_height(block_height)
-        .await
-        .expect("Unable to disconnect block");
+    db_tx.del_main_chain_blocks_above_height(block_height).await?;
 
-    db_tx
-        .del_orders_above_height(block_height)
-        .await
-        .expect("Unable to disconnect block");
+    db_tx.del_statistics_above_height(block_height).await?;
+
+    db_tx.del_orders_above_height(block_height).await?;
 
     Ok(())
 }
@@ -440,7 +406,7 @@ async fn update_tables_from_block_reward<T: ApiServerStorageWrite>(
                 .await;
             }
             TxOutput::CreateStakePool(pool_id, pool_data) => {
-                let pool_data: PoolData = pool_data.as_ref().clone().into();
+                let pool_data = PoolDataWithExtraInfo::new(pool_data.as_ref().clone().into());
 
                 db_tx
                     .set_pool_data_at_height(*pool_id, &pool_data, block_height)
@@ -813,7 +779,7 @@ async fn prefetch_pool_data<T: ApiServerStorageRead>(
             Some(
                 TxOutput::CreateStakePool(pool_id, _) | TxOutput::ProduceBlockFromStake(_, pool_id),
             ) => {
-                let data = db_tx.get_pool_data(*pool_id).await?.expect("should exist");
+                let data = db_tx.get_pool_data(*pool_id).await?.expect("should exist").pool_data;
                 pools.insert(*pool_id, data);
             }
             Some(
@@ -939,7 +905,8 @@ async fn update_tables_from_consensus_data<T: ApiServerStorageWrite>(
                 .expect("Pool should exist");
 
             let delegation_shares = db_tx.get_pool_delegations(pool_id).await?;
-            let mut adapter = pos_adapter::PoSAdapter::new(pool_id, pool_data, &delegation_shares);
+            let mut adapter =
+                pos_adapter::PoSAdapter::new(pool_id, pool_data.pool_data, &delegation_shares);
 
             let reward_distribution_version = chain_config
                 .as_ref()
@@ -980,9 +947,21 @@ async fn update_tables_from_consensus_data<T: ApiServerStorageWrite>(
                     .set_delegation_at_height(*delegation_id, &updated_delegation, block_height)
                     .await?;
             }
+            let delegation_rewards = adapter
+                .rewards_per_delegation()
+                .iter()
+                .map(|x| x.1)
+                .sum::<Option<Amount>>()
+                .expect("no overflow");
 
-            let pool_data = adapter.get_pool_data(pool_id).expect("no error").expect("must exist");
-            db_tx.set_pool_data_at_height(pool_id, &pool_data, block_height).await?;
+            let new_pool_data =
+                adapter.get_pool_data(pool_id).expect("no error").expect("must exist");
+            let new_pool_data = PoolDataWithExtraInfo {
+                pool_data: new_pool_data,
+                delegations_balance: (pool_data.delegations_balance + delegation_rewards)
+                    .expect("no overflow"),
+            };
+            db_tx.set_pool_data_at_height(pool_id, &new_pool_data, block_height).await?;
         }
     }
 
@@ -1039,7 +1018,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                         db_tx.get_fungible_token_issuance(*token_id).await?.expect("must exist");
 
                     let issuance = issuance.mint_tokens(*amount);
-                    db_tx.set_fungible_token_issuance(*token_id, block_height, issuance).await?;
+                    db_tx.set_fungible_token_data(*token_id, block_height, issuance).await?;
                     increase_statistic_amount(
                         db_tx,
                         CoinOrTokenStatistic::CirculatingSupply,
@@ -1074,7 +1053,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                         db_tx.get_fungible_token_issuance(*token_id).await?.expect("must exist");
 
                     let issuance = issuance.unmint_tokens(total_burned);
-                    db_tx.set_fungible_token_issuance(*token_id, block_height, issuance).await?;
+                    db_tx.set_fungible_token_data(*token_id, block_height, issuance).await?;
                     let amount = chain_config.token_supply_change_fee(block_height);
                     increase_statistic_amount(
                         db_tx,
@@ -1098,7 +1077,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                         db_tx.get_fungible_token_issuance(*token_id).await?.expect("must exist");
 
                     let issuance = issuance.freeze(*is_unfreezable);
-                    db_tx.set_fungible_token_issuance(*token_id, block_height, issuance).await?;
+                    db_tx.set_fungible_token_data(*token_id, block_height, issuance).await?;
                     let amount = chain_config.token_freeze_fee(block_height);
                     increase_statistic_amount(
                         db_tx,
@@ -1122,7 +1101,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                         db_tx.get_fungible_token_issuance(*token_id).await?.expect("must exist");
 
                     let issuance = issuance.unfreeze();
-                    db_tx.set_fungible_token_issuance(*token_id, block_height, issuance).await?;
+                    db_tx.set_fungible_token_data(*token_id, block_height, issuance).await?;
                     let amount = chain_config.token_freeze_fee(block_height);
                     increase_statistic_amount(
                         db_tx,
@@ -1146,7 +1125,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                         db_tx.get_fungible_token_issuance(*token_id).await?.expect("must exist");
 
                     let issuance = issuance.lock();
-                    db_tx.set_fungible_token_issuance(*token_id, block_height, issuance).await?;
+                    db_tx.set_fungible_token_data(*token_id, block_height, issuance).await?;
                     let amount = chain_config.token_supply_change_fee(block_height);
                     increase_statistic_amount(
                         db_tx,
@@ -1170,7 +1149,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                         db_tx.get_fungible_token_issuance(*token_id).await?.expect("must exist");
 
                     let issuance = issuance.change_authority(destination.clone());
-                    db_tx.set_fungible_token_issuance(*token_id, block_height, issuance).await?;
+                    db_tx.set_fungible_token_data(*token_id, block_height, issuance).await?;
                     let amount = chain_config.token_change_authority_fee(block_height);
                     increase_statistic_amount(
                         db_tx,
@@ -1194,7 +1173,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                         db_tx.get_fungible_token_issuance(*token_id).await?.expect("must exist");
 
                     let issuance = issuance.change_metadata_uri(metadata_uri.clone());
-                    db_tx.set_fungible_token_issuance(*token_id, block_height, issuance).await?;
+                    db_tx.set_fungible_token_data(*token_id, block_height, issuance).await?;
                     let amount = chain_config.token_change_metadata_uri_fee();
                     increase_statistic_amount(
                         db_tx,
@@ -1244,6 +1223,19 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                             .set_delegation_at_height(*delegation_id, &new_delegation, block_height)
                             .await
                             .expect("Unable to update delegation");
+
+                        let pool_id = *new_delegation.pool_id();
+                        let pool_data = db_tx
+                            .get_pool_data(pool_id)
+                            .await
+                            .expect("unable to get pool data")
+                            .expect("must exist");
+                        let new_pool_data = pool_data.decrease_delegation_balance(*amount);
+
+                        db_tx
+                            .set_pool_data_at_height(pool_id, &new_pool_data, block_height)
+                            .await
+                            .expect("unable to update pool data");
                         decrease_statistic_amount(
                             db_tx,
                             CoinOrTokenStatistic::Staked,
@@ -1541,6 +1533,10 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                     .expect("Unable to encode destination");
                 address_transactions.entry(address.clone()).or_default().insert(transaction_id);
 
+                db_tx
+                    .set_nft_token_issuance(*token_id, block_height, *issuance.clone(), destination)
+                    .await?;
+
                 increase_address_amount(
                     db_tx,
                     &address,
@@ -1575,9 +1571,6 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                 )
                 .await;
 
-                db_tx
-                    .set_nft_token_issuance(*token_id, block_height, *issuance.clone(), destination)
-                    .await?;
                 set_utxo(
                     outpoint,
                     output,
@@ -1611,7 +1604,8 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
             }
             TxOutput::CreateStakePool(pool_id, stake_pool_data) => {
                 // Create pool pledge
-                let new_pool_data: PoolData = stake_pool_data.as_ref().clone().into();
+                let new_pool_data =
+                    PoolDataWithExtraInfo::new(stake_pool_data.as_ref().clone().into());
 
                 db_tx
                     .set_pool_data_at_height(*pool_id, &new_pool_data, block_height)
@@ -1670,6 +1664,19 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                     block_height,
                 )
                 .await;
+
+                let pool_id = *new_delegation.pool_id();
+                let pool_data = db_tx
+                    .get_pool_data(pool_id)
+                    .await
+                    .expect("unable to get pool data")
+                    .expect("must exist");
+                let new_pool_data = pool_data.increase_delegation_balance(*amount);
+
+                db_tx
+                    .set_pool_data_at_height(pool_id, &new_pool_data, block_height)
+                    .await
+                    .expect("unable to update pool data");
 
                 let address = Address::<Destination>::new(
                     &chain_config,

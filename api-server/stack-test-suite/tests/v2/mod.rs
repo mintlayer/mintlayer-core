@@ -17,6 +17,7 @@ mod address;
 mod address_all_utxos;
 mod address_delegations;
 mod address_spendable_utxos;
+mod address_token_authority;
 mod block;
 mod block_header;
 mod block_reward;

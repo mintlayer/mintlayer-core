@@ -22,12 +22,11 @@ use common::{
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
 };
-use pos_accounting::PoolData;
 
 use crate::storage::storage_api::{
-    block_aux_data::BlockAuxData, ApiServerStorageError, ApiServerStorageRead, BlockInfo,
-    CoinOrTokenStatistic, Delegation, FungibleTokenData, NftWithOwner, Order, PoolBlockStats,
-    TransactionInfo, Utxo, UtxoWithExtraInfo,
+    block_aux_data::BlockAuxData, AmountWithDecimals, ApiServerStorageError, ApiServerStorageRead,
+    BlockInfo, CoinOrTokenStatistic, Delegation, FungibleTokenData, NftWithOwner, Order,
+    PoolBlockStats, PoolDataWithExtraInfo, TransactionInfo, Utxo, UtxoWithExtraInfo,
 };
 
 use super::ApiServerInMemoryStorageTransactionalRo;
@@ -44,6 +43,13 @@ impl ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'_> {
         coin_or_token_id: CoinOrTokenId,
     ) -> Result<Option<Amount>, ApiServerStorageError> {
         self.transaction.get_address_balance(address, coin_or_token_id)
+    }
+
+    async fn get_address_balances(
+        &self,
+        address: &str,
+    ) -> Result<BTreeMap<CoinOrTokenId, AmountWithDecimals>, ApiServerStorageError> {
+        self.transaction.get_address_balances(address)
     }
 
     async fn get_address_locked_balance(
@@ -116,7 +122,7 @@ impl ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'_> {
         &self,
         len: u32,
         offset: u32,
-    ) -> Result<Vec<(PoolId, PoolData)>, ApiServerStorageError> {
+    ) -> Result<Vec<(PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError> {
         self.transaction.get_latest_pool_ids(len, offset)
     }
 
@@ -124,7 +130,7 @@ impl ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'_> {
         &self,
         len: u32,
         offset: u32,
-    ) -> Result<Vec<(PoolId, PoolData)>, ApiServerStorageError> {
+    ) -> Result<Vec<(PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError> {
         self.transaction.get_pool_data_with_largest_staker_balance(len, offset)
     }
 
@@ -166,7 +172,7 @@ impl ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'_> {
     async fn get_pool_data(
         &self,
         pool_id: PoolId,
-    ) -> Result<Option<PoolData>, ApiServerStorageError> {
+    ) -> Result<Option<PoolDataWithExtraInfo>, ApiServerStorageError> {
         self.transaction.get_pool_data(pool_id)
     }
 
@@ -204,6 +210,13 @@ impl ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'_> {
         address: &Destination,
     ) -> Result<Vec<(DelegationId, Delegation)>, ApiServerStorageError> {
         self.transaction.get_delegations_from_address(address)
+    }
+
+    async fn get_fungible_tokens_by_authority(
+        &self,
+        authority: Destination,
+    ) -> Result<Vec<TokenId>, ApiServerStorageError> {
+        self.transaction.get_fungible_tokens_by_authority(authority)
     }
 
     async fn get_fungible_token_issuance(

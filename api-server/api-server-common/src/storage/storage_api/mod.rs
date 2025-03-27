@@ -31,9 +31,10 @@ use common::{
         AccountNonce, Block, ChainConfig, DelegationId, Destination, OrderId, PoolId,
         SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
     },
-    primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
+    primitives::{per_thousand::PerThousand, Amount, BlockHeight, CoinOrTokenId, Id},
 };
-use pos_accounting::PoolData;
+use crypto::vrf::VRFPublicKey;
+use pos_accounting::{Error as PosError, PoolData};
 use serialization::{Decode, Encode};
 
 use self::block_aux_data::{BlockAuxData, BlockWithExtraData};
@@ -173,6 +174,70 @@ impl Delegation {
             balance: (self.balance - amount).expect("not underflow"),
             next_nonce: nonce.increment().expect("no overflow"),
             creation_block_height: self.creation_block_height,
+        }
+    }
+}
+
+#[derive(Debug, Eq, PartialEq, Clone, Encode, Decode)]
+pub struct PoolDataWithExtraInfo {
+    pub pool_data: PoolData,
+    pub delegations_balance: Amount,
+}
+
+impl PoolDataWithExtraInfo {
+    pub fn new(pool_data: PoolData) -> Self {
+        Self {
+            pool_data,
+            delegations_balance: Amount::ZERO,
+        }
+    }
+
+    pub fn increase_delegation_balance(self, stake: Amount) -> Self {
+        Self {
+            pool_data: self.pool_data,
+            delegations_balance: (self.delegations_balance + stake).expect("no overflow"),
+        }
+    }
+
+    pub fn decrease_delegation_balance(self, stake: Amount) -> Self {
+        Self {
+            pool_data: self.pool_data,
+            delegations_balance: (self.delegations_balance - stake).expect("no overflow"),
+        }
+    }
+
+    pub fn staker_balance(&self) -> Result<Amount, PosError> {
+        self.pool_data.staker_balance()
+    }
+
+    pub fn is_decommissioned(&self) -> bool {
+        self.pool_data.is_decommissioned()
+    }
+
+    pub fn decommission_destination(&self) -> &Destination {
+        self.pool_data.decommission_destination()
+    }
+
+    pub fn pledge_amount(&self) -> Amount {
+        self.pool_data.pledge_amount()
+    }
+
+    pub fn vrf_public_key(&self) -> &VRFPublicKey {
+        self.pool_data.vrf_public_key()
+    }
+
+    pub fn cost_per_block(&self) -> Amount {
+        self.pool_data.cost_per_block()
+    }
+
+    pub fn margin_ratio_per_thousand(&self) -> PerThousand {
+        self.pool_data.margin_ratio_per_thousand()
+    }
+
+    pub fn decommission_pool(self) -> Self {
+        Self {
+            pool_data: self.pool_data.decommission_pool(),
+            delegations_balance: self.delegations_balance,
         }
     }
 }
@@ -445,6 +510,12 @@ pub struct BlockInfo {
     pub height: Option<BlockHeight>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AmountWithDecimals {
+    pub amount: Amount,
+    pub decimals: u8,
+}
+
 #[async_trait::async_trait]
 pub trait ApiServerStorageRead: Sync {
     async fn is_initialized(&self) -> Result<bool, ApiServerStorageError>;
@@ -456,6 +527,11 @@ pub trait ApiServerStorageRead: Sync {
         address: &str,
         coin_or_token_id: CoinOrTokenId,
     ) -> Result<Option<Amount>, ApiServerStorageError>;
+
+    async fn get_address_balances(
+        &self,
+        address: &str,
+    ) -> Result<BTreeMap<CoinOrTokenId, AmountWithDecimals>, ApiServerStorageError>;
 
     async fn get_address_locked_balance(
         &self,
@@ -507,7 +583,7 @@ pub trait ApiServerStorageRead: Sync {
     async fn get_pool_data(
         &self,
         pool_id: PoolId,
-    ) -> Result<Option<PoolData>, ApiServerStorageError>;
+    ) -> Result<Option<PoolDataWithExtraInfo>, ApiServerStorageError>;
 
     async fn get_pool_block_stats(
         &self,
@@ -519,13 +595,13 @@ pub trait ApiServerStorageRead: Sync {
         &self,
         len: u32,
         offset: u32,
-    ) -> Result<Vec<(PoolId, PoolData)>, ApiServerStorageError>;
+    ) -> Result<Vec<(PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError>;
 
     async fn get_pool_data_with_largest_staker_balance(
         &self,
         len: u32,
         offset: u32,
-    ) -> Result<Vec<(PoolId, PoolData)>, ApiServerStorageError>;
+    ) -> Result<Vec<(PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError>;
 
     #[allow(clippy::type_complexity)]
     async fn get_transaction_with_block(
@@ -568,6 +644,11 @@ pub trait ApiServerStorageRead: Sync {
         &self,
         address: &Destination,
     ) -> Result<Vec<(DelegationId, Delegation)>, ApiServerStorageError>;
+
+    async fn get_fungible_tokens_by_authority(
+        &self,
+        authority: Destination,
+    ) -> Result<Vec<TokenId>, ApiServerStorageError>;
 
     async fn get_fungible_token_issuance(
         &self,
@@ -704,7 +785,7 @@ pub trait ApiServerStorageWrite: ApiServerStorageRead {
     async fn set_pool_data_at_height(
         &mut self,
         pool_id: PoolId,
-        pool_data: &PoolData,
+        pool_data: &PoolDataWithExtraInfo,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError>;
 
@@ -751,6 +832,13 @@ pub trait ApiServerStorageWrite: ApiServerStorageRead {
         issuance: FungibleTokenData,
     ) -> Result<(), ApiServerStorageError>;
 
+    async fn set_fungible_token_data(
+        &mut self,
+        token_id: TokenId,
+        block_height: BlockHeight,
+        data: FungibleTokenData,
+    ) -> Result<(), ApiServerStorageError>;
+
     async fn set_nft_token_issuance(
         &mut self,
         token_id: TokenId,
@@ -765,6 +853,11 @@ pub trait ApiServerStorageWrite: ApiServerStorageRead {
     ) -> Result<(), ApiServerStorageError>;
 
     async fn del_nft_issuance_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError>;
+
+    async fn del_coin_or_token_decimals_above_height(
         &mut self,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError>;

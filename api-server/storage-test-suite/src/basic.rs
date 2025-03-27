@@ -27,8 +27,8 @@ use api_server_common::storage::{
         block_aux_data::{BlockAuxData, BlockWithExtraData},
         ApiServerStorage, ApiServerStorageError, ApiServerStorageRead, ApiServerStorageWrite,
         ApiServerTransactionRw, BlockInfo, CoinOrTokenStatistic, Delegation, FungibleTokenData,
-        LockedUtxo, Order, TransactionInfo, Transactional, TxAdditionalInfo, Utxo, UtxoLock,
-        UtxoWithExtraInfo,
+        LockedUtxo, Order, PoolDataWithExtraInfo, TransactionInfo, Transactional, TxAdditionalInfo,
+        Utxo, UtxoLock, UtxoWithExtraInfo,
     },
 };
 use crypto::{
@@ -730,6 +730,10 @@ where
                 PerThousand::new(margin_ratio_per_thousand).unwrap(),
                 cost_per_block,
             );
+            let random_pool_data = PoolDataWithExtraInfo {
+                pool_data: random_pool_data,
+                delegations_balance: Amount::from_atoms(rng.gen_range(0..=1000)),
+            };
 
             db_tx
                 .set_pool_data_at_height(random_pool_id, &random_pool_data, random_block_height)
@@ -766,6 +770,10 @@ where
                     height = BlockHeight::new(rng.gen::<u32>() as u64)
                 }
                 height
+            };
+            let random_pool_data2 = PoolDataWithExtraInfo {
+                pool_data: random_pool_data2,
+                delegations_balance: Amount::from_atoms(rng.gen_range(0..=1000)),
             };
 
             db_tx
@@ -819,6 +827,10 @@ where
                 PerThousand::new(margin_ratio_per_thousand).unwrap(),
                 cost_per_block,
             );
+            let random_pool_data_new = PoolDataWithExtraInfo {
+                pool_data: random_pool_data_new,
+                delegations_balance: Amount::from_atoms(rng.gen_range(0..=1000)),
+            };
 
             // update pool data in next block height
             db_tx
@@ -862,6 +874,10 @@ where
                 PerThousand::new(margin_ratio_per_thousand).unwrap(),
                 cost_per_block,
             );
+            let decommissioned_random_pool_data = PoolDataWithExtraInfo {
+                pool_data: decommissioned_random_pool_data,
+                delegations_balance: Amount::from_atoms(rng.gen_range(0..=1000)),
+            };
             eprintln!("setting pledge to 0 for pool {random_pool_id:?}");
             db_tx
                 .set_pool_data_at_height(
@@ -1131,6 +1147,13 @@ where
             .await
             .unwrap();
 
+        let balances = db_tx.get_address_balances(address2.as_str()).await.unwrap();
+        assert_eq!(balances.len(), 1);
+        let balance = balances.into_iter().next().unwrap();
+        assert_eq!(balance.0, CoinOrTokenId::TokenId(random_token_id));
+        assert_eq!(balance.1.amount, Amount::from_atoms(1));
+        assert_eq!(balance.1.decimals, 0);
+
         let returned_nft = db_tx.get_nft_token_issuance(random_token_id).await.unwrap().unwrap();
 
         assert_eq!(returned_nft.nft, nft);
@@ -1169,16 +1192,17 @@ where
         let (_, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
 
         let random_destination = Destination::PublicKeyHash(PublicKeyHash::from(&pk));
+        let random_num_decimals = rng.gen_range(1..18);
 
         let token_data = FungibleTokenData {
             token_ticker: "XXXX".as_bytes().to_vec(),
-            number_of_decimals: rng.gen_range(1..18),
+            number_of_decimals: random_num_decimals,
             metadata_uri: "http://uri".as_bytes().to_vec(),
             circulating_supply: Amount::ZERO,
             total_supply: TokenTotalSupply::Unlimited,
             is_locked: false,
             frozen: IsTokenFrozen::No(IsTokenFreezable::Yes),
-            authority: random_destination,
+            authority: random_destination.clone(),
         };
 
         let mut db_tx = storage.transaction_rw().await.unwrap();
@@ -1194,13 +1218,20 @@ where
 
         assert_eq!(returned_token, token_data);
 
+        let tokens = db_tx
+            .get_fungible_tokens_by_authority(random_destination.clone())
+            .await
+            .unwrap();
+        assert_eq!(tokens.len(), 1);
+        assert_eq!(tokens[0], random_token_id);
+
         let locked_token_data = token_data
             .clone()
             .mint_tokens(Amount::from_atoms(rng.gen_range(1..1000)))
             .lock();
 
         db_tx
-            .set_fungible_token_issuance(
+            .set_fungible_token_data(
                 random_token_id,
                 block_height.next_height(),
                 locked_token_data.clone(),
@@ -1213,12 +1244,66 @@ where
 
         assert_eq!(returned_token, locked_token_data);
 
+        let address = Address::new(&chain_config, random_destination.clone()).unwrap();
+        let random_amount = Amount::from_atoms(rng.gen_range(0..100_000));
+        db_tx
+            .set_address_balance_at_height(
+                &address,
+                random_amount,
+                CoinOrTokenId::TokenId(random_token_id),
+                block_height.next_height(),
+            )
+            .await
+            .unwrap();
+
+        let balances = db_tx.get_address_balances(address.as_str()).await.unwrap();
+        assert_eq!(balances.len(), 1);
+        let balance = balances.into_iter().next().unwrap();
+        assert_eq!(balance.0, CoinOrTokenId::TokenId(random_token_id));
+        assert_eq!(balance.1.amount, random_amount);
+        assert_eq!(balance.1.decimals, random_num_decimals);
+
+        let (_, pk2) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+        let random_destination2 = Destination::PublicKeyHash(PublicKeyHash::from(&pk2));
+        let token_change_authority =
+            locked_token_data.clone().change_authority(random_destination2.clone());
+
+        db_tx
+            .set_fungible_token_data(
+                random_token_id,
+                block_height.next_height().next_height(),
+                token_change_authority.clone(),
+            )
+            .await
+            .unwrap();
+        let returned_token =
+            db_tx.get_fungible_token_issuance(random_token_id).await.unwrap().unwrap();
+
+        assert_eq!(returned_token, token_change_authority);
+
+        let tokens = db_tx
+            .get_fungible_tokens_by_authority(random_destination.clone())
+            .await
+            .unwrap();
+        assert!(tokens.is_empty());
+
+        let tokens = db_tx
+            .get_fungible_tokens_by_authority(random_destination2.clone())
+            .await
+            .unwrap();
+        assert_eq!(tokens.len(), 1);
+        assert_eq!(tokens[0], random_token_id);
+
         // after reorg go back to the previous token data
         db_tx.del_token_issuance_above_height(block_height).await.unwrap();
         let returned_token =
             db_tx.get_fungible_token_issuance(random_token_id).await.unwrap().unwrap();
 
         assert_eq!(returned_token, token_data);
+
+        let tokens = db_tx.get_fungible_tokens_by_authority(random_destination).await.unwrap();
+        assert_eq!(tokens.len(), 1);
+        assert_eq!(tokens[0], random_token_id);
 
         db_tx
             .del_token_issuance_above_height(block_height.prev_height().unwrap())

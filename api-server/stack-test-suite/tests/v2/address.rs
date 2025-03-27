@@ -224,18 +224,20 @@ async fn multiple_outputs_to_single_address(#[case] seed: Seed) {
                     (
                         alice_address.as_str().to_string(),
                         json!({
-                        "coin_balance": amount_to_json(alice_balance, chain_config.coin_decimals()),
-                        "locked_coin_balance": amount_to_json(Amount::ZERO, chain_config.coin_decimals()),
-                        "transaction_history": alice_transaction_history,
-                                }),
+                            "coin_balance": amount_to_json(alice_balance, chain_config.coin_decimals()),
+                            "locked_coin_balance": amount_to_json(Amount::ZERO, chain_config.coin_decimals()),
+                            "transaction_history": alice_transaction_history,
+                            "tokens": [],
+                        }),
                     ),
                     (
                         bob_address.to_string(),
                         json!({
-                        "coin_balance": amount_to_json(bob_balance, chain_config.coin_decimals()),
-                        "locked_coin_balance": amount_to_json(bob_locked_balance, chain_config.coin_decimals()),
-                        "transaction_history": bob_transaction_history,
-                                }),
+                            "coin_balance": amount_to_json(bob_balance, chain_config.coin_decimals()),
+                            "locked_coin_balance": amount_to_json(bob_locked_balance, chain_config.coin_decimals()),
+                            "transaction_history": bob_transaction_history,
+                            "tokens": [],
+                        }),
                     ),
                 ]);
 
@@ -473,18 +475,20 @@ async fn test_unlocking_for_locked_utxos(#[case] seed: Seed) {
                     (
                         alice_address.as_str().to_string(),
                         json!({
-                        "coin_balance": amount_to_json(alice_balance, chain_config.coin_decimals()),
-                        "locked_coin_balance": amount_to_json(Amount::ZERO, chain_config.coin_decimals()),
-                        "transaction_history": alice_transaction_history,
-                                }),
+                            "coin_balance": amount_to_json(alice_balance, chain_config.coin_decimals()),
+                            "locked_coin_balance": amount_to_json(Amount::ZERO, chain_config.coin_decimals()),
+                            "transaction_history": alice_transaction_history,
+                            "tokens": [],
+                        }),
                     ),
                     (
                         bob_address.to_string(),
                         json!({
-                        "coin_balance": amount_to_json((bob_balance + bob_locked_balance).unwrap(), chain_config.coin_decimals()),
-                        "locked_coin_balance": amount_to_json(Amount::ZERO, chain_config.coin_decimals()),
-                        "transaction_history": bob_transaction_history,
-                                }),
+                            "coin_balance": amount_to_json((bob_balance + bob_locked_balance).unwrap(), chain_config.coin_decimals()),
+                            "locked_coin_balance": amount_to_json(Amount::ZERO, chain_config.coin_decimals()),
+                            "transaction_history": bob_transaction_history,
+                            "tokens": [],
+                        }),
                     ),
                 ]);
 
@@ -698,18 +702,20 @@ async fn ok(#[case] seed: Seed) {
                     (
                         alice_address.as_str().to_string(),
                         json!({
-                        "coin_balance": amount_to_json(alice_balance, chain_config.coin_decimals()),
-                        "locked_coin_balance": amount_to_json(Amount::ZERO, chain_config.coin_decimals()),
-                        "transaction_history": alice_transaction_history,
-                                }),
+                            "coin_balance": amount_to_json(alice_balance, chain_config.coin_decimals()),
+                            "locked_coin_balance": amount_to_json(Amount::ZERO, chain_config.coin_decimals()),
+                            "transaction_history": alice_transaction_history,
+                            "tokens": [],
+                        }),
                     ),
                     (
                         bob_address.to_string(),
                         json!({
-                        "coin_balance": amount_to_json(bob_balance, chain_config.coin_decimals()),
-                        "locked_coin_balance": amount_to_json(Amount::ZERO, chain_config.coin_decimals()),
-                        "transaction_history": bob_transaction_history,
-                                }),
+                            "coin_balance": amount_to_json(bob_balance, chain_config.coin_decimals()),
+                            "locked_coin_balance": amount_to_json(Amount::ZERO, chain_config.coin_decimals()),
+                            "transaction_history": bob_transaction_history,
+                            "tokens": [],
+                        }),
                     ),
                 ]);
 
