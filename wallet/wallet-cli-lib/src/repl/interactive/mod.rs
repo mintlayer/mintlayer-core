@@ -21,11 +21,13 @@ mod wallet_prompt;
 use std::path::PathBuf;
 
 use clap::Command;
+use itertools::{FoldWhile, Itertools};
 use reedline::{
     default_emacs_keybindings, default_vi_insert_keybindings, default_vi_normal_keybindings,
     ColumnarMenu, DefaultValidator, EditMode, Emacs, FileBackedHistory, ListMenu, MenuBuilder,
     Reedline, ReedlineMenu, Signal, Vi,
 };
+
 use tokio::sync::{mpsc, oneshot};
 use wallet_cli_commands::{get_repl_command, parse_input, ConsoleCommand};
 use wallet_rpc_lib::types::NodeInterface;
@@ -197,6 +199,9 @@ fn handle_response<N: NodeInterface>(
         Ok(Some(ConsoleCommand::Print(text))) => {
             console.print_line(&text);
         }
+        Ok(Some(ConsoleCommand::PaginatedPrint { header, body })) => {
+            paginate_output(header, body, line_editor, console);
+        }
         Ok(Some(ConsoleCommand::SetStatus {
             status,
             print_message,
@@ -225,4 +230,94 @@ fn handle_response<N: NodeInterface>(
         }
     }
     None
+}
+
+fn paginate_output(
+    header: String,
+    body: String,
+    line_editor: &mut Reedline,
+    console: &mut impl ConsoleOutput,
+) {
+    let mut current_index = 0;
+
+    let (cols, rows) = crossterm::terminal::size().unwrap_or((80, 24));
+    let cols = cols as usize;
+    let page_rows = (rows - 4) as usize; // make room for the header and prompt
+
+    loop {
+        line_editor.clear_screen().expect("Should not fail normally");
+
+        let limit = compute_visible_text_limit(
+            body.get(current_index..).expect("safe point").lines(),
+            cols,
+            page_rows,
+        );
+        let end_index = std::cmp::min(current_index + limit, body.len());
+
+        console.print_line(&header);
+        console.print_line(body.get(current_index..end_index).expect("safe point"));
+
+        let commands = match (current_index, end_index) {
+            (0, end) if end == body.len() => "Press 'q' to quit",
+            (0, _) => "Press 'j' for down, 'q' to quit",
+            (_, end) if end == body.len() => "Press 'k' for previous, 'q' to quit",
+            (_, _) => "Press 'j' for next, 'k' for previous, 'q' to quit",
+        };
+        console.print_line(commands);
+
+        // Wait for user input.
+        crossterm::terminal::enable_raw_mode().expect("Should not fail normally");
+        let event = crossterm::event::read().expect("Should not fail normally");
+        crossterm::terminal::disable_raw_mode().expect("Should not fail normally");
+
+        if let crossterm::event::Event::Key(key_event) = event {
+            match key_event.code {
+                reedline::KeyCode::Char('j') | reedline::KeyCode::Down
+                    if end_index < body.len() =>
+                {
+                    let next_text = body.get(current_index..).expect("safe point").lines();
+                    let limit = compute_visible_text_limit(next_text, cols, 1);
+                    current_index = std::cmp::min(body.len(), current_index + limit);
+                }
+                reedline::KeyCode::Char('k') | reedline::KeyCode::Up if current_index > 0 => {
+                    let prev_text = body.get(..current_index).expect("safe point").lines().rev();
+                    let limit = compute_visible_text_limit(prev_text, cols, 1);
+                    current_index = current_index.saturating_sub(limit);
+                }
+                reedline::KeyCode::Char('q') | reedline::KeyCode::Esc => {
+                    break; // Exit pagination
+                }
+                _ => {} // Ignore other keys
+            }
+        }
+    }
+
+    line_editor.clear_screen().expect("Should not fail normally");
+}
+
+fn compute_visible_text_limit<'a, I>(mut lines: I, cols: usize, page_rows: usize) -> usize
+where
+    I: Iterator<Item = &'a str>,
+{
+    let (_, end_index) = lines
+        .fold_while((0, 0), |(current_rows, current_index), line| {
+            let new_rows = line.len().div_ceil(cols);
+            if current_rows + new_rows <= page_rows {
+                let new_total_rows = current_rows + new_rows;
+                let new_end_index = current_index + line.len() + 1;
+                FoldWhile::Continue((new_total_rows, new_end_index))
+            } else {
+                let rows_available = page_rows - current_rows;
+                // make sure we cut it on the start of a utf-8 char boundary
+                let new_end_index = current_index
+                    + (1..=rows_available * cols)
+                        .rev()
+                        .find(|&i| line.is_char_boundary(i))
+                        // 0 is always a safe char boundary
+                        .unwrap_or(0);
+                FoldWhile::Done((page_rows, new_end_index))
+            }
+        })
+        .into_inner();
+    end_index
 }
