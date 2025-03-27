@@ -39,6 +39,7 @@ pub use transaction::{
     InspectTransaction, SignatureStats, TransactionToInspect, ValidatedSignatures,
 };
 use utils::ensure;
+use wallet::signer::trezor_signer::FoundDevice;
 use wallet_types::{
     scan_blockchain::ScanBlockchain,
     seed_phrase::StoreSeedPhrase,
@@ -152,6 +153,8 @@ impl rpc_description::HasValueHint for GenericTokenTransfer {
 pub enum CreatedWallet {
     UserProvidedMnemonic,
     NewlyGeneratedMnemonic(Mnemonic),
+    #[cfg(feature = "trezor")]
+    TrezorDeviceSelection(Vec<FoundDevice>),
 }
 
 #[derive(Debug, Clone)]
@@ -162,7 +165,7 @@ pub enum WalletTypeArgs {
         store_seed_phrase: StoreSeedPhrase,
     },
     #[cfg(feature = "trezor")]
-    Trezor,
+    Trezor { device_id: Option<String> },
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -182,7 +185,7 @@ impl WalletTypeArgs {
                 store_seed_phrase: _,
             } => controller_mode.into(),
             #[cfg(feature = "trezor")]
-            Self::Trezor => WalletType::Trezor,
+            Self::Trezor { device_id: _ } => WalletType::Trezor,
         }
     }
 
@@ -221,8 +224,8 @@ impl WalletTypeArgs {
             }
 
             #[cfg(feature = "trezor")]
-            Self::Trezor => Ok((
-                WalletTypeArgsComputed::Trezor,
+            Self::Trezor { device_id } => Ok((
+                WalletTypeArgsComputed::Trezor { device_id },
                 CreatedWallet::UserProvidedMnemonic,
             )),
         }
@@ -236,5 +239,5 @@ pub enum WalletTypeArgsComputed {
         store_seed_phrase: StoreSeedPhrase,
     },
     #[cfg(feature = "trezor")]
-    Trezor,
+    Trezor { device_id: Option<String> },
 }
