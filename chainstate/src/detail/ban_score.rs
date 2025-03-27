@@ -144,6 +144,7 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::OrdersAccountingError(err) => err.ban_score(),
             ConnectTransactionError::AttemptToCreateOrderFromAccounts => 100,
             ConnectTransactionError::ConcludeInputAmountsDontMatch(_, _) => 100,
+            ConnectTransactionError::ProduceBlockFromStakeChangesStakerDestination(_, _) => 100,
         }
     }
 }
@@ -454,6 +455,7 @@ impl BanScore for ConsensusPoSError {
             ConsensusPoSError::EffectivePoolBalanceError(_) => 100,
             ConsensusPoSError::EmptyTimespan => 100,
             ConsensusPoSError::FailedToCalculateCappedBalance => 100,
+            ConsensusPoSError::InvalidOutputTypeInStakeKernel(_) => 100,
         }
     }
 }
@@ -462,7 +464,6 @@ impl BanScore for BlockSignatureError {
     fn ban_score(&self) -> u32 {
         match self {
             BlockSignatureError::BlockSignatureNotFound(_) => 100,
-            BlockSignatureError::WrongOutputType(_) => 100,
             BlockSignatureError::WrongDestination(_) => 100,
             BlockSignatureError::BadSignature(_) => 100,
         }

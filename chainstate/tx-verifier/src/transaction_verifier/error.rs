@@ -125,6 +125,8 @@ pub enum ConnectTransactionError {
     InputCheck(#[from] InputCheckError),
     #[error("Transaction {0} has conclude order input {1} with amounts that don't match the db")]
     ConcludeInputAmountsDontMatch(Id<Transaction>, OrderId),
+    #[error("ProduceBlockFromStake for block {0} modifies staker destination for pool {1}; this is no longer allowed")]
+    ProduceBlockFromStakeChangesStakerDestination(Id<Block>, PoolId),
 }
 
 impl From<std::convert::Infallible> for ConnectTransactionError {

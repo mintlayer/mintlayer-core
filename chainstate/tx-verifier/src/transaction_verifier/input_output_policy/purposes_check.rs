@@ -15,9 +15,10 @@
 
 use common::{
     chain::{
-        block::BlockRewardTransactable, signature::Signable, Block, Transaction, TxInput, TxOutput,
+        block::BlockRewardTransactable, signature::Signable, Block, ChainConfig,
+        StakerDestinationUpdateForbidden, Transaction, TxInput, TxOutput,
     },
-    primitives::Id,
+    primitives::{BlockHeight, Id},
 };
 use consensus::ConsensusPoSError;
 use utils::ensure;
@@ -28,9 +29,11 @@ use super::super::error::{ConnectTransactionError, SpendStakeError};
 
 /// Not all `TxOutput` combinations can be used in a block reward.
 pub fn check_reward_inputs_outputs_purposes(
+    chain_config: &ChainConfig,
     reward: &BlockRewardTransactable,
     utxo_view: &impl utxo::UtxosView,
     block_id: Id<Block>,
+    block_height: BlockHeight,
 ) -> Result<(), ConnectTransactionError> {
     match reward.inputs() {
         Some(inputs) => {
@@ -49,11 +52,14 @@ pub fn check_reward_inputs_outputs_purposes(
 
             // the rule for single input/output boils down to that the pair should satisfy:
             // `CreateStakePool` | `ProduceBlockFromStake` -> `ProduceBlockFromStake`
-            match inputs_utxos.as_slice() {
+
+            let (input_pool_id, input_staker_destination) = match inputs_utxos.as_slice() {
                 // no inputs
-                [] => Err(ConnectTransactionError::SpendStakeError(
-                    SpendStakeError::ConsensusPoSError(ConsensusPoSError::NoKernel),
-                )),
+                [] => {
+                    return Err(ConnectTransactionError::SpendStakeError(
+                        SpendStakeError::ConsensusPoSError(ConsensusPoSError::NoKernel),
+                    ))
+                }
                 // single input
                 [intput_utxo] => match intput_utxo {
                     TxOutput::Transfer(..)
@@ -65,60 +71,86 @@ pub fn check_reward_inputs_outputs_purposes(
                     | TxOutput::IssueNft(..)
                     | TxOutput::DataDeposit(..)
                     | TxOutput::Htlc(..)
-                    | TxOutput::CreateOrder(..) => Err(ConnectTransactionError::IOPolicyError(
-                        IOPolicyError::InvalidInputTypeInReward,
-                        block_id.into(),
-                    )),
-                    TxOutput::CreateStakePool(input_pool_id, _)
-                    | TxOutput::ProduceBlockFromStake(_, input_pool_id) => {
-                        let outputs =
-                            reward.outputs().ok_or(ConnectTransactionError::SpendStakeError(
-                                SpendStakeError::NoBlockRewardOutputs,
-                            ))?;
-                        match outputs {
-                            [] => Err(ConnectTransactionError::SpendStakeError(
-                                SpendStakeError::NoBlockRewardOutputs,
-                            )),
-                            [output] => match output {
-                                TxOutput::Transfer(..)
-                                | TxOutput::LockThenTransfer(..)
-                                | TxOutput::Burn(..)
-                                | TxOutput::CreateStakePool(..)
-                                | TxOutput::CreateDelegationId(..)
-                                | TxOutput::DelegateStaking(..)
-                                | TxOutput::IssueFungibleToken(..)
-                                | TxOutput::IssueNft(..)
-                                | TxOutput::DataDeposit(..)
-                                | TxOutput::Htlc(..)
-                                | TxOutput::CreateOrder(..) => {
-                                    Err(ConnectTransactionError::IOPolicyError(
-                                        IOPolicyError::InvalidOutputTypeInReward,
-                                        block_id.into(),
-                                    ))
-                                }
-                                TxOutput::ProduceBlockFromStake(_, output_pool_id) => {
-                                    ensure!(
-                                        input_pool_id == output_pool_id,
-                                        ConnectTransactionError::SpendStakeError(
-                                            SpendStakeError::StakePoolIdMismatch(
-                                                *input_pool_id,
-                                                *output_pool_id
-                                            )
-                                        )
-                                    );
-                                    Ok(())
-                                }
-                            },
-                            _ => Err(ConnectTransactionError::SpendStakeError(
-                                SpendStakeError::MultipleBlockRewardOutputs,
-                            )),
-                        }
+                    | TxOutput::CreateOrder(..) => {
+                        return Err(ConnectTransactionError::IOPolicyError(
+                            IOPolicyError::InvalidInputTypeInReward,
+                            block_id.into(),
+                        ))
+                    }
+                    TxOutput::CreateStakePool(input_pool_id, input_pool_data) => {
+                        (input_pool_id, input_pool_data.staker())
+                    }
+                    TxOutput::ProduceBlockFromStake(input_staker_destination, input_pool_id) => {
+                        (input_pool_id, input_staker_destination)
                     }
                 },
                 // multiple inputs
-                _ => Err(ConnectTransactionError::SpendStakeError(
-                    SpendStakeError::ConsensusPoSError(ConsensusPoSError::MultipleKernels),
-                )),
+                _ => {
+                    return Err(ConnectTransactionError::SpendStakeError(
+                        SpendStakeError::ConsensusPoSError(ConsensusPoSError::MultipleKernels),
+                    ))
+                }
+            };
+
+            let outputs = reward.outputs().ok_or(ConnectTransactionError::SpendStakeError(
+                SpendStakeError::NoBlockRewardOutputs,
+            ))?;
+            let (output_staker_destination, output_pool_id) = match outputs {
+                [] => {
+                    return Err(ConnectTransactionError::SpendStakeError(
+                        SpendStakeError::NoBlockRewardOutputs,
+                    ))
+                }
+                [output] => match output {
+                    TxOutput::Transfer(..)
+                    | TxOutput::LockThenTransfer(..)
+                    | TxOutput::Burn(..)
+                    | TxOutput::CreateStakePool(..)
+                    | TxOutput::CreateDelegationId(..)
+                    | TxOutput::DelegateStaking(..)
+                    | TxOutput::IssueFungibleToken(..)
+                    | TxOutput::IssueNft(..)
+                    | TxOutput::DataDeposit(..)
+                    | TxOutput::Htlc(..)
+                    | TxOutput::CreateOrder(..) => {
+                        return Err(ConnectTransactionError::IOPolicyError(
+                            IOPolicyError::InvalidOutputTypeInReward,
+                            block_id.into(),
+                        ))
+                    }
+                    TxOutput::ProduceBlockFromStake(output_staker_destination, output_pool_id) => {
+                        (output_staker_destination, output_pool_id)
+                    }
+                },
+                _ => {
+                    return Err(ConnectTransactionError::SpendStakeError(
+                        SpendStakeError::MultipleBlockRewardOutputs,
+                    ))
+                }
+            };
+
+            ensure!(
+                input_pool_id == output_pool_id,
+                ConnectTransactionError::SpendStakeError(SpendStakeError::StakePoolIdMismatch(
+                    *input_pool_id,
+                    *output_pool_id
+                ))
+            );
+
+            let staker_destination_update_forbidden = chain_config
+                .chainstate_upgrades()
+                .version_at_height(block_height)
+                .1
+                .staker_destination_update_forbidden();
+
+            if staker_destination_update_forbidden == StakerDestinationUpdateForbidden::Yes {
+                ensure!(
+                    output_staker_destination == input_staker_destination,
+                    ConnectTransactionError::ProduceBlockFromStakeChangesStakerDestination(
+                        block_id,
+                        *input_pool_id
+                    )
+                );
             }
         }
         None => {
@@ -151,9 +183,10 @@ pub fn check_reward_inputs_outputs_purposes(
                     block_id.into()
                 )
             );
-            Ok(())
         }
     }
+
+    Ok(())
 }
 
 /// Not all `TxOutput` combinations can be used in a transaction.

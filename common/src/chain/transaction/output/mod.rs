@@ -118,7 +118,9 @@ pub enum TxOutput {
     CreateStakePool(PoolId, Box<StakePoolData>),
     /// Output type that represents spending of a stake pool output in a block reward
     /// in order to produce a block.
-    /// Spending conditions are the same as CreateStakePool, but the staker key can be changed.
+    /// Spending conditions are the same as CreateStakePool.
+    /// Note that the ability to change the staker key here is deprecated; the supplied destination
+    /// must be exactly the same as the staker destination specified in CreateStakePool.
     #[codec(index = 4)]
     ProduceBlockFromStake(Destination, PoolId),
     /// Create a delegation account to a specific pool, defined by its id.

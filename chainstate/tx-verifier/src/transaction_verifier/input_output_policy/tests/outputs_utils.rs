@@ -28,8 +28,9 @@ use common::{
     },
     primitives::{per_thousand::PerThousand, Amount, H256},
 };
-use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
 use serialization::extras::non_empty_vec::DataOrNoVec;
+
+use super::VRF_KEYS;
 
 #[allow(dead_code)]
 fn update_functions_below_if_new_outputs_were_added(output: TxOutput) {
@@ -191,27 +192,31 @@ pub fn lock_then_transfer() -> TxOutput {
     )
 }
 
+pub fn stake_pool_id() -> PoolId {
+    PoolId::new(H256::zero())
+}
+
 pub fn stake_pool() -> TxOutput {
-    let (_, vrf_pub_key) = VRFPrivateKey::new_from_entropy(VRFKeyKind::Schnorrkel);
-    TxOutput::CreateStakePool(
-        PoolId::new(H256::zero()),
-        Box::new(StakePoolData::new(
-            Amount::ZERO,
-            Destination::AnyoneCanSpend,
-            vrf_pub_key,
-            Destination::AnyoneCanSpend,
-            PerThousand::new(0).unwrap(),
-            Amount::ZERO,
-        )),
+    TxOutput::CreateStakePool(stake_pool_id(), Box::new(stake_pool_data()))
+}
+
+pub fn stake_pool_data() -> StakePoolData {
+    StakePoolData::new(
+        Amount::ZERO,
+        Destination::AnyoneCanSpend,
+        VRF_KEYS.1.clone(),
+        Destination::AnyoneCanSpend,
+        PerThousand::new(0).unwrap(),
+        Amount::ZERO,
     )
 }
 
 pub fn produce_block() -> TxOutput {
-    TxOutput::ProduceBlockFromStake(Destination::AnyoneCanSpend, PoolId::new(H256::zero()))
+    TxOutput::ProduceBlockFromStake(Destination::AnyoneCanSpend, stake_pool_id())
 }
 
 pub fn create_delegation() -> TxOutput {
-    TxOutput::CreateDelegationId(Destination::AnyoneCanSpend, PoolId::new(H256::zero()))
+    TxOutput::CreateDelegationId(Destination::AnyoneCanSpend, stake_pool_id())
 }
 
 pub fn delegate_staking() -> TxOutput {

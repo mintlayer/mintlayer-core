@@ -21,6 +21,7 @@ thiserror.workspace = true
 
 [dev-dependencies]
 accounting = { path = "../../accounting" }
+common-test-helpers = { path = "../../common/test-helpers" }
 test-utils = { path = "../../test-utils" }
 
 rstest.workspace = true
