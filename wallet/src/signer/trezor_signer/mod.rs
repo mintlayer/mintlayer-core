@@ -121,7 +121,7 @@ pub struct SelectedDevice {
 pub enum TrezorError {
     #[error("No connected Trezor device found")]
     NoDeviceFound,
-    #[error("No compatible Trezor device found with Mintlayer compatibilities")]
+    #[error("No compatible Trezor device found with Mintlayer capabilities")]
     NoCompatibleDeviceFound,
     #[error("There are multiple connected Trezor devices found {0:?}")]
     NoUniqueDeviceFound(Vec<FoundDevice>),
@@ -143,7 +143,7 @@ pub enum TrezorError {
     MultisigSignatureReturned,
     #[error("The file being loaded is a software wallet and does not correspond to the connected hardware wallet")]
     HardwareWalletDifferentFile,
-    #[error("Public keys mismatch. Wrong device or passphrase:\nfile DeviceId \"{file_device_id}\", connected device \"{connected_device_id}\",\nfile label \"{file_label}\" and connected device label \"{connected_device_id}\"")]
+    #[error("Public keys mismatch. Wrong device or passphrase:\nfile device id \"{file_device_id}\", connected device id \"{connected_device_id}\",\nfile label \"{file_label}\" and connected device label \"{connected_device_id}\"")]
     HardwareWalletDifferentMnemonicOrPassphrase {
         file_device_id: String,
         connected_device_id: String,
@@ -192,7 +192,7 @@ impl TrezorSigner {
             Err(trezor_client::Error::TransportSendMessage(
                 trezor_client::transport::error::Error::Usb(_),
             )) => {
-                let (mut new_client, data, session_id) = find_trezor_device_from_db(db_tx)?;
+                let (mut new_client, data, session_id) = find_trezor_device_from_db(db_tx, None)?;
 
                 check_public_keys_against_key_chain(
                     db_tx,
@@ -445,7 +445,13 @@ impl TrezorSigner {
 
 fn find_trezor_device_from_db(
     db_tx: &impl WalletStorageReadLocked,
+    selected_device_id: Option<String>,
 ) -> SignerResult<(Trezor, TrezorData, Vec<u8>)> {
+    if let Some(device_id) = selected_device_id {
+        return find_trezor_device(Some(SelectedDevice { device_id }))
+            .map_err(SignerError::TrezorError);
+    }
+
     if let Some(HardwareWalletData::Trezor(data)) = db_tx.get_hardware_wallet_data()? {
         let selected = SelectedDevice {
             device_id: data.device_id,
@@ -1462,8 +1468,9 @@ impl TrezorSignerProvider {
     pub fn load_from_database(
         chain_config: Arc<ChainConfig>,
         db_tx: &impl WalletStorageReadLocked,
+        device_id: Option<String>,
     ) -> WalletResult<Self> {
-        let (client, data, session_id) = find_trezor_device_from_db(db_tx)?;
+        let (client, data, session_id) = find_trezor_device_from_db(db_tx, device_id)?;
 
         let provider = Self {
             client: Arc::new(Mutex::new(client)),
@@ -1499,7 +1506,7 @@ fn to_trezor_chain_type(chain_config: &ChainConfig) -> MintlayerChainType {
     }
 }
 
-/// Check that the public keys in the provided key chain are the same as the ones with the
+/// Check that the public keys in the provided key chain are the same as the ones from the
 /// connected hardware wallet
 fn check_public_keys_against_key_chain(
     db_tx: &impl WalletStorageReadLocked,
@@ -1559,7 +1566,7 @@ fn fetch_extended_pub_key(
     Ok(account_pubkey)
 }
 
-/// Check that the public keys in the DB are the same as the ones with the connected hardware
+/// Check that the public keys in the DB are the same as the ones from the connected hardware
 /// wallet
 fn check_public_keys_against_db(
     db_tx: &impl WalletStorageReadLocked,
@@ -1614,10 +1621,13 @@ fn find_trezor_device(
         })
         .collect_vec();
 
-    let client = if let Some(position) = devices.iter().position(|d| {
-        d.features()
-            .is_some_and(|f| selected.as_ref().is_none_or(|s| s.device_id == f.device_id()))
-    }) {
+    let found_selected_device = selected.as_ref().and_then(|s| {
+        devices
+            .iter()
+            .position(|d| d.features().is_some_and(|f| s.device_id == f.device_id()))
+    });
+
+    let client = if let Some(position) = found_selected_device {
         devices.remove(position)
     } else {
         match devices.len() {

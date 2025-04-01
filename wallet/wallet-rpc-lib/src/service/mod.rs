@@ -76,7 +76,9 @@ where
                     node_rpc.is_cold_wallet_node(),
                     force_change_wallet_type,
                     *open_as_wallet_type,
+                    None,
                 )?
+                .wallet()?
             };
 
             let mut controller = WalletController::new(

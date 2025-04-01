@@ -271,22 +271,19 @@ fn handle_choice_menu(
     choice_menu: &dyn ChoiceMenu,
     mut line_editor: Reedline,
 ) -> Option<ManageableWalletCommand> {
-    let completer = Box::new(wallet_completions::WalletCompletions::new(
-        choice_menu.completion_list(),
-    ));
-
-    line_editor = line_editor.with_completer(completer);
-
     let prompt = DefaultPrompt::new(
         reedline::DefaultPromptSegment::Empty,
         reedline::DefaultPromptSegment::Empty,
     );
 
+    let choice_list = choice_menu.choice_list();
+    let exit_index = choice_list.len();
     loop {
         println!("{}", choice_menu.header());
-        for choice in choice_menu.completion_list() {
-            println!("{}", choice);
+        for (idx, choice) in choice_list.iter().enumerate() {
+            println!("{idx}: {choice}");
         }
+        println!("{exit_index}: Exit");
 
         match line_editor.read_line(&prompt).expect("Should not fail normally") {
             Signal::Success(input) => {
@@ -296,10 +293,16 @@ fn handle_choice_menu(
                     return None;
                 }
 
-                if let Some(cmd) = choice_menu.choose(input) {
-                    println!("You selected: {}", input);
-                    return Some(cmd);
-                }
+                match input.parse() {
+                    Ok(index) if index == exit_index => return None,
+                    Ok(index) if index < exit_index => {
+                        if let Some(cmd) = choice_menu.choose(index) {
+                            println!("You selected: {}", choice_list[index]);
+                            return Some(cmd);
+                        }
+                    }
+                    _ => {}
+                };
 
                 println!("Invalid choice! Please select a valid option.");
             }

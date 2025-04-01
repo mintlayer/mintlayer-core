@@ -626,6 +626,7 @@ impl Backend {
                 false,
                 ScanBlockchain::ScanNoWait,
                 hardware_wallet,
+                None,
             )
             .await
             .map_err(|err| BackendError::WalletError(err.to_string()))?;

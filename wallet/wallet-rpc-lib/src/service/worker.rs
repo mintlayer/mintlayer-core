@@ -21,7 +21,9 @@ use tokio::{sync::mpsc, task::JoinHandle};
 
 use logging::log;
 use utils_networking::broadcaster::Broadcaster;
-use wallet_controller::types::{CreatedWallet, WalletCreationOptions, WalletTypeArgs};
+use wallet_controller::types::{
+    CreatedWallet, OpenedWallet, WalletCreationOptions, WalletTypeArgs,
+};
 use wallet_controller::{ControllerError, NodeInterface};
 use wallet_types::scan_blockchain::ScanBlockchain;
 use wallet_types::wallet_type::WalletType;
@@ -155,7 +157,8 @@ where
         force_migrate_wallet_type: bool,
         scan_blockchain: ScanBlockchain,
         open_as_wallet_type: WalletType,
-    ) -> Result<(), ControllerError<N>> {
+        device_id: Option<String>,
+    ) -> Result<OpenedWallet, ControllerError<N>> {
         utils::ensure!(
             self.controller.is_none(),
             ControllerError::WalletFileAlreadyOpen
@@ -168,7 +171,16 @@ where
             self.node_rpc.is_cold_wallet_node(),
             force_migrate_wallet_type,
             open_as_wallet_type,
+            device_id,
         )?;
+
+        let wallet = match wallet {
+            wallet::wallet::WalletCreation::Wallet(w) => w,
+            #[cfg(feature = "trezor")]
+            wallet::wallet::WalletCreation::MultipleAvailableTrezorDevices(devices) => {
+                return Ok(OpenedWallet::TrezorDeviceSelection(devices));
+            }
+        };
 
         let controller = if scan_blockchain.should_wait_for_blockchain_scanning() {
             WalletController::new(
@@ -188,7 +200,7 @@ where
         };
         self.controller.replace(controller);
 
-        Ok(())
+        Ok(OpenedWallet::Opened)
     }
 
     pub async fn create_wallet(
@@ -228,7 +240,7 @@ where
         let wallet = match wallet {
             wallet::wallet::WalletCreation::Wallet(w) => w,
             #[cfg(feature = "trezor")]
-            wallet::wallet::WalletCreation::MultipleAvalableTrezorDevices(devices) => {
+            wallet::wallet::WalletCreation::MultipleAvailableTrezorDevices(devices) => {
                 return Ok(CreatedWallet::TrezorDeviceSelection(devices));
             }
         };

@@ -312,7 +312,7 @@ pub fn create_wallet_in_memory() -> WalletResult<Store<DefaultBackend>> {
 pub enum WalletCreation<W> {
     Wallet(W),
     #[cfg(feature = "trezor")]
-    MultipleAvalableTrezorDevices(Vec<FoundDevice>),
+    MultipleAvailableTrezorDevices(Vec<FoundDevice>),
 }
 
 impl<W> WalletCreation<W> {
@@ -323,17 +323,21 @@ impl<W> WalletCreation<W> {
         match self {
             Self::Wallet(w) => WalletCreation::Wallet(f(w)),
             #[cfg(feature = "trezor")]
-            Self::MultipleAvalableTrezorDevices(devices) => {
-                WalletCreation::MultipleAvalableTrezorDevices(devices)
+            Self::MultipleAvailableTrezorDevices(devices) => {
+                WalletCreation::MultipleAvailableTrezorDevices(devices)
             }
         }
     }
 
-    pub fn wallet(self) -> Option<W> {
+    pub fn wallet(self) -> WalletResult<W> {
         match self {
-            WalletCreation::Wallet(w) => Some(w),
+            WalletCreation::Wallet(w) => Ok(w),
             #[cfg(feature = "trezor")]
-            WalletCreation::MultipleAvalableTrezorDevices(_) => None,
+            WalletCreation::MultipleAvailableTrezorDevices(devices) => {
+                Err(WalletError::SignerError(SignerError::TrezorError(
+                    TrezorError::NoUniqueDeviceFound(devices),
+                )))
+            }
         }
     }
 }
@@ -385,7 +389,7 @@ where
             #[cfg(feature = "trezor")]
             Err(WalletError::SignerError(SignerError::TrezorError(
                 TrezorError::NoUniqueDeviceFound(devices),
-            ))) => return Ok(WalletCreation::MultipleAvalableTrezorDevices(devices)),
+            ))) => return Ok(WalletCreation::MultipleAvailableTrezorDevices(devices)),
             Err(err) => return Err(err),
         };
 
@@ -813,17 +817,26 @@ where
         controller_mode: WalletControllerMode,
         force_change_wallet_type: bool,
         signer_provider: F2,
-    ) -> WalletResult<Self> {
+    ) -> WalletResult<WalletCreation<Self>> {
         if let Some(password) = password {
             db.unlock_private_keys(&password)?;
         }
-        let signer_provider = Self::check_and_migrate_db(
+
+        let signer_provider = match Self::check_and_migrate_db(
             &db,
             chain_config.clone(),
             pre_migration,
             controller_mode,
             signer_provider,
-        )?;
+        ) {
+            Ok(x) => x,
+            #[cfg(feature = "trezor")]
+            Err(WalletError::SignerError(SignerError::TrezorError(
+                TrezorError::NoUniqueDeviceFound(devices),
+            ))) => return Ok(WalletCreation::MultipleAvailableTrezorDevices(devices)),
+            Err(err) => return Err(err),
+        };
+
         if force_change_wallet_type {
             Self::force_migrate_wallet_type(
                 controller_mode.into(),
@@ -833,6 +846,9 @@ where
             )?;
         }
 
+        // The device id stored in the db may not match the actual device id;
+        // this may happen if the user has reset the device after the wallet file was created.
+        // So we overwrite the hardware wallet data to update the id.
         if let Some(data) = signer_provider.get_hardware_wallet_data() {
             let mut db_tx = db.transaction_rw(None)?;
             db_tx.set_hardware_wallet_data(data)?;
@@ -868,14 +884,14 @@ where
 
         let next_unused_account = accounts.pop_last().ok_or(WalletError::WalletNotInitialized)?;
 
-        Ok(Wallet {
+        Ok(WalletCreation::Wallet(Wallet {
             chain_config,
             db,
             accounts,
             latest_median_time,
             next_unused_account,
             signer_provider,
-        })
+        }))
     }
 
     pub fn seed_phrase(&self) -> WalletResult<Option<SerializableSeedPhrase>> {

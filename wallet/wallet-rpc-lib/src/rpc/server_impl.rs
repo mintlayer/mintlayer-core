@@ -49,7 +49,7 @@ use crate::{
         AccountArg, AddressInfo, AddressWithUsageInfo, Balances, ChainInfo, ComposedTransaction,
         CreatedWallet, DelegationInfo, HardwareWalletType, HexEncoded, LegacyVrfPublicKeyInfo,
         MaybeSignedTransaction, NewAccountInfo, NewDelegation, NewTransaction, NftMetadata,
-        NodeVersion, PoolInfo, PublicKeyInfo, RpcAddress, RpcAmountIn, RpcHexString,
+        NodeVersion, OpenedWallet, PoolInfo, PublicKeyInfo, RpcAddress, RpcAmountIn, RpcHexString,
         RpcInspectTransaction, RpcStandaloneAddresses, RpcTokenId, RpcUtxoOutpoint, RpcUtxoState,
         RpcUtxoType, SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
         StandaloneAddressWithDetails, TokenMetadata, TransactionOptions, TxOptionsOverrides,
@@ -149,7 +149,8 @@ where
         password: Option<String>,
         force_migrate_wallet_type: Option<bool>,
         open_as_hw_wallet: Option<HardwareWalletType>,
-    ) -> rpc::RpcResult<()> {
+        trezor_device_id: Option<String>,
+    ) -> rpc::RpcResult<OpenedWallet> {
         rpc::handle_result(
             self.open_wallet(
                 path.into(),
@@ -157,8 +158,10 @@ where
                 force_migrate_wallet_type.unwrap_or(false),
                 ScanBlockchain::ScanNoWait,
                 open_as_hw_wallet,
+                trezor_device_id,
             )
-            .await,
+            .await
+            .map(Into::<OpenedWallet>::into),
         )
     }
 

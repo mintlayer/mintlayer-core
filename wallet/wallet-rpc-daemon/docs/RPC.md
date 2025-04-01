@@ -2840,12 +2840,26 @@ Parameters:
     "hardware_wallet": EITHER OF
          1) "Trezor"
          2) null,
+    "trezor_device_id": EITHER OF
+         1) string
+         2) null,
 }
 ```
 
 Returns:
 ```
-nothing
+EITHER OF
+     1) { "type": "Opened" }
+     2) {
+            "type": "MultipleDevicesAvailable",
+            "content": { "available": {
+                "type": "Trezor",
+                "content": { "devices": [ {
+                    "name": string,
+                    "device_id": string,
+                }, .. ] },
+            } },
+        }
 ```
 
 ### Method `wallet_close`

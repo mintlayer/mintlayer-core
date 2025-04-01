@@ -281,6 +281,8 @@ fn verify_wallet_balance<B, P>(
         false,
         |db_tx| SoftwareSignerProvider::load_from_database(chain_config.clone(), db_tx),
     )
+    .unwrap()
+    .wallet()
     .unwrap();
 
     wallet.get_best_block();
@@ -492,6 +494,8 @@ fn wallet_migration_to_v2(#[case] seed: Seed) {
         false,
         |db_tx| SoftwareSignerProvider::load_from_database(chain_config.clone(), db_tx),
     )
+    .unwrap()
+    .wallet()
     .unwrap();
 
     // Migration has been done and new version is v2
@@ -979,6 +983,8 @@ fn test_wallet_accounts<B, P>(
         false,
         |db_tx| SoftwareSignerProvider::load_from_database(chain_config.clone(), db_tx),
     )
+    .unwrap()
+    .wallet()
     .unwrap();
     let accounts = wallet.account_indexes().cloned().collect::<Vec<_>>();
     assert_eq!(accounts, expected_accounts);
