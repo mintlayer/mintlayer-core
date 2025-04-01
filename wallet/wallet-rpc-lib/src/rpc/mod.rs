@@ -73,8 +73,8 @@ pub use rpc::{rpc_creds::RpcCreds, Rpc};
 use wallet_controller::{
     types::{
         Balances, BlockInfo, CreatedBlockInfo, CreatedWallet, GenericTokenTransfer,
-        InspectTransaction, SeedWithPassPhrase, TransactionToInspect, WalletCreationOptions,
-        WalletInfo, WalletTypeArgs,
+        InspectTransaction, OpenedWallet, SeedWithPassPhrase, TransactionToInspect,
+        WalletCreationOptions, WalletInfo, WalletTypeArgs,
     },
     ConnectedPeer, ControllerConfig, ControllerError, NodeInterface, UtxoState, UtxoStates,
     UtxoType, UtxoTypes, DEFAULT_ACCOUNT_INDEX,
@@ -158,7 +158,8 @@ where
         force_migrate_wallet_type: bool,
         scan_blockchain: ScanBlockchain,
         open_as_hw_wallet: Option<HardwareWalletType>,
-    ) -> WRpcResult<(), N> {
+        device_id: Option<String>,
+    ) -> WRpcResult<OpenedWallet, N> {
         let open_as_wallet_type =
             open_as_hw_wallet.map_or(self.node.is_cold_wallet_node().into(), |hw| match hw {
                 #[cfg(feature = "trezor")]
@@ -175,6 +176,7 @@ where
                             force_migrate_wallet_type,
                             scan_blockchain,
                             open_as_wallet_type,
+                            device_id,
                         )
                         .await
                 })

@@ -130,6 +130,12 @@ pub enum WalletManagementCommand {
         /// Open a wallet file related to a connected hardware wallet.
         #[arg(long, conflicts_with_all(["force_change_wallet_type"]))]
         hardware_wallet: Option<CliHardwareWalletType>,
+
+        /// Optionally specify the ID for the trezor device to connect to in case there
+        /// are multiple trezor devices connected at the same time.
+        /// If not specified and there are multiple devices connected a choice will be presented
+        #[arg(long, conflicts_with_all(["mnemonic", "passphrase", "whether_to_store_seed_phrase"]))]
+        trezor_device_id: Option<String>,
     },
 
     #[clap(name = "wallet-close")]
@@ -892,9 +898,9 @@ pub enum ManageableWalletCommand {
 pub trait ChoiceMenu: DynClone + Debug {
     fn header(&self) -> &str;
 
-    fn completion_list(&self) -> Vec<String>;
+    fn choice_list(&self) -> Vec<String>;
 
-    fn choose(&self, choice: &str) -> Option<ManageableWalletCommand>;
+    fn choose(&self, choice: usize) -> Option<ManageableWalletCommand>;
 }
 dyn_clone::clone_trait_object!(ChoiceMenu);
 
@@ -928,12 +934,15 @@ impl ChoiceMenu for CreateWalletDeviceSelectMenu {
         "Please chose one of the available Trezor devices:"
     }
 
-    fn completion_list(&self) -> Vec<String> {
-        self.available_devices.iter().map(|d| d.to_string()).collect()
+    fn choice_list(&self) -> Vec<String> {
+        self.available_devices
+            .iter()
+            .map(|d| format!("{} (device id: {})", d.name, d.device_id))
+            .collect()
     }
 
-    fn choose(&self, choice: &str) -> Option<ManageableWalletCommand> {
-        self.available_devices.iter().find(|d| d.to_string() == choice).map(|d| {
+    fn choose(&self, choice: usize) -> Option<ManageableWalletCommand> {
+        self.available_devices.get(choice).map(|d| {
             if self.recover {
                 ManageableWalletCommand::ManagementCommands(
                     WalletManagementCommand::RecoverWallet {
@@ -955,6 +964,59 @@ impl ChoiceMenu for CreateWalletDeviceSelectMenu {
                     trezor_device_id: Some(d.device_id.clone()),
                 })
             }
+        })
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct OpenWalletDeviceSelectMenu {
+    available_devices: Vec<FoundDevice>,
+
+    wallet_path: PathBuf,
+    encryption_password: Option<String>,
+    force_change_wallet_type: bool,
+    hardware_wallet: CliHardwareWalletType,
+}
+
+impl OpenWalletDeviceSelectMenu {
+    pub fn new(
+        available_devices: Vec<FoundDevice>,
+        wallet_path: PathBuf,
+        encryption_password: Option<String>,
+        force_change_wallet_type: bool,
+        hardware_wallet: CliHardwareWalletType,
+    ) -> Self {
+        Self {
+            available_devices,
+            wallet_path,
+            encryption_password,
+            force_change_wallet_type,
+            hardware_wallet,
+        }
+    }
+}
+
+impl ChoiceMenu for OpenWalletDeviceSelectMenu {
+    fn header(&self) -> &str {
+        "Please chose one of the available Trezor devices:"
+    }
+
+    fn choice_list(&self) -> Vec<String> {
+        self.available_devices
+            .iter()
+            .map(|d| format!("{} (device id: {})", d.name, d.device_id))
+            .collect()
+    }
+
+    fn choose(&self, choice: usize) -> Option<ManageableWalletCommand> {
+        self.available_devices.get(choice).map(|d| {
+            ManageableWalletCommand::ManagementCommands(WalletManagementCommand::OpenWallet {
+                wallet_path: self.wallet_path.clone(),
+                encryption_password: self.encryption_password.clone(),
+                force_change_wallet_type: self.force_change_wallet_type,
+                hardware_wallet: Some(self.hardware_wallet),
+                trezor_device_id: Some(d.device_id.clone()),
+            })
         })
     }
 }

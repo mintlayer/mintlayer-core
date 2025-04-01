@@ -656,13 +656,6 @@ pub struct FoundDevice {
 }
 
 #[cfg(feature = "trezor")]
-impl std::fmt::Display for FoundDevice {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}-{}", self.name, self.device_id)
-    }
-}
-
-#[cfg(feature = "trezor")]
 impl From<wallet::signer::trezor_signer::FoundDevice> for FoundDevice {
     fn from(value: wallet::signer::trezor_signer::FoundDevice) -> Self {
         Self {
@@ -709,6 +702,29 @@ impl From<wallet_controller::types::CreatedWallet> for CreatedWallet {
         Self {
             mnemonic,
             multiple_devices_available: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
+#[serde(tag = "type", content = "content")]
+pub enum OpenedWallet {
+    Opened,
+    MultipleDevicesAvailable { available: MultipleDevicesAvailable },
+}
+
+impl From<wallet_controller::types::OpenedWallet> for OpenedWallet {
+    fn from(value: wallet_controller::types::OpenedWallet) -> Self {
+        match value {
+            wallet_controller::types::OpenedWallet::Opened => Self::Opened,
+            #[cfg(feature = "trezor")]
+            wallet_controller::types::OpenedWallet::TrezorDeviceSelection(devices) => {
+                Self::MultipleDevicesAvailable {
+                    available: MultipleDevicesAvailable::Trezor {
+                        devices: devices.into_iter().map(Into::into).collect(),
+                    },
+                }
+            }
         }
     }
 }

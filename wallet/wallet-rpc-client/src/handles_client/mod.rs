@@ -42,7 +42,7 @@ use wallet_rpc_lib::{
     types::{
         AddressInfo, AddressWithUsageInfo, Balances, BlockInfo, ComposedTransaction, CreatedWallet,
         DelegationInfo, HardwareWalletType, LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegation,
-        NewOrder, NewTransaction, NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo,
+        NewOrder, NewTransaction, NftMetadata, NodeVersion, OpenedWallet, PoolInfo, PublicKeyInfo,
         RpcHashedTimelockContract, RpcInspectTransaction, RpcStandaloneAddresses, RpcTokenId,
         SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
         StandaloneAddressWithDetails, TokenMetadata, TxOptionsOverrides, UtxoInfo,
@@ -170,7 +170,8 @@ where
         password: Option<String>,
         force_migrate_wallet_type: Option<bool>,
         hardware_wallet: Option<HardwareWalletType>,
-    ) -> Result<(), Self::Error> {
+        device_id: Option<String>,
+    ) -> Result<OpenedWallet, Self::Error> {
         self.wallet_rpc
             .open_wallet(
                 path,
@@ -178,8 +179,10 @@ where
                 force_migrate_wallet_type.unwrap_or(false),
                 ScanBlockchain::ScanAndWait,
                 hardware_wallet,
+                device_id,
             )
             .await
+            .map(Into::into)
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
 

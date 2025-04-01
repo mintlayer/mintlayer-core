@@ -157,6 +157,12 @@ pub enum CreatedWallet {
     TrezorDeviceSelection(Vec<FoundDevice>),
 }
 
+pub enum OpenedWallet {
+    Opened,
+    #[cfg(feature = "trezor")]
+    TrezorDeviceSelection(Vec<FoundDevice>),
+}
+
 #[derive(Debug, Clone)]
 pub enum WalletTypeArgs {
     Software {

@@ -37,7 +37,7 @@ use wallet_controller::{
 use wallet_rpc_lib::types::{
     AddressInfo, AddressWithUsageInfo, Balances, BlockInfo, ComposedTransaction, CreatedWallet,
     DelegationInfo, HardwareWalletType, LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegation,
-    NewOrder, NewTransaction, NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo,
+    NewOrder, NewTransaction, NftMetadata, NodeVersion, OpenedWallet, PoolInfo, PublicKeyInfo,
     RpcHashedTimelockContract, RpcInspectTransaction, RpcSignatureStatus, RpcStandaloneAddresses,
     RpcTokenId, SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
     StandaloneAddressWithDetails, TokenMetadata, TxOptionsOverrides, UtxoInfo, VrfPublicKeyInfo,
@@ -92,7 +92,8 @@ pub trait WalletInterface {
         password: Option<String>,
         force_migrate_wallet_type: Option<bool>,
         hardware_wallet: Option<HardwareWalletType>,
-    ) -> Result<(), Self::Error>;
+        device_id: Option<String>,
+    ) -> Result<OpenedWallet, Self::Error>;
 
     async fn close_wallet(&self) -> Result<(), Self::Error>;
 

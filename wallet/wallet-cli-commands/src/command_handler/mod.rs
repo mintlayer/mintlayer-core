@@ -50,7 +50,8 @@ use wallet_types::{
 
 use crate::{
     errors::WalletCliCommandError, helper_types::parse_generic_token_transfer,
-    CreateWalletDeviceSelectMenu, ManageableWalletCommand, WalletManagementCommand,
+    CreateWalletDeviceSelectMenu, ManageableWalletCommand, OpenWalletDeviceSelectMenu,
+    WalletManagementCommand,
 };
 
 use self::local_state::WalletWithState;
@@ -259,17 +260,41 @@ where
                 encryption_password,
                 force_change_wallet_type,
                 hardware_wallet,
+                trezor_device_id,
             } => {
                 let hardware_wallet = hardware_wallet.map(Into::into);
-                self.wallet()
+                let response = self
+                    .wallet()
                     .await?
                     .open_wallet(
-                        wallet_path,
-                        encryption_password,
+                        wallet_path.clone(),
+                        encryption_password.clone(),
                         Some(force_change_wallet_type),
                         hardware_wallet,
+                        trezor_device_id,
                     )
                     .await?;
+
+                // In the case that the user has reset the device that was used to create the
+                // wallet file that is now being opened, the device can have a different device id.
+                // So in the case of multiple Hardware wallets connected it cannot decide which one
+                // to use, and we fall back to asking the user to choose.
+                if let wallet_rpc_lib::types::OpenedWallet::MultipleDevicesAvailable { available } =
+                    response
+                {
+                    match available {
+                        wallet_rpc_lib::types::MultipleDevicesAvailable::Trezor { devices } => {
+                            let choices = OpenWalletDeviceSelectMenu::new(
+                                devices,
+                                wallet_path,
+                                encryption_password,
+                                force_change_wallet_type,
+                                CliHardwareWalletType::Trezor,
+                            );
+                            return Ok(ConsoleCommand::ChoiceMenu(Box::new(choices)));
+                        }
+                    }
+                }
                 self.wallet.update_wallet::<N>().await;
 
                 Ok(ConsoleCommand::SetStatus {

@@ -394,7 +394,8 @@ where
         current_controller_mode: WalletControllerMode,
         force_change_wallet_type: bool,
         open_as_wallet_type: WalletType,
-    ) -> Result<RuntimeWallet<DefaultBackend>, ControllerError<T>> {
+        device_id: Option<String>,
+    ) -> Result<WalletCreation<RuntimeWallet<DefaultBackend>>, ControllerError<T>> {
         utils::ensure!(
             file_path.as_ref().exists(),
             ControllerError::WalletFileError(
@@ -418,7 +419,7 @@ where
                     |db_tx| SoftwareSignerProvider::load_from_database(chain_config.clone(), db_tx),
                 )
                 .map_err(ControllerError::WalletError)?;
-                Ok(RuntimeWallet::Software(wallet))
+                Ok(wallet.map_wallet(RuntimeWallet::Software))
             }
             #[cfg(feature = "trezor")]
             WalletType::Trezor => {
@@ -429,10 +430,16 @@ where
                     |version| Self::make_backup_wallet_file(file_path.as_ref(), version),
                     current_controller_mode,
                     force_change_wallet_type,
-                    |db_tx| TrezorSignerProvider::load_from_database(chain_config.clone(), db_tx),
+                    |db_tx| {
+                        TrezorSignerProvider::load_from_database(
+                            chain_config.clone(),
+                            db_tx,
+                            device_id,
+                        )
+                    },
                 )
                 .map_err(ControllerError::WalletError)?;
-                Ok(RuntimeWallet::Trezor(wallet))
+                Ok(wallet.map_wallet(RuntimeWallet::Trezor))
             }
         }
     }

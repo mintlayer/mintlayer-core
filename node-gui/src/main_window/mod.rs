@@ -653,7 +653,7 @@ impl MainWindow {
                                 WalletMessage::ConsoleOutput(format!(
                                     "{}\n{}",
                                     menu.header(),
-                                    menu.completion_list().join("\n")
+                                    menu.choice_list().join("\n")
                                 )),
                             )),
                             backend_sender,

@@ -290,6 +290,7 @@ fn setup_events_and_repl<N: NodeInterface + Send + Sync + 'static>(
                         encryption_password: args.wallet_password,
                         force_change_wallet_type: args.force_change_wallet_type,
                         hardware_wallet: args.hardware_wallet,
+                        trezor_device_id: None,
                     },
                 ),
                 res_tx,
