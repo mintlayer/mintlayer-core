@@ -19,7 +19,7 @@ use common::{
         output_value::OutputValue,
         signature::{
             inputsig::{standard_signature::StandardInputSignature, InputWitness},
-            sighash::sighashtype::SigHashType,
+            sighash::{sighashtype::SigHashType, SighashInputInfo},
         },
         timelock::OutputTimeLock,
         tokens::TokenId,

@@ -474,6 +474,8 @@ async fn timelocked_htlc_refund(
     #[case] expected: u32,
 ) {
     // Unpack expected results:
+
+    use common::chain::signature::sighash::SighashInputInfo;
     let in_mempool_at0 = (expected & 0b1000) != 0;
     let in_accumulator_at0 = (expected & 0b0100) != 0;
     let in_mempool_at1 = (expected & 0b0010) != 0;
@@ -546,7 +548,7 @@ async fn timelocked_htlc_refund(
         let sighash = signature_hash(
             SigHashType::all(),
             &tx,
-            &[Some(&tx0.transaction().outputs()[0])],
+            &[SighashInputInfo::Utxo(&tx0.transaction().outputs()[0])],
             0,
         )
         .unwrap();
@@ -565,7 +567,7 @@ async fn timelocked_htlc_refund(
         &authorization,
         SigHashType::all(),
         &tx,
-        &[Some(&tx0.transaction().outputs()[0])],
+        &[SighashInputInfo::Utxo(&tx0.transaction().outputs()[0])],
         0,
     )
     .unwrap();

@@ -24,7 +24,8 @@ use common::chain::{
     },
     tokens::TokenId,
     AccountCommand, AccountOutPoint, AccountSpending, DelegationId, Destination,
-    OrderAccountCommand, OrderId, PoolId, SignedTransaction, TxOutput, UtxoOutPoint,
+    OrderAccountCommand, OrderData, OrderId, PoolData, PoolId, SignedTransaction, TxOutput,
+    UtxoOutPoint,
 };
 use utxo::UtxoSource;
 
@@ -73,6 +74,9 @@ pub enum InputInfo<'a> {
         outpoint: &'a UtxoOutPoint,
         utxo: TxOutput,
         utxo_source: Option<UtxoSource>,
+
+        // Decommissioning a pool requires PoolData in input signature
+        pool_data: Option<PoolData>,
     },
     Account {
         outpoint: &'a AccountOutPoint,
@@ -82,6 +86,9 @@ pub enum InputInfo<'a> {
     },
     OrderAccountCommand {
         command: &'a OrderAccountCommand,
+        // FIXME: It's optional because FreezeOrder doesn't require data but maybe reconsider for simplicity
+        order_data: Option<OrderData>,
+        // FIXME: balances should be also collected here
     },
 }
 
@@ -92,6 +99,7 @@ impl InputInfo<'_> {
                 outpoint: _,
                 utxo,
                 utxo_source: _,
+                pool_data: _,
             } => Some(utxo),
             InputInfo::Account { .. }
             | InputInfo::AccountCommand { .. }
@@ -140,6 +148,7 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for SignedTransaction {
                 outpoint: _,
                 utxo,
                 utxo_source: _,
+                pool_data: _,
             } => match utxo {
                 TxOutput::Transfer(_val, dest) => Ok(to_signature_witness_script(ctx, dest)),
                 TxOutput::LockThenTransfer(_val, dest, timelock) => {
@@ -246,7 +255,10 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for SignedTransaction {
                 }
                 AccountCommand::FillOrder(_, _, _) => Ok(WitnessScript::TRUE),
             },
-            InputInfo::OrderAccountCommand { command } => match command {
+            InputInfo::OrderAccountCommand {
+                command,
+                order_data,
+            } => match command {
                 OrderAccountCommand::FillOrder(_, _, _) => Ok(WitnessScript::TRUE),
                 OrderAccountCommand::FreezeOrder(order_id)
                 | OrderAccountCommand::ConcludeOrder {
@@ -271,6 +283,7 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for BlockRewardTransactable<'_>
                 outpoint: _,
                 utxo,
                 utxo_source: _,
+                pool_data: _,
             } => {
                 match utxo {
                     TxOutput::Transfer(_, _)
@@ -314,6 +327,7 @@ impl<C: InputInfoProvider> TranslateInput<C> for TimelockOnly {
                 outpoint: _,
                 utxo,
                 utxo_source: _,
+                pool_data: _,
             } => match utxo {
                 TxOutput::LockThenTransfer(_val, _dest, timelock) => {
                     Ok(WitnessScript::timelock(*timelock))
@@ -361,7 +375,10 @@ impl<C: InputInfoProvider> TranslateInput<C> for TimelockOnly {
                     Ok(WitnessScript::TRUE)
                 }
             },
-            InputInfo::OrderAccountCommand { command } => match command {
+            InputInfo::OrderAccountCommand {
+                command,
+                order_data,
+            } => match command {
                 OrderAccountCommand::FillOrder(..)
                 | OrderAccountCommand::ConcludeOrder { .. }
                 | OrderAccountCommand::FreezeOrder(_) => Ok(WitnessScript::TRUE),
@@ -379,6 +396,7 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for SignatureOnlyTx {
                 outpoint: _,
                 utxo,
                 utxo_source: _,
+                pool_data: _,
             } => match utxo {
                 TxOutput::Transfer(_val, dest) | TxOutput::LockThenTransfer(_val, dest, _) => {
                     Ok(to_signature_witness_script(ctx, dest))
@@ -471,7 +489,10 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for SignatureOnlyTx {
                 }
                 AccountCommand::FillOrder(_, _, _) => Ok(WitnessScript::TRUE),
             },
-            InputInfo::OrderAccountCommand { command } => match command {
+            InputInfo::OrderAccountCommand {
+                command,
+                order_data,
+            } => match command {
                 OrderAccountCommand::FillOrder(_, _, _) => Ok(WitnessScript::TRUE),
                 OrderAccountCommand::FreezeOrder(order_id)
                 | OrderAccountCommand::ConcludeOrder {

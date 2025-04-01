@@ -23,6 +23,7 @@ use common::{
         output_value::OutputValue,
         signature::{
             inputsig::{standard_signature::StandardInputSignature, InputWitness},
+            sighash::SighashInputInfo,
             DestinationSigError,
         },
         tokens::{
@@ -1399,16 +1400,14 @@ fn conclude_order_check_signature(#[case] seed: Seed, #[case] version: OrdersVer
                 ))
                 .build();
 
-            let inputs_utxos: Vec<Option<TxOutput>> = vec![None];
-            let inputs_utxos_refs =
-                inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
+            // FIXME: This should fail
             let (some_sk, some_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
             let account_sig = StandardInputSignature::produce_uniparty_signature_for_input(
                 &some_sk,
                 Default::default(),
                 Destination::PublicKey(some_pk),
                 &tx,
-                &inputs_utxos_refs,
+                &[SighashInputInfo::None],
                 0,
                 &mut rng,
             )
@@ -1456,14 +1455,13 @@ fn conclude_order_check_signature(#[case] seed: Seed, #[case] version: OrdersVer
             ))
             .build();
 
-        let inputs_utxos: Vec<Option<TxOutput>> = vec![None];
-        let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
+        // FIXME: these should fail
         let account_sig = StandardInputSignature::produce_uniparty_signature_for_input(
             &order_sk,
             Default::default(),
             Destination::PublicKey(order_pk),
             &tx,
-            &inputs_utxos_refs,
+            &[SighashInputInfo::None],
             0,
             &mut rng,
         )
@@ -2628,16 +2626,13 @@ fn freeze_order_check_signature(#[case] seed: Seed) {
                 )
                 .build();
 
-            let inputs_utxos: Vec<Option<TxOutput>> = vec![None];
-            let inputs_utxos_refs =
-                inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
             let (some_sk, some_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
             let account_sig = StandardInputSignature::produce_uniparty_signature_for_input(
                 &some_sk,
                 Default::default(),
                 Destination::PublicKey(some_pk),
                 &tx,
-                &inputs_utxos_refs,
+                &[SighashInputInfo::None],
                 0,
                 &mut rng,
             )
@@ -2673,14 +2668,12 @@ fn freeze_order_check_signature(#[case] seed: Seed) {
             )
             .build();
 
-        let inputs_utxos: Vec<Option<TxOutput>> = vec![None];
-        let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
         let account_sig = StandardInputSignature::produce_uniparty_signature_for_input(
             &order_sk,
             Default::default(),
             Destination::PublicKey(order_pk),
             &tx,
-            &inputs_utxos_refs,
+            &[SighashInputInfo::None],
             0,
             &mut rng,
         )

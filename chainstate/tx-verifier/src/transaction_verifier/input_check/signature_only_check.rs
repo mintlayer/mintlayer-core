@@ -16,7 +16,9 @@
 use std::convert::Infallible;
 
 use common::chain::{
-    signature::{inputsig::InputWitness, DestinationSigError, Transactable},
+    signature::{
+        inputsig::InputWitness, sighash::SighashInputInfo, DestinationSigError, Transactable,
+    },
     tokens::TokenId,
     ChainConfig, DelegationId, Destination, PoolId, SignedTransaction, TxInput, TxOutput,
 };
@@ -31,7 +33,8 @@ struct InputVerifyContextSignature<'a, T> {
     chain_config: &'a ChainConfig,
     tx: &'a T,
     outpoint_destination: &'a Destination,
-    inputs_utxos: &'a [Option<&'a TxOutput>],
+    //inputs_utxos: &'a [Option<&'a TxOutput>],
+    sighash_inputs_infos: &'a [SighashInputInfo<'a>],
     input_num: usize,
     input_data: PerInputData<'a>,
 }
@@ -47,8 +50,8 @@ impl<T: Transactable> SignatureContext for InputVerifyContextSignature<'_, T> {
         self.tx
     }
 
-    fn input_utxos(&self) -> &[Option<&TxOutput>] {
-        self.inputs_utxos
+    fn sighash_inputs_info(&self) -> &[SighashInputInfo] {
+        self.sighash_inputs_infos
     }
 
     fn input_num(&self) -> usize {
@@ -106,7 +109,7 @@ pub fn verify_tx_signature<T: Transactable + SignatureOnlyVerifiable>(
     chain_config: &ChainConfig,
     outpoint_destination: &Destination,
     tx: &T,
-    inputs_utxos: &[Option<&TxOutput>],
+    sighash_inputs_infos: &[SighashInputInfo],
     input_num: usize,
 ) -> Result<(), InputCheckError> {
     let map_sig_err = |e: DestinationSigError| {
@@ -129,30 +132,41 @@ pub fn verify_tx_signature<T: Transactable + SignatureOnlyVerifiable>(
         .map_err(map_sig_err)?;
 
     ensure!(
-        inputs.len() == inputs_utxos.len(),
+        inputs.len() == sighash_inputs_infos.len(),
         map_sig_err(DestinationSigError::InvalidUtxoCountVsInputs(
-            inputs_utxos.len(),
+            sighash_inputs_infos.len(),
             inputs.len()
         ))
     );
 
     let input_info = match input {
         TxInput::Utxo(outpoint) => {
-            let utxo = inputs_utxos[input_num]
-                .ok_or(InputCheckError::new(
-                    input_num,
-                    InputCheckErrorPayload::MissingUtxo(outpoint.clone()),
-                ))?
-                .clone();
+            let (utxo, pool_data) = match sighash_inputs_infos[input_num] {
+                SighashInputInfo::Utxo(output) => (output.clone(), None),
+                SighashInputInfo::PoolDecommission(output, pool_data) => {
+                    (output.clone(), Some(pool_data.clone()))
+                }
+                SighashInputInfo::None | SighashInputInfo::Order { .. } => {
+                    return Err(InputCheckError::new(
+                        input_num,
+                        InputCheckErrorPayload::MissingUtxo(outpoint.clone()),
+                    ))
+                }
+            };
+
             InputInfo::Utxo {
                 outpoint,
                 utxo,
                 utxo_source: None,
+                pool_data,
             }
         }
         TxInput::Account(outpoint) => InputInfo::Account { outpoint },
         TxInput::AccountCommand(_, command) => InputInfo::AccountCommand { command },
-        TxInput::OrderAccountCommand(command) => InputInfo::OrderAccountCommand { command },
+        TxInput::OrderAccountCommand(command) => InputInfo::OrderAccountCommand {
+            command,
+            order_data: None, //FIXME: get Some from sighash_inputs_infos
+        },
     };
     let input_witness = tx.signatures()[input_num]
         .clone()
@@ -164,7 +178,7 @@ pub fn verify_tx_signature<T: Transactable + SignatureOnlyVerifiable>(
         chain_config,
         tx,
         outpoint_destination,
-        inputs_utxos,
+        sighash_inputs_infos,
         input_num,
         input_data,
     };

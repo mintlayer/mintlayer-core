@@ -30,12 +30,12 @@ use crate::{
         output_value::OutputValue,
         signature::{
             inputsig::{standard_signature::StandardInputSignature, InputWitness},
-            sighash::{sighashtype::SigHashType, InputInfo},
+            sighash::{sighashtype::SigHashType, SighashInputInfo},
             DestinationSigError, EvaluatedInputWitness, Signable,
         },
         signed_transaction::SignedTransaction,
         AccountNonce, AccountSpending, ChainConfig, DelegationId, Destination, OrderData, OrderId,
-        PoolData, Transaction, TransactionCreationError, TxInput, TxOutput,
+        PoolData, PoolId, Transaction, TransactionCreationError, TxInput, TxOutput,
     },
     primitives::{amount::UnsignedIntType, per_thousand::PerThousand, Amount, Id, H256},
 };
@@ -97,24 +97,26 @@ pub enum InputInfoVal {
         ask_balance: Amount,
         give_balance: Amount,
     },
-    Pool(PoolData),
+    PoolDecommission(TxOutput, PoolData),
 }
 
-impl<'a> Into<InputInfo<'a>> for &'a InputInfoVal {
-    fn into(self) -> InputInfo<'a> {
+impl<'a> Into<SighashInputInfo<'a>> for &'a InputInfoVal {
+    fn into(self) -> SighashInputInfo<'a> {
         match self {
-            InputInfoVal::None => InputInfo::None,
-            InputInfoVal::Utxo(utxo) => InputInfo::Utxo(utxo),
+            InputInfoVal::None => SighashInputInfo::None,
+            InputInfoVal::Utxo(utxo) => SighashInputInfo::Utxo(utxo),
             InputInfoVal::Order {
                 data,
                 ask_balance,
                 give_balance,
-            } => InputInfo::Order {
+            } => SighashInputInfo::Order {
                 data,
                 ask_balance: *ask_balance,
                 give_balance: *give_balance,
             },
-            InputInfoVal::Pool(data) => InputInfo::Pool(data),
+            InputInfoVal::PoolDecommission(utxo, data) => {
+                SighashInputInfo::PoolDecommission(utxo, data)
+            }
         }
     }
 }
@@ -145,7 +147,11 @@ pub fn generate_inputs_infos(
             }
             3 => {
                 let (data, priv_key) = generate_pool_data(rng);
-                (InputInfoVal::Pool(data), Some(priv_key))
+                let utxo = TxOutput::ProduceBlockFromStake(
+                    data.decommission_destination().clone(),
+                    PoolId::new(H256::random_using(rng)),
+                );
+                (InputInfoVal::PoolDecommission(utxo, data), Some(priv_key))
             }
             _ => unreachable!(),
         })
@@ -200,24 +206,26 @@ impl MutableTransaction {
 pub fn generate_unsigned_tx(
     rng: &mut (impl Rng + CryptoRng),
     destination: &Destination,
-    inputs_info: &[InputInfo],
+    inputs_info: &[SighashInputInfo],
     outputs_count: usize,
 ) -> Result<Transaction, TransactionCreationError> {
     let inputs = inputs_info
         .iter()
         .map(|info| match info {
-            InputInfo::None => TxInput::from_account(
+            SighashInputInfo::None => TxInput::from_account(
                 AccountNonce::new(rng.gen()),
                 AccountSpending::DelegationBalance(
                     DelegationId::new(H256::random_using(rng)),
                     Amount::from_atoms(rng.gen()),
                 ),
             ),
-            InputInfo::Utxo(_) | InputInfo::Pool(_) => TxInput::from_utxo(
-                Id::<Transaction>::new(H256::random_using(rng)).into(),
-                rng.gen(),
-            ),
-            InputInfo::Order { .. } => {
+            SighashInputInfo::Utxo(_) | SighashInputInfo::PoolDecommission(..) => {
+                TxInput::from_utxo(
+                    Id::<Transaction>::new(H256::random_using(rng)).into(),
+                    rng.gen(),
+                )
+            }
+            SighashInputInfo::Order { .. } => {
                 TxInput::OrderAccountCommand(chain::OrderAccountCommand::FillOrder(
                     OrderId::new(H256::random_using(rng)),
                     Amount::from_atoms(rng.gen()),
@@ -243,7 +251,7 @@ pub fn generate_unsigned_tx(
 pub fn sign_whole_tx(
     rng: &mut (impl Rng + CryptoRng),
     tx: Transaction,
-    inputs_info: &[InputInfo],
+    inputs_info: &[SighashInputInfo],
     private_key: &PrivateKey,
     sighash_type: SigHashType,
     destination: &Destination,
@@ -273,7 +281,7 @@ pub fn generate_and_sign_tx(
     chain_config: &ChainConfig,
     rng: &mut (impl Rng + CryptoRng),
     destination: &Destination,
-    inputs_info: &[InputInfo],
+    inputs_info: &[SighashInputInfo],
     outputs: usize,
     private_key: &PrivateKey,
     sighash_type: SigHashType,
@@ -291,7 +299,7 @@ pub fn generate_and_sign_tx(
 pub fn make_signature(
     rng: &mut (impl Rng + CryptoRng),
     tx: &Transaction,
-    inputs_info: &[InputInfo],
+    inputs_info: &[SighashInputInfo],
     input_num: usize,
     private_key: &PrivateKey,
     sighash_type: SigHashType,
@@ -312,7 +320,7 @@ pub fn make_signature(
 pub fn verify_signed_tx(
     chain_config: &ChainConfig,
     tx: &SignedTransaction,
-    inputs_info: &[InputInfo],
+    inputs_info: &[SighashInputInfo],
     destination: &Destination,
 ) -> Result<(), DestinationSigError> {
     for i in 0..tx.inputs().len() {
@@ -362,7 +370,7 @@ pub fn verify_signature<T: Signable>(
     outpoint_destination: &Destination,
     tx: &T,
     input_witness: &InputWitness,
-    inputs_info: &[InputInfo],
+    inputs_info: &[SighashInputInfo],
     input_num: usize,
 ) -> Result<(), DestinationSigError> {
     let eval_witness = match input_witness.clone() {

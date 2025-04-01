@@ -30,7 +30,7 @@ use common::{
                 standard_signature::StandardInputSignature,
                 InputWitness,
             },
-            sighash::{sighashtype::SigHashType, signature_hash},
+            sighash::{sighashtype::SigHashType, signature_hash, SighashInputInfo},
         },
         ChainConfig, Destination, Transaction, TxOutput,
     },
@@ -149,7 +149,7 @@ impl KeyManager {
         destination: &Destination,
         chain_config: &ChainConfig,
         tx: &Transaction,
-        inputs_utxos: &[Option<&TxOutput>],
+        inputs_info: &[SighashInputInfo],
         input_num: usize,
     ) -> Option<InputWitness> {
         match destination {
@@ -163,7 +163,7 @@ impl KeyManager {
                     sighash_type,
                     destination.clone(),
                     tx,
-                    inputs_utxos,
+                    inputs_info,
                     input_num,
                     rng,
                 )
@@ -180,7 +180,7 @@ impl KeyManager {
                     sighash_type,
                     destination.clone(),
                     tx,
-                    inputs_utxos,
+                    inputs_info,
                     input_num,
                     rng,
                 )
@@ -195,7 +195,7 @@ impl KeyManager {
                     AuthorizedClassicalMultisigSpend::new_empty(challenge.clone());
                 let sighash_type = SigHashType::all();
 
-                let sighash = signature_hash(sighash_type, tx, inputs_utxos, input_num).unwrap();
+                let sighash = signature_hash(sighash_type, tx, inputs_info, input_num).unwrap();
 
                 for (key_index, (private_key, _pub_key)) in multisig.keys.iter().enumerate() {
                     let res = sign_classical_multisig_spending(
@@ -211,18 +211,19 @@ impl KeyManager {
 
                     match res {
                         ClassicalMultisigCompletionStatus::Complete(sigs) => {
-                            let sig = if inputs_utxos[input_num].is_some_and(is_htlc_output) {
-                                produce_classical_multisig_signature_for_htlc_input(
-                                    chain_config,
-                                    &sigs,
-                                    sighash_type,
-                                    tx,
-                                    inputs_utxos,
-                                    input_num,
-                                )
-                                .unwrap()
-                            } else {
-                                StandardInputSignature::new(sighash_type, sigs.encode())
+                            let sig = match inputs_info[input_num] {
+                                SighashInputInfo::Utxo(output) if is_htlc_output(output) => {
+                                    produce_classical_multisig_signature_for_htlc_input(
+                                        chain_config,
+                                        &sigs,
+                                        sighash_type,
+                                        tx,
+                                        inputs_info,
+                                        input_num,
+                                    )
+                                    .unwrap()
+                                }
+                                _ => StandardInputSignature::new(sighash_type, sigs.encode()),
                             };
 
                             return Some(InputWitness::Standard(sig));

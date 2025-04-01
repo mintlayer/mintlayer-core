@@ -21,7 +21,7 @@ use serialization::{Decode, DecodeAll, Encode};
 use crate::{
     chain::{
         signature::{
-            sighash::{sighashtype::SigHashType, signature_hash, InputInfo},
+            sighash::{sighashtype::SigHashType, signature_hash, SighashInputInfo},
             DestinationSigError, Signable,
         },
         ChainConfig, Destination, Transaction,
@@ -105,7 +105,7 @@ impl StandardInputSignature {
         sighash_type: SigHashType,
         outpoint_destination: Destination,
         tx: &T,
-        inputs_info: &[InputInfo],
+        inputs_info: &[SighashInputInfo],
         input_index: usize,
         rng: R,
     ) -> Result<Self, DestinationSigError> {
@@ -141,7 +141,7 @@ impl StandardInputSignature {
         authorization: &AuthorizedClassicalMultisigSpend,
         sighash_type: SigHashType,
         tx: &Transaction,
-        inputs_info: &[InputInfo],
+        inputs_info: &[SighashInputInfo],
         input_index: usize,
     ) -> Result<Self, DestinationSigError> {
         use super::classical_multisig::multisig_partial_signature::SigsVerifyResult;

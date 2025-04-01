@@ -355,7 +355,7 @@ fn verify_corrupted_signature(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn signing_transactions_should_not_work(#[case] seed: Seed) {
-    use crate::chain::signature::{sighash::InputInfo, tests::utils::verify_signature};
+    use crate::chain::signature::{sighash::SighashInputInfo, tests::utils::verify_signature};
 
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
@@ -370,7 +370,7 @@ fn signing_transactions_should_not_work(#[case] seed: Seed) {
     let tx = generate_unsigned_tx(
         &mut rng,
         &Destination::AnyoneCanSpend,
-        &[InputInfo::Utxo(&input_utxo)],
+        &[SighashInputInfo::Utxo(&input_utxo)],
         1,
     )
     .unwrap();
@@ -395,7 +395,7 @@ fn signing_transactions_should_not_work(#[case] seed: Seed) {
     // transaction signature.
     {
         let expected_hash =
-            signature_hash(sighash_type, &tx, &[InputInfo::Utxo(&input_utxo)], 0).unwrap();
+            signature_hash(sighash_type, &tx, &[SighashInputInfo::Utxo(&input_utxo)], 0).unwrap();
         assert_eq!(tx_data_hash, expected_hash);
 
         let raw_sig = sign_public_key_spending(&private_key, &public_key, &tx_data_hash, &mut rng)
@@ -411,7 +411,7 @@ fn signing_transactions_should_not_work(#[case] seed: Seed) {
             &destination,
             &signed_tx,
             &signed_tx.signatures()[0],
-            &[InputInfo::Utxo(&input_utxo)],
+            &[SighashInputInfo::Utxo(&input_utxo)],
             0,
         )
         .unwrap();
@@ -438,7 +438,7 @@ fn signing_transactions_should_not_work(#[case] seed: Seed) {
         &destination,
         &signed_tx,
         &signed_tx.signatures()[0],
-        &[InputInfo::Utxo(&input_utxo)],
+        &[SighashInputInfo::Utxo(&input_utxo)],
         0,
     )
     .unwrap_err();

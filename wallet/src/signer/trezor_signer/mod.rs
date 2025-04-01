@@ -300,7 +300,9 @@ impl Signer for TrezorSigner {
             .mintlayer_sign_tx(chain_type, inputs, outputs, utxos)
             .map_err(|err| TrezorError::DeviceError(err.to_string()))?;
 
-        let inputs_utxo_refs: Vec<_> = ptx.input_utxos().iter().map(|u| u.as_ref()).collect();
+        // let inputs_utxo_refs: Vec<_> = ptx.input_utxos().iter().map(|u| u.as_ref()).collect();
+        // FIXME: PartiallySignedTransaction should contain sighash infos instead of utxos
+        let inputs_utxo_refs = vec![];
 
         let (witnesses, prev_statuses, new_statuses) = ptx
             .witnesses()

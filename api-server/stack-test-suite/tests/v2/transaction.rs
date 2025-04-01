@@ -105,7 +105,7 @@ async fn multiple_tx_in_same_block(#[case] seed: Seed) {
                         SigHashType::all(),
                         alice_destination.clone(),
                         &signed_tx1,
-                        &[Some(&previous_tx_out)],
+                        &[SighashInputInfo::Utxo(&previous_tx_out)],
                         0,
                         &mut rng,
                     )
@@ -152,7 +152,7 @@ async fn multiple_tx_in_same_block(#[case] seed: Seed) {
                         SigHashType::all(),
                         alice_destination.clone(),
                         &transaction2,
-                        &[Some(&previous_tx_out)],
+                        &[SighashInputInfo::Utxo(&previous_tx_out)],
                         0,
                         &mut rng,
                     )

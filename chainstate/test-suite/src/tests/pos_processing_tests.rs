@@ -41,7 +41,7 @@ use common::{
         output_value::OutputValue,
         signature::{
             inputsig::{standard_signature::StandardInputSignature, InputWitness},
-            sighash::sighashtype::SigHashType,
+            sighash::{sighashtype::SigHashType, SighashInputInfo},
         },
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
@@ -279,7 +279,7 @@ fn produce_kernel_signature(
         SigHashType::default(),
         staking_destination,
         &block_reward_tx,
-        std::iter::once(Some(utxo)).collect::<Vec<_>>().as_slice(),
+        std::iter::once(SighashInputInfo::Utxo(utxo)).collect::<Vec<_>>().as_slice(),
         0,
         rng,
     )
@@ -2135,7 +2135,7 @@ fn pos_decommission_genesis_pool(#[case] seed: Seed) {
             SigHashType::all(),
             Destination::PublicKey(genesis_staking_pk),
             &tx,
-            &[Some(input_utxo.output())],
+            &[SighashInputInfo::Utxo(input_utxo.output())],
             0,
             &mut rng,
         )

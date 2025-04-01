@@ -164,7 +164,10 @@ async fn ok_tokens(#[case] seed: Seed) {
                         SigHashType::all(),
                         alice_destination.clone(),
                         &mint_transaction,
-                        &[Some(&issue_token_transaction.outputs()[0]), None],
+                        &[
+                            SighashInputInfo::Utxo(&issue_token_transaction.outputs()[0]),
+                            SighashInputInfo::None,
+                        ],
                         1,
                         &mut rng,
                     )

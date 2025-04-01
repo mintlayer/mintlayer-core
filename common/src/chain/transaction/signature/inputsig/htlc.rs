@@ -19,7 +19,7 @@ use serialization::Encode;
 use standard_signature::StandardInputSignature;
 
 use crate::chain::{
-    htlc::HtlcSecret, signature::sighash::InputInfo, ChainConfig, Destination, Transaction,
+    htlc::HtlcSecret, signature::sighash::SighashInputInfo, ChainConfig, Destination, Transaction,
 };
 
 use super::{
@@ -35,7 +35,7 @@ pub fn produce_uniparty_signature_for_htlc_input<T: Signable, R: Rng + CryptoRng
     sighash_type: SigHashType,
     outpoint_destination: Destination,
     tx: &T,
-    inputs_info: &[InputInfo],
+    inputs_info: &[SighashInputInfo],
     input_num: usize,
     htlc_secret: HtlcSecret,
     rng: R,
@@ -65,7 +65,7 @@ pub fn produce_classical_multisig_signature_for_htlc_input(
     authorization: &AuthorizedClassicalMultisigSpend,
     sighash_type: SigHashType,
     tx: &Transaction,
-    inputs_info: &[InputInfo],
+    inputs_info: &[SighashInputInfo],
     input_num: usize,
 ) -> Result<StandardInputSignature, DestinationSigError> {
     let sig = StandardInputSignature::produce_classical_multisig_signature_for_input(

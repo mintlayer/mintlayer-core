@@ -32,7 +32,7 @@ use common::{
                 },
                 standard_signature::StandardInputSignature,
             },
-            sighash::{sighashtype::SigHashType, signature_hash},
+            sighash::{sighashtype::SigHashType, signature_hash, SighashInputInfo},
             DestinationSigError,
         },
         signed_transaction::SignedTransaction,
@@ -149,7 +149,7 @@ fn spend_htlc_with_secret(#[case] seed: Seed) {
                     (&PublicKey::from_private_key(&test_fixture.alice_sk)).into(),
                 ),
                 &tx,
-                &[Some(&tx_1.transaction().outputs()[0])],
+                &[SighashInputInfo::Utxo(&tx_1.transaction().outputs()[0])],
                 0,
                 test_fixture.secret.clone(),
                 &mut rng,
@@ -196,7 +196,7 @@ fn spend_htlc_with_secret(#[case] seed: Seed) {
                     (&PublicKey::from_private_key(&test_fixture.bob_sk)).into(),
                 ),
                 &tx,
-                &[Some(&tx_1.transaction().outputs()[0])],
+                &[SighashInputInfo::Utxo(&tx_1.transaction().outputs()[0])],
                 0,
                 &mut rng,
             )
@@ -244,7 +244,7 @@ fn spend_htlc_with_secret(#[case] seed: Seed) {
                     (&PublicKey::from_private_key(&test_fixture.bob_sk)).into(),
                 ),
                 &tx,
-                &[Some(&tx_1.transaction().outputs()[0])],
+                &[SighashInputInfo::Utxo(&tx_1.transaction().outputs()[0])],
                 0,
                 random_secret,
                 &mut rng,
@@ -286,7 +286,7 @@ fn spend_htlc_with_secret(#[case] seed: Seed) {
             SigHashType::all(),
             Destination::PublicKeyHash((&PublicKey::from_private_key(&test_fixture.bob_sk)).into()),
             &tx,
-            &[Some(&tx_1.transaction().outputs()[0])],
+            &[SighashInputInfo::Utxo(&tx_1.transaction().outputs()[0])],
             0,
             test_fixture.secret,
             &mut rng,
@@ -354,7 +354,7 @@ fn refund_htlc(#[case] seed: Seed) {
                 let sighash = signature_hash(
                     SigHashType::all(),
                     &tx,
-                    &[Some(&tx_1.transaction().outputs()[0])],
+                    &[SighashInputInfo::Utxo(&tx_1.transaction().outputs()[0])],
                     0,
                 )
                 .unwrap();
@@ -373,7 +373,7 @@ fn refund_htlc(#[case] seed: Seed) {
                 &authorization,
                 SigHashType::all(),
                 &tx,
-                &[Some(&tx_1.transaction().outputs()[0])],
+                &[SighashInputInfo::Utxo(&tx_1.transaction().outputs()[0])],
                 0,
             )
             .unwrap();
@@ -425,7 +425,7 @@ fn refund_htlc(#[case] seed: Seed) {
                 let sighash = signature_hash(
                     SigHashType::all(),
                     &tx,
-                    &[Some(&tx_1.transaction().outputs()[0])],
+                    &[SighashInputInfo::Utxo(&tx_1.transaction().outputs()[0])],
                     0,
                 )
                 .unwrap();
@@ -480,7 +480,7 @@ fn refund_htlc(#[case] seed: Seed) {
                 let sighash = signature_hash(
                     SigHashType::all(),
                     &tx,
-                    &[Some(&tx_1.transaction().outputs()[0])],
+                    &[SighashInputInfo::Utxo(&tx_1.transaction().outputs()[0])],
                     0,
                 )
                 .unwrap();
@@ -533,7 +533,7 @@ fn refund_htlc(#[case] seed: Seed) {
             let sighash = signature_hash(
                 SigHashType::all(),
                 &tx,
-                &[Some(&tx_1.transaction().outputs()[0])],
+                &[SighashInputInfo::Utxo(&tx_1.transaction().outputs()[0])],
                 0,
             )
             .unwrap();
@@ -552,7 +552,7 @@ fn refund_htlc(#[case] seed: Seed) {
             &authorization,
             SigHashType::all(),
             &tx,
-            &[Some(&tx_1.transaction().outputs()[0])],
+            &[SighashInputInfo::Utxo(&tx_1.transaction().outputs()[0])],
             0,
         )
         .unwrap();
@@ -814,7 +814,7 @@ fn spend_tokens(#[case] seed: Seed) {
             SigHashType::all(),
             Destination::PublicKeyHash((&PublicKey::from_private_key(&test_fixture.bob_sk)).into()),
             &tx,
-            &[Some(&mint_token_v1_tx.transaction().outputs()[0])],
+            &[SighashInputInfo::Utxo(&mint_token_v1_tx.transaction().outputs()[0])],
             0,
             test_fixture.secret,
             &mut rng,

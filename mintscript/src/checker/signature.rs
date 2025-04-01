@@ -14,8 +14,10 @@
 // limitations under the License.
 
 use common::chain::{
-    signature::{sighash::InputInfo, DestinationSigError, EvaluatedInputWitness, Transactable},
-    ChainConfig, Destination, TxOutput,
+    signature::{
+        sighash::SighashInputInfo, DestinationSigError, EvaluatedInputWitness, Transactable,
+    },
+    ChainConfig, Destination,
 };
 
 pub trait SignatureChecker<C> {
@@ -56,7 +58,7 @@ pub trait SignatureContext {
     fn transaction(&self) -> &Self::Tx;
 
     /// Get the list of input utxos
-    fn input_utxos(&self) -> &[Option<&TxOutput>];
+    fn sighash_inputs_info(&self) -> &[SighashInputInfo];
 
     /// Get the input number
     fn input_num(&self) -> usize;
@@ -78,20 +80,19 @@ impl<C: SignatureContext> SignatureChecker<C> for StandardSignatureChecker {
         let input_num = ctx.input_num();
         let chain_config = ctx.chain_config();
 
-        // FIXME: check height and version
         // FIXME: get from context
-        let inputs_info_refs = ctx
-            .input_utxos()
-            .iter()
-            .map(|utxo| utxo.map_or(InputInfo::None, |utxo| InputInfo::Utxo(utxo)))
-            .collect::<Vec<_>>();
+        //let inputs_info_refs = ctx
+        //    .sighash_inputs_info()
+        //    .iter()
+        //    .map(|utxo| utxo.map_or(SighashInputInfo::None, |utxo| SighashInputInfo::Utxo(utxo)))
+        //    .collect::<Vec<_>>();
 
         common::chain::signature::verify_signature(
             chain_config,
             destination,
             tx,
             witness,
-            &inputs_info_refs,
+            ctx.sighash_inputs_info(),
             input_num,
         )
     }

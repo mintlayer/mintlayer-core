@@ -58,6 +58,7 @@ impl TestInputInfo {
                 outpoint,
                 utxo: utxo.output().clone(),
                 utxo_source: Some(utxo.source().clone()),
+                pool_data: None, // FIXME: must be tested?
             },
             Self::Account { outpoint } => InputInfo::Account { outpoint },
             Self::AccountCommand { command } => InputInfo::AccountCommand { command },

@@ -38,7 +38,7 @@ use common::{
                 standard_signature::StandardInputSignature,
                 InputWitness,
             },
-            sighash::{sighashtype::SigHashType, signature_hash},
+            sighash::{sighashtype::SigHashType, signature_hash, SighashInputInfo},
             DestinationSigError,
         },
         stakelock::StakePoolData,
@@ -1140,6 +1140,7 @@ pub fn encode_witness(
     input_num: u32,
     network: Network,
 ) -> Result<Vec<u8>, Error> {
+    // FIXME: encode order
     let chain_config = Builder::new(network.into()).build();
 
     let private_key = PrivateKey::decode_all(&mut &private_key_bytes[..])
@@ -1156,14 +1157,21 @@ pub fn encode_witness(
         input_utxos.push(utxo);
     }
 
-    let utxos = input_utxos.iter().map(Option::as_ref).collect::<Vec<_>>();
+    let inputs_info_refs = input_utxos
+        .iter()
+        .map(|output| {
+            output.as_ref().map_or(SighashInputInfo::None, |output| {
+                SighashInputInfo::Utxo(output)
+            })
+        })
+        .collect::<Vec<_>>();
 
     let witness = StandardInputSignature::produce_uniparty_signature_for_input(
         &private_key,
         sighashtype.into(),
         destination,
         &tx,
-        &utxos,
+        &inputs_info_refs,
         input_num as usize,
         randomness::make_true_rng(),
     )
@@ -1203,7 +1211,14 @@ pub fn encode_witness_htlc_secret(
         input_utxos.push(utxo);
     }
 
-    let utxos = input_utxos.iter().map(Option::as_ref).collect::<Vec<_>>();
+    let inputs_info_refs = input_utxos
+        .iter()
+        .map(|output| {
+            output.as_ref().map_or(SighashInputInfo::None, |output| {
+                SighashInputInfo::Utxo(output)
+            })
+        })
+        .collect::<Vec<_>>();
 
     let secret = HtlcSecret::decode_all(&mut secret).map_err(|_| Error::InvalidHtlcSecret)?;
 
@@ -1212,7 +1227,7 @@ pub fn encode_witness_htlc_secret(
         sighashtype.into(),
         destination,
         &tx,
-        &utxos,
+        &inputs_info_refs,
         input_num as usize,
         secret,
         randomness::make_true_rng(),
@@ -1281,9 +1296,16 @@ pub fn encode_witness_htlc_multisig(
         input_utxos.push(utxo);
     }
 
-    let utxos = input_utxos.iter().map(Option::as_ref).collect::<Vec<_>>();
+    let inputs_info_refs = input_utxos
+        .iter()
+        .map(|output| {
+            output.as_ref().map_or(SighashInputInfo::None, |output| {
+                SighashInputInfo::Utxo(output)
+            })
+        })
+        .collect::<Vec<_>>();
     let sighashtype = sighashtype.into();
-    let sighash = signature_hash(sighashtype, &tx, &utxos, input_num as usize)
+    let sighash = signature_hash(sighashtype, &tx, &inputs_info_refs, input_num as usize)
         .map_err(|_| Error::InvalidSignatureEncoding)?;
 
     let mut rng = randomness::make_true_rng();

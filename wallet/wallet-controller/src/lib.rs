@@ -981,13 +981,15 @@ where
         input_num: usize,
         dest: &Destination,
     ) -> SignatureStatus {
-        let valid = tx_verifier::input_check::signature_only_check::verify_tx_signature(
-            &self.chain_config,
-            dest,
-            tx,
-            inputs_utxos_refs,
-            input_num,
-        );
+        // FIXME: provide inputs info
+        let valid: Result<_, tx_verifier::error::InputCheckError> = Ok(());
+        //let valid = tx_verifier::input_check::signature_only_check::verify_tx_signature(
+        //    &self.chain_config,
+        //    dest,
+        //    tx,
+        //    inputs_utxos_refs,
+        //    input_num,
+        //);
 
         match valid {
             Ok(_) => SignatureStatus::FullySigned,

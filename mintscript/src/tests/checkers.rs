@@ -33,10 +33,8 @@ fn make_dummy_tx(
     let utxos: Vec<_> = (0_usize..n_inputs)
         .map(|_| TxOutput::Transfer(gen_value(), Destination::AnyoneCanSpend))
         .collect();
-    let inputs_info_refs = utxos
-        .iter()
-        .map(|utxo| common::chain::signature::sighash::InputInfo::Utxo(utxo))
-        .collect::<Vec<_>>();
+    let inputs_info_refs =
+        utxos.iter().map(|utxo| SighashInputInfo::Utxo(utxo)).collect::<Vec<_>>();
 
     let transaction = {
         let output = TxOutput::Burn(gen_value());
@@ -86,6 +84,9 @@ fn check_sig(#[case] seed: Seed) {
     let pubkey0 = &keypairs[0].1;
 
     let (utxos, transaction) = make_dummy_tx(&mut rng, &privkeys);
+    // FIXME: reconsider
+    let inputs_info_refs =
+        utxos.iter().map(|utxo| SighashInputInfo::Utxo(utxo)).collect::<Vec<_>>();
     let sig0 = &transaction.signatures()[0];
 
     let eval_witness = match sig0.clone() {
@@ -95,7 +96,7 @@ fn check_sig(#[case] seed: Seed) {
     let script = WitnessScript::signature(Destination::PublicKey(pubkey0.clone()), eval_witness);
 
     // Test a successful check
-    let mut checker = MockContext::new(0, &transaction, &utxos).into_checker();
+    let mut checker = MockContext::new(0, &transaction, inputs_info_refs.clone()).into_checker();
     script.verify(&mut checker).expect("Check to succeed");
 
     // Test checks which mutate the original transaction, the signature check should fail
@@ -105,7 +106,7 @@ fn check_sig(#[case] seed: Seed) {
             Err(_) => continue,
         };
 
-        let mut checker = MockContext::new(0, &bad_tx, &utxos).into_checker();
+        let mut checker = MockContext::new(0, &bad_tx, inputs_info_refs.clone()).into_checker();
         match script.verify(&mut checker).expect_err("this should fail") {
             ScriptError::Signature(_e) => (),
             e @ (ScriptError::Timelock(_)
@@ -134,11 +135,14 @@ fn check_timelocks(
         .collect();
     let privkeys: Vec<_> = keypairs.iter().map(|(priv_k, _pub_k)| priv_k).collect();
     let (utxos, transaction) = make_dummy_tx(rng, &privkeys);
+    // FIXME: reconsider
+    let inputs_info_refs =
+        utxos.iter().map(|utxo| SighashInputInfo::Utxo(utxo)).collect::<Vec<_>>();
 
     let script = WitnessScript::timelock(timelock);
 
     // Test a successful check
-    let mut checker = MockContext::new(0, &transaction, &utxos)
+    let mut checker = MockContext::new(0, &transaction, inputs_info_refs)
         .with_block_heights(utxo_height, spend_height)
         .with_timestamps(utxo_time, spend_time)
         .into_checker();

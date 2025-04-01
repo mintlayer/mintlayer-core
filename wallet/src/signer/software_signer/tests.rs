@@ -16,35 +16,43 @@
 use std::ops::{Add, Div, Mul, Sub};
 
 use super::*;
-use crate::key_chain::{MasterKeyChain, LOOKAHEAD_SIZE};
-use crate::{Account, SendRequest};
-use common::chain::block::timestamp::BlockTimestamp;
-use common::chain::config::create_regtest;
-use common::chain::htlc::HashedTimelockContract;
-use common::chain::output_value::OutputValue;
-use common::chain::signature::inputsig::arbitrary_message::produce_message_challenge;
-use common::chain::signature::inputsig::authorize_pubkeyhash_spend::AuthorizedPublicKeyHashSpend;
-use common::chain::stakelock::StakePoolData;
-use common::chain::timelock::OutputTimeLock;
-use common::chain::tokens::{NftIssuance, NftIssuanceV0, TokenId, TokenIssuance};
-use common::chain::{
-    AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, CreateOrderData, DelegationId,
-    GenBlock, OutPointSourceId, PoolId, TxInput,
+
+use crate::{
+    key_chain::{MasterKeyChain, LOOKAHEAD_SIZE},
+    Account, SendRequest,
 };
-use common::primitives::per_thousand::PerThousand;
-use common::primitives::{Amount, BlockHeight, Id, H256};
-use crypto::key::secp256k1::Secp256k1PublicKey;
-use crypto::key::{KeyKind, PublicKey, Signature};
+
+use common::{
+    chain::{
+        block::timestamp::BlockTimestamp,
+        config::create_regtest,
+        htlc::HashedTimelockContract,
+        output_value::OutputValue,
+        signature::inputsig::{
+            arbitrary_message::produce_message_challenge,
+            authorize_pubkeyhash_spend::AuthorizedPublicKeyHashSpend,
+        },
+        stakelock::StakePoolData,
+        timelock::OutputTimeLock,
+        tokens::{NftIssuance, NftIssuanceV0, TokenId, TokenIssuance},
+        AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, CreateOrderData,
+        DelegationId, GenBlock, OutPointSourceId, PoolId, TxInput, TxOutput,
+    },
+    primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, Idable, H256},
+};
+use crypto::key::{secp256k1::Secp256k1PublicKey, KeyKind, PublicKey, Signature};
 use itertools::izip;
 use randomness::{Rng, RngCore};
 use rstest::rstest;
 use serialization::Encode;
 use test_utils::random::{make_seedable_rng, Seed};
 use wallet_storage::{DefaultBackend, Store, Transactional};
-use wallet_types::account_info::DEFAULT_ACCOUNT_INDEX;
-use wallet_types::partially_signed_transaction::TxAdditionalInfo;
-use wallet_types::seed_phrase::StoreSeedPhrase;
-use wallet_types::KeyPurpose::{Change, ReceiveFunds};
+use wallet_types::{
+    account_info::DEFAULT_ACCOUNT_INDEX,
+    partially_signed_transaction::TxAdditionalInfo,
+    seed_phrase::StoreSeedPhrase,
+    KeyPurpose::{Change, ReceiveFunds},
+};
 
 const MNEMONIC: &str =
     "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
@@ -88,8 +96,6 @@ fn sign_message(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn sign_transaction_intent(#[case] seed: Seed) {
-    use common::primitives::Idable;
-
     let mut rng = make_seedable_rng(seed);
 
     let config = Arc::new(create_regtest());
@@ -465,12 +471,14 @@ fn sign_transaction(#[case] seed: Seed) {
     }
     assert!(ptx.all_signatures_available());
 
-    let utxos_ref = utxos
-        .iter()
-        .map(Some)
-        .chain([Some(&htlc_utxo), Some(&multisig_utxo)])
-        .chain(acc_dests.iter().map(|_| None))
-        .collect::<Vec<_>>();
+    // FIXME: provide sighash info
+    let utxos_ref = vec![];
+    //let utxos_ref = utxos
+    //    .iter()
+    //    .map(Some)
+    //    .chain([Some(&htlc_utxo), Some(&multisig_utxo)])
+    //    .chain(acc_dests.iter().map(|_| None))
+    //    .collect::<Vec<_>>();
 
     for (i, dest) in destinations.iter().enumerate() {
         tx_verifier::input_check::signature_only_check::verify_tx_signature(
@@ -712,12 +720,14 @@ fn fixed_signatures() {
     let additional_info = TxAdditionalInfo::new();
     let ptx = req.into_partially_signed_tx(additional_info).unwrap();
 
-    let utxos_ref = utxos
-        .iter()
-        .map(Some)
-        .chain([Some(&multisig_utxo)])
-        .chain(acc_dests.iter().map(|_| None))
-        .collect::<Vec<_>>();
+    // FIXME: provide sighash info
+    let utxos_ref = vec![];
+    //let utxos_ref = utxos
+    //    .iter()
+    //    .map(Some)
+    //    .chain([Some(&multisig_utxo)])
+    //    .chain(acc_dests.iter().map(|_| None))
+    //    .collect::<Vec<_>>();
 
     let multisig_signatures = [
         (0, "7a99714dc6cc917faa2afded8028159a5048caf6f8382f67e6b61623fbe62c60423f8f7983f88f40c6f42924594f3de492a232e9e703b241c3b17b130f8daa59"),

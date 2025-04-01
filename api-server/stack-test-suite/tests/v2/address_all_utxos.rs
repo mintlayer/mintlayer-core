@@ -125,7 +125,7 @@ async fn multiple_utxos_to_single_address(#[case] seed: Seed) {
                         SigHashType::all(),
                         alice_destination.clone(),
                         &transaction,
-                        &[Some(&previous_tx_out)],
+                        &[SighashInputInfo::Utxo(&previous_tx_out)],
                         0,
                         &mut rng,
                     )
@@ -201,7 +201,7 @@ async fn multiple_utxos_to_single_address(#[case] seed: Seed) {
                         SigHashType::all(),
                         alice_destination.clone(),
                         &transaction,
-                        &[Some(&previous_tx_out)],
+                        &[SighashInputInfo::Utxo(&previous_tx_out)],
                         0,
                         &mut rng,
                     )
@@ -375,7 +375,7 @@ async fn ok(#[case] seed: Seed) {
                         SigHashType::all(),
                         alice_destination.clone(),
                         &transaction,
-                        &[Some(&previous_tx_out)],
+                        &[SighashInputInfo::Utxo(&previous_tx_out)],
                         0,
                         &mut rng,
                     )
@@ -453,7 +453,7 @@ async fn ok(#[case] seed: Seed) {
                             SigHashType::all(),
                             alice_destination.clone(),
                             &transaction,
-                            &[Some(&previous_tx_out)],
+                            &[SighashInputInfo::Utxo(&previous_tx_out)],
                             0,
                             &mut rng,
                         )

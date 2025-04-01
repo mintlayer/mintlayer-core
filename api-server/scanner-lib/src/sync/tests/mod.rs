@@ -46,7 +46,7 @@ use common::{
                 authorize_pubkey_spend::sign_public_key_spending,
                 standard_signature::StandardInputSignature, InputWitness,
             },
-            sighash::{sighashtype::SigHashType, signature_hash},
+            sighash::{sighashtype::SigHashType, signature_hash, SighashInputInfo},
         },
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
@@ -564,7 +564,7 @@ async fn compare_pool_rewards_with_chainstate_real_state(#[case] seed: Seed) {
     let sighash = signature_hash(
         SigHashType::default(),
         transaction.transaction(),
-        &[Some(&coin_tx_out), Some(&from_block_output)],
+        &[SighashInputInfo::Utxo(&coin_tx_out), SighashInputInfo::Utxo(&from_block_output)],
         1,
     )
     .unwrap();
@@ -786,7 +786,10 @@ async fn reorg_locked_balance(#[case] seed: Seed) {
             let sighash = signature_hash(
                 SigHashType::default(),
                 spend_transaction.transaction(),
-                &[Some(&lock_for_block_count), Some(&lock_until_height)],
+                &[
+                    SighashInputInfo::Utxo(&lock_for_block_count),
+                    SighashInputInfo::Utxo(&lock_until_height),
+                ],
                 idx,
             )
             .unwrap();
@@ -864,7 +867,7 @@ async fn reorg_locked_balance(#[case] seed: Seed) {
             let sighash = signature_hash(
                 SigHashType::default(),
                 spend_time_locked.transaction(),
-                &[Some(&lock_for_sec), Some(&lock_until_time)],
+                &[SighashInputInfo::Utxo(&lock_for_sec), SighashInputInfo::Utxo(&lock_until_time)],
                 idx,
             )
             .unwrap();

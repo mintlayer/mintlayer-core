@@ -31,7 +31,7 @@ pub mod inputsig;
 pub mod sighash;
 
 use serialization::{Decode, Encode};
-use sighash::InputInfo;
+use sighash::SighashInputInfo;
 use thiserror::Error;
 use utils::ensure;
 
@@ -129,7 +129,7 @@ pub fn verify_signature<T: Signable>(
     outpoint_destination: &Destination,
     tx: &T,
     input_witness: &EvaluatedInputWitness,
-    inputs_info: &[InputInfo],
+    inputs_info: &[SighashInputInfo],
     input_index: usize,
 ) -> Result<(), DestinationSigError> {
     let inputs = tx.inputs().ok_or(DestinationSigError::SignatureVerificationWithoutInputs)?;

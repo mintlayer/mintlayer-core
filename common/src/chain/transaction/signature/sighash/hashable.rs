@@ -23,7 +23,7 @@ use crate::{
     primitives::id::{hash_encoded_to, DefaultHashAlgoStream},
 };
 
-use super::InputInfo;
+use super::SighashInputInfo;
 
 pub trait SignatureHashableElement {
     fn signature_hash(
@@ -65,13 +65,13 @@ pub struct SignatureHashableInputs<'a> {
     /// Include utxos of the inputs to make it possible to verify the inputs scripts and amounts without downloading the full transactions
     /// It can be None which means that input spends from an account not utxo
     // FIXME: fix docs
-    inputs_info: &'a [InputInfo<'a>],
+    inputs_info: &'a [SighashInputInfo<'a>],
 }
 
 impl<'a> SignatureHashableInputs<'a> {
     pub fn new(
         inputs: &'a [TxInput],
-        inputs_info: &'a [InputInfo<'a>],
+        inputs_info: &'a [SighashInputInfo<'a>],
     ) -> Result<Self, DestinationSigError> {
         ensure!(
             inputs_info.len() == inputs.len(),
@@ -138,7 +138,7 @@ mod tests {
     use crate::{
         chain::{
             signature::{
-                sighash::{sighashtype::SigHashType, InputInfo},
+                sighash::{sighashtype::SigHashType, SighashInputInfo},
                 tests::utils::{generate_inputs_infos, generate_inputs_utxos},
             },
             OutPointSourceId,
@@ -316,7 +316,9 @@ mod tests {
 
             let inputs_info = inputs_utxos_refs
                 .iter()
-                .map(|utxo| utxo.map_or(InputInfo::None, |utxo| InputInfo::Utxo(utxo)))
+                .map(|utxo| {
+                    utxo.map_or(SighashInputInfo::None, |utxo| SighashInputInfo::Utxo(utxo))
+                })
                 .collect::<Vec<_>>();
             let hashable_inputs_2 = SignatureHashableInputs::new(&inputs, &inputs_info).unwrap();
 

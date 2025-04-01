@@ -139,6 +139,7 @@ pub struct PartiallySignedTransaction {
     tx: Transaction,
     witnesses: Vec<Option<InputWitness>>,
 
+    // FIXME: store input infos
     input_utxos: Vec<Option<TxOutput>>,
     destinations: Vec<Option<Destination>>,
 

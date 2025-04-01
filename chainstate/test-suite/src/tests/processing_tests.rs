@@ -36,7 +36,7 @@ use common::{
         output_value::OutputValue,
         signature::{
             inputsig::{standard_signature::StandardInputSignature, InputWitness},
-            sighash::sighashtype::SigHashType,
+            sighash::{sighashtype::SigHashType, SighashInputInfo},
             DestinationSigError,
         },
         signed_transaction::SignedTransaction,
@@ -1461,7 +1461,7 @@ fn spend_timelocked_signed_output(#[case] seed: Seed) {
                     SigHashType::all(),
                     Destination::PublicKey(public_key.clone()),
                     &tx_2,
-                    &[Some(&tx_1.transaction().outputs()[0])],
+                    &[SighashInputInfo::Utxo(&tx_1.transaction().outputs()[0])],
                     0,
                     &mut rng,
                 )
@@ -1515,7 +1515,7 @@ fn spend_timelocked_signed_output(#[case] seed: Seed) {
                     SigHashType::all(),
                     Destination::PublicKey(random_public_key),
                     &tx_2,
-                    &[Some(&tx_1.transaction().outputs()[0])],
+                    &[SighashInputInfo::Utxo(&tx_1.transaction().outputs()[0])],
                     0,
                     &mut rng,
                 )
@@ -1543,7 +1543,7 @@ fn spend_timelocked_signed_output(#[case] seed: Seed) {
                 SigHashType::all(),
                 Destination::PublicKey(public_key),
                 &tx_2,
-                &[Some(&tx_1.transaction().outputs()[0])],
+                &[SighashInputInfo::Utxo(&tx_1.transaction().outputs()[0])],
                 0,
                 &mut rng,
             )

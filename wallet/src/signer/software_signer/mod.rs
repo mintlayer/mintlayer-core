@@ -31,10 +31,10 @@ use common::chain::{
             standard_signature::StandardInputSignature,
             InputWitness,
         },
-        sighash::{sighashtype::SigHashType, signature_hash},
+        sighash::{sighashtype::SigHashType, signature_hash, SighashInputInfo},
         DestinationSigError,
     },
-    ChainConfig, Destination, SignedTransactionIntent, Transaction, TxOutput,
+    ChainConfig, Destination, SignedTransactionIntent, Transaction,
 };
 use crypto::key::{
     extended::{ExtendedPrivateKey, ExtendedPublicKey},
@@ -110,7 +110,7 @@ impl SoftwareSigner {
         tx: &Transaction,
         destination: &Destination,
         input_index: usize,
-        inputs_utxo_refs: &[Option<&TxOutput>],
+        inputs_info_refs: &[SighashInputInfo],
         key_chain: &impl AccountKeyChains,
         htlc_secret: &Option<HtlcSecret>,
         db_tx: &impl WalletStorageReadUnlocked,
@@ -131,7 +131,7 @@ impl SoftwareSigner {
                                 sighash_type,
                                 destination.clone(),
                                 tx,
-                                inputs_utxo_refs,
+                                inputs_info_refs,
                                 input_index,
                                 htlc_secret.clone(),
                                 make_true_rng(),
@@ -143,7 +143,7 @@ impl SoftwareSigner {
                                 sighash_type,
                                 destination.clone(),
                                 tx,
-                                inputs_utxo_refs,
+                                inputs_info_refs,
                                 input_index,
                                 make_true_rng(),
                             )
@@ -167,13 +167,13 @@ impl SoftwareSigner {
                     let (sig, _, status) = self.sign_multisig_input(
                         tx,
                         input_index,
-                        inputs_utxo_refs,
+                        inputs_info_refs,
                         current_signatures,
                         key_chain,
                         db_tx,
                     )?;
 
-                    let signature = encode_multisig_spend(&sig, inputs_utxo_refs[input_index]);
+                    let signature = encode_multisig_spend(&sig, &inputs_info_refs[input_index]);
 
                     return Ok((Some(InputWitness::Standard(signature)), status));
                 }
@@ -188,7 +188,7 @@ impl SoftwareSigner {
         &self,
         tx: &Transaction,
         input_index: usize,
-        input_utxos: &[Option<&TxOutput>],
+        inputs_info: &[SighashInputInfo],
         mut current_signatures: AuthorizedClassicalMultisigSpend,
         key_chain: &impl AccountKeyChains,
         db_tx: &impl WalletStorageReadUnlocked,
@@ -200,7 +200,7 @@ impl SoftwareSigner {
         let sighash_type = SigHashType::all();
 
         let challenge = current_signatures.challenge().clone();
-        let sighash = signature_hash(sighash_type, tx, input_utxos, input_index)?;
+        let sighash = signature_hash(sighash_type, tx, inputs_info, input_index)?;
         let required_signatures = challenge.min_required_signatures();
 
         let previous_status = SignatureStatus::PartialMultisig {
@@ -263,7 +263,11 @@ impl Signer for SoftwareSigner {
         Vec<SignatureStatus>,
         Vec<SignatureStatus>,
     )> {
-        let inputs_utxo_refs: Vec<_> = ptx.input_utxos().iter().map(|u| u.as_ref()).collect();
+        let inputs_info_refs: Vec<_> = ptx
+            .input_utxos()
+            .iter()
+            .map(|u| u.as_ref().map_or(SighashInputInfo::None, |u| SighashInputInfo::Utxo(u)))
+            .collect();
 
         let (witnesses, prev_statuses, new_statuses) = ptx
             .witnesses()
@@ -285,7 +289,7 @@ impl Signer for SoftwareSigner {
                                     &self.chain_config,
                                     destination,
                                     &ptx,
-                                    &inputs_utxo_refs,
+                                    &inputs_info_refs,
                                     i,
                                 )
                                 .is_ok();
@@ -298,21 +302,21 @@ impl Signer for SoftwareSigner {
                                 ))
                             } else if let Destination::ClassicMultisig(_) = destination {
                                 let sig_components =
-                                    decode_multisig_spend(sig, inputs_utxo_refs[i])
+                                    decode_multisig_spend(sig, &inputs_info_refs[i])
                                         .map_err(SignerError::SigningError)?;
 
                                 let (sig_component, previous_status, final_status) = self
                                     .sign_multisig_input(
                                         ptx.tx(),
                                         i,
-                                        &inputs_utxo_refs,
+                                        &inputs_info_refs,
                                         sig_components,
                                         key_chain,
                                         db_tx,
                                     )?;
 
                                 let signature =
-                                    encode_multisig_spend(&sig_component, inputs_utxo_refs[i]);
+                                    encode_multisig_spend(&sig_component, &inputs_info_refs[i]);
 
                                 Ok((
                                     Some(InputWitness::Standard(signature)),
@@ -340,7 +344,7 @@ impl Signer for SoftwareSigner {
                             ptx.tx(),
                             destination,
                             i,
-                            &inputs_utxo_refs,
+                            &inputs_info_refs,
                             key_chain,
                             htlc_secret,
                             db_tx,

@@ -22,7 +22,7 @@ use serialization::{DecodeAll, Encode};
 use self::utils::*;
 use super::{
     inputsig::InputWitness,
-    sighash::{sighashtype::SigHashType, InputInfo},
+    sighash::{sighashtype::SigHashType, SighashInputInfo},
 };
 use crate::{
     chain::{
@@ -49,7 +49,7 @@ pub mod utils;
 #[trace]
 #[case(Seed::from_entropy())]
 fn encode_decode_utxo_refs_roundtrip(#[case] seed: Seed) {
-    use crate::chain::signature::sighash::InputInfo;
+    use crate::chain::signature::sighash::SighashInputInfo;
 
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
@@ -73,7 +73,7 @@ fn encode_decode_utxo_refs_roundtrip(#[case] seed: Seed) {
 
     // InputInfo::Utxo -> Some(&TxOutput)
     {
-        let info = InputInfo::Utxo(&utxo);
+        let info = SighashInputInfo::Utxo(&utxo);
         let encoded_utxo_ref = info.encode();
         let decoded_info =
             Option::<TxOutput>::decode_all(&mut encoded_utxo_ref.as_slice()).unwrap();
@@ -82,7 +82,7 @@ fn encode_decode_utxo_refs_roundtrip(#[case] seed: Seed) {
 
     // InputInfo::None -> None
     {
-        let info = InputInfo::None;
+        let info = SighashInputInfo::None;
         let encoded_utxo_ref = info.encode();
         let decoded_info =
             Option::<TxOutput>::decode_all(&mut encoded_utxo_ref.as_slice()).unwrap();
@@ -630,7 +630,7 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
 fn sign_mutate_then_verify(
     chain_config: &ChainConfig,
     rng: &mut (impl Rng + CryptoRng),
-    inputs_info_refs: &[InputInfo],
+    inputs_info_refs: &[SighashInputInfo],
     private_key: &PrivateKey,
     sighash_type: SigHashType,
     destination: &Destination,
@@ -660,7 +660,7 @@ fn sign_mutate_then_verify(
 fn check_change_flags(
     chain_config: &ChainConfig,
     original_tx: &SignedTransaction,
-    inputs_info_refs: &[InputInfo],
+    inputs_info_refs: &[SighashInputInfo],
     destination: &Destination,
 ) {
     let mut tx_updater = MutableTransaction::from(original_tx);
@@ -685,7 +685,7 @@ fn check_insert_input(
     chain_config: &ChainConfig,
     rng: &mut (impl Rng + CryptoRng),
     original_tx: &SignedTransaction,
-    inputs_info_refs: &[InputInfo],
+    inputs_info_refs: &[SighashInputInfo],
     destination: &Destination,
     should_fail: bool,
 ) {
@@ -698,7 +698,7 @@ fn check_insert_input(
         Destination::AnyoneCanSpend,
     );
     let mut inputs_info_refs = inputs_info_refs.to_vec();
-    inputs_info_refs.push(InputInfo::Utxo(&inputs_utxo));
+    inputs_info_refs.push(SighashInputInfo::Utxo(&inputs_utxo));
 
     tx_updater.inputs.push(TxInput::from_utxo(outpoint_source_id, 1));
     tx_updater.witness.push(InputWitness::NoSignature(Some(vec![1, 2, 3])));
@@ -722,7 +722,7 @@ fn check_insert_input(
 fn check_mutate_witness(
     chain_config: &ChainConfig,
     original_tx: &SignedTransaction,
-    inputs_info_refs: &[InputInfo],
+    inputs_info_refs: &[SighashInputInfo],
     outpoint_dest: &Destination,
 ) {
     let mut tx_updater = MutableTransaction::from(original_tx);
@@ -756,7 +756,7 @@ fn check_insert_output(
     chain_config: &ChainConfig,
     rng: &mut (impl Rng + CryptoRng),
     original_tx: &SignedTransaction,
-    inputs_info_refs: &[InputInfo],
+    inputs_info_refs: &[SighashInputInfo],
     destination: &Destination,
     should_fail: bool,
 ) {
@@ -795,7 +795,7 @@ fn add_value(output_value: OutputValue) -> OutputValue {
 fn check_mutate_output(
     chain_config: &ChainConfig,
     original_tx: &SignedTransaction,
-    inputs_info_refs: &[InputInfo],
+    inputs_info_refs: &[SighashInputInfo],
     destination: &Destination,
     should_fail: bool,
 ) {
@@ -836,7 +836,7 @@ fn check_mutate_input(
     chain_config: &ChainConfig,
     rng: &mut impl Rng,
     original_tx: &SignedTransaction,
-    inputs_info_refs: &[InputInfo],
+    inputs_info_refs: &[SighashInputInfo],
     destination: &Destination,
     should_fail: bool,
 ) {
@@ -866,7 +866,7 @@ fn check_mutate_input(
 fn check_mutate_inputs_utxos(
     chain_config: &ChainConfig,
     original_tx: &SignedTransaction,
-    inputs_info_refs: &[InputInfo],
+    inputs_info_refs: &[SighashInputInfo],
     outpoint_dest: &Destination,
 ) {
     for input in 0..inputs_info_refs.len() {
@@ -875,7 +875,7 @@ fn check_mutate_inputs_utxos(
             Destination::AnyoneCanSpend,
         );
         let mut inputs_info_refs = inputs_info_refs.to_owned();
-        inputs_info_refs[input] = InputInfo::Utxo(&inputs_utxo);
+        inputs_info_refs[input] = SighashInputInfo::Utxo(&inputs_utxo);
 
         assert!(matches!(
             verify_signature(

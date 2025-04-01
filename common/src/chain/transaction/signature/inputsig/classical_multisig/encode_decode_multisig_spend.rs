@@ -21,7 +21,7 @@ use crate::chain::{
             authorize_hashed_timelock_contract_spend::AuthorizedHashedTimelockContractSpend,
             standard_signature::StandardInputSignature,
         },
-        sighash::sighashtype::SigHashType,
+        sighash::{sighashtype::SigHashType, SighashInputInfo},
         DestinationSigError,
     },
     TxOutput,
@@ -31,17 +31,19 @@ use super::authorize_classical_multisig::AuthorizedClassicalMultisigSpend;
 
 pub fn encode_multisig_spend(
     sig_component: &AuthorizedClassicalMultisigSpend,
-    utxo: Option<&TxOutput>,
+    input_info: &SighashInputInfo,
 ) -> StandardInputSignature {
-    let raw_signature = match utxo {
-        Some(utxo) => {
-            if is_htlc_output(utxo) {
+    let raw_signature = match input_info {
+        SighashInputInfo::Utxo(output) => {
+            if is_htlc_output(output) {
                 AuthorizedHashedTimelockContractSpend::Multisig(sig_component.encode()).encode()
             } else {
                 sig_component.encode()
             }
         }
-        None => sig_component.encode(),
+        SighashInputInfo::Order { .. }
+        | SighashInputInfo::PoolDecommission(..)
+        | SighashInputInfo::None => sig_component.encode(),
     };
 
     let sighash_type = SigHashType::all();
@@ -50,10 +52,10 @@ pub fn encode_multisig_spend(
 
 pub fn decode_multisig_spend(
     sig: &StandardInputSignature,
-    utxo: Option<&TxOutput>,
+    input_info: &SighashInputInfo,
 ) -> Result<AuthorizedClassicalMultisigSpend, DestinationSigError> {
-    let sig_component = match utxo {
-        Some(utxo) => {
+    let sig_component = match input_info {
+        SighashInputInfo::Utxo(utxo) => {
             if is_htlc_output(utxo) {
                 let htlc_spend =
                     AuthorizedHashedTimelockContractSpend::from_data(sig.raw_signature())?;
@@ -69,7 +71,11 @@ pub fn decode_multisig_spend(
                 AuthorizedClassicalMultisigSpend::from_data(sig.raw_signature())?
             }
         }
-        None => AuthorizedClassicalMultisigSpend::from_data(sig.raw_signature())?,
+        SighashInputInfo::Order { .. }
+        | SighashInputInfo::PoolDecommission(..)
+        | SighashInputInfo::None => {
+            AuthorizedClassicalMultisigSpend::from_data(sig.raw_signature())?
+        }
     };
     Ok(sig_component)
 }

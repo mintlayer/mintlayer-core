@@ -1269,18 +1269,23 @@ where
         self.utxo_cache.set_best_block(id);
     }
 
-    pub fn verify_inputs<Tx>(
+    pub fn verify_inputs<'a, Tx>(
         &self,
-        tx: &Tx,
+        tx: &'a Tx,
         tx_source: &TransactionSourceForConnect,
         median_time_past: BlockTimestamp,
     ) -> Result<(), input_check::InputCheckError>
     where
         Tx: input_check::FullyVerifiable<
-            PoSAccountingDelta<A>,
-            TokensAccountingCache<T>,
-            OrdersAccountingCache<O>,
-        >,
+                PoSAccountingDelta<A>,
+                TokensAccountingCache<T>,
+                OrdersAccountingCache<O>,
+            > + input_check::CoreContextConstructable<
+                'a,
+                UtxosCache<U>,
+                PoSAccountingDelta<A>,
+                OrdersAccountingCache<O>,
+            >,
     {
         input_check::verify_full(
             tx,

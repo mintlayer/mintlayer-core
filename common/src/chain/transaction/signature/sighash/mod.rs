@@ -31,9 +31,13 @@ use self::hashable::{SignatureHashableElement, SignatureHashableInputs};
 
 use super::{DestinationSigError, Signable};
 
-// FIXME: document
+// FIXME: document better
+// None|Utxo is backward compatible and used for utxo and account spends.
+// Order is used for Fill and Conclude order to make sure the price and balances are fixed.
+// PoolDecommission is used for spending TxOutput::StakePool and TxOutput::ProduceBlockFromStake in
+// a transaction to ensure staker balances.
 #[derive(Clone, Debug, Encode)]
-pub enum InputInfo<'a> {
+pub enum SighashInputInfo<'a> {
     #[codec(index = 0)]
     None,
     #[codec(index = 1)]
@@ -45,7 +49,7 @@ pub enum InputInfo<'a> {
         give_balance: Amount,
     },
     #[codec(index = 3)]
-    Pool(&'a PoolData),
+    PoolDecommission(&'a TxOutput, &'a PoolData),
 }
 
 fn hash_encoded_if_some<T: Encode>(val: &Option<T>, stream: &mut DefaultHashAlgoStream) {
@@ -56,7 +60,7 @@ fn hash_encoded_if_some<T: Encode>(val: &Option<T>, stream: &mut DefaultHashAlgo
 
 fn stream_signature_hash<T: Signable>(
     tx: &T,
-    inputs_info: &[InputInfo],
+    inputs_info: &[SighashInputInfo],
     stream: &mut DefaultHashAlgoStream,
     mode: sighashtype::SigHashType,
     target_input_index: usize,
@@ -84,7 +88,7 @@ fn stream_signature_hash<T: Signable>(
 pub fn signature_hash<T: Signable>(
     mode: sighashtype::SigHashType,
     tx: &T,
-    inputs_info: &[InputInfo],
+    inputs_info: &[SighashInputInfo],
     input_index: usize,
 ) -> Result<H256, DestinationSigError> {
     let mut stream = DefaultHashAlgoStream::new();

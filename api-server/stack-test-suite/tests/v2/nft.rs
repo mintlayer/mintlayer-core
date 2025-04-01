@@ -127,7 +127,7 @@ async fn ok(#[case] seed: Seed) {
                             SigHashType::all(),
                             alice_destination.clone(),
                             &tx,
-                            &[issue_nft_tx.outputs().first()],
+                            &[SighashInputInfo::Utxo(&issue_nft_tx.outputs()[0])],
                             0,
                             &mut rng,
                         )

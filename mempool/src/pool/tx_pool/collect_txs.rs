@@ -154,6 +154,8 @@ pub fn collect_txs<M>(
                 chain_config,
                 &utxo_view,
                 &chainstate,
+                &chainstate,
+                &chainstate,
                 mempool_tip,
                 best_index.block_height().next_height(),
                 unlock_timestamp,

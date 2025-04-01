@@ -129,7 +129,7 @@ async fn spend(#[case] seed: Seed) {
                     SigHashType::all(),
                     Destination::PublicKeyHash((&PublicKey::from_private_key(&bob_sk)).into()),
                     &tx2,
-                    &[Some(&tx_1.transaction().outputs()[0])],
+                    &[SighashInputInfo::Utxo(&tx_1.transaction().outputs()[0])],
                     0,
                     secret,
                     &mut rng,
@@ -284,7 +284,7 @@ async fn refund(#[case] seed: Seed) {
                     let sighash = signature_hash(
                         SigHashType::all(),
                         &tx2,
-                        &[Some(&tx_1.transaction().outputs()[0])],
+                        &[SighashInputInfo::Utxo(&tx_1.transaction().outputs()[0])],
                         0,
                     )
                     .unwrap();
@@ -303,7 +303,7 @@ async fn refund(#[case] seed: Seed) {
                     &authorization,
                     SigHashType::all(),
                     &tx2,
-                    &[Some(&tx_1.transaction().outputs()[0])],
+                    &[SighashInputInfo::Utxo(&tx_1.transaction().outputs()[0])],
                     0,
                 )
                 .unwrap();

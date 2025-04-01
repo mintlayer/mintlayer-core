@@ -27,7 +27,7 @@ use common::{
         output_value::OutputValue,
         signature::{
             inputsig::{standard_signature::StandardInputSignature, InputWitness},
-            sighash::sighashtype::SigHashType,
+            sighash::{sighashtype::SigHashType, SighashInputInfo},
         },
         stakelock::StakePoolData,
         Block, ChainConfig, CoinUnit, ConsensusUpgrade, Destination, GenBlock, Genesis,
@@ -267,9 +267,7 @@ pub fn produce_kernel_signature(
         SigHashType::default(),
         staking_destination,
         &block_reward_tx,
-        std::iter::once(common::chain::signature::sighash::InputInfo::Utxo(&utxo))
-            .collect::<Vec<_>>()
-            .as_slice(),
+        std::iter::once(SighashInputInfo::Utxo(&utxo)).collect::<Vec<_>>().as_slice(),
         0,
         rng,
     )
@@ -379,7 +377,13 @@ pub fn sign_witnesses(
             | TxInput::OrderAccountCommand(..) => None,
         })
         .collect::<Vec<_>>();
-    let input_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
+    let inputs_info = inputs_utxos
+        .iter()
+        .map(|utxo| {
+            utxo.as_ref()
+                .map_or(SighashInputInfo::None, |utxo| SighashInputInfo::Utxo(utxo))
+        })
+        .collect::<Vec<_>>();
 
     let witnesses = tx
         .inputs()
@@ -388,7 +392,7 @@ pub fn sign_witnesses(
         .map(|(idx, input)| {
             let dest = destination_getter.call(input).unwrap();
             key_manager
-                .get_signature(rng, &dest, chain_config, tx, &input_utxos_refs, idx)
+                .get_signature(rng, &dest, chain_config, tx, &inputs_info, idx)
                 .unwrap()
         })
         .collect();

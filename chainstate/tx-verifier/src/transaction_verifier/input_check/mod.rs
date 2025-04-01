@@ -18,10 +18,14 @@ use std::convert::Infallible;
 use chainstate_types::block_index_ancestor_getter;
 use common::{
     chain::{
-        block::timestamp::BlockTimestamp,
-        signature::{inputsig::InputWitness, DestinationSigError, Transactable},
+        block::{timestamp::BlockTimestamp, BlockRewardTransactable},
+        signature::{
+            inputsig::InputWitness, sighash::SighashInputInfo, DestinationSigError, Signable,
+            Transactable,
+        },
         tokens::TokenId,
-        ChainConfig, DelegationId, Destination, GenBlock, PoolId, TxInput, TxOutput,
+        ChainConfig, DelegationId, Destination, GenBlock, OrderAccountCommand, PoolId,
+        SignedTransaction, TxInput, TxOutput,
     },
     primitives::{BlockHeight, Id},
 };
@@ -118,34 +122,6 @@ pub struct PerInputData<'a> {
 impl<'a> PerInputData<'a> {
     fn new(input: InputInfo<'a>, witness: InputWitness) -> Self {
         Self { input, witness }
-    }
-
-    fn from_input<UV: utxo::UtxosView>(
-        utxo_view: &UV,
-        input_num: usize,
-        input: &'a TxInput,
-        witness: InputWitness,
-    ) -> Result<Self, InputCheckError> {
-        let info = match input {
-            TxInput::Utxo(outpoint) => {
-                let utxo = utxo_view
-                    .utxo(outpoint)
-                    .map_err(|_| InputCheckError::new(input_num, utxo::Error::ViewRead))?
-                    .ok_or_else(|| {
-                        let err = InputCheckErrorPayload::MissingUtxo(outpoint.clone());
-                        InputCheckError::new(input_num, err)
-                    })?;
-                InputInfo::Utxo {
-                    outpoint,
-                    utxo_source: Some(utxo.source().clone()),
-                    utxo: utxo.take_output(),
-                }
-            }
-            TxInput::Account(outpoint) => InputInfo::Account { outpoint },
-            TxInput::AccountCommand(_, command) => InputInfo::AccountCommand { command },
-            TxInput::OrderAccountCommand(command) => InputInfo::OrderAccountCommand { command },
-        };
-        Ok(Self::new(info, witness))
     }
 }
 
@@ -263,12 +239,83 @@ pub struct CoreContext<'a> {
 }
 
 impl<'a> CoreContext<'a> {
-    fn new<T: Transactable, UV: utxo::UtxosView>(
-        utxo_view: &UV,
-        transaction: &'a T,
+    fn from_transaction(
+        utxo_view: &impl utxo::UtxosView,
+        pos_accounting_view: &impl pos_accounting::PoSAccountingView,
+        order_accounting_view: &impl orders_accounting::OrdersAccountingView,
+        tx: &'a SignedTransaction,
     ) -> Result<Self, InputCheckError> {
-        let inputs = transaction.inputs().unwrap_or_default();
-        let sigs = transaction.signatures();
+        assert_eq!(tx.inputs().len(), tx.signatures().len());
+
+        let inputs_and_sigs = tx
+            .inputs()
+            .iter()
+            .zip(tx.signatures().iter())
+            .enumerate()
+            .map(|(n, (input, sig))| {
+                let info = match input {
+                    TxInput::Utxo(outpoint) => {
+                        let utxo = utxo_view
+                            .utxo(outpoint)
+                            .map_err(|_| InputCheckError::new(n, utxo::Error::ViewRead))?
+                            .ok_or_else(|| {
+                                let err = InputCheckErrorPayload::MissingUtxo(outpoint.clone());
+                                InputCheckError::new(n, err)
+                            })?;
+                        let pool_data = match utxo.output() {
+                            TxOutput::Transfer(..)
+                            | TxOutput::LockThenTransfer(..)
+                            | TxOutput::Burn(..)
+                            | TxOutput::CreateDelegationId(..)
+                            | TxOutput::DelegateStaking(..)
+                            | TxOutput::IssueFungibleToken(..)
+                            | TxOutput::IssueNft(..)
+                            | TxOutput::DataDeposit(..)
+                            | TxOutput::Htlc(..)
+                            | TxOutput::CreateOrder(..) => None,
+                            TxOutput::CreateStakePool(id, _)
+                            | TxOutput::ProduceBlockFromStake(_, id) => {
+                                pos_accounting_view.get_pool_data(*id).unwrap()
+                            }
+                        };
+                        InputInfo::Utxo {
+                            outpoint,
+                            utxo_source: Some(utxo.source().clone()),
+                            utxo: utxo.take_output(),
+                            pool_data,
+                        }
+                    }
+                    TxInput::Account(outpoint) => InputInfo::Account { outpoint },
+                    TxInput::AccountCommand(_, command) => InputInfo::AccountCommand { command },
+                    TxInput::OrderAccountCommand(command) => {
+                        let order_data = match command {
+                            OrderAccountCommand::FillOrder(order_id, _, _)
+                            | OrderAccountCommand::ConcludeOrder {
+                                order_id,
+                                filled_amount: _,
+                                remaining_give_amount: _,
+                            } => order_accounting_view.get_order_data(order_id).unwrap(),
+                            OrderAccountCommand::FreezeOrder(_) => None,
+                        };
+                        InputInfo::OrderAccountCommand {
+                            command,
+                            order_data,
+                        }
+                    }
+                };
+                Ok(PerInputData::new(info, sig.clone()))
+            })
+            .collect::<Result<_, _>>()?;
+
+        Ok(Self { inputs_and_sigs })
+    }
+
+    fn from_block_reward<UV: utxo::UtxosView>(
+        utxo_view: &UV,
+        reward: &'a BlockRewardTransactable,
+    ) -> Result<Self, InputCheckError> {
+        let inputs = reward.inputs().unwrap_or_default();
+        let sigs = reward.signatures();
 
         assert_eq!(inputs.len(), sigs.len());
 
@@ -283,7 +330,35 @@ impl<'a> CoreContext<'a> {
                         ScriptError::Signature(DestinationSigError::SignatureNotFound),
                     )
                 })?;
-                PerInputData::from_input(utxo_view, n, input, witness)
+
+                let info = match input {
+                    TxInput::Utxo(outpoint) => {
+                        let utxo = utxo_view
+                            .utxo(outpoint)
+                            .map_err(|_| InputCheckError::new(n, utxo::Error::ViewRead))?
+                            .ok_or_else(|| {
+                                let err = InputCheckErrorPayload::MissingUtxo(outpoint.clone());
+                                InputCheckError::new(n, err)
+                            })?;
+                        InputInfo::Utxo {
+                            outpoint,
+                            utxo_source: Some(utxo.source().clone()),
+                            utxo: utxo.take_output(),
+                            pool_data: None,
+                        }
+                    }
+                    TxInput::Account(_)
+                    | TxInput::AccountCommand(..)
+                    | TxInput::OrderAccountCommand(..) => {
+                        return Err(InputCheckError::new(
+                            n,
+                            InputCheckErrorPayload::Translation(
+                                mintscript::translate::TranslationError::IllegalAccountSpend,
+                            ),
+                        ))
+                    }
+                };
+                Ok(PerInputData::new(info, witness))
             })
             .collect::<Result<_, _>>()?;
 
@@ -397,6 +472,7 @@ impl<S: TransactionVerifierStorageRef> TimelockContext for InputVerifyContextTim
                 outpoint: _,
                 utxo: _,
                 utxo_source,
+                pool_data: _,
             } => match utxo_source.as_ref().ok_or(TimelockContextError::MissingUtxoSource)? {
                 utxo::UtxoSource::Blockchain(height) => Ok(*height),
                 utxo::UtxoSource::Mempool => Ok(self.ctx.spending_height),
@@ -413,6 +489,7 @@ impl<S: TransactionVerifierStorageRef> TimelockContext for InputVerifyContextTim
                 outpoint: _,
                 utxo: _,
                 utxo_source,
+                pool_data: _,
             } => match utxo_source.as_ref().ok_or(TimelockContextError::MissingUtxoSource)? {
                 utxo::UtxoSource::Blockchain(height) => {
                     let block_index_getter = |db_tx: &S, _: &ChainConfig, id: &Id<GenBlock>| {
@@ -442,7 +519,7 @@ impl<S: TransactionVerifierStorageRef> TimelockContext for InputVerifyContextTim
 struct VerifyContextFull<'a, T, S> {
     // Here we need more information about the transaction
     transaction: &'a T,
-    spent_utxos: Vec<Option<&'a TxOutput>>,
+    sighash_inputs_info: Vec<SighashInputInfo<'a>>,
 
     // And the part of the context that's shared with timelock verification
     sub_ctx: &'a VerifyContextTimelock<'a, S>,
@@ -451,11 +528,27 @@ struct VerifyContextFull<'a, T, S> {
 impl<'a, T, S> VerifyContextFull<'a, T, S> {
     fn new(transaction: &'a T, sub_ctx: &'a VerifyContextTimelock<'a, S>) -> Self {
         let inp_iter = sub_ctx.core_ctx.inputs_and_sigs.iter();
-        let spent_utxos = inp_iter.map(|d| d.input_info().as_utxo_output()).collect();
+        let sighash_inputs_info = inp_iter
+            .map(|d| match d.input_info() {
+                InputInfo::Utxo {
+                    outpoint,
+                    utxo,
+                    utxo_source,
+                    pool_data,
+                } => todo!(),
+                InputInfo::Account { .. } | InputInfo::AccountCommand { .. } => {
+                    SighashInputInfo::None
+                }
+                InputInfo::OrderAccountCommand {
+                    command,
+                    order_data,
+                } => todo!(),
+            })
+            .collect();
 
         Self {
             transaction,
-            spent_utxos,
+            sighash_inputs_info,
             sub_ctx,
         }
     }
@@ -507,8 +600,8 @@ impl<T: Transactable, S> SignatureContext for InputVerifyContextFull<'_, T, S> {
         self.ctx.transaction
     }
 
-    fn input_utxos(&self) -> &[Option<&TxOutput>] {
-        &self.ctx.spent_utxos
+    fn sighash_inputs_info(&self) -> &[SighashInputInfo] {
+        &self.ctx.sighash_inputs_info
     }
 
     fn input_num(&self) -> usize {
@@ -526,10 +619,54 @@ impl<T, AV, TV, OV> FullyVerifiable<AV, TV, OV> for T where
 {
 }
 
+// FIXME:  CoreContextConstructable collect info differently for Reward and Tx to handle decommission pool case properly.
+// But it should also check height and version for fork activation, because older signatures must be verified
+// with just None|Utxo (i.e. no SighashInputInfo::OrderData|DecommissionPool)
+pub trait CoreContextConstructable<'a, UV, AV, OV> {
+    fn new(
+        &'a self,
+        utxo_view: &UV,
+        pos_accounting_view: &AV,
+        order_accounting_view: &OV,
+    ) -> Result<CoreContext<'a>, InputCheckError>;
+}
+
+impl<'a, UV, AV, OV> CoreContextConstructable<'a, UV, AV, OV> for SignedTransaction
+where
+    UV: utxo::UtxosView,
+    AV: pos_accounting::PoSAccountingView,
+    OV: orders_accounting::OrdersAccountingView,
+{
+    fn new(
+        &'a self,
+        utxo_view: &UV,
+        pos_accounting_view: &AV,
+        order_accounting_view: &OV,
+    ) -> Result<CoreContext<'a>, InputCheckError> {
+        CoreContext::from_transaction(utxo_view, pos_accounting_view, order_accounting_view, self)
+    }
+}
+
+impl<'a, UV, AV, OV> CoreContextConstructable<'a, UV, AV, OV> for BlockRewardTransactable<'a>
+where
+    UV: utxo::UtxosView,
+    AV: pos_accounting::PoSAccountingView,
+    OV: orders_accounting::OrdersAccountingView,
+{
+    fn new(
+        &'a self,
+        utxo_view: &UV,
+        _pos_accounting_view: &AV,
+        _order_accounting_view: &OV,
+    ) -> Result<CoreContext<'a>, InputCheckError> {
+        CoreContext::from_block_reward(utxo_view, self)
+    }
+}
+
 /// Perform full verification of given input.
 #[allow(clippy::too_many_arguments)]
-pub fn verify_full<T, S, UV, AV, TV, OV>(
-    transaction: &T,
+pub fn verify_full<'a, T, S, UV, AV, TV, OV>(
+    transaction: &'a T,
     chain_config: &ChainConfig,
     utxos_view: &UV,
     pos_accounting: &AV,
@@ -540,14 +677,15 @@ pub fn verify_full<T, S, UV, AV, TV, OV>(
     spending_time: BlockTimestamp,
 ) -> Result<(), InputCheckError>
 where
-    T: FullyVerifiable<AV, TV, OV>,
+    T: FullyVerifiable<AV, TV, OV> + CoreContextConstructable<'a, UV, AV, OV>,
     S: TransactionVerifierStorageRef,
     UV: utxo::UtxosView,
     AV: pos_accounting::PoSAccountingView<Error = pos_accounting::Error>,
     TV: tokens_accounting::TokensAccountingView<Error = tokens_accounting::Error>,
     OV: orders_accounting::OrdersAccountingView<Error = orders_accounting::Error>,
 {
-    let core_ctx = CoreContext::new(utxos_view, transaction)?;
+    let core_ctx =
+        CoreContextConstructable::new(transaction, utxos_view, pos_accounting, orders_accounting)?;
     let tl_ctx = VerifyContextTimelock::for_verifier(
         chain_config,
         storage,
@@ -579,22 +717,27 @@ where
 /// While it would be cleaner for this function to be private to mempool, it currently uses parts
 /// of code that are shared with the full check in a way that makes it somewhat difficult to factor
 /// out without making some support types public.
-pub fn verify_timelocks<T, S, UV>(
-    transaction: &T,
+pub fn verify_timelocks<'a, T, S, UV, AV, OV>(
+    transaction: &'a T,
     chain_config: &ChainConfig,
     utxos_view: &UV,
+    pos_accounting: &AV,
+    orders_accounting: &OV,
     storage: &S,
     tip: Id<GenBlock>,
     spending_height: BlockHeight,
     spending_time: BlockTimestamp,
 ) -> Result<(), InputCheckError>
 where
-    T: Transactable,
-    mintscript::translate::TimelockOnly: for<'a> TranslateInput<PerInputData<'a>>,
+    T: Transactable + CoreContextConstructable<'a, UV, AV, OV>,
+    mintscript::translate::TimelockOnly: for<'b> TranslateInput<PerInputData<'b>>,
     S: TransactionVerifierStorageRef,
     UV: utxo::UtxosView,
+    AV: pos_accounting::PoSAccountingView,
+    OV: orders_accounting::OrdersAccountingView,
 {
-    let core_ctx = CoreContext::new(utxos_view, transaction)?;
+    let core_ctx =
+        CoreContextConstructable::new(transaction, utxos_view, pos_accounting, orders_accounting)?;
     let ctx = VerifyContextTimelock::custom(
         chain_config,
         storage,
