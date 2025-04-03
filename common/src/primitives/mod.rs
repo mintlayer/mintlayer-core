@@ -58,4 +58,18 @@ impl CoinOrTokenId {
             OutputValue::TokenV1(id, _) => Some(Self::TokenId(*id)),
         }
     }
+
+    pub fn to_output_value(&self, amount: Amount) -> OutputValue {
+        match self {
+            CoinOrTokenId::Coin => OutputValue::Coin(amount),
+            CoinOrTokenId::TokenId(id) => OutputValue::TokenV1(*id, amount),
+        }
+    }
+
+    pub fn token_id(&self) -> Option<TokenId> {
+        match self {
+            CoinOrTokenId::Coin => None,
+            CoinOrTokenId::TokenId(id) => Some(*id),
+        }
+    }
 }

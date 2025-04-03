@@ -23,7 +23,8 @@ use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::classic_multisig::ClassicMultisigChallenge;
 use common::chain::htlc::HashedTimelockContract;
 use common::chain::{
-    AccountCommand, AccountOutPoint, AccountSpending, OrderAccountCommand, OrderId, RpcOrderInfo,
+    AccountCommand, AccountOutPoint, AccountSpending, OrderAccountCommand, OrderId, OrdersVersion,
+    RpcOrderInfo,
 };
 use common::primitives::id::WithId;
 use common::primitives::{Idable, H256};
@@ -986,7 +987,7 @@ impl<K: AccountKeyChains> Account<K> {
         let version = self
             .chain_config
             .chainstate_upgrades()
-            .version_at_height(self.account_info.best_block_height())
+            .version_at_height(self.account_info.best_block_height().next_height())
             .1
             .orders_version();
 
@@ -1041,7 +1042,7 @@ impl<K: AccountKeyChains> Account<K> {
         let version = self
             .chain_config
             .chainstate_upgrades()
-            .version_at_height(self.account_info.best_block_height())
+            .version_at_height(self.account_info.best_block_height().next_height())
             .1
             .orders_version();
 
@@ -2539,17 +2540,19 @@ fn group_preselected_inputs(
                         order_info.as_ref(),
                         *fee,
                         &mut update_preselected_inputs,
+                        OrdersVersion::V0,
                     )?;
                 }
             },
             TxInput::OrderAccountCommand(cmd) => match cmd {
-                OrderAccountCommand::FillOrder(id, amount, _) => {
+                OrderAccountCommand::FillOrder(id, fill_amount_in_ask_currency, _) => {
                     handle_fill_order_op(
                         *id,
-                        *amount,
+                        *fill_amount_in_ask_currency,
                         order_info.as_ref(),
                         *fee,
                         &mut update_preselected_inputs,
+                        OrdersVersion::V1,
                     )?;
                 }
                 OrderAccountCommand::ConcludeOrder(order_id) => {
@@ -2572,17 +2575,25 @@ fn handle_fill_order_op(
     order_info: Option<&BTreeMap<OrderId, &RpcOrderInfo>>,
     fee: Amount,
     update_preselected_inputs: &mut impl FnMut(Currency, Amount, Amount, Amount) -> WalletResult<()>,
+    version: OrdersVersion,
 ) -> WalletResult<()> {
     let order_info = order_info
         .as_ref()
         .and_then(|info| info.get(&order_id))
         .ok_or(WalletError::OrderInfoMissing(order_id))?;
 
-    let filled_amount = orders_accounting::calculate_filled_amount(
-        order_info.ask_balance,
-        order_info.give_balance,
-        fill_amount_in_ask_currency,
-    )
+    let filled_amount = match version {
+        OrdersVersion::V0 => orders_accounting::calculate_filled_amount(
+            order_info.ask_balance,
+            order_info.give_balance,
+            fill_amount_in_ask_currency,
+        ),
+        OrdersVersion::V1 => orders_accounting::calculate_filled_amount(
+            order_info.initially_asked.amount(),
+            order_info.initially_given.amount(),
+            fill_amount_in_ask_currency,
+        ),
+    }
     .ok_or(WalletError::CalculateOrderFilledAmountFailed(order_id))?;
 
     let given_currency = Currency::from_rpc_output_value(&order_info.initially_given);

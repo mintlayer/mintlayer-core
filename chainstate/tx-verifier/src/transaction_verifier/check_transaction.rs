@@ -69,7 +69,7 @@ pub enum CheckTransactionError {
     OrdersCurrenciesMustBeDifferent(Id<Transaction>),
     #[error("Change token metadata uri not activated yet")]
     ChangeTokenMetadataUriNotActivated,
-    #[error("Cannot fill order with Zero amount {0} in tx {1}")]
+    #[error("Cannot fill order {0} with zero amount in tx {1}")]
     AttemptToFillOrderWithZero(OrderId, Id<Transaction>),
 }
 
@@ -415,7 +415,7 @@ fn check_order_inputs_outputs(
                 };
                 match cmd {
                     common::chain::OrderAccountCommand::FillOrder(id, fill, _) => {
-                        // Forbidding fills with zero ensures that tx has utxo and therefor is unique.
+                        // Forbidding fills with zero amount ensures that tx has utxo and therefore is unique.
                         // Unique txs cannot be replayed.
                         ensure!(
                             *fill > Amount::ZERO,

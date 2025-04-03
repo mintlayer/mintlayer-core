@@ -191,22 +191,21 @@ fn create_two_same_orders_in_tx(#[case] seed: Seed) {
             OutputValue::TokenV1(token_id, give_amount),
         ));
 
-        let order_id = make_order_id(&tokens_outpoint);
         let tx = TransactionBuilder::new()
             .add_input(tokens_outpoint.into(), InputWitness::NoSignature(None))
             .add_output(TxOutput::CreateOrder(order_data.clone()))
             .add_output(TxOutput::CreateOrder(order_data))
             .build();
+        let tx_id = tx.transaction().get_id();
         let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
             chainstate::ChainstateError::ProcessBlockError(
-                chainstate::BlockError::StateUpdateFailed(
-                    chainstate::ConnectTransactionError::OrdersAccountingError(
-                        orders_accounting::Error::OrderAlreadyExists(order_id)
-                    )
-                )
+                chainstate::BlockError::StateUpdateFailed(ConnectTransactionError::IOPolicyError(
+                    chainstate::IOPolicyError::MultipleOrdersCreated,
+                    tx_id.into()
+                ))
             )
         );
     });
@@ -240,22 +239,21 @@ fn create_two_orders_same_tx(#[case] seed: Seed) {
             OutputValue::TokenV1(token_id, half_tokens_circulating_supply),
         );
 
-        let order_id = make_order_id(&tokens_outpoint);
         let tx = TransactionBuilder::new()
             .add_input(tokens_outpoint.into(), InputWitness::NoSignature(None))
             .add_output(TxOutput::CreateOrder(Box::new(order_data_1)))
             .add_output(TxOutput::CreateOrder(Box::new(order_data_2)))
             .build();
+        let tx_id = tx.transaction().get_id();
         let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
             chainstate::ChainstateError::ProcessBlockError(
-                chainstate::BlockError::StateUpdateFailed(
-                    chainstate::ConnectTransactionError::OrdersAccountingError(
-                        orders_accounting::Error::OrderAlreadyExists(order_id)
-                    )
-                )
+                chainstate::BlockError::StateUpdateFailed(ConnectTransactionError::IOPolicyError(
+                    chainstate::IOPolicyError::MultipleOrdersCreated,
+                    tx_id.into()
+                ))
             )
         );
     });
@@ -2450,6 +2448,358 @@ fn fill_orders_shuffle(#[case] seed: Seed, #[case] fills: Vec<u128>) {
         );
         assert_eq!(
             Some(Amount::from_atoms(1)),
+            tf.chainstate.get_order_give_balance(&order_id).unwrap()
+        );
+    });
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn orders_v1_activation(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = test_utils::random::make_seedable_rng(seed);
+        // activate orders v1 at height 5 (genesis + issue token block + mint block + create order block + empty block)
+        let mut tf = TestFramework::builder(&mut rng)
+            .with_chain_config(
+                common::chain::config::Builder::test_chain()
+                    .chainstate_upgrades(
+                        common::chain::NetUpgrades::initialize(vec![
+                            (
+                                BlockHeight::zero(),
+                                ChainstateUpgradeBuilder::latest()
+                                    .orders_version(OrdersVersion::V0)
+                                    .build(),
+                            ),
+                            (
+                                BlockHeight::new(5),
+                                ChainstateUpgradeBuilder::latest()
+                                    .orders_version(OrdersVersion::V1)
+                                    .build(),
+                            ),
+                        ])
+                        .unwrap(),
+                    )
+                    .genesis_unittest(Destination::AnyoneCanSpend)
+                    .build(),
+            )
+            .build();
+
+        let (token_id, tokens_outpoint, _) = issue_and_mint_token_from_genesis(&mut rng, &mut tf);
+        let tokens_circulating_supply =
+            tf.chainstate.get_token_circulating_supply(&token_id).unwrap().unwrap();
+
+        let order_id = make_order_id(&tokens_outpoint);
+        let order_data = Box::new(OrderData::new(
+            Destination::AnyoneCanSpend,
+            OutputValue::Coin(Amount::from_atoms(rng.gen_range(1u128..1000))),
+            OutputValue::TokenV1(
+                token_id,
+                Amount::from_atoms(rng.gen_range(1u128..=tokens_circulating_supply.into_atoms())),
+            ),
+        ));
+
+        // Create an order
+        tf.make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(tokens_outpoint.into(), InputWitness::NoSignature(None))
+                    .add_output(TxOutput::CreateOrder(order_data))
+                    .build(),
+            )
+            .build_and_process(&mut rng)
+            .unwrap();
+
+        // Try to fill order before activation, check an error
+        {
+            let tx = TransactionBuilder::new()
+                .add_input(
+                    TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(
+                        order_id,
+                        Amount::ZERO,
+                        Destination::AnyoneCanSpend,
+                    )),
+                    InputWitness::NoSignature(None),
+                )
+                .build();
+            let tx_id = tx.transaction().get_id();
+            let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
+
+            assert_eq!(
+                result.unwrap_err(),
+                chainstate::ChainstateError::ProcessBlockError(
+                    chainstate::BlockError::CheckBlockFailed(
+                        chainstate::CheckBlockError::CheckTransactionFailed(
+                            chainstate::CheckBlockTransactionsError::CheckTransactionError(
+                                tx_verifier::CheckTransactionError::OrdersV1AreNotActivated(tx_id)
+                            )
+                        )
+                    )
+                )
+            );
+        }
+
+        // Try to conclude order before activation, check an error
+        {
+            let tx = TransactionBuilder::new()
+                .add_input(
+                    TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder(order_id)),
+                    InputWitness::NoSignature(None),
+                )
+                .build();
+            let tx_id = tx.transaction().get_id();
+            let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
+
+            assert_eq!(
+                result.unwrap_err(),
+                chainstate::ChainstateError::ProcessBlockError(
+                    chainstate::BlockError::CheckBlockFailed(
+                        chainstate::CheckBlockError::CheckTransactionFailed(
+                            chainstate::CheckBlockTransactionsError::CheckTransactionError(
+                                tx_verifier::CheckTransactionError::OrdersV1AreNotActivated(tx_id)
+                            )
+                        )
+                    )
+                )
+            );
+        }
+
+        // produce an empty block and activate fork
+        tf.make_block_builder().build_and_process(&mut rng).unwrap();
+
+        // Try to fill order with deprecated command, check an error
+        {
+            let tx = TransactionBuilder::new()
+                .add_input(
+                    TxInput::AccountCommand(
+                        AccountNonce::new(0),
+                        AccountCommand::FillOrder(
+                            order_id,
+                            Amount::ZERO,
+                            Destination::AnyoneCanSpend,
+                        ),
+                    ),
+                    InputWitness::NoSignature(None),
+                )
+                .build();
+            let tx_id = tx.transaction().get_id();
+            let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
+
+            assert_eq!(
+                result.unwrap_err(),
+                chainstate::ChainstateError::ProcessBlockError(
+                    chainstate::BlockError::CheckBlockFailed(
+                        chainstate::CheckBlockError::CheckTransactionFailed(
+                            chainstate::CheckBlockTransactionsError::CheckTransactionError(
+                                tx_verifier::CheckTransactionError::DeprecatedOrdersCommands(tx_id)
+                            )
+                        )
+                    )
+                )
+            );
+        }
+
+        // Try to conclude order before activation, check an error
+        {
+            let tx = TransactionBuilder::new()
+                .add_input(
+                    TxInput::AccountCommand(
+                        AccountNonce::new(0),
+                        AccountCommand::ConcludeOrder(order_id),
+                    ),
+                    InputWitness::NoSignature(None),
+                )
+                .build();
+            let tx_id = tx.transaction().get_id();
+            let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
+
+            assert_eq!(
+                result.unwrap_err(),
+                chainstate::ChainstateError::ProcessBlockError(
+                    chainstate::BlockError::CheckBlockFailed(
+                        chainstate::CheckBlockError::CheckTransactionFailed(
+                            chainstate::CheckBlockTransactionsError::CheckTransactionError(
+                                tx_verifier::CheckTransactionError::DeprecatedOrdersCommands(tx_id)
+                            )
+                        )
+                    )
+                )
+            );
+        }
+
+        // now it should be possible to use OrderAccountCommand
+        tf.make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(
+                        TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder(order_id)),
+                        InputWitness::NoSignature(None),
+                    )
+                    .build(),
+            )
+            .build_and_process(&mut rng)
+            .unwrap();
+    });
+}
+
+// Create an order, fill it partially.
+// Activate Orders V1 fork.
+// Fill partially again and conclude.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn create_order_fill_activate_fork_fill_conclude(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        // activate orders at height 5 (genesis + issue token block + mint + create order + fill)
+        let mut tf = TestFramework::builder(&mut rng)
+            .with_chain_config(
+                common::chain::config::Builder::test_chain()
+                    .chainstate_upgrades(
+                        common::chain::NetUpgrades::initialize(vec![
+                            (
+                                BlockHeight::zero(),
+                                ChainstateUpgradeBuilder::latest()
+                                    .orders_version(OrdersVersion::V0)
+                                    .build(),
+                            ),
+                            (
+                                BlockHeight::new(5),
+                                ChainstateUpgradeBuilder::latest()
+                                    .orders_version(OrdersVersion::V1)
+                                    .build(),
+                            ),
+                        ])
+                        .unwrap(),
+                    )
+                    .genesis_unittest(Destination::AnyoneCanSpend)
+                    .build(),
+            )
+            .build();
+
+        let (token_id, tokens_outpoint, coins_outpoint) =
+            issue_and_mint_token_from_genesis(&mut rng, &mut tf);
+
+        let ask_amount = Amount::from_atoms(1000);
+        let give_amount = tf.chainstate.get_token_circulating_supply(&token_id).unwrap().unwrap();
+        let order_data = OrderData::new(
+            Destination::AnyoneCanSpend,
+            OutputValue::Coin(ask_amount),
+            OutputValue::TokenV1(token_id, give_amount),
+        );
+
+        let order_id = make_order_id(&tokens_outpoint);
+        let tx = TransactionBuilder::new()
+            .add_input(tokens_outpoint.into(), InputWitness::NoSignature(None))
+            .add_output(TxOutput::CreateOrder(Box::new(order_data)))
+            .build();
+        tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
+
+        // Fill the order partially
+        let fill_amount = Amount::from_atoms(100);
+        let filled_amount = {
+            let db_tx = tf.storage.transaction_ro().unwrap();
+            let orders_db = OrdersAccountingDB::new(&db_tx);
+            orders_accounting::calculate_fill_order(
+                &orders_db,
+                order_id,
+                fill_amount,
+                OrdersVersion::V0,
+            )
+            .unwrap()
+        };
+
+        let fill_tx_1 = TransactionBuilder::new()
+            .add_input(coins_outpoint.into(), InputWitness::NoSignature(None))
+            .add_input(
+                TxInput::AccountCommand(
+                    AccountNonce::new(0),
+                    AccountCommand::FillOrder(order_id, fill_amount, Destination::AnyoneCanSpend),
+                ),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Transfer(
+                OutputValue::TokenV1(token_id, filled_amount),
+                Destination::AnyoneCanSpend,
+            ))
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin(fill_amount),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let fill_tx_1_id = fill_tx_1.transaction().get_id();
+        tf.make_block_builder()
+            .add_transaction(fill_tx_1)
+            .build_and_process(&mut rng)
+            .unwrap();
+
+        // Next block should activate orders V1
+        assert_eq!(BlockHeight::new(4), tf.best_block_index().block_height());
+
+        // Fill again now with V1
+        let filled_amount = {
+            let db_tx = tf.storage.transaction_ro().unwrap();
+            let orders_db = OrdersAccountingDB::new(&db_tx);
+            orders_accounting::calculate_fill_order(
+                &orders_db,
+                order_id,
+                fill_amount,
+                OrdersVersion::V1,
+            )
+            .unwrap()
+        };
+
+        tf.make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_utxo(fill_tx_1_id.into(), 1),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_input(
+                        TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(
+                            order_id,
+                            fill_amount,
+                            Destination::AnyoneCanSpend,
+                        )),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_output(TxOutput::Transfer(
+                        OutputValue::TokenV1(token_id, filled_amount),
+                        Destination::AnyoneCanSpend,
+                    ))
+                    .build(),
+            )
+            .build_and_process(&mut rng)
+            .unwrap();
+
+        // Conclude the order
+        let tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder(order_id)),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Transfer(
+                OutputValue::TokenV1(
+                    token_id,
+                    (give_amount - filled_amount).and_then(|v| v - filled_amount).unwrap(),
+                ),
+                Destination::AnyoneCanSpend,
+            ))
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin((fill_amount * 2).unwrap()),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
+
+        assert_eq!(None, tf.chainstate.get_order_data(&order_id).unwrap());
+        assert_eq!(
+            None,
+            tf.chainstate.get_order_ask_balance(&order_id).unwrap()
+        );
+        assert_eq!(
+            None,
             tf.chainstate.get_order_give_balance(&order_id).unwrap()
         );
     });

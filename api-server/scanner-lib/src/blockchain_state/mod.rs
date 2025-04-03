@@ -583,36 +583,24 @@ async fn calculate_tx_fee_and_collect_token_info<T: ApiServerStorageWrite>(
                     AccountCommand::ConcludeOrder(order_id)
                     | AccountCommand::FillOrder(order_id, _, _) => {
                         let order = db_tx.get_order(*order_id).await?.expect("must exist");
-                        match order.ask_currency {
-                            CoinOrTokenId::Coin => {}
-                            CoinOrTokenId::TokenId(id) => {
-                                token_ids.insert(id);
-                            }
-                        };
-                        match order.give_currency {
-                            CoinOrTokenId::Coin => {}
-                            CoinOrTokenId::TokenId(id) => {
-                                token_ids.insert(id);
-                            }
-                        };
+                        if let Some(id) = order.ask_currency.token_id() {
+                            token_ids.insert(id);
+                        }
+                        if let Some(id) = order.give_currency.token_id() {
+                            token_ids.insert(id);
+                        }
                     }
                 },
                 TxInput::OrderAccountCommand(cmd) => match cmd {
                     OrderAccountCommand::FillOrder(order_id, _, _)
                     | OrderAccountCommand::ConcludeOrder(order_id) => {
                         let order = db_tx.get_order(*order_id).await?.expect("must exist");
-                        match order.ask_currency {
-                            CoinOrTokenId::Coin => {}
-                            CoinOrTokenId::TokenId(id) => {
-                                token_ids.insert(id);
-                            }
-                        };
-                        match order.give_currency {
-                            CoinOrTokenId::Coin => {}
-                            CoinOrTokenId::TokenId(id) => {
-                                token_ids.insert(id);
-                            }
-                        };
+                        if let Some(id) = order.ask_currency.token_id() {
+                            token_ids.insert(id);
+                        }
+                        if let Some(id) = order.give_currency.token_id() {
+                            token_ids.insert(id);
+                        }
                     }
                 },
             };
@@ -829,18 +817,8 @@ async fn prefetch_orders<T: ApiServerStorageRead>(
     let mut give_balances = BTreeMap::<OrderId, Amount>::new();
 
     let to_order_data = |order: &Order| {
-        let ask = match order.ask_currency {
-            CoinOrTokenId::Coin => OutputValue::Coin(order.initially_asked),
-            CoinOrTokenId::TokenId(token_id) => {
-                OutputValue::TokenV1(token_id, order.initially_asked)
-            }
-        };
-        let give = match order.give_currency {
-            CoinOrTokenId::Coin => OutputValue::Coin(order.initially_given),
-            CoinOrTokenId::TokenId(token_id) => {
-                OutputValue::TokenV1(token_id, order.initially_given)
-            }
-        };
+        let ask = order.ask_currency.to_output_value(order.initially_asked);
+        let give = order.give_currency.to_output_value(order.initially_given);
         OrderData::new(order.conclude_destination.clone(), ask, give)
     };
 

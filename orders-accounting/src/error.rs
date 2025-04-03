@@ -47,7 +47,7 @@ pub enum Error {
     OrderOverflow(OrderId),
     #[error("Order `{0}` can provide `{1:?}` amount; but attempted to fill `{2:?}`")]
     OrderOverbid(OrderId, Amount, Amount),
-    #[error("Order `{0}` provides amount `{1:?}` that is not enough to fill even a single coin")]
+    #[error("Order `{0}` provides amount `{1:?}` that is not enough to fill even a single atom")]
     OrderUnderbid(OrderId, Amount),
     #[error("Attempt to conclude non-existing order data `{0}`")]
     AttemptedConcludeNonexistingOrderData(OrderId),

@@ -48,6 +48,8 @@ pub enum IOPolicyError {
     MultiplePoolCreated,
     #[error("Attempted to create multiple delegations in a single tx")]
     MultipleDelegationCreated,
+    #[error("Attempted to create multiple orders in a single tx")]
+    MultipleOrdersCreated,
     #[error("Attempted to produce block in a tx")]
     ProduceBlockInTx,
     #[error("Attempted to provide multiple account command inputs in a single tx")]

@@ -46,6 +46,7 @@ pub enum TxDependency {
     TokenSupplyAccount(TxAccountDependency),
     OrderAccount(TxAccountDependency),
     // TODO: keep only V1 version after OrdersVersion::V1 is activated
+    //       https://github.com/mintlayer/mintlayer-core/issues/1901
     OrderV1Account(AccountType),
     TxOutput(Id<Transaction>, u32),
     // TODO: Block reward?

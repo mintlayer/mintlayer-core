@@ -325,7 +325,7 @@ pub fn tx_input_to_json(inp: &TxInput, chain_config: &ChainConfig) -> serde_json
                     "command": "FillOrder",
                     "order_id": Address::new(chain_config, *id).expect("addressable").to_string(),
                     "fill_atoms": json!({"atoms": fill.into_atoms().to_string()}),
-                    "destination": Address::new(chain_config, dest.clone()).expect("no error").as_str(),
+                    "destination": Address::new(chain_config, dest.clone()).expect("addressable").as_str(),
                 })
             }
             OrderAccountCommand::ConcludeOrder(order_id) => {

@@ -13,15 +13,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::chain::{make_order_id, OrderAccountCommand, OrderData};
+use common::chain::{
+    make_order_id, AccountCommand, AccountNonce, OrderAccountCommand, OrderData, OrdersVersion,
+};
 
 use super::*;
 
 #[rstest]
 #[trace]
-#[case(Seed::from_entropy())]
+#[case(Seed::from_entropy(), OrdersVersion::V0)]
+#[trace]
+#[case(Seed::from_entropy(), OrdersVersion::V1)]
 #[tokio::test]
-async fn create_fill_conclude_order(#[case] seed: Seed) {
+async fn create_fill_conclude_order(#[case] seed: Seed, #[case] version: OrdersVersion) {
+    use common::chain::config::create_unit_test_config_builder;
+
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
 
@@ -31,7 +37,25 @@ async fn create_fill_conclude_order(#[case] seed: Seed) {
         let web_server_state = {
             let mut rng = make_seedable_rng(seed);
 
-            let chain_config = create_unit_test_config();
+            let chain_config = create_unit_test_config_builder()
+                .chainstate_upgrades(
+                    common::chain::NetUpgrades::initialize(vec![(
+                        BlockHeight::zero(),
+                        common::chain::ChainstateUpgrade::new(
+                            common::chain::TokenIssuanceVersion::V1,
+                            common::chain::RewardDistributionVersion::V1,
+                            common::chain::TokensFeeVersion::V1,
+                            common::chain::DataDepositFeeVersion::V1,
+                            common::chain::ChangeTokenMetadataUriActivated::Yes,
+                            common::chain::FrozenTokensValidationVersion::V1,
+                            common::chain::HtlcActivated::Yes,
+                            common::chain::OrdersActivated::Yes,
+                            version,
+                        ),
+                    )])
+                    .expect("cannot fail"),
+                )
+                .build();
 
             let chainstate_blocks = {
                 let mut tf = TestFramework::builder(&mut rng)
@@ -62,19 +86,29 @@ async fn create_fill_conclude_order(#[case] seed: Seed) {
                 tf.process_block(block1.clone(), BlockSource::Local).unwrap();
 
                 // Fill order
+                let fill_input = match version {
+                    OrdersVersion::V0 => TxInput::AccountCommand(
+                        AccountNonce::new(0),
+                        AccountCommand::FillOrder(
+                            order_id,
+                            Amount::from_atoms(1),
+                            Destination::AnyoneCanSpend,
+                        ),
+                    ),
+                    OrdersVersion::V1 => {
+                        TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(
+                            order_id,
+                            Amount::from_atoms(1),
+                            Destination::AnyoneCanSpend,
+                        ))
+                    }
+                };
                 let tx2 = TransactionBuilder::new()
                     .add_input(
                         TxInput::Utxo(issue_and_mint_result.change_outpoint),
                         InputWitness::NoSignature(None),
                     )
-                    .add_input(
-                        TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(
-                            order_id,
-                            Amount::from_atoms(1),
-                            Destination::AnyoneCanSpend,
-                        )),
-                        InputWitness::NoSignature(None),
-                    )
+                    .add_input(fill_input, InputWitness::NoSignature(None))
                     .add_output(TxOutput::Transfer(
                         OutputValue::TokenV1(issue_and_mint_result.token_id, Amount::from_atoms(1)),
                         Destination::AnyoneCanSpend,
@@ -86,11 +120,17 @@ async fn create_fill_conclude_order(#[case] seed: Seed) {
                 tf.process_block(block2.clone(), BlockSource::Local).unwrap();
 
                 // Conclude order
+                let conclude_input = match version {
+                    OrdersVersion::V0 => TxInput::AccountCommand(
+                        AccountNonce::new(1),
+                        AccountCommand::ConcludeOrder(order_id),
+                    ),
+                    OrdersVersion::V1 => {
+                        TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder(order_id))
+                    }
+                };
                 let tx3 = TransactionBuilder::new()
-                    .add_input(
-                        TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder(order_id)),
-                        InputWitness::NoSignature(None),
-                    )
+                    .add_input(conclude_input, InputWitness::NoSignature(None))
                     .add_output(TxOutput::Transfer(
                         OutputValue::Coin(Amount::from_atoms(1)),
                         Destination::AnyoneCanSpend,

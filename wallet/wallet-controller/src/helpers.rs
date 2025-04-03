@@ -286,12 +286,10 @@ async fn into_utxo_and_destination<T: NodeInterface, B: storage::Backend>(
             (Some(utxo), additional_infos, Some(dest))
         }
         TxInput::Account(acc_outpoint) => {
-            // find delegation destination
             let dest = wallet.find_account_destination(acc_outpoint);
             (None, TxAdditionalInfo::new(), dest)
         }
         TxInput::AccountCommand(_, cmd) => {
-            // find authority of the order
             let dest = wallet.find_account_command_destination(cmd);
 
             let additional_infos = match cmd {

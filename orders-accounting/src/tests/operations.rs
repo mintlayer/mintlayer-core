@@ -545,7 +545,10 @@ fn fill_order_must_converge(#[case] seed: Seed, #[case] version: OrdersVersion) 
     let give_atoms = rng.gen_range(1u128..1_000_000_000);
     let ask_amount = Amount::from_atoms(ask_atoms);
     let give_amount = Amount::from_atoms(give_atoms);
-    let fill_orders = test_utils::split_value(&mut rng, ask_amount.into_atoms());
+    let fill_orders = test_utils::split_value(&mut rng, ask_atoms)
+        .into_iter()
+        .filter(|v| *v > 0)
+        .collect::<Vec<_>>();
 
     let ask = OutputValue::Coin(ask_amount);
     let give = OutputValue::Coin(give_amount);
@@ -714,4 +717,46 @@ fn fill_order_underbid(#[case] seed: Seed, #[case] version: OrdersVersion) {
         BTreeMap::new(),
     );
     assert_eq!(expected_storage, storage);
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn fill_orders_interrupted_by_v0_to_v1_fork(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let ask_atoms = rng.gen_range(1u128..1_000_000_000);
+    let give_atoms = rng.gen_range(1u128..1_000_000_000);
+    let ask_amount = Amount::from_atoms(ask_atoms);
+    let give_amount = Amount::from_atoms(give_atoms);
+    let fill_orders = test_utils::split_value(&mut rng, ask_atoms)
+        .into_iter()
+        .filter(|v| *v > 0)
+        .collect::<Vec<_>>();
+    let (fill_orders_v0, fill_orders_v1) =
+        fill_orders.split_at(rng.gen_range(1..=fill_orders.len()));
+
+    let ask = OutputValue::Coin(ask_amount);
+    let give = OutputValue::Coin(give_amount);
+
+    let order_id = OrderId::random_using(&mut rng);
+    let order_data = OrderData::new(Destination::AnyoneCanSpend, ask.clone(), give.clone());
+    let mut storage = InMemoryOrdersAccounting::from_values(
+        BTreeMap::from_iter([(order_id, order_data.clone())]),
+        BTreeMap::from_iter([(order_id, ask_amount)]),
+        BTreeMap::from_iter([(order_id, give_amount)]),
+    );
+    let mut db = OrdersAccountingDB::new(&mut storage);
+    let mut cache = OrdersAccountingCache::new(&db);
+
+    let mut fill_orders = |fills: &[u128], version| {
+        for fill in fills {
+            let _ = cache.fill_order(order_id, Amount::from_atoms(*fill), version).unwrap();
+        }
+    };
+
+    fill_orders(fill_orders_v0, OrdersVersion::V0);
+    fill_orders(fill_orders_v1, OrdersVersion::V1);
+
+    db.batch_write_orders_data(cache.consume()).unwrap();
 }

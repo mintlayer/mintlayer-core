@@ -726,6 +726,18 @@ where
             | TxOutput::DataDeposit(_) => Ok(()),
         };
 
+        let check_order_doesnt_use_frozen_token = |order_id| {
+            let order_data = self.get_order_data(order_id)?.ok_or(
+                ConnectTransactionError::OrdersAccountingError(
+                    orders_accounting::Error::OrderDataNotFound(*order_id),
+                ),
+            )?;
+            [order_data.ask(), order_data.give()].iter().try_for_each(|v| match v {
+                OutputValue::TokenV0(_) | OutputValue::Coin(_) => Ok(()),
+                OutputValue::TokenV1(token_id, _) => check_not_frozen(*token_id),
+            })
+        };
+
         tx.inputs()
             .iter()
             .try_for_each(|input| -> Result<(), ConnectTransactionError> {
@@ -763,29 +775,13 @@ where
                         | AccountCommand::UnfreezeToken(_) => Ok(()),
                         AccountCommand::ConcludeOrder(order_id)
                         | AccountCommand::FillOrder(order_id, _, _) => {
-                            let order_data = self.get_order_data(order_id)?.ok_or(
-                                ConnectTransactionError::OrdersAccountingError(
-                                    orders_accounting::Error::OrderDataNotFound(*order_id),
-                                ),
-                            )?;
-                            [order_data.ask(), order_data.give()].iter().try_for_each(|v| match v {
-                                OutputValue::TokenV0(_) | OutputValue::Coin(_) => Ok(()),
-                                OutputValue::TokenV1(token_id, _) => check_not_frozen(*token_id),
-                            })
+                            check_order_doesnt_use_frozen_token(order_id)
                         }
                     },
                     TxInput::OrderAccountCommand(cmd) => match cmd {
                         OrderAccountCommand::FillOrder(order_id, _, _)
                         | OrderAccountCommand::ConcludeOrder(order_id) => {
-                            let order_data = self.get_order_data(order_id)?.ok_or(
-                                ConnectTransactionError::OrdersAccountingError(
-                                    orders_accounting::Error::OrderDataNotFound(*order_id),
-                                ),
-                            )?;
-                            [order_data.ask(), order_data.give()].iter().try_for_each(|v| match v {
-                                OutputValue::TokenV0(_) | OutputValue::Coin(_) => Ok(()),
-                                OutputValue::TokenV1(token_id, _) => check_not_frozen(*token_id),
-                            })
+                            check_order_doesnt_use_frozen_token(order_id)
                         }
                     },
                 }
