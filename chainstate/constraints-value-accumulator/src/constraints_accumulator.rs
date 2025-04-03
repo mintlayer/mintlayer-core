@@ -336,11 +336,9 @@ impl ConstrainedValueAccumulator {
                 *amount,
                 orders_accounting_delta,
             ),
-            OrderAccountCommand::ConcludeOrder {
-                order_id,
-                filled_amount: _,
-                remaining_give_amount: _,
-            } => self.process_conclude_order_command(*order_id, orders_accounting_delta),
+            OrderAccountCommand::ConcludeOrder(order_id) => {
+                self.process_conclude_order_command(*order_id, orders_accounting_delta)
+            }
         }
     }
 

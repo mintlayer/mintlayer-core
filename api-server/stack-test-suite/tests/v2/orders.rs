@@ -88,11 +88,7 @@ async fn create_fill_conclude_order(#[case] seed: Seed) {
                 // Conclude order
                 let tx3 = TransactionBuilder::new()
                     .add_input(
-                        TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder {
-                            order_id,
-                            filled_amount: Amount::from_atoms(1),
-                            remaining_give_amount: Amount::from_atoms(9),
-                        }),
+                        TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder(order_id)),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(

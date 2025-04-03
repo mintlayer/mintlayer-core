@@ -834,16 +834,14 @@ impl OutputCache {
             },
             TxInput::OrderAccountCommand(cmd) => match cmd {
                 OrderAccountCommand::FillOrder(order_id, _, _)
-                | OrderAccountCommand::ConcludeOrder {
-                    order_id,
-                    filled_amount: _,
-                    remaining_give_amount: _,
-                } => self.order_data(order_id).is_some_and(|data| {
-                    [data.ask_currency, data.give_currency].iter().any(|v| match v {
-                        Currency::Coin => false,
-                        Currency::Token(token_id) => frozen_token_id == token_id,
+                | OrderAccountCommand::ConcludeOrder(order_id) => {
+                    self.order_data(order_id).is_some_and(|data| {
+                        [data.ask_currency, data.give_currency].iter().any(|v| match v {
+                            Currency::Coin => false,
+                            Currency::Token(token_id) => frozen_token_id == token_id,
+                        })
                     })
-                }),
+                }
             },
             TxInput::Account(_) => false,
         })
@@ -1062,11 +1060,7 @@ impl OutputCache {
                 },
                 TxInput::OrderAccountCommand(cmd) => match cmd {
                     OrderAccountCommand::FillOrder(order_id, _, _)
-                    | OrderAccountCommand::ConcludeOrder {
-                        order_id,
-                        filled_amount: _,
-                        remaining_give_amount: _,
-                    } => {
+                    | OrderAccountCommand::ConcludeOrder(order_id) => {
                         if !already_present {
                             if let Some(data) = self.orders.get_mut(order_id) {
                                 Self::update_order_state(
@@ -1225,11 +1219,7 @@ impl OutputCache {
                     },
                     TxInput::OrderAccountCommand(cmd) => match cmd {
                         OrderAccountCommand::FillOrder(order_id, _, _)
-                        | OrderAccountCommand::ConcludeOrder {
-                            order_id,
-                            filled_amount: _,
-                            remaining_give_amount: _,
-                        } => {
+                        | OrderAccountCommand::ConcludeOrder(order_id) => {
                             if let Some(data) = self.orders.get_mut(order_id) {
                                 data.last_parent =
                                     find_parent(&self.unconfirmed_descendants, tx_id.clone());
@@ -1527,11 +1517,7 @@ impl OutputCache {
                                     },
                                     TxInput::OrderAccountCommand(cmd) => match cmd {
                                         OrderAccountCommand::FillOrder(order_id, _, _)
-                                        | OrderAccountCommand::ConcludeOrder {
-                                            order_id,
-                                            filled_amount: _,
-                                            remaining_give_amount: _,
-                                        } => {
+                                        | OrderAccountCommand::ConcludeOrder(order_id) => {
                                             if let Some(data) = self.orders.get_mut(order_id) {
                                                 data.last_parent = find_parent(
                                                     &self.unconfirmed_descendants,

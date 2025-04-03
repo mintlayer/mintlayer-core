@@ -65,11 +65,7 @@ impl From<OrderAccountCommand> for AccountType {
     fn from(cmd: OrderAccountCommand) -> Self {
         match cmd {
             OrderAccountCommand::FillOrder(order_id, _, _)
-            | OrderAccountCommand::ConcludeOrder {
-                order_id,
-                filled_amount: _,
-                remaining_give_amount: _,
-            } => AccountType::Order(order_id),
+            | OrderAccountCommand::ConcludeOrder(order_id) => AccountType::Order(order_id),
         }
     }
 }
@@ -193,12 +189,6 @@ pub enum OrderAccountCommand {
     FillOrder(OrderId, Amount, Destination),
     // Close an order and withdraw all remaining funds from both give and ask balances.
     // Only the address specified as `conclude_key` can authorize this command.
-    // Amounts are important because they get into a signature so that such a tx cannot be applied
-    // to an altered state.
     #[codec(index = 1)]
-    ConcludeOrder {
-        order_id: OrderId,
-        filled_amount: Amount,
-        remaining_give_amount: Amount,
-    },
+    ConcludeOrder(OrderId),
 }

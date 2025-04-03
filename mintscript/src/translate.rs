@@ -248,11 +248,7 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for SignedTransaction {
             },
             InputInfo::OrderAccountCommand { command } => match command {
                 OrderAccountCommand::FillOrder(_, _, _) => Ok(WitnessScript::TRUE),
-                OrderAccountCommand::ConcludeOrder {
-                    order_id,
-                    filled_amount: _,
-                    remaining_give_amount: _,
-                } => {
+                OrderAccountCommand::ConcludeOrder(order_id) => {
                     let dest = ctx
                         .get_orders_conclude_destination(order_id)?
                         .ok_or(TranslationError::OrderNotFound(*order_id))?;
@@ -472,11 +468,7 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for SignatureOnlyTx {
             },
             InputInfo::OrderAccountCommand { command } => match command {
                 OrderAccountCommand::FillOrder(_, _, _) => Ok(WitnessScript::TRUE),
-                OrderAccountCommand::ConcludeOrder {
-                    order_id,
-                    filled_amount: _,
-                    remaining_give_amount: _,
-                } => {
+                OrderAccountCommand::ConcludeOrder(order_id) => {
                     let dest = ctx
                         .get_orders_conclude_destination(order_id)?
                         .ok_or(TranslationError::OrderNotFound(*order_id))?;

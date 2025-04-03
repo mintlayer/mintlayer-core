@@ -686,11 +686,9 @@ fn conclude_order_constraints(#[case] seed: Seed, #[case] version: OrdersVersion
                 AccountNonce::new(0),
                 AccountCommand::ConcludeOrder(order_id),
             ),
-            OrdersVersion::V1 => TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder {
-                order_id,
-                filled_amount: Amount::ZERO,
-                remaining_give_amount: give_amount,
-            }),
+            OrdersVersion::V1 => {
+                TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder(order_id))
+            }
         };
         let inputs = vec![conclude_command];
         let input_utxos = vec![None];
@@ -730,11 +728,9 @@ fn conclude_order_constraints(#[case] seed: Seed, #[case] version: OrdersVersion
                 AccountNonce::new(0),
                 AccountCommand::ConcludeOrder(order_id),
             ),
-            OrdersVersion::V1 => TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder {
-                order_id,
-                filled_amount: Amount::ZERO,
-                remaining_give_amount: give_amount,
-            }),
+            OrdersVersion::V1 => {
+                TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder(order_id))
+            }
         };
         let inputs = vec![conclude_command];
         let input_utxos = vec![None];
@@ -776,11 +772,9 @@ fn conclude_order_constraints(#[case] seed: Seed, #[case] version: OrdersVersion
                 AccountNonce::new(0),
                 AccountCommand::ConcludeOrder(order_id),
             ),
-            OrdersVersion::V1 => TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder {
-                order_id,
-                filled_amount: Amount::ZERO,
-                remaining_give_amount: give_amount,
-            }),
+            OrdersVersion::V1 => {
+                TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder(order_id))
+            }
         };
         let inputs = vec![conclude_command];
         let input_utxos = vec![None];
@@ -820,11 +814,9 @@ fn conclude_order_constraints(#[case] seed: Seed, #[case] version: OrdersVersion
             AccountNonce::new(0),
             AccountCommand::ConcludeOrder(order_id),
         ),
-        OrdersVersion::V1 => TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder {
-            order_id,
-            filled_amount: Amount::ZERO,
-            remaining_give_amount: give_amount,
-        }),
+        OrdersVersion::V1 => {
+            TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder(order_id))
+        }
     };
     let inputs = vec![conclude_command];
     let input_utxos = vec![None];

@@ -1067,15 +1067,9 @@ fn mutate_first_input(
                     destination.clone(),
                 ))
             }
-            OrderAccountCommand::ConcludeOrder {
-                order_id,
-                filled_amount,
-                remaining_give_amount,
-            } => TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder {
-                order_id: *order_id,
-                filled_amount: Amount::from_atoms(filled_amount.into_atoms() + 1),
-                remaining_give_amount: *remaining_give_amount,
-            }),
+            OrderAccountCommand::ConcludeOrder(order_id) => {
+                TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder(*order_id))
+            }
         },
     };
     updater.inputs[0] = mutated_input;

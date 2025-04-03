@@ -75,8 +75,8 @@ use common::{
         signed_transaction::SignedTransaction,
         tokens::make_token_id,
         AccountCommand, AccountNonce, AccountSpending, AccountType, Block, ChainConfig,
-        DelegationId, FrozenTokensValidationVersion, GenBlock, OrderAccountCommand, OrderId,
-        OrdersVersion, Transaction, TxInput, TxOutput, UtxoOutPoint,
+        DelegationId, FrozenTokensValidationVersion, GenBlock, OrderAccountCommand, OrdersVersion,
+        Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{id::WithId, Amount, BlockHeight, Fee, Id, Idable},
 };
@@ -776,11 +776,7 @@ where
                     },
                     TxInput::OrderAccountCommand(cmd) => match cmd {
                         OrderAccountCommand::FillOrder(order_id, _, _)
-                        | OrderAccountCommand::ConcludeOrder {
-                            order_id,
-                            filled_amount: _,
-                            remaining_give_amount: _,
-                        } => {
+                        | OrderAccountCommand::ConcludeOrder(order_id) => {
                             let order_data = self.get_order_data(order_id)?.ok_or(
                                 ConnectTransactionError::OrdersAccountingError(
                                     orders_accounting::Error::OrderDataNotFound(*order_id),
@@ -825,46 +821,6 @@ where
                 .rev()
                 .try_for_each(|undo| self.tokens_accounting_cache.undo(undo))?;
         }
-
-        Ok(())
-    }
-
-    fn check_conclude_command_amounts(
-        view: &impl OrdersAccountingView<Error = orders_accounting::Error>,
-        tx_id: Id<Transaction>,
-        order_id: OrderId,
-        filled_amount: Amount,
-        remaining_give_amount: Amount,
-    ) -> Result<(), ConnectTransactionError> {
-        let order_data = view.get_order_data(&order_id)?.ok_or(
-            ConnectTransactionError::OrdersAccountingError(
-                orders_accounting::Error::OrderDataNotFound(order_id),
-            ),
-        )?;
-
-        let original_ask_balance = match order_data.ask() {
-            OutputValue::TokenV0(_) => {
-                return Err(ConnectTransactionError::OrdersAccountingError(
-                    orders_accounting::Error::UnsupportedTokenVersion,
-                ))
-            }
-            OutputValue::Coin(amount) | OutputValue::TokenV1(_, amount) => *amount,
-        };
-        let current_ask_balance = view.get_ask_balance(&order_id)?;
-        let expected_filled_amount = (original_ask_balance - current_ask_balance).ok_or(
-            ConnectTransactionError::ConcludeInputAmountsDontMatch(tx_id, order_id),
-        )?;
-
-        ensure!(
-            filled_amount == expected_filled_amount,
-            ConnectTransactionError::ConcludeInputAmountsDontMatch(tx_id, order_id)
-        );
-
-        let current_give_balance = view.get_give_balance(&order_id)?;
-        ensure!(
-            current_give_balance == remaining_give_amount,
-            ConnectTransactionError::ConcludeInputAmountsDontMatch(tx_id, order_id)
-        );
 
         Ok(())
     }
@@ -916,23 +872,11 @@ where
                             .map_err(ConnectTransactionError::OrdersAccountingError);
                         Some(res)
                     }
-                    OrderAccountCommand::ConcludeOrder {
-                        order_id,
-                        filled_amount,
-                        remaining_give_amount,
-                    } => {
-                        let res = Self::check_conclude_command_amounts(
-                            &self.orders_accounting_cache,
-                            tx.get_id(),
-                            *order_id,
-                            *filled_amount,
-                            *remaining_give_amount,
-                        )
-                        .and_then(|_| {
-                            self.orders_accounting_cache
-                                .conclude_order(*order_id)
-                                .map_err(ConnectTransactionError::OrdersAccountingError)
-                        });
+                    OrderAccountCommand::ConcludeOrder(order_id) => {
+                        let res = self
+                            .orders_accounting_cache
+                            .conclude_order(*order_id)
+                            .map_err(ConnectTransactionError::OrdersAccountingError);
                         Some(res)
                     }
                 },

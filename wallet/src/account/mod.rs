@@ -1003,11 +1003,7 @@ impl<K: AccountKeyChains> Account<K> {
             }
             common::chain::OrdersVersion::V1 => {
                 SendRequest::new().with_outputs(outputs).with_inputs_and_destinations([(
-                    TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder {
-                        order_id,
-                        filled_amount,
-                        remaining_give_amount: order_info.give_balance,
-                    }),
+                    TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder(order_id)),
                     order_info.conclude_key.clone(),
                 )])
             }
@@ -1532,11 +1528,7 @@ impl<K: AccountKeyChains> Account<K> {
     ) -> WalletResult<Destination> {
         match cmd {
             OrderAccountCommand::FillOrder(_, _, destination) => Ok(destination.clone()),
-            OrderAccountCommand::ConcludeOrder {
-                order_id,
-                filled_amount: _,
-                remaining_give_amount: _,
-            } => self
+            OrderAccountCommand::ConcludeOrder(order_id) => self
                 .output_cache
                 .order_data(order_id)
                 .map(|data| data.conclude_key.clone())
@@ -1980,11 +1972,7 @@ impl<K: AccountKeyChains> Account<K> {
                 OrderAccountCommand::FillOrder(order_id, _, dest) => {
                     self.find_order(order_id).is_ok() || self.is_destination_mine_or_watched(dest)
                 }
-                OrderAccountCommand::ConcludeOrder {
-                    order_id,
-                    filled_amount: _,
-                    remaining_give_amount: _,
-                } => self.find_order(order_id).is_ok(),
+                OrderAccountCommand::ConcludeOrder(order_id) => self.find_order(order_id).is_ok(),
             },
             TxInput::AccountCommand(_, op) => match op {
                 AccountCommand::MintTokens(token_id, _)
@@ -2564,11 +2552,7 @@ fn group_preselected_inputs(
                         &mut update_preselected_inputs,
                     )?;
                 }
-                OrderAccountCommand::ConcludeOrder {
-                    order_id,
-                    filled_amount: _,
-                    remaining_give_amount: _,
-                } => {
+                OrderAccountCommand::ConcludeOrder(order_id) => {
                     handle_conclude_order(
                         *order_id,
                         order_info.as_ref(),

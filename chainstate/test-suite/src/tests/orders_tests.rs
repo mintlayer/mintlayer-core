@@ -485,11 +485,9 @@ fn conclude_order_check_storage(#[case] seed: Seed, #[case] version: OrdersVersi
                 AccountNonce::new(0),
                 AccountCommand::ConcludeOrder(order_id),
             ),
-            OrdersVersion::V1 => TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder {
-                order_id,
-                filled_amount: Amount::ZERO,
-                remaining_give_amount: give_amount,
-            }),
+            OrdersVersion::V1 => {
+                TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder(order_id))
+            }
         };
         let tx = TransactionBuilder::new()
             .add_input(tx_input, InputWitness::NoSignature(None))
@@ -547,11 +545,9 @@ fn conclude_order_multiple_txs(#[case] seed: Seed, #[case] version: OrdersVersio
                 AccountNonce::new(0),
                 AccountCommand::ConcludeOrder(order_id),
             ),
-            OrdersVersion::V1 => TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder {
-                order_id,
-                filled_amount: Amount::ZERO,
-                remaining_give_amount: give_amount,
-            }),
+            OrdersVersion::V1 => {
+                TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder(order_id))
+            }
         };
         let tx1 = TransactionBuilder::new()
             .add_input(tx_input, InputWitness::NoSignature(None))
@@ -566,11 +562,9 @@ fn conclude_order_multiple_txs(#[case] seed: Seed, #[case] version: OrdersVersio
                 AccountNonce::new(1),
                 AccountCommand::ConcludeOrder(order_id),
             ),
-            OrdersVersion::V1 => TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder {
-                order_id,
-                filled_amount: Amount::ZERO,
-                remaining_give_amount: give_amount,
-            }),
+            OrdersVersion::V1 => {
+                TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder(order_id))
+            }
         };
         let tx2 = TransactionBuilder::new()
             .add_input(tx_input, InputWitness::NoSignature(None))
@@ -828,11 +822,7 @@ fn fill_partially_then_conclude(#[case] seed: Seed, #[case] version: OrdersVersi
                     AccountCommand::ConcludeOrder(order_id),
                 ),
                 OrdersVersion::V1 => {
-                    TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder {
-                        order_id,
-                        filled_amount: fill_amount,
-                        remaining_give_amount: (give_amount - filled_amount).unwrap(),
-                    })
+                    TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder(order_id))
                 }
             };
             let tx = TransactionBuilder::new()
@@ -873,11 +863,7 @@ fn fill_partially_then_conclude(#[case] seed: Seed, #[case] version: OrdersVersi
                     AccountCommand::ConcludeOrder(order_id),
                 ),
                 OrdersVersion::V1 => {
-                    TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder {
-                        order_id,
-                        filled_amount: fill_amount,
-                        remaining_give_amount: (give_amount - filled_amount).unwrap(),
-                    })
+                    TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder(order_id))
                 }
             };
             let tx = TransactionBuilder::new()
@@ -911,11 +897,9 @@ fn fill_partially_then_conclude(#[case] seed: Seed, #[case] version: OrdersVersi
                 AccountNonce::new(1),
                 AccountCommand::ConcludeOrder(order_id),
             ),
-            OrdersVersion::V1 => TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder {
-                order_id,
-                filled_amount: fill_amount,
-                remaining_give_amount: (give_amount - filled_amount).unwrap(),
-            }),
+            OrdersVersion::V1 => {
+                TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder(order_id))
+            }
         };
         let tx = TransactionBuilder::new()
             .add_input(conclude_input, InputWitness::NoSignature(None))
@@ -1246,11 +1230,7 @@ fn fill_completely_then_conclude(#[case] seed: Seed, #[case] version: OrdersVers
                     AccountCommand::ConcludeOrder(order_id),
                 ),
                 OrdersVersion::V1 => {
-                    TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder {
-                        order_id,
-                        filled_amount: ask_amount,
-                        remaining_give_amount: Amount::ZERO,
-                    })
+                    TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder(order_id))
                 }
             };
             let tx = TransactionBuilder::new()
@@ -1280,11 +1260,9 @@ fn fill_completely_then_conclude(#[case] seed: Seed, #[case] version: OrdersVers
                 AccountNonce::new(1),
                 AccountCommand::ConcludeOrder(order_id),
             ),
-            OrdersVersion::V1 => TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder {
-                order_id,
-                filled_amount: ask_amount,
-                remaining_give_amount: Amount::ZERO,
-            }),
+            OrdersVersion::V1 => {
+                TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder(order_id))
+            }
         };
         let tx = TransactionBuilder::new()
             .add_input(conclude_input, InputWitness::NoSignature(None))
@@ -1347,11 +1325,7 @@ fn conclude_order_check_signature(#[case] seed: Seed, #[case] version: OrdersVer
                     AccountCommand::ConcludeOrder(order_id),
                 ),
                 OrdersVersion::V1 => {
-                    TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder {
-                        order_id,
-                        filled_amount: Amount::ZERO,
-                        remaining_give_amount: give_amount,
-                    })
+                    TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder(order_id))
                 }
             };
             let tx = TransactionBuilder::new()
@@ -1384,11 +1358,7 @@ fn conclude_order_check_signature(#[case] seed: Seed, #[case] version: OrdersVer
                     AccountCommand::ConcludeOrder(order_id),
                 ),
                 OrdersVersion::V1 => {
-                    TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder {
-                        order_id,
-                        filled_amount: Amount::ZERO,
-                        remaining_give_amount: give_amount,
-                    })
+                    TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder(order_id))
                 }
             };
             let tx = TransactionBuilder::new()
@@ -1442,11 +1412,9 @@ fn conclude_order_check_signature(#[case] seed: Seed, #[case] version: OrdersVer
                 AccountNonce::new(0),
                 AccountCommand::ConcludeOrder(order_id),
             ),
-            OrdersVersion::V1 => TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder {
-                order_id,
-                filled_amount: Amount::ZERO,
-                remaining_give_amount: give_amount,
-            }),
+            OrdersVersion::V1 => {
+                TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder(order_id))
+            }
         };
         let tx = TransactionBuilder::new()
             .add_input(conclude_input, InputWitness::NoSignature(None))
@@ -1659,11 +1627,9 @@ fn reorg_after_create(#[case] seed: Seed, #[case] version: OrdersVersion) {
                 AccountNonce::new(1),
                 AccountCommand::ConcludeOrder(order_id),
             ),
-            OrdersVersion::V1 => TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder {
-                order_id,
-                filled_amount: fill_amount,
-                remaining_give_amount: (give_amount - filled_amount).unwrap(),
-            }),
+            OrdersVersion::V1 => {
+                TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder(order_id))
+            }
         };
         tf.make_block_builder()
             .add_transaction(

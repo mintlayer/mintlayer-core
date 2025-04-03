@@ -314,11 +314,9 @@ async fn into_utxo_and_destination<T: NodeInterface, B: storage::Backend>(
 
             let additional_infos = match cmd {
                 OrderAccountCommand::FillOrder(order_id, _, _)
-                | OrderAccountCommand::ConcludeOrder {
-                    order_id,
-                    filled_amount: _,
-                    remaining_give_amount: _,
-                } => fetch_order_additional_info(rpc_client, *order_id).await?,
+                | OrderAccountCommand::ConcludeOrder(order_id) => {
+                    fetch_order_additional_info(rpc_client, *order_id).await?
+                }
             };
 
             (None, additional_infos, dest)

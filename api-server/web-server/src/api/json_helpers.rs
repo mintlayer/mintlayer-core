@@ -328,17 +328,11 @@ pub fn tx_input_to_json(inp: &TxInput, chain_config: &ChainConfig) -> serde_json
                     "destination": Address::new(chain_config, dest.clone()).expect("no error").as_str(),
                 })
             }
-            OrderAccountCommand::ConcludeOrder {
-                order_id,
-                filled_amount,
-                remaining_give_amount,
-            } => {
+            OrderAccountCommand::ConcludeOrder(order_id) => {
                 json!({
                     "input_type": "OrderAccountCommand",
                     "command": "ConcludeOrder",
                     "order_id": Address::new(chain_config, *order_id).expect("addressable").to_string(),
-                    "filled_atoms": json!({"atoms": filled_amount.into_atoms().to_string()}),
-                    "remaining_give_atoms": json!({"atoms": remaining_give_amount.into_atoms().to_string()}),
                 })
             }
         },
