@@ -1563,8 +1563,11 @@ impl<K: AccountKeyChains> Account<K> {
             .ok_or(WalletError::AddressNotFound)
     }
 
-    pub fn get_all_issued_addresses(&self) -> BTreeMap<ChildNumber, Address<Destination>> {
-        self.key_chain.get_all_issued_addresses()
+    pub fn get_all_issued_addresses(
+        &self,
+        key_purpose: KeyPurpose,
+    ) -> BTreeMap<ChildNumber, Address<Destination>> {
+        self.key_chain.get_all_issued_addresses(key_purpose)
     }
 
     pub fn get_all_standalone_addresses(&self) -> StandaloneAddresses {
@@ -1612,8 +1615,8 @@ impl<K: AccountKeyChains> Account<K> {
         Ok((address, amounts_by_currency, standalone_key))
     }
 
-    pub fn get_addresses_usage(&self) -> &KeychainUsageState {
-        self.key_chain.get_addresses_usage_state()
+    pub fn get_addresses_usage(&self, key_purpose: KeyPurpose) -> &KeychainUsageState {
+        self.key_chain.get_addresses_usage_state(key_purpose)
     }
 
     fn collect_output_destinations(&self, txo: &TxOutput) -> Vec<Destination> {
@@ -1785,6 +1788,30 @@ impl<K: AccountKeyChains> Account<K> {
         with_locked: WithLocked,
     ) -> WalletResult<BTreeMap<Currency, Amount>> {
         let amounts_by_currency = currency_grouper::group_utxos_for_input(
+            self.get_utxos(
+                UtxoType::Transfer | UtxoType::LockThenTransfer | UtxoType::IssueNft,
+                median_time,
+                utxo_states,
+                with_locked,
+            )
+            .into_iter(),
+            |(_, tx_output)| tx_output,
+            |total: &mut Amount, _, amount| -> WalletResult<()> {
+                *total = (*total + amount).ok_or(WalletError::OutputAmountOverflow)?;
+                Ok(())
+            },
+            Amount::ZERO,
+        )?;
+        Ok(amounts_by_currency)
+    }
+
+    pub fn get_address_balances(
+        &self,
+        utxo_states: UtxoStates,
+        median_time: BlockTimestamp,
+        with_locked: WithLocked,
+    ) -> WalletResult<BTreeMap<Destination, Amount>> {
+        let amounts_by_currency = currency_grouper::group_utxos_for_input_by_destination(
             self.get_utxos(
                 UtxoType::Transfer | UtxoType::LockThenTransfer | UtxoType::IssueNft,
                 median_time,

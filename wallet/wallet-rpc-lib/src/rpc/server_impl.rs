@@ -230,8 +230,15 @@ where
     async fn get_issued_addresses(
         &self,
         account_arg: AccountArg,
+        include_change_addresses: Option<bool>,
     ) -> rpc::RpcResult<Vec<AddressWithUsageInfo>> {
-        rpc::handle_result(self.get_issued_addresses(account_arg.index::<N>()?).await)
+        rpc::handle_result(
+            self.get_issued_addresses(
+                account_arg.index::<N>()?,
+                include_change_addresses.unwrap_or(false),
+            )
+            .await,
+        )
     }
 
     async fn new_vrf_public_key(

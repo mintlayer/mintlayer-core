@@ -430,14 +430,14 @@ class WalletCliController(WalletCliControllerBase):
 
     async def list_pool_ids(self) -> List[PoolData]:
         output = await self._write_command("staking-list-pools\n", can_be_empty=True)
-        self.log.info(f"pools: {output}");
+        self.log.info(f"pools: {output}")
         pattern = r"Pool Id: ([a-zA-Z0-9]+), Pledge: (\d+[.]?\d+), Balance: (\d+[.]?\d+), Creation Block Height: (\d+), Creation block timestamp: (\d+), Staker: ([a-zA-Z0-9]+), Decommission Key: ([a-zA-Z0-9]+), VRF Public Key: ([a-zA-Z0-9]+)"
         matches = re.findall(pattern, output)
         return [PoolData(pool_id, pledge, balance, int(height), timestamp, staker, decommission_key, vrf_public_key) for pool_id, pledge, balance, height, timestamp, staker, decommission_key, vrf_public_key in matches]
 
     async def list_pools_for_decommission(self) -> List[PoolData]:
         output = await self._write_command("staking-list-owned-pools-for-decommission\n", can_be_empty=True)
-        self.log.info(f"pools: {output}");
+        self.log.info(f"pools: {output}")
         pattern = r"Pool Id: ([a-zA-Z0-9]+), Pledge: (\d+[.]?\d+), Balance: (\d+[.]?\d+), Creation Block Height: (\d+), Creation block timestamp: (\d+), Staker: ([a-zA-Z0-9]+), Decommission Key: ([a-zA-Z0-9]+), VRF Public Key: ([a-zA-Z0-9]+)"
         matches = re.findall(pattern, output)
         return [PoolData(pool_id, pledge, balance, int(height), timestamp, staker, decommission_key, vrf_public_key) for pool_id, pledge, balance, height, timestamp, staker, decommission_key, vrf_public_key in matches]
@@ -477,15 +477,15 @@ class WalletCliController(WalletCliControllerBase):
         return await self._write_command("wallet-rescan\n")
 
     async def start_staking(self) -> str:
-        return await self._write_command(f"staking-start\n")
+        return await self._write_command("staking-start\n")
 
     async def stop_staking(self) -> str:
-        return await self._write_command(f"staking-stop\n")
+        return await self._write_command("staking-stop\n")
 
     async def staking_status(self) -> str:
-        return await self._write_command(f"staking-status\n")
+        return await self._write_command("staking-status\n")
 
-    async def generate_block(self, transactions: [str]) -> str:
+    async def generate_block(self, transactions: List[str]) -> str:
         return await self._write_command(f"generate-block {transactions}\n")
 
     async def get_standalone_addresses(self) -> str:
@@ -494,8 +494,9 @@ class WalletCliController(WalletCliControllerBase):
     async def get_standalone_address_details(self, address: str) -> str:
         return await self._write_command(f"standalone-address-details {address}\n")
 
-    async def get_addresses_usage(self) -> str:
-        return await self._write_command("address-show\n")
+    async def get_addresses_usage(self, with_change: bool = False) -> str:
+        include_change = "--include-change" if with_change else ""
+        return await self._write_command(f"address-show {include_change}\n")
 
     async def get_vrf_addresses_usage(self) -> str:
         return await self._write_command("staking-show-vrf-public-keys\n")
@@ -515,7 +516,7 @@ class WalletCliController(WalletCliControllerBase):
         return await self._write_command(f"account-balance {with_locked} {' '.join(utxo_states)}\n")
 
     async def list_pending_transactions(self) -> List[str]:
-        output = await self._write_command(f"transaction-list-pending\n")
+        output = await self._write_command("transaction-list-pending\n")
         pattern = r'Id<Transaction>\{([^}]*)\}'
         return re.findall(pattern, output)
 
