@@ -269,7 +269,10 @@ where
         label: Option<String>,
     ) -> KeyChainResult<PublicKeyHash>;
 
-    fn get_all_issued_addresses(&self) -> BTreeMap<ChildNumber, Address<Destination>>;
+    fn get_all_issued_addresses(
+        &self,
+        key_purpose: KeyPurpose,
+    ) -> BTreeMap<ChildNumber, Address<Destination>>;
 
     fn get_all_standalone_addresses(&self) -> StandaloneAddresses;
 
@@ -278,7 +281,7 @@ where
         address: Destination,
     ) -> Option<(Destination, StandaloneAddressDetails)>;
 
-    fn get_addresses_usage_state(&self) -> &KeychainUsageState;
+    fn get_addresses_usage_state(&self, key_purpose: KeyPurpose) -> &KeychainUsageState;
 }
 
 pub trait VRFAccountKeyChains {

@@ -645,8 +645,11 @@ impl<V: VrfKeyChain> AccountKeyChains for AccountKeyChainImpl<V> {
         Ok(multisig_pkh)
     }
 
-    fn get_all_issued_addresses(&self) -> BTreeMap<ChildNumber, Address<Destination>> {
-        self.get_leaf_key_chain(KeyPurpose::ReceiveFunds).get_all_issued_addresses()
+    fn get_all_issued_addresses(
+        &self,
+        key_purpose: KeyPurpose,
+    ) -> BTreeMap<ChildNumber, Address<Destination>> {
+        self.get_leaf_key_chain(key_purpose).get_all_issued_addresses()
     }
 
     fn get_all_standalone_addresses(&self) -> StandaloneAddresses {
@@ -683,8 +686,8 @@ impl<V: VrfKeyChain> AccountKeyChains for AccountKeyChainImpl<V> {
         }
     }
 
-    fn get_addresses_usage_state(&self) -> &KeychainUsageState {
-        self.get_leaf_key_chain(KeyPurpose::ReceiveFunds).usage_state()
+    fn get_addresses_usage_state(&self, key_purpose: KeyPurpose) -> &KeychainUsageState {
+        self.get_leaf_key_chain(key_purpose).usage_state()
     }
 }
 

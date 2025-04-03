@@ -214,7 +214,11 @@ pub enum ColdWalletCommand {
     },
 
     #[clap(name = "address-show")]
-    ShowReceiveAddresses,
+    ShowAddresses {
+        /// Include the change addresses along with the receiving addresses
+        #[arg(long = "include-change")]
+        include_change: bool,
+    },
 
     #[clap(name = "standalone-address-show")]
     ShowStandaloneAddresses,

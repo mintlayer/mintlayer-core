@@ -60,7 +60,7 @@ use wallet_controller::{types::WalletTypeArgs, UtxoState, UtxoType};
 pub use wallet_controller::{ControllerConfig, NodeInterface};
 use wallet_types::{
     partially_signed_transaction::PartiallySignedTransaction, seed_phrase::StoreSeedPhrase,
-    signature_status::SignatureStatus,
+    signature_status::SignatureStatus, KeyPurpose,
 };
 
 use crate::service::SubmitError;
@@ -270,19 +270,45 @@ impl RpcStandalonePrivateKeyAddress {
     }
 }
 
-#[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize, HasValueHint)]
+pub enum RpcKeyPurpose {
+    Receive,
+    Change,
+}
+
+impl From<KeyPurpose> for RpcKeyPurpose {
+    fn from(value: KeyPurpose) -> Self {
+        match value {
+            KeyPurpose::ReceiveFunds => Self::Receive,
+            KeyPurpose::Change => Self::Change,
+        }
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct AddressWithUsageInfo {
     pub address: RpcAddress<Destination>,
     pub index: String,
+    pub purpose: RpcKeyPurpose,
     pub used: bool,
+    pub coins: RpcAmountOut,
 }
 
 impl AddressWithUsageInfo {
-    pub fn new(child_number: ChildNumber, address: Address<Destination>, used: bool) -> Self {
+    pub fn new(
+        child_number: ChildNumber,
+        purpose: KeyPurpose,
+        address: Address<Destination>,
+        used: bool,
+        coins: Amount,
+        chain_config: &ChainConfig,
+    ) -> Self {
         Self {
             address: address.into(),
             index: child_number.to_string(),
+            purpose: purpose.into(),
             used,
+            coins: RpcAmountOut::from_amount_no_padding(coins, chain_config.coin_decimals()),
         }
     }
 }

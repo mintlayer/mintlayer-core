@@ -238,14 +238,14 @@ class WalletRpcController(WalletCliControllerBase):
         return self._write_command("address_reveal_public_key", [self.account, address])['result']['public_key_hex']
 
     async def new_address(self) -> str:
-        return self._write_command(f"address_new", [self.account])['result']['address']
+        return self._write_command("address_new", [self.account])['result']['address']
 
     async def add_standalone_multisig_address(self, min_required_signatures: int, pub_keys: List[str], label: Optional[str] = None) -> str:
         return self._write_command("standalone_add_multisig", [self.account, min_required_signatures, pub_keys, label, None])['result']
 
     async def list_utxos(self, utxo_types: str = '', with_locked: str = '', utxo_states: List[str] = []) -> List[UtxoOutpoint]:
         outputs = self._write_command("account_utxos", [self.account, utxo_types, with_locked, ''.join(utxo_states)])['result']
-        return [UtxoOutpoint(tx_id=match["outpoint"]["source_id"]["content"]['tx_id'], index=int(match["outpoint"]['index'])) for match in outputs]
+        return [UtxoOutpoint(id=match["outpoint"]["source_id"]["content"]['tx_id'], index=int(match["outpoint"]['index'])) for match in outputs]
 
     async def get_transaction(self, tx_id: str) -> str:
         return self._write_command("transaction_get", [self.account, tx_id])['result']
@@ -270,12 +270,12 @@ class WalletRpcController(WalletCliControllerBase):
                               number_of_decimals: int,
                               metadata_uri: str,
                               destination_address: str,
-                              token_supply: Optional[int] = None,
+                              token_supply_fixed: Optional[int] = None,
                               is_freezable: bool = True):
-        if token_supply is None:
+        if token_supply_fixed is None:
             token_supply = { "type": "Lockable" }
         else:
-            token_supply = { "type": "Fixed", "content": {'decimal': str(token_supply)} }
+            token_supply = { "type": "Fixed", "content": {'decimal': str(token_supply_fixed)} }
 
         result = self._write_command('token_issue_new', [
             self.account,
@@ -375,7 +375,7 @@ class WalletRpcController(WalletCliControllerBase):
         return "The transaction was submitted successfully"
 
     async def submit_transaction(self, transaction: str, do_not_store: bool = False) -> str:
-        result = self._write_command(f"node_submit_transaction", [transaction, do_not_store, {}])
+        result = self._write_command("node_submit_transaction", [transaction, do_not_store, {}])
         if 'result' in result:
             return f"The transaction was submitted successfully\n\n{result['result']['tx_id']}"
         else:
@@ -397,7 +397,7 @@ class WalletRpcController(WalletCliControllerBase):
         return self._write_command("delegation_create", [self.account, address, pool_id, {'in_top_x_mb': 5}])['result']['delegation_id']
 
     async def stake_delegation(self, amount: int, delegation_id: str) -> str:
-        self._write_command(f"delegation_stake", [self.account, {'decimal': str(amount)}, delegation_id, {'in_top_x_mb': 5}])['result']
+        self._write_command("delegation_stake", [self.account, {'decimal': str(amount)}, delegation_id, {'in_top_x_mb': 5}])['result']
         return "Success"
 
     async def list_delegation_ids(self) -> List[DelegationData]:
@@ -412,22 +412,22 @@ class WalletRpcController(WalletCliControllerBase):
         return "Success"
 
     async def start_staking(self) -> str:
-        self._write_command(f"staking_start", [self.account])['result']
+        self._write_command("staking_start", [self.account])['result']
         return "Staking started successfully"
 
     async def stop_staking(self) -> str:
-        self._write_command(f"staking_stop", [self.account])['result']
+        self._write_command("staking_stop", [self.account])['result']
         return "Success"
 
     async def staking_status(self) -> str:
-        result = self._write_command(f"staking_status", [self.account])['result']
+        result = self._write_command("staking_status", [self.account])['result']
         if result == "Staking":
             return "Staking"
         else:
             return "Not staking"
 
-    async def get_addresses_usage(self) -> str:
-        return self._write_command("address_show", [self.account])['result']
+    async def get_addresses_usage(self, with_change: bool = False) -> str:
+        return self._write_command("address_show", [self.account, with_change])['result']
 
     async def get_balance(self, with_locked: str = 'unlocked', utxo_states: List[str] = ['confirmed']) -> str:
         with_locked = with_locked.capitalize()

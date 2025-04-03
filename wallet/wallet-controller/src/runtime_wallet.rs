@@ -53,10 +53,10 @@ use wallet_types::{
     partially_signed_transaction::{PartiallySignedTransaction, TxAdditionalInfo},
     seed_phrase::SerializableSeedPhrase,
     signature_status::SignatureStatus,
-    utxo_types::{UtxoStates, UtxoTypes},
+    utxo_types::{UtxoState, UtxoStates, UtxoTypes},
     wallet_tx::TxData,
     with_locked::WithLocked,
-    Currency, KeychainUsageState,
+    Currency, KeyPurpose, KeychainUsageState,
 };
 
 #[cfg(feature = "trezor")]
@@ -373,11 +373,31 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
     pub fn get_all_issued_addresses(
         &self,
         account_index: U31,
+        key_purpose: KeyPurpose,
     ) -> WalletResult<BTreeMap<ChildNumber, Address<Destination>>> {
         match self {
-            RuntimeWallet::Software(w) => w.get_all_issued_addresses(account_index),
+            RuntimeWallet::Software(w) => w.get_all_issued_addresses(account_index, key_purpose),
             #[cfg(feature = "trezor")]
-            RuntimeWallet::Trezor(w) => w.get_all_issued_addresses(account_index),
+            RuntimeWallet::Trezor(w) => w.get_all_issued_addresses(account_index, key_purpose),
+        }
+    }
+
+    pub fn get_address_coin_balances(
+        &self,
+        account_index: U31,
+    ) -> WalletResult<BTreeMap<Destination, Amount>> {
+        match self {
+            RuntimeWallet::Software(w) => w.get_address_coin_balances(
+                account_index,
+                UtxoState::Confirmed.into(),
+                WithLocked::Unlocked,
+            ),
+            #[cfg(feature = "trezor")]
+            RuntimeWallet::Trezor(w) => w.get_address_coin_balances(
+                account_index,
+                UtxoState::Confirmed.into(),
+                WithLocked::Unlocked,
+            ),
         }
     }
 
@@ -403,11 +423,15 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
         }
     }
 
-    pub fn get_addresses_usage(&self, account_index: U31) -> WalletResult<&KeychainUsageState> {
+    pub fn get_addresses_usage(
+        &self,
+        account_index: U31,
+        key_purpose: KeyPurpose,
+    ) -> WalletResult<&KeychainUsageState> {
         match self {
-            RuntimeWallet::Software(w) => w.get_addresses_usage(account_index),
+            RuntimeWallet::Software(w) => w.get_addresses_usage(account_index, key_purpose),
             #[cfg(feature = "trezor")]
-            RuntimeWallet::Trezor(w) => w.get_addresses_usage(account_index),
+            RuntimeWallet::Trezor(w) => w.get_addresses_usage(account_index, key_purpose),
         }
     }
 

@@ -166,6 +166,7 @@ pub trait WalletInterface {
     async fn get_issued_addresses(
         &self,
         options: U31,
+        include_change_addresses: bool,
     ) -> Result<Vec<AddressWithUsageInfo>, Self::Error>;
 
     async fn get_standalone_addresses(

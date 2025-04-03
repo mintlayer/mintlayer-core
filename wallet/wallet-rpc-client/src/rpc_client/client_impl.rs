@@ -337,10 +337,15 @@ impl WalletInterface for ClientWalletRpc {
     async fn get_issued_addresses(
         &self,
         account_index: U31,
+        include_change_addresses: bool,
     ) -> Result<Vec<AddressWithUsageInfo>, Self::Error> {
-        ColdWalletRpcClient::get_issued_addresses(&self.http_client, account_index.into())
-            .await
-            .map_err(WalletRpcError::ResponseError)
+        ColdWalletRpcClient::get_issued_addresses(
+            &self.http_client,
+            account_index.into(),
+            include_change_addresses,
+        )
+        .await
+        .map_err(WalletRpcError::ResponseError)
     }
 
     async fn get_standalone_addresses(

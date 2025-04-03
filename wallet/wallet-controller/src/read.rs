@@ -38,7 +38,7 @@ use wallet_types::{
     utxo_types::{UtxoStates, UtxoTypes},
     wallet_tx::TxData,
     with_locked::WithLocked,
-    Currency, KeychainUsageState,
+    Currency, KeyPurpose, KeychainUsageState,
 };
 
 use crate::{
@@ -56,6 +56,14 @@ pub struct ReadOnlyController<'a, T, B: storage::Backend + 'static> {
 
 /// A Map between the derived child number and the Address with whether it is marked as used or not
 type MapAddressWithUsage<T> = BTreeMap<ChildNumber, (Address<T>, bool)>;
+
+pub struct AddressInfo {
+    pub address: Address<Destination>,
+    pub child_number: ChildNumber,
+    pub purpose: KeyPurpose,
+    pub used: bool,
+    pub coins: Amount,
+}
 
 impl<'a, T, B> ReadOnlyController<'a, T, B>
 where
@@ -159,9 +167,18 @@ where
 
     pub fn get_all_issued_addresses(
         &self,
+        key_purpose: KeyPurpose,
     ) -> Result<BTreeMap<ChildNumber, Address<Destination>>, ControllerError<T>> {
         self.wallet
-            .get_all_issued_addresses(self.account_index)
+            .get_all_issued_addresses(self.account_index, key_purpose)
+            .map_err(ControllerError::WalletError)
+    }
+
+    fn get_address_coin_balances(
+        &self,
+    ) -> Result<BTreeMap<Destination, Amount>, ControllerError<T>> {
+        self.wallet
+            .get_address_coin_balances(self.account_index)
             .map_err(ControllerError::WalletError)
     }
 
@@ -179,30 +196,53 @@ where
             .map_err(ControllerError::WalletError)
     }
 
-    pub fn get_addresses_usage(&self) -> Result<&'a KeychainUsageState, ControllerError<T>> {
+    pub fn get_addresses_usage(
+        &self,
+        key_purpose: KeyPurpose,
+    ) -> Result<&'a KeychainUsageState, ControllerError<T>> {
         self.wallet
-            .get_addresses_usage(self.account_index)
+            .get_addresses_usage(self.account_index, key_purpose)
             .map_err(ControllerError::WalletError)
     }
 
-    /// Get all addresses with usage information
-    /// The boolean in the BTreeMap's value is true if the address is used, false is otherwise
+    /// Get all addresses with usage information and coin balances.
+    /// The `used` boolean field is true if the address is used, false if otherwise.
     /// Note that the usage statistics follow strictly the rules of the wallet. For example,
     /// the initial wallet only stored information about the last used address, so the usage
     /// of all addresses after the first unused address will have the result `false`.
     pub fn get_addresses_with_usage(
         &self,
-    ) -> Result<MapAddressWithUsage<Destination>, ControllerError<T>> {
-        let addresses = self.get_all_issued_addresses()?;
-        let usage = self.get_addresses_usage()?;
+        include_change_addresses: bool,
+    ) -> Result<Vec<AddressInfo>, ControllerError<T>> {
+        let balances = self.get_address_coin_balances()?;
 
-        Ok(addresses
-            .into_iter()
-            .map(|(child_number, address)| {
+        let get_addresses = |key_purpose| -> Result<_, ControllerError<T>> {
+            let addresses = self.get_all_issued_addresses(key_purpose)?;
+            let usage = self.get_addresses_usage(key_purpose)?;
+            let balances = &balances;
+
+            Ok(addresses.into_iter().map(move |(child_number, address)| {
+                let coins = balances.get(address.as_object()).copied().unwrap_or(Amount::ZERO);
                 let used = usage.last_used().is_some_and(|used| used >= child_number.get_index());
-                (child_number, (address, used))
-            })
-            .collect())
+                AddressInfo {
+                    address,
+                    child_number,
+                    coins,
+                    used,
+                    purpose: key_purpose,
+                }
+            }))
+        };
+
+        let result = if include_change_addresses {
+            get_addresses(KeyPurpose::ReceiveFunds)?
+                .chain(get_addresses(KeyPurpose::Change)?)
+                .collect()
+        } else {
+            get_addresses(KeyPurpose::ReceiveFunds)?.collect()
+        };
+
+        Ok(result)
     }
 
     /// Get all standalone addresses with their labels

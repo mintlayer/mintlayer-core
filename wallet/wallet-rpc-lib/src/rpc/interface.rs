@@ -161,6 +161,7 @@ trait ColdWalletRpc {
     async fn get_issued_addresses(
         &self,
         account: AccountArg,
+        include_change_addresses: bool,
     ) -> rpc::RpcResult<Vec<AddressWithUsageInfo>>;
 
     /// Show standalone added addresses with their labels.
