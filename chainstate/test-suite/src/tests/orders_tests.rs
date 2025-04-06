@@ -29,10 +29,10 @@ use common::{
             make_token_id, IsTokenFreezable, TokenId, TokenIssuance, TokenIssuanceV1,
             TokenTotalSupply,
         },
-        AccountCommand, AccountNonce, Destination, OrderAccountCommand, OrderData, OrdersVersion,
-        SignedTransaction, TxInput, TxOutput, UtxoOutPoint,
+        AccountCommand, AccountNonce, Destination, OrderAccountCommand, OrderData, OrderId,
+        OrdersVersion, SignedTransaction, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{Amount, BlockHeight, CoinOrTokenId, Idable},
+    primitives::{Amount, BlockHeight, CoinOrTokenId, Idable, H256},
 };
 use crypto::key::{KeyKind, PrivateKey};
 use orders_accounting::OrdersAccountingDB;
@@ -478,7 +478,7 @@ fn conclude_order_check_storage(#[case] seed: Seed, #[case] version: OrdersVersi
             .build();
         tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
-        let tx_input = match version {
+        let make_conclude_input = |order_id| match version {
             OrdersVersion::V0 => TxInput::AccountCommand(
                 AccountNonce::new(0),
                 AccountCommand::ConcludeOrder(order_id),
@@ -487,8 +487,46 @@ fn conclude_order_check_storage(#[case] seed: Seed, #[case] version: OrdersVersi
                 TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder(order_id))
             }
         };
+
+        // Try conclude nonexisting order
+        {
+            let random_order_id = OrderId::new(H256::random_using(&mut rng));
+
+            let tx = TransactionBuilder::new()
+                .add_input(
+                    make_conclude_input(random_order_id),
+                    InputWitness::NoSignature(None),
+                )
+                .add_output(TxOutput::Transfer(
+                    OutputValue::TokenV1(token_id, give_amount),
+                    Destination::AnyoneCanSpend,
+                ))
+                .build();
+            let tx_id = tx.transaction().get_id();
+            let error = tf
+                .make_block_builder()
+                .add_transaction(tx)
+                .build_and_process(&mut rng)
+                .unwrap_err();
+
+            assert_eq!(
+                error,
+                chainstate::ChainstateError::ProcessBlockError(
+                    chainstate::BlockError::StateUpdateFailed(
+                        ConnectTransactionError::ConstrainedValueAccumulatorError(
+                            orders_accounting::Error::OrderDataNotFound(random_order_id).into(),
+                            tx_id.into()
+                        )
+                    )
+                )
+            );
+        }
+
         let tx = TransactionBuilder::new()
-            .add_input(tx_input, InputWitness::NoSignature(None))
+            .add_input(
+                make_conclude_input(order_id),
+                InputWitness::NoSignature(None),
+            )
             .add_output(TxOutput::Transfer(
                 OutputValue::TokenV1(token_id, give_amount),
                 Destination::AnyoneCanSpend,
@@ -1472,11 +1510,14 @@ fn reorg_before_create(#[case] seed: Seed, #[case] version: OrdersVersion) {
         );
 
         let order_id = make_order_id(&tokens_outpoint);
-        let tx = TransactionBuilder::new()
+        let create_order_tx = TransactionBuilder::new()
             .add_input(tokens_outpoint.into(), InputWitness::NoSignature(None))
             .add_output(TxOutput::CreateOrder(Box::new(order_data.clone())))
             .build();
-        tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
+        tf.make_block_builder()
+            .add_transaction(create_order_tx.clone())
+            .build_and_process(&mut rng)
+            .unwrap();
 
         // Fill the order partially
         let fill_amount = Amount::from_atoms(rng.gen_range(1..ask_amount.into_atoms()));
@@ -1499,7 +1540,7 @@ fn reorg_before_create(#[case] seed: Seed, #[case] version: OrdersVersion) {
                 Destination::AnyoneCanSpend,
             )),
         };
-        let tx = TransactionBuilder::new()
+        let fill_order_tx = TransactionBuilder::new()
             .add_input(coins_outpoint.into(), InputWitness::NoSignature(None))
             .add_input(fill_input, InputWitness::NoSignature(None))
             .add_output(TxOutput::Transfer(
@@ -1511,10 +1552,13 @@ fn reorg_before_create(#[case] seed: Seed, #[case] version: OrdersVersion) {
                 Destination::AnyoneCanSpend,
             ))
             .build();
-        tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
+        tf.make_block_builder()
+            .add_transaction(fill_order_tx.clone())
+            .build_and_process(&mut rng)
+            .unwrap();
 
         assert_eq!(
-            Some(order_data.into()),
+            Some(order_data.clone().into()),
             tf.chainstate.get_order_data(&order_id).unwrap()
         );
         assert_eq!(
@@ -1527,7 +1571,8 @@ fn reorg_before_create(#[case] seed: Seed, #[case] version: OrdersVersion) {
         );
 
         // Create alternative chain and trigger the reorg
-        let new_best_block = tf.create_chain(&reorg_common_ancestor, 3, &mut rng).unwrap();
+        let new_best_block =
+            tf.create_chain_with_empty_blocks(&reorg_common_ancestor, 3, &mut rng).unwrap();
         assert_eq!(tf.best_block_id(), new_best_block);
 
         assert_eq!(None, tf.chainstate.get_order_data(&order_id).unwrap());
@@ -1537,6 +1582,25 @@ fn reorg_before_create(#[case] seed: Seed, #[case] version: OrdersVersion) {
         );
         assert_eq!(
             None,
+            tf.chainstate.get_order_give_balance(&order_id).unwrap()
+        );
+
+        // Reapply txs again
+        tf.make_block_builder()
+            .with_transactions(vec![create_order_tx, fill_order_tx])
+            .build_and_process(&mut rng)
+            .unwrap();
+
+        assert_eq!(
+            Some(order_data.into()),
+            tf.chainstate.get_order_data(&order_id).unwrap()
+        );
+        assert_eq!(
+            Some(left_to_fill),
+            tf.chainstate.get_order_ask_balance(&order_id).unwrap()
+        );
+        assert_eq!(
+            Some((give_amount - filled_amount).unwrap()),
             tf.chainstate.get_order_give_balance(&order_id).unwrap()
         );
     });
@@ -1602,21 +1666,20 @@ fn reorg_after_create(#[case] seed: Seed, #[case] version: OrdersVersion) {
                 Destination::AnyoneCanSpend,
             )),
         };
+        let fill_order_tx = TransactionBuilder::new()
+            .add_input(coins_outpoint.into(), InputWitness::NoSignature(None))
+            .add_input(fill_input, InputWitness::NoSignature(None))
+            .add_output(TxOutput::Transfer(
+                OutputValue::TokenV1(token_id, filled_amount),
+                Destination::AnyoneCanSpend,
+            ))
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin(left_to_fill),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
         tf.make_block_builder()
-            .add_transaction(
-                TransactionBuilder::new()
-                    .add_input(coins_outpoint.into(), InputWitness::NoSignature(None))
-                    .add_input(fill_input, InputWitness::NoSignature(None))
-                    .add_output(TxOutput::Transfer(
-                        OutputValue::TokenV1(token_id, filled_amount),
-                        Destination::AnyoneCanSpend,
-                    ))
-                    .add_output(TxOutput::Transfer(
-                        OutputValue::Coin(left_to_fill),
-                        Destination::AnyoneCanSpend,
-                    ))
-                    .build(),
-            )
+            .add_transaction(fill_order_tx.clone())
             .build_and_process(&mut rng)
             .unwrap();
 
@@ -1629,12 +1692,11 @@ fn reorg_after_create(#[case] seed: Seed, #[case] version: OrdersVersion) {
                 TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder(order_id))
             }
         };
+        let conclude_order_tx = TransactionBuilder::new()
+            .add_input(conclude_input, InputWitness::NoSignature(None))
+            .build();
         tf.make_block_builder()
-            .add_transaction(
-                TransactionBuilder::new()
-                    .add_input(conclude_input, InputWitness::NoSignature(None))
-                    .build(),
-            )
+            .add_transaction(conclude_order_tx.clone())
             .build_and_process(&mut rng)
             .unwrap();
 
@@ -1649,7 +1711,8 @@ fn reorg_after_create(#[case] seed: Seed, #[case] version: OrdersVersion) {
         );
 
         // Create alternative chain and trigger the reorg
-        let new_best_block = tf.create_chain(&reorg_common_ancestor, 3, &mut rng).unwrap();
+        let new_best_block =
+            tf.create_chain_with_empty_blocks(&reorg_common_ancestor, 3, &mut rng).unwrap();
         assert_eq!(tf.best_block_id(), new_best_block);
 
         assert_eq!(
@@ -1663,6 +1726,22 @@ fn reorg_after_create(#[case] seed: Seed, #[case] version: OrdersVersion) {
         assert_eq!(
             Some(order_data.into()),
             tf.chainstate.get_order_data(&order_id).unwrap()
+        );
+
+        // Reapply txs again
+        tf.make_block_builder()
+            .with_transactions(vec![fill_order_tx, conclude_order_tx])
+            .build_and_process(&mut rng)
+            .unwrap();
+
+        assert_eq!(None, tf.chainstate.get_order_data(&order_id).unwrap());
+        assert_eq!(
+            None,
+            tf.chainstate.get_order_ask_balance(&order_id).unwrap()
+        );
+        assert_eq!(
+            None,
+            tf.chainstate.get_order_give_balance(&order_id).unwrap()
         );
     });
 }
@@ -2829,20 +2908,70 @@ fn freeze_order_check_storage(#[case] seed: Seed, #[case] version: OrdersVersion
         );
 
         let order_id = make_order_id(&tokens_outpoint);
-        let tx = TransactionBuilder::new()
-            .add_input(tokens_outpoint.into(), InputWitness::NoSignature(None))
-            .add_output(TxOutput::CreateOrder(Box::new(order_data.clone())))
-            .build();
-        tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
+        tf.make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(tokens_outpoint.into(), InputWitness::NoSignature(None))
+                    .add_output(TxOutput::CreateOrder(Box::new(order_data.clone())))
+                    .build(),
+            )
+            .build_and_process(&mut rng)
+            .unwrap();
 
-        let tx = TransactionBuilder::new()
+        // Try freeze nonexisting order
+        {
+            let random_order_id = OrderId::new(H256::random_using(&mut rng));
+            let freeze_tx = TransactionBuilder::new()
+                .add_input(
+                    TxInput::OrderAccountCommand(OrderAccountCommand::FreezeOrder(random_order_id)),
+                    InputWitness::NoSignature(None),
+                )
+                .build();
+            let freeze_tx_id = freeze_tx.transaction().get_id();
+            let result =
+                tf.make_block_builder().add_transaction(freeze_tx).build_and_process(&mut rng);
+
+            match version {
+                OrdersVersion::V0 => {
+                    assert_eq!(
+                        result.unwrap_err(),
+                        chainstate::ChainstateError::ProcessBlockError(
+                            chainstate::BlockError::CheckBlockFailed(
+                                chainstate::CheckBlockError::CheckTransactionFailed(
+                                    CheckBlockTransactionsError::CheckTransactionError(
+                                        tx_verifier::CheckTransactionError::OrdersV1AreNotActivated(
+                                            freeze_tx_id
+                                        )
+                                    )
+                                )
+                            )
+                        )
+                    );
+                }
+                OrdersVersion::V1 => {
+                    assert_eq!(
+                        result.unwrap_err(),
+                        chainstate::ChainstateError::ProcessBlockError(
+                            chainstate::BlockError::StateUpdateFailed(
+                                ConnectTransactionError::InputCheck(InputCheckError::new(
+                                    0,
+                                    TranslationError::OrderNotFound(random_order_id)
+                                ))
+                            )
+                        )
+                    );
+                }
+            }
+        }
+
+        let freeze_tx = TransactionBuilder::new()
             .add_input(
                 TxInput::OrderAccountCommand(OrderAccountCommand::FreezeOrder(order_id)),
                 InputWitness::NoSignature(None),
             )
             .build();
-        let tx_id = tx.transaction().get_id();
-        let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
+        let freeze_tx_id = freeze_tx.transaction().get_id();
+        let result = tf.make_block_builder().add_transaction(freeze_tx).build_and_process(&mut rng);
 
         match version {
             OrdersVersion::V0 => {
@@ -2853,7 +2982,7 @@ fn freeze_order_check_storage(#[case] seed: Seed, #[case] version: OrdersVersion
                             chainstate::CheckBlockError::CheckTransactionFailed(
                                 chainstate::CheckBlockTransactionsError::CheckTransactionError(
                                     tx_verifier::CheckTransactionError::OrdersV1AreNotActivated(
-                                        tx_id
+                                        freeze_tx_id
                                     )
                                 )
                             )

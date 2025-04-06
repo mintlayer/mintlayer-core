@@ -2060,8 +2060,8 @@ Returns:
 
 ### Method `freeze_order`
 
-Freeze an order given its id. This prevent an order from being filled.
-Only conclude operation is allowed afterwards.
+Freeze an order given its id. This prevents an order from being filled.
+Only a conclude operation is allowed afterwards.
 
 
 Parameters:

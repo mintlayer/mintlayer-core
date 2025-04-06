@@ -774,8 +774,8 @@ trait WalletRpc {
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction>;
 
-    /// Freeze an order given its id. This prevent an order from being filled.
-    /// Only conclude operation is allowed afterwards.
+    /// Freeze an order given its id. This prevents an order from being filled.
+    /// Only a conclude operation is allowed afterwards.
     #[method(name = "freeze_order")]
     async fn freeze_order(
         &self,

@@ -1243,7 +1243,13 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
                 consolidate_fee_rate,
             ),
             #[cfg(feature = "trezor")]
-            RuntimeWallet::Trezor(_w) => unimplemented!(),
+            RuntimeWallet::Trezor(w) => w.create_freeze_order_tx(
+                account_index,
+                order_id,
+                order_info,
+                current_fee_rate,
+                consolidate_fee_rate,
+            ),
         }
     }
 

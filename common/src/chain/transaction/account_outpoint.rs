@@ -194,13 +194,13 @@ pub enum OrderAccountCommand {
     // Second parameter is an amount provided to fill an order which corresponds to order's ask currency.
     #[codec(index = 0)]
     FillOrder(OrderId, Amount, Destination),
-    // Close an order and withdraw all remaining funds from both give and ask balances.
-    // Only the address specified as `conclude_key` can authorize this command.
-    #[codec(index = 1)]
-    ConcludeOrder(OrderId),
     // Freeze an order which effectively forbids any fill operations.
     // Frozen order can only be concluded.
     // Only the address specified as `conclude_key` can authorize this command.
-    #[codec(index = 2)]
+    #[codec(index = 1)]
     FreezeOrder(OrderId),
+    // Close an order and withdraw all remaining funds from both give and ask balances.
+    // Only the address specified as `conclude_key` can authorize this command.
+    #[codec(index = 2)]
+    ConcludeOrder(OrderId),
 }
