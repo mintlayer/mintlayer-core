@@ -56,7 +56,7 @@ async fn max_locator_size_exceeded(#[case] seed: Seed) {
 
         let peer = node.connect_peer(PeerId::new(), protocol_version).await;
 
-        let headers = iter::repeat(block.get_id().into()).take(102).collect();
+        let headers = iter::repeat_n(block.get_id().into(), 102).collect();
         peer.send_block_sync_message(BlockSyncMessage::HeaderListRequest(HeaderListRequest::new(
             Locator::new(headers),
         )))

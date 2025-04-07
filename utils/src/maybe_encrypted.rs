@@ -75,8 +75,8 @@ impl<T: Encode + DecodeAll> MaybeEncrypted<T> {
     /// # Arguments
     ///
     /// * `encryption_key` - An optional `SymmetricKey`
-    ///    If the encryption key is `Some`, the value will be decrypted using the key before decoding.
-    ///    If the encryption key is `None`, the value is assumed to be plain bytes and decoded as is.
+    ///   If the encryption key is `Some`, the value will be decrypted using the key before decoding.
+    ///   If the encryption key is `None`, the value is assumed to be plain bytes and decoded as is.
     ///
     /// # Returns
     ///

@@ -1423,15 +1423,15 @@ where
     /// * `outputs: impl IntoIterator<Item = TxOutput>` - An iterator over `TxOutput` items representing the addresses and amounts to which funds will be sent.
     /// * `inputs`: SelectedInputs - if not empty will try to select inputs from those instead of the available ones
     /// * `selection_algo`: Option<CoinSelectionAlgo> - coin selection algorithm to use on the effective set of inputs;
-    ///    the default value depends on whether the provided `inputs` are empty.
+    ///   the default value depends on whether the provided `inputs` are empty.
     /// * `change_addresses`: if present will use those change_addresses instead of generating new ones
     /// * `current_fee_rate: FeeRate` - The current fee rate based on the mempool to be used for the transaction.
     /// * `consolidate_fee_rate: FeeRate` - The fee rate in case of a consolidation event, if the
-    ///    current_fee_rate is lower than the consolidate_fee_rate then the wallet will tend to
-    ///    use and consolidate multiple smaller inputs, else if the current_fee_rate is higher it will
-    ///    tend to use inputs with lowest fee.
+    ///   current_fee_rate is lower than the consolidate_fee_rate then the wallet will tend to
+    ///   use and consolidate multiple smaller inputs, else if the current_fee_rate is higher it will
+    ///   tend to use inputs with lowest fee.
     /// * `additional_info` - Any additional info for Tokens or Pools used in the UTXOs of
-    ///    the transaction to be created
+    ///   the transaction to be created
     ///
     /// # Returns
     ///

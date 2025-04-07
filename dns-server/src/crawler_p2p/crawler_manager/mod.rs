@@ -219,11 +219,7 @@ where
                 Ok(())
             }
             PeerManagerMessage::AnnounceAddrRequest(AnnounceAddrRequest { address }) => {
-                log::debug!(
-                    "Got address announcement from peer {} ({})",
-                    peer_id,
-                    address.to_string()
-                );
+                log::debug!("Got address announcement from peer {peer_id} ({address})");
                 if let Some(address) = address.as_discoverable_socket_address(false) {
                     self.send_crawler_event(CrawlerEvent::AddressAnnouncement {
                         address,

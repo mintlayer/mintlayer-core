@@ -238,7 +238,7 @@ impl Crawler {
         peer_info: PeerInfo,
         callback: &mut impl FnMut(CrawlerCommand),
     ) {
-        log::info!("connection opened, peer_id: {}", peer_info.peer_id);
+        log::info!("Connection opened, peer_id: {}", peer_info.peer_id);
         self.create_outbound_peer(peer_info.peer_id, address, peer_info, callback);
     }
 
@@ -248,7 +248,7 @@ impl Crawler {
         error: P2pError,
         callback: &mut impl FnMut(CrawlerCommand),
     ) {
-        log::debug!("connection to {} failed: {}", address.to_string(), error);
+        log::debug!("Connection to {} failed: {}", address, error);
 
         let address_data = self
             .addresses
@@ -270,11 +270,7 @@ impl Crawler {
         error: P2pError,
         callback: &mut impl FnMut(CrawlerCommand),
     ) {
-        log::debug!(
-            "handling misbehavior on handshake for {}: {}",
-            address.to_string(),
-            error
-        );
+        log::debug!("Handling misbehavior on handshake for {address}: {error}");
 
         self.handle_new_ban_score(&address, error.ban_score(), callback);
     }
@@ -288,7 +284,7 @@ impl Crawler {
         let ban_score = error.ban_score();
 
         if ban_score > 0 {
-            log::debug!("handling misbehaved peer, peer_id: {peer_id}");
+            log::debug!("Handling misbehaved peer, peer_id: {peer_id}");
 
             let peer = self
                 .outbound_peers
@@ -349,13 +345,13 @@ impl Crawler {
     }
 
     fn handle_disconnected(&mut self, peer_id: PeerId, callback: &mut impl FnMut(CrawlerCommand)) {
-        log::debug!("connection closed, peer_id: {}", peer_id);
+        log::debug!("Connection closed, peer_id: {peer_id}");
         self.remove_outbound_peer(peer_id, callback);
     }
 
     fn add_new_address(&mut self, address: SocketAddress) {
         if let Entry::Vacant(vacant) = self.addresses.entry(address) {
-            log::debug!("new address {} added", address.to_string());
+            log::debug!("New address {address} added");
             vacant.insert(AddressData {
                 state: AddressState::Disconnected {
                     fail_count: 0,
@@ -370,11 +366,7 @@ impl Crawler {
     fn handle_address_announcement(&mut self, address: SocketAddress, sender: PeerId) {
         let peer = self.outbound_peers.get_mut(&sender).expect("must be connected peer");
         if !peer.address_rate_limiter.accept(self.now) {
-            log::debug!(
-                "address announcement is rate limited from peer {} ({})",
-                sender,
-                address.to_string()
-            );
+            log::debug!("Address announcement is rate limited from peer {sender} ({address})");
             return;
         }
         self.add_new_address(address);
@@ -404,11 +396,7 @@ impl Crawler {
         transition: AddressStateTransitionTo,
         callback: &mut impl FnMut(CrawlerCommand),
     ) {
-        log::debug!(
-            "change address {} state to {:?}",
-            address.to_string(),
-            transition
-        );
+        log::debug!("Change address {address} state to {transition:?}");
 
         let old_state = address_data.state.clone();
 
@@ -469,7 +457,7 @@ impl Crawler {
 
         log::debug!(
             "Outbound peer inserted, address: {}, peer_id: {} (total peer count: {})",
-            address.to_string(),
+            address,
             peer_id,
             self.outbound_peers.len()
         );
@@ -478,11 +466,7 @@ impl Crawler {
 
         match peer_compatibility_check_result {
             Ok(()) => {
-                log::info!(
-                    "New outbound peer created, address: {}, peer_id: {}",
-                    address.to_string(),
-                    peer_id
-                );
+                log::info!("New outbound peer created, address: {address}, peer_id: {peer_id}");
 
                 let address_data = self
                     .addresses
@@ -526,11 +510,7 @@ impl Crawler {
                 }
             }
             Err(err) => {
-                log::info!(
-                    "Rejecting incompatible peer {peer_id} with address {}: {}",
-                    address.to_string(),
-                    err.to_string(),
-                );
+                log::info!("Rejecting incompatible peer {peer_id} with address {address}: {err}",);
 
                 self.disconnect_peer(peer_id, &address, callback);
             }

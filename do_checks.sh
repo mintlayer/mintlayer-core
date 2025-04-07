@@ -7,8 +7,9 @@ PYTHON=$(which python || which python3)
 
 cargo fmt --check -- --config newline_style=Unix
 
-# Install cargo deny first with: cargo install cargo-deny
-cargo deny check --hide-inclusion-graph
+# Install cargo deny first with: cargo install cargo-deny.
+# Note: "--allow duplicate" silences the warning "found x duplicate entries for crate y".
+cargo deny check --allow duplicate --hide-inclusion-graph
 
 # Checks enabled everywhere, including tests, benchmarks
 cargo clippy --all-features --workspace --all-targets -- \
