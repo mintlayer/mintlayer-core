@@ -59,7 +59,7 @@ impl TryFrom<Compact> for Uint256 {
 // https://github.com/bitcoin/bitcoin/blob/7fcf53f7b4524572d1d0c9a5fdc388e87eb02416/src/arith_uint256.cpp#L223
 impl From<Uint256> for Compact {
     fn from(value: Uint256) -> Self {
-        let mut size = (value.bits() + 7) / 8;
+        let mut size = value.bits().div_ceil(8);
 
         let mut compact = if size <= 3 {
             value.low_u64() << (8 * (3 - size))

@@ -438,7 +438,7 @@ async fn wait_new_tip(node: &MockNode, new_tip_tx: &mut mpsc::Receiver<(AccountT
     let wait_fut = async move {
         while !reached
             .values()
-            .all(|block| block.map_or(false, |block| block == expected_block_id))
+            .all(|block| block.is_some_and(|block| block == expected_block_id))
         {
             let (acc, block_id) = new_tip_tx.recv().await.unwrap();
             reached.entry(acc).or_default().replace(block_id);

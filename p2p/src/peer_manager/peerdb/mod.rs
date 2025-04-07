@@ -379,7 +379,7 @@ impl<S: PeerDbStorage> PeerDb<S> {
         let is_new = !self.addresses.contains_key(&address);
 
         if is_new {
-            log::debug!("New address discovered: {}", address.to_string());
+            log::debug!("New address discovered: {address}");
 
             debug_assert!(
                 !self.address_tables.have_addr(&address),
@@ -534,7 +534,7 @@ impl<S: PeerDbStorage> PeerDb<S> {
 
         log::debug!(
             "Address {} state changed: {:?}, old state = {:?}, new state = {:?}",
-            address.to_string(),
+            address,
             transition,
             old_state,
             address_data.state()
@@ -632,11 +632,11 @@ impl<S: PeerDbStorage> PeerDb<S> {
         }
         update_db(&self.storage, |tx| {
             for address in self.anchor_addresses.difference(&anchor_addresses) {
-                log::debug!("remove anchor peer {address}");
+                log::debug!("Remove anchor peer {address}");
                 tx.del_anchor_address(address)?;
             }
             for address in anchor_addresses.difference(&self.anchor_addresses) {
-                log::debug!("add anchor peer {address}");
+                log::debug!("Add anchor peer {address}");
                 tx.add_anchor_address(address)?;
             }
             crate::Result::Ok(())

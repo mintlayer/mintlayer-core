@@ -55,9 +55,11 @@ async fn header_count_limit_exceeded(#[case] seed: Seed) {
 
         let peer = node.connect_peer(PeerId::new(), protocol_version).await;
 
-        let headers = iter::repeat(block.header().clone())
-            .take(*p2p_config.protocol_config.msg_header_count_limit + 1)
-            .collect();
+        let headers = iter::repeat_n(
+            block.header().clone(),
+            *p2p_config.protocol_config.msg_header_count_limit + 1,
+        )
+        .collect();
         peer.send_block_sync_message(BlockSyncMessage::HeaderList(HeaderList::new(headers)))
             .await;
 

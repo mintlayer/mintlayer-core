@@ -31,7 +31,7 @@ pub mod table;
 /// As the name implies, the addresses are stored in tables. Two kinds of addresses exist and
 /// each has its own separate table:
 /// 1) "tried" addresses are those to which at least one successful outbound connection was
-///     established at some point;
+///    established at some point;
 /// 2) "new" addresses are basically everything else.
 ///
 /// Note that since `AddressTables` knows nothing about connections, it's the caller who defines
