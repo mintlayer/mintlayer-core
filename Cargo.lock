@@ -8987,6 +8987,7 @@ version = "1.0.2"
 dependencies = [
  "bip39",
  "chainstate",
+ "chainstate-test-framework",
  "common",
  "consensus",
  "crypto",

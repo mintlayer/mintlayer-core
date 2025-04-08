@@ -7252,7 +7252,7 @@ fn conflicting_order_account_nonce(#[case] seed: Seed) {
 }
 
 // Create a pool and a delegation with some share.
-// Create tx that spend from delegation account multiple times in a single tx. Add it as unconfirmed.
+// Create a tx that spends from delegation account multiple times. Add it as unconfirmed.
 // Check confirmed/unconfirmed balance and ensure that account nonce is incremented in OutputCache.
 // Create a tx via separate wallet that spends from the same delegation once.
 // Submit the second tx in a block.
@@ -7521,7 +7521,7 @@ fn conflicting_delegation_account_nonce_multiple_inputs(#[case] seed: Seed) {
 }
 
 // Create a pool and a delegation with some share.
-// Create tx that spend from delegation account and it as unconfirmed.
+// Create a tx that spends from delegation account and add it as unconfirmed.
 // Revert the latest block in the wallet.
 // Create a tx via separate wallet that spends from the same delegation once. Submit the second tx in a block.
 // Check that the first tx was not removed by reorg and is marked as conflicting and the state was properly reversed.
