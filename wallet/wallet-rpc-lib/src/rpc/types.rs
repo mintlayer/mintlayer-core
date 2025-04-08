@@ -162,6 +162,9 @@ pub enum RpcError<N: NodeInterface> {
 
     #[error("Invalid HTLC secret hash")]
     InvalidHtlcSecretHash,
+
+    #[error("Either set `all` to sweep all addresses, or provide specific addresses — not both")]
+    InvalidSweepParameters,
 }
 
 impl<N: NodeInterface> From<RpcError<N>> for rpc::Error {

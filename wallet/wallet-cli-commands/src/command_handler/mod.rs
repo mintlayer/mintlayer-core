@@ -31,7 +31,10 @@ use itertools::Itertools;
 use mempool::tx_options::TxOptionsOverrides;
 use node_comm::node_traits::NodeInterface;
 use serialization::{hex::HexEncode, hex_encoded::HexEncoded};
-use utils::qrcode::{QrCode, QrCodeError};
+use utils::{
+    ensure,
+    qrcode::{QrCode, QrCodeError},
+};
 use wallet::version::get_version;
 use wallet_controller::types::GenericTokenTransfer;
 use wallet_rpc_client::wallet_rpc_traits::{PartialOrSignedTx, WalletInterface};
@@ -166,7 +169,7 @@ where
                 let msg = match response.mnemonic {
                     MnemonicInfo::NewlyGenerated { mnemonic } => {
                         format!(
-                            "New wallet created successfully\nYour mnemonic: {}\
+                            "New wallet created successfully\nYour mnemonic: {}\n\
                         Please write it somewhere safe to be able to restore your wallet. \
                         It's recommended that you attempt to recover the wallet now as practice\
                         to check that you arrive at the same addresses, \
@@ -1356,7 +1359,15 @@ where
             WalletCommand::SweepFromAddress {
                 destination_address,
                 addresses,
+                all,
             } => {
+                // Clap should already prevent this
+                ensure!(
+                    all && addresses.is_empty() || !all && !addresses.is_empty(),
+                    WalletCliCommandError::<N>::InvalidInput(
+                        "Either set `--all` to sweep all addresses, or provide specific addresses — not both".to_owned()
+                    )
+                );
                 let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
 
                 let new_tx = wallet

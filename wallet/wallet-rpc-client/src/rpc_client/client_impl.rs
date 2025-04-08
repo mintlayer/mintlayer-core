@@ -477,11 +477,13 @@ impl WalletInterface for ClientWalletRpc {
         config: ControllerConfig,
     ) -> Result<NewTransaction, Self::Error> {
         let options = TransactionOptions::from_controller_config(&config);
+        let all = from_addresses.is_empty();
         WalletRpcClient::sweep_addresses(
             &self.http_client,
             account_index.into(),
             destination_address.into(),
             from_addresses.into_iter().map(Into::into).collect(),
+            Some(all),
             options,
         )
         .await

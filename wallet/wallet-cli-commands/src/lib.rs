@@ -643,7 +643,11 @@ pub enum WalletCommand {
         /// The receiving address of the coins or tokens
         destination_address: String,
         /// The addresses to be swept
+        #[arg(required_unless_present("all"))]
         addresses: Vec<String>,
+        /// Sweep all addresses
+        #[arg(long = "all", default_value_t = false, conflicts_with_all(["addresses"]))]
+        all: bool,
     },
 
     #[clap(name = "staking-sweep-delegation")]
