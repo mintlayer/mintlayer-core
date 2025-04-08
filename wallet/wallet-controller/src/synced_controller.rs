@@ -584,7 +584,7 @@ where
             .into_iter()
             .filter(|(_, output)| {
                 get_tx_output_destination(output, &|_| None, HtlcSpendingCondition::Skip)
-                    .is_some_and(|dest| from_addresses.contains(&dest))
+                    .is_some_and(|dest| from_addresses.is_empty() || from_addresses.contains(&dest))
             })
             .collect::<Vec<_>>();
 
