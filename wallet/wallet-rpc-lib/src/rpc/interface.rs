@@ -389,6 +389,7 @@ trait WalletRpc {
         account: AccountArg,
         destination_address: RpcAddress<Destination>,
         from_addresses: Vec<RpcAddress<Destination>>,
+        all: Option<bool>,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction>;
 
