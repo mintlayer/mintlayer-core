@@ -37,7 +37,9 @@ thiserror.workspace = true
 zeroize.workspace = true
 
 [dev-dependencies]
+chainstate-test-framework = { path = "../chainstate/test-framework" }
 test-utils = { path = "../test-utils" }
+
 serial_test = "3.2"
 
 rstest.workspace = true
