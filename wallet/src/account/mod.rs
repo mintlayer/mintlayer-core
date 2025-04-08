@@ -2120,9 +2120,9 @@ impl<K: AccountKeyChains> Account<K> {
         let conflicting_txs =
             self.output_cache.update_conflicting_txs(confirmed_tx, block.get_id().into())?;
 
-        for tx_id in conflicting_txs {
-            let id = AccountWalletCreatedTxId::new(acc_id.clone(), tx_id);
-            db_tx.del_user_transaction(&id)?;
+        for (tx_id, tx) in conflicting_txs {
+            db_tx.set_transaction(&AccountWalletTxId::new(acc_id.clone(), tx.id()), &tx)?;
+            db_tx.del_user_transaction(&AccountWalletCreatedTxId::new(acc_id.clone(), tx_id))?;
         }
 
         Ok(())
@@ -2282,9 +2282,9 @@ impl<K: AccountKeyChains> Account<K> {
         let abandoned_txs = self.output_cache.abandon_transaction(tx_id)?;
         let acc_id = self.get_account_id();
 
-        for tx_id in abandoned_txs {
-            let id = AccountWalletCreatedTxId::new(acc_id.clone(), tx_id);
-            db_tx.del_user_transaction(&id)?;
+        for (tx_id, tx) in abandoned_txs {
+            db_tx.set_transaction(&AccountWalletTxId::new(acc_id.clone(), tx.id()), &tx)?;
+            db_tx.del_user_transaction(&AccountWalletCreatedTxId::new(acc_id.clone(), tx_id))?;
         }
 
         Ok(())

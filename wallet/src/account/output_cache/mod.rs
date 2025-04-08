@@ -15,7 +15,7 @@
 
 use std::{
     cmp::Reverse,
-    collections::{btree_map::Entry, BTreeMap, BTreeSet},
+    collections::{btree_map::Entry, BTreeMap, BTreeSet, VecDeque},
     ops::Add,
 };
 
@@ -750,7 +750,7 @@ impl OutputCache {
         &mut self,
         confirmed_tx: &Transaction,
         block_id: Id<GenBlock>,
-    ) -> WalletResult<Vec<Id<Transaction>>> {
+    ) -> WalletResult<Vec<(Id<Transaction>, WalletTx)>> {
         struct ConflictCheck {
             frozen_token_id: Option<TokenId>,
             confirmed_account_nonce: Option<(AccountType, AccountNonce)>,
@@ -802,76 +802,97 @@ impl OutputCache {
             for unconfirmed in self.unconfirmed_descendants.keys() {
                 let unconfirmed_tx = self.txs.get(unconfirmed).expect("must be present");
 
-                if let WalletTx::Tx(tx) = unconfirmed_tx {
-                    if let Some(frozen_token_id) = conflict_check.frozen_token_id {
-                        if self.violates_frozen_token(unconfirmed_tx, &frozen_token_id) {
-                            conflicting_txs.insert(tx.get_transaction().get_id());
-                            continue;
+                match unconfirmed_tx {
+                    WalletTx::Tx(tx) => {
+                        if let Some(frozen_token_id) = conflict_check.frozen_token_id {
+                            if self.violates_frozen_token(unconfirmed_tx, &frozen_token_id) {
+                                conflicting_txs.insert(tx.get_transaction().get_id());
+                                continue;
+                            }
                         }
-                    }
 
-                    if let Some((confirmed_account, confirmed_account_nonce)) =
-                        conflict_check.confirmed_account_nonce
-                    {
-                        if confirmed_tx.get_id() != tx.get_transaction().get_id()
-                            && uses_conflicting_nonce(
-                                unconfirmed_tx,
-                                confirmed_account,
-                                confirmed_account_nonce,
-                            )
+                        if let Some((confirmed_account, confirmed_account_nonce)) =
+                            conflict_check.confirmed_account_nonce
                         {
-                            conflicting_txs.insert(tx.get_transaction().get_id());
-                            continue;
+                            if confirmed_tx.get_id() != tx.get_transaction().get_id()
+                                && uses_conflicting_nonce(
+                                    unconfirmed_tx,
+                                    confirmed_account,
+                                    confirmed_account_nonce,
+                                )
+                            {
+                                conflicting_txs.insert(tx.get_transaction().get_id());
+                                continue;
+                            }
                         }
                     }
-                }
+                    WalletTx::Block(_) => {
+                        utils::debug_panic_or_log!("Cannot be block reward");
+                    }
+                };
             }
         }
 
         // Remove all descendants of conflicting txs
         let mut conflicting_txs_with_descendants = vec![];
 
+        // Note: `conflicting_txs` can contain not only parent txs but also children if they have their
+        // own descendants.
+        // Because `conflicting_txs` is a set we can't tell the order of processing, so have to track all txs
+        // to avoid marking as conflicted txs that has already been marked because they are descendants.
+        let mut processed_transactions = BTreeSet::new();
+
         for conflicting_tx in conflicting_txs {
-            let txs_to_rollback = self.remove_from_unconfirmed_descendants(conflicting_tx);
+            let tx_ids_to_rollback = self.remove_from_unconfirmed_descendants(conflicting_tx);
 
             // Mark conflicting tx and its descendants as Conflicting and update OutputCache data accordingly
             let mut tx_to_rollback_data = vec![];
-            for tx_id in txs_to_rollback.iter().rev().copied() {
-                match self.txs.entry(tx_id.into()) {
-                    Entry::Occupied(mut entry) => match entry.get_mut() {
-                        WalletTx::Block(_) => {
-                            Err(WalletError::TransactionIdCannotMapToBlock(tx_id))
-                        }
-                        WalletTx::Tx(tx) => match tx.state() {
-                            TxState::Inactive(_) | TxState::InMempool(_) => {
-                                tx.set_state(TxState::Conflicted(block_id));
-                                tx_to_rollback_data.push(entry.get().clone());
+            for tx_id in tx_ids_to_rollback.into_iter().rev() {
+                if !processed_transactions.contains(&tx_id) {
+                    match self.txs.entry(tx_id.into()) {
+                        Entry::Occupied(mut entry) => match entry.get_mut() {
+                            WalletTx::Block(_) => {
+                                Err(WalletError::TransactionIdCannotMapToBlock(tx_id))
+                            }
+                            WalletTx::Tx(tx) => {
+                                match tx.state() {
+                                    TxState::Inactive(_) | TxState::InMempool(_) => {
+                                        tx.set_state(TxState::Conflicted(block_id));
+                                        tx_to_rollback_data.push(WalletTx::Tx(tx.clone()));
+                                    }
+                                    TxState::Conflicted(..)
+                                    | TxState::Abandoned
+                                    | TxState::Confirmed(..) => {
+                                        return Err(WalletError::CannotMarkTxAsConflictedIfInState(
+                                            *tx.state(),
+                                        ))
+                                    }
+                                }
+                                conflicting_txs_with_descendants
+                                    .push((tx_id, WalletTx::Tx(tx.clone())));
+                                processed_transactions.insert(tx_id);
                                 Ok(())
                             }
-                            TxState::Conflicted(..)
-                            | TxState::Abandoned
-                            | TxState::Confirmed(..) => {
-                                Err(WalletError::CannotMarkTxAsConflictedIfInState(*tx.state()))
-                            }
                         },
-                    },
-                    Entry::Vacant(_) => {
-                        Err(WalletError::CannotFindDescendantTransactionWithId(tx_id))
-                    }
-                }?;
+                        Entry::Vacant(_) => {
+                            Err(WalletError::CannotFindDescendantTransactionWithId(tx_id))
+                        }
+                    }?;
+                }
             }
 
             for tx in tx_to_rollback_data {
                 self.rollback_tx_data(&tx)?;
             }
-
-            conflicting_txs_with_descendants.extend(txs_to_rollback.into_iter());
         }
 
         Ok(conflicting_txs_with_descendants)
     }
 
     fn violates_frozen_token(&self, unconfirmed_tx: &WalletTx, frozen_token_id: &TokenId) -> bool {
+        // We check only inputs because currently it's not possible to have a token in an output
+        // without having it in an input.
+        // But potentially we should check outputs too.
         unconfirmed_tx.inputs().iter().any(|inp| match inp {
             TxInput::Utxo(outpoint) => self.txs.get(&outpoint.source_id()).is_some_and(|tx| {
                 let output =
@@ -947,9 +968,9 @@ impl OutputCache {
             TxState::Confirmed(_, _, _) => false,
         };
 
-        if is_unconfirmed && !already_present {
-            self.unconfirmed_descendants.insert(tx_id.clone(), BTreeSet::new());
-        } else if !is_unconfirmed {
+        if is_unconfirmed {
+            self.unconfirmed_descendants.entry(tx_id.clone()).or_default();
+        } else {
             self.unconfirmed_descendants.remove(&tx_id);
         }
 
@@ -1197,7 +1218,6 @@ impl OutputCache {
         if let Some(descendants) = data
             .last_parent
             .as_ref()
-            .filter(|parent_tx_id| *parent_tx_id != tx_id)
             .and_then(|parent_tx_id| unconfirmed_descendants.get_mut(parent_tx_id))
         {
             descendants.insert(tx_id.clone());
@@ -1229,7 +1249,6 @@ impl OutputCache {
         if let Some(descendants) = data
             .last_parent
             .as_ref()
-            .filter(|parent_tx_id| *parent_tx_id != tx_id)
             .and_then(|parent_tx_id| unconfirmed_descendants.get_mut(parent_tx_id))
         {
             descendants.insert(tx_id.clone());
@@ -1264,7 +1283,6 @@ impl OutputCache {
         if let Some(descendants) = data
             .last_parent
             .as_ref()
-            .filter(|parent_tx_id| *parent_tx_id != tx_id)
             .and_then(|parent_tx_id| unconfirmed_descendants.get_mut(parent_tx_id))
         {
             descendants.insert(tx_id.clone());
@@ -1275,7 +1293,7 @@ impl OutputCache {
 
     pub fn remove_confirmed_tx(&mut self, tx_id: &OutPointSourceId) -> WalletResult<()> {
         if let Some(tx) = self.txs.remove(tx_id) {
-            matches!(tx.state(), TxState::Confirmed(..));
+            assert!(matches!(tx.state(), TxState::Confirmed(..)));
             self.rollback_tx_data(&tx)?;
         }
 
@@ -1474,16 +1492,21 @@ impl OutputCache {
     }
 
     // Removes a tx and all its descendants from unconfirmed descendants collection.
-    // Returns provided tx and all the descendants in that specific order.
+    // Returns provided tx and all the descendants in such way that parent always comes before its
+    // descendants. Returned collection contains no duplicates.
     fn remove_from_unconfirmed_descendants(
         &mut self,
         tx_id: Id<Transaction>,
     ) -> Vec<Id<Transaction>> {
         let mut all_txs = Vec::new();
-        let mut to_update = BTreeSet::from_iter([OutPointSourceId::from(tx_id)]);
+        let mut all_txs_as_set = BTreeSet::new();
+        let mut to_update: VecDeque<OutPointSourceId> = [tx_id.into()].into();
 
-        while let Some(outpoint_source_id) = to_update.pop_first() {
-            all_txs.push(*outpoint_source_id.get_tx_id().expect("must be a transaction"));
+        while let Some(outpoint_source_id) = to_update.pop_front() {
+            let tx_id = *outpoint_source_id.get_tx_id().expect("must be a transaction");
+            if all_txs_as_set.insert(tx_id) {
+                all_txs.push(tx_id);
+            }
 
             if let Some(descendants) = self.unconfirmed_descendants.remove(&outpoint_source_id) {
                 to_update.extend(descendants.into_iter())
@@ -1498,7 +1521,8 @@ impl OutputCache {
     fn rollback_tx_data(&mut self, tx: &WalletTx) -> WalletResult<()> {
         let tx_id = tx.id();
 
-        // Iterate in reverse to handle situations where an account is modified twice in the same tx
+        // Iterate in reverse to handle situations where an account is modified twice in the same tx.
+        // It's currently impossible to have more than 1 account command but it's safer to use rev() anyway.
         for input in tx.inputs().iter().rev() {
             match input {
                 TxInput::Utxo(outpoint) => {
@@ -1572,7 +1596,7 @@ impl OutputCache {
             }
         }
 
-        for output in tx.outputs() {
+        for output in tx.outputs().iter().rev() {
             match output {
                 TxOutput::CreateStakePool(pool_id, _) => {
                     self.pools.remove(pool_id);
@@ -1613,43 +1637,47 @@ impl OutputCache {
     }
 
     /// Mark a transaction and its descendants as abandoned
-    /// Returns a Vec of the transaction Ids that have been abandoned
+    /// Returns a Vec of the transactions and the Ids that have been abandoned
     pub fn abandon_transaction(
         &mut self,
         tx_id: Id<Transaction>,
-    ) -> WalletResult<Vec<Id<Transaction>>> {
+    ) -> WalletResult<Vec<(Id<Transaction>, WalletTx)>> {
         let all_abandoned = self.remove_from_unconfirmed_descendants(tx_id);
+        let mut all_abandoned_txs = Vec::with_capacity(all_abandoned.len());
 
         let mut txs_to_rollback = vec![];
         for tx_id in all_abandoned.iter().rev().copied() {
             match self.txs.entry(tx_id.into()) {
                 Entry::Occupied(mut entry) => match entry.get_mut() {
                     WalletTx::Block(_) => Err(WalletError::CannotFindTransactionWithId(tx_id)),
-                    WalletTx::Tx(tx) => match tx.state() {
-                        TxState::Inactive(_) => {
-                            tx.set_state(TxState::Abandoned);
-                            txs_to_rollback.push(entry.get().clone());
-                            Ok(())
+                    WalletTx::Tx(tx) => {
+                        all_abandoned_txs.push(WalletTx::Tx(tx.clone()));
+                        match tx.state() {
+                            TxState::Inactive(_) => {
+                                tx.set_state(TxState::Abandoned);
+                                txs_to_rollback.push(entry.get().clone());
+                                Ok(())
+                            }
+                            TxState::Conflicted(_) => {
+                                tx.set_state(TxState::Abandoned);
+                                Ok(())
+                            }
+                            state => Err(WalletError::CannotChangeTransactionState(
+                                *state,
+                                TxState::Abandoned,
+                            )),
                         }
-                        TxState::Conflicted(_) => {
-                            tx.set_state(TxState::Abandoned);
-                            Ok(())
-                        }
-                        state => Err(WalletError::CannotChangeTransactionState(
-                            *state,
-                            TxState::Abandoned,
-                        )),
-                    },
+                    }
                 },
                 Entry::Vacant(_) => Err(WalletError::CannotFindTransactionWithId(tx_id)),
             }?;
         }
 
-        for tx in txs_to_rollback {
-            self.rollback_tx_data(&tx)?;
+        for tx in &txs_to_rollback {
+            self.rollback_tx_data(tx)?;
         }
 
-        Ok(all_abandoned)
+        Ok(all_abandoned.into_iter().zip_eq(all_abandoned_txs).collect())
     }
 
     pub fn get_transaction(&self, transaction_id: Id<Transaction>) -> WalletResult<&TxData> {
@@ -1915,3 +1943,6 @@ fn uses_conflicting_nonce(
         }
     })
 }
+
+#[cfg(test)]
+mod tests;
