@@ -518,7 +518,7 @@ impl MempoolBanScore for orders_accounting::Error {
             Error::InvariantNonzeroAskBalanceForMissingOrder(_) => 100,
             Error::InvariantNonzeroGiveBalanceForMissingOrder(_) => 100,
             Error::OrderOverflow(_) => 100,
-            Error::OrderOverbid(_, _, _) => 100,
+            Error::OrderOverbid(_, _, _) => 0,
             Error::OrderUnderbid(_, _) => 100,
             Error::AttemptedConcludeNonexistingOrderData(_) => 0,
             Error::UnsupportedTokenVersion => 100,
