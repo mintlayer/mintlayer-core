@@ -21,12 +21,15 @@ mod wallet_prompt;
 use std::path::PathBuf;
 
 use clap::Command;
+use itertools::Itertools;
 use reedline::{
     default_emacs_keybindings, default_vi_insert_keybindings, default_vi_normal_keybindings,
     ColumnarMenu, DefaultValidator, EditMode, Emacs, FileBackedHistory, ListMenu, MenuBuilder,
     Reedline, ReedlineMenu, Signal, Vi,
 };
+
 use tokio::sync::{mpsc, oneshot};
+use utils::once_destructor::OnceDestructor;
 use wallet_cli_commands::{get_repl_command, parse_input, ConsoleCommand};
 use wallet_rpc_lib::types::NodeInterface;
 
@@ -197,6 +200,9 @@ fn handle_response<N: NodeInterface>(
         Ok(Some(ConsoleCommand::Print(text))) => {
             console.print_line(&text);
         }
+        Ok(Some(ConsoleCommand::PaginatedPrint { header, body })) => {
+            paginate_output(header, body, line_editor, console).expect("Should not fail normally");
+        }
         Ok(Some(ConsoleCommand::SetStatus {
             status,
             print_message,
@@ -225,4 +231,119 @@ fn handle_response<N: NodeInterface>(
         }
     }
     None
+}
+
+fn paginate_output(
+    header: String,
+    body: String,
+    line_editor: &mut Reedline,
+    console: &mut impl ConsoleOutput,
+) -> std::io::Result<()> {
+    let mut current_index = 0;
+
+    let (mut page_rows, mut offsets) = compute_page_line_offsets(&body);
+    let mut last_batch = offsets.len() - 1;
+
+    loop {
+        line_editor.clear_screen()?;
+
+        let end_batch = std::cmp::min(current_index + page_rows, last_batch);
+        let start = offsets[current_index];
+        let end = offsets[end_batch];
+        console.print_line(&header);
+        console.print_line(body.get(start..end).expect("safe point"));
+
+        let commands = match (current_index, end_batch) {
+            (0, end) if end == last_batch => "Press 'q' to quit",
+            (0, _) => "Press 'j' for next, 'q' to quit",
+            (_, end) if end == last_batch => "Press 'k' for previous, 'q' to quit",
+            _ => "Press 'j' for next, 'k' for previous, 'q' to quit",
+        };
+        console.print_line(commands);
+
+        match read_command(current_index, last_batch, end_batch)? {
+            PagginationCommand::Exit => break,
+            PagginationCommand::Next => {
+                current_index += 1;
+            }
+            PagginationCommand::Previous => {
+                current_index -= 1;
+            }
+            PagginationCommand::TerminalResize => {
+                (page_rows, offsets) = compute_page_line_offsets(&body);
+                last_batch = offsets.len() - 1;
+                current_index = std::cmp::min(current_index, last_batch - page_rows);
+            }
+        }
+    }
+
+    line_editor.clear_screen()
+}
+
+fn compute_page_line_offsets(body: &str) -> (usize, Vec<usize>) {
+    let (cols, rows) = crossterm::terminal::size().unwrap_or((80, 24));
+    let cols = cols as usize;
+
+    // make room for the header and prompt
+    let page_rows = (rows - 4) as usize;
+
+    let position_offsets = (0..1) // prepend 0 as starting position
+        .chain(body.char_indices().peekable().batching(|it| {
+            // if no more characters exit
+            it.peek()?;
+
+            // advance the iterator to the next new line or at least cols characters
+            let _skip = it.take(cols).find(|(_, c)| *c == '\n');
+
+            match it.peek() {
+                Some((idx, _)) => Some(*idx),
+                None => Some(body.len()),
+            }
+        }))
+        .collect_vec();
+    (page_rows, position_offsets)
+}
+
+enum PagginationCommand {
+    Exit,
+    Next,
+    Previous,
+    TerminalResize,
+}
+
+fn read_command(
+    current_index: usize,
+    last_batch: usize,
+    end_batch: usize,
+) -> Result<PagginationCommand, std::io::Error> {
+    // TODO: maybe enable raw mode only once per paggination
+    crossterm::terminal::enable_raw_mode()?;
+    let _cleanup = OnceDestructor::new(|| {
+        crossterm::terminal::disable_raw_mode().expect("Should not fail normally")
+    });
+
+    loop {
+        let event = crossterm::event::read()?;
+
+        match event {
+            crossterm::event::Event::Key(key_event) => {
+                match key_event.code {
+                    reedline::KeyCode::Char('j') | reedline::KeyCode::Down
+                        if end_batch < last_batch =>
+                    {
+                        return Ok(PagginationCommand::Next)
+                    }
+                    reedline::KeyCode::Char('k') | reedline::KeyCode::Up if current_index > 0 => {
+                        return Ok(PagginationCommand::Previous)
+                    }
+                    reedline::KeyCode::Char('q') | reedline::KeyCode::Esc => {
+                        return Ok(PagginationCommand::Exit);
+                    }
+                    _ => {} // Ignore other keys
+                }
+            }
+            crossterm::event::Event::Resize(_, _) => return Ok(PagginationCommand::TerminalResize),
+            _ => {}
+        }
+    }
 }
