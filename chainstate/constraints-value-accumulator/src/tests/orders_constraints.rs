@@ -17,9 +17,11 @@ use std::collections::BTreeMap;
 
 use common::{
     chain::{
-        config::create_unit_test_config, output_value::OutputValue, tokens::TokenId,
-        AccountCommand, AccountNonce, Destination, OrderData, OrderId, OutPointSourceId, TxInput,
-        TxOutput, UtxoOutPoint,
+        config::{create_unit_test_config, create_unit_test_config_builder},
+        output_value::OutputValue,
+        tokens::TokenId,
+        AccountCommand, AccountNonce, Destination, OrderAccountCommand, OrderData, OrderId,
+        OrdersVersion, OutPointSourceId, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Fee, Id, H256},
 };
@@ -252,11 +254,31 @@ fn create_order_constraints(#[case] seed: Seed) {
 
 #[rstest]
 #[trace]
-#[case(Seed::from_entropy())]
-fn fill_order_constraints(#[case] seed: Seed) {
+#[case(Seed::from_entropy(), OrdersVersion::V0)]
+#[trace]
+#[case(Seed::from_entropy(), OrdersVersion::V1)]
+fn fill_order_constraints(#[case] seed: Seed, #[case] version: OrdersVersion) {
     let mut rng = make_seedable_rng(seed);
 
-    let chain_config = create_unit_test_config();
+    let chain_config = create_unit_test_config_builder()
+        .chainstate_upgrades(
+            common::chain::NetUpgrades::initialize(vec![(
+                BlockHeight::zero(),
+                common::chain::ChainstateUpgrade::new(
+                    common::chain::TokenIssuanceVersion::V1,
+                    common::chain::RewardDistributionVersion::V1,
+                    common::chain::TokensFeeVersion::V1,
+                    common::chain::DataDepositFeeVersion::V1,
+                    common::chain::ChangeTokenMetadataUriActivated::Yes,
+                    common::chain::FrozenTokensValidationVersion::V1,
+                    common::chain::HtlcActivated::Yes,
+                    common::chain::OrdersActivated::Yes,
+                    version,
+                ),
+            )])
+            .expect("cannot fail"),
+        )
+        .build();
     let block_height = BlockHeight::one();
 
     let pos_store = InMemoryPoSAccounting::new();
@@ -284,12 +306,8 @@ fn fill_order_constraints(#[case] seed: Seed) {
 
     // use in command more than provided in input
     {
-        let inputs = vec![
-            TxInput::Utxo(UtxoOutPoint::new(
-                OutPointSourceId::BlockReward(Id::new(H256::random_using(&mut rng))),
-                0,
-            )),
-            TxInput::AccountCommand(
+        let fill_command = match version {
+            OrdersVersion::V0 => TxInput::AccountCommand(
                 AccountNonce::new(0),
                 AccountCommand::FillOrder(
                     order_id,
@@ -297,6 +315,18 @@ fn fill_order_constraints(#[case] seed: Seed) {
                     Destination::AnyoneCanSpend,
                 ),
             ),
+            OrdersVersion::V1 => TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(
+                order_id,
+                (ask_amount + Amount::from_atoms(1)).unwrap(),
+                Destination::AnyoneCanSpend,
+            )),
+        };
+        let inputs = vec![
+            TxInput::Utxo(UtxoOutPoint::new(
+                OutPointSourceId::BlockReward(Id::new(H256::random_using(&mut rng))),
+                0,
+            )),
+            fill_command,
         ];
         let input_utxos = vec![
             Some(TxOutput::Transfer(
@@ -328,15 +358,23 @@ fn fill_order_constraints(#[case] seed: Seed) {
 
     // fill with coins instead of tokens
     {
+        let fill_command = match version {
+            OrdersVersion::V0 => TxInput::AccountCommand(
+                AccountNonce::new(0),
+                AccountCommand::FillOrder(order_id, ask_amount, Destination::AnyoneCanSpend),
+            ),
+            OrdersVersion::V1 => TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(
+                order_id,
+                ask_amount,
+                Destination::AnyoneCanSpend,
+            )),
+        };
         let inputs = vec![
             TxInput::Utxo(UtxoOutPoint::new(
                 OutPointSourceId::BlockReward(Id::new(H256::random_using(&mut rng))),
                 0,
             )),
-            TxInput::AccountCommand(
-                AccountNonce::new(0),
-                AccountCommand::FillOrder(order_id, ask_amount, Destination::AnyoneCanSpend),
-            ),
+            fill_command,
         ];
         let input_utxos = vec![
             Some(TxOutput::Transfer(
@@ -361,15 +399,23 @@ fn fill_order_constraints(#[case] seed: Seed) {
 
     // try to print coins in output
     {
+        let fill_command = match version {
+            OrdersVersion::V0 => TxInput::AccountCommand(
+                AccountNonce::new(0),
+                AccountCommand::FillOrder(order_id, ask_amount, Destination::AnyoneCanSpend),
+            ),
+            OrdersVersion::V1 => TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(
+                order_id,
+                ask_amount,
+                Destination::AnyoneCanSpend,
+            )),
+        };
         let inputs = vec![
             TxInput::Utxo(UtxoOutPoint::new(
                 OutPointSourceId::BlockReward(Id::new(H256::random_using(&mut rng))),
                 0,
             )),
-            TxInput::AccountCommand(
-                AccountNonce::new(0),
-                AccountCommand::FillOrder(order_id, ask_amount, Destination::AnyoneCanSpend),
-            ),
+            fill_command,
         ];
         let input_utxos = vec![
             Some(TxOutput::Transfer(
@@ -409,15 +455,23 @@ fn fill_order_constraints(#[case] seed: Seed) {
 
     // try to print tokens in output
     {
+        let fill_command = match version {
+            OrdersVersion::V0 => TxInput::AccountCommand(
+                AccountNonce::new(0),
+                AccountCommand::FillOrder(order_id, ask_amount, Destination::AnyoneCanSpend),
+            ),
+            OrdersVersion::V1 => TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(
+                order_id,
+                ask_amount,
+                Destination::AnyoneCanSpend,
+            )),
+        };
         let inputs = vec![
             TxInput::Utxo(UtxoOutPoint::new(
                 OutPointSourceId::BlockReward(Id::new(H256::random_using(&mut rng))),
                 0,
             )),
-            TxInput::AccountCommand(
-                AccountNonce::new(0),
-                AccountCommand::FillOrder(order_id, ask_amount, Destination::AnyoneCanSpend),
-            ),
+            fill_command,
         ];
         let input_utxos = vec![
             Some(TxOutput::Transfer(
@@ -462,15 +516,23 @@ fn fill_order_constraints(#[case] seed: Seed) {
 
     {
         // partially use input in command
+        let fill_command = match version {
+            OrdersVersion::V0 => TxInput::AccountCommand(
+                AccountNonce::new(0),
+                AccountCommand::FillOrder(order_id, ask_amount, Destination::AnyoneCanSpend),
+            ),
+            OrdersVersion::V1 => TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(
+                order_id,
+                ask_amount,
+                Destination::AnyoneCanSpend,
+            )),
+        };
         let inputs = vec![
             TxInput::Utxo(UtxoOutPoint::new(
                 OutPointSourceId::BlockReward(Id::new(H256::random_using(&mut rng))),
                 0,
             )),
-            TxInput::AccountCommand(
-                AccountNonce::new(0),
-                AccountCommand::FillOrder(order_id, ask_amount, Destination::AnyoneCanSpend),
-            ),
+            fill_command,
         ];
         let input_utxos = vec![
             Some(TxOutput::Transfer(
@@ -513,15 +575,23 @@ fn fill_order_constraints(#[case] seed: Seed) {
     }
 
     // valid case
+    let fill_command = match version {
+        OrdersVersion::V0 => TxInput::AccountCommand(
+            AccountNonce::new(0),
+            AccountCommand::FillOrder(order_id, ask_amount, Destination::AnyoneCanSpend),
+        ),
+        OrdersVersion::V1 => TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(
+            order_id,
+            ask_amount,
+            Destination::AnyoneCanSpend,
+        )),
+    };
     let inputs = vec![
         TxInput::Utxo(UtxoOutPoint::new(
             OutPointSourceId::BlockReward(Id::new(H256::random_using(&mut rng))),
             0,
         )),
-        TxInput::AccountCommand(
-            AccountNonce::new(0),
-            AccountCommand::FillOrder(order_id, ask_amount, Destination::AnyoneCanSpend),
-        ),
+        fill_command,
     ];
     let input_utxos = vec![
         Some(TxOutput::Transfer(
@@ -559,11 +629,31 @@ fn fill_order_constraints(#[case] seed: Seed) {
 
 #[rstest]
 #[trace]
-#[case(Seed::from_entropy())]
-fn conclude_order_constraints(#[case] seed: Seed) {
+#[case(Seed::from_entropy(), OrdersVersion::V0)]
+#[trace]
+#[case(Seed::from_entropy(), OrdersVersion::V1)]
+fn conclude_order_constraints(#[case] seed: Seed, #[case] version: OrdersVersion) {
     let mut rng = make_seedable_rng(seed);
 
-    let chain_config = create_unit_test_config();
+    let chain_config = create_unit_test_config_builder()
+        .chainstate_upgrades(
+            common::chain::NetUpgrades::initialize(vec![(
+                BlockHeight::zero(),
+                common::chain::ChainstateUpgrade::new(
+                    common::chain::TokenIssuanceVersion::V1,
+                    common::chain::RewardDistributionVersion::V1,
+                    common::chain::TokensFeeVersion::V1,
+                    common::chain::DataDepositFeeVersion::V1,
+                    common::chain::ChangeTokenMetadataUriActivated::Yes,
+                    common::chain::FrozenTokensValidationVersion::V1,
+                    common::chain::HtlcActivated::Yes,
+                    common::chain::OrdersActivated::Yes,
+                    version,
+                ),
+            )])
+            .expect("cannot fail"),
+        )
+        .build();
     let block_height = BlockHeight::one();
 
     let pos_store = InMemoryPoSAccounting::new();
@@ -591,10 +681,16 @@ fn conclude_order_constraints(#[case] seed: Seed) {
 
     // try to print coins in output
     {
-        let inputs = vec![TxInput::AccountCommand(
-            AccountNonce::new(0),
-            AccountCommand::ConcludeOrder(order_id),
-        )];
+        let conclude_command = match version {
+            OrdersVersion::V0 => TxInput::AccountCommand(
+                AccountNonce::new(0),
+                AccountCommand::ConcludeOrder(order_id),
+            ),
+            OrdersVersion::V1 => {
+                TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder(order_id))
+            }
+        };
+        let inputs = vec![conclude_command];
         let input_utxos = vec![None];
 
         let outputs = vec![TxOutput::Transfer(
@@ -627,10 +723,16 @@ fn conclude_order_constraints(#[case] seed: Seed) {
 
     // try to print tokens in output
     {
-        let inputs = vec![TxInput::AccountCommand(
-            AccountNonce::new(0),
-            AccountCommand::ConcludeOrder(order_id),
-        )];
+        let conclude_command = match version {
+            OrdersVersion::V0 => TxInput::AccountCommand(
+                AccountNonce::new(0),
+                AccountCommand::ConcludeOrder(order_id),
+            ),
+            OrdersVersion::V1 => {
+                TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder(order_id))
+            }
+        };
+        let inputs = vec![conclude_command];
         let input_utxos = vec![None];
 
         let outputs = vec![TxOutput::Transfer(
@@ -665,10 +767,16 @@ fn conclude_order_constraints(#[case] seed: Seed) {
 
     {
         // partially use input in command
-        let inputs = vec![TxInput::AccountCommand(
-            AccountNonce::new(0),
-            AccountCommand::ConcludeOrder(order_id),
-        )];
+        let conclude_command = match version {
+            OrdersVersion::V0 => TxInput::AccountCommand(
+                AccountNonce::new(0),
+                AccountCommand::ConcludeOrder(order_id),
+            ),
+            OrdersVersion::V1 => {
+                TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder(order_id))
+            }
+        };
+        let inputs = vec![conclude_command];
         let input_utxos = vec![None];
 
         let outputs = vec![TxOutput::Transfer(
@@ -701,10 +809,16 @@ fn conclude_order_constraints(#[case] seed: Seed) {
     }
 
     // valid case
-    let inputs = vec![TxInput::AccountCommand(
-        AccountNonce::new(0),
-        AccountCommand::ConcludeOrder(order_id),
-    )];
+    let conclude_command = match version {
+        OrdersVersion::V0 => TxInput::AccountCommand(
+            AccountNonce::new(0),
+            AccountCommand::ConcludeOrder(order_id),
+        ),
+        OrdersVersion::V1 => {
+            TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder(order_id))
+        }
+    };
+    let inputs = vec![conclude_command];
     let input_utxos = vec![None];
 
     let outputs =

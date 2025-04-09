@@ -955,7 +955,7 @@ where
             .filter_map(|inp| match inp {
                 TxInput::Utxo(utxo) => Some(utxo.clone()),
                 TxInput::Account(_) => None,
-                TxInput::AccountCommand(_, _) => None,
+                TxInput::AccountCommand(_, _) | TxInput::OrderAccountCommand(_) => None,
             })
             .collect();
         let fees = match self.fetch_utxos(&inputs).await {
@@ -1172,8 +1172,9 @@ where
     ) -> Result<Option<TxOutput>, ControllerError<T>> {
         match input {
             TxInput::Utxo(utxo) => fetch_utxo(&self.rpc_client, utxo, &self.wallet).await.map(Some),
-            TxInput::Account(_) => Ok(None),
-            TxInput::AccountCommand(_, _) => Ok(None),
+            TxInput::Account(_)
+            | TxInput::AccountCommand(_, _)
+            | TxInput::OrderAccountCommand(_) => Ok(None),
         }
     }
 

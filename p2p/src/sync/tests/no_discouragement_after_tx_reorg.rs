@@ -35,8 +35,8 @@ use common::{
             TokenIssuanceV1, TokenTotalSupply,
         },
         AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, CoinUnit, DelegationId,
-        Destination, Genesis, OrderData, OrderId, OutPointSourceId, PoolId, SignedTransaction,
-        TxInput, TxOutput, UtxoOutPoint,
+        Destination, Genesis, OrderAccountCommand, OrderData, OrderId, OutPointSourceId, PoolId,
+        SignedTransaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, Idable as _},
 };
@@ -265,7 +265,7 @@ async fn no_discouragement_after_tx_reorg(#[case] seed: Seed) {
                 token_id,
                 another_order1_ask_amount_to_fill,
             ),
-            tfxt.make_tx_to_conclude_order(order_give_amount, order_id, token_id),
+            tfxt.make_tx_to_conclude_order(order_id, token_id, order_give_amount),
         ];
 
         let future_block = tfxt
@@ -831,8 +831,13 @@ impl TestFixture {
         let filled_amount = {
             let db_tx = self.tfrm.storage.transaction_ro().unwrap();
             let orders_db = OrdersAccountingDB::new(&db_tx);
-            orders_accounting::calculate_fill_order(&orders_db, order_id, coin_amount_to_fill)
-                .unwrap()
+            orders_accounting::calculate_fill_order(
+                &orders_db,
+                order_id,
+                coin_amount_to_fill,
+                common::chain::OrdersVersion::V1,
+            )
+            .unwrap()
         };
 
         TransactionBuilder::new()
@@ -841,14 +846,11 @@ impl TestFixture {
                 InputWitness::NoSignature(None),
             )
             .add_input(
-                TxInput::AccountCommand(
-                    AccountNonce::new(0),
-                    AccountCommand::FillOrder(
-                        order_id,
-                        coin_amount_to_fill,
-                        Destination::AnyoneCanSpend,
-                    ),
-                ),
+                TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(
+                    order_id,
+                    coin_amount_to_fill,
+                    Destination::AnyoneCanSpend,
+                )),
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::Transfer(
@@ -860,20 +862,17 @@ impl TestFixture {
 
     fn make_tx_to_conclude_order(
         &mut self,
-        give_amount: Amount,
         order_id: OrderId,
         token_id: TokenId,
+        remaining_give_amount: Amount,
     ) -> SignedTransaction {
         TransactionBuilder::new()
             .add_input(
-                TxInput::AccountCommand(
-                    AccountNonce::new(0),
-                    AccountCommand::ConcludeOrder(order_id),
-                ),
+                TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder(order_id)),
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::Transfer(
-                OutputValue::TokenV1(token_id, give_amount),
+                OutputValue::TokenV1(token_id, remaining_give_amount),
                 Destination::AnyoneCanSpend,
             ))
             .build()

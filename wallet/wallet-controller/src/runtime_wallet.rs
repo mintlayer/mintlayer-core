@@ -23,9 +23,9 @@ use common::{
         output_value::OutputValue,
         signature::inputsig::arbitrary_message::ArbitraryMessageSignature,
         tokens::{IsTokenUnfreezable, Metadata, RPCFungibleTokenInfo, TokenId, TokenIssuance},
-        AccountCommand, AccountOutPoint, DelegationId, Destination, GenBlock, OrderId, PoolId,
-        RpcOrderInfo, SignedTransaction, SignedTransactionIntent, Transaction, TxOutput,
-        UtxoOutPoint,
+        AccountCommand, AccountOutPoint, DelegationId, Destination, GenBlock, OrderAccountCommand,
+        OrderId, PoolId, RpcOrderInfo, SignedTransaction, SignedTransactionIntent, Transaction,
+        TxOutput, UtxoOutPoint,
     },
     primitives::{id::WithId, Amount, BlockHeight, Id, H256},
 };
@@ -93,6 +93,17 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             RuntimeWallet::Software(w) => w.find_account_command_destination(cmd),
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => w.find_account_command_destination(cmd),
+        }
+    }
+
+    pub fn find_order_account_command_destination(
+        &self,
+        cmd: &OrderAccountCommand,
+    ) -> Option<Destination> {
+        match self {
+            RuntimeWallet::Software(w) => w.find_order_account_command_destination(cmd),
+            #[cfg(feature = "trezor")]
+            RuntimeWallet::Trezor(w) => w.find_order_account_command_destination(cmd),
         }
     }
 

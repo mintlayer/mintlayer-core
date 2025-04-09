@@ -1760,3 +1760,77 @@ fn delegate_same_pool_as_staking(#[case] seed: Seed) {
     )
     .unwrap();
 }
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn delegate_and_spend_with_multiple_inputs_in_single_tx(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+
+        let (_, _, delegation_id, _, transfer_outpoint) = prepare_delegation(&mut rng, &mut tf);
+        let available_amount = get_coin_amount_from_outpoint(&tf.storage, &transfer_outpoint);
+        let amount_to_delegate = (available_amount / 2).unwrap();
+        let change = (available_amount - amount_to_delegate).unwrap();
+
+        // Delegate staking
+        let delegate_staking_tx = TransactionBuilder::new()
+            .add_input(transfer_outpoint.into(), empty_witness(&mut rng))
+            .add_output(TxOutput::DelegateStaking(amount_to_delegate, delegation_id))
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin(change),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let delegate_staking_tx_id = delegate_staking_tx.transaction().get_id();
+
+        tf.make_block_builder()
+            .add_transaction(delegate_staking_tx)
+            .build_and_process(&mut rng)
+            .unwrap();
+
+        let original_delegation_balance =
+            PoSAccountingStorageRead::<TipStorageTag>::get_delegation_balance(
+                &tf.storage,
+                delegation_id,
+            )
+            .unwrap()
+            .unwrap();
+        assert_eq!(amount_to_delegate, original_delegation_balance);
+
+        // Spend entire delegated amount in multiple inputs
+        let atoms_per_input = test_utils::split_value(&mut rng, amount_to_delegate.into_atoms());
+        let mut tx_builder = TransactionBuilder::new();
+        for (i, atoms) in atoms_per_input.iter().enumerate() {
+            tx_builder = tx_builder.add_input(
+                TxInput::from_account(
+                    AccountNonce::new(i as u64),
+                    AccountSpending::DelegationBalance(delegation_id, Amount::from_atoms(*atoms)),
+                ),
+                empty_witness(&mut rng),
+            );
+        }
+
+        let tx = tx_builder
+            .add_input(
+                UtxoOutPoint::new(delegate_staking_tx_id.into(), 1).into(),
+                empty_witness(&mut rng),
+            )
+            .add_output(TxOutput::LockThenTransfer(
+                OutputValue::Coin(amount_to_delegate),
+                Destination::AnyoneCanSpend,
+                OutputTimeLock::ForBlockCount(1),
+            ))
+            .build();
+
+        tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
+
+        let delegation_balance = PoSAccountingStorageRead::<TipStorageTag>::get_delegation_balance(
+            &tf.storage,
+            delegation_id,
+        )
+        .unwrap();
+        assert_eq!(None, delegation_balance);
+    });
+}

@@ -146,6 +146,11 @@ impl From<chain::TxInput> for crate::TxInput {
             chain::TxInput::AccountCommand(nonce, command) => {
                 Self::AccountCommand(nonce.value(), command.into())
             }
+            chain::TxInput::OrderAccountCommand(_) => {
+                //TODO: support OrdersVersion::V1
+                //     https://github.com/mintlayer/mintlayer-core/issues/1902
+                unimplemented!();
+            }
         }
     }
 }

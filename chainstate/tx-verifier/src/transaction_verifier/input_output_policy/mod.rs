@@ -48,6 +48,8 @@ pub enum IOPolicyError {
     MultiplePoolCreated,
     #[error("Attempted to create multiple delegations in a single tx")]
     MultipleDelegationCreated,
+    #[error("Attempted to create multiple orders in a single tx")]
+    MultipleOrdersCreated,
     #[error("Attempted to produce block in a tx")]
     ProduceBlockInTx,
     #[error("Attempted to provide multiple account command inputs in a single tx")]
@@ -181,7 +183,9 @@ pub fn check_tx_inputs_outputs_policy(
                 )?;
                 Ok(Some(utxo.take_output()))
             }
-            TxInput::Account(..) | TxInput::AccountCommand(..) => Ok(None),
+            TxInput::Account(..)
+            | TxInput::AccountCommand(..)
+            | TxInput::OrderAccountCommand(..) => Ok(None),
         })
         .collect::<Result<Vec<_>, ConnectTransactionError>>()?;
 
@@ -258,7 +262,9 @@ fn collect_inputs_utxos(
         .iter()
         .filter_map(|input| match input {
             TxInput::Utxo(outpoint) => Some(outpoint),
-            TxInput::Account(..) | TxInput::AccountCommand(..) => None,
+            TxInput::Account(..)
+            | TxInput::AccountCommand(..)
+            | TxInput::OrderAccountCommand(..) => None,
         })
         .map(|outpoint| {
             utxo_view

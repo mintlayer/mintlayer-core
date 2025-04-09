@@ -37,12 +37,12 @@ pub fn check_reward_inputs_outputs_purposes(
             // accounts cannot be used in block reward
             inputs.iter().try_for_each(|input| match input {
                 TxInput::Utxo(_) => Ok(()),
-                TxInput::Account(..) | TxInput::AccountCommand(..) => {
-                    Err(ConnectTransactionError::IOPolicyError(
-                        IOPolicyError::AttemptToUseAccountInputInReward,
-                        block_id.into(),
-                    ))
-                }
+                TxInput::Account(..)
+                | TxInput::AccountCommand(..)
+                | TxInput::OrderAccountCommand(..) => Err(ConnectTransactionError::IOPolicyError(
+                    IOPolicyError::AttemptToUseAccountInputInReward,
+                    block_id.into(),
+                )),
             })?;
 
             let inputs_utxos = super::collect_inputs_utxos(&utxo_view, inputs)?;
@@ -184,7 +184,7 @@ pub fn check_tx_inputs_outputs_purposes(
         .iter()
         .filter(|input| match input {
             TxInput::Utxo(_) | TxInput::Account(..) => false,
-            TxInput::AccountCommand(..) => true,
+            TxInput::AccountCommand(..) | TxInput::OrderAccountCommand(..) => true,
         })
         .count();
 
@@ -197,6 +197,7 @@ pub fn check_tx_inputs_outputs_purposes(
     let mut produce_block_outputs_count = 0;
     let mut stake_pool_outputs_count = 0;
     let mut create_delegation_output_count = 0;
+    let mut create_order_output_count = 0;
 
     tx.outputs().iter().for_each(|output| match output {
         TxOutput::Transfer(..)
@@ -206,8 +207,7 @@ pub fn check_tx_inputs_outputs_purposes(
         | TxOutput::IssueFungibleToken(..)
         | TxOutput::IssueNft(..)
         | TxOutput::DataDeposit(..)
-        | TxOutput::Htlc(..)
-        | TxOutput::CreateOrder(..) => { /* do nothing */ }
+        | TxOutput::Htlc(..) => { /* do nothing */ }
         TxOutput::CreateStakePool(..) => {
             stake_pool_outputs_count += 1;
         }
@@ -216,6 +216,9 @@ pub fn check_tx_inputs_outputs_purposes(
         }
         TxOutput::CreateDelegationId(..) => {
             create_delegation_output_count += 1;
+        }
+        TxOutput::CreateOrder(..) => {
+            create_order_output_count += 1;
         }
     });
 
@@ -230,6 +233,10 @@ pub fn check_tx_inputs_outputs_purposes(
     ensure!(
         create_delegation_output_count <= 1,
         IOPolicyError::MultipleDelegationCreated
+    );
+    ensure!(
+        create_order_output_count <= 1,
+        IOPolicyError::MultipleOrdersCreated
     );
 
     Ok(())

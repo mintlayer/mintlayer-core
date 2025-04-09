@@ -34,8 +34,8 @@ use common::{
         tokens::{get_referenced_token_ids, make_token_id, IsTokenFrozen, TokenId, TokenIssuance},
         transaction::OutPointSourceId,
         AccountCommand, AccountNonce, AccountSpending, Block, DelegationId, Destination, GenBlock,
-        Genesis, OrderData, OrderId, PoolId, SignedTransaction, Transaction, TxInput, TxOutput,
-        UtxoOutPoint,
+        Genesis, OrderAccountCommand, OrderData, OrderId, PoolId, SignedTransaction, Transaction,
+        TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{id::WithId, Amount, BlockHeight, CoinOrTokenId, Fee, Id, Idable, H256},
 };
@@ -583,18 +583,24 @@ async fn calculate_tx_fee_and_collect_token_info<T: ApiServerStorageWrite>(
                     AccountCommand::ConcludeOrder(order_id)
                     | AccountCommand::FillOrder(order_id, _, _) => {
                         let order = db_tx.get_order(*order_id).await?.expect("must exist");
-                        match order.ask_currency {
-                            CoinOrTokenId::Coin => {}
-                            CoinOrTokenId::TokenId(id) => {
-                                token_ids.insert(id);
-                            }
-                        };
-                        match order.give_currency {
-                            CoinOrTokenId::Coin => {}
-                            CoinOrTokenId::TokenId(id) => {
-                                token_ids.insert(id);
-                            }
-                        };
+                        if let Some(id) = order.ask_currency.token_id() {
+                            token_ids.insert(id);
+                        }
+                        if let Some(id) = order.give_currency.token_id() {
+                            token_ids.insert(id);
+                        }
+                    }
+                },
+                TxInput::OrderAccountCommand(cmd) => match cmd {
+                    OrderAccountCommand::FillOrder(order_id, _, _)
+                    | OrderAccountCommand::ConcludeOrder(order_id) => {
+                        let order = db_tx.get_order(*order_id).await?.expect("must exist");
+                        if let Some(id) = order.ask_currency.token_id() {
+                            token_ids.insert(id);
+                        }
+                        if let Some(id) = order.give_currency.token_id() {
+                            token_ids.insert(id);
+                        }
                     }
                 },
             };
@@ -641,7 +647,9 @@ async fn fetch_utxo<T: ApiServerStorageRead>(
                 .expect("must be present");
             Ok(Some(utxo))
         }
-        TxInput::Account(_) | TxInput::AccountCommand(_, _) => Ok(None),
+        TxInput::Account(_) | TxInput::AccountCommand(_, _) | TxInput::OrderAccountCommand(_) => {
+            Ok(None)
+        }
     }
 }
 
@@ -808,9 +816,26 @@ async fn prefetch_orders<T: ApiServerStorageRead>(
     let mut ask_balances = BTreeMap::<OrderId, Amount>::new();
     let mut give_balances = BTreeMap::<OrderId, Amount>::new();
 
+    let to_order_data = |order: &Order| {
+        let ask = order.ask_currency.to_output_value(order.initially_asked);
+        let give = order.give_currency.to_output_value(order.initially_given);
+        OrderData::new(order.conclude_destination.clone(), ask, give)
+    };
+
     for input in inputs {
         match input {
             TxInput::Utxo(_) | TxInput::Account(_) => {}
+            TxInput::OrderAccountCommand(cmd) => match cmd {
+                OrderAccountCommand::FillOrder(order_id, _, _)
+                | OrderAccountCommand::ConcludeOrder(order_id) => {
+                    let order = db_tx.get_order(*order_id).await?.expect("must be present ");
+                    let order_data = to_order_data(&order);
+
+                    ask_balances.insert(*order_id, order.ask_balance);
+                    give_balances.insert(*order_id, order.give_balance);
+                    orders_data.insert(*order_id, order_data);
+                }
+            },
             TxInput::AccountCommand(_, account_command) => match account_command {
                 AccountCommand::MintTokens(_, _)
                 | AccountCommand::UnmintTokens(_)
@@ -822,21 +847,10 @@ async fn prefetch_orders<T: ApiServerStorageRead>(
                 AccountCommand::FillOrder(order_id, _, _)
                 | AccountCommand::ConcludeOrder(order_id) => {
                     let order = db_tx.get_order(*order_id).await?.expect("must be present ");
+                    let order_data = to_order_data(&order);
+
                     ask_balances.insert(*order_id, order.ask_balance);
                     give_balances.insert(*order_id, order.give_balance);
-                    let ask = match order.ask_currency {
-                        CoinOrTokenId::Coin => OutputValue::Coin(order.initially_asked),
-                        CoinOrTokenId::TokenId(token_id) => {
-                            OutputValue::TokenV1(token_id, order.initially_asked)
-                        }
-                    };
-                    let give = match order.give_currency {
-                        CoinOrTokenId::Coin => OutputValue::Coin(order.initially_given),
-                        CoinOrTokenId::TokenId(token_id) => {
-                            OutputValue::TokenV1(token_id, order.initially_given)
-                        }
-                    };
-                    let order_data = OrderData::new(order.conclude_destination.clone(), ask, give);
                     orders_data.insert(*order_id, order_data);
                 }
             },
@@ -888,7 +902,9 @@ async fn update_tables_from_consensus_data<T: ApiServerStorageWrite>(
                         )
                         .await;
                     }
-                    TxInput::Account(_) | TxInput::AccountCommand(_, _) => {}
+                    TxInput::Account(_)
+                    | TxInput::AccountCommand(_, _)
+                    | TxInput::OrderAccountCommand(_) => {}
                 }
             }
 
@@ -1194,11 +1210,27 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                 }
                 AccountCommand::FillOrder(order_id, fill_amount_in_ask_currency, _) => {
                     let order = db_tx.get_order(*order_id).await?.expect("must exist");
-                    let order = order.fill(*fill_amount_in_ask_currency);
+                    let order =
+                        order.fill(&chain_config, block_height, *fill_amount_in_ask_currency);
 
                     db_tx.set_order_at_height(*order_id, &order, block_height).await?;
                 }
                 AccountCommand::ConcludeOrder(order_id) => {
+                    let order = db_tx.get_order(*order_id).await?.expect("must exist");
+                    let order = order.conclude();
+
+                    db_tx.set_order_at_height(*order_id, &order, block_height).await?;
+                }
+            },
+            TxInput::OrderAccountCommand(cmd) => match cmd {
+                OrderAccountCommand::FillOrder(order_id, fill_amount_in_ask_currency, _) => {
+                    let order = db_tx.get_order(*order_id).await?.expect("must exist");
+                    let order =
+                        order.fill(&chain_config, block_height, *fill_amount_in_ask_currency);
+
+                    db_tx.set_order_at_height(*order_id, &order, block_height).await?;
+                }
+                OrderAccountCommand::ConcludeOrder(order_id) => {
                     let order = db_tx.get_order(*order_id).await?.expect("must exist");
                     let order = order.conclude();
 

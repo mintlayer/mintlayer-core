@@ -61,6 +61,15 @@ impl From<AccountCommand> for AccountType {
     }
 }
 
+impl From<OrderAccountCommand> for AccountType {
+    fn from(cmd: OrderAccountCommand) -> Self {
+        match cmd {
+            OrderAccountCommand::FillOrder(order_id, _, _)
+            | OrderAccountCommand::ConcludeOrder(order_id) => AccountType::Order(order_id),
+        }
+    }
+}
+
 /// The type represents the amount to withdraw from a particular account.
 /// Otherwise it's unclear how much should be deducted from an account balance.
 /// It also helps solving 2 additional problems: calculating fees and providing ability to sign input balance with the witness.
@@ -118,10 +127,16 @@ pub enum AccountCommand {
     ChangeTokenAuthority(TokenId, Destination),
     // Close an order and withdraw all remaining funds from both give and ask balances.
     // Only the address specified as `conclude_key` can authorize this command.
+    // After ChainstateUpgrade::OrdersVersion::V1 is activated this command becomes deprecated.
+    // TODO: rename this command to ConcludeOrderDeprecated.
+    //       https://github.com/mintlayer/mintlayer-core/issues/1901
     #[codec(index = 6)]
     ConcludeOrder(OrderId),
     // Satisfy an order completely or partially.
     // Second parameter is an amount provided to fill an order which corresponds to order's ask currency.
+    // After ChainstateUpgrade::OrdersVersion::V1 is activated this command becomes deprecated.
+    // TODO: rename this command to FillOrderDeprecated
+    //       https://github.com/mintlayer/mintlayer-core/issues/1901
     #[codec(index = 7)]
     FillOrder(OrderId, Amount, Destination),
     // Change token metadata uri
@@ -159,4 +174,27 @@ impl AccountOutPoint {
     pub fn account(&self) -> &AccountSpending {
         &self.account
     }
+}
+
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Ord,
+    PartialOrd,
+    Encode,
+    Decode,
+    serde::Serialize,
+    serde::Deserialize,
+)]
+pub enum OrderAccountCommand {
+    // Satisfy an order completely or partially.
+    // Second parameter is an amount provided to fill an order which corresponds to order's ask currency.
+    #[codec(index = 0)]
+    FillOrder(OrderId, Amount, Destination),
+    // Close an order and withdraw all remaining funds from both give and ask balances.
+    // Only the address specified as `conclude_key` can authorize this command.
+    #[codec(index = 1)]
+    ConcludeOrder(OrderId),
 }

@@ -17,7 +17,8 @@ use common::{
     address::{AddressError, RpcAddress},
     chain::{
         tokens::{IsTokenUnfreezable, TokenId},
-        AccountCommand, AccountSpending, ChainConfig, DelegationId, Destination, OrderId,
+        AccountCommand, AccountSpending, ChainConfig, DelegationId, Destination,
+        OrderAccountCommand, OrderId,
     },
     primitives::amount::RpcAmountOut,
 };
@@ -126,6 +127,38 @@ impl RpcAccountCommand {
                 order_id: RpcAddress::new(chain_config, *id)?,
             },
             AccountCommand::FillOrder(id, fill, dest) => RpcAccountCommand::FillOrder {
+                order_id: RpcAddress::new(chain_config, *id)?,
+                fill_value: RpcAmountOut::from_amount(*fill, chain_config.coin_decimals()),
+                destination: RpcAddress::new(chain_config, dest.clone())?,
+            },
+        };
+        Ok(result)
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, rpc_description::HasValueHint)]
+#[serde(tag = "type", content = "content")]
+pub enum RpcOrderAccountCommand {
+    ConcludeOrder {
+        order_id: RpcAddress<OrderId>,
+    },
+    FillOrder {
+        order_id: RpcAddress<OrderId>,
+        fill_value: RpcAmountOut,
+        destination: RpcAddress<Destination>,
+    },
+}
+
+impl RpcOrderAccountCommand {
+    pub fn new(
+        chain_config: &ChainConfig,
+        command: &OrderAccountCommand,
+    ) -> Result<Self, AddressError> {
+        let result = match command {
+            OrderAccountCommand::ConcludeOrder(order_id) => RpcOrderAccountCommand::ConcludeOrder {
+                order_id: RpcAddress::new(chain_config, *order_id)?,
+            },
+            OrderAccountCommand::FillOrder(id, fill, dest) => RpcOrderAccountCommand::FillOrder {
                 order_id: RpcAddress::new(chain_config, *id)?,
                 fill_value: RpcAmountOut::from_amount(*fill, chain_config.coin_decimals()),
                 destination: RpcAddress::new(chain_config, dest.clone())?,

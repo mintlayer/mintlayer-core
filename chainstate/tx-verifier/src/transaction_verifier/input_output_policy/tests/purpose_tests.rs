@@ -119,7 +119,6 @@ fn tx_many_to_many_valid(#[case] seed: Seed) {
         issue_tokens(),
         issue_nft(),
         data_deposit(),
-        create_order(),
     ];
 
     let (utxo_db, tx) = prepare_utxos_and_tx_with_random_combinations(
@@ -152,7 +151,6 @@ fn tx_many_to_many_valid_with_account_input(#[case] seed: Seed) {
         issue_tokens(),
         issue_nft(),
         data_deposit(),
-        create_order(),
     ];
 
     let inputs_utxos = get_random_outputs_combination(

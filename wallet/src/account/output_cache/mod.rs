@@ -31,7 +31,8 @@ use common::{
             TokenId, TokenIssuance, TokenTotalSupply,
         },
         AccountCommand, AccountNonce, AccountSpending, DelegationId, Destination, GenBlock,
-        OrderId, OutPointSourceId, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
+        OrderAccountCommand, OrderId, OutPointSourceId, PoolId, Transaction, TxInput, TxOutput,
+        UtxoOutPoint,
     },
     primitives::{id::WithId, per_thousand::PerThousand, Amount, BlockHeight, Id, Idable},
 };
@@ -746,7 +747,7 @@ impl OutputCache {
         }
 
         let frozen_token_id = tx.inputs().iter().find_map(|inp| match inp {
-            TxInput::Utxo(_) | TxInput::Account(_) => None,
+            TxInput::Utxo(_) | TxInput::Account(_) | TxInput::OrderAccountCommand(_) => None,
             TxInput::AccountCommand(_, cmd) => match cmd {
                 AccountCommand::MintTokens(_, _)
                 | AccountCommand::UnmintTokens(_)
@@ -823,6 +824,17 @@ impl OutputCache {
                 | AccountCommand::UnmintTokens(token_id) => frozen_token_id == token_id,
                 AccountCommand::ConcludeOrder(order_id)
                 | AccountCommand::FillOrder(order_id, _, _) => {
+                    self.order_data(order_id).is_some_and(|data| {
+                        [data.ask_currency, data.give_currency].iter().any(|v| match v {
+                            Currency::Coin => false,
+                            Currency::Token(token_id) => frozen_token_id == token_id,
+                        })
+                    })
+                }
+            },
+            TxInput::OrderAccountCommand(cmd) => match cmd {
+                OrderAccountCommand::FillOrder(order_id, _, _)
+                | OrderAccountCommand::ConcludeOrder(order_id) => {
                     self.order_data(order_id).is_some_and(|data| {
                         [data.ask_currency, data.give_currency].iter().any(|v| match v {
                             Currency::Coin => false,
@@ -1039,7 +1051,23 @@ impl OutputCache {
                                     &mut self.unconfirmed_descendants,
                                     data,
                                     order_id,
-                                    *nonce,
+                                    Some(*nonce),
+                                    tx_id,
+                                )?;
+                            }
+                        }
+                    }
+                },
+                TxInput::OrderAccountCommand(cmd) => match cmd {
+                    OrderAccountCommand::FillOrder(order_id, _, _)
+                    | OrderAccountCommand::ConcludeOrder(order_id) => {
+                        if !already_present {
+                            if let Some(data) = self.orders.get_mut(order_id) {
+                                Self::update_order_state(
+                                    &mut self.unconfirmed_descendants,
+                                    data,
+                                    order_id,
+                                    None,
                                     tx_id,
                                 )?;
                             }
@@ -1118,20 +1146,23 @@ impl OutputCache {
         unconfirmed_descendants: &mut BTreeMap<OutPointSourceId, BTreeSet<OutPointSourceId>>,
         data: &mut OrderData,
         order_id: &OrderId,
-        nonce: AccountNonce,
+        nonce: Option<AccountNonce>,
         tx_id: &OutPointSourceId,
     ) -> Result<(), WalletError> {
-        let next_nonce = data
-            .last_nonce
-            .map_or(Some(AccountNonce::new(0)), |nonce| nonce.increment())
-            .ok_or(WalletError::OrderNonceOverflow(*order_id))?;
+        if let Some(nonce) = nonce {
+            let next_nonce = data
+                .last_nonce
+                .map_or(Some(AccountNonce::new(0)), |nonce| nonce.increment())
+                .ok_or(WalletError::OrderNonceOverflow(*order_id))?;
 
-        ensure!(
-            nonce == next_nonce,
-            WalletError::InconsistentOrderDuplicateNonce(*order_id, nonce)
-        );
+            ensure!(
+                nonce == next_nonce,
+                WalletError::InconsistentOrderDuplicateNonce(*order_id, nonce)
+            );
 
-        data.last_nonce = Some(nonce);
+            data.last_nonce = Some(nonce);
+        }
+
         // update unconfirmed descendants
         if let Some(descendants) = data
             .last_parent
@@ -1181,6 +1212,15 @@ impl OutputCache {
                         | AccountCommand::FillOrder(order_id, _, _) => {
                             if let Some(data) = self.orders.get_mut(order_id) {
                                 data.last_nonce = nonce.decrement();
+                                data.last_parent =
+                                    find_parent(&self.unconfirmed_descendants, tx_id.clone());
+                            }
+                        }
+                    },
+                    TxInput::OrderAccountCommand(cmd) => match cmd {
+                        OrderAccountCommand::FillOrder(order_id, _, _)
+                        | OrderAccountCommand::ConcludeOrder(order_id) => {
+                            if let Some(data) = self.orders.get_mut(order_id) {
                                 data.last_parent =
                                     find_parent(&self.unconfirmed_descendants, tx_id.clone());
                             }
@@ -1389,7 +1429,9 @@ impl OutputCache {
                     get_all_tx_output_destinations(txo, &|pool_id| self.pools.get(pool_id))
                 })
                 .is_some_and(|output_dest| output_dest.contains(dest)),
-            TxInput::Account(_) | TxInput::AccountCommand(_, _) => false,
+            TxInput::Account(_)
+            | TxInput::AccountCommand(_, _)
+            | TxInput::OrderAccountCommand(_) => false,
         })
     }
 
@@ -1473,6 +1515,17 @@ impl OutputCache {
                                             }
                                         }
                                     },
+                                    TxInput::OrderAccountCommand(cmd) => match cmd {
+                                        OrderAccountCommand::FillOrder(order_id, _, _)
+                                        | OrderAccountCommand::ConcludeOrder(order_id) => {
+                                            if let Some(data) = self.orders.get_mut(order_id) {
+                                                data.last_parent = find_parent(
+                                                    &self.unconfirmed_descendants,
+                                                    tx_id.into(),
+                                                );
+                                            }
+                                        }
+                                    },
                                 }
                             }
                             Ok(())
@@ -1517,7 +1570,9 @@ impl OutputCache {
         is_mine: &F,
     ) -> Option<PoolId> {
         match inp {
-            TxInput::Account(_) | TxInput::AccountCommand(_, _) => None,
+            TxInput::Account(_)
+            | TxInput::AccountCommand(_, _)
+            | TxInput::OrderAccountCommand(_) => None,
             TxInput::Utxo(outpoint) => self
                 .txs
                 .get(&outpoint.source_id())
@@ -1682,6 +1737,7 @@ fn apply_freeze_mutations_from_tx(
                 | AccountCommand::ConcludeOrder(_)
                 | AccountCommand::FillOrder(_, _, _) => {}
             },
+            TxInput::OrderAccountCommand(..) => {}
         }
     }
 
@@ -1724,6 +1780,7 @@ fn apply_total_supply_mutations_from_tx(
                 | AccountCommand::ConcludeOrder(_)
                 | AccountCommand::FillOrder(_, _, _) => {}
             },
+            TxInput::OrderAccountCommand(..) => {}
         }
     }
 

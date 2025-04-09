@@ -116,7 +116,9 @@ async fn ok(#[case] seed: Seed) {
                                 TxInput::Utxo(outpoint) => Some(
                                     prev_tx.outputs()[outpoint.output_index() as usize].clone(),
                                 ),
-                                TxInput::Account(_) | TxInput::AccountCommand(_, _) => None,
+                                TxInput::Account(_)
+                                | TxInput::AccountCommand(_, _)
+                                | TxInput::OrderAccountCommand(_) => None,
                             })
                             .collect();
 

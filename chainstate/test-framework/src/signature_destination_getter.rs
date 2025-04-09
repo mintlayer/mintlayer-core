@@ -13,7 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::chain::{AccountCommand, AccountSpending, Destination, TxInput, TxOutput};
+use common::chain::{
+    AccountCommand, AccountSpending, Destination, OrderAccountCommand, TxInput, TxOutput,
+};
 use orders_accounting::OrdersAccountingView;
 use pos_accounting::PoSAccountingView;
 use tokens_accounting::TokensAccountingView;
@@ -183,6 +185,22 @@ impl<'a> SignatureDestinationGetter<'a> {
                             Ok(order_data.conclude_key().clone())
                         }
                         AccountCommand::FillOrder(_, _, d) => Ok(d.clone()),
+                    },
+                    TxInput::OrderAccountCommand(command) => match command {
+                        OrderAccountCommand::FillOrder(_, _, d) => Ok(d.clone()),
+                        OrderAccountCommand::ConcludeOrder(order_id) => {
+                            let order_data = orders_view
+                                .get_order_data(order_id)
+                                .map_err(|_| {
+                                    SignatureDestinationGetterError::OrdersAccountingViewError(
+                                        orders_accounting::Error::ViewFail,
+                                    )
+                                })?
+                                .ok_or(SignatureDestinationGetterError::OrderDataNotFound(
+                                    *order_id,
+                                ))?;
+                            Ok(order_data.conclude_key().clone())
+                        }
                     },
                 }
             };

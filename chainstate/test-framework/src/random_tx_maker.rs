@@ -34,8 +34,8 @@ use common::{
             TokenTotalSupply,
         },
         AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, AccountType, DelegationId,
-        Destination, GenBlockId, OrderData, OrderId, OutPointSourceId, PoolId, Transaction,
-        TxInput, TxOutput, UtxoOutPoint,
+        Destination, GenBlockId, OrderAccountCommand, OrderData, OrderId, OrdersVersion,
+        OutPointSourceId, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, CoinOrTokenId, Id, Idable, H256},
 };
@@ -520,12 +520,6 @@ impl<'a> RandomTxMaker<'a> {
                         if !is_frozen_token(order_data.ask(), tokens_cache)
                             && !is_frozen_token(order_data.give(), tokens_cache)
                         {
-                            let new_nonce = self.get_next_nonce(AccountType::Order(order_id));
-                            result_inputs.push(TxInput::AccountCommand(
-                                new_nonce,
-                                AccountCommand::ConcludeOrder(order_id),
-                            ));
-
                             let available_give_balance =
                                 orders_cache.get_give_balance(&order_id).unwrap();
                             let give_output =
@@ -538,6 +532,10 @@ impl<'a> RandomTxMaker<'a> {
                                 .unwrap();
                             let filled_output =
                                 output_value_with_amount(order_data.ask(), filled_amount);
+
+                            result_inputs.push(TxInput::OrderAccountCommand(
+                                OrderAccountCommand::ConcludeOrder(order_id),
+                            ));
 
                             let _ = orders_cache.conclude_order(order_id).unwrap();
                             self.account_command_used = true;
@@ -1005,30 +1003,33 @@ impl<'a> RandomTxMaker<'a> {
                     get_random_order_to_fill(self.orders_store, &orders_cache, &fill_value)
                 {
                     let filled_value =
-                        calculate_filled_order_value(&orders_cache, order_id, amount_to_spend);
+                        calculate_filled_order_value(&orders_cache, order_id, amount_to_spend)
+                            .unwrap();
 
-                    if !is_frozen_token(&filled_value, tokens_cache) {
-                        let new_nonce = self.get_next_nonce(AccountType::Order(order_id));
-                        let input = TxInput::AccountCommand(
-                            new_nonce,
-                            AccountCommand::FillOrder(
-                                order_id,
-                                amount_to_spend,
+                    if let Some(filled_value) = filled_value {
+                        if !is_frozen_token(&filled_value, tokens_cache) {
+                            let input =
+                                TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(
+                                    order_id,
+                                    amount_to_spend,
+                                    key_manager
+                                        .new_destination(self.chainstate.get_chain_config(), rng),
+                                ));
+
+                            let output = TxOutput::Transfer(
+                                filled_value,
                                 key_manager
                                     .new_destination(self.chainstate.get_chain_config(), rng),
-                            ),
-                        );
+                            );
 
-                        let output = TxOutput::Transfer(
-                            filled_value,
-                            key_manager.new_destination(self.chainstate.get_chain_config(), rng),
-                        );
+                            let _ = orders_cache
+                                .fill_order(order_id, amount_to_spend, OrdersVersion::V1)
+                                .unwrap();
+                            self.account_command_used = true;
 
-                        let _ = orders_cache.fill_order(order_id, amount_to_spend).unwrap();
-                        self.account_command_used = true;
-
-                        result_inputs.push(input);
-                        result_outputs.push(output);
+                            result_inputs.push(input);
+                            result_outputs.push(output);
+                        }
                     }
                 }
             } else if switch == 6 {
@@ -1229,30 +1230,37 @@ impl<'a> RandomTxMaker<'a> {
                             &orders_cache,
                             order_id,
                             Amount::from_atoms(atoms),
-                        );
+                        )
+                        .unwrap();
 
-                        if !is_frozen_token(&filled_value, tokens_cache) {
-                            result_outputs.push(TxOutput::Transfer(
-                                filled_value,
-                                key_manager
-                                    .new_destination(self.chainstate.get_chain_config(), rng),
-                            ));
-
-                            let new_nonce = self.get_next_nonce(AccountType::Order(order_id));
-                            result_inputs.push(TxInput::AccountCommand(
-                                new_nonce,
-                                AccountCommand::FillOrder(
-                                    order_id,
-                                    Amount::from_atoms(atoms),
+                        if let Some(filled_value) = filled_value {
+                            if !is_frozen_token(&filled_value, tokens_cache) {
+                                result_outputs.push(TxOutput::Transfer(
+                                    filled_value,
                                     key_manager
                                         .new_destination(self.chainstate.get_chain_config(), rng),
-                                ),
-                            ));
+                                ));
 
-                            let _ = orders_cache
-                                .fill_order(order_id, Amount::from_atoms(atoms))
-                                .unwrap();
-                            self.account_command_used = true;
+                                result_inputs.push(TxInput::OrderAccountCommand(
+                                    OrderAccountCommand::FillOrder(
+                                        order_id,
+                                        Amount::from_atoms(atoms),
+                                        key_manager.new_destination(
+                                            self.chainstate.get_chain_config(),
+                                            rng,
+                                        ),
+                                    ),
+                                ));
+
+                                let _ = orders_cache
+                                    .fill_order(
+                                        order_id,
+                                        Amount::from_atoms(atoms),
+                                        OrdersVersion::V1,
+                                    )
+                                    .unwrap();
+                                self.account_command_used = true;
+                            }
                         }
                     }
                 }
@@ -1473,10 +1481,17 @@ fn calculate_filled_order_value(
     view: &impl OrdersAccountingView,
     order_id: OrderId,
     fill: Amount,
-) -> OutputValue {
+) -> Result<Option<OutputValue>, orders_accounting::Error> {
     let order_data = view.get_order_data(&order_id).unwrap().unwrap();
 
-    let filled_amount = orders_accounting::calculate_fill_order(view, order_id, fill).unwrap();
+    let result = orders_accounting::calculate_fill_order(view, order_id, fill, OrdersVersion::V1);
 
-    output_value_with_amount(order_data.give(), filled_amount)
+    match result {
+        Ok(filled_amount) => Ok(Some(output_value_with_amount(
+            order_data.give(),
+            filled_amount,
+        ))),
+        Err(orders_accounting::Error::OrderUnderbid(..)) => Ok(None),
+        Err(e) => Err(e),
+    }
 }

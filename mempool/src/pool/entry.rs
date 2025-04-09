@@ -17,8 +17,8 @@ use std::num::NonZeroUsize;
 
 use common::{
     chain::{
-        AccountCommand, AccountNonce, AccountSpending, AccountType, SignedTransaction, Transaction,
-        TxInput, UtxoOutPoint,
+        AccountCommand, AccountNonce, AccountSpending, AccountType, OrderAccountCommand,
+        SignedTransaction, Transaction, TxInput, UtxoOutPoint,
     },
     primitives::{Id, Idable},
 };
@@ -45,28 +45,31 @@ pub enum TxDependency {
     DelegationAccount(TxAccountDependency),
     TokenSupplyAccount(TxAccountDependency),
     OrderAccount(TxAccountDependency),
+    // TODO: keep only V1 version after OrdersVersion::V1 is activated
+    //       https://github.com/mintlayer/mintlayer-core/issues/1901
+    OrderV1Account(AccountType),
     TxOutput(Id<Transaction>, u32),
     // TODO: Block reward?
 }
 
 impl TxDependency {
-    fn from_utxo(outpt: &UtxoOutPoint) -> Option<Self> {
-        outpt
+    fn from_utxo(output: &UtxoOutPoint) -> Option<Self> {
+        output
             .source_id()
             .get_tx_id()
-            .map(|id| Self::TxOutput(*id, outpt.output_index()))
+            .map(|id| Self::TxOutput(*id, output.output_index()))
     }
 
-    fn from_account(acct: &AccountSpending, nonce: AccountNonce) -> Self {
-        match acct {
+    fn from_account(account: &AccountSpending, nonce: AccountNonce) -> Self {
+        match account {
             AccountSpending::DelegationBalance(_, _) => {
-                Self::DelegationAccount(TxAccountDependency::new(acct.clone().into(), nonce))
+                Self::DelegationAccount(TxAccountDependency::new(account.clone().into(), nonce))
             }
         }
     }
 
-    fn from_account_op(acct: &AccountCommand, nonce: AccountNonce) -> Self {
-        match acct {
+    fn from_account_cmd(cmd: &AccountCommand, nonce: AccountNonce) -> Self {
+        match cmd {
             AccountCommand::MintTokens(_, _)
             | AccountCommand::UnmintTokens(_)
             | AccountCommand::LockTokenSupply(_)
@@ -74,12 +77,15 @@ impl TxDependency {
             | AccountCommand::UnfreezeToken(_)
             | AccountCommand::ChangeTokenMetadataUri(_, _)
             | AccountCommand::ChangeTokenAuthority(_, _) => {
-                Self::TokenSupplyAccount(TxAccountDependency::new(acct.clone().into(), nonce))
+                Self::TokenSupplyAccount(TxAccountDependency::new(cmd.clone().into(), nonce))
             }
             AccountCommand::ConcludeOrder(_) | AccountCommand::FillOrder(_, _, _) => {
-                Self::OrderAccount(TxAccountDependency::new(acct.clone().into(), nonce))
+                Self::OrderAccount(TxAccountDependency::new(cmd.clone().into(), nonce))
             }
         }
+    }
+    fn from_order_account_cmd(cmd: &OrderAccountCommand) -> Self {
+        Self::OrderV1Account(cmd.clone().into())
     }
 
     fn from_input_requires(input: &TxInput) -> Option<Self> {
@@ -89,8 +95,9 @@ impl TxDependency {
                 acct.nonce().decrement().map(|nonce| Self::from_account(acct.account(), nonce))
             }
             TxInput::AccountCommand(nonce, op) => {
-                nonce.decrement().map(|nonce| Self::from_account_op(op, nonce))
+                nonce.decrement().map(|nonce| Self::from_account_cmd(op, nonce))
             }
+            TxInput::OrderAccountCommand(cmd) => Some(Self::from_order_account_cmd(cmd)),
         }
     }
 
@@ -98,7 +105,8 @@ impl TxDependency {
         match input {
             TxInput::Utxo(_) => None,
             TxInput::Account(acct) => Some(Self::from_account(acct.account(), acct.nonce())),
-            TxInput::AccountCommand(nonce, op) => Some(Self::from_account_op(op, *nonce)),
+            TxInput::AccountCommand(nonce, op) => Some(Self::from_account_cmd(op, *nonce)),
+            TxInput::OrderAccountCommand(cmd) => Some(Self::from_order_account_cmd(cmd)),
         }
     }
 }

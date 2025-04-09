@@ -15,23 +15,21 @@
 
 use chainstate::{BlockError, ChainstateError, ConnectTransactionError};
 use chainstate_test_framework::{get_output_value, TestFramework, TransactionBuilder};
-use common::primitives::Idable;
 use common::{
     chain::{
         output_value::OutputValue,
         signature::inputsig::InputWitness,
         tokens::{make_token_id, NftIssuance, TokenId},
-        ChainstateUpgrade, ChangeTokenMetadataUriActivated, DataDepositFeeVersion, Destination,
-        FrozenTokensValidationVersion, HtlcActivated, NetUpgrades, OrdersActivated,
-        OutPointSourceId, RewardDistributionVersion, TokenIssuanceVersion, TokensFeeVersion,
-        TxInput, TxOutput,
+        Destination, NetUpgrades, OutPointSourceId, TokenIssuanceVersion, TxInput, TxOutput,
     },
-    primitives::{Amount, BlockHeight, CoinOrTokenId},
+    primitives::{Amount, BlockHeight, CoinOrTokenId, Idable},
 };
 use randomness::Rng;
 use rstest::rstest;
 use test_utils::nft_utils::random_nft_issuance;
 use test_utils::random::{make_seedable_rng, Seed};
+
+use crate::tests::helpers::chainstate_upgrade_builder::ChainstateUpgradeBuilder;
 
 #[rstest]
 #[trace]
@@ -367,16 +365,9 @@ fn ensure_nft_cannot_be_printed_from_tokens_op(#[case] seed: Seed) {
                     .chainstate_upgrades(
                         NetUpgrades::initialize(vec![(
                             BlockHeight::zero(),
-                            ChainstateUpgrade::new(
-                                TokenIssuanceVersion::V1,
-                                RewardDistributionVersion::V1,
-                                TokensFeeVersion::V1,
-                                DataDepositFeeVersion::V1,
-                                ChangeTokenMetadataUriActivated::Yes,
-                                FrozenTokensValidationVersion::V1,
-                                HtlcActivated::Yes,
-                                OrdersActivated::Yes,
-                            ),
+                            ChainstateUpgradeBuilder::latest()
+                                .token_issuance_version(TokenIssuanceVersion::V1)
+                                .build(),
                         )])
                         .unwrap(),
                     )

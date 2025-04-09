@@ -17,11 +17,9 @@ use chainstate::{BlockError, ChainstateError, ConnectTransactionError};
 use chainstate_test_framework::{TestFramework, TransactionBuilder};
 use common::chain::{
     output_value::OutputValue, signature::inputsig::InputWitness, tokens::make_token_id,
-    ChainstateUpgrade, ChangeTokenMetadataUriActivated, DataDepositFeeVersion, Destination,
-    HtlcActivated, OrdersActivated, RewardDistributionVersion, TokenIssuanceVersion,
-    TokensFeeVersion, TxInput, TxOutput,
+    Destination, TokenIssuanceVersion, TxInput, TxOutput,
 };
-use common::chain::{FrozenTokensValidationVersion, OutPointSourceId, UtxoOutPoint};
+use common::chain::{OutPointSourceId, UtxoOutPoint};
 use common::primitives::{Amount, BlockHeight, CoinOrTokenId, Idable};
 use randomness::Rng;
 use rstest::rstest;
@@ -29,6 +27,8 @@ use test_utils::{
     nft_utils::random_nft_issuance,
     random::{make_seedable_rng, Seed},
 };
+
+use crate::tests::helpers::chainstate_upgrade_builder::ChainstateUpgradeBuilder;
 
 #[rstest]
 #[trace]
@@ -212,16 +212,9 @@ fn no_v0_issuance_after_v1(#[case] seed: Seed) {
                     .chainstate_upgrades(
                         common::chain::NetUpgrades::initialize(vec![(
                             BlockHeight::zero(),
-                            ChainstateUpgrade::new(
-                                TokenIssuanceVersion::V1,
-                                RewardDistributionVersion::V1,
-                                TokensFeeVersion::V1,
-                                DataDepositFeeVersion::V1,
-                                ChangeTokenMetadataUriActivated::Yes,
-                                FrozenTokensValidationVersion::V1,
-                                HtlcActivated::Yes,
-                                OrdersActivated::Yes,
-                            ),
+                            ChainstateUpgradeBuilder::latest()
+                                .token_issuance_version(TokenIssuanceVersion::V1)
+                                .build(),
                         )])
                         .unwrap(),
                     )

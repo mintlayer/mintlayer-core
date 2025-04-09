@@ -513,7 +513,9 @@ impl RpcTestFunctionsRpcServer for super::RpcTestFunctionsHandle {
         let htlc_outpoint = htlc_outpoint.into_outpoint();
         let htlc_position = tx.transaction().inputs().iter().position(|input| match input {
             TxInput::Utxo(outpoint) => *outpoint == htlc_outpoint,
-            TxInput::Account(_) | TxInput::AccountCommand(_, _) => false,
+            TxInput::Account(..)
+            | TxInput::AccountCommand(..)
+            | TxInput::OrderAccountCommand(..) => false,
         });
 
         match htlc_position {

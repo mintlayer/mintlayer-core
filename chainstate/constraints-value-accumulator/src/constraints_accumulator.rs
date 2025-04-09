@@ -18,7 +18,7 @@ use std::{collections::BTreeMap, num::NonZeroU64};
 use common::{
     chain::{
         output_value::OutputValue, timelock::OutputTimeLock, AccountCommand, AccountSpending,
-        AccountType, ChainConfig, TxInput, TxOutput, UtxoOutPoint,
+        AccountType, ChainConfig, OrderAccountCommand, OrderId, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Fee, Subsidy},
 };
@@ -108,6 +108,16 @@ impl ConstrainedValueAccumulator {
                         command,
                         &mut temp_orders_accounting,
                         &mut temp_tokens_accounting,
+                    )?;
+
+                    insert_or_increase(&mut total_to_deduct, id, to_deduct)?;
+                }
+                TxInput::OrderAccountCommand(command) => {
+                    let (id, to_deduct) = accumulator.process_input_order_account_command(
+                        chain_config,
+                        block_height,
+                        command,
+                        &mut temp_orders_accounting,
                     )?;
 
                     insert_or_increase(&mut total_to_deduct, id, to_deduct)?;
@@ -295,67 +305,130 @@ impl ConstrainedValueAccumulator {
                 chain_config.token_change_metadata_uri_fee(),
             )),
             AccountCommand::ConcludeOrder(id) => {
-                let order_data = orders_accounting_delta
-                    .get_order_data(id)
-                    .map_err(|_| orders_accounting::Error::ViewFail)?
-                    .ok_or(orders_accounting::Error::OrderDataNotFound(*id))?;
-                let ask_balance = orders_accounting_delta
-                    .get_ask_balance(id)
-                    .map_err(|_| orders_accounting::Error::ViewFail)?;
-                let give_balance = orders_accounting_delta
-                    .get_give_balance(id)
-                    .map_err(|_| orders_accounting::Error::ViewFail)?;
-
-                {
-                    // Ensure that spending won't result in negative balance
-                    let _ = orders_accounting_delta.conclude_order(*id)?;
-                    let _ = orders_accounting_delta.get_ask_balance(id)?;
-                    let _ = orders_accounting_delta.get_give_balance(id)?;
-                }
-
-                let initially_asked = output_value_amount(order_data.ask())?;
-                let filled_amount = (initially_asked - ask_balance)
-                    .ok_or(Error::NegativeAccountBalance(AccountType::Order(*id)))?;
-
-                let ask_currency = CoinOrTokenId::from_output_value(order_data.ask())
-                    .ok_or(Error::UnsupportedTokenVersion)?;
-                insert_or_increase(&mut self.unconstrained_value, ask_currency, filled_amount)?;
-
-                let give_currency = CoinOrTokenId::from_output_value(order_data.give())
-                    .ok_or(Error::UnsupportedTokenVersion)?;
-                insert_or_increase(&mut self.unconstrained_value, give_currency, give_balance)?;
-
-                Ok((CoinOrTokenId::Coin, Amount::ZERO))
+                self.process_conclude_order_command(*id, orders_accounting_delta)
             }
-            AccountCommand::FillOrder(id, fill_amount_in_ask_currency, _) => {
-                let order_data = orders_accounting_delta
-                    .get_order_data(id)
-                    .map_err(|_| orders_accounting::Error::ViewFail)?
-                    .ok_or(orders_accounting::Error::OrderDataNotFound(*id))?;
-                let filled_amount = orders_accounting::calculate_fill_order(
-                    &orders_accounting_delta,
+            AccountCommand::FillOrder(id, fill_amount_in_ask_currency, _) => self
+                .process_fill_order_command(
+                    chain_config,
+                    block_height,
                     *id,
                     *fill_amount_in_ask_currency,
-                )?;
+                    orders_accounting_delta,
+                ),
+        }
+    }
 
-                {
-                    // Ensure that spending won't result in negative balance
-                    let _ =
-                        orders_accounting_delta.fill_order(*id, *fill_amount_in_ask_currency)?;
-                    let _ = orders_accounting_delta.get_ask_balance(id)?;
-                    let _ = orders_accounting_delta.get_give_balance(id)?;
-                }
-
-                let give_currency = CoinOrTokenId::from_output_value(order_data.give())
-                    .ok_or(Error::UnsupportedTokenVersion)?;
-                insert_or_increase(&mut self.unconstrained_value, give_currency, filled_amount)?;
-
-                let ask_currency = CoinOrTokenId::from_output_value(order_data.ask())
-                    .ok_or(Error::UnsupportedTokenVersion)?;
-
-                Ok((ask_currency, *fill_amount_in_ask_currency))
+    fn process_input_order_account_command<O>(
+        &mut self,
+        chain_config: &ChainConfig,
+        block_height: BlockHeight,
+        command: &OrderAccountCommand,
+        orders_accounting_delta: &mut O,
+    ) -> Result<(CoinOrTokenId, Amount), Error>
+    where
+        O: OrdersAccountingOperations + OrdersAccountingView<Error = orders_accounting::Error>,
+    {
+        match command {
+            OrderAccountCommand::FillOrder(id, amount, _) => self.process_fill_order_command(
+                chain_config,
+                block_height,
+                *id,
+                *amount,
+                orders_accounting_delta,
+            ),
+            OrderAccountCommand::ConcludeOrder(order_id) => {
+                self.process_conclude_order_command(*order_id, orders_accounting_delta)
             }
         }
+    }
+
+    fn process_conclude_order_command<O>(
+        &mut self,
+        id: OrderId,
+        orders_accounting_delta: &mut O,
+    ) -> Result<(CoinOrTokenId, Amount), Error>
+    where
+        O: OrdersAccountingOperations + OrdersAccountingView<Error = orders_accounting::Error>,
+    {
+        let order_data = orders_accounting_delta
+            .get_order_data(&id)
+            .map_err(|_| orders_accounting::Error::ViewFail)?
+            .ok_or(orders_accounting::Error::OrderDataNotFound(id))?;
+        let ask_balance = orders_accounting_delta
+            .get_ask_balance(&id)
+            .map_err(|_| orders_accounting::Error::ViewFail)?;
+        let give_balance = orders_accounting_delta
+            .get_give_balance(&id)
+            .map_err(|_| orders_accounting::Error::ViewFail)?;
+
+        {
+            // Ensure that spending won't result in negative balance
+            let _ = orders_accounting_delta.conclude_order(id)?;
+            let _ = orders_accounting_delta.get_ask_balance(&id)?;
+            let _ = orders_accounting_delta.get_give_balance(&id)?;
+        }
+
+        let initially_asked = output_value_amount(order_data.ask())?;
+        let filled_amount = (initially_asked - ask_balance)
+            .ok_or(Error::NegativeAccountBalance(AccountType::Order(id)))?;
+
+        let ask_currency = CoinOrTokenId::from_output_value(order_data.ask())
+            .ok_or(Error::UnsupportedTokenVersion)?;
+        insert_or_increase(&mut self.unconstrained_value, ask_currency, filled_amount)?;
+
+        let give_currency = CoinOrTokenId::from_output_value(order_data.give())
+            .ok_or(Error::UnsupportedTokenVersion)?;
+        insert_or_increase(&mut self.unconstrained_value, give_currency, give_balance)?;
+
+        Ok((CoinOrTokenId::Coin, Amount::ZERO))
+    }
+
+    fn process_fill_order_command<O>(
+        &mut self,
+        chain_config: &ChainConfig,
+        block_height: BlockHeight,
+        order_id: OrderId,
+        fill_amount_in_ask_currency: Amount,
+        orders_accounting_delta: &mut O,
+    ) -> Result<(CoinOrTokenId, Amount), Error>
+    where
+        O: OrdersAccountingOperations + OrdersAccountingView<Error = orders_accounting::Error>,
+    {
+        let order_data = orders_accounting_delta
+            .get_order_data(&order_id)
+            .map_err(|_| orders_accounting::Error::ViewFail)?
+            .ok_or(orders_accounting::Error::OrderDataNotFound(order_id))?;
+        let orders_version = chain_config
+            .chainstate_upgrades()
+            .version_at_height(block_height)
+            .1
+            .orders_version();
+        let filled_amount = orders_accounting::calculate_fill_order(
+            &orders_accounting_delta,
+            order_id,
+            fill_amount_in_ask_currency,
+            orders_version,
+        )?;
+
+        {
+            // Ensure that spending won't result in negative balance
+            let _ = orders_accounting_delta.fill_order(
+                order_id,
+                fill_amount_in_ask_currency,
+                orders_version,
+            )?;
+            let _ = orders_accounting_delta.get_ask_balance(&order_id)?;
+            let _ = orders_accounting_delta.get_give_balance(&order_id)?;
+        }
+
+        let give_currency = CoinOrTokenId::from_output_value(order_data.give())
+            .ok_or(Error::UnsupportedTokenVersion)?;
+        insert_or_increase(&mut self.unconstrained_value, give_currency, filled_amount)?;
+
+        let ask_currency = CoinOrTokenId::from_output_value(order_data.ask())
+            .ok_or(Error::UnsupportedTokenVersion)?;
+
+        Ok((ask_currency, fill_amount_in_ask_currency))
     }
 
     pub fn from_outputs(

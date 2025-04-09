@@ -22,7 +22,10 @@ use common::address::pubkeyhash::PublicKeyHash;
 use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::classic_multisig::ClassicMultisigChallenge;
 use common::chain::htlc::HashedTimelockContract;
-use common::chain::{AccountCommand, AccountOutPoint, AccountSpending, OrderId, RpcOrderInfo};
+use common::chain::{
+    AccountCommand, AccountOutPoint, AccountSpending, OrderAccountCommand, OrderId, OrdersVersion,
+    RpcOrderInfo,
+};
 use common::primitives::id::WithId;
 use common::primitives::{Idable, H256};
 use common::size_estimation::{
@@ -981,14 +984,31 @@ impl<K: AccountKeyChains> Account<K> {
             outputs.push(TxOutput::Transfer(output_value, output_destination));
         }
 
-        let nonce = order_info
-            .nonce
-            .map_or(Some(AccountNonce::new(0)), |n| n.increment())
-            .ok_or(WalletError::OrderNonceOverflow(order_id))?;
-        let request = SendRequest::new().with_outputs(outputs).with_inputs_and_destinations([(
-            TxInput::AccountCommand(nonce, AccountCommand::ConcludeOrder(order_id)),
-            order_info.conclude_key.clone(),
-        )]);
+        let version = self
+            .chain_config
+            .chainstate_upgrades()
+            .version_at_height(self.account_info.best_block_height().next_height())
+            .1
+            .orders_version();
+
+        let request = match version {
+            common::chain::OrdersVersion::V0 => {
+                let nonce = order_info
+                    .nonce
+                    .map_or(Some(AccountNonce::new(0)), |n| n.increment())
+                    .ok_or(WalletError::OrderNonceOverflow(order_id))?;
+                SendRequest::new().with_outputs(outputs).with_inputs_and_destinations([(
+                    TxInput::AccountCommand(nonce, AccountCommand::ConcludeOrder(order_id)),
+                    order_info.conclude_key.clone(),
+                )])
+            }
+            common::chain::OrdersVersion::V1 => {
+                SendRequest::new().with_outputs(outputs).with_inputs_and_destinations([(
+                    TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder(order_id)),
+                    order_info.conclude_key.clone(),
+                )])
+            }
+        };
 
         self.select_inputs_for_send_request(
             request,
@@ -1019,33 +1039,66 @@ impl<K: AccountKeyChains> Account<K> {
             self.get_new_address(db_tx, KeyPurpose::ReceiveFunds)?.1.into_object()
         };
 
-        let filled_amount = orders_accounting::calculate_filled_amount(
-            order_info.ask_balance,
-            order_info.give_balance,
-            fill_amount_in_ask_currency,
-        )
-        .ok_or(WalletError::CalculateOrderFilledAmountFailed(order_id))?;
-        let output_value = match order_info.initially_given {
-            RpcOutputValue::Coin { .. } => OutputValue::Coin(filled_amount),
-            RpcOutputValue::Token { id, .. } => OutputValue::TokenV1(id, filled_amount),
-        };
-        let outputs = vec![TxOutput::Transfer(output_value, output_destination.clone())];
+        let version = self
+            .chain_config
+            .chainstate_upgrades()
+            .version_at_height(self.account_info.best_block_height().next_height())
+            .1
+            .orders_version();
 
-        let nonce = order_info
-            .nonce
-            .map_or(Some(AccountNonce::new(0)), |n| n.increment())
-            .ok_or(WalletError::OrderNonceOverflow(order_id))?;
-        let request = SendRequest::new().with_outputs(outputs).with_inputs_and_destinations([(
-            TxInput::AccountCommand(
-                nonce,
-                AccountCommand::FillOrder(
-                    order_id,
+        let request = match version {
+            common::chain::OrdersVersion::V0 => {
+                let filled_amount = orders_accounting::calculate_filled_amount(
+                    order_info.ask_balance,
+                    order_info.give_balance,
                     fill_amount_in_ask_currency,
-                    output_destination.clone(),
-                ),
-            ),
-            output_destination,
-        )]);
+                )
+                .ok_or(WalletError::CalculateOrderFilledAmountFailed(order_id))?;
+                let output_value = match order_info.initially_given {
+                    RpcOutputValue::Coin { .. } => OutputValue::Coin(filled_amount),
+                    RpcOutputValue::Token { id, .. } => OutputValue::TokenV1(id, filled_amount),
+                };
+                let outputs = vec![TxOutput::Transfer(output_value, output_destination.clone())];
+
+                let nonce = order_info
+                    .nonce
+                    .map_or(Some(AccountNonce::new(0)), |n| n.increment())
+                    .ok_or(WalletError::OrderNonceOverflow(order_id))?;
+                SendRequest::new().with_outputs(outputs).with_inputs_and_destinations([(
+                    TxInput::AccountCommand(
+                        nonce,
+                        AccountCommand::FillOrder(
+                            order_id,
+                            fill_amount_in_ask_currency,
+                            output_destination.clone(),
+                        ),
+                    ),
+                    output_destination,
+                )])
+            }
+            common::chain::OrdersVersion::V1 => {
+                let filled_amount = orders_accounting::calculate_filled_amount(
+                    order_info.initially_asked.amount(),
+                    order_info.initially_given.amount(),
+                    fill_amount_in_ask_currency,
+                )
+                .ok_or(WalletError::CalculateOrderFilledAmountFailed(order_id))?;
+                let output_value = match order_info.initially_given {
+                    RpcOutputValue::Coin { .. } => OutputValue::Coin(filled_amount),
+                    RpcOutputValue::Token { id, .. } => OutputValue::TokenV1(id, filled_amount),
+                };
+                let outputs = vec![TxOutput::Transfer(output_value, output_destination.clone())];
+
+                SendRequest::new().with_outputs(outputs).with_inputs_and_destinations([(
+                    TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(
+                        order_id,
+                        fill_amount_in_ask_currency,
+                        output_destination.clone(),
+                    )),
+                    output_destination,
+                )])
+            }
+        };
 
         self.select_inputs_for_send_request(
             request,
@@ -1467,6 +1520,20 @@ impl<K: AccountKeyChains> Account<K> {
                 .map(|data| data.conclude_key.clone())
                 .ok_or(WalletError::UnknownOrderId(*order_id)),
             AccountCommand::FillOrder(_, _, dest) => Ok(dest.clone()),
+        }
+    }
+
+    pub fn find_order_account_command_destination(
+        &self,
+        cmd: &OrderAccountCommand,
+    ) -> WalletResult<Destination> {
+        match cmd {
+            OrderAccountCommand::FillOrder(_, _, destination) => Ok(destination.clone()),
+            OrderAccountCommand::ConcludeOrder(order_id) => self
+                .output_cache
+                .order_data(order_id)
+                .map(|data| data.conclude_key.clone())
+                .ok_or(WalletError::UnknownOrderId(*order_id)),
         }
     }
 
@@ -1901,6 +1968,12 @@ impl<K: AccountKeyChains> Account<K> {
                 AccountSpending::DelegationBalance(delegation_id, _) => {
                     self.find_delegation(delegation_id).is_ok()
                 }
+            },
+            TxInput::OrderAccountCommand(cmd) => match cmd {
+                OrderAccountCommand::FillOrder(order_id, _, dest) => {
+                    self.find_order(order_id).is_ok() || self.is_destination_mine_or_watched(dest)
+                }
+                OrderAccountCommand::ConcludeOrder(order_id) => self.find_order(order_id).is_ok(),
             },
             TxInput::AccountCommand(_, op) => match op {
                 AccountCommand::MintTokens(token_id, _)
@@ -2453,65 +2526,116 @@ fn group_preselected_inputs(
                     )?;
                 }
                 AccountCommand::ConcludeOrder(order_id) => {
-                    let order_info = order_info
-                        .as_ref()
-                        .and_then(|info| info.get(order_id))
-                        .ok_or(WalletError::OrderInfoMissing(*order_id))?;
-
-                    let given_currency =
-                        Currency::from_rpc_output_value(&order_info.initially_given);
-                    update_preselected_inputs(
-                        given_currency,
-                        order_info.give_balance,
-                        Amount::ZERO,
-                        Amount::ZERO,
+                    handle_conclude_order(
+                        *order_id,
+                        order_info.as_ref(),
+                        *fee,
+                        &mut update_preselected_inputs,
                     )?;
-
-                    let asked_currency =
-                        Currency::from_rpc_output_value(&order_info.initially_asked);
-                    let filled_amount = (order_info.initially_asked.amount()
-                        - order_info.ask_balance)
-                        .ok_or(WalletError::OutputAmountOverflow)?;
-                    update_preselected_inputs(
-                        asked_currency,
-                        filled_amount,
-                        Amount::ZERO,
-                        Amount::ZERO,
-                    )?;
-
-                    // add fee
-                    update_preselected_inputs(Currency::Coin, Amount::ZERO, *fee, Amount::ZERO)?;
                 }
                 AccountCommand::FillOrder(order_id, fill_amount_in_ask_currency, _) => {
-                    let order_info = order_info
-                        .as_ref()
-                        .and_then(|info| info.get(order_id))
-                        .ok_or(WalletError::OrderInfoMissing(*order_id))?;
-
-                    let filled_amount = orders_accounting::calculate_filled_amount(
-                        order_info.ask_balance,
-                        order_info.give_balance,
+                    handle_fill_order_op(
+                        *order_id,
                         *fill_amount_in_ask_currency,
-                    )
-                    .ok_or(WalletError::CalculateOrderFilledAmountFailed(*order_id))?;
-
-                    let given_currency =
-                        Currency::from_rpc_output_value(&order_info.initially_given);
-                    update_preselected_inputs(given_currency, filled_amount, *fee, Amount::ZERO)?;
-
-                    let asked_currency =
-                        Currency::from_rpc_output_value(&order_info.initially_asked);
-                    update_preselected_inputs(
-                        asked_currency,
-                        Amount::ZERO,
-                        Amount::ZERO,
+                        order_info.as_ref(),
+                        *fee,
+                        &mut update_preselected_inputs,
+                        OrdersVersion::V0,
+                    )?;
+                }
+            },
+            TxInput::OrderAccountCommand(cmd) => match cmd {
+                OrderAccountCommand::FillOrder(id, fill_amount_in_ask_currency, _) => {
+                    handle_fill_order_op(
+                        *id,
                         *fill_amount_in_ask_currency,
+                        order_info.as_ref(),
+                        *fee,
+                        &mut update_preselected_inputs,
+                        OrdersVersion::V1,
+                    )?;
+                }
+                OrderAccountCommand::ConcludeOrder(order_id) => {
+                    handle_conclude_order(
+                        *order_id,
+                        order_info.as_ref(),
+                        *fee,
+                        &mut update_preselected_inputs,
                     )?;
                 }
             },
         }
     }
     Ok(preselected_inputs)
+}
+
+fn handle_fill_order_op(
+    order_id: OrderId,
+    fill_amount_in_ask_currency: Amount,
+    order_info: Option<&BTreeMap<OrderId, &RpcOrderInfo>>,
+    fee: Amount,
+    update_preselected_inputs: &mut impl FnMut(Currency, Amount, Amount, Amount) -> WalletResult<()>,
+    version: OrdersVersion,
+) -> WalletResult<()> {
+    let order_info = order_info
+        .as_ref()
+        .and_then(|info| info.get(&order_id))
+        .ok_or(WalletError::OrderInfoMissing(order_id))?;
+
+    let filled_amount = match version {
+        OrdersVersion::V0 => orders_accounting::calculate_filled_amount(
+            order_info.ask_balance,
+            order_info.give_balance,
+            fill_amount_in_ask_currency,
+        ),
+        OrdersVersion::V1 => orders_accounting::calculate_filled_amount(
+            order_info.initially_asked.amount(),
+            order_info.initially_given.amount(),
+            fill_amount_in_ask_currency,
+        ),
+    }
+    .ok_or(WalletError::CalculateOrderFilledAmountFailed(order_id))?;
+
+    let given_currency = Currency::from_rpc_output_value(&order_info.initially_given);
+    update_preselected_inputs(given_currency, filled_amount, fee, Amount::ZERO)?;
+
+    let asked_currency = Currency::from_rpc_output_value(&order_info.initially_asked);
+    update_preselected_inputs(
+        asked_currency,
+        Amount::ZERO,
+        Amount::ZERO,
+        fill_amount_in_ask_currency,
+    )?;
+    Ok(())
+}
+
+fn handle_conclude_order(
+    order_id: OrderId,
+    order_info: Option<&BTreeMap<OrderId, &RpcOrderInfo>>,
+    fee: Amount,
+    update_preselected_inputs: &mut impl FnMut(Currency, Amount, Amount, Amount) -> WalletResult<()>,
+) -> WalletResult<()> {
+    let order_info = order_info
+        .as_ref()
+        .and_then(|info| info.get(&order_id))
+        .ok_or(WalletError::OrderInfoMissing(order_id))?;
+
+    let given_currency = Currency::from_rpc_output_value(&order_info.initially_given);
+    update_preselected_inputs(
+        given_currency,
+        order_info.give_balance,
+        Amount::ZERO,
+        Amount::ZERO,
+    )?;
+
+    let asked_currency = Currency::from_rpc_output_value(&order_info.initially_asked);
+    let filled_amount = (order_info.initially_asked.amount() - order_info.ask_balance)
+        .ok_or(WalletError::OutputAmountOverflow)?;
+    update_preselected_inputs(asked_currency, filled_amount, Amount::ZERO, Amount::ZERO)?;
+
+    // add fee
+    update_preselected_inputs(Currency::Coin, Amount::ZERO, fee, Amount::ZERO)?;
+    Ok(())
 }
 
 /// Calculate the amount of fee that needs to be paid to add a change output

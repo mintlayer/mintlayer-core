@@ -21,10 +21,11 @@ use common::{
         output_value::OutputValue,
         signature::inputsig::InputWitness,
         tokens::{get_tokens_issuance_count, NftIssuance},
-        AccountCommand, ChainConfig, ChangeTokenMetadataUriActivated, HtlcActivated,
-        SignedTransaction, TokenIssuanceVersion, Transaction, TransactionSize, TxInput, TxOutput,
+        AccountCommand, ChainConfig, ChangeTokenMetadataUriActivated, HtlcActivated, OrderId,
+        OrdersVersion, SignedTransaction, TokenIssuanceVersion, Transaction, TransactionSize,
+        TxInput, TxOutput,
     },
-    primitives::{BlockHeight, CoinOrTokenId, Id, Idable},
+    primitives::{Amount, BlockHeight, CoinOrTokenId, Id, Idable},
 };
 use thiserror::Error;
 use utils::ensure;
@@ -60,10 +61,16 @@ pub enum CheckTransactionError {
     HtlcsAreNotActivated,
     #[error("Orders from tx {0} are not yet activated")]
     OrdersAreNotActivated(Id<Transaction>),
+    #[error("Orders V1 from tx {0} are not yet activated")]
+    OrdersV1AreNotActivated(Id<Transaction>),
+    #[error("Order inputs from tx {0} are deprecated")]
+    DeprecatedOrdersCommands(Id<Transaction>),
     #[error("Orders currencies from tx {0} are the same")]
     OrdersCurrenciesMustBeDifferent(Id<Transaction>),
     #[error("Change token metadata uri not activated yet")]
     ChangeTokenMetadataUriNotActivated,
+    #[error("Cannot fill order {0} with zero amount in tx {1}")]
+    AttemptToFillOrderWithZero(OrderId, Id<Transaction>),
 }
 
 pub fn check_transaction(
@@ -78,7 +85,7 @@ pub fn check_transaction(
     check_no_signature_size(chain_config, tx)?;
     check_data_deposit_outputs(chain_config, block_height, tx)?;
     check_htlc_outputs(chain_config, block_height, tx)?;
-    check_order_outputs(chain_config, block_height, tx)?;
+    check_order_inputs_outputs(chain_config, block_height, tx)?;
     Ok(())
 }
 
@@ -209,7 +216,7 @@ fn check_tokens_tx(
 
     // Check token metadata uri change
     tx.inputs().iter().try_for_each(|input| match input {
-        TxInput::Utxo(_) | TxInput::Account(_) => Ok(()),
+        TxInput::Utxo(_) | TxInput::Account(_) | TxInput::OrderAccountCommand(_) => Ok(()),
         TxInput::AccountCommand(_, command) => match command {
             AccountCommand::MintTokens(_, _)
             | AccountCommand::UnmintTokens(_)
@@ -364,11 +371,66 @@ fn check_htlc_outputs(
     Ok(())
 }
 
-fn check_order_outputs(
+fn check_order_inputs_outputs(
     chain_config: &ChainConfig,
     block_height: BlockHeight,
     tx: &SignedTransaction,
 ) -> Result<(), CheckTransactionError> {
+    let orders_version = chain_config
+        .chainstate_upgrades()
+        .version_at_height(block_height)
+        .1
+        .orders_version();
+
+    for input in tx.inputs() {
+        match input {
+            TxInput::Utxo(_) | TxInput::Account(_) => {}
+            TxInput::AccountCommand(_, account_command) => match account_command {
+                AccountCommand::MintTokens(..)
+                | AccountCommand::UnmintTokens(..)
+                | AccountCommand::LockTokenSupply(..)
+                | AccountCommand::FreezeToken(..)
+                | AccountCommand::UnfreezeToken(..)
+                | AccountCommand::ChangeTokenAuthority(..)
+                | AccountCommand::ChangeTokenMetadataUri(..) => { /* do nothing */ }
+                AccountCommand::FillOrder(..) | AccountCommand::ConcludeOrder(..) => {
+                    match orders_version {
+                        OrdersVersion::V0 => {}
+                        OrdersVersion::V1 => {
+                            return Err(CheckTransactionError::DeprecatedOrdersCommands(
+                                tx.transaction().get_id(),
+                            ));
+                        }
+                    };
+                }
+            },
+            TxInput::OrderAccountCommand(cmd) => {
+                match orders_version {
+                    OrdersVersion::V0 => {
+                        return Err(CheckTransactionError::OrdersV1AreNotActivated(
+                            tx.transaction().get_id(),
+                        ));
+                    }
+                    OrdersVersion::V1 => {}
+                };
+                match cmd {
+                    common::chain::OrderAccountCommand::FillOrder(id, fill, _) => {
+                        // Forbidding fills with zero amount ensures that tx has utxo and therefore is unique.
+                        // Unique txs cannot be replayed.
+                        ensure!(
+                            *fill > Amount::ZERO,
+                            CheckTransactionError::AttemptToFillOrderWithZero(
+                                *id,
+                                tx.transaction().get_id()
+                            )
+                        );
+                    }
+                    common::chain::OrderAccountCommand::ConcludeOrder { .. } => {}
+                }
+            }
+        }
+    }
+
     for output in tx.outputs() {
         match output {
             TxOutput::Transfer(..)

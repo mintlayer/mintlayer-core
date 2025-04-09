@@ -47,9 +47,9 @@ use common::chain::tokens::{
 };
 use common::chain::{
     make_order_id, AccountCommand, AccountNonce, AccountOutPoint, Block, ChainConfig, DelegationId,
-    Destination, GenBlock, OrderId, OutPointSourceId, PoolId, RpcOrderInfo, SignedTransaction,
-    SignedTransactionIntent, Transaction, TransactionCreationError, TxInput, TxOutput,
-    UtxoOutPoint,
+    Destination, GenBlock, OrderAccountCommand, OrderId, OutPointSourceId, PoolId, RpcOrderInfo,
+    SignedTransaction, SignedTransactionIntent, Transaction, TransactionCreationError, TxInput,
+    TxOutput, UtxoOutPoint,
 };
 use common::primitives::id::{hash_encoded, WithId};
 use common::primitives::{Amount, BlockHeight, Id, H256};
@@ -1208,6 +1208,15 @@ where
         self.accounts
             .values()
             .find_map(|acc| acc.find_account_command_destination(cmd).ok())
+    }
+
+    pub fn find_order_account_command_destination(
+        &self,
+        cmd: &OrderAccountCommand,
+    ) -> Option<Destination> {
+        self.accounts
+            .values()
+            .find_map(|acc| acc.find_order_account_command_destination(cmd).ok())
     }
 
     pub fn find_unspent_utxo_and_destination(

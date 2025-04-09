@@ -646,6 +646,7 @@ fn update_statistics(
             }
             AccountCommand::ConcludeOrder(_) | AccountCommand::FillOrder(_, _, _) => {}
         },
+        TxInput::OrderAccountCommand(..) => {}
     });
 }
 
