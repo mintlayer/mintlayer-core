@@ -46,12 +46,13 @@ use wallet_controller::{
 use wallet_rpc_lib::{
     types::{
         AddressInfo, AddressWithUsageInfo, BlockInfo, ComposedTransaction, CreatedWallet,
-        DelegationInfo, HardwareWalletType, LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegation,
-        NewOrder, NewTransaction, NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo,
-        RpcHashedTimelockContract, RpcInspectTransaction, RpcStandaloneAddresses, RpcTokenId,
-        SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
-        StandaloneAddressWithDetails, TokenMetadata, TransactionOptions, TxOptionsOverrides,
-        UtxoInfo, VrfPublicKeyInfo,
+        DelegationInfo, HardwareWalletType, LegacyVrfPublicKeyInfo, NewAccountInfo,
+        NewDelegationTransaction, NewOrderTransaction, NewSubmittedTransaction,
+        NewTokenTransaction, NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo,
+        RpcHashedTimelockContract, RpcInspectTransaction, RpcNewTransaction,
+        RpcStandaloneAddresses, SendTokensFromMultisigAddressResult, StakePoolBalance,
+        StakingStatus, StandaloneAddressWithDetails, TokenMetadata, TransactionOptions,
+        TxOptionsOverrides, UtxoInfo, VrfPublicKeyInfo,
     },
     ColdWalletRpcClient, WalletRpcClient,
 };
@@ -419,7 +420,7 @@ impl WalletInterface for ClientWalletRpc {
         tx: HexEncoded<SignedTransaction>,
         do_not_store: bool,
         options: TxOptionsOverrides,
-    ) -> Result<NewTransaction, Self::Error> {
+    ) -> Result<NewSubmittedTransaction, Self::Error> {
         WalletRpcClient::submit_raw_transaction(&self.http_client, tx, do_not_store, options)
             .await
             .map_err(WalletRpcError::ResponseError)
@@ -432,7 +433,7 @@ impl WalletInterface for ClientWalletRpc {
         amount: DecimalAmount,
         selected_utxos: Vec<UtxoOutPoint>,
         config: ControllerConfig,
-    ) -> Result<NewTransaction, Self::Error> {
+    ) -> Result<RpcNewTransaction, Self::Error> {
         let options = TransactionOptions::from_controller_config(&config);
         let selected_utxos = selected_utxos.into_iter().map(Into::into).collect();
         WalletRpcClient::send_coins(
@@ -453,7 +454,7 @@ impl WalletInterface for ClientWalletRpc {
         destination_address: String,
         from_addresses: Vec<String>,
         config: ControllerConfig,
-    ) -> Result<NewTransaction, Self::Error> {
+    ) -> Result<RpcNewTransaction, Self::Error> {
         let options = TransactionOptions::from_controller_config(&config);
         let all = from_addresses.is_empty();
         WalletRpcClient::sweep_addresses(
@@ -474,7 +475,7 @@ impl WalletInterface for ClientWalletRpc {
         destination_address: String,
         delegation_id: String,
         config: ControllerConfig,
-    ) -> Result<NewTransaction, Self::Error> {
+    ) -> Result<RpcNewTransaction, Self::Error> {
         let options = TransactionOptions::from_controller_config(&config);
         WalletRpcClient::sweep_delegation(
             &self.http_client,
@@ -529,7 +530,7 @@ impl WalletInterface for ClientWalletRpc {
         staker_address: Option<String>,
         vrf_public_key: Option<String>,
         config: ControllerConfig,
-    ) -> Result<NewTransaction, Self::Error> {
+    ) -> Result<RpcNewTransaction, Self::Error> {
         let options = TransactionOptions::from_controller_config(&config);
         WalletRpcClient::create_stake_pool(
             &self.http_client,
@@ -552,7 +553,7 @@ impl WalletInterface for ClientWalletRpc {
         pool_id: String,
         output_address: Option<String>,
         config: ControllerConfig,
-    ) -> Result<NewTransaction, Self::Error> {
+    ) -> Result<RpcNewTransaction, Self::Error> {
         let options = TransactionOptions::from_controller_config(&config);
         WalletRpcClient::decommission_stake_pool(
             &self.http_client,
@@ -590,7 +591,7 @@ impl WalletInterface for ClientWalletRpc {
         address: String,
         pool_id: String,
         config: ControllerConfig,
-    ) -> Result<NewDelegation, Self::Error> {
+    ) -> Result<NewDelegationTransaction, Self::Error> {
         let options = TransactionOptions::from_controller_config(&config);
         WalletRpcClient::create_delegation(
             &self.http_client,
@@ -609,7 +610,7 @@ impl WalletInterface for ClientWalletRpc {
         amount: DecimalAmount,
         delegation_id: String,
         config: ControllerConfig,
-    ) -> Result<NewTransaction, Self::Error> {
+    ) -> Result<RpcNewTransaction, Self::Error> {
         let options = TransactionOptions::from_controller_config(&config);
         WalletRpcClient::delegate_staking(
             &self.http_client,
@@ -629,7 +630,7 @@ impl WalletInterface for ClientWalletRpc {
         amount: DecimalAmount,
         delegation_id: String,
         config: ControllerConfig,
-    ) -> Result<NewTransaction, Self::Error> {
+    ) -> Result<RpcNewTransaction, Self::Error> {
         let options = TransactionOptions::from_controller_config(&config);
         WalletRpcClient::withdraw_from_delegation(
             &self.http_client,
@@ -733,7 +734,7 @@ impl WalletInterface for ClientWalletRpc {
         destination_address: String,
         metadata: NftMetadata,
         config: ControllerConfig,
-    ) -> Result<RpcTokenId, Self::Error> {
+    ) -> Result<NewTokenTransaction, Self::Error> {
         let options = TransactionOptions::from_controller_config(&config);
         WalletRpcClient::issue_new_nft(
             &self.http_client,
@@ -752,7 +753,7 @@ impl WalletInterface for ClientWalletRpc {
         destination_address: String,
         metadata: TokenMetadata,
         config: ControllerConfig,
-    ) -> Result<RpcTokenId, Self::Error> {
+    ) -> Result<NewTokenTransaction, Self::Error> {
         let options = TransactionOptions::from_controller_config(&config);
         WalletRpcClient::issue_new_token(
             &self.http_client,
@@ -771,7 +772,7 @@ impl WalletInterface for ClientWalletRpc {
         token_id: String,
         address: String,
         config: ControllerConfig,
-    ) -> Result<NewTransaction, Self::Error> {
+    ) -> Result<RpcNewTransaction, Self::Error> {
         let options = TransactionOptions::from_controller_config(&config);
         WalletRpcClient::change_token_authority(
             &self.http_client,
@@ -790,7 +791,7 @@ impl WalletInterface for ClientWalletRpc {
         token_id: String,
         metadata_uri: String,
         config: ControllerConfig,
-    ) -> Result<NewTransaction, Self::Error> {
+    ) -> Result<RpcNewTransaction, Self::Error> {
         let options = TransactionOptions::from_controller_config(&config);
         WalletRpcClient::change_token_metadata_uri(
             &self.http_client,
@@ -810,7 +811,7 @@ impl WalletInterface for ClientWalletRpc {
         address: String,
         amount: DecimalAmount,
         config: ControllerConfig,
-    ) -> Result<NewTransaction, Self::Error> {
+    ) -> Result<RpcNewTransaction, Self::Error> {
         let options = TransactionOptions::from_controller_config(&config);
         WalletRpcClient::mint_tokens(
             &self.http_client,
@@ -830,7 +831,7 @@ impl WalletInterface for ClientWalletRpc {
         token_id: String,
         amount: DecimalAmount,
         config: ControllerConfig,
-    ) -> Result<NewTransaction, Self::Error> {
+    ) -> Result<RpcNewTransaction, Self::Error> {
         let options = TransactionOptions::from_controller_config(&config);
         WalletRpcClient::unmint_tokens(
             &self.http_client,
@@ -848,7 +849,7 @@ impl WalletInterface for ClientWalletRpc {
         account_index: U31,
         token_id: String,
         config: ControllerConfig,
-    ) -> Result<NewTransaction, Self::Error> {
+    ) -> Result<RpcNewTransaction, Self::Error> {
         let options = TransactionOptions::from_controller_config(&config);
         WalletRpcClient::lock_token_supply(
             &self.http_client,
@@ -866,7 +867,7 @@ impl WalletInterface for ClientWalletRpc {
         token_id: String,
         is_unfreezable: bool,
         config: ControllerConfig,
-    ) -> Result<NewTransaction, Self::Error> {
+    ) -> Result<RpcNewTransaction, Self::Error> {
         let options = TransactionOptions::from_controller_config(&config);
         WalletRpcClient::freeze_token(
             &self.http_client,
@@ -884,7 +885,7 @@ impl WalletInterface for ClientWalletRpc {
         account_index: U31,
         token_id: String,
         config: ControllerConfig,
-    ) -> Result<NewTransaction, Self::Error> {
+    ) -> Result<RpcNewTransaction, Self::Error> {
         let options = TransactionOptions::from_controller_config(&config);
         WalletRpcClient::unfreeze_token(
             &self.http_client,
@@ -903,7 +904,7 @@ impl WalletInterface for ClientWalletRpc {
         address: String,
         amount: DecimalAmount,
         config: ControllerConfig,
-    ) -> Result<NewTransaction, Self::Error> {
+    ) -> Result<RpcNewTransaction, Self::Error> {
         let options = TransactionOptions::from_controller_config(&config);
         WalletRpcClient::send_tokens(
             &self.http_client,
@@ -972,7 +973,7 @@ impl WalletInterface for ClientWalletRpc {
         account_index: U31,
         data: String,
         config: ControllerConfig,
-    ) -> Result<NewTransaction, Self::Error> {
+    ) -> Result<RpcNewTransaction, Self::Error> {
         let options = TransactionOptions::from_controller_config(&config);
         WalletRpcClient::deposit_data(
             &self.http_client,
@@ -1014,7 +1015,7 @@ impl WalletInterface for ClientWalletRpc {
         give_amount: DecimalAmount,
         conclude_address: String,
         config: ControllerConfig,
-    ) -> Result<NewOrder, Self::Error> {
+    ) -> Result<NewOrderTransaction, Self::Error> {
         let options = TransactionOptions::from_controller_config(&config);
         WalletRpcClient::create_order(
             &self.http_client,
@@ -1034,7 +1035,7 @@ impl WalletInterface for ClientWalletRpc {
         order_id: String,
         output_address: Option<String>,
         config: ControllerConfig,
-    ) -> Result<NewTransaction, Self::Error> {
+    ) -> Result<RpcNewTransaction, Self::Error> {
         let options = TransactionOptions::from_controller_config(&config);
         WalletRpcClient::conclude_order(
             &self.http_client,
@@ -1054,7 +1055,7 @@ impl WalletInterface for ClientWalletRpc {
         fill_amount_in_ask_currency: DecimalAmount,
         output_address: Option<String>,
         config: ControllerConfig,
-    ) -> Result<NewTransaction, Self::Error> {
+    ) -> Result<RpcNewTransaction, Self::Error> {
         let options = TransactionOptions::from_controller_config(&config);
         WalletRpcClient::fill_order(
             &self.http_client,

@@ -980,7 +980,21 @@ Parameters:
 
 Returns:
 ```
-{ "tx_id": hex string }
+{
+    "tx_id": hex string,
+    "tx": hex string,
+    "fees": {
+        "coins": {
+            "atoms": number string,
+            "decimal": decimal string,
+        },
+        "tokens": { bech32 string: {
+            "atoms": number string,
+            "decimal": decimal string,
+        }, .. },
+    },
+    "broadcasted": bool,
+}
 ```
 
 ### Method `address_sweep_spendable`
@@ -996,6 +1010,9 @@ Parameters:
     "account": number,
     "destination_address": bech32 string,
     "from_addresses": [ bech32 string, .. ],
+    "all": EITHER OF
+         1) bool
+         2) null,
     "options": { "in_top_x_mb": EITHER OF
          1) number
          2) null },
@@ -1004,7 +1021,21 @@ Parameters:
 
 Returns:
 ```
-{ "tx_id": hex string }
+{
+    "tx_id": hex string,
+    "tx": hex string,
+    "fees": {
+        "coins": {
+            "atoms": number string,
+            "decimal": decimal string,
+        },
+        "tokens": { bech32 string: {
+            "atoms": number string,
+            "decimal": decimal string,
+        }, .. },
+    },
+    "broadcasted": bool,
+}
 ```
 
 ### Method `staking_sweep_delegation`
@@ -1027,7 +1058,21 @@ Parameters:
 
 Returns:
 ```
-{ "tx_id": hex string }
+{
+    "tx_id": hex string,
+    "tx": hex string,
+    "fees": {
+        "coins": {
+            "atoms": number string,
+            "decimal": decimal string,
+        },
+        "tokens": { bech32 string: {
+            "atoms": number string,
+            "decimal": decimal string,
+        }, .. },
+    },
+    "broadcasted": bool,
+}
 ```
 
 ### Method `transaction_create_from_cold_input`
@@ -1188,7 +1233,21 @@ Parameters:
 
 Returns:
 ```
-{ "tx_id": hex string }
+{
+    "tx_id": hex string,
+    "tx": hex string,
+    "fees": {
+        "coins": {
+            "atoms": number string,
+            "decimal": decimal string,
+        },
+        "tokens": { bech32 string: {
+            "atoms": number string,
+            "decimal": decimal string,
+        }, .. },
+    },
+    "broadcasted": bool,
+}
 ```
 
 ### Method `staking_decommission_pool`
@@ -1213,7 +1272,21 @@ Parameters:
 
 Returns:
 ```
-{ "tx_id": hex string }
+{
+    "tx_id": hex string,
+    "tx": hex string,
+    "fees": {
+        "coins": {
+            "atoms": number string,
+            "decimal": decimal string,
+        },
+        "tokens": { bech32 string: {
+            "atoms": number string,
+            "decimal": decimal string,
+        }, .. },
+    },
+    "broadcasted": bool,
+}
 ```
 
 ### Method `staking_decommission_pool_request`
@@ -1266,8 +1339,20 @@ Parameters:
 Returns:
 ```
 {
-    "tx_id": hex string,
     "delegation_id": bech32 string,
+    "tx_id": hex string,
+    "tx": hex string,
+    "fees": {
+        "coins": {
+            "atoms": number string,
+            "decimal": decimal string,
+        },
+        "tokens": { bech32 string: {
+            "atoms": number string,
+            "decimal": decimal string,
+        }, .. },
+    },
+    "broadcasted": bool,
 }
 ```
 
@@ -1292,7 +1377,21 @@ Parameters:
 
 Returns:
 ```
-{ "tx_id": hex string }
+{
+    "tx_id": hex string,
+    "tx": hex string,
+    "fees": {
+        "coins": {
+            "atoms": number string,
+            "decimal": decimal string,
+        },
+        "tokens": { bech32 string: {
+            "atoms": number string,
+            "decimal": decimal string,
+        }, .. },
+    },
+    "broadcasted": bool,
+}
 ```
 
 ### Method `delegation_withdraw`
@@ -1318,7 +1417,21 @@ Parameters:
 
 Returns:
 ```
-{ "tx_id": hex string }
+{
+    "tx_id": hex string,
+    "tx": hex string,
+    "fees": {
+        "coins": {
+            "atoms": number string,
+            "decimal": decimal string,
+        },
+        "tokens": { bech32 string: {
+            "atoms": number string,
+            "decimal": decimal string,
+        }, .. },
+    },
+    "broadcasted": bool,
+}
 ```
 
 ### Method `staking_start`
@@ -1542,6 +1655,18 @@ Returns:
 {
     "token_id": bech32 string,
     "tx_id": hex string,
+    "tx": hex string,
+    "fees": {
+        "coins": {
+            "atoms": number string,
+            "decimal": decimal string,
+        },
+        "tokens": { bech32 string: {
+            "atoms": number string,
+            "decimal": decimal string,
+        }, .. },
+    },
+    "broadcasted": bool,
 }
 ```
 
@@ -1587,6 +1712,18 @@ Returns:
 {
     "token_id": bech32 string,
     "tx_id": hex string,
+    "tx": hex string,
+    "fees": {
+        "coins": {
+            "atoms": number string,
+            "decimal": decimal string,
+        },
+        "tokens": { bech32 string: {
+            "atoms": number string,
+            "decimal": decimal string,
+        }, .. },
+    },
+    "broadcasted": bool,
 }
 ```
 
@@ -1609,7 +1746,21 @@ Parameters:
 
 Returns:
 ```
-{ "tx_id": hex string }
+{
+    "tx_id": hex string,
+    "tx": hex string,
+    "fees": {
+        "coins": {
+            "atoms": number string,
+            "decimal": decimal string,
+        },
+        "tokens": { bech32 string: {
+            "atoms": number string,
+            "decimal": decimal string,
+        }, .. },
+    },
+    "broadcasted": bool,
+}
 ```
 
 ### Method `token_change_metadata_uri`
@@ -1631,7 +1782,21 @@ Parameters:
 
 Returns:
 ```
-{ "tx_id": hex string }
+{
+    "tx_id": hex string,
+    "tx": hex string,
+    "fees": {
+        "coins": {
+            "atoms": number string,
+            "decimal": decimal string,
+        },
+        "tokens": { bech32 string: {
+            "atoms": number string,
+            "decimal": decimal string,
+        }, .. },
+    },
+    "broadcasted": bool,
+}
 ```
 
 ### Method `token_mint`
@@ -1656,7 +1821,21 @@ Parameters:
 
 Returns:
 ```
-{ "tx_id": hex string }
+{
+    "tx_id": hex string,
+    "tx": hex string,
+    "fees": {
+        "coins": {
+            "atoms": number string,
+            "decimal": decimal string,
+        },
+        "tokens": { bech32 string: {
+            "atoms": number string,
+            "decimal": decimal string,
+        }, .. },
+    },
+    "broadcasted": bool,
+}
 ```
 
 ### Method `token_unmint`
@@ -1682,7 +1861,21 @@ Parameters:
 
 Returns:
 ```
-{ "tx_id": hex string }
+{
+    "tx_id": hex string,
+    "tx": hex string,
+    "fees": {
+        "coins": {
+            "atoms": number string,
+            "decimal": decimal string,
+        },
+        "tokens": { bech32 string: {
+            "atoms": number string,
+            "decimal": decimal string,
+        }, .. },
+    },
+    "broadcasted": bool,
+}
 ```
 
 ### Method `token_lock_supply`
@@ -1705,7 +1898,21 @@ Parameters:
 
 Returns:
 ```
-{ "tx_id": hex string }
+{
+    "tx_id": hex string,
+    "tx": hex string,
+    "fees": {
+        "coins": {
+            "atoms": number string,
+            "decimal": decimal string,
+        },
+        "tokens": { bech32 string: {
+            "atoms": number string,
+            "decimal": decimal string,
+        }, .. },
+    },
+    "broadcasted": bool,
+}
 ```
 
 ### Method `token_freeze`
@@ -1730,7 +1937,21 @@ Parameters:
 
 Returns:
 ```
-{ "tx_id": hex string }
+{
+    "tx_id": hex string,
+    "tx": hex string,
+    "fees": {
+        "coins": {
+            "atoms": number string,
+            "decimal": decimal string,
+        },
+        "tokens": { bech32 string: {
+            "atoms": number string,
+            "decimal": decimal string,
+        }, .. },
+    },
+    "broadcasted": bool,
+}
 ```
 
 ### Method `token_unfreeze`
@@ -1754,7 +1975,21 @@ Parameters:
 
 Returns:
 ```
-{ "tx_id": hex string }
+{
+    "tx_id": hex string,
+    "tx": hex string,
+    "fees": {
+        "coins": {
+            "atoms": number string,
+            "decimal": decimal string,
+        },
+        "tokens": { bech32 string: {
+            "atoms": number string,
+            "decimal": decimal string,
+        }, .. },
+    },
+    "broadcasted": bool,
+}
 ```
 
 ### Method `token_send`
@@ -1779,7 +2014,21 @@ Parameters:
 
 Returns:
 ```
-{ "tx_id": hex string }
+{
+    "tx_id": hex string,
+    "tx": hex string,
+    "fees": {
+        "coins": {
+            "atoms": number string,
+            "decimal": decimal string,
+        },
+        "tokens": { bech32 string: {
+            "atoms": number string,
+            "decimal": decimal string,
+        }, .. },
+    },
+    "broadcasted": bool,
+}
 ```
 
 ### Method `token_make_tx_for_sending_with_intent`
@@ -1893,7 +2142,21 @@ Parameters:
 
 Returns:
 ```
-{ "tx_id": hex string }
+{
+    "tx_id": hex string,
+    "tx": hex string,
+    "fees": {
+        "coins": {
+            "atoms": number string,
+            "decimal": decimal string,
+        },
+        "tokens": { bech32 string: {
+            "atoms": number string,
+            "decimal": decimal string,
+        }, .. },
+    },
+    "broadcasted": bool,
+}
 ```
 
 ### Method `create_htlc_transaction`
@@ -1999,8 +2262,20 @@ Parameters:
 Returns:
 ```
 {
-    "tx_id": hex string,
     "order_id": bech32 string,
+    "tx_id": hex string,
+    "tx": hex string,
+    "fees": {
+        "coins": {
+            "atoms": number string,
+            "decimal": decimal string,
+        },
+        "tokens": { bech32 string: {
+            "atoms": number string,
+            "decimal": decimal string,
+        }, .. },
+    },
+    "broadcasted": bool,
 }
 ```
 
@@ -2027,7 +2302,21 @@ Parameters:
 
 Returns:
 ```
-{ "tx_id": hex string }
+{
+    "tx_id": hex string,
+    "tx": hex string,
+    "fees": {
+        "coins": {
+            "atoms": number string,
+            "decimal": decimal string,
+        },
+        "tokens": { bech32 string: {
+            "atoms": number string,
+            "decimal": decimal string,
+        }, .. },
+    },
+    "broadcasted": bool,
+}
 ```
 
 ### Method `fill_order`
@@ -2055,7 +2344,21 @@ Parameters:
 
 Returns:
 ```
-{ "tx_id": hex string }
+{
+    "tx_id": hex string,
+    "tx": hex string,
+    "fees": {
+        "coins": {
+            "atoms": number string,
+            "decimal": decimal string,
+        },
+        "tokens": { bech32 string: {
+            "atoms": number string,
+            "decimal": decimal string,
+        }, .. },
+    },
+    "broadcasted": bool,
+}
 ```
 
 ### Method `freeze_order`

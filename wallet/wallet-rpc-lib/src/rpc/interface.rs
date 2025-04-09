@@ -44,15 +44,15 @@ use wallet_types::{
 use crate::types::{
     AccountArg, AddressInfo, AddressWithUsageInfo, Balances, ChainInfo, ComposedTransaction,
     CreatedWallet, DelegationInfo, HardwareWalletType, HexEncoded, LegacyVrfPublicKeyInfo,
-    MaybeSignedTransaction, NewAccountInfo, NewDelegation, NewOrder, NewTransaction, NftMetadata,
-    NodeVersion, PoolInfo, PublicKeyInfo, RpcAmountIn, RpcHashedTimelockContract,
-    RpcInspectTransaction, RpcStandaloneAddresses, RpcTokenId, RpcUtxoOutpoint, RpcUtxoState,
-    RpcUtxoType, SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
-    StandaloneAddressWithDetails, TokenMetadata, TransactionOptions, TxOptionsOverrides,
-    VrfPublicKeyInfo,
+    MaybeSignedTransaction, NewAccountInfo, NewDelegationTransaction, NewOrderTransaction,
+    NewSubmittedTransaction, NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcAmountIn,
+    RpcHashedTimelockContract, RpcInspectTransaction, RpcNewTransaction, RpcStandaloneAddresses,
+    RpcUtxoOutpoint, RpcUtxoState, RpcUtxoType, SendTokensFromMultisigAddressResult,
+    StakePoolBalance, StakingStatus, StandaloneAddressWithDetails, TokenMetadata,
+    TransactionOptions, TxOptionsOverrides, VrfPublicKeyInfo,
 };
 
-use super::types::UtxoInfo;
+use super::types::{NewTokenTransaction, UtxoInfo};
 
 #[rpc::rpc(server)]
 trait WalletEventsRpc {
@@ -366,7 +366,7 @@ trait WalletRpc {
         tx: HexEncoded<SignedTransaction>,
         do_not_store: bool,
         options: TxOptionsOverrides,
-    ) -> rpc::RpcResult<NewTransaction>;
+    ) -> rpc::RpcResult<NewSubmittedTransaction>;
 
     /// Send a given coin amount to a given address. The wallet will automatically calculate the required information
     /// Optionally, one can also mention the utxos to be used.
@@ -378,7 +378,7 @@ trait WalletRpc {
         amount: RpcAmountIn,
         selected_utxos: Vec<RpcUtxoOutpoint>,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<NewTransaction>;
+    ) -> rpc::RpcResult<RpcNewTransaction>;
 
     /// Sweep all spendable coins or tokens from an address or addresses to a given address.
     /// Spendable coins are any coins that are not locked, and tokens that are not frozen or locked.
@@ -391,7 +391,7 @@ trait WalletRpc {
         from_addresses: Vec<RpcAddress<Destination>>,
         all: Option<bool>,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<NewTransaction>;
+    ) -> rpc::RpcResult<RpcNewTransaction>;
 
     /// Sweep all the coins from a delegation to a given address.
     /// The wallet will automatically calculate the required fees
@@ -402,7 +402,7 @@ trait WalletRpc {
         destination_address: RpcAddress<Destination>,
         delegation_id: RpcAddress<DelegationId>,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<NewTransaction>;
+    ) -> rpc::RpcResult<RpcNewTransaction>;
 
     /// Creates a transaction that spends from a specific address,
     /// and returns the change to the same address (unless one is specified), without signature.
@@ -460,7 +460,7 @@ trait WalletRpc {
         staker_address: Option<RpcAddress<Destination>>,
         vrf_public_key: Option<RpcAddress<VRFPublicKey>>,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<NewTransaction>;
+    ) -> rpc::RpcResult<RpcNewTransaction>;
 
     /// Decommission a staking pool, given its id. This assumes that the decommission key is owned
     /// by the selected account in this wallet.
@@ -471,7 +471,7 @@ trait WalletRpc {
         pool_id: RpcAddress<PoolId>,
         output_address: Option<RpcAddress<Destination>>,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<NewTransaction>;
+    ) -> rpc::RpcResult<RpcNewTransaction>;
 
     /// Create a request to decommission a pool. This assumes that the decommission key is owned
     /// by another wallet. The output of this command should be passed to account-sign-raw-transaction
@@ -497,7 +497,7 @@ trait WalletRpc {
         address: RpcAddress<Destination>,
         pool_id: RpcAddress<PoolId>,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<NewDelegation>;
+    ) -> rpc::RpcResult<NewDelegationTransaction>;
 
     /// Send coins to a delegation id to be staked
     #[method(name = "delegation_stake")]
@@ -507,7 +507,7 @@ trait WalletRpc {
         amount: RpcAmountIn,
         delegation_id: RpcAddress<DelegationId>,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<NewTransaction>;
+    ) -> rpc::RpcResult<RpcNewTransaction>;
 
     /// Send coins from a delegation id (that you own) to stop staking them.
     /// Note that stopping the delegation requires a lock period.
@@ -519,7 +519,7 @@ trait WalletRpc {
         amount: RpcAmountIn,
         delegation_id: RpcAddress<DelegationId>,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<NewTransaction>;
+    ) -> rpc::RpcResult<RpcNewTransaction>;
 
     /// Start staking, assuming there are staking pools in the selected account in this wallet.
     #[method(name = "staking_start")]
@@ -571,7 +571,7 @@ trait WalletRpc {
         destination_address: RpcAddress<Destination>,
         metadata: NftMetadata,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<RpcTokenId>;
+    ) -> rpc::RpcResult<NewTokenTransaction>;
 
     /// Issue a new fungible token from scratch.
     /// Notice that issuing a token fills an issuers supply. To have tokens that are spendable,
@@ -583,7 +583,7 @@ trait WalletRpc {
         destination_address: RpcAddress<Destination>,
         metadata: TokenMetadata,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<RpcTokenId>;
+    ) -> rpc::RpcResult<NewTokenTransaction>;
 
     /// Change the authority of a token; i.e., the cryptographic authority that can do all authority token operations
     #[method(name = "token_change_authority")]
@@ -593,7 +593,7 @@ trait WalletRpc {
         token_id: RpcAddress<TokenId>,
         address: RpcAddress<Destination>,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<NewTransaction>;
+    ) -> rpc::RpcResult<RpcNewTransaction>;
 
     /// Change the metadata URI of a token
     #[method(name = "token_change_metadata_uri")]
@@ -603,7 +603,7 @@ trait WalletRpc {
         token_id: RpcAddress<TokenId>,
         metadata_uri: RpcHexString,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<NewTransaction>;
+    ) -> rpc::RpcResult<RpcNewTransaction>;
 
     /// Given a token that is already issued, mint new tokens and increase the total supply
     #[method(name = "token_mint")]
@@ -614,7 +614,7 @@ trait WalletRpc {
         address: RpcAddress<Destination>,
         amount: RpcAmountIn,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<NewTransaction>;
+    ) -> rpc::RpcResult<RpcNewTransaction>;
 
     /// Unmint existing tokens and reduce the total supply
     /// Unminting reduces the total supply and puts the unminted tokens back at the issuer's control.
@@ -626,7 +626,7 @@ trait WalletRpc {
         token_id: RpcAddress<TokenId>,
         amount: RpcAmountIn,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<NewTransaction>;
+    ) -> rpc::RpcResult<RpcNewTransaction>;
 
     /// Lock the circulating supply for the token. THIS IS IRREVERSIBLE.
     ///
@@ -637,7 +637,7 @@ trait WalletRpc {
         account_index: AccountArg,
         token_id: RpcAddress<TokenId>,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<NewTransaction>;
+    ) -> rpc::RpcResult<RpcNewTransaction>;
 
     /// Freezing the token (by token authority) forbids any operation with all the tokens (except for the optional unfreeze).
     ///
@@ -650,7 +650,7 @@ trait WalletRpc {
         token_id: RpcAddress<TokenId>,
         is_unfreezable: bool,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<NewTransaction>;
+    ) -> rpc::RpcResult<RpcNewTransaction>;
 
     /// By unfreezing the token all operations are available for the tokens again.
     ///
@@ -662,7 +662,7 @@ trait WalletRpc {
         account: AccountArg,
         token_id: RpcAddress<TokenId>,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<NewTransaction>;
+    ) -> rpc::RpcResult<RpcNewTransaction>;
 
     /// Send the given token amount to the given address. The wallet will automatically calculate the required information.
     #[method(name = "token_send")]
@@ -673,7 +673,7 @@ trait WalletRpc {
         address: RpcAddress<Destination>,
         amount: RpcAmountIn,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<NewTransaction>;
+    ) -> rpc::RpcResult<RpcNewTransaction>;
 
     /// Create a transaction for sending tokens to the given address, without submitting it.
     /// The wallet will automatically calculate the required information.
@@ -723,7 +723,7 @@ trait WalletRpc {
         account: AccountArg,
         data: RpcHexString,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<NewTransaction>;
+    ) -> rpc::RpcResult<RpcNewTransaction>;
 
     /// Creates a transaction that locks a given number of coins or tokens in a Hashed Timelock Contract.
     /// Created transaction is not broadcasted by this function.
@@ -749,7 +749,7 @@ trait WalletRpc {
         give: RpcOutputValueIn,
         conclude_address: RpcAddress<Destination>,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<NewOrder>;
+    ) -> rpc::RpcResult<NewOrderTransaction>;
 
     /// Conclude an order, given its id. This assumes that the conclude key is owned
     /// by the selected account in this wallet.
@@ -761,7 +761,7 @@ trait WalletRpc {
         order_id: RpcAddress<OrderId>,
         output_address: Option<RpcAddress<Destination>>,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<NewTransaction>;
+    ) -> rpc::RpcResult<RpcNewTransaction>;
 
     /// Fill order completely or partially given its id and an amount that satisfy what an order can offer.
     /// Optionally output address can be provided where the exchanged funds from the order are transferred.
@@ -773,7 +773,7 @@ trait WalletRpc {
         fill_amount_in_ask_currency: RpcAmountIn,
         output_address: Option<RpcAddress<Destination>>,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<NewTransaction>;
+    ) -> rpc::RpcResult<RpcNewTransaction>;
 
     /// Freeze an order given its id. This prevents an order from being filled.
     /// Only a conclude operation is allowed afterwards.

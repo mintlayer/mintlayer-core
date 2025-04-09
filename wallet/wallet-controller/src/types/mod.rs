@@ -35,6 +35,7 @@ use common::{
 };
 pub use seed_phrase::SeedWithPassPhrase;
 pub use standalone_key::AccountStandaloneKeyDetails;
+pub use transaction::NewTransaction;
 pub use transaction::{
     InspectTransaction, SignatureStats, TransactionToInspect, ValidatedSignatures,
 };
