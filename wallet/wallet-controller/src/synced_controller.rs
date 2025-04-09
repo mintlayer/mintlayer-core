@@ -62,13 +62,13 @@ use wallet_types::{
     signature_status::SignatureStatus,
     utxo_types::{UtxoState, UtxoType},
     with_locked::WithLocked,
-    Currency,
+    Currency, SignedTxWithFees,
 };
 
 use crate::{
     helpers::{fetch_token_info, fetch_utxo, into_balances, tx_to_partially_signed_tx},
     runtime_wallet::RuntimeWallet,
-    types::{Balances, GenericCurrencyTransfer},
+    types::{Balances, GenericCurrencyTransfer, NewTransaction},
     ControllerConfig, ControllerError,
 };
 
@@ -286,7 +286,7 @@ where
         metadata_uri: Vec<u8>,
         token_total_supply: TokenTotalSupply,
         is_freezable: IsTokenFreezable,
-    ) -> Result<(SignedTransaction, TokenId), ControllerError<T>> {
+    ) -> Result<(NewTransaction, TokenId), ControllerError<T>> {
         self.create_and_send_tx_with_id(
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
@@ -314,7 +314,7 @@ where
         &mut self,
         address: Address<Destination>,
         metadata: Metadata,
-    ) -> Result<(SignedTransaction, TokenId), ControllerError<T>> {
+    ) -> Result<(NewTransaction, TokenId), ControllerError<T>> {
         self.create_and_send_tx_with_id(
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
@@ -337,7 +337,7 @@ where
         token_info: RPCTokenInfo,
         amount: Amount,
         address: Address<Destination>,
-    ) -> Result<SignedTransaction, ControllerError<T>> {
+    ) -> Result<NewTransaction, ControllerError<T>> {
         self.create_and_send_token_tx(
             token_info,
             move |current_fee_rate: FeeRate,
@@ -362,7 +362,7 @@ where
         &mut self,
         token_info: RPCTokenInfo,
         amount: Amount,
-    ) -> Result<SignedTransaction, ControllerError<T>> {
+    ) -> Result<NewTransaction, ControllerError<T>> {
         self.create_and_send_token_tx(
             token_info,
             move |current_fee_rate: FeeRate,
@@ -386,7 +386,7 @@ where
     pub async fn lock_token_supply(
         &mut self,
         token_info: RPCTokenInfo,
-    ) -> Result<SignedTransaction, ControllerError<T>> {
+    ) -> Result<NewTransaction, ControllerError<T>> {
         self.create_and_send_token_tx(
             token_info,
             move |current_fee_rate: FeeRate,
@@ -412,7 +412,7 @@ where
         &mut self,
         token_info: RPCTokenInfo,
         is_token_unfreezable: IsTokenUnfreezable,
-    ) -> Result<SignedTransaction, ControllerError<T>> {
+    ) -> Result<NewTransaction, ControllerError<T>> {
         self.create_and_send_token_tx(
             token_info,
             move |current_fee_rate: FeeRate,
@@ -436,7 +436,7 @@ where
     pub async fn unfreeze_token(
         &mut self,
         token_info: RPCTokenInfo,
-    ) -> Result<SignedTransaction, ControllerError<T>> {
+    ) -> Result<NewTransaction, ControllerError<T>> {
         self.create_and_send_token_tx(
             token_info,
             move |current_fee_rate: FeeRate,
@@ -461,7 +461,7 @@ where
         &mut self,
         token_info: RPCTokenInfo,
         address: Address<Destination>,
-    ) -> Result<SignedTransaction, ControllerError<T>> {
+    ) -> Result<NewTransaction, ControllerError<T>> {
         self.create_and_send_token_tx(
             token_info,
             move |current_fee_rate: FeeRate,
@@ -485,7 +485,7 @@ where
         &mut self,
         token_info: RPCTokenInfo,
         metadata_uri: Vec<u8>,
-    ) -> Result<SignedTransaction, ControllerError<T>> {
+    ) -> Result<NewTransaction, ControllerError<T>> {
         self.create_and_send_token_tx(
             token_info,
             move |current_fee_rate: FeeRate,
@@ -508,7 +508,7 @@ where
     pub async fn deposit_data(
         &mut self,
         data: Vec<u8>,
-    ) -> Result<SignedTransaction, ControllerError<T>> {
+    ) -> Result<NewTransaction, ControllerError<T>> {
         let (_, best_block_height) = self.wallet.get_best_block_for_account(self.account_index)?;
         let outputs = make_data_deposit_output(self.chain_config, data, best_block_height)?;
 
@@ -540,7 +540,7 @@ where
         address: Address<Destination>,
         amount: Amount,
         selected_utxos: Vec<UtxoOutPoint>,
-    ) -> Result<SignedTransaction, ControllerError<T>> {
+    ) -> Result<NewTransaction, ControllerError<T>> {
         self.check_tokens_in_selected_utxo(&selected_utxos).await?;
 
         let output = make_address_output(address.into_object(), amount);
@@ -569,7 +569,7 @@ where
         &mut self,
         destination_address: Destination,
         from_addresses: BTreeSet<Destination>,
-    ) -> Result<SignedTransaction, ControllerError<T>> {
+    ) -> Result<NewTransaction, ControllerError<T>> {
         let selected_utxos = self.wallet.get_utxos(
             self.account_index,
             UtxoType::Transfer | UtxoType::LockThenTransfer | UtxoType::IssueNft,
@@ -611,7 +611,7 @@ where
         &mut self,
         destination_address: Address<Destination>,
         delegation_id: DelegationId,
-    ) -> Result<SignedTransaction, ControllerError<T>> {
+    ) -> Result<NewTransaction, ControllerError<T>> {
         let pool_id = self
             .wallet
             .get_delegation(self.account_index, delegation_id)
@@ -854,7 +854,7 @@ where
         &mut self,
         address: Address<Destination>,
         pool_id: PoolId,
-    ) -> Result<(SignedTransaction, DelegationId), ControllerError<T>> {
+    ) -> Result<(NewTransaction, DelegationId), ControllerError<T>> {
         let output = make_create_delegation_output(address, pool_id);
         self.create_and_send_tx_with_id(
             move |current_fee_rate: FeeRate,
@@ -878,7 +878,7 @@ where
         &mut self,
         amount: Amount,
         delegation_id: DelegationId,
-    ) -> Result<SignedTransaction, ControllerError<T>> {
+    ) -> Result<NewTransaction, ControllerError<T>> {
         let output = TxOutput::DelegateStaking(amount, delegation_id);
         self.create_and_send_tx(
             move |current_fee_rate: FeeRate,
@@ -906,7 +906,7 @@ where
         address: Address<Destination>,
         amount: Amount,
         delegation_id: DelegationId,
-    ) -> Result<SignedTransaction, ControllerError<T>> {
+    ) -> Result<NewTransaction, ControllerError<T>> {
         let pool_id = self.wallet.get_delegation(self.account_index, delegation_id)?.pool_id;
 
         let delegation_share = self
@@ -943,7 +943,7 @@ where
         token_info: RPCTokenInfo,
         address: Address<Destination>,
         amount: Amount,
-    ) -> Result<SignedTransaction, ControllerError<T>> {
+    ) -> Result<NewTransaction, ControllerError<T>> {
         let output =
             make_address_output_token(address.into_object(), amount, token_info.token_id());
         self.create_and_send_token_tx(
@@ -982,7 +982,7 @@ where
         address: Address<Destination>,
         amount: Amount,
         intent: String,
-    ) -> Result<(SignedTransaction, SignedTransactionIntent), ControllerError<T>> {
+    ) -> Result<(SignedTxWithFees, SignedTransactionIntent), ControllerError<T>> {
         let output =
             make_address_output_token(address.into_object(), amount, token_info.token_id());
         self.create_token_tx(
@@ -1024,7 +1024,7 @@ where
         cost_per_block: Amount,
         staker_key: Option<Destination>,
         vrf_public_key: Option<VRFPublicKey>,
-    ) -> Result<SignedTransaction, ControllerError<T>> {
+    ) -> Result<NewTransaction, ControllerError<T>> {
         self.create_and_send_tx(
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
@@ -1053,7 +1053,7 @@ where
         &mut self,
         pool_id: PoolId,
         output_address: Option<Destination>,
-    ) -> Result<SignedTransaction, ControllerError<T>> {
+    ) -> Result<NewTransaction, ControllerError<T>> {
         let staker_balance = self
             .rpc_client
             .get_staker_balance(pool_id)
@@ -1134,7 +1134,7 @@ where
         give_value: OutputValue,
         conclude_key: Address<Destination>,
         token_infos: Vec<RPCTokenInfo>,
-    ) -> Result<(SignedTransaction, OrderId), ControllerError<T>> {
+    ) -> Result<(NewTransaction, OrderId), ControllerError<T>> {
         let additional_info = self.additional_token_info(token_infos)?;
 
         self.create_and_send_tx_with_id(
@@ -1162,7 +1162,7 @@ where
         order_info: RpcOrderInfo,
         output_address: Option<Destination>,
         token_infos: Vec<RPCTokenInfo>,
-    ) -> Result<SignedTransaction, ControllerError<T>> {
+    ) -> Result<NewTransaction, ControllerError<T>> {
         let additional_info = self.additional_token_info(token_infos)?;
         self.create_and_send_tx(
             move |current_fee_rate: FeeRate,
@@ -1190,7 +1190,7 @@ where
         fill_amount_in_ask_currency: Amount,
         output_address: Option<Destination>,
         token_infos: Vec<RPCTokenInfo>,
-    ) -> Result<SignedTransaction, ControllerError<T>> {
+    ) -> Result<NewTransaction, ControllerError<T>> {
         let additional_info = self.additional_token_info(token_infos)?;
         self.create_and_send_tx(
             move |current_fee_rate: FeeRate,
@@ -1216,7 +1216,7 @@ where
         &mut self,
         order_id: OrderId,
         order_info: RpcOrderInfo,
-    ) -> Result<SignedTransaction, ControllerError<T>> {
+    ) -> Result<NewTransaction, ControllerError<T>> {
         self.create_and_send_tx(
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
@@ -1342,34 +1342,41 @@ where
     async fn broadcast_to_mempool_if_needed(
         &mut self,
         tx: SignedTransaction,
-    ) -> Result<SignedTransaction, ControllerError<T>> {
+    ) -> Result<(SignedTransaction, bool), ControllerError<T>> {
         if self.config.broadcast_to_mempool {
-            self.broadcast_to_mempool(tx).await
+            self.broadcast_to_mempool(tx).await.map(|tx| (tx, true))
         } else {
-            Ok(tx)
+            Ok((tx, false))
         }
     }
 
-    /// Create a transaction and broadcast it
+    /// Create a transaction and broadcast it if needed
     async fn create_and_send_tx<E, F>(
         &mut self,
         tx_maker: F,
-    ) -> Result<SignedTransaction, ControllerError<T>>
+    ) -> Result<NewTransaction, ControllerError<T>>
     where
-        F: FnOnce(FeeRate, FeeRate, &mut RuntimeWallet<B>, U31) -> Result<SignedTransaction, E>,
+        F: FnOnce(FeeRate, FeeRate, &mut RuntimeWallet<B>, U31) -> Result<SignedTxWithFees, E>,
         ControllerError<T>: From<E>,
     {
         let (current_fee_rate, consolidate_fee_rate) =
             self.get_current_and_consolidation_fee_rate().await?;
 
-        let tx = tx_maker(
+        let SignedTxWithFees { tx, fees } = tx_maker(
             current_fee_rate,
             consolidate_fee_rate,
             self.wallet,
             self.account_index,
         )?;
 
-        self.broadcast_to_mempool_if_needed(tx).await
+        let (tx, broadcasted) = self.broadcast_to_mempool_if_needed(tx).await?;
+        let fees = into_balances(&self.rpc_client, self.chain_config, fees).await?;
+
+        Ok(NewTransaction {
+            tx,
+            fees,
+            broadcasted,
+        })
     }
 
     /// Create a transaction that uses a token, check if that token can be used i.e. not frozen.
@@ -1413,14 +1420,21 @@ where
             &mut RuntimeWallet<B>,
             U31,
             &UnconfirmedTokenInfo,
-        ) -> WalletResult<SignedTransaction>,
+        ) -> WalletResult<SignedTxWithFees>,
     >(
         &mut self,
         token_info: RPCTokenInfo,
         tx_maker: F,
-    ) -> Result<SignedTransaction, ControllerError<T>> {
-        let tx = self.create_token_tx(token_info, tx_maker).await?;
-        self.broadcast_to_mempool_if_needed(tx).await
+    ) -> Result<NewTransaction, ControllerError<T>> {
+        let SignedTxWithFees { tx, fees } = self.create_token_tx(token_info, tx_maker).await?;
+        let (tx, broadcasted) = self.broadcast_to_mempool_if_needed(tx).await?;
+        let fees = into_balances(&self.rpc_client, self.chain_config, fees).await?;
+
+        Ok(NewTransaction {
+            tx,
+            fees,
+            broadcasted,
+        })
     }
 
     fn unconfiremd_token_info(
@@ -1447,15 +1461,15 @@ where
             FeeRate,
             &mut RuntimeWallet<B>,
             U31,
-        ) -> WalletResult<(ID, SignedTransaction)>,
+        ) -> WalletResult<(ID, SignedTxWithFees)>,
     >(
         &mut self,
         tx_maker: F,
-    ) -> Result<(SignedTransaction, ID), ControllerError<T>> {
+    ) -> Result<(NewTransaction, ID), ControllerError<T>> {
         let (current_fee_rate, consolidate_fee_rate) =
             self.get_current_and_consolidation_fee_rate().await?;
 
-        let (id, tx) = tx_maker(
+        let (id, SignedTxWithFees { tx, fees }) = tx_maker(
             current_fee_rate,
             consolidate_fee_rate,
             self.wallet,
@@ -1463,7 +1477,16 @@ where
         )
         .map_err(ControllerError::WalletError)?;
 
-        let tx = self.broadcast_to_mempool_if_needed(tx).await?;
-        Ok((tx, id))
+        let (tx, broadcasted) = self.broadcast_to_mempool_if_needed(tx).await?;
+        let fees = into_balances(&self.rpc_client, self.chain_config, fees).await?;
+
+        Ok((
+            NewTransaction {
+                tx,
+                fees,
+                broadcasted,
+            },
+            id,
+        ))
     }
 }
