@@ -16,9 +16,7 @@
 use std::collections::BTreeMap;
 
 use common::{
-    chain::{
-        output_value::OutputValue, tokens::TokenId, Destination, OrderData, OrderId, OrdersVersion,
-    },
+    chain::{output_value::OutputValue, tokens::TokenId, Destination, OrderId, OrdersVersion},
     primitives::Amount,
 };
 use randomness::Rng;
@@ -27,8 +25,8 @@ use test_utils::random::{make_seedable_rng, Seed};
 
 use crate::{
     cache::OrdersAccountingCache, operations::OrdersAccountingOperations,
-    view::FlushableOrdersAccountingView, Error, InMemoryOrdersAccounting, OrdersAccountingDB,
-    OrdersAccountingView,
+    view::FlushableOrdersAccountingView, Error, InMemoryOrdersAccounting, OrderData,
+    OrdersAccountingDB, OrdersAccountingView,
 };
 
 fn make_order_data(rng: &mut impl Rng) -> OrderData {
@@ -759,4 +757,127 @@ fn fill_orders_interrupted_by_v0_to_v1_fork(#[case] seed: Seed) {
     fill_orders(fill_orders_v1, OrdersVersion::V1);
 
     db.batch_write_orders_data(cache.consume()).unwrap();
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn freeze_order_and_undo(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let order_id = OrderId::random_using(&mut rng);
+    let original_data = make_order_data(&mut rng);
+    assert!(!original_data.is_frozen());
+
+    let mut storage = InMemoryOrdersAccounting::from_values(
+        BTreeMap::from_iter([(order_id, original_data.clone())]),
+        BTreeMap::from_iter([(order_id, output_value_amount(original_data.ask()))]),
+        BTreeMap::from_iter([(order_id, output_value_amount(original_data.give()))]),
+    );
+    let original_storage = storage.clone();
+    let mut db = OrdersAccountingDB::new(&mut storage);
+    let mut cache = OrdersAccountingCache::new(&db);
+
+    let undo = cache.freeze_order(order_id).unwrap();
+
+    let new_data = original_data.clone().try_freeze().unwrap();
+    assert_eq!(
+        Some(&new_data),
+        cache.get_order_data(&order_id).unwrap().as_ref()
+    );
+    assert_eq!(
+        output_value_amount(original_data.ask()),
+        cache.get_ask_balance(&order_id).unwrap()
+    );
+    assert_eq!(
+        output_value_amount(original_data.give()),
+        cache.get_give_balance(&order_id).unwrap()
+    );
+
+    cache.undo(undo).unwrap();
+
+    assert_eq!(
+        Some(&original_data),
+        cache.get_order_data(&order_id).unwrap().as_ref()
+    );
+    assert_eq!(
+        output_value_amount(original_data.ask()),
+        cache.get_ask_balance(&order_id).unwrap()
+    );
+    assert_eq!(
+        output_value_amount(original_data.give()),
+        cache.get_give_balance(&order_id).unwrap()
+    );
+
+    db.batch_write_orders_data(cache.consume()).unwrap();
+
+    assert_eq!(original_storage, storage);
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn conclude_freezed_order_and_undo(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let order_id = OrderId::random_using(&mut rng);
+    let original_data = make_order_data(&mut rng);
+    assert!(!original_data.is_frozen());
+
+    let mut storage = InMemoryOrdersAccounting::from_values(
+        BTreeMap::from_iter([(order_id, original_data.clone())]),
+        BTreeMap::from_iter([(order_id, output_value_amount(original_data.ask()))]),
+        BTreeMap::from_iter([(order_id, output_value_amount(original_data.give()))]),
+    );
+    let mut db = OrdersAccountingDB::new(&mut storage);
+    let mut cache = OrdersAccountingCache::new(&db);
+
+    // Freeze an order
+    let _ = cache.freeze_order(order_id).unwrap();
+    let new_data = original_data.clone().try_freeze().unwrap();
+    assert_eq!(
+        Some(&new_data),
+        cache.get_order_data(&order_id).unwrap().as_ref()
+    );
+
+    // Try filling frozen order
+    let fill_result = cache.fill_order(order_id, Amount::from_atoms(1), OrdersVersion::V1);
+    assert_eq!(
+        fill_result.unwrap_err(),
+        Error::AttemptedFillFrozenOrder(order_id)
+    );
+
+    // Try freezing again
+    let freeze_result = cache.freeze_order(order_id);
+    assert_eq!(
+        freeze_result.unwrap_err(),
+        Error::AttemptedFreezeAlreadyFrozenOrder(order_id)
+    );
+
+    // Conclude frozen order
+    let conclude_undo = cache.conclude_order(order_id).unwrap();
+    assert_eq!(None, cache.get_order_data(&order_id).unwrap());
+
+    // Try freezing concluded order
+    let freeze_result = cache.freeze_order(order_id);
+    assert_eq!(
+        freeze_result.unwrap_err(),
+        Error::AttemptedFreezeNonexistingOrderData(order_id)
+    );
+
+    // Undo conclude
+    cache.undo(conclude_undo).unwrap();
+    assert_eq!(
+        Some(&new_data),
+        cache.get_order_data(&order_id).unwrap().as_ref()
+    );
+
+    db.batch_write_orders_data(cache.consume()).unwrap();
+
+    let expected_storage = InMemoryOrdersAccounting::from_values(
+        BTreeMap::from_iter([(order_id, new_data)]),
+        BTreeMap::from_iter([(order_id, output_value_amount(original_data.ask()))]),
+        BTreeMap::from_iter([(order_id, output_value_amount(original_data.give()))]),
+    );
+    assert_eq!(expected_storage, storage);
 }

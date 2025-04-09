@@ -114,12 +114,12 @@ mod tests {
 
     use super::*;
     use common::{
-        chain::{output_value::OutputValue, tokens::TokenId, Destination, OrderData},
+        chain::{output_value::OutputValue, tokens::TokenId, Destination},
         primitives::H256,
     };
     use rstest::rstest;
 
-    use crate::{InMemoryOrdersAccounting, OrdersAccountingDB};
+    use crate::{InMemoryOrdersAccounting, OrderData, OrdersAccountingDB};
 
     macro_rules! amount {
         ($value:expr) => {

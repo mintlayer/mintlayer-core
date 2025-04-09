@@ -209,9 +209,29 @@ class WalletOrders(BitcoinTestFramework):
             assert_in(f"Coins amount: 140", balance)
             assert_in(f"Token: {token_id} amount: 5", balance)
 
+            # try freeze order
+            freeze_order_result = await wallet.freeze_order(order_id)
+            assert_in("Failed to convert partially signed tx to signed", freeze_order_result['error']['message'])
+
             # try conclude order
             conclude_order_result = await wallet.conclude_order(order_id)
             assert_in("Failed to convert partially signed tx to signed", conclude_order_result['error']['message'])
+
+            ########################################################################################
+            # Alice freezes the order
+            await self.switch_to_wallet(wallet, 'alice_wallet')
+            assert_in("Success", await wallet.sync())
+
+            freeze_order_result = await wallet.freeze_order(order_id)
+            assert freeze_order_result['result']['tx_id'] is not None
+            self.generate_block()
+            assert_in("Success", await wallet.sync())
+
+            ########################################################################################
+            # Carol tries filling again
+            await self.switch_to_wallet(wallet, 'carol_wallet')
+            fill_order_result = await wallet.fill_order(order_id, 1)
+            assert_in("Attempt to fill frozen order", fill_order_result['error']['message'])
 
             ########################################################################################
             # Alice concludes the order
@@ -219,7 +239,6 @@ class WalletOrders(BitcoinTestFramework):
             assert_in("Success", await wallet.sync())
 
             conclude_order_result = await wallet.conclude_order(order_id)
-            print(conclude_order_result)
             assert conclude_order_result['result']['tx_id'] is not None
             self.generate_block()
             assert_in("Success", await wallet.sync())

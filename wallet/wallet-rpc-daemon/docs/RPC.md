@@ -2058,6 +2058,28 @@ Returns:
 { "tx_id": hex string }
 ```
 
+### Method `freeze_order`
+
+Freeze an order given its id. This prevents an order from being filled.
+Only a conclude operation is allowed afterwards.
+
+
+Parameters:
+```
+{
+    "account": number,
+    "order_id": bech32 string,
+    "options": { "in_top_x_mb": EITHER OF
+         1) number
+         2) null },
+}
+```
+
+Returns:
+```
+{ "tx_id": hex string }
+```
+
 ### Method `node_version`
 
 Node version

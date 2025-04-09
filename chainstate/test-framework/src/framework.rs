@@ -312,6 +312,31 @@ impl TestFramework {
         result
     }
 
+    // Same as `create_chain` but blocks don't have txs. Useful when you want to trigger a reorg
+    // but don't want utxos to be spent.
+    pub fn create_chain_with_empty_blocks(
+        &mut self,
+        parent_block: &Id<GenBlock>,
+        blocks_count: usize,
+        rng: &mut (impl Rng + CryptoRng),
+    ) -> Result<Id<GenBlock>, ChainstateError> {
+        let mut prev_block_id = *parent_block;
+        let result = || -> Result<Vec<Id<GenBlock>>, ChainstateError> {
+            let mut ids = Vec::with_capacity(blocks_count);
+            for _ in 0..blocks_count {
+                let block = self.make_block_builder().with_parent(prev_block_id).build(&mut *rng);
+                prev_block_id = block.get_id().into();
+                ids.push(prev_block_id);
+                self.do_process_block(block, BlockSource::Local)?;
+            }
+
+            Ok(ids)
+        }()?;
+
+        self.refresh_block_indices()?;
+        Ok(*result.last().unwrap())
+    }
+
     /// Returns the genesis block of the chain.
     pub fn genesis(&self) -> Arc<WithId<Genesis>> {
         self.chainstate.get_chain_config().genesis_block().clone()

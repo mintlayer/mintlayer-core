@@ -24,13 +24,12 @@ use common::{
         config::{EpochIndex, MagicBytes},
         tokens::{TokenAuxiliaryData, TokenId},
         transaction::Transaction,
-        AccountNonce, AccountType, Block, DelegationId, GenBlock, OrderData, OrderId, PoolId,
-        UtxoOutPoint,
+        AccountNonce, AccountType, Block, DelegationId, GenBlock, OrderId, PoolId, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
 };
 use orders_accounting::{
-    OrdersAccountingStorageRead, OrdersAccountingStorageWrite, OrdersAccountingUndo,
+    OrderData, OrdersAccountingStorageRead, OrdersAccountingStorageWrite, OrdersAccountingUndo,
 };
 use pos_accounting::{
     DelegationData, DeltaMergeUndo, PoSAccountingDeltaData, PoSAccountingUndo, PoolData,

@@ -15,7 +15,7 @@
 
 use accounting::combine_amount_delta;
 use common::{
-    chain::{OrderData, OrderId, OrdersVersion},
+    chain::{OrderId, OrdersVersion},
     primitives::Amount,
 };
 use logging::log;
@@ -26,11 +26,11 @@ use crate::{
     data::OrdersAccountingDeltaData,
     error::{Error, Result},
     operations::{
-        ConcludeOrderUndo, CreateOrderUndo, FillOrderUndo, OrdersAccountingOperations,
-        OrdersAccountingUndo,
+        ConcludeOrderUndo, CreateOrderUndo, FillOrderUndo, FreezeOrderUndo,
+        OrdersAccountingOperations, OrdersAccountingUndo,
     },
     view::OrdersAccountingView,
-    FlushableOrdersAccountingView, OrdersAccountingDeltaUndoData,
+    FlushableOrdersAccountingView, OrderData, OrdersAccountingDeltaUndoData,
 };
 
 pub struct OrdersAccountingCache<P> {
@@ -94,6 +94,16 @@ impl<P: OrdersAccountingView> OrdersAccountingCache<P> {
             Error::InvariantOrderGiveBalanceExistForConcludeUndo(undo.id)
         );
         self.data.give_balances.add_unsigned(undo.id, undo.give_balance)?;
+
+        Ok(())
+    }
+
+    fn undo_freeze_order(&mut self, undo: FreezeOrderUndo) -> Result<()> {
+        ensure!(
+            self.get_order_data(&undo.id)?.is_some(),
+            Error::InvariantOrderDataNotExistForFreezeUndo(undo.id)
+        );
+        self.data.order_data.undo_merge_delta_data_element(undo.id, undo.undo_data)?;
 
         Ok(())
     }
@@ -207,10 +217,8 @@ impl<P: OrdersAccountingView> OrdersAccountingOperations for OrdersAccountingCac
             fill_amount_in_ask_currency
         );
 
-        ensure!(
-            self.get_order_data(&id)?.is_some(),
-            Error::OrderDataNotFound(id)
-        );
+        let order_data = self.get_order_data(&id)?.ok_or(Error::OrderDataNotFound(id))?;
+        ensure!(!order_data.is_frozen(), Error::AttemptedFillFrozenOrder(id));
 
         let filled_amount =
             calculate_fill_order(self, id, fill_amount_in_ask_currency, orders_version)?;
@@ -231,7 +239,31 @@ impl<P: OrdersAccountingView> OrdersAccountingOperations for OrdersAccountingCac
             OrdersAccountingUndo::CreateOrder(undo) => self.undo_create_order(undo),
             OrdersAccountingUndo::ConcludeOrder(undo) => self.undo_conclude_order(undo),
             OrdersAccountingUndo::FillOrder(undo) => self.undo_fill_order(undo),
+            OrdersAccountingUndo::FreezeOrder(undo) => self.undo_freeze_order(undo),
         }
+    }
+
+    fn freeze_order(&mut self, id: OrderId) -> Result<OrdersAccountingUndo> {
+        log::debug!("Freezing an order: {:?}", id);
+
+        let old_data = self
+            .get_order_data(&id)?
+            .ok_or(Error::AttemptedFreezeNonexistingOrderData(id))?;
+
+        let new_data = old_data
+            .clone()
+            .try_freeze()
+            .map_err(|_| Error::AttemptedFreezeAlreadyFrozenOrder(id))?;
+
+        let undo_data = self.data.order_data.merge_delta_data_element(
+            id,
+            accounting::DataDelta::new(Some(old_data), Some(new_data)),
+        )?;
+
+        Ok(OrdersAccountingUndo::FreezeOrder(FreezeOrderUndo {
+            id,
+            undo_data,
+        }))
     }
 }
 

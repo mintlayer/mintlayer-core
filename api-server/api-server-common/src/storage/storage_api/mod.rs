@@ -255,6 +255,8 @@ pub struct Order {
     pub initially_asked: Amount,
     pub ask_balance: Amount,
 
+    pub is_frozen: bool,
+
     pub next_nonce: AccountNonce,
 }
 
@@ -290,6 +292,7 @@ impl Order {
             ask_currency: self.ask_currency,
             initially_asked: self.initially_asked,
             ask_balance: (self.ask_balance - fill_amount_in_ask_currency).expect("no overflow"),
+            is_frozen: self.is_frozen,
             next_nonce: self.next_nonce.increment().expect("no overflow"),
         }
     }
@@ -304,7 +307,24 @@ impl Order {
             ask_currency: self.ask_currency,
             initially_asked: self.initially_asked,
             ask_balance: Amount::ZERO,
+            is_frozen: self.is_frozen,
             next_nonce: self.next_nonce.increment().expect("no overflow"),
+        }
+    }
+
+    pub fn freeze(self) -> Self {
+        assert!(!self.is_frozen);
+        Self {
+            creation_block_height: self.creation_block_height,
+            conclude_destination: self.conclude_destination,
+            give_currency: self.give_currency,
+            initially_given: self.initially_given,
+            give_balance: self.give_balance,
+            ask_currency: self.ask_currency,
+            initially_asked: self.initially_asked,
+            ask_balance: self.ask_balance,
+            is_frozen: true,
+            next_nonce: self.next_nonce,
         }
     }
 }

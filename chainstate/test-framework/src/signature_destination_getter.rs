@@ -188,7 +188,8 @@ impl<'a> SignatureDestinationGetter<'a> {
                     },
                     TxInput::OrderAccountCommand(command) => match command {
                         OrderAccountCommand::FillOrder(_, _, d) => Ok(d.clone()),
-                        OrderAccountCommand::ConcludeOrder(order_id) => {
+                        OrderAccountCommand::FreezeOrder(order_id)
+                        | OrderAccountCommand::ConcludeOrder(order_id) => {
                             let order_data = orders_view
                                 .get_order_data(order_id)
                                 .map_err(|_| {

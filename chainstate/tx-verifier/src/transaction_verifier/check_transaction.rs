@@ -425,7 +425,8 @@ fn check_order_inputs_outputs(
                             )
                         );
                     }
-                    common::chain::OrderAccountCommand::ConcludeOrder { .. } => {}
+                    common::chain::OrderAccountCommand::ConcludeOrder { .. }
+                    | common::chain::OrderAccountCommand::FreezeOrder(_) => {}
                 }
             }
         }
