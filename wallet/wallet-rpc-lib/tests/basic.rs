@@ -28,7 +28,7 @@ use utils::{
 };
 use wallet_rpc_lib::{
     types::{
-        AddressInfo, Balances, BlockInfo, NewAccountInfo, NewTransaction, RpcAmountIn,
+        AddressInfo, Balances, BlockInfo, NewAccountInfo, NewSubmittedTransaction, RpcAmountIn,
         RpcUtxoState, TransactionOptions,
     },
     TxState,
@@ -164,7 +164,7 @@ async fn stake_and_send_coins_to_acct1(#[case] seed: Seed) {
     assert_eq!(utxo_amount, coins_before.into_atoms());
 
     let to_send_amount = Amount::from_atoms(utxo_amount / 2);
-    let _: NewTransaction = {
+    let _: NewSubmittedTransaction = {
         let send_to_addr = acct1_addr.address;
         let options = TransactionOptions {
             in_top_x_mb: Some(3),

@@ -37,7 +37,10 @@ use mempool::tx_accumulator::PackingStrategy;
 use mempool_types::tx_options::TxOptionsOverrides;
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
 use serialization::{hex_encoded::HexEncoded, Decode, DecodeAll};
-use types::{NewOrder, RpcHashedTimelockContract};
+use types::{
+    NewOrderTransaction, NewSubmittedTransaction, NewTokenTransaction, RpcHashedTimelockContract,
+    RpcNewTransaction,
+};
 use utils::{ensure, shallow_clone::ShallowClone};
 use utils_networking::IpOrSocketAddress;
 use wallet::{
@@ -73,7 +76,7 @@ pub use rpc::{rpc_creds::RpcCreds, Rpc};
 use wallet_controller::{
     types::{
         Balances, BlockInfo, CreatedBlockInfo, CreatedWallet, GenericTokenTransfer,
-        InspectTransaction, OpenedWallet, SeedWithPassPhrase, TransactionToInspect,
+        InspectTransaction, NewTransaction, OpenedWallet, SeedWithPassPhrase, TransactionToInspect,
         WalletCreationOptions, WalletInfo, WalletTypeArgs,
     },
     ConnectedPeer, ControllerConfig, ControllerError, NodeInterface, UtxoState, UtxoStates,
@@ -88,7 +91,7 @@ use wallet_types::{
     signature_status::SignatureStatus,
     wallet_tx::TxData,
     with_locked::WithLocked,
-    Currency,
+    Currency, SignedTxWithFees,
 };
 
 use crate::{service::WalletController, WalletHandle, WalletRpcConfig};
@@ -99,10 +102,10 @@ use wallet_types::wallet_type::WalletType;
 pub use self::types::RpcError;
 use self::types::{
     AddressInfo, AddressWithUsageInfo, DelegationInfo, HardwareWalletType, LegacyVrfPublicKeyInfo,
-    NewAccountInfo, NewTransaction, PoolInfo, PublicKeyInfo, RpcAddress, RpcAmountIn, RpcHexString,
+    NewAccountInfo, PoolInfo, PublicKeyInfo, RpcAddress, RpcAmountIn, RpcHexString,
     RpcStandaloneAddress, RpcStandaloneAddressDetails, RpcStandaloneAddresses,
-    RpcStandalonePrivateKeyAddress, RpcTokenId, RpcUtxoOutpoint, StakingStatus,
-    StandaloneAddressWithDetails, VrfPublicKeyInfo,
+    RpcStandalonePrivateKeyAddress, RpcUtxoOutpoint, StakingStatus, StandaloneAddressWithDetails,
+    VrfPublicKeyInfo,
 };
 
 #[derive(Clone)]
@@ -796,7 +799,7 @@ where
         tx: HexEncoded<SignedTransaction>,
         do_not_store: bool,
         options: TxOptionsOverrides,
-    ) -> WRpcResult<NewTransaction, N> {
+    ) -> WRpcResult<NewSubmittedTransaction, N> {
         let tx = tx.take();
         let block_height = self.best_block().await?.height;
         check_transaction(&self.chain_config, block_height, &tx).map_err(|err| {
@@ -829,7 +832,7 @@ where
                 .await??;
         }
 
-        Ok(NewTransaction { tx_id })
+        Ok(NewSubmittedTransaction { tx_id })
     }
 
     pub async fn sign_raw_transaction(
@@ -920,7 +923,7 @@ where
         destination_address: RpcAddress<Destination>,
         from_addresses: Vec<RpcAddress<Destination>>,
         config: ControllerConfig,
-    ) -> WRpcResult<NewTransaction, N> {
+    ) -> WRpcResult<RpcNewTransaction, N> {
         let destination_address = destination_address
             .decode_object(&self.chain_config)
             .map_err(|_| RpcError::InvalidAddress)?;
@@ -939,7 +942,7 @@ where
                         .sweep_addresses(destination_address, from_addresses)
                         .await
                         .map_err(RpcError::Controller)
-                        .map(NewTransaction::new)
+                        .map(RpcNewTransaction::new)
                 })
             })
             .await?
@@ -951,7 +954,7 @@ where
         destination_address: RpcAddress<Destination>,
         delegation_id: RpcAddress<DelegationId>,
         config: ControllerConfig,
-    ) -> WRpcResult<NewTransaction, N> {
+    ) -> WRpcResult<RpcNewTransaction, N> {
         let delegation_id = delegation_id
             .decode_object(&self.chain_config)
             .map_err(|_| RpcError::InvalidDelegationId)?;
@@ -968,7 +971,7 @@ where
                         .sweep_delegation(destination_address, delegation_id)
                         .await
                         .map_err(RpcError::Controller)
-                        .map(NewTransaction::new)
+                        .map(RpcNewTransaction::new)
                 })
             })
             .await?
@@ -981,7 +984,7 @@ where
         amount: RpcAmountIn,
         selected_utxos: Vec<UtxoOutPoint>,
         config: ControllerConfig,
-    ) -> WRpcResult<SignedTransaction, N> {
+    ) -> WRpcResult<NewTransaction, N> {
         let decimals = self.chain_config.coin_decimals();
         let amount = amount.to_amount(decimals).ok_or(RpcError::InvalidCoinAmount)?;
         let address =
@@ -1070,7 +1073,7 @@ where
         address: RpcAddress<Destination>,
         amount: RpcAmountIn,
         config: ControllerConfig,
-    ) -> WRpcResult<NewTransaction, N> {
+    ) -> WRpcResult<RpcNewTransaction, N> {
         let token_id = token_id
             .decode_object(&self.chain_config)
             .map_err(|_| RpcError::InvalidTokenId)?;
@@ -1091,7 +1094,7 @@ where
                         .send_tokens_to_address(token_info, address, amount)
                         .await
                         .map_err(RpcError::Controller)
-                        .map(NewTransaction::new)
+                        .map(RpcNewTransaction::new)
                 })
             })
             .await?
@@ -1105,7 +1108,7 @@ where
         amount: RpcAmountIn,
         intent: String,
         config: ControllerConfig,
-    ) -> WRpcResult<(SignedTransaction, SignedTransactionIntent), N> {
+    ) -> WRpcResult<(SignedTxWithFees, SignedTransactionIntent), N> {
         let token_id = token_id
             .decode_object(&self.chain_config)
             .map_err(|_| RpcError::InvalidTokenId)?;
@@ -1271,7 +1274,7 @@ where
         staker_address: Option<RpcAddress<Destination>>,
         vrf_public_key: Option<RpcAddress<VRFPublicKey>>,
         config: ControllerConfig,
-    ) -> WRpcResult<SignedTransaction, N> {
+    ) -> WRpcResult<NewTransaction, N> {
         let decimals = self.chain_config.coin_decimals();
         let amount = amount.to_amount(decimals).ok_or(RpcError::InvalidCoinAmount)?;
         let cost_per_block =
@@ -1325,7 +1328,7 @@ where
         pool_id: RpcAddress<PoolId>,
         output_address: Option<RpcAddress<Destination>>,
         config: ControllerConfig,
-    ) -> WRpcResult<SignedTransaction, N> {
+    ) -> WRpcResult<NewTransaction, N> {
         let pool_id =
             pool_id.decode_object(&self.chain_config).map_err(|_| RpcError::InvalidPoolId)?;
 
@@ -1381,7 +1384,7 @@ where
         address: RpcAddress<Destination>,
         pool_id: RpcAddress<PoolId>,
         config: ControllerConfig,
-    ) -> WRpcResult<(SignedTransaction, RpcAddress<DelegationId>), N> {
+    ) -> WRpcResult<(NewTransaction, RpcAddress<DelegationId>), N> {
         let address =
             address.into_address(&self.chain_config).map_err(|_| RpcError::InvalidAddress)?;
 
@@ -1415,7 +1418,7 @@ where
         amount: RpcAmountIn,
         delegation_id: RpcAddress<DelegationId>,
         config: ControllerConfig,
-    ) -> WRpcResult<SignedTransaction, N> {
+    ) -> WRpcResult<NewTransaction, N> {
         let decimals = self.chain_config.coin_decimals();
         let amount = amount.to_amount(decimals).ok_or(RpcError::InvalidCoinAmount)?;
 
@@ -1444,7 +1447,7 @@ where
         amount: RpcAmountIn,
         delegation_id: RpcAddress<DelegationId>,
         config: ControllerConfig,
-    ) -> WRpcResult<SignedTransaction, N> {
+    ) -> WRpcResult<NewTransaction, N> {
         let decimals = self.chain_config.coin_decimals();
         let amount = amount.to_amount(decimals).ok_or(RpcError::InvalidCoinAmount)?;
         let address =
@@ -1602,7 +1605,7 @@ where
         give: RpcOutputValueIn,
         conclude_address: RpcAddress<Destination>,
         config: ControllerConfig,
-    ) -> WRpcResult<NewOrder, N> {
+    ) -> WRpcResult<NewOrderTransaction, N> {
         let coin_decimals = self.chain_config.coin_decimals();
 
         let convert_currency = |rpc_currency| -> Result<_, RpcError<N>> {
@@ -1653,10 +1656,11 @@ where
                 })
             })
             .await?
-            .map(|(tx, order_id)| NewOrder {
-                tx_id: tx.transaction().get_id(),
-                order_id: RpcAddress::new(&self.chain_config, order_id)
-                    .expect("addressable delegation id"),
+            .map(|(tx, order_id)| {
+                NewOrderTransaction::new(
+                    tx,
+                    RpcAddress::new(&self.chain_config, order_id).expect("addressable order id"),
+                )
             })
     }
 
@@ -1666,7 +1670,7 @@ where
         order_id: RpcAddress<OrderId>,
         output_address: Option<RpcAddress<Destination>>,
         config: ControllerConfig,
-    ) -> WRpcResult<NewTransaction, N> {
+    ) -> WRpcResult<RpcNewTransaction, N> {
         let order_id = order_id
             .decode_object(&self.chain_config)
             .map_err(|_| RpcError::InvalidTokenId)?;
@@ -1698,7 +1702,7 @@ where
                         .conclude_order(order_id, order_info, output_address, token_infos)
                         .await
                         .map_err(RpcError::Controller)
-                        .map(NewTransaction::new)
+                        .map(RpcNewTransaction::new)
                 })
             })
             .await?
@@ -1711,7 +1715,7 @@ where
         fill_amount_in_ask_currency: RpcAmountIn,
         output_address: Option<RpcAddress<Destination>>,
         config: ControllerConfig,
-    ) -> WRpcResult<NewTransaction, N> {
+    ) -> WRpcResult<RpcNewTransaction, N> {
         let coin_decimals = self.chain_config.coin_decimals();
         let order_id = order_id
             .decode_object(&self.chain_config)
@@ -1762,7 +1766,7 @@ where
                         )
                         .await
                         .map_err(RpcError::Controller)
-                        .map(NewTransaction::new)
+                        .map(RpcNewTransaction::new)
                 })
             })
             .await?
@@ -1773,7 +1777,7 @@ where
         account_index: U31,
         order_id: RpcAddress<OrderId>,
         config: ControllerConfig,
-    ) -> WRpcResult<NewTransaction, N> {
+    ) -> WRpcResult<RpcNewTransaction, N> {
         let order_id = order_id
             .decode_object(&self.chain_config)
             .map_err(|_| RpcError::InvalidTokenId)?;
@@ -1788,7 +1792,7 @@ where
                         .freeze_order(order_id, order_info)
                         .await
                         .map_err(RpcError::Controller)
-                        .map(NewTransaction::new)
+                        .map(RpcNewTransaction::new)
                 })
             })
             .await?
@@ -1856,7 +1860,7 @@ where
         account_index: U31,
         data: Vec<u8>,
         config: ControllerConfig,
-    ) -> WRpcResult<NewTransaction, N> {
+    ) -> WRpcResult<RpcNewTransaction, N> {
         self.wallet
             .call_async(move |controller| {
                 Box::pin(async move {
@@ -1866,7 +1870,7 @@ where
                         .deposit_data(data)
                         .await
                         .map_err(RpcError::Controller)
-                        .map(NewTransaction::new)
+                        .map(RpcNewTransaction::new)
                 })
             })
             .await?
@@ -1883,7 +1887,7 @@ where
         token_total_supply: TokenTotalSupply,
         is_freezable: IsTokenFreezable,
         config: ControllerConfig,
-    ) -> WRpcResult<RpcTokenId, N> {
+    ) -> WRpcResult<NewTokenTransaction, N> {
         ensure!(
             number_of_decimals <= self.chain_config.token_max_dec_count(),
             RpcError::Controller(ControllerError::WalletError(WalletError::TokenIssuance(
@@ -1912,10 +1916,12 @@ where
                 })
             })
             .await?
-            .map(|(tx, token_id)| RpcTokenId {
-                tx_id: tx.transaction().get_id(),
-                token_id: RpcAddress::new(&self.chain_config, token_id)
-                    .expect("Encoding token id should never fail"),
+            .map(|(tx, token_id)| {
+                NewTokenTransaction::new(
+                    tx,
+                    RpcAddress::new(&self.chain_config, token_id)
+                        .expect("Encoding token id should never fail"),
+                )
             })
     }
 
@@ -1925,7 +1931,7 @@ where
         address: RpcAddress<Destination>,
         metadata: Metadata,
         config: ControllerConfig,
-    ) -> WRpcResult<RpcTokenId, N> {
+    ) -> WRpcResult<NewTokenTransaction, N> {
         let address =
             address.into_address(&self.chain_config).map_err(|_| RpcError::InvalidAddress)?;
         self.wallet
@@ -1938,10 +1944,12 @@ where
                 })
             })
             .await?
-            .map(|(tx, token_id)| RpcTokenId {
-                tx_id: tx.transaction().get_id(),
-                token_id: RpcAddress::new(&self.chain_config, token_id)
-                    .expect("Encoding token id should never fail"),
+            .map(|(tx, token_id)| {
+                NewTokenTransaction::new(
+                    tx,
+                    RpcAddress::new(&self.chain_config, token_id)
+                        .expect("Encoding token id should never fail"),
+                )
             })
     }
 
@@ -1952,7 +1960,7 @@ where
         address: RpcAddress<Destination>,
         amount: RpcAmountIn,
         config: ControllerConfig,
-    ) -> WRpcResult<NewTransaction, N> {
+    ) -> WRpcResult<RpcNewTransaction, N> {
         let token_id = token_id
             .decode_object(&self.chain_config)
             .map_err(|_| RpcError::InvalidTokenId)?;
@@ -1973,7 +1981,7 @@ where
                         .mint_tokens(token_info, amount, address)
                         .await
                         .map_err(RpcError::Controller)
-                        .map(NewTransaction::new)
+                        .map(RpcNewTransaction::new)
                 })
             })
             .await?
@@ -1985,7 +1993,7 @@ where
         token_id: RpcAddress<TokenId>,
         amount: RpcAmountIn,
         config: ControllerConfig,
-    ) -> WRpcResult<NewTransaction, N> {
+    ) -> WRpcResult<RpcNewTransaction, N> {
         let token_id = token_id
             .decode_object(&self.chain_config)
             .map_err(|_| RpcError::InvalidTokenId)?;
@@ -2004,7 +2012,7 @@ where
                         .unmint_tokens(token_info, amount)
                         .await
                         .map_err(RpcError::Controller)
-                        .map(NewTransaction::new)
+                        .map(RpcNewTransaction::new)
                 })
             })
             .await?
@@ -2015,7 +2023,7 @@ where
         account_index: U31,
         token_id: RpcAddress<TokenId>,
         config: ControllerConfig,
-    ) -> WRpcResult<NewTransaction, N> {
+    ) -> WRpcResult<RpcNewTransaction, N> {
         let token_id = token_id
             .decode_object(&self.chain_config)
             .map_err(|_| RpcError::InvalidTokenId)?;
@@ -2029,7 +2037,7 @@ where
                         .lock_token_supply(token_info)
                         .await
                         .map_err(RpcError::Controller)
-                        .map(NewTransaction::new)
+                        .map(RpcNewTransaction::new)
                 })
             })
             .await?
@@ -2041,7 +2049,7 @@ where
         token_id: RpcAddress<TokenId>,
         is_unfreezable: IsTokenUnfreezable,
         config: ControllerConfig,
-    ) -> WRpcResult<NewTransaction, N> {
+    ) -> WRpcResult<RpcNewTransaction, N> {
         let token_id = token_id
             .decode_object(&self.chain_config)
             .map_err(|_| RpcError::InvalidTokenId)?;
@@ -2055,7 +2063,7 @@ where
                         .freeze_token(token_info, is_unfreezable)
                         .await
                         .map_err(RpcError::Controller)
-                        .map(NewTransaction::new)
+                        .map(RpcNewTransaction::new)
                 })
             })
             .await?
@@ -2066,7 +2074,7 @@ where
         account_index: U31,
         token_id: RpcAddress<TokenId>,
         config: ControllerConfig,
-    ) -> WRpcResult<NewTransaction, N> {
+    ) -> WRpcResult<RpcNewTransaction, N> {
         let token_id = token_id
             .decode_object(&self.chain_config)
             .map_err(|_| RpcError::InvalidTokenId)?;
@@ -2080,7 +2088,7 @@ where
                         .unfreeze_token(token_info)
                         .await
                         .map_err(RpcError::Controller)
-                        .map(NewTransaction::new)
+                        .map(RpcNewTransaction::new)
                 })
             })
             .await?
@@ -2092,7 +2100,7 @@ where
         token_id: RpcAddress<TokenId>,
         address: RpcAddress<Destination>,
         config: ControllerConfig,
-    ) -> WRpcResult<NewTransaction, N> {
+    ) -> WRpcResult<RpcNewTransaction, N> {
         let token_id = token_id
             .decode_object(&self.chain_config)
             .map_err(|_| RpcError::InvalidTokenId)?;
@@ -2108,7 +2116,7 @@ where
                         .change_token_authority(token_info, address)
                         .await
                         .map_err(RpcError::Controller)
-                        .map(NewTransaction::new)
+                        .map(RpcNewTransaction::new)
                 })
             })
             .await?
@@ -2120,7 +2128,7 @@ where
         token_id: RpcAddress<TokenId>,
         metadata_uri: RpcHexString,
         config: ControllerConfig,
-    ) -> WRpcResult<NewTransaction, N> {
+    ) -> WRpcResult<RpcNewTransaction, N> {
         let token_id = token_id
             .decode_object(&self.chain_config)
             .map_err(|_| RpcError::InvalidTokenId)?;
@@ -2134,7 +2142,7 @@ where
                         .change_token_metadata_uri(token_info, metadata_uri.into_bytes())
                         .await
                         .map_err(RpcError::Controller)
-                        .map(NewTransaction::new)
+                        .map(RpcNewTransaction::new)
                 })
             })
             .await?
