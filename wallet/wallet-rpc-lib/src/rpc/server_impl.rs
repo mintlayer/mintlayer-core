@@ -49,9 +49,9 @@ use crate::{
     types::{
         AccountArg, AddressInfo, AddressWithUsageInfo, Balances, ChainInfo, ComposedTransaction,
         CreatedWallet, DelegationInfo, HardwareWalletType, HexEncoded, LegacyVrfPublicKeyInfo,
-        MaybeSignedTransaction, NewAccountInfo, NewDelegation, NewTransaction, NftMetadata,
-        NodeVersion, OpenedWallet, PoolInfo, PublicKeyInfo, RpcAddress, RpcAmountIn, RpcHexString,
-        RpcInspectTransaction, RpcStandaloneAddresses, RpcTokenId, RpcUtxoOutpoint, RpcUtxoState,
+        MaybeSignedTransaction, NewAccountInfo, NewDelegationTransaction, NewSubmittedTransaction,
+        NftMetadata, NodeVersion, OpenedWallet, PoolInfo, PublicKeyInfo, RpcAddress, RpcAmountIn,
+        RpcHexString, RpcInspectTransaction, RpcStandaloneAddresses, RpcUtxoOutpoint, RpcUtxoState,
         RpcUtxoType, SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
         StandaloneAddressWithDetails, TokenMetadata, TransactionOptions, TxOptionsOverrides,
         UtxoInfo, VrfPublicKeyInfo,
@@ -59,7 +59,9 @@ use crate::{
     RpcError,
 };
 
-use super::types::{NewOrder, RpcHashedTimelockContract};
+use super::types::{
+    NewOrderTransaction, NewTokenTransaction, RpcHashedTimelockContract, RpcNewTransaction,
+};
 
 #[async_trait::async_trait]
 impl<N> WalletEventsRpcServer for WalletRpc<N>
@@ -522,7 +524,7 @@ where
         tx: HexEncoded<SignedTransaction>,
         do_not_store: bool,
         options: TxOptionsOverrides,
-    ) -> rpc::RpcResult<NewTransaction> {
+    ) -> rpc::RpcResult<NewSubmittedTransaction> {
         rpc::handle_result(self.submit_raw_transaction(tx, do_not_store, options).await)
     }
 
@@ -533,7 +535,7 @@ where
         amount: RpcAmountIn,
         selected_utxos: Vec<RpcUtxoOutpoint>,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<NewTransaction> {
+    ) -> rpc::RpcResult<RpcNewTransaction> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb(),
             broadcast_to_mempool: true,
@@ -547,7 +549,7 @@ where
                 config,
             )
             .await
-            .map(NewTransaction::new),
+            .map(RpcNewTransaction::new),
         )
     }
 
@@ -558,7 +560,7 @@ where
         from_addresses: Vec<RpcAddress<Destination>>,
         all: Option<bool>,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<NewTransaction> {
+    ) -> rpc::RpcResult<RpcNewTransaction> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb(),
             broadcast_to_mempool: true,
@@ -585,7 +587,7 @@ where
         destination_address: RpcAddress<Destination>,
         delegation_id: RpcAddress<DelegationId>,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<NewTransaction> {
+    ) -> rpc::RpcResult<RpcNewTransaction> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb(),
             broadcast_to_mempool: true,
@@ -650,7 +652,7 @@ where
         staker_address: Option<RpcAddress<Destination>>,
         vrf_public_key: Option<RpcAddress<VRFPublicKey>>,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<NewTransaction> {
+    ) -> rpc::RpcResult<RpcNewTransaction> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb(),
             broadcast_to_mempool: true,
@@ -667,7 +669,7 @@ where
                 config,
             )
             .await
-            .map(NewTransaction::new),
+            .map(RpcNewTransaction::new),
         )
     }
 
@@ -677,7 +679,7 @@ where
         pool_id: RpcAddress<PoolId>,
         output_address: Option<RpcAddress<Destination>>,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<NewTransaction> {
+    ) -> rpc::RpcResult<RpcNewTransaction> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb(),
             broadcast_to_mempool: true,
@@ -690,7 +692,7 @@ where
                 config,
             )
             .await
-            .map(NewTransaction::new),
+            .map(RpcNewTransaction::new),
         )
     }
 
@@ -723,7 +725,7 @@ where
         address: RpcAddress<Destination>,
         pool_id: RpcAddress<PoolId>,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<NewDelegation> {
+    ) -> rpc::RpcResult<NewDelegationTransaction> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb(),
             broadcast_to_mempool: true,
@@ -731,10 +733,7 @@ where
         rpc::handle_result(
             self.create_delegation(account_arg.index::<N>()?, address, pool_id, config)
                 .await
-                .map(|(tx, delegation_id)| NewDelegation {
-                    tx_id: tx.transaction().get_id(),
-                    delegation_id,
-                }),
+                .map(|(tx, delegation_id)| NewDelegationTransaction::new(tx, delegation_id)),
         )
     }
 
@@ -744,7 +743,7 @@ where
         amount: RpcAmountIn,
         delegation_id: RpcAddress<DelegationId>,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<NewTransaction> {
+    ) -> rpc::RpcResult<RpcNewTransaction> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb(),
             broadcast_to_mempool: true,
@@ -752,7 +751,7 @@ where
         rpc::handle_result(
             self.delegate_staking(account_arg.index::<N>()?, amount, delegation_id, config)
                 .await
-                .map(NewTransaction::new),
+                .map(RpcNewTransaction::new),
         )
     }
 
@@ -763,7 +762,7 @@ where
         amount: RpcAmountIn,
         delegation_id: RpcAddress<DelegationId>,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<NewTransaction> {
+    ) -> rpc::RpcResult<RpcNewTransaction> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb(),
             broadcast_to_mempool: true,
@@ -777,7 +776,7 @@ where
                 config,
             )
             .await
-            .map(NewTransaction::new),
+            .map(RpcNewTransaction::new),
         )
     }
 
@@ -824,7 +823,7 @@ where
         destination_address: RpcAddress<Destination>,
         metadata: NftMetadata,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<RpcTokenId> {
+    ) -> rpc::RpcResult<NewTokenTransaction> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb(),
             broadcast_to_mempool: true,
@@ -847,7 +846,7 @@ where
         destination_address: RpcAddress<Destination>,
         metadata: TokenMetadata,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<RpcTokenId> {
+    ) -> rpc::RpcResult<NewTokenTransaction> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb(),
             broadcast_to_mempool: true,
@@ -876,7 +875,7 @@ where
         token_id: RpcAddress<TokenId>,
         address: RpcAddress<Destination>,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<NewTransaction> {
+    ) -> rpc::RpcResult<RpcNewTransaction> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb(),
             broadcast_to_mempool: true,
@@ -894,7 +893,7 @@ where
         token_id: RpcAddress<TokenId>,
         metadata_uri: RpcHexString,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<NewTransaction> {
+    ) -> rpc::RpcResult<RpcNewTransaction> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb(),
             broadcast_to_mempool: true,
@@ -918,7 +917,7 @@ where
         address: RpcAddress<Destination>,
         amount: RpcAmountIn,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<NewTransaction> {
+    ) -> rpc::RpcResult<RpcNewTransaction> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb(),
             broadcast_to_mempool: true,
@@ -936,7 +935,7 @@ where
         token_id: RpcAddress<TokenId>,
         amount: RpcAmountIn,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<NewTransaction> {
+    ) -> rpc::RpcResult<RpcNewTransaction> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb(),
             broadcast_to_mempool: true,
@@ -952,7 +951,7 @@ where
         account_arg: AccountArg,
         token_id: RpcAddress<TokenId>,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<NewTransaction> {
+    ) -> rpc::RpcResult<RpcNewTransaction> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb(),
             broadcast_to_mempool: true,
@@ -969,7 +968,7 @@ where
         token_id: RpcAddress<TokenId>,
         is_unfreezable: bool,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<NewTransaction> {
+    ) -> rpc::RpcResult<RpcNewTransaction> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb(),
             broadcast_to_mempool: true,
@@ -992,7 +991,7 @@ where
         account_arg: AccountArg,
         token_id: RpcAddress<TokenId>,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<NewTransaction> {
+    ) -> rpc::RpcResult<RpcNewTransaction> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb(),
             broadcast_to_mempool: true,
@@ -1008,7 +1007,7 @@ where
         address: RpcAddress<Destination>,
         amount: RpcAmountIn,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<NewTransaction> {
+    ) -> rpc::RpcResult<RpcNewTransaction> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb(),
             broadcast_to_mempool: true,
@@ -1047,7 +1046,7 @@ where
                 config,
             )
             .await
-            .map(|(tx, intent)| (HexEncoded::new(tx), HexEncoded::new(intent))),
+            .map(|(tx, intent)| (HexEncoded::new(tx.tx), HexEncoded::new(intent))),
         )
     }
 
@@ -1087,7 +1086,7 @@ where
         account_arg: AccountArg,
         data: RpcHexString,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<NewTransaction> {
+    ) -> rpc::RpcResult<RpcNewTransaction> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb(),
             broadcast_to_mempool: true,
@@ -1125,7 +1124,7 @@ where
         give: RpcOutputValueIn,
         conclude_address: RpcAddress<Destination>,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<NewOrder> {
+    ) -> rpc::RpcResult<NewOrderTransaction> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb(),
             broadcast_to_mempool: true,
@@ -1149,7 +1148,7 @@ where
         order_id: RpcAddress<OrderId>,
         output_address: Option<RpcAddress<Destination>>,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<NewTransaction> {
+    ) -> rpc::RpcResult<RpcNewTransaction> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb(),
             broadcast_to_mempool: true,
@@ -1168,7 +1167,7 @@ where
         fill_amount_in_ask_currency: RpcAmountIn,
         output_address: Option<RpcAddress<Destination>>,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<NewTransaction> {
+    ) -> rpc::RpcResult<RpcNewTransaction> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb(),
             broadcast_to_mempool: true,
@@ -1191,7 +1190,7 @@ where
         account_arg: AccountArg,
         order_id: RpcAddress<OrderId>,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<NewTransaction> {
+    ) -> rpc::RpcResult<RpcNewTransaction> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb(),
             broadcast_to_mempool: true,

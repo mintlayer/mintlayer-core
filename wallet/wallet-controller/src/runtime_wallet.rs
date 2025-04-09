@@ -56,7 +56,7 @@ use wallet_types::{
     utxo_types::{UtxoState, UtxoStates, UtxoTypes},
     wallet_tx::TxData,
     with_locked::WithLocked,
-    Currency, KeyPurpose, KeychainUsageState,
+    Currency, KeyPurpose, KeychainUsageState, SignedTxWithFees,
 };
 
 #[cfg(feature = "trezor")]
@@ -615,7 +615,7 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
         token_issuance: TokenIssuance,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
-    ) -> WalletResult<(TokenId, SignedTransaction)> {
+    ) -> WalletResult<(TokenId, SignedTxWithFees)> {
         match self {
             RuntimeWallet::Software(w) => w.issue_new_token(
                 account_index,
@@ -640,7 +640,7 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
         metadata: Metadata,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
-    ) -> WalletResult<(TokenId, SignedTransaction)> {
+    ) -> WalletResult<(TokenId, SignedTxWithFees)> {
         match self {
             RuntimeWallet::Software(w) => w.issue_new_nft(
                 account_index,
@@ -668,7 +668,7 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
         address: Address<Destination>,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
-    ) -> Result<SignedTransaction, WalletError> {
+    ) -> Result<SignedTxWithFees, WalletError> {
         match self {
             RuntimeWallet::Software(w) => w.mint_tokens(
                 account_index,
@@ -697,7 +697,7 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
         amount: Amount,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
-    ) -> Result<SignedTransaction, WalletError> {
+    ) -> Result<SignedTxWithFees, WalletError> {
         match self {
             RuntimeWallet::Software(w) => w.unmint_tokens(
                 account_index,
@@ -723,7 +723,7 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
         token_info: &UnconfirmedTokenInfo,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
-    ) -> Result<SignedTransaction, WalletError> {
+    ) -> Result<SignedTxWithFees, WalletError> {
         match self {
             RuntimeWallet::Software(w) => w.lock_token_supply(
                 account_index,
@@ -748,7 +748,7 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
         is_token_unfreezable: IsTokenUnfreezable,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
-    ) -> Result<SignedTransaction, WalletError> {
+    ) -> Result<SignedTxWithFees, WalletError> {
         match self {
             RuntimeWallet::Software(w) => w.freeze_token(
                 account_index,
@@ -774,7 +774,7 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
         token_info: &UnconfirmedTokenInfo,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
-    ) -> Result<SignedTransaction, WalletError> {
+    ) -> Result<SignedTxWithFees, WalletError> {
         match self {
             RuntimeWallet::Software(w) => w.unfreeze_token(
                 account_index,
@@ -799,7 +799,7 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
         address: Address<Destination>,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
-    ) -> Result<SignedTransaction, WalletError> {
+    ) -> Result<SignedTxWithFees, WalletError> {
         match self {
             RuntimeWallet::Software(w) => w.change_token_authority(
                 account_index,
@@ -826,7 +826,7 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
         metadata_uri: Vec<u8>,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
-    ) -> Result<SignedTransaction, WalletError> {
+    ) -> Result<SignedTxWithFees, WalletError> {
         match self {
             RuntimeWallet::Software(w) => w.change_token_metadata_uri(
                 account_index,
@@ -856,7 +856,7 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
         additional_info: TxAdditionalInfo,
-    ) -> WalletResult<SignedTransaction> {
+    ) -> WalletResult<SignedTxWithFees> {
         match self {
             RuntimeWallet::Software(w) => w.create_transaction_to_addresses(
                 account_index,
@@ -887,7 +887,7 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
         filtered_inputs: Vec<(UtxoOutPoint, TxOutput)>,
         current_fee_rate: FeeRate,
         additional_info: TxAdditionalInfo,
-    ) -> WalletResult<SignedTransaction> {
+    ) -> WalletResult<SignedTxWithFees> {
         match self {
             RuntimeWallet::Software(w) => w.create_sweep_transaction(
                 account_index,
@@ -926,7 +926,7 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
         delegation_id: DelegationId,
         delegation_share: Amount,
         current_fee_rate: FeeRate,
-    ) -> WalletResult<SignedTransaction> {
+    ) -> WalletResult<SignedTxWithFees> {
         match self {
             RuntimeWallet::Software(w) => w.create_sweep_from_delegation_transaction(
                 account_index,
@@ -989,7 +989,7 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
         output: TxOutput,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
-    ) -> WalletResult<(DelegationId, SignedTransaction)> {
+    ) -> WalletResult<(DelegationId, SignedTxWithFees)> {
         match self {
             RuntimeWallet::Software(w) => w.create_delegation(
                 account_index,
@@ -1015,7 +1015,7 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
         delegation_id: DelegationId,
         delegation_share: Amount,
         current_fee_rate: FeeRate,
-    ) -> WalletResult<SignedTransaction> {
+    ) -> WalletResult<SignedTxWithFees> {
         match self {
             RuntimeWallet::Software(w) => w.create_transaction_to_addresses_from_delegation(
                 account_index,
@@ -1043,7 +1043,7 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
         stake_pool_arguments: StakePoolCreationArguments,
-    ) -> WalletResult<SignedTransaction> {
+    ) -> WalletResult<SignedTxWithFees> {
         match self {
             RuntimeWallet::Software(w) => w.create_stake_pool_tx(
                 account_index,
@@ -1068,7 +1068,7 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
         staker_balance: Amount,
         output_address: Option<Destination>,
         current_fee_rate: FeeRate,
-    ) -> WalletResult<SignedTransaction> {
+    ) -> WalletResult<SignedTxWithFees> {
         match self {
             RuntimeWallet::Software(w) => w.decommission_stake_pool(
                 account_index,
@@ -1155,7 +1155,7 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
         additional_info: TxAdditionalInfo,
-    ) -> WalletResult<(OrderId, SignedTransaction)> {
+    ) -> WalletResult<(OrderId, SignedTxWithFees)> {
         match self {
             RuntimeWallet::Software(w) => w.create_order_tx(
                 account_index,
@@ -1189,7 +1189,7 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
         additional_info: TxAdditionalInfo,
-    ) -> WalletResult<SignedTransaction> {
+    ) -> WalletResult<SignedTxWithFees> {
         match self {
             RuntimeWallet::Software(w) => w.create_conclude_order_tx(
                 account_index,
@@ -1224,7 +1224,7 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
         additional_info: TxAdditionalInfo,
-    ) -> WalletResult<SignedTransaction> {
+    ) -> WalletResult<SignedTxWithFees> {
         match self {
             RuntimeWallet::Software(w) => w.create_fill_order_tx(
                 account_index,
@@ -1257,7 +1257,7 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
         order_info: RpcOrderInfo,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
-    ) -> WalletResult<SignedTransaction> {
+    ) -> WalletResult<SignedTxWithFees> {
         match self {
             RuntimeWallet::Software(w) => w.create_freeze_order_tx(
                 account_index,
@@ -1317,7 +1317,7 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
         additional_info: TxAdditionalInfo,
-    ) -> WalletResult<(SignedTransaction, SignedTransactionIntent)> {
+    ) -> WalletResult<(SignedTxWithFees, SignedTransactionIntent)> {
         match self {
             RuntimeWallet::Software(w) => w.create_transaction_to_addresses_with_intent(
                 account_index,
