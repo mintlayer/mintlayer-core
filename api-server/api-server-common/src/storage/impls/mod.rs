@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub const CURRENT_STORAGE_VERSION: u32 = 20;
+pub const CURRENT_STORAGE_VERSION: u32 = 21;
 
 pub mod in_memory;
 pub mod postgres;
