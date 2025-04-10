@@ -269,9 +269,11 @@ pub fn generate_transaction_graph(
         100_000_000_000_000_u128,
     )];
 
-    std::iter::repeat_with(move || {
+    std::iter::from_fn(move || {
         let n_inputs = rng.gen_range(1..=std::cmp::min(3, utxos.len()));
         let n_outputs = rng.gen_range(1..=3);
+
+        let estimated_fee = get_relay_fee_from_tx_size(estimate_tx_size(n_inputs, n_outputs));
 
         let mut builder = TransactionBuilder::new();
         let mut total = 0u128;
@@ -282,6 +284,8 @@ pub fn generate_transaction_graph(
             total += amt;
             builder = builder.add_input(outpt, empty_witness(rng));
         }
+
+        total = total.checked_sub(estimated_fee.into_atoms())?;
 
         for _ in 0..n_outputs {
             let amt = rng.gen_range((total / 2)..(95 * total / 100));
@@ -305,7 +309,10 @@ pub fn generate_transaction_graph(
         let origin = RemoteTxOrigin::new(p2p_types::PeerId::from_u64(1)).into();
         let options = crate::TxOptions::default_for(origin);
         let entry = TxEntry::new(tx, time, origin, options);
-        TxEntryWithFee::new(entry, Fee::new(Amount::from_atoms(total)))
+        Some(TxEntryWithFee::new(
+            entry,
+            Fee::new(Amount::from_atoms(total)),
+        ))
     })
 }
 
