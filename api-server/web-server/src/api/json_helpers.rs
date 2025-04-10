@@ -287,7 +287,11 @@ pub fn utxo_outpoint_to_json(utxo: &UtxoOutPoint) -> serde_json::Value {
     }
 }
 
-pub fn tx_input_to_json(inp: &TxInput, chain_config: &ChainConfig) -> serde_json::Value {
+pub fn tx_input_to_json(
+    inp: &TxInput,
+    token_decimals: &TokenDecimals,
+    chain_config: &ChainConfig,
+) -> serde_json::Value {
     match inp {
         TxInput::Utxo(utxo) => match utxo.source_id() {
             OutPointSourceId::Transaction(tx_id) => {
@@ -349,7 +353,7 @@ pub fn tx_input_to_json(inp: &TxInput, chain_config: &ChainConfig) -> serde_json
                     "input_type": "AccountCommand",
                     "command": "MintTokens",
                     "token_id": Address::new(chain_config, *token_id).expect("addressable").to_string(),
-                    "amount": amount_to_json(*amount, chain_config.coin_decimals()),
+                    "amount": amount_to_json(*amount, token_decimals.get(token_id)),
                     "nonce": nonce,
                 })
             }
@@ -432,6 +436,7 @@ pub fn tx_to_json(
     additional_info: &TxAdditionalInfo,
     chain_config: &ChainConfig,
 ) -> serde_json::Value {
+    let token_decimals = &(&additional_info.token_decimals).into();
     json!({
     "id": tx.get_id().to_hash().encode_hex::<String>(),
     "version_byte": tx.version_byte(),
@@ -439,12 +444,12 @@ pub fn tx_to_json(
     "flags": tx.flags(),
     "fee": amount_to_json(additional_info.fee, chain_config.coin_decimals()),
     "inputs": tx.inputs().iter().zip(additional_info.input_utxos.iter()).map(|(inp, utxo)| json!({
-        "input": tx_input_to_json(inp, chain_config),
-        "utxo": utxo.as_ref().map(|txo| txoutput_to_json(txo, chain_config, &(&additional_info.token_decimals).into())),
+        "input": tx_input_to_json(inp, token_decimals, chain_config),
+        "utxo": utxo.as_ref().map(|txo| txoutput_to_json(txo, chain_config, token_decimals)),
         })).collect::<Vec<_>>(),
     "outputs": tx.outputs()
             .iter()
-            .map(|out| txoutput_to_json(out, chain_config, &(&additional_info.token_decimals).into()))
+            .map(|out| txoutput_to_json(out, chain_config, token_decimals))
             .collect::<Vec<_>>()
     })
 }
