@@ -2380,7 +2380,21 @@ Parameters:
 
 Returns:
 ```
-{ "tx_id": hex string }
+{
+    "tx_id": hex string,
+    "tx": hex string,
+    "fees": {
+        "coins": {
+            "atoms": number string,
+            "decimal": decimal string,
+        },
+        "tokens": { bech32 string: {
+            "atoms": number string,
+            "decimal": decimal string,
+        }, .. },
+    },
+    "broadcasted": bool,
+}
 ```
 
 ### Method `node_version`
