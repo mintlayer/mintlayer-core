@@ -289,11 +289,8 @@ where
             .map(|w| w.map_wallet(RuntimeWallet::Trezor)),
         };
 
-        match &res {
-            Ok(WalletCreation::Wallet(_)) => {}
-            _ => {
-                let _ = fs::remove_file(file_path);
-            }
+        if res.is_err() {
+            let _ = fs::remove_file(file_path);
         }
 
         res
