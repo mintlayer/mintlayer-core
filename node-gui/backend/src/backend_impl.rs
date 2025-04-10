@@ -819,7 +819,8 @@ impl Backend {
                 },
             )
             .await
-            .map_err(|e| BackendError::WalletError(e.to_string()))?;
+            .map_err(|e| BackendError::WalletError(e.to_string()))?
+            .tx;
 
         Ok(TransactionInfo {
             wallet_id,
@@ -872,7 +873,8 @@ impl Backend {
                 },
             )
             .await
-            .map_err(|e| BackendError::WalletError(e.to_string()))?;
+            .map_err(|e| BackendError::WalletError(e.to_string()))?
+            .tx;
 
         Ok(TransactionInfo {
             wallet_id,
@@ -904,7 +906,8 @@ impl Backend {
                 },
             )
             .await
-            .map_err(|e| BackendError::WalletError(e.to_string()))?;
+            .map_err(|e| BackendError::WalletError(e.to_string()))?
+            .tx;
 
         Ok(TransactionInfo {
             wallet_id,
@@ -940,7 +943,7 @@ impl Backend {
 
         Ok(TransactionInfo {
             wallet_id,
-            tx: SignedTransactionWrapper::new(tx),
+            tx: SignedTransactionWrapper::new(tx.tx),
         })
     }
 
@@ -975,7 +978,8 @@ impl Backend {
                 },
             )
             .await
-            .map_err(|e| BackendError::WalletError(e.to_string()))?;
+            .map_err(|e| BackendError::WalletError(e.to_string()))?
+            .tx;
 
         Ok(TransactionInfo {
             wallet_id,
@@ -1018,7 +1022,8 @@ impl Backend {
                 },
             )
             .await
-            .map_err(|e| BackendError::WalletError(e.to_string()))?;
+            .map_err(|e| BackendError::WalletError(e.to_string()))?
+            .tx;
 
         Ok(TransactionInfo {
             wallet_id,

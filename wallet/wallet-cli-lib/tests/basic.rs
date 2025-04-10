@@ -107,7 +107,7 @@ async fn produce_blocks_decommission_genesis_pool(#[case] seed: Seed) {
             rng.gen_range(1..100),
             address,
         ),)
-        .starts_with("The transaction was submitted successfully with ID"));
+        .contains("The transaction was submitted successfully with ID"));
     // create some blocks
     assert_eq!(test.exec("node-generate-blocks 20"), "Success");
 
@@ -121,7 +121,7 @@ async fn produce_blocks_decommission_genesis_pool(#[case] seed: Seed) {
     assert_eq!(test.exec("account-select 0"), "Success");
     assert!(test
         .exec(&format!("address-send {} 50000", acc2_address))
-        .starts_with("The transaction was submitted successfully with ID"));
+        .contains("The transaction was submitted successfully with ID"));
     // create a block
     assert_eq!(test.exec("node-generate-blocks 1"), "Success");
 
@@ -133,7 +133,7 @@ async fn produce_blocks_decommission_genesis_pool(#[case] seed: Seed) {
             rng.gen_range(1..100),
             address,
         ),)
-        .starts_with("The transaction was submitted successfully with ID"));
+        .contains("The transaction was submitted successfully with ID"));
     assert_eq!(test.exec("account-select 0"), "Success");
 
     // create some blocks
@@ -165,7 +165,7 @@ async fn produce_blocks_decommission_genesis_pool(#[case] seed: Seed) {
     assert_eq!(test.exec("wallet-sync"), "Success");
     assert!(test
         .exec(&format!("node-submit-transaction {signed_tx}"))
-        .starts_with("The transaction was submitted successfully with ID"));
+        .contains("The transaction was submitted successfully with ID"));
 
     // stake with the other acc
     assert_eq!(test.exec("account-select 1"), "Success");

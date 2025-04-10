@@ -85,6 +85,7 @@ use wallet_types::wallet_type::{WalletControllerMode, WalletType};
 use wallet_types::with_locked::WithLocked;
 use wallet_types::{
     AccountId, AccountKeyPurposeId, BlockInfo, Currency, KeyPurpose, KeychainUsageState,
+    SignedTxWithFees,
 };
 
 pub const WALLET_VERSION_UNINITIALIZED: u32 = 0;
@@ -1069,14 +1070,14 @@ where
             &mut StoreTxRwUnlocked<B>,
         ) -> WalletResult<(SendRequest, AddlData)>,
         error_mapper: impl FnOnce(WalletError) -> WalletError,
-    ) -> WalletResult<(SignedTransaction, AddlData)> {
+    ) -> WalletResult<(SignedTxWithFees, AddlData)> {
         let (_, block_height) = self.get_best_block_for_account(account_index)?;
 
         self.for_account_rw_unlocked(
             account_index,
             |account, db_tx, chain_config, signer_provider| {
-                let (request, additional_data) = f(account, db_tx)?;
-
+                let (mut request, additional_data) = f(account, db_tx)?;
+                let fees = request.get_fees();
                 let ptx = request.into_partially_signed_tx(additional_info)?;
 
                 let mut signer =
@@ -1113,6 +1114,7 @@ where
                 })?;
 
                 check_transaction(chain_config, block_height.next_height(), &tx)?;
+                let tx = SignedTxWithFees { tx, fees };
                 Ok((tx, additional_data))
             },
         )
@@ -1124,6 +1126,23 @@ where
         additional_info: TxAdditionalInfo,
         f: impl FnOnce(&mut Account<P::K>, &mut StoreTxRwUnlocked<B>) -> WalletResult<SendRequest>,
     ) -> WalletResult<SignedTransaction> {
+        Ok(self
+            .for_account_rw_unlocked_and_check_tx_generic(
+                account_index,
+                additional_info,
+                |account, db_tx| Ok((f(account, db_tx)?, ())),
+                |err| err,
+            )?
+            .0
+            .tx)
+    }
+
+    fn for_account_rw_unlocked_and_check_tx_with_fees(
+        &mut self,
+        account_index: U31,
+        additional_info: TxAdditionalInfo,
+        f: impl FnOnce(&mut Account<P::K>, &mut StoreTxRwUnlocked<B>) -> WalletResult<SendRequest>,
+    ) -> WalletResult<SignedTxWithFees> {
         Ok(self
             .for_account_rw_unlocked_and_check_tx_generic(
                 account_index,
@@ -1455,7 +1474,7 @@ where
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
         additional_info: TxAdditionalInfo,
-    ) -> WalletResult<SignedTransaction> {
+    ) -> WalletResult<SignedTxWithFees> {
         Ok(self
             .create_transaction_to_addresses_impl(
                 account_index,
@@ -1483,7 +1502,7 @@ where
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
         additional_info: TxAdditionalInfo,
-    ) -> WalletResult<(SignedTransaction, SignedTransactionIntent)> {
+    ) -> WalletResult<(SignedTxWithFees, SignedTransactionIntent)> {
         let (signed_tx, input_destinations) = self.create_transaction_to_addresses_impl(
             account_index,
             outputs,
@@ -1502,7 +1521,7 @@ where
                     signer_provider.provide(Arc::new(chain_config.clone()), account_index);
 
                 Ok(signer.sign_transaction_intent(
-                    signed_tx.transaction(),
+                    signed_tx.tx.transaction(),
                     &input_destinations,
                     &intent,
                     account.key_chain(),
@@ -1525,7 +1544,7 @@ where
         consolidate_fee_rate: FeeRate,
         additional_data_getter: impl Fn(&SendRequest) -> AddlData,
         additional_info: TxAdditionalInfo,
-    ) -> WalletResult<(SignedTransaction, AddlData)> {
+    ) -> WalletResult<(SignedTxWithFees, AddlData)> {
         let request = SendRequest::new().with_outputs(outputs);
         let latest_median_time = self.latest_median_time;
         self.for_account_rw_unlocked_and_check_tx_generic(
@@ -1589,7 +1608,7 @@ where
         inputs: Vec<(UtxoOutPoint, TxOutput)>,
         current_fee_rate: FeeRate,
         additional_info: TxAdditionalInfo,
-    ) -> WalletResult<SignedTransaction> {
+    ) -> WalletResult<SignedTxWithFees> {
         let request = SendRequest::new().with_inputs(
             inputs
                 .into_iter()
@@ -1597,9 +1616,11 @@ where
             &|_| None,
         )?;
 
-        self.for_account_rw_unlocked_and_check_tx(account_index, additional_info, |account, _| {
-            account.sweep_addresses(destination, request, current_fee_rate)
-        })
+        self.for_account_rw_unlocked_and_check_tx_with_fees(
+            account_index,
+            additional_info,
+            |account, _| account.sweep_addresses(destination, request, current_fee_rate),
+        )
     }
 
     pub fn create_sweep_from_delegation_transaction(
@@ -1609,8 +1630,8 @@ where
         delegation_id: DelegationId,
         delegation_share: Amount,
         current_fee_rate: FeeRate,
-    ) -> WalletResult<SignedTransaction> {
-        self.for_account_rw_unlocked_and_check_tx(
+    ) -> WalletResult<SignedTxWithFees> {
+        self.for_account_rw_unlocked_and_check_tx_with_fees(
             account_index,
             TxAdditionalInfo::new(),
             |account, _| {
@@ -1627,8 +1648,8 @@ where
         delegation_id: DelegationId,
         delegation_share: Amount,
         current_fee_rate: FeeRate,
-    ) -> WalletResult<SignedTransaction> {
-        self.for_account_rw_unlocked_and_check_tx(
+    ) -> WalletResult<SignedTxWithFees> {
+        self.for_account_rw_unlocked_and_check_tx_with_fees(
             account_index,
             TxAdditionalInfo::new(),
             |account, _| {
@@ -1651,10 +1672,10 @@ where
         destination: Address<Destination>,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
-    ) -> WalletResult<SignedTransaction> {
+    ) -> WalletResult<SignedTxWithFees> {
         let latest_median_time = self.latest_median_time;
         let additional_info = to_token_additional_info(token_info);
-        self.for_account_rw_unlocked_and_check_tx(
+        self.for_account_rw_unlocked_and_check_tx_with_fees(
             account_index,
             additional_info,
             |account, db_tx| {
@@ -1680,10 +1701,10 @@ where
         amount: Amount,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
-    ) -> WalletResult<SignedTransaction> {
+    ) -> WalletResult<SignedTxWithFees> {
         let latest_median_time = self.latest_median_time;
         let additional_info = to_token_additional_info(token_info);
-        self.for_account_rw_unlocked_and_check_tx(
+        self.for_account_rw_unlocked_and_check_tx_with_fees(
             account_index,
             additional_info,
             |account, db_tx| {
@@ -1707,10 +1728,10 @@ where
         token_info: &UnconfirmedTokenInfo,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
-    ) -> WalletResult<SignedTransaction> {
+    ) -> WalletResult<SignedTxWithFees> {
         let latest_median_time = self.latest_median_time;
         let additional_info = to_token_additional_info(token_info);
-        self.for_account_rw_unlocked_and_check_tx(
+        self.for_account_rw_unlocked_and_check_tx_with_fees(
             account_index,
             additional_info,
             |account, db_tx| {
@@ -1734,10 +1755,10 @@ where
         is_token_unfreezable: IsTokenUnfreezable,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
-    ) -> WalletResult<SignedTransaction> {
+    ) -> WalletResult<SignedTxWithFees> {
         let latest_median_time = self.latest_median_time;
         let additional_info = to_token_additional_info(token_info);
-        self.for_account_rw_unlocked_and_check_tx(
+        self.for_account_rw_unlocked_and_check_tx_with_fees(
             account_index,
             additional_info,
             |account, db_tx| {
@@ -1761,10 +1782,10 @@ where
         token_info: &UnconfirmedTokenInfo,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
-    ) -> WalletResult<SignedTransaction> {
+    ) -> WalletResult<SignedTxWithFees> {
         let latest_median_time = self.latest_median_time;
         let additional_info = to_token_additional_info(token_info);
-        self.for_account_rw_unlocked_and_check_tx(
+        self.for_account_rw_unlocked_and_check_tx_with_fees(
             account_index,
             additional_info,
             |account, db_tx| {
@@ -1788,10 +1809,10 @@ where
         address: Address<Destination>,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
-    ) -> WalletResult<SignedTransaction> {
+    ) -> WalletResult<SignedTxWithFees> {
         let latest_median_time = self.latest_median_time;
         let additional_info = to_token_additional_info(token_info);
-        self.for_account_rw_unlocked_and_check_tx(
+        self.for_account_rw_unlocked_and_check_tx_with_fees(
             account_index,
             additional_info,
             |account, db_tx| {
@@ -1816,10 +1837,10 @@ where
         metadata_uri: Vec<u8>,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
-    ) -> WalletResult<SignedTransaction> {
+    ) -> WalletResult<SignedTxWithFees> {
         let latest_median_time = self.latest_median_time;
         let additional_info = to_token_additional_info(token_info);
-        self.for_account_rw_unlocked_and_check_tx(
+        self.for_account_rw_unlocked_and_check_tx_with_fees(
             account_index,
             additional_info,
             |account, db_tx| {
@@ -1860,7 +1881,7 @@ where
         outputs: Vec<TxOutput>,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
-    ) -> WalletResult<(DelegationId, SignedTransaction)> {
+    ) -> WalletResult<(DelegationId, SignedTxWithFees)> {
         let tx = self.create_transaction_to_addresses(
             account_index,
             outputs,
@@ -1881,7 +1902,7 @@ where
         token_issuance: TokenIssuance,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
-    ) -> WalletResult<(TokenId, SignedTransaction)> {
+    ) -> WalletResult<(TokenId, SignedTxWithFees)> {
         let outputs = make_issue_token_outputs(token_issuance, self.chain_config.as_ref())?;
 
         let tx = self.create_transaction_to_addresses(
@@ -1905,11 +1926,11 @@ where
         metadata: Metadata,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
-    ) -> WalletResult<(TokenId, SignedTransaction)> {
+    ) -> WalletResult<(TokenId, SignedTxWithFees)> {
         let destination = address.into_object();
         let latest_median_time = self.latest_median_time;
 
-        let signed_transaction = self.for_account_rw_unlocked_and_check_tx(
+        let signed_transaction = self.for_account_rw_unlocked_and_check_tx_with_fees(
             account_index,
             TxAdditionalInfo::new(),
             |account, db_tx| {
@@ -1939,9 +1960,9 @@ where
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
         stake_pool_arguments: StakePoolCreationArguments,
-    ) -> WalletResult<SignedTransaction> {
+    ) -> WalletResult<SignedTxWithFees> {
         let latest_median_time = self.latest_median_time;
-        self.for_account_rw_unlocked_and_check_tx(
+        self.for_account_rw_unlocked_and_check_tx_with_fees(
             account_index,
             TxAdditionalInfo::new(),
             |account, db_tx| {
@@ -1965,7 +1986,7 @@ where
         staker_balance: Amount,
         output_address: Option<Destination>,
         current_fee_rate: FeeRate,
-    ) -> WalletResult<SignedTransaction> {
+    ) -> WalletResult<SignedTxWithFees> {
         let additional_info =
             TxAdditionalInfo::with_pool_info(pool_id, PoolAdditionalInfo { staker_balance });
         Ok(self
@@ -2062,9 +2083,9 @@ where
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
         additional_info: TxAdditionalInfo,
-    ) -> WalletResult<(OrderId, SignedTransaction)> {
+    ) -> WalletResult<(OrderId, SignedTxWithFees)> {
         let latest_median_time = self.latest_median_time;
-        let tx = self.for_account_rw_unlocked_and_check_tx(
+        let tx = self.for_account_rw_unlocked_and_check_tx_with_fees(
             account_index,
             additional_info,
             |account, db_tx| {
@@ -2096,9 +2117,9 @@ where
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
         additional_info: TxAdditionalInfo,
-    ) -> WalletResult<SignedTransaction> {
+    ) -> WalletResult<SignedTxWithFees> {
         let latest_median_time = self.latest_median_time;
-        self.for_account_rw_unlocked_and_check_tx(
+        self.for_account_rw_unlocked_and_check_tx_with_fees(
             account_index,
             additional_info,
             |account, db_tx| {
@@ -2128,9 +2149,9 @@ where
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
         additional_info: TxAdditionalInfo,
-    ) -> WalletResult<SignedTransaction> {
+    ) -> WalletResult<SignedTxWithFees> {
         let latest_median_time = self.latest_median_time;
-        self.for_account_rw_unlocked_and_check_tx(
+        self.for_account_rw_unlocked_and_check_tx_with_fees(
             account_index,
             additional_info,
             |account, db_tx| {
@@ -2157,9 +2178,9 @@ where
         order_info: RpcOrderInfo,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
-    ) -> WalletResult<SignedTransaction> {
+    ) -> WalletResult<SignedTxWithFees> {
         let latest_median_time = self.latest_median_time;
-        self.for_account_rw_unlocked_and_check_tx(
+        self.for_account_rw_unlocked_and_check_tx_with_fees(
             account_index,
             TxAdditionalInfo::new(),
             |account, db_tx| {
@@ -2429,9 +2450,9 @@ where
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
         stake_pool_arguments: StakePoolCreationArguments,
-    ) -> WalletResult<SignedTransaction> {
+    ) -> WalletResult<SignedTxWithFees> {
         let latest_median_time = self.latest_median_time;
-        self.for_account_rw_unlocked_and_check_tx(
+        self.for_account_rw_unlocked_and_check_tx_with_fees(
             account_index,
             TxAdditionalInfo::new(),
             |account, db_tx| {
