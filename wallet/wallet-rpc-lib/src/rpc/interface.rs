@@ -783,7 +783,7 @@ trait WalletRpc {
         account: AccountArg,
         order_id: RpcAddress<OrderId>,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<NewTransaction>;
+    ) -> rpc::RpcResult<RpcNewTransaction>;
 
     /// Node version
     #[method(name = "node_version")]

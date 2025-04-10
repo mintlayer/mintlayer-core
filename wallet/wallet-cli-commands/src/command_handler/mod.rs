@@ -129,14 +129,14 @@ where
         let status_text = if new_tx.broadcasted {
             let summary = new_tx.tx.take().transaction().text_summary(chain_config);
             format!(
-                "The transaction:\n{summary}\nWas submitted successfully with ID:\n{}",
+                "{summary}\nThe transaction was submitted successfully with ID:\n{}",
                 id_to_hex_string(*new_tx.tx_id.as_hash())
             )
         } else {
             let hex = new_tx.tx.to_string();
             let summary = new_tx.tx.take().transaction().text_summary(chain_config);
 
-            format!("The transaction:\n{summary}\nWas created and ready to be submitted:\n{hex}",)
+            format!("{summary}\nThe transaction was created and ready to be submitted:\n{hex}",)
         };
 
         ConsoleCommand::Print(status_text)

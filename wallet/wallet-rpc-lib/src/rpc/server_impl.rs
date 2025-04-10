@@ -1185,7 +1185,7 @@ where
         account_arg: AccountArg,
         order_id: RpcAddress<OrderId>,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<NewTransaction> {
+    ) -> rpc::RpcResult<RpcNewTransaction> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb(),
             broadcast_to_mempool: true,

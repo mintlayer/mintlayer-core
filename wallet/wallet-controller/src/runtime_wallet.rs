@@ -1233,7 +1233,7 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
         order_info: RpcOrderInfo,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
-    ) -> WalletResult<SignedTransaction> {
+    ) -> WalletResult<SignedTxWithFees> {
         match self {
             RuntimeWallet::Software(w) => w.create_freeze_order_tx(
                 account_index,

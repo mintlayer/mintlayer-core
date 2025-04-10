@@ -2178,9 +2178,9 @@ where
         order_info: RpcOrderInfo,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
-    ) -> WalletResult<SignedTransaction> {
+    ) -> WalletResult<SignedTxWithFees> {
         let latest_median_time = self.latest_median_time;
-        self.for_account_rw_unlocked_and_check_tx(
+        self.for_account_rw_unlocked_and_check_tx_with_fees(
             account_index,
             TxAdditionalInfo::new(),
             |account, db_tx| {

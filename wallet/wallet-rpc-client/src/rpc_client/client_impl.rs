@@ -1074,7 +1074,7 @@ impl WalletInterface for ClientWalletRpc {
         account_index: U31,
         order_id: String,
         config: ControllerConfig,
-    ) -> Result<NewTransaction, Self::Error> {
+    ) -> Result<RpcNewTransaction, Self::Error> {
         let options = TransactionOptions::from_controller_config(&config);
         WalletRpcClient::freeze_order(
             &self.http_client,

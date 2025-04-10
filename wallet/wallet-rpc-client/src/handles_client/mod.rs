@@ -1180,7 +1180,7 @@ where
         account_index: U31,
         order_id: String,
         config: ControllerConfig,
-    ) -> Result<NewTransaction, Self::Error> {
+    ) -> Result<RpcNewTransaction, Self::Error> {
         self.wallet_rpc
             .freeze_order(account_index, order_id.into(), config)
             .await

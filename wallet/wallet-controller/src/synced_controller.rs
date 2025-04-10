@@ -1214,7 +1214,7 @@ where
         &mut self,
         order_id: OrderId,
         order_info: RpcOrderInfo,
-    ) -> Result<SignedTransaction, ControllerError<T>> {
+    ) -> Result<NewTransaction, ControllerError<T>> {
         self.create_and_send_tx(
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
