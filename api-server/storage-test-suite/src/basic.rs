@@ -1203,6 +1203,7 @@ where
             is_locked: false,
             frozen: IsTokenFrozen::No(IsTokenFreezable::Yes),
             authority: random_destination.clone(),
+            next_nonce: AccountNonce::new(0),
         };
 
         let mut db_tx = storage.transaction_rw().await.unwrap();
@@ -1227,8 +1228,11 @@ where
 
         let locked_token_data = token_data
             .clone()
-            .mint_tokens(Amount::from_atoms(rng.gen_range(1..1000)))
-            .lock();
+            .mint_tokens(
+                Amount::from_atoms(rng.gen_range(1..1000)),
+                token_data.next_nonce,
+            )
+            .lock(token_data.next_nonce.increment().unwrap());
 
         db_tx
             .set_fungible_token_data(
@@ -1265,8 +1269,9 @@ where
 
         let (_, pk2) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         let random_destination2 = Destination::PublicKeyHash(PublicKeyHash::from(&pk2));
-        let token_change_authority =
-            locked_token_data.clone().change_authority(random_destination2.clone());
+        let token_change_authority = locked_token_data
+            .clone()
+            .change_authority(random_destination2.clone(), locked_token_data.next_nonce);
 
         db_tx
             .set_fungible_token_data(
@@ -1332,6 +1337,7 @@ where
             is_locked: false,
             frozen: IsTokenFrozen::No(IsTokenFreezable::Yes),
             authority: random_destination,
+            next_nonce: AccountNonce::new(0),
         };
 
         let block_height = BlockHeight::new(rng.gen_range(1..100));
