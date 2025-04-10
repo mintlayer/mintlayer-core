@@ -394,6 +394,12 @@ pub enum WalletCommand {
     #[command(flatten)]
     ColdCommands(ColdWalletCommand),
 
+    /// Configure broadcasting to Mempool to true of false.
+    /// By default it is set to true. If set to false, any command that creates a transaction will
+    /// return it to the user and will need to be submitted manually with the command `node-submit-transaction`
+    #[clap(name = "config-broadcast")]
+    ConfigBroadcast { broadcast: bool },
+
     #[clap(name = "account-create")]
     CreateNewAccount { name: Option<String> },
 

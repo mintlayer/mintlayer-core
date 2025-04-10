@@ -774,6 +774,13 @@ where
                 self.handle_cold_wallet_command(command, chain_config).await
             }
 
+            WalletCommand::ConfigBroadcast { broadcast } => {
+                self.config.broadcast_to_mempool = broadcast;
+                Ok(ConsoleCommand::Print(format!(
+                    "Broadcast to Mempool set to: {broadcast:?}"
+                )))
+            }
+
             WalletCommand::ChainstateInfo => {
                 let info = self.wallet().await?.chainstate_info().await?;
                 Ok(ConsoleCommand::Print(format!("{info:#?}")))
