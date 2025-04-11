@@ -2747,10 +2747,12 @@ Parameters:
          1) string
          2) null,
     "hardware_wallet": EITHER OF
-         1) "Trezor"
-         2) null,
-    "trezor_device_id": EITHER OF
-         1) string
+         1) {
+                "type": "Trezor",
+                "content": { "device_id": EITHER OF
+                     1) string
+                     2) null },
+            }
          2) null,
 }
 ```
@@ -2793,10 +2795,12 @@ Parameters:
          1) string
          2) null,
     "hardware_wallet": EITHER OF
-         1) "Trezor"
-         2) null,
-    "trezor_device_id": EITHER OF
-         1) string
+         1) {
+                "type": "Trezor",
+                "content": { "device_id": EITHER OF
+                     1) string
+                     2) null },
+            }
          2) null,
 }
 ```
@@ -2838,10 +2842,12 @@ Parameters:
          1) bool
          2) null,
     "hardware_wallet": EITHER OF
-         1) "Trezor"
-         2) null,
-    "trezor_device_id": EITHER OF
-         1) string
+         1) {
+                "type": "Trezor",
+                "content": { "device_id": EITHER OF
+                     1) string
+                     2) null },
+            }
          2) null,
 }
 ```
