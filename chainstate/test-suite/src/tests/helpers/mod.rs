@@ -19,10 +19,11 @@ use chainstate_test_framework::{anyonecanspend_address, TestFramework, Transacti
 use common::{
     chain::{
         block::timestamp::BlockTimestamp,
+        make_token_id,
         output_value::OutputValue,
         signature::inputsig::InputWitness,
         timelock::OutputTimeLock,
-        tokens::{make_token_id, TokenId, TokenIssuance},
+        tokens::{TokenId, TokenIssuance},
         AccountCommand, AccountNonce, AccountType, Block, Destination, GenBlock, Transaction,
         TxInput, TxOutput, UtxoOutPoint,
     },
@@ -108,7 +109,13 @@ pub fn issue_token_from_block(
         ))
         .add_output(TxOutput::IssueFungibleToken(Box::new(issuance.clone())))
         .build();
-    let token_id = make_token_id(tx.transaction().inputs()).unwrap();
+    let parent_block_height = tf.gen_block_index(&parent_block_id).block_height();
+    let token_id = make_token_id(
+        tf.chain_config(),
+        parent_block_height.next_height(),
+        tx.transaction().inputs(),
+    )
+    .unwrap();
     let tx_id = tx.transaction().get_id();
     let block = tf
         .make_block_builder()

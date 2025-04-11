@@ -46,13 +46,13 @@ use common::chain::signature::inputsig::arbitrary_message::{
 };
 use common::chain::signature::DestinationSigError;
 use common::chain::tokens::{
-    make_token_id, IsTokenUnfreezable, Metadata, RPCFungibleTokenInfo, TokenId, TokenIssuance,
+    IsTokenUnfreezable, Metadata, RPCFungibleTokenInfo, TokenId, TokenIssuance,
 };
 use common::chain::{
-    make_order_id, AccountCommand, AccountNonce, AccountOutPoint, Block, ChainConfig, DelegationId,
-    Destination, GenBlock, OrderAccountCommand, OrderId, OutPointSourceId, PoolId, RpcOrderInfo,
-    SignedTransaction, SignedTransactionIntent, Transaction, TransactionCreationError, TxInput,
-    TxOutput, UtxoOutPoint,
+    make_delegation_id, make_order_id, make_token_id, AccountCommand, AccountNonce,
+    AccountOutPoint, Block, ChainConfig, DelegationId, Destination, GenBlock, OrderAccountCommand,
+    OrderId, OutPointSourceId, PoolId, RpcOrderInfo, SignedTransaction, SignedTransactionIntent,
+    Transaction, TransactionCreationError, TxInput, TxOutput, UtxoOutPoint,
 };
 use common::primitives::id::{hash_encoded, WithId};
 use common::primitives::{Amount, BlockHeight, Id, H256};
@@ -64,7 +64,6 @@ use crypto::key::hdkd::u31::U31;
 use crypto::key::{PrivateKey, PublicKey};
 use crypto::vrf::VRFPublicKey;
 use mempool::FeeRate;
-use pos_accounting::make_delegation_id;
 use tx_verifier::error::TokenIssuanceError;
 use tx_verifier::{check_transaction, CheckTransactionError};
 use utils::{debug_panic_or_log, ensure};
@@ -1930,8 +1929,8 @@ where
             consolidate_fee_rate,
             TxAdditionalInfo::new(),
         )?;
-        let input0_outpoint = crate::utils::get_first_utxo_outpoint(tx.transaction().inputs())?;
-        let delegation_id = make_delegation_id(input0_outpoint);
+        let delegation_id =
+            make_delegation_id(tx.transaction().inputs()).ok_or(WalletError::NoUtxos)?;
         Ok((delegation_id, tx))
     }
 
@@ -1953,8 +1952,12 @@ where
             consolidate_fee_rate,
             TxAdditionalInfo::new(),
         )?;
-        let token_id =
-            make_token_id(tx.transaction().inputs()).ok_or(WalletError::MissingTokenId)?;
+        let token_id = make_token_id(
+            self.chain_config.as_ref(),
+            self.get_best_block_for_account(account_index)?.1.next_height(),
+            tx.transaction().inputs(),
+        )
+        .ok_or(WalletError::MissingTokenId)?;
         Ok((token_id, tx))
     }
 
@@ -1988,8 +1991,12 @@ where
             },
         )?;
 
-        let token_id = make_token_id(signed_transaction.transaction().inputs())
-            .ok_or(WalletError::MissingTokenId)?;
+        let token_id = make_token_id(
+            self.chain_config.as_ref(),
+            self.get_best_block_for_account(account_index)?.1.next_height(),
+            signed_transaction.transaction().inputs(),
+        )
+        .ok_or(WalletError::MissingTokenId)?;
         Ok((token_id, signed_transaction))
     }
 
@@ -2149,8 +2156,7 @@ where
                 )
             },
         )?;
-        let input0_outpoint = crate::utils::get_first_utxo_outpoint(tx.transaction().inputs())?;
-        let order_id = make_order_id(input0_outpoint);
+        let order_id = make_order_id(tx.inputs()).ok_or(WalletError::NotUtxoInput)?;
         Ok((order_id, tx))
     }
 

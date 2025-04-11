@@ -17,7 +17,7 @@ use rstest::rstest;
 
 use chainstate_test_framework::{empty_witness, TransactionBuilder};
 use common::{
-    chain::{signature::inputsig::InputWitness, timelock::OutputTimeLock, OrderData},
+    chain::{config::create_unit_test_config, signature::inputsig::InputWitness, timelock::OutputTimeLock, OrderData},
     primitives::H256,
 };
 use randomness::Rng;
@@ -39,6 +39,8 @@ use super::*;
 fn diamond_unconfirmed_descendants(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
+    let chain_config = create_unit_test_config();
+    let best_block_height = BlockHeight::new(rng.gen());
     let mut output_cache = OutputCache::empty();
 
     // A
@@ -60,6 +62,8 @@ fn diamond_unconfirmed_descendants(#[case] seed: Seed) {
     let tx_a_id = tx_a.transaction().get_id();
     output_cache
         .add_tx(
+            &chain_config,
+            best_block_height,
             tx_a_id.into(),
             WalletTx::Tx(TxData::new(tx_a, TxState::Inactive(0))),
         )
@@ -79,6 +83,8 @@ fn diamond_unconfirmed_descendants(#[case] seed: Seed) {
     let tx_b_id = tx_b.transaction().get_id();
     output_cache
         .add_tx(
+            &chain_config,
+            best_block_height,
             tx_b_id.into(),
             WalletTx::Tx(TxData::new(tx_b, TxState::Inactive(0))),
         )
@@ -98,6 +104,8 @@ fn diamond_unconfirmed_descendants(#[case] seed: Seed) {
     let tx_c_id = tx_c.transaction().get_id();
     output_cache
         .add_tx(
+            &chain_config,
+            best_block_height,
             tx_c_id.into(),
             WalletTx::Tx(TxData::new(tx_c, TxState::Inactive(0))),
         )
@@ -121,6 +129,8 @@ fn diamond_unconfirmed_descendants(#[case] seed: Seed) {
     let tx_d_id = tx_d.transaction().get_id();
     output_cache
         .add_tx(
+            &chain_config,
+            best_block_height,
             tx_d_id.into(),
             WalletTx::Tx(TxData::new(tx_d, TxState::Inactive(0))),
         )
@@ -162,6 +172,8 @@ fn diamond_unconfirmed_descendants(#[case] seed: Seed) {
 fn update_conflicting_txs_parent_and_child(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
+    let chain_config = create_unit_test_config();
+    let best_block_height = BlockHeight::new(rng.gen());
     let mut output_cache = OutputCache::empty();
     let token_id = TokenId::random_using(&mut rng);
 
@@ -180,6 +192,8 @@ fn update_conflicting_txs_parent_and_child(#[case] seed: Seed) {
     let tx_a_id = tx_a.transaction().get_id();
     output_cache
         .add_tx(
+            &chain_config,
+            best_block_height,
             tx_a_id.into(),
             WalletTx::Tx(TxData::new(
                 tx_a,
@@ -202,6 +216,8 @@ fn update_conflicting_txs_parent_and_child(#[case] seed: Seed) {
     let tx_b_id = tx_b.transaction().get_id();
     output_cache
         .add_tx(
+            &chain_config,
+            best_block_height,
             tx_b_id.into(),
             WalletTx::Tx(TxData::new(tx_b.clone(), TxState::Inactive(0))),
         )
@@ -221,6 +237,8 @@ fn update_conflicting_txs_parent_and_child(#[case] seed: Seed) {
     let tx_c_id = tx_c.transaction().get_id();
     output_cache
         .add_tx(
+            &chain_config,
+            best_block_height,
             tx_c_id.into(),
             WalletTx::Tx(TxData::new(tx_c.clone(), TxState::Inactive(0))),
         )
@@ -238,7 +256,14 @@ fn update_conflicting_txs_parent_and_child(#[case] seed: Seed) {
         .build();
 
     let block_id = Id::<GenBlock>::new(H256::random_using(&mut rng));
-    let result = output_cache.update_conflicting_txs(tx_d.transaction(), block_id).unwrap();
+    let result = output_cache
+        .update_conflicting_txs(
+            &chain_config,
+            best_block_height,
+            tx_d.transaction(),
+            block_id,
+        )
+        .unwrap();
     assert_eq!(
         result,
         vec![

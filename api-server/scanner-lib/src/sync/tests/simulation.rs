@@ -35,12 +35,9 @@ use common::{
     chain::{
         block::timestamp::BlockTimestamp,
         config::create_unit_test_config,
-        make_order_id,
+        make_delegation_id, make_order_id, make_token_id,
         output_value::{OutputValue, RpcOutputValue},
-        tokens::{
-            make_token_id, IsTokenFrozen, NftIssuance, RPCNonFungibleTokenMetadata, RPCTokenInfo,
-            TokenId,
-        },
+        tokens::{IsTokenFrozen, NftIssuance, RPCNonFungibleTokenMetadata, RPCTokenInfo, TokenId},
         AccountCommand, AccountNonce, AccountSpending, AccountType, ChainConfig, ConsensusUpgrade,
         DelegationId, Destination, GenBlockId, NetUpgrades, OrderId, OutPointSourceId,
         PoSChainConfigBuilder, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
@@ -53,7 +50,7 @@ use crypto::{
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
 use orders_accounting::{OrderData, OrdersAccountingOperations, OrdersAccountingView};
-use pos_accounting::{make_delegation_id, PoSAccountingView};
+use pos_accounting::PoSAccountingView;
 use randomness::Rng;
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
@@ -376,16 +373,17 @@ async fn simulation(
                 utxo_outpoints.extend(new_utxos);
 
                 // store new ids
-                let input0_outpoint = tx.inputs().iter().find_map(|input| input.utxo_outpoint());
                 tx.outputs().iter().for_each(|out| match out {
                     TxOutput::CreateStakePool(pool_id, _) => {
                         staking_pools.insert(*pool_id);
                     }
                     TxOutput::IssueNft(_, _, _) | TxOutput::IssueFungibleToken(_) => {
-                        token_ids.insert(make_token_id(tx.inputs()).unwrap());
+                        token_ids.insert(
+                            make_token_id(&chain_config, BlockHeight::zero(), tx.inputs()).unwrap(),
+                        );
                     }
                     TxOutput::CreateDelegationId(_, _) => {
-                        delegations.insert(make_delegation_id(input0_outpoint.unwrap()));
+                        delegations.insert(make_delegation_id(tx.inputs()).unwrap());
                     }
                     | TxOutput::Burn(_)
                     | TxOutput::Transfer(_, _)
@@ -395,7 +393,7 @@ async fn simulation(
                     | TxOutput::ProduceBlockFromStake(_, _)
                     | TxOutput::Htlc(_, _) => {}
                     TxOutput::CreateOrder(order_data) => {
-                        let order_id = make_order_id(input0_outpoint.unwrap());
+                        let order_id = make_order_id(tx.inputs()).unwrap();
                         let _ = new_orders_cache
                             .create_order(order_id, order_data.as_ref().clone().into())
                             .unwrap();

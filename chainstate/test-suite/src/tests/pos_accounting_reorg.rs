@@ -30,8 +30,8 @@ use common::{
         output_value::OutputValue,
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
-        AccountNonce, AccountOutPoint, AccountSpending, Destination, GenBlock, OutPointSourceId,
-        PoolId, TxInput, TxOutput, UtxoOutPoint,
+        AccountNonce, AccountOutPoint, AccountSpending, DelegationId, Destination, GenBlock,
+        OutPointSourceId, PoolId, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, Id, Idable, H256},
 };
@@ -39,7 +39,7 @@ use crypto::{
     key::{KeyKind, PrivateKey},
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
-use pos_accounting::{make_delegation_id, PoSAccountingDeltaData};
+use pos_accounting::PoSAccountingDeltaData;
 use randomness::Rng;
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
@@ -87,7 +87,7 @@ fn stake_pool_reorg(
             OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
             0,
         );
-        let pool_id_a = pos_accounting::make_pool_id(&genesis_outpoint);
+        let pool_id_a = PoolId::from_utxo(&genesis_outpoint);
         let tx_a = TransactionBuilder::new()
             .add_input(genesis_outpoint.into(), empty_witness(&mut rng))
             .add_output(TxOutput::CreateStakePool(
@@ -119,7 +119,7 @@ fn stake_pool_reorg(
         let destination_c = new_pub_key_destination(&mut rng);
         let (_, vrf_pub_key_c) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
         let tx_b_outpoint0 = UtxoOutPoint::new(tx_b.transaction().get_id().into(), 0);
-        let pool_id_c = pos_accounting::make_pool_id(&tx_b_outpoint0);
+        let pool_id_c = PoolId::from_utxo(&tx_b_outpoint0);
         let tx_c = TransactionBuilder::new()
             .add_input(tx_b_outpoint0.into(), empty_witness(&mut rng))
             .add_output(TxOutput::CreateStakePool(
@@ -271,7 +271,7 @@ fn create_same_stake_pool_after_reorg(#[case] seed: Seed) {
         let genesis_block_id = tf.genesis().get_id().into();
         let genesis_outpoint =
             UtxoOutPoint::new(OutPointSourceId::BlockReward(genesis_block_id), 0);
-        let pool_id = pos_accounting::make_pool_id(&genesis_outpoint);
+        let pool_id = PoolId::from_utxo(&genesis_outpoint);
         let create_pool_tx_builder = TransactionBuilder::new()
             .add_input(genesis_outpoint.into(), empty_witness(&mut rng))
             .add_output(TxOutput::CreateStakePool(
@@ -376,7 +376,7 @@ fn create_same_delegation_after_reorg(#[case] seed: Seed) {
         let genesis_block_id = tf.genesis().get_id().into();
         let genesis_outpoint =
             UtxoOutPoint::new(OutPointSourceId::BlockReward(genesis_block_id), 0);
-        let delegation_id = pos_accounting::make_delegation_id(&genesis_outpoint);
+        let delegation_id = DelegationId::from_utxo(&genesis_outpoint);
         let create_delegation_tx = TransactionBuilder::new()
             .add_input(genesis_outpoint.into(), empty_witness(&mut rng))
             .add_output(TxOutput::CreateDelegationId(
@@ -510,7 +510,7 @@ fn create_delegation_for_staking_pool_in_reorg(#[case] seed: Seed) {
         let genesis_block_id = tf.genesis().get_id().into();
         let genesis_outpoint =
             UtxoOutPoint::new(OutPointSourceId::BlockReward(genesis_block_id), 0);
-        let delegation_id_1 = pos_accounting::make_delegation_id(&genesis_outpoint);
+        let delegation_id_1 = DelegationId::from_utxo(&genesis_outpoint);
         let create_delegation_tx_1 = TransactionBuilder::new()
             .add_input(genesis_outpoint.into(), empty_witness(&mut rng))
             .add_output(TxOutput::CreateDelegationId(
@@ -552,10 +552,8 @@ fn create_delegation_for_staking_pool_in_reorg(#[case] seed: Seed) {
         );
 
         // create block b with delegation 2
-        let delegation_id_2 = pos_accounting::make_delegation_id(&UtxoOutPoint::new(
-            delegate_staking_tx_id.into(),
-            1,
-        ));
+        let delegation_id_2 =
+            DelegationId::from_utxo(&UtxoOutPoint::new(delegate_staking_tx_id.into(), 1));
         let create_delegation_tx_2 = TransactionBuilder::new()
             .add_input(
                 TxInput::from_utxo(delegate_staking_tx_id.into(), 1),
@@ -735,7 +733,7 @@ fn in_memory_reorg_disconnect_produce_pool(#[case] seed: Seed) {
         OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
         0,
     );
-    let pool_2_id = pos_accounting::make_pool_id(&genesis_outpoint);
+    let pool_2_id = PoolId::from_utxo(&genesis_outpoint);
     let stake_pool_2_tx = TransactionBuilder::new()
         .add_input(genesis_outpoint.into(), empty_witness(&mut rng))
         .add_output(TxOutput::CreateStakePool(
@@ -830,7 +828,7 @@ fn in_memory_reorg_disconnect_create_pool(#[case] seed: Seed) {
         OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
         0,
     );
-    let pool_2_id = pos_accounting::make_pool_id(&genesis_outpoint);
+    let pool_2_id = PoolId::from_utxo(&genesis_outpoint);
     let stake_pool_2_tx = TransactionBuilder::new()
         .add_input(genesis_outpoint.into(), empty_witness(&mut rng))
         .add_output(TxOutput::CreateStakePool(
@@ -994,7 +992,7 @@ fn in_memory_reorg_disconnect_spend_delegation(#[case] seed: Seed) {
         OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
         0,
     );
-    let delegation_id = make_delegation_id(&genesis_outpoint);
+    let delegation_id = DelegationId::from_utxo(&genesis_outpoint);
     let create_delegation_tx = TransactionBuilder::new()
         .add_input(genesis_outpoint.into(), empty_witness(&mut rng))
         .add_output(TxOutput::Transfer(
@@ -1136,7 +1134,7 @@ fn in_memory_reorg_disconnect_spend_delegation_from_decommissioned(#[case] seed:
         OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
         0,
     );
-    let pool_2_id = pos_accounting::make_pool_id(&genesis_outpoint);
+    let pool_2_id = PoolId::from_utxo(&genesis_outpoint);
     let stake_pool_2_tx = TransactionBuilder::new()
         .add_input(genesis_outpoint.into(), empty_witness(&mut rng))
         .add_output(TxOutput::CreateStakePool(
@@ -1160,7 +1158,7 @@ fn in_memory_reorg_disconnect_spend_delegation_from_decommissioned(#[case] seed:
 
     // produce block `b` at height 2: create delegation and delegation some coins
     let block_a_transfer_outpoint = UtxoOutPoint::new(stake_pool_2_tx_id.into(), 1);
-    let delegation_id = make_delegation_id(&block_a_transfer_outpoint);
+    let delegation_id = DelegationId::from_utxo(&block_a_transfer_outpoint);
     let create_delegation_tx = TransactionBuilder::new()
         .add_input(block_a_transfer_outpoint.into(), empty_witness(&mut rng))
         .add_output(TxOutput::Transfer(
@@ -1299,7 +1297,7 @@ fn pos_submit_new_block_after_reorg(#[case] seed: Seed) {
         OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
         0,
     );
-    let pool_2_id = pos_accounting::make_pool_id(&genesis_outpoint);
+    let pool_2_id = PoolId::from_utxo(&genesis_outpoint);
     let stake_pool_2_tx = TransactionBuilder::new()
         .add_input(genesis_outpoint.into(), empty_witness(&mut rng))
         .add_output(TxOutput::CreateStakePool(
@@ -1415,7 +1413,7 @@ fn reorg_pos_tx_with_simple_tx(#[case] seed: Seed) {
 
     let (stake_pool_data, _) =
         create_stake_pool_data_with_all_reward_to_staker(&mut rng, pledge_amount, vrf_pk);
-    let pool_id = pos_accounting::make_pool_id(&UtxoOutPoint::new(transfer_tx_id.into(), 0));
+    let pool_id = PoolId::from_utxo(&UtxoOutPoint::new(transfer_tx_id.into(), 0));
     let stake_pool_tx = TransactionBuilder::new()
         .add_input(
             TxInput::from_utxo(transfer_tx_id.into(), 0),

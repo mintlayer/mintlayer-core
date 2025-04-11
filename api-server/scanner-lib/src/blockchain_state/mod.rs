@@ -29,12 +29,9 @@ use common::{
     chain::{
         block::{timestamp::BlockTimestamp, ConsensusData},
         config::ChainConfig,
-        make_order_id,
+        make_delegation_id, make_order_id, make_token_id,
         output_value::OutputValue,
-        tokens::{
-            get_referenced_token_ids_ignore_issuance, make_token_id, IsTokenFrozen, TokenId,
-            TokenIssuance,
-        },
+        tokens::{get_referenced_token_ids_ignore_issuance, IsTokenFrozen, TokenId, TokenIssuance},
         transaction::OutPointSourceId,
         AccountCommand, AccountNonce, AccountSpending, Block, DelegationId, Destination, GenBlock,
         Genesis, OrderAccountCommand, OrderId, PoolId, SignedTransaction, Transaction, TxInput,
@@ -44,7 +41,7 @@ use common::{
 };
 use futures::{stream::FuturesOrdered, TryStreamExt};
 use orders_accounting::OrderData;
-use pos_accounting::{make_delegation_id, PoSAccountingView, PoolData};
+use pos_accounting::{PoSAccountingView, PoolData};
 use std::{
     collections::{BTreeMap, BTreeSet},
     ops::{Add, Sub},
@@ -541,7 +538,8 @@ async fn calculate_tx_fee_and_collect_token_info<T: ApiServerStorageWrite>(
         .filter_map(|out| match out {
             TxOutput::IssueNft(token_id, _, _) => Some((*token_id, 0)),
             TxOutput::IssueFungibleToken(data) => {
-                let token_id = make_token_id(tx.inputs()).expect("must exist");
+                let token_id =
+                    make_token_id(chain_config, block_height, tx.inputs()).expect("must exist");
                 match data.as_ref() {
                     TokenIssuance::V1(data) => Some((token_id, data.number_of_decimals)),
                 }
@@ -1540,7 +1538,8 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                 .await;
             }
             TxOutput::IssueFungibleToken(issuance) => {
-                let token_id = make_token_id(inputs).expect("should not fail");
+                let token_id = make_token_id(chain_config.as_ref(), block_height, inputs)
+                    .expect("should not fail");
                 let issuance = match issuance.as_ref() {
                     TokenIssuance::V1(issuance) => FungibleTokenData {
                         token_ticker: issuance.token_ticker.clone(),
@@ -1628,11 +1627,10 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
             }
             TxOutput::ProduceBlockFromStake(_, _) => {}
             TxOutput::CreateDelegationId(destination, pool_id) => {
-                if let Some(input0_outpoint) = inputs.iter().find_map(|input| input.utxo_outpoint())
-                {
+                if let Some(delegation_id) = make_delegation_id(inputs) {
                     db_tx
                         .set_delegation_at_height(
-                            make_delegation_id(input0_outpoint),
+                            delegation_id,
                             &Delegation::new(
                                 block_height,
                                 destination.clone(),
@@ -1872,8 +1870,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                     .expect("Unable to set utxo");
             }
             TxOutput::CreateOrder(order_data) => {
-                if let Some(input0_outpoint) = inputs.iter().find_map(|input| input.utxo_outpoint())
-                {
+                if let Some(order_id) = make_order_id(inputs) {
                     let amount_and_currency = |v: &OutputValue| match v {
                         OutputValue::Coin(amount) => (CoinOrTokenId::Coin, *amount),
                         OutputValue::TokenV1(id, amount) => (CoinOrTokenId::TokenId(*id), *amount),
@@ -1897,7 +1894,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                     };
 
                     db_tx
-                        .set_order_at_height(make_order_id(input0_outpoint), &order, block_height)
+                        .set_order_at_height(order_id, &order, block_height)
                         .await
                         .expect("Unable to set delegation data");
                 }

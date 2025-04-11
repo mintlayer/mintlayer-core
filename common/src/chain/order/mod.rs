@@ -18,7 +18,7 @@ use serialization::{Decode, Encode};
 use super::{output_value::OutputValue, Destination};
 
 mod order_id;
-pub use order_id::{make_order_id, OrderId};
+pub use order_id::OrderId;
 
 mod rpc;
 pub use rpc::RpcOrderInfo;

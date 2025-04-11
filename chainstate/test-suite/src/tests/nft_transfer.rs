@@ -21,9 +21,9 @@ use common::{
     chain::{
         output_value::OutputValue,
         signature::inputsig::InputWitness,
-        tokens::{make_token_id, NftIssuance, TokenId},
+        tokens::{NftIssuance, TokenId},
         ChainstateUpgradeBuilder, Destination, NetUpgrades, OutPointSourceId, TokenIssuanceVersion,
-        TxInput, TxOutput,
+        TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Idable},
 };
@@ -39,8 +39,7 @@ fn nft_transfer_wrong_id(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
         let genesis_outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
-        let token_id =
-            make_token_id(&[TxInput::from_utxo(genesis_outpoint_id.clone(), 0)]).unwrap();
+        let token_id = TokenId::from_utxo(&UtxoOutPoint::new(genesis_outpoint_id.clone(), 0));
 
         let tx = TransactionBuilder::new()
             .add_input(
@@ -102,8 +101,7 @@ fn nft_invalid_transfer(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
         let genesis_outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
-        let token_id =
-            make_token_id(&[TxInput::from_utxo(genesis_outpoint_id.clone(), 0)]).unwrap();
+        let token_id = TokenId::from_utxo(&UtxoOutPoint::new(genesis_outpoint_id.clone(), 0));
 
         let tx = TransactionBuilder::new()
             .add_input(
@@ -124,7 +122,6 @@ fn nft_invalid_transfer(#[case] seed: Seed) {
             .unwrap()
             .unwrap();
         let block = tf.block(*block_index.block_id());
-        let token_id = make_token_id(block.transactions()[0].transaction().inputs()).unwrap();
         assert_eq!(block.transactions()[0], tx);
 
         // Try to transfer more NFT than we have in input
@@ -185,8 +182,7 @@ fn spend_different_nft_than_one_in_input(#[case] seed: Seed) {
         let genesis_outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let token_min_issuance_fee =
             tf.chainstate.get_chain_config().nft_issuance_fee(BlockHeight::zero());
-        let first_token_id =
-            make_token_id(&[TxInput::from_utxo(genesis_outpoint_id.clone(), 0)]).unwrap();
+        let first_token_id = TokenId::from_utxo(&UtxoOutPoint::new(genesis_outpoint_id.clone(), 0));
 
         let tx = TransactionBuilder::new()
             .add_input(
@@ -205,17 +201,15 @@ fn spend_different_nft_than_one_in_input(#[case] seed: Seed) {
             .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
             .build();
         let first_issuance_outpoint_id: OutPointSourceId = tx.transaction().get_id().into();
-        let block_index = tf
+        let _ = tf
             .make_block_builder()
             .add_transaction(tx)
             .build_and_process(&mut rng)
             .unwrap()
             .unwrap();
 
-        let block = tf.block(*block_index.block_id());
-        let first_token_id = make_token_id(block.transactions()[0].transaction().inputs()).unwrap();
         let second_token_id =
-            make_token_id(&[TxInput::from_utxo(first_issuance_outpoint_id.clone(), 0)]).unwrap();
+            TokenId::from_utxo(&UtxoOutPoint::new(first_issuance_outpoint_id.clone(), 0));
 
         let tx = TransactionBuilder::new()
             .add_input(
@@ -241,15 +235,12 @@ fn spend_different_nft_than_one_in_input(#[case] seed: Seed) {
             ))
             .build();
         let second_issuance_outpoint_id: OutPointSourceId = tx.transaction().get_id().into();
-        let block_index = tf
+        let _ = tf
             .make_block_builder()
             .add_transaction(tx)
             .build_and_process(&mut rng)
             .unwrap()
             .unwrap();
-
-        let block = tf.block(*block_index.block_id());
-        let _ = make_token_id(block.transactions()[0].transaction().inputs()).unwrap();
 
         // Try to spend 2 NFTs but use one ID
 
@@ -300,8 +291,7 @@ fn nft_valid_transfer(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
         let genesis_outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
-        let token_id =
-            make_token_id(&[TxInput::from_utxo(genesis_outpoint_id.clone(), 0)]).unwrap();
+        let token_id = TokenId::from_utxo(&UtxoOutPoint::new(genesis_outpoint_id.clone(), 0));
 
         let tx = TransactionBuilder::new()
             .add_input(
@@ -376,8 +366,7 @@ fn ensure_nft_cannot_be_printed_from_tokens_op(#[case] seed: Seed) {
             )
             .build();
         let genesis_outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
-        let token_id =
-            make_token_id(&[TxInput::from_utxo(genesis_outpoint_id.clone(), 0)]).unwrap();
+        let token_id = TokenId::from_utxo(&UtxoOutPoint::new(genesis_outpoint_id.clone(), 0));
 
         let token_min_issuance_fee =
             tf.chainstate.get_chain_config().nft_issuance_fee(BlockHeight::zero());

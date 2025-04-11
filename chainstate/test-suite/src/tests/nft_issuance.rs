@@ -20,19 +20,22 @@ use chainstate::{
     ConnectTransactionError, TokensError,
 };
 use chainstate_test_framework::{TestFramework, TransactionBuilder};
-use common::chain::{
-    output_value::OutputValue,
-    signature::inputsig::InputWitness,
-    tokens::{is_rfc3986_valid_symbol, make_token_id, Metadata, NftIssuance, NftIssuanceV0},
-    Block, ChainstateUpgradeBuilder, Destination, OutPointSourceId, TokenIssuanceVersion, TxInput,
-    TxOutput,
-};
 use common::primitives::{BlockHeight, Idable};
+use common::{
+    chain::{
+        output_value::OutputValue,
+        signature::inputsig::InputWitness,
+        tokens::{is_rfc3986_valid_symbol, Metadata, NftIssuance, NftIssuanceV0, TokenId},
+        Block, ChainstateUpgradeBuilder, Destination, GenBlock, OutPointSourceId,
+        TokenIssuanceVersion, TxInput, TxOutput, UtxoOutPoint,
+    },
+    primitives::Id,
+};
 use randomness::{CryptoRng, Rng};
 use serialization::extras::non_empty_vec::DataOrNoVec;
 use test_utils::{
     gen_text_with_non_ascii,
-    nft_utils::{random_creator, random_nft_issuance},
+    nft_utils::{random_creator, random_nft_issuance, random_token_issuance_v1},
     random::{make_seedable_rng, Seed},
     random_ascii_alphanumeric_string,
 };
@@ -46,7 +49,7 @@ fn nft_name_too_long(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
         let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
-        let token_id = make_token_id(&[TxInput::from_utxo(outpoint_source_id.clone(), 0)]).unwrap();
+        let token_id = TokenId::from_utxo(&UtxoOutPoint::new(outpoint_source_id.clone(), 0));
 
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
@@ -118,7 +121,7 @@ fn nft_empty_name(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
         let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
-        let token_id = make_token_id(&[TxInput::from_utxo(outpoint_source_id.clone(), 0)]).unwrap();
+        let token_id = TokenId::from_utxo(&UtxoOutPoint::new(outpoint_source_id.clone(), 0));
 
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
         let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
@@ -185,7 +188,7 @@ fn nft_invalid_name(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
         let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
-        let token_id = make_token_id(&[TxInput::from_utxo(outpoint_source_id.clone(), 0)]).unwrap();
+        let token_id = TokenId::from_utxo(&UtxoOutPoint::new(outpoint_source_id.clone(), 0));
 
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
@@ -264,7 +267,7 @@ fn nft_ticker_too_long(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
         let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
-        let token_id = make_token_id(&[TxInput::from_utxo(outpoint_source_id.clone(), 0)]).unwrap();
+        let token_id = TokenId::from_utxo(&UtxoOutPoint::new(outpoint_source_id.clone(), 0));
 
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
@@ -337,7 +340,7 @@ fn nft_empty_ticker(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
         let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
-        let token_id = make_token_id(&[TxInput::from_utxo(outpoint_source_id.clone(), 0)]).unwrap();
+        let token_id = TokenId::from_utxo(&UtxoOutPoint::new(outpoint_source_id.clone(), 0));
 
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
@@ -405,7 +408,7 @@ fn nft_invalid_ticker(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
         let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
-        let token_id = make_token_id(&[TxInput::from_utxo(outpoint_source_id.clone(), 0)]).unwrap();
+        let token_id = TokenId::from_utxo(&UtxoOutPoint::new(outpoint_source_id.clone(), 0));
 
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
@@ -484,7 +487,7 @@ fn nft_description_too_long(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
         let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
-        let token_id = make_token_id(&[TxInput::from_utxo(outpoint_source_id.clone(), 0)]).unwrap();
+        let token_id = TokenId::from_utxo(&UtxoOutPoint::new(outpoint_source_id.clone(), 0));
 
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
@@ -557,7 +560,7 @@ fn nft_empty_description(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
         let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
-        let token_id = make_token_id(&[TxInput::from_utxo(outpoint_source_id.clone(), 0)]).unwrap();
+        let token_id = TokenId::from_utxo(&UtxoOutPoint::new(outpoint_source_id.clone(), 0));
 
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
         let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
@@ -625,7 +628,7 @@ fn nft_invalid_description(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
         let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
-        let token_id = make_token_id(&[TxInput::from_utxo(outpoint_source_id.clone(), 0)]).unwrap();
+        let token_id = TokenId::from_utxo(&UtxoOutPoint::new(outpoint_source_id.clone(), 0));
 
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
@@ -704,7 +707,7 @@ fn nft_icon_uri_too_long(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
         let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
-        let token_id = make_token_id(&[TxInput::from_utxo(outpoint_source_id.clone(), 0)]).unwrap();
+        let token_id = TokenId::from_utxo(&UtxoOutPoint::new(outpoint_source_id.clone(), 0));
 
         let max_uri_len = tf.chainstate.get_chain_config().token_max_uri_len();
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
@@ -783,7 +786,7 @@ fn nft_icon_uri_empty(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
         let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
-        let token_id = make_token_id(&[TxInput::from_utxo(outpoint_source_id.clone(), 0)]).unwrap();
+        let token_id = TokenId::from_utxo(&UtxoOutPoint::new(outpoint_source_id.clone(), 0));
 
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
@@ -853,7 +856,7 @@ fn nft_icon_uri_invalid(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
         let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
-        let token_id = make_token_id(&[TxInput::from_utxo(outpoint_source_id.clone(), 0)]).unwrap();
+        let token_id = TokenId::from_utxo(&UtxoOutPoint::new(outpoint_source_id.clone(), 0));
 
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
@@ -938,7 +941,7 @@ fn nft_metadata_uri_too_long(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
         let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
-        let token_id = make_token_id(&[TxInput::from_utxo(outpoint_source_id.clone(), 0)]).unwrap();
+        let token_id = TokenId::from_utxo(&UtxoOutPoint::new(outpoint_source_id.clone(), 0));
 
         // Metadata URI is too long
         let max_uri_len = tf.chainstate.get_chain_config().token_max_uri_len();
@@ -1020,7 +1023,7 @@ fn nft_metadata_uri_empty(#[case] seed: Seed) {
         let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let token_min_issuance_fee =
             tf.chainstate.get_chain_config().nft_issuance_fee(BlockHeight::zero());
-        let token_id = make_token_id(&[TxInput::from_utxo(outpoint_source_id.clone(), 0)]).unwrap();
+        let token_id = TokenId::from_utxo(&UtxoOutPoint::new(outpoint_source_id.clone(), 0));
 
         // Metadata URI is empty
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
@@ -1087,7 +1090,7 @@ fn nft_metadata_uri_invalid(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
         let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
-        let token_id = make_token_id(&[TxInput::from_utxo(outpoint_source_id.clone(), 0)]).unwrap();
+        let token_id = TokenId::from_utxo(&UtxoOutPoint::new(outpoint_source_id.clone(), 0));
 
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
@@ -1172,7 +1175,7 @@ fn nft_media_uri_too_long(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
         let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
-        let token_id = make_token_id(&[TxInput::from_utxo(outpoint_source_id.clone(), 0)]).unwrap();
+        let token_id = TokenId::from_utxo(&UtxoOutPoint::new(outpoint_source_id.clone(), 0));
 
         // Media URI is too long
         let max_uri_len = tf.chainstate.get_chain_config().token_max_uri_len();
@@ -1252,7 +1255,7 @@ fn nft_media_uri_empty(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
         let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
-        let token_id = make_token_id(&[TxInput::from_utxo(outpoint_source_id.clone(), 0)]).unwrap();
+        let token_id = TokenId::from_utxo(&UtxoOutPoint::new(outpoint_source_id.clone(), 0));
 
         let token_min_issuance_fee =
             tf.chainstate.get_chain_config().nft_issuance_fee(BlockHeight::zero());
@@ -1323,7 +1326,7 @@ fn nft_media_uri_invalid(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
         let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
-        let token_id = make_token_id(&[TxInput::from_utxo(outpoint_source_id.clone(), 0)]).unwrap();
+        let token_id = TokenId::from_utxo(&UtxoOutPoint::new(outpoint_source_id.clone(), 0));
 
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
@@ -1412,13 +1415,13 @@ fn new_block_with_media_hash(
     let name = random_ascii_alphanumeric_string(rng, 1..max_name_len).into_bytes();
     let description = random_ascii_alphanumeric_string(rng, 1..max_desc_len).into_bytes();
     let ticker = random_ascii_alphanumeric_string(rng, 1..max_ticker_len).into_bytes();
-    let genesis_id = tf.genesis().get_id();
+    let genesis_id: Id<GenBlock> = tf.genesis().get_id().into();
     let token_min_issuance_fee =
         tf.chainstate.get_chain_config().nft_issuance_fee(BlockHeight::zero());
-    let token_id = make_token_id(&[TxInput::from_utxo(genesis_id.into(), 0)]).unwrap();
+    let token_id = TokenId::from_utxo(&UtxoOutPoint::new(genesis_id.into(), 0));
 
     tf.make_block_builder()
-        .with_parent(genesis_id.into())
+        .with_parent(genesis_id)
         .add_transaction(
             TransactionBuilder::new()
                 .add_input(
@@ -1572,7 +1575,7 @@ fn nft_valid_case(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
         let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
-        let token_id = make_token_id(&[TxInput::from_utxo(outpoint_source_id.clone(), 0)]).unwrap();
+        let token_id = TokenId::from_utxo(&UtxoOutPoint::new(outpoint_source_id.clone(), 0));
 
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
@@ -1742,7 +1745,7 @@ fn only_ascii_alphanumeric_after_v1(#[case] seed: Seed) {
                 media_hash: Vec::new(),
             },
         };
-        let token_id = make_token_id(&[TxInput::from_utxo(genesis_block_id.into(), 0)]).unwrap();
+        let token_id = TokenId::from_utxo(&UtxoOutPoint::new(genesis_block_id.into(), 0));
 
         let tx = TransactionBuilder::new()
             .add_input(
@@ -1789,7 +1792,7 @@ fn only_ascii_alphanumeric_after_v1(#[case] seed: Seed) {
                 media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
             },
         };
-        let token_id = make_token_id(&[TxInput::from_utxo(genesis_block_id.into(), 0)]).unwrap();
+        let token_id = TokenId::from_utxo(&UtxoOutPoint::new(genesis_block_id.into(), 0));
 
         let tx = TransactionBuilder::new()
             .add_input(
@@ -1837,7 +1840,7 @@ fn only_ascii_alphanumeric_after_v1(#[case] seed: Seed) {
                 media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
             },
         };
-        let token_id = make_token_id(&[TxInput::from_utxo(genesis_block_id.into(), 0)]).unwrap();
+        let token_id = TokenId::from_utxo(&UtxoOutPoint::new(genesis_block_id.into(), 0));
 
         let tx = TransactionBuilder::new()
             .add_input(
@@ -1883,7 +1886,7 @@ fn only_ascii_alphanumeric_after_v1(#[case] seed: Seed) {
                 media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
             },
         };
-        let token_id = make_token_id(&[TxInput::from_utxo(genesis_block_id.into(), 0)]).unwrap();
+        let token_id = TokenId::from_utxo(&UtxoOutPoint::new(genesis_block_id.into(), 0));
 
         let tx = TransactionBuilder::new()
             .add_input(
@@ -1909,10 +1912,11 @@ fn nft_token_id_mismatch(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
         let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
-        let invalid_token_id =
-            make_token_id(&[TxInput::from_utxo(outpoint_source_id.clone(), 100)]).unwrap();
-        let valid_token_id =
-            make_token_id(&[TxInput::from_utxo(outpoint_source_id.clone(), 0)]).unwrap();
+        let invalid_token_id = TokenId::from_utxo(&UtxoOutPoint::new(
+            outpoint_source_id.clone(),
+            rng.gen_range(1..100),
+        ));
+        let valid_token_id = TokenId::from_utxo(&UtxoOutPoint::new(outpoint_source_id.clone(), 0));
 
         let token_min_issuance_fee =
             tf.chainstate.get_chain_config().nft_issuance_fee(BlockHeight::zero());
@@ -1962,5 +1966,59 @@ fn nft_token_id_mismatch(#[case] seed: Seed) {
             )
             .build_and_process(&mut rng)
             .unwrap();
+    })
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn issue_nft_and_fungible_token_same_tx(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+        let token_min_issuance_fee =
+            tf.chainstate.get_chain_config().nft_issuance_fee(BlockHeight::zero());
+        let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
+        let token_id = TokenId::from_utxo(&UtxoOutPoint::new(outpoint_source_id.clone(), 0));
+
+        let nft_issuance = random_nft_issuance(tf.chain_config(), &mut rng);
+        let fungible_token_issuance =
+            random_token_issuance_v1(tf.chain_config(), Destination::AnyoneCanSpend, &mut rng);
+
+        let result = tf
+            .make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_utxo(outpoint_source_id, 0),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_output(TxOutput::IssueNft(
+                        token_id,
+                        Box::new(nft_issuance.into()),
+                        Destination::AnyoneCanSpend,
+                    ))
+                    .add_output(TxOutput::IssueFungibleToken(Box::new(
+                        common::chain::tokens::TokenIssuance::V1(fungible_token_issuance),
+                    )))
+                    .add_output(TxOutput::Burn(OutputValue::Coin(
+                        (token_min_issuance_fee * 2).unwrap(),
+                    )))
+                    .build(),
+            )
+            .build_and_process(&mut rng);
+
+        assert!(matches!(
+            result,
+            Err(ChainstateError::ProcessBlockError(
+                BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
+                    CheckBlockTransactionsError::CheckTransactionError(
+                        CheckTransactionError::TokensError(
+                            TokensError::MultipleTokenIssuanceInTransaction(_)
+                        )
+                    )
+                ))
+            ))
+        ));
     })
 }

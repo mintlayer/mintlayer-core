@@ -16,17 +16,15 @@
 use std::collections::BTreeMap;
 
 use common::{
-    chain::{OutPointSourceId, UtxoOutPoint},
-    primitives::{Amount, Id, H256},
+    chain::{DelegationId, PoolId},
+    primitives::Amount,
 };
-use randomness::RngCore;
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 
 use super::{
     create_pool, create_pool_data, create_storage_with_pool,
-    create_storage_with_pool_and_delegation, new_delegation_id, new_pool_id,
-    new_pub_key_destination,
+    create_storage_with_pool_and_delegation, new_pub_key_destination,
 };
 
 use crate::{
@@ -42,13 +40,9 @@ fn create_pool_twice(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     let pledge_amount = Amount::from_atoms(100);
-    let outpoint = UtxoOutPoint::new(
-        OutPointSourceId::BlockReward(Id::new(H256::random_using(&mut rng))),
-        0,
-    );
     let destination = new_pub_key_destination(&mut rng);
     let pool_data = create_pool_data(&mut rng, destination, pledge_amount);
-    let pool_id = crate::make_pool_id(&outpoint);
+    let pool_id = PoolId::random_using(&mut rng);
 
     let mut storage = InMemoryPoSAccounting::new();
     let mut db = PoSAccountingDB::new(&mut storage);
@@ -78,7 +72,7 @@ fn create_pool_twice(#[case] seed: Seed) {
 fn decommission_unknown_pool(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let storage = InMemoryPoSAccounting::new();
-    let pool_id = new_pool_id(rng.next_u64());
+    let pool_id = PoolId::random_using(&mut rng);
 
     let db = PoSAccountingDB::new(&storage);
     let mut delta = PoSAccountingDelta::new(&db);
@@ -177,19 +171,18 @@ fn create_delegation_twice(#[case] seed: Seed) {
     let pledge_amount = Amount::from_atoms(100);
     let (pool_id, _, mut storage) = create_storage_with_pool(&mut rng, pledge_amount);
 
-    let outpoint = UtxoOutPoint::new(
-        OutPointSourceId::BlockReward(Id::new(H256::random_using(&mut rng))),
-        0,
-    );
+    let delegation_id = DelegationId::random_using(&mut rng);
     let destination = new_pub_key_destination(&mut rng);
 
     let mut db = PoSAccountingDB::new(&mut storage);
     let mut delta = PoSAccountingDelta::new(&mut db);
-    let _ = delta.create_delegation_id(pool_id, destination.clone(), &outpoint).unwrap();
+    let _ = delta.create_delegation_id(pool_id, delegation_id, destination.clone()).unwrap();
 
     // before flush
     assert_eq!(
-        delta.create_delegation_id(pool_id, destination.clone(), &outpoint).unwrap_err(),
+        delta
+            .create_delegation_id(pool_id, delegation_id, destination.clone(),)
+            .unwrap_err(),
         Error::InvariantErrorDelegationCreationFailedIdAlreadyExists
     );
 
@@ -199,7 +192,7 @@ fn create_delegation_twice(#[case] seed: Seed) {
     // after flush
     let mut delta = PoSAccountingDelta::new(&mut db);
     assert_eq!(
-        delta.create_delegation_id(pool_id, destination, &outpoint).unwrap_err(),
+        delta.create_delegation_id(pool_id, delegation_id, destination).unwrap_err(),
         Error::InvariantErrorDelegationCreationFailedIdAlreadyExists
     );
 }
@@ -212,16 +205,13 @@ fn create_delegation_id_unknown_pool(#[case] seed: Seed) {
     let storage = InMemoryPoSAccounting::new();
 
     let destination = new_pub_key_destination(&mut rng);
-    let outpoint = UtxoOutPoint::new(
-        OutPointSourceId::BlockReward(Id::new(H256::random_using(&mut rng))),
-        0,
-    );
-    let pool_id = new_pool_id(rng.next_u64());
+    let pool_id = PoolId::random_using(&mut rng);
+    let delegation_id = DelegationId::random_using(&mut rng);
 
     let db = PoSAccountingDB::new(&storage);
     let mut delta = PoSAccountingDelta::new(&db);
     assert_eq!(
-        delta.create_delegation_id(pool_id, destination, &outpoint).unwrap_err(),
+        delta.create_delegation_id(pool_id, delegation_id, destination).unwrap_err(),
         Error::DelegationCreationFailedPoolDoesNotExist
     );
 }
@@ -233,7 +223,7 @@ fn delegate_staking_unknown_id(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let storage = InMemoryPoSAccounting::new();
 
-    let delegation_id = new_delegation_id(rng.next_u64());
+    let delegation_id = DelegationId::random_using(&mut rng);
     let delegated_amount = Amount::from_atoms(100);
 
     let db = PoSAccountingDB::new(&storage);
@@ -251,7 +241,7 @@ fn spend_share_unknown_id(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let storage = InMemoryPoSAccounting::new();
 
-    let delegation_id = new_delegation_id(rng.next_u64());
+    let delegation_id = DelegationId::random_using(&mut rng);
     let delegated_amount = Amount::from_atoms(100);
 
     let db = PoSAccountingDB::new(&storage);

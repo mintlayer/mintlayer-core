@@ -32,7 +32,8 @@ use crate::{
         ConsensusUpgrade, DataDepositFeeVersion, Destination, FrozenTokensValidationVersion,
         GenBlock, Genesis, HtlcActivated, NetUpgrades, OrdersActivated, OrdersVersion,
         PoSChainConfig, PoSConsensusVersion, PoWChainConfig, RewardDistributionVersion,
-        StakerDestinationUpdateForbidden, TokenIssuanceVersion, TokensFeeVersion,
+        StakerDestinationUpdateForbidden, TokenIdGenerationVersion, TokenIssuanceVersion,
+        TokensFeeVersion,
     },
     primitives::{
         id::WithId, per_thousand::PerThousand, semver::SemVer, Amount, BlockCount, BlockDistance,
@@ -187,6 +188,7 @@ impl ChainType {
                 OrdersActivated::No,
                 OrdersVersion::V0,
                 StakerDestinationUpdateForbidden::No,
+                TokenIdGenerationVersion::V0,
             ))
             .then(MAINNET_FORK_HEIGHT_1_HTLC_AND_ORDERS, |builder| {
                 builder
@@ -202,6 +204,7 @@ impl ChainType {
                     builder
                         .orders_version(OrdersVersion::V1)
                         .staker_destination_update_forbidden(StakerDestinationUpdateForbidden::Yes)
+                        .token_id_generation_version(TokenIdGenerationVersion::V1)
                 },
             )
             .build(),
@@ -219,6 +222,7 @@ impl ChainType {
                         OrdersActivated::Yes,
                         OrdersVersion::V1,
                         StakerDestinationUpdateForbidden::Yes,
+                        TokenIdGenerationVersion::V1,
                     ),
                 )];
                 NetUpgrades::initialize(upgrades).expect("net upgrades")
@@ -234,6 +238,7 @@ impl ChainType {
                 OrdersActivated::No,
                 OrdersVersion::V0,
                 StakerDestinationUpdateForbidden::No,
+                TokenIdGenerationVersion::V0,
             ))
             .then(
                 TESTNET_FORK_HEIGHT_1_TOKENS_V1_AND_CONSENSUS_UPGRADE,
@@ -264,6 +269,7 @@ impl ChainType {
                     builder
                         .orders_version(OrdersVersion::V1)
                         .staker_destination_update_forbidden(StakerDestinationUpdateForbidden::Yes)
+                        .token_id_generation_version(TokenIdGenerationVersion::V1)
                 },
             )
             .build(),
@@ -722,6 +728,7 @@ mod tests {
                             OrdersActivated::No,
                             OrdersVersion::V0,
                             StakerDestinationUpdateForbidden::No,
+                            TokenIdGenerationVersion::V0,
                         ),
                     ),
                     (
@@ -737,6 +744,7 @@ mod tests {
                             OrdersActivated::Yes,
                             OrdersVersion::V0,
                             StakerDestinationUpdateForbidden::No,
+                            TokenIdGenerationVersion::V0,
                         ),
                     ),
                     (
@@ -752,6 +760,7 @@ mod tests {
                             OrdersActivated::Yes,
                             OrdersVersion::V1,
                             StakerDestinationUpdateForbidden::Yes,
+                            TokenIdGenerationVersion::V1,
                         ),
                     ),
                 ])
@@ -779,6 +788,7 @@ mod tests {
                             OrdersActivated::No,
                             OrdersVersion::V0,
                             StakerDestinationUpdateForbidden::No,
+                            TokenIdGenerationVersion::V0,
                         ),
                     ),
                     (
@@ -794,6 +804,7 @@ mod tests {
                             OrdersActivated::No,
                             OrdersVersion::V0,
                             StakerDestinationUpdateForbidden::No,
+                            TokenIdGenerationVersion::V0,
                         ),
                     ),
                     (
@@ -809,6 +820,7 @@ mod tests {
                             OrdersActivated::No,
                             OrdersVersion::V0,
                             StakerDestinationUpdateForbidden::No,
+                            TokenIdGenerationVersion::V0,
                         ),
                     ),
                     (
@@ -824,6 +836,7 @@ mod tests {
                             OrdersActivated::No,
                             OrdersVersion::V0,
                             StakerDestinationUpdateForbidden::No,
+                            TokenIdGenerationVersion::V0,
                         ),
                     ),
                     (
@@ -839,6 +852,7 @@ mod tests {
                             OrdersActivated::Yes,
                             OrdersVersion::V0,
                             StakerDestinationUpdateForbidden::No,
+                            TokenIdGenerationVersion::V0,
                         ),
                     ),
                     (
@@ -854,6 +868,7 @@ mod tests {
                             OrdersActivated::Yes,
                             OrdersVersion::V1,
                             StakerDestinationUpdateForbidden::Yes,
+                            TokenIdGenerationVersion::V1,
                         ),
                     ),
                 ])

@@ -319,7 +319,7 @@ export async function run_test() {
     assert_eq_arrays(inputs, expected_inputs);
 
     try {
-      get_token_id([], Network.Testnet);
+      get_token_id([], BigInt(1), Network.Testnet);
       throw "Token Id generated without a UTXO input somehow!";
     } catch (e) {
       if (!e.includes("No UTXO input found")) {
@@ -331,7 +331,7 @@ export async function run_test() {
     {
       const expected_token_id =
         "tmltk13cncdptay55g9ajhrkaw0fp46r0tspq9kptul8vj2q7yvd69n4zsl24gea";
-      const token_id = get_token_id(inputs, Network.Testnet);
+      const token_id = get_token_id(inputs, BigInt(1), Network.Testnet);
       console.log(token_id);
 
       if (token_id != expected_token_id) {

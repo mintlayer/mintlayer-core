@@ -14,8 +14,8 @@
 // limitations under the License.
 
 use common::chain::{
-    make_order_id, AccountCommand, AccountNonce, ChainstateUpgradeBuilder, OrderAccountCommand,
-    OrderData, OrdersVersion,
+    AccountCommand, AccountNonce, ChainstateUpgradeBuilder, OrderAccountCommand, OrderData,
+    OrderId, OrdersVersion,
 };
 
 use super::*;
@@ -63,7 +63,7 @@ async fn create_fill_conclude_order(#[case] seed: Seed, #[case] version: OrdersV
                     OutputValue::Coin(Amount::from_atoms(10)),
                     OutputValue::TokenV1(issue_and_mint_result.token_id, Amount::from_atoms(10)),
                 );
-                let order_id = make_order_id(&issue_and_mint_result.tokens_outpoint);
+                let order_id = OrderId::from_utxo(&issue_and_mint_result.tokens_outpoint);
                 let tx_1 = TransactionBuilder::new()
                     .add_input(
                         TxInput::Utxo(issue_and_mint_result.tokens_outpoint),
@@ -236,7 +236,7 @@ async fn order_pairs(#[case] seed: Seed) {
                     OutputValue::Coin(Amount::from_atoms(10)),
                     OutputValue::TokenV1(issue_and_mint_result.token_id, Amount::from_atoms(10)),
                 );
-                let order_id = make_order_id(&issue_and_mint_result.tokens_outpoint);
+                let order_id = OrderId::from_utxo(&issue_and_mint_result.tokens_outpoint);
                 let tx_1 = TransactionBuilder::new()
                     .add_input(
                         TxInput::Utxo(issue_and_mint_result.tokens_outpoint),

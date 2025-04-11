@@ -59,7 +59,7 @@ use super::{
     ChangeTokenMetadataUriActivated, ConsensusUpgrade, DataDepositFeeVersion, DestinationTag,
     FrozenTokensValidationVersion, HtlcActivated, OrdersActivated, OrdersVersion,
     RequiredConsensus, RewardDistributionVersion, StakerDestinationUpdateForbidden,
-    TokenIssuanceVersion, TokensFeeVersion,
+    TokenIdGenerationVersion, TokenIssuanceVersion, TokensFeeVersion,
 };
 
 use self::{
@@ -918,6 +918,7 @@ pub fn create_unit_test_config_builder() -> Builder {
                     OrdersActivated::Yes,
                     OrdersVersion::V1,
                     StakerDestinationUpdateForbidden::Yes,
+                    TokenIdGenerationVersion::V1,
                 ),
             )])
             .expect("cannot fail"),

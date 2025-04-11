@@ -21,8 +21,9 @@ use chainstate_test_framework::{
 };
 use common::{
     chain::{
+        make_token_id,
         output_value::OutputValue,
-        tokens::{make_token_id, NftIssuance, TokenAuxiliaryData, TokenIssuanceV0},
+        tokens::{NftIssuance, TokenAuxiliaryData, TokenId, TokenIssuanceV0},
         ChainstateUpgradeBuilder, Destination, OutPointSourceId, TokenIssuanceVersion, Transaction,
         TxInput, TxOutput, UtxoOutPoint,
     },
@@ -150,7 +151,12 @@ fn store_fungible_token_v0(#[case] seed: Seed) {
             )))
             .build();
         let tx_id = tx.transaction().get_id();
-        let token_id = make_token_id(tx.transaction().inputs()).unwrap();
+        let token_id = make_token_id(
+            tf.chain_config().as_ref(),
+            BlockHeight::zero(),
+            tx.transaction().inputs(),
+        )
+        .unwrap();
 
         let block = tf.make_block_builder().add_transaction(tx.clone()).build(&mut rng);
         let block_id = block.get_id();
@@ -220,7 +226,12 @@ fn store_nft_v0(#[case] seed: Seed) {
             )))
             .build();
         let tx_id = tx.transaction().get_id();
-        let token_id = make_token_id(tx.transaction().inputs()).unwrap();
+        let token_id = make_token_id(
+            tf.chain_config().as_ref(),
+            BlockHeight::zero(),
+            tx.transaction().inputs(),
+        )
+        .unwrap();
 
         let block = tf.make_block_builder().add_transaction(tx.clone()).build(&mut rng);
         let block_id = block.get_id();
@@ -494,8 +505,7 @@ fn store_aux_data_from_issue_nft(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
 
-        let token_id =
-            make_token_id(&[TxInput::from_utxo(tf.genesis().get_id().into(), 0)]).unwrap();
+        let token_id = TokenId::from_utxo(&UtxoOutPoint::new(tf.genesis().get_id().into(), 0));
 
         // issue a token
         let tx = TransactionBuilder::new()

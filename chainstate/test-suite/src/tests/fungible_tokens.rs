@@ -27,10 +27,7 @@ use common::{
     chain::{
         output_value::OutputValue,
         signature::inputsig::InputWitness,
-        tokens::{
-            make_token_id, Metadata, NftIssuanceV0, TokenData, TokenId, TokenIssuanceV0,
-            TokenTransfer,
-        },
+        tokens::{Metadata, NftIssuanceV0, TokenData, TokenId, TokenIssuanceV0, TokenTransfer},
         ChainstateUpgradeBuilder, Destination, OutPointSourceId, TokenIssuanceVersion, TxInput,
         TxOutput, UtxoOutPoint,
     },
@@ -150,7 +147,7 @@ fn token_transfer_test(#[case] seed: Seed) {
             .unwrap()
             .unwrap();
         let block = tf.block(*block_index.block_id());
-        let token_id = make_token_id(block.transactions()[0].transaction().inputs()).unwrap();
+        let token_id = TokenId::from_utxo(&UtxoOutPoint::new(genesis_outpoint_id.clone(), 0));
         assert_eq!(
             get_output_value(&block.transactions()[0].transaction().outputs()[0]).unwrap(),
             output_value.clone().into()
@@ -368,7 +365,7 @@ fn transfer_split_and_combine_tokens(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::from_utxo(genesis_outpoint_id, 0),
+                        TxInput::from_utxo(genesis_outpoint_id.clone(), 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -384,7 +381,7 @@ fn transfer_split_and_combine_tokens(#[case] seed: Seed) {
 
         let block = tf.block(*block_index.block_id());
         let issuance_outpoint_id = block.transactions()[0].transaction().get_id().into();
-        let token_id = make_token_id(block.transactions()[0].transaction().inputs()).unwrap();
+        let token_id = TokenId::from_utxo(&UtxoOutPoint::new(genesis_outpoint_id, 0));
 
         // Split tokens in outputs
         let split_block = tf
@@ -484,7 +481,7 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::from_utxo(genesis_outpoint_id, 0),
+                        TxInput::from_utxo(genesis_outpoint_id.clone(), 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -505,8 +502,7 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
         let issuance_block = tf.block(*block_index.block_id());
         let issuance_outpoint_id: OutPointSourceId =
             issuance_block.transactions()[0].transaction().get_id().into();
-        let token_id =
-            make_token_id(issuance_block.transactions()[0].transaction().inputs()).unwrap();
+        let token_id = TokenId::from_utxo(&UtxoOutPoint::new(genesis_outpoint_id, 0));
 
         // B1 - burn all tokens in mainchain
         let block_index = tf
@@ -891,15 +887,13 @@ fn issue_and_transfer_in_the_same_block(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = make_test_framework_with_v0(&mut rng);
+        let genesis_outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
 
         let token_issuance_fee = tf.chainstate.get_chain_config().fungible_token_issuance_fee();
 
         let tx_1 = TransactionBuilder::new()
             .add_input(
-                TxInput::from_utxo(
-                    OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
-                    0,
-                ),
+                TxInput::from_utxo(genesis_outpoint_id.clone(), 0),
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::Transfer(
@@ -925,7 +919,7 @@ fn issue_and_transfer_in_the_same_block(#[case] seed: Seed) {
             )
             .add_output(TxOutput::Transfer(
                 TokenData::TokenTransfer(TokenTransfer {
-                    token_id: make_token_id(tx_1.transaction().inputs()).unwrap(),
+                    token_id: TokenId::from_utxo(&UtxoOutPoint::new(genesis_outpoint_id, 0)),
                     amount: Amount::from_atoms(rng.gen_range(1..100_000)),
                 })
                 .into(),
@@ -1031,15 +1025,13 @@ fn no_v0_transfer_after_v1(#[case] seed: Seed) {
                     .build(),
             )
             .build();
+        let genesis_outpoint_id: OutPointSourceId = tf.genesis().get_id().into();
 
         let token_issuance_fee = tf.chainstate.get_chain_config().fungible_token_issuance_fee();
 
         let tx_with_issuance = TransactionBuilder::new()
             .add_input(
-                TxInput::from_utxo(
-                    OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
-                    0,
-                ),
+                TxInput::from_utxo(genesis_outpoint_id.clone(), 0),
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::Transfer(
@@ -1049,7 +1041,7 @@ fn no_v0_transfer_after_v1(#[case] seed: Seed) {
             .add_output(TxOutput::Burn(OutputValue::Coin(token_issuance_fee)))
             .build();
         let tx_with_issuance_id = tx_with_issuance.transaction().get_id();
-        let token_id = make_token_id(tx_with_issuance.inputs()).unwrap();
+        let token_id = TokenId::from_utxo(&UtxoOutPoint::new(genesis_outpoint_id, 0));
 
         tf.make_block_builder()
             .add_transaction(tx_with_issuance)

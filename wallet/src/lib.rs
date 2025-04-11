@@ -22,7 +22,6 @@ pub mod version;
 pub mod wallet;
 pub mod wallet_events;
 
-mod utils;
 use signer::software_signer::SoftwareSignerProvider;
 
 pub use crate::account::Account;

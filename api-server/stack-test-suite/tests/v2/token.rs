@@ -16,9 +16,12 @@
 use api_server_common::storage::storage_api::FungibleTokenData;
 use api_web_server::api::json_helpers::{amount_to_json, to_json_string};
 use common::{
-    chain::tokens::{
-        make_token_id, IsTokenFreezable, IsTokenFrozen, TokenId, TokenIssuance, TokenIssuanceV1,
-        TokenTotalSupply,
+    chain::{
+        make_token_id,
+        tokens::{
+            IsTokenFreezable, IsTokenFrozen, TokenId, TokenIssuance, TokenIssuanceV1,
+            TokenTotalSupply,
+        },
     },
     primitives::H256,
 };
@@ -112,7 +115,9 @@ async fn ok(#[case] seed: Seed) {
                     ))))
                     .build();
 
-                let token_id = make_token_id(transaction.inputs()).unwrap();
+                let token_id =
+                    make_token_id(&chain_config, BlockHeight::zero(), transaction.inputs())
+                        .unwrap();
 
                 let chainstate_block_ids = [*tf
                     .make_block_builder()

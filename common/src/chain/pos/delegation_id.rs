@@ -1,4 +1,4 @@
-// Copyright (c) 2023 RBB S.r.l
+// Copyright (c) 2022 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,25 +13,43 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{
-    address::{hexified::HexifiedAddress, traits::Addressable, AddressError},
-    chain::{ChainConfig, UtxoOutPoint},
-    primitives::{id::hash_encoded, Id, H256},
-};
-use randomness::Rng;
+use crypto::hash::StreamHasher;
+use randomness::{CryptoRng, Rng};
 use serialization::{DecodeAll, Encode};
 use typename::TypeName;
 
-#[derive(Eq, PartialEq, TypeName)]
-pub enum Token {}
-pub type TokenId = Id<Token>;
+use crate::{
+    address::{hexified::HexifiedAddress, traits::Addressable, AddressError},
+    chain::UtxoOutPoint,
+    primitives::{
+        id::{hash_encoded_to, DefaultHashAlgoStream},
+        Id, H256,
+    },
+};
 
-impl TokenId {
+use super::ChainConfig;
+
+fn delegation_id_preimage_suffix() -> u32 {
+    // arbitrary, we use this to create different values when hashing with no security requirements
+    1
+}
+
+#[derive(Eq, PartialEq, TypeName)]
+pub enum Delegation {}
+pub type DelegationId = Id<Delegation>;
+
+impl DelegationId {
     pub fn from_utxo(utxo_outpoint: &UtxoOutPoint) -> Self {
-        Self::new(hash_encoded(utxo_outpoint))
+        let mut hasher = DefaultHashAlgoStream::new();
+
+        hash_encoded_to(&utxo_outpoint, &mut hasher);
+
+        // 1 is arbitrary here, we use this as prefix to use this information again
+        hash_encoded_to(&delegation_id_preimage_suffix(), &mut hasher);
+        Self::new(hasher.finalize().into())
     }
 
-    pub fn random_using<R: Rng>(rng: &mut R) -> Self {
+    pub fn random_using<R: Rng + CryptoRng>(rng: &mut R) -> Self {
         Self::new(H256::random_using(rng))
     }
 
@@ -40,11 +58,11 @@ impl TokenId {
     }
 }
 
-impl Addressable for TokenId {
+impl Addressable for DelegationId {
     type Error = AddressError;
 
     fn address_prefix(&self, chain_config: &ChainConfig) -> &str {
-        chain_config.token_id_address_prefix()
+        chain_config.delegation_id_address_prefix()
     }
 
     fn encode_to_bytes_for_address(&self) -> Vec<u8> {
@@ -58,19 +76,18 @@ impl Addressable for TokenId {
         Self::decode_all(&mut address_bytes.as_ref())
             .map_err(|e| AddressError::DecodingError(e.to_string()))
     }
-
     fn json_wrapper_prefix() -> &'static str {
-        "HexifiedTokenId"
+        "HexifiedDelegationId"
     }
 }
 
-impl serde::Serialize for TokenId {
+impl serde::Serialize for DelegationId {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         HexifiedAddress::serde_serialize(self, serializer)
     }
 }
 
-impl<'de> serde::Deserialize<'de> for TokenId {
+impl<'de> serde::Deserialize<'de> for DelegationId {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         HexifiedAddress::<Self>::serde_deserialize(deserializer)
     }
