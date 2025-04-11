@@ -33,7 +33,7 @@ use randomness::{CryptoRng, Rng};
 use serialization::extras::non_empty_vec::DataOrNoVec;
 use test_utils::{
     gen_text_with_non_ascii,
-    nft_utils::{random_creator, random_nft_issuance},
+    nft_utils::{random_creator, random_nft_issuance, random_token_issuance_v1},
     random::{make_seedable_rng, Seed},
     random_ascii_alphanumeric_string,
 };
@@ -1963,5 +1963,59 @@ fn nft_token_id_mismatch(#[case] seed: Seed) {
             )
             .build_and_process(&mut rng)
             .unwrap();
+    })
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn issue_nft_and_fungible_token_same_tx(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+        let token_min_issuance_fee =
+            tf.chainstate.get_chain_config().nft_issuance_fee(BlockHeight::zero());
+        let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
+        let token_id = make_token_id(&[TxInput::from_utxo(outpoint_source_id.clone(), 0)]).unwrap();
+
+        let nft_issuance = random_nft_issuance(tf.chain_config(), &mut rng);
+        let fungible_token_issuance =
+            random_token_issuance_v1(tf.chain_config(), Destination::AnyoneCanSpend, &mut rng);
+
+        let result = tf
+            .make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_utxo(outpoint_source_id, 0),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_output(TxOutput::IssueNft(
+                        token_id,
+                        Box::new(nft_issuance.into()),
+                        Destination::AnyoneCanSpend,
+                    ))
+                    .add_output(TxOutput::IssueFungibleToken(Box::new(
+                        common::chain::tokens::TokenIssuance::V1(fungible_token_issuance),
+                    )))
+                    .add_output(TxOutput::Burn(OutputValue::Coin(
+                        (token_min_issuance_fee * 2).unwrap(),
+                    )))
+                    .build(),
+            )
+            .build_and_process(&mut rng);
+
+        assert!(matches!(
+            result,
+            Err(ChainstateError::ProcessBlockError(
+                BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
+                    CheckBlockTransactionsError::CheckTransactionError(
+                        CheckTransactionError::TokensError(
+                            TokensError::MultipleTokenIssuanceInTransaction(_)
+                        )
+                    )
+                ))
+            ))
+        ));
     })
 }
