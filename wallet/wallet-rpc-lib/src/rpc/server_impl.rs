@@ -94,14 +94,12 @@ where
         mnemonic: Option<String>,
         passphrase: Option<String>,
         hardware_wallet: Option<HardwareWalletType>,
-        trezor_device_id: Option<String>,
     ) -> rpc::RpcResult<CreatedWallet> {
         let args = HardwareWalletType::into_wallet_args::<N>(
             hardware_wallet,
             store_seed_phrase,
             mnemonic,
             passphrase,
-            trezor_device_id,
         )?;
 
         let options = WalletCreationOptions {
@@ -122,14 +120,12 @@ where
         mnemonic: Option<String>,
         passphrase: Option<String>,
         hardware_wallet: Option<HardwareWalletType>,
-        trezor_device_id: Option<String>,
     ) -> rpc::RpcResult<CreatedWallet> {
         let args = HardwareWalletType::into_wallet_args::<N>(
             hardware_wallet,
             store_seed_phrase,
             mnemonic,
             passphrase,
-            trezor_device_id,
         )?;
 
         let options = WalletCreationOptions {
@@ -149,7 +145,6 @@ where
         password: Option<String>,
         force_migrate_wallet_type: Option<bool>,
         open_as_hw_wallet: Option<HardwareWalletType>,
-        trezor_device_id: Option<String>,
     ) -> rpc::RpcResult<OpenedWallet> {
         rpc::handle_result(
             self.open_wallet(
@@ -158,7 +153,6 @@ where
                 force_migrate_wallet_type.unwrap_or(false),
                 ScanBlockchain::ScanNoWait,
                 open_as_hw_wallet,
-                trezor_device_id,
             )
             .await
             .map(Into::<OpenedWallet>::into),
