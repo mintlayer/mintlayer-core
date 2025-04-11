@@ -648,9 +648,34 @@ pub enum MnemonicInfo {
     NewlyGenerated { mnemonic: String },
 }
 
+#[cfg(feature = "trezor")]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
+pub struct FoundDevice {
+    pub name: String,
+    pub device_id: String,
+}
+
+#[cfg(feature = "trezor")]
+impl From<wallet::signer::trezor_signer::FoundDevice> for FoundDevice {
+    fn from(value: wallet::signer::trezor_signer::FoundDevice) -> Self {
+        Self {
+            name: value.name,
+            device_id: value.device_id,
+        }
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
+#[serde(tag = "type", content = "content")]
+pub enum MultipleDevicesAvailable {
+    #[cfg(feature = "trezor")]
+    Trezor { devices: Vec<FoundDevice> },
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct CreatedWallet {
     pub mnemonic: MnemonicInfo,
+    pub multiple_devices_available: Option<MultipleDevicesAvailable>,
 }
 
 impl From<wallet_controller::types::CreatedWallet> for CreatedWallet {
@@ -664,8 +689,43 @@ impl From<wallet_controller::types::CreatedWallet> for CreatedWallet {
                     mnemonic: mnemonic.to_string(),
                 }
             }
+            #[cfg(feature = "trezor")]
+            wallet_controller::types::CreatedWallet::TrezorDeviceSelection(devices) => {
+                return Self {
+                    mnemonic: MnemonicInfo::UserProvided,
+                    multiple_devices_available: Some(MultipleDevicesAvailable::Trezor {
+                        devices: devices.into_iter().map(Into::into).collect(),
+                    }),
+                }
+            }
         };
-        Self { mnemonic }
+        Self {
+            mnemonic,
+            multiple_devices_available: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
+#[serde(tag = "type", content = "content")]
+pub enum OpenedWallet {
+    Opened,
+    MultipleDevicesAvailable { available: MultipleDevicesAvailable },
+}
+
+impl From<wallet_controller::types::OpenedWallet> for OpenedWallet {
+    fn from(value: wallet_controller::types::OpenedWallet) -> Self {
+        match value {
+            wallet_controller::types::OpenedWallet::Opened => Self::Opened,
+            #[cfg(feature = "trezor")]
+            wallet_controller::types::OpenedWallet::TrezorDeviceSelection(devices) => {
+                Self::MultipleDevicesAvailable {
+                    available: MultipleDevicesAvailable::Trezor {
+                        devices: devices.into_iter().map(Into::into).collect(),
+                    },
+                }
+            }
+        }
     }
 }
 
@@ -805,6 +865,7 @@ impl HardwareWalletType {
         store_seed_phrase: bool,
         mnemonic: Option<String>,
         passphrase: Option<String>,
+        device_id: Option<String>,
     ) -> Result<WalletTypeArgs, RpcError<N>> {
         let store_seed_phrase = if store_seed_phrase {
             StoreSeedPhrase::Store
@@ -827,7 +888,7 @@ impl HardwareWalletType {
                 );
                 match hw_type {
                     #[cfg(feature = "trezor")]
-                    HardwareWalletType::Trezor => Ok(WalletTypeArgs::Trezor),
+                    HardwareWalletType::Trezor => Ok(WalletTypeArgs::Trezor { device_id }),
                 }
             }
         }
