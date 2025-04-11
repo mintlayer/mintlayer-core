@@ -33,20 +33,15 @@ use node_comm::node_traits::NodeInterface;
 use serialization::{hex::HexEncode, hex_encoded::HexEncoded};
 use utils::qrcode::{QrCode, QrCodeError};
 use wallet::version::get_version;
-use wallet_controller::types::{GenericTokenTransfer, WalletTypeArgs};
+use wallet_controller::types::GenericTokenTransfer;
 use wallet_rpc_client::wallet_rpc_traits::{PartialOrSignedTx, WalletInterface};
-use wallet_rpc_lib::{
-    cmdline::CliHardwareWalletType,
-    types::{
-        Balances, ComposedTransaction, ControllerConfig, MnemonicInfo, NewTransaction, NftMetadata,
-        RpcInspectTransaction, RpcSignatureStats, RpcSignatureStatus, RpcStandaloneAddressDetails,
-        RpcValidatedSignatures, TokenMetadata,
-    },
+use wallet_rpc_lib::types::{
+    Balances, ComposedTransaction, ControllerConfig, HardwareWalletType, MnemonicInfo,
+    NewTransaction, NftMetadata, RpcInspectTransaction, RpcSignatureStats, RpcSignatureStatus,
+    RpcStandaloneAddressDetails, RpcValidatedSignatures, TokenMetadata,
 };
 
-use wallet_types::{
-    partially_signed_transaction::PartiallySignedTransaction, seed_phrase::StoreSeedPhrase,
-};
+use wallet_types::partially_signed_transaction::PartiallySignedTransaction;
 
 use crate::{
     errors::WalletCliCommandError, helper_types::parse_generic_token_transfer,
@@ -150,36 +145,17 @@ where
         WalletCliCommandError<N>: From<E>,
     {
         match command {
-            WalletManagementCommand::CreateWallet {
-                wallet_path,
-                mnemonic,
-                whether_to_store_seed_phrase,
-                passphrase,
-                hardware_wallet,
-                trezor_device_id,
-            } => {
-                let store_seed_phrase =
-                    whether_to_store_seed_phrase.map_or(StoreSeedPhrase::DoNotStore, Into::into);
-                let wallet_args = hardware_wallet.map_or(
-                    WalletTypeArgs::Software {
-                        mnemonic,
-                        passphrase,
-                        store_seed_phrase,
-                    },
-                    |h| h.into_wallet_args(trezor_device_id),
-                );
+            WalletManagementCommand::CreateWallet { wallet } => {
+                let (wallet_path, wallet_args) = wallet.into_path_and_wallet_args();
+
                 let response =
                     self.wallet().await?.create_wallet(wallet_path.clone(), wallet_args).await?;
 
                 if let Some(devices) = response.multiple_devices_available {
                     match devices {
                         wallet_rpc_lib::types::MultipleDevicesAvailable::Trezor { devices } => {
-                            let choices = CreateWalletDeviceSelectMenu::new(
-                                devices,
-                                wallet_path,
-                                CliHardwareWalletType::Trezor,
-                                false,
-                            );
+                            let choices =
+                                CreateWalletDeviceSelectMenu::new(devices, wallet_path, false);
                             return Ok(ConsoleCommand::ChoiceMenu(Box::new(choices)));
                         }
                     }
@@ -208,38 +184,17 @@ where
                 })
             }
 
-            WalletManagementCommand::RecoverWallet {
-                wallet_path,
-                mnemonic,
-                whether_to_store_seed_phrase,
-                passphrase,
-                hardware_wallet,
-                trezor_device_id,
-            } => {
-                let hardware_wallet = hardware_wallet.map(Into::into);
+            WalletManagementCommand::RecoverWallet { wallet } => {
+                let (wallet_path, wallet_args) = wallet.into_path_and_wallet_args();
 
-                let response = self
-                    .wallet()
-                    .await?
-                    .recover_wallet(
-                        wallet_path.clone(),
-                        whether_to_store_seed_phrase.is_some_and(|x| x.to_bool()),
-                        mnemonic,
-                        passphrase,
-                        hardware_wallet,
-                        trezor_device_id,
-                    )
-                    .await?;
+                let response =
+                    self.wallet().await?.recover_wallet(wallet_path.clone(), wallet_args).await?;
 
                 if let Some(devices) = response.multiple_devices_available {
                     match devices {
                         wallet_rpc_lib::types::MultipleDevicesAvailable::Trezor { devices } => {
-                            let choices = CreateWalletDeviceSelectMenu::new(
-                                devices,
-                                wallet_path,
-                                CliHardwareWalletType::Trezor,
-                                true,
-                            );
+                            let choices =
+                                CreateWalletDeviceSelectMenu::new(devices, wallet_path, true);
                             return Ok(ConsoleCommand::ChoiceMenu(Box::new(choices)));
                         }
                     }
@@ -255,14 +210,30 @@ where
                 })
             }
 
-            WalletManagementCommand::OpenWallet {
-                wallet_path,
-                encryption_password,
-                force_change_wallet_type,
-                hardware_wallet,
-                trezor_device_id,
-            } => {
-                let hardware_wallet = hardware_wallet.map(Into::into);
+            WalletManagementCommand::OpenWallet { wallet } => {
+                let (wallet_path, encryption_password, force_change_wallet_type, hardware_wallet) =
+                    match wallet {
+                        crate::OpenWalletSubCommand::Software {
+                            wallet_path,
+                            encryption_password,
+                            force_change_wallet_type,
+                        } => (
+                            wallet_path,
+                            encryption_password,
+                            force_change_wallet_type,
+                            None,
+                        ),
+                        crate::OpenWalletSubCommand::Trezor {
+                            wallet_path,
+                            device_id,
+                        } => (
+                            wallet_path,
+                            None,
+                            false,
+                            Some(HardwareWalletType::Trezor { device_id }),
+                        ),
+                    };
+
                 let response = self
                     .wallet()
                     .await?
@@ -271,7 +242,6 @@ where
                         encryption_password.clone(),
                         Some(force_change_wallet_type),
                         hardware_wallet,
-                        trezor_device_id,
                     )
                     .await?;
 
@@ -284,13 +254,7 @@ where
                 {
                     match available {
                         wallet_rpc_lib::types::MultipleDevicesAvailable::Trezor { devices } => {
-                            let choices = OpenWalletDeviceSelectMenu::new(
-                                devices,
-                                wallet_path,
-                                encryption_password,
-                                force_change_wallet_type,
-                                CliHardwareWalletType::Trezor,
-                            );
+                            let choices = OpenWalletDeviceSelectMenu::new(devices, wallet_path);
                             return Ok(ConsoleCommand::ChoiceMenu(Box::new(choices)));
                         }
                     }
