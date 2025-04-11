@@ -17,10 +17,8 @@ use chainstate::{BlockError, BlockSource, ChainstateError, ConnectTransactionErr
 use chainstate_test_framework::{TestFramework, TransactionBuilder};
 use common::{
     chain::{
-        output_value::OutputValue,
-        signature::inputsig::InputWitness,
-        tokens::{make_token_id, NftIssuance},
-        Destination, OutPointSourceId, TxInput, TxOutput, UtxoOutPoint,
+        make_token_id, output_value::OutputValue, signature::inputsig::InputWitness,
+        tokens::NftIssuance, Destination, OutPointSourceId, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Idable},
 };

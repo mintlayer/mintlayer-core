@@ -21,9 +21,10 @@ use chainstate::{
 };
 use chainstate_test_framework::{TestFramework, TransactionBuilder};
 use common::chain::{
+    make_token_id,
     output_value::OutputValue,
     signature::inputsig::InputWitness,
-    tokens::{is_rfc3986_valid_symbol, make_token_id, Metadata, NftIssuance, NftIssuanceV0},
+    tokens::{is_rfc3986_valid_symbol, Metadata, NftIssuance, NftIssuanceV0},
     Block, Destination, OutPointSourceId, TokenIssuanceVersion, TxInput, TxOutput,
 };
 use common::primitives::{BlockHeight, Idable};

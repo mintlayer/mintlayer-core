@@ -69,11 +69,10 @@ use chainstate_types::{BlockIndex, TipStorageTag};
 use common::{
     chain::{
         block::{timestamp::BlockTimestamp, BlockRewardTransactable, ConsensusData},
-        make_order_id,
+        make_order_id, make_pool_id, make_token_id,
         output_value::OutputValue,
         signature::Signable,
         signed_transaction::SignedTransaction,
-        tokens::make_token_id,
         AccountCommand, AccountNonce, AccountSpending, AccountType, Block, ChainConfig,
         DelegationId, FrozenTokensValidationVersion, GenBlock, OrderAccountCommand, OrdersVersion,
         Transaction, TxInput, TxOutput, UtxoOutPoint,
@@ -396,7 +395,7 @@ where
             .filter_map(|output| match output {
                 TxOutput::CreateStakePool(pool_id, data) => match input_utxo_outpoint {
                     Some(input_utxo_outpoint) => {
-                        let expected_pool_id = pos_accounting::make_pool_id(input_utxo_outpoint);
+                        let expected_pool_id = make_pool_id(input_utxo_outpoint);
                         let res = if expected_pool_id == *pool_id {
                             if data.pledge() >= self.chain_config.as_ref().min_stake_pool_pledge() {
                                 self.pos_accounting_adapter

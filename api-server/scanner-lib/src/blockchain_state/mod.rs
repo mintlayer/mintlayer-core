@@ -29,9 +29,9 @@ use common::{
     chain::{
         block::{timestamp::BlockTimestamp, ConsensusData},
         config::ChainConfig,
-        make_order_id,
+        make_delegation_id, make_order_id, make_token_id,
         output_value::OutputValue,
-        tokens::{get_referenced_token_ids, make_token_id, IsTokenFrozen, TokenId, TokenIssuance},
+        tokens::{get_referenced_token_ids, IsTokenFrozen, TokenId, TokenIssuance},
         transaction::OutPointSourceId,
         AccountCommand, AccountNonce, AccountSpending, Block, DelegationId, Destination, GenBlock,
         Genesis, OrderAccountCommand, OrderId, PoolId, SignedTransaction, Transaction, TxInput,
@@ -41,7 +41,7 @@ use common::{
 };
 use futures::{stream::FuturesOrdered, TryStreamExt};
 use orders_accounting::OrderData;
-use pos_accounting::{make_delegation_id, PoSAccountingView, PoolData};
+use pos_accounting::{PoSAccountingView, PoolData};
 use std::{
     collections::{BTreeMap, BTreeSet},
     ops::{Add, Sub},

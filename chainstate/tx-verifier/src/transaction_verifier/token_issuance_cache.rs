@@ -17,7 +17,8 @@ use std::collections::{btree_map::Entry, BTreeMap};
 
 use common::{
     chain::{
-        tokens::{make_token_id, TokenAuxiliaryData, TokenId},
+        make_token_id,
+        tokens::{TokenAuxiliaryData, TokenId},
         Block, Transaction, TxOutput,
     },
     primitives::{Id, Idable, H256},

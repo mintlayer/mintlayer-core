@@ -35,12 +35,9 @@ use common::{
     chain::{
         block::timestamp::BlockTimestamp,
         config::create_unit_test_config,
-        make_order_id,
+        make_delegation_id, make_order_id, make_token_id,
         output_value::{OutputValue, RpcOutputValue},
-        tokens::{
-            make_token_id, IsTokenFrozen, NftIssuance, RPCNonFungibleTokenMetadata, RPCTokenInfo,
-            TokenId,
-        },
+        tokens::{IsTokenFrozen, NftIssuance, RPCNonFungibleTokenMetadata, RPCTokenInfo, TokenId},
         AccountCommand, AccountNonce, AccountSpending, AccountType, ChainConfig, ConsensusUpgrade,
         DelegationId, Destination, GenBlockId, NetUpgrades, OrderId, OutPointSourceId,
         PoSChainConfigBuilder, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
@@ -53,7 +50,7 @@ use crypto::{
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
 use orders_accounting::{OrderData, OrdersAccountingOperations, OrdersAccountingView};
-use pos_accounting::{make_delegation_id, PoSAccountingView};
+use pos_accounting::PoSAccountingView;
 use randomness::Rng;
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};

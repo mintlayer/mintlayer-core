@@ -26,6 +26,7 @@ use common::{
         classic_multisig::ClassicMultisigChallenge,
         config::{Builder, ChainType, BIP44_PATH},
         htlc::{HashedTimelockContract, HtlcSecret, HtlcSecretHash},
+        make_token_id,
         output_value::OutputValue::{self, Coin, TokenV1},
         signature::{
             inputsig::{
@@ -44,8 +45,8 @@ use common::{
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
         tokens::{
-            make_token_id, IsTokenFreezable, IsTokenUnfreezable, Metadata, NftIssuance,
-            NftIssuanceV0, TokenCreator, TokenIssuance, TokenIssuanceV1, TokenTotalSupply,
+            IsTokenFreezable, IsTokenUnfreezable, Metadata, NftIssuance, NftIssuanceV0,
+            TokenCreator, TokenIssuance, TokenIssuanceV1, TokenTotalSupply,
         },
         AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, ChainConfig, Destination,
         OrderData, OutPointSourceId, SignedTransaction, SignedTransactionIntent, Transaction,

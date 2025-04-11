@@ -85,7 +85,7 @@ fn decommission_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
         0,
     );
 
-    let pool_id = pos_accounting::make_pool_id(&genesis_mint_outpoint);
+    let pool_id = common::chain::make_pool_id(&genesis_mint_outpoint);
     let stake_amount = Amount::from_atoms(40_000_000 * common::chain::CoinUnit::ATOMS_PER_COIN);
 
     let tx = TransactionBuilder::new()
@@ -223,7 +223,7 @@ fn spend_share_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
 
     let amount_to_delegate = Amount::from_atoms(1000);
     let pool_id = common::primitives::H256::zero().into();
-    let delegation_id = pos_accounting::make_delegation_id(&genesis_mint_outpoint);
+    let delegation_id = common::chain::make_delegation_id(&genesis_mint_outpoint);
 
     let tx1 = TransactionBuilder::new()
         .add_input(genesis_mint_outpoint.into(), empty_witness(&mut rng))

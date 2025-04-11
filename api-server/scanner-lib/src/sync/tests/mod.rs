@@ -40,6 +40,7 @@ use chainstate_test_framework::{TestFramework, TransactionBuilder};
 use common::{
     address::Address,
     chain::{
+        make_delegation_id, make_pool_id,
         output_value::OutputValue,
         signature::{
             inputsig::{
@@ -60,7 +61,6 @@ use crypto::{
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
 use logging::log;
-use pos_accounting::{make_delegation_id, make_pool_id};
 use randomness::{seq::IteratorRandom, CryptoRng, Rng};
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};

@@ -19,10 +19,11 @@ use chainstate_test_framework::{anyonecanspend_address, TestFramework, Transacti
 use common::{
     chain::{
         block::timestamp::BlockTimestamp,
+        make_token_id,
         output_value::OutputValue,
         signature::inputsig::InputWitness,
         timelock::OutputTimeLock,
-        tokens::{make_token_id, TokenId, TokenIssuance},
+        tokens::{TokenId, TokenIssuance},
         AccountCommand, AccountNonce, AccountType, Block, Destination, GenBlock, Transaction,
         TxInput, TxOutput, UtxoOutPoint,
     },

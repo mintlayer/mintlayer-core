@@ -15,8 +15,8 @@
 
 use crate::{
     address::{hexified::HexifiedAddress, traits::Addressable, AddressError},
-    chain::{ChainConfig, UtxoOutPoint},
-    primitives::{id::hash_encoded, Id, H256},
+    chain::ChainConfig,
+    primitives::{Id, H256},
 };
 use randomness::{CryptoRng, Rng};
 use serialization::{DecodeAll, Encode};
@@ -70,8 +70,4 @@ impl<'de> serde::Deserialize<'de> for OrderId {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         HexifiedAddress::<Self>::serde_deserialize(deserializer)
     }
-}
-
-pub fn make_order_id(input0_outpoint: &UtxoOutPoint) -> OrderId {
-    OrderId::new(hash_encoded(input0_outpoint))
 }

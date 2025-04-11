@@ -22,13 +22,13 @@ use std::{
 use common::{
     chain::{
         block::timestamp::BlockTimestamp,
-        make_order_id,
+        make_delegation_id, make_order_id, make_token_id,
         output_value::OutputValue,
         stakelock::StakePoolData,
         tokens::{
-            get_referenced_token_ids, make_token_id, IsTokenFreezable, IsTokenUnfreezable,
-            RPCFungibleTokenInfo, RPCIsTokenFrozen, RPCNonFungibleTokenInfo, RPCTokenTotalSupply,
-            TokenId, TokenIssuance, TokenTotalSupply,
+            get_referenced_token_ids, IsTokenFreezable, IsTokenUnfreezable, RPCFungibleTokenInfo,
+            RPCIsTokenFrozen, RPCNonFungibleTokenInfo, RPCTokenTotalSupply, TokenId, TokenIssuance,
+            TokenTotalSupply,
         },
         AccountCommand, AccountNonce, AccountSpending, DelegationId, Destination, GenBlock,
         OrderAccountCommand, OrderId, OutPointSourceId, PoolId, Transaction, TxInput, TxOutput,
@@ -38,7 +38,6 @@ use common::{
 };
 use crypto::vrf::VRFPublicKey;
 use itertools::Itertools;
-use pos_accounting::make_delegation_id;
 use rpc_description::HasValueHint;
 use tx_verifier::transaction_verifier::calculate_tokens_burned_in_outputs;
 use utils::ensure;

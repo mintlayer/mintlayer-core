@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use common::{
-    chain::{DelegationId, Destination, OutPointSourceId, PoolId, UtxoOutPoint},
+    chain::{make_pool_id, DelegationId, Destination, OutPointSourceId, PoolId, UtxoOutPoint},
     primitives::{Amount, Id, H256},
 };
 use randomness::{CryptoRng, Rng};
@@ -25,7 +25,6 @@ use test_utils::random::{make_seedable_rng, Seed};
 use super::create_pool_data;
 
 use crate::{
-    make_pool_id,
     pool::{delegation::DelegationData, storage::PoSAccountingDB},
     storage::in_memory::InMemoryPoSAccounting,
     FlushablePoSAccountingView, PoSAccountingDelta, PoSAccountingOperations, PoSAccountingUndo,

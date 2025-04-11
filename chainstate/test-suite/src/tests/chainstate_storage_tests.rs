@@ -21,8 +21,9 @@ use chainstate_test_framework::{
 };
 use common::{
     chain::{
+        make_token_id,
         output_value::OutputValue,
-        tokens::{make_token_id, NftIssuance, TokenAuxiliaryData, TokenIssuanceV0},
+        tokens::{NftIssuance, TokenAuxiliaryData, TokenIssuanceV0},
         Destination, OutPointSourceId, TokenIssuanceVersion, Transaction, TxInput, TxOutput,
         UtxoOutPoint,
     },

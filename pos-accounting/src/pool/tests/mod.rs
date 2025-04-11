@@ -16,7 +16,7 @@
 use std::collections::BTreeMap;
 
 use common::{
-    chain::{DelegationId, Destination, OutPointSourceId, PoolId, UtxoOutPoint},
+    chain::{make_pool_id, DelegationId, Destination, OutPointSourceId, PoolId, UtxoOutPoint},
     primitives::{per_thousand::PerThousand, Amount, Id, H256},
 };
 use crypto::{
@@ -26,7 +26,7 @@ use crypto::{
 use randomness::{CryptoRng, Rng};
 
 use crate::{
-    error::Error, make_pool_id, storage::in_memory::InMemoryPoSAccounting, DelegationData,
+    error::Error, storage::in_memory::InMemoryPoSAccounting, DelegationData,
     PoSAccountingOperations, PoSAccountingUndo, PoolData,
 };
 

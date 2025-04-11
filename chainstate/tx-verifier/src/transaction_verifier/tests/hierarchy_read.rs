@@ -404,9 +404,9 @@ fn hierarchy_test_stake_pool(#[case] seed: Seed) {
     let pool_data1 = create_pool_data(&mut rng, destination1.clone(), destination1, pool_balance1);
     let pool_data2 = create_pool_data(&mut rng, destination2.clone(), destination2, pool_balance2);
 
-    let pool_id_0 = pos_accounting::make_pool_id(&outpoint0);
-    let pool_id_1 = pos_accounting::make_pool_id(&outpoint1);
-    let pool_id_2 = pos_accounting::make_pool_id(&outpoint2);
+    let pool_id_0 = common::chain::make_pool_id(&outpoint0);
+    let pool_id_1 = common::chain::make_pool_id(&outpoint1);
+    let pool_id_2 = common::chain::make_pool_id(&outpoint2);
 
     let block_undo_id_0: Id<Block> = Id::new(H256::random_using(&mut rng));
     let block_undo_source_0 = TransactionSource::Chain(block_undo_id_0);

@@ -59,11 +59,10 @@ use crate::{SendRequest, WalletError, WalletResult};
 use common::address::{Address, RpcAddress};
 use common::chain::output_value::{OutputValue, RpcOutputValue};
 use common::chain::tokens::{
-    make_token_id, IsTokenUnfreezable, NftIssuance, NftIssuanceV0, RPCFungibleTokenInfo, TokenId,
-    TokenIssuance,
+    IsTokenUnfreezable, NftIssuance, NftIssuanceV0, RPCFungibleTokenInfo, TokenId, TokenIssuance,
 };
 use common::chain::{
-    AccountNonce, Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId,
+    make_token_id, AccountNonce, Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId,
     SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
 };
 use common::primitives::{Amount, BlockHeight, Id};
@@ -1479,7 +1478,7 @@ impl<K: AccountKeyChains> Account<K> {
         )?;
 
         let input0_outpoint = crate::utils::get_first_utxo_outpoint(request.inputs())?;
-        let new_pool_id = pos_accounting::make_pool_id(input0_outpoint);
+        let new_pool_id = common::chain::make_pool_id(input0_outpoint);
 
         // update the dummy_pool_id with the new pool_id
         let old_pool_id = request

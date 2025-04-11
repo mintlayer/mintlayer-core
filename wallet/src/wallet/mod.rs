@@ -43,13 +43,13 @@ use common::chain::signature::inputsig::arbitrary_message::{
 };
 use common::chain::signature::DestinationSigError;
 use common::chain::tokens::{
-    make_token_id, IsTokenUnfreezable, Metadata, RPCFungibleTokenInfo, TokenId, TokenIssuance,
+    IsTokenUnfreezable, Metadata, RPCFungibleTokenInfo, TokenId, TokenIssuance,
 };
 use common::chain::{
-    make_order_id, AccountCommand, AccountNonce, AccountOutPoint, Block, ChainConfig, DelegationId,
-    Destination, GenBlock, OrderAccountCommand, OrderId, OutPointSourceId, PoolId, RpcOrderInfo,
-    SignedTransaction, SignedTransactionIntent, Transaction, TransactionCreationError, TxInput,
-    TxOutput, UtxoOutPoint,
+    make_delegation_id, make_order_id, make_token_id, AccountCommand, AccountNonce,
+    AccountOutPoint, Block, ChainConfig, DelegationId, Destination, GenBlock, OrderAccountCommand,
+    OrderId, OutPointSourceId, PoolId, RpcOrderInfo, SignedTransaction, SignedTransactionIntent,
+    Transaction, TransactionCreationError, TxInput, TxOutput, UtxoOutPoint,
 };
 use common::primitives::id::{hash_encoded, WithId};
 use common::primitives::{Amount, BlockHeight, Id, H256};
@@ -61,7 +61,6 @@ use crypto::key::hdkd::u31::U31;
 use crypto::key::{PrivateKey, PublicKey};
 use crypto::vrf::VRFPublicKey;
 use mempool::FeeRate;
-use pos_accounting::make_delegation_id;
 use tx_verifier::error::TokenIssuanceError;
 use tx_verifier::{check_transaction, CheckTransactionError};
 use utils::{debug_panic_or_log, ensure};

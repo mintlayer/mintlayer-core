@@ -70,7 +70,7 @@ fn make_token_id(rng: &mut impl Rng) -> TokenId {
         0,
     );
     let input = TxInput::Utxo(outpoint);
-    common::chain::tokens::make_token_id(&[input]).unwrap()
+    common::chain::make_token_id(&[input]).unwrap()
 }
 
 #[rstest]

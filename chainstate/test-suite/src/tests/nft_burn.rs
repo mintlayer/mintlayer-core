@@ -19,8 +19,8 @@ use chainstate::{BlockError, ChainstateError, ConnectTransactionError};
 use chainstate_test_framework::{TestFramework, TransactionBuilder};
 use common::{
     chain::{
-        output_value::OutputValue, signature::inputsig::InputWitness, tokens::make_token_id,
-        Destination, OutPointSourceId, TokenIssuanceVersion, TxInput, TxOutput, UtxoOutPoint,
+        make_token_id, output_value::OutputValue, signature::inputsig::InputWitness, Destination,
+        OutPointSourceId, TokenIssuanceVersion, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Idable},
 };

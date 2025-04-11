@@ -13,8 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::chain::tokens::{
-    make_token_id, IsTokenFreezable, NftIssuance, TokenIssuance, TokenIssuanceV1, TokenTotalSupply,
+use common::chain::{
+    make_token_id,
+    tokens::{IsTokenFreezable, NftIssuance, TokenIssuance, TokenIssuanceV1, TokenTotalSupply},
 };
 
 use crate::DummyRPC;

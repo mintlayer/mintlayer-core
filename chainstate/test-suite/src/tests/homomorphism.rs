@@ -21,9 +21,7 @@ use chainstate_test_framework::{
 };
 use common::{
     chain::{
-        output_value::OutputValue,
-        timelock::OutputTimeLock,
-        tokens::{make_token_id, TokenIssuance},
+        make_token_id, output_value::OutputValue, timelock::OutputTimeLock, tokens::TokenIssuance,
         AccountCommand, AccountNonce, Destination, OutPointSourceId, TxInput, TxOutput,
         UtxoOutPoint,
     },
@@ -292,7 +290,7 @@ fn pos_accounting_homomorphism(#[case] seed: Seed) {
             vrf_pk,
         );
         let genesis_outpoint = UtxoOutPoint::new(OutPointSourceId::BlockReward(genesis_id), 0);
-        let pool_id = pos_accounting::make_pool_id(&genesis_outpoint);
+        let pool_id = common::chain::make_pool_id(&genesis_outpoint);
 
         let storage2 = TestStore::new_empty().unwrap();
         let mut tf2 = TestFramework::builder(&mut rng)
@@ -331,7 +329,7 @@ fn pos_accounting_homomorphism(#[case] seed: Seed) {
             ))
             .build();
 
-        let delegation_id = pos_accounting::make_delegation_id(&UtxoOutPoint::new(
+        let delegation_id = common::chain::make_delegation_id(&UtxoOutPoint::new(
             tx_1.transaction().get_id().into(),
             1,
         ));

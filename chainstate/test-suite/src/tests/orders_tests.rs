@@ -21,16 +21,13 @@ use chainstate_test_framework::{output_value_amount, TestFramework, TransactionB
 use common::{
     address::pubkeyhash::PublicKeyHash,
     chain::{
-        make_order_id,
+        make_order_id, make_token_id,
         output_value::OutputValue,
         signature::{
             inputsig::{standard_signature::StandardInputSignature, InputWitness},
             DestinationSigError,
         },
-        tokens::{
-            make_token_id, IsTokenFreezable, TokenId, TokenIssuance, TokenIssuanceV1,
-            TokenTotalSupply,
-        },
+        tokens::{IsTokenFreezable, TokenId, TokenIssuance, TokenIssuanceV1, TokenTotalSupply},
         AccountCommand, AccountNonce, Destination, OrderAccountCommand, OrderData, OrderId,
         OrdersVersion, SignedTransaction, TxInput, TxOutput, UtxoOutPoint,
     },

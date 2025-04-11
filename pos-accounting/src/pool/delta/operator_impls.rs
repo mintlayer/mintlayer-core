@@ -15,7 +15,7 @@
 
 use accounting::DataDelta;
 use common::{
-    chain::{DelegationId, Destination, PoolId, UtxoOutPoint},
+    chain::{make_delegation_id, DelegationId, Destination, PoolId, UtxoOutPoint},
     primitives::Amount,
 };
 use utils::ensure;
@@ -24,7 +24,6 @@ use crate::{
     error::Error,
     pool::{
         delegation::DelegationData,
-        helpers::make_delegation_id,
         operations::{
             CreateDelegationIdUndo, CreatePoolUndo, DecommissionPoolUndo, DelegateStakingUndo,
             DeleteDelegationIdUndo, IncreaseStakerRewardsUndo, PoSAccountingOperations,

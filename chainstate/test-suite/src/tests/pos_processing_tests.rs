@@ -38,6 +38,7 @@ use common::{
             ConsensusData,
         },
         config::{create_unit_test_config, Builder as ConfigBuilder, ChainType, EpochIndex},
+        make_pool_id,
         output_value::OutputValue,
         signature::{
             inputsig::{standard_signature::StandardInputSignature, InputWitness},
@@ -59,7 +60,7 @@ use crypto::{
     key::{KeyKind, PrivateKey, PublicKey},
     vrf::{VRFError, VRFKeyKind, VRFPrivateKey, VRFPublicKey},
 };
-use pos_accounting::{make_pool_id, PoSAccountingStorageRead};
+use pos_accounting::PoSAccountingStorageRead;
 use randomness::{CryptoRng, Rng};
 use test_utils::{
     assert_matches,
@@ -85,7 +86,7 @@ fn add_block_with_stake_pool(
         OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
         0,
     );
-    let pool_id = pos_accounting::make_pool_id(&genesis_outpoint);
+    let pool_id = make_pool_id(&genesis_outpoint);
     let tx = TransactionBuilder::new()
         .add_input(genesis_outpoint.into(), empty_witness(rng))
         .add_output(TxOutput::CreateStakePool(
@@ -115,7 +116,7 @@ fn add_block_with_2_stake_pools(
         OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
         0,
     );
-    let pool_id1 = pos_accounting::make_pool_id(&outpoint_genesis);
+    let pool_id1 = make_pool_id(&outpoint_genesis);
     let tx1 = TransactionBuilder::new()
         .add_input(outpoint_genesis.into(), empty_witness(rng))
         .add_output(TxOutput::CreateStakePool(
@@ -132,7 +133,7 @@ fn add_block_with_2_stake_pools(
     let transfer_outpoint1 =
         UtxoOutPoint::new(OutPointSourceId::Transaction(tx1.transaction().get_id()), 1);
 
-    let pool_id2 = pos_accounting::make_pool_id(&transfer_outpoint1);
+    let pool_id2 = make_pool_id(&transfer_outpoint1);
     let tx2 = TransactionBuilder::new()
         .add_input(transfer_outpoint1.into(), empty_witness(rng))
         .add_output(TxOutput::CreateStakePool(
@@ -1231,7 +1232,7 @@ fn stake_pool_as_reward_output(#[case] seed: Seed) {
         OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
         0,
     );
-    let pool_id = pos_accounting::make_pool_id(&genesis_outpoint);
+    let pool_id = make_pool_id(&genesis_outpoint);
 
     let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
     let (stake_pool_data, staking_sk) =
@@ -1833,7 +1834,7 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
         OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
         0,
     );
-    let delegation_id = pos_accounting::make_delegation_id(&genesis_outpoint);
+    let delegation_id = common::chain::make_delegation_id(&genesis_outpoint);
 
     let tx1 = TransactionBuilder::new()
         .add_input(genesis_outpoint.into(), empty_witness(&mut rng))

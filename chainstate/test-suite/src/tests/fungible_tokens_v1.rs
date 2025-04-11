@@ -25,6 +25,7 @@ use chainstate_storage::{BlockchainStorageRead, Transactional};
 use chainstate_test_framework::{TestFramework, TransactionBuilder};
 use common::{
     chain::{
+        make_token_id,
         output_value::OutputValue,
         signature::{
             inputsig::{standard_signature::StandardInputSignature, InputWitness},
@@ -32,8 +33,8 @@ use common::{
         },
         timelock::OutputTimeLock,
         tokens::{
-            make_token_id, IsTokenFreezable, IsTokenUnfreezable, TokenId, TokenIssuance,
-            TokenIssuanceV1, TokenTotalSupply,
+            IsTokenFreezable, IsTokenUnfreezable, TokenId, TokenIssuance, TokenIssuanceV1,
+            TokenTotalSupply,
         },
         AccountCommand, AccountNonce, AccountType, Block, Destination, GenBlock, OrderData,
         OutPointSourceId, SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,

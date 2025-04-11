@@ -16,9 +16,12 @@
 use api_server_common::storage::storage_api::FungibleTokenData;
 use api_web_server::api::json_helpers::{amount_to_json, to_json_string};
 use common::{
-    chain::tokens::{
-        make_token_id, IsTokenFreezable, IsTokenFrozen, TokenId, TokenIssuance, TokenIssuanceV1,
-        TokenTotalSupply,
+    chain::{
+        make_token_id,
+        tokens::{
+            IsTokenFreezable, IsTokenFrozen, TokenId, TokenIssuance, TokenIssuanceV1,
+            TokenTotalSupply,
+        },
     },
     primitives::H256,
 };

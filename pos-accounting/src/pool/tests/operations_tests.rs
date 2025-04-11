@@ -48,7 +48,7 @@ fn create_pool_twice(#[case] seed: Seed) {
     );
     let destination = new_pub_key_destination(&mut rng);
     let pool_data = create_pool_data(&mut rng, destination, pledge_amount);
-    let pool_id = crate::make_pool_id(&outpoint);
+    let pool_id = common::chain::make_pool_id(&outpoint);
 
     let mut storage = InMemoryPoSAccounting::new();
     let mut db = PoSAccountingDB::new(&mut storage);

@@ -14,7 +14,8 @@
 // limitations under the License.
 
 use common::chain::{
-    tokens::{make_token_id, IsTokenFreezable, TokenIssuance, TokenIssuanceV1, TokenTotalSupply},
+    make_token_id,
+    tokens::{IsTokenFreezable, TokenIssuance, TokenIssuanceV1, TokenTotalSupply},
     AccountNonce,
 };
 

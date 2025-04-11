@@ -17,10 +17,8 @@ use api_web_server::api::json_helpers::amount_to_json;
 use common::{
     chain::{
         config::emission_schedule::DEFAULT_INITIAL_MINT,
-        tokens::{
-            make_token_id, IsTokenFreezable, TokenId, TokenIssuance, TokenIssuanceV1,
-            TokenTotalSupply,
-        },
+        make_token_id,
+        tokens::{IsTokenFreezable, TokenId, TokenIssuance, TokenIssuanceV1, TokenTotalSupply},
         AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, UtxoOutPoint,
     },
     primitives::H256,

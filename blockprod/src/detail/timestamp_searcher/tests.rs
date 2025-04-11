@@ -428,7 +428,7 @@ mod collect_search_data {
             Amount::from_atoms(rng.gen_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
 
         let (pool_data, _) = create_stake_pool_data_with_all_reward_to_staker(rng, pledge, vrf_pk);
-        let pool_id = pos_accounting::make_pool_id(utxo_for_spending.outpoint());
+        let pool_id = common::chain::make_pool_id(utxo_for_spending.outpoint());
 
         let tx_builder = TransactionBuilder::new()
             .add_output(TxOutput::CreateStakePool(pool_id, Box::new(pool_data)));
@@ -450,7 +450,7 @@ mod collect_search_data {
         let amount_to_delegate =
             Amount::from_atoms(rng.gen_range(min_stake_pool_pledge / 2..min_stake_pool_pledge * 2));
 
-        let delegation_id = pos_accounting::make_delegation_id(utxo_for_spending.outpoint());
+        let delegation_id = common::chain::make_delegation_id(utxo_for_spending.outpoint());
         let tx1_builder = TransactionBuilder::new()
             .add_output(TxOutput::CreateDelegationId(
                 Destination::AnyoneCanSpend,

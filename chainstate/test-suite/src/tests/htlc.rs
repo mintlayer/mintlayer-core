@@ -20,6 +20,7 @@ use common::{
     chain::{
         classic_multisig::ClassicMultisigChallenge,
         htlc::{HashedTimelockContract, HtlcSecret, HtlcSecretHash},
+        make_token_id,
         output_value::OutputValue,
         signature::{
             inputsig::{
@@ -36,7 +37,7 @@ use common::{
         },
         signed_transaction::SignedTransaction,
         timelock::OutputTimeLock,
-        tokens::{make_token_id, TokenData, TokenIssuance, TokenTransfer},
+        tokens::{TokenData, TokenIssuance, TokenTransfer},
         AccountCommand, AccountNonce, ChainConfig, Destination, HtlcActivated,
         TokenIssuanceVersion, TxInput, TxOutput,
     },

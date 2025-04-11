@@ -26,13 +26,13 @@ use common::{
         block::timestamp::BlockTimestamp,
         classic_multisig::ClassicMultisigChallenge,
         htlc::{HashedTimelockContract, HtlcSecret},
-        make_order_id,
+        make_order_id, make_token_id,
         output_value::OutputValue,
         signature::inputsig::InputWitness,
         timelock::OutputTimeLock,
         tokens::{
-            make_token_id, IsTokenFreezable, IsTokenUnfreezable, TokenId, TokenIssuance,
-            TokenIssuanceV1, TokenTotalSupply,
+            IsTokenFreezable, IsTokenUnfreezable, TokenId, TokenIssuance, TokenIssuanceV1,
+            TokenTotalSupply,
         },
         AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, CoinUnit, DelegationId,
         Destination, Genesis, OrderAccountCommand, OrderData, OrderId, OutPointSourceId, PoolId,
@@ -462,7 +462,7 @@ impl TestFixture {
             vrf_pk,
         );
 
-        let pool_id = pos_accounting::make_pool_id(&outpoint);
+        let pool_id = common::chain::make_pool_id(&outpoint);
 
         let tx = TransactionBuilder::new()
             .add_input(outpoint.into(), InputWitness::NoSignature(None))
@@ -489,7 +489,7 @@ impl TestFixture {
         pool_id: PoolId,
     ) -> (SignedTransaction, DelegationId) {
         let outpoint = self.next_input_from_genesis();
-        let delegation_id = pos_accounting::make_delegation_id(&outpoint);
+        let delegation_id = common::chain::make_delegation_id(&outpoint);
         let tx = TransactionBuilder::new()
             .add_input(outpoint.into(), InputWitness::NoSignature(None))
             .add_output(TxOutput::CreateDelegationId(

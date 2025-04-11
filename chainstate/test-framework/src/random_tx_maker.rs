@@ -25,14 +25,11 @@ use chainstate::chainstate_interface::ChainstateInterface;
 use common::{
     chain::{
         htlc::{HashedTimelockContract, HtlcSecretHash},
-        make_order_id,
+        make_order_id, make_pool_id, make_token_id,
         output_value::OutputValue,
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
-        tokens::{
-            make_token_id, IsTokenUnfreezable, NftIssuance, TokenId, TokenIssuance,
-            TokenTotalSupply,
-        },
+        tokens::{IsTokenUnfreezable, NftIssuance, TokenId, TokenIssuance, TokenTotalSupply},
         AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, AccountType, DelegationId,
         Destination, GenBlockId, OrderAccountCommand, OrderData, OrderId, OrdersVersion,
         OutPointSourceId, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
@@ -48,7 +45,7 @@ use orders_accounting::{
     OrdersAccountingOperations, OrdersAccountingView,
 };
 use pos_accounting::{
-    make_pool_id, DelegationData, InMemoryPoSAccounting, PoSAccountingDB, PoSAccountingDelta,
+    DelegationData, InMemoryPoSAccounting, PoSAccountingDB, PoSAccountingDelta,
     PoSAccountingDeltaData, PoSAccountingOperations, PoSAccountingUndo, PoSAccountingView,
     PoolData,
 };

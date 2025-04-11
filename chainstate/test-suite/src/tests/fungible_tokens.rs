@@ -25,12 +25,10 @@ use chainstate::{
 use chainstate_test_framework::{get_output_value, TestFramework, TransactionBuilder};
 use common::{
     chain::{
+        make_token_id,
         output_value::OutputValue,
         signature::inputsig::InputWitness,
-        tokens::{
-            make_token_id, Metadata, NftIssuanceV0, TokenData, TokenId, TokenIssuanceV0,
-            TokenTransfer,
-        },
+        tokens::{Metadata, NftIssuanceV0, TokenData, TokenId, TokenIssuanceV0, TokenTransfer},
         Destination, OutPointSourceId, TokenIssuanceVersion, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{id, Amount, BlockHeight, Id, Idable},
