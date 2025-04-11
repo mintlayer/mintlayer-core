@@ -23,7 +23,7 @@ use crate::{
 };
 use chainstate::{BlockSource, ChainstateError};
 use chainstate_storage::{BlockchainStorageRead, Transactional};
-use chainstate_types::{pos_randomness::PoSRandomness, BlockIndex, EpochStorageRead};
+use chainstate_types::{pos_randomness::PoSRandomness, BlockIndex};
 use common::{
     chain::{
         block::{
@@ -342,20 +342,9 @@ impl<'f> PoSBlockBuilder<'f> {
         let chain_config = self.framework.chainstate.get_chain_config().as_ref();
         let epoch_index = chain_config.epoch_index_from_height(&new_block_height);
 
-        let randomness = self.randomness.unwrap_or_else(|| {
-            match chain_config.sealed_epoch_index(&new_block_height) {
-                Some(epoch) => *self
-                    .framework
-                    .storage
-                    .transaction_ro()
-                    .unwrap()
-                    .get_epoch_data(epoch)
-                    .unwrap()
-                    .unwrap()
-                    .randomness(),
-                None => PoSRandomness::new(chain_config.initial_randomness()),
-            }
-        });
+        let randomness = self
+            .randomness
+            .unwrap_or_else(|| self.framework.pos_randomness_for_height(&new_block_height));
 
         pos_mine(
             rng,

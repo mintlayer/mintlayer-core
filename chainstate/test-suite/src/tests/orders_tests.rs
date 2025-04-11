@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use rstest::rstest;
+
 use chainstate::{CheckBlockTransactionsError, ConnectTransactionError};
 use chainstate_storage::Transactional;
 use chainstate_test_framework::{output_value_amount, TestFramework, TransactionBuilder};
@@ -34,10 +36,10 @@ use common::{
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Idable, H256},
 };
+use common_test_helpers::chainstate_upgrade_builder::ChainstateUpgradeBuilder;
 use crypto::key::{KeyKind, PrivateKey};
 use orders_accounting::OrdersAccountingDB;
 use randomness::{CryptoRng, Rng, SliceRandom};
-use rstest::rstest;
 use test_utils::{
     nft_utils::random_nft_issuance,
     random::{make_seedable_rng, Seed},
@@ -45,10 +47,7 @@ use test_utils::{
 };
 use tx_verifier::error::{InputCheckError, ScriptError, TranslationError};
 
-use crate::tests::helpers::{
-    chainstate_upgrade_builder::ChainstateUpgradeBuilder, issue_token_from_block,
-    mint_tokens_in_block,
-};
+use crate::tests::helpers::{issue_token_from_block, mint_tokens_in_block};
 
 fn create_test_framework_with_orders(
     rng: &mut (impl Rng + CryptoRng),

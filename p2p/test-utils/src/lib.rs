@@ -15,8 +15,9 @@
 
 #![allow(clippy::unwrap_used)]
 
-//! A module for p2p-related utilities that don't depend on the `p2p` crate itself.
-//! Note: utilities that do depend on `p2p` must go into the `p2p::test_utils` module instead.
+//! A crate for p2p-related utilities that don't depend on the `p2p` crate itself.
+//! Note: utilities that do depend on `p2p` may go into the `p2p::test_helpers` module instead
+//! (but note that the code in that module cannot have test-only dependencies).
 
 use std::{future::Future, sync::Arc, time::Duration};
 
