@@ -853,10 +853,11 @@ pub enum RpcCurrency {
     Token { token_id: RpcAddress<TokenId> },
 }
 
-#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize, HasValueHint)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
+#[serde(tag = "type", content = "content")]
 pub enum HardwareWalletType {
     #[cfg(feature = "trezor")]
-    Trezor,
+    Trezor { device_id: Option<String> },
 }
 
 impl HardwareWalletType {
@@ -865,7 +866,6 @@ impl HardwareWalletType {
         store_seed_phrase: bool,
         mnemonic: Option<String>,
         passphrase: Option<String>,
-        device_id: Option<String>,
     ) -> Result<WalletTypeArgs, RpcError<N>> {
         let store_seed_phrase = if store_seed_phrase {
             StoreSeedPhrase::Store
@@ -888,7 +888,9 @@ impl HardwareWalletType {
                 );
                 match hw_type {
                     #[cfg(feature = "trezor")]
-                    HardwareWalletType::Trezor => Ok(WalletTypeArgs::Trezor { device_id }),
+                    HardwareWalletType::Trezor { device_id } => {
+                        Ok(WalletTypeArgs::Trezor { device_id })
+                    }
                 }
             }
         }
