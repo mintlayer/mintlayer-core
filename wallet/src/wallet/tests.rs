@@ -2044,8 +2044,10 @@ fn reset_keys_after_failed_transaction(#[case] seed: Seed) {
 
     let not_enough = (block1_amount + Amount::from_atoms(1)).unwrap();
 
-    let last_issued_address =
-        wallet.get_addresses_usage(DEFAULT_ACCOUNT_INDEX).unwrap().last_issued();
+    let last_issued_address = wallet
+        .get_addresses_usage(DEFAULT_ACCOUNT_INDEX, KeyPurpose::ReceiveFunds)
+        .unwrap()
+        .last_issued();
 
     let result = wallet.create_stake_pool_tx(
         DEFAULT_ACCOUNT_INDEX,
@@ -2064,7 +2066,10 @@ fn reset_keys_after_failed_transaction(#[case] seed: Seed) {
     assert!(result.is_err());
     assert_eq!(
         last_issued_address,
-        wallet.get_addresses_usage(DEFAULT_ACCOUNT_INDEX).unwrap().last_issued(),
+        wallet
+            .get_addresses_usage(DEFAULT_ACCOUNT_INDEX, KeyPurpose::ReceiveFunds)
+            .unwrap()
+            .last_issued(),
     );
 }
 
@@ -4339,7 +4344,9 @@ fn wallet_address_usage(#[case] seed: Seed) {
     let chain_config = Arc::new(create_regtest());
     let mut wallet = create_wallet(chain_config.clone());
 
-    let usage = wallet.get_addresses_usage(DEFAULT_ACCOUNT_INDEX).unwrap();
+    let usage = wallet
+        .get_addresses_usage(DEFAULT_ACCOUNT_INDEX, KeyPurpose::ReceiveFunds)
+        .unwrap();
     assert_eq!(usage.last_used(), None);
     assert_eq!(usage.last_issued(), None);
 
@@ -4349,7 +4356,9 @@ fn wallet_address_usage(#[case] seed: Seed) {
         let _ = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap();
     }
 
-    let usage = wallet.get_addresses_usage(DEFAULT_ACCOUNT_INDEX).unwrap();
+    let usage = wallet
+        .get_addresses_usage(DEFAULT_ACCOUNT_INDEX, KeyPurpose::ReceiveFunds)
+        .unwrap();
     assert_eq!(usage.last_used(), None);
     assert_eq!(
         usage.last_issued(),
@@ -4360,7 +4369,9 @@ fn wallet_address_usage(#[case] seed: Seed) {
     let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
 
     let last_used = addresses_to_issue + 1;
-    let usage = wallet.get_addresses_usage(DEFAULT_ACCOUNT_INDEX).unwrap();
+    let usage = wallet
+        .get_addresses_usage(DEFAULT_ACCOUNT_INDEX, KeyPurpose::ReceiveFunds)
+        .unwrap();
     assert_eq!(usage.last_used(), Some(last_used.try_into().unwrap()));
     assert_eq!(usage.last_issued(), Some(last_used.try_into().unwrap()));
 }
@@ -4373,7 +4384,9 @@ fn wallet_set_lookahead_size(#[case] seed: Seed) {
     let chain_config = Arc::new(create_regtest());
     let mut wallet = create_wallet(chain_config.clone());
 
-    let usage = wallet.get_addresses_usage(DEFAULT_ACCOUNT_INDEX).unwrap();
+    let usage = wallet
+        .get_addresses_usage(DEFAULT_ACCOUNT_INDEX, KeyPurpose::ReceiveFunds)
+        .unwrap();
     assert_eq!(usage.last_used(), None);
     assert_eq!(usage.last_issued(), None);
 
@@ -4383,7 +4396,9 @@ fn wallet_set_lookahead_size(#[case] seed: Seed) {
         let _ = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap();
     }
 
-    let usage = wallet.get_addresses_usage(DEFAULT_ACCOUNT_INDEX).unwrap();
+    let usage = wallet
+        .get_addresses_usage(DEFAULT_ACCOUNT_INDEX, KeyPurpose::ReceiveFunds)
+        .unwrap();
     assert_eq!(usage.last_used(), None);
     assert_eq!(
         usage.last_issued(),
@@ -4394,7 +4409,9 @@ fn wallet_set_lookahead_size(#[case] seed: Seed) {
     let (_, block1) = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
 
     let last_used = addresses_to_issue + 1;
-    let usage = wallet.get_addresses_usage(DEFAULT_ACCOUNT_INDEX).unwrap();
+    let usage = wallet
+        .get_addresses_usage(DEFAULT_ACCOUNT_INDEX, KeyPurpose::ReceiveFunds)
+        .unwrap();
     assert_eq!(usage.last_used(), Some(last_used.try_into().unwrap()));
     assert_eq!(usage.last_issued(), Some(last_used.try_into().unwrap()));
 
@@ -4413,7 +4430,9 @@ fn wallet_set_lookahead_size(#[case] seed: Seed) {
     scan_wallet(&mut wallet, BlockHeight::new(0), vec![block1.clone()]);
     let coins = get_coin_balance_for_acc(&wallet, DEFAULT_ACCOUNT_INDEX);
     assert_eq!(coins, Amount::ZERO);
-    let usage = wallet.get_addresses_usage(DEFAULT_ACCOUNT_INDEX).unwrap();
+    let usage = wallet
+        .get_addresses_usage(DEFAULT_ACCOUNT_INDEX, KeyPurpose::ReceiveFunds)
+        .unwrap();
     assert_eq!(usage.last_used(), None);
     assert_eq!(usage.last_issued(), None);
 
@@ -4423,7 +4442,9 @@ fn wallet_set_lookahead_size(#[case] seed: Seed) {
     scan_wallet(&mut wallet, BlockHeight::new(0), vec![block1.clone()]);
     let coins = get_coin_balance_for_acc(&wallet, DEFAULT_ACCOUNT_INDEX);
     assert_eq!(coins, block1_amount);
-    let usage = wallet.get_addresses_usage(DEFAULT_ACCOUNT_INDEX).unwrap();
+    let usage = wallet
+        .get_addresses_usage(DEFAULT_ACCOUNT_INDEX, KeyPurpose::ReceiveFunds)
+        .unwrap();
     assert_eq!(usage.last_used(), Some(last_used.try_into().unwrap()));
     assert_eq!(usage.last_issued(), Some(last_used.try_into().unwrap()));
 }
