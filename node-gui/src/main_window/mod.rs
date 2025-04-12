@@ -645,6 +645,16 @@ impl MainWindow {
                             backend_sender,
                         )
                         .map(MainWindowMessage::MainWidgetMessage),
+                    ConsoleCommand::PaginatedPrint { header, body } => self
+                        .main_widget
+                        .update(
+                            MainWidgetMessage::TabsMessage(TabsMessage::WalletMessage(
+                                wallet_id,
+                                WalletMessage::ConsoleOutput(header + &body),
+                            )),
+                            backend_sender,
+                        )
+                        .map(MainWindowMessage::MainWidgetMessage),
                     ConsoleCommand::ClearScreen
                     | ConsoleCommand::ClearHistory
                     | ConsoleCommand::PrintHistory

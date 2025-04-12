@@ -878,6 +878,11 @@ pub enum ManageableWalletCommand {
 #[derive(Debug, Clone, serde::Serialize)]
 pub enum ConsoleCommand {
     Print(String),
+    PaginatedPrint {
+        // TODO: add support for more structured data like table pagination
+        header: String,
+        body: String,
+    },
     ClearScreen,
     PrintHistory,
     ClearHistory,
