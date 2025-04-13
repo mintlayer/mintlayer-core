@@ -650,20 +650,24 @@ where
                 | TxOutput::Htlc(_, _)
                 | TxOutput::CreateOrder(_) => None,
                 TxOutput::IssueFungibleToken(issuance_data) => {
-                    let result = make_token_id(tx.inputs())
-                        .ok_or(ConnectTransactionError::TokensError(
-                            TokensError::TokenIdCantBeCalculated,
-                        ))
-                        .and_then(
-                            |token_id| -> Result<tokens_accounting::TokenAccountingUndo, _> {
-                                let data = tokens_accounting::TokenData::FungibleToken(
-                                    issuance_data.as_ref().clone().into(),
-                                );
-                                self.tokens_accounting_cache
-                                    .issue_token(token_id, data)
-                                    .map_err(ConnectTransactionError::TokensAccountingError)
-                            },
-                        );
+                    let result = make_token_id(
+                        self.chain_config.as_ref(),
+                        tx_source.expected_block_height(),
+                        tx.inputs(),
+                    )
+                    .ok_or(ConnectTransactionError::TokensError(
+                        TokensError::TokenIdCantBeCalculated,
+                    ))
+                    .and_then(
+                        |token_id| -> Result<tokens_accounting::TokenAccountingUndo, _> {
+                            let data = tokens_accounting::TokenData::FungibleToken(
+                                issuance_data.as_ref().clone().into(),
+                            );
+                            self.tokens_accounting_cache
+                                .issue_token(token_id, data)
+                                .map_err(ConnectTransactionError::TokensAccountingError)
+                        },
+                    );
                     Some(result)
                 }
             })
@@ -973,11 +977,17 @@ where
         let block_id = tx_source.chain_block_index().map(|c| *c.block_id());
 
         // Register tokens if tx has issuance data
-        self.token_issuance_cache.register(block_id, tx.transaction(), |id| {
-            self.storage
-                .get_token_aux_data(id)
-                .map_err(|_| ConnectTransactionError::TxVerifierStorage)
-        })?;
+        self.token_issuance_cache.register(
+            self.chain_config.as_ref(),
+            tx_source.expected_block_height(),
+            block_id,
+            tx.transaction(),
+            |id| {
+                self.storage
+                    .get_token_aux_data(id)
+                    .map_err(|_| ConnectTransactionError::TxVerifierStorage)
+            },
+        )?;
 
         // check for attempted money printing and invalid inputs/outputs combinations
         let fee = input_output_policy::check_tx_inputs_outputs_policy(

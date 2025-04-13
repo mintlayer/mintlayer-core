@@ -682,9 +682,9 @@ fn hierarchy_test_tokens_v1(#[case] seed: Seed) {
             Destination::AnyoneCanSpend,
         ));
 
-    let token_id_0 = make_token_id(&[input0]).unwrap();
-    let token_id_1 = make_token_id(&[input1]).unwrap();
-    let token_id_2 = make_token_id(&[input2]).unwrap();
+    let token_id_0 = make_token_id(&chain_config, BlockHeight::zero(), &[input0]).unwrap();
+    let token_id_1 = make_token_id(&chain_config, BlockHeight::zero(), &[input1]).unwrap();
+    let token_id_2 = make_token_id(&chain_config, BlockHeight::zero(), &[input2]).unwrap();
 
     let block_undo_id_0: Id<Block> = Id::new(H256::random_using(&mut rng));
     let block_undo_source_0 = TransactionSource::Chain(block_undo_id_0);

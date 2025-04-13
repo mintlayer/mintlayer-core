@@ -30,9 +30,9 @@ use common::{
             RPCIsTokenFrozen, RPCNonFungibleTokenInfo, RPCTokenTotalSupply, TokenId, TokenIssuance,
             TokenTotalSupply,
         },
-        AccountCommand, AccountNonce, AccountSpending, DelegationId, Destination, GenBlock,
-        OrderAccountCommand, OrderId, OutPointSourceId, PoolId, Transaction, TxInput, TxOutput,
-        UtxoOutPoint,
+        AccountCommand, AccountNonce, AccountSpending, ChainConfig, DelegationId, Destination,
+        GenBlock, OrderAccountCommand, OrderId, OutPointSourceId, PoolId, Transaction, TxInput,
+        TxOutput, UtxoOutPoint,
     },
     primitives::{id::WithId, per_thousand::PerThousand, Amount, BlockHeight, Id, Idable},
 };
@@ -582,12 +582,16 @@ impl OutputCache {
         }
     }
 
-    pub fn new(mut txs: Vec<(AccountWalletTxId, WalletTx)>) -> WalletResult<Self> {
+    pub fn new(
+        chain_config: &ChainConfig,
+        best_block_height: BlockHeight,
+        mut txs: Vec<(AccountWalletTxId, WalletTx)>,
+    ) -> WalletResult<Self> {
         let mut cache = Self::empty();
 
         txs.sort_by(|x, y| wallet_tx_order(&x.1, &y.1));
         for (tx_id, tx) in txs {
-            cache.add_tx(tx_id.into_item_id(), tx)?;
+            cache.add_tx(chain_config, best_block_height, tx_id.into_item_id(), tx)?;
         }
         Ok(cache)
     }
@@ -847,7 +851,13 @@ impl OutputCache {
         })
     }
 
-    pub fn add_tx(&mut self, tx_id: OutPointSourceId, tx: WalletTx) -> WalletResult<()> {
+    pub fn add_tx(
+        &mut self,
+        chain_config: &ChainConfig,
+        best_block_height: BlockHeight,
+        tx_id: OutPointSourceId,
+        tx: WalletTx,
+    ) -> WalletResult<()> {
         let already_present = self.txs.get(&tx_id).is_some_and(|tx| !tx.state().is_abandoned());
         let is_unconfirmed = match tx.state() {
             TxState::Inactive(_)
@@ -862,7 +872,13 @@ impl OutputCache {
 
         self.update_inputs(&tx, is_unconfirmed, &tx_id, already_present)?;
 
-        self.update_outputs(&tx, get_block_info(&tx), already_present)?;
+        self.update_outputs(
+            chain_config,
+            best_block_height,
+            &tx,
+            get_block_info(&tx),
+            already_present,
+        )?;
 
         self.txs.insert(tx_id, tx);
         Ok(())
@@ -871,6 +887,8 @@ impl OutputCache {
     /// Update the pool states for a newly confirmed transaction
     fn update_outputs(
         &mut self,
+        chain_config: &ChainConfig,
+        best_block_height: BlockHeight,
         tx: &WalletTx,
         block_info: Option<BlockInfo>,
         already_present: bool,
@@ -929,7 +947,8 @@ impl OutputCache {
                     if already_present {
                         continue;
                     }
-                    let token_id = make_token_id(tx.inputs()).ok_or(WalletError::NoUtxos)?;
+                    let token_id = make_token_id(chain_config, best_block_height, tx.inputs())
+                        .ok_or(WalletError::NoUtxos)?;
                     match issuance.as_ref() {
                         TokenIssuance::V1(data) => {
                             self.token_issuance

@@ -16,8 +16,8 @@
 use common::chain::{
     ChainstateUpgrade, ChangeTokenMetadataUriActivated, DataDepositFeeVersion,
     FrozenTokensValidationVersion, HtlcActivated, OrdersActivated, OrdersVersion,
-    RewardDistributionVersion, StakerDestinationUpdateForbidden, TokenIssuanceVersion,
-    TokensFeeVersion,
+    RewardDistributionVersion, StakerDestinationUpdateForbidden, TokenIdGenerationVersion,
+    TokenIssuanceVersion, TokensFeeVersion,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
@@ -32,6 +32,7 @@ pub struct ChainstateUpgradeBuilder {
     orders_activated: OrdersActivated,
     orders_version: OrdersVersion,
     staker_destination_update_forbidden: StakerDestinationUpdateForbidden,
+    token_id_generation_version: TokenIdGenerationVersion,
 }
 
 macro_rules! builder_method {
@@ -58,6 +59,7 @@ impl ChainstateUpgradeBuilder {
             orders_activated: OrdersActivated::Yes,
             orders_version: OrdersVersion::V1,
             staker_destination_update_forbidden: StakerDestinationUpdateForbidden::Yes,
+            token_id_generation_version: TokenIdGenerationVersion::V1,
         }
     }
 
@@ -73,6 +75,7 @@ impl ChainstateUpgradeBuilder {
             self.orders_activated,
             self.orders_version,
             self.staker_destination_update_forbidden,
+            self.token_id_generation_version,
         )
     }
 

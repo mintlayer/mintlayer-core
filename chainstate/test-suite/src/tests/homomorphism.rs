@@ -21,7 +21,9 @@ use chainstate_test_framework::{
 };
 use common::{
     chain::{
-        make_token_id, output_value::OutputValue, timelock::OutputTimeLock, tokens::TokenIssuance,
+        output_value::OutputValue,
+        timelock::OutputTimeLock,
+        tokens::{TokenId, TokenIssuance},
         AccountCommand, AccountNonce, Destination, OutPointSourceId, TxInput, TxOutput,
         UtxoOutPoint,
     },
@@ -170,7 +172,7 @@ fn tokens_homomorphism(#[case] seed: Seed) {
             .build();
 
         let chainstate_config = tf.chainstate.get_chainstate_config();
-        let genesis_id = tf.genesis().get_id().into();
+        let genesis_id: Id<GenBlock> = tf.genesis().get_id().into();
 
         let storage2 = TestStore::new_empty().unwrap();
         let mut tf2 = TestFramework::builder(&mut rng)
@@ -181,10 +183,7 @@ fn tokens_homomorphism(#[case] seed: Seed) {
 
         let tx_1 = TransactionBuilder::new()
             .add_input(
-                TxInput::from_utxo(
-                    OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
-                    0,
-                ),
+                TxInput::from_utxo(genesis_id.clone().into(), 0),
                 empty_witness(&mut rng),
             )
             .add_output(TxOutput::IssueFungibleToken(Box::new(TokenIssuance::V1(
@@ -201,7 +200,7 @@ fn tokens_homomorphism(#[case] seed: Seed) {
                 Destination::AnyoneCanSpend,
             ))
             .build();
-        let token_id = make_token_id(tx_1.transaction().inputs()).unwrap();
+        let token_id = TokenId::from_utxo(&UtxoOutPoint::new(genesis_id.clone().into(), 0));
 
         let tx_2 = TransactionBuilder::new()
             .add_input(

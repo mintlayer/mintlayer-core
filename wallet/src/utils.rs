@@ -17,6 +17,7 @@ use common::chain::{TxInput, UtxoOutPoint};
 
 use crate::{WalletError, WalletResult};
 
+// FIXME: this is a different from chainstate
 pub fn get_first_utxo_outpoint(inputs: &[TxInput]) -> WalletResult<&UtxoOutPoint> {
     inputs
         .first()

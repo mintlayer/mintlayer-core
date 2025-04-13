@@ -127,7 +127,9 @@ async fn ok(#[case] seed: Seed) {
                         ))))
                         .build();
 
-                    let token_id = make_token_id(transaction.inputs()).unwrap();
+                    let token_id =
+                        make_token_id(&chain_config, BlockHeight::zero(), transaction.inputs())
+                            .unwrap();
                     token_ids.push(token_id);
                     input = TxInput::from_utxo(
                         OutPointSourceId::Transaction(transaction.transaction().get_id()),
@@ -147,7 +149,9 @@ async fn ok(#[case] seed: Seed) {
                     let mut nft =
                         test_utils::nft_utils::random_nft_issuance(&chain_config, &mut rng);
                     nft.metadata.ticker = token_ticker.as_bytes().to_vec();
-                    let token_id = make_token_id(&[input.clone()]).unwrap();
+                    let token_id =
+                        make_token_id(&chain_config, BlockHeight::zero(), &[input.clone()])
+                            .unwrap();
 
                     // issue NFT
                     let transaction = TransactionBuilder::new()
@@ -163,7 +167,9 @@ async fn ok(#[case] seed: Seed) {
                         ))
                         .build();
 
-                    let token_id = make_token_id(transaction.inputs()).unwrap();
+                    let token_id =
+                        make_token_id(&chain_config, BlockHeight::zero(), transaction.inputs())
+                            .unwrap();
                     nft_ids.push(token_id);
                     input = TxInput::from_utxo(
                         OutPointSourceId::Transaction(transaction.transaction().get_id()),

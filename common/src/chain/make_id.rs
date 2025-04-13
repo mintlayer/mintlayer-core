@@ -13,8 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::{tokens::TokenId, DelegationId, OrderId, PoolId, TxInput, UtxoOutPoint};
-use crate::primitives::id::{hash_encoded, hash_encoded_to, DefaultHashAlgoStream};
+use super::{
+    tokens::TokenId, ChainConfig, DelegationId, OrderId, PoolId, TokenIdGenerationVersion, TxInput,
+    UtxoOutPoint,
+};
+use crate::primitives::{
+    id::{hash_encoded, hash_encoded_to, DefaultHashAlgoStream},
+    BlockHeight,
+};
 
 use crypto::hash::StreamHasher;
 
@@ -28,6 +34,7 @@ fn delegation_id_preimage_suffix() -> u32 {
     1
 }
 
+// FIXME: rewrite this to accept &[TxInput] and implement PoolId::from_utxo (maybe)
 pub fn make_pool_id(input0_outpoint: &UtxoOutPoint) -> PoolId {
     let mut hasher = DefaultHashAlgoStream::new();
     hash_encoded_to(&input0_outpoint, &mut hasher);
@@ -48,7 +55,21 @@ pub fn make_order_id(input0_outpoint: &UtxoOutPoint) -> OrderId {
     OrderId::new(hash_encoded(input0_outpoint))
 }
 
-// TODO: the argument to the function should be a utxo, right now it might be an account
-pub fn make_token_id(inputs: &[TxInput]) -> Option<TokenId> {
-    Some(TokenId::new(hash_encoded(inputs.first()?)))
+pub fn make_token_id(
+    chain_config: &ChainConfig,
+    block_height: BlockHeight,
+    inputs: &[TxInput],
+) -> Option<TokenId> {
+    match chain_config
+        .chainstate_upgrades()
+        .version_at_height(block_height)
+        .1
+        .token_id_generation_version()
+    {
+        TokenIdGenerationVersion::V0 => Some(TokenId::new(hash_encoded(inputs.first()?))),
+        TokenIdGenerationVersion::V1 => {
+            let input_utxo_outpoint = inputs.iter().find_map(|input| input.utxo_outpoint())?;
+            Some(TokenId::from_utxo(input_utxo_outpoint))
+        }
+    }
 }

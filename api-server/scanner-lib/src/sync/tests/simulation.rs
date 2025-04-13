@@ -379,7 +379,9 @@ async fn simulation(
                         staking_pools.insert(*pool_id);
                     }
                     TxOutput::IssueNft(_, _, _) | TxOutput::IssueFungibleToken(_) => {
-                        token_ids.insert(make_token_id(tx.inputs()).unwrap());
+                        token_ids.insert(
+                            make_token_id(&chain_config, BlockHeight::zero(), tx.inputs()).unwrap(),
+                        );
                     }
                     TxOutput::CreateDelegationId(_, _) => {
                         delegations.insert(make_delegation_id(input0_outpoint.unwrap()));

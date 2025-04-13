@@ -713,7 +713,12 @@ fn spend_tokens(#[case] seed: Seed) {
                 Destination::AnyoneCanSpend,
             ))
             .build();
-        let token_v0_id = make_token_id(token_v0_issuance_tx.inputs()).unwrap();
+        let token_v0_id = make_token_id(
+            &chain_config,
+            BlockHeight::zero(),
+            token_v0_issuance_tx.inputs(),
+        )
+        .unwrap();
         let token_v0_issuance_tx_id = token_v0_issuance_tx.transaction().get_id();
         tf.make_block_builder()
             .add_transaction(token_v0_issuance_tx)
@@ -765,7 +770,12 @@ fn spend_tokens(#[case] seed: Seed) {
                 Destination::AnyoneCanSpend,
             ))
             .build();
-        let token_v1_id = make_token_id(token_v1_issuance_tx.inputs()).unwrap();
+        let token_v1_id = make_token_id(
+            &chain_config,
+            BlockHeight::zero(),
+            token_v1_issuance_tx.inputs(),
+        )
+        .unwrap();
         let token_v1_issuance_tx_id = token_v1_issuance_tx.transaction().get_id();
         tf.make_block_builder()
             .add_transaction(token_v1_issuance_tx)

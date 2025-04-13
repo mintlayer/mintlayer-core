@@ -38,7 +38,7 @@ use common::{
         Destination, Genesis, OrderAccountCommand, OrderData, OrderId, OutPointSourceId, PoolId,
         SignedTransaction, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{Amount, Idable as _},
+    primitives::{Amount, BlockHeight, Idable as _},
 };
 use crypto::{
     key::{KeyKind, PrivateKey},
@@ -572,7 +572,12 @@ impl TestFixture {
             .add_output(TxOutput::IssueFungibleToken(Box::new(issuance)))
             .build();
 
-        let token_id = make_token_id(tx.transaction().inputs()).unwrap();
+        let token_id = make_token_id(
+            self.tfrm.chain_config(),
+            BlockHeight::zero(),
+            tx.transaction().inputs(),
+        )
+        .unwrap();
 
         (tx, token_id)
     }
@@ -585,7 +590,12 @@ impl TestFixture {
 
     fn make_tx_to_issue_nft(&mut self) -> (SignedTransaction, TokenId) {
         let input: TxInput = self.next_input_from_genesis().into();
-        let token_id = make_token_id(&[input.clone()]).unwrap();
+        let token_id = make_token_id(
+            self.tfrm.chain_config(),
+            BlockHeight::zero(),
+            &[input.clone()],
+        )
+        .unwrap();
 
         let tx = TransactionBuilder::new()
             .add_input(input, InputWitness::NoSignature(None))

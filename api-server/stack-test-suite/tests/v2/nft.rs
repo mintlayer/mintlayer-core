@@ -98,7 +98,8 @@ async fn ok(#[case] seed: Seed) {
                     0,
                 );
 
-                let token_id = make_token_id(&[input.clone()]).unwrap();
+                let token_id =
+                    make_token_id(&chain_config, BlockHeight::zero(), &[input.clone()]).unwrap();
 
                 // issue NFT
                 let issue_nft_tx = TransactionBuilder::new()

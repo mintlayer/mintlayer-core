@@ -1208,8 +1208,8 @@ fn tokens_v1_set_hierarchy(#[case] seed: Seed) {
             Destination::AnyoneCanSpend,
         ));
 
-    let token_id_1 = make_token_id(&[input1]).unwrap();
-    let token_id_2 = make_token_id(&[input2]).unwrap();
+    let token_id_1 = make_token_id(&chain_config, BlockHeight::zero(), &[input1]).unwrap();
+    let token_id_2 = make_token_id(&chain_config, BlockHeight::zero(), &[input2]).unwrap();
 
     let mut store = mock::MockStore::new();
     store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
@@ -1328,8 +1328,8 @@ fn tokens_v1_set_issue_and_lock_undo_hierarchy(#[case] seed: Seed) {
             Destination::AnyoneCanSpend,
         ));
 
-    let token_id_1 = make_token_id(&[input1]).unwrap();
-    let token_id_2 = make_token_id(&[input2]).unwrap();
+    let token_id_1 = make_token_id(&chain_config, BlockHeight::zero(), &[input1]).unwrap();
+    let token_id_2 = make_token_id(&chain_config, BlockHeight::zero(), &[input2]).unwrap();
 
     let mut store = mock::MockStore::new();
     store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));

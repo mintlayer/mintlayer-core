@@ -92,7 +92,9 @@ async fn ok(#[case] seed: Seed) {
                         ))))
                         .build();
 
-                    let token_id = make_token_id(transaction.inputs()).unwrap();
+                    let token_id =
+                        make_token_id(&chain_config, BlockHeight::zero(), transaction.inputs())
+                            .unwrap();
                     token_ids.push(token_id);
                     input = TxInput::from_utxo(
                         OutPointSourceId::Transaction(transaction.transaction().get_id()),

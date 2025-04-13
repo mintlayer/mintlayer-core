@@ -20,8 +20,8 @@ mod netupgrade;
 pub use chainstate_upgrade::{
     ChainstateUpgrade, ChangeTokenMetadataUriActivated, DataDepositFeeVersion,
     FrozenTokensValidationVersion, HtlcActivated, OrdersActivated, OrdersVersion,
-    RewardDistributionVersion, StakerDestinationUpdateForbidden, TokenIssuanceVersion,
-    TokensFeeVersion,
+    RewardDistributionVersion, StakerDestinationUpdateForbidden, TokenIdGenerationVersion,
+    TokenIssuanceVersion, TokensFeeVersion,
 };
 pub use consensus_upgrade::{ConsensusUpgrade, PoSStatus, PoWStatus, RequiredConsensus};
 pub use netupgrade::NetUpgrades;

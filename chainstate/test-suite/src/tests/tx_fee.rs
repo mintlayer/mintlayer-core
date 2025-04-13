@@ -703,7 +703,12 @@ fn tokens_cannot_be_used_in_fee(#[case] seed: Seed) {
             ))
             .build();
         let token_issuance_tx_id = token_issuance_tx.transaction().get_id();
-        let token_id = make_token_id(token_issuance_tx.transaction().inputs()).unwrap();
+        let token_id = make_token_id(
+            &chain_config,
+            BlockHeight::zero(),
+            token_issuance_tx.transaction().inputs(),
+        )
+        .unwrap();
 
         let amount_to_mint = Amount::from_atoms(rng.gen_range(1..100_000));
         let token_mint_tx = TransactionBuilder::new()

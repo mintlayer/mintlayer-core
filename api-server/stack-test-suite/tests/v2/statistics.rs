@@ -127,7 +127,12 @@ async fn ok_tokens(#[case] seed: Seed) {
                     ))))
                     .build();
 
-                let token_id = make_token_id(issue_token_transaction.inputs()).unwrap();
+                let token_id = make_token_id(
+                    &chain_config,
+                    BlockHeight::zero(),
+                    issue_token_transaction.inputs(),
+                )
+                .unwrap();
                 let to_mint = Amount::from_atoms(1000);
                 let mint_transaction = TransactionBuilder::new()
                     .add_input(

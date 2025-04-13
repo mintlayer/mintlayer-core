@@ -190,7 +190,12 @@ pub fn issue_and_mint_tokens_from_genesis(
             issuance,
         ))))
         .build();
-    let token_id = make_token_id(tx1.transaction().inputs()).unwrap();
+    let token_id = make_token_id(
+        tf.chain_config(),
+        BlockHeight::zero(),
+        tx1.transaction().inputs(),
+    )
+    .unwrap();
     let tx1_id = tx1.transaction().get_id();
     let block1 = tf.make_block_builder().add_transaction(tx1).build(rng);
 

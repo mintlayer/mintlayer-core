@@ -1838,7 +1838,12 @@ fn create_order_with_nft(#[case] seed: Seed, #[case] version: OrdersVersion) {
         let mut tf = create_test_framework_with_orders(&mut rng, version);
 
         let genesis_input = TxInput::from_utxo(tf.genesis().get_id().into(), 0);
-        let token_id = make_token_id(&[genesis_input.clone()]).unwrap();
+        let token_id = make_token_id(
+            tf.chain_config(),
+            BlockHeight::zero(),
+            &[genesis_input.clone()],
+        )
+        .unwrap();
         let nft_issuance = random_nft_issuance(tf.chain_config(), &mut rng);
         let token_min_issuance_fee =
             tf.chainstate.get_chain_config().nft_issuance_fee(BlockHeight::zero());
@@ -2003,7 +2008,12 @@ fn partially_fill_order_with_nft_v0(#[case] seed: Seed) {
             .build();
 
         let genesis_input = TxInput::from_utxo(tf.genesis().get_id().into(), 0);
-        let token_id = make_token_id(&[genesis_input.clone()]).unwrap();
+        let token_id = make_token_id(
+            tf.chain_config(),
+            BlockHeight::zero(),
+            &[genesis_input.clone()],
+        )
+        .unwrap();
         let nft_issuance = random_nft_issuance(tf.chain_config(), &mut rng);
         let token_min_issuance_fee =
             tf.chainstate.get_chain_config().nft_issuance_fee(BlockHeight::zero());
@@ -2211,7 +2221,12 @@ fn partially_fill_order_with_nft_v1(#[case] seed: Seed) {
             .build();
 
         let genesis_input = TxInput::from_utxo(tf.genesis().get_id().into(), 0);
-        let token_id = make_token_id(&[genesis_input.clone()]).unwrap();
+        let token_id = make_token_id(
+            tf.chain_config(),
+            BlockHeight::zero(),
+            &[genesis_input.clone()],
+        )
+        .unwrap();
         let nft_issuance = random_nft_issuance(tf.chain_config(), &mut rng);
         let token_min_issuance_fee =
             tf.chainstate.get_chain_config().nft_issuance_fee(BlockHeight::zero());

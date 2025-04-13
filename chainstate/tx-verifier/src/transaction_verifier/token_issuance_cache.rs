@@ -19,9 +19,9 @@ use common::{
     chain::{
         make_token_id,
         tokens::{TokenAuxiliaryData, TokenId},
-        Block, Transaction, TxOutput,
+        Block, ChainConfig, Transaction, TxOutput,
     },
-    primitives::{Id, Idable, H256},
+    primitives::{BlockHeight, Id, Idable, H256},
 };
 use utils::ensure;
 
@@ -69,6 +69,8 @@ impl TokenIssuanceCache {
     // This helps in finding the relevant information of the token at any time in the future.
     pub fn register<E>(
         &mut self,
+        chain_config: &ChainConfig,
+        block_height: BlockHeight,
         block_id: Option<Id<Block>>,
         tx: &Transaction,
         token_data_getter: impl Fn(&TokenId) -> Result<Option<TokenAuxiliaryData>, E>,
@@ -77,8 +79,8 @@ impl TokenIssuanceCache {
         ConnectTransactionError: From<E>,
     {
         if let Some(token_id) = has_tokens_issuance_to_cache(tx.outputs()) {
-            let expected_token_id =
-                make_token_id(tx.inputs()).ok_or(TokensError::TokenIdCantBeCalculated)?;
+            let expected_token_id = make_token_id(chain_config, block_height, tx.inputs())
+                .ok_or(TokensError::TokenIdCantBeCalculated)?;
 
             ensure!(
                 token_id == expected_token_id,
@@ -90,7 +92,12 @@ impl TokenIssuanceCache {
 
             self.precache_token_issuance(token_data_getter, token_id)?;
 
-            self.write_issuance(&block_id.unwrap_or_else(|| H256::zero().into()), tx)?;
+            self.write_issuance(
+                chain_config,
+                block_height,
+                &block_id.unwrap_or_else(|| H256::zero().into()),
+                tx,
+            )?;
         }
         Ok(())
     }
@@ -106,17 +113,20 @@ impl TokenIssuanceCache {
         if let Some(token_id) = has_tokens_issuance_to_cache(tx.outputs()) {
             self.precache_token_issuance(token_data_getter, token_id)?;
 
-            self.write_undo_issuance(tx)?;
+            self.write_undo_issuance(tx, token_id)?;
         }
         Ok(())
     }
 
     fn write_issuance(
         &mut self,
+        chain_config: &ChainConfig,
+        block_height: BlockHeight,
         block_id: &Id<Block>,
         tx: &Transaction,
     ) -> Result<(), TokensError> {
-        let token_id = make_token_id(tx.inputs()).ok_or(TokensError::TokenIdCantBeCalculated)?;
+        let token_id = make_token_id(chain_config, block_height, tx.inputs())
+            .ok_or(TokensError::TokenIdCantBeCalculated)?;
         let aux_data = TokenAuxiliaryData::new(tx.clone(), *block_id);
         self.insert_aux_data(token_id, CachedAuxDataOp::Write(aux_data))?;
 
@@ -147,8 +157,11 @@ impl TokenIssuanceCache {
         }
     }
 
-    fn write_undo_issuance(&mut self, tx: &Transaction) -> Result<(), TokensError> {
-        let token_id = make_token_id(tx.inputs()).ok_or(TokensError::TokenIdCantBeCalculated)?;
+    fn write_undo_issuance(
+        &mut self,
+        tx: &Transaction,
+        token_id: TokenId,
+    ) -> Result<(), TokensError> {
         match self.data.entry(token_id) {
             Entry::Occupied(mut e) => {
                 e.insert(CachedAuxDataOp::Erase);

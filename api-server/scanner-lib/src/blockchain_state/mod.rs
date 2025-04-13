@@ -538,7 +538,8 @@ async fn calculate_tx_fee_and_collect_token_info<T: ApiServerStorageWrite>(
         .filter_map(|out| match out {
             TxOutput::IssueNft(token_id, _, _) => Some((*token_id, 0)),
             TxOutput::IssueFungibleToken(data) => {
-                let token_id = make_token_id(tx.inputs()).expect("must exist");
+                let token_id =
+                    make_token_id(chain_config, block_height, tx.inputs()).expect("must exist");
                 match data.as_ref() {
                     TokenIssuance::V1(data) => Some((token_id, data.number_of_decimals)),
                 }
@@ -1537,7 +1538,8 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                 .await;
             }
             TxOutput::IssueFungibleToken(issuance) => {
-                let token_id = make_token_id(inputs).expect("should not fail");
+                let token_id = make_token_id(chain_config.as_ref(), block_height, inputs)
+                    .expect("should not fail");
                 let issuance = match issuance.as_ref() {
                     TokenIssuance::V1(issuance) => FungibleTokenData {
                         token_ticker: issuance.token_ticker.clone(),

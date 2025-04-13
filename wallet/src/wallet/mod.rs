@@ -1892,8 +1892,12 @@ where
             consolidate_fee_rate,
             TxAdditionalInfo::new(),
         )?;
-        let token_id =
-            make_token_id(tx.transaction().inputs()).ok_or(WalletError::MissingTokenId)?;
+        let token_id = make_token_id(
+            self.chain_config.as_ref(),
+            self.get_best_block_for_account(account_index)?.1.next_height(),
+            tx.transaction().inputs(),
+        )
+        .ok_or(WalletError::MissingTokenId)?;
         Ok((token_id, tx))
     }
 
@@ -1927,8 +1931,12 @@ where
             },
         )?;
 
-        let token_id = make_token_id(signed_transaction.transaction().inputs())
-            .ok_or(WalletError::MissingTokenId)?;
+        let token_id = make_token_id(
+            self.chain_config.as_ref(),
+            self.get_best_block_for_account(account_index)?.1.next_height(),
+            signed_transaction.transaction().inputs(),
+        )
+        .ok_or(WalletError::MissingTokenId)?;
         Ok((token_id, signed_transaction))
     }
 
