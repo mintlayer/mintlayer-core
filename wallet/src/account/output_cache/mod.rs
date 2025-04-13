@@ -958,8 +958,7 @@ impl OutputCache {
                 }
                 TxOutput::IssueNft(_, _, _) => {}
                 TxOutput::CreateOrder(order_data) => {
-                    let input0_outpoint = crate::utils::get_first_utxo_outpoint(tx.inputs())?;
-                    let order_id = make_order_id(input0_outpoint);
+                    let order_id = make_order_id(tx.inputs()).ok_or(WalletError::NotUtxoInput)?;
                     let give_currency = Currency::from_output_value(order_data.give())
                         .ok_or(WalletError::TokenV0(tx.id()))?;
                     let ask_currency = Currency::from_output_value(order_data.ask())

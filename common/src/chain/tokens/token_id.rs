@@ -27,12 +27,12 @@ pub enum Token {}
 pub type TokenId = Id<Token>;
 
 impl TokenId {
-    pub fn random_using<R: Rng>(rng: &mut R) -> Self {
-        Self::new(H256::random_using(rng))
-    }
-
     pub fn from_utxo(utxo_outpoint: &UtxoOutPoint) -> Self {
         Self::new(hash_encoded(utxo_outpoint))
+    }
+
+    pub fn random_using<R: Rng>(rng: &mut R) -> Self {
+        Self::new(H256::random_using(rng))
     }
 
     pub const fn zero() -> Self {

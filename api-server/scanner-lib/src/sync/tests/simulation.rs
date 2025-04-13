@@ -394,7 +394,7 @@ async fn simulation(
                     | TxOutput::ProduceBlockFromStake(_, _)
                     | TxOutput::Htlc(_, _) => {}
                     TxOutput::CreateOrder(order_data) => {
-                        let order_id = make_order_id(input0_outpoint.unwrap());
+                        let order_id = make_order_id(tx.inputs()).unwrap();
                         let _ = new_orders_cache
                             .create_order(order_id, order_data.as_ref().clone().into())
                             .unwrap();

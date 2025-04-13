@@ -15,8 +15,8 @@
 
 use crate::{
     address::{hexified::HexifiedAddress, traits::Addressable, AddressError},
-    chain::ChainConfig,
-    primitives::{Id, H256},
+    chain::{ChainConfig, UtxoOutPoint},
+    primitives::{id::hash_encoded, Id, H256},
 };
 use randomness::{CryptoRng, Rng};
 use serialization::{DecodeAll, Encode};
@@ -27,6 +27,10 @@ pub enum Order {}
 pub type OrderId = Id<Order>;
 
 impl OrderId {
+    pub fn from_utxo(utxo_outpoint: &UtxoOutPoint) -> Self {
+        Self::new(hash_encoded(utxo_outpoint))
+    }
+
     pub fn random_using<R: Rng + CryptoRng>(rng: &mut R) -> Self {
         Self::new(H256::random_using(rng))
     }

@@ -51,8 +51,9 @@ pub fn make_delegation_id(input0_outpoint: &UtxoOutPoint) -> DelegationId {
     DelegationId::new(hasher.finalize().into())
 }
 
-pub fn make_order_id(input0_outpoint: &UtxoOutPoint) -> OrderId {
-    OrderId::new(hash_encoded(input0_outpoint))
+pub fn make_order_id(inputs: &[TxInput]) -> Option<OrderId> {
+    let input_utxo_outpoint = inputs.iter().find_map(|input| input.utxo_outpoint())?;
+    Some(OrderId::new(hash_encoded(input_utxo_outpoint)))
 }
 
 pub fn make_token_id(

@@ -26,7 +26,7 @@ use common::{
         block::timestamp::BlockTimestamp,
         classic_multisig::ClassicMultisigChallenge,
         htlc::{HashedTimelockContract, HtlcSecret},
-        make_order_id, make_token_id,
+        make_token_id,
         output_value::OutputValue,
         signature::inputsig::InputWitness,
         timelock::OutputTimeLock,
@@ -805,7 +805,7 @@ impl TestFixture {
             OutputValue::TokenV1(token_id, token_give_amount),
         );
 
-        let order_id = make_order_id(&outpoint);
+        let order_id = OrderId::from_utxo(&outpoint);
         let tx = TransactionBuilder::new()
             .add_input(outpoint.into(), InputWitness::NoSignature(None))
             .add_output(TxOutput::CreateOrder(Box::new(order_data)))

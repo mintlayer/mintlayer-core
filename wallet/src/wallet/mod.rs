@@ -2088,8 +2088,7 @@ where
                 )
             },
         )?;
-        let input0_outpoint = crate::utils::get_first_utxo_outpoint(tx.transaction().inputs())?;
-        let order_id = make_order_id(input0_outpoint);
+        let order_id = make_order_id(tx.inputs()).ok_or(WalletError::NotUtxoInput)?;
         Ok((order_id, tx))
     }
 

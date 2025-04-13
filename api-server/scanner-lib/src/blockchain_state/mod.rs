@@ -1871,8 +1871,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                     .expect("Unable to set utxo");
             }
             TxOutput::CreateOrder(order_data) => {
-                if let Some(input0_outpoint) = inputs.iter().find_map(|input| input.utxo_outpoint())
-                {
+                if let Some(order_id) = make_order_id(inputs) {
                     let amount_and_currency = |v: &OutputValue| match v {
                         OutputValue::Coin(amount) => (CoinOrTokenId::Coin, *amount),
                         OutputValue::TokenV1(id, amount) => (CoinOrTokenId::TokenId(*id), *amount),
@@ -1896,7 +1895,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                     };
 
                     db_tx
-                        .set_order_at_height(make_order_id(input0_outpoint), &order, block_height)
+                        .set_order_at_height(order_id, &order, block_height)
                         .await
                         .expect("Unable to set delegation data");
                 }

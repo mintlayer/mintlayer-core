@@ -890,7 +890,6 @@ where
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        let input_utxo_outpoint = tx.inputs().iter().find_map(|input| input.utxo_outpoint());
         let output_undos = tx
             .outputs()
             .iter()
@@ -906,9 +905,8 @@ where
                 | TxOutput::DataDeposit(..)
                 | TxOutput::IssueFungibleToken(..)
                 | TxOutput::Htlc(_, _) => None,
-                TxOutput::CreateOrder(order_data) => match input_utxo_outpoint {
-                    Some(input_utxo_outpoint) => {
-                        let order_id = make_order_id(input_utxo_outpoint);
+                TxOutput::CreateOrder(order_data) => match make_order_id(tx.inputs()) {
+                    Some(order_id) => {
                         let result = self
                             .orders_accounting_cache
                             .create_order(order_id, order_data.as_ref().clone().into())
