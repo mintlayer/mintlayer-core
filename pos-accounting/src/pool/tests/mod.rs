@@ -16,8 +16,8 @@
 use std::collections::BTreeMap;
 
 use common::{
-    chain::{make_pool_id, DelegationId, Destination, OutPointSourceId, PoolId, UtxoOutPoint},
-    primitives::{per_thousand::PerThousand, Amount, Id, H256},
+    chain::{DelegationId, Destination, PoolId},
+    primitives::{per_thousand::PerThousand, Amount, H256},
 };
 use crypto::{
     key::{KeyKind, PrivateKey},
@@ -72,12 +72,8 @@ fn create_pool(
     pledged_amount: Amount,
 ) -> Result<(PoolId, PoolData, PoSAccountingUndo), Error> {
     let destination = new_pub_key_destination(rng);
-    let outpoint = UtxoOutPoint::new(
-        OutPointSourceId::BlockReward(Id::new(H256::random_using(rng))),
-        0,
-    );
     let pool_data = create_pool_data(rng, destination, pledged_amount);
-    let pool_id = make_pool_id(&outpoint);
+    let pool_id = PoolId::random_using(rng);
     op.create_pool(pool_id, pool_data.clone())
         .map(|undo| (pool_id, pool_data, undo))
 }
@@ -88,12 +84,9 @@ fn create_delegation_id(
     target_pool: PoolId,
 ) -> Result<(DelegationId, Destination, PoSAccountingUndo), Error> {
     let destination = new_pub_key_destination(rng);
-    let outpoint = UtxoOutPoint::new(
-        OutPointSourceId::BlockReward(Id::new(H256::random_using(rng))),
-        0,
-    );
-    op.create_delegation_id(target_pool, destination.clone(), &outpoint)
-        .map(|(id, undo)| (id, destination, undo))
+    let delegation_id = DelegationId::random_using(rng);
+    op.create_delegation_id(target_pool, delegation_id, destination.clone())
+        .map(|undo| (delegation_id, destination, undo))
 }
 
 fn create_storage_with_pool(

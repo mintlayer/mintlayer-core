@@ -462,7 +462,7 @@ impl TestFixture {
             vrf_pk,
         );
 
-        let pool_id = common::chain::make_pool_id(&outpoint);
+        let pool_id = PoolId::from_utxo(&outpoint);
 
         let tx = TransactionBuilder::new()
             .add_input(outpoint.into(), InputWitness::NoSignature(None))
@@ -489,7 +489,7 @@ impl TestFixture {
         pool_id: PoolId,
     ) -> (SignedTransaction, DelegationId) {
         let outpoint = self.next_input_from_genesis();
-        let delegation_id = common::chain::make_delegation_id(&outpoint);
+        let delegation_id = DelegationId::from_utxo(&outpoint);
         let tx = TransactionBuilder::new()
             .add_input(outpoint.into(), InputWitness::NoSignature(None))
             .add_output(TxOutput::CreateDelegationId(

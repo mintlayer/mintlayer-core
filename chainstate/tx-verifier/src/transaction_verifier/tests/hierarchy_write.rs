@@ -22,9 +22,8 @@ use super::*;
 use accounting::TxUndo;
 use common::chain::{
     config::Builder as ConfigBuilder,
-    make_pool_id,
     tokens::{IsTokenFreezable, IsTokenFrozen, TokenAuxiliaryData, TokenId, TokenTotalSupply},
-    DelegationId,
+    DelegationId, PoolId,
 };
 use mockall::predicate::eq;
 use orders_accounting::OrdersAccountingDeltaUndoData;
@@ -679,8 +678,8 @@ fn pos_accounting_stake_pool_set_hierarchy(#[case] seed: Seed) {
     let pool_data1 = create_pool_data(&mut rng, destination1.clone(), destination1, pool_balance1);
     let pool_data2 = create_pool_data(&mut rng, destination2.clone(), destination2, pool_balance2);
 
-    let pool_id_1 = make_pool_id(&outpoint1);
-    let pool_id_2 = make_pool_id(&outpoint2);
+    let pool_id_1 = PoolId::from_utxo(&outpoint1);
+    let pool_id_2 = PoolId::from_utxo(&outpoint2);
 
     let mut store = mock::MockStore::new();
     store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
@@ -795,7 +794,7 @@ fn pos_accounting_stake_pool_undo_set_hierarchy(#[case] seed: Seed) {
     store.expect_apply_accounting_delta().times(1).return_const(Ok(()));
 
     let mut verifier1 = {
-        let pool_id = make_pool_id(&outpoint1);
+        let pool_id = PoolId::from_utxo(&outpoint1);
         let mut verifier = TransactionVerifier::new(&store, &chain_config);
         let undo = verifier
             .pos_accounting_adapter
@@ -816,7 +815,7 @@ fn pos_accounting_stake_pool_undo_set_hierarchy(#[case] seed: Seed) {
     };
 
     let verifier2 = {
-        let pool_id = make_pool_id(&outpoint2);
+        let pool_id = PoolId::from_utxo(&outpoint2);
         let mut verifier = verifier1.derive_child();
         let undo_pool = verifier
             .pos_accounting_adapter
@@ -856,8 +855,8 @@ fn pos_accounting_stake_pool_and_delegation_undo_set_hierarchy(#[case] seed: See
     let destination1 = new_pub_key_destination(&mut rng);
     let destination2 = new_pub_key_destination(&mut rng);
 
-    let pool_id_1 = make_pool_id(&outpoint1);
-    let pool_id_2 = make_pool_id(&outpoint2);
+    let pool_id_1 = PoolId::from_utxo(&outpoint1);
+    let pool_id_2 = PoolId::from_utxo(&outpoint2);
 
     let pool_balance1 = Amount::from_atoms(200);
     let pool_balance2 = Amount::from_atoms(300);
@@ -948,11 +947,12 @@ fn pos_accounting_stake_pool_and_delegation_undo_set_hierarchy(#[case] seed: See
     let verifier3 = {
         let mut verifier = verifier2.derive_child();
         let tx_id: Id<Transaction> = Id::new(H256::random_using(&mut rng));
+        let delegation_id = DelegationId::random_using(&mut rng);
 
-        let (_, undo_delegation) = verifier
+        let undo_delegation = verifier
             .pos_accounting_adapter
             .operations(TransactionSource::Mempool)
-            .create_delegation_id(pool_id_1, Destination::AnyoneCanSpend, &outpoint2)
+            .create_delegation_id(pool_id_1, delegation_id, Destination::AnyoneCanSpend)
             .unwrap();
 
         verifier

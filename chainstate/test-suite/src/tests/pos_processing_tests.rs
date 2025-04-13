@@ -38,7 +38,6 @@ use common::{
             ConsensusData,
         },
         config::{create_unit_test_config, Builder as ConfigBuilder, ChainType, EpochIndex},
-        make_pool_id,
         output_value::OutputValue,
         signature::{
             inputsig::{standard_signature::StandardInputSignature, InputWitness},
@@ -46,10 +45,10 @@ use common::{
         },
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
-        AccountNonce, AccountOutPoint, AccountSpending, ChainConfig, ConsensusUpgrade, Destination,
-        GenBlock, NetUpgrades, OutPointSourceId, PoSChainConfig, PoSChainConfigBuilder, PoolId,
-        RequiredConsensus, SignedTransaction, StakerDestinationUpdateForbidden, TxInput, TxOutput,
-        UtxoOutPoint,
+        AccountNonce, AccountOutPoint, AccountSpending, ChainConfig, ConsensusUpgrade,
+        DelegationId, Destination, GenBlock, NetUpgrades, OutPointSourceId, PoSChainConfig,
+        PoSChainConfigBuilder, PoolId, RequiredConsensus, SignedTransaction,
+        StakerDestinationUpdateForbidden, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockCount, BlockHeight, Id, Idable, H256},
     Uint256,
@@ -86,7 +85,7 @@ fn add_block_with_stake_pool(
         OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
         0,
     );
-    let pool_id = make_pool_id(&genesis_outpoint);
+    let pool_id = PoolId::from_utxo(&genesis_outpoint);
     let tx = TransactionBuilder::new()
         .add_input(genesis_outpoint.into(), empty_witness(rng))
         .add_output(TxOutput::CreateStakePool(
@@ -116,7 +115,7 @@ fn add_block_with_2_stake_pools(
         OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
         0,
     );
-    let pool_id1 = make_pool_id(&outpoint_genesis);
+    let pool_id1 = PoolId::from_utxo(&outpoint_genesis);
     let tx1 = TransactionBuilder::new()
         .add_input(outpoint_genesis.into(), empty_witness(rng))
         .add_output(TxOutput::CreateStakePool(
@@ -133,7 +132,7 @@ fn add_block_with_2_stake_pools(
     let transfer_outpoint1 =
         UtxoOutPoint::new(OutPointSourceId::Transaction(tx1.transaction().get_id()), 1);
 
-    let pool_id2 = make_pool_id(&transfer_outpoint1);
+    let pool_id2 = PoolId::from_utxo(&transfer_outpoint1);
     let tx2 = TransactionBuilder::new()
         .add_input(transfer_outpoint1.into(), empty_witness(rng))
         .add_output(TxOutput::CreateStakePool(
@@ -1232,7 +1231,7 @@ fn stake_pool_as_reward_output(#[case] seed: Seed) {
         OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
         0,
     );
-    let pool_id = make_pool_id(&genesis_outpoint);
+    let pool_id = PoolId::from_utxo(&genesis_outpoint);
 
     let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
     let (stake_pool_data, staking_sk) =
@@ -1834,7 +1833,7 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
         OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
         0,
     );
-    let delegation_id = common::chain::make_delegation_id(&genesis_outpoint);
+    let delegation_id = DelegationId::from_utxo(&genesis_outpoint);
 
     let tx1 = TransactionBuilder::new()
         .add_input(genesis_outpoint.into(), empty_witness(&mut rng))
@@ -2051,7 +2050,7 @@ fn pos_decommission_genesis_pool(#[case] seed: Seed) {
         tf.chainstate.get_chain_config().min_stake_pool_pledge(),
         vrf_pk,
     );
-    let new_pool_id = make_pool_id(&genesis_outpoint_0);
+    let new_pool_id = PoolId::from_utxo(&genesis_outpoint_0);
 
     let create_new_pool_tx = TransactionBuilder::new()
         .add_input(genesis_outpoint_0.into(), empty_witness(&mut rng))

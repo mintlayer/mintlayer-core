@@ -15,7 +15,7 @@
 
 use accounting::DataDelta;
 use common::{
-    chain::{make_delegation_id, DelegationId, Destination, PoolId, UtxoOutPoint},
+    chain::{DelegationId, Destination, PoolId},
     primitives::Amount,
 };
 use utils::ensure;
@@ -117,14 +117,12 @@ impl<P: PoSAccountingView> PoSAccountingOperations<PoSAccountingUndo> for PoSAcc
     fn create_delegation_id(
         &mut self,
         target_pool: PoolId,
+        delegation_id: DelegationId,
         spend_key: Destination,
-        input0_outpoint: &UtxoOutPoint,
-    ) -> Result<(DelegationId, PoSAccountingUndo), Error> {
+    ) -> Result<PoSAccountingUndo, Error> {
         if !self.pool_exists(target_pool)? {
             return Err(Error::DelegationCreationFailedPoolDoesNotExist);
         }
-
-        let delegation_id = make_delegation_id(input0_outpoint);
 
         if self.get_delegation_data(delegation_id)?.is_some() {
             // This should never happen since it's based on an unspent input
@@ -138,12 +136,11 @@ impl<P: PoSAccountingView> PoSAccountingOperations<PoSAccountingUndo> for PoSAcc
             .delegation_data
             .merge_delta_data_element(delegation_id, DataDelta::new(None, Some(delegation_data)))?;
 
-        Ok((
-            delegation_id,
-            PoSAccountingUndo::CreateDelegationId(CreateDelegationIdUndo {
+        Ok(PoSAccountingUndo::CreateDelegationId(
+            CreateDelegationIdUndo {
                 delegation_id,
                 data_undo,
-            }),
+            },
         ))
     }
 

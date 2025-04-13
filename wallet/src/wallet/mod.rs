@@ -1869,8 +1869,8 @@ where
             consolidate_fee_rate,
             TxAdditionalInfo::new(),
         )?;
-        let input0_outpoint = crate::utils::get_first_utxo_outpoint(tx.transaction().inputs())?;
-        let delegation_id = make_delegation_id(input0_outpoint);
+        let delegation_id =
+            make_delegation_id(tx.transaction().inputs()).ok_or(WalletError::NoUtxos)?;
         Ok((delegation_id, tx))
     }
 

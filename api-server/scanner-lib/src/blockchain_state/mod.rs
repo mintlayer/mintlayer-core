@@ -1627,11 +1627,10 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
             }
             TxOutput::ProduceBlockFromStake(_, _) => {}
             TxOutput::CreateDelegationId(destination, pool_id) => {
-                if let Some(input0_outpoint) = inputs.iter().find_map(|input| input.utxo_outpoint())
-                {
+                if let Some(delegation_id) = make_delegation_id(inputs) {
                     db_tx
                         .set_delegation_at_height(
-                            make_delegation_id(input0_outpoint),
+                            delegation_id,
                             &Delegation::new(
                                 block_height,
                                 destination.clone(),

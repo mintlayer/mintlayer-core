@@ -40,7 +40,6 @@ use chainstate_test_framework::{TestFramework, TransactionBuilder};
 use common::{
     address::Address,
     chain::{
-        make_delegation_id, make_pool_id,
         output_value::OutputValue,
         signature::{
             inputsig::{
@@ -51,8 +50,8 @@ use common::{
         },
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
-        CoinUnit, Destination, OutPointSourceId, PoolId, SignedTransaction, TxInput, TxOutput,
-        UtxoOutPoint,
+        CoinUnit, DelegationId, Destination, OutPointSourceId, PoolId, SignedTransaction, TxInput,
+        TxOutput, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, CoinOrTokenId, Idable, H256},
 };
@@ -423,7 +422,7 @@ async fn compare_pool_rewards_with_chainstate_real_state(#[case] seed: Seed) {
             pool_id,
         ))
         .build();
-    let delegation_id = make_delegation_id(&UtxoOutPoint::new(
+    let delegation_id = DelegationId::from_utxo(&UtxoOutPoint::new(
         OutPointSourceId::Transaction(prev_tx_id),
         0,
     ));
@@ -507,7 +506,7 @@ async fn compare_pool_rewards_with_chainstate_real_state(#[case] seed: Seed) {
         PerThousand::new_from_rng(&mut rng),
         Amount::from_atoms(rng.gen_range(0..100)),
     );
-    let new_pool_id = make_pool_id(&UtxoOutPoint::new(
+    let new_pool_id = PoolId::from_utxo(&UtxoOutPoint::new(
         OutPointSourceId::Transaction(prev_tx_id),
         0,
     ));

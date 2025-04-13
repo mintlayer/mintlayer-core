@@ -373,7 +373,6 @@ async fn simulation(
                 utxo_outpoints.extend(new_utxos);
 
                 // store new ids
-                let input0_outpoint = tx.inputs().iter().find_map(|input| input.utxo_outpoint());
                 tx.outputs().iter().for_each(|out| match out {
                     TxOutput::CreateStakePool(pool_id, _) => {
                         staking_pools.insert(*pool_id);
@@ -384,7 +383,7 @@ async fn simulation(
                         );
                     }
                     TxOutput::CreateDelegationId(_, _) => {
-                        delegations.insert(make_delegation_id(input0_outpoint.unwrap()));
+                        delegations.insert(make_delegation_id(tx.inputs()).unwrap());
                     }
                     | TxOutput::Burn(_)
                     | TxOutput::Transfer(_, _)

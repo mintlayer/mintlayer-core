@@ -25,7 +25,7 @@ use chainstate::chainstate_interface::ChainstateInterface;
 use common::{
     chain::{
         htlc::{HashedTimelockContract, HtlcSecretHash},
-        make_order_id, make_pool_id, make_token_id,
+        make_delegation_id, make_order_id, make_pool_id, make_token_id,
         output_value::OutputValue,
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
@@ -1384,7 +1384,7 @@ impl<'a> RandomTxMaker<'a> {
                 | TxOutput::DataDeposit(_)
                 | TxOutput::Htlc(_, _) => Some(output),
                 TxOutput::CreateStakePool(dummy_pool_id, pool_data) => {
-                    let pool_id = make_pool_id(inputs[0].utxo_outpoint().unwrap());
+                    let pool_id = make_pool_id(inputs).unwrap();
                     let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
                     let (staker_sk, staker_pk) =
                         PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
@@ -1408,12 +1408,9 @@ impl<'a> RandomTxMaker<'a> {
                 }
                 TxOutput::CreateDelegationId(destination, pool_id) => {
                     if pos_accounting_cache.pool_exists(*pool_id).unwrap() {
+                        let delegation_id = make_delegation_id(inputs).unwrap();
                         let _ = pos_accounting_cache
-                            .create_delegation_id(
-                                *pool_id,
-                                destination.clone(),
-                                inputs[0].utxo_outpoint().unwrap(),
-                            )
+                            .create_delegation_id(*pool_id, delegation_id, destination.clone())
                             .unwrap();
                         Some(output)
                     } else {

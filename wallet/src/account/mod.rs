@@ -1483,8 +1483,8 @@ impl<K: AccountKeyChains> Account<K> {
             None,
         )?;
 
-        let input0_outpoint = crate::utils::get_first_utxo_outpoint(request.inputs())?;
-        let new_pool_id = common::chain::make_pool_id(input0_outpoint);
+        let new_pool_id =
+            common::chain::make_pool_id(request.inputs()).ok_or(WalletError::NotUtxoInput)?;
 
         // update the dummy_pool_id with the new pool_id
         let old_pool_id = request

@@ -69,7 +69,7 @@ use chainstate_types::{BlockIndex, TipStorageTag};
 use common::{
     chain::{
         block::{timestamp::BlockTimestamp, BlockRewardTransactable, ConsensusData},
-        make_order_id, make_pool_id, make_token_id,
+        make_delegation_id, make_order_id, make_pool_id, make_token_id,
         output_value::OutputValue,
         signature::Signable,
         signed_transaction::SignedTransaction,
@@ -388,14 +388,12 @@ where
             .collect::<Result<Vec<_>, _>>()?;
 
         // Process tx outputs in terms of pos accounting.
-        let input_utxo_outpoint = tx.inputs().iter().find_map(|input| input.utxo_outpoint());
         let outputs_undos = tx
             .outputs()
             .iter()
             .filter_map(|output| match output {
-                TxOutput::CreateStakePool(pool_id, data) => match input_utxo_outpoint {
-                    Some(input_utxo_outpoint) => {
-                        let expected_pool_id = make_pool_id(input_utxo_outpoint);
+                TxOutput::CreateStakePool(pool_id, data) => match make_pool_id(tx.inputs()) {
+                    Some(expected_pool_id) => {
                         let res = if expected_pool_id == *pool_id {
                             if data.pledge() >= self.chain_config.as_ref().min_stake_pool_pledge() {
                                 self.pos_accounting_adapter
@@ -422,17 +420,16 @@ where
                     )),
                 },
                 TxOutput::CreateDelegationId(spend_destination, target_pool) => {
-                    match input_utxo_outpoint {
-                        Some(input_utxo_outpoint) => {
+                    match make_delegation_id(tx.inputs()) {
+                        Some(delegation_id) => {
                             let res = self
                                 .pos_accounting_adapter
                                 .operations(tx_source.into())
                                 .create_delegation_id(
                                     *target_pool,
+                                    delegation_id,
                                     spend_destination.clone(),
-                                    input_utxo_outpoint,
                                 )
-                                .map(|(_, undo)| undo)
                                 .map_err(ConnectTransactionError::PoSAccountingError);
                             Some(res)
                         }

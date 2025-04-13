@@ -24,8 +24,8 @@ use common::{
         output_value::OutputValue,
         timelock::OutputTimeLock,
         tokens::{TokenId, TokenIssuance},
-        AccountCommand, AccountNonce, Destination, OutPointSourceId, TxInput, TxOutput,
-        UtxoOutPoint,
+        AccountCommand, AccountNonce, DelegationId, Destination, OutPointSourceId, PoolId, TxInput,
+        TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, Idable},
 };
@@ -289,7 +289,7 @@ fn pos_accounting_homomorphism(#[case] seed: Seed) {
             vrf_pk,
         );
         let genesis_outpoint = UtxoOutPoint::new(OutPointSourceId::BlockReward(genesis_id), 0);
-        let pool_id = common::chain::make_pool_id(&genesis_outpoint);
+        let pool_id = PoolId::from_utxo(&genesis_outpoint);
 
         let storage2 = TestStore::new_empty().unwrap();
         let mut tf2 = TestFramework::builder(&mut rng)
@@ -328,10 +328,8 @@ fn pos_accounting_homomorphism(#[case] seed: Seed) {
             ))
             .build();
 
-        let delegation_id = common::chain::make_delegation_id(&UtxoOutPoint::new(
-            tx_1.transaction().get_id().into(),
-            1,
-        ));
+        let delegation_id =
+            DelegationId::from_utxo(&UtxoOutPoint::new(tx_1.transaction().get_id().into(), 1));
         let tx_3 = TransactionBuilder::new()
             .add_input(
                 TxInput::from_utxo(

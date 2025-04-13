@@ -18,7 +18,7 @@ use std::collections::BTreeMap;
 use super::{storage::TransactionVerifierStorageError, TransactionSource};
 
 use common::{
-    chain::{PoolId, UtxoOutPoint},
+    chain::{DelegationId, PoolId},
     primitives::Amount,
 };
 use logging::log;
@@ -225,13 +225,12 @@ impl<P: PoSAccountingView> PoSAccountingOperations<PoSAccountingUndo>
     fn create_delegation_id(
         &mut self,
         target_pool: PoolId,
+        delegation_id: DelegationId,
         spend_key: common::chain::Destination,
-        input0_outpoint: &UtxoOutPoint,
-    ) -> Result<(common::chain::DelegationId, PoSAccountingUndo), pos_accounting::Error> {
+    ) -> Result<PoSAccountingUndo, pos_accounting::Error> {
         let mut delta = PoSAccountingDelta::new(&self.adapter.accounting_delta);
 
-        let (delegation_id, undo) =
-            delta.create_delegation_id(target_pool, spend_key, input0_outpoint)?;
+        let undo = delta.create_delegation_id(target_pool, delegation_id, spend_key)?;
 
         log::debug!(
             "Creating a delegation: {} for pool {}",
@@ -241,7 +240,7 @@ impl<P: PoSAccountingView> PoSAccountingOperations<PoSAccountingUndo>
 
         self.merge_delta(delta.consume())?;
 
-        Ok((delegation_id, undo))
+        Ok(undo)
     }
 
     fn delete_delegation_id(

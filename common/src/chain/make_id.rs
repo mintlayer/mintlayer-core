@@ -15,40 +15,17 @@
 
 use super::{
     tokens::TokenId, ChainConfig, DelegationId, OrderId, PoolId, TokenIdGenerationVersion, TxInput,
-    UtxoOutPoint,
 };
-use crate::primitives::{
-    id::{hash_encoded, hash_encoded_to, DefaultHashAlgoStream},
-    BlockHeight,
-};
+use crate::primitives::{id::hash_encoded, BlockHeight};
 
-use crypto::hash::StreamHasher;
-
-fn pool_id_preimage_suffix() -> u32 {
-    // arbitrary, we use this to create different values when hashing with no security requirements
-    0
+pub fn make_pool_id(inputs: &[TxInput]) -> Option<PoolId> {
+    let input_utxo_outpoint = inputs.iter().find_map(|input| input.utxo_outpoint())?;
+    Some(PoolId::from_utxo(input_utxo_outpoint))
 }
 
-fn delegation_id_preimage_suffix() -> u32 {
-    // arbitrary, we use this to create different values when hashing with no security requirements
-    1
-}
-
-// FIXME: rewrite this to accept &[TxInput] and implement PoolId::from_utxo (maybe)
-pub fn make_pool_id(input0_outpoint: &UtxoOutPoint) -> PoolId {
-    let mut hasher = DefaultHashAlgoStream::new();
-    hash_encoded_to(&input0_outpoint, &mut hasher);
-    // 0 is arbitrary here, we use this as prefix to use this information again
-    hash_encoded_to(&pool_id_preimage_suffix(), &mut hasher);
-    PoolId::new(hasher.finalize().into())
-}
-
-pub fn make_delegation_id(input0_outpoint: &UtxoOutPoint) -> DelegationId {
-    let mut hasher = DefaultHashAlgoStream::new();
-    hash_encoded_to(&input0_outpoint, &mut hasher);
-    // 1 is arbitrary here, we use this as prefix to use this information again
-    hash_encoded_to(&delegation_id_preimage_suffix(), &mut hasher);
-    DelegationId::new(hasher.finalize().into())
+pub fn make_delegation_id(inputs: &[TxInput]) -> Option<DelegationId> {
+    let input_utxo_outpoint = inputs.iter().find_map(|input| input.utxo_outpoint())?;
+    Some(DelegationId::from_utxo(input_utxo_outpoint))
 }
 
 pub fn make_order_id(inputs: &[TxInput]) -> Option<OrderId> {

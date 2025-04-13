@@ -18,7 +18,7 @@ use chainstate_test_framework::{TestFramework, TransactionBuilder};
 use common::{
     address::pubkeyhash::PublicKeyHash,
     chain::{
-        make_delegation_id, make_pool_id, make_token_id,
+        make_token_id,
         output_value::OutputValue,
         stakelock::StakePoolData,
         tokens::{TokenId, TokenIssuance, TokenTotalSupply},
@@ -56,7 +56,7 @@ pub fn prepare_stake_pool(
         PerThousand::new(margin_ratio_per_thousand).unwrap(),
         Amount::ZERO,
     );
-    let pool_id = make_pool_id(&stake_pool_outpoint);
+    let pool_id = PoolId::from_utxo(&stake_pool_outpoint);
 
     *available_amount = (*available_amount - amount_to_stake).unwrap();
     let stake_pool_transaction = TransactionBuilder::new()
@@ -90,7 +90,7 @@ pub fn prepare_delegation(
     destination: Option<Destination>,
     tf: &mut TestFramework,
 ) -> (DelegationId, Destination, UtxoOutPoint, Block) {
-    let delegation_id = make_delegation_id(&transfer_outpoint);
+    let delegation_id = DelegationId::from_utxo(&transfer_outpoint);
     let (_, pk) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
     let destination = destination.unwrap_or(Destination::PublicKey(pk));
     let create_delegation_tx = TransactionBuilder::new()

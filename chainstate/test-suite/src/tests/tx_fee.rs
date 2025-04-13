@@ -29,8 +29,8 @@ use common::{
         tokens::{
             IsTokenFreezable, TokenIssuance, TokenIssuanceV0, TokenIssuanceV1, TokenTotalSupply,
         },
-        AccountCommand, AccountNonce, AccountSpending, ChainConfig, Destination, NetUpgrades,
-        TokenIssuanceVersion, TxInput, TxOutput, UtxoOutPoint,
+        AccountCommand, AccountNonce, AccountSpending, ChainConfig, DelegationId, Destination,
+        NetUpgrades, PoolId, TokenIssuanceVersion, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, Fee, Idable},
 };
@@ -272,7 +272,7 @@ fn create_stake_pool(#[case] seed: Seed) {
         let expected_fee = Fee((genesis_amount - amount_to_stake).unwrap());
 
         let stake_pool_outpoint = UtxoOutPoint::new(tf.genesis().get_id().into(), 0);
-        let pool_id = common::chain::make_pool_id(&stake_pool_outpoint);
+        let pool_id = PoolId::from_utxo(&stake_pool_outpoint);
         let tx = TransactionBuilder::new()
             .add_input(TxInput::Utxo(stake_pool_outpoint), empty_witness(&mut rng))
             .add_output(TxOutput::CreateStakePool(
@@ -315,7 +315,7 @@ fn delegate_staking(#[case] seed: Seed) {
         let delegated_atoms = rng.gen_range(1..100_000);
 
         let stake_pool_outpoint = UtxoOutPoint::new(tf.genesis().get_id().into(), 0);
-        let pool_id = common::chain::make_pool_id(&stake_pool_outpoint);
+        let pool_id = PoolId::from_utxo(&stake_pool_outpoint);
         let stake_pool_tx = TransactionBuilder::new()
             .add_input(TxInput::Utxo(stake_pool_outpoint), empty_witness(&mut rng))
             .add_output(TxOutput::CreateStakePool(
@@ -329,8 +329,7 @@ fn delegate_staking(#[case] seed: Seed) {
             .build();
         let stake_pool_tx_id = stake_pool_tx.transaction().get_id();
 
-        let delegation_id =
-            common::chain::make_delegation_id(&UtxoOutPoint::new(stake_pool_tx_id.into(), 1));
+        let delegation_id = DelegationId::from_utxo(&UtxoOutPoint::new(stake_pool_tx_id.into(), 1));
         let create_delegation_tx = TransactionBuilder::new()
             .add_input(
                 TxInput::from_utxo(stake_pool_tx_id.into(), 1),
@@ -401,7 +400,7 @@ fn fee_from_decommissioning_stake_pool(#[case] seed: Seed) {
             create_stake_pool_data_with_all_reward_to_staker(&mut rng, amount_to_stake, vrf_pk);
 
         let stake_pool_outpoint = UtxoOutPoint::new(tf.genesis().get_id().into(), 0);
-        let pool_id = common::chain::make_pool_id(&stake_pool_outpoint);
+        let pool_id = PoolId::from_utxo(&stake_pool_outpoint);
         let stake_pool_tx = TransactionBuilder::new()
             .add_input(TxInput::Utxo(stake_pool_outpoint), empty_witness(&mut rng))
             .add_output(TxOutput::CreateStakePool(
@@ -480,8 +479,8 @@ fn fee_from_spending_delegation_share(#[case] seed: Seed) {
         );
 
         let stake_pool_outpoint = UtxoOutPoint::new(tf.genesis().get_id().into(), 0);
-        let pool_id = common::chain::make_pool_id(&stake_pool_outpoint);
-        let delegation_id = common::chain::make_delegation_id(&stake_pool_outpoint);
+        let pool_id = PoolId::from_utxo(&stake_pool_outpoint);
+        let delegation_id = DelegationId::from_utxo(&stake_pool_outpoint);
         let amount_to_delegate = Amount::from_atoms(rng.gen_range(1..100_000));
 
         let delegate_staking_tx = TransactionBuilder::new()

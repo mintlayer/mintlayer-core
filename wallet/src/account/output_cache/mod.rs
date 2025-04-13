@@ -931,8 +931,8 @@ impl OutputCache {
                     if block_info.is_none() {
                         continue;
                     }
-                    let input0_outpoint = crate::utils::get_first_utxo_outpoint(tx.inputs())?;
-                    let delegation_id = make_delegation_id(input0_outpoint);
+                    let delegation_id =
+                        make_delegation_id(tx.inputs()).ok_or(WalletError::NotUtxoInput)?;
                     self.delegations.insert(
                         delegation_id,
                         DelegationData::new(*pool_id, destination.clone()),
