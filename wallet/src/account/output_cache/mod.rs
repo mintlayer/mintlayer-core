@@ -1563,7 +1563,7 @@ impl OutputCache {
                     | OrderAccountCommand::FreezeOrder(order_id)
                     | OrderAccountCommand::ConcludeOrder(order_id) => {
                         if let Some(data) = self.orders.get_mut(order_id) {
-                            data.last_parent = find_parent(&unconfirmed_descendants, tx_id.into());
+                            data.last_parent = find_parent(&self.unconfirmed_descendants, &tx_id);
                         }
                     }
                 },
@@ -1932,8 +1932,8 @@ fn uses_conflicting_nonce(
     confirmed_account_type: AccountType,
     confirmed_nonce: AccountNonce,
 ) -> bool {
-    unconfirmed_tx.inputs().iter().any(|inp| match inp {
-        TxInput::Utxo(_) => false,
+    unconfirmed_tx.inputs().iter().any(|input| match input {
+        TxInput::Utxo(_) | TxInput::OrderAccountCommand(_) => false,
         TxInput::AccountCommand(nonce, cmd) => {
             confirmed_account_type == cmd.into() && *nonce <= confirmed_nonce
         }

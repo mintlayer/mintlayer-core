@@ -7001,7 +7001,26 @@ fn conflicting_delegation_account_nonce_same_wallet(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn conflicting_order_account_nonce(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let chain_config = Arc::new(create_unit_test_config());
+    let chain_config = common::chain::config::create_unit_test_config_builder()
+        .chainstate_upgrades(
+            common::chain::NetUpgrades::initialize(vec![(
+                BlockHeight::zero(),
+                common::chain::ChainstateUpgrade::new(
+                    common::chain::TokenIssuanceVersion::V1,
+                    common::chain::RewardDistributionVersion::V1,
+                    common::chain::TokensFeeVersion::V1,
+                    common::chain::DataDepositFeeVersion::V1,
+                    common::chain::ChangeTokenMetadataUriActivated::Yes,
+                    common::chain::FrozenTokensValidationVersion::V1,
+                    common::chain::HtlcActivated::Yes,
+                    common::chain::OrdersActivated::Yes,
+                    common::chain::OrdersVersion::V0,
+                ),
+            )])
+            .expect("cannot fail"),
+        )
+        .build();
+    let chain_config = Arc::new(chain_config);
 
     let mut wallet = create_wallet(chain_config.clone());
 
