@@ -38,4 +38,6 @@ pub enum WalletCliError<N: NodeInterface> {
     WalletClientRpcError(#[from] WalletRpcError),
     #[error("{0}")]
     WalletCommandError(#[from] WalletCliCommandError<N>),
+    #[error("Unexpected interaction on startup commands")]
+    UnexpectedInteraction,
 }

@@ -32,6 +32,7 @@ clap = { workspace = true, features = ["derive"] }
 async-trait.workspace = true
 crossterm.workspace = true
 directories.workspace = true
+dyn-clone.workspace = true
 humantime.workspace = true
 hex.workspace = true
 itertools.workspace = true

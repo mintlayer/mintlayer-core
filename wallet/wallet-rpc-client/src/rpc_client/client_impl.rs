@@ -47,7 +47,7 @@ use wallet_rpc_lib::{
     types::{
         AddressInfo, AddressWithUsageInfo, BlockInfo, ComposedTransaction, CreatedWallet,
         DelegationInfo, HardwareWalletType, LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegation,
-        NewOrder, NewTransaction, NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo,
+        NewOrder, NewTransaction, NftMetadata, NodeVersion, OpenedWallet, PoolInfo, PublicKeyInfo,
         RpcHashedTimelockContract, RpcInspectTransaction, RpcStandaloneAddresses, RpcTokenId,
         SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
         StandaloneAddressWithDetails, TokenMetadata, TransactionOptions, TxOptionsOverrides,
@@ -88,15 +88,28 @@ impl WalletInterface for ClientWalletRpc {
         path: PathBuf,
         wallet_args: WalletTypeArgs,
     ) -> Result<CreatedWallet, Self::Error> {
-        let (mnemonic, passphrase, store_seed_phrase, hardware_wallet) = match wallet_args {
-            WalletTypeArgs::Software {
-                mnemonic,
-                passphrase,
-                store_seed_phrase,
-            } => (mnemonic, passphrase, store_seed_phrase.should_save(), None),
-            #[cfg(feature = "trezor")]
-            WalletTypeArgs::Trezor => (None, None, false, Some(HardwareWalletType::Trezor)),
-        };
+        let (mnemonic, passphrase, store_seed_phrase, hardware_wallet, device_id) =
+            match wallet_args {
+                WalletTypeArgs::Software {
+                    mnemonic,
+                    passphrase,
+                    store_seed_phrase,
+                } => (
+                    mnemonic,
+                    passphrase,
+                    store_seed_phrase.should_save(),
+                    None,
+                    None,
+                ),
+                #[cfg(feature = "trezor")]
+                WalletTypeArgs::Trezor { device_id } => (
+                    None,
+                    None,
+                    false,
+                    Some(HardwareWalletType::Trezor),
+                    device_id,
+                ),
+            };
 
         ColdWalletRpcClient::create_wallet(
             &self.http_client,
@@ -105,6 +118,7 @@ impl WalletInterface for ClientWalletRpc {
             mnemonic,
             passphrase,
             hardware_wallet,
+            device_id,
         )
         .await
         .map_err(WalletRpcError::ResponseError)
@@ -117,6 +131,7 @@ impl WalletInterface for ClientWalletRpc {
         mnemonic: Option<String>,
         passphrase: Option<String>,
         hardware_wallet: Option<HardwareWalletType>,
+        device_id: Option<String>,
     ) -> Result<CreatedWallet, Self::Error> {
         ColdWalletRpcClient::recover_wallet(
             &self.http_client,
@@ -125,6 +140,7 @@ impl WalletInterface for ClientWalletRpc {
             mnemonic,
             passphrase,
             hardware_wallet,
+            device_id,
         )
         .await
         .map_err(WalletRpcError::ResponseError)
@@ -136,13 +152,15 @@ impl WalletInterface for ClientWalletRpc {
         password: Option<String>,
         force_migrate_wallet_type: Option<bool>,
         hardware_wallet: Option<HardwareWalletType>,
-    ) -> Result<(), Self::Error> {
+        device_id: Option<String>,
+    ) -> Result<OpenedWallet, Self::Error> {
         ColdWalletRpcClient::open_wallet(
             &self.http_client,
             path.to_string_lossy().to_string(),
             password,
             force_migrate_wallet_type,
             hardware_wallet,
+            device_id,
         )
         .await
         .map_err(WalletRpcError::ResponseError)

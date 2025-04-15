@@ -89,8 +89,8 @@ use wallet::{
         TransactionToSign,
     },
     destination_getters::{get_tx_output_destination, HtlcSpendingCondition},
-    signer::software_signer::SoftwareSignerProvider,
-    wallet::WalletPoolsFilter,
+    signer::{software_signer::SoftwareSignerProvider, trezor_signer::SelectedDevice},
+    wallet::{WalletCreation, WalletPoolsFilter},
     wallet_events::WalletEvents,
     WalletError, WalletResult,
 };
@@ -235,7 +235,7 @@ where
         best_block: (BlockHeight, Id<GenBlock>),
         wallet_type: WalletType,
         overwrite_wallet_file: bool,
-    ) -> Result<RuntimeWallet<DefaultBackend>, ControllerError<T>> {
+    ) -> Result<WalletCreation<RuntimeWallet<DefaultBackend>>, ControllerError<T>> {
         utils::ensure!(
             overwrite_wallet_file || !file_path.as_ref().exists(),
             ControllerError::WalletFileError(
@@ -244,9 +244,9 @@ where
             )
         );
 
-        let db = wallet::wallet::open_or_create_wallet_file(file_path)
+        let db = wallet::wallet::open_or_create_wallet_file(file_path.as_ref())
             .map_err(ControllerError::WalletError)?;
-        match args {
+        let res = match args {
             WalletTypeArgsComputed::Software {
                 mnemonic,
                 passphrase,
@@ -254,7 +254,7 @@ where
             } => {
                 let passphrase_ref = passphrase.as_ref().map(|x| x.as_ref());
 
-                let wallet = wallet::Wallet::create_new_wallet(
+                wallet::Wallet::create_new_wallet(
                     Arc::clone(&chain_config),
                     db,
                     best_block,
@@ -269,22 +269,31 @@ where
                         )?)
                     },
                 )
-                .map_err(ControllerError::WalletError)?;
-                Ok(RuntimeWallet::Software(wallet))
+                .map_err(ControllerError::WalletError)
+                .map(|w| w.map_wallet(RuntimeWallet::Software))
             }
             #[cfg(feature = "trezor")]
-            WalletTypeArgsComputed::Trezor => {
-                let wallet = wallet::Wallet::create_new_wallet(
-                    Arc::clone(&chain_config),
-                    db,
-                    best_block,
-                    wallet_type,
-                    |_db_tx| Ok(TrezorSignerProvider::new().map_err(SignerError::TrezorError)?),
-                )
-                .map_err(ControllerError::WalletError)?;
-                Ok(RuntimeWallet::Trezor(wallet))
-            }
+            WalletTypeArgsComputed::Trezor { device_id } => wallet::Wallet::create_new_wallet(
+                Arc::clone(&chain_config),
+                db,
+                best_block,
+                wallet_type,
+                |_db_tx| {
+                    Ok(TrezorSignerProvider::new(
+                        device_id.map(|device_id| SelectedDevice { device_id }),
+                    )
+                    .map_err(SignerError::TrezorError)?)
+                },
+            )
+            .map_err(ControllerError::WalletError)
+            .map(|w| w.map_wallet(RuntimeWallet::Trezor)),
+        };
+
+        if res.is_err() {
+            let _ = fs::remove_file(file_path);
         }
+
+        res
     }
 
     pub fn recover_wallet(
@@ -292,7 +301,7 @@ where
         file_path: impl AsRef<Path>,
         args: WalletTypeArgsComputed,
         wallet_type: WalletType,
-    ) -> Result<RuntimeWallet<DefaultBackend>, ControllerError<T>> {
+    ) -> Result<WalletCreation<RuntimeWallet<DefaultBackend>>, ControllerError<T>> {
         utils::ensure!(
             !file_path.as_ref().exists(),
             ControllerError::WalletFileError(
@@ -327,18 +336,23 @@ where
                     },
                 )
                 .map_err(ControllerError::WalletError)?;
-                Ok(RuntimeWallet::Software(wallet))
+                Ok(wallet.map_wallet(RuntimeWallet::Software))
             }
             #[cfg(feature = "trezor")]
-            WalletTypeArgsComputed::Trezor => {
+            WalletTypeArgsComputed::Trezor { device_id } => {
                 let wallet = wallet::Wallet::recover_wallet(
                     Arc::clone(&chain_config),
                     db,
                     wallet_type,
-                    |_db_tx| Ok(TrezorSignerProvider::new().map_err(SignerError::TrezorError)?),
+                    |_db_tx| {
+                        Ok(TrezorSignerProvider::new(
+                            device_id.map(|device_id| SelectedDevice { device_id }),
+                        )
+                        .map_err(SignerError::TrezorError)?)
+                    },
                 )
                 .map_err(ControllerError::WalletError)?;
-                Ok(RuntimeWallet::Trezor(wallet))
+                Ok(wallet.map_wallet(RuntimeWallet::Trezor))
             }
         }
     }
@@ -377,7 +391,8 @@ where
         current_controller_mode: WalletControllerMode,
         force_change_wallet_type: bool,
         open_as_wallet_type: WalletType,
-    ) -> Result<RuntimeWallet<DefaultBackend>, ControllerError<T>> {
+        device_id: Option<String>,
+    ) -> Result<WalletCreation<RuntimeWallet<DefaultBackend>>, ControllerError<T>> {
         utils::ensure!(
             file_path.as_ref().exists(),
             ControllerError::WalletFileError(
@@ -401,7 +416,7 @@ where
                     |db_tx| SoftwareSignerProvider::load_from_database(chain_config.clone(), db_tx),
                 )
                 .map_err(ControllerError::WalletError)?;
-                Ok(RuntimeWallet::Software(wallet))
+                Ok(wallet.map_wallet(RuntimeWallet::Software))
             }
             #[cfg(feature = "trezor")]
             WalletType::Trezor => {
@@ -412,10 +427,16 @@ where
                     |version| Self::make_backup_wallet_file(file_path.as_ref(), version),
                     current_controller_mode,
                     force_change_wallet_type,
-                    |db_tx| TrezorSignerProvider::load_from_database(chain_config.clone(), db_tx),
+                    |db_tx| {
+                        TrezorSignerProvider::load_from_database(
+                            chain_config.clone(),
+                            db_tx,
+                            device_id,
+                        )
+                    },
                 )
                 .map_err(ControllerError::WalletError)?;
-                Ok(RuntimeWallet::Trezor(wallet))
+                Ok(wallet.map_wallet(RuntimeWallet::Trezor))
             }
         }
     }
