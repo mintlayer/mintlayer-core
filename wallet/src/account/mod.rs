@@ -35,7 +35,6 @@ use common::size_estimation::{
 use common::Uint256;
 use crypto::key::hdkd::child_number::ChildNumber;
 use mempool::FeeRate;
-use output_cache::OrderData;
 use serialization::hex_encoded::HexEncoded;
 use utils::ensure;
 pub use utxo_selector::UtxoSelectorError;
@@ -89,7 +88,8 @@ use wallet_types::{
 };
 
 pub use self::output_cache::{
-    DelegationData, OwnFungibleTokenInfo, PoolData, TxInfo, UnconfirmedTokenInfo, UtxoWithTxOutput,
+    DelegationData, OrderData, OwnFungibleTokenInfo, PoolData, TxInfo, UnconfirmedTokenInfo,
+    UtxoWithTxOutput,
 };
 use self::output_cache::{OutputCache, TokenIssuanceData};
 use self::transaction_list::{get_transaction_list, TransactionList};
@@ -885,6 +885,12 @@ impl<K: AccountKeyChains> Account<K> {
             .token_data(token_id)
             .filter(|data| self.is_destination_mine(&data.authority))
             .ok_or(WalletError::UnknownTokenId(*token_id))
+    }
+
+    pub fn get_orders(&self) -> impl Iterator<Item = (&OrderId, &OrderData)> {
+        self.output_cache
+            .orders()
+            .filter(|(_, data)| self.is_destination_mine(&data.conclude_key))
     }
 
     pub fn find_order(&self, order_id: &OrderId) -> WalletResult<&OrderData> {
@@ -1947,16 +1953,10 @@ impl<K: AccountKeyChains> Account<K> {
             .txs_with_unconfirmed()
             .iter()
             .filter_map(|(id, tx)| match tx.state() {
-                TxState::Confirmed(height, _, idx) => {
-                    if height > common_block_height {
-                        Some((
-                            AccountWalletTxId::new(self.get_account_id(), id.clone()),
-                            (height, idx),
-                        ))
-                    } else {
-                        None
-                    }
-                }
+                TxState::Confirmed(height, _, idx) => (height > common_block_height).then_some((
+                    AccountWalletTxId::new(self.get_account_id(), id.clone()),
+                    (height, idx),
+                )),
                 TxState::Inactive(_)
                 | TxState::Conflicted(_)
                 | TxState::InMempool(_)
@@ -1970,7 +1970,7 @@ impl<K: AccountKeyChains> Account<K> {
         for (tx_id, _) in revoked_txs {
             db_tx.del_transaction(&tx_id)?;
             let source = tx_id.into_item_id();
-            self.output_cache.remove_tx(&source)?;
+            self.output_cache.remove_confirmed_tx(&source)?;
             wallet_events.del_transaction(self.account_index(), source);
         }
 
@@ -2083,7 +2083,8 @@ impl<K: AccountKeyChains> Account<K> {
                         let tx_state =
                             TxState::Confirmed(block_height, block.timestamp(), idx as u64);
                         let wallet_tx = WalletTx::Tx(TxData::new(signed_tx.clone(), tx_state));
-                        self.update_conflicting_txs(&wallet_tx, block, db_tx)?;
+
+                        self.update_conflicting_txs(signed_tx.transaction(), block, db_tx)?;
 
                         new_tx_was_added |= self
                             .add_wallet_tx_if_relevant_and_remove_from_user_txs(
@@ -2111,15 +2112,17 @@ impl<K: AccountKeyChains> Account<K> {
     /// Check for any conflicting txs and update the new state in the DB
     fn update_conflicting_txs<B: storage::Backend>(
         &mut self,
-        wallet_tx: &WalletTx,
+        confirmed_tx: &Transaction,
         block: &Block,
         db_tx: &mut StoreTxRw<B>,
     ) -> WalletResult<()> {
         let acc_id = self.get_account_id();
-        let conflicting_tx = self.output_cache.check_conflicting(wallet_tx, block.get_id().into());
-        for tx in conflicting_tx {
-            let id = AccountWalletTxId::new(acc_id.clone(), tx.id());
-            db_tx.set_transaction(&id, tx)?;
+        let conflicting_txs =
+            self.output_cache.update_conflicting_txs(confirmed_tx, block.get_id().into())?;
+
+        for (tx_id, tx) in conflicting_txs {
+            db_tx.set_transaction(&AccountWalletTxId::new(acc_id.clone(), tx.id()), &tx)?;
+            db_tx.del_user_transaction(&AccountWalletCreatedTxId::new(acc_id.clone(), tx_id))?;
         }
 
         Ok(())
@@ -2279,9 +2282,9 @@ impl<K: AccountKeyChains> Account<K> {
         let abandoned_txs = self.output_cache.abandon_transaction(tx_id)?;
         let acc_id = self.get_account_id();
 
-        for tx_id in abandoned_txs {
-            let id = AccountWalletCreatedTxId::new(acc_id.clone(), tx_id);
-            db_tx.del_user_transaction(&id)?;
+        for (tx_id, tx) in abandoned_txs {
+            db_tx.set_transaction(&AccountWalletTxId::new(acc_id.clone(), tx.id()), &tx)?;
+            db_tx.del_user_transaction(&AccountWalletCreatedTxId::new(acc_id.clone(), tx_id))?;
         }
 
         Ok(())

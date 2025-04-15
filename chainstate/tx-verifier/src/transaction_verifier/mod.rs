@@ -367,7 +367,7 @@ where
                             let res = self
                                 .spend_input_from_account(
                                     outpoint.nonce(),
-                                    outpoint.account().clone().into(),
+                                    outpoint.account().into(),
                                 )
                                 .and_then(|_| {
                                     // If the input spends from delegation account, this means the user is
@@ -496,10 +496,10 @@ where
             match input {
                 TxInput::Utxo(_) | TxInput::OrderAccountCommand(_) => { /* do nothing */ }
                 TxInput::Account(outpoint) => {
-                    self.unspend_input_from_account(outpoint.account().clone().into())?;
+                    self.unspend_input_from_account(outpoint.account().into())?;
                 }
                 TxInput::AccountCommand(_, cmd) => {
-                    self.unspend_input_from_account(cmd.clone().into())?;
+                    self.unspend_input_from_account(cmd.into())?;
                 }
             };
         }
@@ -553,7 +553,7 @@ where
                 TxInput::AccountCommand(nonce, account_op) => match account_op {
                     AccountCommand::MintTokens(token_id, amount) => {
                         let res = self
-                            .spend_input_from_account(*nonce, account_op.clone().into())
+                            .spend_input_from_account(*nonce, account_op.into())
                             .and_then(|_| {
                                 self.tokens_accounting_cache
                                     .mint_tokens(*token_id, *amount)
@@ -563,7 +563,7 @@ where
                     }
                     AccountCommand::UnmintTokens(ref token_id) => {
                         let res = self
-                            .spend_input_from_account(*nonce, account_op.clone().into())
+                            .spend_input_from_account(*nonce, account_op.into())
                             .and_then(|_| {
                                 // actual amount to unmint is determined by the number of burned tokens in the outputs
                                 let total_burned =
@@ -582,7 +582,7 @@ where
                     }
                     AccountCommand::LockTokenSupply(token_id) => {
                         let res = self
-                            .spend_input_from_account(*nonce, account_op.clone().into())
+                            .spend_input_from_account(*nonce, account_op.into())
                             .and_then(|_| {
                                 self.tokens_accounting_cache
                                     .lock_circulating_supply(*token_id)
@@ -592,7 +592,7 @@ where
                     }
                     AccountCommand::FreezeToken(token_id, is_unfreezable) => {
                         let res = self
-                            .spend_input_from_account(*nonce, account_op.clone().into())
+                            .spend_input_from_account(*nonce, account_op.into())
                             .and_then(|_| {
                                 self.tokens_accounting_cache
                                     .freeze_token(*token_id, *is_unfreezable)
@@ -602,7 +602,7 @@ where
                     }
                     AccountCommand::UnfreezeToken(token_id) => {
                         let res = self
-                            .spend_input_from_account(*nonce, account_op.clone().into())
+                            .spend_input_from_account(*nonce, account_op.into())
                             .and_then(|_| {
                                 self.tokens_accounting_cache
                                     .unfreeze_token(*token_id)
@@ -612,7 +612,7 @@ where
                     }
                     AccountCommand::ChangeTokenAuthority(token_id, new_authority) => {
                         let res = self
-                            .spend_input_from_account(*nonce, account_op.clone().into())
+                            .spend_input_from_account(*nonce, account_op.into())
                             .and_then(|_| {
                                 self.tokens_accounting_cache
                                     .change_authority(*token_id, new_authority.clone())
@@ -622,7 +622,7 @@ where
                     }
                     AccountCommand::ChangeTokenMetadataUri(token_id, new_metadata_uri) => {
                         let res = self
-                            .spend_input_from_account(*nonce, account_op.clone().into())
+                            .spend_input_from_account(*nonce, account_op.into())
                             .and_then(|_| {
                                 self.tokens_accounting_cache
                                     .change_metadata_uri(*token_id, new_metadata_uri.clone())
@@ -842,7 +842,7 @@ where
                     | AccountCommand::ChangeTokenMetadataUri(..) => None,
                     AccountCommand::ConcludeOrder(order_id) => {
                         let res = self
-                            .spend_input_from_account(*nonce, account_op.clone().into())
+                            .spend_input_from_account(*nonce, account_op.into())
                             .and_then(|_| {
                                 self.orders_accounting_cache
                                     .conclude_order(*order_id)
@@ -852,7 +852,7 @@ where
                     }
                     AccountCommand::FillOrder(order_id, fill, _) => {
                         let res = self
-                            .spend_input_from_account(*nonce, account_op.clone().into())
+                            .spend_input_from_account(*nonce, account_op.into())
                             .and_then(|_| {
                                 self.orders_accounting_cache
                                     .fill_order(*order_id, *fill, OrdersVersion::V0)

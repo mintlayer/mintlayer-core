@@ -32,7 +32,7 @@ use common::{
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
         tokens::{RPCIsTokenFrozen, TokenData, TokenIssuanceV0, TokenIssuanceV1},
-        Destination, Genesis, OutPointSourceId, TxInput,
+        AccountSpending, Destination, Genesis, OutPointSourceId, TxInput,
     },
     primitives::{per_thousand::PerThousand, Idable, H256},
 };
@@ -220,6 +220,21 @@ where
         )
         .unwrap()
         .get(&Currency::Coin)
+        .copied()
+        .unwrap_or(Amount::ZERO);
+    coin_balance
+}
+
+fn get_balance_with(
+    wallet: &DefaultWallet,
+    currency: Currency,
+    utxo_states: UtxoStates,
+    with_locked: WithLocked,
+) -> Amount {
+    let coin_balance = wallet
+        .get_balance(DEFAULT_ACCOUNT_INDEX, utxo_states, with_locked)
+        .unwrap()
+        .get(&currency)
         .copied()
         .unwrap_or(Amount::ZERO);
     coin_balance
@@ -1597,12 +1612,12 @@ fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
 
     let pool_amount = block1_amount;
 
-    let (stadalone_private_key, stadalone_public_key) =
+    let (standalone_sk, standalone_pk) =
         PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
     wallet
-        .add_standalone_private_key(DEFAULT_ACCOUNT_INDEX, stadalone_private_key, None)
+        .add_standalone_private_key(DEFAULT_ACCOUNT_INDEX, standalone_sk, None)
         .unwrap();
-    let decommission_key = Destination::PublicKey(stadalone_public_key);
+    let decommission_key = Destination::PublicKey(standalone_pk);
 
     let err = wallet
         .create_stake_pool_tx_with_vrf_key(
@@ -3920,17 +3935,17 @@ fn lock_then_transfer(#[case] seed: Seed) {
     scan_wallet(&mut wallet, BlockHeight::new(1), vec![block2]);
 
     // check balance
-    let balance_without_locked_transer =
+    let balance_without_locked_transfer =
         ((block1_amount * 2).unwrap() - amount_to_lock_then_transfer).unwrap();
 
     let coin_balance = get_coin_balance(&wallet);
-    assert_eq!(coin_balance, balance_without_locked_transer);
+    assert_eq!(coin_balance, balance_without_locked_transfer);
 
     // check that for block_count_lock, the amount is not included
     for idx in 0..block_count_lock {
         let coin_balance = get_coin_balance(&wallet);
         // check that the amount is still not unlocked
-        assert_eq!(coin_balance, balance_without_locked_transer);
+        assert_eq!(coin_balance, balance_without_locked_transfer);
 
         let currency_balances = wallet
             .get_balance(
@@ -3963,7 +3978,7 @@ fn lock_then_transfer(#[case] seed: Seed) {
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(
         coin_balance,
-        (balance_without_locked_transer + amount_to_lock_then_transfer).unwrap()
+        (balance_without_locked_transfer + amount_to_lock_then_transfer).unwrap()
     );
 }
 
@@ -4312,15 +4327,15 @@ fn wallet_abandone_transactions(#[case] seed: Seed) {
 
     assert_eq!(abandonable_transactions.len(), transactions.len());
 
-    let txs_to_abandone = rng.gen_range(0..total_num_transactions) as usize;
-    let (txs_to_keep, txs_to_abandone) = transactions.split_at(txs_to_abandone);
+    let txs_to_abandon = rng.gen_range(0..total_num_transactions) as usize;
+    let (txs_to_keep, txs_to_abandon) = transactions.split_at(txs_to_abandon);
 
-    assert!(!txs_to_abandone.is_empty());
+    assert!(!txs_to_abandon.is_empty());
 
-    let transaction_id = txs_to_abandone.first().unwrap().0.transaction().get_id();
+    let transaction_id = txs_to_abandon.first().unwrap().0.transaction().get_id();
     wallet.abandon_transaction(DEFAULT_ACCOUNT_INDEX, transaction_id).unwrap();
 
-    let coins_after_abandon = txs_to_abandone.first().unwrap().1;
+    let coins_after_abandon = txs_to_abandon.first().unwrap().1;
 
     let coin_balance = get_coin_balance_with_inactive(&wallet);
     assert_eq!(coin_balance, coins_after_abandon);
@@ -4329,6 +4344,13 @@ fn wallet_abandone_transactions(#[case] seed: Seed) {
     wallet.scan_mempool(txs_to_keep.as_slice(), &WalletEventsNoOp).unwrap();
     let coin_balance = get_coin_balance_with_inactive(&wallet);
     assert_eq!(coin_balance, coins_after_abandon);
+
+    // Abandon the same tx again
+    let result = wallet.abandon_transaction(DEFAULT_ACCOUNT_INDEX, transaction_id);
+    assert_eq!(
+        result.unwrap_err(),
+        WalletError::CannotChangeTransactionState(TxState::Abandoned, TxState::Abandoned)
+    );
 }
 
 #[rstest]
@@ -6453,4 +6475,1394 @@ fn create_order_fill_partially_conclude(#[case] seed: Seed) {
             ))
         );
     }
+}
+
+// Create 2 wallets from the same mnemonic.
+// Create a pool and a delegation with some stake for both wallets.
+// Add 2 consecutive txs that spend share from delegation to the first wallet as unconfirmed.
+// Add 1 txs that spends share from delegation with different amount (so that tx id is different)
+// via the second wallet and submit it to the block.
+// Check that 2 unconfirmed txs from the first wallet conflict with confirmed tx and got removed.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn conflicting_delegation_account_nonce(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let chain_config = Arc::new(create_unit_test_config());
+
+    let mut wallet1 = create_wallet(chain_config.clone());
+    let mut wallet2 = create_wallet(chain_config.clone());
+
+    let coin_balance = get_coin_balance(&wallet1);
+    assert_eq!(coin_balance, Amount::ZERO);
+
+    // Generate a new block which sends reward to the wallet
+    let delegation_amount = Amount::from_atoms(rng.gen_range(10..100));
+    let block1_amount = (chain_config.min_stake_pool_pledge() + delegation_amount).unwrap();
+    let (_, block1) = create_block(&chain_config, &mut wallet1, vec![], block1_amount, 0);
+    scan_wallet(&mut wallet2, BlockHeight::new(0), vec![block1]);
+
+    let pool_ids = wallet1.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
+    assert!(pool_ids.is_empty());
+
+    let coin_balance = get_coin_balance(&wallet1);
+    assert_eq!(coin_balance, block1_amount);
+
+    // Create a pool
+    let pool_amount = chain_config.min_stake_pool_pledge();
+
+    let stake_pool_transaction = wallet1
+        .create_stake_pool_tx(
+            DEFAULT_ACCOUNT_INDEX,
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            StakePoolCreationArguments {
+                amount: pool_amount,
+                margin_ratio_per_thousand: PerThousand::new_from_rng(&mut rng),
+                cost_per_block: Amount::ZERO,
+                decommission_key: Destination::AnyoneCanSpend,
+                staker_key: None,
+                vrf_public_key: None,
+            },
+        )
+        .unwrap();
+
+    let (address, block2) = create_block(
+        &chain_config,
+        &mut wallet1,
+        vec![stake_pool_transaction.clone()],
+        Amount::ZERO,
+        1,
+    );
+    scan_wallet(&mut wallet2, BlockHeight::new(1), vec![block2]);
+
+    let coin_balance = get_coin_balance(&wallet1);
+    assert_eq!(coin_balance, (block1_amount - pool_amount).unwrap(),);
+
+    let pool_ids = wallet1.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
+    assert_eq!(pool_ids.len(), 1);
+
+    // Create a delegation
+    let pool_id = pool_ids.first().unwrap().0;
+    let (delegation_id, delegation_tx) = wallet1
+        .create_delegation(
+            DEFAULT_ACCOUNT_INDEX,
+            vec![make_create_delegation_output(address.clone(), pool_id)],
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+        )
+        .unwrap();
+
+    let (_, block3) = create_block(
+        &chain_config,
+        &mut wallet1,
+        vec![delegation_tx],
+        Amount::ZERO,
+        2,
+    );
+    scan_wallet(&mut wallet2, BlockHeight::new(2), vec![block3]);
+
+    let mut delegations = wallet1.get_delegations(DEFAULT_ACCOUNT_INDEX).unwrap().collect_vec();
+    assert_eq!(delegations.len(), 1);
+    let (deleg_id, deleg_data) = delegations.pop().unwrap();
+    assert_eq!(*deleg_id, delegation_id);
+    assert!(deleg_data.not_staked_yet);
+    assert_eq!(deleg_data.last_nonce, None);
+    assert_eq!(deleg_data.pool_id, pool_id);
+    assert_eq!(&deleg_data.destination, address.as_object());
+
+    // Delegate some coins
+    let delegation_stake_tx = wallet1
+        .create_transaction_to_addresses(
+            DEFAULT_ACCOUNT_INDEX,
+            [TxOutput::DelegateStaking(delegation_amount, delegation_id)],
+            SelectedInputs::Utxos(vec![]),
+            BTreeMap::new(),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            TxAdditionalInfo::new(),
+        )
+        .unwrap();
+
+    let (_, block4) = create_block(
+        &chain_config,
+        &mut wallet1,
+        vec![delegation_stake_tx],
+        Amount::ZERO,
+        3,
+    );
+    scan_wallet(&mut wallet2, BlockHeight::new(3), vec![block4]);
+
+    let coin_balance_after_delegating = get_coin_balance(&wallet1);
+    assert_eq!(
+        coin_balance_after_delegating,
+        (block1_amount - pool_amount).and_then(|v| v - delegation_amount).unwrap(),
+    );
+
+    // Add unconfirmed txs
+    let withdraw_amount_1 = Amount::from_atoms(1);
+    let spend_from_delegation_tx_1 = wallet1
+        .create_transaction_to_addresses_from_delegation(
+            DEFAULT_ACCOUNT_INDEX,
+            address.clone(),
+            withdraw_amount_1,
+            delegation_id,
+            delegation_amount,
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+        )
+        .unwrap();
+    let spend_from_delegation_tx_1_id = spend_from_delegation_tx_1.transaction().get_id();
+
+    wallet1
+        .add_account_unconfirmed_tx(
+            DEFAULT_ACCOUNT_INDEX,
+            spend_from_delegation_tx_1.clone(),
+            &WalletEventsNoOp,
+        )
+        .unwrap();
+
+    let withdraw_amount_2 = withdraw_amount_1;
+    let spend_from_delegation_tx_2 = wallet1
+        .create_transaction_to_addresses_from_delegation(
+            DEFAULT_ACCOUNT_INDEX,
+            address.clone(),
+            withdraw_amount_2,
+            delegation_id,
+            delegation_amount,
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+        )
+        .unwrap();
+    let spend_from_delegation_tx_2_id = spend_from_delegation_tx_2.transaction().get_id();
+
+    wallet1
+        .add_account_unconfirmed_tx(
+            DEFAULT_ACCOUNT_INDEX,
+            spend_from_delegation_tx_2.clone(),
+            &WalletEventsNoOp,
+        )
+        .unwrap();
+
+    // Check delegation after unconfirmed tx status
+    let mut delegations = wallet1.get_delegations(DEFAULT_ACCOUNT_INDEX).unwrap().collect_vec();
+    assert_eq!(delegations.len(), 1);
+    let (deleg_id, deleg_data) = delegations.pop().unwrap();
+    assert_eq!(*deleg_id, delegation_id);
+    assert_eq!(deleg_data.last_nonce, Some(AccountNonce::new(1)));
+
+    // Create and submit tx with different tx id
+    let withdraw_amount_3 = Amount::from_atoms(5);
+    let spend_from_delegation_tx_3 = wallet2
+        .create_transaction_to_addresses_from_delegation(
+            DEFAULT_ACCOUNT_INDEX,
+            address.clone(),
+            withdraw_amount_3,
+            delegation_id,
+            delegation_amount,
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+        )
+        .unwrap();
+    let spend_from_delegation_tx_3_id = spend_from_delegation_tx_3.transaction().get_id();
+
+    let (_, block5) = create_block(
+        &chain_config,
+        &mut wallet2,
+        vec![spend_from_delegation_tx_3],
+        Amount::ZERO,
+        4,
+    );
+    let block5_id = block5.get_id();
+    scan_wallet(&mut wallet1, BlockHeight::new(4), vec![block5]);
+
+    // if confirmed tx is added conflicting txs must be removed from the output cache
+    let mut delegations = wallet1.get_delegations(DEFAULT_ACCOUNT_INDEX).unwrap().collect_vec();
+    assert_eq!(delegations.len(), 1);
+    let (deleg_id, deleg_data) = delegations.pop().unwrap();
+    assert_eq!(*deleg_id, delegation_id);
+    assert_eq!(deleg_data.last_nonce, Some(AccountNonce::new(0)));
+
+    let coin_balance = get_balance_with(
+        &wallet1,
+        Currency::Coin,
+        UtxoState::Confirmed.into(),
+        WithLocked::Any,
+    );
+    assert_eq!(
+        coin_balance,
+        (coin_balance_after_delegating + withdraw_amount_3).unwrap()
+    );
+
+    let coin_balance = get_balance_with(
+        &wallet1,
+        Currency::Coin,
+        UtxoState::Confirmed | UtxoState::Inactive,
+        WithLocked::Any,
+    );
+    assert_eq!(
+        coin_balance,
+        (coin_balance_after_delegating + withdraw_amount_3).unwrap()
+    );
+
+    assert_eq!(
+        *wallet1
+            .get_transaction(DEFAULT_ACCOUNT_INDEX, spend_from_delegation_tx_1_id)
+            .unwrap()
+            .state(),
+        TxState::Conflicted(block5_id.into())
+    );
+    assert_eq!(
+        *wallet1
+            .get_transaction(DEFAULT_ACCOUNT_INDEX, spend_from_delegation_tx_2_id)
+            .unwrap()
+            .state(),
+        TxState::Conflicted(block5_id.into())
+    );
+    assert_eq!(
+        *wallet1
+            .get_transaction(DEFAULT_ACCOUNT_INDEX, spend_from_delegation_tx_3_id)
+            .unwrap()
+            .state(),
+        TxState::Confirmed(
+            BlockHeight::new(5),
+            chain_config.genesis_block().timestamp(),
+            0
+        )
+    );
+
+    // Abandon conflicting txs
+    wallet1
+        .abandon_transaction(DEFAULT_ACCOUNT_INDEX, spend_from_delegation_tx_1_id)
+        .unwrap();
+    assert_eq!(
+        *wallet1
+            .get_transaction(DEFAULT_ACCOUNT_INDEX, spend_from_delegation_tx_1_id)
+            .unwrap()
+            .state(),
+        TxState::Abandoned
+    );
+
+    let mut delegations = wallet1.get_delegations(DEFAULT_ACCOUNT_INDEX).unwrap().collect_vec();
+    assert_eq!(delegations.len(), 1);
+    let (deleg_id, deleg_data) = delegations.pop().unwrap();
+    assert_eq!(*deleg_id, delegation_id);
+    assert_eq!(deleg_data.last_nonce, Some(AccountNonce::new(0)));
+
+    wallet1
+        .abandon_transaction(DEFAULT_ACCOUNT_INDEX, spend_from_delegation_tx_2_id)
+        .unwrap();
+    assert_eq!(
+        *wallet1
+            .get_transaction(DEFAULT_ACCOUNT_INDEX, spend_from_delegation_tx_2_id)
+            .unwrap()
+            .state(),
+        TxState::Abandoned
+    );
+
+    let mut delegations = wallet1.get_delegations(DEFAULT_ACCOUNT_INDEX).unwrap().collect_vec();
+    assert_eq!(delegations.len(), 1);
+    let (deleg_id, deleg_data) = delegations.pop().unwrap();
+    assert_eq!(*deleg_id, delegation_id);
+    assert_eq!(deleg_data.last_nonce, Some(AccountNonce::new(0)));
+}
+
+// Create a pool and a delegation with some share.
+// Create 2 consecutive txs that spend from delegation account and add them as unconfirmed.
+// Check confirmed/unconfirmed balance and ensure that account nonce is incremented in OutputCache.
+// Submit the first tx in a block.
+// Check that confirmed balance changed and unconfirmed stayed the same.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn conflicting_delegation_account_nonce_same_wallet(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let chain_config = Arc::new(create_unit_test_config());
+
+    let mut wallet = create_wallet(chain_config.clone());
+
+    let coin_balance = get_coin_balance(&wallet);
+    assert_eq!(coin_balance, Amount::ZERO);
+
+    // Generate a new block which sends reward to the wallet
+    let delegation_amount = Amount::from_atoms(rng.gen_range(2..100));
+    let block1_amount = (chain_config.min_stake_pool_pledge() + delegation_amount).unwrap();
+    let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
+
+    // Create a pool
+    let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
+    assert!(pool_ids.is_empty());
+
+    let coin_balance = get_coin_balance(&wallet);
+    assert_eq!(coin_balance, block1_amount);
+
+    let pool_amount = chain_config.min_stake_pool_pledge();
+
+    let stake_pool_transaction = wallet
+        .create_stake_pool_tx(
+            DEFAULT_ACCOUNT_INDEX,
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            StakePoolCreationArguments {
+                amount: pool_amount,
+                margin_ratio_per_thousand: PerThousand::new_from_rng(&mut rng),
+                cost_per_block: Amount::ZERO,
+                decommission_key: Destination::AnyoneCanSpend,
+                staker_key: None,
+                vrf_public_key: None,
+            },
+        )
+        .unwrap();
+
+    let (address, _) = create_block(
+        &chain_config,
+        &mut wallet,
+        vec![stake_pool_transaction],
+        Amount::ZERO,
+        1,
+    );
+
+    let coin_balance = get_coin_balance(&wallet);
+    assert_eq!(coin_balance, (block1_amount - pool_amount).unwrap(),);
+
+    let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
+    assert_eq!(pool_ids.len(), 1);
+
+    // Create a delegation
+    let pool_id = pool_ids.first().unwrap().0;
+    let (delegation_id, delegation_tx) = wallet
+        .create_delegation(
+            DEFAULT_ACCOUNT_INDEX,
+            vec![make_create_delegation_output(address.clone(), pool_id)],
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+        )
+        .unwrap();
+
+    let _ = create_block(
+        &chain_config,
+        &mut wallet,
+        vec![delegation_tx],
+        Amount::ZERO,
+        2,
+    );
+
+    let mut delegations = wallet.get_delegations(DEFAULT_ACCOUNT_INDEX).unwrap().collect_vec();
+    assert_eq!(delegations.len(), 1);
+    let (deleg_id, deleg_data) = delegations.pop().unwrap();
+    assert_eq!(*deleg_id, delegation_id);
+    assert!(deleg_data.not_staked_yet);
+    assert_eq!(deleg_data.last_nonce, None);
+    assert_eq!(deleg_data.pool_id, pool_id);
+    assert_eq!(&deleg_data.destination, address.as_object());
+
+    // Delegate some coins
+    let delegation_stake_tx = wallet
+        .create_transaction_to_addresses(
+            DEFAULT_ACCOUNT_INDEX,
+            [TxOutput::DelegateStaking(delegation_amount, delegation_id)],
+            SelectedInputs::Utxos(vec![]),
+            BTreeMap::new(),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            TxAdditionalInfo::new(),
+        )
+        .unwrap();
+
+    let _ = create_block(
+        &chain_config,
+        &mut wallet,
+        vec![delegation_stake_tx],
+        Amount::ZERO,
+        3,
+    );
+
+    let coin_balance_after_delegating = get_coin_balance(&wallet);
+    assert_eq!(
+        coin_balance_after_delegating,
+        (block1_amount - pool_amount).and_then(|v| v - delegation_amount).unwrap(),
+    );
+
+    // Create first tx that spends from delegation
+    let withdraw_amount_1 = Amount::from_atoms(1);
+    let spend_from_delegation_tx_1 = wallet
+        .create_transaction_to_addresses_from_delegation(
+            DEFAULT_ACCOUNT_INDEX,
+            address.clone(),
+            withdraw_amount_1,
+            delegation_id,
+            delegation_amount,
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+        )
+        .unwrap();
+
+    wallet
+        .add_account_unconfirmed_tx(
+            DEFAULT_ACCOUNT_INDEX,
+            spend_from_delegation_tx_1.clone(),
+            &WalletEventsNoOp,
+        )
+        .unwrap();
+
+    // Create second tx that spends from delegation
+    let withdraw_amount_2 = withdraw_amount_1;
+    let spend_from_delegation_tx_2 = wallet
+        .create_transaction_to_addresses_from_delegation(
+            DEFAULT_ACCOUNT_INDEX,
+            address.clone(),
+            withdraw_amount_2,
+            delegation_id,
+            delegation_amount,
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+        )
+        .unwrap();
+
+    wallet
+        .add_account_unconfirmed_tx(
+            DEFAULT_ACCOUNT_INDEX,
+            spend_from_delegation_tx_2.clone(),
+            &WalletEventsNoOp,
+        )
+        .unwrap();
+
+    // Check delegation after unconfirmed tx status
+    let mut delegations = wallet.get_delegations(DEFAULT_ACCOUNT_INDEX).unwrap().collect_vec();
+    assert_eq!(delegations.len(), 1);
+    let (deleg_id, deleg_data) = delegations.pop().unwrap();
+    assert_eq!(*deleg_id, delegation_id);
+    assert_eq!(deleg_data.last_nonce, Some(AccountNonce::new(1)));
+
+    let coin_balance = get_balance_with(
+        &wallet,
+        Currency::Coin,
+        UtxoState::Confirmed.into(),
+        WithLocked::Any,
+    );
+    assert_eq!(coin_balance, coin_balance_after_delegating);
+
+    let coin_balance = get_balance_with(
+        &wallet,
+        Currency::Coin,
+        UtxoState::Confirmed | UtxoState::Inactive,
+        WithLocked::Any,
+    );
+    assert_eq!(
+        coin_balance,
+        (coin_balance_after_delegating + withdraw_amount_1)
+            .and_then(|v| v + withdraw_amount_2)
+            .unwrap()
+    );
+
+    // Submit first tx in a block
+    let _ = create_block(
+        &chain_config,
+        &mut wallet,
+        vec![spend_from_delegation_tx_1],
+        Amount::ZERO,
+        4,
+    );
+
+    // Confirmed tx should replace the first one leaving the second one as descendant
+    let mut delegations = wallet.get_delegations(DEFAULT_ACCOUNT_INDEX).unwrap().collect_vec();
+    assert_eq!(delegations.len(), 1);
+    let (deleg_id, deleg_data) = delegations.pop().unwrap();
+    assert_eq!(*deleg_id, delegation_id);
+    assert_eq!(deleg_data.last_nonce, Some(AccountNonce::new(1)));
+
+    let coin_balance = get_balance_with(
+        &wallet,
+        Currency::Coin,
+        UtxoState::Confirmed.into(),
+        WithLocked::Any,
+    );
+    assert_eq!(
+        coin_balance,
+        (coin_balance_after_delegating + withdraw_amount_1).unwrap()
+    );
+
+    let coin_balance = get_balance_with(
+        &wallet,
+        Currency::Coin,
+        UtxoState::Confirmed | UtxoState::Inactive,
+        WithLocked::Any,
+    );
+    assert_eq!(
+        coin_balance,
+        (coin_balance_after_delegating + withdraw_amount_1)
+            .and_then(|v| v + withdraw_amount_2)
+            .unwrap()
+    );
+}
+
+// Issue and mint some tokens.
+// Create an order selling tokens for coins.
+// Create 2 fill order txs and add them to a wallet as unconfirmed.
+// Confirm the first tx in a block and check that it is accounted in confirmed balance
+// and also that unconfirmed balance has second tx.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn conflicting_order_account_nonce(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let chain_config = common::chain::config::create_unit_test_config_builder()
+        .chainstate_upgrades(
+            common::chain::NetUpgrades::initialize(vec![(
+                BlockHeight::zero(),
+                common::chain::ChainstateUpgrade::new(
+                    common::chain::TokenIssuanceVersion::V1,
+                    common::chain::RewardDistributionVersion::V1,
+                    common::chain::TokensFeeVersion::V1,
+                    common::chain::DataDepositFeeVersion::V1,
+                    common::chain::ChangeTokenMetadataUriActivated::Yes,
+                    common::chain::FrozenTokensValidationVersion::V1,
+                    common::chain::HtlcActivated::Yes,
+                    common::chain::OrdersActivated::Yes,
+                    common::chain::OrdersVersion::V0,
+                ),
+            )])
+            .expect("cannot fail"),
+        )
+        .build();
+    let chain_config = Arc::new(chain_config);
+
+    let mut wallet = create_wallet(chain_config.clone());
+
+    let coin_balance = get_coin_balance(&wallet);
+    assert_eq!(coin_balance, Amount::ZERO);
+
+    // Generate a new block which sends reward to the wallet
+    let block1_amount = chain_config.fungible_token_issuance_fee();
+    let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
+
+    // Issue a token
+    let address2 = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1;
+
+    let token_issuance =
+        random_token_issuance_v1(&chain_config, address2.as_object().clone(), &mut rng);
+    let (issued_token_id, token_issuance_transaction) = wallet
+        .issue_new_token(
+            DEFAULT_ACCOUNT_INDEX,
+            TokenIssuance::V1(token_issuance.clone()),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+        )
+        .unwrap();
+
+    let block2_amount = chain_config.token_supply_change_fee(BlockHeight::zero());
+    let _ = create_block(
+        &chain_config,
+        &mut wallet,
+        vec![token_issuance_transaction],
+        block2_amount,
+        1,
+    );
+
+    // Mint some tokens
+    let freezable = token_issuance.is_freezable.as_bool();
+    let token_info = RPCFungibleTokenInfo::new(
+        issued_token_id,
+        token_issuance.token_ticker,
+        token_issuance.number_of_decimals,
+        token_issuance.metadata_uri,
+        Amount::ZERO,
+        token_issuance.total_supply.into(),
+        false,
+        RPCIsTokenFrozen::NotFrozen { freezable },
+        token_issuance.authority,
+    );
+
+    let unconfirmed_token_info =
+        wallet.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, token_info).unwrap();
+
+    let token_amount_to_mint = Amount::from_atoms(100);
+    let reward_to_spend_on_orders = Amount::from_atoms(100);
+    let mint_transaction = wallet
+        .mint_tokens(
+            DEFAULT_ACCOUNT_INDEX,
+            &unconfirmed_token_info,
+            token_amount_to_mint,
+            address2.clone(),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+        )
+        .unwrap();
+
+    let _ = create_block(
+        &chain_config,
+        &mut wallet,
+        vec![mint_transaction],
+        reward_to_spend_on_orders,
+        2,
+    );
+
+    // Create an order selling tokens for coins
+    let buy_amount = reward_to_spend_on_orders;
+    let sell_amount = token_amount_to_mint;
+    let ask_value = OutputValue::Coin(buy_amount);
+    let give_value = OutputValue::TokenV1(issued_token_id, sell_amount);
+    let (order_id, create_order_tx) = wallet
+        .create_order_tx(
+            DEFAULT_ACCOUNT_INDEX,
+            ask_value.clone(),
+            give_value.clone(),
+            address2.clone(),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            TxAdditionalInfo::new(),
+        )
+        .unwrap();
+
+    let _ = create_block(
+        &chain_config,
+        &mut wallet,
+        vec![create_order_tx],
+        Amount::ZERO,
+        3,
+    );
+
+    let (coin_balance_after_create_order, token_balance_after_create_order) =
+        get_currency_balances(&wallet);
+    assert_eq!(coin_balance_after_create_order, reward_to_spend_on_orders);
+    assert!(token_balance_after_create_order.is_empty());
+
+    let mut orders = wallet.get_orders(DEFAULT_ACCOUNT_INDEX).unwrap().collect_vec();
+    assert_eq!(orders.len(), 1);
+    let (actual_order_id, actual_order_data) = orders.pop().unwrap();
+    assert_eq!(order_id, *actual_order_id);
+    assert_eq!(actual_order_data.last_nonce, None);
+    assert_eq!(&actual_order_data.conclude_key, address2.as_object());
+
+    // Create 2 fill order txs and put them in unconfirmed
+    let order_info = RpcOrderInfo {
+        conclude_key: address2.clone().into_object(),
+        initially_given: RpcOutputValue::Token {
+            id: issued_token_id,
+            amount: buy_amount,
+        },
+        initially_asked: RpcOutputValue::Coin {
+            amount: sell_amount,
+        },
+        give_balance: sell_amount,
+        ask_balance: buy_amount,
+        nonce: None,
+    };
+
+    let spend_coins_1 = Amount::from_atoms(10);
+    let received_tokens_1 = spend_coins_1;
+    let fill_order_tx_1 = wallet
+        .create_fill_order_tx(
+            DEFAULT_ACCOUNT_INDEX,
+            order_id,
+            order_info.clone(),
+            spend_coins_1,
+            None,
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            TxAdditionalInfo::new(),
+        )
+        .unwrap();
+
+    wallet
+        .add_account_unconfirmed_tx(
+            DEFAULT_ACCOUNT_INDEX,
+            fill_order_tx_1.clone(),
+            &WalletEventsNoOp,
+        )
+        .unwrap();
+
+    let order_info = RpcOrderInfo {
+        conclude_key: address2.clone().into_object(),
+        initially_given: RpcOutputValue::Token {
+            id: issued_token_id,
+            amount: buy_amount,
+        },
+        initially_asked: RpcOutputValue::Coin {
+            amount: sell_amount,
+        },
+        give_balance: sell_amount,
+        ask_balance: buy_amount,
+        nonce: Some(AccountNonce::new(0)),
+    };
+
+    let spend_coins_2 = Amount::from_atoms(3);
+    let received_tokens_2 = spend_coins_2;
+    let fill_order_tx_2 = wallet
+        .create_fill_order_tx(
+            DEFAULT_ACCOUNT_INDEX,
+            order_id,
+            order_info.clone(),
+            spend_coins_2,
+            None,
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            TxAdditionalInfo::new(),
+        )
+        .unwrap();
+
+    wallet
+        .add_account_unconfirmed_tx(
+            DEFAULT_ACCOUNT_INDEX,
+            fill_order_tx_2.clone(),
+            &WalletEventsNoOp,
+        )
+        .unwrap();
+
+    // Check order data after unconfirmed tx status
+    let mut orders = wallet.get_orders(DEFAULT_ACCOUNT_INDEX).unwrap().collect_vec();
+    assert_eq!(orders.len(), 1);
+    let (actual_order_id, order_data) = orders.pop().unwrap();
+    assert_eq!(*actual_order_id, order_id);
+    assert_eq!(order_data.last_nonce, Some(AccountNonce::new(1)));
+
+    let _ = create_block(
+        &chain_config,
+        &mut wallet,
+        vec![fill_order_tx_1],
+        Amount::ZERO,
+        4,
+    );
+
+    // if confirmed tx is added conflicting txs must be replaced in the output cache, leaving descendants intact
+    let mut orders = wallet.get_orders(DEFAULT_ACCOUNT_INDEX).unwrap().collect_vec();
+    assert_eq!(orders.len(), 1);
+    let (actual_order_id, order_data) = orders.pop().unwrap();
+    assert_eq!(*actual_order_id, order_id);
+    assert_eq!(order_data.last_nonce, Some(AccountNonce::new(1)));
+
+    let coin_balance_confirmed = get_balance_with(
+        &wallet,
+        Currency::Coin,
+        UtxoState::Confirmed.into(),
+        WithLocked::Any,
+    );
+    assert_eq!(
+        coin_balance_confirmed,
+        (coin_balance_after_create_order - spend_coins_1).unwrap()
+    );
+
+    let coin_balance_unconfirmed = get_balance_with(
+        &wallet,
+        Currency::Coin,
+        UtxoState::Confirmed | UtxoState::Inactive,
+        WithLocked::Any,
+    );
+    assert_eq!(
+        coin_balance_unconfirmed,
+        (coin_balance_after_create_order - spend_coins_1)
+            .and_then(|v| v - spend_coins_2)
+            .unwrap()
+    );
+
+    let token_balance_confirmed = get_balance_with(
+        &wallet,
+        Currency::Token(issued_token_id),
+        UtxoState::Confirmed.into(),
+        WithLocked::Any,
+    );
+    assert_eq!(token_balance_confirmed, received_tokens_1);
+
+    let token_balance_unconfirmed = get_balance_with(
+        &wallet,
+        Currency::Token(issued_token_id),
+        UtxoState::Confirmed | UtxoState::Inactive,
+        WithLocked::Any,
+    );
+    assert_eq!(
+        token_balance_unconfirmed,
+        (received_tokens_1 + received_tokens_2).unwrap()
+    );
+}
+
+// Create a pool and a delegation with some share.
+// Create a tx that spends from delegation account multiple times. Add it as unconfirmed.
+// Check confirmed/unconfirmed balance and ensure that account nonce is incremented in OutputCache.
+// Create a tx via separate wallet that spends from the same delegation once.
+// Submit the second tx in a block.
+// Check that the first tx was marked as conflicting and the state was properly reversed.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn conflicting_delegation_account_nonce_multiple_inputs(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let chain_config = Arc::new(create_unit_test_config());
+
+    let mut wallet = create_wallet(chain_config.clone());
+    let mut wallet2 = create_wallet(chain_config.clone());
+
+    let coin_balance = get_coin_balance(&wallet);
+    assert_eq!(coin_balance, Amount::ZERO);
+
+    // Generate a new block which sends reward to the wallet
+    let delegation_amount = Amount::from_atoms(rng.gen_range(10..100));
+    let block1_amount = (chain_config.min_stake_pool_pledge() + delegation_amount).unwrap();
+    let (_, block1) = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
+    scan_wallet(&mut wallet2, BlockHeight::new(0), vec![block1]);
+
+    let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
+    assert!(pool_ids.is_empty());
+
+    let coin_balance = get_coin_balance(&wallet);
+    assert_eq!(coin_balance, block1_amount);
+
+    // Create a pool
+    let pool_amount = chain_config.min_stake_pool_pledge();
+
+    let stake_pool_transaction = wallet
+        .create_stake_pool_tx(
+            DEFAULT_ACCOUNT_INDEX,
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            StakePoolCreationArguments {
+                amount: pool_amount,
+                margin_ratio_per_thousand: PerThousand::new_from_rng(&mut rng),
+                cost_per_block: Amount::ZERO,
+                decommission_key: Destination::AnyoneCanSpend,
+                staker_key: None,
+                vrf_public_key: None,
+            },
+        )
+        .unwrap();
+
+    let (address, block2) = create_block(
+        &chain_config,
+        &mut wallet,
+        vec![stake_pool_transaction.clone()],
+        Amount::ZERO,
+        1,
+    );
+    scan_wallet(&mut wallet2, BlockHeight::new(1), vec![block2]);
+
+    let coin_balance = get_coin_balance(&wallet);
+    assert_eq!(coin_balance, (block1_amount - pool_amount).unwrap(),);
+
+    let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
+    assert_eq!(pool_ids.len(), 1);
+
+    // Create a delegation
+    let pool_id = pool_ids.first().unwrap().0;
+    let (delegation_id, delegation_tx) = wallet
+        .create_delegation(
+            DEFAULT_ACCOUNT_INDEX,
+            vec![make_create_delegation_output(address.clone(), pool_id)],
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+        )
+        .unwrap();
+
+    let (_, block3) = create_block(
+        &chain_config,
+        &mut wallet,
+        vec![delegation_tx],
+        Amount::ZERO,
+        2,
+    );
+    scan_wallet(&mut wallet2, BlockHeight::new(2), vec![block3]);
+
+    let mut delegations = wallet.get_delegations(DEFAULT_ACCOUNT_INDEX).unwrap().collect_vec();
+    assert_eq!(delegations.len(), 1);
+    let (deleg_id, deleg_data) = delegations.pop().unwrap();
+    assert_eq!(*deleg_id, delegation_id);
+    assert!(deleg_data.not_staked_yet);
+    assert_eq!(deleg_data.last_nonce, None);
+    assert_eq!(deleg_data.pool_id, pool_id);
+    assert_eq!(&deleg_data.destination, address.as_object());
+    let spend_destination = deleg_data.destination.clone();
+
+    // Delegate some coins
+    let delegation_stake_tx = wallet
+        .create_transaction_to_addresses(
+            DEFAULT_ACCOUNT_INDEX,
+            [TxOutput::DelegateStaking(delegation_amount, delegation_id)],
+            SelectedInputs::Utxos(vec![]),
+            BTreeMap::new(),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            TxAdditionalInfo::new(),
+        )
+        .unwrap();
+
+    let (_, block4) = create_block(
+        &chain_config,
+        &mut wallet,
+        vec![delegation_stake_tx],
+        Amount::ZERO,
+        3,
+    );
+    scan_wallet(&mut wallet2, BlockHeight::new(3), vec![block4]);
+
+    let coin_balance_after_delegating = get_coin_balance(&wallet);
+    assert_eq!(
+        coin_balance_after_delegating,
+        (block1_amount - pool_amount).and_then(|v| v - delegation_amount).unwrap(),
+    );
+
+    // Add unconfirmed tx that spends from delegations via multiple inputs
+    let spend_from_delegation_tx = Transaction::new(
+        0,
+        vec![
+            TxInput::from_account(
+                AccountNonce::new(0),
+                AccountSpending::DelegationBalance(delegation_id, Amount::from_atoms(1)),
+            ),
+            TxInput::from_account(
+                AccountNonce::new(1),
+                AccountSpending::DelegationBalance(delegation_id, Amount::from_atoms(1)),
+            ),
+            TxInput::from_account(
+                AccountNonce::new(2),
+                AccountSpending::DelegationBalance(delegation_id, Amount::from_atoms(1)),
+            ),
+        ],
+        vec![],
+    )
+    .unwrap();
+
+    let spend_from_delegation_ptx = PartiallySignedTransaction::new(
+        spend_from_delegation_tx,
+        vec![None; 3],
+        vec![None; 3],
+        vec![Some(spend_destination); 3],
+        None,
+        TxAdditionalInfo::new(),
+    )
+    .unwrap();
+
+    let spend_from_delegation_signed_tx = wallet
+        .sign_raw_transaction(DEFAULT_ACCOUNT_INDEX, spend_from_delegation_ptx)
+        .unwrap()
+        .0
+        .into_signed_tx()
+        .unwrap();
+    let spend_from_delegation_tx_id = spend_from_delegation_signed_tx.transaction().get_id();
+
+    wallet
+        .add_account_unconfirmed_tx(
+            DEFAULT_ACCOUNT_INDEX,
+            spend_from_delegation_signed_tx.clone(),
+            &WalletEventsNoOp,
+        )
+        .unwrap();
+
+    // Check delegation after unconfirmed tx status
+    let mut delegations = wallet.get_delegations(DEFAULT_ACCOUNT_INDEX).unwrap().collect_vec();
+    assert_eq!(delegations.len(), 1);
+    let (deleg_id, deleg_data) = delegations.pop().unwrap();
+    assert_eq!(*deleg_id, delegation_id);
+    assert_eq!(deleg_data.last_nonce, Some(AccountNonce::new(2)));
+
+    // Create and submit tx with different tx id
+    let withdraw_amount_2 = Amount::from_atoms(5);
+    let spend_from_delegation_tx_confirmed = wallet2
+        .create_transaction_to_addresses_from_delegation(
+            DEFAULT_ACCOUNT_INDEX,
+            address.clone(),
+            withdraw_amount_2,
+            delegation_id,
+            delegation_amount,
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+        )
+        .unwrap();
+    let spend_from_delegation_confirmed_tx_id =
+        spend_from_delegation_tx_confirmed.transaction().get_id();
+
+    let (_, block5) = create_block(
+        &chain_config,
+        &mut wallet2,
+        vec![spend_from_delegation_tx_confirmed],
+        Amount::ZERO,
+        4,
+    );
+    let block5_id = block5.get_id();
+    scan_wallet(&mut wallet, BlockHeight::new(4), vec![block5]);
+
+    // if confirmed tx is added conflicting txs must be removed from the output cache
+    let mut delegations = wallet.get_delegations(DEFAULT_ACCOUNT_INDEX).unwrap().collect_vec();
+    assert_eq!(delegations.len(), 1);
+    let (deleg_id, deleg_data) = delegations.pop().unwrap();
+    assert_eq!(*deleg_id, delegation_id);
+    assert_eq!(deleg_data.last_nonce, Some(AccountNonce::new(0)));
+
+    let coin_balance = get_balance_with(
+        &wallet,
+        Currency::Coin,
+        UtxoState::Confirmed.into(),
+        WithLocked::Any,
+    );
+    assert_eq!(
+        coin_balance,
+        (coin_balance_after_delegating + withdraw_amount_2).unwrap()
+    );
+
+    let coin_balance = get_balance_with(
+        &wallet,
+        Currency::Coin,
+        UtxoState::Confirmed | UtxoState::Inactive,
+        WithLocked::Any,
+    );
+    assert_eq!(
+        coin_balance,
+        (coin_balance_after_delegating + withdraw_amount_2).unwrap()
+    );
+
+    assert_eq!(
+        *wallet
+            .get_transaction(DEFAULT_ACCOUNT_INDEX, spend_from_delegation_tx_id)
+            .unwrap()
+            .state(),
+        TxState::Conflicted(block5_id.into())
+    );
+    assert_eq!(
+        *wallet
+            .get_transaction(DEFAULT_ACCOUNT_INDEX, spend_from_delegation_confirmed_tx_id)
+            .unwrap()
+            .state(),
+        TxState::Confirmed(
+            BlockHeight::new(5),
+            chain_config.genesis_block().timestamp(),
+            0
+        )
+    );
+
+    // Abandon conflicting txs
+    wallet
+        .abandon_transaction(DEFAULT_ACCOUNT_INDEX, spend_from_delegation_tx_id)
+        .unwrap();
+    assert_eq!(
+        *wallet
+            .get_transaction(DEFAULT_ACCOUNT_INDEX, spend_from_delegation_tx_id)
+            .unwrap()
+            .state(),
+        TxState::Abandoned
+    );
+
+    let mut delegations = wallet.get_delegations(DEFAULT_ACCOUNT_INDEX).unwrap().collect_vec();
+    assert_eq!(delegations.len(), 1);
+    let (deleg_id, deleg_data) = delegations.pop().unwrap();
+    assert_eq!(*deleg_id, delegation_id);
+    assert_eq!(deleg_data.last_nonce, Some(AccountNonce::new(0)));
+}
+
+// Create a pool and a delegation with some share.
+// Create a tx that spends from delegation account and add it as unconfirmed.
+// Revert the latest block in the wallet.
+// Create a tx via separate wallet that spends from the same delegation once. Submit the second tx in a block.
+// Check that the first tx was not removed by reorg and is marked as conflicting and the state was properly reversed.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn conflicting_delegation_account_with_reorg(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let chain_config = Arc::new(create_unit_test_config());
+
+    let mut wallet = create_wallet(chain_config.clone());
+    let mut wallet2 = create_wallet(chain_config.clone());
+
+    let coin_balance = get_coin_balance(&wallet);
+    assert_eq!(coin_balance, Amount::ZERO);
+
+    // Generate a new block which sends reward to the wallet
+    let delegation_amount = Amount::from_atoms(rng.gen_range(10..100));
+    let block1_amount = (chain_config.min_stake_pool_pledge() + delegation_amount).unwrap();
+    let (_, block1) = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
+    scan_wallet(&mut wallet2, BlockHeight::new(0), vec![block1]);
+
+    let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
+    assert!(pool_ids.is_empty());
+
+    let coin_balance = get_coin_balance(&wallet);
+    assert_eq!(coin_balance, block1_amount);
+
+    // Create a pool
+    let pool_amount = chain_config.min_stake_pool_pledge();
+
+    let stake_pool_transaction = wallet
+        .create_stake_pool_tx(
+            DEFAULT_ACCOUNT_INDEX,
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            StakePoolCreationArguments {
+                amount: pool_amount,
+                margin_ratio_per_thousand: PerThousand::new_from_rng(&mut rng),
+                cost_per_block: Amount::ZERO,
+                decommission_key: Destination::AnyoneCanSpend,
+                staker_key: None,
+                vrf_public_key: None,
+            },
+        )
+        .unwrap();
+
+    let (address, block2) = create_block(
+        &chain_config,
+        &mut wallet,
+        vec![stake_pool_transaction.clone()],
+        Amount::ZERO,
+        1,
+    );
+    scan_wallet(&mut wallet2, BlockHeight::new(1), vec![block2]);
+
+    let coin_balance = get_coin_balance(&wallet);
+    assert_eq!(coin_balance, (block1_amount - pool_amount).unwrap(),);
+
+    let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
+    assert_eq!(pool_ids.len(), 1);
+
+    // Create a delegation
+    let pool_id = pool_ids.first().unwrap().0;
+    let (delegation_id, delegation_tx) = wallet
+        .create_delegation(
+            DEFAULT_ACCOUNT_INDEX,
+            vec![make_create_delegation_output(address.clone(), pool_id)],
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+        )
+        .unwrap();
+
+    let (_, block3) = create_block(
+        &chain_config,
+        &mut wallet,
+        vec![delegation_tx],
+        Amount::ZERO,
+        2,
+    );
+    scan_wallet(&mut wallet2, BlockHeight::new(2), vec![block3]);
+
+    let mut delegations = wallet.get_delegations(DEFAULT_ACCOUNT_INDEX).unwrap().collect_vec();
+    assert_eq!(delegations.len(), 1);
+    let (deleg_id, deleg_data) = delegations.pop().unwrap();
+    assert_eq!(*deleg_id, delegation_id);
+    assert!(deleg_data.not_staked_yet);
+    assert_eq!(deleg_data.last_nonce, None);
+    assert_eq!(deleg_data.pool_id, pool_id);
+    assert_eq!(&deleg_data.destination, address.as_object());
+
+    // Delegate some coins
+    let delegation_stake_tx = wallet
+        .create_transaction_to_addresses(
+            DEFAULT_ACCOUNT_INDEX,
+            [TxOutput::DelegateStaking(delegation_amount, delegation_id)],
+            SelectedInputs::Utxos(vec![]),
+            BTreeMap::new(),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            TxAdditionalInfo::new(),
+        )
+        .unwrap();
+
+    let (_, block4) = create_block(
+        &chain_config,
+        &mut wallet,
+        vec![delegation_stake_tx],
+        Amount::ZERO,
+        3,
+    );
+    scan_wallet(&mut wallet2, BlockHeight::new(3), vec![block4.clone()]);
+
+    let coin_balance_after_delegating = get_coin_balance(&wallet);
+    assert_eq!(
+        coin_balance_after_delegating,
+        (block1_amount - pool_amount).and_then(|v| v - delegation_amount).unwrap(),
+    );
+
+    // Create an empty block to disconnect later and trigger unconfirmed tx removal
+    let (_, _) = create_block(&chain_config, &mut wallet, vec![], Amount::ZERO, 4);
+
+    // Add unconfirmed tx that spends from delegations
+    let spend_from_delegation_tx_1 = wallet
+        .create_transaction_to_addresses_from_delegation(
+            DEFAULT_ACCOUNT_INDEX,
+            address.clone(),
+            Amount::from_atoms(1),
+            delegation_id,
+            delegation_amount,
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+        )
+        .unwrap();
+    let spend_from_delegation_tx_id_1 = spend_from_delegation_tx_1.transaction().get_id();
+
+    wallet
+        .add_account_unconfirmed_tx(
+            DEFAULT_ACCOUNT_INDEX,
+            spend_from_delegation_tx_1.clone(),
+            &WalletEventsNoOp,
+        )
+        .unwrap();
+
+    // Check delegation after unconfirmed tx status
+    let mut delegations = wallet.get_delegations(DEFAULT_ACCOUNT_INDEX).unwrap().collect_vec();
+    assert_eq!(delegations.len(), 1);
+    let (deleg_id, deleg_data) = delegations.pop().unwrap();
+    assert_eq!(*deleg_id, delegation_id);
+    assert_eq!(deleg_data.last_nonce, Some(AccountNonce::new(0)));
+
+    // Reset empty block and unconfirmed tx
+    scan_wallet(&mut wallet, BlockHeight::new(3), vec![block4]);
+
+    // Create and submit tx with different tx id
+    let withdraw_amount_2 = Amount::from_atoms(5);
+    let spend_from_delegation_tx_2 = wallet2
+        .create_transaction_to_addresses_from_delegation(
+            DEFAULT_ACCOUNT_INDEX,
+            address.clone(),
+            withdraw_amount_2,
+            delegation_id,
+            delegation_amount,
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+        )
+        .unwrap();
+    let spend_from_delegation_tx_id_2 = spend_from_delegation_tx_2.transaction().get_id();
+
+    let (_, block5) = create_block(
+        &chain_config,
+        &mut wallet2,
+        vec![spend_from_delegation_tx_2],
+        Amount::ZERO,
+        4,
+    );
+    let block5_id = block5.get_id();
+    scan_wallet(&mut wallet, BlockHeight::new(4), vec![block5]);
+
+    // if confirmed tx is added, conflicting txs must be removed from the output cache
+    let mut delegations = wallet.get_delegations(DEFAULT_ACCOUNT_INDEX).unwrap().collect_vec();
+    assert_eq!(delegations.len(), 1);
+    let (deleg_id, deleg_data) = delegations.pop().unwrap();
+    assert_eq!(*deleg_id, delegation_id);
+    assert_eq!(deleg_data.last_nonce, Some(AccountNonce::new(0)));
+
+    let coin_balance = get_balance_with(
+        &wallet,
+        Currency::Coin,
+        UtxoState::Confirmed.into(),
+        WithLocked::Any,
+    );
+    assert_eq!(
+        coin_balance,
+        (coin_balance_after_delegating + withdraw_amount_2).unwrap()
+    );
+
+    let coin_balance = get_balance_with(
+        &wallet,
+        Currency::Coin,
+        UtxoState::Confirmed | UtxoState::Inactive,
+        WithLocked::Any,
+    );
+    assert_eq!(
+        coin_balance,
+        (coin_balance_after_delegating + withdraw_amount_2).unwrap()
+    );
+
+    assert_eq!(
+        *wallet
+            .get_transaction(DEFAULT_ACCOUNT_INDEX, spend_from_delegation_tx_id_1)
+            .unwrap()
+            .state(),
+        TxState::Conflicted(block5_id.into())
+    );
+    assert_eq!(
+        *wallet
+            .get_transaction(DEFAULT_ACCOUNT_INDEX, spend_from_delegation_tx_id_2)
+            .unwrap()
+            .state(),
+        TxState::Confirmed(
+            BlockHeight::new(5),
+            chain_config.genesis_block().timestamp(),
+            0
+        )
+    );
+}
+
+// Abandoning a tx should remove utxos from consumed
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn rollback_utxos_after_abandon(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let chain_config = Arc::new(create_mainnet());
+
+    let mut wallet = create_wallet(chain_config.clone());
+
+    // Generate a new block which sends reward to the wallet
+    let utxo_amount = Amount::from_atoms(rng.gen_range(100..10000));
+    let reward_outputs = (0..10)
+        .map(|idx| {
+            let address = get_address(
+                &chain_config,
+                MNEMONIC,
+                DEFAULT_ACCOUNT_INDEX,
+                KeyPurpose::ReceiveFunds,
+                idx.try_into().unwrap(),
+            );
+            make_address_output(address, utxo_amount)
+        })
+        .collect_vec();
+    let block1 = Block::new(
+        vec![],
+        chain_config.genesis_block_id(),
+        chain_config.genesis_block().timestamp(),
+        ConsensusData::None,
+        BlockReward::new(reward_outputs),
+    )
+    .unwrap();
+    scan_wallet(&mut wallet, BlockHeight::new(0), vec![block1]);
+
+    let utxos = wallet
+        .get_utxos(
+            DEFAULT_ACCOUNT_INDEX,
+            UtxoType::Transfer.into(),
+            UtxoState::Confirmed.into(),
+            WithLocked::Unlocked,
+        )
+        .unwrap();
+
+    // Spend some utxos in a tx
+    let selected_utxos = utxos
+        .iter()
+        .map(|(outpoint, _)| outpoint)
+        .take(rng.gen_range(1..utxos.len()))
+        .cloned()
+        .collect_vec();
+
+    let address = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1;
+    let tx = wallet
+        .create_transaction_to_addresses(
+            DEFAULT_ACCOUNT_INDEX,
+            [make_address_output(address, utxo_amount)],
+            SelectedInputs::Utxos(selected_utxos.clone()),
+            BTreeMap::new(),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            TxAdditionalInfo::new(),
+        )
+        .unwrap();
+    let tx_id = tx.transaction().get_id();
+
+    wallet
+        .add_account_unconfirmed_tx(DEFAULT_ACCOUNT_INDEX, tx, &WalletEventsNoOp)
+        .unwrap();
+
+    // Check that spent utxos are not available anymore
+    let outpoints: Vec<_> = wallet
+        .get_utxos(
+            DEFAULT_ACCOUNT_INDEX,
+            UtxoType::Transfer.into(),
+            UtxoStates::ALL,
+            WithLocked::Any,
+        )
+        .unwrap()
+        .iter()
+        .map(|(u, _)| u.clone())
+        .collect();
+    assert!(selected_utxos.iter().all(|u| !outpoints.contains(u)));
+
+    wallet.abandon_transaction(DEFAULT_ACCOUNT_INDEX, tx_id).unwrap();
+
+    // Check that spend utxo are available again
+    let outpoints: Vec<_> = wallet
+        .get_utxos(
+            DEFAULT_ACCOUNT_INDEX,
+            UtxoType::Transfer.into(),
+            UtxoStates::ALL,
+            WithLocked::Any,
+        )
+        .unwrap()
+        .iter()
+        .map(|(u, _)| u.clone())
+        .collect();
+    assert!(selected_utxos.iter().all(|u| outpoints.contains(u)));
 }

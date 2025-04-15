@@ -210,10 +210,10 @@ impl<'f> BlockBuilder<'f> {
                     }
                     TxInput::Account(outpoint) => {
                         self.account_nonce_tracker
-                            .insert(outpoint.account().clone().into(), outpoint.nonce());
+                            .insert(outpoint.account().into(), outpoint.nonce());
                     }
                     TxInput::AccountCommand(nonce, op) => {
-                        self.account_nonce_tracker.insert(op.clone().into(), *nonce);
+                        self.account_nonce_tracker.insert(op.into(), *nonce);
                     }
                     TxInput::OrderAccountCommand(..) => {}
                 };

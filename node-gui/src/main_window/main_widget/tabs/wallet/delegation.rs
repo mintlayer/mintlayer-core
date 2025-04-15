@@ -87,7 +87,7 @@ pub fn view_delegation(
                 .map(|(del_id, (pool_id, b))| (*del_id, *pool_id, *b))
             {
                 let delegation_address = Address::new(chain_config, delegation_id)
-                    .expect("Encoding pool id to address can't fail (GUI)");
+                    .expect("Encoding delegation id to address can't fail (GUI)");
                 let pool_address = Address::new(chain_config, pool_id)
                     .expect("Encoding pool id to address can't fail (GUI)");
                 let delegate_staking_amount =
