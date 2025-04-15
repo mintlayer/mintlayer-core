@@ -279,15 +279,22 @@ pub fn generate_transaction_graph(
         let mut total = 0u128;
         let mut amts = Vec::new();
 
-        for _ in 0..n_inputs {
+        // the number is chosen to avoid generating empty range below
+        let min_valid_total_amount = 2;
+
+        let mut input_count = 0;
+        while input_count < n_inputs || total < estimated_fee.into_atoms() + min_valid_total_amount
+        {
             let (outpt, amt) = utxos.swap_remove(rng.gen_range(0..utxos.len()));
             total += amt;
             builder = builder.add_input(outpt, empty_witness(rng));
+            input_count += 1;
         }
 
-        total = total.checked_sub(estimated_fee.into_atoms())?;
-
         for _ in 0..n_outputs {
+            if total < min_valid_total_amount {
+                break;
+            }
             let amt = rng.gen_range((total / 2)..(95 * total / 100));
             total -= amt;
             builder = builder.add_output(TxOutput::Transfer(
