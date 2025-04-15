@@ -16,9 +16,12 @@
 use api_server_common::storage::storage_api::FungibleTokenData;
 use api_web_server::api::json_helpers::{amount_to_json, to_json_string};
 use common::{
-    chain::tokens::{
-        make_token_id, IsTokenFreezable, IsTokenFrozen, TokenId, TokenIssuance, TokenIssuanceV1,
-        TokenTotalSupply,
+    chain::{
+        tokens::{
+            make_token_id, IsTokenFreezable, IsTokenFrozen, TokenId, TokenIssuance,
+            TokenIssuanceV1, TokenTotalSupply,
+        },
+        AccountNonce,
     },
     primitives::H256,
 };
@@ -131,6 +134,7 @@ async fn ok(#[case] seed: Seed) {
                     is_locked: false,
                     frozen: IsTokenFrozen::No(token_issuance.is_freezable),
                     authority: token_issuance.authority.clone(),
+                    next_nonce: AccountNonce::new(0),
                 };
 
                 _ = tx.send([(
@@ -148,6 +152,7 @@ async fn ok(#[case] seed: Seed) {
                         "frozen": false,
                         "is_token_freezable": false,
                         "is_token_unfreezable": None::<bool>,
+                        "next_nonce": token_data.next_nonce,
                     }),
                 )]);
 
