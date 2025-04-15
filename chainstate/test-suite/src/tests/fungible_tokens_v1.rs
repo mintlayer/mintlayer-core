@@ -6399,7 +6399,7 @@ fn test_make_token_id_activation(#[case] seed: Seed) {
                 InputWitness::NoSignature(None),
             )
             .add_input(
-                TxInput::from_utxo(issue_token_1_tx_id.clone().into(), 0),
+                TxInput::from_utxo(issue_token_1_tx_id.into(), 0),
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::IssueFungibleToken(Box::new(issuance.clone())))

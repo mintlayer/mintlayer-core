@@ -30,7 +30,7 @@ pub fn make_delegation_id(inputs: &[TxInput]) -> Option<DelegationId> {
 
 pub fn make_order_id(inputs: &[TxInput]) -> Option<OrderId> {
     let input_utxo_outpoint = inputs.iter().find_map(|input| input.utxo_outpoint())?;
-    Some(OrderId::new(hash_encoded(input_utxo_outpoint)))
+    Some(OrderId::from_utxo(input_utxo_outpoint))
 }
 
 pub fn make_token_id(
