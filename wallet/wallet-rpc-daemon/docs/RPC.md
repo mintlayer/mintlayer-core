@@ -2994,7 +2994,12 @@ in a block.
 
 Parameters:
 ```
-{ "account": number }
+{
+    "account": number,
+    "include_change_addresses": EITHER OF
+         1) bool
+         2) null,
+}
 ```
 
 Returns:
@@ -3002,7 +3007,14 @@ Returns:
 [ {
     "address": bech32 string,
     "index": string,
+    "purpose": EITHER OF
+         1) "Receive"
+         2) "Change",
     "used": bool,
+    "coins": {
+        "atoms": number string,
+        "decimal": decimal string,
+    },
 }, .. ]
 ```
 
