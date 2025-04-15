@@ -81,6 +81,14 @@ pub enum OrdersVersion {
     V1,
 }
 
+// TODO: after it's activated and reorg depth passes check mainnet/testnet and in case V0 doesn't conflict with
+// V1 this upgrade can be removed from the codebase.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
+pub enum TokenIdGenerationVersion {
+    V0,
+    V1,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub struct ChainstateUpgrade {
     token_issuance_version: TokenIssuanceVersion,
@@ -93,6 +101,7 @@ pub struct ChainstateUpgrade {
     orders_activated: OrdersActivated,
     orders_version: OrdersVersion,
     staker_destination_update_forbidden: StakerDestinationUpdateForbidden,
+    token_id_generation_version: TokenIdGenerationVersion,
 }
 
 impl ChainstateUpgrade {
@@ -108,6 +117,7 @@ impl ChainstateUpgrade {
         orders_activated: OrdersActivated,
         orders_version: OrdersVersion,
         staker_destination_update_forbidden: StakerDestinationUpdateForbidden,
+        token_id_generation_version: TokenIdGenerationVersion,
     ) -> Self {
         Self {
             token_issuance_version,
@@ -120,6 +130,7 @@ impl ChainstateUpgrade {
             orders_activated,
             orders_version,
             staker_destination_update_forbidden,
+            token_id_generation_version,
         }
     }
 
@@ -161,5 +172,9 @@ impl ChainstateUpgrade {
 
     pub fn orders_version(&self) -> OrdersVersion {
         self.orders_version
+    }
+
+    pub fn token_id_generation_version(&self) -> TokenIdGenerationVersion {
+        self.token_id_generation_version
     }
 }

@@ -25,17 +25,14 @@ use chainstate::chainstate_interface::ChainstateInterface;
 use common::{
     chain::{
         htlc::{HashedTimelockContract, HtlcSecretHash},
-        make_order_id,
+        make_delegation_id, make_order_id, make_pool_id, make_token_id,
         output_value::OutputValue,
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
-        tokens::{
-            make_token_id, IsTokenUnfreezable, NftIssuance, TokenId, TokenIssuance,
-            TokenTotalSupply,
-        },
-        AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, AccountType, DelegationId,
-        Destination, GenBlockId, OrderAccountCommand, OrderData, OrderId, OrdersVersion,
-        OutPointSourceId, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
+        tokens::{IsTokenUnfreezable, NftIssuance, TokenId, TokenIssuance, TokenTotalSupply},
+        AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, AccountType, ChainConfig,
+        DelegationId, Destination, GenBlockId, OrderAccountCommand, OrderData, OrderId,
+        OrdersVersion, OutPointSourceId, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, CoinOrTokenId, Id, Idable, H256},
 };
@@ -48,7 +45,7 @@ use orders_accounting::{
     OrdersAccountingOperations, OrdersAccountingView,
 };
 use pos_accounting::{
-    make_pool_id, DelegationData, InMemoryPoSAccounting, PoSAccountingDB, PoSAccountingDelta,
+    DelegationData, InMemoryPoSAccounting, PoSAccountingDB, PoSAccountingDelta,
     PoSAccountingDeltaData, PoSAccountingOperations, PoSAccountingUndo, PoSAccountingView,
     PoolData,
 };
@@ -326,6 +323,7 @@ impl<'a> RandomTxMaker<'a> {
         // now that the inputs are in place calculate the ids and replace dummy values
         let (outputs, new_staking_pools) = Self::tx_outputs_post_process(
             rng,
+            self.chainstate.get_chain_config().as_ref(),
             &mut pos_delta,
             &mut tokens_cache,
             &mut orders_cache,
@@ -956,7 +954,12 @@ impl<'a> RandomTxMaker<'a> {
                         OutPointSourceId::Transaction(Id::<Transaction>::new(H256::zero())),
                         0,
                     )];
-                    let dummy_token_id = make_token_id(&dummy_inputs).unwrap();
+                    let dummy_token_id = make_token_id(
+                        self.chainstate.get_chain_config(),
+                        BlockHeight::zero(),
+                        &dummy_inputs,
+                    )
+                    .unwrap();
                     // Coin output is created intentionally besides issuance output in order to not waste utxo
                     // (e.g. single genesis output on issuance)
                     let outputs = vec![
@@ -1361,6 +1364,7 @@ impl<'a> RandomTxMaker<'a> {
 
     fn tx_outputs_post_process(
         rng: &mut (impl Rng + CryptoRng),
+        chain_config: &ChainConfig,
         pos_accounting_cache: &mut (impl PoSAccountingView + PoSAccountingOperations<PoSAccountingUndo>),
         tokens_cache: &mut (impl TokensAccountingView + TokensAccountingOperations),
         orders_cache: &mut (impl OrdersAccountingView + OrdersAccountingOperations),
@@ -1380,7 +1384,7 @@ impl<'a> RandomTxMaker<'a> {
                 | TxOutput::DataDeposit(_)
                 | TxOutput::Htlc(_, _) => Some(output),
                 TxOutput::CreateStakePool(dummy_pool_id, pool_data) => {
-                    let pool_id = make_pool_id(inputs[0].utxo_outpoint().unwrap());
+                    let pool_id = make_pool_id(inputs).unwrap();
                     let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
                     let (staker_sk, staker_pk) =
                         PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
@@ -1404,12 +1408,9 @@ impl<'a> RandomTxMaker<'a> {
                 }
                 TxOutput::CreateDelegationId(destination, pool_id) => {
                     if pos_accounting_cache.pool_exists(*pool_id).unwrap() {
+                        let delegation_id = make_delegation_id(inputs).unwrap();
                         let _ = pos_accounting_cache
-                            .create_delegation_id(
-                                *pool_id,
-                                destination.clone(),
-                                inputs[0].utxo_outpoint().unwrap(),
-                            )
+                            .create_delegation_id(*pool_id, delegation_id, destination.clone())
                             .unwrap();
                         Some(output)
                     } else {
@@ -1417,7 +1418,8 @@ impl<'a> RandomTxMaker<'a> {
                     }
                 }
                 TxOutput::IssueFungibleToken(issuance) => {
-                    let token_id = make_token_id(inputs).unwrap();
+                    let token_id =
+                        make_token_id(chain_config, BlockHeight::zero(), inputs).unwrap();
                     let data = tokens_accounting::TokenData::FungibleToken(
                         issuance.as_ref().clone().into(),
                     );
@@ -1425,11 +1427,12 @@ impl<'a> RandomTxMaker<'a> {
                     Some(output)
                 }
                 TxOutput::IssueNft(dummy_token_id, _, _) => {
-                    *dummy_token_id = make_token_id(inputs).unwrap();
+                    *dummy_token_id =
+                        make_token_id(chain_config, BlockHeight::zero(), inputs).unwrap();
                     Some(output)
                 }
                 TxOutput::CreateOrder(data) => {
-                    let order_id = make_order_id(inputs[0].utxo_outpoint().unwrap());
+                    let order_id = make_order_id(inputs).unwrap();
                     let _ =
                         orders_cache.create_order(order_id, data.as_ref().clone().into()).unwrap();
                     Some(output)

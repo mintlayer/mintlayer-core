@@ -24,7 +24,7 @@ use common::{
     chain::{
         config::Builder as ConfigBuilder,
         tokens::{IsTokenFreezable, IsTokenFrozen, TokenAuxiliaryData, TokenId, TokenTotalSupply},
-        DelegationId,
+        DelegationId, PoolId,
     },
     primitives::H256,
 };
@@ -404,9 +404,9 @@ fn hierarchy_test_stake_pool(#[case] seed: Seed) {
     let pool_data1 = create_pool_data(&mut rng, destination1.clone(), destination1, pool_balance1);
     let pool_data2 = create_pool_data(&mut rng, destination2.clone(), destination2, pool_balance2);
 
-    let pool_id_0 = pos_accounting::make_pool_id(&outpoint0);
-    let pool_id_1 = pos_accounting::make_pool_id(&outpoint1);
-    let pool_id_2 = pos_accounting::make_pool_id(&outpoint2);
+    let pool_id_0 = PoolId::from_utxo(&outpoint0);
+    let pool_id_1 = PoolId::from_utxo(&outpoint1);
+    let pool_id_2 = PoolId::from_utxo(&outpoint2);
 
     let block_undo_id_0: Id<Block> = Id::new(H256::random_using(&mut rng));
     let block_undo_source_0 = TransactionSource::Chain(block_undo_id_0);
@@ -573,13 +573,13 @@ fn hierarchy_test_nonce(#[case] seed: Seed) {
     let chain_config = ConfigBuilder::test_chain().build();
 
     let nonce0 = AccountNonce::new(rng.gen());
-    let account0 = AccountType::Delegation(DelegationId::new(H256::random_using(&mut rng)));
+    let account0 = AccountType::Delegation(DelegationId::random_using(&mut rng));
 
     let nonce1 = AccountNonce::new(rng.gen());
-    let account1 = AccountType::Delegation(DelegationId::new(H256::random_using(&mut rng)));
+    let account1 = AccountType::Delegation(DelegationId::random_using(&mut rng));
 
     let nonce2 = AccountNonce::new(rng.gen());
-    let account2 = AccountType::Delegation(DelegationId::new(H256::random_using(&mut rng)));
+    let account2 = AccountType::Delegation(DelegationId::random_using(&mut rng));
 
     let mut store = mock::MockStore::new();
     store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
@@ -682,9 +682,9 @@ fn hierarchy_test_tokens_v1(#[case] seed: Seed) {
             Destination::AnyoneCanSpend,
         ));
 
-    let token_id_0 = make_token_id(&[input0]).unwrap();
-    let token_id_1 = make_token_id(&[input1]).unwrap();
-    let token_id_2 = make_token_id(&[input2]).unwrap();
+    let token_id_0 = make_token_id(&chain_config, BlockHeight::zero(), &[input0]).unwrap();
+    let token_id_1 = make_token_id(&chain_config, BlockHeight::zero(), &[input1]).unwrap();
+    let token_id_2 = make_token_id(&chain_config, BlockHeight::zero(), &[input2]).unwrap();
 
     let block_undo_id_0: Id<Block> = Id::new(H256::random_using(&mut rng));
     let block_undo_source_0 = TransactionSource::Chain(block_undo_id_0);

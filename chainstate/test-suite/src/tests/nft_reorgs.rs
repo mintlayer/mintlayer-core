@@ -19,7 +19,7 @@ use common::{
     chain::{
         output_value::OutputValue,
         signature::inputsig::InputWitness,
-        tokens::{make_token_id, NftIssuance},
+        tokens::{NftIssuance, TokenId},
         Destination, OutPointSourceId, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Idable},
@@ -54,8 +54,7 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
 
         // Issue a new NFT
         let genesis_outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
-        let token_id =
-            make_token_id(&[TxInput::from_utxo(genesis_outpoint_id.clone(), 0)]).unwrap();
+        let token_id = TokenId::from_utxo(&UtxoOutPoint::new(genesis_outpoint_id.clone(), 0));
         let issuance_data = random_nft_issuance(tf.chain_config().as_ref(), &mut rng);
 
         let block_index = tf
@@ -335,8 +334,7 @@ fn nft_reorgs_and_cleanup_data(#[case] seed: Seed) {
 
         let genesis_id = tf.genesis().get_id();
         let genesis_outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
-        let token_id =
-            make_token_id(&[TxInput::from_utxo(genesis_outpoint_id.clone(), 0)]).unwrap();
+        let token_id = TokenId::from_utxo(&UtxoOutPoint::new(genesis_outpoint_id.clone(), 0));
 
         let block_index = tf
             .make_block_builder()

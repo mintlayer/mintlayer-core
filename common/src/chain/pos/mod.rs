@@ -15,12 +15,10 @@
 
 use std::str::FromStr;
 
-use serialization::{Decode, DecodeAll, Encode};
-use typename::TypeName;
+use serialization::{Decode, Encode};
 
 use crate::{
-    address::{hexified::HexifiedAddress, traits::Addressable, AddressError},
-    primitives::{BlockCount, Id, H256},
+    primitives::{BlockCount, H256},
     Uint256,
 };
 
@@ -28,18 +26,12 @@ use super::{config::ChainType, ChainConfig};
 
 pub mod config;
 pub mod config_builder;
+pub mod delegation_id;
+pub mod pool_id;
 
 pub const DEFAULT_BLOCK_COUNT_TO_AVERAGE: usize = 100;
 pub const DEFAULT_MATURITY_BLOCK_COUNT_V0: BlockCount = BlockCount::new(2000);
 pub const DEFAULT_MATURITY_BLOCK_COUNT_V1: BlockCount = BlockCount::new(7200);
-
-#[derive(Eq, PartialEq, TypeName)]
-pub enum Pool {}
-pub type PoolId = Id<Pool>;
-
-#[derive(Eq, PartialEq, TypeName)]
-pub enum Delegation {}
-pub type DelegationId = Id<Delegation>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Encode, Decode)]
 pub struct PoSConsensusVersion(u32);
@@ -49,77 +41,6 @@ impl PoSConsensusVersion {
     pub const V0: Self = Self(0);
     /// Incentivize pledging and prevent centralization with capped probability
     pub const V1: Self = Self(1);
-}
-
-impl serde::Serialize for PoolId {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        HexifiedAddress::serde_serialize(self, serializer)
-    }
-}
-
-impl<'de> serde::Deserialize<'de> for PoolId {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        HexifiedAddress::<Self>::serde_deserialize(deserializer)
-    }
-}
-
-impl Addressable for PoolId {
-    type Error = AddressError;
-
-    fn address_prefix(&self, chain_config: &ChainConfig) -> &str {
-        chain_config.pool_id_address_prefix()
-    }
-
-    fn encode_to_bytes_for_address(&self) -> Vec<u8> {
-        self.encode()
-    }
-
-    fn decode_from_bytes_from_address<T: AsRef<[u8]>>(address_bytes: T) -> Result<Self, Self::Error>
-    where
-        Self: Sized,
-    {
-        Self::decode_all(&mut address_bytes.as_ref())
-            .map_err(|e| AddressError::DecodingError(e.to_string()))
-    }
-
-    fn json_wrapper_prefix() -> &'static str {
-        "HexifiedPoolId"
-    }
-}
-
-impl Addressable for DelegationId {
-    type Error = AddressError;
-
-    fn address_prefix(&self, chain_config: &ChainConfig) -> &str {
-        chain_config.delegation_id_address_prefix()
-    }
-
-    fn encode_to_bytes_for_address(&self) -> Vec<u8> {
-        self.encode()
-    }
-
-    fn decode_from_bytes_from_address<T: AsRef<[u8]>>(address_bytes: T) -> Result<Self, Self::Error>
-    where
-        Self: Sized,
-    {
-        Self::decode_all(&mut address_bytes.as_ref())
-            .map_err(|e| AddressError::DecodingError(e.to_string()))
-    }
-    fn json_wrapper_prefix() -> &'static str {
-        "HexifiedDelegationId"
-    }
-}
-
-impl serde::Serialize for DelegationId {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        HexifiedAddress::serde_serialize(self, serializer)
-    }
-}
-
-impl<'de> serde::Deserialize<'de> for DelegationId {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        HexifiedAddress::<Self>::serde_deserialize(deserializer)
-    }
 }
 
 pub fn pos_initial_difficulty(chain_type: ChainType) -> Uint256 {

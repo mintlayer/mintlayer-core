@@ -59,11 +59,10 @@ use crate::{SendRequest, WalletError, WalletResult};
 use common::address::{Address, RpcAddress};
 use common::chain::output_value::{OutputValue, RpcOutputValue};
 use common::chain::tokens::{
-    make_token_id, IsTokenUnfreezable, NftIssuance, NftIssuanceV0, RPCFungibleTokenInfo, TokenId,
-    TokenIssuance,
+    IsTokenUnfreezable, NftIssuance, NftIssuanceV0, RPCFungibleTokenInfo, TokenId, TokenIssuance,
 };
 use common::chain::{
-    AccountNonce, Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId,
+    make_token_id, AccountNonce, Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId,
     SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
 };
 use common::primitives::{Amount, BlockHeight, Id};
@@ -170,7 +169,8 @@ impl<K: AccountKeyChains> Account<K> {
         let key_chain = K::load_from_database(chain_config.clone(), db_tx, id, &account_info)?;
 
         let txs = db_tx.get_transactions(&key_chain.get_account_id())?;
-        let output_cache = OutputCache::new(txs)?;
+        let output_cache =
+            OutputCache::new(chain_config.as_ref(), account_info.best_block_height(), txs)?;
 
         Ok(Account {
             chain_config,
@@ -1170,7 +1170,12 @@ impl<K: AccountKeyChains> Account<K> {
             None,
         )?;
 
-        let new_token_id = make_token_id(request.inputs()).ok_or(WalletError::NoUtxos)?;
+        let new_token_id = make_token_id(
+            &self.chain_config,
+            self.account_info.best_block_height(),
+            request.inputs(),
+        )
+        .ok_or(WalletError::NoUtxos)?;
 
         // update the dummy_token_id with the new_token_id
         let old_token_id = request
@@ -1478,8 +1483,8 @@ impl<K: AccountKeyChains> Account<K> {
             None,
         )?;
 
-        let input0_outpoint = crate::utils::get_first_utxo_outpoint(request.inputs())?;
-        let new_pool_id = pos_accounting::make_pool_id(input0_outpoint);
+        let new_pool_id =
+            common::chain::make_pool_id(request.inputs()).ok_or(WalletError::NotUtxoInput)?;
 
         // update the dummy_pool_id with the new pool_id
         let old_pool_id = request
@@ -2026,7 +2031,12 @@ impl<K: AccountKeyChains> Account<K> {
             let id = AccountWalletTxId::new(self.get_account_id(), tx.id());
             db_tx.set_transaction(&id, &tx)?;
             wallet_events.set_transaction(self.account_index(), &tx);
-            self.output_cache.add_tx(id.into_item_id(), tx)?;
+            self.output_cache.add_tx(
+                self.chain_config.as_ref(),
+                self.account_info.best_block_height(),
+                id.into_item_id(),
+                tx,
+            )?;
             Ok(true)
         } else {
             Ok(false)

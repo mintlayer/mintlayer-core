@@ -14,42 +14,12 @@
 // limitations under the License.
 
 use common::{
-    chain::{DelegationId, PoolId, UtxoOutPoint},
-    primitives::{
-        id::{hash_encoded_to, DefaultHashAlgoStream},
-        Amount, H256,
-    },
+    chain::DelegationId,
+    primitives::{Amount, H256},
 };
-use crypto::hash::StreamHasher;
 use randomness::Rng;
 
 use crate::{pool::operations::DelegateStakingUndo, PoSAccountingUndo};
-
-pub fn pool_id_preimage_suffix() -> u32 {
-    // arbitrary, we use this to create different values when hashing with no security requirements
-    0
-}
-
-pub fn delegation_id_preimage_suffix() -> u32 {
-    // arbitrary, we use this to create different values when hashing with no security requirements
-    1
-}
-
-pub fn make_pool_id(input0_outpoint: &UtxoOutPoint) -> PoolId {
-    let mut hasher = DefaultHashAlgoStream::new();
-    hash_encoded_to(&input0_outpoint, &mut hasher);
-    // 0 is arbitrary here, we use this as prefix to use this information again
-    hash_encoded_to(&pool_id_preimage_suffix(), &mut hasher);
-    PoolId::new(hasher.finalize().into())
-}
-
-pub fn make_delegation_id(input0_outpoint: &UtxoOutPoint) -> DelegationId {
-    let mut hasher = DefaultHashAlgoStream::new();
-    hash_encoded_to(&input0_outpoint, &mut hasher);
-    // 1 is arbitrary here, we use this as prefix to use this information again
-    hash_encoded_to(&delegation_id_preimage_suffix(), &mut hasher);
-    DelegationId::new(hasher.finalize().into())
-}
 
 pub fn random_undo_for_test(rng: &mut impl Rng) -> PoSAccountingUndo {
     let delegation_target: DelegationId = H256::random_using(rng).into();

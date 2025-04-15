@@ -23,9 +23,9 @@ use common::{
     chain::{
         output_value::OutputValue,
         timelock::OutputTimeLock,
-        tokens::{make_token_id, TokenIssuance},
-        AccountCommand, AccountNonce, Destination, OutPointSourceId, TxInput, TxOutput,
-        UtxoOutPoint,
+        tokens::{TokenId, TokenIssuance},
+        AccountCommand, AccountNonce, DelegationId, Destination, OutPointSourceId, PoolId, TxInput,
+        TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, Idable},
 };
@@ -172,7 +172,7 @@ fn tokens_homomorphism(#[case] seed: Seed) {
             .build();
 
         let chainstate_config = tf.chainstate.get_chainstate_config();
-        let genesis_id = tf.genesis().get_id().into();
+        let genesis_id: Id<GenBlock> = tf.genesis().get_id().into();
 
         let storage2 = TestStore::new_empty().unwrap();
         let mut tf2 = TestFramework::builder(&mut rng)
@@ -183,10 +183,7 @@ fn tokens_homomorphism(#[case] seed: Seed) {
 
         let tx_1 = TransactionBuilder::new()
             .add_input(
-                TxInput::from_utxo(
-                    OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
-                    0,
-                ),
+                TxInput::from_utxo(genesis_id.into(), 0),
                 empty_witness(&mut rng),
             )
             .add_output(TxOutput::IssueFungibleToken(Box::new(TokenIssuance::V1(
@@ -203,7 +200,7 @@ fn tokens_homomorphism(#[case] seed: Seed) {
                 Destination::AnyoneCanSpend,
             ))
             .build();
-        let token_id = make_token_id(tx_1.transaction().inputs()).unwrap();
+        let token_id = TokenId::from_utxo(&UtxoOutPoint::new(genesis_id.into(), 0));
 
         let tx_2 = TransactionBuilder::new()
             .add_input(
@@ -292,7 +289,7 @@ fn pos_accounting_homomorphism(#[case] seed: Seed) {
             vrf_pk,
         );
         let genesis_outpoint = UtxoOutPoint::new(OutPointSourceId::BlockReward(genesis_id), 0);
-        let pool_id = pos_accounting::make_pool_id(&genesis_outpoint);
+        let pool_id = PoolId::from_utxo(&genesis_outpoint);
 
         let storage2 = TestStore::new_empty().unwrap();
         let mut tf2 = TestFramework::builder(&mut rng)
@@ -331,10 +328,8 @@ fn pos_accounting_homomorphism(#[case] seed: Seed) {
             ))
             .build();
 
-        let delegation_id = pos_accounting::make_delegation_id(&UtxoOutPoint::new(
-            tx_1.transaction().get_id().into(),
-            1,
-        ));
+        let delegation_id =
+            DelegationId::from_utxo(&UtxoOutPoint::new(tx_1.transaction().get_id().into(), 1));
         let tx_3 = TransactionBuilder::new()
             .add_input(
                 TxInput::from_utxo(

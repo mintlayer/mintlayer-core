@@ -32,7 +32,8 @@ use crate::{
         DataDepositFeeVersion, Destination, FrozenTokensValidationVersion, GenBlock, Genesis,
         HtlcActivated, NetUpgrades, OrdersActivated, OrdersVersion, PoSChainConfig,
         PoSConsensusVersion, PoWChainConfig, RewardDistributionVersion,
-        StakerDestinationUpdateForbidden, TokenIssuanceVersion, TokensFeeVersion,
+        StakerDestinationUpdateForbidden, TokenIdGenerationVersion, TokenIssuanceVersion,
+        TokensFeeVersion,
     },
     primitives::{
         id::WithId, per_thousand::PerThousand, semver::SemVer, Amount, BlockCount, BlockDistance,
@@ -191,6 +192,7 @@ impl ChainType {
                             OrdersActivated::No,
                             OrdersVersion::V0,
                             StakerDestinationUpdateForbidden::No,
+                            TokenIdGenerationVersion::V0,
                         ),
                     ),
                     (
@@ -206,6 +208,7 @@ impl ChainType {
                             OrdersActivated::Yes,
                             OrdersVersion::V0,
                             StakerDestinationUpdateForbidden::No,
+                            TokenIdGenerationVersion::V0,
                         ),
                     ),
                     (
@@ -221,6 +224,7 @@ impl ChainType {
                             OrdersActivated::Yes,
                             OrdersVersion::V1,
                             StakerDestinationUpdateForbidden::Yes,
+                            TokenIdGenerationVersion::V1,
                         ),
                     ),
                 ];
@@ -240,6 +244,7 @@ impl ChainType {
                         OrdersActivated::Yes,
                         OrdersVersion::V1,
                         StakerDestinationUpdateForbidden::Yes,
+                        TokenIdGenerationVersion::V1,
                     ),
                 )];
                 NetUpgrades::initialize(upgrades).expect("net upgrades")
@@ -259,6 +264,7 @@ impl ChainType {
                             OrdersActivated::No,
                             OrdersVersion::V0,
                             StakerDestinationUpdateForbidden::No,
+                            TokenIdGenerationVersion::V0,
                         ),
                     ),
                     (
@@ -274,6 +280,7 @@ impl ChainType {
                             OrdersActivated::No,
                             OrdersVersion::V0,
                             StakerDestinationUpdateForbidden::No,
+                            TokenIdGenerationVersion::V0,
                         ),
                     ),
                     (
@@ -289,6 +296,7 @@ impl ChainType {
                             OrdersActivated::No,
                             OrdersVersion::V0,
                             StakerDestinationUpdateForbidden::No,
+                            TokenIdGenerationVersion::V0,
                         ),
                     ),
                     (
@@ -304,6 +312,7 @@ impl ChainType {
                             OrdersActivated::No,
                             OrdersVersion::V0,
                             StakerDestinationUpdateForbidden::No,
+                            TokenIdGenerationVersion::V0,
                         ),
                     ),
                     (
@@ -319,6 +328,7 @@ impl ChainType {
                             OrdersActivated::Yes,
                             OrdersVersion::V0,
                             StakerDestinationUpdateForbidden::No,
+                            TokenIdGenerationVersion::V0,
                         ),
                     ),
                     (
@@ -334,6 +344,7 @@ impl ChainType {
                             OrdersActivated::Yes,
                             OrdersVersion::V1,
                             StakerDestinationUpdateForbidden::Yes,
+                            TokenIdGenerationVersion::V1,
                         ),
                     ),
                 ];

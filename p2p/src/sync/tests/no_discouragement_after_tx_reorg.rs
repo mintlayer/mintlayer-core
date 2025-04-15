@@ -26,19 +26,19 @@ use common::{
         block::timestamp::BlockTimestamp,
         classic_multisig::ClassicMultisigChallenge,
         htlc::{HashedTimelockContract, HtlcSecret},
-        make_order_id,
+        make_token_id,
         output_value::OutputValue,
         signature::inputsig::InputWitness,
         timelock::OutputTimeLock,
         tokens::{
-            make_token_id, IsTokenFreezable, IsTokenUnfreezable, TokenId, TokenIssuance,
-            TokenIssuanceV1, TokenTotalSupply,
+            IsTokenFreezable, IsTokenUnfreezable, TokenId, TokenIssuance, TokenIssuanceV1,
+            TokenTotalSupply,
         },
         AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, CoinUnit, DelegationId,
         Destination, Genesis, OrderAccountCommand, OrderData, OrderId, OutPointSourceId, PoolId,
         SignedTransaction, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{Amount, Idable as _},
+    primitives::{Amount, BlockHeight, Idable as _},
 };
 use crypto::{
     key::{KeyKind, PrivateKey},
@@ -462,7 +462,7 @@ impl TestFixture {
             vrf_pk,
         );
 
-        let pool_id = pos_accounting::make_pool_id(&outpoint);
+        let pool_id = PoolId::from_utxo(&outpoint);
 
         let tx = TransactionBuilder::new()
             .add_input(outpoint.into(), InputWitness::NoSignature(None))
@@ -489,7 +489,7 @@ impl TestFixture {
         pool_id: PoolId,
     ) -> (SignedTransaction, DelegationId) {
         let outpoint = self.next_input_from_genesis();
-        let delegation_id = pos_accounting::make_delegation_id(&outpoint);
+        let delegation_id = DelegationId::from_utxo(&outpoint);
         let tx = TransactionBuilder::new()
             .add_input(outpoint.into(), InputWitness::NoSignature(None))
             .add_output(TxOutput::CreateDelegationId(
@@ -572,7 +572,12 @@ impl TestFixture {
             .add_output(TxOutput::IssueFungibleToken(Box::new(issuance)))
             .build();
 
-        let token_id = make_token_id(tx.transaction().inputs()).unwrap();
+        let token_id = make_token_id(
+            self.tfrm.chain_config(),
+            BlockHeight::zero(),
+            tx.transaction().inputs(),
+        )
+        .unwrap();
 
         (tx, token_id)
     }
@@ -585,7 +590,12 @@ impl TestFixture {
 
     fn make_tx_to_issue_nft(&mut self) -> (SignedTransaction, TokenId) {
         let input: TxInput = self.next_input_from_genesis().into();
-        let token_id = make_token_id(&[input.clone()]).unwrap();
+        let token_id = make_token_id(
+            self.tfrm.chain_config(),
+            BlockHeight::zero(),
+            &[input.clone()],
+        )
+        .unwrap();
 
         let tx = TransactionBuilder::new()
             .add_input(input, InputWitness::NoSignature(None))
@@ -795,7 +805,7 @@ impl TestFixture {
             OutputValue::TokenV1(token_id, token_give_amount),
         );
 
-        let order_id = make_order_id(&outpoint);
+        let order_id = OrderId::from_utxo(&outpoint);
         let tx = TransactionBuilder::new()
             .add_input(outpoint.into(), InputWitness::NoSignature(None))
             .add_output(TxOutput::CreateOrder(Box::new(order_data)))

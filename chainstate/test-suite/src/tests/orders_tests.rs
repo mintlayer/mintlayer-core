@@ -21,16 +21,13 @@ use chainstate_test_framework::{output_value_amount, TestFramework, TransactionB
 use common::{
     address::pubkeyhash::PublicKeyHash,
     chain::{
-        make_order_id,
+        make_token_id,
         output_value::OutputValue,
         signature::{
             inputsig::{standard_signature::StandardInputSignature, InputWitness},
             DestinationSigError,
         },
-        tokens::{
-            make_token_id, IsTokenFreezable, TokenId, TokenIssuance, TokenIssuanceV1,
-            TokenTotalSupply,
-        },
+        tokens::{IsTokenFreezable, TokenId, TokenIssuance, TokenIssuanceV1, TokenTotalSupply},
         AccountCommand, AccountNonce, Destination, OrderAccountCommand, OrderData, OrderId,
         OrdersVersion, SignedTransaction, TxInput, TxOutput, UtxoOutPoint,
     },
@@ -146,7 +143,7 @@ fn create_order_check_storage(#[case] seed: Seed) {
             OutputValue::TokenV1(token_id, give_amount),
         );
 
-        let order_id = make_order_id(&tokens_outpoint);
+        let order_id = OrderId::from_utxo(&tokens_outpoint);
         let tx = TransactionBuilder::new()
             .add_input(tokens_outpoint.into(), InputWitness::NoSignature(None))
             .add_output(TxOutput::CreateOrder(Box::new(order_data.clone())))
@@ -470,7 +467,7 @@ fn conclude_order_check_storage(#[case] seed: Seed, #[case] version: OrdersVersi
             OutputValue::TokenV1(token_id, give_amount),
         );
 
-        let order_id = make_order_id(&tokens_outpoint);
+        let order_id = OrderId::from_utxo(&tokens_outpoint);
         let tx = TransactionBuilder::new()
             .add_input(tokens_outpoint.into(), InputWitness::NoSignature(None))
             .add_output(TxOutput::CreateOrder(Box::new(order_data)))
@@ -568,7 +565,7 @@ fn conclude_order_multiple_txs(#[case] seed: Seed, #[case] version: OrdersVersio
             OutputValue::TokenV1(token_id, give_amount),
         );
 
-        let order_id = make_order_id(&tokens_outpoint);
+        let order_id = OrderId::from_utxo(&tokens_outpoint);
         let tx = TransactionBuilder::new()
             .add_input(tokens_outpoint.into(), InputWitness::NoSignature(None))
             .add_output(TxOutput::CreateOrder(Box::new(order_data)))
@@ -668,7 +665,7 @@ fn fill_order_check_storage(#[case] seed: Seed, #[case] version: OrdersVersion) 
             OutputValue::TokenV1(token_id, give_amount),
         );
 
-        let order_id = make_order_id(&tokens_outpoint);
+        let order_id = OrderId::from_utxo(&tokens_outpoint);
         let tx = TransactionBuilder::new()
             .add_input(tokens_outpoint.into(), InputWitness::NoSignature(None))
             .add_output(TxOutput::CreateOrder(Box::new(order_data.clone())))
@@ -812,7 +809,7 @@ fn fill_partially_then_conclude(#[case] seed: Seed, #[case] version: OrdersVersi
             OutputValue::TokenV1(token_id, give_amount),
         );
 
-        let order_id = make_order_id(&tokens_outpoint);
+        let order_id = OrderId::from_utxo(&tokens_outpoint);
         let tx = TransactionBuilder::new()
             .add_input(tokens_outpoint.into(), InputWitness::NoSignature(None))
             .add_output(TxOutput::CreateOrder(Box::new(order_data)))
@@ -1026,7 +1023,7 @@ fn try_overbid_order_in_multiple_txs(#[case] seed: Seed, #[case] version: Orders
             OutputValue::TokenV1(token_id, give_amount),
         );
 
-        let order_id = make_order_id(&tokens_outpoint);
+        let order_id = OrderId::from_utxo(&tokens_outpoint);
         let tx = TransactionBuilder::new()
             .add_input(tokens_outpoint.into(), InputWitness::NoSignature(None))
             .add_input(coins_outpoint.into(), InputWitness::NoSignature(None))
@@ -1142,7 +1139,7 @@ fn fill_completely_then_conclude(#[case] seed: Seed, #[case] version: OrdersVers
             OutputValue::TokenV1(token_id, give_amount),
         );
 
-        let order_id = make_order_id(&tokens_outpoint);
+        let order_id = OrderId::from_utxo(&tokens_outpoint);
         let tx = TransactionBuilder::new()
             .add_input(tokens_outpoint.into(), InputWitness::NoSignature(None))
             .add_output(TxOutput::CreateOrder(Box::new(order_data)))
@@ -1345,7 +1342,7 @@ fn conclude_order_check_signature(#[case] seed: Seed, #[case] version: OrdersVer
             OutputValue::TokenV1(token_id, give_amount),
         );
 
-        let order_id = make_order_id(&tokens_outpoint);
+        let order_id = OrderId::from_utxo(&tokens_outpoint);
         let tx = TransactionBuilder::new()
             .add_input(tokens_outpoint.into(), InputWitness::NoSignature(None))
             .add_output(TxOutput::CreateOrder(Box::new(order_data)))
@@ -1508,7 +1505,7 @@ fn reorg_before_create(#[case] seed: Seed, #[case] version: OrdersVersion) {
             OutputValue::TokenV1(token_id, give_amount),
         );
 
-        let order_id = make_order_id(&tokens_outpoint);
+        let order_id = OrderId::from_utxo(&tokens_outpoint);
         let create_order_tx = TransactionBuilder::new()
             .add_input(tokens_outpoint.into(), InputWitness::NoSignature(None))
             .add_output(TxOutput::CreateOrder(Box::new(order_data.clone())))
@@ -1631,7 +1628,7 @@ fn reorg_after_create(#[case] seed: Seed, #[case] version: OrdersVersion) {
             OutputValue::TokenV1(token_id, give_amount),
         );
 
-        let order_id = make_order_id(&tokens_outpoint);
+        let order_id = OrderId::from_utxo(&tokens_outpoint);
         let tx = TransactionBuilder::new()
             .add_input(tokens_outpoint.into(), InputWitness::NoSignature(None))
             .add_output(TxOutput::CreateOrder(Box::new(order_data.clone())))
@@ -1841,7 +1838,12 @@ fn create_order_with_nft(#[case] seed: Seed, #[case] version: OrdersVersion) {
         let mut tf = create_test_framework_with_orders(&mut rng, version);
 
         let genesis_input = TxInput::from_utxo(tf.genesis().get_id().into(), 0);
-        let token_id = make_token_id(&[genesis_input.clone()]).unwrap();
+        let token_id = make_token_id(
+            tf.chain_config(),
+            BlockHeight::zero(),
+            &[genesis_input.clone()],
+        )
+        .unwrap();
         let nft_issuance = random_nft_issuance(tf.chain_config(), &mut rng);
         let token_min_issuance_fee =
             tf.chainstate.get_chain_config().nft_issuance_fee(BlockHeight::zero());
@@ -1877,7 +1879,7 @@ fn create_order_with_nft(#[case] seed: Seed, #[case] version: OrdersVersion) {
         );
 
         let nft_outpoint = UtxoOutPoint::new(issue_nft_tx_id.into(), 0);
-        let order_id = make_order_id(&nft_outpoint);
+        let order_id = OrderId::from_utxo(&nft_outpoint);
         tf.make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
@@ -2006,7 +2008,12 @@ fn partially_fill_order_with_nft_v0(#[case] seed: Seed) {
             .build();
 
         let genesis_input = TxInput::from_utxo(tf.genesis().get_id().into(), 0);
-        let token_id = make_token_id(&[genesis_input.clone()]).unwrap();
+        let token_id = make_token_id(
+            tf.chain_config(),
+            BlockHeight::zero(),
+            &[genesis_input.clone()],
+        )
+        .unwrap();
         let nft_issuance = random_nft_issuance(tf.chain_config(), &mut rng);
         let token_min_issuance_fee =
             tf.chainstate.get_chain_config().nft_issuance_fee(BlockHeight::zero());
@@ -2042,7 +2049,7 @@ fn partially_fill_order_with_nft_v0(#[case] seed: Seed) {
         );
 
         let nft_outpoint = UtxoOutPoint::new(issue_nft_tx_id.into(), 0);
-        let order_id = make_order_id(&nft_outpoint);
+        let order_id = OrderId::from_utxo(&nft_outpoint);
         tf.make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
@@ -2214,7 +2221,12 @@ fn partially_fill_order_with_nft_v1(#[case] seed: Seed) {
             .build();
 
         let genesis_input = TxInput::from_utxo(tf.genesis().get_id().into(), 0);
-        let token_id = make_token_id(&[genesis_input.clone()]).unwrap();
+        let token_id = make_token_id(
+            tf.chain_config(),
+            BlockHeight::zero(),
+            &[genesis_input.clone()],
+        )
+        .unwrap();
         let nft_issuance = random_nft_issuance(tf.chain_config(), &mut rng);
         let token_min_issuance_fee =
             tf.chainstate.get_chain_config().nft_issuance_fee(BlockHeight::zero());
@@ -2250,7 +2262,7 @@ fn partially_fill_order_with_nft_v1(#[case] seed: Seed) {
         );
 
         let nft_outpoint = UtxoOutPoint::new(issue_nft_tx_id.into(), 0);
-        let order_id = make_order_id(&nft_outpoint);
+        let order_id = OrderId::from_utxo(&nft_outpoint);
         tf.make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
@@ -2375,7 +2387,7 @@ fn fill_order_with_zero(#[case] seed: Seed, #[case] version: OrdersVersion) {
             OutputValue::TokenV1(token_id, give_amount),
         );
 
-        let order_id = make_order_id(&tokens_outpoint);
+        let order_id = OrderId::from_utxo(&tokens_outpoint);
         let tx = TransactionBuilder::new()
             .add_input(tokens_outpoint.into(), InputWitness::NoSignature(None))
             .add_output(TxOutput::CreateOrder(Box::new(order_data.clone())))
@@ -2466,7 +2478,7 @@ fn fill_orders_shuffle(#[case] seed: Seed, #[case] fills: Vec<u128>) {
         );
         assert_eq!(ask_amount.into_atoms(), fill_order_atoms.iter().sum());
 
-        let order_id = make_order_id(&tokens_outpoint);
+        let order_id = OrderId::from_utxo(&tokens_outpoint);
         let tx = TransactionBuilder::new()
             .add_input(tokens_outpoint.into(), InputWitness::NoSignature(None))
             .add_output(TxOutput::CreateOrder(Box::new(order_data.clone())))
@@ -2567,7 +2579,7 @@ fn orders_v1_activation(#[case] seed: Seed) {
         let tokens_circulating_supply =
             tf.chainstate.get_token_circulating_supply(&token_id).unwrap().unwrap();
 
-        let order_id = make_order_id(&tokens_outpoint);
+        let order_id = OrderId::from_utxo(&tokens_outpoint);
         let order_data = Box::new(OrderData::new(
             Destination::AnyoneCanSpend,
             OutputValue::Coin(Amount::from_atoms(rng.gen_range(1u128..1000))),
@@ -2766,7 +2778,7 @@ fn create_order_fill_activate_fork_fill_conclude(#[case] seed: Seed) {
             OutputValue::TokenV1(token_id, give_amount),
         );
 
-        let order_id = make_order_id(&tokens_outpoint);
+        let order_id = OrderId::from_utxo(&tokens_outpoint);
         let tx = TransactionBuilder::new()
             .add_input(tokens_outpoint.into(), InputWitness::NoSignature(None))
             .add_output(TxOutput::CreateOrder(Box::new(order_data)))
@@ -2906,7 +2918,7 @@ fn freeze_order_check_storage(#[case] seed: Seed, #[case] version: OrdersVersion
             OutputValue::TokenV1(token_id, give_amount),
         );
 
-        let order_id = make_order_id(&tokens_outpoint);
+        let order_id = OrderId::from_utxo(&tokens_outpoint);
         tf.make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
@@ -3034,7 +3046,7 @@ fn freeze_order_check_signature(#[case] seed: Seed) {
             OutputValue::TokenV1(token_id, give_amount),
         );
 
-        let order_id = make_order_id(&tokens_outpoint);
+        let order_id = OrderId::from_utxo(&tokens_outpoint);
         let tx = TransactionBuilder::new()
             .add_input(tokens_outpoint.into(), InputWitness::NoSignature(None))
             .add_output(TxOutput::CreateOrder(Box::new(order_data)))
@@ -3162,7 +3174,7 @@ fn fill_freeze_conclude_order(#[case] seed: Seed) {
             OutputValue::TokenV1(token_id, give_amount),
         );
 
-        let order_id = make_order_id(&tokens_outpoint);
+        let order_id = OrderId::from_utxo(&tokens_outpoint);
         let tx = TransactionBuilder::new()
             .add_input(tokens_outpoint.into(), InputWitness::NoSignature(None))
             .add_output(TxOutput::CreateOrder(Box::new(order_data)))

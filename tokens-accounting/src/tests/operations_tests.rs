@@ -21,9 +21,9 @@ use common::{
             IsTokenFreezable, IsTokenFrozen, IsTokenUnfreezable, TokenId, TokenIssuance,
             TokenIssuanceV1, TokenTotalSupply,
         },
-        Destination, OutPointSourceId, TxInput, UtxoOutPoint,
+        Destination,
     },
-    primitives::{Amount, Id, H256},
+    primitives::Amount,
 };
 use randomness::Rng;
 use rstest::rstest;
@@ -64,15 +64,6 @@ fn make_token_issuance(
     })
 }
 
-fn make_token_id(rng: &mut impl Rng) -> TokenId {
-    let outpoint = UtxoOutPoint::new(
-        OutPointSourceId::BlockReward(Id::new(H256::random_using(rng))),
-        0,
-    );
-    let input = TxInput::Utxo(outpoint);
-    common::chain::tokens::make_token_id(&[input]).unwrap()
-}
-
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -94,7 +85,7 @@ fn issue_token_and_flush(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     let token_data = make_token_data(&mut rng, TokenTotalSupply::Unlimited, false);
-    let token_id = make_token_id(&mut rng);
+    let token_id = TokenId::random_using(&mut rng);
 
     let mut storage = InMemoryTokensAccounting::new();
     let mut db = TokensAccountingDB::new(&mut storage);
@@ -128,7 +119,7 @@ fn issue_token_and_undo(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     let token_data = make_token_data(&mut rng, TokenTotalSupply::Unlimited, false);
-    let token_id = make_token_id(&mut rng);
+    let token_id = TokenId::random_using(&mut rng);
 
     let storage = InMemoryTokensAccounting::new();
     let db = TokensAccountingDB::new(&storage);
@@ -160,7 +151,7 @@ fn try_issue_twice(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     let token_data = make_token_data(&mut rng, TokenTotalSupply::Unlimited, false);
-    let token_id = make_token_id(&mut rng);
+    let token_id = TokenId::random_using(&mut rng);
 
     let storage = InMemoryTokensAccounting::from_values(
         BTreeMap::from_iter([(token_id, token_data.clone())]),
@@ -188,7 +179,7 @@ fn mint_token_and_flush(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     let token_data = make_token_data(&mut rng, TokenTotalSupply::Unlimited, false);
-    let token_id = make_token_id(&mut rng);
+    let token_id = TokenId::random_using(&mut rng);
     let amount_to_mint = Amount::from_atoms(rng.gen_range(1..1000));
 
     let mut storage = InMemoryTokensAccounting::from_values(
@@ -228,7 +219,7 @@ fn mint_token_unlimited_max(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     let token_data = make_token_data(&mut rng, TokenTotalSupply::Unlimited, false);
-    let token_id = make_token_id(&mut rng);
+    let token_id = TokenId::random_using(&mut rng);
     let max_amount_to_mint = Amount::from_atoms(i128::MAX as u128);
     let overflow_amount_to_mint = Amount::from_atoms(i128::MAX as u128 + 1);
 
@@ -267,7 +258,7 @@ fn mint_token_multiple_times_and_over_supply(#[case] seed: Seed) {
 
     let total_supply = Amount::from_atoms(rng.gen_range(100..100_000));
     let token_data = make_token_data(&mut rng, TokenTotalSupply::Fixed(total_supply), false);
-    let token_id = make_token_id(&mut rng);
+    let token_id = TokenId::random_using(&mut rng);
 
     let storage = InMemoryTokensAccounting::from_values(
         BTreeMap::from_iter([(token_id, token_data.clone())]),
@@ -310,7 +301,7 @@ fn mint_token_undo(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     let token_data = make_token_data(&mut rng, TokenTotalSupply::Unlimited, false);
-    let token_id = make_token_id(&mut rng);
+    let token_id = TokenId::random_using(&mut rng);
     let amount_to_mint = Amount::from_atoms(rng.gen_range(1..1000));
 
     let storage = InMemoryTokensAccounting::from_values(
@@ -350,7 +341,7 @@ fn unmint_token_and_flush(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     let token_data = make_token_data(&mut rng, TokenTotalSupply::Unlimited, false);
-    let token_id = make_token_id(&mut rng);
+    let token_id = TokenId::random_using(&mut rng);
     let amount_to_mint = Amount::from_atoms(rng.gen_range(2..1000));
     let amount_to_unmint = Amount::from_atoms(rng.gen_range(1..amount_to_mint.into_atoms()));
 
@@ -390,7 +381,7 @@ fn unmint_token_undo(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     let token_data = make_token_data(&mut rng, TokenTotalSupply::Unlimited, false);
-    let token_id = make_token_id(&mut rng);
+    let token_id = TokenId::random_using(&mut rng);
     let amount_to_mint = Amount::from_atoms(rng.gen_range(2..1000));
     let amount_to_unmint = Amount::from_atoms(rng.gen_range(1..amount_to_mint.into_atoms()));
 
@@ -432,7 +423,7 @@ fn unmint_token_multiple_times_and_over_minted(#[case] seed: Seed) {
 
     let total_supply = Amount::from_atoms(rng.gen_range(100..100_000));
     let token_data = make_token_data(&mut rng, TokenTotalSupply::Fixed(total_supply), false);
-    let token_id = make_token_id(&mut rng);
+    let token_id = TokenId::random_using(&mut rng);
     let amount_minted = total_supply;
 
     let storage = InMemoryTokensAccounting::from_values(
@@ -491,9 +482,9 @@ fn lock_supply_only_if_lockable(#[case] seed: Seed) {
         false,
     );
     let token_data_3 = make_token_data(&mut rng, TokenTotalSupply::Lockable, false);
-    let token_id_1 = make_token_id(&mut rng);
-    let token_id_2 = make_token_id(&mut rng);
-    let token_id_3 = make_token_id(&mut rng);
+    let token_id_1 = TokenId::random_using(&mut rng);
+    let token_id_2 = TokenId::random_using(&mut rng);
+    let token_id_3 = TokenId::random_using(&mut rng);
 
     let mut storage = InMemoryTokensAccounting::from_values(
         BTreeMap::from_iter([
@@ -560,7 +551,7 @@ fn lock_supply_and_try_mint_unmint(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     let token_data = make_token_data(&mut rng, TokenTotalSupply::Lockable, false);
-    let token_id = make_token_id(&mut rng);
+    let token_id = TokenId::random_using(&mut rng);
     let amount_to_mint = Amount::from_atoms(rng.gen_range(2..1000));
     let amount_to_unmint = Amount::from_atoms(rng.gen_range(1..amount_to_mint.into_atoms()));
 
@@ -598,7 +589,7 @@ fn lock_supply_undo_mint_unmint(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     let token_data = make_token_data(&mut rng, TokenTotalSupply::Lockable, false);
-    let token_id = make_token_id(&mut rng);
+    let token_id = TokenId::random_using(&mut rng);
     let amount_to_mint = Amount::from_atoms(rng.gen_range(2..1000));
     let amount_to_unmint = Amount::from_atoms(rng.gen_range(1..amount_to_mint.into_atoms()));
 
@@ -640,7 +631,7 @@ fn try_lock_twice(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     let token_data = make_token_data(&mut rng, TokenTotalSupply::Lockable, true);
-    let token_id = make_token_id(&mut rng);
+    let token_id = TokenId::random_using(&mut rng);
 
     let storage = InMemoryTokensAccounting::from_values(
         BTreeMap::from_iter([(token_id, token_data.clone())]),
@@ -664,7 +655,7 @@ fn try_freeze_not_freezable_token(#[case] seed: Seed) {
     let token_issuance =
         make_token_issuance(&mut rng, TokenTotalSupply::Unlimited, IsTokenFreezable::No);
     let token_data = TokenData::FungibleToken(token_issuance.into());
-    let token_id = make_token_id(&mut rng);
+    let token_id = TokenId::random_using(&mut rng);
 
     let storage = InMemoryTokensAccounting::new();
     let db = TokensAccountingDB::new(&storage);
@@ -692,7 +683,7 @@ fn freeze_token_and_undo(#[case] seed: Seed) {
     let token_issuance =
         make_token_issuance(&mut rng, TokenTotalSupply::Lockable, IsTokenFreezable::Yes);
     let token_data = TokenData::FungibleToken(token_issuance.into());
-    let token_id = make_token_id(&mut rng);
+    let token_id = TokenId::random_using(&mut rng);
 
     let storage = InMemoryTokensAccounting::from_values(
         BTreeMap::from_iter([(token_id, token_data.clone())]),
@@ -760,7 +751,7 @@ fn unfreeze_token_and_undo(#[case] seed: Seed) {
     let token_issuance =
         make_token_issuance(&mut rng, TokenTotalSupply::Lockable, IsTokenFreezable::Yes);
     let token_data = TokenData::FungibleToken(token_issuance.into());
-    let token_id = make_token_id(&mut rng);
+    let token_id = TokenId::random_using(&mut rng);
 
     let storage = InMemoryTokensAccounting::from_values(
         BTreeMap::from_iter([(token_id, token_data.clone())]),
@@ -800,7 +791,7 @@ fn freeze_unfreeze_freeze(#[case] seed: Seed) {
     let token_issuance =
         make_token_issuance(&mut rng, TokenTotalSupply::Lockable, IsTokenFreezable::Yes);
     let token_data = TokenData::FungibleToken(token_issuance.into());
-    let token_id = make_token_id(&mut rng);
+    let token_id = TokenId::random_using(&mut rng);
 
     let storage = InMemoryTokensAccounting::from_values(
         BTreeMap::from_iter([(token_id, token_data.clone())]),
@@ -850,7 +841,7 @@ fn freeze_unfreeze_freeze(#[case] seed: Seed) {
 fn change_authority_flush_undo(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
-    let token_id = make_token_id(&mut rng);
+    let token_id = TokenId::random_using(&mut rng);
     let token_data_1 = make_token_data(&mut rng, TokenTotalSupply::Unlimited, false);
     let (_, some_pk) =
         crypto::key::PrivateKey::new_from_rng(&mut rng, crypto::key::KeyKind::Secp256k1Schnorr);
@@ -896,7 +887,7 @@ fn change_authority_flush_undo(#[case] seed: Seed) {
 fn change_authority_twice(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
-    let token_id = make_token_id(&mut rng);
+    let token_id = TokenId::random_using(&mut rng);
     let token_data_1 = make_token_data(&mut rng, TokenTotalSupply::Unlimited, false);
 
     let (_, some_pk) =
@@ -940,7 +931,7 @@ fn try_change_authority_for_frozen_token(#[case] seed: Seed) {
     let token_issuance =
         make_token_issuance(&mut rng, TokenTotalSupply::Lockable, IsTokenFreezable::Yes);
     let token_data = TokenData::FungibleToken(token_issuance.into());
-    let token_id = make_token_id(&mut rng);
+    let token_id = TokenId::random_using(&mut rng);
 
     let mut storage = InMemoryTokensAccounting::from_values(
         BTreeMap::from_iter([(token_id, token_data.clone())]),
@@ -989,7 +980,7 @@ fn try_change_authority_for_frozen_token(#[case] seed: Seed) {
 fn change_metadata_flush_undo(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
-    let token_id = make_token_id(&mut rng);
+    let token_id = TokenId::random_using(&mut rng);
     let token_data_1 = make_token_data(&mut rng, TokenTotalSupply::Unlimited, false);
     let new_metadata = random_ascii_alphanumeric_string(&mut rng, 1..1024).as_bytes().to_vec();
     let TokenData::FungibleToken(token_data_2) = token_data_1.clone();
@@ -1033,7 +1024,7 @@ fn change_metadata_flush_undo(#[case] seed: Seed) {
 fn change_metadata_twice(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
-    let token_id = make_token_id(&mut rng);
+    let token_id = TokenId::random_using(&mut rng);
     let token_data_1 = make_token_data(&mut rng, TokenTotalSupply::Unlimited, false);
 
     let new_metadata_1 = random_ascii_alphanumeric_string(&mut rng, 1..1024).as_bytes().to_vec();
@@ -1073,7 +1064,7 @@ fn try_change_metadata_for_frozen_token(#[case] seed: Seed) {
     let token_issuance =
         make_token_issuance(&mut rng, TokenTotalSupply::Lockable, IsTokenFreezable::Yes);
     let token_data = TokenData::FungibleToken(token_issuance.into());
-    let token_id = make_token_id(&mut rng);
+    let token_id = TokenId::random_using(&mut rng);
 
     let mut storage = InMemoryTokensAccounting::from_values(
         BTreeMap::from_iter([(token_id, token_data.clone())]),

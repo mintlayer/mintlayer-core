@@ -27,6 +27,10 @@ pub enum Order {}
 pub type OrderId = Id<Order>;
 
 impl OrderId {
+    pub fn from_utxo(utxo_outpoint: &UtxoOutPoint) -> Self {
+        Self::new(hash_encoded(utxo_outpoint))
+    }
+
     pub fn random_using<R: Rng + CryptoRng>(rng: &mut R) -> Self {
         Self::new(H256::random_using(rng))
     }
@@ -70,8 +74,4 @@ impl<'de> serde::Deserialize<'de> for OrderId {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         HexifiedAddress::<Self>::serde_deserialize(deserializer)
     }
-}
-
-pub fn make_order_id(input0_outpoint: &UtxoOutPoint) -> OrderId {
-    OrderId::new(hash_encoded(input0_outpoint))
 }
