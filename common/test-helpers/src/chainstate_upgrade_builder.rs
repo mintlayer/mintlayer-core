@@ -85,4 +85,5 @@ impl ChainstateUpgradeBuilder {
     builder_method!(orders_activated: OrdersActivated);
     builder_method!(orders_version: OrdersVersion);
     builder_method!(staker_destination_update_forbidden: StakerDestinationUpdateForbidden);
+    builder_method!(token_id_generation_version: TokenIdGenerationVersion);
 }

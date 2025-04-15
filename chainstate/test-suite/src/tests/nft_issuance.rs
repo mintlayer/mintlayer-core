@@ -2023,5 +2023,3 @@ fn issue_nft_and_fungible_token_same_tx(#[case] seed: Seed) {
         ));
     })
 }
-
-// FIXME: add tests

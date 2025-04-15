@@ -81,6 +81,8 @@ pub enum OrdersVersion {
     V1,
 }
 
+// TODO: after it's activated and reorg depth passes check mainnet/testnet and in case V0 doesn't conflict with
+// V1 this upgrade can be removed from the codebase.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
 pub enum TokenIdGenerationVersion {
     V0,

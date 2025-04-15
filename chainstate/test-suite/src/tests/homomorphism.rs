@@ -183,7 +183,7 @@ fn tokens_homomorphism(#[case] seed: Seed) {
 
         let tx_1 = TransactionBuilder::new()
             .add_input(
-                TxInput::from_utxo(genesis_id.clone().into(), 0),
+                TxInput::from_utxo(genesis_id.into(), 0),
                 empty_witness(&mut rng),
             )
             .add_output(TxOutput::IssueFungibleToken(Box::new(TokenIssuance::V1(
@@ -200,7 +200,7 @@ fn tokens_homomorphism(#[case] seed: Seed) {
                 Destination::AnyoneCanSpend,
             ))
             .build();
-        let token_id = TokenId::from_utxo(&UtxoOutPoint::new(genesis_id.clone().into(), 0));
+        let token_id = TokenId::from_utxo(&UtxoOutPoint::new(genesis_id.into(), 0));
 
         let tx_2 = TransactionBuilder::new()
             .add_input(
