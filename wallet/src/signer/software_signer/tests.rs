@@ -13,38 +13,65 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::ops::{Add, Div, Mul, Sub};
-
-use super::*;
-use crate::key_chain::{MasterKeyChain, LOOKAHEAD_SIZE};
-use crate::{Account, SendRequest};
-use common::chain::block::timestamp::BlockTimestamp;
-use common::chain::config::create_regtest;
-use common::chain::htlc::HashedTimelockContract;
-use common::chain::output_value::OutputValue;
-use common::chain::signature::inputsig::arbitrary_message::produce_message_challenge;
-use common::chain::signature::inputsig::authorize_pubkeyhash_spend::AuthorizedPublicKeyHashSpend;
-use common::chain::stakelock::StakePoolData;
-use common::chain::timelock::OutputTimeLock;
-use common::chain::tokens::{NftIssuance, NftIssuanceV0, TokenId, TokenIssuance};
-use common::chain::{
-    AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, DelegationId, GenBlock,
-    OrderData, OutPointSourceId, PoolId, TxInput,
+use std::{
+    num::NonZeroU8,
+    ops::{Add, Div, Mul, Sub},
 };
-use common::primitives::per_thousand::PerThousand;
-use common::primitives::{Amount, BlockHeight, Id, H256};
-use crypto::key::secp256k1::Secp256k1PublicKey;
-use crypto::key::{KeyKind, PublicKey, Signature};
+
 use itertools::izip;
-use randomness::{Rng, RngCore};
 use rstest::rstest;
-use serialization::Encode;
+
+use common::{
+    chain::{
+        self,
+        block::timestamp::BlockTimestamp,
+        classic_multisig::ClassicMultisigChallenge,
+        config::{create_regtest, ChainType},
+        htlc::HashedTimelockContract,
+        output_value::OutputValue,
+        signature::inputsig::{
+            arbitrary_message::produce_message_challenge,
+            authorize_pubkeyhash_spend::AuthorizedPublicKeyHashSpend,
+        },
+        stakelock::StakePoolData,
+        timelock::OutputTimeLock,
+        tokens::{
+            IsTokenUnfreezable, Metadata, NftIssuance, NftIssuanceV0, TokenId, TokenIssuance,
+            TokenIssuanceV1,
+        },
+        AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, DelegationId, GenBlock,
+        NetUpgrades, OrderAccountCommand, OrderData, OrderId, OutPointSourceId, PoolId,
+        SighashInputCommitmentVersion, TxInput, TxOutput,
+    },
+    primitives::{
+        amount::UnsignedIntType, per_thousand::PerThousand, Amount, BlockHeight, Id, Idable, H256,
+    },
+};
+use common_test_helpers::chainstate_upgrade_builder::ChainstateUpgradeBuilder;
+use crypto::{
+    key::{secp256k1::Secp256k1PublicKey, KeyKind, PublicKey, Signature},
+    vrf::VRFPrivateKey,
+};
+use randomness::{Rng, RngCore};
+use serialization::{extras::non_empty_vec::DataOrNoVec, Encode};
 use test_utils::random::{make_seedable_rng, Seed};
 use wallet_storage::{DefaultBackend, Store, Transactional};
-use wallet_types::account_info::DEFAULT_ACCOUNT_INDEX;
-use wallet_types::partially_signed_transaction::TxAdditionalInfo;
-use wallet_types::seed_phrase::StoreSeedPhrase;
-use wallet_types::KeyPurpose::{Change, ReceiveFunds};
+use wallet_types::{
+    account_info::DEFAULT_ACCOUNT_INDEX,
+    partially_signed_transaction::{OrderAdditionalInfo, TxAdditionalInfo},
+    seed_phrase::StoreSeedPhrase,
+    Currency,
+    KeyPurpose::{Change, ReceiveFunds},
+};
+
+use crate::{
+    key_chain::{MasterKeyChain, LOOKAHEAD_SIZE},
+    Account, SendRequest,
+};
+
+use super::*;
+
+use super::super::test_utils::random_order_info;
 
 const MNEMONIC: &str =
     "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
@@ -88,8 +115,6 @@ fn sign_message(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn sign_transaction_intent(#[case] seed: Seed) {
-    use common::primitives::Idable;
-
     let mut rng = make_seedable_rng(seed);
 
     let config = Arc::new(create_regtest());
@@ -156,29 +181,30 @@ fn sign_transaction_intent(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn sign_transaction(#[case] seed: Seed) {
-    use std::num::NonZeroU8;
-
-    use common::{
-        chain::{
-            classic_multisig::ClassicMultisigChallenge,
-            htlc::HashedTimelockContract,
-            stakelock::StakePoolData,
-            tokens::{
-                IsTokenUnfreezable, Metadata, NftIssuance, NftIssuanceV0, TokenId, TokenIssuance,
-                TokenIssuanceV1,
-            },
-            AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, DelegationId,
-            OrderData, OrderId, PoolId,
-        },
-        primitives::amount::UnsignedIntType,
-    };
-    use crypto::vrf::VRFPrivateKey;
-    use itertools::izip;
-    use serialization::extras::non_empty_vec::DataOrNoVec;
-
     let mut rng = make_seedable_rng(seed);
 
-    let chain_config = Arc::new(create_regtest());
+    let sighash_input_commitment_version_fork_height = BlockHeight::new(rng.gen_range(1..100_000));
+    let chain_config = Arc::new(
+        chain::config::Builder::new(ChainType::Regtest)
+            .chainstate_upgrades(
+                NetUpgrades::initialize(vec![
+                    (
+                        BlockHeight::zero(),
+                        ChainstateUpgradeBuilder::latest()
+                            .sighash_input_commitment_version(SighashInputCommitmentVersion::V0)
+                            .build(),
+                    ),
+                    (
+                        sighash_input_commitment_version_fork_height,
+                        ChainstateUpgradeBuilder::latest()
+                            .sighash_input_commitment_version(SighashInputCommitmentVersion::V1)
+                            .build(),
+                    ),
+                ])
+                .unwrap(),
+            )
+            .build(),
+    );
     let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
     let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
 
@@ -202,6 +228,7 @@ fn sign_transaction(#[case] seed: Seed) {
 
     let total_amount = amounts.iter().fold(Amount::ZERO, |acc, a| acc.add(*a).unwrap());
 
+    // FIXME add ProduceBlockFromStake to inputs
     let utxos: Vec<TxOutput> = amounts
         .iter()
         .map(|a| {
@@ -277,6 +304,11 @@ fn sign_transaction(#[case] seed: Seed) {
         Box::new(hash_lock.clone()),
     );
 
+    let filled_order1_id = OrderId::new(H256::random_using(&mut rng));
+    let filled_order2_id = OrderId::new(H256::random_using(&mut rng));
+    let concluded_order1_id = OrderId::new(H256::random_using(&mut rng));
+    let concluded_order2_id = OrderId::new(H256::random_using(&mut rng));
+    let frozen_order_id = OrderId::new(H256::random_using(&mut rng));
     let acc_inputs = vec![
         TxInput::Account(AccountOutPoint::new(
             AccountNonce::new(0),
@@ -320,12 +352,12 @@ fn sign_transaction(#[case] seed: Seed) {
         ),
         TxInput::AccountCommand(
             AccountNonce::new(rng.next_u64()),
-            AccountCommand::ConcludeOrder(OrderId::new(H256::random_using(&mut rng))),
+            AccountCommand::ConcludeOrder(concluded_order1_id),
         ),
         TxInput::AccountCommand(
             AccountNonce::new(rng.next_u64()),
             AccountCommand::FillOrder(
-                OrderId::new(H256::random_using(&mut rng)),
+                filled_order1_id,
                 Amount::from_atoms(123),
                 Destination::AnyoneCanSpend,
             ),
@@ -337,6 +369,13 @@ fn sign_transaction(#[case] seed: Seed) {
                 "http://uri".as_bytes().to_vec(),
             ),
         ),
+        TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(
+            filled_order2_id,
+            Amount::from_atoms(123),
+            Destination::AnyoneCanSpend,
+        )),
+        TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder(concluded_order2_id)),
+        TxInput::OrderAccountCommand(OrderAccountCommand::FreezeOrder(frozen_order_id)),
     ];
     let acc_dests: Vec<Destination> = acc_inputs
         .iter()
@@ -363,7 +402,7 @@ fn sign_transaction(#[case] seed: Seed) {
     let (_dest_prv, dest_pub) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
     let (_, vrf_public_key) = VRFPrivateKey::new_from_entropy(crypto::vrf::VRFKeyKind::Schnorrkel);
 
-    let pool_id = PoolId::new(H256::random());
+    let created_pool_id = PoolId::new(H256::random());
     let delegation_id = DelegationId::new(H256::random());
     let pool_data = StakePoolData::new(
         Amount::from_atoms(5000000),
@@ -413,7 +452,7 @@ fn sign_transaction(#[case] seed: Seed) {
             OutputTimeLock::ForSeconds(rng.next_u64()),
         ),
         TxOutput::Burn(OutputValue::Coin(burn_amount)),
-        TxOutput::CreateStakePool(pool_id, Box::new(pool_data)),
+        TxOutput::CreateStakePool(created_pool_id, Box::new(pool_data)),
         TxOutput::CreateDelegationId(
             Destination::AnyoneCanSpend,
             PoolId::new(H256::random_using(&mut rng)),
@@ -453,11 +492,42 @@ fn sign_transaction(#[case] seed: Seed) {
         .with_inputs_and_destinations(acc_inputs.into_iter().zip(acc_dests.clone()))
         .with_outputs(outputs);
     let destinations = req.destinations().to_vec();
-    let additional_info = TxAdditionalInfo::new();
+    let additional_info = TxAdditionalInfo::new()
+        .with_order_info(
+            filled_order1_id,
+            random_order_info(&Currency::Coin, &Currency::Coin, &mut rng),
+        )
+        .with_order_info(
+            filled_order2_id,
+            random_order_info(&Currency::Coin, &Currency::Coin, &mut rng),
+        )
+        .with_order_info(
+            concluded_order1_id,
+            random_order_info(&Currency::Coin, &Currency::Coin, &mut rng),
+        )
+        .with_order_info(
+            concluded_order2_id,
+            random_order_info(&Currency::Coin, &Currency::Coin, &mut rng),
+        )
+        .with_order_info(
+            frozen_order_id,
+            random_order_info(&Currency::Coin, &Currency::Coin, &mut rng),
+        );
     let ptx = req.into_partially_signed_tx(additional_info).unwrap();
 
+    let block_height_for_input_commitments = BlockHeight::new(
+        rng.gen_range(0..sighash_input_commitment_version_fork_height.into_int() * 2),
+    );
+
     let mut signer = SoftwareSigner::new(chain_config.clone(), DEFAULT_ACCOUNT_INDEX);
-    let (ptx, _, _) = signer.sign_tx(ptx, account.key_chain(), &db_tx).unwrap();
+    let (ptx, _, _) = signer
+        .sign_tx(
+            ptx,
+            account.key_chain(),
+            &db_tx,
+            block_height_for_input_commitments,
+        )
+        .unwrap();
 
     eprintln!("num inputs in tx: {} {:?}", inputs.len(), ptx.witnesses());
     for (i, w) in ptx.witnesses().iter().enumerate() {
@@ -465,7 +535,17 @@ fn sign_transaction(#[case] seed: Seed) {
     }
     assert!(ptx.all_signatures_available());
 
-    let utxos_ref = utxos
+    let input_commitments = make_sighash_input_commitments_for_transaction_inputs(
+        ptx.tx().inputs(),
+        &sighash::input_commitment::TrivialUtxoProvider(ptx.input_utxos()),
+        ptx.additional_info(),
+        ptx.additional_info(),
+        &chain_config,
+        block_height_for_input_commitments,
+    )
+    .unwrap();
+
+    let all_utxos = utxos
         .iter()
         .map(Some)
         .chain([Some(&htlc_utxo), Some(&multisig_utxo)])
@@ -477,26 +557,42 @@ fn sign_transaction(#[case] seed: Seed) {
             &chain_config,
             dest,
             &ptx,
-            &utxos_ref,
+            &input_commitments,
             i,
+            all_utxos[i].cloned(),
         )
         .unwrap();
     }
 }
 
-#[test]
-fn fixed_signatures() {
-    use std::num::NonZeroU8;
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn fixed_signatures(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
 
-    use common::chain::{
-        classic_multisig::ClassicMultisigChallenge,
-        tokens::{IsTokenUnfreezable, Metadata, TokenIssuanceV1},
-        OrderId,
-    };
-    use crypto::vrf::VRFPrivateKey;
-    use serialization::extras::non_empty_vec::DataOrNoVec;
-
-    let chain_config = Arc::new(create_regtest());
+    let sighash_input_commitment_version_fork_height = BlockHeight::new(rng.gen_range(1..100_000));
+    let chain_config = Arc::new(
+        chain::config::Builder::new(ChainType::Regtest)
+            .chainstate_upgrades(
+                NetUpgrades::initialize(vec![
+                    (
+                        BlockHeight::zero(),
+                        ChainstateUpgradeBuilder::latest()
+                            .sighash_input_commitment_version(SighashInputCommitmentVersion::V0)
+                            .build(),
+                    ),
+                    (
+                        sighash_input_commitment_version_fork_height,
+                        ChainstateUpgradeBuilder::latest()
+                            .sighash_input_commitment_version(SighashInputCommitmentVersion::V1)
+                            .build(),
+                    ),
+                ])
+                .unwrap(),
+            )
+            .build(),
+    );
     let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
     let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
 
@@ -560,10 +656,18 @@ fn fixed_signatures() {
     let order_id = OrderId::new(H256::zero());
     let pool_id = PoolId::new(H256::zero());
 
+    let order_info = OrderAdditionalInfo {
+        initially_asked: OutputValue::TokenV1(token_id, Amount::from_atoms(10)),
+        initially_given: OutputValue::Coin(Amount::from_atoms(20)),
+        ask_balance: Amount::from_atoms(5),
+        give_balance: Amount::from_atoms(10),
+    };
+
     let uri = "http://uri.com".as_bytes().to_vec();
 
     let wallet_dest0 = Destination::PublicKeyHash((&wallet_pk0).into());
 
+    // FIXME add ProduceBlockFromStake to inputs
     let utxos = [TxOutput::Transfer(OutputValue::Coin(amount_1), wallet_dest0.clone())];
 
     let inputs = [TxInput::from_utxo(
@@ -609,6 +713,7 @@ fn fixed_signatures() {
             AccountNonce::new(0),
             AccountCommand::ChangeTokenMetadataUri(token_id, uri.clone()),
         ),
+        // FIXME add new order commands
     ];
     let acc_dests: Vec<Destination> = vec![wallet_dest0.clone(); acc_inputs.len()];
 
@@ -709,15 +814,8 @@ fn fixed_signatures() {
         .with_inputs_and_destinations(acc_inputs.into_iter().zip(acc_dests.clone()))
         .with_outputs(outputs);
     let destinations = req.destinations().to_vec();
-    let additional_info = TxAdditionalInfo::new();
+    let additional_info = TxAdditionalInfo::new().with_order_info(order_id, order_info);
     let ptx = req.into_partially_signed_tx(additional_info).unwrap();
-
-    let utxos_ref = utxos
-        .iter()
-        .map(Some)
-        .chain([Some(&multisig_utxo)])
-        .chain(acc_dests.iter().map(|_| None))
-        .collect::<Vec<_>>();
 
     let multisig_signatures = [
         (0, "7a99714dc6cc917faa2afded8028159a5048caf6f8382f67e6b61623fbe62c60423f8f7983f88f40c6f42924594f3de492a232e9e703b241c3b17b130f8daa59"),
@@ -750,13 +848,34 @@ fn fixed_signatures() {
 
     assert!(ptx.all_signatures_available());
 
+    // The height doesn't matter as long as it's below the fork.
+    // FIXME: need a separate "fixed signature" test with the height above the form.
+    let block_height_for_input_commitments =
+        BlockHeight::new(rng.gen_range(0..sighash_input_commitment_version_fork_height.into_int()));
+    let input_commitments = make_sighash_input_commitments_for_transaction_inputs(
+        ptx.tx().inputs(),
+        &sighash::input_commitment::TrivialUtxoProvider(ptx.input_utxos()),
+        ptx.additional_info(),
+        ptx.additional_info(),
+        &chain_config,
+        block_height_for_input_commitments,
+    )
+    .unwrap();
+    let all_utxos = utxos
+        .iter()
+        .map(Some)
+        .chain([Some(&multisig_utxo)])
+        .chain(acc_dests.iter().map(|_| None))
+        .collect::<Vec<_>>();
+
     for (i, dest) in destinations.iter().enumerate() {
         tx_verifier::input_check::signature_only_check::verify_tx_signature(
             &chain_config,
             dest,
             &ptx,
-            &utxos_ref,
+            &input_commitments,
             i,
+            all_utxos[i].cloned(),
         )
         .unwrap();
     }

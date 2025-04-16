@@ -50,12 +50,6 @@ pub enum OrdersActivated {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
-pub enum StakerDestinationUpdateForbidden {
-    Yes,
-    No,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
 pub enum DataDepositFeeVersion {
     V0,
     V1,
@@ -81,6 +75,18 @@ pub enum OrdersVersion {
     V1,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
+pub enum StakerDestinationUpdateForbidden {
+    Yes,
+    No,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
+pub enum SighashInputCommitmentVersion {
+    V0,
+    V1,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub struct ChainstateUpgrade {
     token_issuance_version: TokenIssuanceVersion,
@@ -93,6 +99,7 @@ pub struct ChainstateUpgrade {
     orders_activated: OrdersActivated,
     orders_version: OrdersVersion,
     staker_destination_update_forbidden: StakerDestinationUpdateForbidden,
+    sighash_input_commitment_version: SighashInputCommitmentVersion,
 }
 
 impl ChainstateUpgrade {
@@ -108,6 +115,7 @@ impl ChainstateUpgrade {
         orders_activated: OrdersActivated,
         orders_version: OrdersVersion,
         staker_destination_update_forbidden: StakerDestinationUpdateForbidden,
+        sighash_input_commitment_version: SighashInputCommitmentVersion,
     ) -> Self {
         Self {
             token_issuance_version,
@@ -120,6 +128,7 @@ impl ChainstateUpgrade {
             orders_activated,
             orders_version,
             staker_destination_update_forbidden,
+            sighash_input_commitment_version,
         }
     }
 
@@ -161,5 +170,9 @@ impl ChainstateUpgrade {
 
     pub fn orders_version(&self) -> OrdersVersion {
         self.orders_version
+    }
+
+    pub fn sighash_input_commitment_version(&self) -> SighashInputCommitmentVersion {
+        self.sighash_input_commitment_version
     }
 }

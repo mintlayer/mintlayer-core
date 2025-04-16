@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
+
 use super::*;
 
 fn make_dummy_tx(
@@ -33,8 +35,10 @@ fn make_dummy_tx(
     let utxos: Vec<_> = (0_usize..n_inputs)
         .map(|_| TxOutput::Transfer(gen_value(), Destination::AnyoneCanSpend))
         .collect();
-
-    let utxo_refs: Vec<_> = utxos.iter().map(Some).collect();
+    let input_commitments = utxos
+        .iter()
+        .map(|utxo| SighashInputCommitment::Utxo(Cow::Borrowed(utxo)))
+        .collect::<Vec<_>>();
 
     let transaction = {
         let output = TxOutput::Burn(gen_value());
@@ -53,7 +57,7 @@ fn make_dummy_tx(
                     SigHashType::default(),
                     Destination::PublicKey(PublicKey::from_private_key(private_key)),
                     &tx,
-                    &utxo_refs,
+                    &input_commitments,
                     input_num,
                     &mut rng,
                 )
@@ -84,6 +88,11 @@ fn check_sig(#[case] seed: Seed) {
     let pubkey0 = &keypairs[0].1;
 
     let (utxos, transaction) = make_dummy_tx(&mut rng, &privkeys);
+    // FIXME: reconsider
+    let input_commitments = utxos
+        .iter()
+        .map(|utxo| SighashInputCommitment::Utxo(Cow::Borrowed(utxo)))
+        .collect::<Vec<_>>();
     let sig0 = &transaction.signatures()[0];
 
     let eval_witness = match sig0.clone() {
@@ -93,7 +102,7 @@ fn check_sig(#[case] seed: Seed) {
     let script = WitnessScript::signature(Destination::PublicKey(pubkey0.clone()), eval_witness);
 
     // Test a successful check
-    let mut checker = MockContext::new(0, &transaction, &utxos).into_checker();
+    let mut checker = MockContext::new(0, &transaction, input_commitments.clone()).into_checker();
     script.verify(&mut checker).expect("Check to succeed");
 
     // Test checks which mutate the original transaction, the signature check should fail
@@ -103,7 +112,7 @@ fn check_sig(#[case] seed: Seed) {
             Err(_) => continue,
         };
 
-        let mut checker = MockContext::new(0, &bad_tx, &utxos).into_checker();
+        let mut checker = MockContext::new(0, &bad_tx, input_commitments.clone()).into_checker();
         match script.verify(&mut checker).expect_err("this should fail") {
             ScriptError::Signature(_e) => (),
             e @ (ScriptError::Timelock(_)
@@ -132,11 +141,16 @@ fn check_timelocks(
         .collect();
     let privkeys: Vec<_> = keypairs.iter().map(|(priv_k, _pub_k)| priv_k).collect();
     let (utxos, transaction) = make_dummy_tx(rng, &privkeys);
+    // FIXME: reconsider
+    let input_commitments = utxos
+        .iter()
+        .map(|utxo| SighashInputCommitment::Utxo(Cow::Borrowed(utxo)))
+        .collect::<Vec<_>>();
 
     let script = WitnessScript::timelock(timelock);
 
     // Test a successful check
-    let mut checker = MockContext::new(0, &transaction, &utxos)
+    let mut checker = MockContext::new(0, &transaction, input_commitments)
         .with_block_heights(utxo_height, spend_height)
         .with_timestamps(utxo_time, spend_time)
         .into_checker();

@@ -1531,7 +1531,7 @@ where
                                 .ok_or(RpcError::InvalidCoinAmount)?;
                             (
                                 OutputValue::TokenV1(token_id, amount),
-                                TxAdditionalInfo::with_token_info(
+                                TxAdditionalInfo::new().with_token_info(
                                     token_id,
                                     TokenAdditionalInfo {
                                         num_decimals: token_info.token_number_of_decimals(),

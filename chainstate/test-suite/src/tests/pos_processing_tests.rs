@@ -41,7 +41,10 @@ use common::{
         output_value::OutputValue,
         signature::{
             inputsig::{standard_signature::StandardInputSignature, InputWitness},
-            sighash::sighashtype::SigHashType,
+            sighash::{
+                self, input_commitment::make_sighash_input_commitments_for_kernel_inputs,
+                sighashtype::SigHashType,
+            },
         },
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
@@ -282,6 +285,13 @@ fn produce_kernel_signature(
 
     let kernel_inputs = vec![kernel_outpoint.into()];
 
+    let utxos = [Some(utxo.clone())];
+    let input_commitments = make_sighash_input_commitments_for_kernel_inputs(
+        &kernel_inputs,
+        &sighash::input_commitment::TrivialUtxoProvider(&utxos),
+    )
+    .unwrap();
+
     let block_reward_tx =
         BlockRewardTransactable::new(Some(kernel_inputs.as_slice()), Some(reward_outputs), None);
     StandardInputSignature::produce_uniparty_signature_for_input(
@@ -289,7 +299,7 @@ fn produce_kernel_signature(
         SigHashType::default(),
         staking_destination,
         &block_reward_tx,
-        std::iter::once(Some(utxo)).collect::<Vec<_>>().as_slice(),
+        &input_commitments,
         0,
         rng,
     )
@@ -2132,18 +2142,16 @@ fn pos_decommission_genesis_pool(#[case] seed: Seed) {
             .transaction()
             .clone();
 
-        let input_utxo = tf
-            .chainstate
-            .utxo(&UtxoOutPoint::new(tf.best_block_id().into(), 0))
-            .unwrap()
-            .unwrap();
-
+        let input_commitments = tf.make_sighash_input_commitments_for_transaction_inputs(
+            tx.inputs(),
+            tf.next_block_height(),
+        );
         let input_sign = StandardInputSignature::produce_uniparty_signature_for_input(
             &genesis_staking_sk,
             SigHashType::all(),
             Destination::PublicKey(genesis_staking_pk),
             &tx,
-            &[Some(input_utxo.output())],
+            &input_commitments,
             0,
             &mut rng,
         )

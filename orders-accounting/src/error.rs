@@ -15,6 +15,7 @@
 
 use common::{chain::OrderId, primitives::Amount};
 
+// FIXME StorageError is unused and it's the only thing that requires the chainstate-types dependency.
 #[derive(thiserror::Error, Debug, PartialEq, Eq, Clone)]
 pub enum Error {
     #[error("Accounting storage error")]
@@ -71,3 +72,9 @@ pub enum Error {
 }
 
 pub type Result<T> = core::result::Result<T, Error>;
+
+impl From<std::convert::Infallible> for Error {
+    fn from(value: std::convert::Infallible) -> Self {
+        match value {}
+    }
+}

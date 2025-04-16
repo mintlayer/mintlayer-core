@@ -40,6 +40,7 @@ pub fn print_block_heights_ids_as_checkpoints_data(
     fmt().expect("Writing to string must not fail")
 }
 
+// FIXME a) make the maps "lazy_static"; b) the corresponding field in chain config must be Cow.
 pub fn make_mainnet_checkpoints() -> BTreeMap<BlockHeight, Id<GenBlock>> {
     make_checkpoints(mainnet::CHECKPOINTS_DATA).expect("corrupted mainnet checkpoints data")
 }

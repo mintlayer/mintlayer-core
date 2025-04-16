@@ -36,7 +36,10 @@ use common::{
                 standard_signature::StandardInputSignature,
                 InputWitness,
             },
-            sighash::{sighashtype::SigHashType, signature_hash},
+            sighash::{
+                self, input_commitment::make_sighash_input_commitments_for_transaction_inputs,
+                sighashtype::SigHashType, signature_hash,
+            },
             DestinationSigError,
         },
         timelock::OutputTimeLock,
@@ -44,7 +47,7 @@ use common::{
         AccountCommand, AccountSpending, ChainConfig, Destination, OutPointSourceId,
         SignedTransactionIntent, Transaction, TxInput, TxOutput,
     },
-    primitives::{Amount, Idable, H256},
+    primitives::{Amount, BlockHeight, Idable, H256},
 };
 use crypto::key::{
     extended::ExtendedPublicKey,
@@ -283,6 +286,7 @@ impl Signer for TrezorSigner {
         ptx: PartiallySignedTransaction,
         key_chain: &impl AccountKeyChains,
         _db_tx: &impl WalletStorageReadUnlocked,
+        block_height: BlockHeight,
     ) -> SignerResult<(
         PartiallySignedTransaction,
         Vec<SignatureStatus>,
@@ -293,6 +297,8 @@ impl Signer for TrezorSigner {
         let utxos = to_trezor_utxo_msgs(&ptx, &self.chain_config)?;
         let chain_type = to_trezor_chain_type(&self.chain_config);
 
+        // FIXME: mintlayer_sign_tx should either accept a height, so that it can calculate the input
+        // commitments correctly OR it may accept the commitments themselves and just verify their contents.
         let new_signatures = self
             .client
             .lock()
@@ -300,7 +306,14 @@ impl Signer for TrezorSigner {
             .mintlayer_sign_tx(chain_type, inputs, outputs, utxos)
             .map_err(|err| TrezorError::DeviceError(err.to_string()))?;
 
-        let inputs_utxo_refs: Vec<_> = ptx.input_utxos().iter().map(|u| u.as_ref()).collect();
+        let input_commitments = make_sighash_input_commitments_for_transaction_inputs(
+            ptx.tx().inputs(),
+            &sighash::input_commitment::TrivialUtxoProvider(ptx.input_utxos()),
+            ptx.additional_info(),
+            ptx.additional_info(),
+            &self.chain_config,
+            block_height,
+        )?;
 
         let (witnesses, prev_statuses, new_statuses) = ptx
             .witnesses()
@@ -326,6 +339,8 @@ impl Signer for TrezorSigner {
                     InputWitness::Standard(sig)
                 };
 
+                let input_utxo = &ptx.input_utxos()[i];
+
                 match witness {
                     Some(w) => match w {
                         InputWitness::NoSignature(_) => Ok((
@@ -339,8 +354,9 @@ impl Signer for TrezorSigner {
                                     &self.chain_config,
                                     destination,
                                     &ptx,
-                                    &inputs_utxo_refs,
+                                    &input_commitments,
                                     i,
+                                    input_utxo.clone()
                                 )
                                 .is_ok()
                                 {
@@ -353,7 +369,7 @@ impl Signer for TrezorSigner {
                                     let sighash = signature_hash(
                                         sig.sighash_type(),
                                         ptx.tx(),
-                                        &inputs_utxo_refs,
+                                        &input_commitments,
                                         i,
                                     )?;
 
@@ -405,7 +421,7 @@ impl Signer for TrezorSigner {
                     None => match (destination, new_signatures.get(i)) {
                         (Some(destination), Some(sig)) => {
                             let sighash_type = SigHashType::all();
-                            let sighash = signature_hash(sighash_type, ptx.tx(), &inputs_utxo_refs, i)?;
+                            let sighash = signature_hash(sighash_type, ptx.tx(), &input_commitments, i)?;
                             let (sig, status) = self.make_signature(
                                 sig,
                                 destination,
