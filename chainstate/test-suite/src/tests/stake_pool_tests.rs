@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
+
 use chainstate::{BlockError, ChainstateError, ConnectTransactionError, IOPolicyError};
 use chainstate::{BlockSource, CheckBlockError};
 use chainstate_test_framework::{
@@ -26,6 +28,7 @@ use common::{
         output_value::OutputValue,
         signature::{
             inputsig::{standard_signature::StandardInputSignature, InputWitness},
+            sighash::input_commitment::SighashInputCommitment,
             DestinationSigError,
         },
         stakelock::StakePoolData,
@@ -734,7 +737,10 @@ fn decommission_from_stake_pool_with_staker_key(#[case] seed: Seed) {
 
         let (best_block_source_id, best_block_utxos) =
             tf.outputs_from_genblock(tf.best_block_id()).into_iter().next().unwrap();
-        let inputs_utxos = best_block_utxos.iter().map(Some).collect::<Vec<_>>();
+        let inputs_info_refs = best_block_utxos
+            .iter()
+            .map(|u| SighashInputCommitment::Utxo(Cow::Borrowed(u)))
+            .collect::<Vec<_>>();
 
         {
             // sign with staking key
@@ -758,7 +764,7 @@ fn decommission_from_stake_pool_with_staker_key(#[case] seed: Seed) {
                     Default::default(),
                     Destination::PublicKey(staking_pk),
                     &tx,
-                    &inputs_utxos,
+                    &inputs_info_refs,
                     0,
                     &mut rng,
                 )
@@ -804,7 +810,7 @@ fn decommission_from_stake_pool_with_staker_key(#[case] seed: Seed) {
                 Default::default(),
                 Destination::PublicKey(decommission_pk),
                 &tx,
-                &inputs_utxos,
+                &inputs_info_refs,
                 0,
                 &mut rng,
             )

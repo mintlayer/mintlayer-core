@@ -18,7 +18,10 @@ use std::{collections::BTreeMap, sync::Arc};
 use chainstate_storage::{
     BlockchainStorageRead, BlockchainStorageWrite, TransactionRw, Transactional,
 };
+use orders_accounting::OrdersAccountingDB;
+use pos_accounting::PoSAccountingDB;
 use rstest::rstest;
+use utxo::UtxosDB;
 
 use crate::{
     key_manager::KeyManager,
@@ -28,18 +31,20 @@ use crate::{
     utils::{
         assert_block_index_opt_identical_to, assert_gen_block_index_identical_to,
         assert_gen_block_index_opt_identical_to, find_create_pool_tx_in_genesis,
-        outputs_from_block, outputs_from_genesis,
+        outputs_from_block, outputs_from_genesis, SighashInputCommitmentInfoProvider,
     },
     BlockBuilder, TestChainstate, TestFrameworkBuilder, TestStore,
 };
 use chainstate::{chainstate_interface::ChainstateInterface, BlockSource, ChainstateError};
 use chainstate_types::{
     pos_randomness::PoSRandomness, BlockIndex, BlockStatus, EpochStorageRead as _, GenBlockIndex,
+    TipStorageTag,
 };
 use common::{
     chain::{
-        Block, ChainConfig, GenBlock, GenBlockId, Genesis, OutPointSourceId, PoolId, TxOutput,
-        UtxoOutPoint,
+        signature::sighash::{self, input_commitment::SighashInputCommitment},
+        Block, ChainConfig, GenBlock, GenBlockId, Genesis, OutPointSourceId, PoolId, TxInput,
+        TxOutput, UtxoOutPoint,
     },
     primitives::{id::WithId, time::Time, BlockHeight, Id, Idable},
     time_getter::TimeGetter,
@@ -574,6 +579,31 @@ impl TestFramework {
                     .map(|epoch_data| *epoch_data.randomness())
             })
             .unwrap_or(PoSRandomness::new(chain_config.initial_randomness()))
+    }
+
+    pub fn next_block_height(&self) -> BlockHeight {
+        self.best_block_index().block_height().next_height()
+    }
+
+    pub fn make_sighash_input_commitments_for_transaction_inputs(
+        &self,
+        inputs: &[TxInput],
+        block_height: BlockHeight,
+    ) -> Vec<SighashInputCommitment<'static>> {
+        let storage_tx = self.storage.transaction_ro().unwrap();
+        let utxo_db = UtxosDB::new(&storage_tx);
+        let pos_db = PoSAccountingDB::<_, TipStorageTag>::new(&storage_tx);
+        let orders_db = OrdersAccountingDB::new(&storage_tx);
+
+        sighash::input_commitment::make_sighash_input_commitments_for_transaction_inputs(
+            inputs,
+            &SighashInputCommitmentInfoProvider(&utxo_db),
+            &SighashInputCommitmentInfoProvider(&pos_db),
+            &SighashInputCommitmentInfoProvider(&orders_db),
+            self.chain_config(),
+            block_height,
+        )
+        .unwrap()
     }
 }
 

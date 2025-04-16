@@ -28,6 +28,7 @@ use common::{
         ChainConfig, Destination, SignedTransactionIntent, SignedTransactionIntentError,
         Transaction,
     },
+    primitives::BlockHeight,
 };
 use crypto::key::hdkd::{derivable::DerivationError, u31::U31};
 use wallet_storage::{
@@ -40,12 +41,16 @@ use wallet_types::{
 
 use crate::{
     key_chain::{AccountKeyChains, KeyChainError},
+    wallet::SighashInputCommitmentCreationError,
     Account, WalletResult,
 };
 
 pub mod software_signer;
 #[cfg(feature = "trezor")]
 pub mod trezor_signer;
+
+#[cfg(test)]
+mod test_utils;
 
 #[cfg(feature = "trezor")]
 use self::trezor_signer::TrezorError;
@@ -90,6 +95,8 @@ pub enum SignerError {
     AddressError(#[from] AddressError),
     #[error("Order was filled more than the available balance")]
     OrderFillUnderflow,
+    #[error("Error creating sighash input commitment")]
+    SighashInputCommitmentCreationError(#[from] SighashInputCommitmentCreationError),
 }
 
 type SignerResult<T> = Result<T, SignerError>;
@@ -103,6 +110,7 @@ pub trait Signer {
         tx: PartiallySignedTransaction,
         key_chain: &impl AccountKeyChains,
         db_tx: &impl WalletStorageReadUnlocked,
+        block_height: BlockHeight,
     ) -> SignerResult<(
         PartiallySignedTransaction,
         Vec<SignatureStatus>,

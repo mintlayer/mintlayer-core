@@ -334,13 +334,37 @@ impl BlockProcessingErrorClassification for tx_verifier::error::InputCheckError 
 impl BlockProcessingErrorClassification for tx_verifier::error::InputCheckErrorPayload {
     fn classify(&self) -> BlockProcessingErrorClass {
         match self {
-            Self::MissingUtxo(_) => BlockProcessingErrorClass::BadBlock,
+            Self::MissingUtxo(_)
+            | Self::PoolNotFound(_)
+            | Self::OrderNotFound(_)
+            | Self::NonUtxoKernelInput(_) => BlockProcessingErrorClass::BadBlock,
             Self::UtxoView(e) => e.classify(),
+            Self::UtxoInfoProvider(e) => e.classify(),
+            Self::PoolInfoProvider(e) => e.classify(),
+            Self::OrderInfoProvider(e) => e.classify(),
             Self::Translation(e) => e.classify(),
             Self::Verification(e) => e.classify(),
         }
     }
 }
+
+// impl BlockProcessingErrorClassification for SighashInputCommitmentCreationError {
+//     fn classify(&self) -> BlockProcessingErrorClass {
+//         match self {
+//             Self::UtxoProviderError(_)
+//             | Self::PoolInfoProviderError(_)
+//             | Self::OrderInfoProviderError(_) => {
+//                 // FIXME need to propagate the call to the nested error (which is currently just String)
+//                 BlockProcessingErrorClass::BadBlock
+//             }
+
+//             Self::NonUtxoKernelInput(_, _)
+//             | Self::UtxoNotFound(_, _)
+//             | Self::PoolNotFound(_)
+//             | Self::OrderNotFound(_) => BlockProcessingErrorClass::BadBlock,
+//         }
+//     }
+// }
 
 impl BlockProcessingErrorClassification for mintscript::translate::TranslationError {
     fn classify(&self) -> BlockProcessingErrorClass {

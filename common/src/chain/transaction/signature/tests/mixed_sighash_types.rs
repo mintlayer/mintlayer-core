@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use itertools::iproduct;
+use itertools::{iproduct, Itertools as _};
 
 use crypto::key::{KeyKind, PrivateKey};
 use rstest::rstest;
@@ -46,9 +46,9 @@ fn mixed_sighash_types(#[case] seed: Seed) {
         sig_hash_types(),
         sig_hash_types()
     ) {
-        let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, 6);
-        let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
-        let tx = generate_unsigned_tx(&mut rng, &destination, &inputs_utxos, 6).unwrap();
+        let input_commitments = generate_input_commitments(&mut rng, 6);
+        let input_commitments_refs = input_commitments.iter().map(|comm| comm.into()).collect_vec();
+        let tx = generate_unsigned_tx(&mut rng, &destination, input_commitments.len(), 6).unwrap();
 
         let sigs = [
             sighash_types.0,
@@ -65,7 +65,7 @@ fn mixed_sighash_types(#[case] seed: Seed) {
                 make_signature(
                     &mut rng,
                     &tx,
-                    &inputs_utxos_refs,
+                    &input_commitments_refs,
                     input,
                     &private_key,
                     sighash_type,
@@ -78,7 +78,12 @@ fn mixed_sighash_types(#[case] seed: Seed) {
 
         let signed_tx = tx.with_signatures(sigs).unwrap();
 
-        verify_signed_tx(&chain_config, &signed_tx, &inputs_utxos_refs, &destination)
-            .expect("Signature verification failed")
+        verify_signed_tx(
+            &chain_config,
+            &signed_tx,
+            &input_commitments_refs,
+            &destination,
+        )
+        .expect("Signature verification failed")
     }
 }

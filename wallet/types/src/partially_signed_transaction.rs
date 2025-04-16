@@ -19,7 +19,7 @@ use common::{
     chain::{
         htlc::HtlcSecret,
         output_value::OutputValue,
-        signature::{inputsig::InputWitness, Signable, Transactable},
+        signature::{inputsig::InputWitness, sighash, Signable, Transactable},
         tokens::TokenId,
         Destination, OrderId, PoolId, SignedTransaction, Transaction, TransactionCreationError,
         TxInput, TxOutput,
@@ -82,28 +82,19 @@ impl TxAdditionalInfo {
         }
     }
 
-    pub fn with_token_info(token_id: TokenId, info: TokenAdditionalInfo) -> Self {
-        Self {
-            token_info: BTreeMap::from([(token_id, info)]),
-            pool_info: BTreeMap::new(),
-            order_info: BTreeMap::new(),
-        }
+    pub fn with_token_info(mut self, token_id: TokenId, info: TokenAdditionalInfo) -> Self {
+        self.token_info.insert(token_id, info);
+        self
     }
 
-    pub fn with_pool_info(pool_id: PoolId, info: PoolAdditionalInfo) -> Self {
-        Self {
-            token_info: BTreeMap::new(),
-            pool_info: BTreeMap::from([(pool_id, info)]),
-            order_info: BTreeMap::new(),
-        }
+    pub fn with_pool_info(mut self, pool_id: PoolId, info: PoolAdditionalInfo) -> Self {
+        self.pool_info.insert(pool_id, info);
+        self
     }
 
-    pub fn with_order_info(order_id: OrderId, info: OrderAdditionalInfo) -> Self {
-        Self {
-            token_info: BTreeMap::new(),
-            pool_info: BTreeMap::new(),
-            order_info: BTreeMap::from([(order_id, info)]),
-        }
+    pub fn with_order_info(mut self, order_id: OrderId, info: OrderAdditionalInfo) -> Self {
+        self.order_info.insert(order_id, info);
+        self
     }
 
     pub fn add_token_info(&mut self, token_id: TokenId, info: TokenAdditionalInfo) {
@@ -131,6 +122,39 @@ impl TxAdditionalInfo {
 
     pub fn get_order_info(&self, order_id: &OrderId) -> Option<&OrderAdditionalInfo> {
         self.order_info.get(order_id)
+    }
+}
+
+impl sighash::input_commitment::PoolInfoProvider for TxAdditionalInfo {
+    type Error = std::convert::Infallible;
+
+    fn get_pool_info(
+        &self,
+        pool_id: &PoolId,
+    ) -> Result<Option<sighash::input_commitment::PoolInfo>, Self::Error> {
+        Ok(
+            self.pool_info.get(pool_id).map(|info| sighash::input_commitment::PoolInfo {
+                staker_balance: info.staker_balance,
+            }),
+        )
+    }
+}
+
+impl sighash::input_commitment::OrderInfoProvider for TxAdditionalInfo {
+    type Error = std::convert::Infallible;
+
+    fn get_order_info(
+        &self,
+        order_id: &OrderId,
+    ) -> Result<Option<sighash::input_commitment::OrderInfo>, Self::Error> {
+        Ok(
+            self.order_info.get(order_id).map(|info| sighash::input_commitment::OrderInfo {
+                initially_asked: info.initially_asked.clone(),
+                initially_given: info.initially_given.clone(),
+                ask_balance: info.ask_balance,
+                give_balance: info.give_balance,
+            }),
+        )
     }
 }
 

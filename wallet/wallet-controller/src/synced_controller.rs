@@ -57,7 +57,7 @@ use wallet::{
 };
 use wallet_types::{
     partially_signed_transaction::{
-        PartiallySignedTransaction, TokenAdditionalInfo, TxAdditionalInfo,
+        OrderAdditionalInfo, PartiallySignedTransaction, TokenAdditionalInfo, TxAdditionalInfo,
     },
     signature_status::SignatureStatus,
     utxo_types::{UtxoState, UtxoType},
@@ -953,7 +953,7 @@ where
                   account_index: U31,
                   token_info: &UnconfirmedTokenInfo| {
                 token_info.check_can_be_used()?;
-                let additional_info = TxAdditionalInfo::with_token_info(
+                let additional_info = TxAdditionalInfo::new().with_token_info(
                     token_info.token_id(),
                     TokenAdditionalInfo {
                         num_decimals: token_info.num_decimals(),
@@ -991,7 +991,7 @@ where
                   account_index: U31,
                   token_info: &UnconfirmedTokenInfo| {
                 token_info.check_can_be_used()?;
-                let additional_info = TxAdditionalInfo::with_token_info(
+                let additional_info = TxAdditionalInfo::new().with_token_info(
                     token_info.token_id(),
                     TokenAdditionalInfo {
                         num_decimals: token_info.num_decimals(),
@@ -1052,6 +1052,10 @@ where
         pool_id: PoolId,
         output_address: Option<Destination>,
     ) -> Result<SignedTransaction, ControllerError<T>> {
+        // FIXME: the additional_info with the staker balance is created inside the corresponding method of the Wallet
+        // struct, which is inconsistent with other methods, where additional_info is created by SyncedController.
+        // It's better to unify this, so that additional_info is always crated in a uniform, way on the same level.
+        // (Note: same applies to decommission_stake_pool_request)
         let staker_balance = self
             .rpc_client
             .get_staker_balance(pool_id)
@@ -1106,6 +1110,8 @@ where
             .map_err(ControllerError::WalletError)
     }
 
+    // FIXME: collect additional_info inside this method, just like other methods in this struct do,
+    // instead of accepting it from the outside.
     pub async fn create_htlc_tx(
         &mut self,
         output_value: OutputValue,
@@ -1161,7 +1167,15 @@ where
         output_address: Option<Destination>,
         token_infos: Vec<RPCTokenInfo>,
     ) -> Result<SignedTransaction, ControllerError<T>> {
-        let additional_info = self.additional_token_info(token_infos)?;
+        let additional_info = self.additional_token_info(token_infos)?.with_order_info(
+            order_id,
+            OrderAdditionalInfo {
+                initially_asked: order_info.initially_asked.clone().into(),
+                initially_given: order_info.initially_given.clone().into(),
+                ask_balance: order_info.ask_balance,
+                give_balance: order_info.give_balance,
+            },
+        );
         self.create_and_send_tx(
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
@@ -1181,6 +1195,8 @@ where
         .await
     }
 
+    // FIXME: here and in other places - can we move collecting token_infos inside SyncedController?
+    // Same for other infos, like order_info.
     pub async fn fill_order(
         &mut self,
         order_id: OrderId,
@@ -1189,7 +1205,15 @@ where
         output_address: Option<Destination>,
         token_infos: Vec<RPCTokenInfo>,
     ) -> Result<SignedTransaction, ControllerError<T>> {
-        let additional_info = self.additional_token_info(token_infos)?;
+        let additional_info = self.additional_token_info(token_infos)?.with_order_info(
+            order_id,
+            OrderAdditionalInfo {
+                initially_asked: order_info.initially_asked.clone().into(),
+                initially_given: order_info.initially_given.clone().into(),
+                ask_balance: order_info.ask_balance,
+                give_balance: order_info.give_balance,
+            },
+        );
         self.create_and_send_tx(
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
@@ -1215,6 +1239,9 @@ where
         order_id: OrderId,
         order_info: RpcOrderInfo,
     ) -> Result<SignedTransaction, ControllerError<T>> {
+        // FIXME: though freeze_order technically doesn't need additional_info, this function should
+        // not depend on this fact (because e.g. we could change tx input commitments in the future again).
+        // Need to collect additional_info in a uniform way on every tx creation method call.
         self.create_and_send_tx(
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
@@ -1239,6 +1266,7 @@ where
         token_infos
             .into_iter()
             .try_fold(TxAdditionalInfo::new(), |mut acc, token_info| {
+                // FIXME: what does "unconfirmed token info" mean?
                 let token_info = self.unconfiremd_token_info(token_info)?;
 
                 acc.add_token_info(

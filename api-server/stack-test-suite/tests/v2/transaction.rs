@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
+
 use api_web_server::api::json_helpers::tx_input_to_json;
 
 use super::*;
@@ -105,7 +107,7 @@ async fn multiple_tx_in_same_block(#[case] seed: Seed) {
                         SigHashType::all(),
                         alice_destination.clone(),
                         &signed_tx1,
-                        &[Some(&previous_tx_out)],
+                        &[SighashInputCommitment::Utxo(Cow::Borrowed(&previous_tx_out))],
                         0,
                         &mut rng,
                     )
@@ -152,7 +154,7 @@ async fn multiple_tx_in_same_block(#[case] seed: Seed) {
                         SigHashType::all(),
                         alice_destination.clone(),
                         &transaction2,
-                        &[Some(&previous_tx_out)],
+                        &[SighashInputCommitment::Utxo(Cow::Borrowed(&previous_tx_out))],
                         0,
                         &mut rng,
                     )

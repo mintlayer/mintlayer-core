@@ -14,38 +14,55 @@
 // limitations under the License.
 
 use core::panic;
-use std::ops::{Add, Div, Sub};
+use std::{
+    num::NonZeroU8,
+    ops::{Add, Div, Sub},
+};
 
-use super::*;
-use crate::{
-    key_chain::{MasterKeyChain, LOOKAHEAD_SIZE},
-    Account, SendRequest,
-};
-use common::chain::{
-    config::create_regtest,
-    htlc::{HashedTimelockContract, HtlcSecret},
-    output_value::OutputValue,
-    signature::inputsig::arbitrary_message::produce_message_challenge,
-    stakelock::StakePoolData,
-    timelock::OutputTimeLock,
-    tokens::{NftIssuanceV0, TokenId},
-    AccountNonce, AccountOutPoint, DelegationId, Destination, GenBlock, OrderData, PoolId,
-    Transaction, TxInput,
-};
-use common::primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, H256};
-use crypto::key::{KeyKind, PrivateKey};
 use itertools::izip;
-use randomness::{Rng, RngCore};
 use rstest::rstest;
-use serial_test::serial;
-use test_utils::random::{make_seedable_rng, Seed};
 use trezor_client::find_devices;
+
+use common::{
+    chain::{
+        self,
+        classic_multisig::ClassicMultisigChallenge,
+        config::create_regtest,
+        htlc::{HashedTimelockContract, HtlcSecret},
+        output_value::OutputValue,
+        signature::inputsig::arbitrary_message::produce_message_challenge,
+        stakelock::StakePoolData,
+        timelock::OutputTimeLock,
+        tokens::{IsTokenUnfreezable, Metadata, NftIssuanceV0, TokenId, TokenIssuanceV1},
+        AccountNonce, AccountOutPoint, DelegationId, Destination, GenBlock, NetUpgrades, OrderData,
+        OrderId, PoolId, SighashInputCommitmentVersion, Transaction, TxInput,
+    },
+    primitives::{
+        amount::UnsignedIntType, per_thousand::PerThousand, Amount, BlockHeight, Id, Idable, H256,
+    },
+};
+use common_test_helpers::chainstate_upgrade_builder::ChainstateUpgradeBuilder;
+use crypto::{
+    key::{KeyKind, PrivateKey},
+    vrf::VRFPrivateKey,
+};
+use randomness::{Rng, RngCore};
+use serial_test::serial;
+use serialization::extras::non_empty_vec::DataOrNoVec;
+use test_utils::random::{make_seedable_rng, Seed};
 use wallet_storage::{DefaultBackend, Store, Transactional};
 use wallet_types::{
     account_info::DEFAULT_ACCOUNT_INDEX,
     seed_phrase::StoreSeedPhrase,
     KeyPurpose::{Change, ReceiveFunds},
 };
+
+use crate::{
+    key_chain::{MasterKeyChain, LOOKAHEAD_SIZE},
+    Account, SendRequest,
+};
+
+use super::*;
 
 const MNEMONIC: &str =
     "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
@@ -57,7 +74,28 @@ const MNEMONIC: &str =
 fn sign_message(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
-    let chain_config = Arc::new(create_regtest());
+    let sighash_input_commitment_version_fork_height = BlockHeight::new(rng.gen_range(1..100_000));
+    let chain_config = Arc::new(
+        chain::config::Builder::new(ChainType::Regtest)
+            .chainstate_upgrades(
+                NetUpgrades::initialize(vec![
+                    (
+                        BlockHeight::zero(),
+                        ChainstateUpgradeBuilder::latest()
+                            .sighash_input_commitment_version(SighashInputCommitmentVersion::V0)
+                            .build(),
+                    ),
+                    (
+                        sighash_input_commitment_version_fork_height,
+                        ChainstateUpgradeBuilder::latest()
+                            .sighash_input_commitment_version(SighashInputCommitmentVersion::V1)
+                            .build(),
+                    ),
+                ])
+                .unwrap(),
+            )
+            .build(),
+    );
     let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
     let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
 
@@ -103,8 +141,6 @@ fn sign_message(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 #[serial]
 fn sign_transaction_intent(#[case] seed: Seed) {
-    use common::primitives::Idable;
-
     let mut rng = make_seedable_rng(seed);
 
     let config = Arc::new(create_regtest());
@@ -187,22 +223,30 @@ fn sign_transaction_intent(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 #[serial]
 fn sign_transaction(#[case] seed: Seed) {
-    use std::num::NonZeroU8;
-
-    use common::{
-        chain::{
-            classic_multisig::ClassicMultisigChallenge,
-            tokens::{IsTokenUnfreezable, Metadata, TokenIssuanceV1},
-            OrderId,
-        },
-        primitives::amount::UnsignedIntType,
-    };
-    use crypto::vrf::VRFPrivateKey;
-    use serialization::extras::non_empty_vec::DataOrNoVec;
-
     let mut rng = make_seedable_rng(seed);
 
-    let chain_config = Arc::new(create_regtest());
+    let sighash_input_commitment_version_fork_height = BlockHeight::new(rng.gen_range(1..100_000));
+    let chain_config = Arc::new(
+        chain::config::Builder::new(ChainType::Regtest)
+            .chainstate_upgrades(
+                NetUpgrades::initialize(vec![
+                    (
+                        BlockHeight::zero(),
+                        ChainstateUpgradeBuilder::latest()
+                            .sighash_input_commitment_version(SighashInputCommitmentVersion::V0)
+                            .build(),
+                    ),
+                    (
+                        sighash_input_commitment_version_fork_height,
+                        ChainstateUpgradeBuilder::latest()
+                            .sighash_input_commitment_version(SighashInputCommitmentVersion::V1)
+                            .build(),
+                    ),
+                ])
+                .unwrap(),
+            )
+            .build(),
+    );
     let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
     let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
 
@@ -227,6 +271,7 @@ fn sign_transaction(#[case] seed: Seed) {
     let total_amount = amounts.iter().fold(Amount::ZERO, |acc, a| acc.add(*a).unwrap());
     eprintln!("total utxo amounts: {total_amount:?}");
 
+    // FIXME add ProduceBlockFromStake
     let utxos: Vec<TxOutput> = amounts
         .iter()
         .map(|a| {
@@ -364,6 +409,7 @@ fn sign_transaction(#[case] seed: Seed) {
                 "http://uri".as_bytes().to_vec(),
             ),
         ),
+        // FIXME use new order-related inputs
     ];
     let acc_dests: Vec<Destination> = acc_inputs
         .iter()
@@ -471,46 +517,63 @@ fn sign_transaction(#[case] seed: Seed) {
         .with_inputs_and_destinations(acc_inputs.into_iter().zip(acc_dests.clone()))
         .with_outputs(outputs);
     let destinations = req.destinations().to_vec();
-    let additional_info = TxAdditionalInfo::with_token_info(
-        token_id,
-        TokenAdditionalInfo {
-            num_decimals: 1,
-            ticker: "TKN".as_bytes().to_vec(),
-        },
-    )
-    .join(TxAdditionalInfo::with_order_info(
-        order_id,
-        OrderAdditionalInfo {
-            ask_balance: Amount::from_atoms(10),
-            give_balance: Amount::from_atoms(100),
-            initially_asked: OutputValue::Coin(Amount::from_atoms(20)),
-            initially_given: OutputValue::TokenV1(token_id, Amount::from_atoms(200)),
-        },
-    ));
+    let additional_info = TxAdditionalInfo::new()
+        .with_token_info(
+            token_id,
+            TokenAdditionalInfo {
+                num_decimals: 1,
+                ticker: "TKN".as_bytes().to_vec(),
+            },
+        )
+        .join(TxAdditionalInfo::new().with_order_info(
+            order_id,
+            OrderAdditionalInfo {
+                ask_balance: Amount::from_atoms(10),
+                give_balance: Amount::from_atoms(100),
+                initially_asked: OutputValue::Coin(Amount::from_atoms(20)),
+                initially_given: OutputValue::TokenV1(token_id, Amount::from_atoms(200)),
+            },
+        ));
     let ptx = req.into_partially_signed_tx(additional_info).unwrap();
 
     let client = find_test_device();
 
+    // FIXME: same as for the SoftwareSigner, this should be `sighash_input_commitment_version_fork_height * 2`,
+    // so that both versions are tested.
+    let block_height_for_input_commitments =
+        BlockHeight::new(rng.gen_range(0..sighash_input_commitment_version_fork_height.into_int()));
+
     let mut signer = TrezorSigner::new(chain_config.clone(), Arc::new(Mutex::new(client)));
-    let (ptx, _, _) = signer.sign_tx(ptx, account.key_chain(), &db_tx).unwrap();
+    let (ptx, _, _) = signer
+        .sign_tx(
+            ptx,
+            account.key_chain(),
+            &db_tx,
+            block_height_for_input_commitments,
+        )
+        .unwrap();
 
     eprintln!("num inputs in tx: {} {:?}", inputs.len(), ptx.witnesses());
     assert!(ptx.all_signatures_available());
 
-    let utxos_ref = utxos
-        .iter()
-        .map(Some)
-        .chain([Some(&htlc_utxo), Some(&multisig_utxo)])
-        .chain(acc_dests.iter().map(|_| None))
-        .collect::<Vec<_>>();
+    let input_commitments = make_sighash_input_commitments_for_transaction_inputs(
+        ptx.tx().inputs(),
+        &sighash::input_commitment::TrivialUtxoProvider(ptx.input_utxos()),
+        ptx.additional_info(),
+        ptx.additional_info(),
+        &chain_config,
+        block_height_for_input_commitments,
+    )
+    .unwrap();
 
     for (i, dest) in destinations.iter().enumerate() {
         tx_verifier::input_check::signature_only_check::verify_tx_signature(
             &chain_config,
             dest,
             &ptx,
-            &utxos_ref,
+            &input_commitments,
             i,
+            Some(utxos[i].clone()),
         )
         .unwrap();
     }
@@ -538,3 +601,5 @@ fn find_test_device() -> Trezor {
         .connect()
         .unwrap()
 }
+
+// FIXME: add a fixed_signatures test as well?

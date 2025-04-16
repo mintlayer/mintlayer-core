@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
+
 use itertools::Itertools;
 
 use crypto::key::{KeyKind, PrivateKey, PublicKey};
@@ -26,7 +28,7 @@ use crate::{
         output_value::OutputValue,
         signature::{
             inputsig::{standard_signature::StandardInputSignature, InputWitness},
-            sighash::sighashtype::SigHashType,
+            sighash::{input_commitment::SighashInputCommitment, sighashtype::SigHashType},
             DestinationSigError, EvaluatedInputWitness, Signable,
         },
         signed_transaction::SignedTransaction,
@@ -36,14 +38,108 @@ use crate::{
     primitives::{amount::UnsignedIntType, Amount, Id, H256},
 };
 
+fn make_random_value(rng: &mut (impl Rng + CryptoRng)) -> OutputValue {
+    if rng.gen::<bool>() {
+        OutputValue::Coin(Amount::from_atoms(rng.gen()))
+    } else {
+        OutputValue::TokenV1(H256(rng.gen()).into(), Amount::from_atoms(rng.gen()))
+    }
+}
+
 pub fn generate_input_utxo(
     rng: &mut (impl Rng + CryptoRng),
 ) -> (TxOutput, crypto::key::PrivateKey) {
-    let (private_key, public_key) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
-    let destination = Destination::PublicKey(public_key);
+    let (sk, pk) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
+    let destination = Destination::PublicKey(pk);
     let output_value = OutputValue::Coin(Amount::from_atoms(rng.next_u64() as u128));
     let utxo = TxOutput::Transfer(output_value, destination);
-    (utxo, private_key)
+    (utxo, sk)
+}
+
+// FIXME: remove and use SighashInputCommitment directly instead?
+#[derive(Clone, Debug)]
+pub enum InputCommitmentVal {
+    None,
+    Utxo(TxOutput),
+    ProduceBlockFromStakeUtxo {
+        staker_balance: Amount,
+    },
+    FillOrderAccountCommand {
+        initially_asked: OutputValue,
+        initially_given: OutputValue,
+    },
+    ConcludeOrderAccountCommand {
+        ask_balance: Amount,
+        give_balance: Amount,
+    },
+}
+
+impl<'a> Into<SighashInputCommitment<'a>> for &'a InputCommitmentVal {
+    fn into(self) -> SighashInputCommitment<'a> {
+        match self {
+            InputCommitmentVal::None => SighashInputCommitment::None,
+            InputCommitmentVal::Utxo(utxo) => SighashInputCommitment::Utxo(Cow::Borrowed(utxo)),
+            InputCommitmentVal::ProduceBlockFromStakeUtxo { staker_balance } => {
+                SighashInputCommitment::ProduceBlockFromStakeUtxo {
+                    staker_balance: *staker_balance,
+                }
+            }
+            InputCommitmentVal::FillOrderAccountCommand {
+                initially_asked,
+                initially_given,
+            } => SighashInputCommitment::FillOrderAccountCommand {
+                initially_asked: initially_asked.clone(),
+                initially_given: initially_given.clone(),
+            },
+            InputCommitmentVal::ConcludeOrderAccountCommand {
+                ask_balance,
+                give_balance,
+            } => SighashInputCommitment::ConcludeOrderAccountCommand {
+                ask_balance: *ask_balance,
+                give_balance: *give_balance,
+            },
+        }
+    }
+}
+
+pub fn generate_input_commitment(rng: &mut (impl Rng + CryptoRng)) -> InputCommitmentVal {
+    match rng.gen_range(0..5) {
+        0 => InputCommitmentVal::None,
+        1 => {
+            let (utxo, _) = generate_input_utxo(rng);
+            InputCommitmentVal::Utxo(utxo)
+        }
+        2 => {
+            let staker_balance = Amount::from_atoms(rng.gen::<UnsignedIntType>());
+            InputCommitmentVal::ProduceBlockFromStakeUtxo { staker_balance }
+        }
+        3 => {
+            let initially_asked = make_random_value(rng);
+            let initially_given = make_random_value(rng);
+
+            InputCommitmentVal::FillOrderAccountCommand {
+                initially_asked,
+                initially_given,
+            }
+        }
+        4 => {
+            let ask_balance = Amount::from_atoms(rng.gen());
+            let give_balance = Amount::from_atoms(rng.gen());
+
+            InputCommitmentVal::ConcludeOrderAccountCommand {
+                ask_balance,
+                give_balance,
+            }
+        }
+        _ => unreachable!(),
+    }
+}
+
+pub fn generate_input_commitments(
+    rng: &mut (impl Rng + CryptoRng),
+    input_count: usize,
+) -> Vec<InputCommitmentVal> {
+    (0..input_count).map(|_| generate_input_commitment(rng)).collect()
 }
 
 pub fn generate_inputs_utxos(
@@ -94,23 +190,25 @@ impl MutableTransaction {
 pub fn generate_unsigned_tx(
     rng: &mut (impl Rng + CryptoRng),
     destination: &Destination,
-    inputs_utxos: &[Option<TxOutput>],
+    inputs_count: usize,
     outputs_count: usize,
 ) -> Result<Transaction, TransactionCreationError> {
-    let inputs = inputs_utxos
-        .iter()
-        .map(|utxo| match utxo {
-            Some(_) => TxInput::from_utxo(
-                Id::<Transaction>::new(H256::random_using(rng)).into(),
-                rng.gen(),
-            ),
-            None => TxInput::from_account(
-                AccountNonce::new(rng.gen()),
-                AccountSpending::DelegationBalance(
-                    DelegationId::new(H256::random_using(rng)),
-                    Amount::from_atoms(rng.gen()),
-                ),
-            ),
+    let inputs = (0..inputs_count)
+        .map(|_| {
+            if rng.gen_bool(0.5) {
+                TxInput::from_utxo(
+                    Id::<Transaction>::new(H256::random_using(rng)).into(),
+                    rng.gen(),
+                )
+            } else {
+                TxInput::from_account(
+                    AccountNonce::new(rng.gen()),
+                    AccountSpending::DelegationBalance(
+                        DelegationId::new(H256::random_using(rng)),
+                        Amount::from_atoms(rng.gen()),
+                    ),
+                )
+            }
         })
         .collect();
 
@@ -130,7 +228,7 @@ pub fn generate_unsigned_tx(
 pub fn sign_whole_tx(
     rng: &mut (impl Rng + CryptoRng),
     tx: Transaction,
-    inputs_utxos: &[Option<&TxOutput>],
+    input_commitments: &[SighashInputCommitment],
     private_key: &PrivateKey,
     sighash_type: SigHashType,
     destination: &Destination,
@@ -143,7 +241,7 @@ pub fn sign_whole_tx(
             make_signature(
                 rng,
                 &tx,
-                inputs_utxos,
+                input_commitments,
                 i,
                 private_key,
                 sighash_type,
@@ -160,29 +258,23 @@ pub fn generate_and_sign_tx(
     chain_config: &ChainConfig,
     rng: &mut (impl Rng + CryptoRng),
     destination: &Destination,
-    inputs_utxos: &[Option<TxOutput>],
+    input_commitments: &[SighashInputCommitment],
     outputs: usize,
     private_key: &PrivateKey,
     sighash_type: SigHashType,
 ) -> Result<SignedTransaction, TransactionCreationError> {
-    let tx = generate_unsigned_tx(rng, destination, inputs_utxos, outputs).unwrap();
-    let inputs_utxos_refs = inputs_utxos.iter().map(|i| i.as_ref()).collect::<Vec<_>>();
+    let tx = generate_unsigned_tx(rng, destination, input_commitments.len(), outputs).unwrap();
     let signed_tx = sign_whole_tx(
         rng,
         tx,
-        inputs_utxos_refs.as_slice(),
+        input_commitments,
         private_key,
         sighash_type,
         destination,
     )
     .unwrap();
     assert_eq!(
-        verify_signed_tx(
-            chain_config,
-            &signed_tx,
-            inputs_utxos_refs.as_slice(),
-            destination
-        ),
+        verify_signed_tx(chain_config, &signed_tx, input_commitments, destination),
         Ok(())
     );
     Ok(signed_tx)
@@ -191,7 +283,7 @@ pub fn generate_and_sign_tx(
 pub fn make_signature(
     rng: &mut (impl Rng + CryptoRng),
     tx: &Transaction,
-    inputs_utxos: &[Option<&TxOutput>],
+    input_commitments: &[SighashInputCommitment],
     input_num: usize,
     private_key: &PrivateKey,
     sighash_type: SigHashType,
@@ -202,7 +294,7 @@ pub fn make_signature(
         sighash_type,
         outpoint_dest,
         tx,
-        inputs_utxos,
+        input_commitments,
         input_num,
         rng,
     )?;
@@ -212,7 +304,7 @@ pub fn make_signature(
 pub fn verify_signed_tx(
     chain_config: &ChainConfig,
     tx: &SignedTransaction,
-    inputs_utxos: &[Option<&TxOutput>],
+    input_commitments: &[SighashInputCommitment],
     destination: &Destination,
 ) -> Result<(), DestinationSigError> {
     for i in 0..tx.inputs().len() {
@@ -221,7 +313,7 @@ pub fn verify_signed_tx(
             destination,
             tx,
             &tx.signatures()[i],
-            inputs_utxos,
+            input_commitments,
             i,
         )?
     }
@@ -262,8 +354,8 @@ pub fn verify_signature<T: Signable>(
     outpoint_destination: &Destination,
     tx: &T,
     input_witness: &InputWitness,
-    inputs_utxos: &[Option<&TxOutput>],
-    input_num: usize,
+    input_commitments: &[SighashInputCommitment],
+    input_index: usize,
 ) -> Result<(), DestinationSigError> {
     let eval_witness = match input_witness.clone() {
         InputWitness::NoSignature(d) => EvaluatedInputWitness::NoSignature(d),
@@ -274,7 +366,7 @@ pub fn verify_signature<T: Signable>(
         outpoint_destination,
         tx,
         &eval_witness,
-        inputs_utxos,
-        input_num,
+        input_commitments,
+        input_index,
     )
 }

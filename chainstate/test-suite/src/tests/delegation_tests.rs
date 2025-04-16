@@ -852,6 +852,8 @@ fn create_pool_and_delegation_and_delegate_same_block(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn check_signature_on_spend_share(#[case] seed: Seed) {
+    use common::chain::signature::sighash::input_commitment::SighashInputCommitment;
+
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
@@ -920,9 +922,6 @@ fn check_signature_on_spend_share(#[case] seed: Seed) {
             ))
         );
 
-        let inputs_utxos = [None];
-        let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
-
         // Try to spend share with wrong signature
         let tx = {
             let tx = spend_share_tx_no_signature.transaction().clone();
@@ -933,7 +932,7 @@ fn check_signature_on_spend_share(#[case] seed: Seed) {
                 Default::default(),
                 Destination::PublicKey(some_pk),
                 &tx,
-                &inputs_utxos_refs,
+                &[SighashInputCommitment::None],
                 0,
                 &mut rng,
             )
@@ -963,7 +962,7 @@ fn check_signature_on_spend_share(#[case] seed: Seed) {
                 Default::default(),
                 Destination::PublicKey(delegation_pk),
                 &tx,
-                &inputs_utxos_refs,
+                &[SighashInputCommitment::None],
                 0,
                 &mut rng,
             )

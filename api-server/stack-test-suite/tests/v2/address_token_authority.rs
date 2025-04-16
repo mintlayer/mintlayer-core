@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
+
 use common::chain::{
     tokens::{make_token_id, IsTokenFreezable, TokenIssuance, TokenIssuanceV1, TokenTotalSupply},
     AccountNonce,
@@ -161,7 +163,10 @@ async fn ok(#[case] seed: Seed) {
                             SigHashType::all(),
                             dest,
                             &transaction,
-                            &[Some(&input_utxo), None],
+                            &[
+                                SighashInputCommitment::Utxo(Cow::Borrowed(&input_utxo)),
+                                SighashInputCommitment::None,
+                            ],
                             0,
                             &mut rng,
                         )
