@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
+
 use api_server_common::storage::storage_api::NftWithOwner;
 use api_web_server::api::json_helpers::nft_with_owner_to_json;
 use common::{
@@ -131,7 +133,9 @@ async fn ok(#[case] seed: Seed) {
                             SigHashType::all(),
                             alice_destination.clone(),
                             &tx,
-                            &[issue_nft_tx.outputs().first()],
+                            &[SighashInputCommitment::Utxo(Cow::Borrowed(
+                                &issue_nft_tx.outputs()[0],
+                            ))],
                             0,
                             &mut rng,
                         )

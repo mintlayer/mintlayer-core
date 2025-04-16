@@ -13,13 +13,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::vec;
+use std::{borrow::Cow, vec};
 
 use itertools::Itertools;
 use rstest::rstest;
+use serialization::{DecodeAll, Encode};
 
 use self::utils::*;
-use super::{inputsig::InputWitness, sighash::sighashtype::SigHashType};
+use super::{
+    inputsig::InputWitness,
+    sighash::{input_commitment::SighashInputCommitment, sighashtype::SigHashType},
+};
 use crate::{
     chain::{
         config::create_mainnet,
@@ -41,6 +45,47 @@ mod sign_and_verify;
 
 pub mod utils;
 
+// Check that encoding SighashInputCommitment::Utxo(utxo) is the same as encoding Some(utxo),
+// and encoding SighashInputCommitment::None is the same as encoding None.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn encode_decode_utxo_refs_roundtrip(#[case] seed: Seed) {
+    use crate::chain::signature::sighash::input_commitment::SighashInputCommitment;
+
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
+    // Utxo
+    {
+        // FIXME generate_input_utxo should generate all kinds of utxos
+        let (utxo, _) = generate_input_utxo(&mut rng);
+
+        let commitment = SighashInputCommitment::Utxo(Cow::Borrowed(&utxo));
+        let encoded_commitment = commitment.encode();
+        let opt = Some(&utxo);
+        let encoded_opt = opt.encode();
+
+        assert_eq!(encoded_commitment, encoded_opt);
+
+        // Sanity check
+        let decoded_commitment =
+            Option::<TxOutput>::decode_all(&mut encoded_commitment.as_slice()).unwrap();
+        assert_eq!(decoded_commitment.as_ref(), Some(&utxo));
+    }
+
+    // None
+    {
+        let encoded_commitment = SighashInputCommitment::None.encode();
+        let encoded_opt = Option::<&TxOutput>::None.encode();
+
+        assert_eq!(encoded_commitment, encoded_opt);
+
+        let decoded_commitment =
+            Option::<TxOutput>::decode_all(&mut encoded_commitment.as_slice()).unwrap();
+        assert_eq!(decoded_commitment.as_ref(), None);
+    }
+}
+
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -53,20 +98,20 @@ fn sign_and_verify_different_sighash_types(#[case] seed: Seed) {
     let destination = Destination::PublicKey(public_key);
 
     for sighash_type in sig_hash_types() {
-        let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, 3);
+        let input_commitments = generate_input_commitments(&mut rng, 3);
+        let input_commitments_refs = input_commitments.iter().map(|comm| comm.into()).collect_vec();
         let tx = generate_and_sign_tx(
             &chain_config,
             &mut rng,
             &destination,
-            &inputs_utxos,
+            &input_commitments_refs,
             3,
             &private_key,
             sighash_type,
         )
         .unwrap();
-        let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
         assert_eq!(
-            verify_signed_tx(&chain_config, &tx, &inputs_utxos_refs, &destination),
+            verify_signed_tx(&chain_config, &tx, &input_commitments_refs, &destination),
             Ok(()),
             "{sighash_type:?}"
         );
@@ -87,9 +132,9 @@ fn verify_no_signature(#[case] seed: Seed) {
     for destination in
         destinations(&mut rng, public_key).filter(|d| d != &Destination::AnyoneCanSpend)
     {
-        let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, 3);
-        let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
-        let tx = generate_unsigned_tx(&mut rng, &destination, &inputs_utxos, 3).unwrap();
+        let input_commitments = generate_input_commitments(&mut rng, 3);
+        let input_commitments_refs = input_commitments.iter().map(|comm| comm.into()).collect_vec();
+        let tx = generate_unsigned_tx(&mut rng, &destination, input_commitments.len(), 3).unwrap();
         let witnesses = (0..tx.inputs().len())
             .map(|_| InputWitness::NoSignature(Some(vec![1, 2, 3, 4, 5, 6, 7, 8, 9])))
             .collect_vec();
@@ -100,7 +145,7 @@ fn verify_no_signature(#[case] seed: Seed) {
                 &destination,
                 &signed_tx,
                 &signed_tx.signatures()[0],
-                &inputs_utxos_refs,
+                &input_commitments_refs,
                 0
             ),
             Err(DestinationSigError::SignatureNotFound),
@@ -126,9 +171,9 @@ fn verify_invalid_signature(#[case] seed: Seed) {
     for (sighash_type, raw_signature) in
         sig_hash_types().cartesian_product([empty_signature, invalid_signature])
     {
-        let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, 3);
-        let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
-        let tx = generate_unsigned_tx(&mut rng, &destination, &inputs_utxos, 3).unwrap();
+        let input_commitments = generate_input_commitments(&mut rng, 3);
+        let input_commitments_refs = input_commitments.iter().map(|comm| comm.into()).collect_vec();
+        let tx = generate_unsigned_tx(&mut rng, &destination, input_commitments.len(), 3).unwrap();
         let witnesses = (0..tx.inputs().len())
             .map(|_| {
                 InputWitness::Standard(StandardInputSignature::new(
@@ -145,7 +190,7 @@ fn verify_invalid_signature(#[case] seed: Seed) {
                 &destination,
                 &signed_tx,
                 &signed_tx.signatures()[0],
-                &inputs_utxos_refs,
+                &input_commitments_refs,
                 0
             ),
             Err(DestinationSigError::InvalidSignatureEncoding),
@@ -168,13 +213,13 @@ fn verify_signature_invalid_signature_index(#[case] seed: Seed) {
     let destination = Destination::PublicKey(public_key);
 
     for sighash_type in sig_hash_types() {
-        let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, 3);
-        let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
+        let input_commitments = generate_input_commitments(&mut rng, 3);
+        let input_commitments_refs = input_commitments.iter().map(|comm| comm.into()).collect_vec();
         let tx = generate_and_sign_tx(
             &chain_config,
             &mut rng,
             &destination,
-            &inputs_utxos,
+            &input_commitments_refs,
             3,
             &private_key,
             sighash_type,
@@ -186,7 +231,7 @@ fn verify_signature_invalid_signature_index(#[case] seed: Seed) {
                 &destination,
                 &tx,
                 &tx.signatures()[0],
-                &inputs_utxos_refs,
+                &input_commitments_refs,
                 INVALID_SIGNATURE_INDEX
             ),
             Err(DestinationSigError::InvalidSignatureIndex(
@@ -213,13 +258,13 @@ fn verify_signature_wrong_destination(#[case] seed: Seed) {
     let different_outpoint = Destination::PublicKey(public_key_2);
 
     for sighash_type in sig_hash_types() {
-        let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, 3);
-        let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
+        let input_commitments = generate_input_commitments(&mut rng, 3);
+        let input_commitments_refs = input_commitments.iter().map(|comm| comm.into()).collect_vec();
         let tx = generate_and_sign_tx(
             &chain_config,
             &mut rng,
             &outpoint,
-            &inputs_utxos,
+            &input_commitments_refs,
             3,
             &private_key,
             sighash_type,
@@ -231,7 +276,7 @@ fn verify_signature_wrong_destination(#[case] seed: Seed) {
                 &different_outpoint,
                 &tx,
                 &tx.signatures()[0],
-                &inputs_utxos_refs,
+                &input_commitments_refs,
                 0
             ),
             Err(DestinationSigError::SignatureVerificationFailed),
@@ -252,12 +297,12 @@ fn mutate_all(#[case] seed: Seed) {
     let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
     let outpoint_dest = Destination::PublicKey(public_key);
     let sighash_type = SigHashType::all();
-    let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, 3);
-    let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
+    let input_commitments = generate_input_commitments(&mut rng, 3);
+    let input_commitments_refs = input_commitments.iter().map(|comm| comm.into()).collect_vec();
     let original_tx = sign_mutate_then_verify(
         &chain_config,
         &mut rng,
-        &inputs_utxos,
+        &input_commitments_refs,
         &private_key,
         sighash_type,
         &outpoint_dest,
@@ -267,7 +312,7 @@ fn mutate_all(#[case] seed: Seed) {
         &chain_config,
         &mut rng,
         &original_tx,
-        &inputs_utxos_refs,
+        &input_commitments_refs,
         &outpoint_dest,
         true,
     );
@@ -275,7 +320,7 @@ fn mutate_all(#[case] seed: Seed) {
         &chain_config,
         &mut rng,
         &original_tx,
-        &inputs_utxos_refs,
+        &input_commitments_refs,
         &outpoint_dest,
         true,
     );
@@ -283,14 +328,14 @@ fn mutate_all(#[case] seed: Seed) {
         &chain_config,
         &mut rng,
         &original_tx,
-        &inputs_utxos_refs,
+        &input_commitments_refs,
         &outpoint_dest,
         true,
     );
     check_mutate_output(
         &chain_config,
         &original_tx,
-        &inputs_utxos_refs,
+        &input_commitments_refs,
         &outpoint_dest,
         true,
     );
@@ -308,12 +353,12 @@ fn mutate_all_anyonecanpay(#[case] seed: Seed) {
     let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
     let outpoint_dest = Destination::PublicKey(public_key);
     let sighash_type = SigHashType::try_from(SigHashType::ALL | SigHashType::ANYONECANPAY).unwrap();
-    let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, 3);
-    let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
+    let input_commitments = generate_input_commitments(&mut rng, 3);
+    let input_commitments_refs = input_commitments.iter().map(|comm| comm.into()).collect_vec();
     let original_tx = sign_mutate_then_verify(
         &chain_config,
         &mut rng,
-        &inputs_utxos,
+        &input_commitments_refs,
         &private_key,
         sighash_type,
         &outpoint_dest,
@@ -323,7 +368,7 @@ fn mutate_all_anyonecanpay(#[case] seed: Seed) {
         &chain_config,
         &mut rng,
         &original_tx,
-        &inputs_utxos_refs,
+        &input_commitments_refs,
         &outpoint_dest,
         false,
     );
@@ -331,7 +376,7 @@ fn mutate_all_anyonecanpay(#[case] seed: Seed) {
         &chain_config,
         &mut rng,
         &original_tx,
-        &inputs_utxos_refs,
+        &input_commitments_refs,
         &outpoint_dest,
         true,
     );
@@ -339,14 +384,14 @@ fn mutate_all_anyonecanpay(#[case] seed: Seed) {
         &chain_config,
         &mut rng,
         &original_tx,
-        &inputs_utxos_refs,
+        &input_commitments_refs,
         &outpoint_dest,
         true,
     );
     check_mutate_output(
         &chain_config,
         &original_tx,
-        &inputs_utxos_refs,
+        &input_commitments_refs,
         &outpoint_dest,
         true,
     );
@@ -364,12 +409,12 @@ fn mutate_none(#[case] seed: Seed) {
     let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
     let outpoint_dest = Destination::PublicKey(public_key);
     let sighash_type = SigHashType::try_from(SigHashType::NONE).unwrap();
-    let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, 3);
-    let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
+    let input_commitments = generate_input_commitments(&mut rng, 3);
+    let input_commitments_refs = input_commitments.iter().map(|comm| comm.into()).collect_vec();
     let original_tx = sign_mutate_then_verify(
         &chain_config,
         &mut rng,
-        &inputs_utxos,
+        &input_commitments_refs,
         &private_key,
         sighash_type,
         &outpoint_dest,
@@ -379,7 +424,7 @@ fn mutate_none(#[case] seed: Seed) {
         &chain_config,
         &mut rng,
         &original_tx,
-        &inputs_utxos_refs,
+        &input_commitments_refs,
         &outpoint_dest,
         true,
     );
@@ -387,7 +432,7 @@ fn mutate_none(#[case] seed: Seed) {
         &chain_config,
         &mut rng,
         &original_tx,
-        &inputs_utxos_refs,
+        &input_commitments_refs,
         &outpoint_dest,
         true,
     );
@@ -395,14 +440,14 @@ fn mutate_none(#[case] seed: Seed) {
         &chain_config,
         &mut rng,
         &original_tx,
-        &inputs_utxos_refs,
+        &input_commitments_refs,
         &outpoint_dest,
         false,
     );
     check_mutate_output(
         &chain_config,
         &original_tx,
-        &inputs_utxos_refs,
+        &input_commitments_refs,
         &outpoint_dest,
         false,
     );
@@ -421,12 +466,12 @@ fn mutate_none_anyonecanpay(#[case] seed: Seed) {
     let outpoint_dest = Destination::PublicKey(public_key);
     let sighash_type =
         SigHashType::try_from(SigHashType::NONE | SigHashType::ANYONECANPAY).unwrap();
-    let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, 3);
-    let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
+    let input_commitments = generate_input_commitments(&mut rng, 3);
+    let input_commitments_refs = input_commitments.iter().map(|comm| comm.into()).collect_vec();
     let original_tx = sign_mutate_then_verify(
         &chain_config,
         &mut rng,
-        &inputs_utxos,
+        &input_commitments_refs,
         &private_key,
         sighash_type,
         &outpoint_dest,
@@ -436,7 +481,7 @@ fn mutate_none_anyonecanpay(#[case] seed: Seed) {
         &chain_config,
         &mut rng,
         &original_tx,
-        &inputs_utxos_refs,
+        &input_commitments_refs,
         &outpoint_dest,
         false,
     );
@@ -444,7 +489,7 @@ fn mutate_none_anyonecanpay(#[case] seed: Seed) {
         &chain_config,
         &mut rng,
         &original_tx,
-        &inputs_utxos_refs,
+        &input_commitments_refs,
         &outpoint_dest,
         true,
     );
@@ -452,14 +497,14 @@ fn mutate_none_anyonecanpay(#[case] seed: Seed) {
         &chain_config,
         &mut rng,
         &original_tx,
-        &inputs_utxos_refs,
+        &input_commitments_refs,
         &outpoint_dest,
         false,
     );
     check_mutate_output(
         &chain_config,
         &original_tx,
-        &inputs_utxos_refs,
+        &input_commitments_refs,
         &outpoint_dest,
         false,
     );
@@ -477,12 +522,12 @@ fn mutate_single(#[case] seed: Seed) {
     let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
     let outpoint_dest = Destination::PublicKey(public_key);
     let sighash_type = SigHashType::try_from(SigHashType::SINGLE).unwrap();
-    let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, 3);
-    let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
+    let input_commitments = generate_input_commitments(&mut rng, 3);
+    let input_commitments_refs = input_commitments.iter().map(|comm| comm.into()).collect_vec();
     let original_tx = sign_mutate_then_verify(
         &chain_config,
         &mut rng,
-        &inputs_utxos,
+        &input_commitments_refs,
         &private_key,
         sighash_type,
         &outpoint_dest,
@@ -492,7 +537,7 @@ fn mutate_single(#[case] seed: Seed) {
         &chain_config,
         &mut rng,
         &original_tx,
-        &inputs_utxos_refs,
+        &input_commitments_refs,
         &outpoint_dest,
         true,
     );
@@ -500,7 +545,7 @@ fn mutate_single(#[case] seed: Seed) {
         &chain_config,
         &mut rng,
         &original_tx,
-        &inputs_utxos_refs,
+        &input_commitments_refs,
         &outpoint_dest,
         true,
     );
@@ -508,14 +553,14 @@ fn mutate_single(#[case] seed: Seed) {
         &chain_config,
         &mut rng,
         &original_tx,
-        &inputs_utxos_refs,
+        &input_commitments_refs,
         &outpoint_dest,
         false,
     );
     check_mutate_output(
         &chain_config,
         &original_tx,
-        &inputs_utxos_refs,
+        &input_commitments_refs,
         &outpoint_dest,
         true,
     );
@@ -534,12 +579,12 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
     let outpoint_dest = Destination::PublicKey(public_key);
     let sighash_type =
         SigHashType::try_from(SigHashType::SINGLE | SigHashType::ANYONECANPAY).unwrap();
-    let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, 3);
-    let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
+    let input_commitments = generate_input_commitments(&mut rng, 3);
+    let input_commitments_refs = input_commitments.iter().map(|comm| comm.into()).collect_vec();
     let original_tx = sign_mutate_then_verify(
         &chain_config,
         &mut rng,
-        &inputs_utxos,
+        &input_commitments_refs,
         &private_key,
         sighash_type,
         &outpoint_dest,
@@ -549,7 +594,7 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
         &chain_config,
         &mut rng,
         &original_tx,
-        &inputs_utxos_refs,
+        &input_commitments_refs,
         &outpoint_dest,
         false,
     );
@@ -557,7 +602,7 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
         &chain_config,
         &mut rng,
         &original_tx,
-        &inputs_utxos_refs,
+        &input_commitments_refs,
         &outpoint_dest,
         true,
     );
@@ -565,14 +610,14 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
         &chain_config,
         &mut rng,
         &original_tx,
-        &inputs_utxos_refs,
+        &input_commitments_refs,
         &outpoint_dest,
         false,
     );
     check_mutate_output(
         &chain_config,
         &original_tx,
-        &inputs_utxos_refs,
+        &input_commitments_refs,
         &outpoint_dest,
         true,
     );
@@ -581,7 +626,7 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
 fn sign_mutate_then_verify(
     chain_config: &ChainConfig,
     rng: &mut (impl Rng + CryptoRng),
-    inputs_utxos: &[Option<TxOutput>],
+    input_commitments: &[SighashInputCommitment],
     private_key: &PrivateKey,
     sighash_type: SigHashType,
     destination: &Destination,
@@ -591,28 +636,27 @@ fn sign_mutate_then_verify(
         chain_config,
         rng,
         destination,
-        inputs_utxos,
+        input_commitments,
         3,
         private_key,
         sighash_type,
     )
     .unwrap();
-    let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
     assert_eq!(
-        verify_signed_tx(chain_config, &original_tx, &inputs_utxos_refs, destination),
+        verify_signed_tx(chain_config, &original_tx, input_commitments, destination),
         Ok(())
     );
 
-    check_change_flags(chain_config, &original_tx, &inputs_utxos_refs, destination);
-    check_mutate_witness(chain_config, &original_tx, &inputs_utxos_refs, destination);
-    check_mutate_inputs_utxos(chain_config, &original_tx, &inputs_utxos_refs, destination);
+    check_change_flags(chain_config, &original_tx, input_commitments, destination);
+    check_mutate_witness(chain_config, &original_tx, input_commitments, destination);
+    check_mutate_input_commitments(chain_config, &original_tx, input_commitments, destination);
     original_tx
 }
 
 fn check_change_flags(
     chain_config: &ChainConfig,
     original_tx: &SignedTransaction,
-    inputs_utxos: &[Option<&TxOutput>],
+    input_commitments: &[SighashInputCommitment],
     destination: &Destination,
 ) {
     let mut tx_updater = MutableTransaction::from(original_tx);
@@ -625,7 +669,7 @@ fn check_change_flags(
                 destination,
                 &tx,
                 &tx.signatures()[input_num],
-                inputs_utxos,
+                input_commitments,
                 input_num
             ),
             Err(DestinationSigError::SignatureVerificationFailed)
@@ -637,7 +681,7 @@ fn check_insert_input(
     chain_config: &ChainConfig,
     rng: &mut (impl Rng + CryptoRng),
     original_tx: &SignedTransaction,
-    inputs_utxos: &[Option<&TxOutput>],
+    input_commitments: &[SighashInputCommitment],
     destination: &Destination,
     should_fail: bool,
 ) {
@@ -649,8 +693,8 @@ fn check_insert_input(
         OutputValue::Coin(Amount::from_atoms(123)),
         Destination::AnyoneCanSpend,
     );
-    let mut inputs_utxos = inputs_utxos.to_vec();
-    inputs_utxos.push(Some(&inputs_utxo));
+    let mut input_commitments = input_commitments.to_vec();
+    input_commitments.push(SighashInputCommitment::Utxo(Cow::Borrowed(&inputs_utxo)));
 
     tx_updater.inputs.push(TxInput::from_utxo(outpoint_source_id, 1));
     tx_updater.witness.push(InputWitness::NoSignature(Some(vec![1, 2, 3])));
@@ -660,7 +704,7 @@ fn check_insert_input(
         destination,
         &tx,
         &tx.signatures()[0],
-        &inputs_utxos,
+        &input_commitments,
         0,
     );
     if should_fail {
@@ -674,7 +718,7 @@ fn check_insert_input(
 fn check_mutate_witness(
     chain_config: &ChainConfig,
     original_tx: &SignedTransaction,
-    inputs_utxos: &[Option<&TxOutput>],
+    input_commitments: &[SighashInputCommitment],
     outpoint_dest: &Destination,
 ) {
     let mut tx_updater = MutableTransaction::from(original_tx);
@@ -695,7 +739,7 @@ fn check_mutate_witness(
                 outpoint_dest,
                 &tx,
                 &tx.signatures()[input],
-                inputs_utxos,
+                input_commitments,
                 input
             ),
             Err(DestinationSigError::SignatureVerificationFailed
@@ -708,7 +752,7 @@ fn check_insert_output(
     chain_config: &ChainConfig,
     rng: &mut (impl Rng + CryptoRng),
     original_tx: &SignedTransaction,
-    inputs_utxos: &[Option<&TxOutput>],
+    input_commitments: &[SighashInputCommitment],
     destination: &Destination,
     should_fail: bool,
 ) {
@@ -724,7 +768,7 @@ fn check_insert_output(
         destination,
         &tx,
         &tx.signatures()[0],
-        inputs_utxos,
+        input_commitments,
         0,
     );
     if should_fail {
@@ -747,7 +791,7 @@ fn add_value(output_value: OutputValue) -> OutputValue {
 fn check_mutate_output(
     chain_config: &ChainConfig,
     original_tx: &SignedTransaction,
-    inputs_utxos: &[Option<&TxOutput>],
+    input_commitments: &[SighashInputCommitment],
     destination: &Destination,
     should_fail: bool,
 ) {
@@ -774,7 +818,7 @@ fn check_mutate_output(
         destination,
         &tx,
         &tx.signatures()[0],
-        inputs_utxos,
+        input_commitments,
         0,
     );
     if should_fail {
@@ -788,7 +832,7 @@ fn check_mutate_input(
     chain_config: &ChainConfig,
     rng: &mut impl Rng,
     original_tx: &SignedTransaction,
-    inputs_utxos: &[Option<&TxOutput>],
+    input_commitments: &[SighashInputCommitment],
     destination: &Destination,
     should_fail: bool,
 ) {
@@ -804,7 +848,7 @@ fn check_mutate_input(
         destination,
         &tx,
         &tx.signatures()[0],
-        inputs_utxos,
+        input_commitments,
         0,
     );
     if should_fail {
@@ -815,19 +859,19 @@ fn check_mutate_input(
 }
 
 // An input UTXO mutation should result in signature verification error.
-fn check_mutate_inputs_utxos(
+fn check_mutate_input_commitments(
     chain_config: &ChainConfig,
     original_tx: &SignedTransaction,
-    inputs_utxos: &[Option<&TxOutput>],
+    input_commitments: &[SighashInputCommitment],
     outpoint_dest: &Destination,
 ) {
-    for input in 0..inputs_utxos.len() {
+    for input in 0..input_commitments.len() {
         let inputs_utxo = TxOutput::Transfer(
             OutputValue::Coin(Amount::from_atoms(123456789012345)),
             Destination::AnyoneCanSpend,
         );
-        let mut inputs_utxos = inputs_utxos.to_owned();
-        inputs_utxos[input] = Some(&inputs_utxo);
+        let mut input_commitments = input_commitments.to_owned();
+        input_commitments[input] = SighashInputCommitment::Utxo(Cow::Borrowed(&inputs_utxo));
 
         assert!(matches!(
             verify_signature(
@@ -835,7 +879,7 @@ fn check_mutate_inputs_utxos(
                 outpoint_dest,
                 original_tx,
                 &original_tx.signatures()[input],
-                &inputs_utxos,
+                &input_commitments,
                 input
             ),
             Err(DestinationSigError::SignatureVerificationFailed)

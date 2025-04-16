@@ -51,7 +51,7 @@ use common::{
         block::timestamp::BlockTimestamp,
         classic_multisig::ClassicMultisigChallenge,
         htlc::{HashedTimelockContract, HtlcSecret, HtlcSecretHash},
-        output_value::{OutputValue, RpcOutputValue},
+        output_value::OutputValue,
         signature::inputsig::arbitrary_message::{
             produce_message_challenge, ArbitraryMessageSignature,
         },
@@ -1545,7 +1545,7 @@ where
                                 .ok_or(RpcError::InvalidCoinAmount)?;
                             (
                                 OutputValue::TokenV1(token_id, amount),
-                                TxAdditionalInfo::with_token_info(
+                                TxAdditionalInfo::new().with_token_info(
                                     token_id,
                                     TokenAdditionalInfo {
                                         num_decimals: token_info.token_number_of_decimals(),
@@ -1656,7 +1656,7 @@ where
             .map(|(tx, order_id)| NewOrder {
                 tx_id: tx.transaction().get_id(),
                 order_id: RpcAddress::new(&self.chain_config, order_id)
-                    .expect("addressable delegation id"),
+                    .expect("addressable order id"),
             })
     }
 
@@ -1677,25 +1677,9 @@ where
         self.wallet
             .call_async(move |w| {
                 Box::pin(async move {
-                    let order_info = w.get_order_info(order_id).await?;
-
-                    let ask_token_info =
-                        if let Some(token_id) = order_info.initially_asked.token_id() {
-                            Some(w.get_token_info(token_id).await?)
-                        } else {
-                            None
-                        };
-                    let give_token_info =
-                        if let Some(token_id) = order_info.initially_given.token_id() {
-                            Some(w.get_token_info(token_id).await?)
-                        } else {
-                            None
-                        };
-                    let token_infos = ask_token_info.into_iter().chain(give_token_info).collect();
-
                     w.synced_controller(account_index, config)
                         .await?
-                        .conclude_order(order_id, order_info, output_address, token_infos)
+                        .conclude_order(order_id, output_address)
                         .await
                         .map_err(RpcError::Controller)
                         .map(NewTransaction::new)
@@ -1712,7 +1696,6 @@ where
         output_address: Option<RpcAddress<Destination>>,
         config: ControllerConfig,
     ) -> WRpcResult<NewTransaction, N> {
-        let coin_decimals = self.chain_config.coin_decimals();
         let order_id = order_id
             .decode_object(&self.chain_config)
             .map_err(|_| RpcError::InvalidTokenId)?;
@@ -1723,43 +1706,9 @@ where
         self.wallet
             .call_async(move |w| {
                 Box::pin(async move {
-                    let order_info = w.get_order_info(order_id).await?;
-                    let (fill_amount_in_ask_currency, ask_token_info) =
-                        match order_info.initially_asked {
-                            RpcOutputValue::Coin { .. } => (
-                                fill_amount_in_ask_currency
-                                    .to_amount(coin_decimals)
-                                    .ok_or(RpcError::<N>::InvalidCoinAmount)?,
-                                None,
-                            ),
-                            RpcOutputValue::Token { id, amount: _ } => {
-                                let token_info = w.get_token_info(id).await?;
-                                (
-                                    fill_amount_in_ask_currency
-                                        .to_amount(token_info.token_number_of_decimals())
-                                        .ok_or(RpcError::InvalidCoinAmount)?,
-                                    Some(token_info),
-                                )
-                            }
-                        };
-                    let give_token_info =
-                        if let Some(token_id) = order_info.initially_given.token_id() {
-                            Some(w.get_token_info(token_id).await?)
-                        } else {
-                            None
-                        };
-
-                    let token_infos = ask_token_info.into_iter().chain(give_token_info).collect();
-
                     w.synced_controller(account_index, config)
                         .await?
-                        .fill_order(
-                            order_id,
-                            order_info,
-                            fill_amount_in_ask_currency,
-                            output_address,
-                            token_infos,
-                        )
+                        .fill_order(order_id, fill_amount_in_ask_currency, output_address)
                         .await
                         .map_err(RpcError::Controller)
                         .map(NewTransaction::new)
@@ -1781,11 +1730,9 @@ where
         self.wallet
             .call_async(move |w| {
                 Box::pin(async move {
-                    let order_info = w.get_order_info(order_id).await?;
-
                     w.synced_controller(account_index, config)
                         .await?
-                        .freeze_order(order_id, order_info)
+                        .freeze_order(order_id)
                         .await
                         .map_err(RpcError::Controller)
                         .map(NewTransaction::new)

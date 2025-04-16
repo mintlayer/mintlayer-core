@@ -29,7 +29,7 @@
 //!    Otherwise, the wallet should probably just use "the current tip height plus one"
 //!    as `current_block_height`.
 
-use std::{num::NonZeroU8, str::FromStr};
+use std::{borrow::Cow, num::NonZeroU8, str::FromStr};
 
 use bip39::Language;
 use gloo_utils::format::JsValueSerdeExt as _;
@@ -57,7 +57,9 @@ use common::{
                 standard_signature::StandardInputSignature,
                 InputWitness, InputWitnessTag,
             },
-            sighash::{sighashtype::SigHashType, signature_hash},
+            sighash::{
+                input_commitment::SighashInputCommitment, sighashtype::SigHashType, signature_hash,
+            },
         },
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
@@ -1170,6 +1172,11 @@ pub fn encode_witness_no_signature() -> Vec<u8> {
     InputWitness::NoSignature(None).encode()
 }
 
+// FIXME: this and other "encode_witness" functions should accept "input_commitments" instead of "inputs".
+// Which means that in addition to each "encode_input" function we should also have the corresponding "encode_input_commitment" one???
+// Alternatively, encode_witness could accept the input utxos, like it does now, and also an "additional info" object,
+// which would be used to construct the "input_commitments". But it's not clear how such an object can be represented here.
+//
 /// Given a private key, inputs and an input number to sign, and the destination that owns that output (through the utxo),
 /// and a network type (mainnet, testnet, etc), this function returns a witness to be used in a signed transaction, as bytes.
 #[wasm_bindgen]
@@ -1198,14 +1205,22 @@ pub fn encode_witness(
         input_utxos.push(utxo);
     }
 
-    let utxos = input_utxos.iter().map(Option::as_ref).collect::<Vec<_>>();
+    // FIXME
+    let input_commitments = input_utxos
+        .iter()
+        .map(|output| {
+            output.as_ref().map_or(SighashInputCommitment::None, |output| {
+                SighashInputCommitment::Utxo(Cow::Borrowed(output))
+            })
+        })
+        .collect::<Vec<_>>();
 
     let witness = StandardInputSignature::produce_uniparty_signature_for_input(
         &private_key,
         sighashtype.into(),
         destination,
         &tx,
-        &utxos,
+        &input_commitments,
         input_num as usize,
         randomness::make_true_rng(),
     )
@@ -1245,7 +1260,15 @@ pub fn encode_witness_htlc_secret(
         input_utxos.push(utxo);
     }
 
-    let utxos = input_utxos.iter().map(Option::as_ref).collect::<Vec<_>>();
+    // FIXME
+    let input_commitments = input_utxos
+        .iter()
+        .map(|output| {
+            output.as_ref().map_or(SighashInputCommitment::None, |output| {
+                SighashInputCommitment::Utxo(Cow::Borrowed(output))
+            })
+        })
+        .collect::<Vec<_>>();
 
     let secret = HtlcSecret::decode_all(&mut secret).map_err(Error::InvalidHtlcSecretEncoding)?;
 
@@ -1254,7 +1277,7 @@ pub fn encode_witness_htlc_secret(
         sighashtype.into(),
         destination,
         &tx,
-        &utxos,
+        &input_commitments,
         input_num as usize,
         secret,
         randomness::make_true_rng(),
@@ -1323,9 +1346,17 @@ pub fn encode_witness_htlc_multisig(
         input_utxos.push(utxo);
     }
 
-    let utxos = input_utxos.iter().map(Option::as_ref).collect::<Vec<_>>();
+    // FIXME
+    let input_commitments = input_utxos
+        .iter()
+        .map(|output| {
+            output.as_ref().map_or(SighashInputCommitment::None, |output| {
+                SighashInputCommitment::Utxo(Cow::Borrowed(output))
+            })
+        })
+        .collect::<Vec<_>>();
     let sighashtype = sighashtype.into();
-    let sighash = signature_hash(sighashtype, &tx, &utxos, input_num as usize)
+    let sighash = signature_hash(sighashtype, &tx, &input_commitments, input_num as usize)
         .map_err(Error::SighashCalculationError)?;
 
     let mut rng = randomness::make_true_rng();
@@ -1587,6 +1618,9 @@ pub fn encode_create_order_output(
     let output = TxOutput::CreateOrder(Box::new(order));
     Ok(output.encode())
 }
+
+// FIXME freeze order
+// FIXME use newer OrderAccountCommand
 
 /// Given an amount to fill an order (which is described in terms of ask currency) and a destination
 /// for result outputs create an input that fills the order.

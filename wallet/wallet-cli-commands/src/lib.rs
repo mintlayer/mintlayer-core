@@ -432,6 +432,7 @@ pub enum WalletCommand {
         number_of_decimals: u8,
         /// URI for data related to the token (website, media, etc)
         metadata_uri: String,
+        // FIXME
         /// The address of the receiver of this token
         destination_address: String,
         /// The total supply of this token
