@@ -1570,32 +1570,6 @@ impl OutputCache {
             }
         }
 
-        for output in tx.outputs() {
-            match output {
-                TxOutput::CreateStakePool(pool_id, _) => {
-                    self.pools.remove(pool_id);
-                }
-                TxOutput::ProduceBlockFromStake(_, pool_id) => {
-                    if self.pools.contains_key(pool_id) {
-                        let latest_utxo = self.find_latest_utxo_for_pool(*pool_id);
-                        if let Some(pool_data) = self.pools.get_mut(pool_id) {
-                            pool_data.utxo_outpoint = latest_utxo.expect("must be present");
-                        }
-                    }
-                }
-                TxOutput::Burn(_)
-                | TxOutput::Transfer(_, _)
-                | TxOutput::IssueNft(_, _, _)
-                | TxOutput::DataDeposit(_)
-                | TxOutput::DelegateStaking(_, _)
-                | TxOutput::LockThenTransfer(_, _, _)
-                | TxOutput::CreateDelegationId(_, _)
-                | TxOutput::IssueFungibleToken(_)
-                | TxOutput::Htlc(_, _)
-                | TxOutput::CreateOrder(_) => {}
-            }
-        }
-
         for output in tx.outputs().iter().rev() {
             match output {
                 TxOutput::CreateStakePool(pool_id, _) => {
