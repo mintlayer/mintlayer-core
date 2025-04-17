@@ -19,8 +19,6 @@ use crate::wallet_tx::TxState;
 
 pub type UtxoTypeInt = u16;
 
-// TODO: Burn, CreateDelegationId and DelegateStaking types seems irrelevant here
-//       since they are not included into utxo set and cannot be spend
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u16)]
 pub enum UtxoType {

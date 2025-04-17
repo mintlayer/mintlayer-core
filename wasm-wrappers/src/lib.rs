@@ -13,6 +13,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! WASM bindings.
+//!
+//! Note:
+//! Some of the functions below have the parameter `current_block_height`. It's needed in cases
+//! when the result of the function depends on whether a certain hard fork has already happened.
+//! 1) Its value must be the height of the block into which the corresponding transaction has been
+//!    (or is supposed to be) included.
+//! 2) A wallet cannot reliably predict the block height at which the new transaction will be mined.
+//!    This means that when the chain is around a fork height, it's possible for the wallet to
+//!    create an invalid transaction if the prediction is incorrect.
+//!    The most reliable approach would be for the wallet to become aware of hard forks, so that
+//!    it can refuse creating new transactions when the chain is near a fork, asking the user
+//!    to wait a certain number of blocks.
+//!    Otherwise, the wallet should probably just use "the current tip height plus one"
+//!    as `current_block_height`.
+
 use std::{num::NonZeroU8, str::FromStr};
 
 use bip39::Language;

@@ -26,13 +26,13 @@ use crate::{
     IsGlobalIp,
 };
 
-#[derive(Debug, Encode, Decode, Clone, PartialOrd, Ord, PartialEq, Eq, Hash)]
+#[derive(Debug, Encode, Decode, Clone, PartialOrd, Ord, PartialEq, Eq)]
 pub struct PeerAddressIp4 {
     pub ip: Ip4,
     pub port: u16,
 }
 
-#[derive(Debug, Encode, Decode, Clone, PartialOrd, Ord, PartialEq, Eq, Hash)]
+#[derive(Debug, Encode, Decode, Clone, PartialOrd, Ord, PartialEq, Eq)]
 pub struct PeerAddressIp6 {
     pub ip: Ip6,
     pub port: u16,

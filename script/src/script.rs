@@ -54,7 +54,7 @@ type PubkeyHash = [u8];
 type ScriptHash = [u8];
 
 /// A Bitcoin script
-#[derive(Clone, Default, PartialOrd, Ord, PartialEq, Eq, Hash, Encode, Decode, TypeName)]
+#[derive(Clone, Default, PartialOrd, Ord, PartialEq, Eq, Encode, Decode, TypeName)]
 pub struct Script(Vec<u8>);
 
 impl AsRef<[u8]> for Script {

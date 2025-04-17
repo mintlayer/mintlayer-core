@@ -231,6 +231,9 @@ pub trait ChainstateInterface: Send + Sync {
 
     /// Returns the coin amounts of the outpoints spent by a transaction.
     /// If a utxo for an input was not found or contains tokens the result is `None`.
+    //
+    // TODO: this function is only needed by mempool tests. It can be removed completely when
+    // `get_output_coin_amount` gets moved to mempool tests.
     fn get_inputs_outpoints_coin_amount(
         &self,
         inputs: &[TxInput],

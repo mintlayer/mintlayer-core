@@ -806,6 +806,8 @@ where
 
 // TODO: remove this function. The value of an output cannot be generalized and exposed from ChainstateInterface in such way
 // because it can be invalid for certain contexts.
+// Note: this is used (indirectly) by mempool tests only. Move it to mempool tests (note that PoSAccountingView
+// is also implemented for ChainstateHandle).
 fn get_output_coin_amount(
     pos_accounting_view: &impl pos_accounting::PoSAccountingView,
     output: &TxOutput,

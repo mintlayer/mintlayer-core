@@ -27,6 +27,7 @@ pub fn is_uri_valid(uri: &[u8]) -> bool {
         Ok(uri) => uri
             .chars()
             // TODO: this is probably an invalid way to validate URLs. Find the proper way to do this in rust.
+            // Note: this will have to be done via a fork, to be safe.
             .all(|ch| ch.is_alphanumeric() || is_rfc3986_valid_symbol(ch)),
         Err(_) => false,
     }

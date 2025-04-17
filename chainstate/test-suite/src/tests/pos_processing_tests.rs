@@ -168,7 +168,7 @@ fn consensus_upgrades_with_pos_at_height(height: BlockHeight) -> NetUpgrades<Con
 
 // Create a chain genesis <- block_1
 // block_1 has tx with StakePool output
-fn setup_test_chain_with_staked_pool(
+fn setup_test_chain_with_stake_pool(
     rng: &mut (impl Rng + CryptoRng),
     vrf_pk: VRFPublicKey,
 ) -> (TestFramework, UtxoOutPoint, PoolId, PrivateKey) {
@@ -193,7 +193,7 @@ fn setup_test_chain_with_staked_pool(
 
 // Create a chain genesis <- block_1
 // block_1 has txs with 2 StakePool output
-fn setup_test_chain_with_2_staked_pools(
+fn setup_test_chain_with_2_stake_pools(
     rng: &mut (impl Rng + CryptoRng),
     vrf_pk_1: VRFPublicKey,
     vrf_pk_2: VRFPublicKey,
@@ -217,10 +217,10 @@ fn setup_test_chain_with_2_staked_pools(
         ),
     ];
 
-    setup_test_chain_with_2_staked_pools_with_net_upgrades(rng, vrf_pk_1, vrf_pk_2, upgrades)
+    setup_test_chain_with_2_stake_pools_with_net_upgrades(rng, vrf_pk_1, vrf_pk_2, upgrades)
 }
 
-fn setup_test_chain_with_2_staked_pools_with_net_upgrades(
+fn setup_test_chain_with_2_stake_pools_with_net_upgrades(
     rng: &mut (impl Rng + CryptoRng),
     vrf_pk_1: VRFPublicKey,
     vrf_pk_2: VRFPublicKey,
@@ -312,7 +312,7 @@ fn pos_enforce_strict_time_ordering(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
     let (mut tf, _stake_pool_outpoint, pool_id, _staking_sk) =
-        setup_test_chain_with_staked_pool(&mut rng, vrf_pk);
+        setup_test_chain_with_stake_pool(&mut rng, vrf_pk);
 
     let initial_randomness = tf.chainstate.get_chain_config().initial_randomness();
     let new_block_height = tf.best_block_index().block_height().next_height();
@@ -357,7 +357,7 @@ fn pos_basic(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
     let (mut tf, stake_pool_outpoint, pool_id, staking_sk) =
-        setup_test_chain_with_staked_pool(&mut rng, vrf_pk);
+        setup_test_chain_with_stake_pool(&mut rng, vrf_pk);
 
     let staking_destination = Destination::PublicKey(PublicKey::from_private_key(&staking_sk));
     let reward_outputs =
@@ -461,7 +461,7 @@ fn pos_block_signature(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
     let (mut tf, stake_pool_outpoint, pool_id, staking_sk) =
-        setup_test_chain_with_staked_pool(&mut rng, vrf_pk);
+        setup_test_chain_with_stake_pool(&mut rng, vrf_pk);
 
     let initial_randomness = tf.chainstate.get_chain_config().initial_randomness();
     let new_block_height = tf.best_block_index().block_height().next_height();
@@ -658,7 +658,7 @@ fn pos_invalid_kernel_input(#[case] seed: Seed) {
 
 // Create a chain genesis <- block_1, where block_1 has valid StakePool output.
 // PoS consensus activates on height 2.
-// Try to crete block_2 with PoS data that has mistakes in VRF:
+// Try to create block_2 with PoS data that has mistakes in VRF:
 // wrong timestamp, wrong previous randomness, wrong epoch index, wrong private key.
 // All these mistake should produce verification error.
 #[rstest]
@@ -668,7 +668,7 @@ fn pos_invalid_vrf(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
     let (mut tf, stake_pool_outpoint, pool_id, staking_sk) =
-        setup_test_chain_with_staked_pool(&mut rng, vrf_pk);
+        setup_test_chain_with_stake_pool(&mut rng, vrf_pk);
 
     let expected_error = ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
         CheckBlockError::ConsensusVerificationFailed(ConsensusVerificationError::PoSError(
@@ -829,7 +829,7 @@ fn pos_invalid_vrf(#[case] seed: Seed) {
 
 // Create a chain genesis <- block_1, where block_1 has valid StakePool output.
 // PoS consensus activates on height 2.
-// Try to crete block_2 with PoS data that has refer to invalid pool id.
+// Try to create block_2 with PoS data that references an invalid pool id.
 // Check that processing of the block fails.
 #[rstest]
 #[trace]
@@ -838,7 +838,7 @@ fn pos_invalid_pool_id(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
     let (mut tf, stake_pool_outpoint, pool_id, staking_sk) =
-        setup_test_chain_with_staked_pool(&mut rng, vrf_pk);
+        setup_test_chain_with_stake_pool(&mut rng, vrf_pk);
 
     let staking_destination = Destination::PublicKey(PublicKey::from_private_key(&staking_sk));
     let reward_outputs =
@@ -913,7 +913,7 @@ fn pos_invalid_pool_id(#[case] seed: Seed) {
 
 // Create a chain genesis <- block_1, where block_1 has valid StakePool output.
 // PoS consensus activates on height 2 and an epoch is sealed at height 2.
-// Try to crete block_2 with PoS data that has refer to staked pool.
+// Try to create block_2 with PoS data that references that pool.
 #[ignore = "Disabled because of switch from SealedStorageTag to TipStorageTag"]
 #[rstest]
 #[trace]
@@ -1004,7 +1004,7 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
     let (mut tf, stake_pool_outpoint, pool_id, staking_sk) =
-        setup_test_chain_with_staked_pool(&mut rng, vrf_pk);
+        setup_test_chain_with_stake_pool(&mut rng, vrf_pk);
     let target_block_time = tf.chain_config().target_block_spacing();
 
     // prepare and process block_2 with StakePool -> ProduceBlockFromStake kernel
@@ -1171,7 +1171,7 @@ fn mismatched_pools_in_kernel_and_reward(#[case] seed: Seed) {
     // create initial chain: genesis <- block_1
     // block1 creates 2 separate pools
     let (mut tf, stake_pool_outpoint1, pool_id1, staking_sk_1, _, pool_id2, _) =
-        setup_test_chain_with_2_staked_pools(&mut rng, vrf_pk_1, vrf_pk_2);
+        setup_test_chain_with_2_stake_pools(&mut rng, vrf_pk_1, vrf_pk_2);
 
     // prepare and process block_2 with StakePool -> ProduceBlockFromStake kernel
     // kernel refers to pool1, while block reward refers to pool2
@@ -1404,7 +1404,7 @@ fn decommission_from_produce_block(#[case] seed: Seed) {
         stake_pool_outpoint2,
         pool_id2,
         staking_sk2,
-    ) = setup_test_chain_with_2_staked_pools(&mut rng, vrf_pk_1, vrf_pk_2);
+    ) = setup_test_chain_with_2_stake_pools(&mut rng, vrf_pk_1, vrf_pk_2);
     let target_block_time = tf.chain_config().target_block_spacing();
 
     let stake_pool_block_id = tf.best_block_id();
@@ -1558,7 +1558,7 @@ fn decommission_from_not_best_block(#[case] seed: Seed) {
     // create initial chain: genesis <- block_a
     // block_a creates 2 separate pools
     let (mut tf, stake_pool_outpoint1, pool_id1, staking_sk1, stake_pool_outpoint2, pool_id2, _) =
-        setup_test_chain_with_2_staked_pools_with_net_upgrades(
+        setup_test_chain_with_2_stake_pools_with_net_upgrades(
             &mut rng, vrf_pk_1, vrf_pk_2, upgrades,
         );
     let target_block_time = tf.chain_config().target_block_spacing();

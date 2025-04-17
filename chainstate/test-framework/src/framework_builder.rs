@@ -93,8 +93,7 @@ impl TestFrameworkBuilder {
         let chainstate_storage = tf.storage;
         let time_getter = Some(tf.time_getter);
         let time_value = tf.time_value;
-        // TODO: get strategy from `tf`
-        let tx_verification_strategy = TxVerificationStrategy::Default;
+        let tx_verification_strategy = tf.tx_verification_strategy.0;
         let initial_time_since_genesis = 0;
         let staking_pools = tf.staking_pools;
 
@@ -236,6 +235,7 @@ impl TestFrameworkBuilder {
             time_value,
             staking_pools: self.staking_pools,
             key_manager,
+            tx_verification_strategy: TestFrameworkBuilderValue(self.tx_verification_strategy),
         })
     }
 
@@ -243,3 +243,6 @@ impl TestFrameworkBuilder {
         self.try_build().unwrap()
     }
 }
+
+/// A wrapper for a value that should only be accessible by TestFrameworkBuilder.
+pub struct TestFrameworkBuilderValue<T>(T);

@@ -484,8 +484,6 @@ impl BlockProcessingErrorClassification for TokensError {
             | TokensError::MultipleTokenIssuanceInTransaction(_)
             | TokensError::CoinOrTokenOverflow(_)
             | TokensError::InsufficientTokenFees(_)
-            | TokensError::TransferZeroTokens(_, _)
-            | TokensError::TokensInBlockReward
             | TokensError::TokenMetadataUriTooLarge(_)
             | TokensError::InvariantBrokenUndoIssuanceOnNonexistentToken(_)
             | TokensError::InvariantBrokenRegisterIssuanceWithDuplicateId(_) => {
@@ -941,7 +939,6 @@ impl BlockProcessingErrorClassification for orders_accounting::Error {
                 BlockProcessingErrorClass::BadBlock
             }
 
-            Error::StorageError(err) => err.classify(),
             Error::AccountingError(err) => err.classify(),
         }
     }

@@ -23,13 +23,15 @@ use common::{
         signature::inputsig::InputWitness,
         tokens::{NftIssuance, TokenId},
         ChainstateUpgradeBuilder, Destination, NetUpgrades, OutPointSourceId, TokenIssuanceVersion,
-        TxInput, TxOutput,
+        TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Idable},
 };
 use randomness::Rng;
-use test_utils::nft_utils::random_nft_issuance;
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::{
+    nft_utils::random_nft_issuance,
+    random::{make_seedable_rng, Seed},
+};
 
 #[rstest]
 #[trace]
@@ -145,23 +147,93 @@ fn nft_invalid_transfer(#[case] seed: Seed) {
                 ))
             )
         );
+    })
+}
 
-        // Try to transfer 0 NFT
-        let _ = tf
-            .make_block_builder()
-            .add_transaction(
-                TransactionBuilder::new()
-                    .add_input(
-                        TxInput::from_utxo(issuance_outpoint_id, 0),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_output(TxOutput::Transfer(
-                        OutputValue::TokenV1(token_id, Amount::ZERO),
-                        Destination::AnyoneCanSpend,
-                    ))
-                    .build(),
-            )
+// Transferring zero amount of NFTs is allowed.
+// TODO: perhaps we should prohibit it?
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn nft_zero_transfer(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+
+        let coins_outpoint = UtxoOutPoint::new(
+            OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
+            0,
+        );
+        let coins_amount = tf.coin_amount_from_utxo(&coins_outpoint);
+        let token_issuance_fee =
+            tf.chainstate.get_chain_config().nft_issuance_fee(BlockHeight::zero());
+
+        let tx_first_input = TxInput::Utxo(coins_outpoint.clone());
+        let token_id = TokenId::from_tx_input(&tx_first_input);
+
+        let tx = TransactionBuilder::new()
+            .add_input(tx_first_input, InputWitness::NoSignature(None))
+            .add_output(TxOutput::IssueNft(
+                token_id,
+                Box::new(random_nft_issuance(tf.chain_config().as_ref(), &mut rng).into()),
+                Destination::AnyoneCanSpend,
+            ))
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin((coins_amount - token_issuance_fee).unwrap()),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let tx_id = tx.transaction().get_id();
+        let issuance_outpoint = UtxoOutPoint::new(OutPointSourceId::Transaction(tx_id), 0);
+        let coins_outpoint = UtxoOutPoint::new(OutPointSourceId::Transaction(tx_id), 1);
+        tf.make_block_builder()
+            .add_transaction(tx.clone())
             .build_and_process(&mut rng)
+            .unwrap()
+            .unwrap();
+
+        // Create a tx that consumes the NFT in an input and produces a bunch of zero amount outputs
+        // and optionally a normal output as well.
+        let mut tx_builder = TransactionBuilder::new()
+            .add_input(issuance_outpoint.into(), InputWitness::NoSignature(None));
+        let zero_outputs_count = rng.gen_range(1..5);
+        for _ in 0..zero_outputs_count {
+            tx_builder = tx_builder.add_output(TxOutput::Transfer(
+                OutputValue::TokenV1(token_id, Amount::ZERO),
+                Destination::AnyoneCanSpend,
+            ));
+        }
+
+        if rng.gen_bool(0.5) {
+            // Also make the actual transfer
+            tx_builder = tx_builder.add_output(TxOutput::Transfer(
+                OutputValue::TokenV1(token_id, Amount::from_atoms(1)),
+                Destination::AnyoneCanSpend,
+            ));
+        }
+
+        let tx = tx_builder.build();
+        tf.make_block_builder()
+            .add_transaction(tx)
+            .build_and_process(&mut rng)
+            .unwrap()
+            .unwrap();
+
+        // Special case - transfer zero amount of the NFT when it's not present in the inputs.
+        let mut tx_builder = TransactionBuilder::new()
+            .add_input(coins_outpoint.into(), InputWitness::NoSignature(None));
+        for _ in 0..zero_outputs_count {
+            tx_builder = tx_builder.add_output(TxOutput::Transfer(
+                OutputValue::TokenV1(token_id, Amount::ZERO),
+                Destination::AnyoneCanSpend,
+            ));
+        }
+
+        let tx = tx_builder.build();
+        tf.make_block_builder()
+            .add_transaction(tx)
+            .build_and_process(&mut rng)
+            .unwrap()
             .unwrap();
     })
 }

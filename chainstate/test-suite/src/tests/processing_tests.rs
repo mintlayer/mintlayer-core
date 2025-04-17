@@ -1555,3 +1555,33 @@ fn spend_timelocked_signed_output(#[case] seed: Seed) {
         tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
     });
 }
+
+// Transferring zero coins is allowed (random_tx_maker expects it).
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn zero_amount_transfer(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+
+        let genesis_id = tf.genesis().get_id();
+
+        let tx = TransactionBuilder::new()
+            .add_input(
+                UtxoOutPoint::new(genesis_id.into(), 0).into(),
+                empty_witness(&mut rng),
+            )
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin(Amount::ZERO),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+
+        tf.make_block_builder()
+            .add_transaction(tx)
+            .build_and_process(&mut rng)
+            .unwrap()
+            .unwrap();
+    });
+}

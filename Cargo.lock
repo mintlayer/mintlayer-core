@@ -5544,7 +5544,6 @@ name = "orders-accounting"
 version = "1.0.2"
 dependencies = [
  "accounting",
- "chainstate-types",
  "common",
  "crypto",
  "logging",
@@ -8693,7 +8692,6 @@ dependencies = [
  "consensus",
  "constraints-value-accumulator",
  "crypto",
- "fallible-iterator 0.3.0",
  "itertools 0.14.0",
  "lazy_static",
  "logging",

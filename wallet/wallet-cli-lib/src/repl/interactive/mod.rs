@@ -396,7 +396,7 @@ fn read_command(
     last_batch: usize,
     end_batch: usize,
 ) -> Result<PagginationCommand, std::io::Error> {
-    // TODO: maybe enable raw mode only once per paggination
+    // TODO: maybe enable raw mode only once per pagination
     crossterm::terminal::enable_raw_mode()?;
     let _cleanup = OnceDestructor::new(|| {
         crossterm::terminal::disable_raw_mode().expect("Should not fail normally")

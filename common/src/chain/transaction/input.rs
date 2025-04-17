@@ -37,7 +37,6 @@ use super::{
 pub enum TxInput {
     #[codec(index = 0)]
     Utxo(UtxoOutPoint),
-    // TODO: after the fork AccountOutPoint can be replaced with (AccountNonce, AccountSpending)
     #[codec(index = 1)]
     Account(AccountOutPoint),
     #[codec(index = 2)]

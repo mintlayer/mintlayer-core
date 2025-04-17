@@ -19,7 +19,7 @@ use bech32::{
     DecodeError, EncodeError,
 };
 
-#[derive(thiserror::Error, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Clone)]
+#[derive(thiserror::Error, PartialEq, Eq, PartialOrd, Ord, Debug, Clone)]
 pub enum Bech32Error {
     /// missing separator
     #[error("Decode parsing error: `{0}`")]

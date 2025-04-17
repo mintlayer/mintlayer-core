@@ -162,12 +162,7 @@ pub fn mint_tokens_in_block(
         ));
 
     let tx_builder = if produce_change {
-        let fee_utxo_coins = chainstate_test_framework::get_output_value(
-            tf.chainstate.utxo(&utxo_to_pay_fee).unwrap().unwrap().output(),
-        )
-        .unwrap()
-        .coin_amount()
-        .unwrap();
+        let fee_utxo_coins = tf.coin_amount_from_utxo(&utxo_to_pay_fee);
 
         tx_builder.add_output(TxOutput::Transfer(
             OutputValue::Coin((fee_utxo_coins - token_supply_change_fee).unwrap()),

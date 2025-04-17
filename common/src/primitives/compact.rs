@@ -17,7 +17,7 @@ use crate::uint::Uint256;
 use serialization::{Decode, Encode};
 use std::ops::Shl;
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy, Encode, Decode, serde::Serialize)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Encode, Decode, serde::Serialize)]
 pub struct Compact(pub u32);
 
 impl std::fmt::Debug for Compact {

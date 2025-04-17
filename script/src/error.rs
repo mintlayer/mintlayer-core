@@ -18,7 +18,7 @@
 /// Ways that a script might fail. Not everything is split up as
 /// much as it could be; patches welcome if more detailed errors
 /// would help you.
-#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Clone, Copy, thiserror::Error)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Clone, Copy, thiserror::Error)]
 pub enum Error {
     #[error("Something did a non-minimal push")]
     NonMinimalPush,

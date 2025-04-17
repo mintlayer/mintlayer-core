@@ -34,6 +34,7 @@ use common::{
     primitives::{Amount, BlockHeight, CoinOrTokenId, Idable, H256},
 };
 use crypto::key::{KeyKind, PrivateKey};
+use logging::log;
 use orders_accounting::OrdersAccountingDB;
 use randomness::{CryptoRng, Rng, SliceRandom};
 use test_utils::{
@@ -3337,5 +3338,73 @@ fn fill_freeze_conclude_order(#[case] seed: Seed) {
                 )
             );
         }
+    });
+}
+
+// Orders with zero values are not allowed.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn order_with_zero_value(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+
+        let (token_id, tokens_outpoint, coins_outpoint) =
+            issue_and_mint_token_from_genesis(&mut rng, &mut tf);
+        let tokens_circulating_supply =
+            tf.chainstate.get_token_circulating_supply(&token_id).unwrap().unwrap();
+
+        let (coins, tokens) = match rng.gen_range(0..3) {
+            0 => {
+                let token_amount = Amount::from_atoms(
+                    rng.gen_range(1u128..=tokens_circulating_supply.into_atoms()),
+                );
+                (
+                    OutputValue::Coin(Amount::ZERO),
+                    OutputValue::TokenV1(token_id, token_amount),
+                )
+            }
+            1 => {
+                let coin_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
+                (
+                    OutputValue::Coin(coin_amount),
+                    OutputValue::TokenV1(token_id, Amount::ZERO),
+                )
+            }
+            _ => (
+                OutputValue::Coin(Amount::ZERO),
+                OutputValue::TokenV1(token_id, Amount::ZERO),
+            ),
+        };
+
+        let (ask, give) = if rng.gen_bool(0.5) {
+            (coins, tokens)
+        } else {
+            (tokens, coins)
+        };
+
+        log::debug!("ask = {ask:?}, give = {give:?}");
+
+        let order_data = OrderData::new(Destination::AnyoneCanSpend, ask, give);
+
+        let tx = TransactionBuilder::new()
+            .add_input(coins_outpoint.into(), InputWitness::NoSignature(None))
+            .add_input(tokens_outpoint.into(), InputWitness::NoSignature(None))
+            .add_output(TxOutput::CreateOrder(Box::new(order_data.clone())))
+            .build();
+        let order_id = make_order_id(tx.inputs()).unwrap();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
+
+        assert_eq!(
+            result.unwrap_err(),
+            chainstate::ChainstateError::ProcessBlockError(
+                chainstate::BlockError::StateUpdateFailed(
+                    ConnectTransactionError::OrdersAccountingError(
+                        orders_accounting::Error::OrderWithZeroValue(order_id)
+                    )
+                )
+            )
+        );
     });
 }

@@ -64,7 +64,7 @@ impl InMemoryOrdersAccounting {
 }
 
 impl OrdersAccountingStorageRead for InMemoryOrdersAccounting {
-    type Error = chainstate_types::storage_result::Error;
+    type Error = crate::Error;
 
     fn get_order_data(&self, id: &OrderId) -> Result<Option<OrderData>, Self::Error> {
         Ok(self.orders_data.get(id).cloned())

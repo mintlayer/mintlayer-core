@@ -111,7 +111,6 @@ impl RPCIsTokenFrozen {
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct RPCFungibleTokenInfo {
-    // TODO: Add the controller public key to issuance data - https://github.com/mintlayer/mintlayer-core/issues/401
     pub token_id: TokenId,
     pub token_ticker: RpcString,
     pub number_of_decimals: u8,

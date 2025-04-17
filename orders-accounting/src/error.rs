@@ -17,8 +17,6 @@ use common::{chain::OrderId, primitives::Amount};
 
 #[derive(thiserror::Error, Debug, PartialEq, Eq, Clone)]
 pub enum Error {
-    #[error("Accounting storage error")]
-    StorageError(#[from] chainstate_types::storage_result::Error),
     #[error("Base accounting error: `{0}`")]
     AccountingError(#[from] accounting::Error),
     #[error("Order already exists: `{0}`")]

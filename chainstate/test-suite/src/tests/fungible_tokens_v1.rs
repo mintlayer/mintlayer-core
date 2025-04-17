@@ -408,6 +408,57 @@ fn token_issue_test(#[case] seed: Seed) {
     });
 }
 
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn issue_twice_in_same_tx(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+        let genesis_source_id: OutPointSourceId = tf.genesis().get_id().into();
+
+        let issuance1 = TokenIssuance::V1(TokenIssuanceV1 {
+            token_ticker: random_ascii_alphanumeric_string(&mut rng, 1..5).as_bytes().to_vec(),
+            number_of_decimals: rng.gen_range(1..18),
+            metadata_uri: random_ascii_alphanumeric_string(&mut rng, 1..1024).as_bytes().to_vec(),
+            total_supply: TokenTotalSupply::Unlimited,
+            authority: Destination::AnyoneCanSpend,
+            is_freezable: IsTokenFreezable::No,
+        });
+        let issuance2 = TokenIssuance::V1(TokenIssuanceV1 {
+            token_ticker: random_ascii_alphanumeric_string(&mut rng, 1..5).as_bytes().to_vec(),
+            number_of_decimals: rng.gen_range(1..18),
+            metadata_uri: random_ascii_alphanumeric_string(&mut rng, 1..1024).as_bytes().to_vec(),
+            total_supply: TokenTotalSupply::Unlimited,
+            authority: Destination::AnyoneCanSpend,
+            is_freezable: IsTokenFreezable::No,
+        });
+        let tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_utxo(genesis_source_id, 0),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::IssueFungibleToken(Box::new(issuance1.clone())))
+            .add_output(TxOutput::IssueFungibleToken(Box::new(issuance2.clone())))
+            .build();
+        let tx_id = tx.transaction().get_id();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
+
+        assert_eq!(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                CheckBlockError::CheckTransactionFailed(
+                    CheckBlockTransactionsError::CheckTransactionError(
+                        CheckTransactionError::TokensError(
+                            TokensError::MultipleTokenIssuanceInTransaction(tx_id,)
+                        )
+                    )
+                )
+            ))
+        );
+    });
+}
+
 // Create a tx with 2 output: one is less than required fee and one with equal amount.
 // Try issuing a token by using smaller output for fee; check that's an error.
 // Then use second output and check ok.
@@ -6475,5 +6526,100 @@ fn token_id_generation_v1_activation(#[case] seed: Seed) {
         )
         .unwrap();
         assert!(token_2_data_for_invalid_token_id.is_none());
+    });
+}
+
+// Transferring zero tokens is allowed.
+// TODO: perhaps we should prohibit it?
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn zero_amount_transfer(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+
+        let (token_id, _, utxo_with_change) = issue_token_from_genesis(
+            &mut rng,
+            &mut tf,
+            TokenTotalSupply::Unlimited,
+            IsTokenFreezable::No,
+        );
+
+        let tx = TransactionBuilder::new()
+            .add_input(utxo_with_change.into(), InputWitness::NoSignature(None))
+            .add_output(TxOutput::Transfer(
+                OutputValue::TokenV1(token_id, Amount::ZERO),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+
+        tf.make_block_builder()
+            .add_transaction(tx)
+            .build_and_process(&mut rng)
+            .unwrap()
+            .unwrap();
+    });
+}
+
+// For a frozen token, even zero amount transfers are not allowed.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn zero_amount_transfer_of_frozen_token(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+
+        let (token_id, _, utxo_with_change) = issue_token_from_genesis(
+            &mut rng,
+            &mut tf,
+            TokenTotalSupply::Unlimited,
+            IsTokenFreezable::Yes,
+        );
+
+        let change_coins = tf.coin_amount_from_utxo(&utxo_with_change);
+        let token_freeze_fee = tf.chain_config().token_freeze_fee(BlockHeight::zero());
+
+        let freeze_tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_command(
+                    AccountNonce::new(0),
+                    AccountCommand::FreezeToken(token_id, IsTokenUnfreezable::Yes),
+                ),
+                InputWitness::NoSignature(None),
+            )
+            .add_input(utxo_with_change.into(), InputWitness::NoSignature(None))
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin((change_coins - token_freeze_fee).unwrap()),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let freeze_tx_id = freeze_tx.transaction().get_id();
+
+        tf.make_block_builder()
+            .add_transaction(freeze_tx)
+            .build_and_process(&mut rng)
+            .unwrap()
+            .unwrap();
+
+        let utxo_with_change = UtxoOutPoint::new(freeze_tx_id.into(), 0);
+
+        let tx = TransactionBuilder::new()
+            .add_input(utxo_with_change.into(), InputWitness::NoSignature(None))
+            .add_output(TxOutput::Transfer(
+                OutputValue::TokenV1(token_id, Amount::ZERO),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
+
+        assert_eq!(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::AttemptToSpendFrozenToken(token_id)
+            ))
+        );
     });
 }
