@@ -14,7 +14,8 @@
 // limitations under the License.
 
 use common::chain::{
-    make_order_id, AccountCommand, AccountNonce, OrderAccountCommand, OrderData, OrdersVersion,
+    make_order_id, AccountCommand, AccountNonce, ChainstateUpgradeBuilder, OrderAccountCommand,
+    OrderData, OrdersVersion,
 };
 
 use super::*;
@@ -41,17 +42,7 @@ async fn create_fill_conclude_order(#[case] seed: Seed, #[case] version: OrdersV
                 .chainstate_upgrades(
                     common::chain::NetUpgrades::initialize(vec![(
                         BlockHeight::zero(),
-                        common::chain::ChainstateUpgrade::new(
-                            common::chain::TokenIssuanceVersion::V1,
-                            common::chain::RewardDistributionVersion::V1,
-                            common::chain::TokensFeeVersion::V1,
-                            common::chain::DataDepositFeeVersion::V1,
-                            common::chain::ChangeTokenMetadataUriActivated::Yes,
-                            common::chain::FrozenTokensValidationVersion::V1,
-                            common::chain::HtlcActivated::Yes,
-                            common::chain::OrdersActivated::Yes,
-                            version,
-                        ),
+                        ChainstateUpgradeBuilder::latest().orders_version(version).build(),
                     )])
                     .expect("cannot fail"),
                 )

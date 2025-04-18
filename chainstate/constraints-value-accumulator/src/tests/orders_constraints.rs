@@ -15,20 +15,21 @@
 
 use std::collections::BTreeMap;
 
+use rstest::rstest;
+
 use common::{
     chain::{
         config::{create_unit_test_config, create_unit_test_config_builder},
         output_value::OutputValue,
         tokens::TokenId,
-        AccountCommand, AccountNonce, Destination, OrderAccountCommand, OrderData, OrderId,
-        OrdersVersion, OutPointSourceId, TxInput, TxOutput, UtxoOutPoint,
+        AccountCommand, AccountNonce, ChainstateUpgradeBuilder, Destination, OrderAccountCommand,
+        OrderData, OrderId, OrdersVersion, OutPointSourceId, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Fee, Id, H256},
 };
 use orders_accounting::{InMemoryOrdersAccounting, OrdersAccountingDB};
 use pos_accounting::{InMemoryPoSAccounting, PoSAccountingDB};
 use randomness::Rng;
-use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 
 use crate::{ConstrainedValueAccumulator, Error};
@@ -264,17 +265,7 @@ fn fill_order_constraints(#[case] seed: Seed, #[case] version: OrdersVersion) {
         .chainstate_upgrades(
             common::chain::NetUpgrades::initialize(vec![(
                 BlockHeight::zero(),
-                common::chain::ChainstateUpgrade::new(
-                    common::chain::TokenIssuanceVersion::V1,
-                    common::chain::RewardDistributionVersion::V1,
-                    common::chain::TokensFeeVersion::V1,
-                    common::chain::DataDepositFeeVersion::V1,
-                    common::chain::ChangeTokenMetadataUriActivated::Yes,
-                    common::chain::FrozenTokensValidationVersion::V1,
-                    common::chain::HtlcActivated::Yes,
-                    common::chain::OrdersActivated::Yes,
-                    version,
-                ),
+                ChainstateUpgradeBuilder::latest().orders_version(version).build(),
             )])
             .expect("cannot fail"),
         )
@@ -639,17 +630,7 @@ fn conclude_order_constraints(#[case] seed: Seed, #[case] version: OrdersVersion
         .chainstate_upgrades(
             common::chain::NetUpgrades::initialize(vec![(
                 BlockHeight::zero(),
-                common::chain::ChainstateUpgrade::new(
-                    common::chain::TokenIssuanceVersion::V1,
-                    common::chain::RewardDistributionVersion::V1,
-                    common::chain::TokensFeeVersion::V1,
-                    common::chain::DataDepositFeeVersion::V1,
-                    common::chain::ChangeTokenMetadataUriActivated::Yes,
-                    common::chain::FrozenTokensValidationVersion::V1,
-                    common::chain::HtlcActivated::Yes,
-                    common::chain::OrdersActivated::Yes,
-                    version,
-                ),
+                ChainstateUpgradeBuilder::latest().orders_version(version).build(),
             )])
             .expect("cannot fail"),
         )

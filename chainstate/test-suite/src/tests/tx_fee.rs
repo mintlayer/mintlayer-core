@@ -29,8 +29,8 @@ use common::{
             make_token_id, IsTokenFreezable, TokenIssuance, TokenIssuanceV0, TokenIssuanceV1,
             TokenTotalSupply,
         },
-        AccountCommand, AccountNonce, AccountSpending, ChainConfig, Destination, NetUpgrades,
-        TokenIssuanceVersion, TxInput, TxOutput, UtxoOutPoint,
+        AccountCommand, AccountNonce, AccountSpending, ChainConfig, ChainstateUpgradeBuilder,
+        Destination, NetUpgrades, TokenIssuanceVersion, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, Fee, Idable},
 };
@@ -38,8 +38,6 @@ use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
 use randomness::CryptoRng;
 use test_utils::random_ascii_alphanumeric_string;
 use tx_verifier::transaction_verifier::{TransactionSourceForConnect, TransactionVerifier};
-
-use crate::tests::helpers::chainstate_upgrade_builder::ChainstateUpgradeBuilder;
 
 fn setup(rng: &mut (impl Rng + CryptoRng)) -> (ChainConfig, InMemoryStorageWrapper, TestFramework) {
     let storage = TestStore::new_empty().unwrap();

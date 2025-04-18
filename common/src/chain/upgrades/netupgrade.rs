@@ -17,20 +17,8 @@ use std::ops::Range;
 
 use crate::primitives::BlockHeight;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct NetUpgrades<T>(Vec<(BlockHeight, T)>);
-
-pub trait Activate {
-    fn is_activated(&self, height: BlockHeight, net_upgrades: &NetUpgrades<Self>) -> bool
-    where
-        Self: Sized + Ord + Copy,
-    {
-        if let Ok(idx) = net_upgrades.0.binary_search_by(|&(_, to_match)| to_match.cmp(self)) {
-            return height >= net_upgrades.0[idx].0;
-        }
-        false
-    }
-}
 
 #[derive(thiserror::Error, Debug)]
 pub enum NetUpgradesInitializeError {
@@ -93,9 +81,9 @@ mod tests {
     use super::*;
     use crate::chain::upgrades::netupgrade::NetUpgrades;
     use crate::chain::{
-        Activate, ConsensusUpgrade, PoSChainConfigBuilder, PoSStatus, PoWStatus, RequiredConsensus,
+        ConsensusUpgrade, PoSChainConfigBuilder, PoSStatus, PoWStatus, RequiredConsensus,
     };
-    use crate::primitives::{BlockDistance, BlockHeight};
+    use crate::primitives::BlockHeight;
     use crate::Uint256;
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
@@ -107,8 +95,6 @@ mod tests {
         Four,
         Five,
     }
-
-    impl Activate for MockVersion {}
 
     fn mock_netupgrades() -> (NetUpgrades<MockVersion>, BlockHeight, BlockHeight) {
         let mut upgrades = vec![];
@@ -129,25 +115,6 @@ mod tests {
             two_height,
             three_height,
         )
-    }
-
-    #[test]
-    fn check_is_activated() {
-        let (upgrades, two_height, three_height) = mock_netupgrades();
-
-        assert!(MockVersion::Two.is_activated(two_height, &upgrades));
-        assert!(MockVersion::Two.is_activated(three_height, &upgrades));
-        assert!(!MockVersion::Two.is_activated(BlockHeight::one(), &upgrades));
-        assert!(!MockVersion::Two
-            .is_activated((two_height - BlockDistance::new(1)).unwrap(), &upgrades));
-
-        assert!(!MockVersion::Three.is_activated(two_height, &upgrades));
-        assert!(!MockVersion::Three.is_activated(
-            two_height.checked_add(10).expect("should be fine"),
-            &upgrades
-        ));
-        assert!(MockVersion::Three.is_activated(three_height, &upgrades));
-        assert!(MockVersion::Three.is_activated(BlockHeight::max(), &upgrades));
     }
 
     #[test]

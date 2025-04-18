@@ -108,4 +108,6 @@ pub enum ConsensusPoSError {
     EffectivePoolBalanceError(#[from] EffectivePoolBalanceError),
     #[error("Failed to calculate capped balance")]
     FailedToCalculateCappedBalance,
+    #[error("Invalid kernel output type in block {0}")]
+    InvalidOutputTypeInStakeKernel(Id<Block>),
 }

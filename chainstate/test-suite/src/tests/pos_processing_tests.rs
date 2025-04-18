@@ -15,7 +15,7 @@
 
 use std::{num::NonZeroU64, time::Duration};
 
-use super::helpers::pos::{calculate_new_target, create_custom_genesis_with_stake_pool};
+use rstest::rstest;
 
 use chainstate::{
     chainstate_interface::ChainstateInterface, BlockError, BlockSource, ChainstateError,
@@ -45,9 +45,10 @@ use common::{
         },
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
-        AccountNonce, AccountOutPoint, AccountSpending, ChainConfig, ConsensusUpgrade, Destination,
-        GenBlock, NetUpgrades, OutPointSourceId, PoSChainConfig, PoSChainConfigBuilder, PoolId,
-        RequiredConsensus, SignedTransaction, TxInput, TxOutput, UtxoOutPoint,
+        AccountNonce, AccountOutPoint, AccountSpending, ChainConfig, ChainstateUpgradeBuilder,
+        ConsensusUpgrade, Destination, GenBlock, NetUpgrades, OutPointSourceId, PoSChainConfig,
+        PoSChainConfigBuilder, PoolId, RequiredConsensus, SignedTransaction,
+        StakerDestinationUpdateForbidden, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockCount, BlockHeight, Id, Idable, H256},
     Uint256,
@@ -59,9 +60,13 @@ use crypto::{
 };
 use pos_accounting::{make_pool_id, PoSAccountingStorageRead};
 use randomness::{CryptoRng, Rng};
-use rstest::rstest;
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::{
+    assert_matches,
+    random::{make_seedable_rng, Seed},
+};
 use utils::const_nz_u64;
+
+use super::helpers::pos::{calculate_new_target, create_custom_genesis_with_stake_pool};
 
 // It's important to have short epoch length, so that genesis and the first block can seal
 // an epoch with pool, which is required for PoS validation to work.
@@ -146,23 +151,27 @@ fn add_block_with_2_stake_pools(
     (stake_outpoint1, pool_id1, outpoint2, pool_id2)
 }
 
+fn consensus_upgrades_with_pos_at_height(height: BlockHeight) -> NetUpgrades<ConsensusUpgrade> {
+    NetUpgrades::initialize(vec![
+        (BlockHeight::new(0), ConsensusUpgrade::IgnoreConsensus),
+        (
+            height,
+            ConsensusUpgrade::PoS {
+                initial_difficulty: Some(MIN_DIFFICULTY.into()),
+                config: PoSChainConfigBuilder::new_for_unit_test().build(),
+            },
+        ),
+    ])
+    .unwrap()
+}
+
 // Create a chain genesis <- block_1
 // block_1 has tx with StakePool output
 fn setup_test_chain_with_staked_pool(
     rng: &mut (impl Rng + CryptoRng),
     vrf_pk: VRFPublicKey,
 ) -> (TestFramework, UtxoOutPoint, PoolId, PrivateKey) {
-    let upgrades = vec![
-        (BlockHeight::new(0), ConsensusUpgrade::IgnoreConsensus),
-        (
-            BlockHeight::new(2),
-            ConsensusUpgrade::PoS {
-                initial_difficulty: Some(MIN_DIFFICULTY.into()),
-                config: PoSChainConfigBuilder::new_for_unit_test().build(),
-            },
-        ),
-    ];
-    let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid net-upgrades");
+    let net_upgrades = consensus_upgrades_with_pos_at_height(BlockHeight::new(2));
     let chain_config = ConfigBuilder::test_chain()
         .consensus_upgrades(net_upgrades)
         .epoch_length(TEST_EPOCH_LENGTH)
@@ -233,12 +242,12 @@ fn setup_test_chain_with_2_staked_pools_with_net_upgrades(
 
     let mut tf = TestFramework::builder(rng).with_chain_config(chain_config).build();
 
-    let (stake_pool_data1, pk1) = create_stake_pool_data_with_all_reward_to_staker(
+    let (stake_pool_data1, sk1) = create_stake_pool_data_with_all_reward_to_staker(
         rng,
         tf.chainstate.get_chain_config().min_stake_pool_pledge(),
         vrf_pk_1,
     );
-    let (stake_pool_data2, pk2) = create_stake_pool_data_with_all_reward_to_staker(
+    let (stake_pool_data2, sk2) = create_stake_pool_data_with_all_reward_to_staker(
         rng,
         tf.chainstate.get_chain_config().min_stake_pool_pledge(),
         vrf_pk_2,
@@ -250,10 +259,10 @@ fn setup_test_chain_with_2_staked_pools_with_net_upgrades(
         tf,
         stake_pool_outpoint1,
         pool_id1,
-        pk1,
+        sk1,
         stake_pool_outpoint2,
         pool_id2,
-        pk2,
+        sk2,
     )
 }
 
@@ -640,9 +649,7 @@ fn pos_invalid_kernel_input(#[case] seed: Seed) {
         tf.process_block(block, BlockSource::Local).unwrap_err(),
         ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
             CheckBlockError::ConsensusVerificationFailed(ConsensusVerificationError::PoSError(
-                ConsensusPoSError::BlockSignatureError(BlockSignatureError::WrongOutputType(
-                    block_id
-                ))
+                ConsensusPoSError::InvalidOutputTypeInStakeKernel(block_id)
             ))
         ))
     );
@@ -2178,4 +2185,280 @@ fn pos_decommission_genesis_pool(#[case] seed: Seed) {
             .unwrap()
             .is_some()
     );
+}
+
+// Check that modifying staker destination in ProduceBlockFromStake is allowed before the corresponding
+// fork and prohibited afterwards.
+// 1) The fork height is a few blocks (zero is possible too) after the height 2 (where the chain
+// switches to PoS).
+// All block after height 2 are produces by the same pool.
+// 2) Produce blocks until the fork height is reached, changing the staker destination in each block.
+// 3) At the fork height try producing a block changing the staker destination - it fails.
+// 4) Produce a few more blocks without changing the destination - it succeeds.
+// 5) Try producing a block changing the staker destination again - it still fails.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn staker_destination_change(#[case] seed: Seed) {
+    use staker_destination_change_test_utils::*;
+
+    let mut rng = make_seedable_rng(seed);
+
+    let pos_height = BlockHeight::new(2);
+    let block_count_before_fork = rng.gen_range(0..(TEST_EPOCH_LENGTH.get() * 3));
+    let fork_height = BlockHeight::new(pos_height.into_int() + block_count_before_fork);
+    let chain_config = ConfigBuilder::test_chain()
+        .consensus_upgrades(consensus_upgrades_with_pos_at_height(pos_height))
+        .epoch_length(TEST_EPOCH_LENGTH)
+        .sealed_epoch_distance_from_tip(TEST_SEALED_EPOCH_DISTANCE)
+        .chainstate_upgrades(
+            NetUpgrades::initialize(vec![
+                (
+                    BlockHeight::zero(),
+                    ChainstateUpgradeBuilder::latest()
+                        .staker_destination_update_forbidden(StakerDestinationUpdateForbidden::No)
+                        .build(),
+                ),
+                (
+                    fork_height,
+                    ChainstateUpgradeBuilder::latest()
+                        .staker_destination_update_forbidden(StakerDestinationUpdateForbidden::Yes)
+                        .build(),
+                ),
+            ])
+            .unwrap(),
+        )
+        .build();
+
+    let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
+
+    let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+    let (stake_pool_data, initial_staking_sk) = create_stake_pool_data_with_all_reward_to_staker(
+        &mut rng,
+        tf.chainstate.get_chain_config().min_stake_pool_pledge(),
+        vrf_pk,
+    );
+    let (initial_stake_pool_outpoint, pool_id) =
+        add_block_with_stake_pool(&mut rng, &mut tf, stake_pool_data);
+
+    let mut stake_pool_outpoint = initial_stake_pool_outpoint;
+    let mut pool_balance = tf.chainstate.get_chain_config().min_stake_pool_pledge();
+
+    let (staking_destination, staking_sk) = {
+        let initial_block_height = tf.best_block_index().block_height().next_height();
+
+        let mut staking_destination =
+            Destination::PublicKey(PublicKey::from_private_key(&initial_staking_sk));
+        let mut staking_sk = initial_staking_sk.clone();
+
+        for new_block_height in initial_block_height.iter_up_to(fork_height) {
+            let (next_staking_sk, next_staking_pk) =
+                PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+            let next_staking_destination = Destination::PublicKey(next_staking_pk);
+
+            let (pos_data, block_timestamp, reward_outputs) = pos_mine(
+                &tf,
+                pool_id,
+                staking_destination,
+                &staking_sk,
+                next_staking_destination.clone(),
+                &vrf_sk,
+                stake_pool_outpoint,
+                &mut rng,
+            );
+
+            let block_id = *tf
+                .make_block_builder()
+                .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
+                .with_block_signing_key(staking_sk)
+                .with_timestamp(block_timestamp)
+                .with_reward(reward_outputs)
+                .build_and_process(&mut rng)
+                .unwrap()
+                .unwrap()
+                .block_id();
+
+            let new_pool_balance =
+                PoSAccountingStorageRead::<TipStorageTag>::get_pool_balance(&tf.storage, pool_id)
+                    .unwrap()
+                    .unwrap();
+            let subsidy =
+                tf.chainstate.get_chain_config().block_subsidy_at_height(&new_block_height);
+            let expected_pool_balance = (pool_balance + subsidy).unwrap();
+            assert_eq!(new_pool_balance, expected_pool_balance);
+
+            staking_destination = next_staking_destination;
+            staking_sk = next_staking_sk;
+            stake_pool_outpoint =
+                UtxoOutPoint::new(OutPointSourceId::BlockReward(block_id.into()), 0);
+            pool_balance = new_pool_balance;
+
+            tf.progress_time_seconds_since_epoch(rng.gen_range(1..10));
+        }
+
+        (staking_destination, staking_sk)
+    };
+
+    let new_block_height = tf.best_block_index().block_height().next_height();
+    // Sanity check
+    assert_eq!(new_block_height, fork_height);
+
+    // The fork height has been reached, so attempts to change the staking destination should fail.
+    {
+        let (_, next_staking_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+        let next_staking_destination = Destination::PublicKey(next_staking_pk);
+
+        let (pos_data, block_timestamp, reward_outputs) = pos_mine(
+            &tf,
+            pool_id,
+            staking_destination.clone(),
+            &staking_sk,
+            next_staking_destination,
+            &vrf_sk,
+            stake_pool_outpoint.clone(),
+            &mut rng,
+        );
+
+        let err = tf
+            .make_block_builder()
+            .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
+            .with_block_signing_key(staking_sk.clone())
+            .with_timestamp(block_timestamp)
+            .with_reward(reward_outputs)
+            .build_and_process(&mut rng)
+            .unwrap_err();
+
+        assert_matches!(
+            err,
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::ProduceBlockFromStakeChangesStakerDestination(_, _)
+            ))
+        );
+    }
+
+    // Produce a few blocks without changing the staking destination.
+    let block_count_after_fork = rng.gen_range(0..(TEST_EPOCH_LENGTH.get() * 3));
+    for _ in 0..block_count_after_fork {
+        let (pos_data, block_timestamp, reward_outputs) = pos_mine(
+            &tf,
+            pool_id,
+            staking_destination.clone(),
+            &staking_sk,
+            staking_destination.clone(),
+            &vrf_sk,
+            stake_pool_outpoint,
+            &mut rng,
+        );
+
+        let block_id = *tf
+            .make_block_builder()
+            .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
+            .with_block_signing_key(staking_sk.clone())
+            .with_timestamp(block_timestamp)
+            .with_reward(reward_outputs)
+            .build_and_process(&mut rng)
+            .unwrap()
+            .unwrap()
+            .block_id();
+
+        let new_pool_balance =
+            PoSAccountingStorageRead::<TipStorageTag>::get_pool_balance(&tf.storage, pool_id)
+                .unwrap()
+                .unwrap();
+        let subsidy = tf.chainstate.get_chain_config().block_subsidy_at_height(&new_block_height);
+        let expected_pool_balance = (pool_balance + subsidy).unwrap();
+        assert_eq!(new_pool_balance, expected_pool_balance);
+
+        stake_pool_outpoint = UtxoOutPoint::new(OutPointSourceId::BlockReward(block_id.into()), 0);
+        pool_balance = new_pool_balance;
+
+        tf.progress_time_seconds_since_epoch(rng.gen_range(1..10));
+    }
+
+    // Attempt to change the destination again - it still fails.
+    {
+        let (_, next_staking_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+        let next_staking_destination = Destination::PublicKey(next_staking_pk);
+
+        let (pos_data, block_timestamp, reward_outputs) = pos_mine(
+            &tf,
+            pool_id,
+            staking_destination,
+            &staking_sk,
+            next_staking_destination,
+            &vrf_sk,
+            stake_pool_outpoint,
+            &mut rng,
+        );
+
+        let err = tf
+            .make_block_builder()
+            .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
+            .with_block_signing_key(staking_sk)
+            .with_timestamp(block_timestamp)
+            .with_reward(reward_outputs)
+            .build_and_process(&mut rng)
+            .unwrap_err();
+
+        assert_matches!(
+            err,
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::ProduceBlockFromStakeChangesStakerDestination(_, _)
+            ))
+        );
+    }
+}
+
+mod staker_destination_change_test_utils {
+    use super::*;
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn pos_mine(
+        tf: &TestFramework,
+        pool_id: PoolId,
+        cur_staking_destination: Destination,
+        cur_staking_sk: &PrivateKey,
+        next_staking_destination: Destination,
+        vrf_sk: &VRFPrivateKey,
+        kernel_outpoint: UtxoOutPoint,
+        rng: &mut (impl Rng + CryptoRng),
+    ) -> (PoSData, BlockTimestamp, Vec<TxOutput>) {
+        let reward_outputs =
+            vec![TxOutput::ProduceBlockFromStake(next_staking_destination, pool_id)];
+
+        let kernel_sig = produce_kernel_signature(
+            rng,
+            tf,
+            cur_staking_sk,
+            reward_outputs.as_slice(),
+            cur_staking_destination,
+            tf.best_block_id(),
+            kernel_outpoint.clone(),
+        );
+
+        let chain_config = tf.chainstate.get_chain_config();
+        let new_block_height = tf.best_block_index().block_height().next_height();
+        let current_difficulty = calculate_new_target(tf, new_block_height).unwrap();
+        let final_supply = chain_config.final_supply().unwrap();
+        let epoch_index = chain_config.epoch_index_from_height(&new_block_height);
+        let randomness = tf.pos_randomness_for_height(&new_block_height);
+
+        let (pos_data, block_timestamp) = chainstate_test_framework::pos_mine(
+            rng,
+            &tf.storage.transaction_ro().unwrap(),
+            &get_pos_chain_config(chain_config, new_block_height),
+            BlockTimestamp::from_time(tf.current_time()),
+            kernel_outpoint,
+            InputWitness::Standard(kernel_sig),
+            vrf_sk,
+            randomness,
+            pool_id,
+            final_supply,
+            epoch_index,
+            current_difficulty,
+        )
+        .unwrap();
+
+        (pos_data, block_timestamp, reward_outputs)
+    }
 }

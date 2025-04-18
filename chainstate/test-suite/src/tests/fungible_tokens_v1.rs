@@ -15,6 +15,8 @@
 
 use std::collections::BTreeMap;
 
+use rstest::rstest;
+
 use chainstate::{
     BlockError, BlockSource, ChainstateError, CheckBlockError, CheckBlockTransactionsError,
     ConnectTransactionError, IOPolicyError, TokensError,
@@ -33,14 +35,14 @@ use common::{
             make_token_id, IsTokenFreezable, IsTokenUnfreezable, TokenId, TokenIssuance,
             TokenIssuanceV1, TokenTotalSupply,
         },
-        AccountCommand, AccountNonce, AccountType, Block, Destination, GenBlock, OrderData,
-        OutPointSourceId, SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
+        AccountCommand, AccountNonce, AccountType, Block, ChainstateUpgradeBuilder, Destination,
+        GenBlock, OrderData, OutPointSourceId, SignedTransaction, Transaction, TxInput, TxOutput,
+        UtxoOutPoint,
     },
     primitives::{amount::SignedAmount, Amount, BlockHeight, CoinOrTokenId, Id, Idable},
 };
 use crypto::key::{KeyKind, PrivateKey};
 use randomness::{CryptoRng, Rng};
-use rstest::rstest;
 use test_utils::{
     gen_text_with_non_ascii,
     random::{make_seedable_rng, Seed},
@@ -53,10 +55,7 @@ use tx_verifier::{
     CheckTransactionError,
 };
 
-use crate::tests::helpers::{
-    chainstate_upgrade_builder::ChainstateUpgradeBuilder, issue_token_from_block,
-    mint_tokens_in_block,
-};
+use crate::tests::helpers::{issue_token_from_block, mint_tokens_in_block};
 
 fn make_issuance(
     rng: &mut impl Rng,

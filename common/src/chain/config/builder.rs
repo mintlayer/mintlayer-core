@@ -28,11 +28,11 @@ use crate::{
         },
         pos_initial_difficulty,
         pow::PoWChainConfigBuilder,
-        ChainstateUpgrade, ChangeTokenMetadataUriActivated, CoinUnit, ConsensusUpgrade,
-        DataDepositFeeVersion, Destination, FrozenTokensValidationVersion, GenBlock, Genesis,
-        HtlcActivated, NetUpgrades, OrdersActivated, OrdersVersion, PoSChainConfig,
-        PoSConsensusVersion, PoWChainConfig, RewardDistributionVersion, TokenIssuanceVersion,
-        TokensFeeVersion,
+        ChainstateUpgrade, ChainstateUpgradesBuilder, ChangeTokenMetadataUriActivated, CoinUnit,
+        ConsensusUpgrade, DataDepositFeeVersion, Destination, FrozenTokensValidationVersion,
+        GenBlock, Genesis, HtlcActivated, NetUpgrades, OrdersActivated, OrdersVersion,
+        PoSChainConfig, PoSConsensusVersion, PoWChainConfig, RewardDistributionVersion,
+        StakerDestinationUpdateForbidden, TokenIssuanceVersion, TokensFeeVersion,
     },
     primitives::{
         id::WithId, per_thousand::PerThousand, semver::SemVer, Amount, BlockCount, BlockDistance,
@@ -47,20 +47,30 @@ use super::{
     MagicBytes,
 };
 
-// The fork, at which we upgrade consensus to dis-incentivize large pools + enable tokens v1
-const TESTNET_TOKEN_FORK_HEIGHT: BlockHeight = BlockHeight::new(78_440);
-// The fork, at which we upgrade chainstate to distribute reward to staker proportionally to their balance
-// and change various tokens fees
-const TESTNET_STAKER_REWARD_AND_TOKENS_FEE_FORK_HEIGHT: BlockHeight = BlockHeight::new(138_244);
-// The fork, at which txs with htlc outputs become valid, data deposit fee and size, max future block time offset changed
-const TESTNET_HTLC_AND_DATA_DEPOSIT_FEE_FORK_HEIGHT: BlockHeight = BlockHeight::new(297_550);
-// The fork, at which order outputs become valid
-const TESTNET_ORDERS_FORK_HEIGHT: BlockHeight = BlockHeight::new(325_180);
-const TESTNET_ORDERS_V1_FORK_HEIGHT: BlockHeight = BlockHeight::new(999_999_999);
+// TODO: regarding staker destination change prohibition - the ability to change the destination
+// has never been used up until now and it will likely never be. In such a case, when the corresponding
+// fork height + 1000 blocks (the reorg limit) will have been passed both on testnet and mainnet,
+// the `StakerDestinationUpdateForbidden` upgrade can be completely removed, as if this ability has
+// never existed.
 
-// The fork, at which txs with htlc and orders outputs become valid
-const MAINNET_HTLC_AND_ORDERS_FORK_HEIGHT: BlockHeight = BlockHeight::new(254_740);
-const MAINNET_ORDERS_V1_FORK_HEIGHT: BlockHeight = BlockHeight::new(999_999_999);
+// The fork at which we upgrade consensus to dis-incentivize large pools + enable tokens v1
+const TESTNET_FORK_HEIGHT_1_TOKENS_V1_AND_CONSENSUS_UPGRADE: BlockHeight = BlockHeight::new(78_440);
+// The fork at which we upgrade chainstate to distribute reward to staker proportionally to their balance
+// and change various tokens fees
+const TESTNET_FORK_HEIGHT_2_STAKER_REWARD_AND_TOKENS_FEE: BlockHeight = BlockHeight::new(138_244);
+// The fork at which txs with htlc outputs become valid, data deposit fee and size, max future block time offset changed
+const TESTNET_FORK_HEIGHT_3_HTLC_AND_DATA_DEPOSIT_FEE: BlockHeight = BlockHeight::new(297_550);
+// The fork at which order outputs become valid
+const TESTNET_FORK_HEIGHT_4_ORDERS: BlockHeight = BlockHeight::new(325_180);
+// The fork at which we enable orders v1 and prohibit updating the staker destination in ProduceBlockFromStake.
+const TESTNET_FORK_HEIGHT_5_ORDERS_V1_AND_STAKER_DESTINATION_UPDATE_PROHIBITION: BlockHeight =
+    BlockHeight::new(999_999_999);
+
+// The fork at which txs with htlc and orders outputs become valid
+const MAINNET_FORK_HEIGHT_1_HTLC_AND_ORDERS: BlockHeight = BlockHeight::new(254_740);
+// The fork at which we enable orders v1 and prohibit updating the staker destination in ProduceBlockFromStake.
+const MAINNET_FORK_HEIGHT_2_ORDERS_V1_AND_STAKER_DESTINATION_UPDATE_PROHIBITION: BlockHeight =
+    BlockHeight::new(999_999_999);
 
 impl ChainType {
     fn default_genesis_init(&self) -> GenesisBlockInit {
@@ -145,7 +155,7 @@ impl ChainType {
                         },
                     ),
                     (
-                        TESTNET_TOKEN_FORK_HEIGHT,
+                        TESTNET_FORK_HEIGHT_1_TOKENS_V1_AND_CONSENSUS_UPGRADE,
                         ConsensusUpgrade::PoS {
                             initial_difficulty: None,
                             config: PoSChainConfig::new(
@@ -166,53 +176,35 @@ impl ChainType {
 
     fn default_chainstate_upgrades(&self) -> NetUpgrades<ChainstateUpgrade> {
         match self {
-            ChainType::Mainnet => {
-                let upgrades = vec![
-                    (
-                        BlockHeight::new(0),
-                        ChainstateUpgrade::new(
-                            TokenIssuanceVersion::V1,
-                            RewardDistributionVersion::V1,
-                            TokensFeeVersion::V1,
-                            DataDepositFeeVersion::V0,
-                            ChangeTokenMetadataUriActivated::No,
-                            FrozenTokensValidationVersion::V0,
-                            HtlcActivated::No,
-                            OrdersActivated::No,
-                            OrdersVersion::V0,
-                        ),
-                    ),
-                    (
-                        MAINNET_HTLC_AND_ORDERS_FORK_HEIGHT,
-                        ChainstateUpgrade::new(
-                            TokenIssuanceVersion::V1,
-                            RewardDistributionVersion::V1,
-                            TokensFeeVersion::V1,
-                            DataDepositFeeVersion::V1,
-                            ChangeTokenMetadataUriActivated::Yes,
-                            FrozenTokensValidationVersion::V1,
-                            HtlcActivated::Yes,
-                            OrdersActivated::Yes,
-                            OrdersVersion::V0,
-                        ),
-                    ),
-                    (
-                        MAINNET_ORDERS_V1_FORK_HEIGHT,
-                        ChainstateUpgrade::new(
-                            TokenIssuanceVersion::V1,
-                            RewardDistributionVersion::V1,
-                            TokensFeeVersion::V1,
-                            DataDepositFeeVersion::V1,
-                            ChangeTokenMetadataUriActivated::Yes,
-                            FrozenTokensValidationVersion::V1,
-                            HtlcActivated::Yes,
-                            OrdersActivated::Yes,
-                            OrdersVersion::V1,
-                        ),
-                    ),
-                ];
-                NetUpgrades::initialize(upgrades).expect("net upgrades")
-            }
+            ChainType::Mainnet => ChainstateUpgradesBuilder::new(ChainstateUpgrade::new(
+                TokenIssuanceVersion::V1,
+                RewardDistributionVersion::V1,
+                TokensFeeVersion::V1,
+                DataDepositFeeVersion::V0,
+                ChangeTokenMetadataUriActivated::No,
+                FrozenTokensValidationVersion::V0,
+                HtlcActivated::No,
+                OrdersActivated::No,
+                OrdersVersion::V0,
+                StakerDestinationUpdateForbidden::No,
+            ))
+            .then(MAINNET_FORK_HEIGHT_1_HTLC_AND_ORDERS, |builder| {
+                builder
+                    .data_deposit_fee_version(DataDepositFeeVersion::V1)
+                    .change_token_metadata_uri_activated(ChangeTokenMetadataUriActivated::Yes)
+                    .frozen_tokens_validation_version(FrozenTokensValidationVersion::V1)
+                    .htlc_activated(HtlcActivated::Yes)
+                    .orders_activated(OrdersActivated::Yes)
+            })
+            .then(
+                MAINNET_FORK_HEIGHT_2_ORDERS_V1_AND_STAKER_DESTINATION_UPDATE_PROHIBITION,
+                |builder| {
+                    builder
+                        .orders_version(OrdersVersion::V1)
+                        .staker_destination_update_forbidden(StakerDestinationUpdateForbidden::Yes)
+                },
+            )
+            .build(),
             ChainType::Regtest | ChainType::Signet => {
                 let upgrades = vec![(
                     BlockHeight::new(0),
@@ -226,99 +218,55 @@ impl ChainType {
                         HtlcActivated::Yes,
                         OrdersActivated::Yes,
                         OrdersVersion::V1,
+                        StakerDestinationUpdateForbidden::Yes,
                     ),
                 )];
                 NetUpgrades::initialize(upgrades).expect("net upgrades")
             }
-            ChainType::Testnet => {
-                let upgrades = vec![
-                    (
-                        BlockHeight::new(0),
-                        ChainstateUpgrade::new(
-                            TokenIssuanceVersion::V0,
-                            RewardDistributionVersion::V0,
-                            TokensFeeVersion::V0,
-                            DataDepositFeeVersion::V0,
-                            ChangeTokenMetadataUriActivated::No,
-                            FrozenTokensValidationVersion::V0,
-                            HtlcActivated::No,
-                            OrdersActivated::No,
-                            OrdersVersion::V0,
-                        ),
-                    ),
-                    (
-                        TESTNET_TOKEN_FORK_HEIGHT,
-                        ChainstateUpgrade::new(
-                            TokenIssuanceVersion::V1,
-                            RewardDistributionVersion::V0,
-                            TokensFeeVersion::V0,
-                            DataDepositFeeVersion::V0,
-                            ChangeTokenMetadataUriActivated::No,
-                            FrozenTokensValidationVersion::V0,
-                            HtlcActivated::No,
-                            OrdersActivated::No,
-                            OrdersVersion::V0,
-                        ),
-                    ),
-                    (
-                        TESTNET_STAKER_REWARD_AND_TOKENS_FEE_FORK_HEIGHT,
-                        ChainstateUpgrade::new(
-                            TokenIssuanceVersion::V1,
-                            RewardDistributionVersion::V1,
-                            TokensFeeVersion::V1,
-                            DataDepositFeeVersion::V0,
-                            ChangeTokenMetadataUriActivated::No,
-                            FrozenTokensValidationVersion::V0,
-                            HtlcActivated::No,
-                            OrdersActivated::No,
-                            OrdersVersion::V0,
-                        ),
-                    ),
-                    (
-                        TESTNET_HTLC_AND_DATA_DEPOSIT_FEE_FORK_HEIGHT,
-                        ChainstateUpgrade::new(
-                            TokenIssuanceVersion::V1,
-                            RewardDistributionVersion::V1,
-                            TokensFeeVersion::V1,
-                            DataDepositFeeVersion::V1,
-                            ChangeTokenMetadataUriActivated::Yes,
-                            FrozenTokensValidationVersion::V0,
-                            HtlcActivated::Yes,
-                            OrdersActivated::No,
-                            OrdersVersion::V0,
-                        ),
-                    ),
-                    (
-                        TESTNET_ORDERS_FORK_HEIGHT,
-                        ChainstateUpgrade::new(
-                            TokenIssuanceVersion::V1,
-                            RewardDistributionVersion::V1,
-                            TokensFeeVersion::V1,
-                            DataDepositFeeVersion::V1,
-                            ChangeTokenMetadataUriActivated::Yes,
-                            FrozenTokensValidationVersion::V1,
-                            HtlcActivated::Yes,
-                            OrdersActivated::Yes,
-                            OrdersVersion::V0,
-                        ),
-                    ),
-                    (
-                        TESTNET_ORDERS_V1_FORK_HEIGHT,
-                        ChainstateUpgrade::new(
-                            TokenIssuanceVersion::V1,
-                            RewardDistributionVersion::V1,
-                            TokensFeeVersion::V1,
-                            DataDepositFeeVersion::V1,
-                            ChangeTokenMetadataUriActivated::Yes,
-                            FrozenTokensValidationVersion::V1,
-                            HtlcActivated::Yes,
-                            OrdersActivated::Yes,
-                            OrdersVersion::V1,
-                        ),
-                    ),
-                ];
-                NetUpgrades::initialize(upgrades).expect("net upgrades")
-            }
+            ChainType::Testnet => ChainstateUpgradesBuilder::new(ChainstateUpgrade::new(
+                TokenIssuanceVersion::V0,
+                RewardDistributionVersion::V0,
+                TokensFeeVersion::V0,
+                DataDepositFeeVersion::V0,
+                ChangeTokenMetadataUriActivated::No,
+                FrozenTokensValidationVersion::V0,
+                HtlcActivated::No,
+                OrdersActivated::No,
+                OrdersVersion::V0,
+                StakerDestinationUpdateForbidden::No,
+            ))
+            .then(
+                TESTNET_FORK_HEIGHT_1_TOKENS_V1_AND_CONSENSUS_UPGRADE,
+                |builder| builder.token_issuance_version(TokenIssuanceVersion::V1),
+            )
+            .then(
+                TESTNET_FORK_HEIGHT_2_STAKER_REWARD_AND_TOKENS_FEE,
+                |builder| {
+                    builder
+                        .reward_distribution_version(RewardDistributionVersion::V1)
+                        .tokens_fee_version(TokensFeeVersion::V1)
+                },
+            )
+            .then(TESTNET_FORK_HEIGHT_3_HTLC_AND_DATA_DEPOSIT_FEE, |builder| {
+                builder
+                    .data_deposit_fee_version(DataDepositFeeVersion::V1)
+                    .change_token_metadata_uri_activated(ChangeTokenMetadataUriActivated::Yes)
+                    .htlc_activated(HtlcActivated::Yes)
+            })
+            .then(TESTNET_FORK_HEIGHT_4_ORDERS, |builder| {
+                builder
+                    .frozen_tokens_validation_version(FrozenTokensValidationVersion::V1)
+                    .orders_activated(OrdersActivated::Yes)
+            })
+            .then(
+                TESTNET_FORK_HEIGHT_5_ORDERS_V1_AND_STAKER_DESTINATION_UPDATE_PROHIBITION,
+                |builder| {
+                    builder
+                        .orders_version(OrdersVersion::V1)
+                        .staker_destination_update_forbidden(StakerDestinationUpdateForbidden::Yes)
+                },
+            )
+            .build(),
         }
     }
 }
@@ -680,8 +628,9 @@ mod tests {
         {
             let config = Builder::new(ChainType::Mainnet).build();
 
-            let before_the_fork =
-                BlockHeight::new(rng.gen_range(0..MAINNET_HTLC_AND_ORDERS_FORK_HEIGHT.into_int()));
+            let before_the_fork = BlockHeight::new(
+                rng.gen_range(0..MAINNET_FORK_HEIGHT_1_HTLC_AND_ORDERS.into_int()),
+            );
             assert_eq!(
                 DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET_V1,
                 config.max_future_block_time_offset(before_the_fork)
@@ -689,11 +638,11 @@ mod tests {
 
             assert_eq!(
                 DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET_V2,
-                config.max_future_block_time_offset(MAINNET_HTLC_AND_ORDERS_FORK_HEIGHT)
+                config.max_future_block_time_offset(MAINNET_FORK_HEIGHT_1_HTLC_AND_ORDERS)
             );
 
             let after_the_fork = BlockHeight::new(
-                rng.gen_range(MAINNET_HTLC_AND_ORDERS_FORK_HEIGHT.into_int()..u64::MAX),
+                rng.gen_range(MAINNET_FORK_HEIGHT_1_HTLC_AND_ORDERS.into_int()..u64::MAX),
             );
             assert_eq!(
                 DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET_V2,
@@ -706,7 +655,7 @@ mod tests {
             let config = Builder::new(ChainType::Testnet).build();
 
             let before_the_fork = BlockHeight::new(
-                rng.gen_range(0..TESTNET_HTLC_AND_DATA_DEPOSIT_FEE_FORK_HEIGHT.into_int()),
+                rng.gen_range(0..TESTNET_FORK_HEIGHT_3_HTLC_AND_DATA_DEPOSIT_FEE.into_int()),
             );
             assert_eq!(
                 DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET_V1,
@@ -715,11 +664,12 @@ mod tests {
 
             assert_eq!(
                 DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET_V2,
-                config.max_future_block_time_offset(TESTNET_HTLC_AND_DATA_DEPOSIT_FEE_FORK_HEIGHT)
+                config
+                    .max_future_block_time_offset(TESTNET_FORK_HEIGHT_3_HTLC_AND_DATA_DEPOSIT_FEE)
             );
 
             let after_the_fork = BlockHeight::new(
-                rng.gen_range(TESTNET_HTLC_AND_DATA_DEPOSIT_FEE_FORK_HEIGHT.into_int()..u64::MAX),
+                rng.gen_range(TESTNET_FORK_HEIGHT_3_HTLC_AND_DATA_DEPOSIT_FEE.into_int()..u64::MAX),
             );
             assert_eq!(
                 DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET_V2,
@@ -747,6 +697,168 @@ mod tests {
 
             let height = BlockHeight::new(rng.gen::<u64>());
             assert_eq!(custom_offset, config.max_future_block_time_offset(height));
+        }
+    }
+
+    #[test]
+    fn chainstate_upgrades() {
+        // Mainnet
+        {
+            let config = Builder::new(ChainType::Mainnet).build();
+
+            assert_eq!(
+                config.chainstate_upgrades(),
+                &NetUpgrades::initialize(vec![
+                    (
+                        BlockHeight::new(0),
+                        ChainstateUpgrade::new(
+                            TokenIssuanceVersion::V1,
+                            RewardDistributionVersion::V1,
+                            TokensFeeVersion::V1,
+                            DataDepositFeeVersion::V0,
+                            ChangeTokenMetadataUriActivated::No,
+                            FrozenTokensValidationVersion::V0,
+                            HtlcActivated::No,
+                            OrdersActivated::No,
+                            OrdersVersion::V0,
+                            StakerDestinationUpdateForbidden::No,
+                        ),
+                    ),
+                    (
+                        MAINNET_FORK_HEIGHT_1_HTLC_AND_ORDERS,
+                        ChainstateUpgrade::new(
+                            TokenIssuanceVersion::V1,
+                            RewardDistributionVersion::V1,
+                            TokensFeeVersion::V1,
+                            DataDepositFeeVersion::V1,
+                            ChangeTokenMetadataUriActivated::Yes,
+                            FrozenTokensValidationVersion::V1,
+                            HtlcActivated::Yes,
+                            OrdersActivated::Yes,
+                            OrdersVersion::V0,
+                            StakerDestinationUpdateForbidden::No,
+                        ),
+                    ),
+                    (
+                        MAINNET_FORK_HEIGHT_2_ORDERS_V1_AND_STAKER_DESTINATION_UPDATE_PROHIBITION,
+                        ChainstateUpgrade::new(
+                            TokenIssuanceVersion::V1,
+                            RewardDistributionVersion::V1,
+                            TokensFeeVersion::V1,
+                            DataDepositFeeVersion::V1,
+                            ChangeTokenMetadataUriActivated::Yes,
+                            FrozenTokensValidationVersion::V1,
+                            HtlcActivated::Yes,
+                            OrdersActivated::Yes,
+                            OrdersVersion::V1,
+                            StakerDestinationUpdateForbidden::Yes,
+                        ),
+                    ),
+                ])
+                .unwrap()
+            );
+        }
+
+        // Testnet
+        {
+            let config = Builder::new(ChainType::Testnet).build();
+
+            assert_eq!(
+                config.chainstate_upgrades(),
+                &NetUpgrades::initialize(vec![
+                    (
+                        BlockHeight::new(0),
+                        ChainstateUpgrade::new(
+                            TokenIssuanceVersion::V0,
+                            RewardDistributionVersion::V0,
+                            TokensFeeVersion::V0,
+                            DataDepositFeeVersion::V0,
+                            ChangeTokenMetadataUriActivated::No,
+                            FrozenTokensValidationVersion::V0,
+                            HtlcActivated::No,
+                            OrdersActivated::No,
+                            OrdersVersion::V0,
+                            StakerDestinationUpdateForbidden::No,
+                        ),
+                    ),
+                    (
+                        TESTNET_FORK_HEIGHT_1_TOKENS_V1_AND_CONSENSUS_UPGRADE,
+                        ChainstateUpgrade::new(
+                            TokenIssuanceVersion::V1,
+                            RewardDistributionVersion::V0,
+                            TokensFeeVersion::V0,
+                            DataDepositFeeVersion::V0,
+                            ChangeTokenMetadataUriActivated::No,
+                            FrozenTokensValidationVersion::V0,
+                            HtlcActivated::No,
+                            OrdersActivated::No,
+                            OrdersVersion::V0,
+                            StakerDestinationUpdateForbidden::No,
+                        ),
+                    ),
+                    (
+                        TESTNET_FORK_HEIGHT_2_STAKER_REWARD_AND_TOKENS_FEE,
+                        ChainstateUpgrade::new(
+                            TokenIssuanceVersion::V1,
+                            RewardDistributionVersion::V1,
+                            TokensFeeVersion::V1,
+                            DataDepositFeeVersion::V0,
+                            ChangeTokenMetadataUriActivated::No,
+                            FrozenTokensValidationVersion::V0,
+                            HtlcActivated::No,
+                            OrdersActivated::No,
+                            OrdersVersion::V0,
+                            StakerDestinationUpdateForbidden::No,
+                        ),
+                    ),
+                    (
+                        TESTNET_FORK_HEIGHT_3_HTLC_AND_DATA_DEPOSIT_FEE,
+                        ChainstateUpgrade::new(
+                            TokenIssuanceVersion::V1,
+                            RewardDistributionVersion::V1,
+                            TokensFeeVersion::V1,
+                            DataDepositFeeVersion::V1,
+                            ChangeTokenMetadataUriActivated::Yes,
+                            FrozenTokensValidationVersion::V0,
+                            HtlcActivated::Yes,
+                            OrdersActivated::No,
+                            OrdersVersion::V0,
+                            StakerDestinationUpdateForbidden::No,
+                        ),
+                    ),
+                    (
+                        TESTNET_FORK_HEIGHT_4_ORDERS,
+                        ChainstateUpgrade::new(
+                            TokenIssuanceVersion::V1,
+                            RewardDistributionVersion::V1,
+                            TokensFeeVersion::V1,
+                            DataDepositFeeVersion::V1,
+                            ChangeTokenMetadataUriActivated::Yes,
+                            FrozenTokensValidationVersion::V1,
+                            HtlcActivated::Yes,
+                            OrdersActivated::Yes,
+                            OrdersVersion::V0,
+                            StakerDestinationUpdateForbidden::No,
+                        ),
+                    ),
+                    (
+                        TESTNET_FORK_HEIGHT_5_ORDERS_V1_AND_STAKER_DESTINATION_UPDATE_PROHIBITION,
+                        ChainstateUpgrade::new(
+                            TokenIssuanceVersion::V1,
+                            RewardDistributionVersion::V1,
+                            TokensFeeVersion::V1,
+                            DataDepositFeeVersion::V1,
+                            ChangeTokenMetadataUriActivated::Yes,
+                            FrozenTokensValidationVersion::V1,
+                            HtlcActivated::Yes,
+                            OrdersActivated::Yes,
+                            OrdersVersion::V1,
+                            StakerDestinationUpdateForbidden::Yes,
+                        ),
+                    ),
+                ])
+                .unwrap()
+            );
         }
     }
 }
