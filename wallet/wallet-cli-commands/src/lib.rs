@@ -78,7 +78,7 @@ pub enum WalletManagementCommand {
 
         /// Optionally specify the ID for the trezor device to connect to in case there
         /// are multiple trezor devices connected at the same time.
-        /// If not specified and there are multiple devices connected a choice will be presented
+        /// If not specified and there are multiple devices connected a choice will be presented.
         #[arg(long, conflicts_with_all(["mnemonic", "passphrase", "whether_to_store_seed_phrase"]))]
         trezor_device_id: Option<String>,
     },
@@ -133,8 +133,8 @@ pub enum WalletManagementCommand {
 
         /// Optionally specify the ID for the trezor device to connect to in case there
         /// are multiple trezor devices connected at the same time.
-        /// If not specified and there are multiple devices connected a choice will be presented
-        #[arg(long, conflicts_with_all(["mnemonic", "passphrase", "whether_to_store_seed_phrase"]))]
+        /// If not specified and there are multiple devices connected a choice will be presented.
+        #[arg(long, conflicts_with_all(["force_change_wallet_type"]))]
         trezor_device_id: Option<String>,
     },
 

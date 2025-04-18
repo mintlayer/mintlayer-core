@@ -126,7 +126,7 @@ async fn ok(#[case] seed: Seed) {
                         .build();
 
                     let token_id =
-                        make_token_id(&chain_config, BlockHeight::zero(), transaction.inputs())
+                        make_token_id(&chain_config, tf.next_block_height(), transaction.inputs())
                             .unwrap();
                     token_ids.push(token_id);
                     input = TxInput::from_utxo(
@@ -146,7 +146,7 @@ async fn ok(#[case] seed: Seed) {
                 for _ in 0..10 {
                     let nft = test_utils::nft_utils::random_nft_issuance(&chain_config, &mut rng);
                     let token_id =
-                        make_token_id(&chain_config, BlockHeight::zero(), &[input.clone()])
+                        make_token_id(&chain_config, tf.next_block_height(), &[input.clone()])
                             .unwrap();
 
                     // issue NFT
@@ -164,7 +164,7 @@ async fn ok(#[case] seed: Seed) {
                         .build();
 
                     let token_id =
-                        make_token_id(&chain_config, BlockHeight::zero(), transaction.inputs())
+                        make_token_id(&chain_config, tf.next_block_height(), transaction.inputs())
                             .unwrap();
                     nft_ids.push(token_id);
                     input = TxInput::from_utxo(

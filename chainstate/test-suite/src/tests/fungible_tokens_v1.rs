@@ -25,6 +25,7 @@ use chainstate_storage::{BlockchainStorageRead, Transactional};
 use chainstate_test_framework::{TestFramework, TransactionBuilder};
 use common::{
     chain::{
+        make_token_id,
         output_value::OutputValue,
         signature::{
             inputsig::{standard_signature::StandardInputSignature, InputWitness},
@@ -377,14 +378,19 @@ fn token_issue_test(#[case] seed: Seed) {
         let issuance = make_issuance(&mut rng, TokenTotalSupply::Unlimited, IsTokenFreezable::No);
         let tx = TransactionBuilder::new()
             .add_input(
-                TxInput::from_utxo(genesis_source_id.clone(), 0),
+                TxInput::from_utxo(genesis_source_id, 0),
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::IssueFungibleToken(Box::new(issuance.clone())))
             .build();
+        let token_id = make_token_id(
+            tf.chain_config().as_ref(),
+            tf.next_block_height(),
+            tx.inputs(),
+        )
+        .unwrap();
         tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
-        let token_id = TokenId::from_utxo(&UtxoOutPoint::new(genesis_source_id, 0));
         let actual_token_data = TokensAccountingStorageRead::get_token_data(
             &tf.storage.transaction_ro().unwrap(),
             &token_id,
@@ -2852,7 +2858,13 @@ fn issue_and_mint_same_tx(#[case] seed: Seed) {
         let genesis_source_id: OutPointSourceId = tf.genesis().get_id().into();
 
         let amount_to_mint = Amount::from_atoms(rng.gen_range(1..100_000));
-        let token_id = TokenId::from_utxo(&UtxoOutPoint::new(genesis_source_id.clone(), 0));
+        let first_tx_input = TxInput::from_utxo(genesis_source_id.clone(), 0);
+        let token_id = make_token_id(
+            tf.chain_config().as_ref(),
+            tf.next_block_height(),
+            &[first_tx_input.clone()],
+        )
+        .unwrap();
 
         let issuance = make_issuance(&mut rng, TokenTotalSupply::Unlimited, IsTokenFreezable::No);
         let tx = TransactionBuilder::new()
@@ -2903,14 +2915,21 @@ fn issue_and_mint_same_block(#[case] seed: Seed) {
         let token_supply_change_fee =
             tf.chainstate.get_chain_config().token_supply_change_fee(BlockHeight::zero());
         let amount_to_mint = Amount::from_atoms(rng.gen_range(1..100_000));
-        let token_id = TokenId::from_utxo(&UtxoOutPoint::new(genesis_source_id.clone(), 0));
+
+        let tx_issuance_inputs = vec![TxInput::from_utxo(genesis_source_id, 0)];
+        let token_id = make_token_id(
+            tf.chain_config().as_ref(),
+            tf.next_block_height(),
+            &tx_issuance_inputs,
+        )
+        .unwrap();
 
         let issuance = make_issuance(&mut rng, TokenTotalSupply::Unlimited, IsTokenFreezable::No);
         let tx_issuance = TransactionBuilder::new()
-            .add_input(
-                TxInput::from_utxo(genesis_source_id, 0),
-                InputWitness::NoSignature(None),
+            .with_witnesses(
+                tx_issuance_inputs.iter().map(|_| InputWitness::NoSignature(None)).collect(),
             )
+            .with_inputs(tx_issuance_inputs)
             .add_output(TxOutput::IssueFungibleToken(Box::new(issuance.clone())))
             .add_output(TxOutput::Transfer(
                 OutputValue::Coin(token_supply_change_fee),
@@ -5620,7 +5639,12 @@ fn issue_same_token_alternative_pos_chain(#[case] seed: Seed) {
             ))
             .add_output(TxOutput::IssueFungibleToken(Box::new(issuance.clone())))
             .build();
-        let token_id = TokenId::from_utxo(&UtxoOutPoint::new(genesis_block_id.into(), 0));
+        let token_id = make_token_id(
+            tf.chain_config().as_ref(),
+            tf.next_block_height(),
+            issue_token_tx.inputs(),
+        )
+        .unwrap();
         let tx_id = issue_token_tx.transaction().get_id();
         tf.make_pos_block_builder()
             .with_stake_pool_id(genesis_pool_id)
@@ -6299,12 +6323,12 @@ fn only_authority_can_change_metadata_uri(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn test_make_token_id_activation(#[case] seed: Seed) {
-    use common::chain::make_token_id;
-
+fn token_id_generation_v1_activation(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = test_utils::random::make_seedable_rng(seed);
+
         // activate feature at height 3
+        let fork_height = BlockHeight::new(3);
         let mut tf = TestFramework::builder(&mut rng)
             .with_chain_config(
                 common::chain::config::Builder::test_chain()
@@ -6319,7 +6343,7 @@ fn test_make_token_id_activation(#[case] seed: Seed) {
                                     .build(),
                             ),
                             (
-                                BlockHeight::new(3),
+                                fork_height,
                                 ChainstateUpgradeBuilder::latest()
                                     .token_id_generation_version(
                                         common::chain::TokenIdGenerationVersion::V1,
@@ -6347,17 +6371,16 @@ fn test_make_token_id_activation(#[case] seed: Seed) {
         let token_issuance_fee = tf.chainstate.get_chain_config().fungible_token_issuance_fee();
         let token_change_authority_fee =
             tf.chainstate.get_chain_config().token_change_authority_fee(BlockHeight::zero());
+        let tx1_first_input = TxInput::AccountCommand(
+            AccountNonce::new(0),
+            AccountCommand::LockTokenSupply(token_id_0),
+        );
+        let tx1_first_utxo_input = TxInput::Utxo(utxo_with_change);
 
         let tx1 = TransactionBuilder::new()
+            .add_input(tx1_first_input.clone(), InputWitness::NoSignature(None))
             .add_input(
-                TxInput::AccountCommand(
-                    AccountNonce::new(0),
-                    AccountCommand::LockTokenSupply(token_id_0),
-                ),
-                InputWitness::NoSignature(None),
-            )
-            .add_input(
-                utxo_with_change.clone().into(),
+                tx1_first_utxo_input.clone(),
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::Transfer(
@@ -6368,81 +6391,89 @@ fn test_make_token_id_activation(#[case] seed: Seed) {
             .build();
 
         let issue_token_1_tx_id = tx1.transaction().get_id();
-        let token_id_1 = make_token_id(
+        let token1_id = make_token_id(
             tf.chain_config(),
-            tf.best_block_index().block_height().next_height(),
+            tf.next_block_height(),
             tx1.transaction().inputs(),
         )
         .unwrap();
 
-        let _ = tf
-            .make_block_builder()
+        tf.make_block_builder()
             .add_transaction(tx1)
             .build_and_process(&mut rng)
             .unwrap();
 
         let token_1_data = TokensAccountingStorageRead::get_token_data(
             &tf.storage.transaction_ro().unwrap(),
-            &token_id_1,
+            &token1_id,
         )
         .unwrap();
         assert!(token_1_data.is_some());
-        assert_ne!(token_id_1, TokenId::from_utxo(&utxo_with_change));
+        assert_eq!(token1_id, TokenId::from_tx_input(&tx1_first_input));
+        assert_ne!(token1_id, TokenId::from_tx_input(&tx1_first_utxo_input));
 
-        // Check that at height 3 token is issued not from the first input but from the first utxo input
+        let token2_creation_height = tf.next_block_height();
+
+        // Sanity check
+        assert_eq!(token2_creation_height, fork_height);
+
+        // Check that after the fork a token is issued not from the first input but from the first utxo input.
+        let tx2_first_input = TxInput::AccountCommand(
+            AccountNonce::new(1),
+            AccountCommand::ChangeTokenAuthority(token_id_0, Destination::AnyoneCanSpend),
+        );
+        let tx2_first_utxo_input = TxInput::from_utxo(issue_token_1_tx_id.into(), 0);
+
         let tx2 = TransactionBuilder::new()
+            .add_input(tx2_first_input.clone(), InputWitness::NoSignature(None))
             .add_input(
-                TxInput::AccountCommand(
-                    AccountNonce::new(1),
-                    AccountCommand::ChangeTokenAuthority(token_id_0, Destination::AnyoneCanSpend),
-                ),
-                InputWitness::NoSignature(None),
-            )
-            .add_input(
-                TxInput::from_utxo(issue_token_1_tx_id.into(), 0),
+                tx2_first_utxo_input.clone(),
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::IssueFungibleToken(Box::new(issuance.clone())))
             .build();
 
-        let token_id_2 = make_token_id(
+        let token2_id = make_token_id(
             tf.chain_config(),
-            tf.best_block_index().block_height().next_height(),
+            token2_creation_height,
             tx2.transaction().inputs(),
         )
         .unwrap();
+        // token2_id was created from the first utxo inputs.
+        assert_eq!(token2_id, TokenId::from_tx_input(&tx2_first_utxo_input));
+
+        // The id that token2 would have before the fork.
+        let token2_id_before_fork = make_token_id(
+            tf.chain_config(),
+            token2_creation_height.prev_height().unwrap(),
+            tx2.transaction().inputs(),
+        )
+        .unwrap();
+        // Sanity check - before the fork the id of token2 would be generated from the first input
+        // and it would be different from token2_id.
         assert_eq!(
-            token_id_2,
-            TokenId::from_utxo(&UtxoOutPoint::new(issue_token_1_tx_id.into(), 0))
+            token2_id_before_fork,
+            TokenId::from_tx_input(&tx2_first_input)
         );
+        assert_ne!(token2_id, token2_id_before_fork);
 
-        // also make sure token was not created from account input
-        let invalid_token_id_from_account_input = make_token_id(
-            tf.chain_config(),
-            BlockHeight::zero(),
-            tx2.transaction().inputs(),
-        )
-        .unwrap();
-        assert_ne!(token_id_2, invalid_token_id_from_account_input);
-
-        let _ = tf
-            .make_block_builder()
+        tf.make_block_builder()
             .add_transaction(tx2)
             .build_and_process(&mut rng)
             .unwrap();
 
         let token_2_data = TokensAccountingStorageRead::get_token_data(
             &tf.storage.transaction_ro().unwrap(),
-            &token_id_2,
+            &token2_id,
         )
         .unwrap();
         assert!(token_2_data.is_some());
 
-        let token_2_data_invalid = TokensAccountingStorageRead::get_token_data(
+        let token_2_data_for_invalid_token_id = TokensAccountingStorageRead::get_token_data(
             &tf.storage.transaction_ro().unwrap(),
-            &invalid_token_id_from_account_input,
+            &token2_id_before_fork,
         )
         .unwrap();
-        assert!(token_2_data_invalid.is_none());
+        assert!(token_2_data_for_invalid_token_id.is_none());
     });
 }

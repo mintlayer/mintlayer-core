@@ -866,8 +866,7 @@ pub fn get_token_id(
         &chain_config,
         BlockHeight::new(current_block_height),
         &tx_inputs,
-    )
-    .ok_or(Error::NoUtxoInInputs)?;
+    )?;
 
     Ok(Address::new(&chain_config, token_id)
         .expect("Should not fail to create address")

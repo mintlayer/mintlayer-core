@@ -54,17 +54,15 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
 
         // Issue a new NFT
         let genesis_outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
-        let token_id = TokenId::from_utxo(&UtxoOutPoint::new(genesis_outpoint_id.clone(), 0));
+        let issuance_tx_first_input = TxInput::from_utxo(genesis_outpoint_id, 0);
+        let token_id = TokenId::from_tx_input(&issuance_tx_first_input);
         let issuance_data = random_nft_issuance(tf.chain_config().as_ref(), &mut rng);
 
         let block_index = tf
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(
-                        TxInput::from_utxo(genesis_outpoint_id, 0),
-                        InputWitness::NoSignature(None),
-                    )
+                    .add_input(issuance_tx_first_input, InputWitness::NoSignature(None))
                     .add_output(TxOutput::IssueNft(
                         token_id,
                         Box::new(issuance_data.into()),
@@ -334,17 +332,15 @@ fn nft_reorgs_and_cleanup_data(#[case] seed: Seed) {
 
         let genesis_id = tf.genesis().get_id();
         let genesis_outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
-        let token_id = TokenId::from_utxo(&UtxoOutPoint::new(genesis_outpoint_id.clone(), 0));
+        let issuance_tx_first_input = TxInput::from_utxo(genesis_outpoint_id, 0);
+        let token_id = TokenId::from_tx_input(&issuance_tx_first_input);
 
         let block_index = tf
             .make_block_builder()
             .with_parent(genesis_id.into())
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(
-                        TxInput::from_utxo(genesis_outpoint_id, 0),
-                        InputWitness::NoSignature(None),
-                    )
+                    .add_input(issuance_tx_first_input, InputWitness::NoSignature(None))
                     .add_output(TxOutput::IssueNft(
                         token_id,
                         Box::new(issuance_value.clone().into()),

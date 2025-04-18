@@ -23,7 +23,7 @@ use chainstate_test_framework::{
 use common::{
     chain::{
         config::{create_unit_test_config, ChainType},
-        make_token_id,
+        make_delegation_id, make_token_id,
         output_value::OutputValue,
         timelock::OutputTimeLock,
         tokens::{
@@ -329,7 +329,6 @@ fn delegate_staking(#[case] seed: Seed) {
             .build();
         let stake_pool_tx_id = stake_pool_tx.transaction().get_id();
 
-        let delegation_id = DelegationId::from_utxo(&UtxoOutPoint::new(stake_pool_tx_id.into(), 1));
         let create_delegation_tx = TransactionBuilder::new()
             .add_input(
                 TxInput::from_utxo(stake_pool_tx_id.into(), 1),
@@ -344,6 +343,7 @@ fn delegate_staking(#[case] seed: Seed) {
                 Destination::AnyoneCanSpend,
             ))
             .build();
+        let delegation_id = make_delegation_id(create_delegation_tx.inputs()).unwrap();
         let create_delegation_tx_id = create_delegation_tx.transaction().get_id();
 
         tf.make_block_builder()
@@ -704,7 +704,7 @@ fn tokens_cannot_be_used_in_fee(#[case] seed: Seed) {
         let token_issuance_tx_id = token_issuance_tx.transaction().get_id();
         let token_id = make_token_id(
             &chain_config,
-            BlockHeight::zero(),
+            tf.next_block_height(),
             token_issuance_tx.transaction().inputs(),
         )
         .unwrap();

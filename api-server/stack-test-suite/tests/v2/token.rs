@@ -116,7 +116,7 @@ async fn ok(#[case] seed: Seed) {
                     .build();
 
                 let token_id =
-                    make_token_id(&chain_config, BlockHeight::zero(), transaction.inputs())
+                    make_token_id(&chain_config, tf.next_block_height(), transaction.inputs())
                         .unwrap();
 
                 let chainstate_block_ids = [*tf

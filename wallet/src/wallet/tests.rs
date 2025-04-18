@@ -2516,7 +2516,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
     };
 
     let some_coins = 100;
-    // Generate a new block which sends reward to the wallet2
+    // Generate a new block which sends reward to the issuing wallet.
     let mut block1_amount = (Amount::from_atoms(
         rng.gen_range(NETWORK_FEE + some_coins..NETWORK_FEE + some_coins * 100),
     ) + issuance_fee)
@@ -2529,7 +2529,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
 
     let token_authority_and_destination = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1;
 
-    // Issue token randomly from wallet2 to wallet1 or wallet1 to wallet1
+    // Issue token randomly from wallet2 to wallet1 or wallet1 to wallet2
     let (random_issuing_wallet, other_wallet) = if rng.gen::<bool>() {
         (&mut wallet, &mut wallet2)
     } else {
@@ -7874,4 +7874,139 @@ fn rollback_utxos_after_abandon(#[case] seed: Seed) {
         .map(|(u, _)| u.clone())
         .collect();
     assert!(selected_utxos.iter().all(|u| outpoints.contains(u)));
+}
+
+// Check that token ids are generated from the first input of the issuing transaction even
+// in the TokenIdGenerationVersion::V1 case.
+// Note:
+// 1) In V1, token ids are generated from the first UTXO input of the issuing transaction,
+// so this test basically checks that token issuing transactions always have a UTXO as their
+// first input.
+// 2) The token id generation consistency is only important around the fork height; without it
+// it'd be possible for the wallet to generate an invalid transaction and/or get into an invalid
+// state if it guesses the transaction's block height incorrectly.
+// In general though there is no need for the issuing transaction to always have a UTXO as the first
+// input. So, after the fork height plus 1000 (the max reorg depth) will have been passed, this
+// test can be removed (even if the fork itself remains).
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn token_id_generation_v1_uses_first_tx_input(#[case] seed: Seed) {
+    use common::chain::{self, TokenIdGenerationVersion};
+
+    let mut rng = make_seedable_rng(seed);
+
+    let chain_config = Arc::new(
+        chain::config::Builder::new(ChainType::Mainnet)
+            .chainstate_upgrades(
+                common::chain::NetUpgrades::initialize(vec![(
+                    BlockHeight::zero(),
+                    ChainstateUpgradeBuilder::latest().build(),
+                )])
+                .unwrap(),
+            )
+            .build(),
+    );
+
+    let mut wallet = create_wallet_with_mnemonic(chain_config.clone(), MNEMONIC);
+
+    let coin_balance = get_coin_balance(&wallet);
+    assert_eq!(coin_balance, Amount::ZERO);
+
+    let needed_balance = ((chain_config.fungible_token_issuance_fee()
+        + chain_config.nft_issuance_fee(BlockHeight::zero()))
+    .unwrap()
+        + Amount::from_atoms(rng.gen_range(NETWORK_FEE * 2..NETWORK_FEE * 10)))
+    .unwrap();
+
+    let generated_blocks_count = {
+        let min_blocks = rng.gen_range(1..5);
+        let mut generated_blocks_count = 0;
+        let mut cur_balance = Amount::ZERO;
+
+        while generated_blocks_count < min_blocks || cur_balance < needed_balance {
+            let block_amount = Amount::from_atoms(
+                rng.gen_range(needed_balance.into_atoms() / 10..needed_balance.into_atoms()),
+            );
+
+            let _ = create_block(
+                &chain_config,
+                &mut wallet,
+                vec![],
+                block_amount,
+                generated_blocks_count,
+            );
+            cur_balance = (cur_balance + block_amount).unwrap();
+            generated_blocks_count += 1;
+        }
+
+        generated_blocks_count
+    };
+
+    let token_authority_and_destination = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1;
+
+    // Some sanity checks
+    let best_block_height = wallet.get_best_block_for_account(DEFAULT_ACCOUNT_INDEX).unwrap().1;
+    assert_eq!(best_block_height.into_int(), generated_blocks_count);
+
+    let next_block_height = best_block_height.next_height();
+    assert_eq!(
+        chain_config
+            .chainstate_upgrades()
+            .version_at_height(next_block_height)
+            .1
+            .token_id_generation_version(),
+        TokenIdGenerationVersion::V1
+    );
+
+    let coin_balance = get_coin_balance(&wallet);
+    assert!(coin_balance >= needed_balance);
+
+    // Fungible token
+    {
+        let token_issuance = TokenIssuanceV1 {
+            token_ticker: "XXXX".as_bytes().to_vec(),
+            number_of_decimals: rng.gen_range(1..18),
+            metadata_uri: "http://uri".as_bytes().to_vec(),
+            total_supply: common::chain::tokens::TokenTotalSupply::Unlimited,
+            authority: token_authority_and_destination.as_object().clone(),
+            is_freezable: common::chain::tokens::IsTokenFreezable::No,
+        };
+        let (issued_token_id, token_issuance_transaction) = wallet
+            .issue_new_token(
+                DEFAULT_ACCOUNT_INDEX,
+                TokenIssuance::V1(token_issuance.clone()),
+                FeeRate::from_amount_per_kb(Amount::ZERO),
+                FeeRate::from_amount_per_kb(Amount::ZERO),
+            )
+            .unwrap();
+
+        let expected_token_id = TokenId::from_tx_input(&token_issuance_transaction.inputs()[0]);
+        assert_eq!(issued_token_id, expected_token_id);
+    }
+
+    // NFT
+    {
+        let (issued_token_id, nft_issuance_transaction) = wallet
+            .issue_new_nft(
+                DEFAULT_ACCOUNT_INDEX,
+                token_authority_and_destination.clone(),
+                Metadata {
+                    creator: None,
+                    name: "Name".as_bytes().to_vec(),
+                    description: "SomeNFT".as_bytes().to_vec(),
+                    ticker: "XXXX".as_bytes().to_vec(),
+                    icon_uri: DataOrNoVec::from(None),
+                    additional_metadata_uri: DataOrNoVec::from(None),
+                    media_uri: DataOrNoVec::from(None),
+                    media_hash: "123456".as_bytes().to_vec(),
+                },
+                FeeRate::from_amount_per_kb(Amount::ZERO),
+                FeeRate::from_amount_per_kb(Amount::ZERO),
+            )
+            .unwrap();
+
+        let expected_token_id = TokenId::from_tx_input(&nft_issuance_transaction.inputs()[0]);
+        assert_eq!(issued_token_id, expected_token_id);
+    }
 }

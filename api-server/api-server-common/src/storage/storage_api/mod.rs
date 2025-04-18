@@ -28,8 +28,8 @@ use common::{
             IsTokenFreezable, IsTokenFrozen, IsTokenUnfreezable, NftIssuance, RPCFungibleTokenInfo,
             TokenId, TokenTotalSupply,
         },
-        AccountNonce, Block, ChainConfig, DelegationId, Destination, OrderId, PoolId,
-        SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
+        AccountNonce, Block, ChainConfig, DelegationId, Destination, IdCreationError, OrderId,
+        PoolId, SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, CoinOrTokenId, Id},
 };
@@ -66,8 +66,10 @@ pub enum ApiServerStorageError {
     InvalidBlock(String),
     #[error("Addressable error")]
     AddressableError,
-    #[error("Block timestamp too high {0}")]
+    #[error("Block timestamp too high: {0}")]
     TimestampTooHigh(BlockTimestamp),
+    #[error("Id creation error: {0}")]
+    IdCreationError(#[from] IdCreationError),
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]

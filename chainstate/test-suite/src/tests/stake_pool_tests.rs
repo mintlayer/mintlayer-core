@@ -221,7 +221,7 @@ fn stake_pool_and_mint_tokens_same_tx(#[case] seed: Seed) {
         let tx0_id = tx0.transaction().get_id();
         let token_id = common::chain::make_token_id(
             tf.chain_config(),
-            BlockHeight::zero(),
+            tf.next_block_height(),
             tx0.transaction().inputs(),
         )
         .unwrap();

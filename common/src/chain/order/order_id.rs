@@ -13,32 +13,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{
-    address::{hexified::HexifiedAddress, traits::Addressable, AddressError},
-    chain::{ChainConfig, UtxoOutPoint},
-    primitives::{id::hash_encoded, Id, H256},
-};
-use randomness::{CryptoRng, Rng};
 use serialization::{DecodeAll, Encode};
 use typename::TypeName;
+
+use crate::{
+    address::{hexified::HexifiedAddress, traits::Addressable, AddressError},
+    chain::ChainConfig,
+    primitives::Id,
+};
 
 #[derive(Eq, PartialEq, TypeName)]
 pub enum Order {}
 pub type OrderId = Id<Order>;
-
-impl OrderId {
-    pub fn from_utxo(utxo_outpoint: &UtxoOutPoint) -> Self {
-        Self::new(hash_encoded(utxo_outpoint))
-    }
-
-    pub fn random_using<R: Rng + CryptoRng>(rng: &mut R) -> Self {
-        Self::new(H256::random_using(rng))
-    }
-
-    pub const fn zero() -> Self {
-        Self::new(H256::zero())
-    }
-}
 
 impl Addressable for OrderId {
     type Error = AddressError;

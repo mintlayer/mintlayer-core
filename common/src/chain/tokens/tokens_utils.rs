@@ -15,9 +15,8 @@
 
 use smallvec::SmallVec;
 
-use crate::chain::{output_value::OutputValue, AccountCommand, TxInput, TxOutput};
 use super::{TokenData, TokenId};
-
+use crate::chain::{output_value::OutputValue, AccountCommand, TxInput, TxOutput};
 
 pub fn get_tokens_issuance_count(outputs: &[TxOutput]) -> usize {
     outputs.iter().filter(|&output| is_token_or_nft_issuance(output)).count()

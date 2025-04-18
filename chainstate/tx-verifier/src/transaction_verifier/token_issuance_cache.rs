@@ -79,8 +79,7 @@ impl TokenIssuanceCache {
         ConnectTransactionError: From<E>,
     {
         if let Some(token_id) = has_tokens_issuance_to_cache(tx.outputs()) {
-            let expected_token_id = make_token_id(chain_config, block_height, tx.inputs())
-                .ok_or(TokensError::TokenIdCantBeCalculated)?;
+            let expected_token_id = make_token_id(chain_config, block_height, tx.inputs())?;
 
             ensure!(
                 token_id == expected_token_id,
@@ -93,10 +92,9 @@ impl TokenIssuanceCache {
             self.precache_token_issuance(token_data_getter, token_id)?;
 
             self.write_issuance(
-                chain_config,
-                block_height,
                 &block_id.unwrap_or_else(|| H256::zero().into()),
                 tx,
+                &token_id,
             )?;
         }
         Ok(())
@@ -120,18 +118,15 @@ impl TokenIssuanceCache {
 
     fn write_issuance(
         &mut self,
-        chain_config: &ChainConfig,
-        block_height: BlockHeight,
         block_id: &Id<Block>,
         tx: &Transaction,
-    ) -> Result<(), TokensError> {
-        let token_id = make_token_id(chain_config, block_height, tx.inputs())
-            .ok_or(TokensError::TokenIdCantBeCalculated)?;
+        token_id: &TokenId,
+    ) -> Result<(), ConnectTransactionError> {
         let aux_data = TokenAuxiliaryData::new(tx.clone(), *block_id);
-        self.insert_aux_data(token_id, CachedAuxDataOp::Write(aux_data))?;
+        self.insert_aux_data(*token_id, CachedAuxDataOp::Write(aux_data))?;
 
         // TODO: this probably needs better modeling. Currently, we just want to know what the token id is for a given issuance tx id
-        self.txid_vs_tokenid.insert(tx.get_id(), CachedTokenIndexOp::Write(token_id));
+        self.txid_vs_tokenid.insert(tx.get_id(), CachedTokenIndexOp::Write(*token_id));
         Ok(())
     }
 

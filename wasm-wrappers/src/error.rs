@@ -15,7 +15,7 @@
 
 use common::chain::{
     signature::{inputsig::arbitrary_message::SignArbitraryMessageError, DestinationSigError},
-    SignedTransactionIntentError, TransactionCreationError,
+    IdCreationError, SignedTransactionIntentError, TransactionCreationError,
 };
 use wasm_bindgen::JsValue;
 
@@ -85,8 +85,8 @@ pub enum Error {
     TransactionCreationError(#[from] TransactionCreationError),
     #[error("Signature error: {0}")]
     DestinationSigError(#[from] DestinationSigError),
-    #[error("No UTXO input found in the provided inputs")]
-    NoUtxoInInputs,
+    #[error("Id creation error: {0}")]
+    IdCreationError(#[from] IdCreationError),
     #[error("Invalid message signature encoding")]
     InvalidMessageSignature,
     #[error("Arbitrary message signing error: {0}")]

@@ -56,7 +56,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use self::{
     accounting_undo_cache::{AccountingBlockUndoCache, CachedBlockUndoOp},
-    error::{ConnectTransactionError, TokensError},
+    error::ConnectTransactionError,
     pos_accounting_delta_adapter::PoSAccountingDeltaAdapter,
     storage::TransactionVerifierStorageRef,
     token_issuance_cache::{ConsumedTokenIssuanceCache, TokenIssuanceCache},
@@ -393,7 +393,7 @@ where
             .iter()
             .filter_map(|output| match output {
                 TxOutput::CreateStakePool(pool_id, data) => match make_pool_id(tx.inputs()) {
-                    Some(expected_pool_id) => {
+                    Ok(expected_pool_id) => {
                         let res = if expected_pool_id == *pool_id {
                             if data.pledge() >= self.chain_config.as_ref().min_stake_pool_pledge() {
                                 self.pos_accounting_adapter
@@ -415,13 +415,13 @@ where
                         };
                         Some(res)
                     }
-                    None => Some(Err(
+                    Err(_) => Some(Err(
                         ConnectTransactionError::AttemptToCreateStakePoolFromAccounts,
                     )),
                 },
                 TxOutput::CreateDelegationId(spend_destination, target_pool) => {
                     match make_delegation_id(tx.inputs()) {
-                        Some(delegation_id) => {
+                        Ok(delegation_id) => {
                             let res = self
                                 .pos_accounting_adapter
                                 .operations(tx_source.into())
@@ -433,7 +433,7 @@ where
                                 .map_err(ConnectTransactionError::PoSAccountingError);
                             Some(res)
                         }
-                        None => Some(Err(
+                        Err(_) => Some(Err(
                             ConnectTransactionError::AttemptToCreateDelegationFromAccounts,
                         )),
                     }
@@ -652,9 +652,7 @@ where
                         tx_source.expected_block_height(),
                         tx.inputs(),
                     )
-                    .ok_or(ConnectTransactionError::TokensError(
-                        TokensError::TokenIdCantBeCalculated,
-                    ))
+                    .map_err(ConnectTransactionError::IdCreationError)
                     .and_then(
                         |token_id| -> Result<tokens_accounting::TokenAccountingUndo, _> {
                             let data = tokens_accounting::TokenData::FungibleToken(
@@ -903,14 +901,14 @@ where
                 | TxOutput::IssueFungibleToken(..)
                 | TxOutput::Htlc(_, _) => None,
                 TxOutput::CreateOrder(order_data) => match make_order_id(tx.inputs()) {
-                    Some(order_id) => {
+                    Ok(order_id) => {
                         let result = self
                             .orders_accounting_cache
                             .create_order(order_id, order_data.as_ref().clone().into())
                             .map_err(ConnectTransactionError::OrdersAccountingError);
                         Some(result)
                     }
-                    None => Some(Err(
+                    Err(_) => Some(Err(
                         ConnectTransactionError::AttemptToCreateOrderFromAccounts,
                     )),
                 },

@@ -129,7 +129,7 @@ async fn ok_tokens(#[case] seed: Seed) {
 
                 let token_id = make_token_id(
                     &chain_config,
-                    BlockHeight::zero(),
+                    tf.next_block_height(),
                     issue_token_transaction.inputs(),
                 )
                 .unwrap();

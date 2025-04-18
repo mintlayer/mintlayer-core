@@ -23,6 +23,7 @@ use chainstate::{
     ChainstateError, ConnectTransactionError, IOPolicyError, TokensError,
     TransactionVerifierStorageError,
 };
+use common::chain::IdCreationError;
 
 use crate::error::{Error, MempoolPolicyError, TxValidationError};
 
@@ -131,6 +132,7 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::CheckTransactionError(err) => err.mempool_ban_score(),
             ConnectTransactionError::InputCheck(err) => err.mempool_ban_score(),
             ConnectTransactionError::OrdersAccountingError(err) => err.mempool_ban_score(),
+            ConnectTransactionError::IdCreationError(err) => err.mempool_ban_score(),
 
             // Transaction definitely invalid, ban peer
             ConnectTransactionError::RewardAdditionError(_) => 100,
@@ -169,6 +171,18 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::MissingTransactionNonce(_) => 0,
             ConnectTransactionError::FailedToIncrementAccountNonce => 0,
             ConnectTransactionError::ConcludeInputAmountsDontMatch(_, _) => 0,
+        }
+    }
+}
+
+impl MempoolBanScore for IdCreationError {
+    fn mempool_ban_score(&self) -> u32 {
+        match self {
+            IdCreationError::NoUtxoInputsForPoolIdCreation
+            | IdCreationError::NoUtxoInputsForDelegationIdCreation
+            | IdCreationError::NoUtxoInputsForOrderIdCreation
+            | IdCreationError::NoUtxoInputsForTokenIdCreation
+            | IdCreationError::NoInputsForTokenIdCreation => 100,
         }
     }
 }

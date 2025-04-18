@@ -714,7 +714,7 @@ fn spend_tokens(#[case] seed: Seed) {
             .build();
         let token_v0_id = make_token_id(
             &chain_config,
-            BlockHeight::zero(),
+            tf.next_block_height(),
             token_v0_issuance_tx.inputs(),
         )
         .unwrap();
@@ -771,7 +771,7 @@ fn spend_tokens(#[case] seed: Seed) {
             .build();
         let token_v1_id = make_token_id(
             &chain_config,
-            BlockHeight::zero(),
+            tf.next_block_height(),
             token_v1_issuance_tx.inputs(),
         )
         .unwrap();

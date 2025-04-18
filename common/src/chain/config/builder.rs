@@ -48,12 +48,6 @@ use super::{
     MagicBytes,
 };
 
-// TODO: regarding staker destination change prohibition - the ability to change the destination
-// has never been used up until now and it will likely never be. In such a case, when the corresponding
-// fork height + 1000 blocks (the reorg limit) will have been passed both on testnet and mainnet,
-// the `StakerDestinationUpdateForbidden` upgrade can be completely removed, as if this ability has
-// never existed.
-
 // The fork at which we upgrade consensus to dis-incentivize large pools + enable tokens v1
 const TESTNET_FORK_HEIGHT_1_TOKENS_V1_AND_CONSENSUS_UPGRADE: BlockHeight = BlockHeight::new(78_440);
 // The fork at which we upgrade chainstate to distribute reward to staker proportionally to their balance

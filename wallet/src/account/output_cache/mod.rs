@@ -22,17 +22,17 @@ use std::{
 use common::{
     chain::{
         block::timestamp::BlockTimestamp,
-        make_delegation_id, make_order_id, make_token_id,
+        make_delegation_id, make_order_id, make_token_id, make_token_id_with_version,
         output_value::OutputValue,
         stakelock::StakePoolData,
         tokens::{
-            get_referenced_token_ids_ignore_issuance, IsTokenFreezable, IsTokenUnfreezable, RPCFungibleTokenInfo,
-            RPCIsTokenFrozen, RPCNonFungibleTokenInfo, RPCTokenTotalSupply, TokenId, TokenIssuance,
-            TokenTotalSupply,
+            get_referenced_token_ids_ignore_issuance, IsTokenFreezable, IsTokenUnfreezable,
+            RPCFungibleTokenInfo, RPCIsTokenFrozen, RPCNonFungibleTokenInfo, RPCTokenTotalSupply,
+            TokenId, TokenIssuance, TokenTotalSupply,
         },
         AccountCommand, AccountNonce, AccountSpending, AccountType, ChainConfig, DelegationId,
-        Destination, GenBlock, OrderAccountCommand, OrderId, OutPointSourceId, PoolId, Transaction,
-        TxInput, TxOutput, UtxoOutPoint,
+        Destination, GenBlock, OrderAccountCommand, OrderId, OutPointSourceId, PoolId,
+        TokenIdGenerationVersion, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{id::WithId, per_thousand::PerThousand, Amount, BlockHeight, Id, Idable},
 };
@@ -752,7 +752,6 @@ impl OutputCache {
     pub fn update_conflicting_txs(
         &mut self,
         chain_config: &ChainConfig,
-        best_block_height: BlockHeight,
         confirmed_tx: &Transaction,
         block_id: Id<GenBlock>,
     ) -> WalletResult<Vec<(Id<Transaction>, WalletTx)>> {
@@ -887,7 +886,7 @@ impl OutputCache {
             }
 
             for tx in tx_to_rollback_data {
-                self.rollback_tx_data(chain_config, best_block_height, &tx)?;
+                self.rollback_tx_data(chain_config, &tx)?;
             }
         }
 
@@ -1033,8 +1032,7 @@ impl OutputCache {
                     if block_info.is_none() {
                         continue;
                     }
-                    let delegation_id =
-                        make_delegation_id(tx.inputs()).ok_or(WalletError::NotUtxoInput)?;
+                    let delegation_id = make_delegation_id(tx.inputs())?;
                     self.delegations.insert(
                         delegation_id,
                         DelegationData::new(*pool_id, destination.clone()),
@@ -1049,8 +1047,12 @@ impl OutputCache {
                     if already_present {
                         continue;
                     }
-                    let token_id = make_token_id(chain_config, best_block_height, tx.inputs())
-                        .ok_or(WalletError::NoUtxos)?;
+                    let issuing_height_estimate = match block_info {
+                        Some(info) => info.height,
+                        None => best_block_height.next_height(),
+                    };
+                    let token_id =
+                        make_token_id(chain_config, issuing_height_estimate, tx.inputs())?;
                     match issuance.as_ref() {
                         TokenIssuance::V1(data) => {
                             self.token_issuance
@@ -1060,7 +1062,7 @@ impl OutputCache {
                 }
                 TxOutput::IssueNft(_, _, _) => {}
                 TxOutput::CreateOrder(order_data) => {
-                    let order_id = make_order_id(tx.inputs()).ok_or(WalletError::NotUtxoInput)?;
+                    let order_id = make_order_id(tx.inputs())?;
                     let give_currency = Currency::from_output_value(order_data.give())
                         .ok_or(WalletError::TokenV0(tx.id()))?;
                     let ask_currency = Currency::from_output_value(order_data.ask())
@@ -1300,12 +1302,11 @@ impl OutputCache {
     pub fn remove_confirmed_tx(
         &mut self,
         chain_config: &ChainConfig,
-        best_block_height: BlockHeight,
         tx_id: &OutPointSourceId,
     ) -> WalletResult<()> {
         if let Some(tx) = self.txs.remove(tx_id) {
             assert!(matches!(tx.state(), TxState::Confirmed(..)));
-            self.rollback_tx_data(chain_config, best_block_height, &tx)?;
+            self.rollback_tx_data(chain_config, &tx)?;
         }
 
         ensure!(
@@ -1529,13 +1530,10 @@ impl OutputCache {
 
     // After tx is removed as a result of reorg, abandoning or marking as conflicted
     // its effect on OutputCache's data fields should be rolled back
-    fn rollback_tx_data(
-        &mut self,
-        chain_config: &ChainConfig,
-        best_block_height: BlockHeight,
-        tx: &WalletTx,
-    ) -> WalletResult<()> {
+    fn rollback_tx_data(&mut self, chain_config: &ChainConfig, tx: &WalletTx) -> WalletResult<()> {
         let tx_id = tx.id();
+
+        let tx_block_height = get_block_info(tx).map(|info| info.height);
 
         // Iterate in reverse to handle situations where an account is modified twice in the same tx.
         // It's currently impossible to have more than 1 account command but it's safer to use rev() anyway.
@@ -1600,17 +1598,32 @@ impl OutputCache {
                     }
                 }
                 TxOutput::CreateDelegationId(_, _) => {
-                    let delegation_id =
-                        make_delegation_id(tx.inputs()).ok_or(WalletError::NoUtxos)?;
+                    let delegation_id = make_delegation_id(tx.inputs())?;
                     self.delegations.remove(&delegation_id);
                 }
                 TxOutput::IssueFungibleToken(_) => {
-                    let token_id = make_token_id(chain_config, best_block_height, tx.inputs())
-                        .ok_or(WalletError::NoUtxos)?;
-                    self.token_issuance.remove(&token_id);
+                    if let Some(tx_block_height) = &tx_block_height {
+                        let token_id = make_token_id(chain_config, *tx_block_height, tx.inputs())?;
+                        self.token_issuance.remove(&token_id);
+                    } else {
+                        // If the tx is not from a block, technically we don't know how the token id
+                        // was generated, so we have to try removing both of them.
+                        // But note that this is just a precaution - currently the wallet always
+                        // creates token issuance transactions with a UTXO as the first input,
+                        // in which case token_id_v0 and token_id_v1 will be identical.
+                        // In the future, when the fork height plus 1000 (the reorg limit) will
+                        // have been passed, we can remove the "remove(&token_id_v0)" call here.
+                        let token_id_v0 =
+                            make_token_id_with_version(TokenIdGenerationVersion::V0, tx.inputs())?;
+                        self.token_issuance.remove(&token_id_v0);
+
+                        let token_id_v1 =
+                            make_token_id_with_version(TokenIdGenerationVersion::V1, tx.inputs())?;
+                        self.token_issuance.remove(&token_id_v1);
+                    }
                 }
                 TxOutput::CreateOrder(_) => {
-                    let order_id = make_order_id(tx.inputs()).ok_or(WalletError::NoUtxos)?;
+                    let order_id = make_order_id(tx.inputs())?;
                     self.orders.remove(&order_id);
                 }
                 TxOutput::Burn(_)
@@ -1631,7 +1644,6 @@ impl OutputCache {
     pub fn abandon_transaction(
         &mut self,
         chain_config: &ChainConfig,
-        best_block_height: BlockHeight,
         tx_id: Id<Transaction>,
     ) -> WalletResult<Vec<(Id<Transaction>, WalletTx)>> {
         let all_abandoned = self.remove_from_unconfirmed_descendants(tx_id);
@@ -1666,7 +1678,7 @@ impl OutputCache {
         }
 
         for tx in &txs_to_rollback {
-            self.rollback_tx_data(chain_config, best_block_height, tx)?;
+            self.rollback_tx_data(chain_config, tx)?;
         }
 
         Ok(all_abandoned.into_iter().zip_eq(all_abandoned_txs).collect())

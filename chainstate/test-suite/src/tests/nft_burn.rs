@@ -39,17 +39,15 @@ fn nft_burn_invalid_amount(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
         let genesis_outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
-        let token_id = TokenId::from_utxo(&UtxoOutPoint::new(genesis_outpoint_id.clone(), 0));
+        let first_tx_input = TxInput::from_utxo(genesis_outpoint_id, 0);
+        let token_id = TokenId::from_tx_input(&first_tx_input);
 
         let chain_config = tf.chainstate.get_chain_config();
         let token_min_issuance_fee = chain_config.nft_issuance_fee(BlockHeight::zero());
 
         // Issuance
         let tx = TransactionBuilder::new()
-            .add_input(
-                TxInput::from_utxo(genesis_outpoint_id, 0),
-                InputWitness::NoSignature(None),
-            )
+            .add_input(first_tx_input, InputWitness::NoSignature(None))
             .add_output(TxOutput::IssueNft(
                 token_id,
                 Box::new(random_nft_issuance(chain_config, &mut rng).into()),
@@ -58,8 +56,7 @@ fn nft_burn_invalid_amount(#[case] seed: Seed) {
             .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
             .build();
         let issuance_outpoint_id: OutPointSourceId = tx.transaction().get_id().into();
-        let _ = tf
-            .make_block_builder()
+        tf.make_block_builder()
             .add_transaction(tx)
             .build_and_process(&mut rng)
             .unwrap()
@@ -116,17 +113,15 @@ fn nft_burn_valid_case(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
         let genesis_outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
-        let token_id = TokenId::from_utxo(&UtxoOutPoint::new(genesis_outpoint_id.clone(), 0));
+        let first_tx_input = TxInput::from_utxo(genesis_outpoint_id, 0);
+        let token_id = TokenId::from_tx_input(&first_tx_input);
 
         let chain_config = tf.chainstate.get_chain_config();
         let token_min_issuance_fee = chain_config.nft_issuance_fee(BlockHeight::zero());
 
         // Issuance
         let tx = TransactionBuilder::new()
-            .add_input(
-                TxInput::from_utxo(genesis_outpoint_id, 0),
-                InputWitness::NoSignature(None),
-            )
+            .add_input(first_tx_input, InputWitness::NoSignature(None))
             .add_output(TxOutput::IssueNft(
                 token_id,
                 Box::new(random_nft_issuance(chain_config, &mut rng).into()),
@@ -135,8 +130,7 @@ fn nft_burn_valid_case(#[case] seed: Seed) {
             .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
             .build();
         let issuance_outpoint_id: OutPointSourceId = tx.transaction().get_id().into();
-        let _ = tf
-            .make_block_builder()
+        tf.make_block_builder()
             .add_transaction(tx)
             .build_and_process(&mut rng)
             .unwrap()

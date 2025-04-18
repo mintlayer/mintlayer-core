@@ -38,9 +38,10 @@ use common::{
         make_delegation_id, make_order_id, make_token_id,
         output_value::{OutputValue, RpcOutputValue},
         tokens::{IsTokenFrozen, NftIssuance, RPCNonFungibleTokenMetadata, RPCTokenInfo, TokenId},
-        AccountCommand, AccountNonce, AccountSpending, AccountType, ChainConfig, ConsensusUpgrade,
-        DelegationId, Destination, GenBlockId, NetUpgrades, OrderId, OutPointSourceId,
-        PoSChainConfigBuilder, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
+        AccountCommand, AccountNonce, AccountSpending, AccountType, ChainConfig,
+        ChainstateUpgradeBuilder, ConsensusUpgrade, DelegationId, Destination, GenBlockId,
+        NetUpgrades, OrderId, OutPointSourceId, PoSChainConfigBuilder, PoolId,
+        TokenIdGenerationVersion, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockCount, BlockHeight, CoinOrTokenId, Idable, H256},
 };
@@ -179,11 +180,11 @@ async fn simulation(
     #[case] max_blocks: usize,
     #[case] max_tx_per_block: usize,
 ) {
-    logging::init_logging();
     let mut rng = make_seedable_rng(seed);
     let mut statistics: BTreeMap<CoinOrTokenStatistic, BTreeMap<CoinOrTokenId, Amount>> =
         BTreeMap::new();
 
+    let num_blocks = rng.gen_range((max_blocks / 2)..max_blocks);
     let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
     let (staking_sk, staking_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
     let (config_builder, genesis_pool_id) =
@@ -204,11 +205,30 @@ async fn simulation(
 
     let epoch_length = NonZeroU64::new(rng.gen_range(1..10)).unwrap();
     let sealed_epoch_distance_from_tip = rng.gen_range(1..10);
+    let token_id_generation_v1_fork_height =
+        BlockHeight::new(rng.gen_range(1..=num_blocks + 1) as u64);
     let chain_config = config_builder
         .consensus_upgrades(consensus_upgrades)
         .max_future_block_time_offset(Some(std::time::Duration::from_secs(1_000_000)))
         .epoch_length(epoch_length)
         .sealed_epoch_distance_from_tip(sealed_epoch_distance_from_tip)
+        .chainstate_upgrades(
+            common::chain::NetUpgrades::initialize(vec![
+                (
+                    BlockHeight::zero(),
+                    ChainstateUpgradeBuilder::latest()
+                        .token_id_generation_version(TokenIdGenerationVersion::V0)
+                        .build(),
+                ),
+                (
+                    token_id_generation_v1_fork_height,
+                    ChainstateUpgradeBuilder::latest()
+                        .token_id_generation_version(TokenIdGenerationVersion::V1)
+                        .build(),
+                ),
+            ])
+            .unwrap(),
+        )
         .build();
     let target_time = chain_config.target_block_spacing();
     let genesis_pool_outpoint = UtxoOutPoint::new(chain_config.genesis_block_id().into(), 1);
@@ -258,8 +278,6 @@ async fn simulation(
     }
 
     check_all_statistics(&local_state, &statistics, CoinOrTokenId::Coin).await;
-
-    let num_blocks = rng.gen_range((max_blocks / 2)..max_blocks);
 
     let mut utxo_outpoints = Vec::new();
     let mut staking_pools: BTreeSet<PoolId> = BTreeSet::new();
@@ -364,7 +382,7 @@ async fn simulation(
             let mut new_orders_cache = orders_accounting::OrdersAccountingCache::new(&orders_store);
 
             for tx in block.transactions() {
-                let new_utxos = (0..tx.inputs().len()).map(|output_index| {
+                let new_utxos = (0..tx.outputs().len()).map(|output_index| {
                     UtxoOutPoint::new(
                         OutPointSourceId::Transaction(tx.transaction().get_id()),
                         output_index as u32,
@@ -379,7 +397,8 @@ async fn simulation(
                     }
                     TxOutput::IssueNft(_, _, _) | TxOutput::IssueFungibleToken(_) => {
                         token_ids.insert(
-                            make_token_id(&chain_config, BlockHeight::zero(), tx.inputs()).unwrap(),
+                            make_token_id(&chain_config, tf.next_block_height(), tx.inputs())
+                                .unwrap(),
                         );
                     }
                     TxOutput::CreateDelegationId(_, _) => {

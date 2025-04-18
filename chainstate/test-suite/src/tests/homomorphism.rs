@@ -21,11 +21,9 @@ use chainstate_test_framework::{
 };
 use common::{
     chain::{
-        output_value::OutputValue,
-        timelock::OutputTimeLock,
-        tokens::{TokenId, TokenIssuance},
-        AccountCommand, AccountNonce, DelegationId, Destination, OutPointSourceId, PoolId, TxInput,
-        TxOutput, UtxoOutPoint,
+        make_delegation_id, make_token_id, output_value::OutputValue, timelock::OutputTimeLock,
+        tokens::TokenIssuance, AccountCommand, AccountNonce, Destination, OutPointSourceId, PoolId,
+        TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, Idable},
 };
@@ -200,7 +198,12 @@ fn tokens_homomorphism(#[case] seed: Seed) {
                 Destination::AnyoneCanSpend,
             ))
             .build();
-        let token_id = TokenId::from_utxo(&UtxoOutPoint::new(genesis_id.into(), 0));
+        let token_id = make_token_id(
+            tf.chain_config().as_ref(),
+            tf.next_block_height(),
+            tx_1.inputs(),
+        )
+        .unwrap();
 
         let tx_2 = TransactionBuilder::new()
             .add_input(
@@ -328,8 +331,7 @@ fn pos_accounting_homomorphism(#[case] seed: Seed) {
             ))
             .build();
 
-        let delegation_id =
-            DelegationId::from_utxo(&UtxoOutPoint::new(tx_1.transaction().get_id().into(), 1));
+        let delegation_id = make_delegation_id(tx_2.inputs()).unwrap();
         let tx_3 = TransactionBuilder::new()
             .add_input(
                 TxInput::from_utxo(

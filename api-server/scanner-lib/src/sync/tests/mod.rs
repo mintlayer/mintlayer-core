@@ -15,18 +15,14 @@
 
 mod simulation;
 
-use crate::blockchain_state::BlockchainState;
-
-use mempool::FeeRate;
-use serialization::Encode;
-
-use super::*;
-
 use std::{
     convert::Infallible,
     sync::{Arc, Mutex},
     time::Duration,
 };
+
+use rstest::rstest;
+use tokio::sync::mpsc;
 
 use api_server_common::storage::{
     impls::in_memory::transactional::TransactionalApiServerInMemoryStorage,
@@ -34,12 +30,12 @@ use api_server_common::storage::{
         ApiServerStorageRead, ApiServerStorageWrite, ApiServerTransactionRw, Transactional,
     },
 };
-
 use chainstate::{BlockSource, ChainInfo};
 use chainstate_test_framework::{TestFramework, TransactionBuilder};
 use common::{
     address::Address,
     chain::{
+        make_delegation_id,
         output_value::OutputValue,
         signature::{
             inputsig::{
@@ -50,8 +46,8 @@ use common::{
         },
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
-        CoinUnit, DelegationId, Destination, OutPointSourceId, PoolId, SignedTransaction, TxInput,
-        TxOutput, UtxoOutPoint,
+        CoinUnit, Destination, OutPointSourceId, PoolId, SignedTransaction, TxInput, TxOutput,
+        UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, CoinOrTokenId, Idable, H256},
 };
@@ -60,10 +56,19 @@ use crypto::{
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
 use logging::log;
+use mempool::FeeRate;
 use randomness::{seq::IteratorRandom, CryptoRng, Rng};
-use rstest::rstest;
+use serialization::Encode;
 use test_utils::random::{make_seedable_rng, Seed};
-use tokio::sync::mpsc;
+
+use crate::blockchain_state::BlockchainState;
+
+use super::*;
+
+#[ctor::ctor]
+fn init() {
+    logging::init_logging();
+}
 
 struct MockLocalState {
     genesis_id: Id<GenBlock>,
@@ -422,10 +427,7 @@ async fn compare_pool_rewards_with_chainstate_real_state(#[case] seed: Seed) {
             pool_id,
         ))
         .build();
-    let delegation_id = DelegationId::from_utxo(&UtxoOutPoint::new(
-        OutPointSourceId::Transaction(prev_tx_id),
-        0,
-    ));
+    let delegation_id = make_delegation_id(transaction.inputs()).unwrap();
     let prev_tx_id = transaction.transaction().get_id();
 
     let amount_to_stake = rng.gen_range(100..1000);

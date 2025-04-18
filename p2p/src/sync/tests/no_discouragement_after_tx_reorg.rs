@@ -26,7 +26,7 @@ use common::{
         block::timestamp::BlockTimestamp,
         classic_multisig::ClassicMultisigChallenge,
         htlc::{HashedTimelockContract, HtlcSecret},
-        make_token_id,
+        make_delegation_id, make_order_id, make_token_id,
         output_value::OutputValue,
         signature::inputsig::InputWitness,
         timelock::OutputTimeLock,
@@ -38,7 +38,7 @@ use common::{
         Destination, Genesis, OrderAccountCommand, OrderData, OrderId, OutPointSourceId, PoolId,
         SignedTransaction, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{Amount, BlockHeight, Idable as _},
+    primitives::{Amount, Idable as _},
 };
 use crypto::{
     key::{KeyKind, PrivateKey},
@@ -489,7 +489,6 @@ impl TestFixture {
         pool_id: PoolId,
     ) -> (SignedTransaction, DelegationId) {
         let outpoint = self.next_input_from_genesis();
-        let delegation_id = DelegationId::from_utxo(&outpoint);
         let tx = TransactionBuilder::new()
             .add_input(outpoint.into(), InputWitness::NoSignature(None))
             .add_output(TxOutput::CreateDelegationId(
@@ -497,6 +496,7 @@ impl TestFixture {
                 pool_id,
             ))
             .build();
+        let delegation_id = make_delegation_id(tx.inputs()).unwrap();
 
         (tx, delegation_id)
     }
@@ -574,7 +574,7 @@ impl TestFixture {
 
         let token_id = make_token_id(
             self.tfrm.chain_config(),
-            BlockHeight::zero(),
+            self.tfrm.next_block_height(),
             tx.transaction().inputs(),
         )
         .unwrap();
@@ -592,7 +592,7 @@ impl TestFixture {
         let input: TxInput = self.next_input_from_genesis().into();
         let token_id = make_token_id(
             self.tfrm.chain_config(),
-            BlockHeight::zero(),
+            self.tfrm.next_block_height(),
             &[input.clone()],
         )
         .unwrap();
@@ -805,11 +805,11 @@ impl TestFixture {
             OutputValue::TokenV1(token_id, token_give_amount),
         );
 
-        let order_id = OrderId::from_utxo(&outpoint);
         let tx = TransactionBuilder::new()
             .add_input(outpoint.into(), InputWitness::NoSignature(None))
             .add_output(TxOutput::CreateOrder(Box::new(order_data)))
             .build();
+        let order_id = make_order_id(tx.inputs()).unwrap();
 
         (tx, order_id)
     }

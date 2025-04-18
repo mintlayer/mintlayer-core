@@ -17,13 +17,13 @@ mempool = { path = "../../mempool" }
 node-comm = { path = "../../wallet/wallet-node-client" }
 orders-accounting = { path = "../../orders-accounting" }
 pos-accounting = { path = "../../pos-accounting" }
-tokens-accounting = { path = "../../tokens-accounting" }
 randomness = { path = "../../randomness" }
-utils = { path = "../../utils" }
+tokens-accounting = { path = "../../tokens-accounting" }
 tx-verifier = { path = "../../chainstate/tx-verifier" }
+utils = { path = "../../utils" }
 
-futures = { workspace = true, default-features = false }
 async-trait.workspace = true
+futures = { workspace = true, default-features = false }
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }
 
@@ -34,4 +34,5 @@ crypto = { path = "../../crypto" }
 serialization = { path = "../../serialization" }
 test-utils = { path = "../../test-utils" }
 
+ctor.workspace = true
 rstest.workspace = true

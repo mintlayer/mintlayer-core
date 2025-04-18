@@ -19,10 +19,10 @@ use chainstate::{BlockError, ChainstateError, ConnectTransactionError};
 use chainstate_test_framework::{empty_witness, TestFramework, TransactionBuilder};
 use common::{
     chain::{
-        config::Builder as ConfigBuilder, output_value::OutputValue, stakelock::StakePoolData,
-        timelock::OutputTimeLock, AccountNonce, AccountSpending, ConsensusUpgrade, DelegationId,
-        Destination, NetUpgrades, OutPointSourceId, PoSChainConfigBuilder, PoolId, TxInput,
-        TxOutput, UtxoOutPoint,
+        config::Builder as ConfigBuilder, make_delegation_id, output_value::OutputValue,
+        stakelock::StakePoolData, timelock::OutputTimeLock, AccountNonce, AccountSpending,
+        ConsensusUpgrade, Destination, NetUpgrades, OutPointSourceId, PoSChainConfigBuilder,
+        PoolId, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{
         per_thousand::PerThousand, Amount, BlockCount, BlockHeight, CoinOrTokenId, Idable,
@@ -224,7 +224,6 @@ fn spend_share_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
 
     let amount_to_delegate = Amount::from_atoms(1000);
     let pool_id = common::primitives::H256::zero().into();
-    let delegation_id = DelegationId::from_utxo(&genesis_mint_outpoint);
 
     let tx1 = TransactionBuilder::new()
         .add_input(genesis_mint_outpoint.into(), empty_witness(&mut rng))
@@ -237,6 +236,7 @@ fn spend_share_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
             pool_id,
         ))
         .build();
+    let delegation_id = make_delegation_id(tx1.inputs()).unwrap();
     let tx1_id = tx1.transaction().get_id();
     let tx2 = TransactionBuilder::new()
         .add_input(

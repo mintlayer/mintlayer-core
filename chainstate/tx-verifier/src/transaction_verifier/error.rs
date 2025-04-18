@@ -18,8 +18,8 @@ use common::{
     chain::{
         block::{Block, GenBlock},
         tokens::TokenId,
-        AccountNonce, AccountType, DelegationId, OrderId, OutPointSourceId, PoolId, Transaction,
-        UtxoOutPoint,
+        AccountNonce, AccountType, DelegationId, IdCreationError, OrderId, OutPointSourceId,
+        PoolId, Transaction, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
 };
@@ -127,6 +127,8 @@ pub enum ConnectTransactionError {
     ConcludeInputAmountsDontMatch(Id<Transaction>, OrderId),
     #[error("ProduceBlockFromStake for block {0} modifies staker destination for pool {1}; this is no longer allowed")]
     ProduceBlockFromStakeChangesStakerDestination(Id<Block>, PoolId),
+    #[error("Id creation error: {0}")]
+    IdCreationError(#[from] IdCreationError),
 }
 
 impl From<std::convert::Infallible> for ConnectTransactionError {
@@ -217,8 +219,6 @@ pub enum TokensError {
     InsufficientTokenFees(Id<Transaction>),
     #[error("Can't transfer zero tokens in transaction {0} in block {1}")]
     TransferZeroTokens(Id<Transaction>, Id<Block>),
-    #[error("Tokens ID can't be calculated")]
-    TokenIdCantBeCalculated,
     #[error("Block reward can't be paid in tokens")]
     TokensInBlockReward,
     #[error("Invariant broken - attempt undo issuance on non-existent token {0}")]

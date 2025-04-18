@@ -80,7 +80,8 @@ impl OrphanType {
             | CTE::AttemptToCreateOrderFromAccounts
             | CTE::ConcludeInputAmountsDontMatch(_, _)
             | CTE::IOPolicyError(_, _)
-            | CTE::ProduceBlockFromStakeChangesStakerDestination(_, _) => Err(err),
+            | CTE::ProduceBlockFromStakeChangesStakerDestination(_, _)
+            | CTE::IdCreationError(_) => Err(err),
         }
     }
 }

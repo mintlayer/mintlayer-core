@@ -1178,10 +1178,9 @@ impl<K: AccountKeyChains> Account<K> {
 
         let new_token_id = make_token_id(
             &self.chain_config,
-            self.account_info.best_block_height(),
+            self.account_info.best_block_height().next_height(),
             request.inputs(),
-        )
-        .ok_or(WalletError::NoUtxos)?;
+        )?;
 
         // update the dummy_token_id with the new_token_id
         let old_token_id = request
@@ -1489,8 +1488,7 @@ impl<K: AccountKeyChains> Account<K> {
             None,
         )?;
 
-        let new_pool_id =
-            common::chain::make_pool_id(request.inputs()).ok_or(WalletError::NotUtxoInput)?;
+        let new_pool_id = common::chain::make_pool_id(request.inputs())?;
 
         // update the dummy_pool_id with the new pool_id
         let old_pool_id = request
@@ -1975,11 +1973,7 @@ impl<K: AccountKeyChains> Account<K> {
         for (tx_id, _) in revoked_txs {
             db_tx.del_transaction(&tx_id)?;
             let source = tx_id.into_item_id();
-            self.output_cache.remove_confirmed_tx(
-                &self.chain_config,
-                self.account_info.best_block_height(),
-                &source,
-            )?;
+            self.output_cache.remove_confirmed_tx(&self.chain_config, &source)?;
             wallet_events.del_transaction(self.account_index(), source);
         }
 
@@ -2133,7 +2127,6 @@ impl<K: AccountKeyChains> Account<K> {
         let acc_id = self.get_account_id();
         let conflicting_txs = self.output_cache.update_conflicting_txs(
             &self.chain_config,
-            self.account_info.best_block_height(),
             confirmed_tx,
             block.get_id().into(),
         )?;
@@ -2297,11 +2290,7 @@ impl<K: AccountKeyChains> Account<K> {
         tx_id: Id<Transaction>,
         db_tx: &mut impl WalletStorageWriteLocked,
     ) -> WalletResult<()> {
-        let abandoned_txs = self.output_cache.abandon_transaction(
-            &self.chain_config,
-            self.account_info.best_block_height(),
-            tx_id,
-        )?;
+        let abandoned_txs = self.output_cache.abandon_transaction(&self.chain_config, tx_id)?;
         let acc_id = self.get_account_id();
 
         for (tx_id, tx) in abandoned_txs {

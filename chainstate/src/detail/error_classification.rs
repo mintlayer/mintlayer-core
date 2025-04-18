@@ -17,7 +17,9 @@ use chainstate_types::{
     pos_randomness::PoSRandomnessError, storage_result, GetAncestorError, PropertyQueryError,
 };
 use common::{
-    chain::{block::block_body::BlockMerkleTreeError, signature::DestinationSigError},
+    chain::{
+        block::block_body::BlockMerkleTreeError, signature::DestinationSigError, IdCreationError,
+    },
     UintConversionError,
 };
 use consensus::{
@@ -321,6 +323,19 @@ impl BlockProcessingErrorClassification for ConnectTransactionError {
             ConnectTransactionError::ConstrainedValueAccumulatorError(err, _) => err.classify(),
             ConnectTransactionError::InputCheck(err) => err.classify(),
             ConnectTransactionError::OrdersAccountingError(err) => err.classify(),
+            ConnectTransactionError::IdCreationError(err) => err.classify(),
+        }
+    }
+}
+
+impl BlockProcessingErrorClassification for IdCreationError {
+    fn classify(&self) -> BlockProcessingErrorClass {
+        match self {
+            IdCreationError::NoUtxoInputsForPoolIdCreation
+            | IdCreationError::NoUtxoInputsForDelegationIdCreation
+            | IdCreationError::NoUtxoInputsForOrderIdCreation
+            | IdCreationError::NoUtxoInputsForTokenIdCreation
+            | IdCreationError::NoInputsForTokenIdCreation => BlockProcessingErrorClass::BadBlock,
         }
     }
 }
@@ -473,7 +488,6 @@ impl BlockProcessingErrorClassification for TokensError {
             | TokensError::CoinOrTokenOverflow(_)
             | TokensError::InsufficientTokenFees(_)
             | TokensError::TransferZeroTokens(_, _)
-            | TokensError::TokenIdCantBeCalculated
             | TokensError::TokensInBlockReward
             | TokensError::TokenMetadataUriTooLarge(_)
             | TokensError::InvariantBrokenUndoIssuanceOnNonexistentToken(_)

@@ -270,6 +270,7 @@ dependencies = [
  "common",
  "constraints-value-accumulator",
  "crypto",
+ "ctor",
  "futures",
  "logging",
  "mempool",

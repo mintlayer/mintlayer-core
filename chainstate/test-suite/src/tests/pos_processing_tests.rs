@@ -38,6 +38,7 @@ use common::{
             ConsensusData,
         },
         config::{create_unit_test_config, Builder as ConfigBuilder, ChainType, EpochIndex},
+        make_delegation_id,
         output_value::OutputValue,
         signature::{
             inputsig::{standard_signature::StandardInputSignature, InputWitness},
@@ -46,8 +47,8 @@ use common::{
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
         AccountNonce, AccountOutPoint, AccountSpending, ChainConfig, ChainstateUpgradeBuilder,
-        ConsensusUpgrade, DelegationId, Destination, GenBlock, NetUpgrades, OutPointSourceId,
-        PoSChainConfig, PoSChainConfigBuilder, PoolId, RequiredConsensus, SignedTransaction,
+        ConsensusUpgrade, Destination, GenBlock, NetUpgrades, OutPointSourceId, PoSChainConfig,
+        PoSChainConfigBuilder, PoolId, RequiredConsensus, SignedTransaction,
         StakerDestinationUpdateForbidden, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockCount, BlockHeight, Id, Idable, H256},
@@ -1832,7 +1833,6 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
         OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
         0,
     );
-    let delegation_id = DelegationId::from_utxo(&genesis_outpoint);
 
     let tx1 = TransactionBuilder::new()
         .add_input(genesis_outpoint.into(), empty_witness(&mut rng))
@@ -1845,6 +1845,7 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
             genesis_pool_id,
         ))
         .build();
+    let delegation_id = make_delegation_id(tx1.inputs()).unwrap();
     let tx1_id = tx1.transaction().get_id();
     let tx2 = TransactionBuilder::new()
         .add_input(

@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use chainstate_types::pos_randomness::PoSRandomnessError;
+use common::chain::IdCreationError;
 use consensus::{
     BlockSignatureError, ConsensusPoSError, ConsensusPoWError, ConsensusVerificationError,
 };
@@ -145,6 +146,19 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::AttemptToCreateOrderFromAccounts => 100,
             ConnectTransactionError::ConcludeInputAmountsDontMatch(_, _) => 100,
             ConnectTransactionError::ProduceBlockFromStakeChangesStakerDestination(_, _) => 100,
+            ConnectTransactionError::IdCreationError(err) => err.ban_score(),
+        }
+    }
+}
+
+impl BanScore for IdCreationError {
+    fn ban_score(&self) -> u32 {
+        match self {
+            IdCreationError::NoUtxoInputsForPoolIdCreation
+            | IdCreationError::NoUtxoInputsForDelegationIdCreation
+            | IdCreationError::NoUtxoInputsForOrderIdCreation
+            | IdCreationError::NoUtxoInputsForTokenIdCreation
+            | IdCreationError::NoInputsForTokenIdCreation => 100,
         }
     }
 }
@@ -333,7 +347,6 @@ impl BanScore for TokensError {
             TokensError::CoinOrTokenOverflow(_) => 100,
             TokensError::InsufficientTokenFees(_) => 100,
             TokensError::TransferZeroTokens(_, _) => 100,
-            TokensError::TokenIdCantBeCalculated => 100,
             TokensError::TokensInBlockReward => 100,
             TokensError::InvariantBrokenUndoIssuanceOnNonexistentToken(_) => 100,
             TokensError::InvariantBrokenRegisterIssuanceWithDuplicateId(_) => 100,

@@ -13,25 +13,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::transaction_verifier::{
-    storage::TransactionVerifierStorageError,
-    token_issuance_cache::{CachedAuxDataOp, CachedTokenIndexOp},
-};
+use mockall::predicate::eq;
+use rstest::rstest;
 
-use super::*;
 use accounting::TxUndo;
 use common::chain::{
     config::Builder as ConfigBuilder,
     tokens::{IsTokenFreezable, IsTokenFrozen, TokenAuxiliaryData, TokenId, TokenTotalSupply},
     DelegationId, PoolId,
 };
-use mockall::predicate::eq;
 use orders_accounting::OrdersAccountingDeltaUndoData;
 use pos_accounting::DeltaMergeUndo;
-use rstest::rstest;
 use test_utils::random::Seed;
 use tokens_accounting::{FungibleTokenData, TokensAccountingDeltaUndoData};
 use utxo::{UtxosBlockRewardUndo, UtxosTxUndoWithSources};
+
+use crate::{
+    error::TokensError,
+    transaction_verifier::{
+        storage::TransactionVerifierStorageError,
+        token_issuance_cache::{CachedAuxDataOp, CachedTokenIndexOp},
+    },
+};
+
+use super::*;
 
 // TODO: ConsumedUtxoCache is not checked in these tests, think how to expose it from utxo crate
 
@@ -666,9 +671,6 @@ fn pos_accounting_stake_pool_set_hierarchy(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
     let chain_config = ConfigBuilder::test_chain().build();
 
-    let (outpoint1, _) = create_utxo(&mut rng, 1000);
-    let (outpoint2, _) = create_utxo(&mut rng, 2000);
-
     let destination1 = new_pub_key_destination(&mut rng);
     let destination2 = new_pub_key_destination(&mut rng);
 
@@ -678,8 +680,8 @@ fn pos_accounting_stake_pool_set_hierarchy(#[case] seed: Seed) {
     let pool_data1 = create_pool_data(&mut rng, destination1.clone(), destination1, pool_balance1);
     let pool_data2 = create_pool_data(&mut rng, destination2.clone(), destination2, pool_balance2);
 
-    let pool_id_1 = PoolId::from_utxo(&outpoint1);
-    let pool_id_2 = PoolId::from_utxo(&outpoint2);
+    let pool_id_1 = PoolId::random_using(&mut rng);
+    let pool_id_2 = PoolId::random_using(&mut rng);
 
     let mut store = mock::MockStore::new();
     store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
@@ -741,11 +743,11 @@ fn pos_accounting_stake_pool_undo_set_hierarchy(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
     let chain_config = ConfigBuilder::test_chain().build();
 
-    let (outpoint1, _) = create_utxo(&mut rng, 1000);
-    let (outpoint2, _) = create_utxo(&mut rng, 2000);
-
     let destination1 = new_pub_key_destination(&mut rng);
     let destination2 = new_pub_key_destination(&mut rng);
+
+    let pool_id_1 = PoolId::random_using(&mut rng);
+    let pool_id_2 = PoolId::random_using(&mut rng);
 
     let pool_balance1 = Amount::from_atoms(200);
     let pool_balance2 = Amount::from_atoms(300);
@@ -794,12 +796,11 @@ fn pos_accounting_stake_pool_undo_set_hierarchy(#[case] seed: Seed) {
     store.expect_apply_accounting_delta().times(1).return_const(Ok(()));
 
     let mut verifier1 = {
-        let pool_id = PoolId::from_utxo(&outpoint1);
         let mut verifier = TransactionVerifier::new(&store, &chain_config);
         let undo = verifier
             .pos_accounting_adapter
             .operations(TransactionSource::Mempool)
-            .create_pool(pool_id, pool_data1.into())
+            .create_pool(pool_id_1, pool_data1.into())
             .unwrap();
         let tx_id: Id<Transaction> = Id::new(H256::random_using(&mut rng));
 
@@ -815,12 +816,11 @@ fn pos_accounting_stake_pool_undo_set_hierarchy(#[case] seed: Seed) {
     };
 
     let verifier2 = {
-        let pool_id = PoolId::from_utxo(&outpoint2);
         let mut verifier = verifier1.derive_child();
         let undo_pool = verifier
             .pos_accounting_adapter
             .operations(TransactionSource::Mempool)
-            .create_pool(pool_id, pool_data2.into())
+            .create_pool(pool_id_2, pool_data2.into())
             .unwrap();
         let tx_id: Id<Transaction> = Id::new(H256::random_using(&mut rng));
 
@@ -849,14 +849,11 @@ fn pos_accounting_stake_pool_and_delegation_undo_set_hierarchy(#[case] seed: See
     let mut rng = test_utils::random::make_seedable_rng(seed);
     let chain_config = ConfigBuilder::test_chain().build();
 
-    let (outpoint1, _) = create_utxo(&mut rng, 1000);
-    let (outpoint2, _) = create_utxo(&mut rng, 2000);
-
     let destination1 = new_pub_key_destination(&mut rng);
     let destination2 = new_pub_key_destination(&mut rng);
 
-    let pool_id_1 = PoolId::from_utxo(&outpoint1);
-    let pool_id_2 = PoolId::from_utxo(&outpoint2);
+    let pool_id_1 = PoolId::random_using(&mut rng);
+    let pool_id_2 = PoolId::random_using(&mut rng);
 
     let pool_balance1 = Amount::from_atoms(200);
     let pool_balance2 = Amount::from_atoms(300);
@@ -1181,9 +1178,6 @@ fn tokens_v1_set_hierarchy(#[case] seed: Seed) {
     let tx_id_1: Id<Transaction> = Id::new(H256::random_using(&mut rng));
     let tx_id_2: Id<Transaction> = Id::new(H256::random_using(&mut rng));
 
-    let input1 = TxInput::Utxo(create_utxo(&mut rng, 100).0);
-    let input2 = TxInput::Utxo(create_utxo(&mut rng, 1000).0);
-
     let supply1 = Amount::from_atoms(100);
     let supply2 = Amount::from_atoms(200);
 
@@ -1208,8 +1202,8 @@ fn tokens_v1_set_hierarchy(#[case] seed: Seed) {
             Destination::AnyoneCanSpend,
         ));
 
-    let token_id_1 = make_token_id(&chain_config, BlockHeight::zero(), &[input1]).unwrap();
-    let token_id_2 = make_token_id(&chain_config, BlockHeight::zero(), &[input2]).unwrap();
+    let token_id_1 = TokenId::random_using(&mut rng);
+    let token_id_2 = TokenId::random_using(&mut rng);
 
     let mut store = mock::MockStore::new();
     store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
@@ -1304,9 +1298,6 @@ fn tokens_v1_set_issue_and_lock_undo_hierarchy(#[case] seed: Seed) {
     let block_undo_id_1: Id<Block> = Id::new(H256::random_using(&mut rng));
     let block_undo_id_2: Id<Block> = Id::new(H256::random_using(&mut rng));
 
-    let input1 = TxInput::Utxo(create_utxo(&mut rng, 100).0);
-    let input2 = TxInput::Utxo(create_utxo(&mut rng, 1000).0);
-
     let token_data1 =
         tokens_accounting::TokenData::FungibleToken(FungibleTokenData::new_unchecked(
             "tkn1".into(),
@@ -1328,8 +1319,8 @@ fn tokens_v1_set_issue_and_lock_undo_hierarchy(#[case] seed: Seed) {
             Destination::AnyoneCanSpend,
         ));
 
-    let token_id_1 = make_token_id(&chain_config, BlockHeight::zero(), &[input1]).unwrap();
-    let token_id_2 = make_token_id(&chain_config, BlockHeight::zero(), &[input2]).unwrap();
+    let token_id_1 = TokenId::random_using(&mut rng);
+    let token_id_2 = TokenId::random_using(&mut rng);
 
     let mut store = mock::MockStore::new();
     store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));

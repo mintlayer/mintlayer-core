@@ -23,6 +23,7 @@ use chainstate_types::TipStorageTag;
 use common::{
     chain::{
         config::create_unit_test_config,
+        make_delegation_id,
         output_value::OutputValue,
         signature::{
             inputsig::{standard_signature::StandardInputSignature, InputWitness},
@@ -101,7 +102,6 @@ fn prepare_delegation(
 
     let available_amount = get_coin_amount_from_outpoint(&tf.storage, &transfer_outpoint);
 
-    let delegation_id = DelegationId::from_utxo(&transfer_outpoint);
     let tx = TransactionBuilder::new()
         .add_input(transfer_outpoint.into(), empty_witness(rng))
         .add_output(TxOutput::CreateDelegationId(
@@ -113,6 +113,7 @@ fn prepare_delegation(
             Destination::AnyoneCanSpend,
         ))
         .build();
+    let delegation_id = make_delegation_id(tx.inputs()).unwrap();
     let delegation_outpoint =
         UtxoOutPoint::new(OutPointSourceId::Transaction(tx.transaction().get_id()), 0);
     let transfer_outpoint =
@@ -150,7 +151,6 @@ fn create_delegation(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng).build();
 
         let (pool_id, _, transfer_outpoint) = prepare_stake_pool(&mut rng, &mut tf);
-        let delegation_id = DelegationId::from_utxo(&transfer_outpoint);
         let available_amount = get_coin_amount_from_outpoint(&tf.storage, &transfer_outpoint);
 
         let delegation_spend_destination =
@@ -167,6 +167,7 @@ fn create_delegation(#[case] seed: Seed) {
                 Destination::AnyoneCanSpend,
             ))
             .build();
+        let delegation_id = make_delegation_id(tx.inputs()).unwrap();
 
         tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
@@ -813,7 +814,6 @@ fn create_pool_and_delegation_and_delegate_same_block(#[case] seed: Seed) {
         let tx1_source_id = OutPointSourceId::Transaction(tx1.transaction().get_id());
         let tx_1_kernel0_outpoint = UtxoOutPoint::new(tx1_source_id, 1);
 
-        let delegation_id = DelegationId::from_utxo(&tx_1_kernel0_outpoint);
         let tx2 = TransactionBuilder::new()
             .add_input(tx_1_kernel0_outpoint.into(), empty_witness(&mut rng))
             .add_output(TxOutput::CreateDelegationId(
@@ -825,6 +825,7 @@ fn create_pool_and_delegation_and_delegate_same_block(#[case] seed: Seed) {
                 Destination::AnyoneCanSpend,
             ))
             .build();
+        let delegation_id = make_delegation_id(tx2.inputs()).unwrap();
         let tx2_source_id = OutPointSourceId::Transaction(tx2.transaction().get_id());
 
         let tx3 = TransactionBuilder::new()
@@ -857,7 +858,6 @@ fn check_signature_on_spend_share(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng).build();
 
         let (pool_id, _, transfer_outpoint) = prepare_stake_pool(&mut rng, &mut tf);
-        let delegation_id = DelegationId::from_utxo(&transfer_outpoint);
         let available_amount = get_coin_amount_from_outpoint(&tf.storage, &transfer_outpoint);
 
         let (delegation_sk, delegation_pk) =
@@ -874,6 +874,7 @@ fn check_signature_on_spend_share(#[case] seed: Seed) {
                 Destination::AnyoneCanSpend,
             ))
             .build();
+        let delegation_id = make_delegation_id(create_delegation_tx.inputs()).unwrap();
         let create_delegation_tx_id = create_delegation_tx.transaction().get_id();
 
         let delegate_staking_tx = TransactionBuilder::new()
@@ -1441,7 +1442,6 @@ fn delegate_and_spend_share_same_block_multiple_delegations(#[case] seed: Seed) 
         let change = (available_amount - amount_to_delegate).unwrap();
 
         // Create second delegation and delegate coins to both
-        let delegation_id_2 = DelegationId::from_utxo(&transfer_outpoint);
         let delegate_staking_tx = TransactionBuilder::new()
             .add_input(transfer_outpoint.clone().into(), empty_witness(&mut rng))
             .add_output(TxOutput::DelegateStaking(
@@ -1457,6 +1457,7 @@ fn delegate_and_spend_share_same_block_multiple_delegations(#[case] seed: Seed) 
                 pool_id,
             ))
             .build();
+        let delegation_id_2 = make_delegation_id(delegate_staking_tx.inputs()).unwrap();
         let delegate_staking_tx_id = delegate_staking_tx.transaction().get_id();
 
         let amount_to_delegate = (change / 2).unwrap();
@@ -1730,7 +1731,7 @@ fn delegate_same_pool_as_staking(#[case] seed: Seed) {
         ))
         .build();
     let create_delegation_tx_id = create_delegation_tx.transaction().get_id();
-    let delegation_id = DelegationId::from_utxo(&genesis_mint_outpoint);
+    let delegation_id = make_delegation_id(create_delegation_tx.inputs()).unwrap();
 
     let delegate_staking_tx = TransactionBuilder::new()
         .add_input(

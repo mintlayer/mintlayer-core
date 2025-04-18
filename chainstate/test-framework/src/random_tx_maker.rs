@@ -30,9 +30,9 @@ use common::{
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
         tokens::{IsTokenUnfreezable, NftIssuance, TokenId, TokenIssuance, TokenTotalSupply},
-        AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, AccountType, ChainConfig,
-        DelegationId, Destination, GenBlockId, OrderAccountCommand, OrderData, OrderId,
-        OrdersVersion, OutPointSourceId, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
+        AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, AccountType, DelegationId,
+        Destination, GenBlockId, OrderAccountCommand, OrderData, OrderId, OrdersVersion,
+        OutPointSourceId, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, CoinOrTokenId, Id, Idable, H256},
 };
@@ -314,16 +314,12 @@ impl<'a> RandomTxMaker<'a> {
 
         outputs.extend(account_outputs);
 
-        if !inputs.is_empty() {
-            // keep first element intact so that it's always a UtxoOutpoint for ids calculation
-            inputs[1..].shuffle(rng);
-        }
+        inputs.shuffle(rng);
         outputs.shuffle(rng);
 
         // now that the inputs are in place calculate the ids and replace dummy values
-        let (outputs, new_staking_pools) = Self::tx_outputs_post_process(
+        let (outputs, new_staking_pools) = self.tx_outputs_post_process(
             rng,
-            self.chainstate.get_chain_config().as_ref(),
             &mut pos_delta,
             &mut tokens_cache,
             &mut orders_cache,
@@ -1363,14 +1359,15 @@ impl<'a> RandomTxMaker<'a> {
     }
 
     fn tx_outputs_post_process(
+        &self,
         rng: &mut (impl Rng + CryptoRng),
-        chain_config: &ChainConfig,
         pos_accounting_cache: &mut (impl PoSAccountingView + PoSAccountingOperations<PoSAccountingUndo>),
         tokens_cache: &mut (impl TokensAccountingView + TokensAccountingOperations),
         orders_cache: &mut (impl OrdersAccountingView + OrdersAccountingOperations),
         inputs: &[TxInput],
         outputs: Vec<TxOutput>,
     ) -> (Vec<TxOutput>, BTreeMap<PoolId, (PrivateKey, VRFPrivateKey)>) {
+        let chain_config = self.chainstate.get_chain_config().as_ref();
         let mut new_staking_pools = BTreeMap::new();
 
         let outputs = outputs
@@ -1419,7 +1416,7 @@ impl<'a> RandomTxMaker<'a> {
                 }
                 TxOutput::IssueFungibleToken(issuance) => {
                     let token_id =
-                        make_token_id(chain_config, BlockHeight::zero(), inputs).unwrap();
+                        make_token_id(chain_config, self.next_block_height(), inputs).unwrap();
                     let data = tokens_accounting::TokenData::FungibleToken(
                         issuance.as_ref().clone().into(),
                     );
@@ -1428,7 +1425,7 @@ impl<'a> RandomTxMaker<'a> {
                 }
                 TxOutput::IssueNft(dummy_token_id, _, _) => {
                     *dummy_token_id =
-                        make_token_id(chain_config, BlockHeight::zero(), inputs).unwrap();
+                        make_token_id(chain_config, self.next_block_height(), inputs).unwrap();
                     Some(output)
                 }
                 TxOutput::CreateOrder(data) => {
@@ -1483,6 +1480,10 @@ impl<'a> RandomTxMaker<'a> {
             input.utxo_outpoint().unwrap(),
         )
         .is_ok()
+    }
+
+    fn next_block_height(&self) -> BlockHeight {
+        self.chainstate.get_best_block_height().unwrap().next_height()
     }
 }
 

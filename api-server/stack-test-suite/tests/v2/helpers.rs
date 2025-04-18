@@ -15,6 +15,7 @@
 
 use chainstate_test_framework::empty_witness;
 use chainstate_test_framework::{TestFramework, TransactionBuilder};
+use common::chain::make_delegation_id;
 use common::{
     address::pubkeyhash::PublicKeyHash,
     chain::{
@@ -90,7 +91,6 @@ pub fn prepare_delegation(
     destination: Option<Destination>,
     tf: &mut TestFramework,
 ) -> (DelegationId, Destination, UtxoOutPoint, Block) {
-    let delegation_id = DelegationId::from_utxo(&transfer_outpoint);
     let (_, pk) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
     let destination = destination.unwrap_or(Destination::PublicKey(pk));
     let create_delegation_tx = TransactionBuilder::new()
@@ -101,6 +101,7 @@ pub fn prepare_delegation(
             Destination::AnyoneCanSpend,
         ))
         .build();
+    let delegation_id = make_delegation_id(create_delegation_tx.inputs()).unwrap();
 
     let transfer_outpoint = UtxoOutPoint::new(
         OutPointSourceId::Transaction(create_delegation_tx.transaction().get_id()),
@@ -192,7 +193,7 @@ pub fn issue_and_mint_tokens_from_genesis(
         .build();
     let token_id = make_token_id(
         tf.chain_config(),
-        BlockHeight::zero(),
+        tf.next_block_height(),
         tx1.transaction().inputs(),
     )
     .unwrap();

@@ -322,7 +322,8 @@ export async function run_test() {
       get_token_id([], BigInt(1), Network.Testnet);
       throw "Token Id generated without a UTXO input somehow!";
     } catch (e) {
-      if (!e.includes("No UTXO input found")) {
+      if (!(e.includes("No UTXO inputs for token id creation") ||
+            e.includes("No inputs for token id creation"))) {
         throw e;
       }
       console.log("Tested no UTXO inputs for token ID successfully");

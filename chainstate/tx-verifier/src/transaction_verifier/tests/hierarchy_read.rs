@@ -388,10 +388,6 @@ fn hierarchy_test_stake_pool(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
     let chain_config = ConfigBuilder::test_chain().build();
 
-    let (outpoint0, _) = create_utxo(&mut rng, 100);
-    let (outpoint1, _) = create_utxo(&mut rng, 1000);
-    let (outpoint2, _) = create_utxo(&mut rng, 2000);
-
     let destination0 = new_pub_key_destination(&mut rng);
     let destination1 = new_pub_key_destination(&mut rng);
     let destination2 = new_pub_key_destination(&mut rng);
@@ -404,9 +400,9 @@ fn hierarchy_test_stake_pool(#[case] seed: Seed) {
     let pool_data1 = create_pool_data(&mut rng, destination1.clone(), destination1, pool_balance1);
     let pool_data2 = create_pool_data(&mut rng, destination2.clone(), destination2, pool_balance2);
 
-    let pool_id_0 = PoolId::from_utxo(&outpoint0);
-    let pool_id_1 = PoolId::from_utxo(&outpoint1);
-    let pool_id_2 = PoolId::from_utxo(&outpoint2);
+    let pool_id_0 = PoolId::random_using(&mut rng);
+    let pool_id_1 = PoolId::random_using(&mut rng);
+    let pool_id_2 = PoolId::random_using(&mut rng);
 
     let block_undo_id_0: Id<Block> = Id::new(H256::random_using(&mut rng));
     let block_undo_source_0 = TransactionSource::Chain(block_undo_id_0);
@@ -643,10 +639,6 @@ fn hierarchy_test_tokens_v1(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
     let chain_config = ConfigBuilder::test_chain().build();
 
-    let input0 = TxInput::Utxo(create_utxo(&mut rng, 100).0);
-    let input1 = TxInput::Utxo(create_utxo(&mut rng, 1000).0);
-    let input2 = TxInput::Utxo(create_utxo(&mut rng, 200).0);
-
     let supply0 = Amount::from_atoms(100);
     let supply1 = Amount::from_atoms(200);
     let supply2 = Amount::from_atoms(300);
@@ -682,9 +674,9 @@ fn hierarchy_test_tokens_v1(#[case] seed: Seed) {
             Destination::AnyoneCanSpend,
         ));
 
-    let token_id_0 = make_token_id(&chain_config, BlockHeight::zero(), &[input0]).unwrap();
-    let token_id_1 = make_token_id(&chain_config, BlockHeight::zero(), &[input1]).unwrap();
-    let token_id_2 = make_token_id(&chain_config, BlockHeight::zero(), &[input2]).unwrap();
+    let token_id_0 = TokenId::random_using(&mut rng);
+    let token_id_1 = TokenId::random_using(&mut rng);
+    let token_id_2 = TokenId::random_using(&mut rng);
 
     let block_undo_id_0: Id<Block> = Id::new(H256::random_using(&mut rng));
     let block_undo_source_0 = TransactionSource::Chain(block_undo_id_0);

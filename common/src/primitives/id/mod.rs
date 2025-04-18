@@ -23,10 +23,12 @@ use std::fmt::{Debug, Display, LowerHex, UpperHex};
 use generic_array::{typenum, GenericArray};
 use ref_cast::RefCast;
 
-use crate::Uint256;
 use crypto::hash::StreamHasher;
+use randomness::Rng;
 use serialization::{Decode, Encode};
 use typename::TypeName;
+
+use crate::Uint256;
 
 pub use with_id::WithId;
 
@@ -197,6 +199,14 @@ impl<T> Id<T> {
             hash: h,
             _shadow: std::marker::PhantomData,
         }
+    }
+
+    pub const fn zero() -> Self {
+        Self::new(H256::zero())
+    }
+
+    pub fn random_using<R: Rng>(rng: &mut R) -> Self {
+        Self::new(H256::random_using(rng))
     }
 
     pub fn serde_serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {

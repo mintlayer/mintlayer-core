@@ -33,8 +33,8 @@ mod collect_search_data {
     use chainstate_types::pos_randomness::PoSRandomness;
     use common::{
         chain::{
-            self, config::ChainType, output_value::OutputValue, CoinUnit, ConsensusUpgrade,
-            DelegationId, Destination, NetUpgrades, OutPointSourceId, PoSChainConfigBuilder,
+            self, config::ChainType, make_delegation_id, output_value::OutputValue, CoinUnit,
+            ConsensusUpgrade, Destination, NetUpgrades, OutPointSourceId, PoSChainConfigBuilder,
             PoSConsensusVersion, PoolId, TxOutput, UtxoOutPoint,
         },
         primitives::{Amount, BlockCount, BlockHeight, Idable, H256},
@@ -450,7 +450,6 @@ mod collect_search_data {
         let amount_to_delegate =
             Amount::from_atoms(rng.gen_range(min_stake_pool_pledge / 2..min_stake_pool_pledge * 2));
 
-        let delegation_id = DelegationId::from_utxo(utxo_for_spending.outpoint());
         let tx1_builder = TransactionBuilder::new()
             .add_output(TxOutput::CreateDelegationId(
                 Destination::AnyoneCanSpend,
@@ -466,6 +465,7 @@ mod collect_search_data {
             Amount::ZERO,
             rng,
         );
+        let delegation_id = make_delegation_id(tx1.inputs()).unwrap();
         let transfer_outpoint =
             UtxoOutPoint::new(OutPointSourceId::Transaction(tx1.transaction().get_id()), 1);
 

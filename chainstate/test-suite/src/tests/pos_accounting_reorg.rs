@@ -27,11 +27,12 @@ use chainstate_test_framework::{
 use common::{
     chain::{
         config::{create_unit_test_config, Builder as ConfigBuilder},
+        make_delegation_id,
         output_value::OutputValue,
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
-        AccountNonce, AccountOutPoint, AccountSpending, DelegationId, Destination, GenBlock,
-        OutPointSourceId, PoolId, TxInput, TxOutput, UtxoOutPoint,
+        AccountNonce, AccountOutPoint, AccountSpending, Destination, GenBlock, OutPointSourceId,
+        PoolId, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, Id, Idable, H256},
 };
@@ -376,7 +377,6 @@ fn create_same_delegation_after_reorg(#[case] seed: Seed) {
         let genesis_block_id = tf.genesis().get_id().into();
         let genesis_outpoint =
             UtxoOutPoint::new(OutPointSourceId::BlockReward(genesis_block_id), 0);
-        let delegation_id = DelegationId::from_utxo(&genesis_outpoint);
         let create_delegation_tx = TransactionBuilder::new()
             .add_input(genesis_outpoint.into(), empty_witness(&mut rng))
             .add_output(TxOutput::CreateDelegationId(
@@ -388,6 +388,7 @@ fn create_same_delegation_after_reorg(#[case] seed: Seed) {
                 Destination::AnyoneCanSpend,
             ))
             .build();
+        let delegation_id = make_delegation_id(create_delegation_tx.inputs()).unwrap();
         let delegate_staking_tx = TransactionBuilder::new()
             .add_input(
                 TxInput::from_utxo(create_delegation_tx.transaction().get_id().into(), 1),
@@ -510,7 +511,6 @@ fn create_delegation_for_staking_pool_in_reorg(#[case] seed: Seed) {
         let genesis_block_id = tf.genesis().get_id().into();
         let genesis_outpoint =
             UtxoOutPoint::new(OutPointSourceId::BlockReward(genesis_block_id), 0);
-        let delegation_id_1 = DelegationId::from_utxo(&genesis_outpoint);
         let create_delegation_tx_1 = TransactionBuilder::new()
             .add_input(genesis_outpoint.into(), empty_witness(&mut rng))
             .add_output(TxOutput::CreateDelegationId(
@@ -522,6 +522,7 @@ fn create_delegation_for_staking_pool_in_reorg(#[case] seed: Seed) {
                 Destination::AnyoneCanSpend,
             ))
             .build();
+        let delegation_id_1 = make_delegation_id(create_delegation_tx_1.inputs()).unwrap();
         let delegate_staking_tx_1 = TransactionBuilder::new()
             .add_input(
                 TxInput::from_utxo(create_delegation_tx_1.transaction().get_id().into(), 1),
@@ -552,8 +553,6 @@ fn create_delegation_for_staking_pool_in_reorg(#[case] seed: Seed) {
         );
 
         // create block b with delegation 2
-        let delegation_id_2 =
-            DelegationId::from_utxo(&UtxoOutPoint::new(delegate_staking_tx_id.into(), 1));
         let create_delegation_tx_2 = TransactionBuilder::new()
             .add_input(
                 TxInput::from_utxo(delegate_staking_tx_id.into(), 1),
@@ -568,6 +567,7 @@ fn create_delegation_for_staking_pool_in_reorg(#[case] seed: Seed) {
                 Destination::AnyoneCanSpend,
             ))
             .build();
+        let delegation_id_2 = make_delegation_id(create_delegation_tx_2.inputs()).unwrap();
         let create_delegation_tx_2_id = create_delegation_tx_2.transaction().get_id();
         let delegate_staking_tx_2 = TransactionBuilder::new()
             .add_input(
@@ -992,7 +992,6 @@ fn in_memory_reorg_disconnect_spend_delegation(#[case] seed: Seed) {
         OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
         0,
     );
-    let delegation_id = DelegationId::from_utxo(&genesis_outpoint);
     let create_delegation_tx = TransactionBuilder::new()
         .add_input(genesis_outpoint.into(), empty_witness(&mut rng))
         .add_output(TxOutput::Transfer(
@@ -1004,6 +1003,7 @@ fn in_memory_reorg_disconnect_spend_delegation(#[case] seed: Seed) {
             genesis_pool_id,
         ))
         .build();
+    let delegation_id = make_delegation_id(create_delegation_tx.inputs()).unwrap();
     let create_delegation_tx_id = create_delegation_tx.transaction().get_id();
 
     let delegate_staking_tx = TransactionBuilder::new()
@@ -1158,7 +1158,6 @@ fn in_memory_reorg_disconnect_spend_delegation_from_decommissioned(#[case] seed:
 
     // produce block `b` at height 2: create delegation and delegation some coins
     let block_a_transfer_outpoint = UtxoOutPoint::new(stake_pool_2_tx_id.into(), 1);
-    let delegation_id = DelegationId::from_utxo(&block_a_transfer_outpoint);
     let create_delegation_tx = TransactionBuilder::new()
         .add_input(block_a_transfer_outpoint.into(), empty_witness(&mut rng))
         .add_output(TxOutput::Transfer(
@@ -1170,6 +1169,7 @@ fn in_memory_reorg_disconnect_spend_delegation_from_decommissioned(#[case] seed:
             pool_2_id,
         ))
         .build();
+    let delegation_id = make_delegation_id(create_delegation_tx.inputs()).unwrap();
     let create_delegation_tx_id = create_delegation_tx.transaction().get_id();
 
     let delegate_staking_tx = TransactionBuilder::new()

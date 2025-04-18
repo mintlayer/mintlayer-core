@@ -25,10 +25,10 @@ use chainstate_test_framework::{
 use chainstate_types::TipStorageTag;
 use common::{
     chain::{
-        self, config::ChainType, output_value::OutputValue, timelock::OutputTimeLock, AccountNonce,
-        AccountOutPoint, AccountSpending, CoinUnit, ConsensusUpgrade, DelegationId, Destination,
-        NetUpgrades, OutPointSourceId, PoSChainConfigBuilder, PoolId, TxInput, TxOutput,
-        UtxoOutPoint,
+        self, config::ChainType, make_delegation_id, output_value::OutputValue,
+        timelock::OutputTimeLock, AccountNonce, AccountOutPoint, AccountSpending, CoinUnit,
+        ConsensusUpgrade, DelegationId, Destination, NetUpgrades, OutPointSourceId,
+        PoSChainConfigBuilder, PoolId, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{amount::SignedAmount, Amount, BlockCount, BlockHeight, Idable, H256},
 };
@@ -500,7 +500,6 @@ impl TestData {
         let amount_to_delegate =
             Amount::from_atoms(rng.gen_range(min_stake_pool_pledge / 2..min_stake_pool_pledge * 2));
 
-        let delegation_id = DelegationId::from_utxo(self.utxo_for_spending.outpoint());
         let tx1_builder = TransactionBuilder::new()
             .add_output(TxOutput::CreateDelegationId(
                 Destination::AnyoneCanSpend,
@@ -516,6 +515,7 @@ impl TestData {
             Amount::ZERO,
             rng,
         );
+        let delegation_id = make_delegation_id(tx1.inputs()).unwrap();
         let tx1_id = tx1.transaction().get_id();
         let transfer_outpoint = UtxoOutPoint::new(OutPointSourceId::Transaction(tx1_id), 1);
 

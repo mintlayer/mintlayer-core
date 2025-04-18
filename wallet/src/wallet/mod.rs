@@ -50,9 +50,10 @@ use common::chain::tokens::{
 };
 use common::chain::{
     make_delegation_id, make_order_id, make_token_id, AccountCommand, AccountNonce,
-    AccountOutPoint, Block, ChainConfig, DelegationId, Destination, GenBlock, OrderAccountCommand,
-    OrderId, OutPointSourceId, PoolId, RpcOrderInfo, SignedTransaction, SignedTransactionIntent,
-    Transaction, TransactionCreationError, TxInput, TxOutput, UtxoOutPoint,
+    AccountOutPoint, Block, ChainConfig, DelegationId, Destination, GenBlock, IdCreationError,
+    OrderAccountCommand, OrderId, OutPointSourceId, PoolId, RpcOrderInfo, SignedTransaction,
+    SignedTransactionIntent, Transaction, TransactionCreationError, TxInput, TxOutput,
+    UtxoOutPoint,
 };
 use common::primitives::id::{hash_encoded, WithId};
 use common::primitives::{Amount, BlockHeight, Id, H256};
@@ -154,8 +155,6 @@ pub enum WalletError {
     InconsistentTokenIssuanceDuplicateNonce(TokenId, AccountNonce),
     #[error("Order with id: {0} with duplicate AccountNonce: {1}")]
     InconsistentOrderDuplicateNonce(OrderId, AccountNonce),
-    #[error("Empty inputs in token issuance transaction")]
-    MissingTokenId,
     #[error("Unknown token with Id {0}")]
     UnknownTokenId(TokenId),
     #[error("Unknown order with Id {0}")]
@@ -176,8 +175,6 @@ pub enum WalletError {
     InvalidTransaction(#[from] CheckTransactionError),
     #[error("No UTXOs")]
     NoUtxos,
-    #[error("An input is not a UTXO")]
-    NotUtxoInput,
     #[error("Coin selection error: {0}")]
     CoinSelectionError(#[from] UtxoSelectorError),
     #[error("Cannot change a transaction's state from {0} to {1}")]
@@ -280,6 +277,8 @@ pub enum WalletError {
     UnsupportedHardwareWalletOperation,
     #[error("Transaction from {0:?} is confirmed and among unconfirmed descendants")]
     ConfirmedTxAmongUnconfirmedDescendants(OutPointSourceId),
+    #[error("Id creation error: {0}")]
+    IdCreationError(#[from] IdCreationError),
 }
 
 /// Result type used for the wallet
@@ -1929,8 +1928,7 @@ where
             consolidate_fee_rate,
             TxAdditionalInfo::new(),
         )?;
-        let delegation_id =
-            make_delegation_id(tx.transaction().inputs()).ok_or(WalletError::NoUtxos)?;
+        let delegation_id = make_delegation_id(tx.transaction().inputs())?;
         Ok((delegation_id, tx))
     }
 
@@ -1956,8 +1954,7 @@ where
             self.chain_config.as_ref(),
             self.get_best_block_for_account(account_index)?.1.next_height(),
             tx.transaction().inputs(),
-        )
-        .ok_or(WalletError::MissingTokenId)?;
+        )?;
         Ok((token_id, tx))
     }
 
@@ -1995,8 +1992,7 @@ where
             self.chain_config.as_ref(),
             self.get_best_block_for_account(account_index)?.1.next_height(),
             signed_transaction.transaction().inputs(),
-        )
-        .ok_or(WalletError::MissingTokenId)?;
+        )?;
         Ok((token_id, signed_transaction))
     }
 
@@ -2156,7 +2152,7 @@ where
                 )
             },
         )?;
-        let order_id = make_order_id(tx.inputs()).ok_or(WalletError::NotUtxoInput)?;
+        let order_id = make_order_id(tx.inputs())?;
         Ok((order_id, tx))
     }
 

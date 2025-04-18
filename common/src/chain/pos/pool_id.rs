@@ -13,50 +13,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crypto::hash::StreamHasher;
-use randomness::{CryptoRng, Rng};
 use serialization::{DecodeAll, Encode};
 use typename::TypeName;
 
 use crate::{
     address::{hexified::HexifiedAddress, traits::Addressable, AddressError},
-    chain::UtxoOutPoint,
-    primitives::{
-        id::{hash_encoded_to, DefaultHashAlgoStream},
-        Id, H256,
-    },
+    primitives::Id,
 };
 
 use super::ChainConfig;
 
-fn pool_id_preimage_suffix() -> u32 {
-    // arbitrary, we use this to create different values when hashing with no security requirements
-    0
-}
-
 #[derive(Eq, PartialEq, TypeName)]
 pub enum Pool {}
 pub type PoolId = Id<Pool>;
-
-impl PoolId {
-    pub fn from_utxo(utxo_outpoint: &UtxoOutPoint) -> Self {
-        let mut hasher = DefaultHashAlgoStream::new();
-
-        hash_encoded_to(&utxo_outpoint, &mut hasher);
-
-        // 0 is arbitrary here, we use this as prefix to use this information again
-        hash_encoded_to(&pool_id_preimage_suffix(), &mut hasher);
-        Self::new(hasher.finalize().into())
-    }
-
-    pub fn random_using<R: Rng + CryptoRng>(rng: &mut R) -> Self {
-        Self::new(H256::random_using(rng))
-    }
-
-    pub const fn zero() -> Self {
-        Self::new(H256::zero())
-    }
-}
 
 impl serde::Serialize for PoolId {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
