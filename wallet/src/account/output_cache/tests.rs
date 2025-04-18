@@ -13,10 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chainstate_test_framework::{empty_witness, TransactionBuilder};
-use common::{chain::signature::inputsig::InputWitness, primitives::H256};
-use randomness::Rng;
 use rstest::rstest;
+
+use chainstate_test_framework::{empty_witness, TransactionBuilder};
+use common::{
+    chain::{signature::inputsig::InputWitness, timelock::OutputTimeLock, OrderData},
+    primitives::H256,
+};
+use randomness::Rng;
 use test_utils::random::{make_seedable_rng, Seed};
 
 use super::*;
@@ -44,6 +48,10 @@ fn diamond_unconfirmed_descendants(#[case] seed: Seed) {
             TxInput::from_utxo(genesis_tx_id.into(), 0),
             InputWitness::NoSignature(None),
         )
+        .add_output(TxOutput::Transfer(
+            OutputValue::Coin(Amount::from_atoms(rng.gen())),
+            Destination::AnyoneCanSpend,
+        ))
         .add_output(TxOutput::Transfer(
             OutputValue::Coin(Amount::from_atoms(rng.gen())),
             Destination::AnyoneCanSpend,
@@ -79,7 +87,7 @@ fn diamond_unconfirmed_descendants(#[case] seed: Seed) {
     // C
     let tx_c = TransactionBuilder::new()
         .add_input(
-            TxInput::from_utxo(tx_a_id.into(), 0),
+            TxInput::from_utxo(tx_a_id.into(), 1),
             empty_witness(&mut rng),
         )
         .add_output(TxOutput::Transfer(
@@ -140,18 +148,18 @@ fn diamond_unconfirmed_descendants(#[case] seed: Seed) {
     assert!(output_cache.unconfirmed_descendants.is_empty());
 }
 
-// Create 2 unconfirmed txs B and C that spends tokens:
+// Create 2 unconfirmed txs B and C that spend tokens:
 //
 //  /-->B-->C
 // A
 //  \-->D
 //
-// Freeze token in D.
-// Check that both B and C got marked as conflicted and function doesn't crash.
+// Freeze the token in D.
+// Check that both B and C got marked as conflicted.
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn conflict_parent_and_child(#[case] seed: Seed) {
+fn update_conflicting_txs_parent_and_child(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     let mut output_cache = OutputCache::empty();
@@ -243,5 +251,150 @@ fn conflict_parent_and_child(#[case] seed: Seed) {
                 WalletTx::Tx(TxData::new(tx_b, TxState::Conflicted(block_id)))
             ),
         ]
+    );
+}
+
+// Create unconfirmed txs Bi that use a token in their outputs only:
+// a) by transferring zero amount of the token (a legit situation which doesn't require the token
+// to be present in the inputs);
+// b) creating an order that asks for the token.
+//
+//  /-->Bi
+// A
+//  \-->C
+//
+// Freeze the token in C.
+// Check that Bi got marked as conflicted.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn update_conflicting_txs_frozen_token_only_in_outputs(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let mut output_cache = OutputCache::empty();
+    let token_id = TokenId::random_using(&mut rng);
+
+    let genesis_tx_id = Id::<Transaction>::new(H256::random_using(&mut rng));
+    let tx_a = TransactionBuilder::new()
+        .add_input(
+            TxInput::from_utxo(genesis_tx_id.into(), 0),
+            InputWitness::NoSignature(None),
+        )
+        // Note: only coin outputs here
+        .add_output(TxOutput::Transfer(
+            OutputValue::Coin(Amount::from_atoms(rng.gen())),
+            Destination::AnyoneCanSpend,
+        ))
+        .add_output(TxOutput::Transfer(
+            OutputValue::Coin(Amount::from_atoms(rng.gen())),
+            Destination::AnyoneCanSpend,
+        ))
+        .add_output(TxOutput::Transfer(
+            OutputValue::Coin(Amount::from_atoms(rng.gen())),
+            Destination::AnyoneCanSpend,
+        ))
+        .build();
+    let tx_a_id = tx_a.transaction().get_id();
+    output_cache
+        .add_tx(
+            tx_a_id.into(),
+            WalletTx::Tx(TxData::new(
+                tx_a,
+                TxState::Confirmed(BlockHeight::zero(), BlockTimestamp::from_int_seconds(0), 0),
+            )),
+        )
+        .unwrap();
+
+    // Transfer zero amount
+    let tx_b1 = TransactionBuilder::new()
+        .add_input(
+            TxInput::from_utxo(tx_a_id.into(), 0),
+            empty_witness(&mut rng),
+        )
+        .add_output(TxOutput::Transfer(
+            OutputValue::TokenV1(token_id, Amount::ZERO),
+            Destination::AnyoneCanSpend,
+        ))
+        .build();
+    let tx_b1_id = tx_b1.transaction().get_id();
+    output_cache
+        .add_tx(
+            tx_b1_id.into(),
+            WalletTx::Tx(TxData::new(tx_b1.clone(), TxState::Inactive(0))),
+        )
+        .unwrap();
+
+    // LockThenTransfer zero amount
+    let tx_b2 = TransactionBuilder::new()
+        .add_input(
+            TxInput::from_utxo(tx_a_id.into(), 1),
+            empty_witness(&mut rng),
+        )
+        .add_output(TxOutput::LockThenTransfer(
+            OutputValue::TokenV1(token_id, Amount::ZERO),
+            Destination::AnyoneCanSpend,
+            OutputTimeLock::ForBlockCount(1),
+        ))
+        .build();
+    let tx_b2_id = tx_b2.transaction().get_id();
+    output_cache
+        .add_tx(
+            tx_b2_id.into(),
+            WalletTx::Tx(TxData::new(tx_b2.clone(), TxState::Inactive(0))),
+        )
+        .unwrap();
+
+    let tx_b3 = TransactionBuilder::new()
+        .add_input(
+            TxInput::from_utxo(tx_a_id.into(), 2),
+            empty_witness(&mut rng),
+        )
+        .add_output(TxOutput::CreateOrder(Box::new(OrderData::new(
+            Destination::AnyoneCanSpend,
+            OutputValue::TokenV1(token_id, Amount::from_atoms(rng.gen())),
+            OutputValue::Coin(Amount::from_atoms(rng.gen())),
+        ))))
+        .build();
+    let tx_b3_id = tx_b3.transaction().get_id();
+    output_cache
+        .add_tx(
+            tx_b3_id.into(),
+            WalletTx::Tx(TxData::new(tx_b3.clone(), TxState::Inactive(0))),
+        )
+        .unwrap();
+
+    let tx_d = TransactionBuilder::new()
+        .add_input(
+            TxInput::AccountCommand(
+                AccountNonce::new(0),
+                AccountCommand::FreezeToken(token_id, IsTokenUnfreezable::No),
+            ),
+            empty_witness(&mut rng),
+        )
+        .build();
+
+    let block_id = Id::<GenBlock>::new(H256::random_using(&mut rng));
+    let result = output_cache
+        .update_conflicting_txs(tx_d.transaction(), block_id)
+        .unwrap()
+        .into_iter()
+        .collect::<BTreeMap<_, _>>();
+
+    assert_eq!(
+        result,
+        BTreeMap::from([
+            (
+                tx_b1_id,
+                WalletTx::Tx(TxData::new(tx_b1, TxState::Conflicted(block_id)))
+            ),
+            (
+                tx_b2_id,
+                WalletTx::Tx(TxData::new(tx_b2, TxState::Conflicted(block_id)))
+            ),
+            (
+                tx_b3_id,
+                WalletTx::Tx(TxData::new(tx_b3, TxState::Conflicted(block_id)))
+            ),
+        ])
     );
 }

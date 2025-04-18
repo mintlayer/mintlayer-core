@@ -890,36 +890,33 @@ impl OutputCache {
     }
 
     fn violates_frozen_token(&self, unconfirmed_tx: &WalletTx, frozen_token_id: &TokenId) -> bool {
-        // We check only inputs because currently it's not possible to have a token in an output
-        // without having it in an input.
-        // But potentially we should check outputs too.
-        unconfirmed_tx.inputs().iter().any(|inp| match inp {
+        let output_uses_frozen_token = |output: &TxOutput| match output {
+            TxOutput::Transfer(v, _)
+            | TxOutput::LockThenTransfer(v, _, _)
+            | TxOutput::Burn(v)
+            | TxOutput::Htlc(v, _) => match v {
+                OutputValue::TokenV1(token_id, _) => frozen_token_id == token_id,
+                OutputValue::TokenV0(_) | OutputValue::Coin(_) => false,
+            },
+            TxOutput::CreateOrder(data) => [data.ask(), data.give()].iter().any(|v| match v {
+                OutputValue::TokenV1(token_id, _) => frozen_token_id == token_id,
+                OutputValue::TokenV0(_) | OutputValue::Coin(_) => false,
+            }),
+            TxOutput::IssueNft(_, _, _)
+            | TxOutput::DataDeposit(_)
+            | TxOutput::CreateStakePool(_, _)
+            | TxOutput::DelegateStaking(_, _)
+            | TxOutput::CreateDelegationId(_, _)
+            | TxOutput::IssueFungibleToken(_)
+            | TxOutput::ProduceBlockFromStake(_, _) => false,
+        };
+
+        let in_inputs = unconfirmed_tx.inputs().iter().any(|input| match input {
             TxInput::Utxo(outpoint) => self.txs.get(&outpoint.source_id()).is_some_and(|tx| {
                 let output =
                     tx.outputs().get(outpoint.output_index() as usize).expect("must be present");
 
-                match output {
-                    TxOutput::Transfer(v, _)
-                    | TxOutput::LockThenTransfer(v, _, _)
-                    | TxOutput::Burn(v)
-                    | TxOutput::Htlc(v, _) => match v {
-                        OutputValue::TokenV1(token_id, _) => frozen_token_id == token_id,
-                        OutputValue::TokenV0(_) | OutputValue::Coin(_) => false,
-                    },
-                    TxOutput::CreateOrder(data) => {
-                        [data.ask(), data.give()].iter().any(|v| match v {
-                            OutputValue::TokenV1(token_id, _) => frozen_token_id == token_id,
-                            OutputValue::TokenV0(_) | OutputValue::Coin(_) => false,
-                        })
-                    }
-                    TxOutput::IssueNft(_, _, _)
-                    | TxOutput::DataDeposit(_)
-                    | TxOutput::CreateStakePool(_, _)
-                    | TxOutput::DelegateStaking(_, _)
-                    | TxOutput::CreateDelegationId(_, _)
-                    | TxOutput::IssueFungibleToken(_)
-                    | TxOutput::ProduceBlockFromStake(_, _) => false,
-                }
+                output_uses_frozen_token(output)
             }),
             TxInput::AccountCommand(_, cmd) => match cmd {
                 AccountCommand::LockTokenSupply(token_id)
@@ -952,7 +949,14 @@ impl OutputCache {
                 OrderAccountCommand::FreezeOrder(_) => false,
             },
             TxInput::Account(_) => false,
-        })
+        });
+
+        // Note: it's possible to have a token in tx outputs but not in inputs:
+        // 1) zero amount transfers don't require the token to be present in inputs;
+        // 2) for a CreateOrder output the ask currency won't be present in the inputs either.
+        let in_outputs = unconfirmed_tx.outputs().iter().any(output_uses_frozen_token);
+
+        in_inputs || in_outputs
     }
 
     pub fn add_tx(&mut self, tx_id: OutPointSourceId, tx: WalletTx) -> WalletResult<()> {
