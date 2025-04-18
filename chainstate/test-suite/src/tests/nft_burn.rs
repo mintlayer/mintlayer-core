@@ -20,11 +20,11 @@ use chainstate_test_framework::{TestFramework, TransactionBuilder};
 use common::{
     chain::{
         output_value::OutputValue, signature::inputsig::InputWitness, tokens::make_token_id,
-        Destination, OutPointSourceId, TokenIssuanceVersion, TxInput, TxOutput, UtxoOutPoint,
+        ChainstateUpgradeBuilder, Destination, OutPointSourceId, TokenIssuanceVersion, TxInput,
+        TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Idable},
 };
-use common_test_helpers::chainstate_upgrade_builder::ChainstateUpgradeBuilder;
 use randomness::Rng;
 use test_utils::{
     nft_utils::random_nft_issuance,

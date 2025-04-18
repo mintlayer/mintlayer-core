@@ -347,7 +347,6 @@ dependencies = [
  "chainstate",
  "chainstate-test-framework",
  "common",
- "common-test-helpers",
  "crypto",
  "hex",
  "libtest-mimic",
@@ -1332,7 +1331,6 @@ dependencies = [
  "chainstate-test-framework",
  "chainstate-types",
  "common",
- "common-test-helpers",
  "consensus",
  "constraints-value-accumulator",
  "criterion",
@@ -1610,13 +1608,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-test-helpers"
-version = "1.0.2"
-dependencies = [
- "common",
-]
-
-[[package]]
 name = "concurrent-queue"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1672,7 +1663,6 @@ version = "1.0.2"
 dependencies = [
  "accounting",
  "common",
- "common-test-helpers",
  "crypto",
  "orders-accounting",
  "pos-accounting",
@@ -8683,7 +8673,6 @@ dependencies = [
  "chainstate-storage",
  "chainstate-types",
  "common",
- "common-test-helpers",
  "consensus",
  "constraints-value-accumulator",
  "crypto",
@@ -8995,7 +8984,6 @@ dependencies = [
  "chainstate",
  "chainstate-test-framework",
  "common",
- "common-test-helpers",
  "consensus",
  "crypto",
  "hex",

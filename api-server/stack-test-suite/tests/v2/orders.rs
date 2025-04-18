@@ -14,9 +14,9 @@
 // limitations under the License.
 
 use common::chain::{
-    make_order_id, AccountCommand, AccountNonce, OrderAccountCommand, OrderData, OrdersVersion,
+    make_order_id, AccountCommand, AccountNonce, ChainstateUpgradeBuilder, OrderAccountCommand,
+    OrderData, OrdersVersion,
 };
-use common_test_helpers::chainstate_upgrade_builder::ChainstateUpgradeBuilder;
 
 use super::*;
 

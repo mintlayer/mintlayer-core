@@ -12,7 +12,6 @@ api-web-server = { path = "../web-server" }
 chainstate = { path = "../../chainstate" }
 chainstate-test-framework = { path = "../../chainstate/test-framework" }
 common = { path = "../../common" }
-common-test-helpers = { path = "../../common/test-helpers" }
 crypto = { path = "../../crypto" }
 randomness = { path = "../../randomness" }
 serialization = { path = "../../serialization" }

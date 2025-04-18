@@ -23,12 +23,11 @@ use common::{
     chain::{
         output_value::OutputValue,
         tokens::{make_token_id, NftIssuance, TokenAuxiliaryData, TokenIssuanceV0},
-        Destination, OutPointSourceId, TokenIssuanceVersion, Transaction, TxInput, TxOutput,
-        UtxoOutPoint,
+        ChainstateUpgradeBuilder, Destination, OutPointSourceId, TokenIssuanceVersion, Transaction,
+        TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, Id, Idable},
 };
-use common_test_helpers::chainstate_upgrade_builder::ChainstateUpgradeBuilder;
 use test_utils::nft_utils::random_nft_issuance;
 use utxo::{Utxo, UtxosStorageRead, UtxosTxUndo};
 

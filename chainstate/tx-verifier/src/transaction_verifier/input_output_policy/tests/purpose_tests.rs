@@ -19,12 +19,11 @@ use rstest::rstest;
 
 use common::{
     chain::{
-        self, stakelock::StakePoolData, Destination, GenBlock, NetUpgrades, OutPointSourceId,
-        StakerDestinationUpdateForbidden, TxInput, UtxoOutPoint,
+        self, stakelock::StakePoolData, ChainstateUpgradeBuilder, Destination, GenBlock,
+        NetUpgrades, OutPointSourceId, StakerDestinationUpdateForbidden, TxInput, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Id, H256},
 };
-use common_test_helpers::chainstate_upgrade_builder::ChainstateUpgradeBuilder;
 use crypto::key::{KeyKind, PrivateKey};
 use randomness::{Rng, SliceRandom};
 use test_utils::{

@@ -37,12 +37,11 @@ use common::{
         signed_transaction::SignedTransaction,
         timelock::OutputTimeLock,
         tokens::{make_token_id, TokenData, TokenIssuance, TokenTransfer},
-        AccountCommand, AccountNonce, ChainConfig, Destination, HtlcActivated,
-        TokenIssuanceVersion, TxInput, TxOutput,
+        AccountCommand, AccountNonce, ChainConfig, ChainstateUpgradeBuilder, Destination,
+        HtlcActivated, TokenIssuanceVersion, TxInput, TxOutput,
     },
     primitives::{Amount, Idable},
 };
-use common_test_helpers::chainstate_upgrade_builder::ChainstateUpgradeBuilder;
 use crypto::key::{KeyKind, PrivateKey, PublicKey};
 use randomness::CryptoRng;
 use serialization::Encode;

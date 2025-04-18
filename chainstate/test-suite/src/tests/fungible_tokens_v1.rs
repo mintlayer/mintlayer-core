@@ -35,12 +35,12 @@ use common::{
             make_token_id, IsTokenFreezable, IsTokenUnfreezable, TokenId, TokenIssuance,
             TokenIssuanceV1, TokenTotalSupply,
         },
-        AccountCommand, AccountNonce, AccountType, Block, Destination, GenBlock, OrderData,
-        OutPointSourceId, SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
+        AccountCommand, AccountNonce, AccountType, Block, ChainstateUpgradeBuilder, Destination,
+        GenBlock, OrderData, OutPointSourceId, SignedTransaction, Transaction, TxInput, TxOutput,
+        UtxoOutPoint,
     },
     primitives::{amount::SignedAmount, Amount, BlockHeight, CoinOrTokenId, Id, Idable},
 };
-use common_test_helpers::chainstate_upgrade_builder::ChainstateUpgradeBuilder;
 use crypto::key::{KeyKind, PrivateKey};
 use randomness::{CryptoRng, Rng};
 use test_utils::{

@@ -31,11 +31,10 @@ use common::{
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
         tokens::{RPCIsTokenFrozen, TokenData, TokenIssuanceV0, TokenIssuanceV1},
-        AccountSpending, Destination, Genesis, OutPointSourceId, TxInput,
+        AccountSpending, ChainstateUpgradeBuilder, Destination, Genesis, OutPointSourceId, TxInput,
     },
     primitives::{per_thousand::PerThousand, Idable, H256},
 };
-use common_test_helpers::chainstate_upgrade_builder::ChainstateUpgradeBuilder;
 use crypto::{
     key::{
         hdkd::{child_number::ChildNumber, derivable::Derivable, derivation_path::DerivationPath},

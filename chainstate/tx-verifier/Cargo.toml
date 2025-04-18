@@ -32,7 +32,6 @@ static_assertions.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
-common-test-helpers = { path = "../../common/test-helpers" }
 test-utils = { path = "../../test-utils" }
 chainstate-storage = { path = "../storage", features = ["expensive-reads"]}
 

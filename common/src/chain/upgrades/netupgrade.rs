@@ -17,7 +17,7 @@ use std::ops::Range;
 
 use crate::primitives::BlockHeight;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct NetUpgrades<T>(Vec<(BlockHeight, T)>);
 
 #[derive(thiserror::Error, Debug)]

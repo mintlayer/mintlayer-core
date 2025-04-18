@@ -22,11 +22,11 @@ use common::{
         output_value::OutputValue,
         signature::inputsig::InputWitness,
         tokens::{make_token_id, NftIssuance, TokenId},
-        Destination, NetUpgrades, OutPointSourceId, TokenIssuanceVersion, TxInput, TxOutput,
+        ChainstateUpgradeBuilder, Destination, NetUpgrades, OutPointSourceId, TokenIssuanceVersion,
+        TxInput, TxOutput,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Idable},
 };
-use common_test_helpers::chainstate_upgrade_builder::ChainstateUpgradeBuilder;
 use randomness::Rng;
 use test_utils::nft_utils::random_nft_issuance;
 use test_utils::random::{make_seedable_rng, Seed};

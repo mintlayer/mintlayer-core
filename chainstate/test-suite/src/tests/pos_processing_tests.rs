@@ -45,15 +45,14 @@ use common::{
         },
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
-        AccountNonce, AccountOutPoint, AccountSpending, ChainConfig, ConsensusUpgrade, Destination,
-        GenBlock, NetUpgrades, OutPointSourceId, PoSChainConfig, PoSChainConfigBuilder, PoolId,
-        RequiredConsensus, SignedTransaction, StakerDestinationUpdateForbidden, TxInput, TxOutput,
-        UtxoOutPoint,
+        AccountNonce, AccountOutPoint, AccountSpending, ChainConfig, ChainstateUpgradeBuilder,
+        ConsensusUpgrade, Destination, GenBlock, NetUpgrades, OutPointSourceId, PoSChainConfig,
+        PoSChainConfigBuilder, PoolId, RequiredConsensus, SignedTransaction,
+        StakerDestinationUpdateForbidden, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockCount, BlockHeight, Id, Idable, H256},
     Uint256,
 };
-use common_test_helpers::chainstate_upgrade_builder::ChainstateUpgradeBuilder;
 use consensus::{BlockSignatureError, ConsensusPoSError, ConsensusVerificationError};
 use crypto::{
     key::{KeyKind, PrivateKey, PublicKey},

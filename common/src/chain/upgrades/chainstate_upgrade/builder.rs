@@ -1,4 +1,4 @@
-// Copyright (c) 2025 RBB S.r.l
+// Copyright (c) 2021-2025 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,25 +13,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::chain::{
+use crate::chain::{
     ChainstateUpgrade, ChangeTokenMetadataUriActivated, DataDepositFeeVersion,
     FrozenTokensValidationVersion, HtlcActivated, OrdersActivated, OrdersVersion,
     RewardDistributionVersion, StakerDestinationUpdateForbidden, TokenIssuanceVersion,
     TokensFeeVersion,
 };
 
+/// A builder for `ChainstateUpgrade`.
+///
+/// If `strict` is set to true, builder methods will panic if the new value is the same
+/// as the original one.
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub struct ChainstateUpgradeBuilder {
-    token_issuance_version: TokenIssuanceVersion,
-    reward_distribution_version: RewardDistributionVersion,
-    tokens_fee_version: TokensFeeVersion,
-    data_deposit_fee_version: DataDepositFeeVersion,
-    change_token_metadata_uri_activated: ChangeTokenMetadataUriActivated,
-    frozen_tokens_validation_version: FrozenTokensValidationVersion,
-    htlc_activated: HtlcActivated,
-    orders_activated: OrdersActivated,
-    orders_version: OrdersVersion,
-    staker_destination_update_forbidden: StakerDestinationUpdateForbidden,
+    upgrade: ChainstateUpgrade,
+    strict: bool,
 }
 
 macro_rules! builder_method {
@@ -39,15 +35,33 @@ macro_rules! builder_method {
         #[doc = concat!("Set the `", stringify!($name), "` field.")]
         #[must_use = "ChainstateUpgradeBuilder dropped prematurely"]
         pub fn $name(mut self, $name: $type) -> Self {
-            self.$name = $name;
+            assert!(
+                !self.strict || self.upgrade.$name != $name,
+                "field set to the same value in strict mode"
+            );
+            self.upgrade.$name = $name;
             self
         }
     };
 }
 
 impl ChainstateUpgradeBuilder {
-    pub fn latest() -> Self {
+    pub fn new(upgrade: ChainstateUpgrade) -> Self {
         Self {
+            upgrade,
+            strict: false,
+        }
+    }
+
+    pub fn new_strict(upgrade: ChainstateUpgrade) -> Self {
+        Self {
+            upgrade,
+            strict: true,
+        }
+    }
+
+    pub fn latest() -> Self {
+        Self::new(ChainstateUpgrade {
             token_issuance_version: TokenIssuanceVersion::V1,
             reward_distribution_version: RewardDistributionVersion::V1,
             tokens_fee_version: TokensFeeVersion::V1,
@@ -58,26 +72,19 @@ impl ChainstateUpgradeBuilder {
             orders_activated: OrdersActivated::Yes,
             orders_version: OrdersVersion::V1,
             staker_destination_update_forbidden: StakerDestinationUpdateForbidden::Yes,
-        }
+        })
     }
 
     pub fn build(self) -> ChainstateUpgrade {
-        ChainstateUpgrade::new(
-            self.token_issuance_version,
-            self.reward_distribution_version,
-            self.tokens_fee_version,
-            self.data_deposit_fee_version,
-            self.change_token_metadata_uri_activated,
-            self.frozen_tokens_validation_version,
-            self.htlc_activated,
-            self.orders_activated,
-            self.orders_version,
-            self.staker_destination_update_forbidden,
-        )
+        self.upgrade
     }
 
     builder_method!(token_issuance_version: TokenIssuanceVersion);
+    builder_method!(reward_distribution_version: RewardDistributionVersion);
+    builder_method!(tokens_fee_version: TokensFeeVersion);
+    builder_method!(data_deposit_fee_version: DataDepositFeeVersion);
     builder_method!(change_token_metadata_uri_activated: ChangeTokenMetadataUriActivated);
+    builder_method!(frozen_tokens_validation_version: FrozenTokensValidationVersion);
     builder_method!(htlc_activated: HtlcActivated);
     builder_method!(orders_activated: OrdersActivated);
     builder_method!(orders_version: OrdersVersion);

@@ -31,11 +31,11 @@ use common::{
             make_token_id, Metadata, NftIssuanceV0, TokenData, TokenId, TokenIssuanceV0,
             TokenTransfer,
         },
-        Destination, OutPointSourceId, TokenIssuanceVersion, TxInput, TxOutput, UtxoOutPoint,
+        ChainstateUpgradeBuilder, Destination, OutPointSourceId, TokenIssuanceVersion, TxInput,
+        TxOutput, UtxoOutPoint,
     },
     primitives::{id, Amount, BlockHeight, Id, Idable},
 };
-use common_test_helpers::chainstate_upgrade_builder::ChainstateUpgradeBuilder;
 use crypto::hash::StreamHasher;
 use randomness::{CryptoRng, Rng};
 use serialization::extras::non_empty_vec::DataOrNoVec;

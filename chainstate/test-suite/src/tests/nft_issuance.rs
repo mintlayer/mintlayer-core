@@ -24,10 +24,10 @@ use common::chain::{
     output_value::OutputValue,
     signature::inputsig::InputWitness,
     tokens::{is_rfc3986_valid_symbol, make_token_id, Metadata, NftIssuance, NftIssuanceV0},
-    Block, Destination, OutPointSourceId, TokenIssuanceVersion, TxInput, TxOutput,
+    Block, ChainstateUpgradeBuilder, Destination, OutPointSourceId, TokenIssuanceVersion, TxInput,
+    TxOutput,
 };
 use common::primitives::{BlockHeight, Idable};
-use common_test_helpers::chainstate_upgrade_builder::ChainstateUpgradeBuilder;
 use randomness::{CryptoRng, Rng};
 use serialization::extras::non_empty_vec::DataOrNoVec;
 use test_utils::{

@@ -1,9 +1,0 @@
-[package]
-name = "common-test-helpers"
-license.workspace = true
-version.workspace = true
-edition.workspace = true
-rust-version.workspace = true
-
-[dependencies]
-common = { path = "../../common" }

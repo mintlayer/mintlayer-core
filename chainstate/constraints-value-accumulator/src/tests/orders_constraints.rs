@@ -22,12 +22,11 @@ use common::{
         config::{create_unit_test_config, create_unit_test_config_builder},
         output_value::OutputValue,
         tokens::TokenId,
-        AccountCommand, AccountNonce, Destination, OrderAccountCommand, OrderData, OrderId,
-        OrdersVersion, OutPointSourceId, TxInput, TxOutput, UtxoOutPoint,
+        AccountCommand, AccountNonce, ChainstateUpgradeBuilder, Destination, OrderAccountCommand,
+        OrderData, OrderId, OrdersVersion, OutPointSourceId, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Fee, Id, H256},
 };
-use common_test_helpers::chainstate_upgrade_builder::ChainstateUpgradeBuilder;
 use orders_accounting::{InMemoryOrdersAccounting, OrdersAccountingDB};
 use pos_accounting::{InMemoryPoSAccounting, PoSAccountingDB};
 use randomness::Rng;

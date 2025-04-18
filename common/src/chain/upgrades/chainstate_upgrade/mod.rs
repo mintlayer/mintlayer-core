@@ -13,6 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod builder;
+
+pub use builder::ChainstateUpgradeBuilder;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
 pub enum TokenIssuanceVersion {
     /// Initial issuance implementation

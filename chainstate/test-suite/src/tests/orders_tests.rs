@@ -31,12 +31,11 @@ use common::{
             make_token_id, IsTokenFreezable, TokenId, TokenIssuance, TokenIssuanceV1,
             TokenTotalSupply,
         },
-        AccountCommand, AccountNonce, Destination, OrderAccountCommand, OrderData, OrderId,
-        OrdersVersion, SignedTransaction, TxInput, TxOutput, UtxoOutPoint,
+        AccountCommand, AccountNonce, ChainstateUpgradeBuilder, Destination, OrderAccountCommand,
+        OrderData, OrderId, OrdersVersion, SignedTransaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Idable, H256},
 };
-use common_test_helpers::chainstate_upgrade_builder::ChainstateUpgradeBuilder;
 use crypto::key::{KeyKind, PrivateKey};
 use orders_accounting::OrdersAccountingDB;
 use randomness::{CryptoRng, Rng, SliceRandom};
