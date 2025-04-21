@@ -26,9 +26,9 @@ use common::{
         output_value::OutputValue,
         stakelock::StakePoolData,
         tokens::{
-            get_referenced_token_ids, make_token_id, IsTokenFreezable, IsTokenUnfreezable,
-            RPCFungibleTokenInfo, RPCIsTokenFrozen, RPCNonFungibleTokenInfo, RPCTokenTotalSupply,
-            TokenId, TokenIssuance, TokenTotalSupply,
+            get_referenced_token_ids_ignore_issuance, make_token_id, IsTokenFreezable,
+            IsTokenUnfreezable, RPCFungibleTokenInfo, RPCIsTokenFrozen, RPCNonFungibleTokenInfo,
+            RPCTokenTotalSupply, TokenId, TokenIssuance, TokenTotalSupply,
         },
         AccountCommand, AccountNonce, AccountSpending, AccountType, DelegationId, Destination,
         GenBlock, OrderAccountCommand, OrderId, OutPointSourceId, PoolId, Transaction, TxInput,
@@ -890,25 +890,8 @@ impl OutputCache {
     }
 
     fn violates_frozen_token(&self, unconfirmed_tx: &WalletTx, frozen_token_id: &TokenId) -> bool {
-        let output_uses_frozen_token = |output: &TxOutput| match output {
-            TxOutput::Transfer(v, _)
-            | TxOutput::LockThenTransfer(v, _, _)
-            | TxOutput::Burn(v)
-            | TxOutput::Htlc(v, _) => match v {
-                OutputValue::TokenV1(token_id, _) => frozen_token_id == token_id,
-                OutputValue::TokenV0(_) | OutputValue::Coin(_) => false,
-            },
-            TxOutput::CreateOrder(data) => [data.ask(), data.give()].iter().any(|v| match v {
-                OutputValue::TokenV1(token_id, _) => frozen_token_id == token_id,
-                OutputValue::TokenV0(_) | OutputValue::Coin(_) => false,
-            }),
-            TxOutput::IssueNft(_, _, _)
-            | TxOutput::DataDeposit(_)
-            | TxOutput::CreateStakePool(_, _)
-            | TxOutput::DelegateStaking(_, _)
-            | TxOutput::CreateDelegationId(_, _)
-            | TxOutput::IssueFungibleToken(_)
-            | TxOutput::ProduceBlockFromStake(_, _) => false,
+        let output_uses_frozen_token = |output: &TxOutput| {
+            get_referenced_token_ids_ignore_issuance(output).contains(frozen_token_id)
         };
 
         let in_inputs = unconfirmed_tx.inputs().iter().any(|input| match input {
@@ -1365,7 +1348,7 @@ impl OutputCache {
         inputs.iter().try_fold(BTreeSet::new(), |mut token_ids, utxo| {
             let new_ids = self
                 .find_unspent_unlocked_utxo(utxo, current_block_info)
-                .map(get_referenced_token_ids)?;
+                .map(get_referenced_token_ids_ignore_issuance)?;
             token_ids.extend(new_ids);
 
             Ok(token_ids)

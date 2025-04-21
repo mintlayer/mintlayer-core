@@ -23,8 +23,8 @@ use common::{
         output_value::OutputValue,
         signature::inputsig::arbitrary_message::ArbitraryMessageSignature,
         tokens::{
-            get_referenced_token_ids, IsTokenFreezable, IsTokenUnfreezable, Metadata,
-            RPCFungibleTokenInfo, RPCTokenInfo, TokenId, TokenIssuance, TokenIssuanceV1,
+            get_referenced_token_ids_ignore_issuance, IsTokenFreezable, IsTokenUnfreezable,
+            Metadata, RPCFungibleTokenInfo, RPCTokenInfo, TokenId, TokenIssuance, TokenIssuanceV1,
             TokenTotalSupply,
         },
         ChainConfig, DelegationId, Destination, OrderId, PoolId, RpcOrderInfo, SignedTransaction,
@@ -110,7 +110,7 @@ where
 
     async fn fetch_token_infos(
         &self,
-        tokens: BTreeSet<TokenId>,
+        tokens: impl IntoIterator<Item = TokenId>,
     ) -> Result<Vec<RPCTokenInfo>, ControllerError<T>> {
         let tasks: FuturesUnordered<_> = tokens
             .into_iter()
@@ -161,7 +161,7 @@ where
         let mut result = vec![];
         let mut additional_info = TxAdditionalInfo::new();
         for utxo in input_utxos {
-            let token_ids = get_referenced_token_ids(&utxo.1);
+            let token_ids = get_referenced_token_ids_ignore_issuance(&utxo.1);
             if token_ids.is_empty() {
                 result.push(utxo);
             } else {

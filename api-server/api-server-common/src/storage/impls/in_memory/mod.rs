@@ -872,7 +872,7 @@ impl ApiServerInMemoryStorage {
         Ok(())
     }
 
-    // The NFT owner is updated in both cases when it is spent as an input and transfered or
+    // The NFT owner is updated in both cases when it is spent as an input and transferred or
     // created as an output. When the amount is 0 we set the owner to None as in the case of a Burn
     fn update_nft_owner(
         &mut self,
