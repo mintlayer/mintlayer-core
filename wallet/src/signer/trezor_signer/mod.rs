@@ -30,9 +30,13 @@ use common::{
                 authorize_pubkey_spend::AuthorizedPublicKeySpend,
                 authorize_pubkeyhash_spend::AuthorizedPublicKeyHashSpend,
                 classical_multisig::{
-                    authorize_classical_multisig::AuthorizedClassicalMultisigSpend,
+                    authorize_classical_multisig::{
+                        sign_classical_multisig_spending, AuthorizedClassicalMultisigSpend,
+                        ClassicalMultisigCompletionStatus,
+                    },
                     multisig_partial_signature::{self, PartiallySignedMultisigChallenge},
                 },
+                htlc::produce_uniparty_signature_for_htlc_input,
                 standard_signature::StandardInputSignature,
                 InputWitness,
             },
@@ -51,9 +55,10 @@ use crypto::key::{
     hdkd::{chain_code::ChainCode, derivable::Derivable, u31::U31},
     secp256k1::{extended_keys::Secp256k1ExtendedPublicKey, Secp256k1PublicKey},
     signature::SignatureKind,
-    Signature, SignatureError,
+    PrivateKey, Signature, SignatureError,
 };
 use itertools::Itertools;
+use randomness::make_true_rng;
 use serialization::Encode;
 use trezor_client::{
     client::{mintlayer::MintlayerSignature, TransactionId},
@@ -100,13 +105,26 @@ use crate::{
 
 use super::{Signer, SignerError, SignerProvider, SignerResult};
 
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct FoundDevice {
+    pub name: String,
+    pub device_id: String,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct SelectedDevice {
+    pub device_id: String,
+}
+
 /// Signer errors
 #[derive(thiserror::Error, Debug, Eq, PartialEq)]
 pub enum TrezorError {
     #[error("No connected Trezor device found")]
     NoDeviceFound,
-    #[error("There are multiple connected Trezor devices found")]
-    NoUniqueDeviceFound,
+    #[error("No compatible Trezor device found with Mintlayer capabilities")]
+    NoCompatibleDeviceFound,
+    #[error("There are multiple connected Trezor devices found {0:?}")]
+    NoUniqueDeviceFound(Vec<FoundDevice>),
     #[error("Cannot get the supported features for the connected Trezor device")]
     CannotGetDeviceFeatures,
     #[error("The connected Trezor device does not support the Mintlayer capabilities, please install the correct firmware")]
@@ -123,32 +141,111 @@ pub enum TrezorError {
     MultipleSignaturesReturned,
     #[error("A multisig signature was returned for a single address from Device")]
     MultisigSignatureReturned,
+    #[error("The file being loaded is a software wallet and does not correspond to the connected hardware wallet")]
+    HardwareWalletDifferentFile,
+    #[error("Public keys mismatch. Wrong device or passphrase:\nfile device id \"{file_device_id}\", connected device id \"{connected_device_id}\",\nfile label \"{file_label}\" and connected device label \"{connected_device_id}\"")]
+    HardwareWalletDifferentMnemonicOrPassphrase {
+        file_device_id: String,
+        connected_device_id: String,
+        file_label: String,
+        connected_device_label: String,
+    },
+    #[error("The file being loaded corresponds to the connected hardware wallet, but public keys are different. Maybe a wrong passphrase was entered?")]
+    HardwareWalletDifferentPassphrase,
+    #[error("Missing hardware wallet data in database")]
+    MissingHardwareWalletData,
 }
 
 pub struct TrezorSigner {
     chain_config: Arc<ChainConfig>,
     client: Arc<Mutex<Trezor>>,
+    session_id: Vec<u8>,
 }
 
 impl TrezorSigner {
-    pub fn new(chain_config: Arc<ChainConfig>, client: Arc<Mutex<Trezor>>) -> Self {
+    pub fn new(
+        chain_config: Arc<ChainConfig>,
+        client: Arc<Mutex<Trezor>>,
+        session_id: Vec<u8>,
+    ) -> Self {
         Self {
             chain_config,
             client,
+            session_id,
         }
     }
 
-    fn make_signature<F>(
+    /// Calls initialize on the device with the current session_id.
+    ///
+    /// If the operation fails due to an USB error (which may indicate a lost connection to the device),
+    /// the function will attempt to reconnect to the Trezor device once before returning an error.
+    fn check_session(
+        &mut self,
+        db_tx: &impl WalletStorageReadLocked,
+        key_chain: &impl AccountKeyChains,
+    ) -> SignerResult<()> {
+        let mut client = self.client.lock().expect("poisoned lock");
+
+        match client.init_device(Some(self.session_id.clone())) {
+            Ok(_) => Ok(()),
+            // In case of a USB error try to reconnect, and try again
+            Err(trezor_client::Error::TransportSendMessage(
+                trezor_client::transport::error::Error::Usb(_),
+            )) => {
+                let (mut new_client, data, session_id) = find_trezor_device_from_db(db_tx, None)?;
+
+                check_public_keys_against_key_chain(
+                    db_tx,
+                    &mut new_client,
+                    &data,
+                    key_chain,
+                    &self.chain_config,
+                )?;
+
+                *client = new_client;
+                self.session_id = session_id;
+                Ok(())
+            }
+            Err(err) => Err(SignerError::TrezorError(TrezorError::DeviceError(
+                err.to_string(),
+            ))),
+        }
+    }
+
+    /// Attempts to perform an operation on the Trezor client.
+    ///
+    /// If the operation fails due to an USB error (which may indicate a lost connection to the device),
+    /// the function will attempt to reconnect to the Trezor device once before returning an error.
+    fn perform_trezor_operation<F, R>(
+        &mut self,
+        operation: F,
+        db_tx: &impl WalletStorageReadLocked,
+        key_chain: &impl AccountKeyChains,
+    ) -> SignerResult<R>
+    where
+        F: Fn(&mut Trezor) -> Result<R, trezor_client::Error>,
+    {
+        self.check_session(db_tx, key_chain)?;
+
+        let mut client = self.client.lock().expect("poisoned lock");
+        operation(&mut client).map_err(|e| TrezorError::DeviceError(e.to_string()).into())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn make_signature<'a, 'b, F, F2>(
         &self,
         signatures: &[MintlayerSignature],
-        destination: &Destination,
+        standalone_inputs: &'a [StandaloneInput],
+        destination: &'b Destination,
         sighash_type: SigHashType,
         sighash: H256,
         key_chain: &impl AccountKeyChains,
         add_secret_if_needed: F,
+        sign_with_standalone_private_key: F2,
     ) -> SignerResult<(Option<InputWitness>, SignatureStatus)>
     where
         F: Fn(StandardInputSignature) -> InputWitness,
+        F2: Fn(&'a StandaloneInput, &'b Destination) -> SignerResult<InputWitness>,
     {
         match destination {
             Destination::AnyoneCanSpend => Ok((
@@ -174,7 +271,14 @@ impl TrezorSigner {
 
                     Ok((Some(sig), SignatureStatus::FullySigned))
                 } else {
-                    Ok((None, SignatureStatus::NotSigned))
+                    let standalone = match standalone_inputs {
+                        [] => return Ok((None, SignatureStatus::NotSigned)),
+                        [standalone] => standalone,
+                        _ => return Err(TrezorError::MultisigSignatureReturned.into()),
+                    };
+
+                    let sig = sign_with_standalone_private_key(standalone, destination)?;
+                    Ok((Some(sig), SignatureStatus::FullySigned))
                 }
             }
             Destination::PublicKey(_) => {
@@ -192,7 +296,14 @@ impl TrezorSigner {
 
                     Ok((Some(sig), SignatureStatus::FullySigned))
                 } else {
-                    Ok((None, SignatureStatus::NotSigned))
+                    let standalone = match standalone_inputs {
+                        [] => return Ok((None, SignatureStatus::NotSigned)),
+                        [standalone] => standalone,
+                        _ => return Err(TrezorError::MultisigSignatureReturned.into()),
+                    };
+
+                    let sig = sign_with_standalone_private_key(standalone, destination)?;
+                    Ok((Some(sig), SignatureStatus::FullySigned))
                 }
             }
             Destination::ClassicMultisig(_) => {
@@ -200,6 +311,13 @@ impl TrezorSigner {
                     let (current_signatures, status) = self.update_and_check_multisig(
                         signatures,
                         AuthorizedClassicalMultisigSpend::new_empty(challenge.clone()),
+                        sighash,
+                    )?;
+
+                    let (current_signatures, status) = self.sign_with_standalone_private_keys(
+                        current_signatures,
+                        standalone_inputs,
+                        status,
                         sighash,
                     )?;
 
@@ -260,11 +378,11 @@ impl TrezorSigner {
 
     fn update_and_check_multisig(
         &self,
-        signature: &[MintlayerSignature],
+        signatures: &[MintlayerSignature],
         mut current_signatures: AuthorizedClassicalMultisigSpend,
         sighash: H256,
     ) -> SignerResult<(AuthorizedClassicalMultisigSpend, SignatureStatus)> {
-        for sig in signature {
+        for sig in signatures {
             let idx = sig.multisig_idx.ok_or(TrezorError::MissingMultisigIndexForSignature)?;
             let sig = Signature::from_raw_data(&sig.signature, SignatureKind::Secp256k1Schnorr)
                 .map_err(TrezorError::SignatureError)?;
@@ -275,6 +393,76 @@ impl TrezorSigner {
 
         Ok((current_signatures, status))
     }
+
+    fn sign_with_standalone_private_keys(
+        &self,
+        current_signatures: AuthorizedClassicalMultisigSpend,
+        standalone_inputs: &[StandaloneInput],
+        new_status: SignatureStatus,
+        sighash: H256,
+    ) -> SignerResult<(AuthorizedClassicalMultisigSpend, SignatureStatus)> {
+        let challenge = current_signatures.challenge().clone();
+
+        standalone_inputs.iter().try_fold(
+            (current_signatures, new_status),
+            |(mut current_signatures, mut status), inp| -> SignerResult<_> {
+                if status == SignatureStatus::FullySigned {
+                    return Ok((current_signatures, status));
+                }
+
+                let key_index =
+                    inp.multisig_idx.ok_or(TrezorError::MissingMultisigIndexForSignature)?;
+                let res = sign_classical_multisig_spending(
+                    &self.chain_config,
+                    key_index as u8,
+                    &inp.private_key,
+                    &challenge,
+                    &sighash,
+                    current_signatures,
+                    &mut make_true_rng(),
+                )
+                .map_err(DestinationSigError::ClassicalMultisigSigningFailed)?;
+
+                match res {
+                    ClassicalMultisigCompletionStatus::Complete(signatures) => {
+                        current_signatures = signatures;
+                        status = SignatureStatus::FullySigned;
+                    }
+                    ClassicalMultisigCompletionStatus::Incomplete(signatures) => {
+                        current_signatures = signatures;
+                        status = SignatureStatus::PartialMultisig {
+                            required_signatures: challenge.min_required_signatures(),
+                            num_signatures: current_signatures.signatures().len() as u8,
+                        };
+                    }
+                };
+
+                Ok((current_signatures, status))
+            },
+        )
+    }
+}
+
+fn find_trezor_device_from_db(
+    db_tx: &impl WalletStorageReadLocked,
+    selected_device_id: Option<String>,
+) -> SignerResult<(Trezor, TrezorData, Vec<u8>)> {
+    if let Some(device_id) = selected_device_id {
+        return find_trezor_device(Some(SelectedDevice { device_id }))
+            .map_err(SignerError::TrezorError);
+    }
+
+    if let Some(HardwareWalletData::Trezor(data)) = db_tx.get_hardware_wallet_data()? {
+        let selected = SelectedDevice {
+            device_id: data.device_id,
+        };
+
+        find_trezor_device(Some(selected)).map_err(SignerError::TrezorError)
+    } else {
+        Err(SignerError::TrezorError(
+            TrezorError::MissingHardwareWalletData,
+        ))
+    }
 }
 
 impl Signer for TrezorSigner {
@@ -282,33 +470,35 @@ impl Signer for TrezorSigner {
         &mut self,
         ptx: PartiallySignedTransaction,
         key_chain: &impl AccountKeyChains,
-        _db_tx: &impl WalletStorageReadUnlocked,
+        db_tx: &impl WalletStorageReadUnlocked,
     ) -> SignerResult<(
         PartiallySignedTransaction,
         Vec<SignatureStatus>,
         Vec<SignatureStatus>,
     )> {
-        let inputs = to_trezor_input_msgs(&ptx, key_chain, &self.chain_config)?;
+        let (inputs, standalone_inputs) =
+            to_trezor_input_msgs(&ptx, key_chain, &self.chain_config, db_tx)?;
         let outputs = self.to_trezor_output_msgs(&ptx)?;
         let utxos = to_trezor_utxo_msgs(&ptx, &self.chain_config)?;
         let chain_type = to_trezor_chain_type(&self.chain_config);
 
-        let new_signatures = self
-            .client
-            .lock()
-            .expect("poisoned lock")
-            .mintlayer_sign_tx(chain_type, inputs, outputs, utxos)
-            .map_err(|err| TrezorError::DeviceError(err.to_string()))?;
+        let new_signatures = self.perform_trezor_operation(
+            move |client| {
+                client.mintlayer_sign_tx(chain_type, inputs.clone(), outputs.clone(), utxos.clone())
+            },
+            db_tx,
+            key_chain,
+        )?;
 
         let inputs_utxo_refs: Vec<_> = ptx.input_utxos().iter().map(|u| u.as_ref()).collect();
 
-        let (witnesses, prev_statuses, new_statuses) = ptx
+        let (witnesses, prev_statuses, new_statuses) = itertools::process_results(ptx
             .witnesses()
             .iter()
             .enumerate()
             .zip(ptx.destinations())
             .zip(ptx.htlc_secrets())
-            .map(|(((i, witness), destination), secret)| {
+            .map(|(((input_index, witness), destination), secret)| -> SignerResult<_> {
                 let add_secret_if_needed = |sig: StandardInputSignature| {
                     let sig = if let Some(htlc_secret) = secret {
                         let sighash_type = sig.sighash_type();
@@ -326,6 +516,17 @@ impl Signer for TrezorSigner {
                     InputWitness::Standard(sig)
                 };
 
+                let sign_with_standalone_private_key = |standalone, destination| {
+                    sign_input_with_standalone_key(
+                        secret,
+                        standalone,
+                        destination,
+                        &ptx,
+                        &inputs_utxo_refs,
+                        input_index,
+                    )
+                };
+
                 match witness {
                     Some(w) => match w {
                         InputWitness::NoSignature(_) => Ok((
@@ -340,7 +541,7 @@ impl Signer for TrezorSigner {
                                     destination,
                                     &ptx,
                                     &inputs_utxo_refs,
-                                    i,
+                                    input_index,
                                 )
                                 .is_ok()
                                 {
@@ -354,7 +555,7 @@ impl Signer for TrezorSigner {
                                         sig.sighash_type(),
                                         ptx.tx(),
                                         &inputs_utxo_refs,
-                                        i,
+                                        input_index,
                                     )?;
 
                                     let current_signatures =
@@ -369,24 +570,28 @@ impl Signer for TrezorSigner {
                                         num_signatures: current_signatures.signatures().len() as u8,
                                     };
 
-                                    if let Some(signature) = new_signatures.get(i) {
-                                        let (current_signatures, status) = self
-                                            .update_and_check_multisig(
-                                                signature,
-                                                current_signatures,
-                                                sighash,
-                                            )?;
-
-                                        let sighash_type = SigHashType::all();
-                                        let sig = add_secret_if_needed(StandardInputSignature::new(
-                                            sighash_type,
-                                            current_signatures.encode(),
-                                        ));
-
-                                        return Ok((Some(sig), previous_status, status));
+                                    let (current_signatures, new_status) = if let Some(signatures) = new_signatures.get(input_index)
+                                    {
+                                        self.update_and_check_multisig(signatures, current_signatures, sighash)?
                                     } else {
-                                        Ok((None, previous_status, previous_status))
-                                    }
+                                        (current_signatures, previous_status)
+                                    };
+
+                                    let (current_signatures, new_status) =
+                                        self.sign_with_standalone_private_keys(
+                                            current_signatures,
+                                            standalone_inputs.get(&(input_index as u32)).map_or(&[], |x| x.as_slice()),
+                                            new_status,
+                                            sighash
+                                        )?;
+
+                                    let sighash_type = SigHashType::all();
+                                    let sig = add_secret_if_needed(StandardInputSignature::new(
+                                        sighash_type,
+                                        current_signatures.encode(),
+                                    ));
+
+                                    Ok((Some(sig), previous_status, new_status))
                                 } else {
                                     Ok((
                                         None,
@@ -402,29 +607,48 @@ impl Signer for TrezorSigner {
                             )),
                         },
                     },
-                    None => match (destination, new_signatures.get(i)) {
+                    None => match (destination, new_signatures.get(input_index)) {
                         (Some(destination), Some(sig)) => {
                             let sighash_type = SigHashType::all();
-                            let sighash = signature_hash(sighash_type, ptx.tx(), &inputs_utxo_refs, i)?;
+                            let sighash = signature_hash(sighash_type, ptx.tx(), &inputs_utxo_refs, input_index)?;
                             let (sig, status) = self.make_signature(
                                 sig,
+                                standalone_inputs.get(&(input_index as u32)).map_or(&[], |x| x.as_slice()),
                                 destination,
                                 sighash_type,
                                 sighash,
                                 key_chain,
                                 add_secret_if_needed,
+                                sign_with_standalone_private_key,
                             )?;
                             Ok((sig, SignatureStatus::NotSigned, status))
                         }
-                        (Some(_) | None, None) | (None, Some(_)) => {
+                        (Some(destination), None) => {
+                            let standalone = match standalone_inputs.get(&(input_index as u32)).map(|x| x.as_slice()) {
+                                Some([standalone]) => standalone,
+                                Some(_) => return Err(TrezorError::MultisigSignatureReturned.into()),
+                                None => return Ok((None, SignatureStatus::NotSigned, SignatureStatus::NotSigned))
+                            };
+
+                            let sig = sign_input_with_standalone_key(
+                                secret,
+                                standalone,
+                                destination,
+                                &ptx,
+                                &inputs_utxo_refs,
+                                input_index
+                            )?;
+
+                            Ok((Some(sig), SignatureStatus::NotSigned, SignatureStatus::FullySigned))
+                        }
+                        (None, _) => {
                             Ok((None, SignatureStatus::NotSigned, SignatureStatus::NotSigned))
                         }
                     },
                 }
-            })
-            .collect::<Result<Vec<_>, SignerError>>()?
-            .into_iter()
-            .multiunzip();
+            }),
+            |iter| iter.multiunzip()
+        )?;
 
         Ok((ptx.with_witnesses(witnesses), prev_statuses, new_statuses))
     }
@@ -434,11 +658,11 @@ impl Signer for TrezorSigner {
         message: &[u8],
         destination: &Destination,
         key_chain: &impl AccountKeyChains,
-        _db_tx: &impl WalletStorageReadUnlocked,
+        db_tx: &impl WalletStorageReadUnlocked,
     ) -> SignerResult<ArbitraryMessageSignature> {
         let data = match key_chain.find_public_key(destination) {
             Some(FoundPubKey::Hierarchy(xpub)) => {
-                let address_n = xpub
+                let address_n: Vec<_> = xpub
                     .get_derivation_path()
                     .as_slice()
                     .iter()
@@ -467,12 +691,19 @@ impl Signer for TrezorSigner {
 
                 let chain_type = to_trezor_chain_type(&self.chain_config);
 
-                let sig = self
-                    .client
-                    .lock()
-                    .expect("poisoned lock")
-                    .mintlayer_sign_message(chain_type, address_n, addr_type, message.to_vec())
-                    .map_err(|err| TrezorError::DeviceError(err.to_string()))?;
+                let sig = self.perform_trezor_operation(
+                    move |client| {
+                        client.mintlayer_sign_message(
+                            chain_type,
+                            address_n.clone(),
+                            addr_type,
+                            message.to_vec(),
+                        )
+                    },
+                    db_tx,
+                    key_chain,
+                )?;
+
                 let signature = Signature::from_raw_data(&sig, SignatureKind::Secp256k1Schnorr)
                     .map_err(TrezorError::SignatureError)?;
 
@@ -499,8 +730,18 @@ impl Signer for TrezorSigner {
                     }
                 }
             }
-            Some(FoundPubKey::Standalone(_)) => {
-                unimplemented!("standalone keys with trezor")
+            Some(FoundPubKey::Standalone(acc_public_key)) => {
+                let standalone_pk = db_tx
+                    .get_account_standalone_private_key(&acc_public_key)?
+                    .ok_or(SignerError::DestinationNotFromThisWallet)?;
+
+                let sig = ArbitraryMessageSignature::produce_uniparty_signature(
+                    &standalone_pk,
+                    destination,
+                    message,
+                    make_true_rng(),
+                )?;
+                return Ok(sig);
             }
             None => return Err(SignerError::DestinationNotFromThisWallet),
         };
@@ -536,53 +777,90 @@ impl Signer for TrezorSigner {
     }
 }
 
+fn sign_input_with_standalone_key(
+    secret: &Option<common::chain::htlc::HtlcSecret>,
+    standalone: &StandaloneInput,
+    destination: &Destination,
+    ptx: &PartiallySignedTransaction,
+    inputs_utxo_refs: &[Option<&TxOutput>],
+    input_index: usize,
+) -> SignerResult<InputWitness> {
+    let sighash_type = SigHashType::all();
+    match secret {
+        Some(htlc_secret) => produce_uniparty_signature_for_htlc_input(
+            &standalone.private_key,
+            sighash_type,
+            destination.clone(),
+            ptx.tx(),
+            inputs_utxo_refs,
+            input_index,
+            htlc_secret.clone(),
+            make_true_rng(),
+        ),
+        None => StandardInputSignature::produce_uniparty_signature_for_input(
+            &standalone.private_key,
+            sighash_type,
+            destination.clone(),
+            ptx.tx(),
+            inputs_utxo_refs,
+            input_index,
+            make_true_rng(),
+        ),
+    }
+    .map(InputWitness::Standard)
+    .map_err(SignerError::SigningError)
+}
+
 fn to_trezor_input_msgs(
     ptx: &PartiallySignedTransaction,
     key_chain: &impl AccountKeyChains,
     chain_config: &ChainConfig,
-) -> SignerResult<Vec<MintlayerTxInput>> {
-    ptx.tx()
-        .inputs()
-        .iter()
-        .zip(ptx.input_utxos())
-        .zip(ptx.destinations())
-        .map(|((inp, utxo), dest)| match (inp, utxo, dest) {
-            (TxInput::Utxo(outpoint), Some(_), Some(dest)) => {
-                to_trezor_utxo_input(outpoint, dest, key_chain)
-            }
-            (TxInput::Account(outpoint), _, Some(dest)) => {
-                to_trezor_account_input(chain_config, dest, key_chain, outpoint)
-            }
-            (TxInput::AccountCommand(nonce, command), _, Some(dest)) => {
-                to_trezor_account_command_input(
-                    chain_config,
-                    dest,
-                    key_chain,
-                    nonce,
-                    command,
-                    ptx.additional_info(),
-                )
-            }
-            (TxInput::OrderAccountCommand(_), _, _) => {
-                //TODO: support OrdersVersion::V1
-                unimplemented!();
-            }
-            (_, _, None) => Err(SignerError::MissingDestinationInTransaction),
-            (TxInput::Utxo(_), _, _) => Err(SignerError::MissingUtxo),
-        })
-        .collect()
+    db_tx: &impl WalletStorageReadUnlocked,
+) -> SignerResult<(Vec<MintlayerTxInput>, StandaloneInputs)> {
+    let res: (Vec<_>, BTreeMap<_, _>) = itertools::process_results(
+        ptx.tx().inputs().iter().zip(ptx.destinations()).enumerate().map(
+            |(idx, (inp, dest))| -> SignerResult<_> {
+                let (address_paths, standalone_inputs) =
+                    dest.as_ref().map_or(Ok((vec![], vec![])), |dest| {
+                        destination_to_address_paths(key_chain, dest, db_tx)
+                    })?;
+
+                let input = match inp {
+                    TxInput::Utxo(outpoint) => to_trezor_utxo_input(outpoint, address_paths),
+                    TxInput::Account(outpoint) => {
+                        to_trezor_account_input(chain_config, address_paths, outpoint)
+                    }
+                    TxInput::AccountCommand(nonce, command) => to_trezor_account_command_input(
+                        chain_config,
+                        address_paths,
+                        nonce,
+                        command,
+                        ptx.additional_info(),
+                    ),
+                    TxInput::OrderAccountCommand(_) => {
+                        //TODO: support OrdersVersion::V1
+                        unimplemented!();
+                    }
+                }?;
+
+                Ok((input, (idx as u32, standalone_inputs)))
+            },
+        ),
+        |iter| iter.unzip(),
+    )?;
+
+    Ok(res)
 }
 
 fn to_trezor_account_command_input(
     chain_config: &ChainConfig,
-    dest: &Destination,
-    key_chain: &impl AccountKeyChains,
+    address_paths: Vec<MintlayerAddressPath>,
     nonce: &common::chain::AccountNonce,
     command: &AccountCommand,
     additional_info: &TxAdditionalInfo,
 ) -> SignerResult<MintlayerTxInput> {
     let mut inp_req = MintlayerAccountCommandTxInput::new();
-    inp_req.addresses = destination_to_address_paths(key_chain, dest);
+    inp_req.addresses = address_paths;
     inp_req.set_nonce(nonce.value());
     match command {
         AccountCommand::MintTokens(token_id, amount) => {
@@ -726,12 +1004,11 @@ fn value_with_new_amount(
 
 fn to_trezor_account_input(
     chain_config: &ChainConfig,
-    dest: &Destination,
-    key_chain: &impl AccountKeyChains,
+    address_paths: Vec<MintlayerAddressPath>,
     outpoint: &common::chain::AccountOutPoint,
 ) -> SignerResult<MintlayerTxInput> {
     let mut inp_req = MintlayerAccountTxInput::new();
-    inp_req.addresses = destination_to_address_paths(key_chain, dest);
+    inp_req.addresses = address_paths;
     inp_req.set_nonce(outpoint.nonce().value());
     match outpoint.account() {
         AccountSpending::DelegationBalance(delegation_id, amount) => {
@@ -749,8 +1026,7 @@ fn to_trezor_account_input(
 
 fn to_trezor_utxo_input(
     outpoint: &common::chain::UtxoOutPoint,
-    dest: &Destination,
-    key_chain: &impl AccountKeyChains,
+    address_paths: Vec<MintlayerAddressPath>,
 ) -> SignerResult<MintlayerTxInput> {
     let mut inp_req = MintlayerUtxoTxInput::new();
     let id = match outpoint.source_id() {
@@ -766,18 +1042,35 @@ fn to_trezor_utxo_input(
     inp_req.set_prev_hash(id.to_vec());
     inp_req.set_prev_index(outpoint.output_index());
 
-    inp_req.addresses = destination_to_address_paths(key_chain, dest);
+    inp_req.addresses = address_paths;
 
     let mut inp = MintlayerTxInput::new();
     inp.utxo = Some(inp_req).into();
     Ok(inp)
 }
 
+struct StandaloneInput {
+    multisig_idx: Option<u32>,
+    private_key: PrivateKey,
+}
+
+type StandaloneInputs = BTreeMap</*input index*/ u32, Vec<StandaloneInput>>;
+
 /// Find the derivation paths to the key in the destination, or multiple in the case of a multisig
 fn destination_to_address_paths(
     key_chain: &impl AccountKeyChains,
     dest: &Destination,
-) -> Vec<MintlayerAddressPath> {
+    db_tx: &impl WalletStorageReadUnlocked,
+) -> SignerResult<(Vec<MintlayerAddressPath>, Vec<StandaloneInput>)> {
+    destination_to_address_paths_impl(key_chain, dest, None, db_tx)
+}
+
+fn destination_to_address_paths_impl(
+    key_chain: &impl AccountKeyChains,
+    dest: &Destination,
+    multisig_idx: Option<u32>,
+    db_tx: &impl WalletStorageReadUnlocked,
+) -> SignerResult<(Vec<MintlayerAddressPath>, Vec<StandaloneInput>)> {
     match key_chain.find_public_key(dest) {
         Some(FoundPubKey::Hierarchy(xpub)) => {
             let address_n = xpub
@@ -786,44 +1079,48 @@ fn destination_to_address_paths(
                 .iter()
                 .map(|c| c.into_encoded_index())
                 .collect();
-            vec![MintlayerAddressPath {
-                address_n,
-                ..Default::default()
-            }]
+            Ok((
+                vec![MintlayerAddressPath {
+                    address_n,
+                    multisig_idx,
+                    ..Default::default()
+                }],
+                vec![],
+            ))
         }
-        Some(FoundPubKey::Standalone(_)) => {
-            unimplemented!("standalone keys with trezor")
+        Some(FoundPubKey::Standalone(acc_public_key)) => {
+            let standalone_input =
+                db_tx.get_account_standalone_private_key(&acc_public_key)?.map(|private_key| {
+                    StandaloneInput {
+                        multisig_idx,
+                        private_key,
+                    }
+                });
+            Ok((vec![], standalone_input.into_iter().collect()))
         }
-        None => {
+        None if multisig_idx.is_none() => {
             if let Some(challenge) = key_chain.find_multisig_challenge(dest) {
-                challenge
-                    .public_keys()
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(idx, pk)| {
-                        match key_chain.find_public_key(&Destination::PublicKey(pk.clone())) {
-                            Some(FoundPubKey::Hierarchy(xpub)) => {
-                                let address_n = xpub
-                                    .get_derivation_path()
-                                    .as_slice()
-                                    .iter()
-                                    .map(|c| c.into_encoded_index())
-                                    .collect();
-                                Some(MintlayerAddressPath {
-                                    address_n,
-                                    multisig_idx: Some(idx as u32),
-                                    special_fields: Default::default(),
-                                })
-                            }
-                            Some(FoundPubKey::Standalone(_)) => unimplemented!("standalone keys"),
-                            None => None,
-                        }
-                    })
-                    .collect()
+                let (x, y): (Vec<_>, Vec<_>) = itertools::process_results(
+                    challenge.public_keys().iter().enumerate().map(|(idx, pk)| {
+                        destination_to_address_paths_impl(
+                            key_chain,
+                            &Destination::PublicKey(pk.clone()),
+                            Some(idx as u32),
+                            db_tx,
+                        )
+                    }),
+                    |iter| iter.unzip(),
+                )?;
+
+                Ok((
+                    x.into_iter().flatten().collect(),
+                    y.into_iter().flatten().collect(),
+                ))
             } else {
-                vec![]
+                Ok((vec![], vec![]))
             }
         }
+        None => Ok((vec![], vec![])),
     }
 }
 
@@ -1148,6 +1445,7 @@ fn to_trezor_output_lock(lock: &OutputTimeLock) -> trezor_client::protos::Mintla
 pub struct TrezorSignerProvider {
     client: Arc<Mutex<Trezor>>,
     data: TrezorData,
+    session_id: Vec<u8>,
 }
 
 impl std::fmt::Debug for TrezorSignerProvider {
@@ -1157,28 +1455,30 @@ impl std::fmt::Debug for TrezorSignerProvider {
 }
 
 impl TrezorSignerProvider {
-    pub fn new() -> Result<Self, TrezorError> {
-        let (client, data) =
-            find_trezor_device().map_err(|err| TrezorError::DeviceError(err.to_string()))?;
+    pub fn new(selected: Option<SelectedDevice>) -> Result<Self, TrezorError> {
+        let (client, data, session_id) = find_trezor_device(selected)?;
 
         Ok(Self {
             client: Arc::new(Mutex::new(client)),
             data,
+            session_id,
         })
     }
 
     pub fn load_from_database(
         chain_config: Arc<ChainConfig>,
         db_tx: &impl WalletStorageReadLocked,
+        device_id: Option<String>,
     ) -> WalletResult<Self> {
-        let (client, data) = find_trezor_device().map_err(SignerError::TrezorError)?;
+        let (client, data, session_id) = find_trezor_device_from_db(db_tx, device_id)?;
 
         let provider = Self {
             client: Arc::new(Mutex::new(client)),
             data,
+            session_id,
         };
 
-        check_public_keys(db_tx, &provider, chain_config)?;
+        check_public_keys_against_db(db_tx, &provider, chain_config)?;
 
         Ok(provider)
     }
@@ -1188,25 +1488,12 @@ impl TrezorSignerProvider {
         chain_config: &Arc<ChainConfig>,
         account_index: U31,
     ) -> SignerResult<ExtendedPublicKey> {
-        let derivation_path = make_account_path(chain_config, account_index);
-        let account_path =
-            derivation_path.as_slice().iter().map(|c| c.into_encoded_index()).collect();
-        let chain_type = to_trezor_chain_type(chain_config);
-        let xpub = self
-            .client
-            .lock()
-            .expect("poisoned lock")
-            .mintlayer_get_public_key(chain_type, account_path)
-            .map_err(|e| SignerError::TrezorError(TrezorError::DeviceError(e.to_string())))?;
-        let chain_code = ChainCode::from(xpub.chain_code.0);
-        let account_pubkey = Secp256k1ExtendedPublicKey::new_unchecked(
-            derivation_path,
-            chain_code,
-            Secp256k1PublicKey::from_bytes(&xpub.public_key.serialize())
-                .map_err(|_| SignerError::TrezorError(TrezorError::InvalidKey))?,
-        );
-        let account_pubkey = ExtendedPublicKey::new(account_pubkey);
-        Ok(account_pubkey)
+        fetch_extended_pub_key(
+            &mut self.client.lock().expect("poisoned lock"),
+            chain_config,
+            account_index,
+        )
+        .map_err(SignerError::TrezorError)
     }
 }
 
@@ -1219,9 +1506,69 @@ fn to_trezor_chain_type(chain_config: &ChainConfig) -> MintlayerChainType {
     }
 }
 
-/// Check that the public keys in the DB are the same as the ones with the connected hardware
+/// Check that the public keys in the provided key chain are the same as the ones from the
+/// connected hardware wallet
+fn check_public_keys_against_key_chain(
+    db_tx: &impl WalletStorageReadLocked,
+    client: &mut Trezor,
+    trezor_data: &TrezorData,
+    key_chain: &impl AccountKeyChains,
+    chain_config: &ChainConfig,
+) -> SignerResult<()> {
+    let expected_pk = fetch_extended_pub_key(client, chain_config, key_chain.account_index())?;
+
+    if key_chain.account_public_key() == &expected_pk {
+        return Ok(());
+    }
+
+    if let Some(data) = db_tx.get_hardware_wallet_data()? {
+        match data {
+            HardwareWalletData::Trezor(data) => {
+                // If the device_id is the same but public keys are different, maybe a
+                // different passphrase was used
+                if data.device_id == trezor_data.device_id {
+                    return Err(TrezorError::HardwareWalletDifferentPassphrase.into());
+                } else {
+                    return Err(TrezorError::HardwareWalletDifferentMnemonicOrPassphrase {
+                        file_device_id: data.device_id,
+                        connected_device_id: trezor_data.device_id.clone(),
+                        file_label: data.label,
+                        connected_device_label: trezor_data.label.clone(),
+                    }
+                    .into());
+                }
+            }
+        }
+    }
+
+    Err(TrezorError::HardwareWalletDifferentFile)?
+}
+
+fn fetch_extended_pub_key(
+    client: &mut Trezor,
+    chain_config: &ChainConfig,
+    account_index: U31,
+) -> Result<ExtendedPublicKey, TrezorError> {
+    let derivation_path = make_account_path(chain_config, account_index);
+    let account_path = derivation_path.as_slice().iter().map(|c| c.into_encoded_index()).collect();
+    let chain_type = to_trezor_chain_type(chain_config);
+    let xpub = client
+        .mintlayer_get_public_key(chain_type, account_path)
+        .map_err(|e| TrezorError::DeviceError(e.to_string()))?;
+    let chain_code = ChainCode::from(xpub.chain_code.0);
+    let account_pubkey = Secp256k1ExtendedPublicKey::new_unchecked(
+        derivation_path,
+        chain_code,
+        Secp256k1PublicKey::from_bytes(&xpub.public_key.serialize())
+            .map_err(|_| TrezorError::InvalidKey)?,
+    );
+    let account_pubkey = ExtendedPublicKey::new(account_pubkey);
+    Ok(account_pubkey)
+}
+
+/// Check that the public keys in the DB are the same as the ones from the connected hardware
 /// wallet
-fn check_public_keys(
+fn check_public_keys_against_db(
     db_tx: &impl WalletStorageReadLocked,
     provider: &TrezorSignerProvider,
     chain_config: Arc<ChainConfig>,
@@ -1234,65 +1581,86 @@ fn check_public_keys(
         })
         .cloned()
         .ok_or(WalletError::WalletNotInitialized)?;
-    let expected_pk = provider.fetch_extended_pub_key(&chain_config, DEFAULT_ACCOUNT_INDEX)?;
-    let loaded_acc = provider.load_account_from_database(chain_config, db_tx, &first_acc)?;
+    let loaded_acc =
+        provider.load_account_from_database(chain_config.clone(), db_tx, &first_acc)?;
 
-    if loaded_acc.key_chain().account_public_key() == &expected_pk {
-        return Ok(());
-    }
-
-    if let Some(data) = db_tx.get_hardware_wallet_data()? {
-        match data {
-            HardwareWalletData::Trezor(data) => {
-                // If the device_id is the same but public keys are different, maybe a
-                // different passphrase was used
-                if data.device_id == provider.data.device_id {
-                    return Err(WalletError::HardwareWalletDifferentPassphrase);
-                } else {
-                    return Err(WalletError::HardwareWalletDifferentMnemonicOrPassphrase {
-                        file_device_id: data.device_id,
-                        connected_device_id: provider.data.device_id.clone(),
-                        file_label: data.label,
-                        connected_device_label: provider.data.label.clone(),
-                    });
-                }
-            }
-        }
-    }
-
-    Err(WalletError::HardwareWalletDifferentFile)
+    check_public_keys_against_key_chain(
+        db_tx,
+        &mut provider.client.lock().expect("poisoned lock"),
+        &provider.data,
+        loaded_acc.key_chain(),
+        &chain_config,
+    )
+    .map_err(WalletError::SignerError)
 }
 
-fn find_trezor_device() -> Result<(Trezor, TrezorData), TrezorError> {
-    let mut devices = find_devices(false)
+fn find_trezor_device(
+    selected: Option<SelectedDevice>,
+) -> Result<(Trezor, TrezorData, Vec<u8>), TrezorError> {
+    let devices = find_devices(false);
+    ensure!(!devices.is_empty(), TrezorError::NoDeviceFound);
+
+    let mut devices = devices
         .into_iter()
-        .filter(|device| device.model == Model::Trezor || device.model == Model::TrezorEmulator)
+        .filter(|device| {
+            device.model == Model::Trezor
+                || device.model == Model::TrezorEmulator
+                || device.model == Model::TrezorLegacy
+        })
+        .filter_map(|d| {
+            d.connect().ok().and_then(|mut c| {
+                c.init_device(None).ok()?;
+
+                c.features()?
+                    .capabilities
+                    .iter()
+                    .filter_map(|c| c.enum_value().ok())
+                    .contains(&Capability::Capability_Mintlayer)
+                    .then_some(c)
+            })
+        })
         .collect_vec();
 
-    let device = match devices.len() {
-        0 => return Err(TrezorError::NoDeviceFound),
-        1 => devices.remove(0),
-        _ => return Err(TrezorError::NoUniqueDeviceFound),
+    let found_selected_device = selected.as_ref().and_then(|s| {
+        devices
+            .iter()
+            .position(|d| d.features().is_some_and(|f| s.device_id == f.device_id()))
+    });
+
+    let client = if let Some(position) = found_selected_device {
+        devices.remove(position)
+    } else {
+        match devices.len() {
+            0 => return Err(TrezorError::NoCompatibleDeviceFound),
+            1 => devices.remove(0),
+            _ => {
+                let devices = devices
+                    .into_iter()
+                    .filter_map(|c| {
+                        c.features().map(|f| FoundDevice {
+                            name: if !f.label().is_empty() {
+                                f.label()
+                            } else {
+                                f.model()
+                            }
+                            .to_owned(),
+                            device_id: f.device_id().to_owned(),
+                        })
+                    })
+                    .collect();
+                return Err(TrezorError::NoUniqueDeviceFound(devices));
+            }
+        }
     };
-    let mut client = device.connect().map_err(|e| TrezorError::DeviceError(e.to_string()))?;
-    client.init_device(None).map_err(|e| TrezorError::DeviceError(e.to_string()))?;
 
     let features = client.features().ok_or(TrezorError::CannotGetDeviceFeatures)?;
-    ensure!(
-        features
-            .capabilities
-            .iter()
-            .filter_map(|c| c.enum_value().ok())
-            .contains(&Capability::Capability_Mintlayer),
-        TrezorError::MintlayerFeaturesNotSupported
-    );
-
     let data = TrezorData {
         label: features.label().to_owned(),
         device_id: features.device_id().to_owned(),
     };
+    let session_id = features.session_id().to_vec();
 
-    Ok((client, data))
+    Ok((client, data, session_id))
 }
 
 impl SignerProvider for TrezorSignerProvider {
@@ -1300,7 +1668,7 @@ impl SignerProvider for TrezorSignerProvider {
     type K = AccountKeyChainImplHardware;
 
     fn provide(&mut self, chain_config: Arc<ChainConfig>, _account_index: U31) -> Self::S {
-        TrezorSigner::new(chain_config, self.client.clone())
+        TrezorSigner::new(chain_config, self.client.clone(), self.session_id.clone())
     }
 
     fn make_new_account(
@@ -1334,7 +1702,7 @@ impl SignerProvider for TrezorSignerProvider {
         Account::load_from_database(chain_config, db_tx, id)
     }
 
-    fn get_hardware_wallet_data(&mut self) -> Option<HardwareWalletData> {
+    fn get_hardware_wallet_data(&self) -> Option<HardwareWalletData> {
         Some(HardwareWalletData::Trezor(self.data.clone()))
     }
 }

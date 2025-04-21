@@ -655,6 +655,20 @@ impl MainWindow {
                             backend_sender,
                         )
                         .map(MainWindowMessage::MainWidgetMessage),
+                    ConsoleCommand::ChoiceMenu(menu) => self
+                        .main_widget
+                        .update(
+                            MainWidgetMessage::TabsMessage(TabsMessage::WalletMessage(
+                                wallet_id,
+                                WalletMessage::ConsoleOutput(format!(
+                                    "{}\n{}",
+                                    menu.header(),
+                                    menu.choice_list().join("\n")
+                                )),
+                            )),
+                            backend_sender,
+                        )
+                        .map(MainWindowMessage::MainWidgetMessage),
                     ConsoleCommand::ClearScreen
                     | ConsoleCommand::ClearHistory
                     | ConsoleCommand::PrintHistory
@@ -718,7 +732,7 @@ impl MainWindow {
                         }
                     }
                     #[cfg(feature = "trezor")]
-                    WalletArgs::Trezor => WalletTypeArgs::Trezor,
+                    WalletArgs::Trezor => WalletTypeArgs::Trezor { device_id: None },
                 };
 
                 self.file_dialog_active = true;

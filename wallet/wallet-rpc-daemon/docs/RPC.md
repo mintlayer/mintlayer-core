@@ -2749,17 +2749,31 @@ Parameters:
     "hardware_wallet": EITHER OF
          1) "Trezor"
          2) null,
+    "trezor_device_id": EITHER OF
+         1) string
+         2) null,
 }
 ```
 
 Returns:
 ```
-{ "mnemonic": EITHER OF
-     1) { "type": "UserProvided" }
-     2) {
-            "type": "NewlyGenerated",
-            "content": { "mnemonic": string },
-        } }
+{
+    "mnemonic": EITHER OF
+         1) { "type": "UserProvided" }
+         2) {
+                "type": "NewlyGenerated",
+                "content": { "mnemonic": string },
+            },
+    "multiple_devices_available": EITHER OF
+         1) {
+                "type": "Trezor",
+                "content": { "devices": [ {
+                    "name": string,
+                    "device_id": string,
+                }, .. ] },
+            }
+         2) null,
+}
 ```
 
 ### Method `wallet_recover`
@@ -2781,17 +2795,31 @@ Parameters:
     "hardware_wallet": EITHER OF
          1) "Trezor"
          2) null,
+    "trezor_device_id": EITHER OF
+         1) string
+         2) null,
 }
 ```
 
 Returns:
 ```
-{ "mnemonic": EITHER OF
-     1) { "type": "UserProvided" }
-     2) {
-            "type": "NewlyGenerated",
-            "content": { "mnemonic": string },
-        } }
+{
+    "mnemonic": EITHER OF
+         1) { "type": "UserProvided" }
+         2) {
+                "type": "NewlyGenerated",
+                "content": { "mnemonic": string },
+            },
+    "multiple_devices_available": EITHER OF
+         1) {
+                "type": "Trezor",
+                "content": { "devices": [ {
+                    "name": string,
+                    "device_id": string,
+                }, .. ] },
+            }
+         2) null,
+}
 ```
 
 ### Method `wallet_open`
@@ -2812,12 +2840,26 @@ Parameters:
     "hardware_wallet": EITHER OF
          1) "Trezor"
          2) null,
+    "trezor_device_id": EITHER OF
+         1) string
+         2) null,
 }
 ```
 
 Returns:
 ```
-nothing
+EITHER OF
+     1) { "type": "Opened" }
+     2) {
+            "type": "MultipleDevicesAvailable",
+            "content": { "available": {
+                "type": "Trezor",
+                "content": { "devices": [ {
+                    "name": string,
+                    "device_id": string,
+                }, .. ] },
+            } },
+        }
 ```
 
 ### Method `wallet_close`

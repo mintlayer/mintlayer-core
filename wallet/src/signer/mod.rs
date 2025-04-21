@@ -13,6 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#[cfg(test)]
+mod signer_test_helpers;
+
 use std::sync::Arc;
 
 use common::{
@@ -152,5 +155,5 @@ pub trait SignerProvider {
         id: &AccountId,
     ) -> WalletResult<Account<Self::K>>;
 
-    fn get_hardware_wallet_data(&mut self) -> Option<HardwareWalletData>;
+    fn get_hardware_wallet_data(&self) -> Option<HardwareWalletData>;
 }

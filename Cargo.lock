@@ -8633,6 +8633,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "trezor-client"
+version = "0.1.4"
+source = "git+https://github.com/mintlayer/mintlayer-trezor-firmware?branch=mintlayer-master#75f4d84ba451998a255ffe4eb8b52dd97c1711e6"
+dependencies = [
+ "bitcoin",
+ "byteorder",
+ "hex",
+ "protobuf",
+ "rusb",
+ "thiserror",
+ "tracing",
+ "unicode-normalization",
+]
+
+[[package]]
 name = "trezor-common"
 version = "1.0.2"
 dependencies = [
@@ -8644,7 +8659,7 @@ dependencies = [
  "rstest",
  "strum",
  "test-utils",
- "trezor-client",
+ "trezor-client 0.1.4 (git+https://github.com/mintlayer/mintlayer-trezor-firmware?branch=feature%2Fmintlayer-pk)",
 ]
 
 [[package]]
@@ -9009,7 +9024,7 @@ dependencies = [
  "tempfile",
  "test-utils",
  "thiserror",
- "trezor-client",
+ "trezor-client 0.1.4 (git+https://github.com/mintlayer/mintlayer-trezor-firmware?branch=mintlayer-master)",
  "tx-verifier",
  "utils",
  "utils-networking",
@@ -9072,6 +9087,7 @@ dependencies = [
  "crossterm",
  "crypto",
  "directories",
+ "dyn-clone",
  "futures",
  "hex",
  "humantime",

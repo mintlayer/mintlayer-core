@@ -296,6 +296,8 @@ fn verify_wallet_balance<B, P>(
         false,
         |db_tx| SoftwareSignerProvider::load_from_database(chain_config.clone(), db_tx),
     )
+    .unwrap()
+    .wallet()
     .unwrap();
 
     wallet.get_best_block();
@@ -329,6 +331,8 @@ fn create_wallet_with_mnemonic(chain_config: Arc<ChainConfig>, mnemonic: &str) -
             )?)
         },
     )
+    .unwrap()
+    .wallet()
     .unwrap()
 }
 
@@ -451,7 +455,10 @@ fn wallet_migration_to_v2(#[case] seed: Seed) {
             )?)
         },
     )
+    .unwrap()
+    .wallet()
     .unwrap();
+
     verify_wallet_balance(&chain_config, &wallet, genesis_amount);
 
     let password = Some("password".into());
@@ -502,6 +509,8 @@ fn wallet_migration_to_v2(#[case] seed: Seed) {
         false,
         |db_tx| SoftwareSignerProvider::load_from_database(chain_config.clone(), db_tx),
     )
+    .unwrap()
+    .wallet()
     .unwrap();
 
     // Migration has been done and new version is v2
@@ -558,6 +567,8 @@ fn wallet_seed_phrase_retrieval(#[case] seed: Seed) {
             )?)
         },
     )
+    .unwrap()
+    .wallet()
     .unwrap();
 
     let wallet_passphrase = PassPhrase::new(zeroize::Zeroizing::new(wallet_passphrase));
@@ -653,6 +664,8 @@ fn wallet_seed_phrase_check_address() {
             )?)
         },
     )
+    .unwrap()
+    .wallet()
     .unwrap();
 
     let address = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap();
@@ -679,6 +692,8 @@ fn wallet_seed_phrase_check_address() {
             )?)
         },
     )
+    .unwrap()
+    .wallet()
     .unwrap();
 
     let address = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap();
@@ -983,6 +998,8 @@ fn test_wallet_accounts<B, P>(
         false,
         |db_tx| SoftwareSignerProvider::load_from_database(chain_config.clone(), db_tx),
     )
+    .unwrap()
+    .wallet()
     .unwrap();
     let accounts = wallet.account_indexes().cloned().collect::<Vec<_>>();
     assert_eq!(accounts, expected_accounts);

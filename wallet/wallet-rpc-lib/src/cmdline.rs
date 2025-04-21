@@ -89,16 +89,15 @@ pub enum CliHardwareWalletType {
     Trezor,
 }
 
-impl From<CliHardwareWalletType> for HardwareWalletType {
-    fn from(value: CliHardwareWalletType) -> Self {
-        match value {
-            #[cfg(feature = "trezor")]
-            CliHardwareWalletType::Trezor => Self::Trezor,
+impl CliHardwareWalletType {
+    pub fn into_wallet_args(&self, device_id: Option<String>) -> WalletTypeArgs {
+        match self {
+            Self::Trezor => WalletTypeArgs::Trezor { device_id },
         }
     }
 }
 
-impl From<CliHardwareWalletType> for WalletTypeArgs {
+impl From<CliHardwareWalletType> for HardwareWalletType {
     fn from(value: CliHardwareWalletType) -> Self {
         match value {
             #[cfg(feature = "trezor")]

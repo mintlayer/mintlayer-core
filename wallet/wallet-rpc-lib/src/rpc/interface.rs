@@ -45,7 +45,7 @@ use crate::types::{
     AccountArg, AddressInfo, AddressWithUsageInfo, Balances, ChainInfo, ComposedTransaction,
     CreatedWallet, DelegationInfo, HardwareWalletType, HexEncoded, LegacyVrfPublicKeyInfo,
     MaybeSignedTransaction, NewAccountInfo, NewDelegation, NewOrder, NewTransaction, NftMetadata,
-    NodeVersion, PoolInfo, PublicKeyInfo, RpcAmountIn, RpcHashedTimelockContract,
+    NodeVersion, OpenedWallet, PoolInfo, PublicKeyInfo, RpcAmountIn, RpcHashedTimelockContract,
     RpcInspectTransaction, RpcStandaloneAddresses, RpcTokenId, RpcUtxoOutpoint, RpcUtxoState,
     RpcUtxoType, SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
     StandaloneAddressWithDetails, TokenMetadata, TransactionOptions, TxOptionsOverrides,
@@ -80,6 +80,7 @@ trait ColdWalletRpc {
         mnemonic: Option<String>,
         passphrase: Option<String>,
         hardware_wallet: Option<HardwareWalletType>,
+        trezor_device_id: Option<String>,
     ) -> rpc::RpcResult<CreatedWallet>;
 
     /// Recover new wallet, this will rescan the blockchain upon creation
@@ -91,6 +92,7 @@ trait ColdWalletRpc {
         mnemonic: Option<String>,
         passphrase: Option<String>,
         hardware_wallet: Option<HardwareWalletType>,
+        trezor_device_id: Option<String>,
     ) -> rpc::RpcResult<CreatedWallet>;
 
     /// Open an exiting wallet by specifying the file location of the wallet file
@@ -101,7 +103,8 @@ trait ColdWalletRpc {
         password: Option<String>,
         force_migrate_wallet_type: Option<bool>,
         hardware_wallet: Option<HardwareWalletType>,
-    ) -> rpc::RpcResult<()>;
+        trezor_device_id: Option<String>,
+    ) -> rpc::RpcResult<OpenedWallet>;
 
     /// Close the currently open wallet file
     #[method(name = "wallet_close")]
