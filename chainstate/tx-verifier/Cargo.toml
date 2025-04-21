@@ -25,15 +25,15 @@ tokens-accounting = { path = "../../tokens-accounting" }
 utils = { path = "../../utils" }
 utxo = { path = "../../utxo" }
 
+fallible-iterator.workspace = true
 itertools.workspace = true
+lazy_static.workspace = true
 static_assertions.workspace = true
 thiserror.workspace = true
-fallible-iterator.workspace = true
-replace_with.workspace = true
 
 [dev-dependencies]
 test-utils = { path = "../../test-utils" }
 chainstate-storage = { path = "../storage", features = ["expensive-reads"]}
 
-rstest.workspace = true
 mockall.workspace = true
+rstest.workspace = true

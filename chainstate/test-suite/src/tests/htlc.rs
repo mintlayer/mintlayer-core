@@ -13,7 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::*;
 use chainstate::{BlockError, ChainstateError, ConnectTransactionError};
 use chainstate_test_framework::{TestFramework, TransactionBuilder};
 use common::{
@@ -38,8 +37,8 @@ use common::{
         signed_transaction::SignedTransaction,
         timelock::OutputTimeLock,
         tokens::{make_token_id, TokenData, TokenIssuance, TokenTransfer},
-        AccountCommand, AccountNonce, ChainConfig, Destination, HtlcActivated,
-        TokenIssuanceVersion, TxInput, TxOutput,
+        AccountCommand, AccountNonce, ChainConfig, ChainstateUpgradeBuilder, Destination,
+        HtlcActivated, TokenIssuanceVersion, TxInput, TxOutput,
     },
     primitives::{Amount, Idable},
 };
@@ -52,7 +51,7 @@ use tx_verifier::{
     input_check::HashlockError,
 };
 
-use crate::tests::helpers::chainstate_upgrade_builder::ChainstateUpgradeBuilder;
+use super::*;
 
 struct TestFixture {
     alice_sk: PrivateKey,

@@ -35,7 +35,7 @@ use super::{stake::MATURITY_PERIOD_TOOLTIP_TEXT, WalletMessage};
 const POOL_ID_TOOLTIP_TEXT: &str =
     "The pool address of the pool that will get the delegation and stake the coins.";
 const DELEGATION_ADDRESS_TOOLTIP_TEXT: &str =
-    "The address, that will have the authority to sign withdrawals from a pool.";
+    "The address, that will have the authority to sign withdrawals from the delegation.";
 
 const SEND_DELEGATION_ADDRESS_TOOLTIP_TEXT: &str = "The address that will be receiving the coins";
 const SEND_DELEGATION_AMOUNT_TOOLTIP_TEXT: &str =

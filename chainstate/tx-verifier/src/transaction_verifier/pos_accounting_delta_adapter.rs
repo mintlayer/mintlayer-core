@@ -31,10 +31,31 @@ use pos_accounting::{
 /// Main purpose of this struct is to make it impossible to perform operations on current delta
 /// and forget to update cumulative blocks delta.
 pub struct PoSAccountingDeltaAdapter<P> {
-    // represents accumulated delta with all changes done via current verifier object
+    // This represents accumulated delta with all changes done via current verifier object.
     accounting_delta: PoSAccountingDelta<P>,
 
-    // stores deltas per block
+    // This stores deltas per block.
+    // Note/TODO:
+    // 1) This map mainly exists to be able to update epoch data later, for which the block height
+    // must be known (which will be obtained from the block id).
+    // (The map will become `pos_accounting_block_deltas` of the `TransactionVerifierDelta` that will be
+    // passed to `flush_to_storage`, which will call `TransactionVerifierStorage::apply_accounting_delta`
+    // on it, which will merge the delta into the corresponding epoch delta).
+    // 2) The fact that it's a map from `TransactionSource` is actually a mistake, because it doesn't reflect
+    // the order of the blocks. Because of this, `flush_to_storage` will only work correctly if the size of the map
+    // is not bigger than 1 (and it has the corresponding debug assert).
+    // 3) We'd probably still want to be able to use the same `TransactionVerifier` object to accumulate deltas from
+    // multiple consecutive blocks (though we don't currently have a use-case for it).
+    // So, TODO: make it a linear collection ordered by block height (OR include the block height into the source so that
+    // `flush_to_storage` can do the sorting).
+    // Also note that we don't really want to re-use the same tx verifier for both blocks' and mempool's transactions,
+    // so the field should become an enum containing either one delta for the mempool or multiple deltas for consecutive
+    // blocks.
+    // Finally note that we have this old TODO all over the place suggesting moving the "TransactionSource::Chain" vs "::Mempool"
+    // distinction to compile time (mintlayer-core/issues/633), which means that instead of the single `TransactionSource` enum
+    // we'll have 2 separate types, one of which will be provided as a generic parameter in places where `TransactionSource`
+    // is currently passed at run-time. If we go this route, then this field can't be an enum either and its type will have to be
+    // provided as a generic parameter as well.
     accounting_block_deltas: BTreeMap<TransactionSource, PoSAccountingDeltaData>,
 }
 

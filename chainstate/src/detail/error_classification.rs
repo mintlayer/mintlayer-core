@@ -302,7 +302,8 @@ impl BlockProcessingErrorClassification for ConnectTransactionError {
             | ConnectTransactionError::TotalFeeRequiredOverflow
             | ConnectTransactionError::InsufficientCoinsFee(_, _)
             | ConnectTransactionError::AttemptToSpendFrozenToken(_)
-            | ConnectTransactionError::ConcludeInputAmountsDontMatch(_, _) => {
+            | ConnectTransactionError::ConcludeInputAmountsDontMatch(_, _)
+            | ConnectTransactionError::ProduceBlockFromStakeChangesStakerDestination(_, _) => {
                 BlockProcessingErrorClass::BadBlock
             }
 
@@ -643,7 +644,8 @@ impl BlockProcessingErrorClassification for ConsensusPoSError {
             | ConsensusPoSError::PoSBlockTimeStrictOrderInvalid(_)
             | ConsensusPoSError::FiniteTotalSupplyIsRequired
             | ConsensusPoSError::UnsupportedConsensusVersion
-            | ConsensusPoSError::FailedToCalculateCappedBalance => {
+            | ConsensusPoSError::FailedToCalculateCappedBalance
+            | ConsensusPoSError::InvalidOutputTypeInStakeKernel(_) => {
                 BlockProcessingErrorClass::BadBlock
             }
 

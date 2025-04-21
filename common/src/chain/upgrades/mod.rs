@@ -14,16 +14,19 @@
 // limitations under the License.
 
 mod chainstate_upgrade;
+mod chainstate_upgrades_builder;
 mod consensus_upgrade;
 mod netupgrade;
 
 pub use chainstate_upgrade::{
-    ChainstateUpgrade, ChangeTokenMetadataUriActivated, DataDepositFeeVersion,
-    FrozenTokensValidationVersion, HtlcActivated, OrdersActivated, OrdersVersion,
-    RewardDistributionVersion, TokenIssuanceVersion, TokensFeeVersion,
+    ChainstateUpgrade, ChainstateUpgradeBuilder, ChangeTokenMetadataUriActivated,
+    DataDepositFeeVersion, FrozenTokensValidationVersion, HtlcActivated, OrdersActivated,
+    OrdersVersion, RewardDistributionVersion, StakerDestinationUpdateForbidden,
+    TokenIssuanceVersion, TokensFeeVersion,
 };
+pub use chainstate_upgrades_builder::ChainstateUpgradesBuilder;
 pub use consensus_upgrade::{ConsensusUpgrade, PoSStatus, PoWStatus, RequiredConsensus};
-pub use netupgrade::{Activate, NetUpgrades};
+pub use netupgrade::NetUpgrades;
 
 pub enum NetUpgradeError {
     GenerateConfigFailed,

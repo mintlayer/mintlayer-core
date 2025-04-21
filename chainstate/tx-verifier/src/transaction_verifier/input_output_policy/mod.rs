@@ -97,9 +97,11 @@ pub fn check_reward_inputs_outputs_policy(
     let block_subsidy_at_height = Subsidy(chain_config.block_subsidy_at_height(&block_height));
 
     purposes_check::check_reward_inputs_outputs_purposes(
+        chain_config,
         &block_reward_transactable,
         utxo_view,
         block_id,
+        block_height,
     )?;
 
     match consensus_data {

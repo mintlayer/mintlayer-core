@@ -33,10 +33,11 @@ hex.workspace = true
 itertools.workspace = true
 
 [dev-dependencies]
+tokio = { workspace = true, features = ["rt", "time"] }
+
 criterion.workspace = true
 expect-test.workspace = true
 rstest.workspace = true
-tokio = { workspace = true, features = ["rt", "time"] }
 
 [[bench]]
 name = "benches"

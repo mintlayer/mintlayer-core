@@ -33,7 +33,9 @@ use crate::{
     BlockBuilder, TestChainstate, TestFrameworkBuilder, TestStore,
 };
 use chainstate::{chainstate_interface::ChainstateInterface, BlockSource, ChainstateError};
-use chainstate_types::{BlockIndex, BlockStatus, GenBlockIndex};
+use chainstate_types::{
+    pos_randomness::PoSRandomness, BlockIndex, BlockStatus, EpochStorageRead as _, GenBlockIndex,
+};
 use common::{
     chain::{
         Block, ChainConfig, GenBlock, GenBlockId, Genesis, OutPointSourceId, PoolId, TxOutput,
@@ -556,6 +558,22 @@ impl TestFramework {
         )
         .unwrap();
         self.on_pool_created(*pool_id, staker_key, vrf_sk, outpoint);
+    }
+
+    pub fn pos_randomness_for_height(&self, height: &BlockHeight) -> PoSRandomness {
+        let chain_config = self.chain_config();
+
+        chain_config
+            .sealed_epoch_index(height)
+            .and_then(|epoch_index| {
+                self.storage
+                    .transaction_ro()
+                    .unwrap()
+                    .get_epoch_data(epoch_index)
+                    .unwrap()
+                    .map(|epoch_data| *epoch_data.randomness())
+            })
+            .unwrap_or(PoSRandomness::new(chain_config.initial_randomness()))
     }
 }
 

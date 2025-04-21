@@ -58,7 +58,8 @@ use super::{
     output_value::OutputValue, stakelock::StakePoolData, ChainstateUpgrade,
     ChangeTokenMetadataUriActivated, ConsensusUpgrade, DataDepositFeeVersion, DestinationTag,
     FrozenTokensValidationVersion, HtlcActivated, OrdersActivated, OrdersVersion,
-    RequiredConsensus, RewardDistributionVersion, TokenIssuanceVersion, TokensFeeVersion,
+    RequiredConsensus, RewardDistributionVersion, StakerDestinationUpdateForbidden,
+    TokenIssuanceVersion, TokensFeeVersion,
 };
 
 use self::{
@@ -916,6 +917,7 @@ pub fn create_unit_test_config_builder() -> Builder {
                     HtlcActivated::Yes,
                     OrdersActivated::Yes,
                     OrdersVersion::V1,
+                    StakerDestinationUpdateForbidden::Yes,
                 ),
             )])
             .expect("cannot fail"),
@@ -946,7 +948,10 @@ pub fn assert_no_ignore_consensus_in_chain_config(chain_config: &ChainConfig) {
         "Invalid chain config. There are no net-upgrades defined, not even for genesis."
     );
 
-    assert!(all_upgrades.len() >= 2, "Invalid chain config. There must be at least 2 net-upgrades defined, one for genesis and one for the first block after genesis.");
+    assert!(
+        all_upgrades.len() >= 2,
+        "Invalid chain config. There must be at least 2 net-upgrades defined, one for genesis and one for the first block after genesis."
+    );
 
     assert!(
         all_upgrades[0].0 == 0.into(),

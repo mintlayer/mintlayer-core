@@ -88,6 +88,10 @@ where
     // flush pos accounting
     storage.batch_write_delta(consumed.accounting_delta)?;
 
+    // Note: the deltas here are sorted by block id, which is a wrong order to use when applying them.
+    // This currently works because the map can only contain at most one element at a time.
+    // See the comment for `PoSAccountingDeltaAdapter::accounting_block_deltas`.
+    debug_assert!(consumed.pos_accounting_block_deltas.len() <= 1);
     for (tx_source, delta) in consumed.pos_accounting_block_deltas {
         storage.apply_accounting_delta(tx_source, &delta)?;
     }

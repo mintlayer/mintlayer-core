@@ -23,9 +23,8 @@ pub mod target;
 mod effective_pool_balance;
 
 use chainstate_types::{
-    pos_randomness::{PoSRandomness, PoSRandomnessError},
-    vrf_tools::construct_transcript,
-    BlockIndexHandle, EpochStorageRead, GenBlockIndex,
+    pos_randomness::PoSRandomness, vrf_tools::construct_transcript, BlockIndexHandle,
+    EpochStorageRead, GenBlockIndex,
 };
 use common::{
     address::Address,
@@ -151,42 +150,40 @@ where
     let random_seed = randomness_of_sealed_epoch(chain_config, current_height, epoch_data_storage)?;
 
     let current_epoch_index = chain_config.epoch_index_from_height(&current_height);
-    let kernel_output = get_kernel_output(pos_data.kernel_inputs(), utxos_view)?;
 
-    // Proof of stake mandates signing the block with the same key of the kernel output
-    check_block_signature(header, &kernel_output)?;
+    let pool_id = *pos_data.stake_pool_id();
+    let pool_data = pos_accounting_view
+        .get_pool_data(pool_id)?
+        .ok_or(ConsensusPoSError::PoolDataNotFound(pool_id))?;
 
-    let vrf_pub_key = match kernel_output {
-        TxOutput::Transfer(_, _)
-        | TxOutput::LockThenTransfer(_, _, _)
-        | TxOutput::Burn(_)
-        | TxOutput::CreateDelegationId(_, _)
-        | TxOutput::DelegateStaking(_, _)
-        | TxOutput::IssueFungibleToken(_)
-        | TxOutput::IssueNft(_, _, _)
-        | TxOutput::DataDeposit(_)
-        | TxOutput::Htlc(_, _)
-        | TxOutput::CreateOrder(_) => {
-            // only pool outputs can be staked
-            return Err(ConsensusPoSError::RandomnessError(
-                PoSRandomnessError::InvalidOutputTypeInStakeKernel(header.get_id()),
-            ));
-        }
-        TxOutput::CreateStakePool(_, d) => d.as_ref().vrf_public_key().clone(),
-        TxOutput::ProduceBlockFromStake(_, pool_id) => {
-            let pool_data = pos_accounting_view
-                .get_pool_data(pool_id)?
-                .ok_or(ConsensusPoSError::PoolDataNotFound(pool_id))?;
-            pool_data.vrf_public_key().clone()
+    let staker_dest = {
+        let kernel_output = get_kernel_output(pos_data.kernel_inputs(), utxos_view)?;
+
+        match kernel_output {
+            TxOutput::Transfer(_, _)
+            | TxOutput::LockThenTransfer(_, _, _)
+            | TxOutput::Burn(_)
+            | TxOutput::CreateDelegationId(_, _)
+            | TxOutput::DelegateStaking(_, _)
+            | TxOutput::IssueFungibleToken(_)
+            | TxOutput::IssueNft(_, _, _)
+            | TxOutput::DataDeposit(_)
+            | TxOutput::Htlc(_, _)
+            | TxOutput::CreateOrder(_) => {
+                return Err(ConsensusPoSError::InvalidOutputTypeInStakeKernel(
+                    header.get_id(),
+                ))
+            }
+            TxOutput::CreateStakePool(_, stake_pool) => stake_pool.staker().clone(),
+            TxOutput::ProduceBlockFromStake(dest, _) => dest,
         }
     };
 
-    let stake_pool_id = *pos_data.stake_pool_id();
-    let pool_balance = pos_accounting_view.get_pool_balance(stake_pool_id)?;
-    let staker_balance = pos_accounting_view
-        .get_pool_data(stake_pool_id)?
-        .ok_or(ConsensusPoSError::PoolDataNotFound(stake_pool_id))?
-        .staker_balance()?;
+    // Proof of stake mandates signing the block with the same key of the kernel output
+    check_block_signature(header, &staker_dest)?;
+
+    let pool_balance = pos_accounting_view.get_pool_balance(pool_id)?;
+    let staker_balance = pool_data.staker_balance()?;
     let final_supply = chain_config
         .final_supply()
         .ok_or(ConsensusPoSError::FiniteTotalSupplyIsRequired)?;
@@ -197,7 +194,7 @@ where
         &random_seed,
         &compact_target_to_target(pos_data.compact_target())?,
         pos_data.vrf_data(),
-        &vrf_pub_key,
+        pool_data.vrf_public_key(),
         header.timestamp(),
         staker_balance,
         pool_balance,
