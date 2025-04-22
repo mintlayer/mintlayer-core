@@ -31,7 +31,10 @@ use common::{
         config::ChainConfig,
         make_order_id,
         output_value::OutputValue,
-        tokens::{get_referenced_token_ids, make_token_id, IsTokenFrozen, TokenId, TokenIssuance},
+        tokens::{
+            get_referenced_token_ids_ignore_issuance, make_token_id, IsTokenFrozen, TokenId,
+            TokenIssuance,
+        },
         transaction::OutPointSourceId,
         AccountCommand, AccountNonce, AccountSpending, Block, DelegationId, Destination, GenBlock,
         Genesis, OrderAccountCommand, OrderId, PoolId, SignedTransaction, Transaction, TxInput,
@@ -566,7 +569,7 @@ async fn calculate_tx_fee_and_collect_token_info<T: ApiServerStorageWrite>(
         for (inp, utxo) in tx.inputs().iter().zip(input_utxos.iter()) {
             match inp {
                 TxInput::Utxo(_) => {
-                    token_ids.append(&mut get_referenced_token_ids(
+                    token_ids.extend(get_referenced_token_ids_ignore_issuance(
                         utxo.as_ref().expect("must be present"),
                     ));
                 }
@@ -608,13 +611,13 @@ async fn calculate_tx_fee_and_collect_token_info<T: ApiServerStorageWrite>(
             };
         }
 
-        tx.outputs()
-            .iter()
-            .map(get_referenced_token_ids)
-            .fold(token_ids, |mut x, mut y| {
-                x.append(&mut y);
-                x
-            })
+        tx.outputs().iter().map(get_referenced_token_ids_ignore_issuance).fold(
+            token_ids,
+            |mut token_ids_acc, tokens_iter| {
+                token_ids_acc.extend(tokens_iter);
+                token_ids_acc
+            },
+        )
     };
 
     let token_tasks: FuturesOrdered<_> = token_ids

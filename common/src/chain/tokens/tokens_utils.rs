@@ -13,13 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeSet;
+use smallvec::SmallVec;
 
-use super::{TokenData, TokenId};
 use crate::{
     chain::{output_value::OutputValue, AccountCommand, TxInput, TxOutput},
     primitives::id::hash_encoded,
 };
+
+use super::{TokenData, TokenId};
 
 // TODO: the argument to the function should be a utxo, right now it might be an account
 pub fn make_token_id(inputs: &[TxInput]) -> Option<TokenId> {
@@ -91,30 +92,32 @@ pub fn is_token_or_nft_issuance(output: &TxOutput) -> bool {
     }
 }
 
-/// Get any token referenced by this output
-/// ignore tokens V0
-pub fn get_referenced_token_ids(output: &TxOutput) -> BTreeSet<TokenId> {
+/// Get any non-V0 token referenced by this output, ignoring `IssueFungibleToken`.
+pub fn get_referenced_token_ids_ignore_issuance(output: &TxOutput) -> SmallVec<[TokenId; 2]> {
     match output {
         TxOutput::Transfer(v, _)
         | TxOutput::LockThenTransfer(v, _, _)
         | TxOutput::Burn(v)
-        | TxOutput::Htlc(v, _) => referenced_token_id(v).into_iter().collect(),
+        | TxOutput::Htlc(v, _) => SmallVec::from_iter(token_id_from_output_value(v)),
         | TxOutput::CreateOrder(data) => {
-            let mut tokens: BTreeSet<_> = referenced_token_id(data.ask()).into_iter().collect();
-            tokens.extend(referenced_token_id(data.give()));
-            tokens
+            // Note: order's ask and give currencies are always different.
+            SmallVec::from_iter(
+                [token_id_from_output_value(data.ask()), token_id_from_output_value(data.give())]
+                    .into_iter()
+                    .flatten(),
+            )
         }
         TxOutput::CreateStakePool(_, _)
         | TxOutput::ProduceBlockFromStake(_, _)
         | TxOutput::CreateDelegationId(_, _)
         | TxOutput::DelegateStaking(_, _)
         | TxOutput::DataDeposit(_)
-        | TxOutput::IssueFungibleToken(_) => BTreeSet::new(),
-        TxOutput::IssueNft(token_id, _, _) => BTreeSet::from_iter([*token_id]),
+        | TxOutput::IssueFungibleToken(_) => SmallVec::new(),
+        TxOutput::IssueNft(token_id, _, _) => SmallVec::from_iter([*token_id]),
     }
 }
 
-fn referenced_token_id(v: &OutputValue) -> Option<TokenId> {
+fn token_id_from_output_value(v: &OutputValue) -> Option<TokenId> {
     match v {
         OutputValue::Coin(_) | OutputValue::TokenV0(_) => None,
         OutputValue::TokenV1(token_id, _) => Some(*token_id),

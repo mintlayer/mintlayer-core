@@ -1599,6 +1599,7 @@ dependencies = [
  "serde_with",
  "serial_test",
  "serialization",
+ "smallvec",
  "static_assertions",
  "strum",
  "test-utils",

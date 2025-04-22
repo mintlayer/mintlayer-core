@@ -15,7 +15,7 @@
 
 use rstest::rstest;
 
-use chainstate::{CheckBlockTransactionsError, ConnectTransactionError};
+use chainstate::{CheckBlockError, CheckBlockTransactionsError, ConnectTransactionError};
 use chainstate_storage::Transactional;
 use chainstate_test_framework::{output_value_amount, TestFramework, TransactionBuilder};
 use common::{
@@ -44,7 +44,10 @@ use test_utils::{
     random::{make_seedable_rng, Seed},
     random_ascii_alphanumeric_string,
 };
-use tx_verifier::error::{InputCheckError, ScriptError, TranslationError};
+use tx_verifier::{
+    error::{InputCheckError, ScriptError, TranslationError},
+    CheckTransactionError,
+};
 
 use crate::tests::helpers::{issue_token_from_block, mint_tokens_in_block};
 
@@ -984,19 +987,39 @@ fn fill_partially_then_conclude(#[case] seed: Seed, #[case] version: OrdersVersi
                 .build();
             let tx_id = tx.transaction().get_id();
             let res = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
-            assert_eq!(
-                res.unwrap_err(),
-                chainstate::ChainstateError::ProcessBlockError(
-                    chainstate::BlockError::StateUpdateFailed(
-                        ConnectTransactionError::ConstrainedValueAccumulatorError(
-                            constraints_value_accumulator::Error::OrdersAccountingError(
-                                orders_accounting::Error::OrderDataNotFound(order_id)
-                            ),
-                            tx_id.into()
+
+            if give_amount != filled_amount {
+                assert_eq!(
+                    res.unwrap_err(),
+                    chainstate::ChainstateError::ProcessBlockError(
+                        chainstate::BlockError::StateUpdateFailed(
+                            ConnectTransactionError::ConstrainedValueAccumulatorError(
+                                constraints_value_accumulator::Error::OrdersAccountingError(
+                                    orders_accounting::Error::OrderDataNotFound(order_id)
+                                ),
+                                tx_id.into()
+                            )
                         )
                     )
-                )
-            );
+                );
+            } else {
+                // Note: the zero fill check happens during an earlier stage (in tx_verifier::check_transaction),
+                // so in this case we'll hit AttemptToFillOrderWithZero first.
+                assert_eq!(
+                    res.unwrap_err(),
+                    chainstate::ChainstateError::ProcessBlockError(
+                        chainstate::BlockError::CheckBlockFailed(
+                            CheckBlockError::CheckTransactionFailed(
+                                CheckBlockTransactionsError::CheckTransactionError(
+                                    CheckTransactionError::AttemptToFillOrderWithZero(
+                                        order_id, tx_id
+                                    )
+                                )
+                            )
+                        )
+                    )
+                );
+            }
         }
     });
 }
