@@ -297,9 +297,6 @@ impl BlockProcessingErrorClassification for ConnectTransactionError {
             | ConnectTransactionError::NonceIsNotIncremental(_, _, _)
             | ConnectTransactionError::MissingTransactionNonce(_)
             | ConnectTransactionError::NotEnoughPledgeToCreateStakePool(_, _, _)
-            | ConnectTransactionError::AttemptToCreateStakePoolFromAccounts
-            | ConnectTransactionError::AttemptToCreateDelegationFromAccounts
-            | ConnectTransactionError::AttemptToCreateOrderFromAccounts
             | ConnectTransactionError::IOPolicyError(_, _)
             | ConnectTransactionError::TotalFeeRequiredOverflow
             | ConnectTransactionError::InsufficientCoinsFee(_, _)

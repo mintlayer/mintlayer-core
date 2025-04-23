@@ -95,12 +95,6 @@ pub enum ConnectTransactionError {
         "Transaction {0} has not enough pledge to create a stake pool: giver {1:?}, required {2:?}"
     )]
     NotEnoughPledgeToCreateStakePool(Id<Transaction>, Amount, Amount),
-    #[error("Attempt to create stake pool from accounting inputs")]
-    AttemptToCreateStakePoolFromAccounts,
-    #[error("Attempt to create delegation from accounting inputs")]
-    AttemptToCreateDelegationFromAccounts,
-    #[error("Attempt to create order from accounting inputs")]
-    AttemptToCreateOrderFromAccounts,
     #[error("Failed to increment account nonce")]
     FailedToIncrementAccountNonce,
     #[error("Input output policy error: `{0}` in : `{1:?}`")]

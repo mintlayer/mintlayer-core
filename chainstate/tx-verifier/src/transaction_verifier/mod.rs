@@ -415,9 +415,7 @@ where
                         };
                         Some(res)
                     }
-                    Err(_) => Some(Err(
-                        ConnectTransactionError::AttemptToCreateStakePoolFromAccounts,
-                    )),
+                    Err(err) => Some(Err(err.into())),
                 },
                 TxOutput::CreateDelegationId(spend_destination, target_pool) => {
                     match make_delegation_id(tx.inputs()) {
@@ -433,9 +431,7 @@ where
                                 .map_err(ConnectTransactionError::PoSAccountingError);
                             Some(res)
                         }
-                        Err(_) => Some(Err(
-                            ConnectTransactionError::AttemptToCreateDelegationFromAccounts,
-                        )),
+                        Err(err) => Some(Err(err.into())),
                     }
                 }
                 TxOutput::DelegateStaking(amount, delegation_id) => {
@@ -908,9 +904,7 @@ where
                             .map_err(ConnectTransactionError::OrdersAccountingError);
                         Some(result)
                     }
-                    Err(_) => Some(Err(
-                        ConnectTransactionError::AttemptToCreateOrderFromAccounts,
-                    )),
+                    Err(err) => Some(Err(err.into())),
                 },
             })
             .collect::<Result<Vec<_>, _>>()?;
