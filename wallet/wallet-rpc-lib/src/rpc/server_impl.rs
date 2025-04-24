@@ -1104,7 +1104,7 @@ where
         token_id: Option<RpcAddress<TokenId>>,
         htlc: RpcHashedTimelockContract,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<HexEncoded<SignedTransaction>> {
+    ) -> rpc::RpcResult<RpcNewTransaction> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb(),
             broadcast_to_mempool: true,
@@ -1112,8 +1112,7 @@ where
 
         rpc::handle_result(
             self.create_htlc_transaction(account_arg.index::<N>()?, amount, token_id, htlc, config)
-                .await
-                .map(HexEncoded::new),
+                .await,
         )
     }
 

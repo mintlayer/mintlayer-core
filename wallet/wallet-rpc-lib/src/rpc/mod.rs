@@ -1512,7 +1512,7 @@ where
         token_id: Option<RpcAddress<TokenId>>,
         htlc: RpcHashedTimelockContract,
         config: ControllerConfig,
-    ) -> WRpcResult<SignedTransaction, N> {
+    ) -> WRpcResult<RpcNewTransaction, N> {
         let secret_hash = HtlcSecretHash::decode_all(&mut htlc.secret_hash.as_bytes())
             .map_err(|_| RpcError::InvalidHtlcSecretHash)?;
 
@@ -1572,6 +1572,7 @@ where
                         .create_htlc_tx(value, htlc, additional_info)
                         .await
                         .map_err(RpcError::Controller)
+                        .map(RpcNewTransaction::new)
                 })
             })
             .await?

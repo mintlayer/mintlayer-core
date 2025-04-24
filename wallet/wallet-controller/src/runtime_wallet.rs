@@ -1123,7 +1123,7 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
         additional_info: TxAdditionalInfo,
-    ) -> WalletResult<SignedTransaction> {
+    ) -> WalletResult<SignedTxWithFees> {
         match self {
             RuntimeWallet::Software(w) => w.create_htlc_tx(
                 account_index,

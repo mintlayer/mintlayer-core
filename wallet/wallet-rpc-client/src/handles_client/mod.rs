@@ -1093,7 +1093,7 @@ where
         token_id: Option<String>,
         htlc: RpcHashedTimelockContract,
         config: ControllerConfig,
-    ) -> Result<HexEncoded<SignedTransaction>, Self::Error> {
+    ) -> Result<RpcNewTransaction, Self::Error> {
         self.wallet_rpc
             .create_htlc_transaction(
                 account_index,
@@ -1103,7 +1103,6 @@ where
                 config,
             )
             .await
-            .map(HexEncoded::new)
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
 

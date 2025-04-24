@@ -394,9 +394,12 @@ pub enum WalletCommand {
     #[command(flatten)]
     ColdCommands(ColdWalletCommand),
 
-    /// Configure broadcasting to Mempool to true of false.
-    /// By default it is set to true. If set to false, any command that creates a transaction will
-    /// return it to the user and will need to be submitted manually with the command `node-submit-transaction`
+    /// Configure broadcasting to Mempool to true or false.
+    ///
+    /// If set to false, any command that creates a transaction will return it to the user and not submit it automatically.
+    /// The transaction will need to be submitted manually with the command `node-submit-transaction`.
+    ///
+    /// The effect of this is not preserved when the CLI wallet is closed.
     #[clap(name = "config-broadcast")]
     ConfigBroadcast { broadcast: bool },
 

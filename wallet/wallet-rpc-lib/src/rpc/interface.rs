@@ -736,7 +736,7 @@ trait WalletRpc {
         token_id: Option<RpcAddress<TokenId>>,
         htlc: RpcHashedTimelockContract,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<HexEncoded<SignedTransaction>>;
+    ) -> rpc::RpcResult<RpcNewTransaction>;
 
     /// Create an order for exchanging "given" amount of an arbitrary currency (coins or tokens) for
     /// an arbitrary amount of "asked" currency.

@@ -1014,7 +1014,7 @@ impl WalletInterface for ClientWalletRpc {
         token_id: Option<String>,
         htlc: RpcHashedTimelockContract,
         config: ControllerConfig,
-    ) -> Result<HexEncoded<SignedTransaction>, Self::Error> {
+    ) -> Result<RpcNewTransaction, Self::Error> {
         let options = TransactionOptions::from_controller_config(&config);
         WalletRpcClient::create_htlc_transaction(
             &self.http_client,

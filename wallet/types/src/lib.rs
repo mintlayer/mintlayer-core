@@ -28,20 +28,20 @@ pub mod wallet_tx;
 pub mod wallet_type;
 pub mod with_locked;
 
-use std::collections::BTreeMap;
-
 pub use account_id::{
     AccountDerivationPathId, AccountId, AccountKeyPurposeId, AccountWalletCreatedTxId,
     AccountWalletTxId,
 };
 pub use account_info::AccountInfo;
+pub use currency::Currency;
+pub use keys::{KeyPurpose, KeychainUsageState, RootKeys};
+pub use wallet_tx::{BlockInfo, WalletTx};
+
 use common::{
     chain::{SignedTransaction, Transaction},
     primitives::Amount,
 };
-pub use currency::Currency;
-pub use keys::{KeyPurpose, KeychainUsageState, RootKeys};
-pub use wallet_tx::{BlockInfo, WalletTx};
+use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SignedTxWithFees {

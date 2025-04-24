@@ -136,7 +136,7 @@ where
             let hex = new_tx.tx.to_string();
             let summary = new_tx.tx.take().transaction().text_summary(chain_config);
 
-            format!("{summary}\nThe transaction was created and ready to be submitted:\n{hex}",)
+            format!("{summary}\nThe transaction was created and is ready to be submitted:\n{hex}",)
         };
 
         ConsoleCommand::Print(status_text)

@@ -501,7 +501,7 @@ pub trait WalletInterface {
         token_id: Option<String>,
         htlc: RpcHashedTimelockContract,
         config: ControllerConfig,
-    ) -> Result<HexEncoded<SignedTransaction>, Self::Error>;
+    ) -> Result<RpcNewTransaction, Self::Error>;
 
     #[allow(clippy::too_many_arguments)]
     async fn create_order(
