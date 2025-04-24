@@ -5579,7 +5579,8 @@ fn create_htlc_and_spend(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             TxAdditionalInfo::new(),
         )
-        .unwrap();
+        .unwrap()
+        .tx;
     let create_htlc_tx_id = create_htlc_tx.transaction().get_id();
     let (_, block2) = create_block(
         &chain_config,
@@ -5719,7 +5720,8 @@ fn create_htlc_and_refund(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             TxAdditionalInfo::new(),
         )
-        .unwrap();
+        .unwrap()
+        .tx;
     let create_htlc_tx_id = create_htlc_tx.transaction().get_id();
 
     let refund_tx = Transaction::new(
