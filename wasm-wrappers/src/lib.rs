@@ -47,16 +47,17 @@ use common::{
         signature::{
             inputsig::{
                 arbitrary_message::{produce_message_challenge, ArbitraryMessageSignature},
-                authorize_hashed_timelock_contract_spend::AuthorizedHashedTimelockContractSpend,
+                authorize_hashed_timelock_contract_spend::{
+                    AuthorizedHashedTimelockContractSpend, AuthorizedHashedTimelockContractSpendTag,
+                },
                 classical_multisig::authorize_classical_multisig::{
                     sign_classical_multisig_spending, AuthorizedClassicalMultisigSpend,
                 },
                 htlc::produce_uniparty_signature_for_htlc_input,
                 standard_signature::StandardInputSignature,
-                InputWitness,
+                InputWitness, InputWitnessTag,
             },
             sighash::{sighashtype::SigHashType, signature_hash},
-            DestinationSigError,
         },
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
@@ -111,7 +112,9 @@ impl Amount {
         UnsignedIntType::from_str(&self.atoms)
             .ok()
             .map(primitives::Amount::from_atoms)
-            .ok_or(Error::InvalidAmount)
+            .ok_or_else(|| Error::AtomsAmountParseError {
+                atoms: self.atoms.clone(),
+            })
     }
 
     fn from_internal_amount(amount: primitives::Amount) -> Self {
@@ -192,9 +195,9 @@ fn parse_token_total_supply(
     let supply = match value {
         TotalSupply::Lockable => TokenTotalSupply::Lockable,
         TotalSupply::Unlimited => TokenTotalSupply::Unlimited,
-        TotalSupply::Fixed => {
-            TokenTotalSupply::Fixed(amount.ok_or(Error::FixedTotalSupply)?.as_internal_amount()?)
-        }
+        TotalSupply::Fixed => TokenTotalSupply::Fixed(
+            amount.ok_or(Error::FixedTotalSupplyButNoAmount)?.as_internal_amount()?,
+        ),
     };
 
     Ok(supply)
@@ -253,8 +256,8 @@ pub fn make_private_key() -> Vec<u8> {
 /// derivation path: 44'/mintlayer_coin_type'/0'
 #[wasm_bindgen]
 pub fn make_default_account_privkey(mnemonic: &str, network: Network) -> Result<Vec<u8>, Error> {
-    let mnemonic = bip39::Mnemonic::parse_in(Language::English, mnemonic)
-        .map_err(|_| Error::InvalidMnemonic)?;
+    let mnemonic =
+        bip39::Mnemonic::parse_in(Language::English, mnemonic).map_err(Error::InvalidMnemonic)?;
     let seed = mnemonic.to_seed("");
 
     let root_key = ExtendedPrivateKey::new_master(&seed, ExtendedKeyKind::Secp256k1Schnorr)
@@ -281,7 +284,7 @@ pub fn make_default_account_privkey(mnemonic: &str, network: Network) -> Result<
 #[wasm_bindgen]
 pub fn make_receiving_address(private_key_bytes: &[u8], key_index: u32) -> Result<Vec<u8>, Error> {
     let account_privkey = ExtendedPrivateKey::decode_all(&mut &private_key_bytes[..])
-        .map_err(|_| Error::InvalidPrivateKeyEncoding)?;
+        .map_err(Error::InvalidPrivateKeyEncoding)?;
     let private_key = derive(account_privkey, RECEIVE_FUNDS_INDEX, key_index)?.private_key();
     Ok(private_key.encode())
 }
@@ -291,7 +294,7 @@ pub fn make_receiving_address(private_key_bytes: &[u8], key_index: u32) -> Resul
 #[wasm_bindgen]
 pub fn make_change_address(private_key_bytes: &[u8], key_index: u32) -> Result<Vec<u8>, Error> {
     let account_privkey = ExtendedPrivateKey::decode_all(&mut &private_key_bytes[..])
-        .map_err(|_| Error::InvalidPrivateKeyEncoding)?;
+        .map_err(Error::InvalidPrivateKeyEncoding)?;
     let private_key = derive(account_privkey, CHANGE_FUNDS_INDEX, key_index)?.private_key();
     Ok(private_key.encode())
 }
@@ -304,7 +307,7 @@ pub fn pubkey_to_pubkeyhash_address(
     network: Network,
 ) -> Result<String, Error> {
     let public_key = PublicKey::decode_all(&mut &public_key_bytes[..])
-        .map_err(|_| Error::InvalidPublicKeyEncoding)?;
+        .map_err(Error::InvalidPublicKeyEncoding)?;
     let chain_config = Builder::new(network.into()).build();
 
     let public_key_hash = PublicKeyHash::from(&public_key);
@@ -319,8 +322,8 @@ pub fn pubkey_to_pubkeyhash_address(
 /// Given a private key, as bytes, return the bytes of the corresponding public key
 #[wasm_bindgen]
 pub fn public_key_from_private_key(private_key: &[u8]) -> Result<Vec<u8>, Error> {
-    let private_key = PrivateKey::decode_all(&mut &private_key[..])
-        .map_err(|_| Error::InvalidPrivateKeyEncoding)?;
+    let private_key =
+        PrivateKey::decode_all(&mut &private_key[..]).map_err(Error::InvalidPrivateKeyEncoding)?;
     let public_key = PublicKey::from_private_key(&private_key);
     Ok(public_key.encode())
 }
@@ -331,7 +334,7 @@ pub fn extended_public_key_from_extended_private_key(
     private_key_bytes: &[u8],
 ) -> Result<Vec<u8>, Error> {
     let extended_private_key = ExtendedPrivateKey::decode_all(&mut &private_key_bytes[..])
-        .map_err(|_| Error::InvalidPrivateKeyEncoding)?;
+        .map_err(Error::InvalidPrivateKeyEncoding)?;
     let extended_public_key = extended_private_key.to_public_key();
     Ok(extended_public_key.encode())
 }
@@ -344,7 +347,7 @@ pub fn make_receiving_address_public_key(
     key_index: u32,
 ) -> Result<Vec<u8>, Error> {
     let account_publickey = ExtendedPublicKey::decode_all(&mut &extended_public_key_bytes[..])
-        .map_err(|_| Error::InvalidPrivateKeyEncoding)?;
+        .map_err(Error::InvalidPrivateKeyEncoding)?;
     let public_key = derive(account_publickey, RECEIVE_FUNDS_INDEX, key_index)?.into_public_key();
     Ok(public_key.encode())
 }
@@ -357,7 +360,7 @@ pub fn make_change_address_public_key(
     key_index: u32,
 ) -> Result<Vec<u8>, Error> {
     let account_publickey = ExtendedPublicKey::decode_all(&mut &extended_public_key_bytes[..])
-        .map_err(|_| Error::InvalidPrivateKeyEncoding)?;
+        .map_err(Error::InvalidPrivateKeyEncoding)?;
     let public_key = derive(account_publickey, CHANGE_FUNDS_INDEX, key_index)?.into_public_key();
     Ok(public_key.encode())
 }
@@ -371,7 +374,7 @@ fn derive<D: Derivable>(
         .derive_child(child_number)
         .expect("Should not fail to derive key")
         .derive_child(ChildNumber::from_normal(
-            U31::from_u32(key_index).ok_or(Error::InvalidKeyIndex)?,
+            U31::from_u32(key_index).ok_or(Error::InvalidKeyIndexMsbBitSet)?,
         ))
         .expect("Should not fail to derive key");
     Ok(res)
@@ -382,9 +385,11 @@ fn derive<D: Derivable>(
 /// input witness.
 #[wasm_bindgen]
 pub fn sign_message_for_spending(private_key: &[u8], message: &[u8]) -> Result<Vec<u8>, Error> {
-    let private_key = PrivateKey::decode_all(&mut &private_key[..])
-        .map_err(|_| Error::InvalidPrivateKeyEncoding)?;
-    let signature = private_key.sign_message(message, randomness::make_true_rng())?;
+    let private_key =
+        PrivateKey::decode_all(&mut &private_key[..]).map_err(Error::InvalidPrivateKeyEncoding)?;
+    let signature = private_key
+        .sign_message(message, randomness::make_true_rng())
+        .map_err(Error::SignMessageError)?;
     Ok(signature.encode())
 }
 
@@ -400,9 +405,9 @@ pub fn verify_signature_for_spending(
     message: &[u8],
 ) -> Result<bool, Error> {
     let public_key =
-        PublicKey::decode_all(&mut &public_key[..]).map_err(|_| Error::InvalidPublicKeyEncoding)?;
+        PublicKey::decode_all(&mut &public_key[..]).map_err(Error::InvalidPublicKeyEncoding)?;
     let signature =
-        Signature::decode_all(&mut &signature[..]).map_err(|_| Error::InvalidSignatureEncoding)?;
+        Signature::decode_all(&mut &signature[..]).map_err(Error::InvalidSignatureEncoding)?;
     let verifcation_result = public_key.verify_message(&signature, message);
     Ok(verifcation_result)
 }
@@ -411,14 +416,15 @@ pub fn verify_signature_for_spending(
 /// This kind of signature is to be used when signing challenges.
 #[wasm_bindgen]
 pub fn sign_challenge(private_key: &[u8], message: &[u8]) -> Result<Vec<u8>, Error> {
-    let private_key = PrivateKey::decode_all(&mut &private_key[..])
-        .map_err(|_| Error::InvalidPrivateKeyEncoding)?;
+    let private_key =
+        PrivateKey::decode_all(&mut &private_key[..]).map_err(Error::InvalidPrivateKeyEncoding)?;
 
     let signature = ArbitraryMessageSignature::produce_uniparty_signature_as_pub_key_hash_spending(
         &private_key,
         message,
         randomness::make_true_rng(),
-    )?;
+    )
+    .map_err(Error::ArbitraryMessageSigningError)?;
     Ok(signature.into_raw())
 }
 
@@ -445,7 +451,8 @@ pub fn verify_challenge(
     let destination = parse_addressable(&chain_config, address)?;
     let message_challenge = produce_message_challenge(message);
     let sig = ArbitraryMessageSignature::from_data(signed_challenge.to_vec());
-    sig.verify_signature(&chain_config, &destination, &message_challenge)?;
+    sig.verify_signature(&chain_config, &destination, &message_challenge)
+        .map_err(Error::ArbitraryMessageSignatureVerificationError)?;
     Ok(true)
 }
 
@@ -454,8 +461,9 @@ fn parse_addressable<T: Addressable>(
     address: &str,
 ) -> Result<T, Error> {
     let addressable = Address::from_string(chain_config, address)
-        .map_err(|_| Error::InvalidAddressable {
+        .map_err(|error| Error::AddressableParseError {
             addressable: address.to_owned(),
+            error,
         })?
         .into_object();
     Ok(addressable)
@@ -468,7 +476,7 @@ pub fn make_transaction_intent_message_to_sign(
     transaction_id: &str,
 ) -> Result<Vec<u8>, Error> {
     let transaction_id =
-        Id::new(H256::from_str(transaction_id).map_err(|_| Error::InvalidTransactionId)?);
+        Id::new(H256::from_str(transaction_id).map_err(Error::TransactionIdParseError)?);
     let message_to_sign = SignedTransactionIntent::get_message_to_sign(intent, &transaction_id);
 
     Ok(message_to_sign.into_bytes())
@@ -492,7 +500,7 @@ pub fn encode_signed_transaction_intent(
     signatures: &JsValue,
 ) -> Result<Vec<u8>, Error> {
     let signed_message_str = String::from_utf8(signed_message.to_owned())
-        .map_err(|_| Error::SignedTransactionIntentMessageIsNotAValidString)?;
+        .map_err(|_| Error::SignedTransactionIntentMessageIsNotAValidUtf8String)?;
     let signatures: Vec<Vec<u8>> =
         signatures.into_serde().map_err(|err| Error::JsValueNotArrayOfArraysOfBytes {
             error: err.to_string(),
@@ -522,22 +530,24 @@ pub fn verify_transaction_intent(
     network: Network,
 ) -> Result<(), Error> {
     let expected_signed_message_str = String::from_utf8(expected_signed_message.to_owned())
-        .map_err(|_| Error::SignedTransactionIntentMessageIsNotAValidString)?;
+        .map_err(|_| Error::SignedTransactionIntentMessageIsNotAValidUtf8String)?;
     let chain_config = Builder::new(network.into()).build();
 
     let signed_intent = SignedTransactionIntent::decode_all(&mut encoded_signed_intent)
-        .map_err(|_| Error::InvalidSignedTransactionIntent)?;
+        .map_err(Error::InvalidSignedTransactionIntentEncoding)?;
 
     let input_destinations = input_destinations
         .iter()
         .map(|addr| parse_addressable(&chain_config, addr))
         .collect::<Result<Vec<_>, _>>()?;
 
-    signed_intent.verify(
-        &chain_config,
-        &input_destinations,
-        &expected_signed_message_str,
-    )?;
+    signed_intent
+        .verify(
+            &chain_config,
+            &input_destinations,
+            &expected_signed_message_str,
+        )
+        .map_err(Error::SignedTransactionIntentVerificationError)?;
 
     Ok(())
 }
@@ -638,7 +648,8 @@ pub fn encode_output_lock_then_transfer(
     let chain_config = Builder::new(network.into()).build();
     let amount = amount.as_internal_amount()?;
     let destination = parse_addressable(&chain_config, address)?;
-    let lock = OutputTimeLock::decode_all(&mut &lock[..]).map_err(|_| Error::InvalidTimeLock)?;
+    let lock =
+        OutputTimeLock::decode_all(&mut &lock[..]).map_err(Error::InvalidTimeLockEncoding)?;
 
     let output = TxOutput::LockThenTransfer(Coin(amount), destination, lock);
     Ok(output.encode())
@@ -658,7 +669,8 @@ pub fn encode_output_token_lock_then_transfer(
     let chain_config = Builder::new(network.into()).build();
     let amount = amount.as_internal_amount()?;
     let destination = parse_addressable(&chain_config, address)?;
-    let lock = OutputTimeLock::decode_all(&mut &lock[..]).map_err(|_| Error::InvalidTimeLock)?;
+    let lock =
+        OutputTimeLock::decode_all(&mut &lock[..]).map_err(Error::InvalidTimeLockEncoding)?;
     let token = parse_addressable(&chain_config, token_id)?;
 
     let output = TxOutput::LockThenTransfer(TokenV1(token, amount), destination, lock);
@@ -767,8 +779,8 @@ pub fn encode_output_create_stake_pool(
 ) -> Result<Vec<u8>, Error> {
     let chain_config = Builder::new(network.into()).build();
     let pool_id = parse_addressable(&chain_config, pool_id)?;
-    let pool_data =
-        StakePoolData::decode_all(&mut &pool_data[..]).map_err(|_| Error::InvalidStakePoolData)?;
+    let pool_data = StakePoolData::decode_all(&mut &pool_data[..])
+        .map_err(Error::InvalidStakePoolDataEncoding)?;
 
     let output = TxOutput::CreateStakePool(pool_id, Box::new(pool_data));
     Ok(output.encode())
@@ -857,7 +869,8 @@ pub fn encode_output_issue_fungible_token(
         is_freezable,
     });
 
-    tx_verifier::check_tokens_issuance(&chain_config, &token_issuance)?;
+    tx_verifier::check_tokens_issuance(&chain_config, &token_issuance)
+        .map_err(Error::InvalidTokenParameters)?;
 
     let output = TxOutput::IssueFungibleToken(Box::new(token_issuance));
     Ok(output.encode())
@@ -874,7 +887,7 @@ pub fn get_token_id(
 
     let mut tx_inputs = vec![];
     while !inputs.is_empty() {
-        let input = TxInput::decode(&mut inputs).map_err(|_| Error::InvalidInput)?;
+        let input = TxInput::decode(&mut inputs).map_err(Error::InvalidInputEncoding)?;
         tx_inputs.push(input);
     }
 
@@ -919,7 +932,7 @@ pub fn encode_output_issue_nft(
     let creator = creator
         .map(|pk| PublicKey::decode_all(&mut pk.as_slice()))
         .transpose()
-        .map_err(|_| Error::InvalidCreatorPublicKey)?
+        .map_err(Error::InvalidNftCreatorPublicKey)?
         .map(|public_key| TokenCreator { public_key });
 
     let nft_issuance = NftIssuanceV0 {
@@ -935,7 +948,8 @@ pub fn encode_output_issue_nft(
         },
     };
 
-    tx_verifier::check_nft_issuance_data(&chain_config, &nft_issuance)?;
+    tx_verifier::check_nft_issuance_data(&chain_config, &nft_issuance)
+        .map_err(Error::InvalidTokenParameters)?;
 
     let output = TxOutput::IssueNft(token_id, Box::new(NftIssuance::V0(nft_issuance)), authority);
     Ok(output.encode())
@@ -987,9 +1001,9 @@ pub fn encode_output_htlc(
     let chain_config = Builder::new(network.into()).build();
     let output_value = parse_output_value(&chain_config, &amount, token_id)?;
     let refund_timelock = OutputTimeLock::decode_all(&mut &refund_timelock[..])
-        .map_err(|_| Error::InvalidTimeLock)?;
+        .map_err(Error::InvalidTimeLockEncoding)?;
     let secret_hash =
-        HtlcSecretHash::from_str(secret_hash).map_err(|_| Error::InvalidHtlcSecretHash)?;
+        HtlcSecretHash::from_str(secret_hash).map_err(Error::HtlcSecretHashParseError)?;
 
     let spend_key = parse_addressable(&chain_config, spend_address)?;
     let refund_key = parse_addressable(&chain_config, refund_address)?;
@@ -1014,15 +1028,15 @@ pub fn extract_htlc_secret(
     htlc_output_index: u32,
 ) -> Result<Vec<u8>, Error> {
     let outpoint_source_id = OutPointSourceId::decode_all(&mut &htlc_outpoint_source_id[..])
-        .map_err(|_| Error::InvalidOutpointId)?;
+        .map_err(Error::InvalidOutpointIdEncoding)?;
     let htlc_utxo_outpoint = UtxoOutPoint::new(outpoint_source_id, htlc_output_index);
 
     let tx = if strict_byte_size {
         SignedTransaction::decode_all(&mut &signed_tx_bytes[..])
-            .map_err(|_| Error::InvalidTransaction)?
+            .map_err(Error::InvalidTransactionEncoding)?
     } else {
         SignedTransaction::decode(&mut &signed_tx_bytes[..])
-            .map_err(|_| Error::InvalidTransaction)?
+            .map_err(Error::InvalidTransactionEncoding)?
     };
 
     let htlc_position = tx
@@ -1038,13 +1052,19 @@ pub fn extract_htlc_secret(
         .ok_or(Error::NoInputOutpointFound)?;
 
     match tx.signatures().get(htlc_position).ok_or(Error::InvalidWitnessCount)? {
-        InputWitness::NoSignature(_) => Err(Error::InvalidWitness),
+        InputWitness::NoSignature(_) => {
+            Err(Error::UnexpectedWitnessType(InputWitnessTag::NoSignature))
+        }
         InputWitness::Standard(sig) => {
             let htlc_spend = AuthorizedHashedTimelockContractSpend::from_data(sig.raw_signature())
-                .map_err(|_| Error::InvalidWitness)?;
+                .map_err(Error::HtlcSpendCreationError)?;
             match htlc_spend {
                 AuthorizedHashedTimelockContractSpend::Secret(secret, _) => Ok(secret.encode()),
-                AuthorizedHashedTimelockContractSpend::Multisig(_) => Err(Error::InvalidWitness),
+                AuthorizedHashedTimelockContractSpend::Multisig(_) => {
+                    Err(Error::UnexpectedHtlcSpendType(
+                        AuthorizedHashedTimelockContractSpendTag::Multisig,
+                    ))
+                }
             }
         }
     }
@@ -1058,7 +1078,7 @@ pub fn encode_input_for_utxo(
     output_index: u32,
 ) -> Result<Vec<u8>, Error> {
     let outpoint_source_id = OutPointSourceId::decode_all(&mut &outpoint_source_id[..])
-        .map_err(|_| Error::InvalidOutpointId)?;
+        .map_err(Error::InvalidOutpointIdEncoding)?;
     let input = TxInput::Utxo(UtxoOutPoint::new(outpoint_source_id, output_index));
     Ok(input.encode())
 }
@@ -1099,7 +1119,7 @@ pub fn estimate_transaction_size(
     let chain_config = Builder::new(network.into()).build();
     let mut tx_outputs = vec![];
     while !outputs.is_empty() {
-        let output = TxOutput::decode(&mut outputs).map_err(|_| Error::InvalidOutput)?;
+        let output = TxOutput::decode(&mut outputs).map_err(Error::InvalidOutputEncoding)?;
         tx_outputs.push(output);
     }
 
@@ -1111,11 +1131,8 @@ pub fn estimate_transaction_size(
     for destination in input_utxos_destinations {
         let destination = parse_addressable(&chain_config, &destination)?;
         let signature_size =
-            input_signature_size_from_destination(&destination, Option::<&_>::None).map_err(
-                |err| Error::TransactionSizeEstimationError {
-                    error: err.to_string(),
-                },
-            )?;
+            input_signature_size_from_destination(&destination, Option::<&_>::None)
+                .map_err(Error::TransactionSizeEstimationError)?;
 
         total_size += signature_size;
     }
@@ -1133,13 +1150,13 @@ pub fn encode_transaction(
 ) -> Result<Vec<u8>, Error> {
     let mut tx_outputs = vec![];
     while !outputs.is_empty() {
-        let output = TxOutput::decode(&mut outputs).map_err(|_| Error::InvalidOutput)?;
+        let output = TxOutput::decode(&mut outputs).map_err(Error::InvalidOutputEncoding)?;
         tx_outputs.push(output);
     }
 
     let mut tx_inputs = vec![];
     while !inputs.is_empty() {
-        let input = TxInput::decode(&mut inputs).map_err(|_| Error::InvalidInput)?;
+        let input = TxInput::decode(&mut inputs).map_err(Error::InvalidInputEncoding)?;
         tx_inputs.push(input);
     }
 
@@ -1168,16 +1185,16 @@ pub fn encode_witness(
     let chain_config = Builder::new(network.into()).build();
 
     let private_key = PrivateKey::decode_all(&mut &private_key_bytes[..])
-        .map_err(|_| Error::InvalidPrivateKeyEncoding)?;
+        .map_err(Error::InvalidPrivateKeyEncoding)?;
 
     let destination = parse_addressable(&chain_config, input_owner_destination)?;
 
     let tx = Transaction::decode_all(&mut &transaction_bytes[..])
-        .map_err(|_| Error::InvalidTransaction)?;
+        .map_err(Error::InvalidTransactionEncoding)?;
 
     let mut input_utxos = vec![];
     while !inputs.is_empty() {
-        let utxo = Option::<TxOutput>::decode(&mut inputs).map_err(|_| Error::InvalidInput)?;
+        let utxo = Option::<TxOutput>::decode(&mut inputs).map_err(Error::InvalidInputEncoding)?;
         input_utxos.push(utxo);
     }
 
@@ -1193,7 +1210,7 @@ pub fn encode_witness(
         randomness::make_true_rng(),
     )
     .map(InputWitness::Standard)
-    .map_err(|_| Error::InvalidWitness)?;
+    .map_err(Error::InputSigningError)?;
 
     Ok(witness.encode())
 }
@@ -1215,22 +1232,22 @@ pub fn encode_witness_htlc_secret(
     let chain_config = Builder::new(network.into()).build();
 
     let private_key = PrivateKey::decode_all(&mut &private_key_bytes[..])
-        .map_err(|_| Error::InvalidPrivateKeyEncoding)?;
+        .map_err(Error::InvalidPrivateKeyEncoding)?;
 
     let destination = parse_addressable(&chain_config, input_owner_destination)?;
 
     let tx = Transaction::decode_all(&mut &transaction_bytes[..])
-        .map_err(|_| Error::InvalidTransaction)?;
+        .map_err(Error::InvalidTransactionEncoding)?;
 
     let mut input_utxos = vec![];
     while !inputs.is_empty() {
-        let utxo = Option::<TxOutput>::decode(&mut inputs).map_err(|_| Error::InvalidInput)?;
+        let utxo = Option::<TxOutput>::decode(&mut inputs).map_err(Error::InvalidInputEncoding)?;
         input_utxos.push(utxo);
     }
 
     let utxos = input_utxos.iter().map(Option::as_ref).collect::<Vec<_>>();
 
-    let secret = HtlcSecret::decode_all(&mut secret).map_err(|_| Error::InvalidHtlcSecret)?;
+    let secret = HtlcSecret::decode_all(&mut secret).map_err(Error::InvalidHtlcSecretEncoding)?;
 
     let witness = produce_uniparty_signature_for_htlc_input(
         &private_key,
@@ -1243,7 +1260,7 @@ pub fn encode_witness_htlc_secret(
         randomness::make_true_rng(),
     )
     .map(InputWitness::Standard)
-    .map_err(|_| Error::InvalidWitness)?;
+    .map_err(Error::InputSigningError)?;
 
     Ok(witness.encode())
 }
@@ -1263,13 +1280,13 @@ pub fn encode_multisig_challenge(
 
     let mut public_keys = vec![];
     while !public_keys_bytes.is_empty() {
-        let public_key = PublicKey::decode(&mut public_keys_bytes)
-            .map_err(|_| Error::InvalidPublicKeyEncoding)?;
+        let public_key =
+            PublicKey::decode(&mut public_keys_bytes).map_err(Error::InvalidPublicKeyEncoding)?;
         public_keys.push(public_key);
     }
 
     let challenge = ClassicMultisigChallenge::new(&chain_config, min_sigs, public_keys)
-        .map_err(|_| Error::InvalidMultisigChallenge)?;
+        .map_err(Error::MultisigChallengeCreationError)?;
 
     Ok(challenge.encode())
 }
@@ -1295,43 +1312,46 @@ pub fn encode_witness_htlc_multisig(
     let chain_config = Builder::new(network.into()).build();
 
     let private_key = PrivateKey::decode_all(&mut &private_key_bytes[..])
-        .map_err(|_| Error::InvalidPrivateKeyEncoding)?;
+        .map_err(Error::InvalidPrivateKeyEncoding)?;
 
     let tx = Transaction::decode_all(&mut &transaction_bytes[..])
-        .map_err(|_| Error::InvalidTransaction)?;
+        .map_err(Error::InvalidTransactionEncoding)?;
 
     let mut input_utxos = vec![];
     while !utxos.is_empty() {
-        let utxo = Option::<TxOutput>::decode(&mut utxos).map_err(|_| Error::InvalidInput)?;
+        let utxo = Option::<TxOutput>::decode(&mut utxos).map_err(Error::InvalidInputEncoding)?;
         input_utxos.push(utxo);
     }
 
     let utxos = input_utxos.iter().map(Option::as_ref).collect::<Vec<_>>();
     let sighashtype = sighashtype.into();
     let sighash = signature_hash(sighashtype, &tx, &utxos, input_num as usize)
-        .map_err(|_| Error::InvalidSignatureEncoding)?;
+        .map_err(Error::SighashCalculationError)?;
 
     let mut rng = randomness::make_true_rng();
     let challenge = ClassicMultisigChallenge::decode_all(&mut multisig_challenge)
-        .map_err(|_| Error::InvalidMultisigChallenge)?;
+        .map_err(Error::InvalidMultisigChallengeEncoding)?;
     let authorization = if !input_witness.is_empty() {
         let input_witness =
-            InputWitness::decode_all(&mut input_witness).map_err(|_| Error::InvalidWitness)?;
+            InputWitness::decode_all(&mut input_witness).map_err(Error::InvalidWitnessEncoding)?;
 
         match input_witness {
-            InputWitness::NoSignature(_) => return Err(Error::InvalidWitness),
+            InputWitness::NoSignature(_) => {
+                return Err(Error::UnexpectedWitnessType(InputWitnessTag::NoSignature))
+            }
             InputWitness::Standard(sig) => {
                 let htlc_spend =
-                    AuthorizedHashedTimelockContractSpend::from_data(sig.raw_signature())?;
+                    AuthorizedHashedTimelockContractSpend::from_data(sig.raw_signature())
+                        .map_err(Error::HtlcSpendCreationError)?;
                 match htlc_spend {
                     AuthorizedHashedTimelockContractSpend::Secret(_, _) => {
-                        return Err(Error::DestinationSigError(
-                            DestinationSigError::InvalidSignatureEncoding,
+                        return Err(Error::UnexpectedHtlcSpendType(
+                            AuthorizedHashedTimelockContractSpendTag::Secret,
                         ));
                     }
                     AuthorizedHashedTimelockContractSpend::Multisig(raw_signature) => {
                         AuthorizedClassicalMultisigSpend::from_data(&raw_signature)
-                            .map_err(|_| Error::InvalidWitness)?
+                            .map_err(Error::MultisigSpendCreationError)?
                     }
                 }
             }
@@ -1349,7 +1369,7 @@ pub fn encode_witness_htlc_multisig(
         authorization,
         &mut rng,
     )
-    .map_err(DestinationSigError::ClassicalMultisigSigningFailed)?
+    .map_err(Error::MultisigSigningError)?
     .take();
 
     let raw_signature =
@@ -1367,14 +1387,15 @@ pub fn encode_signed_transaction(
 ) -> Result<Vec<u8>, Error> {
     let mut tx_signatures = vec![];
     while !signatures.is_empty() {
-        let signature = InputWitness::decode(&mut signatures).map_err(|_| Error::InvalidWitness)?;
+        let signature =
+            InputWitness::decode(&mut signatures).map_err(Error::InvalidWitnessEncoding)?;
         tx_signatures.push(signature);
     }
 
     let tx = Transaction::decode_all(&mut &transaction_bytes[..])
-        .map_err(|_| Error::InvalidTransaction)?;
+        .map_err(Error::InvalidTransactionEncoding)?;
 
-    let tx = SignedTransaction::new(tx, tx_signatures).map_err(|_| Error::InvalidWitnessCount)?;
+    let tx = SignedTransaction::new(tx, tx_signatures).map_err(Error::TransactionCreationError)?;
     Ok(tx.encode())
 }
 
@@ -1394,9 +1415,10 @@ pub fn get_transaction_id(
 ) -> Result<String, Error> {
     let tx = if strict_byte_size {
         Transaction::decode_all(&mut &transaction_bytes[..])
-            .map_err(|_| Error::InvalidTransaction)?
+            .map_err(Error::InvalidTransactionEncoding)?
     } else {
-        Transaction::decode(&mut &transaction_bytes[..]).map_err(|_| Error::InvalidTransaction)?
+        Transaction::decode(&mut &transaction_bytes[..])
+            .map_err(Error::InvalidTransactionEncoding)?
     };
     let tx_id = tx.get_id();
 
@@ -1415,12 +1437,12 @@ pub fn effective_pool_balance(
 
     let pledge_amount = pledge_amount.as_internal_amount()?;
     let pool_balance = pool_balance.as_internal_amount()?;
-    let final_supply = chain_config.final_supply().ok_or(Error::FinalSupplyError)?;
+    let final_supply = chain_config.final_supply().ok_or(Error::FinalSupplyMissingInChainConfig)?;
     let final_supply = final_supply.to_amount_atoms();
 
     let effective_balance =
         consensus::calculate_effective_pool_balance(pledge_amount, pool_balance, final_supply)
-            .map_err(|e| Error::EffectiveBalanceCalculationFailed(e.to_string()))?;
+            .map_err(Error::EffectiveBalanceCalculationFailed)?;
 
     Ok(Amount::from_internal_amount(effective_balance))
 }

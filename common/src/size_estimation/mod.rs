@@ -36,7 +36,7 @@ use crate::chain::{
 };
 
 /// Wallet errors
-#[derive(thiserror::Error, Debug, Eq, PartialEq)]
+#[derive(thiserror::Error, Debug, Clone, Eq, PartialEq)]
 pub enum SizeEstimationError {
     #[error("Unsupported input destination")]
     UnsupportedInputDestination(Destination),
