@@ -35,9 +35,8 @@ use common::{
 };
 pub use seed_phrase::SeedWithPassPhrase;
 pub use standalone_key::AccountStandaloneKeyDetails;
-pub use transaction::NewTransaction;
 pub use transaction::{
-    InspectTransaction, SignatureStats, TransactionToInspect, ValidatedSignatures,
+    InspectTransaction, NewTransaction, SignatureStats, TransactionToInspect, ValidatedSignatures,
 };
 use utils::ensure;
 use wallet::signer::trezor_signer::FoundDevice;

@@ -1111,11 +1111,11 @@ where
         output_value: OutputValue,
         htlc: HashedTimelockContract,
         additional_info: TxAdditionalInfo,
-    ) -> Result<SignedTransaction, ControllerError<T>> {
+    ) -> Result<NewTransaction, ControllerError<T>> {
         let (current_fee_rate, consolidate_fee_rate) =
             self.get_current_and_consolidation_fee_rate().await?;
 
-        let result = self.wallet.create_htlc_tx(
+        let SignedTxWithFees { tx, fees } = self.wallet.create_htlc_tx(
             self.account_index,
             output_value,
             htlc,
@@ -1123,7 +1123,14 @@ where
             consolidate_fee_rate,
             additional_info,
         )?;
-        Ok(result)
+
+        let fees = into_balances(&self.rpc_client, self.chain_config, fees).await?;
+
+        Ok(NewTransaction {
+            tx,
+            fees,
+            broadcasted: false,
+        })
     }
 
     pub async fn create_order(

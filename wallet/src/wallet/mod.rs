@@ -1178,23 +1178,6 @@ where
         )
     }
 
-    fn for_account_rw_unlocked_and_check_tx(
-        &mut self,
-        account_index: U31,
-        additional_info: TxAdditionalInfo,
-        f: impl FnOnce(&mut Account<P::K>, &mut StoreTxRwUnlocked<B>) -> WalletResult<SendRequest>,
-    ) -> WalletResult<SignedTransaction> {
-        Ok(self
-            .for_account_rw_unlocked_and_check_tx_generic(
-                account_index,
-                additional_info,
-                |account, db_tx| Ok((f(account, db_tx)?, ())),
-                |err| err,
-            )?
-            .0
-            .tx)
-    }
-
     fn for_account_rw_unlocked_and_check_tx_with_fees(
         &mut self,
         account_index: U31,
@@ -2134,9 +2117,9 @@ where
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
         additional_info: TxAdditionalInfo,
-    ) -> WalletResult<SignedTransaction> {
+    ) -> WalletResult<SignedTxWithFees> {
         let latest_median_time = self.latest_median_time;
-        self.for_account_rw_unlocked_and_check_tx(
+        self.for_account_rw_unlocked_and_check_tx_with_fees(
             account_index,
             additional_info,
             |account, db_tx| {
