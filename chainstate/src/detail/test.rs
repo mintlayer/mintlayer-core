@@ -13,18 +13,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::detail::query::locator_tip_distances;
-use crate::interface::chainstate_interface_impl::ChainstateInterfaceImpl;
-use crate::DefaultTransactionVerificationStrategy;
+use std::collections::BTreeMap;
+
+use static_assertions::*;
+
+use chainstate_storage::inmemory::Store;
+use common::{
+    chain::{
+        config::{Builder as ChainConfigBuilder, ChainType},
+        Destination, NetUpgrades,
+    },
+    Uint256,
+};
+
+use crate::{
+    detail::query::locator_tip_distances,
+    interface::chainstate_interface_impl::ChainstateInterfaceImpl,
+    DefaultTransactionVerificationStrategy,
+};
 
 use super::*;
-use chainstate_storage::inmemory::Store;
-use common::chain::config::Builder as ChainConfigBuilder;
-use common::chain::config::ChainType;
-use common::chain::Destination;
-use common::chain::NetUpgrades;
-use common::Uint256;
-use static_assertions::*;
 
 assert_impl_all!(ChainstateInterfaceImpl<chainstate_storage::inmemory::Store, DefaultTransactionVerificationStrategy>: Send);
 
@@ -34,6 +42,8 @@ fn process_genesis_block() {
         let chain_config = ChainConfigBuilder::new(ChainType::Mainnet)
             .consensus_upgrades(NetUpgrades::unit_tests())
             .genesis_unittest(Destination::AnyoneCanSpend)
+            // Force empty checkpoints because a custom genesis is used.
+            .checkpoints(BTreeMap::new())
             .build();
         let chainstate_config = ChainstateConfig::default();
         let chainstate_storage = Store::new_empty().unwrap();
@@ -80,6 +90,8 @@ fn empty_chainstate_no_genesis() {
         let chain_config = ChainConfigBuilder::new(ChainType::Mainnet)
             .consensus_upgrades(NetUpgrades::unit_tests())
             .genesis_unittest(Destination::AnyoneCanSpend)
+            // Force empty checkpoints because a custom genesis is used.
+            .checkpoints(BTreeMap::new())
             .build();
         let chainstate_config = ChainstateConfig::default();
         let chainstate_storage = Store::new_empty().unwrap();

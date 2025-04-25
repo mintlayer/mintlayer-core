@@ -987,12 +987,12 @@ pub fn assert_no_ignore_consensus_in_chain_config(chain_config: &ChainConfig) {
 
 #[cfg(test)]
 mod tests {
-    use self::checkpoints_data::make_mainnet_checkpoints;
-
-    use super::*;
     use rstest::rstest;
     use strum::IntoEnumIterator as _;
-    use tests::checkpoints_data::make_testnet_checkpoints;
+
+    use crate::chain::config::checkpoints_data::{MAINNET_CHECKPOINTS, TESTNET_CHECKPOINTS};
+
+    use super::*;
 
     #[test]
     fn mainnet_creation() {
@@ -1258,19 +1258,16 @@ mod tests {
     #[test]
     fn test_checkpoints() {
         let config = Builder::new(ChainType::Mainnet).build();
-        let expected_checkpoints = {
-            let mut checkpoints = make_mainnet_checkpoints();
-            checkpoints.insert(BlockHeight::zero(), config.genesis_block_id());
-            checkpoints.into()
-        };
-        assert_eq!(*config.height_checkpoints(), expected_checkpoints);
+        assert_eq!(
+            *config.height_checkpoints().checkpoints_map(),
+            *MAINNET_CHECKPOINTS
+        );
 
         let config = Builder::new(ChainType::Testnet).build();
-        let expected_checkpoints = {
-            let mut checkpoints = make_testnet_checkpoints();
-            checkpoints.insert(BlockHeight::zero(), config.genesis_block_id());
-            checkpoints.into()
-        };
-        assert_eq!(*config.height_checkpoints(), expected_checkpoints);
+
+        assert_eq!(
+            *config.height_checkpoints().checkpoints_map(),
+            *TESTNET_CHECKPOINTS
+        );
     }
 }

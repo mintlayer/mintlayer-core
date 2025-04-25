@@ -44,7 +44,8 @@ use crate::{
 use crypto::key::hdkd::child_number::ChildNumber;
 
 use super::{
-    checkpoints_data::{make_mainnet_checkpoints, make_testnet_checkpoints},
+    checkpoints::Checkpoints,
+    checkpoints_data::{MAINNET_CHECKPOINTS, TESTNET_CHECKPOINTS},
     MagicBytes,
 };
 
@@ -451,20 +452,26 @@ impl Builder {
             } => create_unit_test_genesis(premine_destination),
         };
         let genesis_block = Arc::new(WithId::new(genesis_block));
+        let genesis_id = genesis_block.get_id();
 
         let height_checkpoint_data = {
-            let mut checkpoints = if let Some(checkpoints) = checkpoints {
-                checkpoints
+            if let Some(checkpoints) = checkpoints {
+                Checkpoints::new(checkpoints, genesis_id)
             } else {
                 match chain_type {
-                    ChainType::Mainnet => make_mainnet_checkpoints(),
-                    ChainType::Testnet => make_testnet_checkpoints(),
-                    ChainType::Regtest | ChainType::Signet => BTreeMap::new(),
+                    ChainType::Mainnet => {
+                        Checkpoints::new_static(&MAINNET_CHECKPOINTS, &genesis_id)
+                    }
+                    ChainType::Testnet => {
+                        Checkpoints::new_static(&TESTNET_CHECKPOINTS, &genesis_id)
+                    }
+                    ChainType::Regtest | ChainType::Signet => {
+                        Checkpoints::new(BTreeMap::new(), genesis_id)
+                    }
                 }
-            };
-
-            checkpoints.entry(0.into()).or_insert(genesis_block.get_id().into());
-            checkpoints.into()
+            }
+            // Note: this can only panic on genesis mismatch.
+            .expect("checkpoints creation must succeed")
         };
 
         let pow_chain_config = {

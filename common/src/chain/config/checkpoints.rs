@@ -13,31 +13,65 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
+use std::{borrow::Cow, collections::BTreeMap};
+
+use utils::ensure;
 
 use crate::{
-    chain::GenBlock,
+    chain::{GenBlock, Genesis},
     primitives::{BlockHeight, Id},
 };
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Checkpoints {
-    checkpoints: BTreeMap<BlockHeight, Id<GenBlock>>,
-}
-
-impl From<BTreeMap<BlockHeight, Id<GenBlock>>> for Checkpoints {
-    fn from(checkpoints: BTreeMap<BlockHeight, Id<GenBlock>>) -> Self {
-        Self::new(checkpoints)
-    }
+    checkpoints: Cow<'static, BTreeMap<BlockHeight, Id<GenBlock>>>,
 }
 
 impl Checkpoints {
-    pub fn new(checkpoints: BTreeMap<BlockHeight, Id<GenBlock>>) -> Self {
-        checkpoints
-            .get(&BlockHeight::new(0))
-            .expect("Checkpoints must have genesis id at height 0");
+    pub fn new(
+        mut checkpoints: BTreeMap<BlockHeight, Id<GenBlock>>,
+        genesis_id: Id<Genesis>,
+    ) -> Result<Self, CheckpointsError> {
+        use std::collections::btree_map::Entry;
 
-        Self { checkpoints }
+        let genesis_id: Id<GenBlock> = genesis_id.into();
+
+        match checkpoints.entry(0.into()) {
+            Entry::Vacant(entry) => {
+                entry.insert(genesis_id);
+            }
+            Entry::Occupied(entry) => ensure!(
+                entry.get() == &genesis_id,
+                CheckpointsError::GenesisMismatch {
+                    expected: genesis_id,
+                    actual: *entry.get()
+                }
+            ),
+        }
+
+        Ok(Self {
+            checkpoints: Cow::Owned(checkpoints),
+        })
+    }
+
+    pub fn new_static(
+        checkpoints: &'static BTreeMap<BlockHeight, Id<GenBlock>>,
+        expected_genesis_id: &Id<Genesis>,
+    ) -> Result<Self, CheckpointsError> {
+        let expected_genesis_id: &Id<GenBlock> = expected_genesis_id.into();
+        let actual_genesis_id =
+            checkpoints.get(&BlockHeight::new(0)).ok_or(CheckpointsError::GenesisMissing)?;
+        ensure!(
+            actual_genesis_id == expected_genesis_id,
+            CheckpointsError::GenesisMismatch {
+                expected: *expected_genesis_id,
+                actual: *actual_genesis_id
+            }
+        );
+
+        Ok(Self {
+            checkpoints: Cow::Borrowed(checkpoints),
+        })
     }
 
     pub fn checkpoint_at_height(&self, height: &BlockHeight) -> Option<&Id<GenBlock>> {
@@ -59,22 +93,78 @@ impl Checkpoints {
             .expect("Genesis must be there, at least.");
         (*cp_before.0, (*cp_before.1))
     }
+
+    #[cfg(test)]
+    pub fn checkpoints_map(&self) -> &BTreeMap<BlockHeight, Id<GenBlock>> {
+        &self.checkpoints
+    }
+}
+
+#[derive(thiserror::Error, Debug, Clone)]
+pub enum CheckpointsError {
+    #[error("Genesis missing")]
+    GenesisMissing,
+
+    #[error("Genesis mismatch, expected: {expected:x}, actual: {actual:x}")]
+    GenesisMismatch {
+        expected: Id<GenBlock>,
+        actual: Id<GenBlock>,
+    },
 }
 
 #[cfg(test)]
 mod tests {
-    use rstest::rstest;
-    use test_utils::random::{make_seedable_rng, Rng, Seed};
+    use once_cell::sync::OnceCell;
 
-    use crate::primitives::H256;
+    use rstest::rstest;
+
+    use test_utils::{
+        assert_matches,
+        random::{make_seedable_rng, Rng, Seed},
+    };
 
     use super::*;
 
-    #[test]
-    #[should_panic = "Checkpoints must have genesis id at height 0"]
-    fn test_empty_checkpoints() {
-        let checkpoints_map = BTreeMap::new();
-        let _checkpoints = Checkpoints::new(checkpoints_map);
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn test_creation(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+
+        let genesis1_id = Id::random_using(&mut rng);
+        let genesis1_gen_block_id: Id<GenBlock> = genesis1_id.into();
+        let genesis2_id: Id<Genesis> = Id::random_using(&mut rng);
+
+        // new
+        {
+            let checkpoints = Checkpoints::new(BTreeMap::new(), genesis1_id).unwrap();
+            assert_eq!(
+                checkpoints.checkpoint_at_height(&BlockHeight::zero()).unwrap(),
+                &genesis1_gen_block_id
+            );
+
+            let error = Checkpoints::new(
+                BTreeMap::from([(BlockHeight::zero(), genesis2_id.into())]),
+                genesis1_id,
+            )
+            .unwrap_err();
+            assert_matches!(error, CheckpointsError::GenesisMismatch { .. });
+        }
+
+        // new_static
+        {
+            static MAP: OnceCell<BTreeMap<BlockHeight, Id<GenBlock>>> = OnceCell::new();
+            MAP.get_or_init(|| BTreeMap::from([(BlockHeight::zero(), genesis1_id.into())]));
+
+            let checkpoints = Checkpoints::new_static(MAP.get().unwrap(), &genesis1_id).unwrap();
+            assert_eq!(
+                checkpoints.checkpoint_at_height(&BlockHeight::zero()).unwrap(),
+                &genesis1_gen_block_id
+            );
+
+            let error = Checkpoints::new_static(MAP.get().unwrap(), &genesis2_id).unwrap_err();
+            assert_matches!(error, CheckpointsError::GenesisMismatch { .. });
+        }
     }
 
     #[rstest]
@@ -83,12 +173,22 @@ mod tests {
     fn test_parent_checkpoint_to_height_with_checkpoints(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
 
-        let mut checkpoints_map = BTreeMap::new();
-        checkpoints_map.insert(BlockHeight::new(0), H256::random_using(&mut rng).into());
-        checkpoints_map.insert(BlockHeight::new(5), H256::random_using(&mut rng).into());
-        checkpoints_map.insert(BlockHeight::new(10), H256::random_using(&mut rng).into());
-        checkpoints_map.insert(BlockHeight::new(15), H256::random_using(&mut rng).into());
-        let checkpoints = Checkpoints::new(checkpoints_map.clone());
+        let genesis_id = Id::random_using(&mut rng);
+        let checkpoints_map = {
+            let mut checkpoints_map = BTreeMap::new();
+            checkpoints_map.insert(BlockHeight::new(0), genesis_id.into());
+            checkpoints_map.insert(BlockHeight::new(5), Id::random_using(&mut rng));
+            checkpoints_map.insert(BlockHeight::new(10), Id::random_using(&mut rng));
+            checkpoints_map.insert(BlockHeight::new(15), Id::random_using(&mut rng));
+            checkpoints_map
+        };
+        let checkpoints = if rng.gen_bool(0.5) {
+            Checkpoints::new(checkpoints_map.clone(), genesis_id).unwrap()
+        } else {
+            static MAP: OnceCell<BTreeMap<BlockHeight, Id<GenBlock>>> = OnceCell::new();
+            MAP.get_or_init(|| checkpoints_map.clone());
+            Checkpoints::new_static(MAP.get().unwrap(), &genesis_id).unwrap()
+        };
 
         assert_eq!(
             checkpoints.parent_checkpoint_to_height(BlockHeight::new(0)),

@@ -374,7 +374,13 @@ fn test_balance_from_genesis(
         BlockTimestamp::from_int_seconds(1639975460),
         utxos,
     );
-    let chain_config = Arc::new(Builder::new(chain_type).genesis_custom(genesis).build());
+    let chain_config = Arc::new(
+        Builder::new(chain_type)
+            .genesis_custom(genesis)
+            // Force empty checkpoints because a custom genesis is used.
+            .checkpoints(BTreeMap::new())
+            .build(),
+    );
 
     let wallet = create_wallet(chain_config.clone());
 
@@ -791,7 +797,13 @@ fn locked_wallet_balance_works(#[case] seed: Seed) {
         BlockTimestamp::from_int_seconds(1639975460),
         vec![genesis_output],
     );
-    let chain_config = Arc::new(Builder::new(chain_type).genesis_custom(genesis).build());
+    let chain_config = Arc::new(
+        Builder::new(chain_type)
+            .genesis_custom(genesis)
+            // Force empty checkpoints because a custom genesis is used.
+            .checkpoints(BTreeMap::new())
+            .build(),
+    );
 
     let mut wallet = create_wallet(chain_config.clone());
 

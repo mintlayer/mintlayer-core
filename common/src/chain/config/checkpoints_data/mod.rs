@@ -40,25 +40,27 @@ pub fn print_block_heights_ids_as_checkpoints_data(
     fmt().expect("Writing to string must not fail")
 }
 
-pub fn make_mainnet_checkpoints() -> BTreeMap<BlockHeight, Id<GenBlock>> {
-    make_checkpoints(mainnet::CHECKPOINTS_DATA).expect("corrupted mainnet checkpoints data")
+lazy_static::lazy_static! {
+    pub static ref MAINNET_CHECKPOINTS: BTreeMap<BlockHeight, Id<GenBlock>> = {
+        make_checkpoints(mainnet::CHECKPOINTS_DATA).expect("corrupted mainnet checkpoints data")
+    };
 }
 
-pub fn make_testnet_checkpoints() -> BTreeMap<BlockHeight, Id<GenBlock>> {
-    make_checkpoints(testnet::CHECKPOINTS_DATA).expect("corrupted testnet checkpoints data")
+lazy_static::lazy_static! {
+    pub static ref TESTNET_CHECKPOINTS: BTreeMap<BlockHeight, Id<GenBlock>> = {
+        make_checkpoints(testnet::CHECKPOINTS_DATA).expect("corrupted mainnet checkpoints data")
+    };
 }
 
 fn make_checkpoints(
     checkpoints_data: &[(u64, &str)],
-) -> Option<BTreeMap<BlockHeight, Id<GenBlock>>> {
-    let checkpoints_iter = checkpoints_data.iter().map(
-        |(height, id_str)| -> Result<_, fixed_hash::rustc_hex::FromHexError> {
-            let id = H256::from_str(id_str)?.into();
-            Ok((BlockHeight::new(*height), id))
-        },
-    );
+) -> Result<BTreeMap<BlockHeight, Id<GenBlock>>, fixed_hash::rustc_hex::FromHexError> {
+    let checkpoints_iter = checkpoints_data.iter().map(|(height, id_str)| {
+        let id = H256::from_str(id_str)?.into();
+        Ok((BlockHeight::new(*height), id))
+    });
 
-    itertools::process_results(checkpoints_iter, |iter| iter.collect::<BTreeMap<_, _>>()).ok()
+    itertools::process_results(checkpoints_iter, |iter| iter.collect::<BTreeMap<_, _>>())
 }
 
 #[cfg(test)]
