@@ -58,7 +58,7 @@ use wallet_types::{
     },
     seed_phrase::{PassPhrase, StoreSeedPhrase},
     utxo_types::{UtxoState, UtxoType},
-    AccountWalletTxId, Currency,
+    AccountWalletTxId, Currency, WalletTx,
 };
 
 use crate::{
@@ -4272,7 +4272,7 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn wallet_abandone_transactions(#[case] seed: Seed) {
+fn wallet_abandon_transactions(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_mainnet());
 
@@ -4373,6 +4373,31 @@ fn wallet_abandone_transactions(#[case] seed: Seed) {
     wallet.scan_mempool(txs_to_keep.as_slice(), &WalletEventsNoOp).unwrap();
     let coin_balance = get_coin_balance_with_inactive(&wallet);
     assert_eq!(coin_balance, coins_after_abandon);
+
+    // Check the db
+    {
+        let account_id = wallet.get_account(DEFAULT_ACCOUNT_INDEX).unwrap().get_account_id();
+        let db_tx = wallet.database().transaction_ro().unwrap();
+        let db_transactions = db_tx.get_transactions(&account_id).unwrap();
+
+        let abandoned_tx_ids = txs_to_abandon
+            .iter()
+            .map(|(tx, _)| tx.transaction().get_id())
+            .collect::<BTreeSet<_>>();
+
+        for (_, wallet_tx) in db_transactions {
+            match wallet_tx {
+                WalletTx::Block(_) => {}
+                WalletTx::Tx(tx_data) => {
+                    if abandoned_tx_ids.contains(&tx_data.get_transaction().get_id()) {
+                        assert_eq!(*tx_data.state(), TxState::Abandoned);
+                    } else {
+                        assert_ne!(*tx_data.state(), TxState::Abandoned);
+                    }
+                }
+            };
+        }
+    }
 
     // Abandon the same tx again
     let result = wallet.abandon_transaction(DEFAULT_ACCOUNT_INDEX, transaction_id);

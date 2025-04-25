@@ -1639,49 +1639,55 @@ impl OutputCache {
         Ok(())
     }
 
-    /// Mark a transaction and its descendants as abandoned
-    /// Returns a Vec of the transactions and the Ids that have been abandoned
+    /// Mark a transaction and its descendants as abandoned.
+    /// Return a Vec of the transactions and the Ids that have been abandoned.
     pub fn abandon_transaction(
         &mut self,
         chain_config: &ChainConfig,
         tx_id: Id<Transaction>,
     ) -> WalletResult<Vec<(Id<Transaction>, WalletTx)>> {
         let all_abandoned = self.remove_from_unconfirmed_descendants(tx_id);
-        let mut all_abandoned_txs = Vec::with_capacity(all_abandoned.len());
-
         let mut txs_to_rollback = vec![];
-        for tx_id in all_abandoned.iter().rev().copied() {
-            match self.txs.entry(tx_id.into()) {
-                Entry::Occupied(mut entry) => match entry.get_mut() {
-                    WalletTx::Block(_) => Err(WalletError::CannotFindTransactionWithId(tx_id)),
-                    WalletTx::Tx(tx) => {
-                        all_abandoned_txs.push(WalletTx::Tx(tx.clone()));
-                        match tx.state() {
-                            TxState::Inactive(_) => {
-                                tx.set_state(TxState::Abandoned);
-                                txs_to_rollback.push(entry.get().clone());
-                                Ok(())
-                            }
-                            TxState::Conflicted(_) => {
-                                tx.set_state(TxState::Abandoned);
-                                Ok(())
-                            }
-                            state => Err(WalletError::CannotChangeTransactionState(
-                                *state,
-                                TxState::Abandoned,
-                            )),
-                        }
-                    }
-                },
-                Entry::Vacant(_) => Err(WalletError::CannotFindTransactionWithId(tx_id)),
-            }?;
-        }
 
-        for tx in &txs_to_rollback {
+        let result = all_abandoned
+            .iter()
+            .map(|tx_id| -> WalletResult<_> {
+                match self.txs.entry((*tx_id).into()) {
+                    Entry::Occupied(mut entry) => match entry.get_mut() {
+                        WalletTx::Block(_) => Err(WalletError::CannotFindTransactionWithId(*tx_id)),
+                        WalletTx::Tx(tx) => {
+                            let need_rollback = match tx.state() {
+                                TxState::Inactive(_) => true,
+                                TxState::Conflicted(_) => false,
+                                state @ (TxState::Confirmed(_, _, _)
+                                | TxState::InMempool(_)
+                                | TxState::Abandoned) => {
+                                    return Err(WalletError::CannotChangeTransactionState(
+                                        *state,
+                                        TxState::Abandoned,
+                                    ))
+                                }
+                            };
+
+                            tx.set_state(TxState::Abandoned);
+
+                            if need_rollback {
+                                txs_to_rollback.push(WalletTx::Tx(tx.clone()));
+                            }
+
+                            Ok((*tx_id, WalletTx::Tx(tx.clone())))
+                        }
+                    },
+                    Entry::Vacant(_) => Err(WalletError::CannotFindTransactionWithId(*tx_id)),
+                }
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        for tx in txs_to_rollback.iter().rev() {
             self.rollback_tx_data(chain_config, tx)?;
         }
 
-        Ok(all_abandoned.into_iter().zip_eq(all_abandoned_txs).collect())
+        Ok(result)
     }
 
     pub fn get_transaction(&self, transaction_id: Id<Transaction>) -> WalletResult<&TxData> {
