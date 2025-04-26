@@ -475,16 +475,16 @@ impl WalletInterface for ClientWalletRpc {
         account_index: U31,
         destination_address: String,
         from_addresses: Vec<String>,
+        all: bool,
         config: ControllerConfig,
     ) -> Result<RpcNewTransaction, Self::Error> {
         let options = TransactionOptions::from_controller_config(&config);
-        let all = from_addresses.is_empty();
         WalletRpcClient::sweep_addresses(
             &self.http_client,
             account_index.into(),
             destination_address.into(),
             from_addresses.into_iter().map(Into::into).collect(),
-            Some(all),
+            all,
             options,
         )
         .await

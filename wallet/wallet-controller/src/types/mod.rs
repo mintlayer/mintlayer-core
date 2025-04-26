@@ -21,6 +21,8 @@ mod seed_phrase;
 mod standalone_key;
 mod transaction;
 
+use std::collections::BTreeSet;
+
 pub use balances::Balances;
 use bip39::{Language, Mnemonic};
 pub use block_info::{BlockInfo, CreatedBlockInfo};
@@ -246,4 +248,18 @@ pub enum WalletTypeArgsComputed {
     },
     #[cfg(feature = "trezor")]
     Trezor { device_id: Option<String> },
+}
+
+pub enum SweepFromAddresses {
+    All,
+    SpecificAddresses(BTreeSet<Destination>),
+}
+
+impl SweepFromAddresses {
+    pub fn should_sweep_address(&self, dest: &Destination) -> bool {
+        match self {
+            Self::All => true,
+            Self::SpecificAddresses(destinations) => destinations.contains(dest),
+        }
+    }
 }

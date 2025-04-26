@@ -264,6 +264,7 @@ pub trait WalletInterface {
         account_index: U31,
         destination_address: String,
         from_addresses: Vec<String>,
+        all: bool,
         config: ControllerConfig,
     ) -> Result<RpcNewTransaction, Self::Error>;
 

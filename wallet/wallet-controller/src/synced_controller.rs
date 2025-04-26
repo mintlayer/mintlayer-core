@@ -68,7 +68,7 @@ use wallet_types::{
 use crate::{
     helpers::{fetch_token_info, fetch_utxo, into_balances, tx_to_partially_signed_tx},
     runtime_wallet::RuntimeWallet,
-    types::{Balances, GenericCurrencyTransfer, NewTransaction},
+    types::{Balances, GenericCurrencyTransfer, NewTransaction, SweepFromAddresses},
     ControllerConfig, ControllerError,
 };
 
@@ -568,7 +568,7 @@ where
     pub async fn sweep_addresses(
         &mut self,
         destination_address: Destination,
-        from_addresses: BTreeSet<Destination>,
+        from_addresses: SweepFromAddresses,
     ) -> Result<NewTransaction, ControllerError<T>> {
         let selected_utxos = self.wallet.get_utxos(
             self.account_index,
@@ -584,7 +584,7 @@ where
             .into_iter()
             .filter(|(_, output)| {
                 get_tx_output_destination(output, &|_| None, HtlcSpendingCondition::Skip)
-                    .is_some_and(|dest| from_addresses.is_empty() || from_addresses.contains(&dest))
+                    .is_some_and(|dest| from_addresses.should_sweep_address(&dest))
             })
             .collect::<Vec<_>>();
 

@@ -29,7 +29,6 @@ use common::{
 use crypto::{key::PrivateKey, vrf::VRFPublicKey};
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
 use serialization::{hex::HexEncode, json_encoded::JsonEncoded};
-use utils::ensure;
 use utils_networking::IpOrSocketAddress;
 use wallet::{account::TxInfo, version::get_version};
 use wallet_controller::{
@@ -558,23 +557,19 @@ where
         account: AccountArg,
         destination_address: RpcAddress<Destination>,
         from_addresses: Vec<RpcAddress<Destination>>,
-        all: Option<bool>,
+        all: bool,
         options: TransactionOptions,
     ) -> rpc::RpcResult<RpcNewTransaction> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb(),
             broadcast_to_mempool: true,
         };
-        let all = all.unwrap_or(false);
-        ensure!(
-            all && from_addresses.is_empty() || !all && !from_addresses.is_empty(),
-            RpcError::<N>::InvalidSweepParameters
-        );
         rpc::handle_result(
             self.sweep_addresses(
                 account.index::<N>()?,
                 destination_address,
                 from_addresses,
+                all,
                 config,
             )
             .await,

@@ -76,8 +76,8 @@ pub use rpc::{rpc_creds::RpcCreds, Rpc};
 use wallet_controller::{
     types::{
         Balances, BlockInfo, CreatedBlockInfo, CreatedWallet, GenericTokenTransfer,
-        InspectTransaction, NewTransaction, OpenedWallet, SeedWithPassPhrase, TransactionToInspect,
-        WalletCreationOptions, WalletInfo, WalletTypeArgs,
+        InspectTransaction, NewTransaction, OpenedWallet, SeedWithPassPhrase, SweepFromAddresses,
+        TransactionToInspect, WalletCreationOptions, WalletInfo, WalletTypeArgs,
     },
     ConnectedPeer, ControllerConfig, ControllerError, NodeInterface, UtxoState, UtxoStates,
     UtxoType, UtxoTypes, DEFAULT_ACCOUNT_INDEX,
@@ -923,16 +923,29 @@ where
         account_index: U31,
         destination_address: RpcAddress<Destination>,
         from_addresses: Vec<RpcAddress<Destination>>,
+        all: bool,
         config: ControllerConfig,
     ) -> WRpcResult<RpcNewTransaction, N> {
+        ensure!(
+            all && from_addresses.is_empty() || !all && !from_addresses.is_empty(),
+            RpcError::<N>::InvalidSweepParameters
+        );
+
         let destination_address = destination_address
             .decode_object(&self.chain_config)
             .map_err(|_| RpcError::InvalidAddress)?;
 
-        let from_addresses = from_addresses
-            .into_iter()
-            .map(|a| a.decode_object(&self.chain_config).map_err(|_| RpcError::InvalidAddress))
-            .collect::<Result<BTreeSet<Destination>, _>>()?;
+        let from_addresses = match all {
+            true => SweepFromAddresses::All,
+            false => SweepFromAddresses::SpecificAddresses(
+                from_addresses
+                    .into_iter()
+                    .map(|a| {
+                        a.decode_object(&self.chain_config).map_err(|_| RpcError::InvalidAddress)
+                    })
+                    .collect::<Result<BTreeSet<Destination>, _>>()?,
+            ),
+        };
 
         self.wallet
             .call_async(move |controller| {

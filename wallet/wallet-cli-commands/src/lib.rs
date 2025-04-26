@@ -401,7 +401,10 @@ pub enum WalletCommand {
     ///
     /// The effect of this is not preserved when the CLI wallet is closed.
     #[clap(name = "config-broadcast")]
-    ConfigBroadcast { broadcast: bool },
+    ConfigBroadcast {
+        #[arg(value_enum)]
+        broadcast: YesNo,
+    },
 
     #[clap(name = "account-create")]
     CreateNewAccount { name: Option<String> },
