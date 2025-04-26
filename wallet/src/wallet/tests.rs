@@ -1475,7 +1475,7 @@ fn wallet_transactions_with_fees(#[case] seed: Seed) {
         .collect();
 
     let feerate = FeeRate::from_amount_per_kb(Amount::from_atoms(rng.gen_range(1..1000)));
-    let transaction = wallet
+    let SignedTxWithFees { tx, fees } = wallet
         .create_transaction_to_addresses(
             DEFAULT_ACCOUNT_INDEX,
             outputs,
@@ -1485,10 +1485,9 @@ fn wallet_transactions_with_fees(#[case] seed: Seed) {
             feerate,
             TxAdditionalInfo::new(),
         )
-        .unwrap()
-        .tx;
+        .unwrap();
 
-    let tx_size = serialization::Encode::encoded_size(&transaction);
+    let tx_size = serialization::Encode::encoded_size(&tx);
 
     // 16 bytes (u128) is the max tx size diffference in the estimation,
     // because of the compact encoding for the change amount which is unknown beforhand
@@ -1498,11 +1497,7 @@ fn wallet_transactions_with_fees(#[case] seed: Seed) {
 
     // register the successful transaction and check the balance
     wallet
-        .add_account_unconfirmed_tx(
-            DEFAULT_ACCOUNT_INDEX,
-            transaction.clone(),
-            &WalletEventsNoOp,
-        )
+        .add_account_unconfirmed_tx(DEFAULT_ACCOUNT_INDEX, tx.clone(), &WalletEventsNoOp)
         .unwrap();
     let coin_balance1 = get_coin_balance_with_inactive(&wallet);
     let expected_balance_max =
@@ -1512,6 +1507,10 @@ fn wallet_transactions_with_fees(#[case] seed: Seed) {
 
     assert!(coin_balance1 >= expected_balance_min);
     assert!(coin_balance1 <= expected_balance_max);
+    let fee = *fees.get(&Currency::Coin).unwrap();
+    eprintln!("{fee:?} {min_fee:?} {max_fee:?}");
+    assert!(fee >= *min_fee);
+    assert!(fee <= *max_fee);
 
     let selected_utxos = wallet
         .get_utxos(
@@ -1534,7 +1533,7 @@ fn wallet_transactions_with_fees(#[case] seed: Seed) {
     let account1 = wallet.create_next_account(None).unwrap().0;
     let address2 = wallet.get_new_address(account1).unwrap().1.into_object();
     let feerate = FeeRate::from_amount_per_kb(Amount::from_atoms(rng.gen_range(1..1000)));
-    let transaction = wallet
+    let SignedTxWithFees { tx, fees } = wallet
         .create_sweep_transaction(
             DEFAULT_ACCOUNT_INDEX,
             address2,
@@ -1544,16 +1543,12 @@ fn wallet_transactions_with_fees(#[case] seed: Seed) {
         )
         .unwrap();
 
-    let tx_size = serialization::Encode::encoded_size(&transaction);
+    let tx_size = serialization::Encode::encoded_size(&tx);
     let exact_fee = feerate.compute_fee(tx_size).unwrap();
 
     // register the successful transaction and check the balance
     wallet
-        .add_account_unconfirmed_tx(
-            DEFAULT_ACCOUNT_INDEX,
-            transaction.clone(),
-            &WalletEventsNoOp,
-        )
+        .add_account_unconfirmed_tx(DEFAULT_ACCOUNT_INDEX, tx.clone(), &WalletEventsNoOp)
         .unwrap();
     let coin_balance2 = get_coin_balance_with_inactive(&wallet);
     // sweep pays fees from the transfer amount itself
@@ -1561,7 +1556,7 @@ fn wallet_transactions_with_fees(#[case] seed: Seed) {
 
     // add the tx to the new account and check the balance
     wallet
-        .add_account_unconfirmed_tx(account1, transaction.clone(), &WalletEventsNoOp)
+        .add_account_unconfirmed_tx(account1, tx.clone(), &WalletEventsNoOp)
         .unwrap();
 
     let coin_balance3 = wallet
@@ -1578,6 +1573,7 @@ fn wallet_transactions_with_fees(#[case] seed: Seed) {
     // the sweep command should pay exactly the correct fee as it has no change outputs
     let expected_balance3 = (amount_to_transfer - exact_fee.into()).unwrap();
     assert_eq!(coin_balance3, expected_balance3);
+    assert_eq!(*exact_fee, *fees.get(&Currency::Coin).unwrap());
 }
 
 #[test]

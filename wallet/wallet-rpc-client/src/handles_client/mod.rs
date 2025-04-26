@@ -621,6 +621,7 @@ where
         account_index: U31,
         destination_address: String,
         from_addresses: Vec<String>,
+        all: bool,
         config: ControllerConfig,
     ) -> Result<RpcNewTransaction, Self::Error> {
         self.wallet_rpc
@@ -628,6 +629,7 @@ where
                 account_index,
                 destination_address.into(),
                 from_addresses.into_iter().map(Into::into).collect(),
+                all,
                 config,
             )
             .await

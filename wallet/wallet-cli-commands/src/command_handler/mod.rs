@@ -131,14 +131,17 @@ where
 
     pub fn new_tx_command(new_tx: RpcNewTransaction, chain_config: &ChainConfig) -> ConsoleCommand {
         let status_text = if new_tx.broadcasted {
-            let summary = new_tx.tx.take().transaction().text_summary(chain_config);
+            let mut summary = new_tx.tx.take().transaction().text_summary(chain_config);
+            format_fees(&mut summary, &new_tx.fees);
+
             format!(
                 "{summary}\nThe transaction was submitted successfully with ID:\n{}",
                 id_to_hex_string(*new_tx.tx_id.as_hash())
             )
         } else {
             let hex = new_tx.tx.to_string();
-            let summary = new_tx.tx.take().transaction().text_summary(chain_config);
+            let mut summary = new_tx.tx.take().transaction().text_summary(chain_config);
+            format_fees(&mut summary, &new_tx.fees);
 
             format!("{summary}\nThe transaction was created and is ready to be submitted:\n{hex}",)
         };
@@ -805,7 +808,7 @@ where
             }
 
             WalletCommand::ConfigBroadcast { broadcast } => {
-                self.config.broadcast_to_mempool = broadcast;
+                self.config.broadcast_to_mempool = broadcast.to_bool();
                 Ok(ConsoleCommand::Print(format!(
                     "Broadcast to Mempool set to: {broadcast:?}"
                 )))
@@ -1430,6 +1433,7 @@ where
                         selected_account,
                         destination_address,
                         addresses,
+                        all,
                         self.config,
                     )
                     .await?;
