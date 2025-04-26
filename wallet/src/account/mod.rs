@@ -532,7 +532,7 @@ impl<K: AccountKeyChains> Account<K> {
     pub fn sweep_addresses(
         &mut self,
         destination: Destination,
-        request: SendRequest,
+        mut request: SendRequest,
         current_fee_rate: FeeRate,
     ) -> WalletResult<SendRequest> {
         let mut grouped_inputs = group_preselected_inputs(
@@ -592,6 +592,7 @@ impl<K: AccountKeyChains> Account<K> {
             destination,
         );
         outputs.push(coin_output);
+        request.add_fee(Currency::Coin, total_fee)?;
 
         Ok(request.with_outputs(outputs))
     }

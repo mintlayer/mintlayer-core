@@ -128,7 +128,7 @@ class WalletHtlcRefund(BitcoinTestFramework):
             assert_equal(await wallet.get_best_block(), block_id)
 
             balance = await wallet.get_balance()
-            assert_in(f"Coins amount: 151", balance)
+            assert_in("Coins amount: 151", balance)
             assert_not_in("Tokens", balance)
 
             # issue a valid token
@@ -142,7 +142,7 @@ class WalletHtlcRefund(BitcoinTestFramework):
             self.generate_block()
             assert_in("Success", await wallet.sync())
             balance = await wallet.get_balance()
-            assert_in(f"Coins amount: 50", balance)
+            assert_in("Coins amount: 50", balance)
             assert_not_in("Tokens", balance)
 
             amount_to_mint = random.randint(1, 10000)
@@ -153,7 +153,7 @@ class WalletHtlcRefund(BitcoinTestFramework):
             assert_in("Success", await wallet.sync())
             balance = await wallet.get_balance()
             print(balance)
-            assert_in(f"Coins amount: 0", balance)
+            assert_in("Coins amount: 0", balance)
             assert_in(f"Token: {token_id} amount: {amount_to_mint}", balance)
 
             ########################################################################################
@@ -165,7 +165,7 @@ class WalletHtlcRefund(BitcoinTestFramework):
 
             alice_amount_to_swap = amount_to_mint
             alice_htlc_tx = await wallet.create_htlc_transaction(alice_amount_to_swap, token_id, alice_secret_hash, bob_address, refund_address, 6)
-            alice_signed_tx_obj = signed_tx_obj.decode(ScaleBytes("0x" + alice_htlc_tx))
+            alice_signed_tx_obj = signed_tx_obj.decode(ScaleBytes("0x" + alice_htlc_tx['tx']))
             alice_htlc_outputs = alice_signed_tx_obj['transaction']['outputs']
             alice_htlc_change_dest = alice_htlc_outputs[1]['Transfer'][1]
             alice_htlc_tx_id = hash_object(base_tx_obj, alice_signed_tx_obj['transaction'])
@@ -200,7 +200,7 @@ class WalletHtlcRefund(BitcoinTestFramework):
 
             bob_amount_to_swap = 150
             bob_htlc_tx = await wallet.create_htlc_transaction(bob_amount_to_swap, None, alice_secret_hash, alice_address, refund_address, 6)
-            bob_signed_tx_obj = signed_tx_obj.decode(ScaleBytes("0x" + bob_htlc_tx))
+            bob_signed_tx_obj = signed_tx_obj.decode(ScaleBytes("0x" + bob_htlc_tx['tx']))
             bob_htlc_outputs = bob_signed_tx_obj['transaction']['outputs']
             bob_htlc_change_dest = bob_htlc_outputs[1]['Transfer'][1]
             bob_htlc_tx_id = hash_object(base_tx_obj, bob_signed_tx_obj['transaction'])
@@ -227,7 +227,7 @@ class WalletHtlcRefund(BitcoinTestFramework):
             alice_refund_ptx = output.split('\n')[2]
 
             # Alice's htlc tx can now be broadcasted
-            output = await wallet.submit_transaction(alice_htlc_tx)
+            output = await wallet.submit_transaction(alice_htlc_tx['tx'])
             assert_in("The transaction was submitted successfully", output)
 
             # Alice signs Bob's refund
@@ -238,7 +238,7 @@ class WalletHtlcRefund(BitcoinTestFramework):
             bob_refund_ptx = output.split('\n')[2]
 
             # Bob's htlc tx can now be broadcasted
-            output = await wallet.submit_transaction(bob_htlc_tx)
+            output = await wallet.submit_transaction(bob_htlc_tx['tx'])
             assert_in("The transaction was submitted successfully", output)
 
             self.generate_block()
@@ -246,14 +246,14 @@ class WalletHtlcRefund(BitcoinTestFramework):
 
             # Check Alice's balance
             balance = await wallet.get_balance()
-            assert_in(f"Coins amount: 0", balance)
+            assert_in("Coins amount: 0", balance)
             assert_not_in("Tokens", balance)
 
             # Check Bob's balance now
             await self.switch_to_wallet(wallet, 'bob_wallet')
             assert_in("Success", await wallet.sync())
             balance = await wallet.get_balance()
-            assert_in(f"Coins amount: 0", balance)
+            assert_in("Coins amount: 0", balance)
             assert_not_in("Tokens", balance)
 
             ########################################################################################
@@ -270,7 +270,7 @@ class WalletHtlcRefund(BitcoinTestFramework):
             assert_in("Spending at height 9, locked until height 10", output)
 
             balance = await wallet.get_balance()
-            assert_in(f"Coins amount: 0", balance)
+            assert_in("Coins amount: 0", balance)
             assert_not_in("Tokens", balance)
 
             # Bob signs and spends the refund
@@ -286,7 +286,7 @@ class WalletHtlcRefund(BitcoinTestFramework):
             assert_in("Spending at height 9, locked until height 10", output)
 
             balance = await wallet.get_balance()
-            assert_in(f"Coins amount: 0", balance)
+            assert_in("Coins amount: 0", balance)
             assert_not_in("Tokens", balance)
 
             ########################################################################################
@@ -304,7 +304,7 @@ class WalletHtlcRefund(BitcoinTestFramework):
             self.generate_block()
             assert_in("Success", await wallet.sync())
             balance = await wallet.get_balance()
-            assert_in(f"Coins amount: 0", balance)
+            assert_in("Coins amount: 0", balance)
             assert_not_in("Tokens", balance)
 
             self.generate_block()
@@ -316,13 +316,13 @@ class WalletHtlcRefund(BitcoinTestFramework):
             await self.switch_to_wallet(wallet, 'alice_wallet')
             assert_in("Success", await wallet.sync())
             balance = await wallet.get_balance()
-            assert_in(f"Coins amount: 0", balance)
+            assert_in("Coins amount: 0", balance)
             assert_in(f"Token: {token_id} amount: {alice_amount_to_swap}", balance)
 
             await self.switch_to_wallet(wallet, 'bob_wallet')
             assert_in("Success", await wallet.sync())
             balance = await wallet.get_balance()
-            assert_in(f"Coins amount: 150", balance)
+            assert_in(f"Coins amount: {bob_amount_to_swap}", balance)
             assert_not_in("Tokens", balance)
 
 

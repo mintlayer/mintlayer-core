@@ -131,7 +131,7 @@ class WalletHtlcSpend(BitcoinTestFramework):
             assert_equal(await wallet.get_best_block(), block_id)
 
             balance = await wallet.get_balance()
-            assert_in(f"Coins amount: 151", balance)
+            assert_in("Coins amount: 151", balance)
             assert_not_in("Tokens", balance)
 
             # issue a valid token
@@ -142,7 +142,7 @@ class WalletHtlcSpend(BitcoinTestFramework):
             self.generate_block()
             assert_in("Success", await wallet.sync())
             balance = await wallet.get_balance()
-            assert_in(f"Coins amount: 50", balance)
+            assert_in("Coins amount: 50", balance)
             assert_not_in("Tokens", balance)
 
             amount_to_mint = random.randint(1, 10000)
@@ -152,7 +152,7 @@ class WalletHtlcSpend(BitcoinTestFramework):
             self.generate_block()
             assert_in("Success", await wallet.sync())
             balance = await wallet.get_balance()
-            assert_in(f"Coins amount: 0", balance)
+            assert_in("Coins amount: 0", balance)
             assert_in(f"Token: {token_id} amount: {amount_to_mint}", balance)
 
             ########################################################################################
@@ -164,7 +164,7 @@ class WalletHtlcSpend(BitcoinTestFramework):
             alice_amount_to_swap = amount_to_mint
             refund_address = await wallet.add_standalone_multisig_address(2, [alice_pub_key, bob_pub_key], None)
             alice_htlc_tx = await wallet.create_htlc_transaction(alice_amount_to_swap, token_id, alice_secret_hash, bob_address, refund_address, 2)
-            output = await wallet.submit_transaction(alice_htlc_tx)
+            output = await wallet.submit_transaction(alice_htlc_tx['tx'])
             alice_htlc_tx_id = output.split('\n')[2]
             self.generate_block()
             assert_in("Success", await wallet.sync())
@@ -175,7 +175,7 @@ class WalletHtlcSpend(BitcoinTestFramework):
 
             bob_amount_to_swap = 150
             bob_htlc_tx = await wallet.create_htlc_transaction(bob_amount_to_swap, None, alice_secret_hash, alice_address, refund_address, 2)
-            output = await wallet.submit_transaction(bob_htlc_tx)
+            output = await wallet.submit_transaction(bob_htlc_tx['tx'])
             bob_htlc_tx_id = output.split('\n')[2]
             self.generate_block()
             assert_in("Success", await wallet.sync())
@@ -189,7 +189,7 @@ class WalletHtlcSpend(BitcoinTestFramework):
             random_secret_hex = random_secret.hex()
 
             balance = await wallet.get_balance()
-            assert_in(f"Coins amount: 0", balance)
+            assert_in("Coins amount: 0", balance)
             assert_not_in("Tokens", balance)
 
             # Alice can't spend Alice's htlc without a secret
@@ -214,7 +214,7 @@ class WalletHtlcSpend(BitcoinTestFramework):
             assert_in("Success", await wallet.sync())
 
             balance = await wallet.get_balance()
-            assert_in(f"Coins amount: 0", balance)
+            assert_in("Coins amount: 0", balance)
             assert_not_in("Tokens", balance)
 
             # Bob can't spend it without secret
@@ -264,7 +264,7 @@ class WalletHtlcSpend(BitcoinTestFramework):
             assert_in("Success", await wallet.sync())
 
             balance = await wallet.get_balance()
-            assert_in(f"Coins amount: 150", balance)
+            assert_in(f"Coins amount: {bob_amount_to_swap}", balance)
             assert_not_in("Tokens", balance)
 
             ########################################################################################
@@ -283,7 +283,7 @@ class WalletHtlcSpend(BitcoinTestFramework):
             assert_in("Success", await wallet.sync())
 
             balance = await wallet.get_balance()
-            assert_in(f"Coins amount: 0", balance)
+            assert_in("Coins amount: 0", balance)
             assert_in(f"Token: {token_id} amount: {alice_amount_to_swap}", balance)
 
 
