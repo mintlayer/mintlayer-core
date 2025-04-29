@@ -36,7 +36,7 @@ pub struct OutputGroup {
     pub long_term_fee: Amount,
     /// Total weight of the UTXOs in this group.
     /// the size in bytes of the UTXOs
-    pub weight: u32,
+    pub weight: usize,
 }
 
 /// Should we pay fee with this currency or not in the case we pay the total fees with another
@@ -52,7 +52,7 @@ impl OutputGroup {
         output: (TxInput, TxOutput),
         fee: Amount,
         long_term_fee: Amount,
-        weight: u32,
+        weight: usize,
     ) -> Result<Self, UtxoSelectorError> {
         let output_value = match &output.1 {
             TxOutput::Transfer(v, _)

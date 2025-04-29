@@ -1395,6 +1395,8 @@ fn wallet_list_mainchain_transactions(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn wallet_transaction_with_fees(#[case] seed: Seed) {
+    use crate::destination_getters::{get_tx_output_destination, HtlcSpendingCondition};
+
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_mainnet());
 
@@ -1404,7 +1406,7 @@ fn wallet_transaction_with_fees(#[case] seed: Seed) {
     assert_eq!(coin_balance, Amount::ZERO);
 
     // Generate a new block which sends reward to the wallet
-    let block1_amount = Amount::from_atoms(rng.gen_range(100000..1000000));
+    let block1_amount = Amount::from_atoms(rng.gen_range(10000000..20000000));
     let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
 
     let coin_balance = get_coin_balance(&wallet);
@@ -1436,16 +1438,29 @@ fn wallet_transaction_with_fees(#[case] seed: Seed) {
         }
     }
 
-    let num_outputs = rng.gen_range(1..10);
-    let amount_to_transfer = Amount::from_atoms(
-        rng.gen_range(1..=(block1_amount.into_atoms() / num_outputs - NETWORK_FEE)),
+    // make a transaction with multiple outputs to the same address so we can later sweep them all
+    // again
+    let num_outputs = rng.gen_range(1..1000);
+    let amount_to_transfer_per_output = Amount::from_atoms(
+        rng.gen_range(1..=((block1_amount.into_atoms() - NETWORK_FEE) / num_outputs / 2)),
     );
+    let amount_to_transfer = (amount_to_transfer_per_output * num_outputs).unwrap();
 
+    let address = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1.into_object();
     let outputs: Vec<TxOutput> = (0..num_outputs)
-        .map(|_| gen_random_transfer(&mut rng, amount_to_transfer))
+        .map(|_| {
+            TxOutput::Transfer(
+                OutputValue::Coin(amount_to_transfer_per_output),
+                address.clone(),
+            )
+        })
+        // also add some random outputs to test out different TxOutput types
+        .chain(
+            (0..num_outputs).map(|_| gen_random_transfer(&mut rng, amount_to_transfer_per_output)),
+        )
         .collect();
 
-    let feerate = FeeRate::from_amount_per_kb(Amount::from_atoms(1000));
+    let feerate = FeeRate::from_amount_per_kb(Amount::from_atoms(rng.gen_range(1..1000)));
     let transaction = wallet
         .create_transaction_to_addresses(
             DEFAULT_ACCOUNT_INDEX,
@@ -1459,7 +1474,12 @@ fn wallet_transaction_with_fees(#[case] seed: Seed) {
         .unwrap();
 
     let tx_size = serialization::Encode::encoded_size(&transaction);
-    let fee = feerate.compute_fee(tx_size).unwrap();
+
+    // 16 bytes (u128) is the max tx size diffference in the estimation,
+    // because of the compact encoding for the change amount which is unknown beforhand
+    let max_size_diff = std::mem::size_of::<u128>();
+    let min_fee = feerate.compute_fee(tx_size).unwrap();
+    let max_fee = feerate.compute_fee(tx_size + max_size_diff).unwrap();
 
     // register the successful transaction and check the balance
     wallet
@@ -1469,8 +1489,80 @@ fn wallet_transaction_with_fees(#[case] seed: Seed) {
             &WalletEventsNoOp,
         )
         .unwrap();
-    let coin_balance = get_coin_balance_with_inactive(&wallet);
-    assert!(coin_balance <= ((block1_amount - amount_to_transfer).unwrap() - fee.into()).unwrap());
+    let coin_balance1 = get_coin_balance_with_inactive(&wallet);
+    let expected_balance_max =
+        ((block1_amount - amount_to_transfer).unwrap() - min_fee.into()).unwrap();
+    let expected_balance_min =
+        ((block1_amount - amount_to_transfer).unwrap() - max_fee.into()).unwrap();
+
+    assert!(coin_balance1 >= expected_balance_min);
+    assert!(coin_balance1 <= expected_balance_max);
+
+    let selected_utxos = wallet
+        .get_utxos(
+            DEFAULT_ACCOUNT_INDEX,
+            UtxoType::Transfer | UtxoType::LockThenTransfer | UtxoType::IssueNft,
+            UtxoState::Confirmed | UtxoState::Inactive,
+            WithLocked::Unlocked,
+        )
+        .unwrap()
+        .into_iter()
+        .filter(|(_, output)| {
+            get_tx_output_destination(output, &|_| None, HtlcSpendingCondition::Skip)
+                .is_some_and(|dest| dest == address)
+        })
+        .collect::<Vec<_>>();
+
+    // make sure we have selected all of the previously created outputs
+    assert!(selected_utxos.len() >= num_outputs as usize);
+
+    let account1 = wallet.create_next_account(None).unwrap().0;
+    let address2 = wallet.get_new_address(account1).unwrap().1.into_object();
+    let feerate = FeeRate::from_amount_per_kb(Amount::from_atoms(rng.gen_range(1..1000)));
+    let transaction = wallet
+        .create_sweep_transaction(
+            DEFAULT_ACCOUNT_INDEX,
+            address2,
+            selected_utxos,
+            feerate,
+            TxAdditionalInfo::new(),
+        )
+        .unwrap();
+
+    let tx_size = serialization::Encode::encoded_size(&transaction);
+    let exact_fee = feerate.compute_fee(tx_size).unwrap();
+
+    // register the successful transaction and check the balance
+    wallet
+        .add_account_unconfirmed_tx(
+            DEFAULT_ACCOUNT_INDEX,
+            transaction.clone(),
+            &WalletEventsNoOp,
+        )
+        .unwrap();
+    let coin_balance2 = get_coin_balance_with_inactive(&wallet);
+    // sweep pays fees from the transfer amount itself
+    assert_eq!(coin_balance2, (coin_balance1 - amount_to_transfer).unwrap());
+
+    // add the tx to the new account and check the balance
+    wallet
+        .add_account_unconfirmed_tx(account1, transaction.clone(), &WalletEventsNoOp)
+        .unwrap();
+
+    let coin_balance3 = wallet
+        .get_balance(
+            account1,
+            UtxoState::Confirmed | UtxoState::Inactive | UtxoState::InMempool,
+            WithLocked::Unlocked,
+        )
+        .unwrap()
+        .get(&Currency::Coin)
+        .copied()
+        .unwrap_or(Amount::ZERO);
+
+    // the sweep command should pay exactly the correct fee as it has no change outputs
+    let expected_balance3 = (amount_to_transfer - exact_fee.into()).unwrap();
+    assert_eq!(coin_balance3, expected_balance3);
 }
 
 #[test]

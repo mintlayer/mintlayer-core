@@ -1123,7 +1123,7 @@ pub fn estimate_transaction_size(
         tx_outputs.push(output);
     }
 
-    let size = tx_size_with_outputs(&tx_outputs);
+    let size = tx_size_with_outputs(&tx_outputs, input_utxos_destinations.len());
     let inputs_size = inputs.len();
 
     let mut total_size = size + inputs_size;

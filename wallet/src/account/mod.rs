@@ -37,6 +37,7 @@ use crypto::key::hdkd::child_number::ChildNumber;
 use mempool::FeeRate;
 use serialization::hex_encoded::HexEncoded;
 use utils::ensure;
+use utxo_selector::SelectionResult;
 pub use utxo_selector::UtxoSelectorError;
 use wallet_types::account_id::AccountPrefixedId;
 use wallet_types::account_info::{StandaloneAddressDetails, StandaloneAddresses};
@@ -245,12 +246,6 @@ impl<K: AccountKeyChains> Account<K> {
                 Ok(())
             })?;
 
-        let network_fee: Amount = fee_rates
-            .current_fee_rate
-            .compute_fee(tx_size_with_outputs(request.outputs()))
-            .map_err(|_| UtxoSelectorError::AmountArithmeticError)?
-            .into();
-
         let (utxos, selection_algo) = if input_utxos.is_empty() {
             (
                 self.get_utxos(
@@ -288,27 +283,26 @@ impl<K: AccountKeyChains> Account<K> {
         let amount_to_be_paid_in_currency_with_fees =
             output_currency_amounts.remove(&pay_fee_with_currency).unwrap_or(Amount::ZERO);
 
-        let mut total_fees_not_paid = network_fee;
+        let mut total_fees_not_paid = Amount::ZERO;
+        let mut total_tx_size = 0;
 
         let mut selected_inputs: BTreeMap<_, _> = output_currency_amounts
             .iter()
             .map(|(currency, output_amount)| -> WalletResult<_> {
                 let utxos = utxos_by_currency.remove(currency).unwrap_or(vec![]);
-                let (preselected_amount, preselected_fee) = preselected_inputs
-                    .remove(currency)
-                    .map_or((Amount::ZERO, Amount::ZERO), |inputs| {
-                        (inputs.amount, inputs.fee)
-                    });
+                let (preselected_amount, preselected_fee, preselected_input_size) =
+                    preselected_inputs
+                        .remove(currency)
+                        .map_or((Amount::ZERO, Amount::ZERO, 0), |inputs| {
+                            (inputs.amount, inputs.fee, inputs.total_input_size)
+                        });
 
-                let (coin_change_fee, token_change_fee) = coin_and_token_output_change_fees(
+                let (size_of_change, cost_of_change) = coin_and_token_output_change_fees(
                     current_fee_rate,
+                    currency,
                     change_addresses.get(currency),
                 )?;
 
-                let cost_of_change = match currency {
-                    Currency::Coin => coin_change_fee,
-                    Currency::Token(_) => token_change_fee,
-                };
                 let selection_result = select_coins(
                     utxos,
                     output_amount.sub(preselected_amount).unwrap_or(Amount::ZERO),
@@ -317,7 +311,10 @@ impl<K: AccountKeyChains> Account<K> {
                     // when we allow paying fees with different currency
                     Amount::ZERO,
                     selection_algo,
+                    self.chain_config.max_tx_size_for_mempool(),
                 )?;
+
+                total_tx_size += selection_result.get_weight() + preselected_input_size;
 
                 total_fees_not_paid = (total_fees_not_paid + selection_result.get_total_fees())
                     .ok_or(WalletError::OutputAmountOverflow)?;
@@ -331,19 +328,36 @@ impl<K: AccountKeyChains> Account<K> {
                 if change_amount > Amount::ZERO {
                     total_fees_not_paid = (total_fees_not_paid + cost_of_change)
                         .ok_or(WalletError::OutputAmountOverflow)?;
+                    total_tx_size += size_of_change;
                 }
 
                 Ok((*currency, selection_result))
             })
             .try_collect()?;
 
+        let num_inputs = selected_inputs
+            .values()
+            .map(SelectionResult::num_selected_inputs)
+            .sum::<usize>()
+            + request.inputs().len();
+
+        let tx_outputs_size = tx_size_with_outputs(request.outputs(), num_inputs);
+        let tx_outputs_fee: Amount = current_fee_rate
+            .compute_fee(tx_outputs_size)
+            .map_err(|_| UtxoSelectorError::AmountArithmeticError)?
+            .into();
+
         let utxos = utxos_by_currency.remove(&pay_fee_with_currency).unwrap_or(vec![]);
-        let (preselected_amount, preselected_fee) = preselected_inputs
+        let (preselected_amount, preselected_fee, preselected_input_size) = preselected_inputs
             .remove(&pay_fee_with_currency)
-            .map_or((Amount::ZERO, Amount::ZERO), |inputs| {
-                (inputs.amount, inputs.fee)
+            .map_or((Amount::ZERO, Amount::ZERO, 0), |inputs| {
+                (inputs.amount, inputs.fee, inputs.total_input_size)
             });
 
+        total_tx_size += tx_outputs_size + preselected_input_size;
+
+        total_fees_not_paid =
+            (total_fees_not_paid + tx_outputs_fee).ok_or(WalletError::OutputAmountOverflow)?;
         total_fees_not_paid =
             (total_fees_not_paid + preselected_fee).ok_or(WalletError::OutputAmountOverflow)?;
         total_fees_not_paid = preselected_inputs
@@ -351,18 +365,19 @@ impl<K: AccountKeyChains> Account<K> {
             .try_fold(total_fees_not_paid, |total, inputs| total + inputs.fee)
             .ok_or(WalletError::OutputAmountOverflow)?;
 
-        let mut amount_to_be_paid_in_currency_with_fees = (amount_to_be_paid_in_currency_with_fees
+        total_tx_size = preselected_inputs.values().fold(total_tx_size, |total, inputs| {
+            total + inputs.total_input_size
+        });
+
+        let amount_to_be_paid_in_currency_with_fees = (amount_to_be_paid_in_currency_with_fees
             + total_fees_not_paid)
             .ok_or(WalletError::OutputAmountOverflow)?;
 
-        let (coin_change_fee, token_change_fee) = coin_and_token_output_change_fees(
+        let (size_of_change, cost_of_change) = coin_and_token_output_change_fees(
             current_fee_rate,
+            &pay_fee_with_currency,
             change_addresses.get(&pay_fee_with_currency),
         )?;
-        let cost_of_change = match pay_fee_with_currency {
-            Currency::Coin => coin_change_fee,
-            Currency::Token(_) => token_change_fee,
-        };
 
         let selection_result = select_coins(
             utxos,
@@ -370,29 +385,40 @@ impl<K: AccountKeyChains> Account<K> {
             PayFee::PayFeeWithThisCurrency,
             cost_of_change,
             selection_algo,
+            self.chain_config.max_tx_size_for_mempool(),
         )?;
 
-        let selection_result = selection_result.add_change(
+        let mut selection_result = selection_result.add_change(
             (preselected_amount - amount_to_be_paid_in_currency_with_fees).unwrap_or(Amount::ZERO),
         )?;
+
         let change_amount = selection_result.get_change();
+        total_tx_size += selection_result.get_weight();
+        total_fees_not_paid = (total_fees_not_paid + selection_result.get_total_fees())
+            .ok_or(WalletError::OutputAmountOverflow)?;
+
         if change_amount > Amount::ZERO {
-            amount_to_be_paid_in_currency_with_fees = (amount_to_be_paid_in_currency_with_fees
-                + cost_of_change)
-                .ok_or(WalletError::OutputAmountOverflow)?;
+            total_fees_not_paid =
+                (total_fees_not_paid + cost_of_change).ok_or(WalletError::OutputAmountOverflow)?;
+
+            // There can be an small rounding error of computing the fee for each individual input
+            // and then summing them vs computing the fee of the total size at once.
+            let new_total_fees_not_paid = current_fee_rate
+                .compute_fee(total_tx_size + size_of_change)
+                .map_err(|_| UtxoSelectorError::AmountArithmeticError)?
+                .into();
+
+            // Add the difference if any back as change
+            selection_result = selection_result.add_change(
+                (total_fees_not_paid - new_total_fees_not_paid).unwrap_or(Amount::ZERO),
+            )?;
         }
 
-        output_currency_amounts.insert(
-            pay_fee_with_currency,
-            (amount_to_be_paid_in_currency_with_fees + selection_result.get_total_fees())
-                .ok_or(WalletError::OutputAmountOverflow)?,
-        );
         selected_inputs.insert(pay_fee_with_currency, selection_result);
 
         // Check outputs against inputs and create change
         self.check_outputs_and_add_change(
             &pay_fee_with_currency,
-            output_currency_amounts,
             selected_inputs,
             change_addresses,
             db_tx,
@@ -403,16 +429,14 @@ impl<K: AccountKeyChains> Account<K> {
     fn check_outputs_and_add_change(
         &mut self,
         pay_fee_with_currency: &Currency,
-        output_currency_amounts: BTreeMap<Currency, Amount>,
         selected_inputs: BTreeMap<Currency, utxo_selector::SelectionResult>,
         mut change_addresses: BTreeMap<Currency, Address<Destination>>,
         db_tx: &mut impl WalletStorageWriteLocked,
         mut request: SendRequest,
     ) -> Result<SendRequest, WalletError> {
-        for currency in output_currency_amounts.keys() {
-            let currency_result = selected_inputs.get(currency);
-            let change_amount = currency_result.map_or(Amount::ZERO, |result| result.get_change());
-            let fees = currency_result.map_or(Amount::ZERO, |result| result.get_total_fees());
+        for (currency, currency_result) in selected_inputs.iter() {
+            let change_amount = currency_result.get_change();
+            let fees = currency_result.get_total_fees();
 
             if fees > Amount::ZERO {
                 request.add_fee(*pay_fee_with_currency, fees)?;
@@ -457,18 +481,17 @@ impl<K: AccountKeyChains> Account<K> {
                 let input_size = serialization::Encode::encoded_size(&tx_input);
 
                 let inp_sig_size = input_signature_size(&txo, Some(self))?;
+                let weight = input_size + inp_sig_size;
 
                 let fee = fee_rates
                     .current_fee_rate
-                    .compute_fee(input_size + inp_sig_size)
+                    .compute_fee(weight)
                     .map_err(|_| UtxoSelectorError::AmountArithmeticError)?;
                 let consolidate_fee = fee_rates
                     .consolidate_fee_rate
-                    .compute_fee(input_size + inp_sig_size)
+                    .compute_fee(weight)
                     .map_err(|_| UtxoSelectorError::AmountArithmeticError)?;
 
-                // TODO-#1120: calculate weight from the size of the input
-                let weight = 0;
                 let out_group =
                     OutputGroup::new((tx_input, txo), fee.into(), consolidate_fee.into(), weight)?;
 
@@ -519,11 +542,13 @@ impl<K: AccountKeyChains> Account<K> {
             None,
         )?;
 
-        let input_fees = grouped_inputs
+        let total_input_sizes = grouped_inputs
             .values()
-            .map(|input_amounts| input_amounts.fee)
-            .sum::<Option<Amount>>()
-            .ok_or(WalletError::OutputAmountOverflow)?;
+            .map(|input_amounts| input_amounts.total_input_size)
+            .sum::<usize>();
+        let input_fees = *current_fee_rate
+            .compute_fee(total_input_sizes)
+            .map_err(|_| UtxoSelectorError::AmountArithmeticError)?;
 
         let coin_input = grouped_inputs.remove(&Currency::Coin).ok_or(WalletError::NoUtxos)?;
 
@@ -550,13 +575,12 @@ impl<K: AccountKeyChains> Account<K> {
         );
 
         outputs.push(coin_output);
-        let tx_fee: Amount = current_fee_rate
-            .compute_fee(tx_size_with_outputs(outputs.as_slice()))
+        let tx_size = tx_size_with_outputs(outputs.as_slice(), request.inputs().len());
+        let total_fee: Amount = current_fee_rate
+            .compute_fee(tx_size + total_input_sizes)
             .map_err(|_| UtxoSelectorError::AmountArithmeticError)?
             .into();
         outputs.pop();
-
-        let total_fee = (tx_fee + input_fees).ok_or(WalletError::OutputAmountOverflow)?;
 
         let coin_output = TxOutput::Transfer(
             OutputValue::Coin(
@@ -599,7 +623,7 @@ impl<K: AccountKeyChains> Account<K> {
         let input_size = serialization::Encode::encoded_size(&tx_input);
         let total_fee: Amount = current_fee_rate
             .compute_fee(
-                tx_size_with_outputs(outputs.as_slice())
+                tx_size_with_outputs(outputs.as_slice(), 1)
                     + input_size
                     + input_signature_size_from_destination(
                         &delegation_data.destination,
@@ -709,7 +733,7 @@ impl<K: AccountKeyChains> Account<K> {
 
             current_fee_rate
                 .compute_fee(
-                    tx_size_with_outputs(outputs.as_slice())
+                    tx_size_with_outputs(outputs.as_slice(), 1)
                         + input_signature_size_from_destination(
                             &pool_data.decommission_key,
                             Some(self),
@@ -801,7 +825,7 @@ impl<K: AccountKeyChains> Account<K> {
         let outputs = vec![output];
         let network_fee: Amount = current_fee_rate
             .compute_fee(
-                tx_size_with_outputs(outputs.as_slice())
+                tx_size_with_outputs(outputs.as_slice(), 1)
                     + input_signature_size_from_destination(
                         &delegation_data.destination,
                         Some(self),
@@ -2371,6 +2395,8 @@ struct PreselectedInputAmounts {
     pub fee: Amount,
     // Burn requirement introduced by an input
     pub burn: Amount,
+    // the total encoded size for the input along with the signature for it
+    pub total_input_size: usize,
 }
 
 impl<K: AccountKeyChains + VRFAccountKeyChains> Account<K> {
@@ -2488,9 +2514,16 @@ fn group_preselected_inputs(
 
         let mut update_preselected_inputs =
             |currency: Currency, amount: Amount, fee: Amount, burn: Amount| -> WalletResult<()> {
+                let total_input_size = input_size + inp_sig_size;
+
                 match preselected_inputs.entry(currency) {
                     Entry::Vacant(entry) => {
-                        entry.insert(PreselectedInputAmounts { amount, fee, burn });
+                        entry.insert(PreselectedInputAmounts {
+                            amount,
+                            fee,
+                            burn,
+                            total_input_size,
+                        });
                     }
                     Entry::Occupied(mut entry) => {
                         let existing = entry.get_mut();
@@ -2500,6 +2533,7 @@ fn group_preselected_inputs(
                             (existing.fee + fee).ok_or(WalletError::OutputAmountOverflow)?;
                         existing.burn =
                             (existing.burn + burn).ok_or(WalletError::OutputAmountOverflow)?;
+                        existing.total_input_size += total_input_size;
                     }
                 }
                 Ok(())
@@ -2550,9 +2584,14 @@ fn group_preselected_inputs(
                     update_preselected_inputs(
                         Currency::Token(*token_id),
                         *amount,
-                        (*fee + chain_config.token_supply_change_fee(block_height))
-                            .ok_or(WalletError::OutputAmountOverflow)?,
+                        *fee,
                         Amount::ZERO,
+                    )?;
+                    update_preselected_inputs(
+                        Currency::Coin,
+                        Amount::ZERO,
+                        Amount::ZERO,
+                        chain_config.token_supply_change_fee(block_height),
                     )?;
                 }
                 AccountCommand::LockTokenSupply(token_id)
@@ -2560,9 +2599,14 @@ fn group_preselected_inputs(
                     update_preselected_inputs(
                         Currency::Token(*token_id),
                         Amount::ZERO,
-                        (*fee + chain_config.token_supply_change_fee(block_height))
-                            .ok_or(WalletError::OutputAmountOverflow)?,
+                        *fee,
                         Amount::ZERO,
+                    )?;
+                    update_preselected_inputs(
+                        Currency::Coin,
+                        Amount::ZERO,
+                        Amount::ZERO,
+                        chain_config.token_supply_change_fee(block_height),
                     )?;
                 }
                 AccountCommand::FreezeToken(token_id, _)
@@ -2570,27 +2614,42 @@ fn group_preselected_inputs(
                     update_preselected_inputs(
                         Currency::Token(*token_id),
                         Amount::ZERO,
-                        (*fee + chain_config.token_freeze_fee(block_height))
-                            .ok_or(WalletError::OutputAmountOverflow)?,
+                        *fee,
                         Amount::ZERO,
+                    )?;
+                    update_preselected_inputs(
+                        Currency::Coin,
+                        Amount::ZERO,
+                        Amount::ZERO,
+                        chain_config.token_freeze_fee(block_height),
                     )?;
                 }
                 AccountCommand::ChangeTokenAuthority(token_id, _) => {
                     update_preselected_inputs(
                         Currency::Token(*token_id),
                         Amount::ZERO,
-                        (*fee + chain_config.token_change_authority_fee(block_height))
-                            .ok_or(WalletError::OutputAmountOverflow)?,
+                        *fee,
                         Amount::ZERO,
+                    )?;
+                    update_preselected_inputs(
+                        Currency::Coin,
+                        Amount::ZERO,
+                        Amount::ZERO,
+                        chain_config.token_change_authority_fee(block_height),
                     )?;
                 }
                 AccountCommand::ChangeTokenMetadataUri(token_id, _) => {
                     update_preselected_inputs(
                         Currency::Token(*token_id),
                         Amount::ZERO,
-                        (*fee + chain_config.token_change_metadata_uri_fee())
-                            .ok_or(WalletError::OutputAmountOverflow)?,
+                        *fee,
                         Amount::ZERO,
+                    )?;
+                    update_preselected_inputs(
+                        Currency::Coin,
+                        Amount::ZERO,
+                        Amount::ZERO,
+                        chain_config.token_change_metadata_uri_fee(),
                     )?;
                 }
                 AccountCommand::ConcludeOrder(order_id) => {
@@ -2713,8 +2772,9 @@ fn handle_conclude_order(
 /// Returns the Amounts for Coin output and Token output
 fn coin_and_token_output_change_fees(
     feerate: mempool::FeeRate,
+    currency: &Currency,
     destination: Option<&Address<Destination>>,
-) -> WalletResult<(Amount, Amount)> {
+) -> WalletResult<(usize, Amount)> {
     let destination = if let Some(addr) = destination {
         addr.as_object().clone()
     } else {
@@ -2722,32 +2782,31 @@ fn coin_and_token_output_change_fees(
         Destination::PublicKeyHash(pub_key_hash)
     };
 
-    let coin_output = TxOutput::Transfer(OutputValue::Coin(Amount::MAX), destination.clone());
-    let token_output = TxOutput::Transfer(
-        OutputValue::TokenV1(
-            TokenId::zero(),
-            // TODO: as the  amount is compact there is an edge case where those extra few bytes of
-            // size can cause the output fee to be go over the available amount of coins thus not
-            // including a change output, and losing money for the user
-            // e.g. available money X and need to transfer Y and the difference Z = X - Y is just
-            // enough the make an output with change but the amount having single byte encoding
-            // but by using Amount::MAX the algorithm thinks that the change output will cost more
-            // than Z and it will not create a change output
-            Amount::MAX,
+    let output = match currency {
+        Currency::Coin => TxOutput::Transfer(OutputValue::Coin(Amount::MAX), destination.clone()),
+        Currency::Token(_) => TxOutput::Transfer(
+            OutputValue::TokenV1(
+                TokenId::zero(),
+                // TODO: as the  amount is compact there is an edge case where those extra few bytes of
+                // size can cause the output fee to be go over the available amount of coins thus not
+                // including a change output, and losing money for the user
+                // e.g. available money X and need to transfer Y and the difference Z = X - Y is just
+                // enough the make an output with change but the amount having single byte encoding
+                // but by using Amount::MAX the algorithm thinks that the change output will cost more
+                // than Z and it will not create a change output
+                Amount::MAX,
+            ),
+            destination,
         ),
-        destination,
-    );
+    };
 
-    Ok((
-        feerate
-            .compute_fee(serialization::Encode::encoded_size(&coin_output))
-            .map_err(|_| UtxoSelectorError::AmountArithmeticError)?
-            .into(),
-        feerate
-            .compute_fee(serialization::Encode::encoded_size(&token_output))
-            .map_err(|_| UtxoSelectorError::AmountArithmeticError)?
-            .into(),
-    ))
+    let size = serialization::Encode::encoded_size(&output);
+    let fee = feerate
+        .compute_fee(size)
+        .map_err(|_| UtxoSelectorError::AmountArithmeticError)?
+        .into();
+
+    Ok((size, fee))
 }
 
 #[cfg(test)]

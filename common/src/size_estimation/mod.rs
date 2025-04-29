@@ -194,13 +194,25 @@ pub fn input_signature_size_from_destination(
 
 /// Return the encoded size for a SignedTransaction with specified outputs and empty inputs and
 /// signatures
-pub fn tx_size_with_outputs(outputs: &[TxOutput]) -> usize {
+pub fn tx_size_with_outputs(outputs: &[TxOutput], num_inputs: usize) -> usize {
+    #[derive(Encode)]
+    struct CompactSize {
+        #[codec(compact)]
+        value: u64,
+    }
+
     let tx = SignedTransaction::new(
         Transaction::new(1, vec![], outputs.into()).expect("should not fail"),
         vec![],
     )
     .expect("should not fail");
-    serialization::Encode::encoded_size(&tx)
+    let size = serialization::Encode::encoded_size(&tx);
+
+    let compact_size_diff = serialization::Encode::encoded_size(&CompactSize {
+        value: num_inputs as u64,
+    }) - serialization::Encode::encoded_size(&CompactSize { value: 0 });
+
+    size + (compact_size_diff * 2) // 2 for number of inputs and number of input signatures
 }
 
 fn get_tx_output_destination(txo: &TxOutput) -> Option<&Destination> {
