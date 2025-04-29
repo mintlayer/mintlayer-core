@@ -269,7 +269,7 @@ fn select_coins_srd(
 }
 
 /// Original coin selection algorithm as a fallback
-fn knapsack_solver(
+fn knapsack_solver_impl(
     groups: &mut Vec<OutputGroup>,
     target_value: Amount,
     cost_of_change: Amount,
@@ -386,6 +386,33 @@ fn knapsack_solver(
     }
 
     Ok(result)
+}
+
+fn knapsack_solver(
+    groups: &mut Vec<OutputGroup>,
+    target_value: Amount,
+    cost_of_change: Amount,
+    rng: &mut impl Rng,
+    max_weight: usize,
+    pay_fees: PayFee,
+) -> Result<SelectionResult, UtxoSelectorError> {
+    let result = knapsack_solver_impl(
+        groups,
+        target_value,
+        cost_of_change,
+        rng,
+        max_weight,
+        pay_fees,
+    );
+
+    if let Ok(result) = &result {
+        ensure!(
+            result.weight <= max_weight,
+            UtxoSelectorError::MaxWeightExceeded
+        )
+    }
+
+    result
 }
 
 /// Find a subset of the OutputGroups that is at least as large as, but as close as possible to, the
