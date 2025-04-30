@@ -1391,10 +1391,20 @@ fn wallet_list_mainchain_transactions(#[case] seed: Seed) {
     assert!(txs.iter().any(|info| info.id == spend_from_tx_id));
 }
 
+// Check 3 scenarios for fee calculation by the wallet
+// 1. give X amount of coins to the wallet
+// 2. Try to create a transaction where the feerate is so high that the UTXO will need to pay more
+//    fee than it has so it will return an NoUTXOs error
+// 3. Successfuly create a TX with many outputs and make sure the fee paid is within the range of
+//    [0-16] bytes * feerate (16 bytes is the MAX u128 Amount used by the change output)
+//
+// 4. Create a sweep TX using the previously created many outputs. The sweep command does not
+//    create any change output so check that the fee paid is exactly the correct one based on the
+//    final size of the transaction.
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn wallet_transaction_with_fees(#[case] seed: Seed) {
+fn wallet_transactions_with_fees(#[case] seed: Seed) {
     use crate::destination_getters::{get_tx_output_destination, HtlcSpendingCondition};
 
     let mut rng = make_seedable_rng(seed);
@@ -1406,7 +1416,7 @@ fn wallet_transaction_with_fees(#[case] seed: Seed) {
     assert_eq!(coin_balance, Amount::ZERO);
 
     // Generate a new block which sends reward to the wallet
-    let block1_amount = Amount::from_atoms(rng.gen_range(10000000..20000000));
+    let block1_amount = Amount::from_atoms(rng.gen_range(30000000..50000000));
     let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
 
     let coin_balance = get_coin_balance(&wallet);
@@ -1442,7 +1452,7 @@ fn wallet_transaction_with_fees(#[case] seed: Seed) {
     // again
     let num_outputs = rng.gen_range(1..1000);
     let amount_to_transfer_per_output = Amount::from_atoms(
-        rng.gen_range(1..=((block1_amount.into_atoms() - NETWORK_FEE) / num_outputs / 2)),
+        rng.gen_range(NETWORK_FEE..=((block1_amount.into_atoms() - NETWORK_FEE) / num_outputs / 2)),
     );
     let amount_to_transfer = (amount_to_transfer_per_output * num_outputs).unwrap();
 

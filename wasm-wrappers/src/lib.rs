@@ -72,7 +72,10 @@ use common::{
     primitives::{
         self, amount::UnsignedIntType, per_thousand::PerThousand, BlockHeight, Id, Idable, H256,
     },
-    size_estimation::{input_signature_size_from_destination, tx_size_with_outputs},
+    size_estimation::{
+        input_signature_size_from_destination, outputs_encoded_size,
+        tx_size_with_num_inputs_and_outputs,
+    },
 };
 use crypto::key::{
     extended::{ExtendedKeyKind, ExtendedPrivateKey, ExtendedPublicKey},
@@ -1123,7 +1126,9 @@ pub fn estimate_transaction_size(
         tx_outputs.push(output);
     }
 
-    let size = tx_size_with_outputs(&tx_outputs, input_utxos_destinations.len());
+    let size =
+        tx_size_with_num_inputs_and_outputs(tx_outputs.len(), input_utxos_destinations.len())
+            + outputs_encoded_size(tx_outputs.as_slice());
     let inputs_size = inputs.len();
 
     let mut total_size = size + inputs_size;

@@ -192,9 +192,9 @@ pub fn input_signature_size_from_destination(
     }
 }
 
-/// Return the encoded size for a SignedTransaction with specified outputs and empty inputs and
-/// signatures
-pub fn tx_size_with_outputs(outputs: &[TxOutput], num_inputs: usize) -> usize {
+/// Return the encoded size for a SignedTransaction also accounting for the compact encoding of the
+/// vectors for the specified number of inputs and outputs
+pub fn tx_size_with_num_inputs_and_outputs(num_outputs: usize, num_inputs: usize) -> usize {
     #[derive(Encode)]
     struct CompactSize {
         #[codec(compact)]
@@ -202,17 +202,27 @@ pub fn tx_size_with_outputs(outputs: &[TxOutput], num_inputs: usize) -> usize {
     }
 
     let tx = SignedTransaction::new(
-        Transaction::new(1, vec![], outputs.into()).expect("should not fail"),
+        Transaction::new(1, vec![], vec![]).expect("should not fail"),
         vec![],
     )
     .expect("should not fail");
     let size = serialization::Encode::encoded_size(&tx);
 
-    let compact_size_diff = serialization::Encode::encoded_size(&CompactSize {
-        value: num_inputs as u64,
-    }) - serialization::Encode::encoded_size(&CompactSize { value: 0 });
+    let input_compact_size_diff =
+        serialization::Encode::encoded_size(&CompactSize {
+            value: num_inputs as u64,
+        }) - serialization::Encode::encoded_size(&CompactSize { value: 0 });
 
-    size + (compact_size_diff * 2) // 2 for number of inputs and number of input signatures
+    let output_compact_size_diff =
+        serialization::Encode::encoded_size(&CompactSize {
+            value: num_outputs as u64,
+        }) - serialization::Encode::encoded_size(&CompactSize { value: 0 });
+
+    size + output_compact_size_diff + (input_compact_size_diff * 2) // 2 for number of inputs and number of input signatures
+}
+
+pub fn outputs_encoded_size(outputs: &[TxOutput]) -> usize {
+    outputs.iter().map(serialization::Encode::encoded_size).sum()
 }
 
 fn get_tx_output_destination(txo: &TxOutput) -> Option<&Destination> {
