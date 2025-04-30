@@ -434,3 +434,186 @@ async fn ok(#[case] seed: Seed) {
 
     task.abort();
 }
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test]
+async fn mint_tokens(#[case] seed: Seed) {
+    use chainstate_test_framework::empty_witness;
+    use common::chain::{
+        make_token_id,
+        tokens::{TokenIssuance, TokenTotalSupply},
+        AccountCommand, AccountNonce, UtxoOutPoint,
+    };
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+
+    let (tx, rx) = tokio::sync::oneshot::channel();
+
+    let task = tokio::spawn(async move {
+        let web_server_state = {
+            let mut rng = make_seedable_rng(seed);
+            let chain_config = create_unit_test_config();
+
+            let chainstate_blocks = {
+                let mut tf = TestFramework::builder(&mut rng)
+                    .with_chain_config(chain_config.clone())
+                    .build();
+
+                let token_issuance_fee =
+                    tf.chainstate.get_chain_config().fungible_token_issuance_fee();
+
+                let issuance = test_utils::nft_utils::random_token_issuance_v1(
+                    tf.chain_config(),
+                    Destination::AnyoneCanSpend,
+                    &mut rng,
+                );
+                let amount_to_mint = match issuance.total_supply {
+                    TokenTotalSupply::Fixed(limit) => {
+                        Amount::from_atoms(rng.gen_range(1..=limit.into_atoms()))
+                    }
+                    TokenTotalSupply::Lockable | TokenTotalSupply::Unlimited => {
+                        Amount::from_atoms(rng.gen_range(100..1000))
+                    }
+                };
+                let mint_amount_decimal =
+                    amount_to_mint.into_fixedpoint_str(issuance.number_of_decimals);
+
+                let genesis_outpoint = UtxoOutPoint::new(tf.best_block_id().into(), 0);
+                let genesis_coins = chainstate_test_framework::get_output_value(
+                    tf.chainstate.utxo(&genesis_outpoint).unwrap().unwrap().output(),
+                )
+                .unwrap()
+                .coin_amount()
+                .unwrap();
+                let coins_after_issue = (genesis_coins - token_issuance_fee).unwrap();
+
+                // Issue token
+                let tx1 = TransactionBuilder::new()
+                    .add_input(genesis_outpoint.into(), empty_witness(&mut rng))
+                    .add_output(TxOutput::Transfer(
+                        OutputValue::Coin(coins_after_issue),
+                        Destination::AnyoneCanSpend,
+                    ))
+                    .add_output(TxOutput::IssueFungibleToken(Box::new(TokenIssuance::V1(
+                        issuance,
+                    ))))
+                    .build();
+                let token_id = make_token_id(
+                    &chain_config,
+                    BlockHeight::new(1),
+                    tx1.transaction().inputs(),
+                )
+                .unwrap();
+                let tx1_id = tx1.transaction().get_id();
+                let block1 = tf.make_block_builder().add_transaction(tx1).build(&mut rng);
+
+                tf.process_block(block1.clone(), chainstate::BlockSource::Local).unwrap();
+
+                // Mint tokens
+                let token_supply_change_fee =
+                    tf.chainstate.get_chain_config().token_supply_change_fee(BlockHeight::zero());
+                let coins_after_mint = (coins_after_issue - token_supply_change_fee).unwrap();
+
+                let tx2 = TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_command(
+                            AccountNonce::new(0),
+                            AccountCommand::MintTokens(token_id, amount_to_mint),
+                        ),
+                        empty_witness(&mut rng),
+                    )
+                    .add_input(
+                        TxInput::from_utxo(tx1_id.into(), 0),
+                        empty_witness(&mut rng),
+                    )
+                    .add_output(TxOutput::Transfer(
+                        OutputValue::Coin(coins_after_mint),
+                        Destination::AnyoneCanSpend,
+                    ))
+                    .add_output(TxOutput::Transfer(
+                        OutputValue::TokenV1(token_id, amount_to_mint),
+                        Destination::AnyoneCanSpend,
+                    ))
+                    .build();
+
+                let tx2_id = tx2.transaction().get_id();
+                let block2 = tf.make_block_builder().add_transaction(tx2).build(&mut rng);
+
+                tf.process_block(block2.clone(), chainstate::BlockSource::Local).unwrap();
+
+                _ = tx.send((
+                    tx2_id.to_hash().encode_hex::<String>(),
+                    mint_amount_decimal,
+                    Address::new(&chain_config, token_id).expect("no error").into_string(),
+                ));
+
+                vec![block1, block2]
+            };
+
+            let storage = {
+                let mut storage = TransactionalApiServerInMemoryStorage::new(&chain_config);
+
+                let mut db_tx = storage.transaction_rw().await.unwrap();
+                db_tx.reinitialize_storage(&chain_config).await.unwrap();
+                db_tx.commit().await.unwrap();
+
+                storage
+            };
+
+            let chain_config = Arc::new(chain_config);
+            let mut local_node = BlockchainState::new(Arc::clone(&chain_config), storage);
+            local_node.scan_genesis(chain_config.genesis_block()).await.unwrap();
+            local_node.scan_blocks(BlockHeight::new(0), chainstate_blocks).await.unwrap();
+
+            ApiServerWebServerState {
+                db: Arc::new(local_node.storage().clone_storage().await),
+                chain_config: Arc::clone(&chain_config),
+                rpc: Arc::new(DummyRPC {}),
+                cached_values: Arc::new(CachedValues {
+                    feerate_points: RwLock::new((get_time(), vec![])),
+                }),
+                time_getter: Default::default(),
+            }
+        };
+
+        web_server(listener, web_server_state, true).await
+    });
+
+    let (transaction_id, mint_amount, token_id) = rx.await.unwrap();
+    let url = format!("/api/v2/transaction/{transaction_id}");
+
+    // Given that the listener port is open, this will block until a
+    // response is made (by the web server, which takes the listener
+    // over)
+    let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), 200);
+
+    let body = response.text().await.unwrap();
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let body = body.as_object().unwrap();
+
+    let inputs = body.get("inputs").unwrap().as_array().unwrap();
+    assert_eq!(inputs.len(), 2);
+    let mint_inp = inputs.first().unwrap().as_object().unwrap().get("input").unwrap();
+    assert_eq!(
+        mint_inp.as_object().unwrap().get("command").unwrap().as_str().unwrap(),
+        "MintTokens"
+    );
+    assert_eq!(
+        mint_inp.as_object().unwrap().get("token_id").unwrap().as_str().unwrap(),
+        token_id,
+    );
+    let amount = mint_inp.as_object().unwrap().get("amount").unwrap().as_object().unwrap();
+    assert_eq!(
+        amount.get("decimal").unwrap().as_str().unwrap(),
+        mint_amount
+    );
+
+    task.abort();
+}
