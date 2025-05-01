@@ -618,10 +618,7 @@ async fn mint_tokens(#[case] seed: Seed) {
     let outputs = body.get("outputs").unwrap().as_array().unwrap();
     assert_eq!(outputs.len(), 2);
     let burn_out = outputs.first().unwrap().as_object().unwrap();
-    assert_eq!(
-        burn_out.get("type").unwrap().as_str().unwrap(),
-        "Burn",
-    );
+    assert_eq!(burn_out.get("type").unwrap().as_str().unwrap(), "Burn",);
 
     task.abort();
 }
