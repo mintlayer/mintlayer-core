@@ -79,19 +79,12 @@ impl Checkpoints {
     }
 
     pub fn parent_checkpoint_to_height(&self, height: BlockHeight) -> (BlockHeight, Id<GenBlock>) {
-        // If an exact match is found at height, return it
-        let exact_cp = self.checkpoints.get(&height);
-        if let Some(&cp) = exact_cp {
-            return (height, cp);
-        }
-
-        // Otherwise, find the closest checkpoint before the given height
-        let cp_before = self
+        let cp = self
             .checkpoints
-            .range(..height)
+            .range(..=height)
             .next_back()
             .expect("Genesis must be there, at least.");
-        (*cp_before.0, (*cp_before.1))
+        (*cp.0, *cp.1)
     }
 
     #[cfg(test)]
