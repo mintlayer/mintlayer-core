@@ -618,6 +618,8 @@ fn build_test_framework(#[case] seed: test_utils::random::Seed) {
             ChainConfigBuilder::new(chain_type)
                 .consensus_upgrades(NetUpgrades::unit_tests())
                 .genesis_unittest(Destination::AnyoneCanSpend)
+                // Force empty checkpoints because a custom genesis is used.
+                .checkpoints(BTreeMap::new())
                 .build(),
         )
         .with_chainstate_config(ChainstateConfig {
