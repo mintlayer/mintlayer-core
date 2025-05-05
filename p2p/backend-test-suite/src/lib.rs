@@ -31,6 +31,10 @@ use libtest_mimic::{Arguments, Trial};
 use networking::test_helpers::TestTransportMaker;
 use p2p::net::{ConnectivityService, MessagingService, NetworkingService, SyncingEventReceiver};
 
+// TODO: these tests may benefit from randomness (see https://github.com/mintlayer/mintlayer-core/issues/656#issuecomment-1474408003).
+// Note: the easiest way of introducing randomness here is using `with_rng_seed` (which is currently lives
+// in `storage-backend-test-suite` and will have to be moved to test-utils), instead of trying to fit `rstest` here.
+
 /// Runs all tests.
 pub fn run<T, N>()
 where

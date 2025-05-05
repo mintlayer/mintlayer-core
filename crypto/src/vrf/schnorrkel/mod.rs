@@ -28,7 +28,7 @@ const PRIVKEY_LEN: usize = 64; // scalar + nonce
 
 pub mod data;
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 #[must_use]
 pub struct SchnorrkelPublicKey {
     key: schnorrkel::PublicKey,

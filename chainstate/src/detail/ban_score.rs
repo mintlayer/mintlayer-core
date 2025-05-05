@@ -343,8 +343,6 @@ impl BanScore for TokensError {
             TokensError::MultipleTokenIssuanceInTransaction(_) => 100,
             TokensError::CoinOrTokenOverflow(_) => 100,
             TokensError::InsufficientTokenFees(_) => 100,
-            TokensError::TransferZeroTokens(_, _) => 100,
-            TokensError::TokensInBlockReward => 100,
             TokensError::InvariantBrokenUndoIssuanceOnNonexistentToken(_) => 100,
             TokensError::InvariantBrokenRegisterIssuanceWithDuplicateId(_) => 100,
             TokensError::TokenMetadataUriTooLarge(_) => 100,
@@ -679,7 +677,6 @@ impl BanScore for orders_accounting::Error {
     fn ban_score(&self) -> u32 {
         use orders_accounting::Error;
         match self {
-            Error::StorageError(_) => 0,
             Error::AccountingError(_) => 100,
             Error::OrderAlreadyExists(_) => 100,
             Error::OrderDataNotFound(_) => 100,

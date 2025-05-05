@@ -21,6 +21,8 @@ use chainstate_storage::{
 use rstest::rstest;
 
 use crate::{
+    framework_builder::TestFrameworkBuilderValue,
+    get_output_value,
     key_manager::KeyManager,
     pos_block_builder::PoSBlockBuilder,
     random_tx_maker::StakingPoolsObserver,
@@ -30,7 +32,7 @@ use crate::{
         assert_gen_block_index_opt_identical_to, find_create_pool_tx_in_genesis,
         outputs_from_block, outputs_from_genesis,
     },
-    BlockBuilder, TestChainstate, TestFrameworkBuilder, TestStore,
+    BlockBuilder, TestChainstate, TestFrameworkBuilder, TestStore, TxVerificationStrategy,
 };
 use chainstate::{chainstate_interface::ChainstateInterface, BlockSource, ChainstateError};
 use chainstate_types::{
@@ -41,7 +43,7 @@ use common::{
         Block, ChainConfig, GenBlock, GenBlockId, Genesis, OutPointSourceId, PoolId, TxOutput,
         UtxoOutPoint,
     },
-    primitives::{id::WithId, time::Time, BlockHeight, Id, Idable},
+    primitives::{id::WithId, time::Time, Amount, BlockHeight, Id, Idable},
     time_getter::TimeGetter,
 };
 use crypto::{key::PrivateKey, vrf::VRFPrivateKey};
@@ -62,6 +64,10 @@ pub struct TestFramework {
     // All pools from the tip that can be used for staking
     pub staking_pools: StakingPools,
     pub key_manager: KeyManager,
+
+    // Here come some values that the framework builder needs to be able to re-create the framework
+    // in TestFrameworkBuilder::from_existing_framework.
+    pub tx_verification_strategy: TestFrameworkBuilderValue<TxVerificationStrategy>,
 }
 
 pub type BlockOutputs = BTreeMap<OutPointSourceId, Vec<TxOutput>>;
@@ -582,6 +588,13 @@ impl TestFramework {
 
     pub fn next_block_height(&self) -> BlockHeight {
         self.best_block_height().next_height()
+    }
+
+    pub fn coin_amount_from_utxo(&self, outpoint: &UtxoOutPoint) -> Amount {
+        get_output_value(self.chainstate.utxo(outpoint).unwrap().unwrap().output())
+            .unwrap()
+            .coin_amount()
+            .unwrap()
     }
 }
 

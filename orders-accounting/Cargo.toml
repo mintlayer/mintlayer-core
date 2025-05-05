@@ -9,7 +9,6 @@ rust-version.workspace = true
 
 [dependencies]
 accounting = { path = "../accounting" }
-chainstate-types = { path = "../chainstate/types" }
 common = { path = "../common" }
 crypto = { path = "../crypto" }
 logging = { path = "../logging" }

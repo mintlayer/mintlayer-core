@@ -255,7 +255,6 @@ fn check_issuance_fee_burn_v0(
     Ok(())
 }
 
-// TODO: use FallibleIterator to avoid manually collecting to a Result
 fn collect_inputs_utxos(
     utxo_view: &impl utxo::UtxosView,
     inputs: &[TxInput],

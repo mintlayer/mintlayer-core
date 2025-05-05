@@ -1916,6 +1916,59 @@ fn nft_token_id_mismatch(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
+fn issue_nft_twice_same_tx(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+        let token_min_issuance_fee =
+            tf.chainstate.get_chain_config().nft_issuance_fee(BlockHeight::zero());
+        let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
+        let tx_first_input = TxInput::from_utxo(outpoint_source_id, 0);
+        let token_id = TokenId::from_tx_input(&tx_first_input);
+
+        let nft_issuance1 = random_nft_issuance(tf.chain_config(), &mut rng);
+        let nft_issuance2 = random_nft_issuance(tf.chain_config(), &mut rng);
+
+        let result = tf
+            .make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(tx_first_input, InputWitness::NoSignature(None))
+                    .add_output(TxOutput::IssueNft(
+                        token_id,
+                        Box::new(nft_issuance1.into()),
+                        Destination::AnyoneCanSpend,
+                    ))
+                    .add_output(TxOutput::IssueNft(
+                        token_id,
+                        Box::new(nft_issuance2.into()),
+                        Destination::AnyoneCanSpend,
+                    ))
+                    .add_output(TxOutput::Burn(OutputValue::Coin(
+                        (token_min_issuance_fee * 2).unwrap(),
+                    )))
+                    .build(),
+            )
+            .build_and_process(&mut rng);
+
+        assert!(matches!(
+            result,
+            Err(ChainstateError::ProcessBlockError(
+                BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
+                    CheckBlockTransactionsError::CheckTransactionError(
+                        CheckTransactionError::TokensError(
+                            TokensError::MultipleTokenIssuanceInTransaction(_)
+                        )
+                    )
+                ))
+            ))
+        ));
+    })
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 fn issue_nft_and_fungible_token_same_tx(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);

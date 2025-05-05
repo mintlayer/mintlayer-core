@@ -43,7 +43,7 @@ pub struct ScriptChecker<C, S, T, H> {
 pub type TimelockOnlyScriptChecker<C> =
     ScriptChecker<C, NoOpSignatureChecker, StandardTimelockChecker, NoOpHashlockChecker>;
 
-/// Script checker only verifying signtures.
+/// Script checker only verifying signatures.
 pub type SignatureOnlyScriptChecker<C> =
     ScriptChecker<C, StandardSignatureChecker, NoOpTimelockChecker, NoOpHashlockChecker>;
 

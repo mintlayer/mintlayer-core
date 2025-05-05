@@ -77,8 +77,18 @@ fn randomness_of_sealed_epoch<S: EpochStorageRead>(
             match epoch_data {
                 Some(d) => *d.randomness(),
                 None => {
-                    // TODO: no epoch_data means either that no epoch was created yet or
-                    // that the data is actually missing
+                    // Note: we should never get here normally; we only handle this case
+                    // because historically `pos_processing_tests` in `chainstate-test-suite` set
+                    // `sealed_epoch_distance_from_tip` to zero, in which case processing the
+                    // last block of an epoch will attempt to get the randomness from this very
+                    // epoch, which has not been sealed yet. (Also note that just returning
+                    // PoSRandomness::at_genesis here is still wrong; it only works because
+                    // the above-mentioned tests can only get to the last block of the 0th epoch,
+                    // but not of the later one).
+                    // TODO: refactor the tests:
+                    // a) use non-zero sealed_epoch_distance_from_tip;
+                    // b) generate some intermediate blocks so that they can run trough several epochs.
+                    // And then return an error here.
                     PoSRandomness::at_genesis(chain_config)
                 }
             }

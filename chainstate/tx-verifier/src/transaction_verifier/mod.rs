@@ -683,7 +683,8 @@ where
         block_height: BlockHeight,
     ) -> Result<(), ConnectTransactionError> {
         let check_not_frozen = |token_id| {
-            // TODO: when NFTs are stored in accounting None should become an error
+            // Note: this "if" is needed because NFT ids are also possible here (for which
+            // `get_token_data` would return `None`).
             if let Some(token_data) = self.get_token_data(&token_id)? {
                 match token_data {
                     tokens_accounting::TokenData::FungibleToken(data) => {

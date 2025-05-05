@@ -516,7 +516,6 @@ impl MempoolBanScore for orders_accounting::Error {
         use orders_accounting::Error;
 
         match self {
-            Error::StorageError(_) => 0,
             Error::AccountingError(_) => 100,
             Error::OrderAlreadyExists(_) => 100,
             Error::OrderDataNotFound(_) => 0,

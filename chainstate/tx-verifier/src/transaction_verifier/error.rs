@@ -211,10 +211,6 @@ pub enum TokensError {
     CoinOrTokenOverflow(CoinOrTokenId),
     #[error("Insufficient token issuance fee in transaction {0}")]
     InsufficientTokenFees(Id<Transaction>),
-    #[error("Can't transfer zero tokens in transaction {0} in block {1}")]
-    TransferZeroTokens(Id<Transaction>, Id<Block>),
-    #[error("Block reward can't be paid in tokens")]
-    TokensInBlockReward,
     #[error("Invariant broken - attempt undo issuance on non-existent token {0}")]
     InvariantBrokenUndoIssuanceOnNonexistentToken(TokenId),
     #[error("Invariant broken - attempt register issuance on non-existent token {0}")]
