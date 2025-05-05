@@ -78,7 +78,7 @@ fn make_tx_with_stake_pool(
     amount_to_transfer: Amount,
 ) -> (SignedTransaction, PoolId, PoolData, UtxoOutPoint) {
     let destination = new_pub_key_destination(rng);
-    let pool_id = pos_accounting::make_pool_id(&input0_outpoint);
+    let pool_id = PoolId::from_utxo(&input0_outpoint);
     let pool_data = create_pool_data(rng, destination, amount_to_stake);
     let stake_output = TxOutput::CreateStakePool(
         pool_id,

@@ -29,12 +29,9 @@ use common::{
     chain::{
         block::{timestamp::BlockTimestamp, ConsensusData},
         config::ChainConfig,
-        make_order_id,
+        make_delegation_id, make_order_id, make_token_id,
         output_value::OutputValue,
-        tokens::{
-            get_referenced_token_ids_ignore_issuance, make_token_id, IsTokenFrozen, TokenId,
-            TokenIssuance,
-        },
+        tokens::{get_referenced_token_ids_ignore_issuance, IsTokenFrozen, TokenId, TokenIssuance},
         transaction::OutPointSourceId,
         AccountCommand, AccountNonce, AccountSpending, Block, DelegationId, Destination, GenBlock,
         Genesis, OrderAccountCommand, OrderId, PoolId, SignedTransaction, Transaction, TxInput,
@@ -44,7 +41,7 @@ use common::{
 };
 use futures::{stream::FuturesOrdered, TryStreamExt};
 use orders_accounting::OrderData;
-use pos_accounting::{make_delegation_id, PoSAccountingView, PoolData};
+use pos_accounting::{PoSAccountingView, PoolData};
 use std::{
     collections::{BTreeMap, BTreeSet},
     ops::{Add, Sub},
@@ -535,17 +532,18 @@ async fn calculate_tx_fee_and_collect_token_info<T: ApiServerStorageWrite>(
     tx: &Transaction,
     block_height: BlockHeight,
 ) -> Result<(AccumulatedFee, TxAdditionalInfo), ApiServerStorageError> {
-    let new_tokens: BTreeMap<_, _> = tx
+    let new_tokens = tx
         .outputs()
         .iter()
         .filter_map(|out| match out {
-            TxOutput::IssueNft(token_id, _, _) => Some((*token_id, 0)),
-            TxOutput::IssueFungibleToken(data) => {
-                let token_id = make_token_id(tx.inputs()).expect("must exist");
-                match data.as_ref() {
-                    TokenIssuance::V1(data) => Some((token_id, data.number_of_decimals)),
-                }
-            }
+            TxOutput::IssueNft(token_id, _, _) => Some(Ok((*token_id, 0))),
+            TxOutput::IssueFungibleToken(data) => Some(
+                make_token_id(chain_config, block_height, tx.inputs()).map(|token_id| {
+                    match data.as_ref() {
+                        TokenIssuance::V1(data) => (token_id, data.number_of_decimals),
+                    }
+                }),
+            ),
             TxOutput::CreateStakePool(_, _)
             | TxOutput::Transfer(_, _)
             | TxOutput::LockThenTransfer(_, _, _)
@@ -557,7 +555,7 @@ async fn calculate_tx_fee_and_collect_token_info<T: ApiServerStorageWrite>(
             | TxOutput::Htlc(_, _)
             | TxOutput::CreateOrder(_) => None,
         })
-        .collect();
+        .collect::<Result<BTreeMap<_, _>, _>>()?;
 
     let fee = tx_fees(chain_config, block_height, tx, db_tx).await?;
 
@@ -1540,7 +1538,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                 .await;
             }
             TxOutput::IssueFungibleToken(issuance) => {
-                let token_id = make_token_id(inputs).expect("should not fail");
+                let token_id = make_token_id(chain_config.as_ref(), block_height, inputs)?;
                 let issuance = match issuance.as_ref() {
                     TokenIssuance::V1(issuance) => FungibleTokenData {
                         token_ticker: issuance.token_ticker.clone(),
@@ -1628,23 +1626,21 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
             }
             TxOutput::ProduceBlockFromStake(_, _) => {}
             TxOutput::CreateDelegationId(destination, pool_id) => {
-                if let Some(input0_outpoint) = inputs.iter().find_map(|input| input.utxo_outpoint())
-                {
-                    db_tx
-                        .set_delegation_at_height(
-                            make_delegation_id(input0_outpoint),
-                            &Delegation::new(
-                                block_height,
-                                destination.clone(),
-                                *pool_id,
-                                Amount::ZERO,
-                                AccountNonce::new(0),
-                            ),
+                let delegation_id = make_delegation_id(inputs)?;
+                db_tx
+                    .set_delegation_at_height(
+                        delegation_id,
+                        &Delegation::new(
                             block_height,
-                        )
-                        .await
-                        .expect("Unable to set delegation data");
-                }
+                            destination.clone(),
+                            *pool_id,
+                            Amount::ZERO,
+                            AccountNonce::new(0),
+                        ),
+                        block_height,
+                    )
+                    .await
+                    .expect("Unable to set delegation data");
             }
             TxOutput::CreateStakePool(pool_id, stake_pool_data) => {
                 // Create pool pledge
@@ -1872,35 +1868,33 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                     .expect("Unable to set utxo");
             }
             TxOutput::CreateOrder(order_data) => {
-                if let Some(input0_outpoint) = inputs.iter().find_map(|input| input.utxo_outpoint())
-                {
-                    let amount_and_currency = |v: &OutputValue| match v {
-                        OutputValue::Coin(amount) => (CoinOrTokenId::Coin, *amount),
-                        OutputValue::TokenV1(id, amount) => (CoinOrTokenId::TokenId(*id), *amount),
-                        OutputValue::TokenV0(_) => panic!("unsupported token"),
-                    };
+                let order_id = make_order_id(inputs)?;
+                let amount_and_currency = |v: &OutputValue| match v {
+                    OutputValue::Coin(amount) => (CoinOrTokenId::Coin, *amount),
+                    OutputValue::TokenV1(id, amount) => (CoinOrTokenId::TokenId(*id), *amount),
+                    OutputValue::TokenV0(_) => panic!("unsupported token"),
+                };
 
-                    let (ask_currency, ask_balance) = amount_and_currency(order_data.ask());
-                    let (give_currency, give_balance) = amount_and_currency(order_data.give());
+                let (ask_currency, ask_balance) = amount_and_currency(order_data.ask());
+                let (give_currency, give_balance) = amount_and_currency(order_data.give());
 
-                    let order = Order {
-                        creation_block_height: block_height,
-                        conclude_destination: order_data.conclude_key().clone(),
-                        initially_asked: ask_balance,
-                        initially_given: give_balance,
-                        ask_balance,
-                        ask_currency,
-                        give_balance,
-                        give_currency,
-                        is_frozen: false,
-                        next_nonce: AccountNonce::new(0),
-                    };
+                let order = Order {
+                    creation_block_height: block_height,
+                    conclude_destination: order_data.conclude_key().clone(),
+                    initially_asked: ask_balance,
+                    initially_given: give_balance,
+                    ask_balance,
+                    ask_currency,
+                    give_balance,
+                    give_currency,
+                    is_frozen: false,
+                    next_nonce: AccountNonce::new(0),
+                };
 
-                    db_tx
-                        .set_order_at_height(make_order_id(input0_outpoint), &order, block_height)
-                        .await
-                        .expect("Unable to set delegation data");
-                }
+                db_tx
+                    .set_order_at_height(order_id, &order, block_height)
+                    .await
+                    .expect("Unable to set delegation data");
             }
         }
     }

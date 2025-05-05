@@ -56,7 +56,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use self::{
     accounting_undo_cache::{AccountingBlockUndoCache, CachedBlockUndoOp},
-    error::{ConnectTransactionError, TokensError},
+    error::ConnectTransactionError,
     pos_accounting_delta_adapter::PoSAccountingDeltaAdapter,
     storage::TransactionVerifierStorageRef,
     token_issuance_cache::{ConsumedTokenIssuanceCache, TokenIssuanceCache},
@@ -69,11 +69,10 @@ use chainstate_types::{BlockIndex, TipStorageTag};
 use common::{
     chain::{
         block::{timestamp::BlockTimestamp, BlockRewardTransactable, ConsensusData},
-        make_order_id,
+        make_delegation_id, make_order_id, make_pool_id, make_token_id,
         output_value::OutputValue,
         signature::Signable,
         signed_transaction::SignedTransaction,
-        tokens::make_token_id,
         AccountCommand, AccountNonce, AccountSpending, AccountType, Block, ChainConfig,
         DelegationId, FrozenTokensValidationVersion, GenBlock, OrderAccountCommand, OrdersVersion,
         Transaction, TxInput, TxOutput, UtxoOutPoint,
@@ -389,14 +388,12 @@ where
             .collect::<Result<Vec<_>, _>>()?;
 
         // Process tx outputs in terms of pos accounting.
-        let input_utxo_outpoint = tx.inputs().iter().find_map(|input| input.utxo_outpoint());
         let outputs_undos = tx
             .outputs()
             .iter()
             .filter_map(|output| match output {
-                TxOutput::CreateStakePool(pool_id, data) => match input_utxo_outpoint {
-                    Some(input_utxo_outpoint) => {
-                        let expected_pool_id = pos_accounting::make_pool_id(input_utxo_outpoint);
+                TxOutput::CreateStakePool(pool_id, data) => match make_pool_id(tx.inputs()) {
+                    Ok(expected_pool_id) => {
                         let res = if expected_pool_id == *pool_id {
                             if data.pledge() >= self.chain_config.as_ref().min_stake_pool_pledge() {
                                 self.pos_accounting_adapter
@@ -418,28 +415,23 @@ where
                         };
                         Some(res)
                     }
-                    None => Some(Err(
-                        ConnectTransactionError::AttemptToCreateStakePoolFromAccounts,
-                    )),
+                    Err(err) => Some(Err(err.into())),
                 },
                 TxOutput::CreateDelegationId(spend_destination, target_pool) => {
-                    match input_utxo_outpoint {
-                        Some(input_utxo_outpoint) => {
+                    match make_delegation_id(tx.inputs()) {
+                        Ok(delegation_id) => {
                             let res = self
                                 .pos_accounting_adapter
                                 .operations(tx_source.into())
                                 .create_delegation_id(
                                     *target_pool,
+                                    delegation_id,
                                     spend_destination.clone(),
-                                    input_utxo_outpoint,
                                 )
-                                .map(|(_, undo)| undo)
                                 .map_err(ConnectTransactionError::PoSAccountingError);
                             Some(res)
                         }
-                        None => Some(Err(
-                            ConnectTransactionError::AttemptToCreateDelegationFromAccounts,
-                        )),
+                        Err(err) => Some(Err(err.into())),
                     }
                 }
                 TxOutput::DelegateStaking(amount, delegation_id) => {
@@ -651,20 +643,22 @@ where
                 | TxOutput::Htlc(_, _)
                 | TxOutput::CreateOrder(_) => None,
                 TxOutput::IssueFungibleToken(issuance_data) => {
-                    let result = make_token_id(tx.inputs())
-                        .ok_or(ConnectTransactionError::TokensError(
-                            TokensError::TokenIdCantBeCalculated,
-                        ))
-                        .and_then(
-                            |token_id| -> Result<tokens_accounting::TokenAccountingUndo, _> {
-                                let data = tokens_accounting::TokenData::FungibleToken(
-                                    issuance_data.as_ref().clone().into(),
-                                );
-                                self.tokens_accounting_cache
-                                    .issue_token(token_id, data)
-                                    .map_err(ConnectTransactionError::TokensAccountingError)
-                            },
-                        );
+                    let result = make_token_id(
+                        self.chain_config.as_ref(),
+                        tx_source.expected_block_height(),
+                        tx.inputs(),
+                    )
+                    .map_err(ConnectTransactionError::IdCreationError)
+                    .and_then(
+                        |token_id| -> Result<tokens_accounting::TokenAccountingUndo, _> {
+                            let data = tokens_accounting::TokenData::FungibleToken(
+                                issuance_data.as_ref().clone().into(),
+                            );
+                            self.tokens_accounting_cache
+                                .issue_token(token_id, data)
+                                .map_err(ConnectTransactionError::TokensAccountingError)
+                        },
+                    );
                     Some(result)
                 }
             })
@@ -887,7 +881,6 @@ where
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        let input_utxo_outpoint = tx.inputs().iter().find_map(|input| input.utxo_outpoint());
         let output_undos = tx
             .outputs()
             .iter()
@@ -903,18 +896,15 @@ where
                 | TxOutput::DataDeposit(..)
                 | TxOutput::IssueFungibleToken(..)
                 | TxOutput::Htlc(_, _) => None,
-                TxOutput::CreateOrder(order_data) => match input_utxo_outpoint {
-                    Some(input_utxo_outpoint) => {
-                        let order_id = make_order_id(input_utxo_outpoint);
+                TxOutput::CreateOrder(order_data) => match make_order_id(tx.inputs()) {
+                    Ok(order_id) => {
                         let result = self
                             .orders_accounting_cache
                             .create_order(order_id, order_data.as_ref().clone().into())
                             .map_err(ConnectTransactionError::OrdersAccountingError);
                         Some(result)
                     }
-                    None => Some(Err(
-                        ConnectTransactionError::AttemptToCreateOrderFromAccounts,
-                    )),
+                    Err(err) => Some(Err(err.into())),
                 },
             })
             .collect::<Result<Vec<_>, _>>()?;
@@ -974,11 +964,17 @@ where
         let block_id = tx_source.chain_block_index().map(|c| *c.block_id());
 
         // Register tokens if tx has issuance data
-        self.token_issuance_cache.register(block_id, tx.transaction(), |id| {
-            self.storage
-                .get_token_aux_data(id)
-                .map_err(|_| ConnectTransactionError::TxVerifierStorage)
-        })?;
+        self.token_issuance_cache.register(
+            self.chain_config.as_ref(),
+            tx_source.expected_block_height(),
+            block_id,
+            tx.transaction(),
+            |id| {
+                self.storage
+                    .get_token_aux_data(id)
+                    .map_err(|_| ConnectTransactionError::TxVerifierStorage)
+            },
+        )?;
 
         // check for attempted money printing and invalid inputs/outputs combinations
         let fee = input_output_policy::check_tx_inputs_outputs_policy(

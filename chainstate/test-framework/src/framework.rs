@@ -575,6 +575,14 @@ impl TestFramework {
             })
             .unwrap_or(PoSRandomness::new(chain_config.initial_randomness()))
     }
+
+    pub fn best_block_height(&self) -> BlockHeight {
+        self.chainstate.get_best_block_height().unwrap()
+    }
+
+    pub fn next_block_height(&self) -> BlockHeight {
+        self.best_block_height().next_height()
+    }
 }
 
 #[rstest]

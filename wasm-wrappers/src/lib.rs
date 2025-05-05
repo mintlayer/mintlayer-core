@@ -26,6 +26,7 @@ use common::{
         classic_multisig::ClassicMultisigChallenge,
         config::{Builder, ChainType, BIP44_PATH},
         htlc::{HashedTimelockContract, HtlcSecret, HtlcSecretHash},
+        make_token_id,
         output_value::OutputValue::{self, Coin, TokenV1},
         signature::{
             inputsig::{
@@ -44,8 +45,8 @@ use common::{
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
         tokens::{
-            make_token_id, IsTokenFreezable, IsTokenUnfreezable, Metadata, NftIssuance,
-            NftIssuanceV0, TokenCreator, TokenIssuance, TokenIssuanceV1, TokenTotalSupply,
+            IsTokenFreezable, IsTokenUnfreezable, Metadata, NftIssuance, NftIssuanceV0,
+            TokenCreator, TokenIssuance, TokenIssuanceV1, TokenTotalSupply,
         },
         AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, ChainConfig, Destination,
         OrderData, OutPointSourceId, SignedTransaction, SignedTransactionIntent, Transaction,
@@ -848,7 +849,11 @@ pub fn encode_output_issue_fungible_token(
 
 /// Returns the Fungible/NFT Token ID for the given inputs of a transaction
 #[wasm_bindgen]
-pub fn get_token_id(mut inputs: &[u8], network: Network) -> Result<String, Error> {
+pub fn get_token_id(
+    mut inputs: &[u8],
+    current_block_height: u64,
+    network: Network,
+) -> Result<String, Error> {
     let chain_config = Builder::new(network.into()).build();
 
     let mut tx_inputs = vec![];
@@ -857,7 +862,11 @@ pub fn get_token_id(mut inputs: &[u8], network: Network) -> Result<String, Error
         tx_inputs.push(input);
     }
 
-    let token_id = make_token_id(&tx_inputs).ok_or(Error::NoUtxoInInputs)?;
+    let token_id = make_token_id(
+        &chain_config,
+        BlockHeight::new(current_block_height),
+        &tx_inputs,
+    )?;
 
     Ok(Address::new(&chain_config, token_id)
         .expect("Should not fail to create address")

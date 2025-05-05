@@ -100,6 +100,9 @@ impl Addressable for Destination {
     }
 }
 
+// TODO: `CreateDelegationId` sounds a bit strange, it's better to rename it to just `CreateDelegation`.
+// Same applies to certain functions throughout the code, e.g. `create_delegation_id`/`delete_delegation_id`
+// in `pos-accounting` should become `create_delegation`/`delete_delegation``.
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serde::Serialize, serde::Deserialize)]
 pub enum TxOutput {
     /// Transfer an output, giving the provided Destination the authority to spend it (no conditions).

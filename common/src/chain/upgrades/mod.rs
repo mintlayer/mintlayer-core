@@ -22,7 +22,7 @@ pub use chainstate_upgrade::{
     ChainstateUpgrade, ChainstateUpgradeBuilder, ChangeTokenMetadataUriActivated,
     DataDepositFeeVersion, FrozenTokensValidationVersion, HtlcActivated, OrdersActivated,
     OrdersVersion, RewardDistributionVersion, StakerDestinationUpdateForbidden,
-    TokenIssuanceVersion, TokensFeeVersion,
+    TokenIdGenerationVersion, TokenIssuanceVersion, TokensFeeVersion,
 };
 pub use chainstate_upgrades_builder::ChainstateUpgradesBuilder;
 pub use consensus_upgrade::{ConsensusUpgrade, PoSStatus, PoWStatus, RequiredConsensus};

@@ -17,7 +17,12 @@ use rstest::rstest;
 
 use chainstate_test_framework::{empty_witness, TransactionBuilder};
 use common::{
-    chain::{signature::inputsig::InputWitness, timelock::OutputTimeLock, OrderData},
+    chain::{
+        config::{create_unit_test_config, create_unit_test_config_builder},
+        signature::inputsig::InputWitness,
+        timelock::OutputTimeLock,
+        OrderData,
+    },
     primitives::H256,
 };
 use randomness::Rng;
@@ -39,6 +44,8 @@ use super::*;
 fn diamond_unconfirmed_descendants(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
+    let chain_config = create_unit_test_config();
+    let best_block_height = BlockHeight::new(rng.gen());
     let mut output_cache = OutputCache::empty();
 
     // A
@@ -60,6 +67,8 @@ fn diamond_unconfirmed_descendants(#[case] seed: Seed) {
     let tx_a_id = tx_a.transaction().get_id();
     output_cache
         .add_tx(
+            &chain_config,
+            best_block_height,
             tx_a_id.into(),
             WalletTx::Tx(TxData::new(tx_a, TxState::Inactive(0))),
         )
@@ -79,6 +88,8 @@ fn diamond_unconfirmed_descendants(#[case] seed: Seed) {
     let tx_b_id = tx_b.transaction().get_id();
     output_cache
         .add_tx(
+            &chain_config,
+            best_block_height,
             tx_b_id.into(),
             WalletTx::Tx(TxData::new(tx_b, TxState::Inactive(0))),
         )
@@ -98,6 +109,8 @@ fn diamond_unconfirmed_descendants(#[case] seed: Seed) {
     let tx_c_id = tx_c.transaction().get_id();
     output_cache
         .add_tx(
+            &chain_config,
+            best_block_height,
             tx_c_id.into(),
             WalletTx::Tx(TxData::new(tx_c, TxState::Inactive(0))),
         )
@@ -121,6 +134,8 @@ fn diamond_unconfirmed_descendants(#[case] seed: Seed) {
     let tx_d_id = tx_d.transaction().get_id();
     output_cache
         .add_tx(
+            &chain_config,
+            best_block_height,
             tx_d_id.into(),
             WalletTx::Tx(TxData::new(tx_d, TxState::Inactive(0))),
         )
@@ -162,6 +177,8 @@ fn diamond_unconfirmed_descendants(#[case] seed: Seed) {
 fn update_conflicting_txs_parent_and_child(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
+    let chain_config = create_unit_test_config();
+    let best_block_height = BlockHeight::new(rng.gen());
     let mut output_cache = OutputCache::empty();
     let token_id = TokenId::random_using(&mut rng);
 
@@ -180,10 +197,16 @@ fn update_conflicting_txs_parent_and_child(#[case] seed: Seed) {
     let tx_a_id = tx_a.transaction().get_id();
     output_cache
         .add_tx(
+            &chain_config,
+            best_block_height,
             tx_a_id.into(),
             WalletTx::Tx(TxData::new(
                 tx_a,
-                TxState::Confirmed(BlockHeight::zero(), BlockTimestamp::from_int_seconds(0), 0),
+                TxState::Confirmed(
+                    BlockHeight::new(rng.gen()),
+                    BlockTimestamp::from_int_seconds(0),
+                    0,
+                ),
             )),
         )
         .unwrap();
@@ -202,6 +225,8 @@ fn update_conflicting_txs_parent_and_child(#[case] seed: Seed) {
     let tx_b_id = tx_b.transaction().get_id();
     output_cache
         .add_tx(
+            &chain_config,
+            best_block_height,
             tx_b_id.into(),
             WalletTx::Tx(TxData::new(tx_b.clone(), TxState::Inactive(0))),
         )
@@ -221,6 +246,8 @@ fn update_conflicting_txs_parent_and_child(#[case] seed: Seed) {
     let tx_c_id = tx_c.transaction().get_id();
     output_cache
         .add_tx(
+            &chain_config,
+            best_block_height,
             tx_c_id.into(),
             WalletTx::Tx(TxData::new(tx_c.clone(), TxState::Inactive(0))),
         )
@@ -238,7 +265,9 @@ fn update_conflicting_txs_parent_and_child(#[case] seed: Seed) {
         .build();
 
     let block_id = Id::<GenBlock>::new(H256::random_using(&mut rng));
-    let result = output_cache.update_conflicting_txs(tx_d.transaction(), block_id).unwrap();
+    let result = output_cache
+        .update_conflicting_txs(&chain_config, tx_d.transaction(), block_id)
+        .unwrap();
     assert_eq!(
         result,
         vec![
@@ -271,6 +300,8 @@ fn update_conflicting_txs_parent_and_child(#[case] seed: Seed) {
 fn update_conflicting_txs_frozen_token_only_in_outputs(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
+    let chain_config = create_unit_test_config();
+    let best_block_height = BlockHeight::new(rng.gen());
     let mut output_cache = OutputCache::empty();
     let token_id = TokenId::random_using(&mut rng);
 
@@ -297,10 +328,16 @@ fn update_conflicting_txs_frozen_token_only_in_outputs(#[case] seed: Seed) {
     let tx_a_id = tx_a.transaction().get_id();
     output_cache
         .add_tx(
+            &chain_config,
+            best_block_height,
             tx_a_id.into(),
             WalletTx::Tx(TxData::new(
                 tx_a,
-                TxState::Confirmed(BlockHeight::zero(), BlockTimestamp::from_int_seconds(0), 0),
+                TxState::Confirmed(
+                    BlockHeight::new(rng.gen()),
+                    BlockTimestamp::from_int_seconds(0),
+                    0,
+                ),
             )),
         )
         .unwrap();
@@ -319,6 +356,8 @@ fn update_conflicting_txs_frozen_token_only_in_outputs(#[case] seed: Seed) {
     let tx_b1_id = tx_b1.transaction().get_id();
     output_cache
         .add_tx(
+            &chain_config,
+            best_block_height,
             tx_b1_id.into(),
             WalletTx::Tx(TxData::new(tx_b1.clone(), TxState::Inactive(0))),
         )
@@ -339,6 +378,8 @@ fn update_conflicting_txs_frozen_token_only_in_outputs(#[case] seed: Seed) {
     let tx_b2_id = tx_b2.transaction().get_id();
     output_cache
         .add_tx(
+            &chain_config,
+            best_block_height,
             tx_b2_id.into(),
             WalletTx::Tx(TxData::new(tx_b2.clone(), TxState::Inactive(0))),
         )
@@ -358,6 +399,8 @@ fn update_conflicting_txs_frozen_token_only_in_outputs(#[case] seed: Seed) {
     let tx_b3_id = tx_b3.transaction().get_id();
     output_cache
         .add_tx(
+            &chain_config,
+            best_block_height,
             tx_b3_id.into(),
             WalletTx::Tx(TxData::new(tx_b3.clone(), TxState::Inactive(0))),
         )
@@ -375,7 +418,7 @@ fn update_conflicting_txs_frozen_token_only_in_outputs(#[case] seed: Seed) {
 
     let block_id = Id::<GenBlock>::new(H256::random_using(&mut rng));
     let result = output_cache
-        .update_conflicting_txs(tx_d.transaction(), block_id)
+        .update_conflicting_txs(&chain_config, tx_d.transaction(), block_id)
         .unwrap()
         .into_iter()
         .collect::<BTreeMap<_, _>>();
@@ -397,4 +440,215 @@ fn update_conflicting_txs_frozen_token_only_in_outputs(#[case] seed: Seed) {
             ),
         ])
     );
+}
+
+// Check that when add_tx is called for a tx with an `IssueFungibleToken` output, the token
+// id is generated based on the tx block height if the tx is in a block and on best block height
+// plus one if it's not.
+// Also call `rollback_tx_data` for the same tx and check that the token is no longer in the cache
+// after that.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn token_id_in_add_tx(#[case] seed: Seed) {
+    use common::chain::{
+        make_token_id_with_version, tokens::TokenIssuanceV1, AccountOutPoint,
+        ChainstateUpgradeBuilder, TokenIdGenerationVersion,
+    };
+
+    let mut rng = make_seedable_rng(seed);
+
+    let fork_height = BlockHeight::new(rng.gen_range(1000..1_000_000));
+    let chain_config = create_unit_test_config_builder()
+        .chainstate_upgrades(
+            common::chain::NetUpgrades::initialize(vec![
+                (
+                    BlockHeight::zero(),
+                    ChainstateUpgradeBuilder::latest()
+                        .token_id_generation_version(TokenIdGenerationVersion::V0)
+                        .build(),
+                ),
+                (
+                    fork_height,
+                    ChainstateUpgradeBuilder::latest()
+                        .token_id_generation_version(TokenIdGenerationVersion::V1)
+                        .build(),
+                ),
+            ])
+            .unwrap(),
+        )
+        .build();
+
+    let genesis_tx_id = Id::<Transaction>::new(H256::random_using(&mut rng));
+    let tx = TransactionBuilder::new()
+        .add_input(
+            TxInput::Account(AccountOutPoint::new(
+                AccountNonce::new(rng.gen()),
+                AccountSpending::DelegationBalance(
+                    Id::random_using(&mut rng),
+                    Amount::from_atoms(rng.gen()),
+                ),
+            )),
+            InputWitness::NoSignature(None),
+        )
+        .add_input(
+            TxInput::from_utxo(genesis_tx_id.into(), 0),
+            InputWitness::NoSignature(None),
+        )
+        .add_output(TxOutput::IssueFungibleToken(Box::new(TokenIssuance::V1(
+            TokenIssuanceV1 {
+                token_ticker: "XXXX".as_bytes().to_vec(),
+                number_of_decimals: rng.gen_range(1..18),
+                metadata_uri: "http://uri".as_bytes().to_vec(),
+                total_supply: common::chain::tokens::TokenTotalSupply::Unlimited,
+                authority: Destination::AnyoneCanSpend,
+                is_freezable: common::chain::tokens::IsTokenFreezable::No,
+            },
+        ))))
+        .build();
+    let tx_id = tx.transaction().get_id();
+
+    // The tx is from a block.
+    // Tx block height is before the fork, best block height is after the fork.
+    // Expecting V0 token id.
+    {
+        let tx_block_height = BlockHeight::new(rng.gen_range(0..fork_height.into_int()));
+        let best_block_height =
+            BlockHeight::new(rng.gen_range(fork_height.into_int()..fork_height.into_int() * 2));
+        let mut output_cache = OutputCache::empty();
+
+        let wallet_tx = WalletTx::Tx(TxData::new(
+            tx.clone(),
+            TxState::Confirmed(tx_block_height, BlockTimestamp::from_int_seconds(0), 0),
+        ));
+        output_cache
+            .add_tx(
+                &chain_config,
+                best_block_height,
+                tx_id.into(),
+                wallet_tx.clone(),
+            )
+            .unwrap();
+
+        let correct_token_id =
+            make_token_id_with_version(TokenIdGenerationVersion::V0, tx.inputs()).unwrap();
+        let wrong_token_id =
+            make_token_id_with_version(TokenIdGenerationVersion::V1, tx.inputs()).unwrap();
+
+        assert!(output_cache.token_issuance.contains_key(&correct_token_id));
+        assert!(!output_cache.token_issuance.contains_key(&wrong_token_id));
+
+        output_cache.rollback_tx_data(&chain_config, &wallet_tx).unwrap();
+
+        assert!(!output_cache.token_issuance.contains_key(&correct_token_id));
+        assert!(!output_cache.token_issuance.contains_key(&wrong_token_id));
+    }
+
+    // The tx is from a block.
+    // Tx block height is after the fork, best block height is before the fork (note that this
+    // situation shouldn't really be possible, we just want to make sure that the token id
+    // is based on the tx block height and not the best block height).
+    // Expecting V1 token id.
+    {
+        let tx_block_height =
+            BlockHeight::new(rng.gen_range(fork_height.into_int()..fork_height.into_int() * 2));
+        let best_block_height = BlockHeight::new(rng.gen_range(0..fork_height.into_int()));
+        let mut output_cache = OutputCache::empty();
+
+        let wallet_tx = WalletTx::Tx(TxData::new(
+            tx.clone(),
+            TxState::Confirmed(tx_block_height, BlockTimestamp::from_int_seconds(0), 0),
+        ));
+        output_cache
+            .add_tx(
+                &chain_config,
+                best_block_height,
+                tx_id.into(),
+                wallet_tx.clone(),
+            )
+            .unwrap();
+
+        let correct_token_id =
+            make_token_id_with_version(TokenIdGenerationVersion::V1, tx.inputs()).unwrap();
+        let wrong_token_id =
+            make_token_id_with_version(TokenIdGenerationVersion::V0, tx.inputs()).unwrap();
+
+        assert!(output_cache.token_issuance.contains_key(&correct_token_id));
+        assert!(!output_cache.token_issuance.contains_key(&wrong_token_id));
+
+        output_cache.rollback_tx_data(&chain_config, &wallet_tx).unwrap();
+
+        assert!(!output_cache.token_issuance.contains_key(&correct_token_id));
+        assert!(!output_cache.token_issuance.contains_key(&wrong_token_id));
+    }
+
+    // The tx is not from a block.
+    // Best block height is the fork height minus 2 or less.
+    // Expecting V0 token id.
+    {
+        let best_block_height = if rng.gen_bool(0.5) {
+            fork_height.prev_height().unwrap().prev_height().unwrap()
+        } else {
+            BlockHeight::new(rng.gen_range(0..fork_height.into_int() - 2))
+        };
+        let mut output_cache = OutputCache::empty();
+
+        let wallet_tx = WalletTx::Tx(TxData::new(tx.clone(), TxState::Inactive(rng.gen())));
+        output_cache
+            .add_tx(
+                &chain_config,
+                best_block_height,
+                tx_id.into(),
+                wallet_tx.clone(),
+            )
+            .unwrap();
+
+        let correct_token_id =
+            make_token_id_with_version(TokenIdGenerationVersion::V0, tx.inputs()).unwrap();
+        let wrong_token_id =
+            make_token_id_with_version(TokenIdGenerationVersion::V1, tx.inputs()).unwrap();
+
+        assert!(output_cache.token_issuance.contains_key(&correct_token_id));
+        assert!(!output_cache.token_issuance.contains_key(&wrong_token_id));
+
+        output_cache.rollback_tx_data(&chain_config, &wallet_tx).unwrap();
+
+        assert!(!output_cache.token_issuance.contains_key(&correct_token_id));
+        assert!(!output_cache.token_issuance.contains_key(&wrong_token_id));
+    }
+
+    // The tx is not from a block.
+    // Best block height is the fork height minus 1 or bigger.
+    // Expecting V0 token id.
+    {
+        let best_block_height = if rng.gen_bool(0.5) {
+            fork_height.prev_height().unwrap()
+        } else {
+            BlockHeight::new(rng.gen_range(fork_height.into_int()..fork_height.into_int() * 2))
+        };
+        let mut output_cache = OutputCache::empty();
+
+        let wallet_tx = WalletTx::Tx(TxData::new(tx.clone(), TxState::Inactive(rng.gen())));
+        output_cache
+            .add_tx(
+                &chain_config,
+                best_block_height,
+                tx_id.into(),
+                wallet_tx.clone(),
+            )
+            .unwrap();
+
+        let correct_token_id =
+            make_token_id_with_version(TokenIdGenerationVersion::V1, tx.inputs()).unwrap();
+        let wrong_token_id =
+            make_token_id_with_version(TokenIdGenerationVersion::V0, tx.inputs()).unwrap();
+
+        assert!(output_cache.token_issuance.contains_key(&correct_token_id));
+        assert!(!output_cache.token_issuance.contains_key(&wrong_token_id));
+
+        output_cache.rollback_tx_data(&chain_config, &wallet_tx).unwrap();
+
+        assert!(!output_cache.token_issuance.contains_key(&correct_token_id));
+        assert!(!output_cache.token_issuance.contains_key(&wrong_token_id));
+    }
 }

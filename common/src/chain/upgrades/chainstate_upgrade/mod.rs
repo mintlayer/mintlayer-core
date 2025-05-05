@@ -54,12 +54,6 @@ pub enum OrdersActivated {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
-pub enum StakerDestinationUpdateForbidden {
-    Yes,
-    No,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
 pub enum DataDepositFeeVersion {
     V0,
     V1,
@@ -85,6 +79,37 @@ pub enum OrdersVersion {
     V1,
 }
 
+// TODO: the ability to change the destination has never been used up until now and it will likely
+// never be. In such a case, when the corresponding fork height + 1000 blocks (the reorg limit)
+// will have been passed both on testnet and mainnet, this upgrade can be completely removed,
+// as if this ability has never existed.
+// Note: it should be enough to just remove the upgrade (i.e. disable the staker destination change
+// unconditionally) and attempt to do a full sync for testnet and mainnet; if it syncs to
+// the correct tip, the upgrade can be removed permanently.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
+pub enum StakerDestinationUpdateForbidden {
+    Yes,
+    No,
+}
+
+// TODO: in our wallet we don't produce token-issuing transactions where the 1st input is not a UTXO.
+// Which means that this upgrade may probably be completely removed when the "fork height + reorg limit"
+// height has been passed.
+// Note: unlike StakerDestinationUpdateForbidden, it may not be enough to just sync and compare tips
+// in order to prove that the upgrade can be permanently removed. But the following approach should
+// be safe:
+// a) Add token id logging during token creation.
+// b) For both testnet and mainnet, do one full sync with the upgrade present and another one with
+// it removed (i.e. where the V1 generation is always used); if the logged ids are the same,
+// the upgrade can be removed permanently.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
+pub enum TokenIdGenerationVersion {
+    // Token id is generated from the 1st input of the issuing transaction.
+    V0,
+    // Token id is generated from the 1st UTXO input of the issuing transaction.
+    V1,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub struct ChainstateUpgrade {
     token_issuance_version: TokenIssuanceVersion,
@@ -97,6 +122,7 @@ pub struct ChainstateUpgrade {
     orders_activated: OrdersActivated,
     orders_version: OrdersVersion,
     staker_destination_update_forbidden: StakerDestinationUpdateForbidden,
+    token_id_generation_version: TokenIdGenerationVersion,
 }
 
 impl ChainstateUpgrade {
@@ -112,6 +138,7 @@ impl ChainstateUpgrade {
         orders_activated: OrdersActivated,
         orders_version: OrdersVersion,
         staker_destination_update_forbidden: StakerDestinationUpdateForbidden,
+        token_id_generation_version: TokenIdGenerationVersion,
     ) -> Self {
         Self {
             token_issuance_version,
@@ -124,6 +151,7 @@ impl ChainstateUpgrade {
             orders_activated,
             orders_version,
             staker_destination_update_forbidden,
+            token_id_generation_version,
         }
     }
 
@@ -165,5 +193,9 @@ impl ChainstateUpgrade {
 
     pub fn orders_version(&self) -> OrdersVersion {
         self.orders_version
+    }
+
+    pub fn token_id_generation_version(&self) -> TokenIdGenerationVersion {
+        self.token_id_generation_version
     }
 }

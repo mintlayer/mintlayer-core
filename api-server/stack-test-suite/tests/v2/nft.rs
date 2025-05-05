@@ -16,7 +16,10 @@
 use api_server_common::storage::storage_api::NftWithOwner;
 use api_web_server::api::json_helpers::nft_with_owner_to_json;
 use common::{
-    chain::tokens::{make_token_id, NftIssuance, TokenId},
+    chain::{
+        make_token_id,
+        tokens::{NftIssuance, TokenId},
+    },
     primitives::H256,
 };
 
@@ -95,7 +98,8 @@ async fn ok(#[case] seed: Seed) {
                     0,
                 );
 
-                let token_id = make_token_id(&[input.clone()]).unwrap();
+                let token_id =
+                    make_token_id(&chain_config, tf.next_block_height(), &[input.clone()]).unwrap();
 
                 // issue NFT
                 let issue_nft_tx = TransactionBuilder::new()

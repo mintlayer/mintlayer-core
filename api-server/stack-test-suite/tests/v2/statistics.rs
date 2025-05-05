@@ -17,10 +17,8 @@ use api_web_server::api::json_helpers::amount_to_json;
 use common::{
     chain::{
         config::emission_schedule::DEFAULT_INITIAL_MINT,
-        tokens::{
-            make_token_id, IsTokenFreezable, TokenId, TokenIssuance, TokenIssuanceV1,
-            TokenTotalSupply,
-        },
+        make_token_id,
+        tokens::{IsTokenFreezable, TokenId, TokenIssuance, TokenIssuanceV1, TokenTotalSupply},
         AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, UtxoOutPoint,
     },
     primitives::H256,
@@ -129,7 +127,12 @@ async fn ok_tokens(#[case] seed: Seed) {
                     ))))
                     .build();
 
-                let token_id = make_token_id(issue_token_transaction.inputs()).unwrap();
+                let token_id = make_token_id(
+                    &chain_config,
+                    tf.next_block_height(),
+                    issue_token_transaction.inputs(),
+                )
+                .unwrap();
                 let to_mint = Amount::from_atoms(1000);
                 let mint_transaction = TransactionBuilder::new()
                     .add_input(

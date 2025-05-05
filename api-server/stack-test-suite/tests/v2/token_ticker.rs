@@ -13,8 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::chain::tokens::{
-    make_token_id, IsTokenFreezable, NftIssuance, TokenIssuance, TokenIssuanceV1, TokenTotalSupply,
+use common::chain::{
+    make_token_id,
+    tokens::{IsTokenFreezable, NftIssuance, TokenIssuance, TokenIssuanceV1, TokenTotalSupply},
 };
 
 use crate::DummyRPC;
@@ -126,7 +127,9 @@ async fn ok(#[case] seed: Seed) {
                         ))))
                         .build();
 
-                    let token_id = make_token_id(transaction.inputs()).unwrap();
+                    let token_id =
+                        make_token_id(&chain_config, tf.next_block_height(), transaction.inputs())
+                            .unwrap();
                     token_ids.push(token_id);
                     input = TxInput::from_utxo(
                         OutPointSourceId::Transaction(transaction.transaction().get_id()),
@@ -146,7 +149,9 @@ async fn ok(#[case] seed: Seed) {
                     let mut nft =
                         test_utils::nft_utils::random_nft_issuance(&chain_config, &mut rng);
                     nft.metadata.ticker = token_ticker.as_bytes().to_vec();
-                    let token_id = make_token_id(&[input.clone()]).unwrap();
+                    let token_id =
+                        make_token_id(&chain_config, tf.next_block_height(), &[input.clone()])
+                            .unwrap();
 
                     // issue NFT
                     let transaction = TransactionBuilder::new()
@@ -162,7 +167,9 @@ async fn ok(#[case] seed: Seed) {
                         ))
                         .build();
 
-                    let token_id = make_token_id(transaction.inputs()).unwrap();
+                    let token_id =
+                        make_token_id(&chain_config, tf.next_block_height(), transaction.inputs())
+                            .unwrap();
                     nft_ids.push(token_id);
                     input = TxInput::from_utxo(
                         OutPointSourceId::Transaction(transaction.transaction().get_id()),

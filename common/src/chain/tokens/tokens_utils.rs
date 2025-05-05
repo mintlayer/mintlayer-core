@@ -15,17 +15,8 @@
 
 use smallvec::SmallVec;
 
-use crate::{
-    chain::{output_value::OutputValue, AccountCommand, TxInput, TxOutput},
-    primitives::id::hash_encoded,
-};
-
 use super::{TokenData, TokenId};
-
-// TODO: the argument to the function should be a utxo, right now it might be an account
-pub fn make_token_id(inputs: &[TxInput]) -> Option<TokenId> {
-    Some(TokenId::new(hash_encoded(inputs.first()?)))
-}
+use crate::chain::{output_value::OutputValue, AccountCommand, TxInput, TxOutput};
 
 pub fn get_tokens_issuance_count(outputs: &[TxOutput]) -> usize {
     outputs.iter().filter(|&output| is_token_or_nft_issuance(output)).count()

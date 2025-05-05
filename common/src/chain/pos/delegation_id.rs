@@ -1,4 +1,4 @@
-// Copyright (c) 2024 RBB S.r.l
+// Copyright (c) 2022 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -18,19 +18,20 @@ use typename::TypeName;
 
 use crate::{
     address::{hexified::HexifiedAddress, traits::Addressable, AddressError},
-    chain::ChainConfig,
     primitives::Id,
 };
 
-#[derive(Eq, PartialEq, TypeName)]
-pub enum Order {}
-pub type OrderId = Id<Order>;
+use super::ChainConfig;
 
-impl Addressable for OrderId {
+#[derive(Eq, PartialEq, TypeName)]
+pub enum Delegation {}
+pub type DelegationId = Id<Delegation>;
+
+impl Addressable for DelegationId {
     type Error = AddressError;
 
     fn address_prefix(&self, chain_config: &ChainConfig) -> &str {
-        chain_config.order_id_address_prefix()
+        chain_config.delegation_id_address_prefix()
     }
 
     fn encode_to_bytes_for_address(&self) -> Vec<u8> {
@@ -44,19 +45,18 @@ impl Addressable for OrderId {
         Self::decode_all(&mut address_bytes.as_ref())
             .map_err(|e| AddressError::DecodingError(e.to_string()))
     }
-
     fn json_wrapper_prefix() -> &'static str {
-        "HexifiedOrderId"
+        "HexifiedDelegationId"
     }
 }
 
-impl serde::Serialize for OrderId {
+impl serde::Serialize for DelegationId {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         HexifiedAddress::serde_serialize(self, serializer)
     }
 }
 
-impl<'de> serde::Deserialize<'de> for OrderId {
+impl<'de> serde::Deserialize<'de> for DelegationId {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         HexifiedAddress::<Self>::serde_deserialize(deserializer)
     }

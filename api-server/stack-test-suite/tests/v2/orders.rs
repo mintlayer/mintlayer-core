@@ -63,7 +63,6 @@ async fn create_fill_conclude_order(#[case] seed: Seed, #[case] version: OrdersV
                     OutputValue::Coin(Amount::from_atoms(10)),
                     OutputValue::TokenV1(issue_and_mint_result.token_id, Amount::from_atoms(10)),
                 );
-                let order_id = make_order_id(&issue_and_mint_result.tokens_outpoint);
                 let tx_1 = TransactionBuilder::new()
                     .add_input(
                         TxInput::Utxo(issue_and_mint_result.tokens_outpoint),
@@ -71,6 +70,7 @@ async fn create_fill_conclude_order(#[case] seed: Seed, #[case] version: OrdersV
                     )
                     .add_output(TxOutput::CreateOrder(Box::new(order_data)))
                     .build();
+                let order_id = make_order_id(tx_1.inputs()).unwrap();
                 let tx_1_id = tx_1.transaction().get_id();
 
                 let block1 = tf.make_block_builder().add_transaction(tx_1.clone()).build(&mut rng);
@@ -236,7 +236,6 @@ async fn order_pairs(#[case] seed: Seed) {
                     OutputValue::Coin(Amount::from_atoms(10)),
                     OutputValue::TokenV1(issue_and_mint_result.token_id, Amount::from_atoms(10)),
                 );
-                let order_id = make_order_id(&issue_and_mint_result.tokens_outpoint);
                 let tx_1 = TransactionBuilder::new()
                     .add_input(
                         TxInput::Utxo(issue_and_mint_result.tokens_outpoint),
@@ -244,6 +243,7 @@ async fn order_pairs(#[case] seed: Seed) {
                     )
                     .add_output(TxOutput::CreateOrder(Box::new(order_data)))
                     .build();
+                let order_id = make_order_id(tx_1.inputs()).unwrap();
 
                 let block1 = tf.make_block_builder().add_transaction(tx_1.clone()).build(&mut rng);
                 tf.process_block(block1.clone(), BlockSource::Local).unwrap();

@@ -20,6 +20,7 @@ use common::{
     chain::{
         classic_multisig::ClassicMultisigChallenge,
         htlc::{HashedTimelockContract, HtlcSecret, HtlcSecretHash},
+        make_token_id,
         output_value::OutputValue,
         signature::{
             inputsig::{
@@ -36,7 +37,7 @@ use common::{
         },
         signed_transaction::SignedTransaction,
         timelock::OutputTimeLock,
-        tokens::{make_token_id, TokenData, TokenIssuance, TokenTransfer},
+        tokens::{TokenData, TokenIssuance, TokenTransfer},
         AccountCommand, AccountNonce, ChainConfig, ChainstateUpgradeBuilder, Destination,
         HtlcActivated, TokenIssuanceVersion, TxInput, TxOutput,
     },
@@ -711,7 +712,12 @@ fn spend_tokens(#[case] seed: Seed) {
                 Destination::AnyoneCanSpend,
             ))
             .build();
-        let token_v0_id = make_token_id(token_v0_issuance_tx.inputs()).unwrap();
+        let token_v0_id = make_token_id(
+            &chain_config,
+            tf.next_block_height(),
+            token_v0_issuance_tx.inputs(),
+        )
+        .unwrap();
         let token_v0_issuance_tx_id = token_v0_issuance_tx.transaction().get_id();
         tf.make_block_builder()
             .add_transaction(token_v0_issuance_tx)
@@ -763,7 +769,12 @@ fn spend_tokens(#[case] seed: Seed) {
                 Destination::AnyoneCanSpend,
             ))
             .build();
-        let token_v1_id = make_token_id(token_v1_issuance_tx.inputs()).unwrap();
+        let token_v1_id = make_token_id(
+            &chain_config,
+            tf.next_block_height(),
+            token_v1_issuance_tx.inputs(),
+        )
+        .unwrap();
         let token_v1_issuance_tx_id = token_v1_issuance_tx.transaction().get_id();
         tf.make_block_builder()
             .add_transaction(token_v1_issuance_tx)

@@ -14,8 +14,8 @@
 // limitations under the License.
 
 use common::{
-    chain::{DelegationId, Destination, OutPointSourceId, PoolId, UtxoOutPoint},
-    primitives::{Amount, Id, H256},
+    chain::{DelegationId, Destination, PoolId},
+    primitives::Amount,
 };
 use randomness::{CryptoRng, Rng};
 use rstest::rstest;
@@ -25,17 +25,11 @@ use test_utils::random::{make_seedable_rng, Seed};
 use super::create_pool_data;
 
 use crate::{
-    make_pool_id,
     pool::{delegation::DelegationData, storage::PoSAccountingDB},
     storage::in_memory::InMemoryPoSAccounting,
     FlushablePoSAccountingView, PoSAccountingDelta, PoSAccountingOperations, PoSAccountingUndo,
     PoSAccountingView,
 };
-
-fn random_outpoint0(rng: &mut impl Rng) -> UtxoOutPoint {
-    let source_id = OutPointSourceId::Transaction(Id::new(H256::random_using(rng)));
-    UtxoOutPoint::new(source_id, 0)
-}
 
 fn get_random_pool_id(rng: &mut impl Rng, storage: &InMemoryPoSAccounting) -> Option<PoolId> {
     let all_pool_data = storage.all_pool_data();
@@ -118,10 +112,9 @@ fn perform_random_operation(
     match rng.gen_range(0..11) {
         // create new pool
         0..=1 => {
-            let input0_outpoint = random_outpoint0(rng);
             let pledge_amount = Amount::from_atoms(rng.gen_range(1000..10_000));
             let pool_data = create_pool_data(rng, Destination::AnyoneCanSpend, pledge_amount);
-            let pool_id = make_pool_id(&input0_outpoint);
+            let pool_id = PoolId::random_using(rng);
 
             let undo = op.create_pool(pool_id, pool_data).unwrap();
             undos.push(undo);
@@ -136,10 +129,10 @@ fn perform_random_operation(
         // create delegation
         3..=4 => {
             if let Some(pool_id) = random_pool {
-                let input0_outpoint = random_outpoint0(rng);
+                let delegation_id = DelegationId::random_using(rng);
 
-                let (_, undo) = op
-                    .create_delegation_id(pool_id, Destination::AnyoneCanSpend, &input0_outpoint)
+                let undo = op
+                    .create_delegation_id(pool_id, delegation_id, Destination::AnyoneCanSpend)
                     .unwrap();
                 undos.push(undo);
             }

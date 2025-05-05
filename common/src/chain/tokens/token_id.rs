@@ -13,28 +13,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use serialization::{DecodeAll, Encode};
+use typename::TypeName;
+
 use crate::{
     address::{hexified::HexifiedAddress, traits::Addressable, AddressError},
     chain::ChainConfig,
-    primitives::{Id, H256},
+    primitives::Id,
 };
-use randomness::Rng;
-use serialization::{DecodeAll, Encode};
-use typename::TypeName;
 
 #[derive(Eq, PartialEq, TypeName)]
 pub enum Token {}
 pub type TokenId = Id<Token>;
-
-impl TokenId {
-    pub fn random_using<R: Rng>(rng: &mut R) -> Self {
-        Self::new(H256::random_using(rng))
-    }
-
-    pub const fn zero() -> Self {
-        Self::new(H256::zero())
-    }
-}
 
 impl Addressable for TokenId {
     type Error = AddressError;

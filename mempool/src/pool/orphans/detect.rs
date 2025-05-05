@@ -66,8 +66,6 @@ impl OrphanType {
             | CTE::TxVerifierStorage
             | CTE::NotEnoughPledgeToCreateStakePool(..)
             | CTE::MissingTransactionNonce(_)
-            | CTE::AttemptToCreateStakePoolFromAccounts
-            | CTE::AttemptToCreateDelegationFromAccounts
             | CTE::FailedToIncrementAccountNonce
             | CTE::TokensAccountingError(_)
             | CTE::TotalFeeRequiredOverflow
@@ -77,10 +75,10 @@ impl OrphanType {
             | CTE::RewardDistributionError(_)
             | CTE::CheckTransactionError(_)
             | CTE::OrdersAccountingError(_)
-            | CTE::AttemptToCreateOrderFromAccounts
             | CTE::ConcludeInputAmountsDontMatch(_, _)
             | CTE::IOPolicyError(_, _)
-            | CTE::ProduceBlockFromStakeChangesStakerDestination(_, _) => Err(err),
+            | CTE::ProduceBlockFromStakeChangesStakerDestination(_, _)
+            | CTE::IdCreationError(_) => Err(err),
         }
     }
 }
