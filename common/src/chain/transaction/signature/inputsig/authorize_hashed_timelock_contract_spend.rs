@@ -13,11 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use strum::EnumDiscriminants;
+
 use serialization::{Decode, DecodeAll, Encode};
 
 use crate::chain::{htlc::HtlcSecret, signature::DestinationSigError};
 
-#[derive(Debug, Encode, Decode, PartialEq, Eq)]
+#[derive(Debug, Encode, Decode, PartialEq, Eq, EnumDiscriminants)]
+#[strum_discriminants(name(AuthorizedHashedTimelockContractSpendTag))]
 pub enum AuthorizedHashedTimelockContractSpend {
     Secret(HtlcSecret, Vec<u8>),
     Multisig(Vec<u8>),

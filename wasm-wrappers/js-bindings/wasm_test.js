@@ -347,7 +347,7 @@ export async function run_test() {
       encode_output_coin_burn(Amount.from_atoms("invalid amount"));
       throw new Error("Invalid value for amount worked somehow!");
     } catch (e) {
-      if (!e.includes("Invalid amount")) {
+      if (!e.includes("Invalid atoms amount")) {
         throw e;
       }
       console.log("Tested invalid amount successfully");
@@ -360,7 +360,7 @@ export async function run_test() {
       );
       throw new Error("Invalid value for amount worked somehow!");
     } catch (e) {
-      if (!e.includes("Invalid amount")) {
+      if (!e.includes("Invalid atoms amount")) {
         throw e;
       }
       console.log("Tested invalid amount successfully");
@@ -424,7 +424,7 @@ export async function run_test() {
       if (!e.includes("Invalid time lock encoding")) {
         throw e;
       }
-      console.log("Tested invalid lock successfully");
+      console.log("Tested invalid token lock successfully");
     }
 
     try {
@@ -439,7 +439,6 @@ export async function run_test() {
       );
       throw new Error("Invalid token id worked somehow!");
     } catch (e) {
-      console.log(`err: ${e}`);
       if (!e.includes("Invalid addressable")) {
         throw e;
       }
@@ -497,7 +496,6 @@ export async function run_test() {
       );
       throw new Error("Invalid token id worked somehow!");
     } catch (e) {
-      console.log(`err: ${e}`);
       if (!e.includes("Invalid addressable")) {
         throw e;
       }
@@ -537,7 +535,7 @@ export async function run_test() {
       );
       throw new Error("Invalid margin_ratio_per_thousand worked somehow!");
     } catch (e) {
-      if (!e.includes("Invalid per thousand 2000 valid range is [0, 1000]")) {
+      if (!e.includes("Invalid per thousand 2000, valid range is [0, 1000]")) {
         throw e;
       }
       console.log("Tested invalid margin_ratio_per_thousand successfully");
@@ -583,7 +581,6 @@ export async function run_test() {
     ];
 
     assert_eq_arrays(encoded_fungible_token, expected_fungible_token);
-
 
     const account_pubkey = make_default_account_privkey(
       mnemonic,
@@ -642,7 +639,6 @@ export async function run_test() {
       );
       throw new Error("Invalid token id worked somehow!");
     } catch (e) {
-      console.log(`err: ${e}`);
       if (!e.includes("Invalid addressable")) {
         throw e;
       }
@@ -650,7 +646,6 @@ export async function run_test() {
     }
 
     try {
-      console.log("Testing invalid creator successfully..");
       const creator_public_key_hash = address;
       encode_output_issue_nft(
         token_id,
@@ -668,14 +663,13 @@ export async function run_test() {
       );
       throw new Error("Invalid creator worked somehow!");
     } catch (e) {
-      if (!e.includes("NFT Creator needs to be a public key address")) {
+      if (!e.includes("Cannot decode NFT creator as a public key")) {
         throw e;
       }
       console.log("Tested invalid creator successfully");
     }
 
     try {
-      console.log("Testing invalid nft ticker successfully..");
       const empty_ticker = "";
       encode_output_issue_nft(
         token_id,
@@ -700,7 +694,6 @@ export async function run_test() {
     }
 
     try {
-      console.log("Testing invalid nft name successfully..");
       const empty_name = "";
       encode_output_issue_nft(
         token_id,
@@ -725,7 +718,6 @@ export async function run_test() {
     }
 
     try {
-      console.log("Testing invalid nft description successfully..");
       const empty_description = "";
       encode_output_issue_nft(
         token_id,
@@ -1010,7 +1002,7 @@ export async function run_test() {
       encode_transaction(invalid_inputs, outputs, BigInt(0));
       throw new Error("Invalid inputs worked somehow!");
     } catch (e) {
-      if (!e.includes("Invalid Transaction input encoding")) {
+      if (!e.includes("Invalid transaction input encoding")) {
         throw e;
       }
       console.log("Tested invalid inputs successfully");
@@ -1021,7 +1013,7 @@ export async function run_test() {
       encode_transaction(inputs, invalid_outputs, BigInt(0));
       throw new Error("Invalid outputs worked somehow!");
     } catch (e) {
-      if (!e.includes("Invalid Transaction output encoding")) {
+      if (!e.includes("Invalid transaction output encoding")) {
         throw e;
       }
       console.log("Tested invalid outputs successfully");
@@ -1106,7 +1098,11 @@ export async function run_test() {
       console.log("Tested invalid transaction in encode witness successfully");
     }
     try {
-      const invalid_utxos = "invalid utxos";
+      // Note: if "invalid utxos" were passed to `encode_witness` directly (i.e. as a string instead
+      // of an array), the `inputs: &[u8]` parameter of `encode_witness` would contain 13 zeroes,
+      // which would be parsed as 13 `Option::None` and the error would be about an incorrect witness
+      // count.
+      const invalid_utxos = [...Buffer.from("invalid utxos")]
       encode_witness(
         SignatureHashType.ALL,
         receiving_privkey,
@@ -1118,7 +1114,7 @@ export async function run_test() {
       );
       throw new Error("Invalid utxo worked somehow!");
     } catch (e) {
-      if (!e.includes("Invalid Transaction witness encoding")) {
+      if (!e.includes("Invalid transaction input encoding")) {
         throw e;
       }
       console.log("Tested invalid utxo in encode witness successfully");
@@ -1136,7 +1132,7 @@ export async function run_test() {
       );
       throw new Error("Invalid utxo worked somehow!");
     } catch (e) {
-      if (!e.includes("Invalid Transaction witness encoding")) {
+      if (!e.includes("Utxos count does not match inputs count")) {
         throw e;
       }
       console.log("Tested invalid utxo count in encode witness successfully");
@@ -1154,10 +1150,10 @@ export async function run_test() {
       );
       throw new Error("Invalid address worked somehow!");
     } catch (e) {
-      if (!e.includes("Invalid Transaction witness encoding")) {
+      if (!e.includes("Invalid input index")) {
         throw e;
       }
-      console.log("Tested invalid utxo in encode witness successfully");
+      console.log("Tested invalid input index in encode witness successfully");
     }
     // all ok
     encode_witness(
@@ -1186,7 +1182,7 @@ export async function run_test() {
       encode_signed_transaction(tx, invalid_witnesses);
       throw new Error("Invalid witnesses worked somehow!");
     } catch (e) {
-      if (!e.includes("Invalid Transaction witness encoding")) {
+      if (!e.includes("Invalid transaction witness encoding")) {
         throw e;
       }
       console.log("Tested invalid witnesses successfully");
@@ -1458,7 +1454,7 @@ function test_signed_transaction_intent() {
     make_transaction_intent_message_to_sign("intent", invalid_tx_id);
     throw new Error("Invalid tx id worked somehow!");
   } catch (e) {
-    if (!e.includes("Invalid transaction id encoding")) {
+    if (!e.includes("Error parsing transaction id")) {
       throw e;
     }
   }

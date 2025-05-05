@@ -21,13 +21,15 @@ pub mod classical_multisig;
 pub mod htlc;
 pub mod standard_signature;
 
-use serialization::{Decode, Encode};
+use strum::EnumDiscriminants;
 
+use serialization::{Decode, Encode};
 use standard_signature::StandardInputSignature;
 
 use super::{DestinationSigError, Signable};
 
-#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, Ord, PartialOrd, EnumDiscriminants)]
+#[strum_discriminants(name(InputWitnessTag))]
 pub enum InputWitness {
     #[codec(index = 0)]
     NoSignature(Option<Vec<u8>>),

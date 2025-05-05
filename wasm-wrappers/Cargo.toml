@@ -19,6 +19,7 @@ common = { path = "../common" }
 tx-verifier = { path = "../chainstate/tx-verifier" }
 
 bip39 = { workspace = true, default-features = false, features = ["std", "zeroize"] }
+fixed-hash.workspace = true
 thiserror.workspace = true
 
 # This crate is required for rand to work with wasm. See: https://docs.rs/getrandom/latest/getrandom/#webassembly-support

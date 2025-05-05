@@ -9488,6 +9488,7 @@ dependencies = [
  "common",
  "consensus",
  "crypto",
+ "fixed-hash",
  "getrandom 0.2.15",
  "gloo-utils",
  "hex",

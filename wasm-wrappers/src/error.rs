@@ -13,90 +13,166 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::chain::{
-    signature::{inputsig::arbitrary_message::SignArbitraryMessageError, DestinationSigError},
-    IdCreationError, SignedTransactionIntentError, TransactionCreationError,
+use common::{
+    address::AddressError,
+    chain::{
+        classic_multisig::ClassicMultisigChallengeError,
+        signature::{
+            inputsig::{
+                arbitrary_message::SignArbitraryMessageError,
+                authorize_hashed_timelock_contract_spend::AuthorizedHashedTimelockContractSpendTag,
+                classical_multisig::authorize_classical_multisig::ClassicalMultisigSigningError,
+                InputWitnessTag,
+            },
+            DestinationSigError,
+        },
+        IdCreationError, SignedTransactionIntentError, TransactionCreationError,
+    },
+    size_estimation::SizeEstimationError,
 };
+use consensus::EffectivePoolBalanceError;
 use wasm_bindgen::JsValue;
 
 #[derive(thiserror::Error, Debug, Clone)]
 pub enum Error {
-    #[error("Invalid private key encoding")]
-    InvalidPrivateKeyEncoding,
-    #[error("Signature error: {0}")]
-    SignatureError(#[from] crypto::key::SignatureError),
-    #[error("Invalid public key encoding")]
-    InvalidPublicKeyEncoding,
-    #[error("Invalid signature encoding")]
-    InvalidSignatureEncoding,
-    #[error("Invalid mnemonic string")]
-    InvalidMnemonic,
+    #[error("Invalid private key encoding: {0}")]
+    InvalidPrivateKeyEncoding(serialization::Error),
+
+    #[error("Invalid public key encoding: {0}")]
+    InvalidPublicKeyEncoding(serialization::Error),
+
+    #[error("Invalid signature encoding: {0}")]
+    InvalidSignatureEncoding(serialization::Error),
+
+    #[error("Invalid outpoint ID encoding: {0}")]
+    InvalidOutpointIdEncoding(serialization::Error),
+
+    #[error("Invalid time lock encoding: {0}")]
+    InvalidTimeLockEncoding(serialization::Error),
+
+    #[error("Invalid stake pool data encoding: {0}")]
+    InvalidStakePoolDataEncoding(serialization::Error),
+
+    #[error("Invalid transaction output encoding: {0}")]
+    InvalidOutputEncoding(serialization::Error),
+
+    #[error("Invalid transaction input encoding: {0}")]
+    InvalidInputEncoding(serialization::Error),
+
+    #[error("Invalid transaction witness encoding: {0}")]
+    InvalidWitnessEncoding(serialization::Error),
+
+    #[error("Invalid transaction encoding: {0}")]
+    InvalidTransactionEncoding(serialization::Error),
+
+    #[error("Invalid htlc secret encoding: {0}")]
+    InvalidHtlcSecretEncoding(serialization::Error),
+
+    #[error("Invalid multisig challenge encoding: {0}")]
+    InvalidMultisigChallengeEncoding(serialization::Error),
+
+    #[error("Invalid signed transaction intent encoding: {0}")]
+    InvalidSignedTransactionIntentEncoding(serialization::Error),
+
+    #[error("Error creating multisig spend: {0}")]
+    MultisigSpendCreationError(DestinationSigError),
+
+    #[error("Error creating HTLC spend: {0}")]
+    HtlcSpendCreationError(DestinationSigError),
+
+    #[error("Error signing a message: {0}")]
+    SignMessageError(crypto::key::SignatureError),
+
+    #[error("Invalid mnemonic string: {0}")]
+    InvalidMnemonic(bip39::Error),
+
+    #[error("Unexpected HTLC spend type: {0:?}")]
+    UnexpectedHtlcSpendType(AuthorizedHashedTimelockContractSpendTag),
+
+    #[error("Unexpected transaction witness type: {0:?}")]
+    UnexpectedWitnessType(InputWitnessTag),
+
     #[error("Invalid key index, MSB bit set")]
-    InvalidKeyIndex,
-    #[error("Invalid outpoint ID encoding")]
-    InvalidOutpointId,
-    #[error("Invalid addressable: {addressable}")]
-    InvalidAddressable { addressable: String },
-    #[error("Transaction size estimation error: {error}")]
-    TransactionSizeEstimationError { error: String },
-    #[error("NFT Creator needs to be a public key address")]
-    InvalidCreatorPublicKey,
-    #[error("Invalid amount")]
-    InvalidAmount,
-    #[error("Invalid time lock encoding")]
-    InvalidTimeLock,
-    #[error("Invalid per thousand {0} valid range is [0, 1000]")]
+    InvalidKeyIndexMsbBitSet,
+
+    #[error("Invalid addressable `{addressable}`: {error}")]
+    AddressableParseError {
+        addressable: String,
+        error: AddressError,
+    },
+
+    #[error("Transaction size estimation error: {0}")]
+    TransactionSizeEstimationError(SizeEstimationError),
+
+    #[error("Cannot decode NFT creator as a public key: {0}")]
+    InvalidNftCreatorPublicKey(serialization::Error),
+
+    #[error("Invalid atoms amount: {atoms}")]
+    AtomsAmountParseError { atoms: String },
+
+    #[error("Invalid per thousand {0}, valid range is [0, 1000]")]
     InvalidPerThousand(u16),
-    #[error("Invalid stake pool data encoding")]
-    InvalidStakePoolData,
-    #[error("Invalid Transaction output encoding")]
-    InvalidOutput,
-    #[error("Invalid Transaction input encoding")]
-    InvalidInput,
-    #[error("Invalid Transaction witness encoding")]
-    InvalidWitness,
-    #[error("Invalid transaction encoding")]
-    InvalidTransaction,
-    #[error("Invalid transaction id encoding")]
-    InvalidTransactionId,
+
+    #[error("Multisig signing error: {0}")]
+    MultisigSigningError(ClassicalMultisigSigningError),
+
+    #[error("Arbitrary message signing error: {0}")]
+    ArbitraryMessageSigningError(SignArbitraryMessageError),
+
+    #[error("Arbitrary message signature verification error: {0}")]
+    ArbitraryMessageSignatureVerificationError(DestinationSigError),
+
+    #[error("Input signing error: {0}")]
+    InputSigningError(DestinationSigError),
+
+    #[error("Error parsing transaction id: {0}")]
+    TransactionIdParseError(fixed_hash::rustc_hex::FromHexError),
+
+    #[error("Error parsing htlc secret hash: {0}")]
+    HtlcSecretHashParseError(fixed_hash::rustc_hex::FromHexError),
+
     #[error("The number of signatures does not match the number of inputs")]
     InvalidWitnessCount,
-    #[error("Invalid htlc secret encoding")]
-    InvalidHtlcSecret,
-    #[error("Invalid htlc secret hash encoding")]
-    InvalidHtlcSecretHash,
-    #[error("Invalid signed transaction intent encoding")]
-    InvalidSignedTransactionIntent,
+
     #[error("No input outpoint found in transaction")]
     NoInputOutpointFound,
-    #[error("Invalid multisig challenge encoding")]
-    InvalidMultisigChallenge,
+
+    #[error("Multisig challenge creation error: {0}")]
+    MultisigChallengeCreationError(ClassicMultisigChallengeError),
+
     #[error("Multisig required signatures cannot be zero")]
     ZeroMultisigRequiredSigs,
-    #[error("Final supply calculation error")]
-    FinalSupplyError,
+
+    #[error("Final supply missing in chain config")]
+    FinalSupplyMissingInChainConfig,
+
     #[error("Calculating effective balance failed: {0}")]
-    EffectiveBalanceCalculationFailed(String),
+    EffectiveBalanceCalculationFailed(EffectivePoolBalanceError),
+
     #[error("When fixed total supply is selected an amount must be present as well")]
-    FixedTotalSupply,
+    FixedTotalSupplyButNoAmount,
+
     #[error("Invalid token parameters: {0}")]
-    TokenIssuanceError(#[from] tx_verifier::error::TokenIssuanceError),
+    InvalidTokenParameters(tx_verifier::error::TokenIssuanceError),
+
     #[error("Transaction creation error: {0}")]
-    TransactionCreationError(#[from] TransactionCreationError),
-    #[error("Signature error: {0}")]
-    DestinationSigError(#[from] DestinationSigError),
+    TransactionCreationError(TransactionCreationError),
+
+    #[error("Sighash calculation error: {0}")]
+    SighashCalculationError(DestinationSigError),
+
+    // Note: IdCreationError already contains the info about which kind of id is being created.
     #[error("Id creation error: {0}")]
     IdCreationError(#[from] IdCreationError),
-    #[error("Invalid message signature encoding")]
-    InvalidMessageSignature,
-    #[error("Arbitrary message signing error: {0}")]
-    SignArbitraryMessageError(#[from] SignArbitraryMessageError),
+
     #[error("Error decoding a JsValue as an array of arrays of bytes: {error}")]
     JsValueNotArrayOfArraysOfBytes { error: String },
-    #[error("Signed transaction intent error: {0}")]
-    SignedTransactionIntentError(#[from] SignedTransactionIntentError),
-    #[error("Signed transaction intent message is not a valid string")]
-    SignedTransactionIntentMessageIsNotAValidString,
+
+    #[error("Signed transaction intent verification error: {0}")]
+    SignedTransactionIntentVerificationError(SignedTransactionIntentError),
+
+    #[error("Signed transaction intent message is not a valid UTF-8 string")]
+    SignedTransactionIntentMessageIsNotAValidUtf8String,
 }
 
 // This is required to make an error readable in JavaScript
