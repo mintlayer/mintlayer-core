@@ -938,7 +938,7 @@ where
         force_reduce: bool,
     ) -> WalletResult<()> {
         let last_used = self.accounts.values().fold(None, |last, acc| {
-            let usage = acc.get_addresses_usage();
+            let usage = acc.get_addresses_usage(KeyPurpose::ReceiveFunds);
             std::cmp::max(last, usage.last_used().map(U31::into_u32))
         });
 
@@ -1220,6 +1220,19 @@ where
         )
     }
 
+    pub fn get_address_coin_balances(
+        &self,
+        account_index: U31,
+        utxo_states: UtxoStates,
+        with_locked: WithLocked,
+    ) -> WalletResult<BTreeMap<Destination, Amount>> {
+        self.get_account(account_index)?.get_address_coin_balances(
+            utxo_states,
+            self.latest_median_time,
+            with_locked,
+        )
+    }
+
     pub fn get_multisig_utxos(
         &self,
         account_index: U31,
@@ -1450,9 +1463,10 @@ where
     pub fn get_all_issued_addresses(
         &self,
         account_index: U31,
+        key_purpose: KeyPurpose,
     ) -> WalletResult<BTreeMap<ChildNumber, Address<Destination>>> {
         let account = self.get_account(account_index)?;
-        Ok(account.get_all_issued_addresses())
+        Ok(account.get_all_issued_addresses(key_purpose))
     }
 
     pub fn get_all_standalone_addresses(
@@ -1476,9 +1490,13 @@ where
         account.get_all_standalone_address_details(address, self.latest_median_time)
     }
 
-    pub fn get_addresses_usage(&self, account_index: U31) -> WalletResult<&KeychainUsageState> {
+    pub fn get_addresses_usage(
+        &self,
+        account_index: U31,
+        key_purpose: KeyPurpose,
+    ) -> WalletResult<&KeychainUsageState> {
         let account = self.get_account(account_index)?;
-        Ok(account.get_addresses_usage())
+        Ok(account.get_addresses_usage(key_purpose))
     }
 
     /// Creates a transaction to send funds to specified addresses.

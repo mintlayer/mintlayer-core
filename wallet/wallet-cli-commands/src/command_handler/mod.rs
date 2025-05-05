@@ -473,21 +473,35 @@ where
                 ))
             }
 
-            ColdWalletCommand::ShowReceiveAddresses => {
+            ColdWalletCommand::ShowAddresses { include_change } => {
                 let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
-                let addresses_with_usage = wallet.get_issued_addresses(selected_account).await?;
+                let addresses_with_usage =
+                    wallet.get_issued_addresses(selected_account, include_change).await?;
 
                 let addresses_table = {
                     let mut addresses_table = prettytable::Table::new();
                     addresses_table.set_titles(prettytable::row![
                         "Index",
+                        "Purpose",
                         "Address",
                         "Is used in transaction history",
+                        "Coins",
                     ]);
 
                     addresses_table.extend(addresses_with_usage.into_iter().map(|info| {
                         let is_used = if info.used { "Yes" } else { "No" };
-                        prettytable::row![info.index, info.address, is_used]
+                        let purpose = match info.purpose {
+                            wallet_rpc_lib::types::RpcKeyPurpose::Change => "Change",
+                            wallet_rpc_lib::types::RpcKeyPurpose::Receive => "Receive",
+                        };
+
+                        prettytable::row![
+                            info.index,
+                            purpose,
+                            info.address,
+                            is_used,
+                            info.coins.decimal().to_string()
+                        ]
                     }));
 
                     addresses_table

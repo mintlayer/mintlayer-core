@@ -223,7 +223,7 @@ impl Backend {
             .flatten();
 
         let addresses = controller
-            .get_issued_addresses(account_index)
+            .get_issued_addresses(account_index, false)
             .await
             .map_err(|e| BackendError::WalletError(e.to_string()))?
             .into_iter()
@@ -1244,7 +1244,7 @@ impl Backend {
                     }
                 };
 
-                match controller.get_issued_addresses(account_id.account_index()).await {
+                match controller.get_issued_addresses(account_id.account_index(), false).await {
                     Ok(addresses) => {
                         for info in addresses {
                             Self::send_event(

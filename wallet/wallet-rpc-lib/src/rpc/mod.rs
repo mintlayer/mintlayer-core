@@ -564,16 +564,28 @@ where
     pub async fn get_issued_addresses(
         &self,
         account_index: U31,
+        include_change_addresses: bool,
     ) -> WRpcResult<Vec<AddressWithUsageInfo>, N> {
-        let addresses: BTreeMap<_, _> = self
+        let addresses: Vec<_> = self
             .wallet
             .call(move |controller| {
-                controller.readonly_controller(account_index).get_addresses_with_usage()
+                controller
+                    .readonly_controller(account_index)
+                    .get_addresses_with_usage(include_change_addresses)
             })
             .await??;
         let result = addresses
             .into_iter()
-            .map(|(num, (addr, used))| AddressWithUsageInfo::new(num, addr, used))
+            .map(|info| {
+                AddressWithUsageInfo::new(
+                    info.child_number,
+                    info.purpose,
+                    info.address,
+                    info.used,
+                    info.coins,
+                    &self.chain_config,
+                )
+            })
             .collect();
         Ok(result)
     }

@@ -13,12 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{WalletError, WalletResult};
+use crate::{
+    destination_getters::{get_tx_output_destination, HtlcSpendingCondition},
+    WalletError, WalletResult,
+};
 
 use std::collections::BTreeMap;
 
 use common::{
-    chain::{output_value::OutputValue, ChainConfig, TxOutput},
+    chain::{output_value::OutputValue, ChainConfig, Destination, TxOutput},
     primitives::{Amount, BlockHeight},
 };
 use wallet_types::currency::Currency;
@@ -193,4 +196,25 @@ pub fn group_utxos_for_input<T: std::fmt::Debug, Grouped: Clone>(
 
     tokens_grouped.insert(Currency::Coin, coin_grouped);
     Ok(tokens_grouped)
+}
+
+pub fn group_coin_utxos_for_input_by_destination<T: std::fmt::Debug, Grouped: Clone>(
+    items: impl IntoIterator<Item = T>,
+    get_tx_output: impl Fn(&T) -> &TxOutput,
+    mut combiner: impl FnMut(&mut Grouped, &T, Amount) -> WalletResult<()>,
+    init: Grouped,
+) -> WalletResult<BTreeMap<Destination, Grouped>> {
+    items.into_iter().try_fold(BTreeMap::new(), move |mut acc, item| {
+        let output = get_tx_output(&item);
+        let (currency, value) = output_spendable_value(output)?;
+        let destination = get_tx_output_destination(output, &|_| None, HtlcSpendingCondition::Skip);
+
+        if let Some(destination) = destination {
+            if currency == Currency::Coin {
+                let for_destination = acc.entry(destination).or_insert_with(|| init.clone());
+                combiner(for_destination, &item, value)?;
+            }
+        }
+        Ok(acc)
+    })
 }

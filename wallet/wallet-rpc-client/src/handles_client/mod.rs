@@ -353,9 +353,10 @@ where
     async fn get_issued_addresses(
         &self,
         account_index: U31,
+        include_change_addresses: bool,
     ) -> Result<Vec<AddressWithUsageInfo>, Self::Error> {
         self.wallet_rpc
-            .get_issued_addresses(account_index)
+            .get_issued_addresses(account_index, include_change_addresses)
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
