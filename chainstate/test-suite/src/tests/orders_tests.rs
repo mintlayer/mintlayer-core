@@ -986,7 +986,10 @@ fn fill_partially_then_conclude(#[case] seed: Seed, #[case] version: OrdersVersi
             let tx_id = tx.transaction().get_id();
             let res = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
 
-            if give_amount != filled_amount {
+            // Note: In V1, zero fills are not allowed. Since the zero fill check happens during
+            // an earlier stage (in tx_verifier::check_transaction), we'll hit AttemptToFillOrderWithZero
+            // first in this case.
+            if give_amount != filled_amount || version == OrdersVersion::V0 {
                 assert_eq!(
                     res.unwrap_err(),
                     chainstate::ChainstateError::ProcessBlockError(
@@ -1001,8 +1004,6 @@ fn fill_partially_then_conclude(#[case] seed: Seed, #[case] version: OrdersVersi
                     )
                 );
             } else {
-                // Note: the zero fill check happens during an earlier stage (in tx_verifier::check_transaction),
-                // so in this case we'll hit AttemptToFillOrderWithZero first.
                 assert_eq!(
                     res.unwrap_err(),
                     chainstate::ChainstateError::ProcessBlockError(
@@ -3344,11 +3345,13 @@ fn fill_freeze_conclude_order(#[case] seed: Seed) {
 // Orders with zero values are not allowed.
 #[rstest]
 #[trace]
-#[case(Seed::from_entropy())]
-fn order_with_zero_value(#[case] seed: Seed) {
+#[case(Seed::from_entropy(), OrdersVersion::V0)]
+#[trace]
+#[case(Seed::from_entropy(), OrdersVersion::V1)]
+fn order_with_zero_value(#[case] seed: Seed, #[case] version: OrdersVersion) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::builder(&mut rng).build();
+        let mut tf = create_test_framework_with_orders(&mut rng, version);
 
         let (token_id, tokens_outpoint, coins_outpoint) =
             issue_and_mint_token_from_genesis(&mut rng, &mut tf);

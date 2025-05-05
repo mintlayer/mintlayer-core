@@ -16,14 +16,11 @@
 use rstest::rstest;
 
 use chainstate_test_framework::{empty_witness, TransactionBuilder};
-use common::{
-    chain::{
-        config::{create_unit_test_config, create_unit_test_config_builder},
-        signature::inputsig::InputWitness,
-        timelock::OutputTimeLock,
-        OrderData,
-    },
-    primitives::H256,
+use common::chain::{
+    config::{create_unit_test_config, create_unit_test_config_builder},
+    signature::inputsig::InputWitness,
+    timelock::OutputTimeLock,
+    OrderData,
 };
 use randomness::Rng;
 use test_utils::random::{make_seedable_rng, Seed};
@@ -49,7 +46,7 @@ fn diamond_unconfirmed_descendants(#[case] seed: Seed) {
     let mut output_cache = OutputCache::empty();
 
     // A
-    let genesis_tx_id = Id::<Transaction>::new(H256::random_using(&mut rng));
+    let genesis_tx_id = Id::<Transaction>::random_using(&mut rng);
     let tx_a = TransactionBuilder::new()
         .add_input(
             TxInput::from_utxo(genesis_tx_id.into(), 0),
@@ -183,7 +180,7 @@ fn update_conflicting_txs_parent_and_child(#[case] seed: Seed) {
     let token_id = TokenId::random_using(&mut rng);
 
     // A
-    let genesis_tx_id = Id::<Transaction>::new(H256::random_using(&mut rng));
+    let genesis_tx_id = Id::<Transaction>::random_using(&mut rng);
     let tx_a = TransactionBuilder::new()
         .add_input(
             TxInput::from_utxo(genesis_tx_id.into(), 0),
@@ -264,7 +261,7 @@ fn update_conflicting_txs_parent_and_child(#[case] seed: Seed) {
         )
         .build();
 
-    let block_id = Id::<GenBlock>::new(H256::random_using(&mut rng));
+    let block_id = Id::random_using(&mut rng);
     let result = output_cache
         .update_conflicting_txs(&chain_config, tx_d.transaction(), block_id)
         .unwrap();
@@ -305,7 +302,7 @@ fn update_conflicting_txs_frozen_token_only_in_outputs(#[case] seed: Seed) {
     let mut output_cache = OutputCache::empty();
     let token_id = TokenId::random_using(&mut rng);
 
-    let genesis_tx_id = Id::<Transaction>::new(H256::random_using(&mut rng));
+    let genesis_tx_id = Id::<Transaction>::random_using(&mut rng);
     let tx_a = TransactionBuilder::new()
         .add_input(
             TxInput::from_utxo(genesis_tx_id.into(), 0),
@@ -416,7 +413,7 @@ fn update_conflicting_txs_frozen_token_only_in_outputs(#[case] seed: Seed) {
         )
         .build();
 
-    let block_id = Id::<GenBlock>::new(H256::random_using(&mut rng));
+    let block_id = Id::random_using(&mut rng);
     let result = output_cache
         .update_conflicting_txs(&chain_config, tx_d.transaction(), block_id)
         .unwrap()
@@ -479,7 +476,7 @@ fn token_id_in_add_tx(#[case] seed: Seed) {
         )
         .build();
 
-    let genesis_tx_id = Id::<Transaction>::new(H256::random_using(&mut rng));
+    let genesis_tx_id = Id::<Transaction>::random_using(&mut rng);
     let tx = TransactionBuilder::new()
         .add_input(
             TxInput::Account(AccountOutPoint::new(
@@ -651,4 +648,96 @@ fn token_id_in_add_tx(#[case] seed: Seed) {
         assert!(!output_cache.token_issuance.contains_key(&correct_token_id));
         assert!(!output_cache.token_issuance.contains_key(&wrong_token_id));
     }
+}
+
+// Having transactions "A->B->C", where B is Inactive and C is Conflicted,
+// abandon B and check that both B and C get into the "Abandoned" state.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn abandon_transaction(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let chain_config = create_unit_test_config();
+    let best_block_height = BlockHeight::new(rng.gen());
+    let mut output_cache = OutputCache::empty();
+
+    let genesis_tx_id = Id::<Transaction>::random_using(&mut rng);
+    let tx_a = TransactionBuilder::new()
+        .add_input(
+            TxInput::from_utxo(genesis_tx_id.into(), 0),
+            InputWitness::NoSignature(None),
+        )
+        .add_output(TxOutput::Transfer(
+            OutputValue::Coin(Amount::from_atoms(rng.gen())),
+            Destination::AnyoneCanSpend,
+        ))
+        .build();
+    let tx_a_id = tx_a.transaction().get_id();
+
+    output_cache
+        .add_tx(
+            &chain_config,
+            best_block_height,
+            tx_a_id.into(),
+            WalletTx::Tx(TxData::new(tx_a, TxState::Inactive(0))),
+        )
+        .unwrap();
+
+    let tx_b = TransactionBuilder::new()
+        .add_input(
+            TxInput::from_utxo(tx_a_id.into(), 0),
+            empty_witness(&mut rng),
+        )
+        .add_output(TxOutput::Transfer(
+            OutputValue::Coin(Amount::from_atoms(rng.gen())),
+            Destination::AnyoneCanSpend,
+        ))
+        .build();
+    let tx_b_id = tx_b.transaction().get_id();
+
+    output_cache
+        .add_tx(
+            &chain_config,
+            best_block_height,
+            tx_b_id.into(),
+            WalletTx::Tx(TxData::new(tx_b.clone(), TxState::Inactive(0))),
+        )
+        .unwrap();
+
+    let tx_c = TransactionBuilder::new()
+        .add_input(
+            TxInput::from_utxo(tx_b_id.into(), 0),
+            empty_witness(&mut rng),
+        )
+        .add_output(TxOutput::Transfer(
+            OutputValue::Coin(Amount::from_atoms(rng.gen())),
+            Destination::AnyoneCanSpend,
+        ))
+        .build();
+    let tx_c_id = tx_c.transaction().get_id();
+
+    let block_id = Id::random_using(&mut rng);
+    output_cache
+        .add_tx(
+            &chain_config,
+            best_block_height,
+            tx_c_id.into(),
+            WalletTx::Tx(TxData::new(tx_c.clone(), TxState::Conflicted(block_id))),
+        )
+        .unwrap();
+
+    let result = output_cache
+        .abandon_transaction(&chain_config, tx_b_id)
+        .unwrap()
+        .into_iter()
+        .collect::<BTreeMap<_, _>>();
+
+    assert_eq!(
+        result,
+        BTreeMap::from([
+            (tx_b_id, WalletTx::Tx(TxData::new(tx_b, TxState::Abandoned))),
+            (tx_c_id, WalletTx::Tx(TxData::new(tx_c, TxState::Abandoned))),
+        ])
+    );
 }
