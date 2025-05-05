@@ -43,7 +43,8 @@ pub struct Podman {
     env: Vec<(String, String)>,
     port_mappings: Vec<(Option<u16>, u16)>,
     container: Container,
-    stopped: bool,
+    // `None` means that the container hasn't been created yet.
+    is_running: Option<bool>,
 }
 
 impl Podman {
@@ -57,7 +58,7 @@ impl Podman {
             env: Vec::new(),
             port_mappings: Vec::new(),
             container,
-            stopped: false,
+            is_running: None,
         }
     }
 
@@ -76,7 +77,6 @@ impl Podman {
         let mut command = std::process::Command::new("podman");
         command.arg("run");
         command.arg("--detach");
-        command.arg("--rm");
         command.arg("--name");
         command.arg(&self.name);
         for (key, value) in &self.env {
@@ -91,18 +91,8 @@ impl Podman {
             };
         }
         command.arg(self.container.container_name());
-        logging::log::debug!(
-            "Podman run command args: {:?}",
-            command.get_args().map(|s| s.to_string_lossy()).collect::<Vec<_>>().join(" ")
-        );
-        let output = command.output().unwrap();
-        assert!(
-            output.status.success(),
-            "Failed to run podman command: {:?}\n{}",
-            command,
-            String::from_utf8_lossy(&output.stderr)
-        );
-        self.stopped = false;
+        Self::run_command(command);
+        self.is_running = Some(true);
     }
 
     pub fn get_port_mapping(&self, container_port: u16) -> Option<u16> {
@@ -111,17 +101,7 @@ impl Podman {
         command.arg(&self.name);
         command.arg(format!("{}", container_port));
 
-        let output = command.output().unwrap();
-        logging::log::debug!(
-            "Podman ports command args: {:?}",
-            command.get_args().map(|s| s.to_string_lossy()).collect::<Vec<_>>().join(" ")
-        );
-        assert!(
-            output.status.success(),
-            "Failed to run podman command: {:?}\n{}",
-            command,
-            String::from_utf8_lossy(&output.stderr)
-        );
+        let output = Self::run_command(command);
         let stdout = String::from_utf8(output.stdout).unwrap();
         let line = stdout.lines().next()?;
         let parts = line.split(':').collect::<Vec<&str>>();
@@ -138,18 +118,20 @@ impl Podman {
         let mut command = std::process::Command::new("podman");
         command.arg("stop");
         command.arg(&self.name);
-        let output = command.output().unwrap();
-        logging::log::debug!(
-            "Podman stop command args: {:?}",
-            command.get_args().map(|s| s.to_string_lossy()).collect::<Vec<_>>().join(" ")
-        );
+        Self::run_command(command);
+        self.is_running = Some(false);
+    }
+
+    pub fn restart(&mut self) {
         assert!(
-            output.status.success(),
-            "Failed to run podman command: {:?}\n{}",
-            command,
-            String::from_utf8_lossy(&output.stderr)
+            self.is_running == Some(false),
+            "The container must have been created and stopped before it can be restarted"
         );
-        self.stopped = true;
+        let mut command = std::process::Command::new("podman");
+        command.arg("start");
+        command.arg(&self.name);
+        Self::run_command(command);
+        self.is_running = Some(true);
     }
 
     /// Uses the command `podman logs` to print the logs of the container.
@@ -157,17 +139,7 @@ impl Podman {
         let mut command = std::process::Command::new("podman");
         command.arg("logs");
         command.arg(&self.name);
-        let output = command.output().unwrap();
-        logging::log::debug!(
-            "Podman logs command args: {:?}",
-            command.get_args().map(|s| s.to_string_lossy()).collect::<Vec<_>>().join(" ")
-        );
-        assert!(
-            output.status.success(),
-            "Failed to run podman command: {:?}\n{}",
-            command,
-            String::from_utf8_lossy(&output.stderr)
-        );
+        let output = Self::run_command(command);
 
         {
             let mut logs = String::new();
@@ -192,10 +164,35 @@ impl Podman {
         }
     }
 
+    fn run_command(mut command: std::process::Command) -> std::process::Output {
+        let output = command.output().unwrap();
+        logging::log::debug!(
+            "Podman command args: {:?}",
+            command.get_args().map(|s| s.to_string_lossy()).collect::<Vec<_>>().join(" ")
+        );
+        assert!(
+            output.status.success(),
+            "Failed to run podman command: {:?}\n{}",
+            command,
+            String::from_utf8_lossy(&output.stderr)
+        );
+        output
+    }
+
+    fn remove_container(&mut self) {
+        let mut command = std::process::Command::new("podman");
+        command.arg("rm");
+        command.arg(&self.name);
+        Self::run_command(command);
+    }
+
     fn destructor(&mut self) {
-        self.print_logs();
-        if !self.stopped {
-            self.stop();
+        if let Some(is_running) = self.is_running {
+            self.print_logs();
+            if is_running {
+                self.stop();
+            }
+            self.remove_container();
         }
     }
 
