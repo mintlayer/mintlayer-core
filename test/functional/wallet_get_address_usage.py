@@ -154,6 +154,9 @@ class WalletGetAddressUsage(BitcoinTestFramework):
 
             assert_in("The transaction was submitted successfully", await wallet.create_stake_pool(stake_pool_amount, 0, 0.5, decommission_address))
             self.generate_block()
+            # sync the wallet
+            output = await wallet.sync()
+            assert_in("Success", output)
 
             expected_output = """+-------+---------+----------------------------------------------+--------------------------------+
 | Index | Purpose | Address                                      | Is used in transaction history | Coins
