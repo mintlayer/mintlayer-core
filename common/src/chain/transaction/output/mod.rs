@@ -237,8 +237,8 @@ impl TextSummary for TxOutput {
             TokenTotalSupply::Unlimited => "Unlimited".to_string(),
         };
         let fmt_tkn_frzble = |f: &IsTokenFreezable| match f {
-            IsTokenFreezable::No => "Yes".to_string(),
-            IsTokenFreezable::Yes => "No".to_string(),
+            IsTokenFreezable::No => "No".to_string(),
+            IsTokenFreezable::Yes => "Yes".to_string(),
         };
         let fmt_tkn_iss = |iss: &TokenIssuance| {
             match iss {

@@ -117,34 +117,39 @@ class WalletTokens(BitcoinTestFramework):
             # invalid ticker
             # > max len
             invalid_ticker = ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(random.randint(13, 20)))
-            token_id, err = await wallet.issue_new_token(invalid_ticker, 2, "http://uri", address)
+            token_id, tx_id, err = await wallet.issue_new_token(invalid_ticker, 2, "http://uri", address)
             assert token_id is None
+            assert tx_id is None
             assert err is not None
             assert_in("Invalid ticker length", err)
             # non alphanumeric
             invalid_ticker = "asd" + random.choice(r"#$%&'()*+,-./:;<=>?@[]^_`{|}~")
-            token_id, err = await wallet.issue_new_token("asd#", 2, "http://uri", address)
+            token_id, tx_id, err = await wallet.issue_new_token("asd#", 2, "http://uri", address)
             assert token_id is None
+            assert tx_id is None
             assert err is not None
             assert_in("Invalid character in token ticker", err)
 
             # invalid url
-            token_id, err = await wallet.issue_new_token("XXX", 2, "123 123", address)
+            token_id, tx_id, err = await wallet.issue_new_token("XXX", 2, "123 123", address)
             assert token_id is None
+            assert tx_id is None
             assert err is not None
             assert_in("Incorrect metadata URI", err)
 
             # invalid num decimals
-            token_id, err = await wallet.issue_new_token("XXX", 99, "http://uri", address)
+            token_id, tx_id, err = await wallet.issue_new_token("XXX", 99, "http://uri", address)
             assert token_id is None
+            assert tx_id is None
             assert err is not None
             assert_in("Too many decimals", err)
 
             # issue a valid token
             valid_ticker = ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(random.randint(1, 5)))
             num_decimals = random.randint(1, 5)
-            token_id, err = await wallet.issue_new_token(valid_ticker, num_decimals, "http://uri", address)
+            token_id, tx_id, err = await wallet.issue_new_token(valid_ticker, num_decimals, "http://uri", address)
             assert token_id is not None
+            assert tx_id is not None
             assert err is None
             self.log.info(f"new token id: {token_id}")
 
@@ -186,8 +191,9 @@ class WalletTokens(BitcoinTestFramework):
             assert_in(f"{token_id} amount: {token_balance_str}", await wallet.get_balance())
 
             ## try to issue a new token, should fail with not enough coins
-            token_id, err = await wallet.issue_new_token("XXX", 2, "http://uri", address)
+            token_id, tx_id, err = await wallet.issue_new_token("XXX", 2, "http://uri", address)
             assert token_id is None
+            assert tx_id is None
             assert err is not None
             assert_in("Not enough funds", err)
 

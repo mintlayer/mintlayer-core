@@ -116,10 +116,20 @@ class WalletTokens(BitcoinTestFramework):
             address = await wallet.new_address()
 
             # issue a valid token
-            token_id, err = await wallet.issue_new_token("XXX", 2, "http://uri", address)
+            ticker = "XXX"
+            decimals = 2
+            url = "http://uri"
+            token_id, tx_id, err = await wallet.issue_new_token(ticker, decimals, url, address)
             assert token_id is not None
+            assert tx_id is not None
             assert err is None
             self.log.info(f"new token id: {token_id}")
+
+            hex_tx = await wallet.get_raw_signed_transaction(tx_id)
+            summary = await wallet.inspect_transaction(hex_tx)
+            assert_in(f"Ticker({ticker})", summary)
+            assert_in(f"Decimals({decimals})", summary)
+            assert_in("IsFreezable(Yes)", summary)
 
             self.generate_block()
             assert_in("Success", await wallet.sync())

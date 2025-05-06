@@ -95,14 +95,16 @@ class WalletTokensTransferFromMultisigAddr(BitcoinTestFramework):
         self.log.debug(f'Created address: {address}')
 
         # Create token foo.
-        token_foo_id, err = await wallet.issue_new_token('FOO', 5, "http://uri", address)
+        token_foo_id, token_foo_tx_id, err = await wallet.issue_new_token('FOO', 5, "http://uri", address)
         assert token_foo_id is not None
+        assert token_foo_tx_id is not None
         assert err is None
         self.log.debug(f"token foo id: {token_foo_id}")
 
         # Create token bar.
-        token_bar_id, err = await wallet.issue_new_token('BAR', 10, "http://uri", address)
+        token_bar_id, token_bar_tx_id, err = await wallet.issue_new_token('BAR', 10, "http://uri", address)
         assert token_bar_id is not None
+        assert token_bar_tx_id is not None
         assert err is None
         self.log.debug(f"token bar id: {token_bar_id}")
 

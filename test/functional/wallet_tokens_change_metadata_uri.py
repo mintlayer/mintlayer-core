@@ -114,8 +114,9 @@ class WalletTokens(BitcoinTestFramework):
             # issue a valid token
             address = await wallet.new_address()
             metadata_uri = "http://uri"
-            token_id, err = await wallet.issue_new_token("XXX", 2, metadata_uri, address, token_supply='lockable')
+            token_id, tx_id, err = await wallet.issue_new_token("XXX", 2, metadata_uri, address, token_supply='lockable')
             assert token_id is not None
+            assert tx_id is not None
             assert err is None
             self.log.info(f"new token id: {token_id}")
 

@@ -119,8 +119,9 @@ class WalletConflictTransaction(BitcoinTestFramework):
             assert_in(f"Coins amount: {coins_to_send * 2 + token_fee}", await wallet.get_balance())
 
             address = await wallet.new_address()
-            token_id, err = await wallet.issue_new_token("XXX", 2, "http://uri", address)
+            token_id, tx_id, err = await wallet.issue_new_token("XXX", 2, "http://uri", address)
             assert token_id is not None
+            assert tx_id is not None
             assert err is None
 
             self.generate_block()

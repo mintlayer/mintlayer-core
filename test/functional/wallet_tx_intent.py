@@ -108,8 +108,9 @@ class WalletTxIntent(BitcoinTestFramework):
         self.log.debug(f'token_issuer_address = {token_issuer_address}')
 
         # Create the token.
-        token_id, err = await wallet.issue_new_token('FOO', 5, "http://uri", token_issuer_address)
+        token_id, tx_id, err = await wallet.issue_new_token('FOO', 5, "http://uri", token_issuer_address)
         assert token_id is not None
+        assert tx_id is not None
         assert err is None
         self.log.debug(f"token id: {token_id}")
 

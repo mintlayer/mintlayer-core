@@ -126,7 +126,7 @@ pub fn txoutput_to_json(
         }
         TxOutput::Burn(value) => {
             json!({
-                "type": "LockThenTransfer",
+                "type": "Burn",
                 "value": outputvalue_to_json(value, chain_config, token_decimals),
             })
         }

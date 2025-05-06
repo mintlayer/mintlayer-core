@@ -291,9 +291,9 @@ class WalletRpcController(WalletCliControllerBase):
         ])
 
         if 'result' in result:
-            return result['result']['token_id'], None
+            return result['result']['token_id'], result['result']['tx_id'], None
         else:
-            return None, result['error']
+            return None, None, result['error']
 
     async def mint_tokens(self, token_id: str, address: str, amount: int) -> str:
         return self._write_command("token_mint", [self.account, token_id, address, {'decimal': str(amount)}, {'in_top_x_mb': 5}])['result']

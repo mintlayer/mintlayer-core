@@ -134,7 +134,7 @@ class WalletHtlcRefund(BitcoinTestFramework):
             # issue a valid token
             token_ticker = "XXXX"
             token_number_of_decimals = 2
-            token_id, _ = (await wallet.issue_new_token(token_ticker, token_number_of_decimals, "http://uri", alice_address))
+            token_id, _, _ = (await wallet.issue_new_token(token_ticker, token_number_of_decimals, "http://uri", alice_address))
             assert token_id is not None
             self.log.info(f"new token id: {token_id}")
             token_id_hex = node.test_functions_reveal_token_id(token_id)
