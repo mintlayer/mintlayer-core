@@ -302,6 +302,18 @@ pub enum WalletCommand {
     #[command(flatten)]
     ColdCommands(ColdWalletCommand),
 
+    /// Configure broadcasting to Mempool to true or false.
+    ///
+    /// If set to false, any command that creates a transaction will return it to the user and not submit it automatically.
+    /// The transaction will need to be submitted manually with the command `node-submit-transaction`.
+    ///
+    /// The effect of this is not preserved when the CLI wallet is closed.
+    #[clap(name = "config-broadcast")]
+    ConfigBroadcast {
+        #[arg(value_enum)]
+        broadcast: YesNo,
+    },
+
     #[clap(name = "account-create")]
     CreateNewAccount { name: Option<String> },
 
@@ -551,7 +563,11 @@ pub enum WalletCommand {
         /// The receiving address of the coins or tokens
         destination_address: String,
         /// The addresses to be swept
+        #[arg(required_unless_present("all"))]
         addresses: Vec<String>,
+        /// Sweep all addresses
+        #[arg(long = "all", default_value_t = false, conflicts_with_all(["addresses"]))]
+        all: bool,
     },
 
     #[clap(name = "staking-sweep-delegation")]

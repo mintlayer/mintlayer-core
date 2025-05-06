@@ -31,16 +31,19 @@ use itertools::Itertools;
 use mempool::tx_options::TxOptionsOverrides;
 use node_comm::node_traits::NodeInterface;
 use serialization::{hex::HexEncode, hex_encoded::HexEncoded};
-use utils::qrcode::{QrCode, QrCodeError};
+use utils::{
+    ensure,
+    qrcode::{QrCode, QrCodeError},
+};
 use wallet::version::get_version;
 use wallet_controller::types::{GenericTokenTransfer, WalletTypeArgs};
 use wallet_rpc_client::wallet_rpc_traits::{PartialOrSignedTx, WalletInterface};
 use wallet_rpc_lib::{
     cmdline::CliHardwareWalletType,
     types::{
-        Balances, ComposedTransaction, ControllerConfig, MnemonicInfo, NewTransaction, NftMetadata,
-        RpcInspectTransaction, RpcSignatureStats, RpcSignatureStatus, RpcStandaloneAddressDetails,
-        RpcValidatedSignatures, TokenMetadata,
+        Balances, ComposedTransaction, ControllerConfig, MnemonicInfo, NewSubmittedTransaction,
+        NftMetadata, RpcInspectTransaction, RpcNewTransaction, RpcSignatureStats,
+        RpcSignatureStatus, RpcStandaloneAddressDetails, RpcValidatedSignatures, TokenMetadata,
     },
 };
 
@@ -126,7 +129,27 @@ where
         Ok(status)
     }
 
-    pub fn new_tx_submitted_command(new_tx: NewTransaction) -> ConsoleCommand {
+    pub fn new_tx_command(new_tx: RpcNewTransaction, chain_config: &ChainConfig) -> ConsoleCommand {
+        let status_text = if new_tx.broadcasted {
+            let mut summary = new_tx.tx.take().transaction().text_summary(chain_config);
+            format_fees(&mut summary, &new_tx.fees);
+
+            format!(
+                "{summary}\nThe transaction was submitted successfully with ID:\n{}",
+                id_to_hex_string(*new_tx.tx_id.as_hash())
+            )
+        } else {
+            let hex = new_tx.tx.to_string();
+            let mut summary = new_tx.tx.take().transaction().text_summary(chain_config);
+            format_fees(&mut summary, &new_tx.fees);
+
+            format!("{summary}\nThe transaction was created and is ready to be submitted:\n{hex}",)
+        };
+
+        ConsoleCommand::Print(status_text)
+    }
+
+    pub fn new_tx_submitted_command(new_tx: NewSubmittedTransaction) -> ConsoleCommand {
         let status_text = format!(
             "The transaction was submitted successfully with ID:\n{}",
             id_to_hex_string(*new_tx.tx_id.as_hash())
@@ -190,7 +213,7 @@ where
                 let msg = match response.mnemonic {
                     MnemonicInfo::NewlyGenerated { mnemonic } => {
                         format!(
-                            "New wallet created successfully\nYour mnemonic: {}\
+                            "New wallet created successfully\nYour mnemonic: {}\n\
                         Please write it somewhere safe to be able to restore your wallet. \
                         It's recommended that you attempt to recover the wallet now as practice\
                         to check that you arrive at the same addresses, \
@@ -784,6 +807,13 @@ where
                 self.handle_cold_wallet_command(command, chain_config).await
             }
 
+            WalletCommand::ConfigBroadcast { broadcast } => {
+                self.config.broadcast_to_mempool = broadcast.to_bool();
+                Ok(ConsoleCommand::Print(format!(
+                    "Broadcast to Mempool set to: {broadcast:?}"
+                )))
+            }
+
             WalletCommand::ChainstateInfo => {
                 let info = self.wallet().await?.chainstate_info().await?;
                 Ok(ConsoleCommand::Print(format!("{info:#?}")))
@@ -1178,7 +1208,7 @@ where
                     .mint_tokens(selected_account, token_id, address, amount, self.config)
                     .await?;
 
-                Ok(Self::new_tx_submitted_command(new_tx))
+                Ok(Self::new_tx_command(new_tx, chain_config))
             }
 
             WalletCommand::UnmintTokens { token_id, amount } => {
@@ -1186,7 +1216,7 @@ where
                 let new_tx =
                     wallet.unmint_tokens(selected_account, token_id, amount, self.config).await?;
 
-                Ok(Self::new_tx_submitted_command(new_tx))
+                Ok(Self::new_tx_command(new_tx, chain_config))
             }
 
             WalletCommand::LockTokenSupply { token_id } => {
@@ -1194,7 +1224,7 @@ where
                 let new_tx =
                     wallet.lock_token_supply(selected_account, token_id, self.config).await?;
 
-                Ok(Self::new_tx_submitted_command(new_tx))
+                Ok(Self::new_tx_command(new_tx, chain_config))
             }
 
             WalletCommand::FreezeToken {
@@ -1211,14 +1241,14 @@ where
                     )
                     .await?;
 
-                Ok(Self::new_tx_submitted_command(new_tx))
+                Ok(Self::new_tx_command(new_tx, chain_config))
             }
 
             WalletCommand::UnfreezeToken { token_id } => {
                 let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
                 let new_tx = wallet.unfreeze_token(selected_account, token_id, self.config).await?;
 
-                Ok(Self::new_tx_submitted_command(new_tx))
+                Ok(Self::new_tx_command(new_tx, chain_config))
             }
 
             WalletCommand::ChangeTokenAuthority { token_id, address } => {
@@ -1227,7 +1257,7 @@ where
                     .change_token_authority(selected_account, token_id, address, self.config)
                     .await?;
 
-                Ok(Self::new_tx_submitted_command(new_tx))
+                Ok(Self::new_tx_command(new_tx, chain_config))
             }
 
             WalletCommand::ChangeTokenMetadataUri {
@@ -1244,7 +1274,7 @@ where
                     )
                     .await?;
 
-                Ok(Self::new_tx_submitted_command(new_tx))
+                Ok(Self::new_tx_command(new_tx, chain_config))
             }
 
             WalletCommand::Rescan => {
@@ -1381,13 +1411,21 @@ where
                 let new_tx = wallet
                     .send_coins(selected_account, address, amount, input_utxos, self.config)
                     .await?;
-                Ok(Self::new_tx_submitted_command(new_tx))
+                Ok(Self::new_tx_command(new_tx, chain_config))
             }
 
             WalletCommand::SweepFromAddress {
                 destination_address,
                 addresses,
+                all,
             } => {
+                // Clap should already prevent this
+                ensure!(
+                    all && addresses.is_empty() || !all && !addresses.is_empty(),
+                    WalletCliCommandError::<N>::InvalidInput(
+                        "Either set `--all` to sweep all addresses, or provide specific addresses — not both".to_owned()
+                    )
+                );
                 let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
 
                 let new_tx = wallet
@@ -1395,11 +1433,12 @@ where
                         selected_account,
                         destination_address,
                         addresses,
+                        all,
                         self.config,
                     )
                     .await?;
 
-                Ok(Self::new_tx_submitted_command(new_tx))
+                Ok(Self::new_tx_command(new_tx, chain_config))
             }
 
             WalletCommand::SweepFromDelegation {
@@ -1417,7 +1456,7 @@ where
                     )
                     .await?;
 
-                Ok(Self::new_tx_submitted_command(new_tx))
+                Ok(Self::new_tx_command(new_tx, chain_config))
             }
 
             WalletCommand::CreateTxFromColdInput {
@@ -1530,7 +1569,7 @@ where
                     .send_tokens(selected_account, token_id, address, amount, self.config)
                     .await?;
 
-                Ok(Self::new_tx_submitted_command(new_tx))
+                Ok(Self::new_tx_command(new_tx, chain_config))
             }
 
             WalletCommand::MakeTxToSendTokensToAddressWithIntent {
@@ -1699,7 +1738,7 @@ where
                     )
                     .await?;
 
-                Ok(Self::new_tx_submitted_command(new_tx))
+                Ok(Self::new_tx_command(new_tx, chain_config))
             }
 
             WalletCommand::DecommissionStakePool {
@@ -1715,7 +1754,7 @@ where
                         self.config,
                     )
                     .await?;
-                Ok(Self::new_tx_submitted_command(new_tx))
+                Ok(Self::new_tx_command(new_tx, chain_config))
             }
 
             WalletCommand::DecommissionStakePoolRequest {
@@ -1750,7 +1789,7 @@ where
             WalletCommand::DepositData { hex_data } => {
                 let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
                 let new_tx = wallet.deposit_data(selected_account, hex_data, self.config).await?;
-                Ok(Self::new_tx_submitted_command(new_tx))
+                Ok(Self::new_tx_command(new_tx, chain_config))
             }
 
             WalletCommand::NodeVersion => {

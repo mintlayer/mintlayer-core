@@ -201,7 +201,7 @@ impl<K: AccountKeyChains> Account<K> {
     #[allow(clippy::too_many_arguments)]
     fn select_inputs_for_send_request(
         &mut self,
-        request: SendRequest,
+        mut request: SendRequest,
         input_utxos: SelectedInputs,
         selection_algo: Option<CoinSelectionAlgo>,
         change_addresses: BTreeMap<Currency, Address<Destination>>,
@@ -414,23 +414,24 @@ impl<K: AccountKeyChains> Account<K> {
             selection_result = selection_result.add_change(
                 (total_fees_not_paid - new_total_fees_not_paid).unwrap_or(Amount::ZERO),
             )?;
+
+            request.add_fee(pay_fee_with_currency, new_total_fees_not_paid)?;
+        } else {
+            let new_total_fees_not_paid = current_fee_rate
+                .compute_fee(total_tx_size)
+                .map_err(|_| UtxoSelectorError::AmountArithmeticError)?
+                .into();
+            request.add_fee(pay_fee_with_currency, new_total_fees_not_paid)?;
         }
 
         selected_inputs.insert(pay_fee_with_currency, selection_result);
 
         // Check outputs against inputs and create change
-        self.check_outputs_and_add_change(
-            &pay_fee_with_currency,
-            selected_inputs,
-            change_addresses,
-            db_tx,
-            request,
-        )
+        self.check_outputs_and_add_change(selected_inputs, change_addresses, db_tx, request)
     }
 
     fn check_outputs_and_add_change(
         &mut self,
-        pay_fee_with_currency: &Currency,
         selected_inputs: BTreeMap<Currency, utxo_selector::SelectionResult>,
         mut change_addresses: BTreeMap<Currency, Address<Destination>>,
         db_tx: &mut impl WalletStorageWriteLocked,
@@ -438,11 +439,6 @@ impl<K: AccountKeyChains> Account<K> {
     ) -> Result<SendRequest, WalletError> {
         for (currency, currency_result) in selected_inputs.iter() {
             let change_amount = currency_result.get_change();
-            let fees = currency_result.get_total_fees();
-
-            if fees > Amount::ZERO {
-                request.add_fee(*pay_fee_with_currency, fees)?;
-            }
 
             if change_amount > Amount::ZERO {
                 let change_address = if let Some(change_address) = change_addresses.remove(currency)
@@ -532,7 +528,7 @@ impl<K: AccountKeyChains> Account<K> {
     pub fn sweep_addresses(
         &mut self,
         destination: Destination,
-        request: SendRequest,
+        mut request: SendRequest,
         current_fee_rate: FeeRate,
     ) -> WalletResult<SendRequest> {
         let mut grouped_inputs = group_preselected_inputs(
@@ -593,6 +589,7 @@ impl<K: AccountKeyChains> Account<K> {
             destination,
         );
         outputs.push(coin_output);
+        request.add_fee(Currency::Coin, total_fee)?;
 
         Ok(request.with_outputs(outputs))
     }

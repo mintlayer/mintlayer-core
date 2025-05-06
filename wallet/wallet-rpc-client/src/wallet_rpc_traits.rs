@@ -36,10 +36,11 @@ use wallet_controller::{
 };
 use wallet_rpc_lib::types::{
     AddressInfo, AddressWithUsageInfo, Balances, BlockInfo, ComposedTransaction, CreatedWallet,
-    DelegationInfo, HardwareWalletType, LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegation,
-    NewOrder, NewTransaction, NftMetadata, NodeVersion, OpenedWallet, PoolInfo, PublicKeyInfo,
-    RpcHashedTimelockContract, RpcInspectTransaction, RpcSignatureStatus, RpcStandaloneAddresses,
-    RpcTokenId, SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
+    DelegationInfo, HardwareWalletType, LegacyVrfPublicKeyInfo, NewAccountInfo,
+    NewDelegationTransaction, NewOrderTransaction, NewSubmittedTransaction, NewTokenTransaction,
+    NftMetadata, NodeVersion, OpenedWallet, PoolInfo, PublicKeyInfo, RpcHashedTimelockContract,
+    RpcInspectTransaction, RpcNewTransaction, RpcSignatureStatus, RpcStandaloneAddresses,
+    SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
     StandaloneAddressWithDetails, TokenMetadata, TxOptionsOverrides, UtxoInfo, VrfPublicKeyInfo,
 };
 use wallet_types::{
@@ -216,7 +217,7 @@ pub trait WalletInterface {
         tx: HexEncoded<SignedTransaction>,
         do_not_store: bool,
         options: TxOptionsOverrides,
-    ) -> Result<NewTransaction, Self::Error>;
+    ) -> Result<NewSubmittedTransaction, Self::Error>;
 
     async fn sign_challenge(
         &self,
@@ -261,15 +262,16 @@ pub trait WalletInterface {
         amount: DecimalAmount,
         selected_utxos: Vec<UtxoOutPoint>,
         config: ControllerConfig,
-    ) -> Result<NewTransaction, Self::Error>;
+    ) -> Result<RpcNewTransaction, Self::Error>;
 
     async fn sweep_addresses(
         &self,
         account_index: U31,
         destination_address: String,
         from_addresses: Vec<String>,
+        all: bool,
         config: ControllerConfig,
-    ) -> Result<NewTransaction, Self::Error>;
+    ) -> Result<RpcNewTransaction, Self::Error>;
 
     async fn sweep_delegation(
         &self,
@@ -277,7 +279,7 @@ pub trait WalletInterface {
         destination_address: String,
         delegation_id: String,
         config: ControllerConfig,
-    ) -> Result<NewTransaction, Self::Error>;
+    ) -> Result<RpcNewTransaction, Self::Error>;
 
     async fn transaction_from_cold_input(
         &self,
@@ -305,7 +307,7 @@ pub trait WalletInterface {
         staker_address: Option<String>,
         vrf_public_key: Option<String>,
         config: ControllerConfig,
-    ) -> Result<NewTransaction, Self::Error>;
+    ) -> Result<RpcNewTransaction, Self::Error>;
 
     async fn decommission_stake_pool(
         &self,
@@ -313,7 +315,7 @@ pub trait WalletInterface {
         pool_id: String,
         output_address: Option<String>,
         config: ControllerConfig,
-    ) -> Result<NewTransaction, Self::Error>;
+    ) -> Result<RpcNewTransaction, Self::Error>;
 
     async fn decommission_stake_pool_request(
         &self,
@@ -329,7 +331,7 @@ pub trait WalletInterface {
         address: String,
         pool_id: String,
         config: ControllerConfig,
-    ) -> Result<NewDelegation, Self::Error>;
+    ) -> Result<NewDelegationTransaction, Self::Error>;
 
     async fn delegate_staking(
         &self,
@@ -337,7 +339,7 @@ pub trait WalletInterface {
         amount: DecimalAmount,
         delegation_id: String,
         config: ControllerConfig,
-    ) -> Result<NewTransaction, Self::Error>;
+    ) -> Result<RpcNewTransaction, Self::Error>;
 
     async fn withdraw_from_delegation(
         &self,
@@ -346,7 +348,7 @@ pub trait WalletInterface {
         amount: DecimalAmount,
         delegation_id: String,
         config: ControllerConfig,
-    ) -> Result<NewTransaction, Self::Error>;
+    ) -> Result<RpcNewTransaction, Self::Error>;
 
     async fn start_staking(&self, account_index: U31) -> Result<(), Self::Error>;
 
@@ -392,7 +394,7 @@ pub trait WalletInterface {
         destination_address: String,
         metadata: NftMetadata,
         config: ControllerConfig,
-    ) -> Result<RpcTokenId, Self::Error>;
+    ) -> Result<NewTokenTransaction, Self::Error>;
 
     async fn issue_new_token(
         &self,
@@ -400,7 +402,7 @@ pub trait WalletInterface {
         destination_address: String,
         metadata: TokenMetadata,
         config: ControllerConfig,
-    ) -> Result<RpcTokenId, Self::Error>;
+    ) -> Result<NewTokenTransaction, Self::Error>;
 
     async fn change_token_authority(
         &self,
@@ -408,7 +410,7 @@ pub trait WalletInterface {
         token_id: String,
         address: String,
         config: ControllerConfig,
-    ) -> Result<NewTransaction, Self::Error>;
+    ) -> Result<RpcNewTransaction, Self::Error>;
 
     async fn change_token_metadata_uri(
         &self,
@@ -416,7 +418,7 @@ pub trait WalletInterface {
         token_id: String,
         metadata_uri: String,
         config: ControllerConfig,
-    ) -> Result<NewTransaction, Self::Error>;
+    ) -> Result<RpcNewTransaction, Self::Error>;
 
     async fn mint_tokens(
         &self,
@@ -425,7 +427,7 @@ pub trait WalletInterface {
         address: String,
         amount: DecimalAmount,
         config: ControllerConfig,
-    ) -> Result<NewTransaction, Self::Error>;
+    ) -> Result<RpcNewTransaction, Self::Error>;
 
     async fn unmint_tokens(
         &self,
@@ -433,14 +435,14 @@ pub trait WalletInterface {
         token_id: String,
         amount: DecimalAmount,
         config: ControllerConfig,
-    ) -> Result<NewTransaction, Self::Error>;
+    ) -> Result<RpcNewTransaction, Self::Error>;
 
     async fn lock_token_supply(
         &self,
         account_index: U31,
         token_id: String,
         config: ControllerConfig,
-    ) -> Result<NewTransaction, Self::Error>;
+    ) -> Result<RpcNewTransaction, Self::Error>;
 
     async fn freeze_token(
         &self,
@@ -448,14 +450,14 @@ pub trait WalletInterface {
         token_id: String,
         is_unfreezable: bool,
         config: ControllerConfig,
-    ) -> Result<NewTransaction, Self::Error>;
+    ) -> Result<RpcNewTransaction, Self::Error>;
 
     async fn unfreeze_token(
         &self,
         account_index: U31,
         token_id: String,
         config: ControllerConfig,
-    ) -> Result<NewTransaction, Self::Error>;
+    ) -> Result<RpcNewTransaction, Self::Error>;
 
     async fn send_tokens(
         &self,
@@ -464,7 +466,7 @@ pub trait WalletInterface {
         address: String,
         amount: DecimalAmount,
         config: ControllerConfig,
-    ) -> Result<NewTransaction, Self::Error>;
+    ) -> Result<RpcNewTransaction, Self::Error>;
 
     async fn make_tx_for_sending_tokens_with_intent(
         &self,
@@ -496,7 +498,7 @@ pub trait WalletInterface {
         account_index: U31,
         data: String,
         config: ControllerConfig,
-    ) -> Result<NewTransaction, Self::Error>;
+    ) -> Result<RpcNewTransaction, Self::Error>;
 
     async fn create_htlc_transaction(
         &self,
@@ -505,7 +507,7 @@ pub trait WalletInterface {
         token_id: Option<String>,
         htlc: RpcHashedTimelockContract,
         config: ControllerConfig,
-    ) -> Result<HexEncoded<SignedTransaction>, Self::Error>;
+    ) -> Result<RpcNewTransaction, Self::Error>;
 
     #[allow(clippy::too_many_arguments)]
     async fn create_order(
@@ -517,7 +519,7 @@ pub trait WalletInterface {
         give_amount: DecimalAmount,
         conclude_address: String,
         config: ControllerConfig,
-    ) -> Result<NewOrder, Self::Error>;
+    ) -> Result<NewOrderTransaction, Self::Error>;
 
     async fn conclude_order(
         &self,
@@ -525,7 +527,7 @@ pub trait WalletInterface {
         order_id: String,
         output_address: Option<String>,
         config: ControllerConfig,
-    ) -> Result<NewTransaction, Self::Error>;
+    ) -> Result<RpcNewTransaction, Self::Error>;
 
     async fn fill_order(
         &self,
@@ -534,14 +536,14 @@ pub trait WalletInterface {
         fill_amount_in_ask_currency: DecimalAmount,
         output_address: Option<String>,
         config: ControllerConfig,
-    ) -> Result<NewTransaction, Self::Error>;
+    ) -> Result<RpcNewTransaction, Self::Error>;
 
     async fn freeze_order(
         &self,
         account_index: U31,
         order_id: String,
         config: ControllerConfig,
-    ) -> Result<NewTransaction, Self::Error>;
+    ) -> Result<RpcNewTransaction, Self::Error>;
 
     async fn node_version(&self) -> Result<NodeVersion, Self::Error>;
 

@@ -68,3 +68,10 @@ pub struct InspectTransaction {
     pub fees: Option<Balances>,
     pub stats: SignatureStats,
 }
+
+/// Newly signed transaction with fees that might have been broadcasted to the mempool
+pub struct NewTransaction {
+    pub tx: SignedTransaction,
+    pub fees: Balances,
+    pub broadcasted: bool,
+}

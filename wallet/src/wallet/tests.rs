@@ -1054,7 +1054,8 @@ fn wallet_accounts_creation() {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             TxAdditionalInfo::new(),
         )
-        .unwrap();
+        .unwrap()
+        .tx;
 
     // even with an unconfirmed transaction we cannot create a new account
     wallet.add_unconfirmed_tx(tx.clone(), &WalletEventsNoOp).unwrap();
@@ -1290,7 +1291,8 @@ fn wallet_get_transaction(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             TxAdditionalInfo::new(),
         )
-        .unwrap();
+        .unwrap()
+        .tx;
 
     let tx_id = tx.transaction().get_id();
 
@@ -1350,7 +1352,8 @@ fn wallet_list_mainchain_transactions(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             TxAdditionalInfo::new(),
         )
-        .unwrap();
+        .unwrap()
+        .tx;
 
     let send_tx_id = tx.transaction().get_id();
 
@@ -1373,7 +1376,8 @@ fn wallet_list_mainchain_transactions(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             TxAdditionalInfo::new(),
         )
-        .unwrap();
+        .unwrap()
+        .tx;
     let spend_from_tx_id = tx.transaction().get_id();
 
     let _ = create_block(
@@ -1471,7 +1475,7 @@ fn wallet_transactions_with_fees(#[case] seed: Seed) {
         .collect();
 
     let feerate = FeeRate::from_amount_per_kb(Amount::from_atoms(rng.gen_range(1..1000)));
-    let transaction = wallet
+    let SignedTxWithFees { tx, fees } = wallet
         .create_transaction_to_addresses(
             DEFAULT_ACCOUNT_INDEX,
             outputs,
@@ -1483,7 +1487,7 @@ fn wallet_transactions_with_fees(#[case] seed: Seed) {
         )
         .unwrap();
 
-    let tx_size = serialization::Encode::encoded_size(&transaction);
+    let tx_size = serialization::Encode::encoded_size(&tx);
 
     // 16 bytes (u128) is the max tx size diffference in the estimation,
     // because of the compact encoding for the change amount which is unknown beforhand
@@ -1493,11 +1497,7 @@ fn wallet_transactions_with_fees(#[case] seed: Seed) {
 
     // register the successful transaction and check the balance
     wallet
-        .add_account_unconfirmed_tx(
-            DEFAULT_ACCOUNT_INDEX,
-            transaction.clone(),
-            &WalletEventsNoOp,
-        )
+        .add_account_unconfirmed_tx(DEFAULT_ACCOUNT_INDEX, tx.clone(), &WalletEventsNoOp)
         .unwrap();
     let coin_balance1 = get_coin_balance_with_inactive(&wallet);
     let expected_balance_max =
@@ -1507,6 +1507,10 @@ fn wallet_transactions_with_fees(#[case] seed: Seed) {
 
     assert!(coin_balance1 >= expected_balance_min);
     assert!(coin_balance1 <= expected_balance_max);
+    let fee = *fees.get(&Currency::Coin).unwrap();
+    eprintln!("{fee:?} {min_fee:?} {max_fee:?}");
+    assert!(fee >= *min_fee);
+    assert!(fee <= *max_fee);
 
     let selected_utxos = wallet
         .get_utxos(
@@ -1529,7 +1533,7 @@ fn wallet_transactions_with_fees(#[case] seed: Seed) {
     let account1 = wallet.create_next_account(None).unwrap().0;
     let address2 = wallet.get_new_address(account1).unwrap().1.into_object();
     let feerate = FeeRate::from_amount_per_kb(Amount::from_atoms(rng.gen_range(1..1000)));
-    let transaction = wallet
+    let SignedTxWithFees { tx, fees } = wallet
         .create_sweep_transaction(
             DEFAULT_ACCOUNT_INDEX,
             address2,
@@ -1539,16 +1543,12 @@ fn wallet_transactions_with_fees(#[case] seed: Seed) {
         )
         .unwrap();
 
-    let tx_size = serialization::Encode::encoded_size(&transaction);
+    let tx_size = serialization::Encode::encoded_size(&tx);
     let exact_fee = feerate.compute_fee(tx_size).unwrap();
 
     // register the successful transaction and check the balance
     wallet
-        .add_account_unconfirmed_tx(
-            DEFAULT_ACCOUNT_INDEX,
-            transaction.clone(),
-            &WalletEventsNoOp,
-        )
+        .add_account_unconfirmed_tx(DEFAULT_ACCOUNT_INDEX, tx.clone(), &WalletEventsNoOp)
         .unwrap();
     let coin_balance2 = get_coin_balance_with_inactive(&wallet);
     // sweep pays fees from the transfer amount itself
@@ -1556,7 +1556,7 @@ fn wallet_transactions_with_fees(#[case] seed: Seed) {
 
     // add the tx to the new account and check the balance
     wallet
-        .add_account_unconfirmed_tx(account1, transaction.clone(), &WalletEventsNoOp)
+        .add_account_unconfirmed_tx(account1, tx.clone(), &WalletEventsNoOp)
         .unwrap();
 
     let coin_balance3 = wallet
@@ -1573,6 +1573,7 @@ fn wallet_transactions_with_fees(#[case] seed: Seed) {
     // the sweep command should pay exactly the correct fee as it has no change outputs
     let expected_balance3 = (amount_to_transfer - exact_fee.into()).unwrap();
     assert_eq!(coin_balance3, expected_balance3);
+    assert_eq!(*exact_fee, *fees.get(&Currency::Coin).unwrap());
 }
 
 #[test]
@@ -1672,7 +1673,8 @@ fn spend_from_user_specified_utxos(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             TxAdditionalInfo::new(),
         )
-        .unwrap();
+        .unwrap()
+        .tx;
 
     // check that we only have the selected_utxo as inputs
     assert_eq!(tx.inputs().len(), selected_utxos.len());
@@ -1781,7 +1783,8 @@ fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
                 vrf_public_key: None,
             },
         )
-        .unwrap();
+        .unwrap()
+        .tx;
     let stake_pool_transaction_id = stake_pool_transaction.transaction().get_id();
     let (addr, block2) = create_block(
         &chain_config,
@@ -1879,7 +1882,8 @@ fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
             None,
             FeeRate::from_amount_per_kb(Amount::from_atoms(0)),
         )
-        .unwrap();
+        .unwrap()
+        .tx;
 
     let _ = create_block(
         &chain_config,
@@ -1990,7 +1994,8 @@ fn create_stake_pool_for_different_wallet_and_list_pool_ids(#[case] seed: Seed) 
                 vrf_public_key: Some(staker_vrf_public_key.clone()),
             },
         )
-        .unwrap();
+        .unwrap()
+        .tx;
     let stake_pool_transaction_id = stake_pool_transaction.transaction().get_id();
 
     let stake_pool_transaction2 = wallet1
@@ -2007,7 +2012,8 @@ fn create_stake_pool_for_different_wallet_and_list_pool_ids(#[case] seed: Seed) 
                 vrf_public_key: Some(staker_vrf_public_key.clone()),
             },
         )
-        .unwrap();
+        .unwrap()
+        .tx;
     let stake_pool_transaction_id2 = stake_pool_transaction2.transaction().get_id();
     assert_eq!(stake_pool_transaction_id, stake_pool_transaction_id2);
 
@@ -2147,7 +2153,8 @@ fn create_stake_pool_for_different_wallet_and_list_pool_ids(#[case] seed: Seed) 
             None,
             FeeRate::from_amount_per_kb(Amount::from_atoms(0)),
         )
-        .unwrap();
+        .unwrap()
+        .tx;
 
     let (_, block4) = create_block(
         &chain_config,
@@ -2284,6 +2291,7 @@ fn send_to_unknown_delegation(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .map(|(id, tx)| (id, tx.tx))
         .unwrap();
 
     let block_height = 2;
@@ -2317,7 +2325,8 @@ fn send_to_unknown_delegation(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             TxAdditionalInfo::new(),
         )
-        .unwrap();
+        .unwrap()
+        .tx;
 
     let block_height = 3;
     let (_, block) = create_block(
@@ -2354,6 +2363,7 @@ fn send_to_unknown_delegation(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .map(|(id, tx)| (id, tx.tx))
         .unwrap();
 
     let _ = create_block(
@@ -2414,7 +2424,8 @@ fn create_spend_from_delegations(#[case] seed: Seed) {
                 vrf_public_key: None,
             },
         )
-        .unwrap();
+        .unwrap()
+        .tx;
 
     let (address, _) = create_block(
         &chain_config,
@@ -2438,6 +2449,7 @@ fn create_spend_from_delegations(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .map(|(id, tx)| (id, tx.tx))
         .unwrap();
 
     let _ = create_block(
@@ -2467,7 +2479,8 @@ fn create_spend_from_delegations(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             TxAdditionalInfo::new(),
         )
-        .unwrap();
+        .unwrap()
+        .tx;
 
     let _ = create_block(
         &chain_config,
@@ -2486,7 +2499,8 @@ fn create_spend_from_delegations(#[case] seed: Seed) {
             Amount::from_atoms(2),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
-        .unwrap();
+        .unwrap()
+        .tx;
 
     wallet
         .add_account_unconfirmed_tx(
@@ -2518,7 +2532,8 @@ fn create_spend_from_delegations(#[case] seed: Seed) {
             Amount::from_atoms(1),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
-        .unwrap();
+        .unwrap()
+        .tx;
     wallet
         .add_account_unconfirmed_tx(
             DEFAULT_ACCOUNT_INDEX,
@@ -2589,7 +2604,8 @@ fn create_spend_from_delegations(#[case] seed: Seed) {
             Amount::from_atoms(1),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
-        .unwrap();
+        .unwrap()
+        .tx;
     wallet
         .add_account_unconfirmed_tx(DEFAULT_ACCOUNT_INDEX, delegation_tx3, &WalletEventsNoOp)
         .unwrap();
@@ -2689,6 +2705,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
                 FeeRate::from_amount_per_kb(Amount::ZERO),
                 FeeRate::from_amount_per_kb(Amount::ZERO),
             )
+            .map(|(id, tx)| (id, tx.tx))
             .unwrap();
 
         let freezable = token_issuance.is_freezable.as_bool();
@@ -2734,7 +2751,8 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
                 FeeRate::from_amount_per_kb(Amount::ZERO),
                 TxAdditionalInfo::new(),
             )
-            .unwrap();
+            .unwrap()
+            .tx;
         wallet
             .add_account_unconfirmed_tx(
                 DEFAULT_ACCOUNT_INDEX,
@@ -2755,7 +2773,8 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
                 FeeRate::from_amount_per_kb(Amount::ZERO),
                 FeeRate::from_amount_per_kb(Amount::ZERO),
             )
-            .unwrap();
+            .unwrap()
+            .tx;
 
         (
             issued_token_id,
@@ -2781,6 +2800,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
                 FeeRate::from_amount_per_kb(Amount::ZERO),
                 FeeRate::from_amount_per_kb(Amount::ZERO),
             )
+            .map(|(id, tx)| (id, tx.tx))
             .unwrap();
         random_issuing_wallet
             .add_unconfirmed_tx(nft_issuance_transaction.clone(), &WalletEventsNoOp)
@@ -2799,7 +2819,8 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
                 FeeRate::from_amount_per_kb(Amount::ZERO),
                 TxAdditionalInfo::new(),
             )
-            .unwrap();
+            .unwrap()
+            .tx;
         (issued_token_id, vec![nft_issuance_transaction, transfer_tx])
     };
 
@@ -2852,7 +2873,8 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             additional_info.clone(),
         )
-        .unwrap();
+        .unwrap()
+        .tx;
     wallet
         .add_account_unconfirmed_tx(
             DEFAULT_ACCOUNT_INDEX,
@@ -2906,8 +2928,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             additional_info,
         )
-        .err()
-        .unwrap();
+        .unwrap_err();
 
     let remaining_tokens = (token_amount_to_issue - tokens_to_transfer).unwrap();
     if remaining_tokens == Amount::ZERO {
@@ -3024,6 +3045,7 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .map(|(id, tx)| (id, tx.tx))
         .unwrap();
 
     let block2_amount = chain_config.token_supply_change_fee(BlockHeight::zero());
@@ -3062,7 +3084,8 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
-        .unwrap();
+        .unwrap()
+        .tx;
 
     let _ = create_block(&chain_config, &mut wallet, vec![mint_tx], block2_amount, 2);
 
@@ -3078,7 +3101,8 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
-        .unwrap();
+        .unwrap()
+        .tx;
 
     wallet.add_unconfirmed_tx(freeze_tx.clone(), &WalletEventsNoOp).unwrap();
 
@@ -3106,7 +3130,8 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
-        .unwrap();
+        .unwrap()
+        .tx;
 
     wallet.add_unconfirmed_tx(unfreeze_tx.clone(), &WalletEventsNoOp).unwrap();
 
@@ -3177,7 +3202,8 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
-        .unwrap();
+        .unwrap()
+        .tx;
 
     let tokens_to_transfer = Amount::from_atoms(rng.gen_range(1..=amount_to_mint.into_atoms()));
     let some_other_address = PublicKeyHash::from_low_u64_be(1);
@@ -3203,7 +3229,8 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             additional_info,
         )
-        .unwrap();
+        .unwrap()
+        .tx;
 
     wallet
         .add_unconfirmed_tx(transfer_tokens_transaction.clone(), &WalletEventsNoOp)
@@ -3322,6 +3349,7 @@ fn change_token_supply_fixed(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .map(|(id, tx)| (id, tx.tx))
         .unwrap();
 
     let block2_amount = chain_config.token_supply_change_fee(BlockHeight::zero());
@@ -3375,7 +3403,8 @@ fn change_token_supply_fixed(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
-        .unwrap();
+        .unwrap()
+        .tx;
 
     wallet.add_unconfirmed_tx(mint_transaction.clone(), &WalletEventsNoOp).unwrap();
 
@@ -3490,7 +3519,8 @@ fn change_token_supply_fixed(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
-        .unwrap();
+        .unwrap()
+        .tx;
 
     wallet
         .add_unconfirmed_tx(unmint_transaction.clone(), &WalletEventsNoOp)
@@ -3575,6 +3605,7 @@ fn change_token_supply_unlimited(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .map(|(id, tx)| (id, tx.tx))
         .unwrap();
 
     let block2_amount = chain_config.token_supply_change_fee(BlockHeight::zero());
@@ -3629,7 +3660,8 @@ fn change_token_supply_unlimited(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
-        .unwrap();
+        .unwrap()
+        .tx;
 
     wallet.add_unconfirmed_tx(mint_transaction.clone(), &WalletEventsNoOp).unwrap();
     let unconfirmed_token_info = wallet
@@ -3685,7 +3717,8 @@ fn change_token_supply_unlimited(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
-        .unwrap();
+        .unwrap()
+        .tx;
     wallet
         .add_unconfirmed_tx(unmint_transaction.clone(), &WalletEventsNoOp)
         .unwrap();
@@ -3769,6 +3802,7 @@ fn change_and_lock_token_supply_lockable(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .map(|(id, tx)| (id, tx.tx))
         .unwrap();
 
     let block2_amount = chain_config.token_supply_change_fee(BlockHeight::zero());
@@ -3823,7 +3857,8 @@ fn change_and_lock_token_supply_lockable(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
-        .unwrap();
+        .unwrap()
+        .tx;
     wallet.add_unconfirmed_tx(mint_transaction.clone(), &WalletEventsNoOp).unwrap();
     let unconfirmed_token_info = wallet
         .get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, token_info.clone())
@@ -3878,7 +3913,8 @@ fn change_and_lock_token_supply_lockable(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
-        .unwrap();
+        .unwrap()
+        .tx;
 
     wallet
         .add_unconfirmed_tx(unmint_transaction.clone(), &WalletEventsNoOp)
@@ -3918,7 +3954,8 @@ fn change_and_lock_token_supply_lockable(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
-        .unwrap();
+        .unwrap()
+        .tx;
 
     let _ = create_block(
         &chain_config,
@@ -4051,7 +4088,8 @@ fn lock_then_transfer(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             TxAdditionalInfo::new(),
         )
-        .unwrap();
+        .unwrap()
+        .tx;
     wallet
         .add_unconfirmed_tx(lock_then_transfer_transaction.clone(), &WalletEventsNoOp)
         .unwrap();
@@ -4169,7 +4207,8 @@ fn wallet_multiple_transactions_in_single_block(#[case] seed: Seed) {
                 FeeRate::from_amount_per_kb(Amount::ZERO),
                 TxAdditionalInfo::new(),
             )
-            .unwrap();
+            .unwrap()
+            .tx;
         wallet.add_unconfirmed_tx(transaction.clone(), &WalletEventsNoOp).unwrap();
 
         for utxo in transaction.inputs().iter().map(|inp| inp.utxo_outpoint().unwrap()) {
@@ -4257,7 +4296,8 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
                 FeeRate::from_amount_per_kb(Amount::ZERO),
                 TxAdditionalInfo::new(),
             )
-            .unwrap();
+            .unwrap()
+            .tx;
 
         wallet.add_unconfirmed_tx(transaction.clone(), &WalletEventsNoOp).unwrap();
 
@@ -4292,7 +4332,8 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             TxAdditionalInfo::new(),
         )
-        .unwrap();
+        .unwrap()
+        .tx;
     wallet.add_unconfirmed_tx(transaction.clone(), &WalletEventsNoOp).unwrap();
 
     for utxo in transaction.inputs().iter().map(|inp| inp.utxo_outpoint().unwrap()) {
@@ -4357,7 +4398,8 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             TxAdditionalInfo::new(),
         )
-        .unwrap();
+        .unwrap()
+        .tx;
     wallet.add_unconfirmed_tx(transaction.clone(), &WalletEventsNoOp).unwrap();
 
     let transaction_id = transaction.transaction().get_id();
@@ -4438,7 +4480,8 @@ fn wallet_abandon_transactions(#[case] seed: Seed) {
                 FeeRate::from_amount_per_kb(Amount::ZERO),
                 TxAdditionalInfo::new(),
             )
-            .unwrap();
+            .unwrap()
+            .tx;
         wallet
             .add_account_unconfirmed_tx(
                 DEFAULT_ACCOUNT_INDEX,
@@ -4673,7 +4716,8 @@ fn decommission_pool_wrong_account(#[case] seed: Seed) {
                 vrf_public_key: None,
             },
         )
-        .unwrap();
+        .unwrap()
+        .tx;
     let _ = create_block(
         &chain_config,
         &mut wallet,
@@ -4708,7 +4752,8 @@ fn decommission_pool_wrong_account(#[case] seed: Seed) {
             None,
             FeeRate::from_amount_per_kb(Amount::from_atoms(0)),
         )
-        .unwrap();
+        .unwrap()
+        .tx;
 
     let _ = create_block(
         &chain_config,
@@ -4768,7 +4813,8 @@ fn decommission_pool_request_wrong_account(#[case] seed: Seed) {
                 vrf_public_key: None,
             },
         )
-        .unwrap();
+        .unwrap()
+        .tx;
     let _ = create_block(
         &chain_config,
         &mut wallet,
@@ -4857,7 +4903,8 @@ fn sign_decommission_pool_request_between_accounts(#[case] seed: Seed) {
                 vrf_public_key: None,
             },
         )
-        .unwrap();
+        .unwrap()
+        .tx;
 
     // remove the signatures and try to sign it again
     let tx = stake_pool_transaction.transaction().clone();
@@ -4971,7 +5018,8 @@ fn sign_decommission_pool_request_cold_wallet(#[case] seed: Seed) {
                 vrf_public_key: None,
             },
         )
-        .unwrap();
+        .unwrap()
+        .tx;
     let _ = create_block(
         &chain_config,
         &mut hot_wallet,
@@ -5068,7 +5116,8 @@ fn filter_pools(#[case] seed: Seed) {
                 vrf_public_key: None,
             },
         )
-        .unwrap();
+        .unwrap()
+        .tx;
     // sync for wallet1
     let _ = create_block(
         &chain_config,
@@ -5500,7 +5549,8 @@ fn create_htlc_and_spend(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             TxAdditionalInfo::new(),
         )
-        .unwrap();
+        .unwrap()
+        .tx;
     let create_htlc_tx_id = create_htlc_tx.transaction().get_id();
     let (_, block2) = create_block(
         &chain_config,
@@ -5640,7 +5690,8 @@ fn create_htlc_and_refund(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             TxAdditionalInfo::new(),
         )
-        .unwrap();
+        .unwrap()
+        .tx;
     let create_htlc_tx_id = create_htlc_tx.transaction().get_id();
 
     let refund_tx = Transaction::new(
@@ -5765,6 +5816,7 @@ fn create_order(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .map(|(id, tx)| (id, tx.tx))
         .unwrap();
 
     let block2_amount = chain_config.token_supply_change_fee(BlockHeight::zero());
@@ -5804,7 +5856,8 @@ fn create_order(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
-        .unwrap();
+        .unwrap()
+        .tx;
 
     let _ = create_block(
         &chain_config,
@@ -5842,6 +5895,7 @@ fn create_order(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             additional_info,
         )
+        .map(|(id, tx)| (id, tx.tx))
         .unwrap();
 
     let _ = create_block(
@@ -5891,6 +5945,7 @@ fn create_order_and_conclude(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .map(|(id, tx)| (id, tx.tx))
         .unwrap();
 
     let block2_amount = chain_config.token_supply_change_fee(BlockHeight::zero());
@@ -5930,7 +5985,8 @@ fn create_order_and_conclude(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
-        .unwrap();
+        .unwrap()
+        .tx;
 
     let _ = create_block(
         &chain_config,
@@ -5968,6 +6024,7 @@ fn create_order_and_conclude(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             additional_info,
         )
+        .map(|(id, tx)| (id, tx.tx))
         .unwrap();
     let order_info = RpcOrderInfo {
         conclude_key: address2.clone().into_object(),
@@ -6012,7 +6069,8 @@ fn create_order_and_conclude(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             additional_info,
         )
-        .unwrap();
+        .unwrap()
+        .tx;
 
     let _ = create_block(
         &chain_config,
@@ -6066,6 +6124,7 @@ fn create_order_fill_completely_conclude(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .map(|(id, tx)| (id, tx.tx))
         .unwrap();
 
     let block2_amount = chain_config.token_supply_change_fee(BlockHeight::zero());
@@ -6108,7 +6167,8 @@ fn create_order_fill_completely_conclude(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
-        .unwrap();
+        .unwrap()
+        .tx;
 
     let (_, block3) = create_block(
         &chain_config,
@@ -6157,6 +6217,7 @@ fn create_order_fill_completely_conclude(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             additional_info,
         )
+        .map(|(id, tx)| (id, tx.tx))
         .unwrap();
     let order_info = RpcOrderInfo {
         conclude_key: address1.clone().into_object(),
@@ -6218,7 +6279,8 @@ fn create_order_fill_completely_conclude(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             additional_info,
         )
-        .unwrap();
+        .unwrap()
+        .tx;
 
     let (_, block5) = create_block(
         &chain_config,
@@ -6282,7 +6344,8 @@ fn create_order_fill_completely_conclude(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             additional_info,
         )
-        .unwrap();
+        .unwrap()
+        .tx;
 
     let (_, block6) = create_block(
         &chain_config,
@@ -6338,7 +6401,8 @@ fn create_order_fill_completely_conclude(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             additional_info,
         )
-        .unwrap();
+        .unwrap()
+        .tx;
 
     let (_, block7) = create_block(
         &chain_config,
@@ -6403,6 +6467,7 @@ fn create_order_fill_partially_conclude(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .map(|(id, tx)| (id, tx.tx))
         .unwrap();
 
     let block2_amount = chain_config.token_supply_change_fee(BlockHeight::zero());
@@ -6445,7 +6510,8 @@ fn create_order_fill_partially_conclude(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
-        .unwrap();
+        .unwrap()
+        .tx;
 
     let (_, block3) = create_block(
         &chain_config,
@@ -6494,6 +6560,7 @@ fn create_order_fill_partially_conclude(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             additional_info,
         )
+        .map(|(id, tx)| (id, tx.tx))
         .unwrap();
     let order_info = RpcOrderInfo {
         conclude_key: address1.clone().into_object(),
@@ -6555,7 +6622,8 @@ fn create_order_fill_partially_conclude(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             additional_info,
         )
-        .unwrap();
+        .unwrap()
+        .tx;
 
     let (_, block5) = create_block(
         &chain_config,
@@ -6618,7 +6686,8 @@ fn create_order_fill_partially_conclude(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             additional_info,
         )
-        .unwrap();
+        .unwrap()
+        .tx;
 
     let (_, block6) = create_block(
         &chain_config,
@@ -6702,7 +6771,8 @@ fn conflicting_delegation_account_nonce(#[case] seed: Seed) {
                 vrf_public_key: None,
             },
         )
-        .unwrap();
+        .unwrap()
+        .tx;
 
     let (address, block2) = create_block(
         &chain_config,
@@ -6728,6 +6798,7 @@ fn conflicting_delegation_account_nonce(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .map(|(id, tx)| (id, tx.tx))
         .unwrap();
 
     let (_, block3) = create_block(
@@ -6759,7 +6830,8 @@ fn conflicting_delegation_account_nonce(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             TxAdditionalInfo::new(),
         )
-        .unwrap();
+        .unwrap()
+        .tx;
 
     let (_, block4) = create_block(
         &chain_config,
@@ -6787,7 +6859,8 @@ fn conflicting_delegation_account_nonce(#[case] seed: Seed) {
             delegation_amount,
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
-        .unwrap();
+        .unwrap()
+        .tx;
     let spend_from_delegation_tx_1_id = spend_from_delegation_tx_1.transaction().get_id();
 
     wallet1
@@ -6808,7 +6881,8 @@ fn conflicting_delegation_account_nonce(#[case] seed: Seed) {
             delegation_amount,
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
-        .unwrap();
+        .unwrap()
+        .tx;
     let spend_from_delegation_tx_2_id = spend_from_delegation_tx_2.transaction().get_id();
 
     wallet1
@@ -6837,7 +6911,8 @@ fn conflicting_delegation_account_nonce(#[case] seed: Seed) {
             delegation_amount,
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
-        .unwrap();
+        .unwrap()
+        .tx;
     let spend_from_delegation_tx_3_id = spend_from_delegation_tx_3.transaction().get_id();
 
     let (_, block5) = create_block(
@@ -6986,7 +7061,8 @@ fn conflicting_delegation_account_nonce_same_wallet(#[case] seed: Seed) {
                 vrf_public_key: None,
             },
         )
-        .unwrap();
+        .unwrap()
+        .tx;
 
     let (address, _) = create_block(
         &chain_config,
@@ -7011,6 +7087,7 @@ fn conflicting_delegation_account_nonce_same_wallet(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .map(|(id, tx)| (id, tx.tx))
         .unwrap();
 
     let _ = create_block(
@@ -7041,7 +7118,8 @@ fn conflicting_delegation_account_nonce_same_wallet(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             TxAdditionalInfo::new(),
         )
-        .unwrap();
+        .unwrap()
+        .tx;
 
     let _ = create_block(
         &chain_config,
@@ -7068,7 +7146,8 @@ fn conflicting_delegation_account_nonce_same_wallet(#[case] seed: Seed) {
             delegation_amount,
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
-        .unwrap();
+        .unwrap()
+        .tx;
 
     wallet
         .add_account_unconfirmed_tx(
@@ -7089,7 +7168,8 @@ fn conflicting_delegation_account_nonce_same_wallet(#[case] seed: Seed) {
             delegation_amount,
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
-        .unwrap();
+        .unwrap()
+        .tx;
 
     wallet
         .add_account_unconfirmed_tx(
@@ -7212,6 +7292,7 @@ fn conflicting_order_account_nonce(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .map(|(id, tx)| (id, tx.tx))
         .unwrap();
 
     let block2_amount = chain_config.token_supply_change_fee(BlockHeight::zero());
@@ -7251,7 +7332,8 @@ fn conflicting_order_account_nonce(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
-        .unwrap();
+        .unwrap()
+        .tx;
 
     let _ = create_block(
         &chain_config,
@@ -7276,6 +7358,7 @@ fn conflicting_order_account_nonce(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             TxAdditionalInfo::new(),
         )
+        .map(|(id, tx)| (id, tx.tx))
         .unwrap();
 
     let _ = create_block(
@@ -7326,7 +7409,8 @@ fn conflicting_order_account_nonce(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             TxAdditionalInfo::new(),
         )
-        .unwrap();
+        .unwrap()
+        .tx;
 
     wallet
         .add_account_unconfirmed_tx(
@@ -7363,7 +7447,8 @@ fn conflicting_order_account_nonce(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             TxAdditionalInfo::new(),
         )
-        .unwrap();
+        .unwrap()
+        .tx;
 
     wallet
         .add_account_unconfirmed_tx(
@@ -7487,7 +7572,8 @@ fn conflicting_delegation_account_nonce_multiple_inputs(#[case] seed: Seed) {
                 vrf_public_key: None,
             },
         )
-        .unwrap();
+        .unwrap()
+        .tx;
 
     let (address, block2) = create_block(
         &chain_config,
@@ -7513,6 +7599,7 @@ fn conflicting_delegation_account_nonce_multiple_inputs(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .map(|(id, tx)| (id, tx.tx))
         .unwrap();
 
     let (_, block3) = create_block(
@@ -7545,7 +7632,8 @@ fn conflicting_delegation_account_nonce_multiple_inputs(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             TxAdditionalInfo::new(),
         )
-        .unwrap();
+        .unwrap()
+        .tx;
 
     let (_, block4) = create_block(
         &chain_config,
@@ -7627,7 +7715,8 @@ fn conflicting_delegation_account_nonce_multiple_inputs(#[case] seed: Seed) {
             delegation_amount,
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
-        .unwrap();
+        .unwrap()
+        .tx;
     let spend_from_delegation_confirmed_tx_id =
         spend_from_delegation_tx_confirmed.transaction().get_id();
 
@@ -7755,7 +7844,8 @@ fn conflicting_delegation_account_with_reorg(#[case] seed: Seed) {
                 vrf_public_key: None,
             },
         )
-        .unwrap();
+        .unwrap()
+        .tx;
 
     let (address, block2) = create_block(
         &chain_config,
@@ -7781,6 +7871,7 @@ fn conflicting_delegation_account_with_reorg(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .map(|(id, tx)| (id, tx.tx))
         .unwrap();
 
     let (_, block3) = create_block(
@@ -7812,7 +7903,8 @@ fn conflicting_delegation_account_with_reorg(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             TxAdditionalInfo::new(),
         )
-        .unwrap();
+        .unwrap()
+        .tx;
 
     let (_, block4) = create_block(
         &chain_config,
@@ -7842,7 +7934,8 @@ fn conflicting_delegation_account_with_reorg(#[case] seed: Seed) {
             delegation_amount,
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
-        .unwrap();
+        .unwrap()
+        .tx;
     let spend_from_delegation_tx_id_1 = spend_from_delegation_tx_1.transaction().get_id();
 
     wallet
@@ -7874,7 +7967,8 @@ fn conflicting_delegation_account_with_reorg(#[case] seed: Seed) {
             delegation_amount,
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
-        .unwrap();
+        .unwrap()
+        .tx;
     let spend_from_delegation_tx_id_2 = spend_from_delegation_tx_2.transaction().get_id();
 
     let (_, block5) = create_block(
@@ -7998,7 +8092,8 @@ fn rollback_utxos_after_abandon(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             TxAdditionalInfo::new(),
         )
-        .unwrap();
+        .unwrap()
+        .tx;
     let tx_id = tx.transaction().get_id();
 
     wallet
@@ -8139,6 +8234,7 @@ fn token_id_generation_v1_uses_first_tx_input(#[case] seed: Seed) {
                 FeeRate::from_amount_per_kb(Amount::ZERO),
                 FeeRate::from_amount_per_kb(Amount::ZERO),
             )
+            .map(|(id, tx)| (id, tx.tx))
             .unwrap();
 
         let expected_token_id = TokenId::from_tx_input(&token_issuance_transaction.inputs()[0]);
@@ -8164,6 +8260,7 @@ fn token_id_generation_v1_uses_first_tx_input(#[case] seed: Seed) {
                 FeeRate::from_amount_per_kb(Amount::ZERO),
                 FeeRate::from_amount_per_kb(Amount::ZERO),
             )
+            .map(|(id, tx)| (id, tx.tx))
             .unwrap();
 
         let expected_token_id = TokenId::from_tx_input(&nft_issuance_transaction.inputs()[0]);
