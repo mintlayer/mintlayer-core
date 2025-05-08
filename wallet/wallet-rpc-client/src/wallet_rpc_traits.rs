@@ -79,11 +79,7 @@ pub trait WalletInterface {
     async fn recover_wallet(
         &self,
         path: PathBuf,
-        store_seed_phrase: bool,
-        mnemonic: Option<String>,
-        passphrase: Option<String>,
-        hardware_wallet: Option<HardwareWalletType>,
-        device_id: Option<String>,
+        wallet_args: WalletTypeArgs,
     ) -> Result<CreatedWallet, Self::Error>;
 
     async fn open_wallet(
@@ -92,7 +88,6 @@ pub trait WalletInterface {
         password: Option<String>,
         force_migrate_wallet_type: Option<bool>,
         hardware_wallet: Option<HardwareWalletType>,
-        device_id: Option<String>,
     ) -> Result<OpenedWallet, Self::Error>;
 
     async fn close_wallet(&self) -> Result<(), Self::Error>;
