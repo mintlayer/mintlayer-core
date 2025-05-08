@@ -19,7 +19,7 @@ use std::{
 };
 
 use crypto::key::{PrivateKey, PublicKey, Signature};
-use serialization::Encode;
+use serialization::{CompactLen, Encode};
 
 use crate::chain::{
     classic_multisig::ClassicMultisigChallenge,
@@ -40,6 +40,8 @@ use crate::chain::{
 pub enum SizeEstimationError {
     #[error("Unsupported input destination")]
     UnsupportedInputDestination(Destination),
+    #[error("Attempted to estimate the size of a TX with too many inputs or outputs {0}")]
+    TooManyElements(usize),
 }
 
 /// Return the encoded size of an input signature.
@@ -194,31 +196,40 @@ pub fn input_signature_size_from_destination(
 
 /// Return the encoded size for a SignedTransaction also accounting for the compact encoding of the
 /// vectors for the specified number of inputs and outputs
-pub fn tx_size_with_num_inputs_and_outputs(num_outputs: usize, num_inputs: usize) -> usize {
-    #[derive(Encode)]
-    struct CompactSize {
-        #[codec(compact)]
-        value: u64,
+pub fn tx_size_with_num_inputs_and_outputs(
+    num_outputs: usize,
+    num_inputs: usize,
+) -> Result<usize, SizeEstimationError> {
+    lazy_static::lazy_static! {
+        static ref EMPTY_SIGNED_TX_SIZE: usize = {
+            let tx = SignedTransaction::new(
+                Transaction::new(1, vec![], vec![]).expect("should not fail"),
+                vec![],
+            )
+            .expect("should not fail");
+            serialization::Encode::encoded_size(&tx)
+        };
+    }
+    lazy_static::lazy_static! {
+        static ref ZERO_COMPACT_SIZE: usize = {
+            serialization::Compact::<u32>::compact_len(&0)
+        };
     }
 
-    let tx = SignedTransaction::new(
-        Transaction::new(1, vec![], vec![]).expect("should not fail"),
-        vec![],
-    )
-    .expect("should not fail");
-    let size = serialization::Encode::encoded_size(&tx);
+    let input_compact_size_diff = serialization::Compact::<u32>::compact_len(
+        &(num_inputs
+            .try_into()
+            .map_err(|_| SizeEstimationError::TooManyElements(num_inputs))?),
+    ) - *ZERO_COMPACT_SIZE;
 
-    let input_compact_size_diff =
-        serialization::Encode::encoded_size(&CompactSize {
-            value: num_inputs as u64,
-        }) - serialization::Encode::encoded_size(&CompactSize { value: 0 });
+    let output_compact_size_diff = serialization::Compact::<u32>::compact_len(
+        &(num_outputs
+            .try_into()
+            .map_err(|_| SizeEstimationError::TooManyElements(num_inputs))?),
+    ) - *ZERO_COMPACT_SIZE;
 
-    let output_compact_size_diff =
-        serialization::Encode::encoded_size(&CompactSize {
-            value: num_outputs as u64,
-        }) - serialization::Encode::encoded_size(&CompactSize { value: 0 });
-
-    size + output_compact_size_diff + (input_compact_size_diff * 2) // 2 for number of inputs and number of input signatures
+    // 2 for number of inputs and number of input signatures
+    Ok(*EMPTY_SIGNED_TX_SIZE + output_compact_size_diff + (input_compact_size_diff * 2))
 }
 
 pub fn outputs_encoded_size(outputs: &[TxOutput]) -> usize {
@@ -241,3 +252,6 @@ fn get_tx_output_destination(txo: &TxOutput) -> Option<&Destination> {
         | TxOutput::CreateOrder(_) => None,
     }
 }
+
+#[cfg(test)]
+mod tests;

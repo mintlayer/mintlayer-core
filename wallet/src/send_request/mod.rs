@@ -57,19 +57,16 @@ pub struct SendRequest {
     fees: BTreeMap<Currency, Amount>,
 }
 
-pub fn make_address_output(address: Address<Destination>, amount: Amount) -> TxOutput {
-    TxOutput::Transfer(OutputValue::Coin(amount), address.into_object())
+pub fn make_address_output(address: Destination, amount: Amount) -> TxOutput {
+    TxOutput::Transfer(OutputValue::Coin(amount), address)
 }
 
 pub fn make_address_output_token(
-    address: Address<Destination>,
+    address: Destination,
     amount: Amount,
     token_id: TokenId,
 ) -> TxOutput {
-    TxOutput::Transfer(
-        OutputValue::TokenV1(token_id, amount),
-        address.into_object(),
-    )
+    TxOutput::Transfer(OutputValue::TokenV1(token_id, amount), address)
 }
 
 pub fn make_issue_token_outputs(
@@ -295,6 +292,10 @@ impl SendRequest {
         }
 
         Ok(self)
+    }
+
+    pub fn add_outputs(&mut self, outputs: impl IntoIterator<Item = TxOutput>) {
+        self.outputs.extend(outputs);
     }
 
     pub fn with_outputs(mut self, outputs: impl IntoIterator<Item = TxOutput>) -> Self {

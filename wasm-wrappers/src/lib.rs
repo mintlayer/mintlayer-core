@@ -1128,6 +1128,7 @@ pub fn estimate_transaction_size(
 
     let size =
         tx_size_with_num_inputs_and_outputs(tx_outputs.len(), input_utxos_destinations.len())
+            .map_err(Error::TransactionSizeEstimationError)?
             + outputs_encoded_size(tx_outputs.as_slice());
     let inputs_size = inputs.len();
 

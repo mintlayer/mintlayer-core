@@ -355,7 +355,10 @@ where
         chain_config.genesis_block_id(),
         chain_config.genesis_block().timestamp(),
         ConsensusData::None,
-        BlockReward::new(vec![make_address_output(address.clone(), reward)]),
+        BlockReward::new(vec![make_address_output(
+            address.clone().into_object(),
+            reward,
+        )]),
     )
     .unwrap();
 
@@ -764,7 +767,7 @@ fn wallet_balance_genesis() {
             );
 
             let genesis_amount = Amount::from_atoms(23456);
-            let genesis_output = make_address_output(address, genesis_amount);
+            let genesis_output = make_address_output(address.into_object(), genesis_amount);
 
             if address_index.into_u32() == LOOKAHEAD_SIZE {
                 test_balance_from_genesis(chain_type, vec![genesis_output], Amount::ZERO);
@@ -854,7 +857,10 @@ fn wallet_balance_block_reward() {
         block1.get_id().into(),
         chain_config.genesis_block().timestamp(),
         ConsensusData::None,
-        BlockReward::new(vec![make_address_output(address, block2_amount)]),
+        BlockReward::new(vec![make_address_output(
+            address.into_object(),
+            block2_amount,
+        )]),
     )
     .unwrap();
     let block2_id = block2.header().block_id();
@@ -884,7 +890,10 @@ fn wallet_balance_block_reward() {
         block1.get_id().into(),
         chain_config.genesis_block().timestamp(),
         ConsensusData::None,
-        BlockReward::new(vec![make_address_output(address, block2_amount_new)]),
+        BlockReward::new(vec![make_address_output(
+            address.into_object(),
+            block2_amount_new,
+        )]),
     )
     .unwrap();
     let block2_new_id = block2_new.header().block_id();
@@ -919,7 +928,7 @@ fn wallet_balance_block_transactions() {
     let transaction1 = Transaction::new(
         0,
         Vec::new(),
-        vec![make_address_output(address, tx_amount1)],
+        vec![make_address_output(address.into_object(), tx_amount1)],
     )
     .unwrap();
     let signed_transaction1 = SignedTransaction::new(transaction1, Vec::new()).unwrap();
@@ -962,7 +971,7 @@ fn wallet_balance_parent_child_transactions() {
     let transaction1 = Transaction::new(
         0,
         Vec::new(),
-        vec![make_address_output(address1, tx_amount1)],
+        vec![make_address_output(address1.into_object(), tx_amount1)],
     )
     .unwrap();
     let transaction_id1 = transaction1.get_id();
@@ -971,7 +980,7 @@ fn wallet_balance_parent_child_transactions() {
     let transaction2 = Transaction::new(
         0,
         vec![TxInput::from_utxo(OutPointSourceId::Transaction(transaction_id1), 0)],
-        vec![make_address_output(address2, tx_amount2)],
+        vec![make_address_output(address2.into_object(), tx_amount2)],
     )
     .unwrap();
     let signed_transaction2 =
@@ -1134,7 +1143,7 @@ fn wallet_recover_new_account(#[case] seed: Seed) {
             let transaction1 = Transaction::new(
                 0,
                 Vec::new(),
-                vec![make_address_output(address, tx_amount1)],
+                vec![make_address_output(address.into_object(), tx_amount1)],
             )
             .unwrap();
             let signed_transaction1 = SignedTransaction::new(transaction1, Vec::new()).unwrap();
@@ -1395,7 +1404,7 @@ fn wallet_list_mainchain_transactions(#[case] seed: Seed) {
 // 1. give X amount of coins to the wallet
 // 2. Try to create a transaction where the feerate is so high that the UTXO will need to pay more
 //    fee than it has so it will return an NoUTXOs error
-// 3. Successfuly create a TX with many outputs and make sure the fee paid is within the range of
+// 3. Successfully create a TX with many outputs and make sure the fee paid is within the range of
 //    [0-16] bytes * feerate (16 bytes is the MAX u128 Amount used by the change output)
 //
 // 4. Create a sweep TX using the previously created many outputs. The sweep command does not
@@ -1485,8 +1494,8 @@ fn wallet_transactions_with_fees(#[case] seed: Seed) {
 
     let tx_size = serialization::Encode::encoded_size(&transaction);
 
-    // 16 bytes (u128) is the max tx size diffference in the estimation,
-    // because of the compact encoding for the change amount which is unknown beforhand
+    // 16 bytes (u128) is the max tx size difference in the estimation,
+    // because of the compact encoding for the change amount which is unknown beforehand
     let max_size_diff = std::mem::size_of::<u128>();
     let min_fee = feerate.compute_fee(tx_size).unwrap();
     let max_fee = feerate.compute_fee(tx_size + max_size_diff).unwrap();
@@ -1609,7 +1618,7 @@ fn spend_from_user_specified_utxos(#[case] seed: Seed) {
                 KeyPurpose::ReceiveFunds,
                 idx.try_into().unwrap(),
             );
-            make_address_output(address, utxo_amount)
+            make_address_output(address.into_object(), utxo_amount)
         })
         .collect_vec();
     let block1 = Block::new(
@@ -2280,7 +2289,10 @@ fn send_to_unknown_delegation(#[case] seed: Seed) {
     let (wallet2_delegation_id, delegation_tx) = wallet2
         .create_delegation(
             DEFAULT_ACCOUNT_INDEX,
-            vec![make_create_delegation_output(address2.clone(), unknown_pool_id)],
+            vec![
+                make_create_delegation_output(address2.clone(), unknown_pool_id),
+                make_address_output(address2.clone().into_object(), Amount::from_atoms(1)),
+            ],
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
@@ -2350,7 +2362,10 @@ fn send_to_unknown_delegation(#[case] seed: Seed) {
     let (delegation_id, delegation_tx) = wallet
         .create_delegation(
             DEFAULT_ACCOUNT_INDEX,
-            vec![make_create_delegation_output(address.clone(), unknown_pool_id)],
+            vec![
+                make_create_delegation_output(address.clone(), unknown_pool_id),
+                make_address_output(address.clone().into_object(), Amount::from_atoms(1)),
+            ],
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
@@ -2434,7 +2449,10 @@ fn create_spend_from_delegations(#[case] seed: Seed) {
     let (delegation_id, delegation_tx) = wallet
         .create_delegation(
             DEFAULT_ACCOUNT_INDEX,
-            vec![make_create_delegation_output(address.clone(), pool_id)],
+            vec![
+                make_create_delegation_output(address.clone(), pool_id),
+                make_address_output(address.clone().into_object(), Amount::from_atoms(1)),
+            ],
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
@@ -4009,7 +4027,10 @@ fn lock_then_transfer(#[case] seed: Seed) {
         chain_config.genesis_block_id(),
         timestamp,
         ConsensusData::None,
-        BlockReward::new(vec![make_address_output(address.clone(), block1_amount)]),
+        BlockReward::new(vec![make_address_output(
+            address.clone().into_object(),
+            block1_amount,
+        )]),
     )
     .unwrap();
 
@@ -4061,7 +4082,10 @@ fn lock_then_transfer(#[case] seed: Seed) {
         block1_id.into(),
         timestamp,
         ConsensusData::None,
-        BlockReward::new(vec![make_address_output(address, block1_amount)]),
+        BlockReward::new(vec![make_address_output(
+            address.into_object(),
+            block1_amount,
+        )]),
     )
     .unwrap();
 
@@ -4238,7 +4262,7 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
             KeyPurpose::ReceiveFunds,
             (idx + 1).try_into().unwrap(),
         );
-        let change_output = make_address_output(address, change);
+        let change_output = make_address_output(address.into_object(), change);
 
         let new_output = TxOutput::Transfer(
             OutputValue::Coin(amount_to_transfer),
@@ -4419,7 +4443,7 @@ fn wallet_abandon_transactions(#[case] seed: Seed) {
             KeyPurpose::ReceiveFunds,
             (idx + 1).try_into().unwrap(),
         );
-        let change_output = make_address_output(address, change);
+        let change_output = make_address_output(address.into_object(), change);
 
         let new_output = TxOutput::Transfer(
             OutputValue::Coin(amount_to_transfer),
@@ -4828,7 +4852,7 @@ fn sign_decommission_pool_request_between_accounts(#[case] seed: Seed) {
     // Generate a new block which sends reward to the wallet
     let block1_amount = Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
     let (addr, _) = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
-    let utxo = make_address_output(addr.clone(), block1_amount);
+    let utxo = make_address_output(addr.clone().into_object(), block1_amount);
 
     let pool_ids = wallet.get_pool_ids(acc_0_index, WalletPoolsFilter::All).unwrap();
     assert!(pool_ids.is_empty());
@@ -5131,7 +5155,8 @@ fn sign_send_request_cold_wallet(#[case] seed: Seed) {
 
     // Generate a new block which sends reward to the cold wallet address
     let block1_amount = Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
-    let reward_output = make_address_output(cold_wallet_address.clone(), block1_amount);
+    let reward_output =
+        make_address_output(cold_wallet_address.clone().into_object(), block1_amount);
     let block1 = Block::new(
         vec![],
         chain_config.genesis_block_id(),
@@ -5236,7 +5261,7 @@ fn test_not_exhaustion_of_keys(#[case] seed: Seed) {
 
     // Generate a new block which sends reward to the cold wallet address
     let block1_amount = Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
-    let reward_output = make_address_output(address.clone(), block1_amount);
+    let reward_output = make_address_output(address.clone().into_object(), block1_amount);
     let block1 = Block::new(
         vec![],
         chain_config.genesis_block_id(),
@@ -5295,7 +5320,7 @@ fn test_add_standalone_private_key(#[case] seed: Seed) {
 
     // Generate a new block which sends reward to the new address
     let block1_amount = Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
-    let output = make_address_output(address.clone(), block1_amount);
+    let output = make_address_output(address.clone().into_object(), block1_amount);
 
     let tx =
         SignedTransaction::new(Transaction::new(0, vec![], vec![output]).unwrap(), vec![]).unwrap();
@@ -5362,7 +5387,7 @@ fn test_add_standalone_multisig(#[case] seed: Seed) {
 
     // Generate a new block which sends reward to the new multisig address
     let block1_amount = Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
-    let output = make_address_output(multisig_address.clone(), block1_amount);
+    let output = make_address_output(multisig_address.clone().into_object(), block1_amount);
 
     let tx =
         SignedTransaction::new(Transaction::new(0, vec![], vec![output]).unwrap(), vec![]).unwrap();
@@ -6724,7 +6749,10 @@ fn conflicting_delegation_account_nonce(#[case] seed: Seed) {
     let (delegation_id, delegation_tx) = wallet1
         .create_delegation(
             DEFAULT_ACCOUNT_INDEX,
-            vec![make_create_delegation_output(address.clone(), pool_id)],
+            vec![
+                make_create_delegation_output(address.clone(), pool_id),
+                make_address_output(address.clone().into_object(), Amount::from_atoms(1)),
+            ],
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
@@ -7007,7 +7035,10 @@ fn conflicting_delegation_account_nonce_same_wallet(#[case] seed: Seed) {
     let (delegation_id, delegation_tx) = wallet
         .create_delegation(
             DEFAULT_ACCOUNT_INDEX,
-            vec![make_create_delegation_output(address.clone(), pool_id)],
+            vec![
+                make_create_delegation_output(address.clone(), pool_id),
+                make_address_output(address.clone().into_object(), Amount::from_atoms(1)),
+            ],
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
@@ -7509,7 +7540,10 @@ fn conflicting_delegation_account_nonce_multiple_inputs(#[case] seed: Seed) {
     let (delegation_id, delegation_tx) = wallet
         .create_delegation(
             DEFAULT_ACCOUNT_INDEX,
-            vec![make_create_delegation_output(address.clone(), pool_id)],
+            vec![
+                make_create_delegation_output(address.clone(), pool_id),
+                make_address_output(address.clone().into_object(), Amount::from_atoms(1)),
+            ],
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
@@ -7777,7 +7811,10 @@ fn conflicting_delegation_account_with_reorg(#[case] seed: Seed) {
     let (delegation_id, delegation_tx) = wallet
         .create_delegation(
             DEFAULT_ACCOUNT_INDEX,
-            vec![make_create_delegation_output(address.clone(), pool_id)],
+            vec![
+                make_create_delegation_output(address.clone(), pool_id),
+                make_address_output(address.clone().into_object(), Amount::from_atoms(1)),
+            ],
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
@@ -7957,7 +7994,7 @@ fn rollback_utxos_after_abandon(#[case] seed: Seed) {
                 KeyPurpose::ReceiveFunds,
                 idx.try_into().unwrap(),
             );
-            make_address_output(address, utxo_amount)
+            make_address_output(address.into_object(), utxo_amount)
         })
         .collect_vec();
     let block1 = Block::new(
@@ -7991,7 +8028,7 @@ fn rollback_utxos_after_abandon(#[case] seed: Seed) {
     let tx = wallet
         .create_transaction_to_addresses(
             DEFAULT_ACCOUNT_INDEX,
-            [make_address_output(address, utxo_amount)],
+            [make_address_output(address.into_object(), utxo_amount)],
             SelectedInputs::Utxos(selected_utxos.clone()),
             BTreeMap::new(),
             FeeRate::from_amount_per_kb(Amount::ZERO),

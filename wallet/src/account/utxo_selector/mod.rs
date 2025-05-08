@@ -703,7 +703,7 @@ pub fn select_coins(
     coin_selection_algo: CoinSelectionAlgo,
     max_tx_weight: usize,
 ) -> Result<SelectionResult, UtxoSelectorError> {
-    if selection_target == Amount::ZERO && pay_fees == PayFee::DoNotPayFeeWithThisCurrency {
+    if selection_target == Amount::ZERO {
         return Ok(SelectionResult::new(selection_target));
     }
     ensure!(!utxo_pool.is_empty(), UtxoSelectorError::NoUtxos);
