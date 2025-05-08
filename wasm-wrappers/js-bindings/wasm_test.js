@@ -38,6 +38,7 @@ import {
   extract_htlc_secret,
   encode_create_order_output,
   encode_input_for_fill_order,
+  encode_input_for_freeze_order,
   encode_input_for_conclude_order,
   SignatureHashType,
   encode_input_for_withdraw_from_delegation,
@@ -66,12 +67,14 @@ import {
   encode_input_for_change_token_metadata_uri,
 } from "../pkg/wasm_wrappers.js";
 
-function assert_eq_arrays(arr1, arr2) {
-  assert(arr1.length == arr2.length, "array lengths are different");
+// Taken from TESTNET_FORK_HEIGHT_5_ORDERS_V1 in common/src/chain/config/builder.rs.
+// This will be updated to the actual height after we choose one.
+const ORDERS_V1_TESTNET_FORK_HEIGHT = 999999999;
 
-  arr1.forEach((elem, idx) => {
-    assert(elem == arr2[idx], `element at index ${idx} is different`);
-  });
+function assert_eq_arrays(arr1, arr2) {
+  const equal = arr1.length == arr2.length && arr1.every((value, index) => value == arr2[index]);
+
+  assert(equal, `array1 [${arr1}] differs from array2 [${arr2}]`);
 }
 
 function assert(condition, message) {
@@ -962,14 +965,20 @@ export async function run_test() {
     console.log("create order tokens for coins encoding ok");
 
     const order_id = "tordr1xxt0avjtt4flkq0tnlyphmdm4aaj9vmkx5r2m4g863nw3lgf7nzs7mlkqc";
-    const fill_order_input = encode_input_for_fill_order(
+    // Note: the exact heights don't matter as long as they are at the "correct side" of the fork.
+    const order_v0_height = Math.floor(Math.random() * ORDERS_V1_TESTNET_FORK_HEIGHT);
+    const order_v1_height = order_v0_height + ORDERS_V1_TESTNET_FORK_HEIGHT;
+    // Note: the nonce is ignored since orders v1.
+    const order_v1_nonce = Math.floor(Math.random() * 1000000);
+    const fill_order_v0_input = encode_input_for_fill_order(
       order_id,
       Amount.from_atoms("40000"),
       address,
       BigInt(1),
+      BigInt(order_v0_height),
       Network.Testnet
     );
-    const expected_fill_order_input = [
+    const expected_fill_order_v0_input = [
       2, 4, 7, 49, 150, 254, 178, 75, 93, 83, 251,
       1, 235, 159, 200, 27, 237, 187, 175, 123, 34, 179,
       118, 53, 6, 173, 213, 7, 212, 102, 232, 253, 9,
@@ -978,15 +987,38 @@ export async function run_test() {
       103, 207, 80, 217, 178
     ];
 
-    assert_eq_arrays(fill_order_input, expected_fill_order_input);
-    console.log("fill order encoding ok");
+    assert_eq_arrays(fill_order_v0_input, expected_fill_order_v0_input);
+    console.log("fill order v0 encoding ok");
 
-    const conclude_order_input = encode_input_for_conclude_order(
+    const fill_order_v1_input = encode_input_for_fill_order(
       order_id,
-      BigInt(1),
+      Amount.from_atoms("40000"),
+      address,
+      BigInt(order_v1_nonce),
+      BigInt(order_v1_height),
       Network.Testnet
     );
-    const expected_conclude_order_input = [
+    const expected_fill_order_v1_input = [
+      3, 0, 49, 150, 254, 178, 75, 93,
+      83, 251, 1, 235, 159, 200, 27, 237,
+      187, 175, 123, 34, 179, 118, 53, 6,
+      173, 213, 7, 212, 102, 232, 253, 9,
+      244, 197, 2, 113, 2, 0, 1, 91,
+      58, 110, 176, 100, 207, 6, 194, 41,
+      193, 30, 91, 4, 195, 202, 103, 207,
+      80, 217, 178
+    ];
+
+    assert_eq_arrays(fill_order_v1_input, expected_fill_order_v1_input);
+    console.log("fill order v1 encoding ok");
+
+    const conclude_order_v0_input = encode_input_for_conclude_order(
+      order_id,
+      BigInt(1),
+      BigInt(order_v0_height),
+      Network.Testnet
+    );
+    const expected_conclude_order_v0_input = [
       2, 4, 6, 49, 150, 254, 178, 75,
       93, 83, 251, 1, 235, 159, 200, 27,
       237, 187, 175, 123, 34, 179, 118, 53,
@@ -994,8 +1026,55 @@ export async function run_test() {
       9, 244, 197
     ];
 
-    assert_eq_arrays(conclude_order_input, expected_conclude_order_input);
-    console.log("conclude order encoding ok");
+    assert_eq_arrays(conclude_order_v0_input, expected_conclude_order_v0_input);
+    console.log("conclude order v0 encoding ok");
+
+    const conclude_order_v1_input = encode_input_for_conclude_order(
+      order_id,
+      BigInt(order_v1_nonce),
+      BigInt(order_v1_height),
+      Network.Testnet
+    );
+    const expected_conclude_order_v1_input = [
+      3, 2, 49, 150, 254, 178, 75, 93,
+      83, 251, 1, 235, 159, 200, 27, 237,
+      187, 175, 123, 34, 179, 118, 53, 6,
+      173, 213, 7, 212, 102, 232, 253, 9,
+      244, 197
+    ];
+
+    assert_eq_arrays(conclude_order_v1_input, expected_conclude_order_v1_input);
+    console.log("conclude order v1 encoding ok");
+
+    const freeze_order_input = encode_input_for_freeze_order(
+      order_id,
+      BigInt(order_v1_height),
+      Network.Testnet
+    );
+    const expected_freeze_order_input = [
+      3, 1, 49, 150, 254, 178, 75, 93,
+      83, 251, 1, 235, 159, 200, 27, 237,
+      187, 175, 123, 34, 179, 118, 53, 6,
+      173, 213, 7, 212, 102, 232, 253, 9,
+      244, 197
+    ];
+
+    assert_eq_arrays(freeze_order_input, expected_freeze_order_input);
+    console.log("freeze order encoding ok");
+
+    try {
+      encode_input_for_freeze_order(
+        order_id,
+        BigInt(order_v0_height),
+        Network.Testnet
+      );
+      throw new Error("Freezing an order before v1 worked somehow!");
+    } catch (e) {
+      if (!e.includes("Orders V1 not activated")) {
+        throw e;
+      }
+      console.log("Tested order freezing before v1 successfully");
+    }
 
     try {
       const invalid_inputs = "invalid inputs";

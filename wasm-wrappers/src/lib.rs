@@ -66,8 +66,8 @@ use common::{
             TokenCreator, TokenIssuance, TokenIssuanceV1, TokenTotalSupply,
         },
         AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, ChainConfig, Destination,
-        OrderData, OutPointSourceId, SignedTransaction, SignedTransactionIntent, Transaction,
-        TxInput, TxOutput, UtxoOutPoint,
+        OrderAccountCommand, OrderData, OrdersVersion, OutPointSourceId, SignedTransaction,
+        SignedTransactionIntent, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{
         self, amount::UnsignedIntType, per_thousand::PerThousand, BlockHeight, Id, Idable, H256,
@@ -1590,38 +1590,100 @@ pub fn encode_create_order_output(
 
 /// Given an amount to fill an order (which is described in terms of ask currency) and a destination
 /// for result outputs create an input that fills the order.
+///
+/// Note: the nonce is only needed before the orders V1 fork activation. After the fork the nonce is
+/// ignored and any value can be passed for the parameter.
 #[wasm_bindgen]
 pub fn encode_input_for_fill_order(
     order_id: &str,
     fill_amount: Amount,
     destination: &str,
     nonce: u64,
+    current_block_height: u64,
     network: Network,
 ) -> Result<Vec<u8>, Error> {
     let chain_config = Builder::new(network.into()).build();
     let order_id = parse_addressable(&chain_config, order_id)?;
     let fill_amount = fill_amount.as_internal_amount()?;
     let destination = parse_addressable(&chain_config, destination)?;
-    let input = TxInput::AccountCommand(
-        AccountNonce::new(nonce),
-        AccountCommand::FillOrder(order_id, fill_amount, destination),
-    );
+    let orders_version = chain_config
+        .chainstate_upgrades()
+        .version_at_height(BlockHeight::new(current_block_height))
+        .1
+        .orders_version();
+
+    let input = match orders_version {
+        OrdersVersion::V0 => TxInput::AccountCommand(
+            AccountNonce::new(nonce),
+            AccountCommand::FillOrder(order_id, fill_amount, destination),
+        ),
+        OrdersVersion::V1 => TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(
+            order_id,
+            fill_amount,
+            destination,
+        )),
+    };
     Ok(input.encode())
 }
 
-/// Given an order id create an input that concludes the order.
+/// Given an order id create an input that freezes the order.
+///
+/// Note: order freezing is available only after the orders V1 fork activation.
 #[wasm_bindgen]
-pub fn encode_input_for_conclude_order(
+pub fn encode_input_for_freeze_order(
     order_id: &str,
-    nonce: u64,
+    current_block_height: u64,
     network: Network,
 ) -> Result<Vec<u8>, Error> {
     let chain_config = Builder::new(network.into()).build();
     let order_id = parse_addressable(&chain_config, order_id)?;
-    let input = TxInput::AccountCommand(
-        AccountNonce::new(nonce),
-        AccountCommand::ConcludeOrder(order_id),
-    );
+    let orders_version = chain_config
+        .chainstate_upgrades()
+        .version_at_height(BlockHeight::new(current_block_height))
+        .1
+        .orders_version();
+
+    let input = match orders_version {
+        OrdersVersion::V0 => {
+            return Err(Error::OrdersV1NotActivatedAtSpecifiedHeight);
+        }
+        OrdersVersion::V1 => {
+            TxInput::OrderAccountCommand(OrderAccountCommand::FreezeOrder(order_id))
+        }
+    };
+
+    Ok(input.encode())
+}
+
+/// Given an order id create an input that concludes the order.
+///
+/// Note: the nonce is only needed before the orders V1 fork activation. After the fork the nonce is
+/// ignored and any value can be passed for the parameter.
+#[wasm_bindgen]
+pub fn encode_input_for_conclude_order(
+    order_id: &str,
+    nonce: u64,
+    current_block_height: u64,
+    network: Network,
+) -> Result<Vec<u8>, Error> {
+    let chain_config = Builder::new(network.into()).build();
+    let order_id = parse_addressable(&chain_config, order_id)?;
+    let orders_version = chain_config
+        .chainstate_upgrades()
+        .version_at_height(BlockHeight::new(current_block_height))
+        .1
+        .orders_version();
+
+    let input = match orders_version {
+        OrdersVersion::V0 => TxInput::AccountCommand(
+            AccountNonce::new(nonce),
+            AccountCommand::ConcludeOrder(order_id),
+        ),
+        OrdersVersion::V1 => {
+            TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder(order_id))
+        }
+    };
+
     Ok(input.encode())
 }
 

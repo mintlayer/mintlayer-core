@@ -49,24 +49,51 @@ use super::{
     MagicBytes,
 };
 
-// The fork at which we upgrade consensus to dis-incentivize large pools + enable tokens v1
-const TESTNET_FORK_HEIGHT_1_TOKENS_V1_AND_CONSENSUS_UPGRADE: BlockHeight = BlockHeight::new(78_440);
-// The fork at which we upgrade chainstate to distribute reward to staker proportionally to their balance
-// and change various tokens fees
-const TESTNET_FORK_HEIGHT_2_STAKER_REWARD_AND_TOKENS_FEE: BlockHeight = BlockHeight::new(138_244);
-// The fork at which txs with htlc outputs become valid, data deposit fee and size, max future block time offset changed
-const TESTNET_FORK_HEIGHT_3_HTLC_AND_DATA_DEPOSIT_FEE: BlockHeight = BlockHeight::new(297_550);
-// The fork at which order outputs become valid
-const TESTNET_FORK_HEIGHT_4_ORDERS: BlockHeight = BlockHeight::new(325_180);
-// The fork at which we enable orders v1 and prohibit updating the staker destination in ProduceBlockFromStake.
-const TESTNET_FORK_HEIGHT_5_ORDERS_V1_AND_STAKER_DESTINATION_UPDATE_PROHIBITION: BlockHeight =
-    BlockHeight::new(999_999_999);
+// Note: the names of the "FORK_HEIGHT" constants below only contain the short description
+// of the most prominent change that happens at that height, which serves as the "proper name"
+// for the fork.
 
-// The fork at which txs with htlc and orders outputs become valid
+// The fork at which we:
+// * enable tokens v1;
+// * upgrade consensus to PoSConsensusVersion::V1 to dis-incentivize large pools.
+const TESTNET_FORK_HEIGHT_1_TOKENS_V1: BlockHeight = BlockHeight::new(78_440);
+
+// The fork at which we:
+// * upgrade chainstate to RewardDistributionVersion::V1 to distribute reward to the staker
+// proportionally to their balance;
+// * change various tokens fees.
+const TESTNET_FORK_HEIGHT_2_STAKER_REWARD_DISTRIBUTION: BlockHeight = BlockHeight::new(138_244);
+
+// The fork at which:
+// * txs with htlc outputs become valid;
+// * data deposit fee and size are changed;
+// * token metadata uri change is allowed;
+// * max future block time offset is changed.
+const TESTNET_FORK_HEIGHT_3_HTLC: BlockHeight = BlockHeight::new(297_550);
+
+// The fork at which:
+// * order outputs become valid;
+// * frozen token validation logic is changed to FrozenTokensValidationVersion::V1.
+const TESTNET_FORK_HEIGHT_4_ORDERS: BlockHeight = BlockHeight::new(325_180);
+
+// The fork at which we:
+// * enable orders v1;
+// * enable token id generation v1;
+// * prohibit updating the staker destination in ProduceBlockFromStake.
+const TESTNET_FORK_HEIGHT_5_ORDERS_V1: BlockHeight = BlockHeight::new(999_999_999);
+
+// The fork at which:
+// * txs with htlc and order outputs become valid;
+// * data deposit fee and size are changed;
+// * token metadata uri change is allowed;
+// * frozen token validation logic is changed to FrozenTokensValidationVersion::V1.
 const MAINNET_FORK_HEIGHT_1_HTLC_AND_ORDERS: BlockHeight = BlockHeight::new(254_740);
-// The fork at which we enable orders v1 and prohibit updating the staker destination in ProduceBlockFromStake.
-const MAINNET_FORK_HEIGHT_2_ORDERS_V1_AND_STAKER_DESTINATION_UPDATE_PROHIBITION: BlockHeight =
-    BlockHeight::new(999_999_999);
+
+// The fork at which we:
+// * enable orders v1;
+// * enable token id generation v1;
+// * prohibit updating the staker destination in ProduceBlockFromStake.
+const MAINNET_FORK_HEIGHT_2_ORDERS_V1: BlockHeight = BlockHeight::new(999_999_999);
 
 impl ChainType {
     fn default_genesis_init(&self) -> GenesisBlockInit {
@@ -151,7 +178,7 @@ impl ChainType {
                         },
                     ),
                     (
-                        TESTNET_FORK_HEIGHT_1_TOKENS_V1_AND_CONSENSUS_UPGRADE,
+                        TESTNET_FORK_HEIGHT_1_TOKENS_V1,
                         ConsensusUpgrade::PoS {
                             initial_difficulty: None,
                             config: PoSChainConfig::new(
@@ -193,15 +220,12 @@ impl ChainType {
                     .htlc_activated(HtlcActivated::Yes)
                     .orders_activated(OrdersActivated::Yes)
             })
-            .then(
-                MAINNET_FORK_HEIGHT_2_ORDERS_V1_AND_STAKER_DESTINATION_UPDATE_PROHIBITION,
-                |builder| {
-                    builder
-                        .orders_version(OrdersVersion::V1)
-                        .staker_destination_update_forbidden(StakerDestinationUpdateForbidden::Yes)
-                        .token_id_generation_version(TokenIdGenerationVersion::V1)
-                },
-            )
+            .then(MAINNET_FORK_HEIGHT_2_ORDERS_V1, |builder| {
+                builder
+                    .orders_version(OrdersVersion::V1)
+                    .staker_destination_update_forbidden(StakerDestinationUpdateForbidden::Yes)
+                    .token_id_generation_version(TokenIdGenerationVersion::V1)
+            })
             .build(),
             ChainType::Regtest | ChainType::Signet => {
                 let upgrades = vec![(
@@ -235,19 +259,18 @@ impl ChainType {
                 StakerDestinationUpdateForbidden::No,
                 TokenIdGenerationVersion::V0,
             ))
+            .then(TESTNET_FORK_HEIGHT_1_TOKENS_V1, |builder| {
+                builder.token_issuance_version(TokenIssuanceVersion::V1)
+            })
             .then(
-                TESTNET_FORK_HEIGHT_1_TOKENS_V1_AND_CONSENSUS_UPGRADE,
-                |builder| builder.token_issuance_version(TokenIssuanceVersion::V1),
-            )
-            .then(
-                TESTNET_FORK_HEIGHT_2_STAKER_REWARD_AND_TOKENS_FEE,
+                TESTNET_FORK_HEIGHT_2_STAKER_REWARD_DISTRIBUTION,
                 |builder| {
                     builder
                         .reward_distribution_version(RewardDistributionVersion::V1)
                         .tokens_fee_version(TokensFeeVersion::V1)
                 },
             )
-            .then(TESTNET_FORK_HEIGHT_3_HTLC_AND_DATA_DEPOSIT_FEE, |builder| {
+            .then(TESTNET_FORK_HEIGHT_3_HTLC, |builder| {
                 builder
                     .data_deposit_fee_version(DataDepositFeeVersion::V1)
                     .change_token_metadata_uri_activated(ChangeTokenMetadataUriActivated::Yes)
@@ -258,15 +281,12 @@ impl ChainType {
                     .frozen_tokens_validation_version(FrozenTokensValidationVersion::V1)
                     .orders_activated(OrdersActivated::Yes)
             })
-            .then(
-                TESTNET_FORK_HEIGHT_5_ORDERS_V1_AND_STAKER_DESTINATION_UPDATE_PROHIBITION,
-                |builder| {
-                    builder
-                        .orders_version(OrdersVersion::V1)
-                        .staker_destination_update_forbidden(StakerDestinationUpdateForbidden::Yes)
-                        .token_id_generation_version(TokenIdGenerationVersion::V1)
-                },
-            )
+            .then(TESTNET_FORK_HEIGHT_5_ORDERS_V1, |builder| {
+                builder
+                    .orders_version(OrdersVersion::V1)
+                    .staker_destination_update_forbidden(StakerDestinationUpdateForbidden::Yes)
+                    .token_id_generation_version(TokenIdGenerationVersion::V1)
+            })
             .build(),
         }
     }
@@ -661,9 +681,8 @@ mod tests {
         {
             let config = Builder::new(ChainType::Testnet).build();
 
-            let before_the_fork = BlockHeight::new(
-                rng.gen_range(0..TESTNET_FORK_HEIGHT_3_HTLC_AND_DATA_DEPOSIT_FEE.into_int()),
-            );
+            let before_the_fork =
+                BlockHeight::new(rng.gen_range(0..TESTNET_FORK_HEIGHT_3_HTLC.into_int()));
             assert_eq!(
                 DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET_V1,
                 config.max_future_block_time_offset(before_the_fork)
@@ -671,13 +690,11 @@ mod tests {
 
             assert_eq!(
                 DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET_V2,
-                config
-                    .max_future_block_time_offset(TESTNET_FORK_HEIGHT_3_HTLC_AND_DATA_DEPOSIT_FEE)
+                config.max_future_block_time_offset(TESTNET_FORK_HEIGHT_3_HTLC)
             );
 
-            let after_the_fork = BlockHeight::new(
-                rng.gen_range(TESTNET_FORK_HEIGHT_3_HTLC_AND_DATA_DEPOSIT_FEE.into_int()..u64::MAX),
-            );
+            let after_the_fork =
+                BlockHeight::new(rng.gen_range(TESTNET_FORK_HEIGHT_3_HTLC.into_int()..u64::MAX));
             assert_eq!(
                 DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET_V2,
                 config.max_future_block_time_offset(after_the_fork)
@@ -749,7 +766,7 @@ mod tests {
                         ),
                     ),
                     (
-                        MAINNET_FORK_HEIGHT_2_ORDERS_V1_AND_STAKER_DESTINATION_UPDATE_PROHIBITION,
+                        MAINNET_FORK_HEIGHT_2_ORDERS_V1,
                         ChainstateUpgrade::new(
                             TokenIssuanceVersion::V1,
                             RewardDistributionVersion::V1,
@@ -793,7 +810,7 @@ mod tests {
                         ),
                     ),
                     (
-                        TESTNET_FORK_HEIGHT_1_TOKENS_V1_AND_CONSENSUS_UPGRADE,
+                        TESTNET_FORK_HEIGHT_1_TOKENS_V1,
                         ChainstateUpgrade::new(
                             TokenIssuanceVersion::V1,
                             RewardDistributionVersion::V0,
@@ -809,7 +826,7 @@ mod tests {
                         ),
                     ),
                     (
-                        TESTNET_FORK_HEIGHT_2_STAKER_REWARD_AND_TOKENS_FEE,
+                        TESTNET_FORK_HEIGHT_2_STAKER_REWARD_DISTRIBUTION,
                         ChainstateUpgrade::new(
                             TokenIssuanceVersion::V1,
                             RewardDistributionVersion::V1,
@@ -825,7 +842,7 @@ mod tests {
                         ),
                     ),
                     (
-                        TESTNET_FORK_HEIGHT_3_HTLC_AND_DATA_DEPOSIT_FEE,
+                        TESTNET_FORK_HEIGHT_3_HTLC,
                         ChainstateUpgrade::new(
                             TokenIssuanceVersion::V1,
                             RewardDistributionVersion::V1,
@@ -857,7 +874,7 @@ mod tests {
                         ),
                     ),
                     (
-                        TESTNET_FORK_HEIGHT_5_ORDERS_V1_AND_STAKER_DESTINATION_UPDATE_PROHIBITION,
+                        TESTNET_FORK_HEIGHT_5_ORDERS_V1,
                         ChainstateUpgrade::new(
                             TokenIssuanceVersion::V1,
                             RewardDistributionVersion::V1,

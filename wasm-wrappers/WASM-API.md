@@ -366,9 +366,21 @@ Given ask and give amounts and a conclude key create output that creates an orde
 Given an amount to fill an order (which is described in terms of ask currency) and a destination
 for result outputs create an input that fills the order.
 
+Note: the nonce is only needed before the orders V1 fork activation. After the fork the nonce is
+ignored and any value can be passed for the parameter.
+
+### Function: `encode_input_for_freeze_order`
+
+Given an order id create an input that freezes the order.
+
+Note: order freezing is available only after the orders V1 fork activation.
+
 ### Function: `encode_input_for_conclude_order`
 
 Given an order id create an input that concludes the order.
+
+Note: the nonce is only needed before the orders V1 fork activation. After the fork the nonce is
+ignored and any value can be passed for the parameter.
 
 ### Enum: `Network`
 
