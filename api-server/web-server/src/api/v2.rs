@@ -1121,6 +1121,7 @@ pub async fn token<T: ApiServerStorage>(
         "frozen": frozen,
         "is_token_unfreezable": unfreezable,
         "is_token_freezable": freezable,
+        "next_nonce": token.next_nonce,
     })))
 }
 

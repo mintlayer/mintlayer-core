@@ -22,6 +22,7 @@ use common::{
             IsTokenFreezable, IsTokenFrozen, TokenId, TokenIssuance, TokenIssuanceV1,
             TokenTotalSupply,
         },
+        AccountNonce,
     },
     primitives::H256,
 };
@@ -136,6 +137,7 @@ async fn ok(#[case] seed: Seed) {
                     is_locked: false,
                     frozen: IsTokenFrozen::No(token_issuance.is_freezable),
                     authority: token_issuance.authority.clone(),
+                    next_nonce: AccountNonce::new(0),
                 };
 
                 _ = tx.send([(
@@ -153,6 +155,7 @@ async fn ok(#[case] seed: Seed) {
                         "frozen": false,
                         "is_token_freezable": false,
                         "is_token_unfreezable": None::<bool>,
+                        "next_nonce": token_data.next_nonce,
                     }),
                 )]);
 

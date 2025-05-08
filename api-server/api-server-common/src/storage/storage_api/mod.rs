@@ -464,6 +464,7 @@ pub struct FungibleTokenData {
     pub is_locked: bool,
     pub frozen: IsTokenFrozen,
     pub authority: Destination,
+    pub next_nonce: AccountNonce,
 }
 
 impl FungibleTokenData {
@@ -481,38 +482,45 @@ impl FungibleTokenData {
         }
     }
 
-    pub fn mint_tokens(mut self, amount: Amount) -> Self {
+    pub fn mint_tokens(mut self, amount: Amount, nonce: AccountNonce) -> Self {
         self.circulating_supply = (self.circulating_supply + amount).expect("no overflow");
+        self.next_nonce = nonce.increment().expect("no overflow");
         self
     }
 
-    pub fn unmint_tokens(mut self, amount: Amount) -> Self {
+    pub fn unmint_tokens(mut self, amount: Amount, nonce: AccountNonce) -> Self {
         self.circulating_supply = (self.circulating_supply - amount).expect("no underflow");
+        self.next_nonce = nonce.increment().expect("no overflow");
         self
     }
 
-    pub fn freeze(mut self, is_token_unfreezable: IsTokenUnfreezable) -> Self {
+    pub fn freeze(mut self, is_token_unfreezable: IsTokenUnfreezable, nonce: AccountNonce) -> Self {
         self.frozen = IsTokenFrozen::Yes(is_token_unfreezable);
+        self.next_nonce = nonce.increment().expect("no overflow");
         self
     }
 
-    pub fn unfreeze(mut self) -> Self {
+    pub fn unfreeze(mut self, nonce: AccountNonce) -> Self {
         self.frozen = IsTokenFrozen::No(IsTokenFreezable::Yes);
+        self.next_nonce = nonce.increment().expect("no overflow");
         self
     }
 
-    pub fn lock(mut self) -> Self {
+    pub fn lock(mut self, nonce: AccountNonce) -> Self {
         self.is_locked = true;
+        self.next_nonce = nonce.increment().expect("no overflow");
         self
     }
 
-    pub fn change_authority(mut self, authority: Destination) -> Self {
+    pub fn change_authority(mut self, authority: Destination, nonce: AccountNonce) -> Self {
         self.authority = authority;
+        self.next_nonce = nonce.increment().expect("no overflow");
         self
     }
 
-    pub fn change_metadata_uri(mut self, metadata_uri: Vec<u8>) -> Self {
+    pub fn change_metadata_uri(mut self, metadata_uri: Vec<u8>, nonce: AccountNonce) -> Self {
         self.metadata_uri = metadata_uri;
+        self.next_nonce = nonce.increment().expect("no overflow");
         self
     }
 }
