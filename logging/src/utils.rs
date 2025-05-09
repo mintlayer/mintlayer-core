@@ -15,7 +15,7 @@
 
 use std::{borrow::Cow, ffi::OsString};
 
-#[derive(Debug, thiserror::Error, PartialEq, Eq)]
+#[derive(Debug, Clone, thiserror::Error, PartialEq, Eq)]
 pub enum GetFromEnvError {
     #[error("Env var {var_name}'s contents are not valid unicode: {data:?}")]
     NotUnicode { var_name: String, data: OsString },

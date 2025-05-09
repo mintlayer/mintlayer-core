@@ -15,6 +15,7 @@ randomness = { path = "../randomness" }
 serialization = { path = "../serialization" }
 utils = { path = "../utils" }
 
+ctor.workspace = true
 hex.workspace = true
 itertools.workspace = true
 rand_chacha.workspace = true

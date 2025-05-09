@@ -13,52 +13,54 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::ops::{Add, Div, Sub};
-use std::sync::Arc;
-
-use common::chain::htlc::{HashedTimelockContract, HtlcSecret};
-use common::chain::stakelock::StakePoolData;
-use common::chain::timelock::OutputTimeLock;
-use common::chain::tokens::{NftIssuance, NftIssuanceV0, TokenId, TokenIssuance};
-use common::chain::{
-    AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, DelegationId, OrderData,
-    OutPointSourceId, PoolId,
+use std::{
+    num::NonZeroU8,
+    ops::{Add, Div, Sub},
+    sync::Arc,
 };
-use common::primitives::per_thousand::PerThousand;
-use common::primitives::BlockHeight;
+
+use itertools::izip;
+
 use common::{
     chain::{
+        classic_multisig::ClassicMultisigChallenge,
         config::create_regtest,
+        htlc::{HashedTimelockContract, HtlcSecret},
         output_value::OutputValue,
         signature::{inputsig::arbitrary_message::produce_message_challenge, DestinationSigError},
-        ChainConfig, Destination, GenBlock, SignedTransactionIntent, Transaction, TxInput,
-        TxOutput,
+        stakelock::StakePoolData,
+        timelock::OutputTimeLock,
+        tokens::{
+            IsTokenUnfreezable, Metadata, NftIssuance, NftIssuanceV0, TokenId, TokenIssuance,
+            TokenIssuanceV1,
+        },
+        AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, ChainConfig, DelegationId,
+        Destination, GenBlock, OrderData, OrderId, OutPointSourceId, PoolId,
+        SignedTransactionIntent, Transaction, TxInput, TxOutput,
     },
-    primitives::{Amount, Id, H256},
+    primitives::{
+        amount::UnsignedIntType, per_thousand::PerThousand, Amount, BlockHeight, Id, Idable, H256,
+    },
 };
-use crypto::key::hdkd::u31::U31;
-use crypto::key::{KeyKind, PrivateKey};
-use itertools::izip;
+use crypto::{
+    key::{hdkd::u31::U31, KeyKind, PrivateKey},
+    vrf::VRFPrivateKey,
+};
+use logging::log;
 use randomness::{CryptoRng, Rng};
+use serialization::extras::non_empty_vec::DataOrNoVec;
 use tx_verifier::error::{InputCheckErrorPayload, ScriptError};
-use wallet_storage::{DefaultBackend, Store, StoreTxRwUnlocked, Transactional};
-use wallet_types::partially_signed_transaction::{
-    OrderAdditionalInfo, TokenAdditionalInfo, TxAdditionalInfo,
+use wallet_storage::{DefaultBackend, Store, Transactional};
+use wallet_types::{
+    account_info::DEFAULT_ACCOUNT_INDEX,
+    partially_signed_transaction::{OrderAdditionalInfo, TokenAdditionalInfo, TxAdditionalInfo},
+    KeyPurpose,
 };
-use wallet_types::{account_info::DEFAULT_ACCOUNT_INDEX, seed_phrase::StoreSeedPhrase, KeyPurpose};
 
-use crate::key_chain::AccountKeyChainImplSoftware;
-use crate::signer::SignerError;
-use crate::SendRequest;
 use crate::{
-    key_chain::{MasterKeyChain, LOOKAHEAD_SIZE},
-    Account,
+    signer::{tests::account_from_mnemonic, Signer, SignerError},
+    SendRequest,
 };
-
-use super::Signer;
-
-const MNEMONIC: &str =
-    "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
 
 pub fn test_sign_message<F, S>(rng: &mut (impl Rng + CryptoRng), make_signer: F)
 where
@@ -103,7 +105,7 @@ where
         res.verify_signature(&chain_config, &destination, &message_challenge).unwrap();
     }
 
-    // Check we cannot signe if we don't know the destination
+    // Check we cannot sign if we don't know the destination
     let (_, random_pk) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
     let random_pk_destination = Destination::PublicKey(random_pk);
 
@@ -127,8 +129,6 @@ where
     F: Fn(Arc<ChainConfig>, U31) -> S,
     S: Signer,
 {
-    use common::primitives::Idable;
-
     let chain_config = Arc::new(create_regtest());
     let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
     let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
@@ -188,6 +188,7 @@ where
     .unwrap();
 
     let intent: String = [rng.gen::<char>(), rng.gen::<char>(), rng.gen::<char>()].iter().collect();
+    log::debug!("Generated intent: `{intent}`");
     let res = signer
         .sign_transaction_intent(
             &tx,
@@ -226,19 +227,6 @@ where
     F: Fn(Arc<ChainConfig>, U31) -> S,
     S: Signer,
 {
-    use std::num::NonZeroU8;
-
-    use common::{
-        chain::{
-            classic_multisig::ClassicMultisigChallenge,
-            tokens::{IsTokenUnfreezable, Metadata, TokenIssuanceV1},
-            OrderId,
-        },
-        primitives::amount::UnsignedIntType,
-    };
-    use crypto::vrf::VRFPrivateKey;
-    use serialization::extras::non_empty_vec::DataOrNoVec;
-
     let chain_config = Arc::new(create_regtest());
     let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
     let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
@@ -314,9 +302,9 @@ where
     };
 
     let min_required_signatures = 3;
-    // The first account can signe the pub_key2 and the standalone key,
-    // but it will not be fully signed, so we will need to signe it with the account2 which
-    // can conplete the signing with the pub_key3
+    // The first account can sign the pub_key2 and the standalone key,
+    // but it will not be fully signed, so we will need to sign it with the account2 which
+    // can complete the signing with the pub_key3.
     let challenge = ClassicMultisigChallenge::new(
         &chain_config,
         NonZeroU8::new(min_required_signatures).unwrap(),
@@ -600,24 +588,4 @@ where
         )
         .unwrap();
     }
-}
-
-fn account_from_mnemonic<B: storage::Backend>(
-    chain_config: &Arc<ChainConfig>,
-    db_tx: &mut StoreTxRwUnlocked<B>,
-    account_index: U31,
-) -> Account<AccountKeyChainImplSoftware> {
-    let master_key_chain = MasterKeyChain::new_from_mnemonic(
-        chain_config.clone(),
-        db_tx,
-        MNEMONIC,
-        None,
-        StoreSeedPhrase::DoNotStore,
-    )
-    .unwrap();
-
-    let key_chain = master_key_chain
-        .create_account_key_chain(db_tx, account_index, LOOKAHEAD_SIZE)
-        .unwrap();
-    Account::new(chain_config.clone(), db_tx, key_chain, None).unwrap()
 }
