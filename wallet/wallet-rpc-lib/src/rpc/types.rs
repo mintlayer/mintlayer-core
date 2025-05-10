@@ -391,18 +391,39 @@ impl NewAccountInfo {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct TransactionOptions {
     pub in_top_x_mb: Option<usize>,
+    pub broadcast_to_mempool: Option<bool>,
 }
 
 impl TransactionOptions {
     const DEFAULT_IN_TOP_X_MB: usize = 5;
+    const DEFAULT_BROADCAST: bool = true;
 
     pub fn from_controller_config(config: &ControllerConfig) -> Self {
         let in_top_x_mb = Some(config.in_top_x_mb);
-        Self { in_top_x_mb }
+        let broadcast_to_mempool = Some(config.broadcast_to_mempool);
+        Self {
+            in_top_x_mb,
+            broadcast_to_mempool,
+        }
     }
 
     pub fn in_top_x_mb(&self) -> usize {
         self.in_top_x_mb.unwrap_or(Self::DEFAULT_IN_TOP_X_MB)
+    }
+
+    pub fn broadcast_to_mempool(&self) -> bool {
+        self.broadcast_to_mempool.unwrap_or(Self::DEFAULT_BROADCAST)
+    }
+}
+
+impl From<TransactionOptions> for ControllerConfig {
+    fn from(value: TransactionOptions) -> Self {
+        Self {
+            broadcast_to_mempool: value
+                .broadcast_to_mempool
+                .unwrap_or(TransactionOptions::DEFAULT_BROADCAST),
+            in_top_x_mb: value.in_top_x_mb.unwrap_or(TransactionOptions::DEFAULT_IN_TOP_X_MB),
+        }
     }
 }
 

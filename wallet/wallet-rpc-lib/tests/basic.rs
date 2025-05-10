@@ -168,6 +168,7 @@ async fn stake_and_send_coins_to_acct1(#[case] seed: Seed) {
         let send_to_addr = acct1_addr.address;
         let options = TransactionOptions {
             in_top_x_mb: Some(3),
+            broadcast_to_mempool: Some(true),
         };
         let params = (
             ACCOUNT0_ARG,
