@@ -382,9 +382,10 @@ trait WalletRpc {
     ) -> rpc::RpcResult<RpcNewTransaction>;
 
     /// Sweep all spendable coins or tokens from an address or addresses specified in `from_addresses`
-    /// or all addresses from this account if all is set to true, to a given destination address.
+    /// or all addresses from this account if all is set to true, to the given destination address.
     /// Either 1 or more addresses need to be specified in `from_addresses` with all set to false, or
     /// `from_addresses` needs to be empty and all set to true.
+    ///
     /// Spendable coins are any coins that are not locked, and tokens that are not frozen or locked.
     /// The wallet will automatically calculate the required fees
     #[method(name = "address_sweep_spendable")]

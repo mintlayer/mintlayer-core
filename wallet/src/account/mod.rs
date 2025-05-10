@@ -444,6 +444,7 @@ impl<K: AccountKeyChains> Account<K> {
             selection_result = selection_result.add_change(
                 (total_fees_not_paid - new_total_fees_not_paid).unwrap_or(Amount::ZERO),
             )?;
+            let change_amount = selection_result.get_change();
             let change_output = match pay_fee_with_currency {
                 Currency::Coin => make_address_output(change_address.clone(), change_amount),
                 Currency::Token(token_id) => {

@@ -37,11 +37,12 @@ pub use currency::Currency;
 pub use keys::{KeyPurpose, KeychainUsageState, RootKeys};
 pub use wallet_tx::{BlockInfo, WalletTx};
 
+use std::collections::BTreeMap;
+
 use common::{
     chain::{SignedTransaction, Transaction},
     primitives::Amount,
 };
-use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SignedTxWithFees {

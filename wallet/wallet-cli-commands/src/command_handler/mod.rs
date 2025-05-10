@@ -135,11 +135,7 @@ where
                 id_to_hex_string(*new_tx.tx_id.as_hash())
             )
         } else {
-            let hex = new_tx.tx.to_string();
-            let mut summary = new_tx.tx.take().transaction().text_summary(chain_config);
-            format_fees(&mut summary, &new_tx.fees);
-
-            format!("{summary}\nThe transaction was created and is ready to be submitted:\n{hex}",)
+            format_tx_to_be_broadcasted(new_tx.tx, &new_tx.fees, chain_config)
         };
 
         ConsoleCommand::Print(status_text)
@@ -1127,11 +1123,17 @@ where
                     )
                     .await?;
 
-                Ok(ConsoleCommand::Print(format!(
-                    "A new token has been issued with ID: {} in tx: {}",
-                    new_token.token_id,
-                    id_to_hex_string(*new_token.tx_id.as_hash())
-                )))
+                let result = if new_token.broadcasted {
+                    format!(
+                        "A new token has been issued with ID: {} in tx: {}",
+                        new_token.token_id,
+                        id_to_hex_string(*new_token.tx_id.as_hash())
+                    )
+                } else {
+                    format_tx_to_be_broadcasted(new_token.tx, &new_token.fees, chain_config)
+                };
+
+                Ok(ConsoleCommand::Print(result))
             }
 
             WalletCommand::IssueNewNft {
@@ -1161,11 +1163,17 @@ where
                     .issue_new_nft(selected_account, destination_address, metadata, self.config)
                     .await?;
 
-                Ok(ConsoleCommand::Print(format!(
-                    "A new NFT has been issued with ID: {} in tx: {}",
-                    new_token.token_id,
-                    id_to_hex_string(*new_token.tx_id.as_hash())
-                )))
+                let result = if new_token.broadcasted {
+                    format!(
+                        "A new NFT has been issued with ID: {} in tx: {}",
+                        new_token.token_id,
+                        id_to_hex_string(*new_token.tx_id.as_hash())
+                    )
+                } else {
+                    format_tx_to_be_broadcasted(new_token.tx, &new_token.fees, chain_config)
+                };
+
+                Ok(ConsoleCommand::Print(result))
             }
 
             WalletCommand::MintTokens {
@@ -1640,15 +1648,24 @@ where
 
             WalletCommand::CreateDelegation { owner, pool_id } => {
                 let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
-                let delegation_id = wallet
-                    .create_delegation(selected_account, owner, pool_id, self.config)
-                    .await?
-                    .delegation_id;
+                let new_delegation =
+                    wallet.create_delegation(selected_account, owner, pool_id, self.config).await?;
 
-                Ok(ConsoleCommand::Print(format!(
-                    "Success, the creation of delegation transaction was broadcast to the network. Delegation id: {}",
-                    delegation_id
-                )))
+                let result = if new_delegation.broadcasted {
+                    format!(
+                        "Success, the creation of delegation transaction was broadcast to the network. Delegation id: {} in tx: {}",
+                        new_delegation.delegation_id,
+                        id_to_hex_string(*new_delegation.tx_id.as_hash())
+                    )
+                } else {
+                    format_tx_to_be_broadcasted(
+                        new_delegation.tx,
+                        &new_delegation.fees,
+                        chain_config,
+                    )
+                };
+
+                Ok(ConsoleCommand::Print(result))
             }
 
             WalletCommand::DelegateStaking {
@@ -1656,14 +1673,18 @@ where
                 delegation_id,
             } => {
                 let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
-                wallet
+                let new_tx = wallet
                     .delegate_staking(selected_account, amount, delegation_id, self.config)
                     .await?;
 
-                Ok(ConsoleCommand::Print(
+                let result = if new_tx.broadcasted {
                     "Success, the delegation staking transaction was broadcast to the network"
-                        .to_owned(),
-                ))
+                        .to_owned()
+                } else {
+                    format_tx_to_be_broadcasted(new_tx.tx, &new_tx.fees, chain_config)
+                };
+
+                Ok(ConsoleCommand::Print(result))
             }
 
             WalletCommand::WithdrawFromDelegation {
@@ -1672,7 +1693,7 @@ where
                 delegation_id,
             } => {
                 let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
-                wallet
+                let new_tx = wallet
                     .withdraw_from_delegation(
                         selected_account,
                         address,
@@ -1681,9 +1702,8 @@ where
                         self.config,
                     )
                     .await?;
-                Ok(ConsoleCommand::Print(
-                    "Success. The transaction was broadcast to the network".to_owned(),
-                ))
+
+                Ok(Self::new_tx_command(new_tx, chain_config))
             }
 
             WalletCommand::CreateStakePool {
@@ -1921,6 +1941,18 @@ where
             }
         }
     }
+}
+
+fn format_tx_to_be_broadcasted(
+    tx: HexEncoded<SignedTransaction>,
+    fees: &Balances,
+    chain_config: &ChainConfig,
+) -> String {
+    let hex = tx.to_string();
+    let mut summary = tx.take().transaction().text_summary(chain_config);
+    format_fees(&mut summary, fees);
+
+    format!("{summary}\nThe transaction was created and is ready to be submitted:\n{hex}")
 }
 
 fn format_signature_status((idx, status): (usize, &RpcSignatureStatus)) -> String {
