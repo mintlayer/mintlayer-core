@@ -529,12 +529,12 @@ async fn mint_tokens(#[case] seed: Seed) {
                         TxInput::from_utxo(tx1_id.into(), 0),
                         empty_witness(&mut rng),
                     )
+                    .add_output(TxOutput::Burn(OutputValue::TokenV1(
+                        token_id,
+                        amount_to_mint,
+                    )))
                     .add_output(TxOutput::Transfer(
                         OutputValue::Coin(coins_after_mint),
-                        Destination::AnyoneCanSpend,
-                    ))
-                    .add_output(TxOutput::Transfer(
-                        OutputValue::TokenV1(token_id, amount_to_mint),
                         Destination::AnyoneCanSpend,
                     ))
                     .build();
@@ -614,6 +614,11 @@ async fn mint_tokens(#[case] seed: Seed) {
         amount.get("decimal").unwrap().as_str().unwrap(),
         mint_amount
     );
+
+    let outputs = body.get("outputs").unwrap().as_array().unwrap();
+    assert_eq!(outputs.len(), 2);
+    let burn_out = outputs.first().unwrap().as_object().unwrap();
+    assert_eq!(burn_out.get("type").unwrap().as_str().unwrap(), "Burn",);
 
     task.abort();
 }

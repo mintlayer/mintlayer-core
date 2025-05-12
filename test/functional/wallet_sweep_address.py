@@ -172,10 +172,12 @@ class WalletSweepAddresses(BitcoinTestFramework):
 
             # issue some tokens to also transfer
             tokens_address = await wallet.new_address()
-            token_id, err = await wallet.issue_new_token("XXX", 2, "http://uri", tokens_address)
+            token_id, tx_id, err = await wallet.issue_new_token("XXX", 2, "http://uri", tokens_address)
             assert token_id is not None
+            assert tx_id is not None
             assert err is None
-            self.log.info(f"new token id: {token_id}")
+            self.log.info(f"new token id: {token_id} tx_id: {tx_id}")
+            assert node.mempool_contains_tx(tx_id)
             block_id = self.generate_block()
             assert_in("Success", await wallet.sync())
             assert_in("The transaction was submitted successfully", await wallet.mint_tokens(token_id, tokens_address, 10000))
@@ -183,10 +185,12 @@ class WalletSweepAddresses(BitcoinTestFramework):
 
             # issue some more tokens but freeze them
             frozen_tokens_address = await wallet.new_address()
-            frozen_token_id, err = await wallet.issue_new_token("XXX", 2, "http://uri", frozen_tokens_address)
+            frozen_token_id, frozen_tx_id, err = await wallet.issue_new_token("XXX", 2, "http://uri", frozen_tokens_address)
             assert frozen_token_id is not None
+            assert frozen_tx_id is not None
             assert err is None
             self.log.info(f"new token id: {frozen_token_id}")
+            assert node.mempool_contains_tx(frozen_tx_id)
             block_id = self.generate_block()
             assert_in("Success", await wallet.sync())
             assert_in("The transaction was submitted successfully", await wallet.mint_tokens(frozen_token_id, frozen_tokens_address, 10000))

@@ -329,14 +329,15 @@ class WalletCliController(WalletCliControllerBase):
                               metadata_uri: str,
                               destination_address: str,
                               token_supply: str = 'unlimited',
-                              is_freezable: str = 'freezable') -> Tuple[Optional[str], Optional[str]]:
+                              is_freezable: str = 'freezable') -> Tuple[Optional[str], Optional[str], Optional[str]]:
         output = await self._write_command(f'token-issue-new "{token_ticker}" "{number_of_decimals}" "{metadata_uri}" {destination_address} {token_supply} {is_freezable}\n')
         if output.startswith("A new token has been issued with ID"):
-            begin = output.find(':') + 2
-            end = output.find(' ', begin)
-            return output[begin:end], None
+            token_id_begin = output.find(':') + 2
+            token_id_end = output.find(' ', token_id_begin)
+            tx_id_begin = output.find(':', token_id_end) + 2
+            return output[token_id_begin:token_id_end], output[tx_id_begin:], None
 
-        return None, output
+        return None, None, output
 
     async def mint_tokens(self, token_id: str, address: str, amount: int) -> str:
         return await self._write_command(f"token-mint {token_id} {address} {amount}\n")
