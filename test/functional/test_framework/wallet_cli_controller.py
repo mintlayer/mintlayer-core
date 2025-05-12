@@ -301,8 +301,9 @@ class WalletCliController(WalletCliControllerBase):
         change_address_str = '' if change_address is None else f"--change {change_address}"
         return await self._write_command(f"transaction-create-from-cold-input {address} {amount} {str(selected_utxo)} {change_address_str}\n")
 
-    async def sweep_addresses(self, destination_address: str, from_addresses: List[str] = []) -> str:
-        return await self._write_command(f"address-sweep-spendable {destination_address} {' '.join(from_addresses)}\n")
+    async def sweep_addresses(self, destination_address: str, from_addresses: List[str] = [], all_addresses: bool = False) -> str:
+        all_addresses_str = "--all" if all_addresses else ""
+        return await self._write_command(f"address-sweep-spendable {destination_address} {' '.join(from_addresses)} {all_addresses_str}\n")
 
     async def sweep_delegation(self, destination_address: str, delegation_id: str) -> str:
         return await self._write_command(f"staking-sweep-delegation {destination_address} {delegation_id}\n")

@@ -41,11 +41,12 @@ use wallet_controller::{
 use wallet_rpc_lib::{
     types::{
         AddressInfo, AddressWithUsageInfo, Balances, BlockInfo, ComposedTransaction, CreatedWallet,
-        DelegationInfo, HardwareWalletType, LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegation,
-        NewOrder, NewTransaction, NftMetadata, NodeVersion, OpenedWallet, PoolInfo, PublicKeyInfo,
-        RpcHashedTimelockContract, RpcInspectTransaction, RpcStandaloneAddresses, RpcTokenId,
-        SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
-        StandaloneAddressWithDetails, TokenMetadata, TxOptionsOverrides, UtxoInfo,
+        DelegationInfo, HardwareWalletType, LegacyVrfPublicKeyInfo, NewAccountInfo,
+        NewDelegationTransaction, NewOrderTransaction, NewSubmittedTransaction,
+        NewTokenTransaction, NftMetadata, NodeVersion, OpenedWallet, PoolInfo, PublicKeyInfo,
+        RpcHashedTimelockContract, RpcInspectTransaction, RpcNewTransaction,
+        RpcStandaloneAddresses, SendTokensFromMultisigAddressResult, StakePoolBalance,
+        StakingStatus, StandaloneAddressWithDetails, TokenMetadata, TxOptionsOverrides, UtxoInfo,
         VrfPublicKeyInfo,
     },
     RpcError, WalletRpc,
@@ -475,7 +476,7 @@ where
         tx: HexEncoded<SignedTransaction>,
         do_not_store: bool,
         options: TxOptionsOverrides,
-    ) -> Result<NewTransaction, Self::Error> {
+    ) -> Result<NewSubmittedTransaction, Self::Error> {
         self.wallet_rpc
             .submit_raw_transaction(tx, do_not_store, options)
             .await
@@ -601,7 +602,7 @@ where
         amount: DecimalAmount,
         selected_utxos: Vec<UtxoOutPoint>,
         config: ControllerConfig,
-    ) -> Result<NewTransaction, Self::Error> {
+    ) -> Result<RpcNewTransaction, Self::Error> {
         self.wallet_rpc
             .send_coins(
                 account_index,
@@ -612,7 +613,7 @@ where
             )
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
-            .map(NewTransaction::new)
+            .map(RpcNewTransaction::new)
     }
 
     async fn sweep_addresses(
@@ -620,13 +621,15 @@ where
         account_index: U31,
         destination_address: String,
         from_addresses: Vec<String>,
+        all: bool,
         config: ControllerConfig,
-    ) -> Result<NewTransaction, Self::Error> {
+    ) -> Result<RpcNewTransaction, Self::Error> {
         self.wallet_rpc
             .sweep_addresses(
                 account_index,
                 destination_address.into(),
                 from_addresses.into_iter().map(Into::into).collect(),
+                all,
                 config,
             )
             .await
@@ -639,7 +642,7 @@ where
         destination_address: String,
         delegation_id: String,
         config: ControllerConfig,
-    ) -> Result<NewTransaction, Self::Error> {
+    ) -> Result<RpcNewTransaction, Self::Error> {
         self.wallet_rpc
             .sweep_delegation(
                 account_index,
@@ -661,7 +664,7 @@ where
         staker_address: Option<String>,
         vrf_public_key: Option<String>,
         config: ControllerConfig,
-    ) -> Result<NewTransaction, Self::Error> {
+    ) -> Result<RpcNewTransaction, Self::Error> {
         self.wallet_rpc
             .create_stake_pool(
                 account_index,
@@ -675,7 +678,7 @@ where
             )
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
-            .map(NewTransaction::new)
+            .map(RpcNewTransaction::new)
     }
 
     async fn decommission_stake_pool(
@@ -684,7 +687,7 @@ where
         pool_id: String,
         output_address: Option<String>,
         config: ControllerConfig,
-    ) -> Result<NewTransaction, Self::Error> {
+    ) -> Result<RpcNewTransaction, Self::Error> {
         self.wallet_rpc
             .decommission_stake_pool(
                 account_index,
@@ -694,7 +697,7 @@ where
             )
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
-            .map(NewTransaction::new)
+            .map(RpcNewTransaction::new)
     }
 
     async fn decommission_stake_pool_request(
@@ -722,15 +725,12 @@ where
         address: String,
         pool_id: String,
         config: ControllerConfig,
-    ) -> Result<NewDelegation, Self::Error> {
+    ) -> Result<NewDelegationTransaction, Self::Error> {
         self.wallet_rpc
             .create_delegation(account_index, address.into(), pool_id.into(), config)
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
-            .map(|(tx, delegation_id)| NewDelegation {
-                tx_id: tx.transaction().get_id(),
-                delegation_id,
-            })
+            .map(|(tx, delegation_id)| NewDelegationTransaction::new(tx, delegation_id))
     }
 
     async fn delegate_staking(
@@ -739,12 +739,12 @@ where
         amount: DecimalAmount,
         delegation_id: String,
         config: ControllerConfig,
-    ) -> Result<NewTransaction, Self::Error> {
+    ) -> Result<RpcNewTransaction, Self::Error> {
         self.wallet_rpc
             .delegate_staking(account_index, amount.into(), delegation_id.into(), config)
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
-            .map(NewTransaction::new)
+            .map(RpcNewTransaction::new)
     }
 
     async fn withdraw_from_delegation(
@@ -754,7 +754,7 @@ where
         amount: DecimalAmount,
         delegation_id: String,
         config: ControllerConfig,
-    ) -> Result<NewTransaction, Self::Error> {
+    ) -> Result<RpcNewTransaction, Self::Error> {
         self.wallet_rpc
             .withdraw_from_delegation(
                 account_index,
@@ -765,7 +765,7 @@ where
             )
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
-            .map(NewTransaction::new)
+            .map(RpcNewTransaction::new)
     }
 
     async fn start_staking(&self, account_index: U31) -> Result<(), Self::Error> {
@@ -870,7 +870,7 @@ where
         destination_address: String,
         metadata: NftMetadata,
         config: ControllerConfig,
-    ) -> Result<RpcTokenId, Self::Error> {
+    ) -> Result<NewTokenTransaction, Self::Error> {
         self.wallet_rpc
             .issue_new_nft(
                 account_index,
@@ -888,7 +888,7 @@ where
         destination_address: String,
         metadata: TokenMetadata,
         config: ControllerConfig,
-    ) -> Result<RpcTokenId, Self::Error> {
+    ) -> Result<NewTokenTransaction, Self::Error> {
         let token_supply = metadata.token_supply()?;
         let is_freezable = metadata.is_freezable();
         self.wallet_rpc
@@ -912,7 +912,7 @@ where
         token_id: String,
         address: String,
         config: ControllerConfig,
-    ) -> Result<NewTransaction, Self::Error> {
+    ) -> Result<RpcNewTransaction, Self::Error> {
         self.wallet_rpc
             .change_token_authority(account_index, token_id.into(), address.into(), config)
             .await
@@ -925,7 +925,7 @@ where
         token_id: String,
         metadata_uri: String,
         config: ControllerConfig,
-    ) -> Result<NewTransaction, Self::Error> {
+    ) -> Result<RpcNewTransaction, Self::Error> {
         self.wallet_rpc
             .change_token_metadata_uri(
                 account_index,
@@ -944,7 +944,7 @@ where
         address: String,
         amount: DecimalAmount,
         config: ControllerConfig,
-    ) -> Result<NewTransaction, Self::Error> {
+    ) -> Result<RpcNewTransaction, Self::Error> {
         self.wallet_rpc
             .mint_tokens(
                 account_index,
@@ -963,7 +963,7 @@ where
         token_id: String,
         amount: DecimalAmount,
         config: ControllerConfig,
-    ) -> Result<NewTransaction, Self::Error> {
+    ) -> Result<RpcNewTransaction, Self::Error> {
         self.wallet_rpc
             .unmint_tokens(account_index, token_id.into(), amount.into(), config)
             .await
@@ -975,7 +975,7 @@ where
         account_index: U31,
         token_id: String,
         config: ControllerConfig,
-    ) -> Result<NewTransaction, Self::Error> {
+    ) -> Result<RpcNewTransaction, Self::Error> {
         self.wallet_rpc
             .lock_token_supply(account_index, token_id.into(), config)
             .await
@@ -988,7 +988,7 @@ where
         token_id: String,
         is_unfreezable: bool,
         config: ControllerConfig,
-    ) -> Result<NewTransaction, Self::Error> {
+    ) -> Result<RpcNewTransaction, Self::Error> {
         let is_unfreezable = if is_unfreezable {
             IsTokenUnfreezable::Yes
         } else {
@@ -1005,7 +1005,7 @@ where
         account_index: U31,
         token_id: String,
         config: ControllerConfig,
-    ) -> Result<NewTransaction, Self::Error> {
+    ) -> Result<RpcNewTransaction, Self::Error> {
         self.wallet_rpc
             .unfreeze_token(account_index, token_id.into(), config)
             .await
@@ -1019,7 +1019,7 @@ where
         address: String,
         amount: DecimalAmount,
         config: ControllerConfig,
-    ) -> Result<NewTransaction, Self::Error> {
+    ) -> Result<RpcNewTransaction, Self::Error> {
         self.wallet_rpc
             .send_tokens(
                 account_index,
@@ -1058,7 +1058,7 @@ where
             )
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
-            .map(|(tx, intent)| (HexEncoded::new(tx), HexEncoded::new(intent)))
+            .map(|(tx, intent)| (HexEncoded::new(tx.tx), HexEncoded::new(intent)))
     }
 
     async fn make_tx_to_send_tokens_from_multisig_address(
@@ -1093,7 +1093,7 @@ where
         account_index: U31,
         data: String,
         config: ControllerConfig,
-    ) -> Result<NewTransaction, Self::Error> {
+    ) -> Result<RpcNewTransaction, Self::Error> {
         let data = hex::decode(data).map_err(|_| RpcError::<N>::InvalidHexData)?;
 
         self.wallet_rpc
@@ -1109,7 +1109,7 @@ where
         token_id: Option<String>,
         htlc: RpcHashedTimelockContract,
         config: ControllerConfig,
-    ) -> Result<HexEncoded<SignedTransaction>, Self::Error> {
+    ) -> Result<RpcNewTransaction, Self::Error> {
         self.wallet_rpc
             .create_htlc_transaction(
                 account_index,
@@ -1119,7 +1119,6 @@ where
                 config,
             )
             .await
-            .map(HexEncoded::new)
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
 
@@ -1132,7 +1131,7 @@ where
         give_amount: DecimalAmount,
         conclude_address: String,
         config: ControllerConfig,
-    ) -> Result<NewOrder, Self::Error> {
+    ) -> Result<NewOrderTransaction, Self::Error> {
         self.wallet_rpc
             .create_order(
                 account_index,
@@ -1151,7 +1150,7 @@ where
         order_id: String,
         output_address: Option<String>,
         config: ControllerConfig,
-    ) -> Result<NewTransaction, Self::Error> {
+    ) -> Result<RpcNewTransaction, Self::Error> {
         self.wallet_rpc
             .conclude_order(
                 account_index,
@@ -1170,7 +1169,7 @@ where
         fill_amount_in_ask_currency: DecimalAmount,
         output_address: Option<String>,
         config: ControllerConfig,
-    ) -> Result<NewTransaction, Self::Error> {
+    ) -> Result<RpcNewTransaction, Self::Error> {
         self.wallet_rpc
             .fill_order(
                 account_index,
@@ -1188,7 +1187,7 @@ where
         account_index: U31,
         order_id: String,
         config: ControllerConfig,
-    ) -> Result<NewTransaction, Self::Error> {
+    ) -> Result<RpcNewTransaction, Self::Error> {
         self.wallet_rpc
             .freeze_order(account_index, order_id.into(), config)
             .await

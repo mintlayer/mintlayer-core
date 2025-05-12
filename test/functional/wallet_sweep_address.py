@@ -149,14 +149,14 @@ class WalletSweepAddresses(BitcoinTestFramework):
             acc1_address = await wallet.new_address()
 
             await wallet.select_account(0)
-            assert_in("The transaction was submitted successfully", await wallet.sweep_addresses(acc1_address, addresses))
+            assert_in("The transaction was submitted successfully", await wallet.sweep_addresses(acc1_address, all_addresses=True))
 
             block_id = self.generate_block()
             assert_in("Success", await wallet.sync())
 
             # check we sent all our coins
             balance = await wallet.get_balance()
-            assert_in(f"Coins amount: 0", balance)
+            assert_in("Coins amount: 0", balance)
             # check we still have the locked balance
 
             balance = await wallet.get_balance('locked')

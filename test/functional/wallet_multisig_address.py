@@ -180,7 +180,7 @@ class WalletSubmitTransaction(BitcoinTestFramework):
             await wallet.open_wallet('wallet0')
             output = await wallet.send_to_address(multisig_address, 1)
             assert_in("The transaction was submitted successfully", output)
-            multisig_tx_id = output.splitlines()[1]
+            multisig_tx_id = output.splitlines()[-1]
             self.generate_block()
             assert not node.mempool_contains_tx(multisig_tx_id)
             assert_not_in("No transaction found", await wallet.get_raw_signed_transaction(multisig_tx_id))

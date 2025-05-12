@@ -444,6 +444,7 @@ impl<K: AccountKeyChains> Account<K> {
             selection_result = selection_result.add_change(
                 (total_fees_not_paid - new_total_fees_not_paid).unwrap_or(Amount::ZERO),
             )?;
+            let change_amount = selection_result.get_change();
             let change_output = match pay_fee_with_currency {
                 Currency::Coin => make_address_output(change_address.clone(), change_amount),
                 Currency::Token(token_id) => {
@@ -532,7 +533,7 @@ impl<K: AccountKeyChains> Account<K> {
     pub fn sweep_addresses(
         &mut self,
         destination: Destination,
-        request: SendRequest,
+        mut request: SendRequest,
         current_fee_rate: FeeRate,
     ) -> WalletResult<SendRequest> {
         let mut grouped_inputs = group_preselected_inputs(
@@ -592,6 +593,7 @@ impl<K: AccountKeyChains> Account<K> {
             destination,
         );
         outputs.push(coin_output);
+        request.add_fee(Currency::Coin, total_fee)?;
 
         Ok(request.with_outputs(outputs))
     }

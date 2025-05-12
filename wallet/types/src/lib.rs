@@ -36,3 +36,22 @@ pub use account_info::AccountInfo;
 pub use currency::Currency;
 pub use keys::{KeyPurpose, KeychainUsageState, RootKeys};
 pub use wallet_tx::{BlockInfo, WalletTx};
+
+use std::collections::BTreeMap;
+
+use common::{
+    chain::{SignedTransaction, Transaction},
+    primitives::Amount,
+};
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SignedTxWithFees {
+    pub tx: SignedTransaction,
+    pub fees: BTreeMap<Currency, Amount>,
+}
+
+impl SignedTxWithFees {
+    pub fn transaction(&self) -> &Transaction {
+        self.tx.transaction()
+    }
+}

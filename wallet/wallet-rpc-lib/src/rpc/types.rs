@@ -162,6 +162,9 @@ pub enum RpcError<N: NodeInterface> {
 
     #[error("Invalid HTLC secret hash")]
     InvalidHtlcSecretHash,
+
+    #[error("Either set `all` to sweep all addresses, or provide specific addresses — not both")]
+    InvalidSweepParameters,
 }
 
 impl<N: NodeInterface> From<RpcError<N>> for rpc::Error {
@@ -388,18 +391,39 @@ impl NewAccountInfo {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct TransactionOptions {
     pub in_top_x_mb: Option<usize>,
+    pub broadcast_to_mempool: Option<bool>,
 }
 
 impl TransactionOptions {
     const DEFAULT_IN_TOP_X_MB: usize = 5;
+    const DEFAULT_BROADCAST: bool = true;
 
     pub fn from_controller_config(config: &ControllerConfig) -> Self {
         let in_top_x_mb = Some(config.in_top_x_mb);
-        Self { in_top_x_mb }
+        let broadcast_to_mempool = Some(config.broadcast_to_mempool);
+        Self {
+            in_top_x_mb,
+            broadcast_to_mempool,
+        }
     }
 
     pub fn in_top_x_mb(&self) -> usize {
         self.in_top_x_mb.unwrap_or(Self::DEFAULT_IN_TOP_X_MB)
+    }
+
+    pub fn broadcast_to_mempool(&self) -> bool {
+        self.broadcast_to_mempool.unwrap_or(Self::DEFAULT_BROADCAST)
+    }
+}
+
+impl From<TransactionOptions> for ControllerConfig {
+    fn from(value: TransactionOptions) -> Self {
+        Self {
+            broadcast_to_mempool: value
+                .broadcast_to_mempool
+                .unwrap_or(TransactionOptions::DEFAULT_BROADCAST),
+            in_top_x_mb: value.in_top_x_mb.unwrap_or(TransactionOptions::DEFAULT_IN_TOP_X_MB),
+        }
     }
 }
 
@@ -450,9 +474,27 @@ impl PoolInfo {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
-pub struct NewDelegation {
-    pub tx_id: Id<Transaction>,
+pub struct NewDelegationTransaction {
     pub delegation_id: RpcAddress<DelegationId>,
+    pub tx_id: Id<Transaction>,
+    pub tx: HexEncoded<SignedTransaction>,
+    pub fees: Balances,
+    pub broadcasted: bool,
+}
+
+impl NewDelegationTransaction {
+    pub fn new(
+        tx: wallet_controller::types::NewTransaction,
+        delegation_id: RpcAddress<DelegationId>,
+    ) -> Self {
+        Self {
+            delegation_id,
+            tx_id: tx.tx.transaction().get_id(),
+            tx: tx.tx.into(),
+            fees: tx.fees,
+            broadcasted: tx.broadcasted,
+        }
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
@@ -629,20 +671,57 @@ pub struct StakePoolBalance {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
-pub struct RpcTokenId {
+pub struct NewTokenTransaction {
     pub token_id: RpcAddress<TokenId>,
     pub tx_id: Id<Transaction>,
+    pub tx: HexEncoded<SignedTransaction>,
+    pub fees: Balances,
+    pub broadcasted: bool,
+}
+
+impl NewTokenTransaction {
+    pub fn new(
+        tx: wallet_controller::types::NewTransaction,
+        token_id: RpcAddress<TokenId>,
+    ) -> Self {
+        Self {
+            token_id,
+            tx_id: tx.tx.transaction().get_id(),
+            tx: tx.tx.into(),
+            fees: tx.fees,
+            broadcasted: tx.broadcasted,
+        }
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
-pub struct NewTransaction {
+pub struct NewSubmittedTransaction {
     pub tx_id: Id<Transaction>,
 }
 
-impl NewTransaction {
+impl NewSubmittedTransaction {
     pub fn new(tx: SignedTransaction) -> Self {
         Self {
             tx_id: tx.transaction().get_id(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
+pub struct RpcNewTransaction {
+    pub tx_id: Id<Transaction>,
+    pub tx: HexEncoded<SignedTransaction>,
+    pub fees: Balances,
+    pub broadcasted: bool,
+}
+
+impl RpcNewTransaction {
+    pub fn new(tx: wallet_controller::types::NewTransaction) -> Self {
+        Self {
+            tx_id: tx.tx.transaction().get_id(),
+            tx: tx.tx.into(),
+            fees: tx.fees,
+            broadcasted: tx.broadcasted,
         }
     }
 }
@@ -867,9 +946,27 @@ pub struct RpcHashedTimelockContract {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
-pub struct NewOrder {
-    pub tx_id: Id<Transaction>,
+pub struct NewOrderTransaction {
     pub order_id: RpcAddress<OrderId>,
+    pub tx_id: Id<Transaction>,
+    pub tx: HexEncoded<SignedTransaction>,
+    pub fees: Balances,
+    pub broadcasted: bool,
+}
+
+impl NewOrderTransaction {
+    pub fn new(
+        tx: wallet_controller::types::NewTransaction,
+        order_id: RpcAddress<OrderId>,
+    ) -> Self {
+        Self {
+            order_id,
+            tx_id: tx.tx.transaction().get_id(),
+            tx: tx.tx.into(),
+            fees: tx.fees,
+            broadcasted: tx.broadcasted,
+        }
+    }
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
