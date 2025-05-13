@@ -355,6 +355,24 @@ pub enum AccountCommand {
     ChangeTokenMetadataUri(TokenId, parity_scale_codec::alloc::vec::Vec<u8>),
 }
 
+#[derive(Encode, EnumDiscriminants)]
+#[strum_discriminants(name(OrderCommandTag), derive(EnumIter, FromPrimitive))]
+pub enum OrderAccountCommand {
+    // Satisfy an order completely or partially.
+    // Second parameter is an amount provided to fill an order which corresponds to order's ask currency.
+    #[codec(index = 0)]
+    FillOrder(OrderId, Amount, Destination),
+    // Freeze an order which effectively forbids any fill operations.
+    // Frozen order can only be concluded.
+    // Only the address specified as `conclude_key` can authorize this command.
+    #[codec(index = 1)]
+    FreezeOrder(OrderId),
+    // Close an order and withdraw all remaining funds from both give and ask balances.
+    // Only the address specified as `conclude_key` can authorize this command.
+    #[codec(index = 2)]
+    ConcludeOrder(OrderId),
+}
+
 #[derive(Encode)]
 pub enum TxInput {
     #[codec(index = 0)]
@@ -363,6 +381,8 @@ pub enum TxInput {
     Account(AccountOutPoint),
     #[codec(index = 2)]
     AccountCommand(#[codec(compact)] u64, AccountCommand),
+    #[codec(index = 3)]
+    OrderAccountCommand(OrderAccountCommand),
 }
 
 #[cfg(test)]
