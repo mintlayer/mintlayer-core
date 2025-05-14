@@ -1726,3 +1726,7 @@ fn single_signature(
 #[cfg(feature = "enable-trezor-device-tests")]
 #[cfg(test)]
 mod tests;
+
+#[cfg(feature = "enable-trezor-device-tests")]
+#[cfg(test)]
+mod test_utils;

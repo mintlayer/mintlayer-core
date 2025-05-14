@@ -14,7 +14,7 @@
 // limitations under the License.
 
 #[cfg(test)]
-mod signer_test_helpers;
+mod tests;
 
 use std::sync::Arc;
 

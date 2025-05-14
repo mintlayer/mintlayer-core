@@ -18,6 +18,7 @@ pub mod mock_time_getter;
 pub mod nft_utils;
 pub mod random;
 pub mod test_dir;
+pub mod threading;
 
 use std::collections::BTreeMap;
 

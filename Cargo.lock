@@ -8116,6 +8116,7 @@ version = "1.0.2"
 dependencies = [
  "common",
  "crypto",
+ "ctor",
  "hex",
  "itertools 0.14.0",
  "logging",
@@ -9001,6 +9002,7 @@ dependencies = [
  "common",
  "consensus",
  "crypto",
+ "ctor",
  "hex",
  "itertools 0.14.0",
  "logging",
@@ -9012,6 +9014,7 @@ dependencies = [
  "rpc-description",
  "rstest",
  "serde",
+ "serde_json",
  "serial_test",
  "serialization",
  "storage",

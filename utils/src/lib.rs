@@ -27,6 +27,7 @@ pub mod debug_panic;
 pub mod default_data_dir;
 pub mod displayable_option;
 pub mod ensure;
+pub mod env_utils;
 pub mod eventhandler;
 pub mod exp_rand;
 pub mod graph_traversals;
