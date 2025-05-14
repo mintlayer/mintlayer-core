@@ -173,6 +173,9 @@ pub enum Error {
 
     #[error("Signed transaction intent message is not a valid UTF-8 string")]
     SignedTransactionIntentMessageIsNotAValidUtf8String,
+
+    #[error("Orders V1 not activated at the specified height")]
+    OrdersV1NotActivatedAtSpecifiedHeight,
 }
 
 // This is required to make an error readable in JavaScript
