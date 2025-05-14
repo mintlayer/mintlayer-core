@@ -35,7 +35,7 @@ use common::{
             TokenIssuanceV1,
         },
         AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, ChainConfig, DelegationId,
-        Destination, GenBlock, OrderData, OrderId, OutPointSourceId, PoolId,
+        Destination, GenBlock, OrderAccountCommand, OrderData, OrderId, OutPointSourceId, PoolId,
         SignedTransactionIntent, Transaction, TxInput, TxOutput,
     },
     primitives::{
@@ -396,6 +396,13 @@ where
             AccountNonce::new(rng.next_u64()),
             AccountCommand::FillOrder(order_id, Amount::from_atoms(1), Destination::AnyoneCanSpend),
         ),
+        TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder(order_id)),
+        TxInput::OrderAccountCommand(OrderAccountCommand::FreezeOrder(order_id)),
+        TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(
+            order_id,
+            Amount::from_atoms(1),
+            Destination::AnyoneCanSpend,
+        )),
         TxInput::AccountCommand(
             AccountNonce::new(rng.next_u64()),
             AccountCommand::ChangeTokenMetadataUri(
