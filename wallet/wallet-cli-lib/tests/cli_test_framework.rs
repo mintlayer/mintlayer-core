@@ -202,7 +202,7 @@ impl CliTestFramework {
             .unwrap()
             .to_owned();
         let cmd = format!(
-            "wallet-recover \"{}\" store-seed-phrase \"{}\"",
+            "wallet-recover software \"{}\" store-seed-phrase \"{}\"",
             file_name, MNEMONIC
         );
         assert_eq!(self.exec(&cmd), "Wallet recovered successfully");
@@ -220,7 +220,7 @@ impl CliTestFramework {
             .unwrap()
             .to_owned();
         let cmd = format!(
-            "wallet-create \"{}\" store-seed-phrase \"{}\"",
+            "wallet-create software \"{}\" store-seed-phrase \"{}\"",
             file_name, COLD_WALLET_MENEMONIC,
         );
         assert_eq!(self.exec(&cmd), "New wallet created successfully");

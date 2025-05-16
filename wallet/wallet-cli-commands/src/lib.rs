@@ -22,8 +22,8 @@ use dyn_clone::DynClone;
 pub use errors::WalletCliCommandError;
 use helper_types::YesNo;
 use rpc::description::{Described, Module};
+use wallet_controller::types::WalletTypeArgs;
 use wallet_rpc_lib::{
-    cmdline::CliHardwareWalletType,
     types::{FoundDevice, NodeInterface},
     ColdWalletRpcDescription, WalletRpcDescription,
 };
@@ -46,11 +46,11 @@ use self::helper_types::{
     CliUtxoTypes, CliWithLocked, EnableOrDisable,
 };
 
-#[derive(Debug, Parser)]
-#[clap(rename_all = "kebab-case")]
-pub enum WalletManagementCommand {
-    #[clap(name = "wallet-create")]
-    CreateWallet {
+#[derive(Debug, Subcommand, Clone)]
+pub enum CreateWalletSubCommand {
+    /// Create a software wallet
+    #[command()]
+    Software {
         /// File path of the wallet file
         wallet_path: PathBuf,
 
@@ -59,8 +59,7 @@ pub enum WalletManagementCommand {
         /// Not storing the seed-phrase can be seen as a security measure
         /// to ensure sufficient secrecy in case that seed-phrase is reused
         /// elsewhere if this wallet is compromised.
-        #[arg(required_unless_present("hardware_wallet"))]
-        whether_to_store_seed_phrase: Option<CliStoreSeedPhrase>,
+        whether_to_store_seed_phrase: CliStoreSeedPhrase,
 
         /// Mnemonic phrase (12, 15, or 24 words as a single quoted argument). If not specified, a new mnemonic phrase is generated and printed.
         mnemonic: Option<String>,
@@ -68,57 +67,124 @@ pub enum WalletManagementCommand {
         /// Passphrase along the mnemonic
         #[arg(long = "passphrase")]
         passphrase: Option<String>,
-
-        /// Create a wallet using a connected hardware wallet. Only the public keys will be kept in
-        /// the software wallet. Cannot specify a mnemonic or passphrase here,
-        /// the former must have been entered on the hardware during the device setup
-        /// and the latter will have to be entered every time the device is connected to the host machine.
-        #[arg(long, conflicts_with_all(["mnemonic", "passphrase", "whether_to_store_seed_phrase"]))]
-        hardware_wallet: Option<CliHardwareWalletType>,
-
-        /// Optionally specify the ID for the trezor device to connect to in case there
-        /// are multiple trezor devices connected at the same time.
-        /// If not specified and there are multiple devices connected a choice will be presented.
-        #[arg(long, conflicts_with_all(["mnemonic", "passphrase", "whether_to_store_seed_phrase"]))]
-        trezor_device_id: Option<String>,
     },
+    /// Create a wallet using a connected hardware wallet. Only the public keys will be kept in
+    /// the software wallet. Cannot specify a mnemonic or passphrase here,
+    /// the former must have been entered on the hardware during the device setup
+    /// and the latter will have to be entered every time the device is connected to the host machine.
+    #[command()]
+    Trezor {
+        /// File path of the wallet file
+        wallet_path: PathBuf,
 
-    #[clap(name = "wallet-recover")]
-    RecoverWallet {
+        /// Optionally specify the ID for the Trezor device to connect to in case there
+        /// are multiple Trezor devices connected at the same time.
+        /// If not specified and there are multiple devices connected a choice will be presented
+        #[arg(long)]
+        device_id: Option<String>,
+    },
+}
+
+impl CreateWalletSubCommand {
+    pub fn into_path_and_wallet_args(self) -> (PathBuf, WalletTypeArgs) {
+        match self {
+            Self::Software {
+                wallet_path,
+                whether_to_store_seed_phrase,
+                mnemonic,
+                passphrase,
+            } => {
+                let store_seed_phrase = whether_to_store_seed_phrase.into();
+                (
+                    wallet_path,
+                    WalletTypeArgs::Software {
+                        mnemonic,
+                        passphrase,
+                        store_seed_phrase,
+                    },
+                )
+            }
+
+            Self::Trezor {
+                wallet_path,
+                device_id,
+            } => (wallet_path, WalletTypeArgs::Trezor { device_id }),
+        }
+    }
+}
+
+#[derive(Debug, Subcommand, Clone)]
+pub enum RecoverWalletSubCommand {
+    /// Recover a software.
+    #[command()]
+    Software {
         /// File path of the wallet file
         wallet_path: PathBuf,
 
         /// If 'store-seed-phrase', the seed-phrase will be stored in the wallet file.
+        /// If 'do-not-store-seed-phrase', the seed-phrase will only be printed on the screen.
         /// Not storing the seed-phrase can be seen as a security measure
         /// to ensure sufficient secrecy in case that seed-phrase is reused
         /// elsewhere if this wallet is compromised.
-        #[arg(required_unless_present("hardware_wallet"))]
-        whether_to_store_seed_phrase: Option<CliStoreSeedPhrase>,
+        whether_to_store_seed_phrase: CliStoreSeedPhrase,
 
-        /// Mnemonic phrase (12, 15, or 24 words as a single quoted argument).
-        #[arg(required_unless_present("hardware_wallet"))]
+        /// Mnemonic phrase (12, 15, or 24 words as a single quoted argument). If not specified, a new mnemonic phrase is generated and printed.
         mnemonic: Option<String>,
 
         /// Passphrase along the mnemonic
         #[arg(long = "passphrase")]
         passphrase: Option<String>,
-
-        /// Create a wallet using a connected hardware wallet. Only the public keys will be kept in
-        /// the software wallet. Cannot specify a mnemonic or passphrase here,
-        /// the former must have been entered on the hardware during the device setup
-        /// and the latter will have to be entered every time the device is connected to the host machine.
-        #[arg(long, conflicts_with_all(["passphrase", "mnemonic", "whether_to_store_seed_phrase"]))]
-        hardware_wallet: Option<CliHardwareWalletType>,
-
-        /// Optionally specify the ID for the trezor device to connect to in case there
-        /// are multiple trezor devices connected at the same time.
-        /// If not specified and there are multiple devices connected a choice will be presented
-        #[arg(long, conflicts_with_all(["mnemonic", "passphrase", "whether_to_store_seed_phrase"]))]
-        trezor_device_id: Option<String>,
     },
+    /// Recover a wallet using a connected hardware wallet. Only the public keys will be kept in
+    /// the software wallet. Cannot specify a mnemonic or passphrase here,
+    /// the former must have been entered on the hardware during the device setup
+    /// and the latter will have to be entered every time the device is connected to the host machine.
+    #[command()]
+    Trezor {
+        /// File path of the wallet file
+        wallet_path: PathBuf,
 
-    #[clap(name = "wallet-open")]
-    OpenWallet {
+        /// Optionally specify the ID for the Trezor device to connect to in case there
+        /// are multiple Trezor devices connected at the same time.
+        /// If not specified and there are multiple devices connected a choice will be presented
+        #[arg(long)]
+        device_id: Option<String>,
+    },
+}
+
+impl RecoverWalletSubCommand {
+    pub fn into_path_and_wallet_args(self) -> (PathBuf, WalletTypeArgs) {
+        match self {
+            Self::Software {
+                wallet_path,
+                whether_to_store_seed_phrase,
+                mnemonic,
+                passphrase,
+            } => {
+                let store_seed_phrase = whether_to_store_seed_phrase.into();
+                (
+                    wallet_path,
+                    WalletTypeArgs::Software {
+                        mnemonic,
+                        passphrase,
+                        store_seed_phrase,
+                    },
+                )
+            }
+
+            Self::Trezor {
+                wallet_path,
+                device_id,
+            } => (wallet_path, WalletTypeArgs::Trezor { device_id }),
+        }
+    }
+}
+
+#[derive(Debug, Subcommand, Clone)]
+pub enum OpenWalletSubCommand {
+    /// Open a software wallet
+    #[command()]
+    Software {
         /// File path of the wallet file
         wallet_path: PathBuf,
         /// The existing password, if the wallet is encrypted.
@@ -126,16 +192,42 @@ pub enum WalletManagementCommand {
         /// Force change the wallet type from hot to cold or from cold to hot
         #[arg(long)]
         force_change_wallet_type: bool,
+    },
+    /// Open a wallet file that is connected to a hardware wallet.
+    #[command()]
+    Trezor {
+        /// File path of the wallet file
+        wallet_path: PathBuf,
+        /// The existing password, if the wallet is encrypted.
+        encryption_password: Option<String>,
 
-        /// Open a wallet file related to a connected hardware wallet.
-        #[arg(long, conflicts_with_all(["force_change_wallet_type"]))]
-        hardware_wallet: Option<CliHardwareWalletType>,
-
-        /// Optionally specify the ID for the trezor device to connect to in case there
-        /// are multiple trezor devices connected at the same time.
+        /// Optionally specify the ID for the Trezor device to connect to in case there
+        /// are multiple Trezor devices connected at the same time.
         /// If not specified and there are multiple devices connected a choice will be presented.
-        #[arg(long, conflicts_with_all(["force_change_wallet_type"]))]
-        trezor_device_id: Option<String>,
+        #[arg(long)]
+        device_id: Option<String>,
+    },
+}
+
+#[derive(Debug, Parser)]
+#[clap(rename_all = "kebab-case")]
+pub enum WalletManagementCommand {
+    #[clap(name = "wallet-create")]
+    CreateWallet {
+        #[command(subcommand)]
+        wallet: CreateWalletSubCommand,
+    },
+
+    #[clap(name = "wallet-recover")]
+    RecoverWallet {
+        #[command(subcommand)]
+        wallet: RecoverWalletSubCommand,
+    },
+
+    #[clap(name = "wallet-open")]
+    OpenWallet {
+        #[command(subcommand)]
+        wallet: OpenWalletSubCommand,
     },
 
     #[clap(name = "wallet-close")]
@@ -913,21 +1005,14 @@ pub struct CreateWalletDeviceSelectMenu {
     available_devices: Vec<FoundDevice>,
 
     wallet_path: PathBuf,
-    hardware_wallet: CliHardwareWalletType,
     recover: bool,
 }
 
 impl CreateWalletDeviceSelectMenu {
-    pub fn new(
-        available_devices: Vec<FoundDevice>,
-        wallet_path: PathBuf,
-        hardware_wallet: CliHardwareWalletType,
-        recover: bool,
-    ) -> Self {
+    pub fn new(available_devices: Vec<FoundDevice>, wallet_path: PathBuf, recover: bool) -> Self {
         Self {
             available_devices,
             wallet_path,
-            hardware_wallet,
             recover,
         }
     }
@@ -950,22 +1035,18 @@ impl ChoiceMenu for CreateWalletDeviceSelectMenu {
             if self.recover {
                 ManageableWalletCommand::ManagementCommands(
                     WalletManagementCommand::RecoverWallet {
-                        wallet_path: self.wallet_path.clone(),
-                        whether_to_store_seed_phrase: None,
-                        mnemonic: None,
-                        passphrase: None,
-                        hardware_wallet: Some(self.hardware_wallet),
-                        trezor_device_id: Some(d.device_id.clone()),
+                        wallet: RecoverWalletSubCommand::Trezor {
+                            wallet_path: self.wallet_path.clone(),
+                            device_id: Some(d.device_id.clone()),
+                        },
                     },
                 )
             } else {
                 ManageableWalletCommand::ManagementCommands(WalletManagementCommand::CreateWallet {
-                    wallet_path: self.wallet_path.clone(),
-                    whether_to_store_seed_phrase: None,
-                    mnemonic: None,
-                    passphrase: None,
-                    hardware_wallet: Some(self.hardware_wallet),
-                    trezor_device_id: Some(d.device_id.clone()),
+                    wallet: CreateWalletSubCommand::Trezor {
+                        wallet_path: self.wallet_path.clone(),
+                        device_id: Some(d.device_id.clone()),
+                    },
                 })
             }
         })
@@ -978,8 +1059,6 @@ pub struct OpenWalletDeviceSelectMenu {
 
     wallet_path: PathBuf,
     encryption_password: Option<String>,
-    force_change_wallet_type: bool,
-    hardware_wallet: CliHardwareWalletType,
 }
 
 impl OpenWalletDeviceSelectMenu {
@@ -987,15 +1066,11 @@ impl OpenWalletDeviceSelectMenu {
         available_devices: Vec<FoundDevice>,
         wallet_path: PathBuf,
         encryption_password: Option<String>,
-        force_change_wallet_type: bool,
-        hardware_wallet: CliHardwareWalletType,
     ) -> Self {
         Self {
             available_devices,
             wallet_path,
             encryption_password,
-            force_change_wallet_type,
-            hardware_wallet,
         }
     }
 }
@@ -1015,11 +1090,11 @@ impl ChoiceMenu for OpenWalletDeviceSelectMenu {
     fn choose(&self, choice: usize) -> Option<ManageableWalletCommand> {
         self.available_devices.get(choice).map(|d| {
             ManageableWalletCommand::ManagementCommands(WalletManagementCommand::OpenWallet {
-                wallet_path: self.wallet_path.clone(),
-                encryption_password: self.encryption_password.clone(),
-                force_change_wallet_type: self.force_change_wallet_type,
-                hardware_wallet: Some(self.hardware_wallet),
-                trezor_device_id: Some(d.device_id.clone()),
+                wallet: OpenWalletSubCommand::Trezor {
+                    wallet_path: self.wallet_path.clone(),
+                    encryption_password: self.encryption_password.clone(),
+                    device_id: Some(d.device_id.clone()),
+                },
             })
         })
     }
