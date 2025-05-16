@@ -115,32 +115,37 @@ class WalletTokens(BitcoinTestFramework):
 
             # invalid ticker
             # > max len
-            token_id, err = await wallet.issue_new_token("aaabbbcccddde", 2, "http://uri", address)
+            token_id, tx_id, err = await wallet.issue_new_token("aaabbbcccddde", 2, "http://uri", address)
             assert token_id is None
+            assert tx_id is None
             assert err is not None
             assert_in("Invalid ticker length", err)
             # non alphanumeric
-            token_id, err = await wallet.issue_new_token("asd#", 2, "http://uri", address)
+            token_id, tx_id, err = await wallet.issue_new_token("asd#", 2, "http://uri", address)
             assert token_id is None
+            assert tx_id is None
             assert err is not None
             assert_in("Invalid character in token ticker", err)
 
             # invalid url
-            token_id, err = await wallet.issue_new_token("XXX", 2, "123 123", address)
+            token_id, tx_id, err = await wallet.issue_new_token("XXX", 2, "123 123", address)
             assert token_id is None
+            assert tx_id is None
             assert err is not None
             assert_in("Incorrect metadata URI", err)
 
             # invalid num decimals
-            token_id, err = await wallet.issue_new_token("XXX", 99, "http://uri", address)
+            token_id, tx_id, err = await wallet.issue_new_token("XXX", 99, "http://uri", address)
             assert token_id is None
+            assert tx_id is None
             assert err is not None
             assert_in("Too many decimals", err)
 
             # issue a valid token
             number_of_decimals = random.randrange(0, 4)
-            token_id, err = await wallet.issue_new_token("XXX", number_of_decimals, "http://uri", address, 'lockable')
+            token_id, tx_id, err = await wallet.issue_new_token("XXX", number_of_decimals, "http://uri", address, 'lockable')
             assert token_id is not None
+            assert tx_id is not None
             assert err is None
             self.log.info(f"new token id: {token_id}")
 

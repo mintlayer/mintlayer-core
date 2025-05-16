@@ -1032,12 +1032,12 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
 
     for input in inputs {
         match input {
-            TxInput::AccountCommand(_, cmd) => match cmd {
+            TxInput::AccountCommand(nonce, cmd) => match cmd {
                 AccountCommand::MintTokens(token_id, amount) => {
                     let issuance =
                         db_tx.get_fungible_token_issuance(*token_id).await?.expect("must exist");
 
-                    let issuance = issuance.mint_tokens(*amount);
+                    let issuance = issuance.mint_tokens(*amount, *nonce);
                     db_tx.set_fungible_token_data(*token_id, block_height, issuance).await?;
                     increase_statistic_amount(
                         db_tx,
@@ -1072,7 +1072,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                     let issuance =
                         db_tx.get_fungible_token_issuance(*token_id).await?.expect("must exist");
 
-                    let issuance = issuance.unmint_tokens(total_burned);
+                    let issuance = issuance.unmint_tokens(total_burned, *nonce);
                     db_tx.set_fungible_token_data(*token_id, block_height, issuance).await?;
                     let amount = chain_config.token_supply_change_fee(block_height);
                     increase_statistic_amount(
@@ -1096,7 +1096,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                     let issuance =
                         db_tx.get_fungible_token_issuance(*token_id).await?.expect("must exist");
 
-                    let issuance = issuance.freeze(*is_unfreezable);
+                    let issuance = issuance.freeze(*is_unfreezable, *nonce);
                     db_tx.set_fungible_token_data(*token_id, block_height, issuance).await?;
                     let amount = chain_config.token_freeze_fee(block_height);
                     increase_statistic_amount(
@@ -1120,7 +1120,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                     let issuance =
                         db_tx.get_fungible_token_issuance(*token_id).await?.expect("must exist");
 
-                    let issuance = issuance.unfreeze();
+                    let issuance = issuance.unfreeze(*nonce);
                     db_tx.set_fungible_token_data(*token_id, block_height, issuance).await?;
                     let amount = chain_config.token_freeze_fee(block_height);
                     increase_statistic_amount(
@@ -1144,7 +1144,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                     let issuance =
                         db_tx.get_fungible_token_issuance(*token_id).await?.expect("must exist");
 
-                    let issuance = issuance.lock();
+                    let issuance = issuance.lock(*nonce);
                     db_tx.set_fungible_token_data(*token_id, block_height, issuance).await?;
                     let amount = chain_config.token_supply_change_fee(block_height);
                     increase_statistic_amount(
@@ -1168,7 +1168,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                     let issuance =
                         db_tx.get_fungible_token_issuance(*token_id).await?.expect("must exist");
 
-                    let issuance = issuance.change_authority(destination.clone());
+                    let issuance = issuance.change_authority(destination.clone(), *nonce);
                     db_tx.set_fungible_token_data(*token_id, block_height, issuance).await?;
                     let amount = chain_config.token_change_authority_fee(block_height);
                     increase_statistic_amount(
@@ -1192,7 +1192,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                     let issuance =
                         db_tx.get_fungible_token_issuance(*token_id).await?.expect("must exist");
 
-                    let issuance = issuance.change_metadata_uri(metadata_uri.clone());
+                    let issuance = issuance.change_metadata_uri(metadata_uri.clone(), *nonce);
                     db_tx.set_fungible_token_data(*token_id, block_height, issuance).await?;
                     let amount = chain_config.token_change_metadata_uri_fee();
                     increase_statistic_amount(
@@ -1549,6 +1549,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                         is_locked: false,
                         frozen: IsTokenFrozen::No(issuance.is_freezable),
                         authority: issuance.authority.clone(),
+                        next_nonce: AccountNonce::new(0),
                     },
                 };
                 db_tx.set_fungible_token_issuance(token_id, block_height, issuance).await?;

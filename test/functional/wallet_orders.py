@@ -141,7 +141,7 @@ class WalletOrders(BitcoinTestFramework):
             assert_not_in("Tokens", balance)
 
             # issue a valid token
-            token_id, _ = (await wallet.issue_new_token("XXXX", 2, "http://uri", alice_address))
+            token_id, _, _ = (await wallet.issue_new_token("XXXX", 2, "http://uri", alice_address))
             assert token_id is not None
             self.log.info(f"new token id: {token_id}")
 
