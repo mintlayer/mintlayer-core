@@ -33,7 +33,7 @@ pub struct SelectionResult {
     effective_value: Amount,
     target: Amount,
     waste: SignedAmount,
-    weight: u32,
+    weight: usize,
     fees: Amount,
     change: Amount,
 }
@@ -51,6 +51,10 @@ impl SelectionResult {
         }
     }
 
+    pub fn get_weight(&self) -> usize {
+        self.weight
+    }
+
     pub fn get_total_fees(&self) -> Amount {
         self.fees
     }
@@ -66,6 +70,10 @@ impl SelectionResult {
 
     pub fn into_output_pairs(self) -> Vec<(TxInput, TxOutput)> {
         self.outputs
+    }
+
+    pub fn num_selected_inputs(&self) -> usize {
+        self.outputs.len()
     }
 
     fn add_input(
@@ -200,7 +208,7 @@ fn select_coins_srd(
     target_value: Amount,
     rng: &mut impl Rng,
     change_cost: Amount,
-    max_weight: u32,
+    max_weight: usize,
     pay_fees: PayFee,
 ) -> Result<SelectionResult, UtxoSelectorError> {
     let mut result = SelectionResult::new(target_value);
@@ -261,12 +269,12 @@ fn select_coins_srd(
 }
 
 /// Original coin selection algorithm as a fallback
-fn knapsack_solver(
+fn knapsack_solver_impl(
     groups: &mut Vec<OutputGroup>,
     target_value: Amount,
     cost_of_change: Amount,
     rng: &mut impl Rng,
-    max_weight: u32,
+    max_weight: usize,
     pay_fees: PayFee,
 ) -> Result<SelectionResult, UtxoSelectorError> {
     let mut result = SelectionResult::new(target_value);
@@ -380,6 +388,33 @@ fn knapsack_solver(
     Ok(result)
 }
 
+fn knapsack_solver(
+    groups: &mut Vec<OutputGroup>,
+    target_value: Amount,
+    cost_of_change: Amount,
+    rng: &mut impl Rng,
+    max_weight: usize,
+    pay_fees: PayFee,
+) -> Result<SelectionResult, UtxoSelectorError> {
+    let result = knapsack_solver_impl(
+        groups,
+        target_value,
+        cost_of_change,
+        rng,
+        max_weight,
+        pay_fees,
+    );
+
+    if let Ok(result) = &result {
+        ensure!(
+            result.weight <= max_weight,
+            UtxoSelectorError::MaxWeightExceeded
+        )
+    }
+
+    result
+}
+
 /// Find a subset of the OutputGroups that is at least as large as, but as close as possible to, the
 /// target amount; solve subset sum.
 fn approximate_best_subset(
@@ -473,7 +508,7 @@ fn select_coins_bnb(
     mut utxo_pool: Vec<OutputGroup>,
     selection_target: Amount,
     cost_of_change: Amount,
-    max_weight: u32,
+    max_weight: usize,
     pay_fees: PayFee,
 ) -> Result<SelectionResult, UtxoSelectorError> {
     let mut curr_value = Amount::ZERO;
@@ -666,8 +701,9 @@ pub fn select_coins(
     pay_fees: PayFee,
     cost_of_change: Amount,
     coin_selection_algo: CoinSelectionAlgo,
+    max_tx_weight: usize,
 ) -> Result<SelectionResult, UtxoSelectorError> {
-    if selection_target == Amount::ZERO && pay_fees == PayFee::DoNotPayFeeWithThisCurrency {
+    if selection_target == Amount::ZERO {
         return Ok(SelectionResult::new(selection_target));
     }
     ensure!(!utxo_pool.is_empty(), UtxoSelectorError::NoUtxos);
@@ -687,9 +723,13 @@ pub fn select_coins(
         CoinSelectionAlgo::UsePreselected => {
             select_all_coins(utxo_pool, selection_target, pay_fees, cost_of_change)
         }
-        CoinSelectionAlgo::Randomize => {
-            select_random_coins(utxo_pool, selection_target, cost_of_change, pay_fees)
-        }
+        CoinSelectionAlgo::Randomize => select_random_coins(
+            utxo_pool,
+            selection_target,
+            cost_of_change,
+            pay_fees,
+            max_tx_weight,
+        ),
     }
 }
 
@@ -698,9 +738,8 @@ fn select_random_coins(
     selection_target: Amount,
     cost_of_change: Amount,
     pay_fees: PayFee,
+    max_weight: usize,
 ) -> Result<SelectionResult, UtxoSelectorError> {
-    // TODO: set some max weight
-    let max_weight = 999;
     let mut rng = make_pseudo_rng();
 
     let mut results = vec![];

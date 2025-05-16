@@ -37,7 +37,7 @@ fn add_output(value: Amount, groups: &mut Vec<OutputGroup>) {
         value,
         fee: Amount::ZERO,
         long_term_fee: Amount::ZERO,
-        weight: 0,
+        weight: 1,
     });
 }
 
@@ -95,6 +95,37 @@ fn test_knapsack_solver_not_enough(#[case] seed: Seed) {
     .unwrap();
 
     assert_eq!(error, UtxoSelectorError::NoSolutionFound);
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn test_knapsack_solver_max_weight(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let mut groups = vec![];
+    let mut target_value = Amount::ZERO;
+    let num_inputs = rng.gen_range(1..100);
+    for _ in 0..num_inputs {
+        let value = Amount::from_atoms(rng.gen_range(1..100));
+        add_output(value, &mut groups);
+        target_value = (target_value + value).expect("can't overflow");
+    }
+
+    let cost_of_change = Amount::ZERO;
+    // make sure there cannot be a solution because it requires all inputs but the max weight does
+    // not allow to select them all
+    let max_weight = num_inputs - 1;
+    let result = knapsack_solver(
+        &mut groups,
+        target_value,
+        cost_of_change,
+        &mut rng,
+        max_weight,
+        PayFee::PayFeeWithThisCurrency,
+    );
+
+    assert_eq!(result.unwrap_err(), UtxoSelectorError::MaxWeightExceeded);
 }
 
 #[rstest]
@@ -268,6 +299,36 @@ fn test_bnb_solver_exact_solution(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
+fn test_bnb_solver_max_weight(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let mut groups = vec![];
+    let mut target_value = Amount::ZERO;
+    let num_inputs = rng.gen_range(1..100);
+    for _ in 0..num_inputs {
+        let value = Amount::from_atoms(rng.gen_range(1..100));
+        add_output(value, &mut groups);
+        target_value = (target_value + value).expect("can't overflow");
+    }
+
+    let cost_of_change = Amount::ZERO;
+    // make sure there cannot be a solution because it requires all inputs but the max weight does
+    // not allow to select them all
+    let max_weight = num_inputs - 1;
+    let result = select_coins_bnb(
+        groups,
+        target_value,
+        cost_of_change,
+        max_weight,
+        PayFee::PayFeeWithThisCurrency,
+    );
+
+    assert_eq!(result.unwrap_err(), UtxoSelectorError::MaxWeightExceeded);
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 fn test_bnb_solver_exact_solution_multiple_utxos(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
@@ -357,4 +418,35 @@ fn test_srd_solver_find_solution(#[case] seed: Seed) {
     .unwrap();
 
     assert!(result.effective_value >= target_value);
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn test_srd_solver_max_weight(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let mut groups = vec![];
+    let mut target_value = Amount::ZERO;
+    let num_inputs = rng.gen_range(1..100);
+    for _ in 0..num_inputs {
+        let value = Amount::from_atoms(rng.gen_range(1..100));
+        add_output(value, &mut groups);
+        target_value = (target_value + value).expect("can't overflow");
+    }
+
+    let cost_of_change = Amount::ZERO;
+    // make sure there cannot be a solution because it requires all inputs but the max weight does
+    // not allow to select them all
+    let max_weight = num_inputs - 1;
+    let result = select_coins_srd(
+        &groups,
+        target_value,
+        &mut rng,
+        cost_of_change,
+        max_weight,
+        PayFee::PayFeeWithThisCurrency,
+    );
+
+    assert_eq!(result.unwrap_err(), UtxoSelectorError::MaxWeightExceeded);
 }

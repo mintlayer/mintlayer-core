@@ -543,7 +543,7 @@ where
     ) -> Result<SignedTransaction, ControllerError<T>> {
         self.check_tokens_in_selected_utxo(&selected_utxos).await?;
 
-        let output = make_address_output(address, amount);
+        let output = make_address_output(address.into_object(), amount);
         self.create_and_send_tx(
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
@@ -656,7 +656,7 @@ where
         selected_utxo: UtxoOutPoint,
         change_address: Option<Address<Destination>>,
     ) -> Result<(PartiallySignedTransaction, Balances), ControllerError<T>> {
-        let output = make_address_output(address, amount);
+        let output = make_address_output(address.into_object(), amount);
 
         let utxo_output = fetch_utxo(&self.rpc_client, &selected_utxo, self.wallet).await?;
         let change_address = if let Some(change_address) = change_address {
@@ -944,7 +944,8 @@ where
         address: Address<Destination>,
         amount: Amount,
     ) -> Result<SignedTransaction, ControllerError<T>> {
-        let output = make_address_output_token(address, amount, token_info.token_id());
+        let output =
+            make_address_output_token(address.into_object(), amount, token_info.token_id());
         self.create_and_send_token_tx(
             token_info,
             move |current_fee_rate: FeeRate,
@@ -982,7 +983,8 @@ where
         amount: Amount,
         intent: String,
     ) -> Result<(SignedTransaction, SignedTransactionIntent), ControllerError<T>> {
-        let output = make_address_output_token(address, amount, token_info.token_id());
+        let output =
+            make_address_output_token(address.into_object(), amount, token_info.token_id());
         self.create_token_tx(
             token_info,
             move |current_fee_rate: FeeRate,

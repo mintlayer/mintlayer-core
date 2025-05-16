@@ -17,7 +17,7 @@
 
 // Re-export SCALE traits
 pub use parity_scale_codec::{
-    Codec, Decode, DecodeAll, Encode, EncodeLike, Input, Output, WrapperTypeDecode,
+    Codec, CompactLen, Decode, DecodeAll, Encode, EncodeLike, Input, Output, WrapperTypeDecode,
     WrapperTypeEncode,
 };
 
