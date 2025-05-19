@@ -138,6 +138,22 @@ impl From<chain::AccountCommand> for crate::AccountCommand {
     }
 }
 
+impl From<chain::OrderAccountCommand> for crate::OrderAccountCommand {
+    fn from(value: chain::OrderAccountCommand) -> Self {
+        match value {
+            chain::OrderAccountCommand::FillOrder(order_id, amount, destination) => {
+                Self::FillOrder(order_id.to_hash().into(), amount.into(), destination.into())
+            }
+            chain::OrderAccountCommand::FreezeOrder(order_id) => {
+                Self::FreezeOrder(order_id.to_hash().into())
+            }
+            chain::OrderAccountCommand::ConcludeOrder(order_id) => {
+                Self::ConcludeOrder(order_id.to_hash().into())
+            }
+        }
+    }
+}
+
 impl From<chain::TxInput> for crate::TxInput {
     fn from(value: chain::TxInput) -> Self {
         match value {
@@ -146,10 +162,8 @@ impl From<chain::TxInput> for crate::TxInput {
             chain::TxInput::AccountCommand(nonce, command) => {
                 Self::AccountCommand(nonce.value(), command.into())
             }
-            chain::TxInput::OrderAccountCommand(_) => {
-                //TODO: support OrdersVersion::V1
-                //     https://github.com/mintlayer/mintlayer-core/issues/1902
-                unimplemented!();
+            chain::TxInput::OrderAccountCommand(command) => {
+                Self::OrderAccountCommand(command.into())
             }
         }
     }
