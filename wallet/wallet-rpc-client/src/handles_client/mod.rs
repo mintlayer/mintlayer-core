@@ -45,9 +45,9 @@ use wallet_rpc_lib::{
         NewDelegationTransaction, NewOrderTransaction, NewSubmittedTransaction,
         NewTokenTransaction, NftMetadata, NodeVersion, OpenedWallet, PoolInfo, PublicKeyInfo,
         RpcHashedTimelockContract, RpcInspectTransaction, RpcNewTransaction,
-        RpcStandaloneAddresses, SendTokensFromMultisigAddressResult, StakePoolBalance,
-        StakingStatus, StandaloneAddressWithDetails, TokenMetadata, TxOptionsOverrides, UtxoInfo,
-        VrfPublicKeyInfo,
+        RpcPreparedTransaction, RpcStandaloneAddresses, SendTokensFromMultisigAddressResult,
+        StakePoolBalance, StakingStatus, StandaloneAddressWithDetails, TokenMetadata,
+        TxOptionsOverrides, UtxoInfo, VrfPublicKeyInfo,
     },
     RpcError, WalletRpc,
 };
@@ -1095,7 +1095,7 @@ where
         token_id: Option<String>,
         htlc: RpcHashedTimelockContract,
         config: ControllerConfig,
-    ) -> Result<RpcNewTransaction, Self::Error> {
+    ) -> Result<RpcPreparedTransaction, Self::Error> {
         self.wallet_rpc
             .create_htlc_transaction(
                 account_index,

@@ -68,7 +68,9 @@ use wallet_types::{
 use crate::{
     helpers::{fetch_token_info, fetch_utxo, into_balances, tx_to_partially_signed_tx},
     runtime_wallet::RuntimeWallet,
-    types::{Balances, GenericCurrencyTransfer, NewTransaction, SweepFromAddresses},
+    types::{
+        Balances, GenericCurrencyTransfer, NewTransaction, PreparedTransaction, SweepFromAddresses,
+    },
     ControllerConfig, ControllerError,
 };
 
@@ -1016,7 +1018,7 @@ where
     }
 
     /// Creates a transaction that creates a new stake pool and broadcasts it to the mempool.
-    pub async fn create_stake_pool_tx(
+    pub async fn create_stake_pool(
         &mut self,
         amount: Amount,
         decommission_key: Destination,
@@ -1030,7 +1032,7 @@ where
                   consolidate_fee_rate: FeeRate,
                   wallet: &mut RuntimeWallet<B>,
                   account_index: U31| {
-                wallet.create_stake_pool_tx(
+                wallet.create_stake_pool(
                     account_index,
                     current_fee_rate,
                     consolidate_fee_rate,
@@ -1113,7 +1115,7 @@ where
         output_value: OutputValue,
         htlc: HashedTimelockContract,
         additional_info: TxAdditionalInfo,
-    ) -> Result<NewTransaction, ControllerError<T>> {
+    ) -> Result<PreparedTransaction, ControllerError<T>> {
         let (current_fee_rate, consolidate_fee_rate) =
             self.get_current_and_consolidation_fee_rate().await?;
 
@@ -1128,11 +1130,7 @@ where
 
         let fees = into_balances(&self.rpc_client, self.chain_config, fees).await?;
 
-        Ok(NewTransaction {
-            tx,
-            fees,
-            broadcasted: false,
-        })
+        Ok(PreparedTransaction { tx, fees })
     }
 
     pub async fn create_order(

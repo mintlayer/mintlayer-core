@@ -39,7 +39,7 @@ use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress
 use serialization::{hex_encoded::HexEncoded, Decode, DecodeAll};
 use types::{
     NewOrderTransaction, NewSubmittedTransaction, NewTokenTransaction, RpcHashedTimelockContract,
-    RpcNewTransaction,
+    RpcNewTransaction, RpcPreparedTransaction,
 };
 use utils::{ensure, shallow_clone::ShallowClone};
 use utils_networking::IpOrSocketAddress;
@@ -1321,7 +1321,7 @@ where
                     controller
                         .synced_controller(account_index, config)
                         .await?
-                        .create_stake_pool_tx(
+                        .create_stake_pool(
                             amount,
                             decommission_destination,
                             margin_ratio_per_thousand,
@@ -1525,7 +1525,7 @@ where
         token_id: Option<RpcAddress<TokenId>>,
         htlc: RpcHashedTimelockContract,
         config: ControllerConfig,
-    ) -> WRpcResult<RpcNewTransaction, N> {
+    ) -> WRpcResult<RpcPreparedTransaction, N> {
         let secret_hash = HtlcSecretHash::decode_all(&mut htlc.secret_hash.as_bytes())
             .map_err(|_| RpcError::InvalidHtlcSecretHash)?;
 
@@ -1585,7 +1585,7 @@ where
                         .create_htlc_tx(value, htlc, additional_info)
                         .await
                         .map_err(RpcError::Controller)
-                        .map(RpcNewTransaction::new)
+                        .map(RpcPreparedTransaction::new)
                 })
             })
             .await?

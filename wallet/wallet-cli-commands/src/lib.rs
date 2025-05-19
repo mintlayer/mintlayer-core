@@ -652,9 +652,9 @@ pub enum WalletCommand {
 
     #[clap(name = "address-sweep-spendable")]
     /// Sweep all spendable coins or tokens from an address or addresses specified in `addresses`
-    /// or all addresses from this account if all is set to true, to the given destination address.
-    /// Either 1 or more addresses need to be specified in `addresses` without `all` being set, or
-    /// `addresses` needs to be empty and --all being set.
+    /// or all addresses from this account if `--all` is specified, to the given destination address.
+    /// Either 1 or more addresses need to be specified in `addresses` without `--all` being set, or
+    /// `addresses` needs to be empty and `--all` being set.
     ///
     /// Spendable coins are any coins that are not locked, and tokens that are not frozen or locked.
     /// The wallet will automatically calculate the required fees

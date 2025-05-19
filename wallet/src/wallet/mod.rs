@@ -2018,7 +2018,7 @@ where
         Ok((token_id, signed_transaction))
     }
 
-    pub fn create_stake_pool_tx_with_vrf_key(
+    pub fn create_stake_pool_with_vrf_key(
         &mut self,
         account_index: U31,
         current_fee_rate: FeeRate,
@@ -2030,7 +2030,7 @@ where
             account_index,
             TxAdditionalInfo::new(),
             |account, db_tx| {
-                account.create_stake_pool_tx_with_vrf_key(
+                account.create_stake_pool_with_vrf_key(
                     db_tx,
                     stake_pool_arguments,
                     latest_median_time,
@@ -2515,7 +2515,7 @@ where
         Ok(account.get_legacy_vrf_public_key())
     }
 
-    pub fn create_stake_pool_tx(
+    pub fn create_stake_pool(
         &mut self,
         account_index: U31,
         current_fee_rate: FeeRate,
@@ -2527,7 +2527,7 @@ where
             account_index,
             TxAdditionalInfo::new(),
             |account, db_tx| {
-                account.create_stake_pool_tx(
+                account.create_stake_pool(
                     db_tx,
                     stake_pool_arguments,
                     latest_median_time,

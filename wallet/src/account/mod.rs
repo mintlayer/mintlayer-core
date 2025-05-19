@@ -1446,7 +1446,7 @@ impl<K: AccountKeyChains> Account<K> {
         )
     }
 
-    pub fn create_stake_pool_tx_with_vrf_key(
+    pub fn create_stake_pool_with_vrf_key(
         &mut self,
         db_tx: &mut impl WalletStorageWriteUnlocked,
         mut stake_pool_arguments: StakePoolCreationArguments,
@@ -1457,7 +1457,7 @@ impl<K: AccountKeyChains> Account<K> {
             return Err(WalletError::VrfKeyMustBeProvided);
         };
 
-        self.create_stake_pool_tx_impl(
+        self.create_stake_pool_impl(
             stake_pool_arguments,
             db_tx,
             vrf_public_key,
@@ -1466,7 +1466,7 @@ impl<K: AccountKeyChains> Account<K> {
         )
     }
 
-    fn create_stake_pool_tx_impl(
+    fn create_stake_pool_impl(
         &mut self,
         stake_pool_arguments: StakePoolCreationArguments,
         db_tx: &mut impl WalletStorageWriteUnlocked,
@@ -2493,7 +2493,7 @@ impl<K: AccountKeyChains + VRFAccountKeyChains> Account<K> {
         Ok(data)
     }
 
-    pub fn create_stake_pool_tx(
+    pub fn create_stake_pool(
         &mut self,
         db_tx: &mut impl WalletStorageWriteUnlocked,
         mut stake_pool_arguments: StakePoolCreationArguments,
@@ -2504,7 +2504,7 @@ impl<K: AccountKeyChains + VRFAccountKeyChains> Account<K> {
             Some(vrf_public_key) => vrf_public_key,
             None => self.get_vrf_public_key(db_tx)?,
         };
-        self.create_stake_pool_tx_impl(
+        self.create_stake_pool_impl(
             stake_pool_arguments,
             db_tx,
             vrf_public_key,

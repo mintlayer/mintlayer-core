@@ -48,10 +48,10 @@ use crate::types::{
     MaybeSignedTransaction, NewAccountInfo, NewDelegationTransaction, NewOrderTransaction,
     NewSubmittedTransaction, NftMetadata, NodeVersion, OpenedWallet, PoolInfo, PublicKeyInfo,
     RpcAmountIn, RpcHashedTimelockContract, RpcInspectTransaction, RpcNewTransaction,
-    RpcStandaloneAddresses, RpcUtxoOutpoint, RpcUtxoState, RpcUtxoType,
+    RpcPreparedTransaction, RpcStandaloneAddresses, RpcUtxoOutpoint, RpcUtxoState, RpcUtxoType,
     SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
-    StandaloneAddressWithDetails, TokenMetadata, TransactionOptions, TxOptionsOverrides,
-    VrfPublicKeyInfo,
+    StandaloneAddressWithDetails, TokenMetadata, TransactionOptions, TransactionRequestOptions,
+    TxOptionsOverrides, VrfPublicKeyInfo,
 };
 
 #[rpc::rpc(server)]
@@ -225,7 +225,7 @@ trait ColdWalletRpc {
         &self,
         account: AccountArg,
         raw_tx: RpcHexString,
-        options: TransactionOptions,
+        options: TransactionRequestOptions,
     ) -> rpc::RpcResult<MaybeSignedTransaction>;
 
     #[method(name = "challenge_sign_plain")]
@@ -382,9 +382,9 @@ trait WalletRpc {
     ) -> rpc::RpcResult<RpcNewTransaction>;
 
     /// Sweep all spendable coins or tokens from an address or addresses specified in `from_addresses`
-    /// or all addresses from this account if all is set to true, to the given destination address.
-    /// Either 1 or more addresses need to be specified in `from_addresses` with all set to false, or
-    /// `from_addresses` needs to be empty and all set to true.
+    /// or all addresses from this account if `all` is set to true, to the given destination address.
+    /// Either 1 or more addresses need to be specified in `from_addresses` with `all` set to false, or
+    /// `from_addresses` needs to be empty and `all` set to true.
     ///
     /// Spendable coins are any coins that are not locked, and tokens that are not frozen or locked.
     /// The wallet will automatically calculate the required fees
@@ -425,7 +425,7 @@ trait WalletRpc {
         amount: RpcAmountIn,
         selected_utxo: RpcUtxoOutpoint,
         change_address: Option<RpcAddress<Destination>>,
-        options: TransactionOptions,
+        options: TransactionRequestOptions,
     ) -> rpc::RpcResult<ComposedTransaction>;
 
     /// Print the summary of the transaction
@@ -488,7 +488,7 @@ trait WalletRpc {
         account: AccountArg,
         pool_id: RpcAddress<PoolId>,
         output_address: Option<RpcAddress<Destination>>,
-        options: TransactionOptions,
+        options: TransactionRequestOptions,
     ) -> rpc::RpcResult<HexEncoded<PartiallySignedTransaction>>;
 
     /// Create a delegation to a given pool id and the owner address/destination.
@@ -698,7 +698,7 @@ trait WalletRpc {
         address: RpcAddress<Destination>,
         amount: RpcAmountIn,
         intent: String,
-        options: TransactionOptions,
+        options: TransactionRequestOptions,
     ) -> rpc::RpcResult<(
         HexEncoded<SignedTransaction>,
         HexEncoded<SignedTransactionIntent>,
@@ -717,7 +717,7 @@ trait WalletRpc {
         from_address: RpcAddress<Destination>,
         fee_change_address: Option<RpcAddress<Destination>>,
         outputs: Vec<GenericTokenTransfer>,
-        options: TransactionOptions,
+        options: TransactionRequestOptions,
     ) -> rpc::RpcResult<SendTokensFromMultisigAddressResult>;
 
     /// Store data on the blockchain, the data is provided as hex encoded string.
@@ -739,8 +739,8 @@ trait WalletRpc {
         amount: RpcAmountIn,
         token_id: Option<RpcAddress<TokenId>>,
         htlc: RpcHashedTimelockContract,
-        options: TransactionOptions,
-    ) -> rpc::RpcResult<RpcNewTransaction>;
+        options: TransactionRequestOptions,
+    ) -> rpc::RpcResult<RpcPreparedTransaction>;
 
     /// Create an order for exchanging "given" amount of an arbitrary currency (coins or tokens) for
     /// an arbitrary amount of "asked" currency.

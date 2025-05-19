@@ -1762,7 +1762,7 @@ fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
     let decommission_key = Destination::PublicKey(standalone_pk);
 
     let err = wallet
-        .create_stake_pool_tx_with_vrf_key(
+        .create_stake_pool_with_vrf_key(
             DEFAULT_ACCOUNT_INDEX,
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
@@ -1779,7 +1779,7 @@ fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
     assert_eq!(err, WalletError::VrfKeyMustBeProvided);
 
     let stake_pool_transaction = wallet
-        .create_stake_pool_tx(
+        .create_stake_pool(
             DEFAULT_ACCOUNT_INDEX,
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
@@ -1967,7 +1967,7 @@ fn create_stake_pool_for_different_wallet_and_list_pool_ids(#[case] seed: Seed) 
 
     // First, try to create the pool using staker_key_hash_dest as the staker address; this should fail.
     let err = wallet1
-        .create_stake_pool_tx(
+        .create_stake_pool(
             DEFAULT_ACCOUNT_INDEX,
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
@@ -1990,7 +1990,7 @@ fn create_stake_pool_for_different_wallet_and_list_pool_ids(#[case] seed: Seed) 
 
     // Now use staker_key_dest.
     let stake_pool_transaction = wallet1
-        .create_stake_pool_tx(
+        .create_stake_pool(
             DEFAULT_ACCOUNT_INDEX,
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
@@ -2008,7 +2008,7 @@ fn create_stake_pool_for_different_wallet_and_list_pool_ids(#[case] seed: Seed) 
     let stake_pool_transaction_id = stake_pool_transaction.transaction().get_id();
 
     let stake_pool_transaction2 = wallet1
-        .create_stake_pool_tx_with_vrf_key(
+        .create_stake_pool_with_vrf_key(
             DEFAULT_ACCOUNT_INDEX,
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
@@ -2211,7 +2211,7 @@ fn reset_keys_after_failed_transaction(#[case] seed: Seed) {
         .unwrap()
         .last_issued();
 
-    let result = wallet.create_stake_pool_tx(
+    let result = wallet.create_stake_pool(
         DEFAULT_ACCOUNT_INDEX,
         FeeRate::from_amount_per_kb(Amount::ZERO),
         FeeRate::from_amount_per_kb(Amount::ZERO),
@@ -2426,7 +2426,7 @@ fn create_spend_from_delegations(#[case] seed: Seed) {
     let pool_amount = chain_config.min_stake_pool_pledge();
 
     let stake_pool_transaction = wallet
-        .create_stake_pool_tx(
+        .create_stake_pool(
             DEFAULT_ACCOUNT_INDEX,
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
@@ -4727,7 +4727,7 @@ fn decommission_pool_wrong_account(#[case] seed: Seed) {
     let decommission_key = wallet.get_new_address(acc_1_index).unwrap().1;
 
     let stake_pool_transaction = wallet
-        .create_stake_pool_tx(
+        .create_stake_pool(
             acc_0_index,
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
@@ -4824,7 +4824,7 @@ fn decommission_pool_request_wrong_account(#[case] seed: Seed) {
     let decommission_key = wallet.get_new_address(acc_1_index).unwrap().1;
 
     let stake_pool_transaction = wallet
-        .create_stake_pool_tx(
+        .create_stake_pool(
             acc_0_index,
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
@@ -4914,7 +4914,7 @@ fn sign_decommission_pool_request_between_accounts(#[case] seed: Seed) {
     let decommission_key = wallet.get_new_address(acc_1_index).unwrap().1;
 
     let stake_pool_transaction = wallet
-        .create_stake_pool_tx(
+        .create_stake_pool(
             acc_0_index,
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
@@ -5029,7 +5029,7 @@ fn sign_decommission_pool_request_cold_wallet(#[case] seed: Seed) {
     assert_eq!(res, (U31::from_u32(1).unwrap(), Some("name".into())));
 
     let stake_pool_transaction = hot_wallet
-        .create_stake_pool_tx(
+        .create_stake_pool(
             DEFAULT_ACCOUNT_INDEX,
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
@@ -5127,7 +5127,7 @@ fn filter_pools(#[case] seed: Seed) {
     let pool_amount = block1_amount;
 
     let stake_pool_transaction = wallet1
-        .create_stake_pool_tx(
+        .create_stake_pool(
             DEFAULT_ACCOUNT_INDEX,
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
@@ -6783,7 +6783,7 @@ fn conflicting_delegation_account_nonce(#[case] seed: Seed) {
     let pool_amount = chain_config.min_stake_pool_pledge();
 
     let stake_pool_transaction = wallet1
-        .create_stake_pool_tx(
+        .create_stake_pool(
             DEFAULT_ACCOUNT_INDEX,
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
@@ -7076,7 +7076,7 @@ fn conflicting_delegation_account_nonce_same_wallet(#[case] seed: Seed) {
     let pool_amount = chain_config.min_stake_pool_pledge();
 
     let stake_pool_transaction = wallet
-        .create_stake_pool_tx(
+        .create_stake_pool(
             DEFAULT_ACCOUNT_INDEX,
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
@@ -7590,7 +7590,7 @@ fn conflicting_delegation_account_nonce_multiple_inputs(#[case] seed: Seed) {
     let pool_amount = chain_config.min_stake_pool_pledge();
 
     let stake_pool_transaction = wallet
-        .create_stake_pool_tx(
+        .create_stake_pool(
             DEFAULT_ACCOUNT_INDEX,
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
@@ -7865,7 +7865,7 @@ fn conflicting_delegation_account_with_reorg(#[case] seed: Seed) {
     let pool_amount = chain_config.min_stake_pool_pledge();
 
     let stake_pool_transaction = wallet
-        .create_stake_pool_tx(
+        .create_stake_pool(
             DEFAULT_ACCOUNT_INDEX,
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),

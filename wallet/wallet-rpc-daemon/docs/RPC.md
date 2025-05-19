@@ -1005,9 +1005,9 @@ Returns:
 ### Method `address_sweep_spendable`
 
 Sweep all spendable coins or tokens from an address or addresses specified in `from_addresses`
-or all addresses from this account if all is set to true, to the given destination address.
-Either 1 or more addresses need to be specified in `from_addresses` with all set to false, or
-`from_addresses` needs to be empty and all set to true.
+or all addresses from this account if `all` is set to true, to the given destination address.
+Either 1 or more addresses need to be specified in `from_addresses` with `all` set to false, or
+`from_addresses` needs to be empty and `all` set to true.
 
 Spendable coins are any coins that are not locked, and tokens that are not frozen or locked.
 The wallet will automatically calculate the required fees
@@ -1127,14 +1127,9 @@ Parameters:
     "change_address": EITHER OF
          1) bech32 string
          2) null,
-    "options": {
-        "in_top_x_mb": EITHER OF
-             1) number
-             2) null,
-        "broadcast_to_mempool": EITHER OF
-             1) bool
-             2) null,
-    },
+    "options": { "in_top_x_mb": EITHER OF
+         1) number
+         2) null },
 }
 ```
 
@@ -1337,14 +1332,9 @@ Parameters:
     "output_address": EITHER OF
          1) bech32 string
          2) null,
-    "options": {
-        "in_top_x_mb": EITHER OF
-             1) number
-             2) null,
-        "broadcast_to_mempool": EITHER OF
-             1) bool
-             2) null,
-    },
+    "options": { "in_top_x_mb": EITHER OF
+         1) number
+         2) null },
 }
 ```
 
@@ -2157,14 +2147,9 @@ Parameters:
          1) { "atoms": number string }
          2) { "decimal": decimal string },
     "intent": string,
-    "options": {
-        "in_top_x_mb": EITHER OF
-             1) number
-             2) null,
-        "broadcast_to_mempool": EITHER OF
-             1) bool
-             2) null,
-    },
+    "options": { "in_top_x_mb": EITHER OF
+         1) number
+         2) null },
 }
 ```
 
@@ -2195,14 +2180,9 @@ Parameters:
          1) bech32 string
          2) null,
     "outputs": [ object, .. ],
-    "options": {
-        "in_top_x_mb": EITHER OF
-             1) number
-             2) null,
-        "broadcast_to_mempool": EITHER OF
-             1) bool
-             2) null,
-    },
+    "options": { "in_top_x_mb": EITHER OF
+         1) number
+         2) null },
 }
 ```
 
@@ -2314,14 +2294,9 @@ Parameters:
                     "content": number,
                 },
     },
-    "options": {
-        "in_top_x_mb": EITHER OF
-             1) number
-             2) null,
-        "broadcast_to_mempool": EITHER OF
-             1) bool
-             2) null,
-    },
+    "options": { "in_top_x_mb": EITHER OF
+         1) number
+         2) null },
 }
 ```
 
@@ -2340,7 +2315,6 @@ Returns:
             "decimal": decimal string,
         }, .. },
     },
-    "broadcasted": bool,
 }
 ```
 
@@ -3730,14 +3704,9 @@ Parameters:
 {
     "account": number,
     "raw_tx": hex string,
-    "options": {
-        "in_top_x_mb": EITHER OF
-             1) number
-             2) null,
-        "broadcast_to_mempool": EITHER OF
-             1) bool
-             2) null,
-    },
+    "options": { "in_top_x_mb": EITHER OF
+         1) number
+         2) null },
 }
 ```
 

@@ -50,9 +50,10 @@ use wallet_rpc_lib::{
         NewDelegationTransaction, NewOrderTransaction, NewSubmittedTransaction,
         NewTokenTransaction, NftMetadata, NodeVersion, OpenedWallet, PoolInfo, PublicKeyInfo,
         RpcHashedTimelockContract, RpcInspectTransaction, RpcNewTransaction,
-        RpcStandaloneAddresses, SendTokensFromMultisigAddressResult, StakePoolBalance,
-        StakingStatus, StandaloneAddressWithDetails, TokenMetadata, TransactionOptions,
-        TxOptionsOverrides, UtxoInfo, VrfPublicKeyInfo,
+        RpcPreparedTransaction, RpcStandaloneAddresses, SendTokensFromMultisigAddressResult,
+        StakePoolBalance, StakingStatus, StandaloneAddressWithDetails, TokenMetadata,
+        TransactionOptions, TransactionRequestOptions, TxOptionsOverrides, UtxoInfo,
+        VrfPublicKeyInfo,
     },
     ColdWalletRpcClient, WalletRpcClient,
 };
@@ -519,7 +520,7 @@ impl WalletInterface for ClientWalletRpc {
         change_address: Option<String>,
         config: ControllerConfig,
     ) -> Result<ComposedTransaction, Self::Error> {
-        let options = TransactionOptions::from_controller_config(&config);
+        let options = TransactionRequestOptions::from_controller_config(&config);
         WalletRpcClient::transaction_from_cold_input(
             &self.http_client,
             account_index.into(),
@@ -595,7 +596,7 @@ impl WalletInterface for ClientWalletRpc {
         output_address: Option<String>,
         config: ControllerConfig,
     ) -> Result<HexEncoded<PartiallySignedTransaction>, Self::Error> {
-        let options = TransactionOptions::from_controller_config(&config);
+        let options = TransactionRequestOptions::from_controller_config(&config);
         WalletRpcClient::decommission_stake_pool_request(
             &self.http_client,
             account_index.into(),
@@ -955,7 +956,7 @@ impl WalletInterface for ClientWalletRpc {
         ),
         Self::Error,
     > {
-        let options = TransactionOptions::from_controller_config(&config);
+        let options = TransactionRequestOptions::from_controller_config(&config);
         WalletRpcClient::make_tx_for_sending_tokens_with_intent(
             &self.http_client,
             account_index.into(),
@@ -977,7 +978,7 @@ impl WalletInterface for ClientWalletRpc {
         outputs: Vec<GenericTokenTransfer>,
         config: ControllerConfig,
     ) -> Result<SendTokensFromMultisigAddressResult, Self::Error> {
-        let options = TransactionOptions::from_controller_config(&config);
+        let options = TransactionRequestOptions::from_controller_config(&config);
         WalletRpcClient::make_tx_to_send_tokens_from_multisig_address(
             &self.http_client,
             account_index.into(),
@@ -1014,8 +1015,8 @@ impl WalletInterface for ClientWalletRpc {
         token_id: Option<String>,
         htlc: RpcHashedTimelockContract,
         config: ControllerConfig,
-    ) -> Result<RpcNewTransaction, Self::Error> {
-        let options = TransactionOptions::from_controller_config(&config);
+    ) -> Result<RpcPreparedTransaction, Self::Error> {
+        let options = TransactionRequestOptions::from_controller_config(&config);
         WalletRpcClient::create_htlc_transaction(
             &self.http_client,
             account_index.into(),
@@ -1303,7 +1304,7 @@ impl WalletInterface for ClientWalletRpc {
         raw_tx: String,
         config: ControllerConfig,
     ) -> Result<SignRawTransactionResult, Self::Error> {
-        let options = TransactionOptions::from_controller_config(&config);
+        let options = TransactionRequestOptions::from_controller_config(&config);
         ColdWalletRpcClient::sign_raw_transaction(
             &self.http_client,
             account_index.into(),

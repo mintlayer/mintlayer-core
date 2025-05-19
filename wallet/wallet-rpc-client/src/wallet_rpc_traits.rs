@@ -39,8 +39,8 @@ use wallet_rpc_lib::types::{
     DelegationInfo, HardwareWalletType, LegacyVrfPublicKeyInfo, NewAccountInfo,
     NewDelegationTransaction, NewOrderTransaction, NewSubmittedTransaction, NewTokenTransaction,
     NftMetadata, NodeVersion, OpenedWallet, PoolInfo, PublicKeyInfo, RpcHashedTimelockContract,
-    RpcInspectTransaction, RpcNewTransaction, RpcSignatureStatus, RpcStandaloneAddresses,
-    SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
+    RpcInspectTransaction, RpcNewTransaction, RpcPreparedTransaction, RpcSignatureStatus,
+    RpcStandaloneAddresses, SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
     StandaloneAddressWithDetails, TokenMetadata, TxOptionsOverrides, UtxoInfo, VrfPublicKeyInfo,
 };
 use wallet_types::{
@@ -502,7 +502,7 @@ pub trait WalletInterface {
         token_id: Option<String>,
         htlc: RpcHashedTimelockContract,
         config: ControllerConfig,
-    ) -> Result<RpcNewTransaction, Self::Error>;
+    ) -> Result<RpcPreparedTransaction, Self::Error>;
 
     #[allow(clippy::too_many_arguments)]
     async fn create_order(

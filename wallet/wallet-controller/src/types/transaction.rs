@@ -75,3 +75,9 @@ pub struct NewTransaction {
     pub fees: Balances,
     pub broadcasted: bool,
 }
+
+/// Newly signed transaction with fees that is ready to be broadcasted to the mempool
+pub struct PreparedTransaction {
+    pub tx: SignedTransaction,
+    pub fees: Balances,
+}

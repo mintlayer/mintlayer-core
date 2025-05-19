@@ -1037,7 +1037,7 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
         }
     }
 
-    pub fn create_stake_pool_tx(
+    pub fn create_stake_pool(
         &mut self,
         account_index: U31,
         current_fee_rate: FeeRate,
@@ -1045,14 +1045,14 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
         stake_pool_arguments: StakePoolCreationArguments,
     ) -> WalletResult<SignedTxWithFees> {
         match self {
-            RuntimeWallet::Software(w) => w.create_stake_pool_tx(
+            RuntimeWallet::Software(w) => w.create_stake_pool(
                 account_index,
                 current_fee_rate,
                 consolidate_fee_rate,
                 stake_pool_arguments,
             ),
             #[cfg(feature = "trezor")]
-            RuntimeWallet::Trezor(w) => w.create_stake_pool_tx_with_vrf_key(
+            RuntimeWallet::Trezor(w) => w.create_stake_pool_with_vrf_key(
                 account_index,
                 current_fee_rate,
                 consolidate_fee_rate,

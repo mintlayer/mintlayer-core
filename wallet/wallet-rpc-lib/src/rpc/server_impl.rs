@@ -52,14 +52,15 @@ use crate::{
         NftMetadata, NodeVersion, OpenedWallet, PoolInfo, PublicKeyInfo, RpcAddress, RpcAmountIn,
         RpcHexString, RpcInspectTransaction, RpcStandaloneAddresses, RpcUtxoOutpoint, RpcUtxoState,
         RpcUtxoType, SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
-        StandaloneAddressWithDetails, TokenMetadata, TransactionOptions, TxOptionsOverrides,
-        UtxoInfo, VrfPublicKeyInfo,
+        StandaloneAddressWithDetails, TokenMetadata, TransactionOptions, TransactionRequestOptions,
+        TxOptionsOverrides, UtxoInfo, VrfPublicKeyInfo,
     },
     RpcError,
 };
 
 use super::types::{
     NewOrderTransaction, NewTokenTransaction, RpcHashedTimelockContract, RpcNewTransaction,
+    RpcPreparedTransaction,
 };
 
 #[async_trait::async_trait]
@@ -266,7 +267,7 @@ where
         &self,
         account_arg: AccountArg,
         raw_tx: RpcHexString,
-        options: TransactionOptions,
+        options: TransactionRequestOptions,
     ) -> rpc::RpcResult<MaybeSignedTransaction> {
         rpc::handle_result(
             self.sign_raw_transaction(account_arg.index::<N>()?, raw_tx, options.into())
@@ -589,7 +590,7 @@ where
         amount: RpcAmountIn,
         selected_utxo: RpcUtxoOutpoint,
         change_address: Option<RpcAddress<Destination>>,
-        options: TransactionOptions,
+        options: TransactionRequestOptions,
     ) -> rpc::RpcResult<ComposedTransaction> {
         rpc::handle_result(
             self.request_send_coins(
@@ -668,7 +669,7 @@ where
         account_arg: AccountArg,
         pool_id: RpcAddress<PoolId>,
         output_address: Option<RpcAddress<Destination>>,
-        options: TransactionOptions,
+        options: TransactionRequestOptions,
     ) -> rpc::RpcResult<HexEncoded<PartiallySignedTransaction>> {
         rpc::handle_result(
             self.decommission_stake_pool_request(
@@ -958,7 +959,7 @@ where
         address: RpcAddress<Destination>,
         amount: RpcAmountIn,
         intent: String,
-        options: TransactionOptions,
+        options: TransactionRequestOptions,
     ) -> rpc::RpcResult<(
         HexEncoded<SignedTransaction>,
         HexEncoded<SignedTransactionIntent>,
@@ -983,7 +984,7 @@ where
         from_address: RpcAddress<Destination>,
         fee_change_address: Option<RpcAddress<Destination>>,
         outputs: Vec<GenericTokenTransfer>,
-        options: TransactionOptions,
+        options: TransactionRequestOptions,
     ) -> rpc::RpcResult<SendTokensFromMultisigAddressResult> {
         rpc::handle_result(
             self.make_tx_to_send_tokens_from_multisig_address(
@@ -1022,8 +1023,8 @@ where
         amount: RpcAmountIn,
         token_id: Option<RpcAddress<TokenId>>,
         htlc: RpcHashedTimelockContract,
-        options: TransactionOptions,
-    ) -> rpc::RpcResult<RpcNewTransaction> {
+        options: TransactionRequestOptions,
+    ) -> rpc::RpcResult<RpcPreparedTransaction> {
         rpc::handle_result(
             self.create_htlc_transaction(
                 account_arg.index::<N>()?,

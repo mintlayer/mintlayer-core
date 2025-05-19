@@ -419,10 +419,40 @@ impl TransactionOptions {
 impl From<TransactionOptions> for ControllerConfig {
     fn from(value: TransactionOptions) -> Self {
         Self {
-            broadcast_to_mempool: value
-                .broadcast_to_mempool
-                .unwrap_or(TransactionOptions::DEFAULT_BROADCAST),
-            in_top_x_mb: value.in_top_x_mb.unwrap_or(TransactionOptions::DEFAULT_IN_TOP_X_MB),
+            broadcast_to_mempool: value.broadcast_to_mempool(),
+            in_top_x_mb: value.in_top_x_mb(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
+pub struct TransactionRequestOptions {
+    pub in_top_x_mb: Option<usize>,
+}
+
+impl TransactionRequestOptions {
+    const DEFAULT_IN_TOP_X_MB: usize = 5;
+    const DEFAULT_BROADCAST: bool = false;
+
+    pub fn from_controller_config(config: &ControllerConfig) -> Self {
+        let in_top_x_mb = Some(config.in_top_x_mb);
+        Self { in_top_x_mb }
+    }
+
+    pub fn in_top_x_mb(&self) -> usize {
+        self.in_top_x_mb.unwrap_or(Self::DEFAULT_IN_TOP_X_MB)
+    }
+
+    pub fn broadcast_to_mempool(&self) -> bool {
+        Self::DEFAULT_BROADCAST
+    }
+}
+
+impl From<TransactionRequestOptions> for ControllerConfig {
+    fn from(value: TransactionRequestOptions) -> Self {
+        Self {
+            broadcast_to_mempool: value.broadcast_to_mempool(),
+            in_top_x_mb: value.in_top_x_mb(),
         }
     }
 }
@@ -722,6 +752,23 @@ impl RpcNewTransaction {
             tx: tx.tx.into(),
             fees: tx.fees,
             broadcasted: tx.broadcasted,
+        }
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
+pub struct RpcPreparedTransaction {
+    pub tx_id: Id<Transaction>,
+    pub tx: HexEncoded<SignedTransaction>,
+    pub fees: Balances,
+}
+
+impl RpcPreparedTransaction {
+    pub fn new(tx: wallet_controller::types::PreparedTransaction) -> Self {
+        Self {
+            tx_id: tx.tx.transaction().get_id(),
+            tx: tx.tx.into(),
+            fees: tx.fees,
         }
     }
 }
