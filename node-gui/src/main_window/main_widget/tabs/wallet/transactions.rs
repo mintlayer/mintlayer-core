@@ -34,15 +34,26 @@ pub fn view_transactions(
     let mut transactions = Column::new();
 
     let current_transaction_list = &account.transaction_list;
-    let mut transaction_list = Grid::new().width(Length::Fill).push(
-        GridRow::new()
-            .push(field("#".into()))
-            .push(field("Transaction Id".into()))
-            .push(field("Timestamp (UTC)".into()))
-            .push(field("Type".into()))
-            .push(field("Amount".into()))
-            .push(field("State".into())),
-    );
+    let mut transaction_list = Grid::new()
+        .width(Length::Fill)
+        .push(
+            GridRow::new()
+                .push(field("#".into()))
+                .push(field("Transaction Id".into()))
+                .push(field("Timestamp (UTC)".into()))
+                .push(field("Type".into()))
+                .push(field("Amount".into()))
+                .push(field("State".into())),
+        )
+        .column_widths(&[
+            // Make the number column stretch just a little bit, compared to the other ones.
+            Length::FillPortion(1),
+            Length::FillPortion(5),
+            Length::FillPortion(5),
+            Length::FillPortion(5),
+            Length::FillPortion(5),
+            Length::FillPortion(5),
+        ]);
     for (index, tx) in current_transaction_list.txs.iter().enumerate() {
         let amount_str = tx
             .tx_type
