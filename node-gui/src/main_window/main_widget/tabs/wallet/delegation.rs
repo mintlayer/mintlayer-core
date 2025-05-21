@@ -16,7 +16,7 @@
 use std::collections::BTreeMap;
 
 use iced::{
-    widget::{button, column, row, text_input, tooltip, tooltip::Position, Text},
+    widget::{button, column, row, text_input, tooltip, tooltip::Position, Space, Text},
     Element, Length,
 };
 use iced_aw::{Grid, GridRow};
@@ -61,9 +61,15 @@ pub fn view_delegation(
     delegate_staking_amounts: &BTreeMap<DelegationId, String>,
     still_syncing: Option<WalletMessage>,
 ) -> Element<'static, WalletMessage> {
-    let field = |text: String| iced::widget::container(Text::new(text)).padding(5);
-
     let delegation_balance_grid = {
+        let field_padding = 5;
+        // Default horizontal padding used by Button.
+        let button_horizontal_padding = 10;
+        let field = |text: String| iced::widget::container(Text::new(text)).padding(field_padding);
+
+        // Note: due to how the items are arranged in each row (and due to their lack of borders),
+        // the visual spacing between columns will be `field_padding + button_horizontal_padding`.
+
         // We print the table only if there are delegations
         if account.delegations_balance.is_empty() {
             Grid::new().push(
@@ -106,7 +112,7 @@ pub fn view_delegation(
                                         }
                                     )
                                 )
-                                .padding(5),
+                                .padding(field_padding),
                                 Text::new(delegation_address.to_string()),
                                 Position::Bottom,
                             )
@@ -134,7 +140,7 @@ pub fn view_delegation(
                                         }
                                     )
                                 )
-                                .padding(5),
+                                .padding(field_padding),
                                 Text::new(pool_address.to_string()),
                                 Position::Bottom,
                             )
@@ -149,6 +155,10 @@ pub fn view_delegation(
                             .on_press(WalletMessage::CopyToClipboard(pool_address.to_string())),
                         ])
                         .push(field(print_coin_amount(chain_config, balance)))
+                        .push(Space::new(
+                            Length::Fixed(button_horizontal_padding as f32),
+                            Length::Shrink,
+                        ))
                         .push(
                             text_input("Amount", &delegate_staking_amount)
                                 .on_input(move |value| {
@@ -158,9 +168,13 @@ pub fn view_delegation(
                                         WalletMessage::NoOp
                                     }
                                 })
-                                .padding(5)
+                                .padding(field_padding)
                                 .width(Length::Fixed(100.)),
                         )
+                        .push(Space::new(
+                            Length::Fixed((field_padding + button_horizontal_padding) as f32),
+                            Length::Shrink,
+                        ))
                         .push(
                             button(Text::new("Delegate")).on_press(
                                 still_syncing
@@ -174,7 +188,16 @@ pub fn view_delegation(
         }
     };
 
-    let maturity_period = chain_config.staking_pool_spend_maturity_block_count(1.into()).to_int();
+    let maturity_period = chain_config
+        .staking_pool_spend_maturity_block_count(
+            // Assume that at the last checkpoint we already had the latest value for the maturity
+            // period.
+            // Note: this value has only been upgraded once on testnet (where we initially had a
+            // 2000 block maturity period).
+            // TODO: it's probably better to pass the actual tip height here anyway.
+            chain_config.height_checkpoints().last_checkpoint().0,
+        )
+        .to_int();
     let maturity_period_text = format!(
         "Maturity period: {maturity_period} blocks (a block takes on average {} seconds)",
         chain_config.target_block_spacing().as_secs()
