@@ -550,7 +550,7 @@ impl Backend {
                             handles_client,
                             file_path.clone(),
                             wallet_events,
-                            Some(HardwareWalletType::Trezor),
+                            Some(HardwareWalletType::Trezor { device_id: None }),
                         )
                         .await?;
 
@@ -626,7 +626,6 @@ impl Backend {
                 false,
                 ScanBlockchain::ScanNoWait,
                 hardware_wallet,
-                None,
             )
             .await
             .map_err(|err| BackendError::WalletError(err.to_string()))?;

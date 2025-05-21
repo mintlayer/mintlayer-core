@@ -106,7 +106,7 @@ where
         || node_rpc.is_cold_wallet_node().into(),
         |hw| match hw {
             #[cfg(feature = "trezor")]
-            HardwareWalletType::Trezor => WalletType::Trezor,
+            HardwareWalletType::Trezor { device_id: _ } => WalletType::Trezor,
         },
     );
     // Start the wallet service

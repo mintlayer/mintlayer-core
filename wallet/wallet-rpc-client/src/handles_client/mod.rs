@@ -139,26 +139,14 @@ where
     async fn recover_wallet(
         &self,
         path: PathBuf,
-        store_seed_phrase: bool,
-        mnemonic: Option<String>,
-        passphrase: Option<String>,
-        hardware_wallet: Option<HardwareWalletType>,
-        device_id: Option<String>,
+        wallet_args: WalletTypeArgs,
     ) -> Result<CreatedWallet, Self::Error> {
-        let args = HardwareWalletType::into_wallet_args::<N>(
-            hardware_wallet,
-            store_seed_phrase,
-            mnemonic,
-            passphrase,
-            device_id,
-        )?;
-
         let options = WalletCreationOptions {
             overwrite_wallet_file: false,
             scan_blockchain: ScanBlockchain::ScanAndWait,
         };
         self.wallet_rpc
-            .create_wallet(path, args, options)
+            .create_wallet(path, wallet_args, options)
             .await
             .map(Into::into)
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
@@ -170,7 +158,6 @@ where
         password: Option<String>,
         force_migrate_wallet_type: Option<bool>,
         hardware_wallet: Option<HardwareWalletType>,
-        device_id: Option<String>,
     ) -> Result<OpenedWallet, Self::Error> {
         self.wallet_rpc
             .open_wallet(
@@ -179,7 +166,6 @@ where
                 force_migrate_wallet_type.unwrap_or(false),
                 ScanBlockchain::ScanAndWait,
                 hardware_wallet,
-                device_id,
             )
             .await
             .map(Into::into)

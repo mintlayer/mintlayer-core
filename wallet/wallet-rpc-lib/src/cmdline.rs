@@ -26,7 +26,6 @@ use utils::{
     clap_utils, cookie::COOKIE_FILENAME, default_data_dir::default_data_dir_for_chain, ensure,
 };
 use utils_networking::NetworkAddressWithPort;
-use wallet_controller::types::WalletTypeArgs;
 
 use crate::{
     config::{WalletRpcConfig, WalletServiceConfig},
@@ -89,19 +88,11 @@ pub enum CliHardwareWalletType {
     Trezor,
 }
 
-impl CliHardwareWalletType {
-    pub fn into_wallet_args(&self, device_id: Option<String>) -> WalletTypeArgs {
-        match self {
-            Self::Trezor => WalletTypeArgs::Trezor { device_id },
-        }
-    }
-}
-
 impl From<CliHardwareWalletType> for HardwareWalletType {
     fn from(value: CliHardwareWalletType) -> Self {
         match value {
             #[cfg(feature = "trezor")]
-            CliHardwareWalletType::Trezor => Self::Trezor,
+            CliHardwareWalletType::Trezor => Self::Trezor { device_id: None },
         }
     }
 }
