@@ -444,6 +444,7 @@ impl<K: AccountKeyChains> Account<K> {
             selection_result = selection_result.add_change(
                 (total_fees_not_paid - new_total_fees_not_paid).unwrap_or(Amount::ZERO),
             )?;
+            let change_amount = selection_result.get_change();
             let change_output = match pay_fee_with_currency {
                 Currency::Coin => make_address_output(change_address.clone(), change_amount),
                 Currency::Token(token_id) => {
@@ -532,7 +533,7 @@ impl<K: AccountKeyChains> Account<K> {
     pub fn sweep_addresses(
         &mut self,
         destination: Destination,
-        request: SendRequest,
+        mut request: SendRequest,
         current_fee_rate: FeeRate,
     ) -> WalletResult<SendRequest> {
         let mut grouped_inputs = group_preselected_inputs(
@@ -592,6 +593,7 @@ impl<K: AccountKeyChains> Account<K> {
             destination,
         );
         outputs.push(coin_output);
+        request.add_fee(Currency::Coin, total_fee)?;
 
         Ok(request.with_outputs(outputs))
     }
@@ -1444,7 +1446,7 @@ impl<K: AccountKeyChains> Account<K> {
         )
     }
 
-    pub fn create_stake_pool_tx_with_vrf_key(
+    pub fn create_stake_pool_with_vrf_key(
         &mut self,
         db_tx: &mut impl WalletStorageWriteUnlocked,
         mut stake_pool_arguments: StakePoolCreationArguments,
@@ -1455,7 +1457,7 @@ impl<K: AccountKeyChains> Account<K> {
             return Err(WalletError::VrfKeyMustBeProvided);
         };
 
-        self.create_stake_pool_tx_impl(
+        self.create_stake_pool_impl(
             stake_pool_arguments,
             db_tx,
             vrf_public_key,
@@ -1464,7 +1466,7 @@ impl<K: AccountKeyChains> Account<K> {
         )
     }
 
-    fn create_stake_pool_tx_impl(
+    fn create_stake_pool_impl(
         &mut self,
         stake_pool_arguments: StakePoolCreationArguments,
         db_tx: &mut impl WalletStorageWriteUnlocked,
@@ -2491,7 +2493,7 @@ impl<K: AccountKeyChains + VRFAccountKeyChains> Account<K> {
         Ok(data)
     }
 
-    pub fn create_stake_pool_tx(
+    pub fn create_stake_pool(
         &mut self,
         db_tx: &mut impl WalletStorageWriteUnlocked,
         mut stake_pool_arguments: StakePoolCreationArguments,
@@ -2502,7 +2504,7 @@ impl<K: AccountKeyChains + VRFAccountKeyChains> Account<K> {
             Some(vrf_public_key) => vrf_public_key,
             None => self.get_vrf_public_key(db_tx)?,
         };
-        self.create_stake_pool_tx_impl(
+        self.create_stake_pool_impl(
             stake_pool_arguments,
             db_tx,
             vrf_public_key,

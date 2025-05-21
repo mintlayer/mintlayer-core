@@ -25,7 +25,7 @@ from tempfile import NamedTemporaryFile
 import base64
 from operator import itemgetter
 
-from typing import Optional, List, Union
+from typing import Optional, List, Union, TypedDict
 
 from test_framework.util import assert_in, rpc_port
 from test_framework.wallet_controller_common import PartialSigInfo, TokenTxOutput, UtxoOutpoint, WalletCliControllerBase
@@ -46,6 +46,16 @@ class TransferTxOutput:
         else:
             return {'Transfer': [ { 'Coin': {"atoms": str(self.atoms)} }, f"HexifiedDestination{{0x02{self.pub_key_hex}}}" ]}
 
+@dataclass
+class Balances:
+    coins: str
+    tokens: dict
+
+class NewTxResult(TypedDict):
+    tx_id: str
+    tx: str
+    fees: Balances
+    broadcasted: bool
 
 @dataclass
 class PoolData:
@@ -295,7 +305,7 @@ class WalletRpcController(WalletCliControllerBase):
         else:
             return None, None, result['error']
 
-    async def mint_tokens(self, token_id: str, address: str, amount: int) -> str:
+    async def mint_tokens(self, token_id: str, address: str, amount: int) -> NewTxResult:
         return self._write_command("token_mint", [self.account, token_id, address, {'decimal': str(amount)}, {'in_top_x_mb': 5}])['result']
 
     # Note: unlike mint_tokens, this function behaves identically both for wallet_cli_controller and wallet_rpc_controller.
@@ -303,22 +313,22 @@ class WalletRpcController(WalletCliControllerBase):
         # self.mint_tokens already fails on error
         await self.mint_tokens(token_id, address, amount)
 
-    async def unmint_tokens(self, token_id: str, amount: int) -> str:
+    async def unmint_tokens(self, token_id: str, amount: int) -> NewTxResult:
         return self._write_command("token_unmint", [self.account, token_id, {'decimal': str(amount)}, {'in_top_x_mb': 5}])['result']
 
-    async def lock_token_supply(self, token_id: str) -> str:
+    async def lock_token_supply(self, token_id: str) -> NewTxResult:
         return self._write_command("token_lock_supply", [self.account, token_id, {'in_top_x_mb': 5}])['result']
 
-    async def freeze_token(self, token_id: str, is_unfreezable: str) -> str:
+    async def freeze_token(self, token_id: str, is_unfreezable: str) -> NewTxResult:
         return self._write_command("token_freeze", [self.account, token_id, is_unfreezable, {'in_top_x_mb': 5}])['result']
 
-    async def unfreeze_token(self, token_id: str) -> str:
+    async def unfreeze_token(self, token_id: str) -> NewTxResult:
         return self._write_command("token_unfreeze", [self.account, token_id, {'in_top_x_mb': 5}])['result']
 
-    async def change_token_authority(self, token_id: str, new_authority: str) -> str:
+    async def change_token_authority(self, token_id: str, new_authority: str) -> NewTxResult:
         return self._write_command("token_change_authority", [self.account, token_id, new_authority, {'in_top_x_mb': 5}])['result']
 
-    async def change_token_metadata_uri(self, token_id: str, new_metadata_uri: str) -> str:
+    async def change_token_metadata_uri(self, token_id: str, new_metadata_uri: str) -> NewTxResult:
         return self._write_command("token_change_metadata_uri", [self.account, token_id, new_metadata_uri, {'in_top_x_mb': 5}])['result']
 
     async def issue_new_nft(self,
@@ -571,7 +581,7 @@ class WalletRpcController(WalletCliControllerBase):
                          secret_hash: str,
                          spend_address: str,
                          refund_address: str,
-                         refund_lock_for_blocks: int) -> str:
+                         refund_lock_for_blocks: int) -> NewTxResult:
         timelock = { "type": "ForBlockCount", "content": refund_lock_for_blocks }
         htlc = { "secret_hash": secret_hash, "spend_address": spend_address, "refund_address": refund_address, "refund_timelock": timelock }
         object = [self.account, {'decimal': str(amount)}, token_id, htlc, {'in_top_x_mb': 5}]

@@ -972,20 +972,43 @@ Parameters:
                 },
         "index": number,
     }, .. ],
-    "options": { "in_top_x_mb": EITHER OF
-         1) number
-         2) null },
+    "options": {
+        "in_top_x_mb": EITHER OF
+             1) number
+             2) null,
+        "broadcast_to_mempool": EITHER OF
+             1) bool
+             2) null,
+    },
 }
 ```
 
 Returns:
 ```
-{ "tx_id": hex string }
+{
+    "tx_id": hex string,
+    "tx": hex string,
+    "fees": {
+        "coins": {
+            "atoms": number string,
+            "decimal": decimal string,
+        },
+        "tokens": { bech32 string: {
+            "atoms": number string,
+            "decimal": decimal string,
+        }, .. },
+    },
+    "broadcasted": bool,
+}
 ```
 
 ### Method `address_sweep_spendable`
 
-Sweep all spendable coins or tokens from an address or addresses to a given address.
+Sweep all spendable coins or tokens from an address or addresses specified in `from_addresses`
+or all addresses from this account if `all` is set to true, to the given destination address.
+Either 1 or more addresses need to be specified in `from_addresses` with `all` set to false, or
+`from_addresses` needs to be empty and `all` set to true.
+
 Spendable coins are any coins that are not locked, and tokens that are not frozen or locked.
 The wallet will automatically calculate the required fees
 
@@ -996,15 +1019,35 @@ Parameters:
     "account": number,
     "destination_address": bech32 string,
     "from_addresses": [ bech32 string, .. ],
-    "options": { "in_top_x_mb": EITHER OF
-         1) number
-         2) null },
+    "all": bool,
+    "options": {
+        "in_top_x_mb": EITHER OF
+             1) number
+             2) null,
+        "broadcast_to_mempool": EITHER OF
+             1) bool
+             2) null,
+    },
 }
 ```
 
 Returns:
 ```
-{ "tx_id": hex string }
+{
+    "tx_id": hex string,
+    "tx": hex string,
+    "fees": {
+        "coins": {
+            "atoms": number string,
+            "decimal": decimal string,
+        },
+        "tokens": { bech32 string: {
+            "atoms": number string,
+            "decimal": decimal string,
+        }, .. },
+    },
+    "broadcasted": bool,
+}
 ```
 
 ### Method `staking_sweep_delegation`
@@ -1019,15 +1062,34 @@ Parameters:
     "account": number,
     "destination_address": bech32 string,
     "delegation_id": bech32 string,
-    "options": { "in_top_x_mb": EITHER OF
-         1) number
-         2) null },
+    "options": {
+        "in_top_x_mb": EITHER OF
+             1) number
+             2) null,
+        "broadcast_to_mempool": EITHER OF
+             1) bool
+             2) null,
+    },
 }
 ```
 
 Returns:
 ```
-{ "tx_id": hex string }
+{
+    "tx_id": hex string,
+    "tx": hex string,
+    "fees": {
+        "coins": {
+            "atoms": number string,
+            "decimal": decimal string,
+        },
+        "tokens": { bech32 string: {
+            "atoms": number string,
+            "decimal": decimal string,
+        }, .. },
+    },
+    "broadcasted": bool,
+}
 ```
 
 ### Method `transaction_create_from_cold_input`
@@ -1180,15 +1242,34 @@ Parameters:
     "vrf_public_key": EITHER OF
          1) bech32 string
          2) null,
-    "options": { "in_top_x_mb": EITHER OF
-         1) number
-         2) null },
+    "options": {
+        "in_top_x_mb": EITHER OF
+             1) number
+             2) null,
+        "broadcast_to_mempool": EITHER OF
+             1) bool
+             2) null,
+    },
 }
 ```
 
 Returns:
 ```
-{ "tx_id": hex string }
+{
+    "tx_id": hex string,
+    "tx": hex string,
+    "fees": {
+        "coins": {
+            "atoms": number string,
+            "decimal": decimal string,
+        },
+        "tokens": { bech32 string: {
+            "atoms": number string,
+            "decimal": decimal string,
+        }, .. },
+    },
+    "broadcasted": bool,
+}
 ```
 
 ### Method `staking_decommission_pool`
@@ -1205,15 +1286,34 @@ Parameters:
     "output_address": EITHER OF
          1) bech32 string
          2) null,
-    "options": { "in_top_x_mb": EITHER OF
-         1) number
-         2) null },
+    "options": {
+        "in_top_x_mb": EITHER OF
+             1) number
+             2) null,
+        "broadcast_to_mempool": EITHER OF
+             1) bool
+             2) null,
+    },
 }
 ```
 
 Returns:
 ```
-{ "tx_id": hex string }
+{
+    "tx_id": hex string,
+    "tx": hex string,
+    "fees": {
+        "coins": {
+            "atoms": number string,
+            "decimal": decimal string,
+        },
+        "tokens": { bech32 string: {
+            "atoms": number string,
+            "decimal": decimal string,
+        }, .. },
+    },
+    "broadcasted": bool,
+}
 ```
 
 ### Method `staking_decommission_pool_request`
@@ -1257,17 +1357,34 @@ Parameters:
     "account": number,
     "address": bech32 string,
     "pool_id": bech32 string,
-    "options": { "in_top_x_mb": EITHER OF
-         1) number
-         2) null },
+    "options": {
+        "in_top_x_mb": EITHER OF
+             1) number
+             2) null,
+        "broadcast_to_mempool": EITHER OF
+             1) bool
+             2) null,
+    },
 }
 ```
 
 Returns:
 ```
 {
-    "tx_id": hex string,
     "delegation_id": bech32 string,
+    "tx_id": hex string,
+    "tx": hex string,
+    "fees": {
+        "coins": {
+            "atoms": number string,
+            "decimal": decimal string,
+        },
+        "tokens": { bech32 string: {
+            "atoms": number string,
+            "decimal": decimal string,
+        }, .. },
+    },
+    "broadcasted": bool,
 }
 ```
 
@@ -1284,15 +1401,34 @@ Parameters:
          1) { "atoms": number string }
          2) { "decimal": decimal string },
     "delegation_id": bech32 string,
-    "options": { "in_top_x_mb": EITHER OF
-         1) number
-         2) null },
+    "options": {
+        "in_top_x_mb": EITHER OF
+             1) number
+             2) null,
+        "broadcast_to_mempool": EITHER OF
+             1) bool
+             2) null,
+    },
 }
 ```
 
 Returns:
 ```
-{ "tx_id": hex string }
+{
+    "tx_id": hex string,
+    "tx": hex string,
+    "fees": {
+        "coins": {
+            "atoms": number string,
+            "decimal": decimal string,
+        },
+        "tokens": { bech32 string: {
+            "atoms": number string,
+            "decimal": decimal string,
+        }, .. },
+    },
+    "broadcasted": bool,
+}
 ```
 
 ### Method `delegation_withdraw`
@@ -1310,15 +1446,34 @@ Parameters:
          1) { "atoms": number string }
          2) { "decimal": decimal string },
     "delegation_id": bech32 string,
-    "options": { "in_top_x_mb": EITHER OF
-         1) number
-         2) null },
+    "options": {
+        "in_top_x_mb": EITHER OF
+             1) number
+             2) null,
+        "broadcast_to_mempool": EITHER OF
+             1) bool
+             2) null,
+    },
 }
 ```
 
 Returns:
 ```
-{ "tx_id": hex string }
+{
+    "tx_id": hex string,
+    "tx": hex string,
+    "fees": {
+        "coins": {
+            "atoms": number string,
+            "decimal": decimal string,
+        },
+        "tokens": { bech32 string: {
+            "atoms": number string,
+            "decimal": decimal string,
+        }, .. },
+    },
+    "broadcasted": bool,
+}
 ```
 
 ### Method `staking_start`
@@ -1531,9 +1686,14 @@ Parameters:
              2) { "hex": hex string }
              3) null,
     },
-    "options": { "in_top_x_mb": EITHER OF
-         1) number
-         2) null },
+    "options": {
+        "in_top_x_mb": EITHER OF
+             1) number
+             2) null,
+        "broadcast_to_mempool": EITHER OF
+             1) bool
+             2) null,
+    },
 }
 ```
 
@@ -1542,6 +1702,18 @@ Returns:
 {
     "token_id": bech32 string,
     "tx_id": hex string,
+    "tx": hex string,
+    "fees": {
+        "coins": {
+            "atoms": number string,
+            "decimal": decimal string,
+        },
+        "tokens": { bech32 string: {
+            "atoms": number string,
+            "decimal": decimal string,
+        }, .. },
+    },
+    "broadcasted": bool,
 }
 ```
 
@@ -1576,9 +1748,14 @@ Parameters:
              3) { "type": "Unlimited" },
         "is_freezable": bool,
     },
-    "options": { "in_top_x_mb": EITHER OF
-         1) number
-         2) null },
+    "options": {
+        "in_top_x_mb": EITHER OF
+             1) number
+             2) null,
+        "broadcast_to_mempool": EITHER OF
+             1) bool
+             2) null,
+    },
 }
 ```
 
@@ -1587,6 +1764,18 @@ Returns:
 {
     "token_id": bech32 string,
     "tx_id": hex string,
+    "tx": hex string,
+    "fees": {
+        "coins": {
+            "atoms": number string,
+            "decimal": decimal string,
+        },
+        "tokens": { bech32 string: {
+            "atoms": number string,
+            "decimal": decimal string,
+        }, .. },
+    },
+    "broadcasted": bool,
 }
 ```
 
@@ -1601,15 +1790,34 @@ Parameters:
     "account": number,
     "token_id": bech32 string,
     "address": bech32 string,
-    "options": { "in_top_x_mb": EITHER OF
-         1) number
-         2) null },
+    "options": {
+        "in_top_x_mb": EITHER OF
+             1) number
+             2) null,
+        "broadcast_to_mempool": EITHER OF
+             1) bool
+             2) null,
+    },
 }
 ```
 
 Returns:
 ```
-{ "tx_id": hex string }
+{
+    "tx_id": hex string,
+    "tx": hex string,
+    "fees": {
+        "coins": {
+            "atoms": number string,
+            "decimal": decimal string,
+        },
+        "tokens": { bech32 string: {
+            "atoms": number string,
+            "decimal": decimal string,
+        }, .. },
+    },
+    "broadcasted": bool,
+}
 ```
 
 ### Method `token_change_metadata_uri`
@@ -1623,15 +1831,34 @@ Parameters:
     "account": number,
     "token_id": bech32 string,
     "metadata_uri": hex string,
-    "options": { "in_top_x_mb": EITHER OF
-         1) number
-         2) null },
+    "options": {
+        "in_top_x_mb": EITHER OF
+             1) number
+             2) null,
+        "broadcast_to_mempool": EITHER OF
+             1) bool
+             2) null,
+    },
 }
 ```
 
 Returns:
 ```
-{ "tx_id": hex string }
+{
+    "tx_id": hex string,
+    "tx": hex string,
+    "fees": {
+        "coins": {
+            "atoms": number string,
+            "decimal": decimal string,
+        },
+        "tokens": { bech32 string: {
+            "atoms": number string,
+            "decimal": decimal string,
+        }, .. },
+    },
+    "broadcasted": bool,
+}
 ```
 
 ### Method `token_mint`
@@ -1648,15 +1875,34 @@ Parameters:
     "amount": EITHER OF
          1) { "atoms": number string }
          2) { "decimal": decimal string },
-    "options": { "in_top_x_mb": EITHER OF
-         1) number
-         2) null },
+    "options": {
+        "in_top_x_mb": EITHER OF
+             1) number
+             2) null,
+        "broadcast_to_mempool": EITHER OF
+             1) bool
+             2) null,
+    },
 }
 ```
 
 Returns:
 ```
-{ "tx_id": hex string }
+{
+    "tx_id": hex string,
+    "tx": hex string,
+    "fees": {
+        "coins": {
+            "atoms": number string,
+            "decimal": decimal string,
+        },
+        "tokens": { bech32 string: {
+            "atoms": number string,
+            "decimal": decimal string,
+        }, .. },
+    },
+    "broadcasted": bool,
+}
 ```
 
 ### Method `token_unmint`
@@ -1674,15 +1920,34 @@ Parameters:
     "amount": EITHER OF
          1) { "atoms": number string }
          2) { "decimal": decimal string },
-    "options": { "in_top_x_mb": EITHER OF
-         1) number
-         2) null },
+    "options": {
+        "in_top_x_mb": EITHER OF
+             1) number
+             2) null,
+        "broadcast_to_mempool": EITHER OF
+             1) bool
+             2) null,
+    },
 }
 ```
 
 Returns:
 ```
-{ "tx_id": hex string }
+{
+    "tx_id": hex string,
+    "tx": hex string,
+    "fees": {
+        "coins": {
+            "atoms": number string,
+            "decimal": decimal string,
+        },
+        "tokens": { bech32 string: {
+            "atoms": number string,
+            "decimal": decimal string,
+        }, .. },
+    },
+    "broadcasted": bool,
+}
 ```
 
 ### Method `token_lock_supply`
@@ -1697,15 +1962,34 @@ Parameters:
 {
     "account_index": number,
     "token_id": bech32 string,
-    "options": { "in_top_x_mb": EITHER OF
-         1) number
-         2) null },
+    "options": {
+        "in_top_x_mb": EITHER OF
+             1) number
+             2) null,
+        "broadcast_to_mempool": EITHER OF
+             1) bool
+             2) null,
+    },
 }
 ```
 
 Returns:
 ```
-{ "tx_id": hex string }
+{
+    "tx_id": hex string,
+    "tx": hex string,
+    "fees": {
+        "coins": {
+            "atoms": number string,
+            "decimal": decimal string,
+        },
+        "tokens": { bech32 string: {
+            "atoms": number string,
+            "decimal": decimal string,
+        }, .. },
+    },
+    "broadcasted": bool,
+}
 ```
 
 ### Method `token_freeze`
@@ -1722,15 +2006,34 @@ Parameters:
     "account": number,
     "token_id": bech32 string,
     "is_unfreezable": bool,
-    "options": { "in_top_x_mb": EITHER OF
-         1) number
-         2) null },
+    "options": {
+        "in_top_x_mb": EITHER OF
+             1) number
+             2) null,
+        "broadcast_to_mempool": EITHER OF
+             1) bool
+             2) null,
+    },
 }
 ```
 
 Returns:
 ```
-{ "tx_id": hex string }
+{
+    "tx_id": hex string,
+    "tx": hex string,
+    "fees": {
+        "coins": {
+            "atoms": number string,
+            "decimal": decimal string,
+        },
+        "tokens": { bech32 string: {
+            "atoms": number string,
+            "decimal": decimal string,
+        }, .. },
+    },
+    "broadcasted": bool,
+}
 ```
 
 ### Method `token_unfreeze`
@@ -1746,15 +2049,34 @@ Parameters:
 {
     "account": number,
     "token_id": bech32 string,
-    "options": { "in_top_x_mb": EITHER OF
-         1) number
-         2) null },
+    "options": {
+        "in_top_x_mb": EITHER OF
+             1) number
+             2) null,
+        "broadcast_to_mempool": EITHER OF
+             1) bool
+             2) null,
+    },
 }
 ```
 
 Returns:
 ```
-{ "tx_id": hex string }
+{
+    "tx_id": hex string,
+    "tx": hex string,
+    "fees": {
+        "coins": {
+            "atoms": number string,
+            "decimal": decimal string,
+        },
+        "tokens": { bech32 string: {
+            "atoms": number string,
+            "decimal": decimal string,
+        }, .. },
+    },
+    "broadcasted": bool,
+}
 ```
 
 ### Method `token_send`
@@ -1771,15 +2093,34 @@ Parameters:
     "amount": EITHER OF
          1) { "atoms": number string }
          2) { "decimal": decimal string },
-    "options": { "in_top_x_mb": EITHER OF
-         1) number
-         2) null },
+    "options": {
+        "in_top_x_mb": EITHER OF
+             1) number
+             2) null,
+        "broadcast_to_mempool": EITHER OF
+             1) bool
+             2) null,
+    },
 }
 ```
 
 Returns:
 ```
-{ "tx_id": hex string }
+{
+    "tx_id": hex string,
+    "tx": hex string,
+    "fees": {
+        "coins": {
+            "atoms": number string,
+            "decimal": decimal string,
+        },
+        "tokens": { bech32 string: {
+            "atoms": number string,
+            "decimal": decimal string,
+        }, .. },
+    },
+    "broadcasted": bool,
+}
 ```
 
 ### Method `token_make_tx_for_sending_with_intent`
@@ -1885,15 +2226,34 @@ Parameters:
 {
     "account": number,
     "data": hex string,
-    "options": { "in_top_x_mb": EITHER OF
-         1) number
-         2) null },
+    "options": {
+        "in_top_x_mb": EITHER OF
+             1) number
+             2) null,
+        "broadcast_to_mempool": EITHER OF
+             1) bool
+             2) null,
+    },
 }
 ```
 
 Returns:
 ```
-{ "tx_id": hex string }
+{
+    "tx_id": hex string,
+    "tx": hex string,
+    "fees": {
+        "coins": {
+            "atoms": number string,
+            "decimal": decimal string,
+        },
+        "tokens": { bech32 string: {
+            "atoms": number string,
+            "decimal": decimal string,
+        }, .. },
+    },
+    "broadcasted": bool,
+}
 ```
 
 ### Method `create_htlc_transaction`
@@ -1942,7 +2302,20 @@ Parameters:
 
 Returns:
 ```
-hex string
+{
+    "tx_id": hex string,
+    "tx": hex string,
+    "fees": {
+        "coins": {
+            "atoms": number string,
+            "decimal": decimal string,
+        },
+        "tokens": { bech32 string: {
+            "atoms": number string,
+            "decimal": decimal string,
+        }, .. },
+    },
+}
 ```
 
 ### Method `create_order`
@@ -1990,17 +2363,34 @@ Parameters:
                 },
             },
     "conclude_address": bech32 string,
-    "options": { "in_top_x_mb": EITHER OF
-         1) number
-         2) null },
+    "options": {
+        "in_top_x_mb": EITHER OF
+             1) number
+             2) null,
+        "broadcast_to_mempool": EITHER OF
+             1) bool
+             2) null,
+    },
 }
 ```
 
 Returns:
 ```
 {
-    "tx_id": hex string,
     "order_id": bech32 string,
+    "tx_id": hex string,
+    "tx": hex string,
+    "fees": {
+        "coins": {
+            "atoms": number string,
+            "decimal": decimal string,
+        },
+        "tokens": { bech32 string: {
+            "atoms": number string,
+            "decimal": decimal string,
+        }, .. },
+    },
+    "broadcasted": bool,
 }
 ```
 
@@ -2019,15 +2409,34 @@ Parameters:
     "output_address": EITHER OF
          1) bech32 string
          2) null,
-    "options": { "in_top_x_mb": EITHER OF
-         1) number
-         2) null },
+    "options": {
+        "in_top_x_mb": EITHER OF
+             1) number
+             2) null,
+        "broadcast_to_mempool": EITHER OF
+             1) bool
+             2) null,
+    },
 }
 ```
 
 Returns:
 ```
-{ "tx_id": hex string }
+{
+    "tx_id": hex string,
+    "tx": hex string,
+    "fees": {
+        "coins": {
+            "atoms": number string,
+            "decimal": decimal string,
+        },
+        "tokens": { bech32 string: {
+            "atoms": number string,
+            "decimal": decimal string,
+        }, .. },
+    },
+    "broadcasted": bool,
+}
 ```
 
 ### Method `fill_order`
@@ -2047,15 +2456,34 @@ Parameters:
     "output_address": EITHER OF
          1) bech32 string
          2) null,
-    "options": { "in_top_x_mb": EITHER OF
-         1) number
-         2) null },
+    "options": {
+        "in_top_x_mb": EITHER OF
+             1) number
+             2) null,
+        "broadcast_to_mempool": EITHER OF
+             1) bool
+             2) null,
+    },
 }
 ```
 
 Returns:
 ```
-{ "tx_id": hex string }
+{
+    "tx_id": hex string,
+    "tx": hex string,
+    "fees": {
+        "coins": {
+            "atoms": number string,
+            "decimal": decimal string,
+        },
+        "tokens": { bech32 string: {
+            "atoms": number string,
+            "decimal": decimal string,
+        }, .. },
+    },
+    "broadcasted": bool,
+}
 ```
 
 ### Method `freeze_order`
@@ -2069,15 +2497,34 @@ Parameters:
 {
     "account": number,
     "order_id": bech32 string,
-    "options": { "in_top_x_mb": EITHER OF
-         1) number
-         2) null },
+    "options": {
+        "in_top_x_mb": EITHER OF
+             1) number
+             2) null,
+        "broadcast_to_mempool": EITHER OF
+             1) bool
+             2) null,
+    },
 }
 ```
 
 Returns:
 ```
-{ "tx_id": hex string }
+{
+    "tx_id": hex string,
+    "tx": hex string,
+    "fees": {
+        "coins": {
+            "atoms": number string,
+            "decimal": decimal string,
+        },
+        "tokens": { bech32 string: {
+            "atoms": number string,
+            "decimal": decimal string,
+        }, .. },
+    },
+    "broadcasted": bool,
+}
 ```
 
 ### Method `node_version`

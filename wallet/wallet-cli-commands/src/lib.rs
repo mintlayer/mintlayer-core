@@ -394,6 +394,18 @@ pub enum WalletCommand {
     #[command(flatten)]
     ColdCommands(ColdWalletCommand),
 
+    /// Configure broadcasting to Mempool to yes or no.
+    ///
+    /// If set to no, any command that creates a transaction will return it to the user and not submit it automatically.
+    /// The transaction will need to be submitted manually with the command `node-submit-transaction`.
+    ///
+    /// The effect of this is not preserved when the CLI wallet is closed.
+    #[clap(name = "config-broadcast")]
+    ConfigBroadcast {
+        #[arg(value_enum)]
+        broadcast: YesNo,
+    },
+
     #[clap(name = "account-create")]
     CreateNewAccount { name: Option<String> },
 
@@ -639,11 +651,22 @@ pub enum WalletCommand {
     },
 
     #[clap(name = "address-sweep-spendable")]
+    /// Sweep all spendable coins or tokens from an address or addresses specified in `addresses`
+    /// or all addresses from this account if `--all` is specified, to the given destination address.
+    /// Either 1 or more addresses need to be specified in `addresses` without `--all` being set, or
+    /// `addresses` needs to be empty and `--all` being set.
+    ///
+    /// Spendable coins are any coins that are not locked, and tokens that are not frozen or locked.
+    /// The wallet will automatically calculate the required fees
     SweepFromAddress {
         /// The receiving address of the coins or tokens
         destination_address: String,
         /// The addresses to be swept
+        #[arg(required_unless_present("all"))]
         addresses: Vec<String>,
+        /// Sweep all addresses
+        #[arg(long = "all", default_value_t = false, conflicts_with_all(["addresses"]))]
+        all: bool,
     },
 
     #[clap(name = "staking-sweep-delegation")]
@@ -1159,20 +1182,23 @@ pub fn get_repl_command(cold_wallet: bool, mutable_wallet: bool) -> Command {
 
     // Customize the help template for all commands to make it more REPL friendly
     for subcommand in repl_command.get_subcommands_mut() {
-        if let Some(desc) =
-            COLD_WALLET_DESC.methods.iter().chain(WALLET_DESC.methods).find_map(|method| {
-                method
-                    .name
-                    .split('_')
-                    .zip(subcommand.get_name().split('-'))
-                    .all(|(x, y)| x == y)
-                    .then_some(method.description)
-            })
-        {
-            *subcommand = subcommand.clone().help_template(COMMAND_HELP_TEMPLATE).about(desc);
-        } else {
-            *subcommand = subcommand.clone().help_template(COMMAND_HELP_TEMPLATE);
+        let mut new_subcommand = subcommand.clone().help_template(COMMAND_HELP_TEMPLATE);
+        if new_subcommand.get_about().is_none() {
+            if let Some(desc) =
+                COLD_WALLET_DESC.methods.iter().chain(WALLET_DESC.methods).find_map(|method| {
+                    method
+                        .name
+                        .split('_')
+                        .zip(subcommand.get_name().split('-'))
+                        .all(|(x, y)| x == y)
+                        .then_some(method.description)
+                })
+            {
+                new_subcommand = new_subcommand.about(desc);
+            }
         }
+
+        *subcommand = new_subcommand;
     }
 
     repl_command

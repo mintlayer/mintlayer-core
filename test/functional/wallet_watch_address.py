@@ -109,7 +109,7 @@ class WalletSubmitTransaction(BitcoinTestFramework):
             if store_tx_in_wallet:
                 assert_in(f"Coins amount: {coins_to_send}", await wallet.get_balance(utxo_states=['inactive']))
             else:
-                assert_in(f"Coins amount: 0", await wallet.get_balance(utxo_states=['inactive']))
+                assert_in("Coins amount: 0", await wallet.get_balance(utxo_states=['inactive']))
 
             assert node.mempool_contains_tx(receive_coins_tx_id)
 
@@ -145,7 +145,7 @@ class WalletSubmitTransaction(BitcoinTestFramework):
             # send coins to that address
             output = await wallet.send_to_address(address_from_wallet1, 1)
             assert_in("The transaction was submitted successfully", output)
-            receive_coins_tx_id = output.splitlines()[1]
+            receive_coins_tx_id = output.splitlines()[-1]
 
             # check in wallet2
             await wallet.close_wallet()
@@ -173,7 +173,7 @@ class WalletSubmitTransaction(BitcoinTestFramework):
             other_address = await wallet.new_address()
             output = await wallet.send_to_address(other_address, 0.1)
             assert_in("The transaction was submitted successfully", output)
-            send_coins_tx_id = output.splitlines()[1]
+            send_coins_tx_id = output.splitlines()[-1]
 
 
             # go back to wallet 2
