@@ -77,7 +77,7 @@ use wallet_storage::{
 use wallet_types::account_info::{StandaloneAddressDetails, StandaloneAddresses};
 use wallet_types::chain_info::ChainInfo;
 use wallet_types::partially_signed_transaction::{
-    PartiallySignedTransaction, PartiallySignedTransactionCreationError, PoolAdditionalInfo,
+    PartiallySignedTransaction, PartiallySignedTransactionError, PoolAdditionalInfo,
     TokenAdditionalInfo, TxAdditionalInfo,
 };
 use wallet_types::seed_phrase::SerializableSeedPhrase;
@@ -162,7 +162,7 @@ pub enum WalletError {
     #[error("Transaction creation error: {0}")]
     TransactionCreation(#[from] TransactionCreationError),
     #[error("Transaction creation error: {0}")]
-    PartiallySignedTransactionCreation(#[from] PartiallySignedTransactionCreationError),
+    PartiallySignedTransactionCreation(#[from] PartiallySignedTransactionError),
     #[error("Transaction signing error: {0}")]
     TransactionSig(#[from] DestinationSigError),
     #[error("Delegation not found with id {0}")]
@@ -1128,7 +1128,8 @@ where
         ) -> WalletResult<(SendRequest, AddlData)>,
         error_mapper: impl FnOnce(WalletError) -> WalletError,
     ) -> WalletResult<(SignedTransaction, AddlData)> {
-        let (_, block_height) = self.get_best_block_for_account(account_index)?;
+        let (_, best_block_height) = self.get_best_block_for_account(account_index)?;
+        let next_block_height = best_block_height.next_height();
 
         self.for_account_rw_unlocked(
             account_index,
@@ -1139,21 +1140,27 @@ where
 
                 let mut signer =
                     signer_provider.provide(Arc::new(chain_config.clone()), account_index);
-                let ptx = signer.sign_tx(ptx, account.key_chain(), db_tx).map(|(ptx, _, _)| ptx)?;
+                let ptx = signer
+                    .sign_tx(ptx, account.key_chain(), db_tx, next_block_height)
+                    .map(|(ptx, _, _)| ptx)?;
 
-                let inputs_utxo_refs: Vec<_> =
-                    ptx.input_utxos().iter().map(|u| u.as_ref()).collect();
+                let input_commitments =
+                    ptx.make_sighash_input_commitments(&chain_config, next_block_height)?;
+
                 let is_fully_signed =
                     ptx.destinations().iter().enumerate().zip(ptx.witnesses()).all(
                         |((i, destination), witness)| match (witness, destination) {
                             (None | Some(_), None) | (None, Some(_)) => false,
                             (Some(_), Some(destination)) => {
+                                let input_utxo = ptx.input_utxos()[i].clone();
+
                                 tx_verifier::input_check::signature_only_check::verify_tx_signature(
                                     chain_config,
                                     destination,
                                     &ptx,
-                                    &inputs_utxo_refs,
+                                    &input_commitments,
                                     i,
+                                    input_utxo,
                                 )
                                 .is_ok()
                             }
@@ -1170,7 +1177,7 @@ where
                     error_mapper(WalletError::PartiallySignedTransactionCreation(e))
                 })?;
 
-                check_transaction(chain_config, block_height.next_height(), &tx)?;
+                check_transaction(chain_config, next_block_height, &tx)?;
                 Ok((tx, additional_data))
             },
         )
@@ -2048,7 +2055,7 @@ where
         current_fee_rate: FeeRate,
     ) -> WalletResult<SignedTransaction> {
         let additional_info =
-            TxAdditionalInfo::with_pool_info(pool_id, PoolAdditionalInfo { staker_balance });
+            TxAdditionalInfo::new().with_pool_info(pool_id, PoolAdditionalInfo { staker_balance });
         Ok(self
             .for_account_rw_unlocked_and_check_tx_generic(
                 account_index,
@@ -2078,8 +2085,11 @@ where
         output_address: Option<Destination>,
         current_fee_rate: FeeRate,
     ) -> WalletResult<PartiallySignedTransaction> {
+        let (_, best_block_height) = self.get_best_block_for_account(account_index)?;
+        let next_block_height = best_block_height.next_height();
+
         let additional_info =
-            TxAdditionalInfo::with_pool_info(pool_id, PoolAdditionalInfo { staker_balance });
+            TxAdditionalInfo::new().with_pool_info(pool_id, PoolAdditionalInfo { staker_balance });
         self.for_account_rw_unlocked(
             account_index,
             |account, db_tx, chain_config, signer_provider| {
@@ -2095,7 +2105,9 @@ where
 
                 let mut signer =
                     signer_provider.provide(Arc::new(chain_config.clone()), account_index);
-                let ptx = signer.sign_tx(ptx, account.key_chain(), db_tx).map(|(ptx, _, _)| ptx)?;
+                let ptx = signer
+                    .sign_tx(ptx, account.key_chain(), db_tx, next_block_height)
+                    .map(|(ptx, _, _)| ptx)?;
 
                 if ptx.all_signatures_available() {
                     return Err(WalletError::FullySignedTransactionInDecommissionReq);
@@ -2245,11 +2257,12 @@ where
         order_info: RpcOrderInfo,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
+        additional_info: TxAdditionalInfo,
     ) -> WalletResult<SignedTransaction> {
         let latest_median_time = self.latest_median_time;
         self.for_account_rw_unlocked_and_check_tx(
             account_index,
-            TxAdditionalInfo::new(),
+            additional_info,
             |account, db_tx| {
                 account.create_freeze_order_tx(
                     db_tx,
@@ -2274,13 +2287,21 @@ where
         Vec<SignatureStatus>,
         Vec<SignatureStatus>,
     )> {
+        let (_, best_block_height) = self.get_best_block_for_account(account_index)?;
+        let next_block_height = best_block_height.next_height();
+
+        // FIXME: need to ensure that the provided ptx always contains all the necessary info.
+        // And since it comes from RPC, it's better to ensure that ANY PartiallySignedTransaction
+        // contains ALL the necessary info (and we'd better explicitly define what "necessary info"
+        // means exactly and encapsulate its retrieval in one module).
+
         self.for_account_rw_unlocked(
             account_index,
             |account, db_tx, chain_config, signer_provider| {
                 let mut signer =
                     signer_provider.provide(Arc::new(chain_config.clone()), account_index);
 
-                let res = signer.sign_tx(ptx, account.key_chain(), db_tx)?;
+                let res = signer.sign_tx(ptx, account.key_chain(), db_tx, next_block_height)?;
                 Ok(res)
             },
         )
@@ -2472,7 +2493,7 @@ where
 }
 
 fn to_token_additional_info(token_info: &UnconfirmedTokenInfo) -> TxAdditionalInfo {
-    TxAdditionalInfo::with_token_info(
+    TxAdditionalInfo::new().with_token_info(
         token_info.token_id(),
         TokenAdditionalInfo {
             num_decimals: token_info.num_decimals(),

@@ -16,12 +16,14 @@
 use std::{num::NonZeroU8, sync::Arc};
 
 use itertools::izip;
+use rstest::rstest;
 
 use common::{
     chain::{
+        self,
         block::timestamp::BlockTimestamp,
         classic_multisig::ClassicMultisigChallenge,
-        config::create_regtest,
+        config::ChainType,
         htlc::HashedTimelockContract,
         output_value::OutputValue,
         signature::{
@@ -38,8 +40,9 @@ use common::{
             IsTokenUnfreezable, Metadata, NftIssuance, NftIssuanceV0, TokenId, TokenIssuance,
             TokenIssuanceV1,
         },
-        AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, DelegationId, Destination,
-        OrderData, OrderId, OutPointSourceId, PoolId, Transaction, TxInput, TxOutput,
+        AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, ChainstateUpgradeBuilder,
+        DelegationId, Destination, NetUpgrades, OrderData, OrderId, OutPointSourceId, PoolId,
+        SighashInputCommitmentVersion, Transaction, TxInput, TxOutput,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, H256},
 };
@@ -47,11 +50,15 @@ use crypto::{
     key::{secp256k1::Secp256k1PublicKey, PublicKey, Signature},
     vrf::VRFPrivateKey,
 };
+use randomness::Rng as _;
 use serialization::{extras::non_empty_vec::DataOrNoVec, Encode as _};
+use test_utils::random::{make_seedable_rng, Seed};
 use wallet_storage::{DefaultBackend, Store, Transactional};
 use wallet_types::{
-    account_info::DEFAULT_ACCOUNT_INDEX, partially_signed_transaction::TxAdditionalInfo,
-    seed_phrase::StoreSeedPhrase, KeyPurpose,
+    account_info::DEFAULT_ACCOUNT_INDEX,
+    partially_signed_transaction::{OrderAdditionalInfo, TokenAdditionalInfo, TxAdditionalInfo},
+    seed_phrase::StoreSeedPhrase,
+    KeyPurpose,
 };
 
 use crate::{
@@ -61,9 +68,40 @@ use crate::{
 };
 
 // Verify some signatures produced on a Trezor.
-#[test]
-fn fixed_trezor_signatures() {
-    let chain_config = Arc::new(create_regtest());
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn fixed_trezor_signatures(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let sighash_input_commitment_version_fork_height = BlockHeight::new(rng.gen_range(1..100_000));
+    // The height shouldn't matter as long as it's below the fork.
+    // FIXME: need a separate "fixed signature" test with the height above the fork.
+    let block_height_for_input_commitments =
+        BlockHeight::new(rng.gen_range(0..sighash_input_commitment_version_fork_height.into_int()));
+
+    let chain_config = Arc::new(
+        chain::config::Builder::new(ChainType::Regtest)
+            .chainstate_upgrades(
+                NetUpgrades::initialize(vec![
+                    (
+                        BlockHeight::zero(),
+                        ChainstateUpgradeBuilder::latest()
+                            .sighash_input_commitment_version(SighashInputCommitmentVersion::V0)
+                            .build(),
+                    ),
+                    (
+                        sighash_input_commitment_version_fork_height,
+                        ChainstateUpgradeBuilder::latest()
+                            .sighash_input_commitment_version(SighashInputCommitmentVersion::V1)
+                            .build(),
+                    ),
+                ])
+                .unwrap(),
+            )
+            .build(),
+    );
+
     let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
     let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
 
@@ -130,10 +168,22 @@ fn fixed_trezor_signatures() {
     let order_id = OrderId::new(H256::zero());
     let pool_id = PoolId::new(H256::zero());
 
+    let token_info = TokenAdditionalInfo {
+        num_decimals: 11,
+        ticker: vec![1, 2, 3],
+    };
+    let order_info = OrderAdditionalInfo {
+        initially_asked: OutputValue::TokenV1(token_id, Amount::from_atoms(10)),
+        initially_given: OutputValue::Coin(Amount::from_atoms(20)),
+        ask_balance: Amount::from_atoms(5),
+        give_balance: Amount::from_atoms(10),
+    };
+
     let uri = "http://uri.com".as_bytes().to_vec();
 
     let wallet_dest0 = Destination::PublicKeyHash((&wallet_pk0).into());
 
+    // FIXME add ProduceBlockFromStake to inputs
     let utxos = [TxOutput::Transfer(OutputValue::Coin(amount_1), wallet_dest0.clone())];
 
     let inputs = [TxInput::from_utxo(
@@ -179,6 +229,7 @@ fn fixed_trezor_signatures() {
             AccountNonce::new(0),
             AccountCommand::ChangeTokenMetadataUri(token_id, uri.clone()),
         ),
+        // FIXME add new order commands
     ];
     let acc_dests: Vec<Destination> = vec![wallet_dest0.clone(); acc_inputs.len()];
 
@@ -279,15 +330,10 @@ fn fixed_trezor_signatures() {
         .with_inputs_and_destinations(acc_inputs.into_iter().zip(acc_dests.clone()))
         .with_outputs(outputs);
     let destinations = req.destinations().to_vec();
-    let additional_info = TxAdditionalInfo::new();
+    let additional_info = TxAdditionalInfo::new()
+        .with_order_info(order_id, order_info)
+        .with_token_info(token_id, token_info);
     let ptx = req.into_partially_signed_tx(additional_info).unwrap();
-
-    let utxos_ref = utxos
-        .iter()
-        .map(Some)
-        .chain([Some(&multisig_utxo)])
-        .chain(acc_dests.iter().map(|_| None))
-        .collect::<Vec<_>>();
 
     let multisig_signatures = [
         (0, "7a99714dc6cc917faa2afded8028159a5048caf6f8382f67e6b61623fbe62c60423f8f7983f88f40c6f42924594f3de492a232e9e703b241c3b17b130f8daa59"),
@@ -316,17 +362,28 @@ fn fixed_trezor_signatures() {
 
     let mut sigs = vec![Some(InputWitness::Standard(sig)); ptx.count_inputs()];
     sigs[1] = Some(InputWitness::Standard(multisig_sig));
-    let ptx = ptx.with_witnesses(sigs);
+    let ptx = ptx.with_witnesses(sigs).unwrap();
 
     assert!(ptx.all_signatures_available());
+
+    let input_commitments = ptx
+        .make_sighash_input_commitments(&chain_config, block_height_for_input_commitments)
+        .unwrap();
+    let all_utxos = utxos
+        .iter()
+        .map(Some)
+        .chain([Some(&multisig_utxo)])
+        .chain(acc_dests.iter().map(|_| None))
+        .collect::<Vec<_>>();
 
     for (i, dest) in destinations.iter().enumerate() {
         tx_verifier::input_check::signature_only_check::verify_tx_signature(
             &chain_config,
             dest,
             &ptx,
-            &utxos_ref,
+            &input_commitments,
             i,
+            all_utxos[i].cloned(),
         )
         .unwrap();
     }

@@ -58,8 +58,9 @@ use super::{
     output_value::OutputValue, stakelock::StakePoolData, ChainstateUpgrade,
     ChangeTokenMetadataUriActivated, ConsensusUpgrade, DataDepositFeeVersion, DestinationTag,
     FrozenTokensValidationVersion, HtlcActivated, OrdersActivated, OrdersVersion,
-    RequiredConsensus, RewardDistributionVersion, StakerDestinationUpdateForbidden,
-    TokenIdGenerationVersion, TokenIssuanceVersion, TokensFeeVersion,
+    RequiredConsensus, RewardDistributionVersion, SighashInputCommitmentVersion,
+    StakerDestinationUpdateForbidden, TokenIdGenerationVersion, TokenIssuanceVersion,
+    TokensFeeVersion,
 };
 
 use self::{
@@ -919,6 +920,7 @@ pub fn create_unit_test_config_builder() -> Builder {
                     OrdersVersion::V1,
                     StakerDestinationUpdateForbidden::Yes,
                     TokenIdGenerationVersion::V1,
+                    SighashInputCommitmentVersion::V1,
                 ),
             )])
             .expect("cannot fail"),

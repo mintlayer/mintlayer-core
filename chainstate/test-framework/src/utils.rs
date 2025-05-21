@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
+
 use crate::{
     framework::BlockOutputs, key_manager::KeyManager,
     signature_destination_getter::SignatureDestinationGetter, TestFramework,
@@ -27,12 +29,18 @@ use common::{
         output_value::OutputValue,
         signature::{
             inputsig::{standard_signature::StandardInputSignature, InputWitness},
-            sighash::sighashtype::SigHashType,
+            sighash::{
+                self,
+                input_commitment::{
+                    make_sighash_input_commitments_for_transaction_inputs, SighashInputCommitment,
+                },
+                sighashtype::SigHashType,
+            },
         },
         stakelock::StakePoolData,
         Block, ChainConfig, CoinUnit, ConsensusUpgrade, Destination, GenBlock, Genesis,
-        NetUpgrades, OutPointSourceId, PoSChainConfig, PoSChainConfigBuilder, PoolId, TxInput,
-        TxOutput, UtxoOutPoint,
+        NetUpgrades, OrderId, OutPointSourceId, PoSChainConfig, PoSChainConfigBuilder, PoolId,
+        TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Compact, Id, Idable, H256},
     Uint256,
@@ -42,6 +50,7 @@ use crypto::{
     key::{KeyKind, PrivateKey, PublicKey},
     vrf::{VRFPrivateKey, VRFPublicKey},
 };
+use orders_accounting::OrdersAccountingView;
 use pos_accounting::{PoSAccountingDB, PoSAccountingView};
 use randomness::{CryptoRng, Rng};
 use utxo::UtxosView;
@@ -267,7 +276,9 @@ pub fn produce_kernel_signature(
         SigHashType::default(),
         staking_destination,
         &block_reward_tx,
-        std::iter::once(Some(&utxo)).collect::<Vec<_>>().as_slice(),
+        std::iter::once(SighashInputCommitment::Utxo(Cow::Borrowed(&utxo)))
+            .collect::<Vec<_>>()
+            .as_slice(),
         0,
         rng,
     )
@@ -363,7 +374,10 @@ pub fn sign_witnesses(
     chain_config: &ChainConfig,
     tx: &common::chain::Transaction,
     utxo_view: &impl UtxosView,
+    pos_accounting_view: &impl PoSAccountingView<Error = pos_accounting::Error>,
+    order_accounting_view: &impl OrdersAccountingView<Error = orders_accounting::Error>,
     destination_getter: SignatureDestinationGetter,
+    block_height: BlockHeight,
 ) -> Vec<InputWitness> {
     let inputs_utxos = tx
         .inputs()
@@ -377,7 +391,15 @@ pub fn sign_witnesses(
             | TxInput::OrderAccountCommand(..) => None,
         })
         .collect::<Vec<_>>();
-    let input_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
+    let input_commitments = make_sighash_input_commitments_for_transaction_inputs(
+        tx.inputs(),
+        &sighash::input_commitment::TrivialUtxoProvider(&inputs_utxos),
+        &SighashInputCommitmentInfoProvider(&pos_accounting_view),
+        &SighashInputCommitmentInfoProvider(&order_accounting_view),
+        chain_config,
+        block_height,
+    )
+    .unwrap();
 
     let witnesses = tx
         .inputs()
@@ -386,7 +408,7 @@ pub fn sign_witnesses(
         .map(|(idx, input)| {
             let dest = destination_getter.call(input).unwrap();
             key_manager
-                .get_signature(rng, &dest, chain_config, tx, &input_utxos_refs, idx)
+                .get_signature(rng, &dest, chain_config, tx, &input_commitments, idx)
                 .unwrap()
         })
         .collect();
@@ -464,4 +486,64 @@ pub fn create_custom_genesis_with_stake_pool(
         BlockTimestamp::from_int_seconds(1685025323),
         vec![mint_output, initial_pool],
     )
+}
+
+pub struct SighashInputCommitmentInfoProvider<'a, T>(pub &'a T);
+
+impl<'a, UV> sighash::input_commitment::UtxoProvider<'static>
+    for SighashInputCommitmentInfoProvider<'a, UV>
+where
+    UV: UtxosView,
+{
+    type Error = std::convert::Infallible;
+
+    fn get_utxo(
+        &self,
+        _tx_input_index: usize,
+        outpoint: &UtxoOutPoint,
+    ) -> Result<Option<Cow<'static, TxOutput>>, Self::Error> {
+        Ok(self.0.utxo(outpoint).unwrap().map(|utxo| Cow::Owned(utxo.take_output())))
+    }
+}
+
+impl<'a, AV> sighash::input_commitment::PoolInfoProvider
+    for SighashInputCommitmentInfoProvider<'a, AV>
+where
+    AV: pos_accounting::PoSAccountingView,
+{
+    type Error = std::convert::Infallible;
+
+    fn get_pool_info(
+        &self,
+        pool_id: &PoolId,
+    ) -> Result<Option<sighash::input_commitment::PoolInfo>, Self::Error> {
+        Ok(self.0.get_pool_data(*pool_id).unwrap().map(|pool_data| {
+            let staker_balance = pool_data.staker_balance().unwrap();
+            sighash::input_commitment::PoolInfo { staker_balance }
+        }))
+    }
+}
+
+impl<'a, OV> sighash::input_commitment::OrderInfoProvider
+    for SighashInputCommitmentInfoProvider<'a, OV>
+where
+    OV: orders_accounting::OrdersAccountingView,
+{
+    type Error = std::convert::Infallible;
+
+    fn get_order_info(
+        &self,
+        order_id: &OrderId,
+    ) -> Result<Option<sighash::input_commitment::OrderInfo>, Self::Error> {
+        Ok(self.0.get_order_data(order_id).unwrap().map(|order_data| {
+            let ask_balance = self.0.get_ask_balance(order_id).unwrap();
+            let give_balance = self.0.get_give_balance(order_id).unwrap();
+            sighash::input_commitment::OrderInfo {
+                initially_asked: order_data.ask().clone(),
+                initially_given: order_data.give().clone(),
+                ask_balance,
+                give_balance,
+            }
+        }))
+    }
 }

@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
+
 use api_web_server::api::json_helpers::amount_to_json;
 use common::{
     chain::{
@@ -167,7 +169,12 @@ async fn ok_tokens(#[case] seed: Seed) {
                         SigHashType::all(),
                         alice_destination.clone(),
                         &mint_transaction,
-                        &[Some(&issue_token_transaction.outputs()[0]), None],
+                        &[
+                            SighashInputCommitment::Utxo(Cow::Borrowed(
+                                &issue_token_transaction.outputs()[0],
+                            )),
+                            SighashInputCommitment::None,
+                        ],
                         1,
                         &mut rng,
                     )
