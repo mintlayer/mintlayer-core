@@ -1,7 +1,10 @@
 {
   "compilerOptions": {
     "target": "es2022",
-    "module": "es2022",
-    "sourceMap": true
+    "module": "nodenext",
+    "sourceMap": true,
+    "outDir": "./dist",
+    "noUnusedLocals": true,
+    "strict": true
   }
 }

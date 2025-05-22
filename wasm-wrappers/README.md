@@ -35,7 +35,7 @@ In the wasm Cargo.toml directory, run:
 tsc --project js-bindings-test/tsconfig.json
 ```
 
-### Running the tests in a web browser
+### Run the tests in a web browser
 
 To build the wasm package from the crate, run (in the wasm Cargo.toml directory):
 
@@ -43,13 +43,13 @@ To build the wasm package from the crate, run (in the wasm Cargo.toml directory)
 wasm-pack build --target web
 ```
 
-To test the wasm binary. First, install `http-server` web server (feel free to use any other web-server of your choosing):
+To test the wasm binary, first install `http-server` web server (feel free to use any other web-server of your choosing):
 
 ```
 cargo install http-server
 ```
 
-Then run the http server, and then choose the file `js-bindings-test/index.html`:
+Then run the http server:
 
 ```
 http-server --port 8080
@@ -61,9 +61,9 @@ If you're using a remote server, either tunnel to port 8080, or expose that port
 http-server --port 8080 --host 0.0.0.0
 ```
 
-The ported wasm functions are exported to the file `js-bindings-test/index.js` and used in the file `js-bindings-test/index.html` with a basic test/example in them using JavaScript. Use your browser's console to see the output.
+To run test tests, choose the file `js-bindings-test/index.html` in the browser. Use browser's console to see the output.
 
-### Running the tests in Node.js
+### Run the tests in Node.js
 
 To build the wasm package from the crate, run (in the wasm Cargo.toml directory):
 
@@ -71,11 +71,30 @@ To build the wasm package from the crate, run (in the wasm Cargo.toml directory)
 wasm-pack build --target nodejs
 ```
 
-Finally, to run the example, run:
+Finally, to run the tests, run:
 
 ```
 node --enable-source-maps  js-bindings-test/node-entry.js
 ```
+
+### Run `knip`
+
+We use `knip` to make sure that there are no unused exports in `js-bindings-test/tests` (which could
+mean that some of the tests are never run).
+
+**Note: unused local definitions are caught by the TypeScript compiler itself, via the `noUnusedLocals` setting.**
+
+To run `knip` locally, first install it:
+```
+npm install -g knip
+```
+
+And then run (in the wasm Cargo.toml directory):
+```
+(cd js-bindings-test && npx knip)
+```
+
+**Note: to explicitly exclude an export from `knip`'s report, annotate it with `/** @public */`.**
 
 ### Further documentation on wasm
 

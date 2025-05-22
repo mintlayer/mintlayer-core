@@ -34,7 +34,8 @@ COMMON_EXCLUDE_DIRS = [
     '.git',
     'build-tools/docker/example-mainnet/mintlayer-data',
     'build-tools/docker/example-mainnet-dns-server/mintlayer-data',
-    'wasm-wrappers/pkg'
+    'wasm-wrappers/pkg',
+    'wasm-wrappers/js-bindings-test/dist',
 ]
 
 
@@ -325,7 +326,6 @@ def check_files_end_with_newline():
     # list of files exempted from checks
     exempted_files = [
         'wasm-wrappers/doc/*',
-        'wasm-wrappers/js-bindings-test/test.js',
     ]
 
     ok = True

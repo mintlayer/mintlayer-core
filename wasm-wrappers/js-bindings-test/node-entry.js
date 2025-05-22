@@ -1,7 +1,7 @@
-import { run_test } from "./test.js";
+import { run_all_tests } from "./dist/main.js";
 
 async function node_run() {
-  await run_test();
+  await run_all_tests();
 }
 
 node_run();

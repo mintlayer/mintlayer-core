@@ -35,8 +35,8 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: ${{ matrix.node-version }}
-      - name: Install TypeScript
-        run: npm install typescript
+      - name: Install TypeScript & Knip
+        run: npm install typescript knip
       - name: Install wasm-pack
         run: cargo install wasm-pack
       - name: Build the wasm module
@@ -48,6 +48,9 @@ jobs:
       - name: Run the tests
         working-directory: ./wasm-wrappers
         run: node --enable-source-maps js-bindings-test/node-entry.js
+      - name: Run Knip
+        working-directory: ./wasm-wrappers/js-bindings-test
+        run: npx knip
 
   wasm_artifacts:
     runs-on: ubuntu-latest
