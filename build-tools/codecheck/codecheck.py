@@ -325,6 +325,7 @@ def check_files_end_with_newline():
     # list of files exempted from checks
     exempted_files = [
         'wasm-wrappers/doc/*',
+        'wasm-wrappers/js-bindings-test/test.js',
     ]
 
     ok = True

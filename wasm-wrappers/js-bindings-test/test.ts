@@ -69,7 +69,9 @@ import {
 
 // Taken from TESTNET_FORK_HEIGHT_5_ORDERS_V1 in common/src/chain/config/builder.rs.
 // This will be updated to the actual height after we choose one.
-const ORDERS_V1_TESTNET_FORK_HEIGHT = 999999999;
+const ORDERS_V1_TESTNET_FORK_HEIGHT = 999_999_999;
+
+const TEXT_ENCODER = new TextEncoder();
 
 function assert_eq_arrays(arr1, arr2) {
   const equal = arr1.length == arr2.length && arr1.every((value, index) => value == arr2[index]);
@@ -95,7 +97,7 @@ export async function run_test() {
   console.log(`priv key = ${priv_key}`);
   const pub_key = public_key_from_private_key(priv_key);
   console.log(`pub key = ${pub_key}`);
-  const message = "Hello, world!";
+  const message = TEXT_ENCODER.encode("Hello, world!");
   const signature = sign_message_for_spending(priv_key, message);
   console.log(`signature = ${signature}`);
   const verified = verify_signature_for_spending(pub_key, signature, message);
@@ -106,14 +108,14 @@ export async function run_test() {
   const verified_bad = verify_signature_for_spending(
     pub_key,
     signature,
-    "bro!"
+    TEXT_ENCODER.encode("bro!")
   );
   if (verified_bad) {
     throw new Error("Invalid message signature verification passed!");
   }
 
   // Attempt to use a bad private key to get a public key (test returned Result<> object, which will become a string error)
-  const bad_priv_key = "bad";
+  const bad_priv_key = TEXT_ENCODER.encode("bad");
   try {
     public_key_from_private_key(bad_priv_key);
     throw new Error("Invalid private key worked somehow!");
@@ -268,17 +270,18 @@ export async function run_test() {
 
   {
     const lock_for_blocks = staking_pool_spend_maturity_block_count(
-      BigInt(1000)
+      BigInt(1000),
+      Network.Mainnet
     );
     console.log(`lock for blocks ${lock_for_blocks}`);
-    if (lock_for_blocks != 7200) {
+    if (lock_for_blocks != BigInt(7200)) {
       throw new Error("Incorrect lock for blocks");
     }
   }
 
   {
     try {
-      encode_input_for_utxo("asd", 1);
+      encode_input_for_utxo(TEXT_ENCODER.encode("asd"), 1);
       throw new Error("Invalid outpoint encoding worked somehow!");
     } catch (e) {
       if (!e.includes("Invalid outpoint ID encoding")) {
@@ -322,7 +325,7 @@ export async function run_test() {
     assert_eq_arrays(inputs, expected_inputs);
 
     try {
-      get_token_id([], BigInt(1), Network.Testnet);
+      get_token_id(new Uint8Array(), BigInt(1), Network.Testnet);
       throw "Token Id generated without a UTXO input somehow!";
     } catch (e) {
       if (!(e.includes("No UTXO inputs for token id creation") ||
@@ -335,7 +338,7 @@ export async function run_test() {
     {
       const expected_token_id =
         "tmltk13cncdptay55g9ajhrkaw0fp46r0tspq9kptul8vj2q7yvd69n4zsl24gea";
-      const token_id = get_token_id(inputs, BigInt(1), Network.Testnet);
+      const token_id = get_token_id(Uint8Array.from(inputs), BigInt(1), Network.Testnet);
       console.log(token_id);
 
       if (token_id != expected_token_id) {
@@ -398,7 +401,7 @@ export async function run_test() {
     const address = "tmt1q9dn5m4svn8sds3fcy09kpxrefnu75xekgr5wa3n";
 
     try {
-      const invalid_lock = "invalid lock";
+      const invalid_lock = TEXT_ENCODER.encode("invalid lock");
       encode_output_lock_then_transfer(
         Amount.from_atoms("100"),
         address,
@@ -414,7 +417,7 @@ export async function run_test() {
     }
 
     try {
-      const invalid_lock = "invalid lock";
+      const invalid_lock = TEXT_ENCODER.encode("invalid lock");
       encode_output_token_lock_then_transfer(
         Amount.from_atoms("100"),
         address,
@@ -598,7 +601,7 @@ export async function run_test() {
       "nft",
       "XXX",
       "desc",
-      "1234",
+      Uint8Array.from([1, 2, 3, 4]),
       receiving_pubkey,
       "http://uri",
       "http://icon",
@@ -632,7 +635,7 @@ export async function run_test() {
         "nft",
         "XXX",
         "desc",
-        "12345",
+        Uint8Array.from([1, 2, 3, 4, 5]),
         undefined,
         undefined,
         undefined,
@@ -649,14 +652,14 @@ export async function run_test() {
     }
 
     try {
-      const creator_public_key_hash = address;
+      const creator_public_key_hash = Uint8Array.from([1, 2, 3, 4, 5]);
       encode_output_issue_nft(
         token_id,
         address,
         "nft",
         "XXX",
         "desc",
-        "123",
+        Uint8Array.from([1, 2, 3]),
         creator_public_key_hash,
         undefined,
         undefined,
@@ -680,7 +683,7 @@ export async function run_test() {
         "nft",
         empty_ticker,
         "desc",
-        "123",
+        Uint8Array.from([1, 2, 3]),
         undefined,
         undefined,
         undefined,
@@ -704,7 +707,7 @@ export async function run_test() {
         empty_name,
         "xxx",
         "desc",
-        "123",
+        Uint8Array.from([1, 2, 3]),
         undefined,
         undefined,
         undefined,
@@ -728,7 +731,7 @@ export async function run_test() {
         "name",
         "XXX",
         empty_description,
-        "123",
+        Uint8Array.from([1, 2, 3]),
         undefined,
         undefined,
         undefined,
@@ -747,7 +750,7 @@ export async function run_test() {
     const pool_id =
       "tpool1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqza035u";
     try {
-      const invalid_pool_data = "invalid pool data";
+      const invalid_pool_data = TEXT_ENCODER.encode("invalid pool data");
       encode_output_create_stake_pool(
         pool_id,
         invalid_pool_data,
@@ -1077,8 +1080,8 @@ export async function run_test() {
     }
 
     try {
-      const invalid_inputs = "invalid inputs";
-      encode_transaction(invalid_inputs, outputs, BigInt(0));
+      const invalid_inputs = TEXT_ENCODER.encode("invalid inputs");
+      encode_transaction(invalid_inputs, Uint8Array.from(outputs), BigInt(0));
       throw new Error("Invalid inputs worked somehow!");
     } catch (e) {
       if (!e.includes("Invalid transaction input encoding")) {
@@ -1088,8 +1091,8 @@ export async function run_test() {
     }
 
     try {
-      const invalid_outputs = "invalid outputs";
-      encode_transaction(inputs, invalid_outputs, BigInt(0));
+      const invalid_outputs = TEXT_ENCODER.encode("invalid outputs");
+      encode_transaction(Uint8Array.from(inputs), invalid_outputs, BigInt(0));
       throw new Error("Invalid outputs worked somehow!");
     } catch (e) {
       if (!e.includes("Invalid transaction output encoding")) {
@@ -1098,7 +1101,7 @@ export async function run_test() {
       console.log("Tested invalid outputs successfully");
     }
 
-    const tx = encode_transaction(inputs, outputs, BigInt(0));
+    const tx = encode_transaction(Uint8Array.from(inputs), Uint8Array.from(outputs), BigInt(0));
     const expected_tx = [
       1, 0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 4, 0, 0, 0, 0, 0, 0, 0,
@@ -1123,13 +1126,13 @@ export async function run_test() {
     const opt_utxos = [1, ...output, 1, ...stake_pool_output];
 
     try {
-      const invalid_private_key = "invalid private key";
+      const invalid_private_key = TEXT_ENCODER.encode("invalid private key");
       encode_witness(
         SignatureHashType.ALL,
         invalid_private_key,
         address,
         tx,
-        opt_utxos,
+        Uint8Array.from(opt_utxos),
         0,
         Network.Testnet
       );
@@ -1147,7 +1150,7 @@ export async function run_test() {
         receiving_privkey,
         invalid_address,
         tx,
-        opt_utxos,
+        Uint8Array.from(opt_utxos),
         0,
         Network.Testnet
       );
@@ -1159,13 +1162,13 @@ export async function run_test() {
       console.log("Tested invalid address in encode witness successfully");
     }
     try {
-      const invalid_tx = "invalid tx";
+      const invalid_tx = TEXT_ENCODER.encode("invalid tx");
       encode_witness(
         SignatureHashType.ALL,
         receiving_privkey,
         address,
         invalid_tx,
-        opt_utxos,
+        Uint8Array.from(opt_utxos),
         0,
         Network.Testnet
       );
@@ -1177,11 +1180,7 @@ export async function run_test() {
       console.log("Tested invalid transaction in encode witness successfully");
     }
     try {
-      // Note: if "invalid utxos" were passed to `encode_witness` directly (i.e. as a string instead
-      // of an array), the `inputs: &[u8]` parameter of `encode_witness` would contain 13 zeroes,
-      // which would be parsed as 13 `Option::None` and the error would be about an incorrect witness
-      // count.
-      const invalid_utxos = [...Buffer.from("invalid utxos")]
+      const invalid_utxos = TEXT_ENCODER.encode("invalid utxos");
       encode_witness(
         SignatureHashType.ALL,
         receiving_privkey,
@@ -1193,13 +1192,13 @@ export async function run_test() {
       );
       throw new Error("Invalid utxo worked somehow!");
     } catch (e) {
-      if (!e.includes("Invalid transaction input encoding")) {
+      if (!e.includes("Invalid transaction input utxo encoding")) {
         throw e;
       }
       console.log("Tested invalid utxo in encode witness successfully");
     }
     try {
-      const invalid_utxos_count = [0];
+      const invalid_utxos_count = Uint8Array.from([0]);
       encode_witness(
         SignatureHashType.ALL,
         receiving_privkey,
@@ -1223,7 +1222,7 @@ export async function run_test() {
         receiving_privkey,
         address,
         tx,
-        opt_utxos,
+        Uint8Array.from(opt_utxos),
         invalid_input_idx,
         Network.Testnet
       );
@@ -1240,7 +1239,7 @@ export async function run_test() {
       receiving_privkey,
       address,
       tx,
-      opt_utxos,
+      Uint8Array.from(opt_utxos),
       0,
       Network.Testnet
     );
@@ -1257,7 +1256,7 @@ export async function run_test() {
     ];
 
     try {
-      const invalid_witnesses = "invalid witnesses";
+      const invalid_witnesses = TEXT_ENCODER.encode("invalid witnesses");
       encode_signed_transaction(tx, invalid_witnesses);
       throw new Error("Invalid witnesses worked somehow!");
     } catch (e) {
@@ -1282,7 +1281,7 @@ export async function run_test() {
     }
 
     try {
-      const invalid_tx = "invalid tx";
+      const invalid_tx = TEXT_ENCODER.encode("invalid tx");
       encode_signed_transaction(invalid_tx, witness);
       throw new Error("Invalid transaction worked somehow!");
     } catch (e) {
@@ -1293,7 +1292,7 @@ export async function run_test() {
     }
 
     let witnesses = [...random_witness2, ...random_witness2];
-    const signed_tx = encode_signed_transaction(tx, witnesses);
+    const signed_tx = encode_signed_transaction(tx, Uint8Array.from(witnesses));
     const expected_signed_tx = [
       1, 0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 4, 0, 0, 0, 0, 0, 0, 0,
@@ -1323,16 +1322,16 @@ export async function run_test() {
     assert_eq_arrays(signed_tx, expected_signed_tx);
 
     const opt_htlc_utxos = [1, ...htlc_coins_output, 1, ...htlc_tokens_output];
-    const htlc_tx = encode_transaction(inputs, outputs, BigInt(0));
+    const htlc_tx = encode_transaction(Uint8Array.from(inputs), Uint8Array.from(outputs), BigInt(0));
     // encode witness with secret
     const witness_with_htlc_secret = encode_witness_htlc_secret(
       SignatureHashType.ALL,
       receiving_privkey,
       address,
       htlc_tx,
-      opt_htlc_utxos,
+      Uint8Array.from(opt_htlc_utxos),
       0,
-      secret,
+      Uint8Array.from(secret),
       Network.Testnet
     );
     console.log("Tested encode witness with htlc secret successfully");
@@ -1342,7 +1341,7 @@ export async function run_test() {
     const alice_pk = public_key_from_private_key(alice_sk);
     const bob_sk = make_private_key();
     const bob_pk = public_key_from_private_key(bob_sk);
-    let challenge = encode_multisig_challenge([...alice_pk, ...bob_pk], 2, Network.Testnet);
+    let challenge = encode_multisig_challenge(Uint8Array.from([...alice_pk, ...bob_pk]), 2, Network.Testnet);
     console.log("Tested multisig challenge successfully");
 
     // encode mutlisig witness
@@ -1353,7 +1352,7 @@ export async function run_test() {
       new Uint8Array([]),
       challenge,
       tx,
-      opt_htlc_utxos,
+      Uint8Array.from(opt_htlc_utxos),
       1,
       Network.Testnet
     );
@@ -1366,22 +1365,22 @@ export async function run_test() {
       witness_with_htlc_multisig_1,
       challenge,
       tx,
-      opt_htlc_utxos,
+      Uint8Array.from(opt_htlc_utxos),
       1,
       Network.Testnet
     );
     console.log("Tested encode multisig witness 1 successfully");
 
     // encode signed tx with secret and multi
-    const htlc_signed_tx = encode_signed_transaction(htlc_tx, [...witness_with_htlc_secret, ...witness_with_htlc_multisig]);
+    const htlc_signed_tx = encode_signed_transaction(htlc_tx, Uint8Array.from([...witness_with_htlc_secret, ...witness_with_htlc_multisig]));
     // extract secret from signed tx
     const secret_extracted = extract_htlc_secret(htlc_signed_tx, true, tx_outpoint, 1);
     assert_eq_arrays(secret, secret_extracted);
 
     const estimated_size = estimate_transaction_size(
-      inputs,
+      Uint8Array.from(inputs),
       [address, address],
-      outputs,
+      Uint8Array.from(outputs),
       Network.Testnet
     );
     if (estimated_size != expected_signed_tx.length) {
@@ -1487,7 +1486,7 @@ function test_get_transaction_id() {
     "35a7938c2a2aad5ae324e7d0536de245bf9e439169aa3c16f1492be117e5d0e0";
 
   {
-    const tx_id = get_transaction_id(tx_bin, true);
+    const tx_id = get_transaction_id(Uint8Array.from(tx_bin), true);
     if (tx_id != expected_tx_id) {
       throw new Error(
         `Decoded transaction id mismatch: ${tx_id} != ${expected_tx_id}`
@@ -1496,7 +1495,7 @@ function test_get_transaction_id() {
   }
 
   {
-    const tx_id = get_transaction_id(tx_bin, false);
+    const tx_id = get_transaction_id(Uint8Array.from(tx_bin), false);
     if (tx_id != expected_tx_id) {
       throw new Error(
         `Decoded transaction id mismatch: ${tx_id} != ${expected_tx_id}`
@@ -1505,7 +1504,7 @@ function test_get_transaction_id() {
   }
 
   {
-    const tx_id = get_transaction_id(tx_signed_bin, false);
+    const tx_id = get_transaction_id(Uint8Array.from(tx_signed_bin), false);
     if (tx_id != expected_tx_id) {
       throw new Error(
         `Decoded transaction id mismatch: ${tx_id} != ${expected_tx_id}`
@@ -1515,7 +1514,7 @@ function test_get_transaction_id() {
 
   {
     try {
-      get_transaction_id(tx_signed_bin, true);
+      get_transaction_id(Uint8Array.from(tx_signed_bin), true);
       throw new Error("Invalid witnesses worked somehow!");
     } catch (e) {
       if (!e.includes("Invalid transaction encoding")) {
@@ -1540,7 +1539,7 @@ function test_signed_transaction_intent() {
 
   const tx_id = "DFC2BB0CC4C7F3ED3FE682A48EE9F78BCD4962E55E7BC239BD340EC22AFF8657";
   const message = make_transaction_intent_message_to_sign("the intent", tx_id);
-  const expected_message = new TextEncoder().encode(
+  const expected_message = TEXT_ENCODER.encode(
     "<tx_id:dfc2bb0cc4c7f3ed3fe682a48ee9f78bcd4962e55e7bc239bd340ec22aff8657;intent:the intent>");
   assert_eq_arrays(message, expected_message);
 
@@ -1568,8 +1567,8 @@ function test_signed_transaction_intent() {
     const pubkey_addr2 = "rpmt1qgqqylj755w0rlejn3cjadtrhskkzyxqs9nq7mura3z467fkaam7ppxkjr77n7";
     const pubkeyhash_addr2 = "rmt1qx0y7ktusde6d4hf9474z28dwcsys3uk5qxphddl";
 
-    const signature1 = sign_challenge(prv_key1, message);
-    const signature2 = sign_challenge(prv_key2, message);
+    const signature1 = sign_challenge(Uint8Array.from(prv_key1), message);
+    const signature2 = sign_challenge(Uint8Array.from(prv_key2), message);
 
     const signed_intent = encode_signed_transaction_intent(message, [Array.from(signature1), Array.from(signature2)]);
 
@@ -1585,7 +1584,7 @@ function test_signed_transaction_intent() {
       }
     }
 
-    const bad_signature1 = sign_challenge(prv_key1, [...message, 123]);
+    const bad_signature1 = sign_challenge(Uint8Array.from(prv_key1), Uint8Array.from([...message, 123]));
     const bad_signed_intent = encode_signed_transaction_intent(message, [Array.from(bad_signature1), Array.from(signature2)]);
 
     try {

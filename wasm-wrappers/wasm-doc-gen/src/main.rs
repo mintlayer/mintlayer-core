@@ -214,24 +214,27 @@ fn write_to_stream<'a, D: Documentable>(
 
 fn write_docs_to_data_vec(
     docs_title: Option<impl AsRef<str>>,
-    library_file_path: impl AsRef<std::path::Path>,
+    library_file_paths: impl IntoIterator<Item = impl AsRef<std::path::Path>>,
 ) -> anyhow::Result<Vec<u8>> {
-    let file_to_doc = std::fs::read_to_string(library_file_path).expect("Source file not found");
-    let file_to_doc_contents = syn::parse_file(&file_to_doc).expect("Unable to parse file");
-
-    let fn_docs = FunctionData::pull_from_items(&file_to_doc_contents.items);
-    let enum_docs = EnumData::pull_from_items(&file_to_doc_contents.items);
-    let struct_docs = StructData::pull_from_items(&file_to_doc_contents.items);
-
     let mut expected_doc_file_data = Vec::new();
 
-    {
-        let mut stream: std::io::BufWriter<Box<dyn std::io::Write>> =
-            std::io::BufWriter::new(Box::new(&mut expected_doc_file_data));
+    for library_file_path in library_file_paths {
+        let file_to_doc =
+            std::fs::read_to_string(library_file_path).expect("Source file not found");
+        let file_to_doc_contents = syn::parse_file(&file_to_doc).expect("Unable to parse file");
 
-        write_to_stream(docs_title.as_ref(), fn_docs, &mut stream)?;
-        write_to_stream(docs_title.as_ref(), enum_docs, &mut stream)?;
-        write_to_stream(docs_title.as_ref(), struct_docs, &mut stream)?;
+        let fn_docs = FunctionData::pull_from_items(&file_to_doc_contents.items);
+        let enum_docs = EnumData::pull_from_items(&file_to_doc_contents.items);
+        let struct_docs = StructData::pull_from_items(&file_to_doc_contents.items);
+
+        {
+            let mut stream: std::io::BufWriter<Box<dyn std::io::Write>> =
+                std::io::BufWriter::new(Box::new(&mut expected_doc_file_data));
+
+            write_to_stream(docs_title.as_ref(), fn_docs, &mut stream)?;
+            write_to_stream(docs_title.as_ref(), enum_docs, &mut stream)?;
+            write_to_stream(docs_title.as_ref(), struct_docs, &mut stream)?;
+        }
     }
 
     Ok(expected_doc_file_data)
@@ -254,7 +257,15 @@ fn open_output_file(file_path: impl AsRef<std::path::Path>) -> anyhow::Result<st
 fn main() -> anyhow::Result<()> {
     let args = DocGenRunOptions::parse();
 
-    let generated_doc_data = write_docs_to_data_vec(args.doc_title, "wasm-wrappers/src/lib.rs")?;
+    let generated_doc_data = write_docs_to_data_vec(
+        args.doc_title,
+        [
+            "wasm-wrappers/src/lib.rs",
+            "wasm-wrappers/src/encode_input.rs",
+            "wasm-wrappers/src/encode_output.rs",
+            "wasm-wrappers/src/types.rs",
+        ],
+    )?;
 
     if args.check {
         if let Some(ref file_path) = args.output_file {
