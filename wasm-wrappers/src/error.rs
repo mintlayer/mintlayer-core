@@ -1,4 +1,4 @@
-// Copyright (c) 2023 RBB S.r.l
+// Copyright (c) 2021-2025 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -12,6 +12,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
+use wasm_bindgen::JsValue;
 
 use common::{
     address::AddressError,
@@ -31,8 +33,8 @@ use common::{
     size_estimation::SizeEstimationError,
 };
 use consensus::EffectivePoolBalanceError;
-use wasm_bindgen::JsValue;
 
+#[allow(clippy::enum_variant_names)]
 #[derive(thiserror::Error, Debug, Clone)]
 pub enum Error {
     #[error("Invalid private key encoding: {0}")]
@@ -58,6 +60,9 @@ pub enum Error {
 
     #[error("Invalid transaction input encoding: {0}")]
     InvalidInputEncoding(serialization::Error),
+
+    #[error("Invalid transaction input utxo encoding: {0}")]
+    InvalidInputUtxoEncoding(serialization::Error),
 
     #[error("Invalid transaction witness encoding: {0}")]
     InvalidWitnessEncoding(serialization::Error),
