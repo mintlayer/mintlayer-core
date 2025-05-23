@@ -67,11 +67,18 @@ export const OUTPUT_CREATE_STAKE_POOL = [
 export const OUTPUTS = [...OUTPUT_LOCK_THEN_TRANSFER, ...OUTPUT_CREATE_STAKE_POOL];
 
 export async function test_encode_other_outputs() {
-  run_one_test(predefined_outputs_test);
-  run_one_test(general_test);
+  run_one_test(create_stake_pool_test);
+  run_one_test(stake_pool_data_test);
+  run_one_test(coin_burn_test);
+  run_one_test(token_burn_test);
+  run_one_test(lock_then_transfer_test);
+  run_one_test(token_lock_then_transfer_test);
+  run_one_test(token_transfer_test);
+  run_one_test(issue_fungible_token_test);
+  run_one_test(issue_nft_test);
 }
 
-async function predefined_outputs_test() {
+async function create_stake_pool_test() {
   const vrf_public_key =
     "tvrfpk1qpk0t6np4gyl084fv328h6ahjvwcsaktrzfrs0xeqtrzpp0l7p28knrnn57";
 
@@ -128,7 +135,31 @@ async function predefined_outputs_test() {
   assert_eq_arrays(outputs, OUTPUTS);
 }
 
-export async function general_test() {
+async function stake_pool_data_test() {
+  const vrf_public_key =
+    "tvrfpk1qpk0t6np4gyl084fv328h6ahjvwcsaktrzfrs0xeqtrzpp0l7p28knrnn57";
+
+  try {
+    const invalid_margin_ratio_per_thousand = 2000;
+    encode_stake_pool_data(
+      Amount.from_atoms("40000"),
+      ADDRESS,
+      vrf_public_key,
+      ADDRESS,
+      invalid_margin_ratio_per_thousand,
+      Amount.from_atoms("0"),
+      Network.Testnet
+    );
+    throw new Error("Invalid margin_ratio_per_thousand worked somehow!");
+  } catch (e) {
+    if (!get_err_msg(e).includes("Invalid per thousand 2000, valid range is [0, 1000]")) {
+      throw e;
+    }
+    console.log("Tested invalid margin_ratio_per_thousand successfully");
+  }
+}
+
+async function coin_burn_test() {
   try {
     encode_output_coin_burn(Amount.from_atoms("invalid amount"));
     throw new Error("Invalid value for amount worked somehow!");
@@ -138,6 +169,9 @@ export async function general_test() {
     }
     console.log("Tested invalid amount successfully");
   }
+}
+
+async function token_burn_test() {
   try {
     encode_output_token_burn(
       Amount.from_atoms("invalid amount"),
@@ -177,7 +211,9 @@ export async function general_test() {
     196, 119, 145, 1,
   ];
   assert_eq_arrays(token_burn, expected_token_burn);
+}
 
+async function lock_then_transfer_test() {
   try {
     const invalid_lock = TEXT_ENCODER.encode("invalid lock");
     encode_output_lock_then_transfer(
@@ -193,7 +229,9 @@ export async function general_test() {
     }
     console.log("Tested invalid lock successfully");
   }
+}
 
+async function token_lock_then_transfer_test() {
   try {
     const invalid_lock = TEXT_ENCODER.encode("invalid lock");
     encode_output_token_lock_then_transfer(
@@ -245,7 +283,9 @@ export async function general_test() {
     4, 195, 202, 103, 207, 80, 217, 178, 0, 145, 1,
   ];
   assert_eq_arrays(token_lock_transfer_out, expected_token_lock_transfer_out);
+}
 
+async function token_transfer_test() {
   try {
     const invalid_address = "invalid address";
     encode_output_token_transfer(
@@ -296,29 +336,9 @@ export async function general_test() {
   ];
 
   assert_eq_arrays(token_transfer_out, expected_token_transfer_out);
+}
 
-  const vrf_public_key =
-    "tvrfpk1qpk0t6np4gyl084fv328h6ahjvwcsaktrzfrs0xeqtrzpp0l7p28knrnn57";
-
-  try {
-    const invalid_margin_ratio_per_thousand = 2000;
-    encode_stake_pool_data(
-      Amount.from_atoms("40000"),
-      ADDRESS,
-      vrf_public_key,
-      ADDRESS,
-      invalid_margin_ratio_per_thousand,
-      Amount.from_atoms("0"),
-      Network.Testnet
-    );
-    throw new Error("Invalid margin_ratio_per_thousand worked somehow!");
-  } catch (e) {
-    if (!get_err_msg(e).includes("Invalid per thousand 2000, valid range is [0, 1000]")) {
-      throw e;
-    }
-    console.log("Tested invalid margin_ratio_per_thousand successfully");
-  }
-
+async function issue_fungible_token_test() {
   let encoded_fungible_token = encode_output_issue_fungible_token(
     ADDRESS,
     "XXX",
@@ -340,7 +360,9 @@ export async function general_test() {
   ];
 
   assert_eq_arrays(encoded_fungible_token, expected_fungible_token);
+}
 
+async function issue_nft_test() {
   const account_pubkey = make_default_account_privkey(
     MNEMONIC,
     Network.Testnet
