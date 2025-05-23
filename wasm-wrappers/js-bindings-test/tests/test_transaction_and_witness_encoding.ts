@@ -33,12 +33,18 @@ import {
 
 import {
   MNEMONIC,
-  ADDRESS,
+} from "./defs.js";
+import {
+  ADDRESS
+} from "./test_address_generation.js";
+import {
   INPUTS,
+} from "./test_encode_other_inputs.js";
+import {
   OUTPUT_LOCK_THEN_TRANSFER,
   OUTPUT_CREATE_STAKE_POOL,
   OUTPUTS,
-} from "./defs.js";
+} from "./test_encode_other_outputs.js";
 
 export async function test_transaction_and_witness_encoding() {
   const account_pubkey = make_default_account_privkey(

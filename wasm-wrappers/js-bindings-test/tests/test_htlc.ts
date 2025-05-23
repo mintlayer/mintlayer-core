@@ -37,12 +37,18 @@ import {
 
 import {
   MNEMONIC,
-  ADDRESS,
   TOKEN_ID,
-  INPUTS,
-  OUTPUTS,
-  TX_OUTPOINT,
 } from "./defs.js";
+import {
+  ADDRESS
+} from "./test_address_generation.js";
+import {
+  INPUTS,
+  TX_OUTPOINT,
+} from "./test_encode_other_inputs.js";
+import {
+  OUTPUTS,
+} from "./test_encode_other_outputs.js";
 
 export async function test_htlc() {
   const account_pubkey = make_default_account_privkey(

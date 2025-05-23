@@ -29,9 +29,11 @@ import {
 
 import {
   ORDERS_V1_TESTNET_FORK_HEIGHT,
-  ADDRESS,
   TOKEN_ID,
 } from "./defs.js";
+import {
+  ADDRESS
+} from "./test_address_generation.js";
 
 export async function test_orders() {
   const order_output = encode_create_order_output(

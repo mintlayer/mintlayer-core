@@ -34,10 +34,40 @@ import {
 
 import {
   MNEMONIC,
-  test_predefined_address,
 } from "./defs.js";
 
+// Some address.
+// It corresponds to `make_receiving_address(make_default_account_privkey(MNEMONIC,Network.Testnet), 0)`,
+// but most tests don't care.
+export const ADDRESS = "tmt1q9dn5m4svn8sds3fcy09kpxrefnu75xekgr5wa3n";
+
 export async function test_address_generation() {
+  run_one_test(predefined_address_test);
+  run_one_test(general_test);
+}
+
+export async function predefined_address_test() {
+  const account_private_key = make_default_account_privkey(
+    MNEMONIC,
+    Network.Testnet
+  );
+  console.log(`acc private key = ${account_private_key}`);
+
+  const receiving_privkey = make_receiving_address(account_private_key, 0);
+  console.log(`receiving privkey = ${receiving_privkey}`);
+
+  const receiving_pubkey = public_key_from_private_key(receiving_privkey);
+  const address = pubkey_to_pubkeyhash_address(
+    receiving_pubkey,
+    Network.Testnet
+  );
+  console.log(`address = ${address}`);
+  if (address != ADDRESS) {
+    throw new Error("Incorrect address generated");
+  }
+}
+
+export async function general_test() {
   const bad_priv_key = TEXT_ENCODER.encode("bad");
 
   try {
@@ -123,6 +153,4 @@ export async function test_address_generation() {
       throw new Error("Incorrect address generated");
     }
   }
-
-  run_one_test(test_predefined_address);
 }

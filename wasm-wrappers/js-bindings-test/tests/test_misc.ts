@@ -39,8 +39,10 @@ import {
 import {
   get_predefined_prv_key,
   get_predefined_pub_key,
-  INPUTS,
 } from "./defs.js";
+import {
+  INPUTS,
+} from "./test_encode_other_inputs.js";
 
 export async function test_misc() {
   run_one_test(test_verify_signature_for_spending);

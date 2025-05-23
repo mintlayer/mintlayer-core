@@ -38,12 +38,42 @@ import {
 } from "./utils.js";
 
 import {
-  ADDRESS,
   TOKEN_ID,
-  test_encode_predefined_inputs,
 } from "./defs.js";
+import {
+  ADDRESS
+} from "./test_address_generation.js";
+
+// Some test inputs - a UTXO and a delegation withdrawal
+export const INPUTS = [
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4,
+];
+
+// OutpointSourceId used in INPUTS.
+export const TX_OUTPOINT = new Uint8Array(33).fill(0)
 
 export async function test_encode_other_inputs() {
+  run_one_test(predefined_inputs_test);
+  run_one_test(general_test);
+}
+
+async function predefined_inputs_test() {
+  const tx_input = encode_input_for_utxo(TX_OUTPOINT, 1);
+  const deleg_id =
+    "mdelg1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqut3aj8";
+  const tx_input2 = encode_input_for_withdraw_from_delegation(
+    deleg_id,
+    Amount.from_atoms("1"),
+    BigInt(1),
+    Network.Mainnet
+  );
+  const inputs = [...tx_input, ...tx_input2];
+  assert_eq_arrays(inputs, INPUTS);
+}
+
+export async function general_test() {
   try {
     encode_input_for_utxo(TEXT_ENCODER.encode("asd"), 1);
     throw new Error("Invalid outpoint encoding worked somehow!");
@@ -68,8 +98,6 @@ export async function test_encode_other_inputs() {
     }
     console.log("Tested invalid delegation id in account successfully");
   }
-
-  run_one_test(test_encode_predefined_inputs);
 
   const mint_tokens_input = encode_input_for_mint_tokens(
     TOKEN_ID,
