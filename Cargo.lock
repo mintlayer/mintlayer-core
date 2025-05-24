@@ -8996,6 +8996,7 @@ dependencies = [
 name = "wallet"
 version = "1.0.2"
 dependencies = [
+ "async-trait",
  "bip39",
  "chainstate",
  "chainstate-test-framework",
@@ -9003,6 +9004,7 @@ dependencies = [
  "consensus",
  "crypto",
  "ctor",
+ "futures",
  "hex",
  "itertools 0.14.0",
  "logging",
@@ -9021,6 +9023,7 @@ dependencies = [
  "tempfile",
  "test-utils",
  "thiserror",
+ "tokio",
  "trezor-client 0.1.4 (git+https://github.com/mintlayer/mintlayer-trezor-firmware?branch=mintlayer-master)",
  "tx-verifier",
  "utils",

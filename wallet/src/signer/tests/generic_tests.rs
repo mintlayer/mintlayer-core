@@ -50,7 +50,7 @@ use logging::log;
 use randomness::{CryptoRng, Rng};
 use serialization::extras::non_empty_vec::DataOrNoVec;
 use tx_verifier::error::{InputCheckErrorPayload, ScriptError};
-use wallet_storage::{DefaultBackend, Store, Transactional};
+use wallet_storage::{DefaultBackend, Store, TransactionRwUnlocked, Transactional};
 use wallet_types::{
     account_info::DEFAULT_ACCOUNT_INDEX,
     partially_signed_transaction::{OrderAdditionalInfo, TokenAdditionalInfo, TxAdditionalInfo},
@@ -62,7 +62,7 @@ use crate::{
     SendRequest,
 };
 
-pub fn test_sign_message<F, S>(rng: &mut (impl Rng + CryptoRng), make_signer: F)
+pub async fn test_sign_message<F, S>(rng: &mut (impl Rng + CryptoRng), make_signer: F)
 where
     F: Fn(Arc<ChainConfig>, U31) -> S,
     S: Signer,
@@ -93,12 +93,16 @@ where
         .unwrap();
     let standalone_pk_destination = Destination::PublicKey(standalone_pk);
 
+    db_tx.commit().unwrap();
+    let db_tx = db.local_rw_unlocked().read_only_store();
+
     for destination in [pkh_destination, pk_destination, standalone_pk_destination] {
         let mut signer = make_signer(chain_config.clone(), account.account_index());
 
         let message = vec![rng.gen::<u8>(), rng.gen::<u8>(), rng.gen::<u8>()];
         let res = signer
             .sign_challenge(&message, &destination, account.key_chain(), &db_tx)
+            .await
             .unwrap();
 
         let message_challenge = produce_message_challenge(&message);
@@ -119,12 +123,13 @@ where
             account.key_chain(),
             &db_tx,
         )
+        .await
         .unwrap_err();
 
     assert_eq!(err, SignerError::DestinationNotFromThisWallet);
 }
 
-pub fn test_sign_transaction_intent<F, S>(rng: &mut (impl Rng + CryptoRng), make_signer: F)
+pub async fn test_sign_transaction_intent<F, S>(rng: &mut (impl Rng + CryptoRng), make_signer: F)
 where
     F: Fn(Arc<ChainConfig>, U31) -> S,
     S: Signer,
@@ -187,6 +192,9 @@ where
     )
     .unwrap();
 
+    db_tx.commit().unwrap();
+    let db_tx = db.local_rw_unlocked().read_only_store();
+
     let intent: String = [rng.gen::<char>(), rng.gen::<char>(), rng.gen::<char>()].iter().collect();
     log::debug!("Generated intent: `{intent}`");
     let res = signer
@@ -197,6 +205,7 @@ where
             account.key_chain(),
             &db_tx,
         )
+        .await
         .unwrap();
 
     let expected_signed_message =
@@ -217,12 +226,13 @@ where
             account.key_chain(),
             &db_tx,
         )
+        .await
         .unwrap_err();
 
     assert_eq!(err, SignerError::DestinationNotFromThisWallet);
 }
 
-pub fn test_sign_transaction<F, S>(rng: &mut (impl Rng + CryptoRng), make_signer: F)
+pub async fn test_sign_transaction<F, S>(rng: &mut (impl Rng + CryptoRng), make_signer: F)
 where
     F: Fn(Arc<ChainConfig>, U31) -> S,
     S: Signer,
@@ -528,8 +538,11 @@ where
     ));
     let ptx = req.into_partially_signed_tx(additional_info).unwrap();
 
+    db_tx.commit().unwrap();
+    let db_tx = db.local_rw_unlocked().read_only_store();
+
     let mut signer = make_signer(chain_config.clone(), account.account_index());
-    let (ptx, _, _) = signer.sign_tx(ptx, account.key_chain(), &db_tx).unwrap();
+    let (ptx, _, _) = signer.sign_tx(ptx, account.key_chain(), &db_tx).await.unwrap();
 
     assert!(ptx.all_signatures_available());
 
@@ -574,7 +587,7 @@ where
 
     // fully sign the remaining key in the multisig address
     let mut signer = make_signer(chain_config.clone(), account2.account_index());
-    let (ptx, _, _) = signer.sign_tx(ptx, account2.key_chain(), &db_tx).unwrap();
+    let (ptx, _, _) = signer.sign_tx(ptx, account2.key_chain(), &db_tx).await.unwrap();
 
     assert!(ptx.all_signatures_available());
 
