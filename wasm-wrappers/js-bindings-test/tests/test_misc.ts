@@ -34,6 +34,7 @@ import {
   TEXT_ENCODER,
   run_one_test,
   get_err_msg,
+  gen_random_int,
 } from "./utils.js";
 
 import {
@@ -204,7 +205,7 @@ async function test_effective_pool_balance() {
 
   {
     // over capped
-    const over_capped = Math.floor(Math.random() * 4);
+    const over_capped = gen_random_int(0, 4, "over_capped");
     const capped = 6 + over_capped;
     const eff_bal = effective_pool_balance(
       Network.Mainnet,

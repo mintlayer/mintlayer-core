@@ -54,5 +54,10 @@ export const get_predefined_pub_key = (function () {
 })();
 
 // Some token id.
-export const TOKEN_ID =
-  "tmltk15tgfrs49rv88v8utcllqh0nvpaqtgvn26vdxhuner5m6ewg9c3msn9fxns";
+export const TOKEN_ID = "tmltk15tgfrs49rv88v8utcllqh0nvpaqtgvn26vdxhuner5m6ewg9c3msn9fxns";
+
+// Some pool id
+export const POOL_ID = "tpool1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqza035u";
+
+// Some order id
+export const ORDER_ID = "tordr1xxt0avjtt4flkq0tnlyphmdm4aaj9vmkx5r2m4g863nw3lgf7nzs7mlkqc";

@@ -24,10 +24,12 @@ import {
 
 import {
   assert_eq_arrays,
+  gen_random_int,
   get_err_msg,
 } from "./utils.js";
 
 import {
+  ORDER_ID,
   ORDERS_V1_TESTNET_FORK_HEIGHT,
   TOKEN_ID,
 } from "./defs.js";
@@ -76,14 +78,13 @@ export async function test_orders() {
   assert_eq_arrays(create_order_output_2, expected_create_order_output_2);
   console.log("create order tokens for coins encoding ok");
 
-  const order_id = "tordr1xxt0avjtt4flkq0tnlyphmdm4aaj9vmkx5r2m4g863nw3lgf7nzs7mlkqc";
   // Note: the exact heights don't matter as long as they are at the "correct side" of the fork.
-  const order_v0_height = Math.floor(Math.random() * ORDERS_V1_TESTNET_FORK_HEIGHT);
+  const order_v0_height = gen_random_int(0, ORDERS_V1_TESTNET_FORK_HEIGHT - 1, "order_v0_height");
   const order_v1_height = order_v0_height + ORDERS_V1_TESTNET_FORK_HEIGHT;
   // Note: the nonce is ignored since orders v1.
-  const order_v1_nonce = Math.floor(Math.random() * 1000000);
+  const order_v1_nonce = gen_random_int(0, 1000000, "order_v1_nonce");
   const fill_order_v0_input = encode_input_for_fill_order(
-    order_id,
+    ORDER_ID,
     Amount.from_atoms("40000"),
     ADDRESS,
     BigInt(1),
@@ -103,7 +104,7 @@ export async function test_orders() {
   console.log("fill order v0 encoding ok");
 
   const fill_order_v1_input = encode_input_for_fill_order(
-    order_id,
+    ORDER_ID,
     Amount.from_atoms("40000"),
     ADDRESS,
     BigInt(order_v1_nonce),
@@ -125,7 +126,7 @@ export async function test_orders() {
   console.log("fill order v1 encoding ok");
 
   const conclude_order_v0_input = encode_input_for_conclude_order(
-    order_id,
+    ORDER_ID,
     BigInt(1),
     BigInt(order_v0_height),
     Network.Testnet
@@ -142,7 +143,7 @@ export async function test_orders() {
   console.log("conclude order v0 encoding ok");
 
   const conclude_order_v1_input = encode_input_for_conclude_order(
-    order_id,
+    ORDER_ID,
     BigInt(order_v1_nonce),
     BigInt(order_v1_height),
     Network.Testnet
@@ -159,7 +160,7 @@ export async function test_orders() {
   console.log("conclude order v1 encoding ok");
 
   const freeze_order_input = encode_input_for_freeze_order(
-    order_id,
+    ORDER_ID,
     BigInt(order_v1_height),
     Network.Testnet
   );
@@ -176,7 +177,7 @@ export async function test_orders() {
 
   try {
     encode_input_for_freeze_order(
-      order_id,
+      ORDER_ID,
       BigInt(order_v0_height),
       Network.Testnet
     );

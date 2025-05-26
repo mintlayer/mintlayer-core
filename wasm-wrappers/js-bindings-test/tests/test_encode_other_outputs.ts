@@ -44,6 +44,7 @@ import {
 
 import {
   MNEMONIC,
+  POOL_ID,
   TOKEN_ID,
 } from "./defs.js";
 import { ADDRESS } from "./test_address_generation.js";
@@ -109,12 +110,10 @@ async function create_stake_pool_test() {
     Network.Testnet
   );
 
-  const pool_id =
-    "tpool1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqza035u";
   try {
     const invalid_pool_data = TEXT_ENCODER.encode("invalid pool data");
     encode_output_create_stake_pool(
-      pool_id,
+      POOL_ID,
       invalid_pool_data,
       Network.Testnet
     );
@@ -126,7 +125,7 @@ async function create_stake_pool_test() {
     console.log("Tested invalid pool data successfully");
   }
   const stake_pool_output = encode_output_create_stake_pool(
-    pool_id,
+    POOL_ID,
     pool_data,
     Network.Testnet
   );

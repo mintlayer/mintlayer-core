@@ -39,3 +39,13 @@ export function get_err_msg(error: unknown) {
   if (error instanceof Error) return error.message
   return String(error)
 }
+
+// Generate a random integer in the [min, max] interval and print in to the console.
+export function gen_random_int(min: number, max: number, description: string) {
+  const min_int = Math.ceil(min);
+  const max_int = Math.floor(max);
+  const result =  Math.floor(Math.random() * (max_int - min_int + 1) + min_int);
+  console.log(`Generated ${description}: ${result}`);
+
+  return result;
+}
