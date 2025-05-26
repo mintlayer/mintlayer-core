@@ -14,22 +14,22 @@
 // limitations under the License.
 
 import {
-  public_key_from_private_key,
+  extended_public_key_from_extended_private_key,
+  make_change_address,
+  make_change_address_public_key,
   make_default_account_privkey,
   make_receiving_address,
-  make_change_address,
-  pubkey_to_pubkeyhash_address,
   make_receiving_address_public_key,
-  make_change_address_public_key,
-  extended_public_key_from_extended_private_key,
   Network,
+  public_key_from_private_key,
+  pubkey_to_pubkeyhash_address,
 } from "../../pkg/wasm_wrappers.js";
 
 import {
-  TEXT_ENCODER,
   assert_eq_arrays,
-  run_one_test,
   get_err_msg,
+  run_one_test,
+  TEXT_ENCODER,
 } from "./utils.js";
 
 import {

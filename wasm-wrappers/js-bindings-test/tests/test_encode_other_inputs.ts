@@ -16,25 +16,25 @@
 // Here we test inputs encoding, except for orders and htlcs, which have their separate test files.
 
 import {
-  Network,
-  encode_input_for_utxo,
-  encode_input_for_withdraw_from_delegation,
-  encode_input_for_mint_tokens,
-  encode_input_for_unmint_tokens,
-  encode_input_for_lock_token_supply,
-  encode_input_for_freeze_token,
-  encode_input_for_unfreeze_token,
+  Amount,
   encode_input_for_change_token_authority,
   encode_input_for_change_token_metadata_uri,
-  Amount,
+  encode_input_for_freeze_token,
+  encode_input_for_lock_token_supply,
+  encode_input_for_mint_tokens,
+  encode_input_for_unfreeze_token,
+  encode_input_for_unmint_tokens,
+  encode_input_for_utxo,
+  encode_input_for_withdraw_from_delegation,
+  Network,
   TokenUnfreezable,
 } from "../../pkg/wasm_wrappers.js";
 
 import {
-  TEXT_ENCODER,
   assert_eq_arrays,
-  run_one_test,
   get_err_msg,
+  run_one_test,
+  TEXT_ENCODER,
 } from "./utils.js";
 
 import {

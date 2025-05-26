@@ -14,27 +14,27 @@
 // limitations under the License.
 
 import {
-  make_private_key,
-  public_key_from_private_key,
-  sign_message_for_spending,
-  verify_signature_for_spending,
-  make_default_account_privkey,
-  pubkey_to_pubkeyhash_address,
-  Network,
-  staking_pool_spend_maturity_block_count,
+  Amount,
+  get_token_id,
   get_transaction_id,
   effective_pool_balance,
-  Amount,
+  make_default_account_privkey,
+  make_private_key,
+  Network,
+  pubkey_to_pubkeyhash_address,
+  public_key_from_private_key,
   sign_challenge,
+  sign_message_for_spending,
+  staking_pool_spend_maturity_block_count,
   verify_challenge,
-  get_token_id,
+  verify_signature_for_spending,
 } from "../../pkg/wasm_wrappers.js";
 
 import {
-  TEXT_ENCODER,
-  run_one_test,
-  get_err_msg,
   gen_random_int,
+  get_err_msg,
+  run_one_test,
+  TEXT_ENCODER,
 } from "./utils.js";
 
 import {

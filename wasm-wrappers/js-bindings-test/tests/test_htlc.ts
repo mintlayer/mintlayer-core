@@ -14,21 +14,21 @@
 // limitations under the License.
 
 import {
-  make_private_key,
-  public_key_from_private_key,
-  make_default_account_privkey,
-  make_receiving_address,
-  Network,
-  encode_transaction,
-  encode_signed_transaction,
-  encode_lock_until_height,
-  encode_output_htlc,
-  encode_witness_htlc_secret,
-  encode_multisig_challenge,
-  encode_witness_htlc_multisig,
-  extract_htlc_secret,
-  SignatureHashType,
   Amount,
+  encode_lock_until_height,
+  encode_multisig_challenge,
+  encode_output_htlc,
+  encode_signed_transaction,
+  encode_transaction,
+  encode_witness_htlc_multisig,
+  encode_witness_htlc_secret,
+  extract_htlc_secret,
+  make_default_account_privkey,
+  make_private_key,
+  make_receiving_address,
+  public_key_from_private_key,
+  Network,
+  SignatureHashType,
 } from "../../pkg/wasm_wrappers.js";
 
 import {

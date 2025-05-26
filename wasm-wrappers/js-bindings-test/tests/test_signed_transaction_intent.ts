@@ -14,18 +14,18 @@
 // limitations under the License.
 
 import {
+  encode_signed_transaction_intent,
+  make_transaction_intent_message_to_sign,
   Network,
   sign_challenge,
-  make_transaction_intent_message_to_sign,
-  encode_signed_transaction_intent,
   verify_transaction_intent,
 } from "../../pkg/wasm_wrappers.js";
 
 import {
-    TEXT_ENCODER,
-    assert_eq_arrays,
-    get_err_msg,
-  } from "./utils.js";
+  get_err_msg,
+  assert_eq_arrays,
+  TEXT_ENCODER,
+} from "./utils.js";
 
 export function test_signed_transaction_intent() {
   try {

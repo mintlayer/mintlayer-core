@@ -16,30 +16,30 @@
 // Here we test outputs encoding, except for orders and htlcs, which have their separate test files.
 
 import {
-  public_key_from_private_key,
+  Amount,
+  FreezableToken,
+  encode_lock_until_height,
+  encode_output_coin_burn,
+  encode_output_create_stake_pool,
+  encode_output_issue_fungible_token,
+  encode_output_issue_nft,
+  encode_output_lock_then_transfer,
+  encode_output_token_burn,
+  encode_output_token_lock_then_transfer,
+  encode_output_token_transfer,
+  encode_stake_pool_data,
   make_default_account_privkey,
   make_receiving_address,
   Network,
-  encode_output_coin_burn,
-  encode_output_token_burn,
-  encode_lock_until_height,
-  encode_output_token_transfer,
-  encode_output_lock_then_transfer,
-  encode_output_token_lock_then_transfer,
-  encode_stake_pool_data,
-  encode_output_create_stake_pool,
-  Amount,
+  public_key_from_private_key,
   TotalSupply,
-  FreezableToken,
-  encode_output_issue_nft,
-  encode_output_issue_fungible_token,
 } from "../../pkg/wasm_wrappers.js";
 
 import {
-  TEXT_ENCODER,
   assert_eq_arrays,
+  get_err_msg,
   run_one_test,
-  get_err_msg
+  TEXT_ENCODER,
 } from "./utils.js";
 
 import {

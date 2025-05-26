@@ -14,21 +14,21 @@
 // limitations under the License.
 
 import {
+  encode_signed_transaction,
+  encode_transaction,
+  encode_witness,
+  encode_witness_no_signature,
+  estimate_transaction_size,
   make_default_account_privkey,
   make_receiving_address,
   Network,
-  encode_transaction,
-  encode_witness_no_signature,
-  encode_signed_transaction,
-  encode_witness,
   SignatureHashType,
-  estimate_transaction_size,
 } from "../../pkg/wasm_wrappers.js";
 
 import {
-  TEXT_ENCODER,
   assert_eq_arrays,
   get_err_msg,
+  TEXT_ENCODER,
 } from "./utils.js";
 
 import {
@@ -41,9 +41,9 @@ import {
   INPUTS,
 } from "./test_encode_other_inputs.js";
 import {
-  OUTPUT_LOCK_THEN_TRANSFER,
-  OUTPUT_CREATE_STAKE_POOL,
   OUTPUTS,
+  OUTPUT_CREATE_STAKE_POOL,
+  OUTPUT_LOCK_THEN_TRANSFER,
 } from "./test_encode_other_outputs.js";
 
 export async function test_transaction_and_witness_encoding() {

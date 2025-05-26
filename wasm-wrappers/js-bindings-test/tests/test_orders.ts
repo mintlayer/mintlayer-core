@@ -14,12 +14,12 @@
 // limitations under the License.
 
 import {
-  Network,
+  Amount,
+  encode_create_order_output,
+  encode_input_for_conclude_order,
   encode_input_for_fill_order,
   encode_input_for_freeze_order,
-  encode_input_for_conclude_order,
-  encode_create_order_output,
-  Amount,
+  Network,
 } from "../../pkg/wasm_wrappers.js";
 
 import {
