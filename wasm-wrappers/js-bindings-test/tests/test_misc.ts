@@ -45,7 +45,7 @@ import {
   INPUTS,
 } from "./test_encode_other_inputs.js";
 
-export async function test_misc() {
+export function test_misc() {
   run_one_test(test_verify_signature_for_spending);
   run_one_test(test_public_key_from_bad_private_key);
   run_one_test(test_make_default_account_privkey_from_bad_mnemonic);
@@ -56,7 +56,7 @@ export async function test_misc() {
   run_one_test(test_get_transaction_id);
 }
 
-async function test_verify_signature_for_spending() {
+function test_verify_signature_for_spending() {
   const prv_key = get_predefined_prv_key();
   const pub_key = get_predefined_pub_key();
   const message = TEXT_ENCODER.encode("Hello, world!");
@@ -78,7 +78,7 @@ async function test_verify_signature_for_spending() {
   }
 }
 
-async function test_public_key_from_bad_private_key() {
+function test_public_key_from_bad_private_key() {
   // Attempt to use a bad private key to get a public key (test returned Result<> object, which will become a string error)
   const bad_priv_key = TEXT_ENCODER.encode("bad");
   try {
@@ -94,7 +94,7 @@ async function test_public_key_from_bad_private_key() {
   }
 }
 
-async function test_make_default_account_privkey_from_bad_mnemonic() {
+function test_make_default_account_privkey_from_bad_mnemonic() {
   try {
     const invalid_mnemonic = "asd asd";
     make_default_account_privkey(invalid_mnemonic, Network.Mainnet);
@@ -107,7 +107,7 @@ async function test_make_default_account_privkey_from_bad_mnemonic() {
   }
 }
 
-async function test_sign_challenge() {
+function test_sign_challenge() {
   const prv_key = get_predefined_prv_key();
   const pub_key = get_predefined_pub_key();
   const message = TEXT_ENCODER.encode("Hello, world!");
@@ -132,7 +132,7 @@ async function test_sign_challenge() {
   }
 }
 
-async function test_staking_pool_spend_maturity_block_count() {
+function test_staking_pool_spend_maturity_block_count() {
   const lock_for_blocks = staking_pool_spend_maturity_block_count(
     BigInt(1000),
     Network.Mainnet
@@ -143,7 +143,7 @@ async function test_staking_pool_spend_maturity_block_count() {
   }
 }
 
-async function test_get_token_id() {
+function test_get_token_id() {
   try {
     get_token_id(new Uint8Array(), BigInt(1), Network.Testnet);
     throw "Token Id generated without a UTXO input somehow!";
@@ -168,7 +168,7 @@ async function test_get_token_id() {
   }
 }
 
-async function test_effective_pool_balance() {
+function test_effective_pool_balance() {
   {
     const eff_bal = effective_pool_balance(
       Network.Mainnet,

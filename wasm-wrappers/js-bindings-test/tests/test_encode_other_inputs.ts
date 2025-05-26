@@ -54,12 +54,12 @@ export const INPUTS = [
 // OutpointSourceId used in INPUTS.
 export const TX_OUTPOINT = new Uint8Array(33).fill(0)
 
-export async function test_encode_other_inputs() {
+export function test_encode_other_inputs() {
   run_one_test(predefined_inputs_test);
   run_one_test(general_test);
 }
 
-async function predefined_inputs_test() {
+function predefined_inputs_test() {
   const tx_input = encode_input_for_utxo(TX_OUTPOINT, 1);
   const deleg_id =
     "mdelg1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqut3aj8";
@@ -73,7 +73,7 @@ async function predefined_inputs_test() {
   assert_eq_arrays(inputs, INPUTS);
 }
 
-export async function general_test() {
+export function general_test() {
   try {
     encode_input_for_utxo(TEXT_ENCODER.encode("asd"), 1);
     throw new Error("Invalid outpoint encoding worked somehow!");

@@ -41,12 +41,12 @@ import {
 // but most tests don't care.
 export const ADDRESS = "tmt1q9dn5m4svn8sds3fcy09kpxrefnu75xekgr5wa3n";
 
-export async function test_address_generation() {
+export function test_address_generation() {
   run_one_test(predefined_address_test);
   run_one_test(general_test);
 }
 
-export async function predefined_address_test() {
+export function predefined_address_test() {
   const account_private_key = make_default_account_privkey(
     MNEMONIC,
     Network.Testnet
@@ -67,7 +67,7 @@ export async function predefined_address_test() {
   }
 }
 
-export async function general_test() {
+export function general_test() {
   const bad_priv_key = TEXT_ENCODER.encode("bad");
 
   try {

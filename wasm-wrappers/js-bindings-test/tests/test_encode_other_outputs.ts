@@ -67,7 +67,7 @@ export const OUTPUT_CREATE_STAKE_POOL = [
 // Some tx outputs - LockThenTransfer and CreateStakePool
 export const OUTPUTS = [...OUTPUT_LOCK_THEN_TRANSFER, ...OUTPUT_CREATE_STAKE_POOL];
 
-export async function test_encode_other_outputs() {
+export function test_encode_other_outputs() {
   run_one_test(create_stake_pool_test);
   run_one_test(stake_pool_data_test);
   run_one_test(coin_burn_test);
@@ -79,7 +79,7 @@ export async function test_encode_other_outputs() {
   run_one_test(issue_nft_test);
 }
 
-async function create_stake_pool_test() {
+function create_stake_pool_test() {
   const vrf_public_key =
     "tvrfpk1qpk0t6np4gyl084fv328h6ahjvwcsaktrzfrs0xeqtrzpp0l7p28knrnn57";
 
@@ -134,7 +134,7 @@ async function create_stake_pool_test() {
   assert_eq_arrays(outputs, OUTPUTS);
 }
 
-async function stake_pool_data_test() {
+function stake_pool_data_test() {
   const vrf_public_key =
     "tvrfpk1qpk0t6np4gyl084fv328h6ahjvwcsaktrzfrs0xeqtrzpp0l7p28knrnn57";
 
@@ -158,7 +158,7 @@ async function stake_pool_data_test() {
   }
 }
 
-async function coin_burn_test() {
+function coin_burn_test() {
   try {
     encode_output_coin_burn(Amount.from_atoms("invalid amount"));
     throw new Error("Invalid value for amount worked somehow!");
@@ -170,7 +170,7 @@ async function coin_burn_test() {
   }
 }
 
-async function token_burn_test() {
+function token_burn_test() {
   try {
     encode_output_token_burn(
       Amount.from_atoms("invalid amount"),
@@ -212,7 +212,7 @@ async function token_burn_test() {
   assert_eq_arrays(token_burn, expected_token_burn);
 }
 
-async function lock_then_transfer_test() {
+function lock_then_transfer_test() {
   try {
     const invalid_lock = TEXT_ENCODER.encode("invalid lock");
     encode_output_lock_then_transfer(
@@ -230,7 +230,7 @@ async function lock_then_transfer_test() {
   }
 }
 
-async function token_lock_then_transfer_test() {
+function token_lock_then_transfer_test() {
   try {
     const invalid_lock = TEXT_ENCODER.encode("invalid lock");
     encode_output_token_lock_then_transfer(
@@ -284,7 +284,7 @@ async function token_lock_then_transfer_test() {
   assert_eq_arrays(token_lock_transfer_out, expected_token_lock_transfer_out);
 }
 
-async function token_transfer_test() {
+function token_transfer_test() {
   try {
     const invalid_address = "invalid address";
     encode_output_token_transfer(
@@ -337,7 +337,7 @@ async function token_transfer_test() {
   assert_eq_arrays(token_transfer_out, expected_token_transfer_out);
 }
 
-async function issue_fungible_token_test() {
+function issue_fungible_token_test() {
   let encoded_fungible_token = encode_output_issue_fungible_token(
     ADDRESS,
     "XXX",
@@ -361,7 +361,7 @@ async function issue_fungible_token_test() {
   assert_eq_arrays(encoded_fungible_token, expected_fungible_token);
 }
 
-async function issue_nft_test() {
+function issue_nft_test() {
   const account_pubkey = make_default_account_privkey(
     MNEMONIC,
     Network.Testnet

@@ -37,7 +37,7 @@ import {
   ADDRESS
 } from "./test_address_generation.js";
 
-export async function test_orders() {
+export function test_orders() {
   const order_output = encode_create_order_output(
     Amount.from_atoms("40000"),
     undefined,

@@ -50,7 +50,7 @@ import {
   OUTPUTS,
 } from "./test_encode_other_outputs.js";
 
-export async function test_htlc() {
+export function test_htlc() {
   const account_pubkey = make_default_account_privkey(
     MNEMONIC,
     Network.Testnet

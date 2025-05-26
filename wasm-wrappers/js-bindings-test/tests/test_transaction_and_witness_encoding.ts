@@ -46,7 +46,7 @@ import {
   OUTPUT_LOCK_THEN_TRANSFER,
 } from "./test_encode_other_outputs.js";
 
-export async function test_transaction_and_witness_encoding() {
+export function test_transaction_and_witness_encoding() {
   const account_pubkey = make_default_account_privkey(
     MNEMONIC,
     Network.Testnet

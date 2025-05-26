@@ -27,7 +27,7 @@ import { test_signed_transaction_intent } from "./test_signed_transaction_intent
 import { test_transaction_and_witness_encoding } from "./test_transaction_and_witness_encoding.js";
 
 /** @public */
-export async function run_all_tests() {
+export function run_all_tests() {
   run_one_test(test_address_generation);
   run_one_test(test_encode_other_inputs);
   run_one_test(test_encode_other_outputs);
