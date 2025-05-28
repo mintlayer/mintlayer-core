@@ -17,27 +17,28 @@ use std::{borrow::Cow, vec};
 
 use itertools::Itertools;
 use rstest::rstest;
-use serialization::{DecodeAll, Encode};
+use strum::IntoEnumIterator as _;
 
-use self::utils::*;
-use super::{
-    inputsig::InputWitness,
-    sighash::{input_commitments::SighashInputCommitment, sighashtype::SigHashType},
-};
+use crypto::key::{KeyKind, PrivateKey};
+use randomness::{CryptoRng, Rng};
+use serialization::{DecodeAll, Encode};
+use test_utils::random::Seed;
+
 use crate::{
     chain::{
-        config::create_mainnet,
-        output_value::OutputValue,
-        signature::{inputsig::standard_signature::StandardInputSignature, DestinationSigError},
-        signed_transaction::SignedTransaction,
-        ChainConfig, Destination, OutPointSourceId, Transaction, TxInput, TxOutput,
+        config::create_mainnet, output_value::OutputValue, signed_transaction::SignedTransaction,
+        ChainConfig, Destination, OutPointSourceId, Transaction, TxInput, TxOutput, TxOutputTag,
     },
     primitives::{Amount, Id, H256},
 };
-use crypto::key::{KeyKind, PrivateKey};
-use randomness::CryptoRng;
-use randomness::Rng;
-use test_utils::random::Seed;
+
+use super::{
+    inputsig::{standard_signature::StandardInputSignature, InputWitness},
+    sighash::{input_commitments::SighashInputCommitment, sighashtype::SigHashType},
+    DestinationSigError,
+};
+
+use self::utils::*;
 
 mod mixed_sighash_types;
 mod sign_and_mutate;
@@ -51,26 +52,25 @@ pub mod utils;
 #[trace]
 #[case(Seed::from_entropy())]
 fn encode_decode_utxo_refs_roundtrip(#[case] seed: Seed) {
-    use crate::chain::signature::sighash::input_commitments::SighashInputCommitment;
-
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
     // Utxo
     {
-        // FIXME generate_input_utxo should generate all kinds of utxos
-        let (utxo, _) = generate_input_utxo(&mut rng);
+        for tag in TxOutputTag::iter() {
+            let utxo = generate_input_utxo_for_tag(&mut rng, tag);
 
-        let commitment = SighashInputCommitment::Utxo(Cow::Borrowed(&utxo));
-        let encoded_commitment = commitment.encode();
-        let opt = Some(&utxo);
-        let encoded_opt = opt.encode();
+            let commitment = SighashInputCommitment::Utxo(Cow::Borrowed(&utxo));
+            let encoded_commitment = commitment.encode();
+            let opt = Some(&utxo);
+            let encoded_opt = opt.encode();
 
-        assert_eq!(encoded_commitment, encoded_opt);
+            assert_eq!(encoded_commitment, encoded_opt);
 
-        // Sanity check
-        let decoded_commitment =
-            Option::<TxOutput>::decode_all(&mut encoded_commitment.as_slice()).unwrap();
-        assert_eq!(decoded_commitment.as_ref(), Some(&utxo));
+            // Sanity check
+            let decoded_commitment =
+                Option::<TxOutput>::decode_all(&mut encoded_commitment.as_slice()).unwrap();
+            assert_eq!(decoded_commitment.as_ref(), Some(&utxo));
+        }
     }
 
     // None

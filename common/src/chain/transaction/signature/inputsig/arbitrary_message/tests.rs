@@ -364,7 +364,7 @@ fn signing_transactions_should_not_work(#[case] seed: Seed) {
     let chain_config = chain::config::create_testnet();
 
     let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
-    let (input_utxo, _) = generate_input_utxo(&mut rng);
+    let input_utxo = generate_input_utxo(&mut rng);
     let destination = Destination::PublicKey(public_key.clone());
     let sighash_type =
         SigHashType::try_from(SigHashType::NONE | SigHashType::ANYONECANPAY).unwrap();

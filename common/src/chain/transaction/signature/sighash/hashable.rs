@@ -294,7 +294,7 @@ mod tests {
             let inputs_count = rng.gen_range(1..100);
             let inputs =
                 (0..inputs_count).map(|_| generate_random_input(&mut rng)).collect::<Vec<_>>();
-            let (inputs_utxos, _) = generate_inputs_utxos(&mut rng, inputs_count);
+            let inputs_utxos = generate_inputs_utxos(&mut rng, inputs_count);
 
             let inputs_utxos_refs = inputs_utxos.iter().map(|u| u.as_ref()).collect::<Vec<_>>();
 
