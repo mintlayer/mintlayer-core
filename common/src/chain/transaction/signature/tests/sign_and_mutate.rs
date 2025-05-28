@@ -47,12 +47,12 @@ const INPUTS_COUNT: usize = 15;
 const OUTPUTS_COUNT: usize = 15;
 const INVALID_INPUT_INDEX: usize = 1235466;
 
-// Create a transaction, sign it, modify and try to verify the signature. Modifications include
-// changing flags and lock time.
+// Create a transaction, sign it, modify its flags and try to verify the signature.
+// TODO: this is a strange test, which also seems to be redundant.
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn test_mutate_tx_internal_data(#[case] seed: Seed) {
+fn test_mutate_tx_flags(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
     let chain_config = create_mainnet();

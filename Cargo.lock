@@ -1573,6 +1573,7 @@ dependencies = [
  "chrono",
  "clap",
  "crypto",
+ "ctor",
  "expect-test",
  "fixed-hash",
  "generic-array",

@@ -825,7 +825,7 @@ fn check_mutate_input(
     destination: &Destination,
     should_fail: bool,
 ) {
-    // Should failed due to change in output value
+    // Should fail due to change in output value
     let mut tx_updater = MutableTransaction::from(original_tx);
     tx_updater.inputs[0] = TxInput::from_utxo(
         OutPointSourceId::Transaction(Id::<Transaction>::from(H256::random_using(rng))),

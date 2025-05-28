@@ -41,7 +41,7 @@ impl SignatureHashableElement for &[TxOutput] {
         stream: &mut DefaultHashAlgoStream,
         mode: sighashtype::SigHashType,
         _target_input: &TxInput,
-        target_input_num: usize,
+        target_input_index: usize,
     ) -> Result<(), DestinationSigError> {
         match mode.outputs_mode() {
             sighashtype::OutputsMode::All => {
@@ -49,8 +49,8 @@ impl SignatureHashableElement for &[TxOutput] {
             }
             sighashtype::OutputsMode::None => (),
             sighashtype::OutputsMode::Single => {
-                let output = self.get(target_input_num).ok_or({
-                    DestinationSigError::InvalidInputIndex(target_input_num, self.len())
+                let output = self.get(target_input_index).ok_or({
+                    DestinationSigError::InvalidInputIndex(target_input_index, self.len())
                 })?;
                 hash_encoded_to(&output, stream);
             }
