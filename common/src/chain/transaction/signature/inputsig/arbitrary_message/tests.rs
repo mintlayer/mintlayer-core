@@ -13,11 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
+
 use rstest::rstest;
 
 use chain::signature::{
     inputsig::{standard_signature::StandardInputSignature, InputWitness},
+    sighash::input_commitments::SighashInputCommitment,
     sighash::{sighashtype::SigHashType, signature_hash},
+    tests::utils::verify_signature,
     tests::utils::{generate_input_utxo, generate_unsigned_tx},
 };
 use crypto::{
@@ -355,12 +359,6 @@ fn verify_corrupted_signature(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn signing_transactions_should_not_work(#[case] seed: Seed) {
-    use std::borrow::Cow;
-
-    use crate::chain::signature::{
-        sighash::input_commitments::SighashInputCommitment, tests::utils::verify_signature,
-    };
-
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
     let chain_config = chain::config::create_testnet();

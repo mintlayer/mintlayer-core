@@ -192,11 +192,13 @@ pub enum SimpleCurrencyAmount {
     Tokens(SimpleTokenAmount),
 }
 
+/// Additional information for a pool.
 #[derive(Clone, Debug, Tsify, Serialize, Deserialize)]
 pub struct PoolAdditionalInfo {
     pub staker_balance: SimpleAmount,
 }
 
+/// Additional information for an order.
 #[derive(Clone, Debug, Tsify, Serialize, Deserialize)]
 pub struct OrderAdditionalInfo {
     pub initially_asked: SimpleCurrencyAmount,
@@ -204,6 +206,8 @@ pub struct OrderAdditionalInfo {
     pub ask_balance: SimpleAmount,
     pub give_balance: SimpleAmount,
 }
+
+/// Additional information for a transaction.
 #[derive(Clone, Debug, Tsify, Serialize, Deserialize)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct TxAdditionalInfo {

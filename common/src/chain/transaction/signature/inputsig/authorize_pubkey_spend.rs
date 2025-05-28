@@ -70,6 +70,10 @@ pub fn sign_public_key_spending<R: Rng + CryptoRng>(
 mod test {
     use rstest::rstest;
 
+    use crypto::key::{KeyKind, PrivateKey};
+    use randomness::Rng;
+    use test_utils::random::Seed;
+
     use crate::{
         address::pubkeyhash::PublicKeyHash,
         chain::{
@@ -80,9 +84,6 @@ mod test {
             Destination,
         },
     };
-    use crypto::key::{KeyKind, PrivateKey};
-    use randomness::Rng;
-    use test_utils::random::Seed;
 
     use super::*;
 

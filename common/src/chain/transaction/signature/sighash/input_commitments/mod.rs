@@ -102,16 +102,15 @@ pub enum SighashInputCommitment<'a> {
 }
 
 impl<'a> SighashInputCommitment<'a> {
-    // FIXME rename to to_owned? Same for CowUtils
     pub fn deep_clone(&self) -> SighashInputCommitment<'static> {
         match self {
             SighashInputCommitment::None => SighashInputCommitment::None,
-            SighashInputCommitment::Utxo(cow) => SighashInputCommitment::Utxo(cow.deep_clone()),
+            SighashInputCommitment::Utxo(cow) => SighashInputCommitment::Utxo(cow.to_owned_cow()),
             SighashInputCommitment::ProduceBlockFromStakeUtxo {
                 utxo,
                 staker_balance,
             } => SighashInputCommitment::ProduceBlockFromStakeUtxo {
-                utxo: utxo.deep_clone(),
+                utxo: utxo.to_owned_cow(),
                 staker_balance: *staker_balance,
             },
             SighashInputCommitment::FillOrderAccountCommand {

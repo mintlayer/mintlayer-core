@@ -101,6 +101,10 @@ fn sign_public_key_hash_spending_impl<R: Rng + CryptoRng>(
 mod test {
     use rstest::rstest;
 
+    use crypto::key::{KeyKind, PrivateKey};
+    use randomness::Rng;
+    use test_utils::random::Seed;
+
     use crate::chain::{
         signature::{sighash::signature_hash, StandardInputSignature},
         transaction::signature::tests::utils::{
@@ -108,9 +112,6 @@ mod test {
         },
         Destination,
     };
-    use crypto::key::{KeyKind, PrivateKey};
-    use randomness::Rng;
-    use test_utils::random::Seed;
 
     use super::*;
 

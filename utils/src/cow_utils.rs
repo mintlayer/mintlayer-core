@@ -16,11 +16,11 @@
 use std::borrow::Cow;
 
 pub trait CowUtils<'a, T: Clone> {
-    fn deep_clone(&self) -> Cow<'static, T>;
+    fn to_owned_cow(&self) -> Cow<'static, T>;
 }
 
 impl<'a, T: Clone> CowUtils<'a, T> for Cow<'a, T> {
-    fn deep_clone(&self) -> Cow<'static, T> {
+    fn to_owned_cow(&self) -> Cow<'static, T> {
         Cow::Owned(self.clone().into_owned())
     }
 }

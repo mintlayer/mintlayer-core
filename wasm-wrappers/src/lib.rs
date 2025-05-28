@@ -655,11 +655,6 @@ pub fn encode_witness_no_signature() -> Vec<u8> {
     InputWitness::NoSignature(None).encode()
 }
 
-// FIXME: this and other "encode_witness" functions should accept "input_commitments" instead of "inputs".
-// Which means that in addition to each "encode_input" function we should also have the corresponding "encode_input_commitment" one???
-// Alternatively, encode_witness could accept the input utxos, like it does now, and also an "additional info" object,
-// which would be used to construct the "input_commitments". But it's not clear how such an object can be represented here.
-
 /// Sign the specified input of the transaction and encode the signature as InputWitness.
 ///
 /// `input_utxos` must be formed as follows: for each transaction input, emit byte 0 if it's a non-UTXO input,

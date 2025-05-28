@@ -131,21 +131,24 @@ impl SignatureHashableElement for SignatureHashableInputs<'_> {
 
 #[cfg(test)]
 mod tests {
-    use randomness::{CryptoRng, Rng};
+    use std::borrow::Cow;
+
     use rstest::rstest;
+
+    use crypto::hash::StreamHasher;
+    use randomness::{CryptoRng, Rng};
     use test_utils::random::{make_seedable_rng, Seed};
 
     use crate::{
         chain::{
             signature::{
                 sighash::{sighashtype::SigHashType, SighashInputCommitment},
-                tests::utils::{generate_input_commitments, generate_inputs_utxos},
+                tests::utils::{generate_input_commitments, generate_inputs_utxos, sig_hash_types},
             },
             OutPointSourceId,
         },
         primitives::{Id, H256},
     };
-    use crypto::hash::StreamHasher;
 
     use super::*;
 
@@ -285,10 +288,6 @@ mod tests {
     #[trace]
     #[case(Seed::from_entropy())]
     fn signature_hash_backward_compatibility(#[case] seed: Seed) {
-        use std::borrow::Cow;
-
-        use crate::chain::signature::tests::utils::sig_hash_types;
-
         let mut rng = make_seedable_rng(seed);
 
         for sighash_type in sig_hash_types() {
@@ -299,46 +298,41 @@ mod tests {
 
             let inputs_utxos_refs = inputs_utxos.iter().map(|u| u.as_ref()).collect::<Vec<_>>();
 
-            let hashable_inputs_1 = SignatureHashableInputsV0 {
+            let hashable_inputs_v0 = SignatureHashableInputsV0 {
                 inputs: &inputs,
                 inputs_utxos: &inputs_utxos_refs,
             };
 
             let input_index = rng.gen_range(0..inputs_count);
 
-            let mut stream1 = DefaultHashAlgoStream::new();
-            hashable_inputs_1
-                .signature_hash(
-                    &mut stream1,
-                    sighash_type,
-                    &inputs[input_index],
-                    input_index,
-                )
-                .unwrap();
-            let hash1: H256 = stream1.finalize().into();
+            let hash_v0: H256 = {
+                let mut stream = DefaultHashAlgoStream::new();
+                hashable_inputs_v0
+                    .signature_hash(&mut stream, sighash_type, &inputs[input_index], input_index)
+                    .unwrap();
+                stream.finalize().into()
+            };
 
-            let inputs_info = inputs_utxos_refs
+            let input_commitments_v1 = inputs_utxos
                 .iter()
                 .map(|utxo| {
-                    utxo.map_or(SighashInputCommitment::None, |utxo| {
+                    utxo.as_ref().map_or(SighashInputCommitment::None, |utxo| {
                         SighashInputCommitment::Utxo(Cow::Borrowed(utxo))
                     })
                 })
                 .collect::<Vec<_>>();
-            let hashable_inputs_2 = SignatureHashableInputs::new(&inputs, &inputs_info).unwrap();
+            let hashable_inputs_v1 =
+                SignatureHashableInputs::new(&inputs, &input_commitments_v1).unwrap();
 
-            let mut stream2 = DefaultHashAlgoStream::new();
-            hashable_inputs_2
-                .signature_hash(
-                    &mut stream2,
-                    sighash_type,
-                    &inputs[input_index],
-                    input_index,
-                )
-                .unwrap();
-            let hash2: H256 = stream2.finalize().into();
+            let hash_v1: H256 = {
+                let mut stream = DefaultHashAlgoStream::new();
+                hashable_inputs_v1
+                    .signature_hash(&mut stream, sighash_type, &inputs[input_index], input_index)
+                    .unwrap();
+                stream.finalize().into()
+            };
 
-            assert_eq!(hash1, hash2);
+            assert_eq!(hash_v0, hash_v1);
         }
     }
 }

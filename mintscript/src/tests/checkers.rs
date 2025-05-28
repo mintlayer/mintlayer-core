@@ -20,7 +20,7 @@ use super::*;
 fn make_dummy_tx(
     mut rng: impl Rng + CryptoRng,
     privkeys: &[&PrivateKey],
-) -> (Vec<TxOutput>, SignedTransaction) {
+) -> (SignedTransaction, Vec<SighashInputCommitment<'static>>) {
     // Create a simple single output transaction. We can afford to put dummy data
     // here since we construct the script manually, not from the transaction, so most of it is
     // ignored by the evaluator. It's used mostly to get the hash for signing.
@@ -35,41 +35,39 @@ fn make_dummy_tx(
     let utxos: Vec<_> = (0_usize..n_inputs)
         .map(|_| TxOutput::Transfer(gen_value(), Destination::AnyoneCanSpend))
         .collect();
+
+    let output = TxOutput::Burn(gen_value());
+    let inputs = (0..n_inputs).map(|_| {
+        let outpoint = OutPointSourceId::Transaction(Id::new(rng.gen()));
+        TxInput::from_utxo(outpoint, rng.gen_range(0u32..200))
+    });
     let input_commitments = utxos
         .iter()
-        .map(|utxo| SighashInputCommitment::Utxo(Cow::Borrowed(utxo)))
+        .map(|utxo| SighashInputCommitment::<'static>::Utxo(Cow::Owned(utxo.clone())))
         .collect::<Vec<_>>();
+    let tx = Transaction::new(0, inputs.collect(), vec![output]).unwrap();
 
-    let transaction = {
-        let output = TxOutput::Burn(gen_value());
-        let inputs = (0..n_inputs).map(|_| {
-            let outpoint = OutPointSourceId::Transaction(Id::new(rng.gen()));
-            TxInput::from_utxo(outpoint, rng.gen_range(0u32..200))
-        });
-        let tx = Transaction::new(0, inputs.collect(), vec![output]).unwrap();
+    let witnesses = privkeys
+        .iter()
+        .enumerate()
+        .map(|(input_num, private_key)| {
+            let sig = StandardInputSignature::produce_uniparty_signature_for_input(
+                private_key,
+                SigHashType::default(),
+                Destination::PublicKey(PublicKey::from_private_key(private_key)),
+                &tx,
+                &input_commitments,
+                input_num,
+                &mut rng,
+            )
+            .unwrap();
+            InputWitness::Standard(sig)
+        })
+        .collect();
 
-        let witnesses = privkeys
-            .iter()
-            .enumerate()
-            .map(|(input_num, private_key)| {
-                let sig = StandardInputSignature::produce_uniparty_signature_for_input(
-                    private_key,
-                    SigHashType::default(),
-                    Destination::PublicKey(PublicKey::from_private_key(private_key)),
-                    &tx,
-                    &input_commitments,
-                    input_num,
-                    &mut rng,
-                )
-                .unwrap();
-                InputWitness::Standard(sig)
-            })
-            .collect();
+    let transaction = SignedTransaction::new(tx, witnesses).unwrap();
 
-        SignedTransaction::new(tx, witnesses).unwrap()
-    };
-
-    (utxos, transaction)
+    (transaction, input_commitments)
 }
 
 #[rstest::rstest]
@@ -87,12 +85,7 @@ fn check_sig(#[case] seed: Seed) {
     let privkeys: Vec<_> = keypairs.iter().map(|(priv_k, _pub_k)| priv_k).collect();
     let pubkey0 = &keypairs[0].1;
 
-    let (utxos, transaction) = make_dummy_tx(&mut rng, &privkeys);
-    // FIXME: reconsider
-    let input_commitments = utxos
-        .iter()
-        .map(|utxo| SighashInputCommitment::Utxo(Cow::Borrowed(utxo)))
-        .collect::<Vec<_>>();
+    let (transaction, input_commitments) = make_dummy_tx(&mut rng, &privkeys);
     let sig0 = &transaction.signatures()[0];
 
     let eval_witness = match sig0.clone() {
@@ -140,12 +133,7 @@ fn check_timelocks(
         .map(|_| PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr))
         .collect();
     let privkeys: Vec<_> = keypairs.iter().map(|(priv_k, _pub_k)| priv_k).collect();
-    let (utxos, transaction) = make_dummy_tx(rng, &privkeys);
-    // FIXME: reconsider
-    let input_commitments = utxos
-        .iter()
-        .map(|utxo| SighashInputCommitment::Utxo(Cow::Borrowed(utxo)))
-        .collect::<Vec<_>>();
+    let (transaction, input_commitments) = make_dummy_tx(rng, &privkeys);
 
     let script = WitnessScript::timelock(timelock);
 

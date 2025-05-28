@@ -20,6 +20,8 @@ use utils::ensure;
 
 use crate::chain::{ChainConfig, TxInput};
 
+use super::{Destination, TxOutput};
+
 use self::{
     inputsig::{
         classical_multisig::{
@@ -31,8 +33,6 @@ use self::{
     },
     sighash::{input_commitments::SighashInputCommitment, signature_hash},
 };
-
-use super::{Destination, TxOutput};
 
 pub mod inputsig;
 pub mod sighash;
