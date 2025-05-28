@@ -1,4 +1,4 @@
-// Copyright (c) 2023 RBB S.r.l
+// Copyright (c) 2021-2025 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -36,14 +36,13 @@ use gloo_utils::format::JsValueSerdeExt as _;
 use wasm_bindgen::prelude::*;
 
 use common::{
-    address::{pubkeyhash::PublicKeyHash, traits::Addressable, Address},
+    address::{pubkeyhash::PublicKeyHash, Address},
     chain::{
         block::timestamp::BlockTimestamp,
         classic_multisig::ClassicMultisigChallenge,
-        config::{Builder, ChainType, BIP44_PATH},
-        htlc::{HashedTimelockContract, HtlcSecret, HtlcSecretHash},
+        config::{Builder, BIP44_PATH},
+        htlc::HtlcSecret,
         make_token_id,
-        output_value::OutputValue::{self, Coin, TokenV1},
         signature::{
             inputsig::{
                 arbitrary_message::{produce_message_challenge, ArbitraryMessageSignature},
@@ -57,21 +56,14 @@ use common::{
                 standard_signature::StandardInputSignature,
                 InputWitness, InputWitnessTag,
             },
-            sighash::{sighashtype::SigHashType, signature_hash},
+            sighash::signature_hash,
         },
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
-        tokens::{
-            IsTokenFreezable, IsTokenUnfreezable, Metadata, NftIssuance, NftIssuanceV0,
-            TokenCreator, TokenIssuance, TokenIssuanceV1, TokenTotalSupply,
-        },
-        AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, ChainConfig, Destination,
-        OrderAccountCommand, OrderData, OrdersVersion, OutPointSourceId, SignedTransaction,
-        SignedTransactionIntent, Transaction, TxInput, TxOutput, UtxoOutPoint,
+        Destination, OutPointSourceId, SignedTransaction, SignedTransactionIntent, Transaction,
+        TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{
-        self, amount::UnsignedIntType, per_thousand::PerThousand, BlockHeight, Id, Idable, H256,
-    },
+    primitives::{per_thousand::PerThousand, BlockHeight, Id, Idable, H256},
     size_estimation::{
         input_signature_size_from_destination, outputs_encoded_size,
         tx_size_with_num_inputs_and_outputs,
@@ -82,136 +74,24 @@ use crypto::key::{
     hdkd::{child_number::ChildNumber, derivable::Derivable, u31::U31},
     KeyKind, PrivateKey, PublicKey, Signature,
 };
-use error::Error;
 use serialization::{Decode, DecodeAll, Encode};
 
-pub mod error;
+use crate::{
+    error::Error,
+    types::{Amount, Network, SignatureHashType, SourceId},
+    utils::{decode_raw_array, parse_addressable},
+};
+
+mod encode_input;
+mod encode_output;
+mod error;
+#[cfg(test)]
+mod tests;
+mod types;
+mod utils;
 
 const RECEIVE_FUNDS_INDEX: ChildNumber = ChildNumber::from_normal(U31::from_u32_with_msb(0).0);
 const CHANGE_FUNDS_INDEX: ChildNumber = ChildNumber::from_normal(U31::from_u32_with_msb(1).0);
-
-#[wasm_bindgen]
-/// Amount type abstraction. The amount type is stored in a string
-/// since JavaScript number type cannot fit 128-bit integers.
-/// The amount is given as an integer in units of "atoms".
-/// Atoms are the smallest, indivisible amount of a coin or token.
-pub struct Amount {
-    atoms: String,
-}
-
-#[wasm_bindgen]
-impl Amount {
-    #[wasm_bindgen]
-    pub fn from_atoms(atoms: String) -> Self {
-        Self { atoms }
-    }
-
-    #[wasm_bindgen]
-    pub fn atoms(self) -> String {
-        self.atoms
-    }
-
-    fn as_internal_amount(&self) -> Result<primitives::Amount, Error> {
-        UnsignedIntType::from_str(&self.atoms)
-            .ok()
-            .map(primitives::Amount::from_atoms)
-            .ok_or_else(|| Error::AtomsAmountParseError {
-                atoms: self.atoms.clone(),
-            })
-    }
-
-    fn from_internal_amount(amount: primitives::Amount) -> Self {
-        Self {
-            atoms: amount.into_atoms().to_string(),
-        }
-    }
-}
-
-#[wasm_bindgen]
-#[derive(Debug, Copy, Clone)]
-/// The network, for which an operation to be done. Mainnet, testnet, etc.
-pub enum Network {
-    Mainnet,
-    Testnet,
-    Regtest,
-    Signet,
-}
-
-impl From<Network> for ChainType {
-    fn from(value: Network) -> Self {
-        match value {
-            Network::Mainnet => ChainType::Mainnet,
-            Network::Testnet => ChainType::Testnet,
-            Network::Regtest => ChainType::Regtest,
-            Network::Signet => ChainType::Signet,
-        }
-    }
-}
-
-/// Indicates whether a token can be frozen
-#[wasm_bindgen]
-pub enum FreezableToken {
-    No,
-    Yes,
-}
-
-impl From<FreezableToken> for IsTokenFreezable {
-    fn from(value: FreezableToken) -> Self {
-        match value {
-            FreezableToken::No => IsTokenFreezable::No,
-            FreezableToken::Yes => IsTokenFreezable::Yes,
-        }
-    }
-}
-
-/// Indicates whether a token can be unfrozen once frozen
-#[wasm_bindgen]
-pub enum TokenUnfreezable {
-    No,
-    Yes,
-}
-
-impl From<TokenUnfreezable> for IsTokenUnfreezable {
-    fn from(value: TokenUnfreezable) -> Self {
-        match value {
-            TokenUnfreezable::No => IsTokenUnfreezable::No,
-            TokenUnfreezable::Yes => IsTokenUnfreezable::Yes,
-        }
-    }
-}
-
-/// The token supply of a specific token, set on issuance
-#[wasm_bindgen]
-pub enum TotalSupply {
-    /// Can be issued with no limit, but then can be locked to have a fixed supply.
-    Lockable,
-    /// Unlimited supply, no limits except for numeric limits due to u128
-    Unlimited,
-    /// On issuance, the total number of coins is fixed
-    Fixed,
-}
-
-fn parse_token_total_supply(
-    value: TotalSupply,
-    amount: Option<Amount>,
-) -> Result<TokenTotalSupply, Error> {
-    let supply = match value {
-        TotalSupply::Lockable => TokenTotalSupply::Lockable,
-        TotalSupply::Unlimited => TokenTotalSupply::Unlimited,
-        TotalSupply::Fixed => TokenTotalSupply::Fixed(
-            amount.ok_or(Error::FixedTotalSupplyButNoAmount)?.as_internal_amount()?,
-        ),
-    };
-
-    Ok(supply)
-}
-
-/// A utxo can either come from a transaction or a block reward. This enum signifies that.
-#[wasm_bindgen]
-pub enum SourceId {
-    Transaction,
-    BlockReward,
-}
 
 /// A utxo can either come from a transaction or a block reward.
 /// Given a source id, whether from a block reward or transaction, this function
@@ -224,28 +104,6 @@ pub fn encode_outpoint_source_id(id: &[u8], source: SourceId) -> Vec<u8> {
         SourceId::BlockReward => OutPointSourceId::BlockReward(H256::from_slice(id).into()),
     }
     .encode()
-}
-
-/// The part of the transaction that will be committed in the signature. Similar to bitcoin's sighash.
-#[wasm_bindgen]
-pub enum SignatureHashType {
-    ALL,
-    NONE,
-    SINGLE,
-    ANYONECANPAY,
-}
-
-impl From<SignatureHashType> for SigHashType {
-    fn from(value: SignatureHashType) -> Self {
-        let value = match value {
-            SignatureHashType::ALL => SigHashType::ALL,
-            SignatureHashType::SINGLE => SigHashType::SINGLE,
-            SignatureHashType::ANYONECANPAY => SigHashType::ANYONECANPAY,
-            SignatureHashType::NONE => SigHashType::NONE,
-        };
-
-        SigHashType::try_from(value).expect("should not fail")
-    }
 }
 
 /// Generates a new, random private key from entropy
@@ -285,8 +143,8 @@ pub fn make_default_account_privkey(mnemonic: &str, network: Network) -> Result<
 /// From an extended private key create a receiving private key for a given key index
 /// derivation path: current_derivation_path/0/key_index
 #[wasm_bindgen]
-pub fn make_receiving_address(private_key_bytes: &[u8], key_index: u32) -> Result<Vec<u8>, Error> {
-    let account_privkey = ExtendedPrivateKey::decode_all(&mut &private_key_bytes[..])
+pub fn make_receiving_address(private_key: &[u8], key_index: u32) -> Result<Vec<u8>, Error> {
+    let account_privkey = ExtendedPrivateKey::decode_all(&mut &private_key[..])
         .map_err(Error::InvalidPrivateKeyEncoding)?;
     let private_key = derive(account_privkey, RECEIVE_FUNDS_INDEX, key_index)?.private_key();
     Ok(private_key.encode())
@@ -295,8 +153,8 @@ pub fn make_receiving_address(private_key_bytes: &[u8], key_index: u32) -> Resul
 /// From an extended private key create a change private key for a given key index
 /// derivation path: current_derivation_path/1/key_index
 #[wasm_bindgen]
-pub fn make_change_address(private_key_bytes: &[u8], key_index: u32) -> Result<Vec<u8>, Error> {
-    let account_privkey = ExtendedPrivateKey::decode_all(&mut &private_key_bytes[..])
+pub fn make_change_address(private_key: &[u8], key_index: u32) -> Result<Vec<u8>, Error> {
+    let account_privkey = ExtendedPrivateKey::decode_all(&mut &private_key[..])
         .map_err(Error::InvalidPrivateKeyEncoding)?;
     let private_key = derive(account_privkey, CHANGE_FUNDS_INDEX, key_index)?.private_key();
     Ok(private_key.encode())
@@ -305,12 +163,9 @@ pub fn make_change_address(private_key_bytes: &[u8], key_index: u32) -> Result<V
 /// Given a public key (as bytes) and a network type (mainnet, testnet, etc),
 /// return the address public key hash from that public key as an address
 #[wasm_bindgen]
-pub fn pubkey_to_pubkeyhash_address(
-    public_key_bytes: &[u8],
-    network: Network,
-) -> Result<String, Error> {
-    let public_key = PublicKey::decode_all(&mut &public_key_bytes[..])
-        .map_err(Error::InvalidPublicKeyEncoding)?;
+pub fn pubkey_to_pubkeyhash_address(public_key: &[u8], network: Network) -> Result<String, Error> {
+    let public_key =
+        PublicKey::decode_all(&mut &public_key[..]).map_err(Error::InvalidPublicKeyEncoding)?;
     let chain_config = Builder::new(network.into()).build();
 
     let public_key_hash = PublicKeyHash::from(&public_key);
@@ -333,10 +188,8 @@ pub fn public_key_from_private_key(private_key: &[u8]) -> Result<Vec<u8>, Error>
 
 /// Return the extended public key from an extended private key
 #[wasm_bindgen]
-pub fn extended_public_key_from_extended_private_key(
-    private_key_bytes: &[u8],
-) -> Result<Vec<u8>, Error> {
-    let extended_private_key = ExtendedPrivateKey::decode_all(&mut &private_key_bytes[..])
+pub fn extended_public_key_from_extended_private_key(private_key: &[u8]) -> Result<Vec<u8>, Error> {
+    let extended_private_key = ExtendedPrivateKey::decode_all(&mut &private_key[..])
         .map_err(Error::InvalidPrivateKeyEncoding)?;
     let extended_public_key = extended_private_key.to_public_key();
     Ok(extended_public_key.encode())
@@ -346,10 +199,10 @@ pub fn extended_public_key_from_extended_private_key(
 /// derivation path: current_derivation_path/0/key_index
 #[wasm_bindgen]
 pub fn make_receiving_address_public_key(
-    extended_public_key_bytes: &[u8],
+    extended_public_key: &[u8],
     key_index: u32,
 ) -> Result<Vec<u8>, Error> {
-    let account_publickey = ExtendedPublicKey::decode_all(&mut &extended_public_key_bytes[..])
+    let account_publickey = ExtendedPublicKey::decode_all(&mut &extended_public_key[..])
         .map_err(Error::InvalidPrivateKeyEncoding)?;
     let public_key = derive(account_publickey, RECEIVE_FUNDS_INDEX, key_index)?.into_public_key();
     Ok(public_key.encode())
@@ -359,10 +212,10 @@ pub fn make_receiving_address_public_key(
 /// derivation path: current_derivation_path/1/key_index
 #[wasm_bindgen]
 pub fn make_change_address_public_key(
-    extended_public_key_bytes: &[u8],
+    extended_public_key: &[u8],
     key_index: u32,
 ) -> Result<Vec<u8>, Error> {
-    let account_publickey = ExtendedPublicKey::decode_all(&mut &extended_public_key_bytes[..])
+    let account_publickey = ExtendedPublicKey::decode_all(&mut &extended_public_key[..])
         .map_err(Error::InvalidPrivateKeyEncoding)?;
     let public_key = derive(account_publickey, CHANGE_FUNDS_INDEX, key_index)?.into_public_key();
     Ok(public_key.encode())
@@ -459,19 +312,6 @@ pub fn verify_challenge(
     Ok(true)
 }
 
-fn parse_addressable<T: Addressable>(
-    chain_config: &ChainConfig,
-    address: &str,
-) -> Result<T, Error> {
-    let addressable = Address::from_string(chain_config, address)
-        .map_err(|error| Error::AddressableParseError {
-            addressable: address.to_owned(),
-            error,
-        })?
-        .into_object();
-    Ok(addressable)
-}
-
 /// Return the message that has to be signed to produce a signed transaction intent.
 #[wasm_bindgen]
 pub fn make_transaction_intent_message_to_sign(
@@ -555,40 +395,6 @@ pub fn verify_transaction_intent(
     Ok(())
 }
 
-/// Given a destination address, an amount and a network type (mainnet, testnet, etc), this function
-/// creates an output of type Transfer, and returns it as bytes.
-#[wasm_bindgen]
-pub fn encode_output_transfer(
-    amount: Amount,
-    address: &str,
-    network: Network,
-) -> Result<Vec<u8>, Error> {
-    let chain_config = Builder::new(network.into()).build();
-    let amount = amount.as_internal_amount()?;
-    let destination = parse_addressable(&chain_config, address)?;
-
-    let output = TxOutput::Transfer(Coin(amount), destination);
-    Ok(output.encode())
-}
-
-/// Given a destination address, an amount, token ID (in address form) and a network type (mainnet, testnet, etc), this function
-/// creates an output of type Transfer for tokens, and returns it as bytes.
-#[wasm_bindgen]
-pub fn encode_output_token_transfer(
-    amount: Amount,
-    address: &str,
-    token_id: &str,
-    network: Network,
-) -> Result<Vec<u8>, Error> {
-    let chain_config = Builder::new(network.into()).build();
-    let amount = amount.as_internal_amount()?;
-    let destination = parse_addressable(&chain_config, address)?;
-    let token = parse_addressable(&chain_config, token_id)?;
-
-    let output = TxOutput::Transfer(TokenV1(token, amount), destination);
-    Ok(output.encode())
-}
-
 /// Given the current block height and a network type (mainnet, testnet, etc),
 /// this function returns the number of blocks, after which a pool that decommissioned,
 /// will have its funds unlocked and available for spending.
@@ -638,106 +444,6 @@ pub fn encode_lock_until_height(block_height: u64) -> Vec<u8> {
     output.encode()
 }
 
-/// Given a valid receiving address, and a locking rule as bytes (available in this file),
-/// and a network type (mainnet, testnet, etc), this function creates an output of type
-/// LockThenTransfer with the parameters provided.
-#[wasm_bindgen]
-pub fn encode_output_lock_then_transfer(
-    amount: Amount,
-    address: &str,
-    lock: &[u8],
-    network: Network,
-) -> Result<Vec<u8>, Error> {
-    let chain_config = Builder::new(network.into()).build();
-    let amount = amount.as_internal_amount()?;
-    let destination = parse_addressable(&chain_config, address)?;
-    let lock =
-        OutputTimeLock::decode_all(&mut &lock[..]).map_err(Error::InvalidTimeLockEncoding)?;
-
-    let output = TxOutput::LockThenTransfer(Coin(amount), destination, lock);
-    Ok(output.encode())
-}
-
-/// Given a valid receiving address, token ID (in address form), a locking rule as bytes (available in this file),
-/// and a network type (mainnet, testnet, etc), this function creates an output of type
-/// LockThenTransfer with the parameters provided.
-#[wasm_bindgen]
-pub fn encode_output_token_lock_then_transfer(
-    amount: Amount,
-    address: &str,
-    token_id: &str,
-    lock: &[u8],
-    network: Network,
-) -> Result<Vec<u8>, Error> {
-    let chain_config = Builder::new(network.into()).build();
-    let amount = amount.as_internal_amount()?;
-    let destination = parse_addressable(&chain_config, address)?;
-    let lock =
-        OutputTimeLock::decode_all(&mut &lock[..]).map_err(Error::InvalidTimeLockEncoding)?;
-    let token = parse_addressable(&chain_config, token_id)?;
-
-    let output = TxOutput::LockThenTransfer(TokenV1(token, amount), destination, lock);
-    Ok(output.encode())
-}
-
-/// Given an amount, this function creates an output (as bytes) to burn a given amount of coins
-#[wasm_bindgen]
-pub fn encode_output_coin_burn(amount: Amount) -> Result<Vec<u8>, Error> {
-    let amount = amount.as_internal_amount()?;
-
-    let output = TxOutput::Burn(Coin(amount));
-    Ok(output.encode())
-}
-
-/// Given an amount, token ID (in address form) and network type (mainnet, testnet, etc),
-/// this function creates an output (as bytes) to burn a given amount of tokens
-#[wasm_bindgen]
-pub fn encode_output_token_burn(
-    amount: Amount,
-    token_id: &str,
-    network: Network,
-) -> Result<Vec<u8>, Error> {
-    let chain_config = Builder::new(network.into()).build();
-    let amount = amount.as_internal_amount()?;
-    let token = parse_addressable(&chain_config, token_id)?;
-
-    let output = TxOutput::Burn(TokenV1(token, amount));
-    Ok(output.encode())
-}
-
-/// Given a pool id as string, an owner address and a network type (mainnet, testnet, etc),
-/// this function returns an output (as bytes) to create a delegation to the given pool.
-/// The owner address is the address that is authorized to withdraw from that delegation.
-#[wasm_bindgen]
-pub fn encode_output_create_delegation(
-    pool_id: &str,
-    owner_address: &str,
-    network: Network,
-) -> Result<Vec<u8>, Error> {
-    let chain_config = Builder::new(network.into()).build();
-    let destination = parse_addressable(&chain_config, owner_address)?;
-    let pool_id = parse_addressable(&chain_config, pool_id)?;
-
-    let output = TxOutput::CreateDelegationId(destination, pool_id);
-    Ok(output.encode())
-}
-
-/// Given a delegation id (as string, in address form), an amount and a network type (mainnet, testnet, etc),
-/// this function returns an output (as bytes) that would delegate coins to be staked in the specified delegation id.
-#[wasm_bindgen]
-pub fn encode_output_delegate_staking(
-    amount: Amount,
-    delegation_id: &str,
-    network: Network,
-) -> Result<Vec<u8>, Error> {
-    let chain_config = Builder::new(network.into()).build();
-    let amount = amount.as_internal_amount()?;
-    let delegation_id = parse_addressable(&chain_config, delegation_id)?;
-
-    let output = TxOutput::DelegateStaking(amount, delegation_id);
-    Ok(output.encode())
-}
-
 /// This function returns the staking pool data needed to create a staking pool in an output as bytes,
 /// given its parameters and the network type (testnet, mainnet, etc).
 #[wasm_bindgen]
@@ -768,25 +474,6 @@ pub fn encode_stake_pool_data(
     );
 
     Ok(pool_data.encode())
-}
-
-/// Given a pool id, staking data as bytes and the network type (mainnet, testnet, etc),
-/// this function returns an output that creates that staking pool.
-/// Note that the pool id is mandated to be taken from the hash of the first input.
-/// It is not arbitrary.
-#[wasm_bindgen]
-pub fn encode_output_create_stake_pool(
-    pool_id: &str,
-    pool_data: &[u8],
-    network: Network,
-) -> Result<Vec<u8>, Error> {
-    let chain_config = Builder::new(network.into()).build();
-    let pool_id = parse_addressable(&chain_config, pool_id)?;
-    let pool_data = StakePoolData::decode_all(&mut &pool_data[..])
-        .map_err(Error::InvalidStakePoolDataEncoding)?;
-
-    let output = TxOutput::CreateStakePool(pool_id, Box::new(pool_data));
-    Ok(output.encode())
 }
 
 /// Returns the fee that needs to be paid by a transaction for issuing a new fungible token
@@ -841,128 +528,26 @@ pub fn token_change_authority_fee(current_block_height: u64, network: Network) -
     )
 }
 
-/// Given the parameters needed to issue a fungible token, and a network type (mainnet, testnet, etc),
-/// this function creates an output that issues that token.
-#[allow(clippy::too_many_arguments)]
-#[wasm_bindgen]
-pub fn encode_output_issue_fungible_token(
-    authority: &str,
-    token_ticker: &str,
-    metadata_uri: &str,
-    number_of_decimals: u8,
-    total_supply: TotalSupply,
-    supply_amount: Option<Amount>,
-    is_token_freezable: FreezableToken,
-    _current_block_height: u64,
-    network: Network,
-) -> Result<Vec<u8>, Error> {
-    let chain_config = Builder::new(network.into()).build();
-    let authority = parse_addressable(&chain_config, authority)?;
-    let token_ticker = token_ticker.into();
-    let metadata_uri = metadata_uri.into();
-    let total_supply = parse_token_total_supply(total_supply, supply_amount)?;
-    let is_freezable = is_token_freezable.into();
-
-    let token_issuance = TokenIssuance::V1(TokenIssuanceV1 {
-        authority,
-        token_ticker,
-        metadata_uri,
-        number_of_decimals,
-        total_supply,
-        is_freezable,
-    });
-
-    tx_verifier::check_tokens_issuance(&chain_config, &token_issuance)
-        .map_err(Error::InvalidTokenParameters)?;
-
-    let output = TxOutput::IssueFungibleToken(Box::new(token_issuance));
-    Ok(output.encode())
-}
-
 /// Returns the Fungible/NFT Token ID for the given inputs of a transaction
 #[wasm_bindgen]
 pub fn get_token_id(
-    mut inputs: &[u8],
+    inputs: &[u8],
     current_block_height: u64,
     network: Network,
 ) -> Result<String, Error> {
     let chain_config = Builder::new(network.into()).build();
 
-    let mut tx_inputs = vec![];
-    while !inputs.is_empty() {
-        let input = TxInput::decode(&mut inputs).map_err(Error::InvalidInputEncoding)?;
-        tx_inputs.push(input);
-    }
+    let inputs = decode_raw_array::<TxInput>(inputs).map_err(Error::InvalidInputEncoding)?;
 
     let token_id = make_token_id(
         &chain_config,
         BlockHeight::new(current_block_height),
-        &tx_inputs,
+        &inputs,
     )?;
 
     Ok(Address::new(&chain_config, token_id)
         .expect("Should not fail to create address")
         .to_string())
-}
-
-/// Given the parameters needed to issue an NFT, and a network type (mainnet, testnet, etc),
-/// this function creates an output that issues that NFT.
-#[allow(clippy::too_many_arguments)]
-#[wasm_bindgen]
-pub fn encode_output_issue_nft(
-    token_id: &str,
-    authority: &str,
-    name: &str,
-    ticker: &str,
-    description: &str,
-    media_hash: &[u8],
-    creator: Option<Vec<u8>>,
-    media_uri: Option<String>,
-    icon_uri: Option<String>,
-    additional_metadata_uri: Option<String>,
-    _current_block_height: u64,
-    network: Network,
-) -> Result<Vec<u8>, Error> {
-    let chain_config = Builder::new(network.into()).build();
-    let token_id = parse_addressable(&chain_config, token_id)?;
-    let authority = parse_addressable(&chain_config, authority)?;
-    let name = name.into();
-    let ticker = ticker.into();
-    let media_uri = media_uri.map(Into::into).into();
-    let icon_uri = icon_uri.map(Into::into).into();
-    let media_hash = media_hash.into();
-    let additional_metadata_uri = additional_metadata_uri.map(Into::into).into();
-    let creator = creator
-        .map(|pk| PublicKey::decode_all(&mut pk.as_slice()))
-        .transpose()
-        .map_err(Error::InvalidNftCreatorPublicKey)?
-        .map(|public_key| TokenCreator { public_key });
-
-    let nft_issuance = NftIssuanceV0 {
-        metadata: Metadata {
-            media_hash,
-            media_uri,
-            ticker,
-            additional_metadata_uri,
-            description: description.into(),
-            name,
-            icon_uri,
-            creator,
-        },
-    };
-
-    tx_verifier::check_nft_issuance_data(&chain_config, &nft_issuance)
-        .map_err(Error::InvalidTokenParameters)?;
-
-    let output = TxOutput::IssueNft(token_id, Box::new(NftIssuance::V0(nft_issuance)), authority);
-    Ok(output.encode())
-}
-
-/// Given data to be deposited in the blockchain, this function provides the output that deposits this data
-#[wasm_bindgen]
-pub fn encode_output_data_deposit(data: &[u8]) -> Result<Vec<u8>, Error> {
-    let output = TxOutput::DataDeposit(data.into());
-    Ok(output.encode())
 }
 
 /// Returns the fee that needs to be paid by a transaction for issuing a data deposit
@@ -974,58 +559,11 @@ pub fn data_deposit_fee(current_block_height: u64, network: Network) -> Amount {
     )
 }
 
-fn parse_output_value(
-    chain_config: &ChainConfig,
-    amount: &Amount,
-    token_id: Option<String>,
-) -> Result<OutputValue, Error> {
-    let amount = amount.as_internal_amount()?;
-    match token_id {
-        Some(token_id) => {
-            let token_id = parse_addressable(chain_config, &token_id)?;
-            Ok(OutputValue::TokenV1(token_id, amount))
-        }
-        None => Ok(OutputValue::Coin(amount)),
-    }
-}
-
-/// Given the parameters needed to create hash timelock contract, and a network type (mainnet, testnet, etc),
-/// this function creates an output.
-#[wasm_bindgen]
-pub fn encode_output_htlc(
-    amount: Amount,
-    token_id: Option<String>,
-    secret_hash: &str,
-    spend_address: &str,
-    refund_address: &str,
-    refund_timelock: &[u8],
-    network: Network,
-) -> Result<Vec<u8>, Error> {
-    let chain_config = Builder::new(network.into()).build();
-    let output_value = parse_output_value(&chain_config, &amount, token_id)?;
-    let refund_timelock = OutputTimeLock::decode_all(&mut &refund_timelock[..])
-        .map_err(Error::InvalidTimeLockEncoding)?;
-    let secret_hash =
-        HtlcSecretHash::from_str(secret_hash).map_err(Error::HtlcSecretHashParseError)?;
-
-    let spend_key = parse_addressable(&chain_config, spend_address)?;
-    let refund_key = parse_addressable(&chain_config, refund_address)?;
-
-    let htlc = HashedTimelockContract {
-        secret_hash,
-        spend_key,
-        refund_timelock,
-        refund_key,
-    };
-    let output = TxOutput::Htlc(output_value, Box::new(htlc));
-    Ok(output.encode())
-}
-
 /// Given a signed transaction and input outpoint that spends an htlc utxo, extract a secret that is
 /// encoded in the corresponding input signature
 #[wasm_bindgen]
 pub fn extract_htlc_secret(
-    signed_tx_bytes: &[u8],
+    signed_tx: &[u8],
     strict_byte_size: bool,
     htlc_outpoint_source_id: &[u8],
     htlc_output_index: u32,
@@ -1035,11 +573,10 @@ pub fn extract_htlc_secret(
     let htlc_utxo_outpoint = UtxoOutPoint::new(outpoint_source_id, htlc_output_index);
 
     let tx = if strict_byte_size {
-        SignedTransaction::decode_all(&mut &signed_tx_bytes[..])
+        SignedTransaction::decode_all(&mut &signed_tx[..])
             .map_err(Error::InvalidTransactionEncoding)?
     } else {
-        SignedTransaction::decode(&mut &signed_tx_bytes[..])
-            .map_err(Error::InvalidTransactionEncoding)?
+        SignedTransaction::decode(&mut &signed_tx[..]).map_err(Error::InvalidTransactionEncoding)?
     };
 
     let htlc_position = tx
@@ -1073,39 +610,6 @@ pub fn extract_htlc_secret(
     }
 }
 
-/// Given an output source id as bytes, and an output index, together representing a utxo,
-/// this function returns the input that puts them together, as bytes.
-#[wasm_bindgen]
-pub fn encode_input_for_utxo(
-    outpoint_source_id: &[u8],
-    output_index: u32,
-) -> Result<Vec<u8>, Error> {
-    let outpoint_source_id = OutPointSourceId::decode_all(&mut &outpoint_source_id[..])
-        .map_err(Error::InvalidOutpointIdEncoding)?;
-    let input = TxInput::Utxo(UtxoOutPoint::new(outpoint_source_id, output_index));
-    Ok(input.encode())
-}
-
-/// Given a delegation id, an amount and a network type (mainnet, testnet, etc), this function
-/// creates an input that withdraws from a delegation.
-/// A nonce is needed because this spends from an account. The nonce must be in sequence for everything in that account.
-#[wasm_bindgen]
-pub fn encode_input_for_withdraw_from_delegation(
-    delegation_id: &str,
-    amount: Amount,
-    nonce: u64,
-    network: Network,
-) -> Result<Vec<u8>, Error> {
-    let chain_config = Builder::new(network.into()).build();
-    let amount = amount.as_internal_amount()?;
-    let delegation_id = parse_addressable(&chain_config, delegation_id)?;
-    let input = TxInput::Account(AccountOutPoint::new(
-        AccountNonce::new(nonce),
-        AccountSpending::DelegationBalance(delegation_id, amount),
-    ));
-    Ok(input.encode())
-}
-
 /// Given the inputs, along each input's destination that can spend that input
 /// (e.g. If we are spending a UTXO in input number 1 and it is owned by address mtc1xxxx, then it is mtc1xxxx in element number 2 in the vector/list.
 /// for Account inputs that spend from a delegation it is the owning address of that delegation,
@@ -1116,20 +620,15 @@ pub fn encode_input_for_withdraw_from_delegation(
 pub fn estimate_transaction_size(
     inputs: &[u8],
     input_utxos_destinations: Vec<String>,
-    mut outputs: &[u8],
+    outputs: &[u8],
     network: Network,
 ) -> Result<usize, Error> {
     let chain_config = Builder::new(network.into()).build();
-    let mut tx_outputs = vec![];
-    while !outputs.is_empty() {
-        let output = TxOutput::decode(&mut outputs).map_err(Error::InvalidOutputEncoding)?;
-        tx_outputs.push(output);
-    }
+    let outputs = decode_raw_array::<TxOutput>(outputs).map_err(Error::InvalidOutputEncoding)?;
 
-    let size =
-        tx_size_with_num_inputs_and_outputs(tx_outputs.len(), input_utxos_destinations.len())
-            .map_err(Error::TransactionSizeEstimationError)?
-            + outputs_encoded_size(tx_outputs.as_slice());
+    let size = tx_size_with_num_inputs_and_outputs(outputs.len(), input_utxos_destinations.len())
+        .map_err(Error::TransactionSizeEstimationError)?
+        + outputs_encoded_size(outputs.as_slice());
     let inputs_size = inputs.len();
 
     let mut total_size = size + inputs_size;
@@ -1149,24 +648,11 @@ pub fn estimate_transaction_size(
 /// Given inputs as bytes, outputs as bytes, and flags settings, this function returns
 /// the transaction that contains them all, as bytes.
 #[wasm_bindgen]
-pub fn encode_transaction(
-    mut inputs: &[u8],
-    mut outputs: &[u8],
-    flags: u64,
-) -> Result<Vec<u8>, Error> {
-    let mut tx_outputs = vec![];
-    while !outputs.is_empty() {
-        let output = TxOutput::decode(&mut outputs).map_err(Error::InvalidOutputEncoding)?;
-        tx_outputs.push(output);
-    }
+pub fn encode_transaction(inputs: &[u8], outputs: &[u8], flags: u64) -> Result<Vec<u8>, Error> {
+    let inputs = decode_raw_array::<TxInput>(inputs).map_err(Error::InvalidInputEncoding)?;
+    let outputs = decode_raw_array::<TxOutput>(outputs).map_err(Error::InvalidOutputEncoding)?;
 
-    let mut tx_inputs = vec![];
-    while !inputs.is_empty() {
-        let input = TxInput::decode(&mut inputs).map_err(Error::InvalidInputEncoding)?;
-        tx_inputs.push(input);
-    }
-
-    let tx = Transaction::new(flags as u128, tx_inputs, tx_outputs).expect("no error");
+    let tx = Transaction::new(flags as u128, inputs, outputs).expect("no error");
     Ok(tx.encode())
 }
 
@@ -1181,28 +667,25 @@ pub fn encode_witness_no_signature() -> Vec<u8> {
 #[wasm_bindgen]
 pub fn encode_witness(
     sighashtype: SignatureHashType,
-    private_key_bytes: &[u8],
+    private_key: &[u8],
     input_owner_destination: &str,
-    transaction_bytes: &[u8],
-    mut inputs: &[u8],
-    input_num: u32,
+    transaction: &[u8],
+    input_utxos: &[u8],
+    input_index: u32,
     network: Network,
 ) -> Result<Vec<u8>, Error> {
     let chain_config = Builder::new(network.into()).build();
 
-    let private_key = PrivateKey::decode_all(&mut &private_key_bytes[..])
-        .map_err(Error::InvalidPrivateKeyEncoding)?;
+    let private_key =
+        PrivateKey::decode_all(&mut &private_key[..]).map_err(Error::InvalidPrivateKeyEncoding)?;
 
     let destination = parse_addressable(&chain_config, input_owner_destination)?;
 
-    let tx = Transaction::decode_all(&mut &transaction_bytes[..])
+    let tx = Transaction::decode_all(&mut &transaction[..])
         .map_err(Error::InvalidTransactionEncoding)?;
 
-    let mut input_utxos = vec![];
-    while !inputs.is_empty() {
-        let utxo = Option::<TxOutput>::decode(&mut inputs).map_err(Error::InvalidInputEncoding)?;
-        input_utxos.push(utxo);
-    }
+    let input_utxos = decode_raw_array::<Option<TxOutput>>(input_utxos)
+        .map_err(Error::InvalidInputUtxoEncoding)?;
 
     let utxos = input_utxos.iter().map(Option::as_ref).collect::<Vec<_>>();
 
@@ -1212,7 +695,7 @@ pub fn encode_witness(
         destination,
         &tx,
         &utxos,
-        input_num as usize,
+        input_index as usize,
         randomness::make_true_rng(),
     )
     .map(InputWitness::Standard)
@@ -1227,29 +710,26 @@ pub fn encode_witness(
 #[wasm_bindgen]
 pub fn encode_witness_htlc_secret(
     sighashtype: SignatureHashType,
-    private_key_bytes: &[u8],
+    private_key: &[u8],
     input_owner_destination: &str,
-    transaction_bytes: &[u8],
-    mut inputs: &[u8],
-    input_num: u32,
+    transaction: &[u8],
+    input_utxos: &[u8],
+    input_index: u32,
     mut secret: &[u8],
     network: Network,
 ) -> Result<Vec<u8>, Error> {
     let chain_config = Builder::new(network.into()).build();
 
-    let private_key = PrivateKey::decode_all(&mut &private_key_bytes[..])
-        .map_err(Error::InvalidPrivateKeyEncoding)?;
+    let private_key =
+        PrivateKey::decode_all(&mut &private_key[..]).map_err(Error::InvalidPrivateKeyEncoding)?;
 
     let destination = parse_addressable(&chain_config, input_owner_destination)?;
 
-    let tx = Transaction::decode_all(&mut &transaction_bytes[..])
+    let tx = Transaction::decode_all(&mut &transaction[..])
         .map_err(Error::InvalidTransactionEncoding)?;
 
-    let mut input_utxos = vec![];
-    while !inputs.is_empty() {
-        let utxo = Option::<TxOutput>::decode(&mut inputs).map_err(Error::InvalidInputEncoding)?;
-        input_utxos.push(utxo);
-    }
+    let input_utxos = decode_raw_array::<Option<TxOutput>>(input_utxos)
+        .map_err(Error::InvalidInputUtxoEncoding)?;
 
     let utxos = input_utxos.iter().map(Option::as_ref).collect::<Vec<_>>();
 
@@ -1261,7 +741,7 @@ pub fn encode_witness_htlc_secret(
         destination,
         &tx,
         &utxos,
-        input_num as usize,
+        input_index as usize,
         secret,
         randomness::make_true_rng(),
     )
@@ -1275,7 +755,7 @@ pub fn encode_witness_htlc_secret(
 /// the multisig challenge, as bytes.
 #[wasm_bindgen]
 pub fn encode_multisig_challenge(
-    mut public_keys_bytes: &[u8],
+    public_keys: &[u8],
     min_required_signatures: u8,
     network: Network,
 ) -> Result<Vec<u8>, Error> {
@@ -1284,12 +764,8 @@ pub fn encode_multisig_challenge(
     let min_sigs =
         NonZeroU8::new(min_required_signatures).ok_or(Error::ZeroMultisigRequiredSigs)?;
 
-    let mut public_keys = vec![];
-    while !public_keys_bytes.is_empty() {
-        let public_key =
-            PublicKey::decode(&mut public_keys_bytes).map_err(Error::InvalidPublicKeyEncoding)?;
-        public_keys.push(public_key);
-    }
+    let public_keys =
+        decode_raw_array::<PublicKey>(public_keys).map_err(Error::InvalidPublicKeyEncoding)?;
 
     let challenge = ClassicMultisigChallenge::new(&chain_config, min_sigs, public_keys)
         .map_err(Error::MultisigChallengeCreationError)?;
@@ -1306,32 +782,29 @@ pub fn encode_multisig_challenge(
 #[wasm_bindgen]
 pub fn encode_witness_htlc_multisig(
     sighashtype: SignatureHashType,
-    private_key_bytes: &[u8],
+    private_key: &[u8],
     key_index: u8,
     mut input_witness: &[u8],
     mut multisig_challenge: &[u8],
-    transaction_bytes: &[u8],
-    mut utxos: &[u8],
-    input_num: u32,
+    transaction: &[u8],
+    input_utxos: &[u8],
+    input_index: u32,
     network: Network,
 ) -> Result<Vec<u8>, Error> {
     let chain_config = Builder::new(network.into()).build();
 
-    let private_key = PrivateKey::decode_all(&mut &private_key_bytes[..])
-        .map_err(Error::InvalidPrivateKeyEncoding)?;
+    let private_key =
+        PrivateKey::decode_all(&mut &private_key[..]).map_err(Error::InvalidPrivateKeyEncoding)?;
 
-    let tx = Transaction::decode_all(&mut &transaction_bytes[..])
+    let tx = Transaction::decode_all(&mut &transaction[..])
         .map_err(Error::InvalidTransactionEncoding)?;
 
-    let mut input_utxos = vec![];
-    while !utxos.is_empty() {
-        let utxo = Option::<TxOutput>::decode(&mut utxos).map_err(Error::InvalidInputEncoding)?;
-        input_utxos.push(utxo);
-    }
+    let input_utxos = decode_raw_array::<Option<TxOutput>>(input_utxos)
+        .map_err(Error::InvalidInputUtxoEncoding)?;
 
     let utxos = input_utxos.iter().map(Option::as_ref).collect::<Vec<_>>();
     let sighashtype = sighashtype.into();
-    let sighash = signature_hash(sighashtype, &tx, &utxos, input_num as usize)
+    let sighash = signature_hash(sighashtype, &tx, &utxos, input_index as usize)
         .map_err(Error::SighashCalculationError)?;
 
     let mut rng = randomness::make_true_rng();
@@ -1387,21 +860,14 @@ pub fn encode_witness_htlc_multisig(
 
 /// Given an unsigned transaction and signatures, this function returns a SignedTransaction object as bytes.
 #[wasm_bindgen]
-pub fn encode_signed_transaction(
-    transaction_bytes: &[u8],
-    mut signatures: &[u8],
-) -> Result<Vec<u8>, Error> {
-    let mut tx_signatures = vec![];
-    while !signatures.is_empty() {
-        let signature =
-            InputWitness::decode(&mut signatures).map_err(Error::InvalidWitnessEncoding)?;
-        tx_signatures.push(signature);
-    }
+pub fn encode_signed_transaction(transaction: &[u8], signatures: &[u8]) -> Result<Vec<u8>, Error> {
+    let signatures =
+        decode_raw_array::<InputWitness>(signatures).map_err(Error::InvalidWitnessEncoding)?;
 
-    let tx = Transaction::decode_all(&mut &transaction_bytes[..])
+    let tx = Transaction::decode_all(&mut &transaction[..])
         .map_err(Error::InvalidTransactionEncoding)?;
 
-    let tx = SignedTransaction::new(tx, tx_signatures).map_err(Error::TransactionCreationError)?;
+    let tx = SignedTransaction::new(tx, signatures).map_err(Error::TransactionCreationError)?;
     Ok(tx.encode())
 }
 
@@ -1415,16 +881,11 @@ pub fn encode_signed_transaction(
 /// since the signatures are appended at the end of the `Transaction` object as a vector to create a `SignedTransaction`.
 /// It is recommended to use a strict `Transaction` size and set the second parameter to `true`.
 #[wasm_bindgen]
-pub fn get_transaction_id(
-    transaction_bytes: &[u8],
-    strict_byte_size: bool,
-) -> Result<String, Error> {
+pub fn get_transaction_id(transaction: &[u8], strict_byte_size: bool) -> Result<String, Error> {
     let tx = if strict_byte_size {
-        Transaction::decode_all(&mut &transaction_bytes[..])
-            .map_err(Error::InvalidTransactionEncoding)?
+        Transaction::decode_all(&mut &transaction[..]).map_err(Error::InvalidTransactionEncoding)?
     } else {
-        Transaction::decode(&mut &transaction_bytes[..])
-            .map_err(Error::InvalidTransactionEncoding)?
+        Transaction::decode(&mut &transaction[..]).map_err(Error::InvalidTransactionEncoding)?
     };
     let tx_id = tx.get_id();
 
@@ -1451,324 +912,4 @@ pub fn effective_pool_balance(
             .map_err(Error::EffectiveBalanceCalculationFailed)?;
 
     Ok(Amount::from_internal_amount(effective_balance))
-}
-
-/// Given a token_id, an amount of tokens to mint and nonce return an encoded mint tokens input
-#[wasm_bindgen]
-pub fn encode_input_for_mint_tokens(
-    token_id: &str,
-    amount: Amount,
-    nonce: u64,
-    network: Network,
-) -> Result<Vec<u8>, Error> {
-    let chain_config = Builder::new(network.into()).build();
-    let token_id = parse_addressable(&chain_config, token_id)?;
-    let amount = amount.as_internal_amount()?;
-    let input = TxInput::AccountCommand(
-        AccountNonce::new(nonce),
-        AccountCommand::MintTokens(token_id, amount),
-    );
-    Ok(input.encode())
-}
-
-/// Given a token_id and nonce return an encoded unmint tokens input
-#[wasm_bindgen]
-pub fn encode_input_for_unmint_tokens(
-    token_id: &str,
-    nonce: u64,
-    network: Network,
-) -> Result<Vec<u8>, Error> {
-    let chain_config = Builder::new(network.into()).build();
-    let token_id = parse_addressable(&chain_config, token_id)?;
-    let input = TxInput::AccountCommand(
-        AccountNonce::new(nonce),
-        AccountCommand::UnmintTokens(token_id),
-    );
-    Ok(input.encode())
-}
-
-/// Given a token_id and nonce return an encoded lock_token_supply input
-#[wasm_bindgen]
-pub fn encode_input_for_lock_token_supply(
-    token_id: &str,
-    nonce: u64,
-    network: Network,
-) -> Result<Vec<u8>, Error> {
-    let chain_config = Builder::new(network.into()).build();
-    let token_id = parse_addressable(&chain_config, token_id)?;
-    let input = TxInput::AccountCommand(
-        AccountNonce::new(nonce),
-        AccountCommand::LockTokenSupply(token_id),
-    );
-    Ok(input.encode())
-}
-
-/// Given a token_id, is token unfreezable and nonce return an encoded freeze token input
-#[wasm_bindgen]
-pub fn encode_input_for_freeze_token(
-    token_id: &str,
-    is_token_unfreezable: TokenUnfreezable,
-    nonce: u64,
-    network: Network,
-) -> Result<Vec<u8>, Error> {
-    let chain_config = Builder::new(network.into()).build();
-    let token_id = parse_addressable(&chain_config, token_id)?;
-    let input = TxInput::AccountCommand(
-        AccountNonce::new(nonce),
-        AccountCommand::FreezeToken(token_id, is_token_unfreezable.into()),
-    );
-    Ok(input.encode())
-}
-
-/// Given a token_id and nonce return an encoded unfreeze token input
-#[wasm_bindgen]
-pub fn encode_input_for_unfreeze_token(
-    token_id: &str,
-    nonce: u64,
-    network: Network,
-) -> Result<Vec<u8>, Error> {
-    let chain_config = Builder::new(network.into()).build();
-    let token_id = parse_addressable(&chain_config, token_id)?;
-    let input = TxInput::AccountCommand(
-        AccountNonce::new(nonce),
-        AccountCommand::UnfreezeToken(token_id),
-    );
-    Ok(input.encode())
-}
-
-/// Given a token_id, new authority destination and nonce return an encoded change token authority input
-#[wasm_bindgen]
-pub fn encode_input_for_change_token_authority(
-    token_id: &str,
-    new_authority: &str,
-    nonce: u64,
-    network: Network,
-) -> Result<Vec<u8>, Error> {
-    let chain_config = Builder::new(network.into()).build();
-    let token_id = parse_addressable(&chain_config, token_id)?;
-    let new_authority = parse_addressable(&chain_config, new_authority)?;
-    let input = TxInput::AccountCommand(
-        AccountNonce::new(nonce),
-        AccountCommand::ChangeTokenAuthority(token_id, new_authority),
-    );
-    Ok(input.encode())
-}
-
-/// Given a token_id, new metadata uri and nonce return an encoded change token metadata uri input
-#[wasm_bindgen]
-pub fn encode_input_for_change_token_metadata_uri(
-    token_id: &str,
-    new_metadata_uri: &str,
-    nonce: u64,
-    network: Network,
-) -> Result<Vec<u8>, Error> {
-    let chain_config = Builder::new(network.into()).build();
-    let token_id = parse_addressable(&chain_config, token_id)?;
-    let input = TxInput::AccountCommand(
-        AccountNonce::new(nonce),
-        AccountCommand::ChangeTokenMetadataUri(token_id, new_metadata_uri.into()),
-    );
-    Ok(input.encode())
-}
-
-/// Given ask and give amounts and a conclude key create output that creates an order.
-///
-/// 'ask_token_id': the parameter represents a Token if it's Some and coins otherwise.
-/// 'give_token_id': the parameter represents a Token if it's Some and coins otherwise.
-#[wasm_bindgen]
-pub fn encode_create_order_output(
-    ask_amount: Amount,
-    ask_token_id: Option<String>,
-    give_amount: Amount,
-    give_token_id: Option<String>,
-    conclude_address: &str,
-    network: Network,
-) -> Result<Vec<u8>, Error> {
-    let chain_config = Builder::new(network.into()).build();
-    let ask = parse_output_value(&chain_config, &ask_amount, ask_token_id)?;
-    let give = parse_output_value(&chain_config, &give_amount, give_token_id)?;
-    let conclude_key = parse_addressable(&chain_config, conclude_address)?;
-
-    let order = OrderData::new(conclude_key, ask, give);
-    let output = TxOutput::CreateOrder(Box::new(order));
-    Ok(output.encode())
-}
-
-/// Given an amount to fill an order (which is described in terms of ask currency) and a destination
-/// for result outputs create an input that fills the order.
-///
-/// Note: the nonce is only needed before the orders V1 fork activation. After the fork the nonce is
-/// ignored and any value can be passed for the parameter.
-#[wasm_bindgen]
-pub fn encode_input_for_fill_order(
-    order_id: &str,
-    fill_amount: Amount,
-    destination: &str,
-    nonce: u64,
-    current_block_height: u64,
-    network: Network,
-) -> Result<Vec<u8>, Error> {
-    let chain_config = Builder::new(network.into()).build();
-    let order_id = parse_addressable(&chain_config, order_id)?;
-    let fill_amount = fill_amount.as_internal_amount()?;
-    let destination = parse_addressable(&chain_config, destination)?;
-    let orders_version = chain_config
-        .chainstate_upgrades()
-        .version_at_height(BlockHeight::new(current_block_height))
-        .1
-        .orders_version();
-
-    let input = match orders_version {
-        OrdersVersion::V0 => TxInput::AccountCommand(
-            AccountNonce::new(nonce),
-            AccountCommand::FillOrder(order_id, fill_amount, destination),
-        ),
-        OrdersVersion::V1 => TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(
-            order_id,
-            fill_amount,
-            destination,
-        )),
-    };
-    Ok(input.encode())
-}
-
-/// Given an order id create an input that freezes the order.
-///
-/// Note: order freezing is available only after the orders V1 fork activation.
-#[wasm_bindgen]
-pub fn encode_input_for_freeze_order(
-    order_id: &str,
-    current_block_height: u64,
-    network: Network,
-) -> Result<Vec<u8>, Error> {
-    let chain_config = Builder::new(network.into()).build();
-    let order_id = parse_addressable(&chain_config, order_id)?;
-    let orders_version = chain_config
-        .chainstate_upgrades()
-        .version_at_height(BlockHeight::new(current_block_height))
-        .1
-        .orders_version();
-
-    let input = match orders_version {
-        OrdersVersion::V0 => {
-            return Err(Error::OrdersV1NotActivatedAtSpecifiedHeight);
-        }
-        OrdersVersion::V1 => {
-            TxInput::OrderAccountCommand(OrderAccountCommand::FreezeOrder(order_id))
-        }
-    };
-
-    Ok(input.encode())
-}
-
-/// Given an order id create an input that concludes the order.
-///
-/// Note: the nonce is only needed before the orders V1 fork activation. After the fork the nonce is
-/// ignored and any value can be passed for the parameter.
-#[wasm_bindgen]
-pub fn encode_input_for_conclude_order(
-    order_id: &str,
-    nonce: u64,
-    current_block_height: u64,
-    network: Network,
-) -> Result<Vec<u8>, Error> {
-    let chain_config = Builder::new(network.into()).build();
-    let order_id = parse_addressable(&chain_config, order_id)?;
-    let orders_version = chain_config
-        .chainstate_upgrades()
-        .version_at_height(BlockHeight::new(current_block_height))
-        .1
-        .orders_version();
-
-    let input = match orders_version {
-        OrdersVersion::V0 => TxInput::AccountCommand(
-            AccountNonce::new(nonce),
-            AccountCommand::ConcludeOrder(order_id),
-        ),
-        OrdersVersion::V1 => {
-            TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder(order_id))
-        }
-    };
-
-    Ok(input.encode())
-}
-
-#[cfg(test)]
-mod tests {
-    use randomness::Rng;
-    use rstest::rstest;
-    use test_utils::random::{make_seedable_rng, Seed};
-
-    use super::*;
-
-    #[rstest]
-    #[trace]
-    #[case(Seed::from_entropy())]
-    fn sign_and_verify(#[case] seed: Seed) {
-        let mut rng = make_seedable_rng(seed);
-
-        let key = make_private_key();
-        assert_eq!(key.len(), 33);
-
-        let public_key = public_key_from_private_key(&key).unwrap();
-
-        let message_size = 1 + rng.gen::<usize>() % 10000;
-        let message: Vec<u8> = (0..message_size).map(|_| rng.gen::<u8>()).collect();
-
-        let signature = sign_message_for_spending(&key, &message).unwrap();
-
-        {
-            // Valid reference signature
-            let verification_result =
-                verify_signature_for_spending(&public_key, &signature, &message).unwrap();
-            assert!(verification_result);
-        }
-        {
-            // Tamper with the message
-            let mut tampered_message = message.clone();
-            let tamper_bit_index = rng.gen::<usize>() % message_size;
-            tampered_message[tamper_bit_index] = tampered_message[tamper_bit_index].wrapping_add(1);
-            let verification_result =
-                verify_signature_for_spending(&public_key, &signature, &tampered_message).unwrap();
-            assert!(!verification_result);
-        }
-        {
-            // Tamper with the signature
-            let mut tampered_signature = signature.clone();
-            // Ignore the first byte because the it is the key kind
-            let tamper_bit_index = 1 + rng.gen::<usize>() % (signature.len() - 1);
-            tampered_signature[tamper_bit_index] =
-                tampered_signature[tamper_bit_index].wrapping_add(1);
-            let verification_result =
-                verify_signature_for_spending(&public_key, &tampered_signature, &message).unwrap();
-            assert!(!verification_result);
-        }
-        {
-            // Wrong keys
-            let private_key = make_private_key();
-            let public_key = public_key_from_private_key(&private_key).unwrap();
-            let verification_result =
-                verify_signature_for_spending(&public_key, &signature, &message).unwrap();
-            assert!(!verification_result);
-        }
-    }
-
-    #[test]
-    fn transaction_get_id() {
-        let expected_tx_id = "35a7938c2a2aad5ae324e7d0536de245bf9e439169aa3c16f1492be117e5d0e0";
-        let tx_hex = "0100040000ff5d9a94390ee97208d31aa5c3b5ddbd8df9d308069df2ebf5283f7ce3e4261401000000080340f9924e4da0af7dc8c5be71a9c9e05962c7bf4ef96127fde7a7b4e1469e48620f0080e03779c31102000365807e3b4147cb978b78715e60606092f89dc769586e98456850bd3b449c87b400203015e9ef9fc142569e0f966bc0188464fa712a841e14002e0fe952a076a26c01e539c5f0ceba927ab8f8f55f274af739ce4eef3700000b00204aa9d10100000b409e4c355d010199e4ec3a5b176140ef9cd58c7d3579fdb0ecb21a";
-        let tx_signed_hex = "0100040000ff5d9a94390ee97208d31aa5c3b5ddbd8df9d308069df2ebf5283f7ce3e4261401000000080340f9924e4da0af7dc8c5be71a9c9e05962c7bf4ef96127fde7a7b4e1469e48620f0080e03779c31102000365807e3b4147cb978b78715e60606092f89dc769586e98456850bd3b449c87b400203015e9ef9fc142569e0f966bc0188464fa712a841e14002e0fe952a076a26c01e539c5f0ceba927ab8f8f55f274af739ce4eef3700000b00204aa9d10100000b409e4c355d010199e4ec3a5b176140ef9cd58c7d3579fdb0ecb21a0401018d010002eddd003bfb6333123e682abe6923da1d38faa4f0e0d9e2ee42d5aa46c152a34800a749a30c8c9c33696ce407fc145ebc9824e17b778d0d9ccc8129be52f37b74160e60f6689ac2f481071e1a63d9cf0f6eab84c2703b5e9f229cd8188ce092edd4";
-
-        let tx_bin = hex::decode(tx_hex).unwrap();
-        let tx_signed_bin = hex::decode(tx_signed_hex).unwrap();
-
-        assert_eq!(get_transaction_id(&tx_bin, true).unwrap(), expected_tx_id);
-        assert_eq!(get_transaction_id(&tx_bin, false).unwrap(), expected_tx_id);
-
-        get_transaction_id(&tx_signed_bin, true).unwrap_err();
-        assert_eq!(
-            get_transaction_id(&tx_signed_bin, false).unwrap(),
-            expected_tx_id
-        );
-    }
 }
