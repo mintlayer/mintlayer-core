@@ -26,7 +26,7 @@ use common::{
                 htlc::produce_classical_multisig_signature_for_htlc_input,
             },
             sighash::{
-                input_commitment::SighashInputCommitment, sighashtype::SigHashType, signature_hash,
+                input_commitments::SighashInputCommitment, sighashtype::SigHashType, signature_hash,
             },
         },
         timelock::OutputTimeLock,

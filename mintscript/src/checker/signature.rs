@@ -15,7 +15,7 @@
 
 use common::chain::{
     signature::{
-        sighash::input_commitment::SighashInputCommitment, DestinationSigError,
+        sighash::input_commitments::SighashInputCommitment, DestinationSigError,
         EvaluatedInputWitness, Transactable,
     },
     ChainConfig, Destination,

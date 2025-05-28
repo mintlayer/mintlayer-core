@@ -36,7 +36,7 @@ use common::{
         output_value::OutputValue,
         signature::{
             inputsig::{standard_signature::StandardInputSignature, InputWitness},
-            sighash::{input_commitment::SighashInputCommitment, sighashtype::SigHashType},
+            sighash::{input_commitments::SighashInputCommitment, sighashtype::SigHashType},
             DestinationSigError,
         },
         signed_transaction::SignedTransaction,

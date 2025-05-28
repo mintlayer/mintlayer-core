@@ -28,7 +28,7 @@ use crate::{
         output_value::OutputValue,
         signature::{
             inputsig::{standard_signature::StandardInputSignature, InputWitness},
-            sighash::{input_commitment::SighashInputCommitment, sighashtype::SigHashType},
+            sighash::{input_commitments::SighashInputCommitment, sighashtype::SigHashType},
             DestinationSigError, EvaluatedInputWitness, Signable,
         },
         signed_transaction::SignedTransaction,

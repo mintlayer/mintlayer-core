@@ -23,7 +23,7 @@ use common::{
             inputsig::InputWitness,
             sighash::{
                 self,
-                input_commitment::{
+                input_commitments::{
                     make_sighash_input_commitments_for_transaction_inputs, SighashInputCommitment,
                 },
             },
@@ -160,30 +160,30 @@ impl TxAdditionalInfo {
     }
 }
 
-impl sighash::input_commitment::PoolInfoProvider for TxAdditionalInfo {
+impl sighash::input_commitments::PoolInfoProvider for TxAdditionalInfo {
     type Error = std::convert::Infallible;
 
     fn get_pool_info(
         &self,
         pool_id: &PoolId,
-    ) -> Result<Option<sighash::input_commitment::PoolInfo>, Self::Error> {
+    ) -> Result<Option<sighash::input_commitments::PoolInfo>, Self::Error> {
         Ok(
-            self.pool_info.get(pool_id).map(|info| sighash::input_commitment::PoolInfo {
+            self.pool_info.get(pool_id).map(|info| sighash::input_commitments::PoolInfo {
                 staker_balance: info.staker_balance,
             }),
         )
     }
 }
 
-impl sighash::input_commitment::OrderInfoProvider for TxAdditionalInfo {
+impl sighash::input_commitments::OrderInfoProvider for TxAdditionalInfo {
     type Error = std::convert::Infallible;
 
     fn get_order_info(
         &self,
         order_id: &OrderId,
-    ) -> Result<Option<sighash::input_commitment::OrderInfo>, Self::Error> {
+    ) -> Result<Option<sighash::input_commitments::OrderInfo>, Self::Error> {
         Ok(
-            self.order_info.get(order_id).map(|info| sighash::input_commitment::OrderInfo {
+            self.order_info.get(order_id).map(|info| sighash::input_commitments::OrderInfo {
                 initially_asked: info.initially_asked.clone(),
                 initially_given: info.initially_given.clone(),
                 ask_balance: info.ask_balance,
@@ -466,7 +466,7 @@ impl PartiallySignedTransaction {
 
 // FIXME move elsewhere?
 pub type SighashInputCommitmentCreationError =
-    sighash::input_commitment::SighashInputCommitmentCreationError<
+    sighash::input_commitments::SighashInputCommitmentCreationError<
         std::convert::Infallible,
         std::convert::Infallible,
         std::convert::Infallible,
@@ -482,7 +482,7 @@ pub fn make_sighash_input_commitments<'a>(
 ) -> Result<Vec<SighashInputCommitment<'a>>, SighashInputCommitmentCreationError> {
     make_sighash_input_commitments_for_transaction_inputs(
         tx_inputs,
-        &sighash::input_commitment::TrivialUtxoProvider(input_utxos),
+        &sighash::input_commitments::TrivialUtxoProvider(input_utxos),
         additional_info,
         additional_info,
         chain_config,

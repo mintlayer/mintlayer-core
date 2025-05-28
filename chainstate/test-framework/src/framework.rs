@@ -27,7 +27,7 @@ use chainstate_types::{
 };
 use common::{
     chain::{
-        signature::sighash::{self, input_commitment::SighashInputCommitment},
+        signature::sighash::{self, input_commitments::SighashInputCommitment},
         Block, ChainConfig, GenBlock, GenBlockId, Genesis, OutPointSourceId, PoolId, TxInput,
         TxOutput, UtxoOutPoint,
     },
@@ -598,7 +598,7 @@ impl TestFramework {
         let pos_db = PoSAccountingDB::<_, TipStorageTag>::new(&storage_tx);
         let orders_db = OrdersAccountingDB::new(&storage_tx);
 
-        sighash::input_commitment::make_sighash_input_commitments_for_transaction_inputs(
+        sighash::input_commitments::make_sighash_input_commitments_for_transaction_inputs(
             inputs,
             &SighashInputCommitmentInfoProvider(&utxo_db),
             &SighashInputCommitmentInfoProvider(&pos_db),

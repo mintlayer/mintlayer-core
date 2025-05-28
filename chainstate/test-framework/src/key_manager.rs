@@ -31,7 +31,7 @@ use common::{
                 InputWitness,
             },
             sighash::{
-                input_commitment::SighashInputCommitment, sighashtype::SigHashType, signature_hash,
+                input_commitments::SighashInputCommitment, sighashtype::SigHashType, signature_hash,
             },
         },
         ChainConfig, Destination, Transaction, TxOutput,

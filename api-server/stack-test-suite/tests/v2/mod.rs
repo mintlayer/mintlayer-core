@@ -65,7 +65,7 @@ use common::{
         output_value::OutputValue,
         signature::{
             inputsig::{standard_signature::StandardInputSignature, InputWitness},
-            sighash::{input_commitment::SighashInputCommitment, sighashtype::SigHashType},
+            sighash::{input_commitments::SighashInputCommitment, sighashtype::SigHashType},
         },
         transaction::output::timelock::OutputTimeLock,
         Destination, OutPointSourceId, SignedTransaction, Transaction, TxInput, TxOutput,

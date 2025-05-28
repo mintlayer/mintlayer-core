@@ -19,7 +19,7 @@ use serialization::Encode;
 use standard_signature::StandardInputSignature;
 
 use crate::chain::{
-    htlc::HtlcSecret, signature::sighash::input_commitment::SighashInputCommitment, ChainConfig,
+    htlc::HtlcSecret, signature::sighash::input_commitments::SighashInputCommitment, ChainConfig,
     Destination, Transaction,
 };
 

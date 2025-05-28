@@ -358,7 +358,7 @@ fn signing_transactions_should_not_work(#[case] seed: Seed) {
     use std::borrow::Cow;
 
     use crate::chain::signature::{
-        sighash::input_commitment::SighashInputCommitment, tests::utils::verify_signature,
+        sighash::input_commitments::SighashInputCommitment, tests::utils::verify_signature,
     };
 
     let mut rng = test_utils::random::make_seedable_rng(seed);

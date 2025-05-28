@@ -35,7 +35,7 @@ use common::{
                 standard_signature::StandardInputSignature,
             },
             sighash::{
-                input_commitment::SighashInputCommitment, sighashtype::SigHashType, signature_hash,
+                input_commitments::SighashInputCommitment, sighashtype::SigHashType, signature_hash,
             },
             DestinationSigError,
         },

@@ -17,7 +17,7 @@ use std::convert::Infallible;
 
 use common::chain::{
     signature::{
-        inputsig::InputWitness, sighash::input_commitment::SighashInputCommitment,
+        inputsig::InputWitness, sighash::input_commitments::SighashInputCommitment,
         DestinationSigError, Transactable,
     },
     tokens::TokenId,

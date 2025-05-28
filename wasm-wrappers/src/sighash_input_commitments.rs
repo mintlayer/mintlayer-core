@@ -19,7 +19,7 @@ use common::{
     chain::{
         signature::sighash::{
             self,
-            input_commitment::{
+            input_commitments::{
                 make_sighash_input_commitments_for_transaction_inputs, OrderInfoProvider,
                 PoolInfoProvider, SighashInputCommitment,
             },
@@ -46,7 +46,7 @@ pub fn make_sighash_input_commitments<'a>(
 ) -> Result<Vec<SighashInputCommitment<'a>>, Error> {
     Ok(make_sighash_input_commitments_for_transaction_inputs(
         tx_inputs,
-        &sighash::input_commitment::TrivialUtxoProvider(input_utxos),
+        &sighash::input_commitments::TrivialUtxoProvider(input_utxos),
         inputs_info,
         inputs_info,
         chain_config,
@@ -55,15 +55,15 @@ pub fn make_sighash_input_commitments<'a>(
 }
 
 pub type SighashInputCommitmentCreationError =
-    sighash::input_commitment::SighashInputCommitmentCreationError<
+    sighash::input_commitments::SighashInputCommitmentCreationError<
         std::convert::Infallible,
         std::convert::Infallible,
         std::convert::Infallible,
     >;
 
 pub struct TxInputsAdditionalInfo {
-    pub pool_info: BTreeMap<PoolId, sighash::input_commitment::PoolInfo>,
-    pub order_info: BTreeMap<OrderId, sighash::input_commitment::OrderInfo>,
+    pub pool_info: BTreeMap<PoolId, sighash::input_commitments::PoolInfo>,
+    pub order_info: BTreeMap<OrderId, sighash::input_commitments::OrderInfo>,
 }
 
 impl TxInputsAdditionalInfo {
@@ -104,7 +104,7 @@ impl PoolInfoProvider for TxInputsAdditionalInfo {
     fn get_pool_info(
         &self,
         pool_id: &PoolId,
-    ) -> Result<Option<sighash::input_commitment::PoolInfo>, Self::Error> {
+    ) -> Result<Option<sighash::input_commitments::PoolInfo>, Self::Error> {
         Ok(self.pool_info.get(pool_id).cloned())
     }
 }
@@ -115,23 +115,23 @@ impl OrderInfoProvider for TxInputsAdditionalInfo {
     fn get_order_info(
         &self,
         order_id: &OrderId,
-    ) -> Result<Option<sighash::input_commitment::OrderInfo>, Self::Error> {
+    ) -> Result<Option<sighash::input_commitments::OrderInfo>, Self::Error> {
         Ok(self.order_info.get(order_id).cloned())
     }
 }
 
 fn convert_pool_info(
     info: &crate::types::PoolAdditionalInfo,
-) -> Result<sighash::input_commitment::PoolInfo, Error> {
+) -> Result<sighash::input_commitments::PoolInfo, Error> {
     let staker_balance = internal_amount_from_simple_amount(&info.staker_balance)?;
 
-    Ok(sighash::input_commitment::PoolInfo { staker_balance })
+    Ok(sighash::input_commitments::PoolInfo { staker_balance })
 }
 
 fn convert_order_info(
     chain_config: &ChainConfig,
     info: &crate::types::OrderAdditionalInfo,
-) -> Result<sighash::input_commitment::OrderInfo, Error> {
+) -> Result<sighash::input_commitments::OrderInfo, Error> {
     let initially_asked =
         output_value_from_simple_currency_amount(chain_config, &info.initially_asked)?;
     let initially_given =
@@ -140,7 +140,7 @@ fn convert_order_info(
     let ask_balance = internal_amount_from_simple_amount(&info.ask_balance)?;
     let give_balance = internal_amount_from_simple_amount(&info.give_balance)?;
 
-    Ok(sighash::input_commitment::OrderInfo {
+    Ok(sighash::input_commitments::OrderInfo {
         initially_asked,
         initially_given,
         ask_balance,

@@ -33,7 +33,7 @@ use common::{
                 standard_signature::StandardInputSignature, InputWitness,
             },
             sighash::{
-                input_commitment::make_sighash_input_commitments_for_kernel_input_utxos,
+                input_commitments::make_sighash_input_commitments_for_kernel_input_utxos,
                 sighashtype::SigHashType, signature_hash,
             },
         },

@@ -63,7 +63,7 @@ use common::{
         block::timestamp::BlockTimestamp,
         htlc::HtlcSecret,
         signature::{
-            inputsig::InputWitness, sighash::input_commitment::SighashInputCommitment,
+            inputsig::InputWitness, sighash::input_commitments::SighashInputCommitment,
             DestinationSigError, Transactable,
         },
         tokens::{RPCTokenInfo, TokenId},

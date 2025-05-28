@@ -14,11 +14,11 @@
 // limitations under the License.
 
 use crypto::hash::StreamHasher;
-use input_commitment::SighashInputCommitment;
+use input_commitments::SighashInputCommitment;
 use serialization::Encode;
 
 mod hashable;
-pub mod input_commitment;
+pub mod input_commitments;
 pub mod sighashtype;
 
 use crate::primitives::{

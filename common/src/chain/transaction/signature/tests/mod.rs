@@ -22,7 +22,7 @@ use serialization::{DecodeAll, Encode};
 use self::utils::*;
 use super::{
     inputsig::InputWitness,
-    sighash::{input_commitment::SighashInputCommitment, sighashtype::SigHashType},
+    sighash::{input_commitments::SighashInputCommitment, sighashtype::SigHashType},
 };
 use crate::{
     chain::{
@@ -51,7 +51,7 @@ pub mod utils;
 #[trace]
 #[case(Seed::from_entropy())]
 fn encode_decode_utxo_refs_roundtrip(#[case] seed: Seed) {
-    use crate::chain::signature::sighash::input_commitment::SighashInputCommitment;
+    use crate::chain::signature::sighash::input_commitments::SighashInputCommitment;
 
     let mut rng = test_utils::random::make_seedable_rng(seed);
 

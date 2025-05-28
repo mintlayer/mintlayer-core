@@ -29,7 +29,7 @@ use self::{
         standard_signature::StandardInputSignature,
         InputWitness,
     },
-    sighash::{input_commitment::SighashInputCommitment, signature_hash},
+    sighash::{input_commitments::SighashInputCommitment, signature_hash},
 };
 
 use super::{Destination, TxOutput};

@@ -45,7 +45,7 @@ use common::{
                 standard_signature::StandardInputSignature, InputWitness,
             },
             sighash::{
-                input_commitment::{
+                input_commitments::{
                     make_sighash_input_commitments_for_transaction_inputs, OrderInfo, PoolInfo,
                     SighashInputCommitment, TrivialUtxoProvider,
                 },

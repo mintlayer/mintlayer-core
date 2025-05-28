@@ -31,7 +31,7 @@ use common::{
             inputsig::{standard_signature::StandardInputSignature, InputWitness},
             sighash::{
                 self,
-                input_commitment::{
+                input_commitments::{
                     make_sighash_input_commitments_for_transaction_inputs, SighashInputCommitment,
                 },
                 sighashtype::SigHashType,
@@ -393,7 +393,7 @@ pub fn sign_witnesses(
         .collect::<Vec<_>>();
     let input_commitments = make_sighash_input_commitments_for_transaction_inputs(
         tx.inputs(),
-        &sighash::input_commitment::TrivialUtxoProvider(&inputs_utxos),
+        &sighash::input_commitments::TrivialUtxoProvider(&inputs_utxos),
         &SighashInputCommitmentInfoProvider(&pos_accounting_view),
         &SighashInputCommitmentInfoProvider(&order_accounting_view),
         chain_config,
@@ -490,7 +490,7 @@ pub fn create_custom_genesis_with_stake_pool(
 
 pub struct SighashInputCommitmentInfoProvider<'a, T>(pub &'a T);
 
-impl<'a, UV> sighash::input_commitment::UtxoProvider<'static>
+impl<'a, UV> sighash::input_commitments::UtxoProvider<'static>
     for SighashInputCommitmentInfoProvider<'a, UV>
 where
     UV: UtxosView,
@@ -506,7 +506,7 @@ where
     }
 }
 
-impl<'a, AV> sighash::input_commitment::PoolInfoProvider
+impl<'a, AV> sighash::input_commitments::PoolInfoProvider
     for SighashInputCommitmentInfoProvider<'a, AV>
 where
     AV: pos_accounting::PoSAccountingView,
@@ -516,15 +516,15 @@ where
     fn get_pool_info(
         &self,
         pool_id: &PoolId,
-    ) -> Result<Option<sighash::input_commitment::PoolInfo>, Self::Error> {
+    ) -> Result<Option<sighash::input_commitments::PoolInfo>, Self::Error> {
         Ok(self.0.get_pool_data(*pool_id).unwrap().map(|pool_data| {
             let staker_balance = pool_data.staker_balance().unwrap();
-            sighash::input_commitment::PoolInfo { staker_balance }
+            sighash::input_commitments::PoolInfo { staker_balance }
         }))
     }
 }
 
-impl<'a, OV> sighash::input_commitment::OrderInfoProvider
+impl<'a, OV> sighash::input_commitments::OrderInfoProvider
     for SighashInputCommitmentInfoProvider<'a, OV>
 where
     OV: orders_accounting::OrdersAccountingView,
@@ -534,11 +534,11 @@ where
     fn get_order_info(
         &self,
         order_id: &OrderId,
-    ) -> Result<Option<sighash::input_commitment::OrderInfo>, Self::Error> {
+    ) -> Result<Option<sighash::input_commitments::OrderInfo>, Self::Error> {
         Ok(self.0.get_order_data(order_id).unwrap().map(|order_data| {
             let ask_balance = self.0.get_ask_balance(order_id).unwrap();
             let give_balance = self.0.get_give_balance(order_id).unwrap();
-            sighash::input_commitment::OrderInfo {
+            sighash::input_commitments::OrderInfo {
                 initially_asked: order_data.ask().clone(),
                 initially_given: order_data.give().clone(),
                 ask_balance,

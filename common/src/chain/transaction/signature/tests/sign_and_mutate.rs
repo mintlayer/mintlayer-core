@@ -23,7 +23,7 @@ use crate::{
         config::create_mainnet,
         signature::{
             sighash::{
-                input_commitment::SighashInputCommitment,
+                input_commitments::SighashInputCommitment,
                 sighashtype::{OutputsMode, SigHashType},
             },
             tests::{

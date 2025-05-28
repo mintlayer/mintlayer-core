@@ -23,7 +23,7 @@ use common::{
             inputsig::InputWitness,
             sighash::{
                 self,
-                input_commitment::{
+                input_commitments::{
                     make_sighash_input_commitments_for_kernel_inputs,
                     make_sighash_input_commitments_for_transaction_inputs, SighashInputCommitment,
                     SighashInputCommitmentCreationError,
@@ -374,7 +374,7 @@ impl<'a> CoreContext<'a> {
     }
 }
 
-impl<'a, 'b> sighash::input_commitment::UtxoProvider<'a> for &'a CoreContext<'b> {
+impl<'a, 'b> sighash::input_commitments::UtxoProvider<'a> for &'a CoreContext<'b> {
     type Error = std::convert::Infallible;
 
     fn get_utxo(
@@ -411,7 +411,7 @@ impl<'a, 'b> sighash::input_commitment::UtxoProvider<'a> for &'a CoreContext<'b>
 // FIXME should it be separate wrappers each in the corresponding accounting crate?
 pub struct SighashInputCommitmentInfoProvidersImplementor<'a, T>(pub &'a T);
 
-impl<'a, UV> sighash::input_commitment::UtxoProvider<'static>
+impl<'a, UV> sighash::input_commitments::UtxoProvider<'static>
     for SighashInputCommitmentInfoProvidersImplementor<'a, UV>
 where
     UV: UtxosView,
@@ -428,7 +428,7 @@ where
     }
 }
 
-impl<'a, AV> sighash::input_commitment::PoolInfoProvider
+impl<'a, AV> sighash::input_commitments::PoolInfoProvider
     for SighashInputCommitmentInfoProvidersImplementor<'a, AV>
 where
     AV: pos_accounting::PoSAccountingView,
@@ -439,18 +439,18 @@ where
     fn get_pool_info(
         &self,
         pool_id: &PoolId,
-    ) -> Result<Option<sighash::input_commitment::PoolInfo>, Self::Error> {
+    ) -> Result<Option<sighash::input_commitments::PoolInfo>, Self::Error> {
         self.0
             .get_pool_data(*pool_id)?
             .map(|pool_data| {
                 let staker_balance = pool_data.staker_balance()?;
-                Ok(sighash::input_commitment::PoolInfo { staker_balance })
+                Ok(sighash::input_commitments::PoolInfo { staker_balance })
             })
             .transpose()
     }
 }
 
-impl<'a, OV> sighash::input_commitment::OrderInfoProvider
+impl<'a, OV> sighash::input_commitments::OrderInfoProvider
     for SighashInputCommitmentInfoProvidersImplementor<'a, OV>
 where
     OV: orders_accounting::OrdersAccountingView,
@@ -461,13 +461,13 @@ where
     fn get_order_info(
         &self,
         order_id: &OrderId,
-    ) -> Result<Option<sighash::input_commitment::OrderInfo>, Self::Error> {
+    ) -> Result<Option<sighash::input_commitments::OrderInfo>, Self::Error> {
         self.0
             .get_order_data(order_id)?
             .map(|order_data| {
                 let ask_balance = self.0.get_ask_balance(order_id)?;
                 let give_balance = self.0.get_give_balance(order_id)?;
-                Ok(sighash::input_commitment::OrderInfo {
+                Ok(sighash::input_commitments::OrderInfo {
                     initially_asked: order_data.ask().clone(),
                     initially_given: order_data.give().clone(),
                     ask_balance,

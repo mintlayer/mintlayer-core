@@ -29,7 +29,7 @@ use common::{
         output_value::OutputValue,
         signature::{
             inputsig::{standard_signature::StandardInputSignature, InputWitness},
-            sighash::input_commitment::SighashInputCommitment,
+            sighash::input_commitments::SighashInputCommitment,
             DestinationSigError,
         },
         stakelock::StakePoolData,
