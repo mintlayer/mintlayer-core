@@ -31,14 +31,17 @@ use common::{
         ChainConfig, Destination, SignedTransactionIntent, SignedTransactionIntentError,
         Transaction,
     },
+    primitives::BlockHeight,
 };
 use crypto::key::hdkd::{derivable::DerivationError, u31::U31};
 use wallet_storage::{
     WalletStorageReadLocked, WalletStorageReadUnlocked, WalletStorageWriteUnlocked,
 };
 use wallet_types::{
-    hw_data::HardwareWalletData, partially_signed_transaction::PartiallySignedTransaction,
-    signature_status::SignatureStatus, AccountId,
+    hw_data::HardwareWalletData,
+    partially_signed_transaction::{PartiallySignedTransaction, PartiallySignedTransactionError},
+    signature_status::SignatureStatus,
+    AccountId,
 };
 
 use crate::{
@@ -93,6 +96,8 @@ pub enum SignerError {
     AddressError(#[from] AddressError),
     #[error("Order was filled more than the available balance")]
     OrderFillUnderflow,
+    #[error("Partially signed transaction error: {0}")]
+    PartiallySignedTransactionError(#[from] PartiallySignedTransactionError),
 }
 
 type SignerResult<T> = Result<T, SignerError>;
@@ -106,6 +111,7 @@ pub trait Signer {
         tx: PartiallySignedTransaction,
         key_chain: &impl AccountKeyChains,
         db_tx: &impl WalletStorageReadUnlocked,
+        block_height: BlockHeight,
     ) -> SignerResult<(
         PartiallySignedTransaction,
         Vec<SignatureStatus>,

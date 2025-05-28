@@ -988,7 +988,12 @@ where
             &self.utxo_cache,
         )?;
 
-        self.verify_inputs(tx, tx_source, *median_time_past)?;
+        self.verify_inputs(
+            tx,
+            tx_source,
+            *median_time_past,
+            tx_source.expected_block_height(),
+        )?;
 
         self.connect_pos_accounting_outputs(tx_source, tx.transaction())?;
 
@@ -1019,23 +1024,25 @@ where
         total_fees: Fee,
         median_time_past: BlockTimestamp,
     ) -> Result<(), ConnectTransactionError> {
+        let block_height = block_index.block_height();
+        let block_id = *block_index.block_id();
+
         // TODO: test spending block rewards from chains outside the mainchain
         if reward_transactable.inputs().is_some() {
             let tx_source = TransactionSourceForConnect::for_chain(block_index);
-            self.verify_inputs(&reward_transactable, &tx_source, median_time_past)?;
+            self.verify_inputs(
+                &reward_transactable,
+                &tx_source,
+                median_time_past,
+                block_height,
+            )?;
         }
-
-        let block_id = *block_index.block_id();
 
         // spend inputs of the block reward
         // if block reward has no inputs then only outputs will be added to the utxo set
         let reward_undo = self
             .utxo_cache
-            .connect_block_transactable(
-                &reward_transactable,
-                &block_id.into(),
-                block_index.block_height(),
-            )
+            .connect_block_transactable(&reward_transactable, &block_id.into(), block_height)
             .map_err(ConnectTransactionError::from)?;
 
         if let Some(reward_undo) = reward_undo {
@@ -1049,7 +1056,7 @@ where
             ConsensusData::PoS(pos_data) => {
                 // distribute reward among staker and delegators
                 let block_subsidy =
-                    self.chain_config.as_ref().block_subsidy_at_height(&block_index.block_height());
+                    self.chain_config.as_ref().block_subsidy_at_height(&block_height);
                 let total_reward = (block_subsidy + total_fees.0)
                     .ok_or(ConnectTransactionError::RewardAdditionError(block_id))?;
 
@@ -1061,7 +1068,7 @@ where
                         .chain_config
                         .as_ref()
                         .chainstate_upgrades()
-                        .version_at_height(block_index.block_height())
+                        .version_at_height(block_height)
                         .1
                         .reward_distribution_version();
 
@@ -1206,11 +1213,12 @@ where
         self.utxo_cache.set_best_block(id);
     }
 
-    pub fn verify_inputs<Tx>(
+    pub fn verify_inputs<'a, Tx>(
         &self,
-        tx: &Tx,
+        tx: &'a Tx,
         tx_source: &TransactionSourceForConnect,
         median_time_past: BlockTimestamp,
+        height: BlockHeight,
     ) -> Result<(), input_check::InputCheckError>
     where
         Tx: input_check::FullyVerifiable<
@@ -1229,6 +1237,7 @@ where
             &self.storage,
             tx_source,
             median_time_past,
+            height,
         )
     }
 

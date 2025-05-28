@@ -223,15 +223,6 @@ def init_mintlayer_types():
                 ]
             },
 
-            "InfoId": {
-                "type": "enum",
-                "type_mapping": [
-                    ["TokenId", "H256"],
-                    ["PoolId", "H256"],
-                    ["OrderId", "H256"],
-                ],
-            },
-
             "TxAdditionalInfo": {
                 "type": "struct",
                 "type_mapping": [
@@ -265,7 +256,7 @@ def init_mintlayer_types():
                     ["input_utxos", "Vec<Option<TxOutput>>"],
                     ["destinations", "Vec<Option<Destination>>"],
                     ["htlc_secrets", "Vec<Option<[u8; 32]>>"],
-                    ["additional_infos", "TxAdditionalInfo"],
+                    ["additional_info", "TxAdditionalInfo"],
                 ]
             },
 

@@ -13,15 +13,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::convert::Infallible;
+use std::{borrow::Cow, convert::Infallible};
 
 use chainstate_types::block_index_ancestor_getter;
 use common::{
     chain::{
-        block::timestamp::BlockTimestamp,
-        signature::{inputsig::InputWitness, DestinationSigError, Transactable},
+        block::{timestamp::BlockTimestamp, BlockRewardTransactable},
+        signature::{
+            inputsig::InputWitness,
+            sighash::{
+                self,
+                input_commitment::{
+                    make_sighash_input_commitments_for_kernel_inputs,
+                    make_sighash_input_commitments_for_transaction_inputs, SighashInputCommitment,
+                    SighashInputCommitmentCreationError,
+                },
+            },
+            DestinationSigError, Signable, Transactable,
+        },
         tokens::TokenId,
-        ChainConfig, DelegationId, Destination, GenBlock, PoolId, TxInput, TxOutput,
+        ChainConfig, DelegationId, Destination, GenBlock, OrderId, PoolId, SignedTransaction,
+        TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{BlockHeight, Id},
 };
@@ -29,6 +41,8 @@ use mintscript::{
     translate::InputInfoProvider, InputInfo, SignatureContext, TimelockContext, TranslateInput,
     WitnessScript,
 };
+use utils::debug_assert_or_log;
+use utxo::UtxosView;
 
 use crate::TransactionVerifierStorageRef;
 
@@ -46,11 +60,29 @@ pub enum InputCheckErrorPayload {
     #[error("Utxo {0:?} missing or spent")]
     MissingUtxo(common::chain::UtxoOutPoint),
 
+    #[error("Pool not found: {0}")]
+    PoolNotFound(PoolId),
+
+    #[error("Order not found: {0}")]
+    OrderNotFound(OrderId),
+
+    #[error("Non-utxo kernel input: {0:?}")]
+    NonUtxoKernelInput(TxInput),
+
     #[error("Utxo view error: {0}")]
     UtxoView(#[from] utxo::Error),
 
+    #[error("Utxo info provider error: {0}")]
+    UtxoInfoProvider(chainstate_types::storage_result::Error),
+
+    #[error("Pool info provider error: {0}")]
+    PoolInfoProvider(pos_accounting::Error),
+
+    #[error("Orders info provider error: {0}")]
+    OrderInfoProvider(orders_accounting::Error),
+
     #[error(transparent)]
-    Translation(#[from] mintscript::translate::TranslationError),
+    Translation(mintscript::translate::TranslationError),
 
     #[error(transparent)]
     Verification(#[from] ScriptError),
@@ -80,11 +112,67 @@ impl From<mintscript::script::ScriptError<DestinationSigError, Infallible, Infal
     }
 }
 
+// Note: InputCheckErrorPayload::OrderNotFound may or may not be produced when creating input commitments,
+// depending on whether we commit to order inputs or not. Since commitments are created before
+// the input checks are performed, this may result in different errors being returned for a missing order.
+// The purpose of this "impl From" is to unify the errors, so that tests may check only for one of them.
+impl From<mintscript::translate::TranslationError> for InputCheckErrorPayload {
+    fn from(value: mintscript::translate::TranslationError) -> Self {
+        match value {
+            mintscript::translate::TranslationError::OrderNotFound(id) => Self::OrderNotFound(id),
+            _ => Self::Translation(value),
+        }
+    }
+}
+
 #[derive(PartialEq, Eq, Clone, thiserror::Error, Debug)]
 #[error("Error verifying input #{input_num}: {error}")]
 pub struct InputCheckError {
     input_num: usize,
     error: InputCheckErrorPayload,
+}
+
+impl<UPE, PIPE, OIPE> From<SighashInputCommitmentCreationError<UPE, PIPE, OIPE>> for InputCheckError
+where
+    UPE: std::error::Error,
+    PIPE: std::error::Error,
+    OIPE: std::error::Error,
+    chainstate_types::storage_result::Error: From<UPE>,
+    pos_accounting::Error: From<PIPE>,
+    orders_accounting::Error: From<OIPE>,
+{
+    fn from(value: SighashInputCommitmentCreationError<UPE, PIPE, OIPE>) -> Self {
+        let (error, input_index) = match value {
+            SighashInputCommitmentCreationError::UtxoProviderError(err, input_index) => (
+                InputCheckErrorPayload::UtxoInfoProvider(err.into()),
+                input_index,
+            ),
+            SighashInputCommitmentCreationError::PoolInfoProviderError(err, input_index) => (
+                InputCheckErrorPayload::PoolInfoProvider(err.into()),
+                input_index,
+            ),
+            SighashInputCommitmentCreationError::OrderInfoProviderError(err, input_index) => (
+                InputCheckErrorPayload::OrderInfoProvider(err.into()),
+                input_index,
+            ),
+            SighashInputCommitmentCreationError::NonUtxoKernelInput(tx_input, input_index) => (
+                InputCheckErrorPayload::NonUtxoKernelInput(tx_input),
+                input_index,
+            ),
+            SighashInputCommitmentCreationError::UtxoNotFound(utxo_out_point, input_index) => (
+                InputCheckErrorPayload::MissingUtxo(utxo_out_point),
+                input_index,
+            ),
+            SighashInputCommitmentCreationError::PoolNotFound(id, input_index) => {
+                (InputCheckErrorPayload::PoolNotFound(id), input_index)
+            }
+            SighashInputCommitmentCreationError::OrderNotFound(id, input_index) => {
+                (InputCheckErrorPayload::OrderNotFound(id), input_index)
+            }
+        };
+
+        InputCheckError::new(input_index, error)
+    }
 }
 
 impl InputCheckError {
@@ -299,6 +387,110 @@ impl<'a> CoreContext<'a> {
     }
 }
 
+impl<'a, 'b> sighash::input_commitment::UtxoProvider<'a> for &'a CoreContext<'b> {
+    type Error = std::convert::Infallible;
+
+    fn get_utxo(
+        &self,
+        tx_input_index: usize,
+        outpoint: &common::chain::UtxoOutPoint,
+    ) -> Result<Option<Cow<'a, TxOutput>>, Self::Error> {
+        let utxo =
+            self.inputs_and_sigs.get(tx_input_index).and_then(|input_data| {
+                match &input_data.input {
+                    InputInfo::Utxo {
+                        outpoint: actual_outpoint,
+                        utxo,
+                        utxo_source: _,
+                    } => {
+                        debug_assert_or_log!(
+                            *actual_outpoint == outpoint,
+                            "actual_outpoint = {actual_outpoint:?}, outpoint = {outpoint:?}"
+                        );
+                        Some(Cow::Borrowed(utxo))
+                    }
+                    InputInfo::Account { .. }
+                    | InputInfo::AccountCommand { .. }
+                    | InputInfo::OrderAccountCommand { .. } => None,
+                }
+            });
+
+        Ok(utxo)
+    }
+}
+
+/// A wrapper that implements the "InfoProvider" traits from sighash::input_commitment;
+/// this is needed to work around Rust's "orphan rule".
+// FIXME should it be separate wrappers each in the corresponding accounting crate?
+pub struct SighashInputCommitmentInfoProvidersImplementor<'a, T>(pub &'a T);
+
+impl<'a, UV> sighash::input_commitment::UtxoProvider<'static>
+    for SighashInputCommitmentInfoProvidersImplementor<'a, UV>
+where
+    UV: UtxosView,
+    chainstate_types::storage_result::Error: From<<UV as UtxosView>::Error>,
+{
+    type Error = chainstate_types::storage_result::Error;
+
+    fn get_utxo(
+        &self,
+        _tx_input_index: usize,
+        outpoint: &UtxoOutPoint,
+    ) -> Result<Option<Cow<'static, TxOutput>>, Self::Error> {
+        Ok(self.0.utxo(outpoint)?.map(|utxo| Cow::Owned(utxo.take_output())))
+    }
+}
+
+impl<'a, AV> sighash::input_commitment::PoolInfoProvider
+    for SighashInputCommitmentInfoProvidersImplementor<'a, AV>
+where
+    AV: pos_accounting::PoSAccountingView,
+    pos_accounting::Error: From<<AV as pos_accounting::PoSAccountingView>::Error>,
+{
+    type Error = pos_accounting::Error;
+
+    fn get_pool_info(
+        &self,
+        pool_id: &PoolId,
+    ) -> Result<Option<sighash::input_commitment::PoolInfo>, Self::Error> {
+        self.0
+            .get_pool_data(*pool_id)?
+            .map(|pool_data| {
+                let staker_balance = pool_data.staker_balance()?;
+                Ok(sighash::input_commitment::PoolInfo { staker_balance })
+            })
+            .transpose()
+    }
+}
+
+impl<'a, OV> sighash::input_commitment::OrderInfoProvider
+    for SighashInputCommitmentInfoProvidersImplementor<'a, OV>
+where
+    OV: orders_accounting::OrdersAccountingView,
+    orders_accounting::Error: From<<OV as orders_accounting::OrdersAccountingView>::Error>,
+{
+    type Error = orders_accounting::Error;
+
+    fn get_order_info(
+        &self,
+        order_id: &OrderId,
+    ) -> Result<Option<sighash::input_commitment::OrderInfo>, Self::Error> {
+        self.0
+            .get_order_data(order_id)?
+            .map(|order_data| {
+                let ask_balance = self.0.get_ask_balance(order_id)?;
+                let give_balance = self.0.get_give_balance(order_id)?;
+                Ok(sighash::input_commitment::OrderInfo {
+                    initially_asked: order_data.ask().clone(),
+                    initially_given: order_data.give().clone(),
+                    ask_balance,
+                    give_balance,
+                })
+            })
+            .transpose()
+    }
+}
+
 // Context shared between timelock and full verification.
 struct VerifyContextTimelock<'a, S> {
     // Information about the chain
@@ -442,20 +634,21 @@ impl<S: TransactionVerifierStorageRef> TimelockContext for InputVerifyContextTim
 struct VerifyContextFull<'a, T, S> {
     // Here we need more information about the transaction
     transaction: &'a T,
-    spent_utxos: Vec<Option<&'a TxOutput>>,
+    input_commitments: Vec<SighashInputCommitment<'a>>,
 
     // And the part of the context that's shared with timelock verification
     sub_ctx: &'a VerifyContextTimelock<'a, S>,
 }
 
 impl<'a, T, S> VerifyContextFull<'a, T, S> {
-    fn new(transaction: &'a T, sub_ctx: &'a VerifyContextTimelock<'a, S>) -> Self {
-        let inp_iter = sub_ctx.core_ctx.inputs_and_sigs.iter();
-        let spent_utxos = inp_iter.map(|d| d.input_info().as_utxo_output()).collect();
-
+    fn new(
+        transaction: &'a T,
+        input_commitments: Vec<SighashInputCommitment<'a>>,
+        sub_ctx: &'a VerifyContextTimelock<'a, S>,
+    ) -> Self {
         Self {
             transaction,
-            spent_utxos,
+            input_commitments,
             sub_ctx,
         }
     }
@@ -507,8 +700,8 @@ impl<T: Transactable, S> SignatureContext for InputVerifyContextFull<'_, T, S> {
         self.ctx.transaction
     }
 
-    fn input_utxos(&self) -> &[Option<&TxOutput>] {
-        &self.ctx.spent_utxos
+    fn input_commitments(&self) -> &[SighashInputCommitment] {
+        &self.ctx.input_commitments
     }
 
     fn input_num(&self) -> usize {
@@ -516,20 +709,86 @@ impl<T: Transactable, S> SignatureContext for InputVerifyContextFull<'_, T, S> {
     }
 }
 
+pub trait SighashInputCommitmentSource {
+    fn get_input_commitments<'a, AV, OV>(
+        &self,
+        core_ctx: &'a CoreContext,
+        pos_accounting: &'a AV,
+        orders_accounting: &'a OV,
+        chain_config: &ChainConfig,
+        block_height: BlockHeight,
+    ) -> Result<Vec<SighashInputCommitment<'a>>, InputCheckError>
+    where
+        AV: pos_accounting::PoSAccountingView<Error = pos_accounting::Error>,
+        OV: orders_accounting::OrdersAccountingView<Error = orders_accounting::Error>;
+}
+
+impl SighashInputCommitmentSource for SignedTransaction {
+    fn get_input_commitments<'a, AV, OV>(
+        &self,
+        core_ctx: &'a CoreContext,
+        pos_accounting: &'a AV,
+        orders_accounting: &'a OV,
+        chain_config: &ChainConfig,
+        block_height: BlockHeight,
+    ) -> Result<Vec<SighashInputCommitment<'a>>, InputCheckError>
+    where
+        AV: pos_accounting::PoSAccountingView<Error = pos_accounting::Error>,
+        OV: orders_accounting::OrdersAccountingView<Error = orders_accounting::Error>,
+    {
+        Ok(make_sighash_input_commitments_for_transaction_inputs(
+            self.inputs(),
+            &core_ctx,
+            &SighashInputCommitmentInfoProvidersImplementor(pos_accounting),
+            &SighashInputCommitmentInfoProvidersImplementor(orders_accounting),
+            chain_config,
+            block_height,
+        )?)
+    }
+}
+
+impl<'b> SighashInputCommitmentSource for BlockRewardTransactable<'b> {
+    fn get_input_commitments<'a, AV, OV>(
+        &self,
+        core_ctx: &'a CoreContext,
+        _pos_accounting: &'a AV,
+        _orders_accounting: &'a OV,
+        _chain_config: &ChainConfig,
+        _block_height: BlockHeight,
+    ) -> Result<Vec<SighashInputCommitment<'a>>, InputCheckError>
+    where
+        AV: pos_accounting::PoSAccountingView<Error = pos_accounting::Error>,
+        OV: orders_accounting::OrdersAccountingView<Error = orders_accounting::Error>,
+    {
+        if let Some(kernel_inputs) = self.inputs() {
+            let commitments =
+                make_sighash_input_commitments_for_kernel_inputs(kernel_inputs, &core_ctx)?;
+
+            Ok(commitments)
+        } else {
+            Ok(Vec::new())
+        }
+    }
+}
+
 pub trait FullyVerifiable<AV, TV, OV>:
-    Transactable + for<'a> TranslateInput<TranslationContextFull<'a, &'a AV, &'a TV, &'a OV>>
+    Transactable
+    + for<'a> TranslateInput<TranslationContextFull<'a, &'a AV, &'a TV, &'a OV>>
+    + SighashInputCommitmentSource
 {
 }
 
 impl<T, AV, TV, OV> FullyVerifiable<AV, TV, OV> for T where
-    T: Transactable + for<'a> TranslateInput<TranslationContextFull<'a, &'a AV, &'a TV, &'a OV>>
+    T: Transactable
+        + for<'a> TranslateInput<TranslationContextFull<'a, &'a AV, &'a TV, &'a OV>>
+        + SighashInputCommitmentSource
 {
 }
 
 /// Perform full verification of given input.
 #[allow(clippy::too_many_arguments)]
-pub fn verify_full<T, S, UV, AV, TV, OV>(
-    transaction: &T,
+pub fn verify_full<'a, T, S, UV, AV, TV, OV>(
+    transaction: &'a T,
     chain_config: &ChainConfig,
     utxos_view: &UV,
     pos_accounting: &AV,
@@ -538,6 +797,7 @@ pub fn verify_full<T, S, UV, AV, TV, OV>(
     storage: &S,
     tx_source: &TransactionSourceForConnect,
     spending_time: BlockTimestamp,
+    height: BlockHeight,
 ) -> Result<(), InputCheckError>
 where
     T: FullyVerifiable<AV, TV, OV>,
@@ -555,7 +815,14 @@ where
         spending_time,
         &core_ctx,
     );
-    let ctx = VerifyContextFull::new(transaction, &tl_ctx);
+    let input_commitments = transaction.get_input_commitments(
+        &core_ctx,
+        pos_accounting,
+        orders_accounting,
+        chain_config,
+        height,
+    )?;
+    let ctx = VerifyContextFull::new(transaction, input_commitments, &tl_ctx);
 
     for (n, inp) in core_ctx.inputs_iter() {
         let script =

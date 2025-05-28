@@ -48,6 +48,29 @@ impl OutputValue {
             OutputValue::TokenV0(_) | OutputValue::TokenV1(_, _) => None,
         }
     }
+
+    pub fn amount(&self) -> Amount {
+        match self {
+            OutputValue::Coin(amount) => *amount,
+            OutputValue::TokenV0(token_data) => {
+                let token_data = token_data.as_ref();
+                match token_data {
+                    TokenData::TokenTransfer(transfer) => transfer.amount,
+                    TokenData::TokenIssuance(issuance) => issuance.amount_to_issue,
+                    TokenData::NftIssuance(_) => Amount::from_atoms(1),
+                }
+            }
+            OutputValue::TokenV1(_, amount) => *amount,
+        }
+    }
+
+    pub fn token_v1_id(&self) -> Option<&TokenId> {
+        match self {
+            OutputValue::Coin(_) => None,
+            OutputValue::TokenV0(_) => None,
+            OutputValue::TokenV1(id, _) => Some(id),
+        }
+    }
 }
 
 impl From<TokenData> for OutputValue {
@@ -107,10 +130,10 @@ impl RpcOutputValue {
         }
     }
 
-    pub fn token_id(&self) -> Option<TokenId> {
+    pub fn token_id(&self) -> Option<&TokenId> {
         match self {
             RpcOutputValue::Coin { amount: _ } => None,
-            RpcOutputValue::Token { id, amount: _ } => Some(*id),
+            RpcOutputValue::Token { id, amount: _ } => Some(id),
         }
     }
 }

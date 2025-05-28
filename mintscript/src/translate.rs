@@ -85,21 +85,6 @@ pub enum InputInfo<'a> {
     },
 }
 
-impl InputInfo<'_> {
-    pub fn as_utxo_output(&self) -> Option<&TxOutput> {
-        match self {
-            InputInfo::Utxo {
-                outpoint: _,
-                utxo,
-                utxo_source: _,
-            } => Some(utxo),
-            InputInfo::Account { .. }
-            | InputInfo::AccountCommand { .. }
-            | InputInfo::OrderAccountCommand { .. } => None,
-        }
-    }
-}
-
 pub trait InputInfoProvider {
     fn input_info(&self) -> &InputInfo;
     fn witness(&self) -> &InputWitness;
