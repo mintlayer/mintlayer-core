@@ -17,12 +17,26 @@ use std::str::FromStr as _;
 
 use common::{
     address::{traits::Addressable, Address},
-    chain::ChainConfig,
+    chain::{
+        output_value::OutputValue,
+        signature::{
+            inputsig::{
+                authorize_hashed_timelock_contract_spend::AuthorizedHashedTimelockContractSpend,
+                InputWitness, InputWitnessTag,
+            },
+            sighash::sighashtype::SigHashType,
+        },
+        tokens::TokenId,
+        ChainConfig,
+    },
     primitives,
 };
 use serialization::Decode;
 
-use crate::error::Error;
+use crate::{
+    error::Error,
+    types::{SimpleAmount, SimpleCurrencyAmount},
+};
 
 pub fn decode_raw_array<T: Decode>(mut array: &[u8]) -> Result<Vec<T>, serialization::Error> {
     let mut result = Vec::new();
@@ -55,4 +69,42 @@ pub fn internal_amount_from_atoms_str(atoms: &str) -> Result<primitives::Amount,
         .ok_or_else(|| Error::AtomsAmountParseError {
             atoms: atoms.to_owned(),
         })
+}
+
+pub fn internal_amount_from_simple_amount(
+    amount: &SimpleAmount,
+) -> Result<primitives::Amount, Error> {
+    internal_amount_from_atoms_str(&amount.atoms)
+}
+
+pub fn output_value_from_simple_currency_amount(
+    chain_config: &ChainConfig,
+    amount: &SimpleCurrencyAmount,
+) -> Result<OutputValue, Error> {
+    let result = match amount {
+        SimpleCurrencyAmount::Coins(amount) => {
+            OutputValue::Coin(internal_amount_from_simple_amount(&amount)?)
+        }
+        SimpleCurrencyAmount::Tokens(token_amount) => {
+            let token_id = parse_addressable::<TokenId>(chain_config, &token_amount.token_id)?;
+            let amount = internal_amount_from_simple_amount(&token_amount.amount)?;
+            OutputValue::TokenV1(token_id, amount)
+        }
+    };
+    Ok(result)
+}
+
+pub fn extract_htlc_spend(
+    witness: &InputWitness,
+) -> Result<(AuthorizedHashedTimelockContractSpend, SigHashType), Error> {
+    match witness {
+        InputWitness::NoSignature(_) => {
+            Err(Error::UnexpectedWitnessType(InputWitnessTag::NoSignature))
+        }
+        InputWitness::Standard(sig) => Ok((
+            AuthorizedHashedTimelockContractSpend::from_data(sig.raw_signature())
+                .map_err(Error::HtlcSpendDecodingError)?,
+            sig.sighash_type(),
+        )),
+    }
 }

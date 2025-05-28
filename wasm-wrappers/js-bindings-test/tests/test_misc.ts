@@ -19,7 +19,6 @@ import {
   get_transaction_id,
   effective_pool_balance,
   make_default_account_privkey,
-  make_private_key,
   Network,
   pubkey_to_pubkeyhash_address,
   public_key_from_private_key,
@@ -38,6 +37,7 @@ import {
 } from "./utils.js";
 
 import {
+  generate_prv_key,
   get_predefined_prv_key,
   get_predefined_pub_key,
 } from "./defs.js";
@@ -119,7 +119,7 @@ function test_sign_challenge() {
     throw new Error("Invalid sing and verify challenge");
   }
 
-  const different_priv_key = make_private_key();
+  const different_priv_key = generate_prv_key("different_priv_key");
   const different_pub_key = public_key_from_private_key(different_priv_key);
   let different_address = pubkey_to_pubkeyhash_address(different_pub_key, Network.Testnet);
   try {

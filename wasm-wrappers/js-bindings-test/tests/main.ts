@@ -21,6 +21,7 @@ import { test_address_generation } from "./test_address_generation.js";
 import { test_encode_other_inputs } from "./test_encode_other_inputs.js";
 import { test_encode_other_outputs } from "./test_encode_other_outputs.js";
 import { test_htlc } from "./test_htlc.js";
+import { test_input_commitments } from "./test_input_commitments.js";
 import { test_misc } from "./test_misc.js";
 import { test_orders } from "./test_orders.js";
 import { test_signed_transaction_intent } from "./test_signed_transaction_intent.js";
@@ -32,6 +33,7 @@ export function run_all_tests() {
   run_one_test(test_encode_other_inputs);
   run_one_test(test_encode_other_outputs);
   run_one_test(test_htlc);
+  run_one_test(test_input_commitments);
   run_one_test(test_misc);
   run_one_test(test_orders);
   run_one_test(test_signed_transaction_intent);

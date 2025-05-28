@@ -48,34 +48,40 @@ fn sign_and_verify_all_and_none(#[case] seed: Seed) {
     let test_data = [(0, 31), (31, 0), (20, 3), (3, 20)];
     let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
 
-    for ((destination, sighash_type), (inputs, outputs)) in destinations(&mut rng, public_key)
-        .cartesian_product(sig_hash_types().filter(|t| t.outputs_mode() != OutputsMode::Single))
-        .cartesian_product(test_data)
+    for ((destination, sighash_type), (inputs_count, outputs_count)) in
+        destinations(&mut rng, public_key)
+            .cartesian_product(sig_hash_types().filter(|t| t.outputs_mode() != OutputsMode::Single))
+            .cartesian_product(test_data)
     {
-        let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, inputs);
-        let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
+        let input_commitments = generate_input_commitments(&mut rng, inputs_count);
 
-        let tx = generate_unsigned_tx(&mut rng, &destination, &inputs_utxos, outputs).unwrap();
+        let tx = generate_unsigned_tx(
+            &mut rng,
+            &destination,
+            input_commitments.len(),
+            outputs_count,
+        )
+        .unwrap();
         let signed_tx = sign_whole_tx(
             &mut rng,
             tx,
-            &inputs_utxos_refs,
+            &input_commitments,
             &private_key,
             sighash_type,
             &destination,
         );
         // `sign_whole_tx` does nothing if there no inputs.
-        if destination == Destination::AnyoneCanSpend && inputs > 0 {
+        if destination == Destination::AnyoneCanSpend && inputs_count > 0 {
             assert_eq!(
                 signed_tx,
                 Err(DestinationSigError::AttemptedToProduceSignatureForAnyoneCanSpend)
             );
-        } else if matches!(destination, Destination::ScriptHash(_)) && inputs > 0 {
+        } else if matches!(destination, Destination::ScriptHash(_)) && inputs_count > 0 {
             // This should be updated after ScriptHash support is implemented.
             assert_eq!(signed_tx, Err(DestinationSigError::Unsupported));
         } else {
             let signed_tx = signed_tx.expect("{sighash_type:?} {destination:?}");
-            verify_signed_tx(&chain_config, &signed_tx, &inputs_utxos_refs, &destination)
+            verify_signed_tx(&chain_config, &signed_tx, &input_commitments, &destination)
                 .expect("{sighash_type:?} {destination:?}")
         }
     }
@@ -245,21 +251,27 @@ fn sign_and_verify_single(#[case] seed: Seed) {
         ),
     ];
 
-    for (destination, sighash_type, inputs, outputs, expected) in test_data.into_iter() {
-        let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, inputs);
-        let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
+    for (destination, sighash_type, inputs_count, outputs_count, expected) in test_data.into_iter()
+    {
+        let input_commitments = generate_input_commitments(&mut rng, inputs_count);
 
-        let tx = generate_unsigned_tx(&mut rng, &destination, &inputs_utxos, outputs).unwrap();
+        let tx = generate_unsigned_tx(
+            &mut rng,
+            &destination,
+            input_commitments.len(),
+            outputs_count,
+        )
+        .unwrap();
         match sign_whole_tx(
             &mut rng,
             tx,
-            &inputs_utxos_refs,
+            &input_commitments,
             &private_key,
             sighash_type,
             &destination,
         ) {
             Ok(signed_tx) => {
-                verify_signed_tx(&chain_config, &signed_tx, &inputs_utxos_refs, &destination)
+                verify_signed_tx(&chain_config, &signed_tx, &input_commitments, &destination)
                     .expect("{sighash_type:X?}, {destination:?}")
             }
             Err(err) => assert_eq!(Err(err), expected, "{sighash_type:X?}, {destination:?}"),

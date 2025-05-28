@@ -19,9 +19,10 @@ use itertools::izip;
 
 use common::{
     chain::{
+        self,
         block::timestamp::BlockTimestamp,
         classic_multisig::ClassicMultisigChallenge,
-        config::create_regtest,
+        config::ChainType,
         htlc::HashedTimelockContract,
         output_value::OutputValue,
         signature::{
@@ -38,8 +39,9 @@ use common::{
             IsTokenUnfreezable, Metadata, NftIssuance, NftIssuanceV0, TokenId, TokenIssuance,
             TokenIssuanceV1,
         },
-        AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, ChainConfig, DelegationId,
-        Destination, OrderData, OrderId, OutPointSourceId, PoolId, Transaction, TxInput, TxOutput,
+        AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, ChainConfig,
+        ChainstateUpgradeBuilder, DelegationId, Destination, NetUpgrades, OrderData, OrderId,
+        OutPointSourceId, PoolId, SighashInputCommitmentVersion, Transaction, TxInput, TxOutput,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, H256},
 };
@@ -69,7 +71,34 @@ where
     MkS: Fn(Arc<ChainConfig>, U31) -> S,
     S: Signer,
 {
-    let chain_config = Arc::new(create_regtest());
+    let sighash_input_commitment_version_fork_height = BlockHeight::new(rng.gen_range(1..100_000));
+    // The height shouldn't matter as long as it's below the fork, ProduceBlockFromStake inputs and new order inputs
+    // FIXME: need a separate "fixed signature" test with the height above the fork.
+    let tx_block_height =
+        BlockHeight::new(rng.gen_range(0..sighash_input_commitment_version_fork_height.into_int()));
+
+    let chain_config = Arc::new(
+        chain::config::Builder::new(ChainType::Regtest)
+            .chainstate_upgrades(
+                NetUpgrades::initialize(vec![
+                    (
+                        BlockHeight::zero(),
+                        ChainstateUpgradeBuilder::latest()
+                            .sighash_input_commitment_version(SighashInputCommitmentVersion::V0)
+                            .build(),
+                    ),
+                    (
+                        sighash_input_commitment_version_fork_height,
+                        ChainstateUpgradeBuilder::latest()
+                            .sighash_input_commitment_version(SighashInputCommitmentVersion::V1)
+                            .build(),
+                    ),
+                ])
+                .unwrap(),
+            )
+            .build(),
+    );
+
     let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
     let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
 
@@ -285,35 +314,40 @@ where
         .with_inputs_and_destinations(acc_inputs.into_iter().zip(acc_dests.clone()))
         .with_outputs(outputs);
     let destinations = req.destinations().to_vec();
-    let additional_info = TxAdditionalInfo::with_token_info(
-        token_id,
-        // Note: this info doesn't influence the signature and can be random.
-        TokenAdditionalInfo {
-            num_decimals: rng.gen_range(1..10),
-            ticker: random_ascii_alphanumeric_string(rng, 5..10).into_bytes(),
-        },
-    )
-    .join(TxAdditionalInfo::with_order_info(
-        order_id,
-        OrderAdditionalInfo {
-            ask_balance: Amount::from_atoms(10),
-            give_balance: Amount::from_atoms(100),
-            initially_asked: OutputValue::Coin(Amount::from_atoms(20)),
-            // Note: initially_given's amount isn't used by the signers in orders v0, only its
-            // currency matters.
-            initially_given: OutputValue::TokenV1(
-                token_id,
-                Amount::from_atoms(rng.gen_range(100..200)),
-            ),
-        },
-    ));
+    let additional_info = TxAdditionalInfo::new()
+        .with_token_info(
+            token_id,
+            // Note: this info doesn't influence the signature and can be random.
+            TokenAdditionalInfo {
+                num_decimals: rng.gen_range(1..10),
+                ticker: random_ascii_alphanumeric_string(rng, 5..10).into_bytes(),
+            },
+        )
+        .with_order_info(
+            order_id,
+            OrderAdditionalInfo {
+                ask_balance: Amount::from_atoms(10),
+                give_balance: Amount::from_atoms(100),
+                initially_asked: OutputValue::Coin(Amount::from_atoms(20)),
+                // Note: initially_given's amount isn't used by the signers in orders v0, only its
+                // currency matters.
+                initially_given: OutputValue::TokenV1(
+                    token_id,
+                    Amount::from_atoms(rng.gen_range(100..200)),
+                ),
+            },
+        );
     let orig_ptx = req.into_partially_signed_tx(additional_info).unwrap();
 
     let mut signer = make_signer(chain_config.clone(), account.account_index());
-    let (ptx, _, _) = signer.sign_tx(orig_ptx, account.key_chain(), &db_tx).unwrap();
+    let (ptx, _, _) =
+        signer.sign_tx(orig_ptx, account.key_chain(), &db_tx, tx_block_height).unwrap();
     assert!(ptx.all_signatures_available());
 
-    let utxos_ref = utxos
+    let input_commitments = ptx
+        .make_sighash_input_commitments_at_height(&chain_config, tx_block_height)
+        .unwrap();
+    let all_utxos = utxos
         .iter()
         .map(Some)
         .chain([Some(&multisig_utxo)])
@@ -325,8 +359,9 @@ where
             &chain_config,
             dest,
             &ptx,
-            &utxos_ref,
+            &input_commitments,
             i,
+            all_utxos[i].cloned(),
         )
         .unwrap();
     }

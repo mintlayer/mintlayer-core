@@ -67,24 +67,27 @@ pub fn sign_public_key_spending<AuxP: SigAuxDataProvider + ?Sized>(
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use crate::chain::signature::sighash::signature_hash;
-    use crate::chain::signature::tests::utils::generate_inputs_utxos;
+    use rstest::rstest;
+
+    use crypto::key::{KeyKind, PrivateKey};
+    use randomness::Rng;
+    use test_utils::random::Seed;
+
     use crate::{
         address::pubkeyhash::PublicKeyHash,
         chain::{
-            signature::inputsig::StandardInputSignature,
-            transaction::signature::tests::utils::{generate_unsigned_tx, sig_hash_types},
+            signature::{sighash::signature_hash, StandardInputSignature},
+            transaction::signature::tests::utils::{
+                generate_input_commitments, generate_unsigned_tx, sig_hash_types,
+            },
             Destination,
         },
     };
-    use crypto::key::{KeyKind, PrivateKey};
-    use randomness::Rng;
-    use rstest::rstest;
-    use test_utils::random::Seed;
 
-    const INPUTS: usize = 10;
-    const OUTPUTS: usize = 10;
+    use super::*;
+
+    const INPUTS_COUNT: usize = 10;
+    const OUTPUTS_COUNT: usize = 10;
 
     // Try to produce a signature for a non-existent input.
     #[rstest]
@@ -97,10 +100,9 @@ mod test {
             PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         let destination = Destination::PublicKey(public_key);
 
-        let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, 1);
-        let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
+        let input_commitments = generate_input_commitments(&mut rng, 1);
 
-        let tx = generate_unsigned_tx(&mut rng, &destination, &inputs_utxos, 2).unwrap();
+        let tx = generate_unsigned_tx(&mut rng, &destination, input_commitments.len(), 2).unwrap();
 
         for sighash_type in sig_hash_types() {
             let res = StandardInputSignature::produce_uniparty_signature_for_input(
@@ -108,7 +110,7 @@ mod test {
                 sighash_type,
                 destination.clone(),
                 &tx,
-                &inputs_utxos_refs,
+                &input_commitments,
                 1,
                 &mut rng,
             );
@@ -127,10 +129,15 @@ mod test {
             PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         let destination = Destination::PublicKeyHash(PublicKeyHash::from(&public_key));
 
-        let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, INPUTS);
-        let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
+        let input_commitments = generate_input_commitments(&mut rng, INPUTS_COUNT);
 
-        let tx = generate_unsigned_tx(&mut rng, &destination, &inputs_utxos, OUTPUTS).unwrap();
+        let tx = generate_unsigned_tx(
+            &mut rng,
+            &destination,
+            input_commitments.len(),
+            OUTPUTS_COUNT,
+        )
+        .unwrap();
 
         for sighash_type in sig_hash_types() {
             let witness = StandardInputSignature::produce_uniparty_signature_for_input(
@@ -138,8 +145,8 @@ mod test {
                 sighash_type,
                 destination.clone(),
                 &tx,
-                &inputs_utxos_refs,
-                rng.gen_range(0..inputs_utxos.len()),
+                &input_commitments,
+                rng.gen_range(0..INPUTS_COUNT),
                 &mut rng,
             )
             .unwrap();
@@ -162,10 +169,15 @@ mod test {
             PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         let destination = Destination::PublicKey(public_key);
 
-        let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, INPUTS);
-        let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
+        let input_commitments = generate_input_commitments(&mut rng, INPUTS_COUNT);
 
-        let tx = generate_unsigned_tx(&mut rng, &destination, &inputs_utxos, OUTPUTS).unwrap();
+        let tx = generate_unsigned_tx(
+            &mut rng,
+            &destination,
+            input_commitments.len(),
+            OUTPUTS_COUNT,
+        )
+        .unwrap();
 
         for sighash_type in sig_hash_types() {
             let witness = StandardInputSignature::produce_uniparty_signature_for_input(
@@ -173,8 +185,8 @@ mod test {
                 sighash_type,
                 destination.clone(),
                 &tx,
-                &inputs_utxos_refs,
-                rng.gen_range(0..INPUTS),
+                &input_commitments,
+                rng.gen_range(0..INPUTS_COUNT),
                 &mut rng,
             )
             .unwrap();
@@ -203,19 +215,24 @@ mod test {
             PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         let destination = Destination::PublicKey(public_key.clone());
 
-        let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, INPUTS);
-        let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
+        let input_commitments = generate_input_commitments(&mut rng, INPUTS_COUNT);
 
-        let tx = generate_unsigned_tx(&mut rng, &destination, &inputs_utxos, OUTPUTS).unwrap();
+        let tx = generate_unsigned_tx(
+            &mut rng,
+            &destination,
+            input_commitments.len(),
+            OUTPUTS_COUNT,
+        )
+        .unwrap();
 
         for sighash_type in sig_hash_types() {
-            let input = rng.gen_range(0..inputs_utxos.len());
+            let input = rng.gen_range(0..INPUTS_COUNT);
             let witness = StandardInputSignature::produce_uniparty_signature_for_input(
                 &private_key,
                 sighash_type,
                 destination.clone(),
                 &tx,
-                &inputs_utxos_refs,
+                &input_commitments,
                 input,
                 &mut rng,
             )
@@ -223,7 +240,7 @@ mod test {
             let spender_signature =
                 AuthorizedPublicKeySpend::from_data(witness.raw_signature()).unwrap();
             let sighash =
-                signature_hash(witness.sighash_type(), &tx, &inputs_utxos_refs, input).unwrap();
+                signature_hash(witness.sighash_type(), &tx, &input_commitments, input).unwrap();
             verify_public_key_spending(&public_key, &spender_signature, &sighash)
                 .unwrap_or_else(|_| panic!("{sighash_type:X?}"));
         }
@@ -239,25 +256,30 @@ mod test {
             PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         let destination = Destination::PublicKey(public_key.clone());
 
-        let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, INPUTS);
-        let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
+        let input_commitments = generate_input_commitments(&mut rng, INPUTS_COUNT);
 
-        let tx = generate_unsigned_tx(&mut rng, &destination, &inputs_utxos, OUTPUTS).unwrap();
+        let tx = generate_unsigned_tx(
+            &mut rng,
+            &destination,
+            input_commitments.len(),
+            OUTPUTS_COUNT,
+        )
+        .unwrap();
 
         for sighash_type in sig_hash_types() {
-            let input = rng.gen_range(0..inputs_utxos.len());
+            let input = rng.gen_range(0..INPUTS_COUNT);
             let witness = StandardInputSignature::produce_uniparty_signature_for_input(
                 &private_key,
                 sighash_type,
                 destination.clone(),
                 &tx,
-                &inputs_utxos_refs,
+                &input_commitments,
                 input,
                 &mut rng,
             )
             .unwrap();
             let sighash =
-                signature_hash(witness.sighash_type(), &tx, &inputs_utxos_refs, input).unwrap();
+                signature_hash(witness.sighash_type(), &tx, &input_commitments, input).unwrap();
             sign_public_key_spending(&private_key, &public_key, &sighash, &mut rng)
                 .unwrap_or_else(|_| panic!("{sighash_type:X?}"));
         }

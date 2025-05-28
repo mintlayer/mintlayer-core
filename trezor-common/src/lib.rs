@@ -13,13 +13,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Common code used by Trezor firware with no-std
+//! Common code used by Trezor firmware with no-std
 
 #![no_std]
 
 use num_derive::FromPrimitive;
 use parity_scale_codec::{Decode, Encode};
 use strum::{EnumDiscriminants, EnumIter};
+
+// Note: below we have a bunch of numeric enums (most of which are implicitly generated via `strum_discriminants`, but IsTokenFreezable is also one of them)
+// that are used in the communication between the rust and the python parts of the firmware, which means that
+// their values must coincide with a certain protobuf-generated type.
+// This is very fragile.
+// TODO:
+// 1) The values of the implicitly generated "Tag" enums should NOT be relied upon. The main purpose of the tags is to make
+// sure that all variants of the parent enum are handled by tests. If we need enums that correspond to the protobuf-generated values,
+// they must be separate enums.
+// The same is true for IsTokenFreezable - though we can assign specific values to its variants, it's probably better
+// to have a separate enum for firmware-specific purposes.
+// 2) Having these enums for the rust-python communication in the firmware is redundant, because the protobuf-generated values
+// can be used directly. Though they are still a bit useful, because they'll force a compilation error on the rust side
+// whenever an enum gets more variants.
+// 3) Normally, these enums should be in the firmware repo. The only reason for keeping them in the core repo is that
+// here it's easier to test that they indeed have the required values. But they and their tests should probably live in
+// a separate module, so that they are not confused with the "normal" enums.
 
 /// Specifies which parts of the transaction a signature commits to.
 ///
@@ -76,6 +93,8 @@ pub enum OutputValue {
     TokenV1(H256, Amount),
 }
 
+// Note: OutputTimeLockTag is used in the communication between the rust and python parts of the firmware,
+// which expects its values to be the same as in the protobuf-generated MintlayerOutputTimeLockType.
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, EnumDiscriminants)]
 #[strum_discriminants(name(OutputTimeLockTag), derive(EnumIter, FromPrimitive))]
 pub enum OutputTimeLock {
@@ -139,13 +158,19 @@ pub enum Destination {
     ClassicMultisig(PublicKeyHash),
 }
 
-#[derive(Encode)]
+#[derive(Encode, Decode)]
 pub enum TokenIssuance {
     #[codec(index = 1)]
     V1(TokenIssuanceV1),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, FromPrimitive)]
+// Note: IsTokenFreezable is used in the communication between the rust and python parts of the firmware,
+// where it's constructed from int representation of a boolean flag "is_freezable" (so, No must be zero and Yes must be 1).
+//
+// Also note that this is not the case for the `IsTokenUnfreezable` enum defined below - though
+// it is also used in the communication between rust and python parts of the firmware, it's passed
+// in its encoded form, so its values are not relied upon.
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, EnumIter, FromPrimitive)]
 pub enum IsTokenFreezable {
     #[codec(index = 0)]
     No,
@@ -153,6 +178,8 @@ pub enum IsTokenFreezable {
     Yes,
 }
 
+// Note: TokenTotalSupplyTag is used in the communication between the rust and python parts of the firmware,
+// which expects its values to be the same as in the protobuf-generated MintlayerTokenTotalSupplyType.
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, EnumDiscriminants)]
 #[strum_discriminants(name(TokenTotalSupplyTag), derive(EnumIter, FromPrimitive))]
 pub enum TokenTotalSupply {
@@ -164,7 +191,7 @@ pub enum TokenTotalSupply {
     Unlimited, // limited only by the Amount data type
 }
 
-#[derive(Encode)]
+#[derive(Encode, Decode)]
 pub struct TokenIssuanceV1 {
     pub token_ticker: parity_scale_codec::alloc::vec::Vec<u8>,
     pub number_of_decimals: u8,
@@ -174,18 +201,18 @@ pub struct TokenIssuanceV1 {
     pub is_freezable: IsTokenFreezable,
 }
 
-#[derive(Encode)]
+#[derive(Encode, Decode)]
 pub enum NftIssuance {
     #[codec(index = 0)]
     V0(NftIssuanceV0),
 }
 
-#[derive(Encode)]
+#[derive(Encode, Decode)]
 pub struct NftIssuanceV0 {
     pub metadata: Metadata,
 }
 
-#[derive(Encode)]
+#[derive(Encode, Decode)]
 pub struct Metadata {
     pub creator: Option<PublicKeyHolder>,
     pub name: parity_scale_codec::alloc::vec::Vec<u8>,
@@ -197,7 +224,7 @@ pub struct Metadata {
     pub media_hash: parity_scale_codec::alloc::vec::Vec<u8>,
 }
 
-#[derive(Encode)]
+#[derive(Encode, Decode)]
 pub struct OrderData {
     /// The key that can authorize conclusion of an order
     pub conclude_key: Destination,
@@ -209,7 +236,7 @@ pub struct OrderData {
     pub give: OutputValue,
 }
 
-#[derive(Encode)]
+#[derive(Encode, Decode)]
 pub enum TxOutput {
     /// Transfer an output, giving the provided Destination the authority to
     /// spend it (no conditions)
@@ -249,7 +276,7 @@ pub enum TxOutput {
     CreateOrder(OrderData),
 }
 
-#[derive(Encode)]
+#[derive(Encode, Decode)]
 pub struct HashedTimelockContract {
     // can be spent either by a specific address that knows the secret
     pub secret_hash: HtlcSecretHash,
@@ -266,6 +293,8 @@ pub struct H256(pub [u8; 32]);
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug, Encode, Decode)]
 pub struct HtlcSecretHash(pub [u8; 20]);
 
+// Note: OutPointSourceIdTag is used in the communication between the rust and python parts of the firmware,
+// which expects its values to be the same as in the protobuf-generated MintlayerUtxoType.
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Ord, PartialOrd, EnumDiscriminants)]
 #[strum_discriminants(name(OutPointSourceIdTag), derive(EnumIter, FromPrimitive))]
 pub enum OutPointSourceId {
@@ -322,6 +351,8 @@ pub enum IsTokenUnfreezable {
 type OrderId = H256;
 type TokenId = H256;
 
+// Note: AccountCommandTag is used in the communication between the rust and python parts of the firmware,
+// which expects its values to be the same as in the protobuf-generated MintlayerAccountCommandType.
 #[derive(Encode, EnumDiscriminants)]
 #[strum_discriminants(name(AccountCommandTag), derive(EnumIter, FromPrimitive))]
 pub enum AccountCommand {
@@ -356,7 +387,7 @@ pub enum AccountCommand {
 }
 
 #[derive(Encode, EnumDiscriminants)]
-#[strum_discriminants(name(OrderCommandTag), derive(EnumIter, FromPrimitive))]
+#[strum_discriminants(name(OrderAccountCommandTag), derive(EnumIter))]
 pub enum OrderAccountCommand {
     // Satisfy an order completely or partially.
     // Second parameter is an amount provided to fill an order which corresponds to order's ask currency.
@@ -391,5 +422,6 @@ extern crate std;
 #[cfg(test)]
 use std::prelude::v1::*;
 
+pub mod input_commitments;
 #[cfg(test)]
 mod tests;

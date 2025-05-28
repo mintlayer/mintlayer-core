@@ -15,6 +15,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use futures::{stream::FuturesUnordered, TryStreamExt};
+
 use common::{
     address::{pubkeyhash::PublicKeyHash, Address},
     chain::{
@@ -30,7 +32,7 @@ use common::{
         ChainConfig, DelegationId, Destination, OrderId, PoolId, RpcOrderInfo, SignedTransaction,
         SignedTransactionIntent, Transaction, TxOutput, UtxoOutPoint,
     },
-    primitives::{per_thousand::PerThousand, Amount, Id},
+    primitives::{amount::RpcAmountIn, per_thousand::PerThousand, Amount, Id},
 };
 use crypto::{
     key::{
@@ -39,7 +41,6 @@ use crypto::{
     },
     vrf::VRFPublicKey,
 };
-use futures::{stream::FuturesUnordered, TryStreamExt};
 use logging::log;
 use mempool::FeeRate;
 use node_comm::node_traits::NodeInterface;
@@ -57,7 +58,7 @@ use wallet::{
 };
 use wallet_types::{
     partially_signed_transaction::{
-        PartiallySignedTransaction, TokenAdditionalInfo, TxAdditionalInfo,
+        OrderAdditionalInfo, PartiallySignedTransaction, TokenAdditionalInfo, TxAdditionalInfo,
     },
     signature_status::SignatureStatus,
     utxo_types::{UtxoState, UtxoType},
@@ -66,7 +67,9 @@ use wallet_types::{
 };
 
 use crate::{
-    helpers::{fetch_token_info, fetch_utxo, into_balances, tx_to_partially_signed_tx},
+    helpers::{
+        fetch_order_info, fetch_token_info, fetch_utxo, into_balances, tx_to_partially_signed_tx,
+    },
     runtime_wallet::RuntimeWallet,
     types::{
         Balances, GenericCurrencyTransfer, NewTransaction, PreparedTransaction, SweepFromAddresses,
@@ -543,6 +546,12 @@ where
         amount: Amount,
         selected_utxos: Vec<UtxoOutPoint>,
     ) -> Result<NewTransaction, ControllerError<T>> {
+        // TODO: this function seems to be dedicated to sending coins only, because we have the separate
+        // `send_tokens_to_address` function for tokens. If so, it should probably be renamed and the call
+        // to `check_tokens_in_selected_utxo` be replaced with another one that rejects all tokens.
+        // If, on the other hand, this function can potentially be used for tokens, then the `TxAdditionalInfo`
+        // passed to create_transaction_to_addresses should include token infos.
+
         self.check_tokens_in_selected_utxo(&selected_utxos).await?;
 
         let output = make_address_output(address.into_object(), amount);
@@ -956,7 +965,7 @@ where
                   account_index: U31,
                   token_info: &UnconfirmedTokenInfo| {
                 token_info.check_can_be_used()?;
-                let additional_info = TxAdditionalInfo::with_token_info(
+                let additional_info = TxAdditionalInfo::new().with_token_info(
                     token_info.token_id(),
                     TokenAdditionalInfo {
                         num_decimals: token_info.num_decimals(),
@@ -995,7 +1004,7 @@ where
                   account_index: U31,
                   token_info: &UnconfirmedTokenInfo| {
                 token_info.check_can_be_used()?;
-                let additional_info = TxAdditionalInfo::with_token_info(
+                let additional_info = TxAdditionalInfo::new().with_token_info(
                     token_info.token_id(),
                     TokenAdditionalInfo {
                         num_decimals: token_info.num_decimals(),
@@ -1112,10 +1121,35 @@ where
 
     pub async fn create_htlc_tx(
         &mut self,
-        output_value: OutputValue,
+        amount: RpcAmountIn,
+        token_id: Option<TokenId>,
         htlc: HashedTimelockContract,
-        additional_info: TxAdditionalInfo,
     ) -> Result<PreparedTransaction, ControllerError<T>> {
+        let (output_value, additional_info) = match token_id {
+            Some(token_id) => {
+                let token_info = fetch_token_info(&self.rpc_client, token_id).await?;
+                let amount = amount
+                    .to_amount(token_info.token_number_of_decimals())
+                    .ok_or(ControllerError::InvalidCoinAmount)?;
+                (
+                    OutputValue::TokenV1(token_id, amount),
+                    TxAdditionalInfo::new().with_token_info(
+                        token_id,
+                        TokenAdditionalInfo {
+                            num_decimals: token_info.token_number_of_decimals(),
+                            ticker: token_info.token_ticker().to_vec(),
+                        },
+                    ),
+                )
+            }
+            None => {
+                let amount = amount
+                    .to_amount(self.chain_config.coin_decimals())
+                    .ok_or(ControllerError::InvalidCoinAmount)?;
+                (OutputValue::Coin(amount), TxAdditionalInfo::new())
+            }
+        };
+
         let (current_fee_rate, consolidate_fee_rate) =
             self.get_current_and_consolidation_fee_rate().await?;
 
@@ -1140,7 +1174,17 @@ where
         conclude_key: Address<Destination>,
         token_infos: Vec<RPCTokenInfo>,
     ) -> Result<(NewTransaction, OrderId), ControllerError<T>> {
-        let additional_info = self.additional_token_info(token_infos)?;
+        let additional_info =
+            token_infos.into_iter().fold(TxAdditionalInfo::new(), |mut acc, token_info| {
+                acc.add_token_info(
+                    token_info.token_id(),
+                    TokenAdditionalInfo {
+                        num_decimals: token_info.token_number_of_decimals(),
+                        ticker: token_info.token_ticker().to_vec(),
+                    },
+                );
+                acc
+            });
 
         self.create_and_send_tx_with_id(
             move |current_fee_rate: FeeRate,
@@ -1164,11 +1208,12 @@ where
     pub async fn conclude_order(
         &mut self,
         order_id: OrderId,
-        order_info: RpcOrderInfo,
         output_address: Option<Destination>,
-        token_infos: Vec<RPCTokenInfo>,
     ) -> Result<NewTransaction, ControllerError<T>> {
-        let additional_info = self.additional_token_info(token_infos)?;
+        let order_info = fetch_order_info(&self.rpc_client, order_id).await?;
+        let tx_additional_info =
+            self.additional_info_for_order_update_tx(order_id, &order_info).await?;
+
         self.create_and_send_tx(
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
@@ -1181,7 +1226,7 @@ where
                     output_address,
                     current_fee_rate,
                     consolidate_fee_rate,
-                    additional_info,
+                    tx_additional_info,
                 )
             },
         )
@@ -1191,12 +1236,27 @@ where
     pub async fn fill_order(
         &mut self,
         order_id: OrderId,
-        order_info: RpcOrderInfo,
-        fill_amount_in_ask_currency: Amount,
+        fill_amount_in_ask_currency: RpcAmountIn,
         output_address: Option<Destination>,
-        token_infos: Vec<RPCTokenInfo>,
     ) -> Result<NewTransaction, ControllerError<T>> {
-        let additional_info = self.additional_token_info(token_infos)?;
+        let order_info = fetch_order_info(&self.rpc_client, order_id).await?;
+        let tx_additional_info =
+            self.additional_info_for_order_update_tx(order_id, &order_info).await?;
+
+        let ask_currency_decimals = match order_info.initially_asked.token_id() {
+            Some(token_id) => {
+                tx_additional_info
+                    .get_token_info(token_id)
+                    .expect("token info should be present after additional_info_for_order_tx call")
+                    .num_decimals
+            }
+            None => self.chain_config.coin_decimals(),
+        };
+
+        let fill_amount_in_ask_currency = fill_amount_in_ask_currency
+            .to_amount(ask_currency_decimals)
+            .ok_or(ControllerError::InvalidCoinAmount)?;
+
         self.create_and_send_tx(
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
@@ -1210,7 +1270,7 @@ where
                     output_address,
                     current_fee_rate,
                     consolidate_fee_rate,
-                    additional_info,
+                    tx_additional_info,
                 )
             },
         )
@@ -1220,8 +1280,11 @@ where
     pub async fn freeze_order(
         &mut self,
         order_id: OrderId,
-        order_info: RpcOrderInfo,
     ) -> Result<NewTransaction, ControllerError<T>> {
+        let order_info = fetch_order_info(&self.rpc_client, order_id).await?;
+        let tx_additional_info =
+            self.additional_info_for_order_update_tx(order_id, &order_info).await?;
+
         self.create_and_send_tx(
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
@@ -1233,31 +1296,55 @@ where
                     order_info,
                     current_fee_rate,
                     consolidate_fee_rate,
+                    tx_additional_info,
                 )
             },
         )
         .await
     }
 
-    fn additional_token_info(
-        &mut self,
-        token_infos: Vec<RPCTokenInfo>,
+    async fn additional_info_for_order_update_tx(
+        &self,
+        order_id: OrderId,
+        order_info: &RpcOrderInfo,
     ) -> Result<TxAdditionalInfo, ControllerError<T>> {
-        token_infos
-            .into_iter()
-            .try_fold(TxAdditionalInfo::new(), |mut acc, token_info| {
-                let token_info = self.unconfiremd_token_info(token_info)?;
+        let mut tx_info = TxAdditionalInfo::new().with_order_info(
+            order_id,
+            OrderAdditionalInfo {
+                initially_asked: order_info.initially_asked.into(),
+                initially_given: order_info.initially_given.into(),
+                ask_balance: order_info.ask_balance,
+                give_balance: order_info.give_balance,
+            },
+        );
 
-                acc.add_token_info(
-                    token_info.token_id(),
-                    TokenAdditionalInfo {
-                        num_decimals: token_info.num_decimals(),
-                        ticker: token_info.token_ticker().to_vec(),
-                    },
-                );
+        let token1_id = order_info.initially_asked.token_id();
+        let token2_id = order_info.initially_given.token_id();
 
-                Ok(acc)
-            })
+        let mut add_token_info =
+            async |token_id_opt: Option<&TokenId>| -> Result<_, ControllerError<T>> {
+                if let Some(token_id) = token_id_opt {
+                    let token_info = fetch_token_info(&self.rpc_client, *token_id).await?;
+
+                    tx_info.add_token_info(
+                        *token_id,
+                        TokenAdditionalInfo {
+                            num_decimals: token_info.token_number_of_decimals(),
+                            ticker: token_info.token_ticker().to_vec(),
+                        },
+                    );
+                }
+
+                Ok(())
+            };
+
+        add_token_info(token1_id).await?;
+
+        if token2_id != token1_id {
+            add_token_info(token2_id).await?;
+        }
+
+        Ok(tx_info)
     }
 
     /// Checks if the wallet has stake pools and marks this account for staking.
@@ -1404,7 +1491,7 @@ where
             &UnconfirmedTokenInfo,
         ) -> WalletResult<R>,
     {
-        let token_freezable_info = self.unconfiremd_token_info(token_info)?;
+        let token_freezable_info = self.unconfirmed_token_info(token_info)?;
 
         let (current_fee_rate, consolidate_fee_rate) =
             self.get_current_and_consolidation_fee_rate().await?;
@@ -1447,7 +1534,7 @@ where
         })
     }
 
-    fn unconfiremd_token_info(
+    fn unconfirmed_token_info(
         &mut self,
         token_info: RPCTokenInfo,
     ) -> Result<UnconfirmedTokenInfo, ControllerError<T>> {

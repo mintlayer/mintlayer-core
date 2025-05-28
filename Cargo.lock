@@ -1574,6 +1574,7 @@ dependencies = [
  "chrono",
  "clap",
  "crypto",
+ "ctor",
  "expect-test",
  "fixed-hash",
  "generic-array",
@@ -7297,6 +7298,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_derive_internals"
+version = "0.29.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "18d26a20a969b9e3fdf2fc2d9f21eda6c40e2de84c9408bb5d3b05d499aae711"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.101",
+]
+
+[[package]]
 name = "serde_json"
 version = "1.0.140"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8659,6 +8671,7 @@ dependencies = [
  "num-traits",
  "parity-scale-codec",
  "rstest",
+ "serialization",
  "strum",
  "test-utils",
  "trezor-client 0.1.4 (git+https://github.com/mintlayer/mintlayer-trezor-firmware?branch=feature%2Fmintlayer-pk)",
@@ -8669,6 +8682,31 @@ name = "try-lock"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
+
+[[package]]
+name = "tsify"
+version = "0.5.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b2ec91b85e6c6592ed28636cb1dd1fac377ecbbeb170ff1d79f97aac5e38926d"
+dependencies = [
+ "gloo-utils",
+ "serde",
+ "serde_json",
+ "tsify-macros",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "tsify-macros"
+version = "0.5.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9a324606929ad11628a19206d7853807481dcaecd6c08be70a235930b8241955"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "serde_derive_internals",
+ "syn 2.0.101",
+]
 
 [[package]]
 name = "ttf-parser"
@@ -9499,12 +9537,17 @@ dependencies = [
  "getrandom 0.2.16",
  "gloo-utils",
  "hex",
+ "itertools 0.14.0",
+ "js-sys",
  "randomness",
  "rstest",
+ "serde",
  "serialization",
  "test-utils",
  "thiserror",
+ "tsify",
  "tx-verifier",
+ "utils",
  "wasm-bindgen",
  "web-sys",
 ]
