@@ -34,6 +34,8 @@ use common::{
 };
 use consensus::EffectivePoolBalanceError;
 
+use crate::sighash_input_commitments::SighashInputCommitmentCreationError;
+
 #[allow(clippy::enum_variant_names)]
 #[derive(thiserror::Error, Debug, Clone)]
 pub enum Error {
@@ -83,7 +85,7 @@ pub enum Error {
     MultisigSpendCreationError(DestinationSigError),
 
     #[error("Error creating HTLC spend: {0}")]
-    HtlcSpendCreationError(DestinationSigError),
+    HtlcSpendDecodingError(DestinationSigError),
 
     #[error("Error signing a message: {0}")]
     SignMessageError(crypto::key::SignatureError),
@@ -170,9 +172,6 @@ pub enum Error {
     #[error("Id creation error: {0}")]
     IdCreationError(#[from] IdCreationError),
 
-    #[error("Error decoding a JsValue as an array of arrays of bytes: {error}")]
-    JsValueNotArrayOfArraysOfBytes { error: String },
-
     #[error("Signed transaction intent verification error: {0}")]
     SignedTransactionIntentVerificationError(SignedTransactionIntentError),
 
@@ -181,6 +180,27 @@ pub enum Error {
 
     #[error("Orders V1 not activated at the specified height")]
     OrdersV1NotActivatedAtSpecifiedHeight,
+
+    #[error("The currency amount contains tokens, not coins")]
+    CurrencyAmountContainsTokens,
+
+    #[error("The currency amount contains coins, not tokens")]
+    CurrencyAmountContainsCoins,
+
+    #[error("Error creating sighash input commitments: {0}")]
+    SighashInputCommitmentCreationError(#[from] SighashInputCommitmentCreationError),
+
+    #[error("Signature verification error: {0}")]
+    SignatureVerificationError(DestinationSigError),
+
+    #[error("Wrong input index or UTXO count")]
+    WrongInputIndexOrUtxoCount,
+
+    #[error("Input owner destination needed")]
+    InputOwnerDestinationNeeded,
+
+    #[error("Input owner destination not needed")]
+    InputOwnerDestinationNotNeeded,
 }
 
 // This is required to make an error readable in JavaScript

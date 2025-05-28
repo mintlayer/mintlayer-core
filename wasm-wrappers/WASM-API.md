@@ -91,7 +91,7 @@ corresponding to each input of the transaction.
 
 Parameters:
 `signed_message` - this must have been produced by `make_transaction_intent_message_to_sign`.
-`signatures` - this should be an array of arrays of bytes, each of them representing an individual signature
+`signatures` - this should be an array of Uint8Array, each of them representing an individual signature
 of `signed_message` produced by `sign_challenge` using the private key for the corresponding input destination
 of the transaction. The number of signatures must be equal to the number of inputs in the transaction.
 
@@ -205,8 +205,11 @@ Encode an input witness of the variant that contains no signature.
 
 ### Function: `encode_witness`
 
-Given a private key, inputs and an input number to sign, and the destination that owns that output (through the utxo),
-and a network type (mainnet, testnet, etc), this function returns a witness to be used in a signed transaction, as bytes.
+Sign the specified input of the transaction and encode the signature as InputWitness.
+
+`input_utxos` must be formed as follows: for each transaction input, emit byte 0 if it's a non-UTXO input,
+otherwise emit 1 followed by the corresponding transaction output encoded via the appropriate "encode_output_"
+function.
 
 ### Function: `encode_witness_htlc_secret`
 
@@ -406,10 +409,34 @@ A utxo can either come from a transaction or a block reward. This enum signifies
 
 The part of the transaction that will be committed in the signature. Similar to bitcoin's sighash.
 
+### Enum: `SimpleCurrencyAmount`
+
+An mount of coins or some token,
+
 ### Struct: `Amount`
 
 Amount type abstraction. The amount type is stored in a string
 since JavaScript number type cannot fit 128-bit integers.
 The amount is given as an integer in units of "atoms".
 Atoms are the smallest, indivisible amount of a coin or token.
+
+### Struct: `SimpleAmount`
+
+An alternative representation of `Amount`.
+
+### Struct: `SimpleTokenAmount`
+
+An amount of some token.
+
+### Struct: `PoolAdditionalInfo`
+
+
+
+### Struct: `OrderAdditionalInfo`
+
+
+
+### Struct: `TxAdditionalInfo`
+
+
 

@@ -33,6 +33,7 @@ import {
 
 import {
   MNEMONIC,
+  RANDOM_HEIGHT,
 } from "./defs.js";
 import {
   ADDRESS
@@ -108,6 +109,8 @@ export function test_transaction_and_witness_encoding() {
       tx,
       Uint8Array.from(opt_utxos),
       0,
+      { pool_info: {}, order_info: {} },
+      BigInt(RANDOM_HEIGHT),
       Network.Testnet
     );
     throw new Error("Invalid private key worked somehow!");
@@ -126,6 +129,8 @@ export function test_transaction_and_witness_encoding() {
       tx,
       Uint8Array.from(opt_utxos),
       0,
+      { pool_info: {}, order_info: {} },
+      BigInt(RANDOM_HEIGHT),
       Network.Testnet
     );
     throw new Error("Invalid address worked somehow!");
@@ -144,6 +149,8 @@ export function test_transaction_and_witness_encoding() {
       invalid_tx,
       Uint8Array.from(opt_utxos),
       0,
+      { pool_info: {}, order_info: {} },
+      BigInt(RANDOM_HEIGHT),
       Network.Testnet
     );
     throw new Error("Invalid transaction worked somehow!");
@@ -162,6 +169,8 @@ export function test_transaction_and_witness_encoding() {
       tx,
       invalid_utxos,
       0,
+      { pool_info: {}, order_info: {} },
+      BigInt(RANDOM_HEIGHT),
       Network.Testnet
     );
     throw new Error("Invalid utxo worked somehow!");
@@ -180,11 +189,13 @@ export function test_transaction_and_witness_encoding() {
       tx,
       invalid_utxos_count,
       0,
+      { pool_info: {}, order_info: {} },
+      BigInt(RANDOM_HEIGHT),
       Network.Testnet
     );
     throw new Error("Invalid utxo worked somehow!");
   } catch (e) {
-    if (!get_err_msg(e).includes("Utxos count does not match inputs count")) {
+    if (!get_err_msg(e).includes("Error creating sighash input commitments: Utxo not found")) {
       throw e;
     }
     console.log("Tested invalid utxo count in encode witness successfully");
@@ -198,6 +209,8 @@ export function test_transaction_and_witness_encoding() {
       tx,
       Uint8Array.from(opt_utxos),
       invalid_input_idx,
+      { pool_info: {}, order_info: {} },
+      BigInt(RANDOM_HEIGHT),
       Network.Testnet
     );
     throw new Error("Invalid address worked somehow!");
@@ -215,6 +228,8 @@ export function test_transaction_and_witness_encoding() {
     tx,
     Uint8Array.from(opt_utxos),
     0,
+    { pool_info: {}, order_info: {} },
+    BigInt(RANDOM_HEIGHT),
     Network.Testnet
   );
 

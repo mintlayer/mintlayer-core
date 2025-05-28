@@ -1671,10 +1671,11 @@ where
                 })
             })
             .await?
-            .map(|(tx, order_id)| NewOrder {
-                tx_id: tx.transaction().get_id(),
-                order_id: RpcAddress::new(&self.chain_config, order_id)
-                    .expect("addressable order id"),
+            .map(|(tx, order_id)| {
+                NewOrderTransaction::new(
+                    tx,
+                    RpcAddress::new(&self.chain_config, order_id).expect("addressable order id"),
+                )
             })
     }
 

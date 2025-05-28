@@ -299,13 +299,13 @@ where
                 // the same for V0 and V1. So we simulate the creation of a V1 commitment in
                 // the V0 case, to force the corresponding provider queries.
                 // TODO: after the fork to V1 is complete, this can be removed.
-                let _ = make_sighash_input_commitment_v1_for_one_transaction_input(
+                make_sighash_input_commitment_v1_for_one_transaction_input(
                     input,
                     idx,
                     &get_utxo,
                     &get_pool_info,
                     &get_order_info,
-                );
+                )?;
 
                 match input {
                     TxInput::Utxo(outpoint) => {
