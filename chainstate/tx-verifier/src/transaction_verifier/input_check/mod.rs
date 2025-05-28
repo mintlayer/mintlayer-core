@@ -82,7 +82,7 @@ pub enum InputCheckErrorPayload {
     OrderInfoProvider(orders_accounting::Error),
 
     #[error(transparent)]
-    Translation(mintscript::translate::TranslationError),
+    Translation(#[from] mintscript::translate::TranslationError),
 
     #[error(transparent)]
     Verification(#[from] ScriptError),
@@ -109,19 +109,6 @@ impl From<mintscript::script::ScriptError<DestinationSigError, Infallible, Infal
             mintscript::script::ScriptError::Threshold(e) => ScriptError::Threshold(e),
         };
         Self::Verification(err)
-    }
-}
-
-// Note: InputCheckErrorPayload::OrderNotFound may or may not be produced when creating input commitments,
-// depending on whether we commit to order inputs or not. Since commitments are created before
-// the input checks are performed, this may result in different errors being returned for a missing order.
-// The purpose of this "impl From" is to unify the errors, so that tests may check only for one of them.
-impl From<mintscript::translate::TranslationError> for InputCheckErrorPayload {
-    fn from(value: mintscript::translate::TranslationError) -> Self {
-        match value {
-            mintscript::translate::TranslationError::OrderNotFound(id) => Self::OrderNotFound(id),
-            _ => Self::Translation(value),
-        }
     }
 }
 

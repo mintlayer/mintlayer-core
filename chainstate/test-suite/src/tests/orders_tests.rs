@@ -43,7 +43,7 @@ use test_utils::{
     random_ascii_alphanumeric_string,
 };
 use tx_verifier::{
-    error::{InputCheckError, InputCheckErrorPayload, ScriptError},
+    error::{InputCheckError, ScriptError, TranslationError},
     CheckTransactionError,
 };
 
@@ -2949,7 +2949,7 @@ fn freeze_order_check_storage(#[case] seed: Seed, #[case] version: OrdersVersion
                             chainstate::BlockError::StateUpdateFailed(
                                 ConnectTransactionError::InputCheck(InputCheckError::new(
                                     0,
-                                    InputCheckErrorPayload::OrderNotFound(random_order_id)
+                                    TranslationError::OrderNotFound(random_order_id)
                                 ))
                             )
                         )
@@ -3296,7 +3296,7 @@ fn fill_freeze_conclude_order(#[case] seed: Seed) {
                 result.unwrap_err(),
                 chainstate::ChainstateError::ProcessBlockError(
                     chainstate::BlockError::StateUpdateFailed(ConnectTransactionError::InputCheck(
-                        InputCheckError::new(0, InputCheckErrorPayload::OrderNotFound(order_id))
+                        InputCheckError::new(0, TranslationError::OrderNotFound(order_id))
                     ))
                 )
             );
