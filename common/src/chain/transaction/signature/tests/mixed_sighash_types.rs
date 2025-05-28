@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use itertools::{iproduct, Itertools as _};
+use itertools::iproduct;
 
 use crypto::key::{KeyKind, PrivateKey};
 use rstest::rstest;
@@ -47,7 +47,6 @@ fn mixed_sighash_types(#[case] seed: Seed) {
         sig_hash_types()
     ) {
         let input_commitments = generate_input_commitments(&mut rng, 6);
-        let input_commitments_refs = input_commitments.iter().map(|comm| comm.into()).collect_vec();
         let tx = generate_unsigned_tx(&mut rng, &destination, input_commitments.len(), 6).unwrap();
 
         let sigs = [
@@ -65,7 +64,7 @@ fn mixed_sighash_types(#[case] seed: Seed) {
                 make_signature(
                     &mut rng,
                     &tx,
-                    &input_commitments_refs,
+                    &input_commitments,
                     input,
                     &private_key,
                     sighash_type,
@@ -78,12 +77,7 @@ fn mixed_sighash_types(#[case] seed: Seed) {
 
         let signed_tx = tx.with_signatures(sigs).unwrap();
 
-        verify_signed_tx(
-            &chain_config,
-            &signed_tx,
-            &input_commitments_refs,
-            &destination,
-        )
-        .expect("Signature verification failed")
+        verify_signed_tx(&chain_config, &signed_tx, &input_commitments, &destination)
+            .expect("Signature verification failed")
     }
 }

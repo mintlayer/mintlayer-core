@@ -54,7 +54,6 @@ fn sign_and_verify_all_and_none(#[case] seed: Seed) {
             .cartesian_product(test_data)
     {
         let input_commitments = generate_input_commitments(&mut rng, inputs_count);
-        let input_commitments_refs = input_commitments.iter().map(|comm| comm.into()).collect_vec();
 
         let tx = generate_unsigned_tx(
             &mut rng,
@@ -66,7 +65,7 @@ fn sign_and_verify_all_and_none(#[case] seed: Seed) {
         let signed_tx = sign_whole_tx(
             &mut rng,
             tx,
-            &input_commitments_refs,
+            &input_commitments,
             &private_key,
             sighash_type,
             &destination,
@@ -85,7 +84,7 @@ fn sign_and_verify_all_and_none(#[case] seed: Seed) {
             verify_signed_tx(
                 &chain_config,
                 &signed_tx,
-                &input_commitments_refs,
+                &input_commitments,
                 &destination,
             )
             .expect("{sighash_type:?} {destination:?}")
@@ -260,7 +259,6 @@ fn sign_and_verify_single(#[case] seed: Seed) {
     for (destination, sighash_type, inputs_count, outputs_count, expected) in test_data.into_iter()
     {
         let input_commitments = generate_input_commitments(&mut rng, inputs_count);
-        let input_commitments_refs = input_commitments.iter().map(|comm| comm.into()).collect_vec();
 
         let tx = generate_unsigned_tx(
             &mut rng,
@@ -272,7 +270,7 @@ fn sign_and_verify_single(#[case] seed: Seed) {
         match sign_whole_tx(
             &mut rng,
             tx,
-            &input_commitments_refs,
+            &input_commitments,
             &private_key,
             sighash_type,
             &destination,
@@ -280,7 +278,7 @@ fn sign_and_verify_single(#[case] seed: Seed) {
             Ok(signed_tx) => verify_signed_tx(
                 &chain_config,
                 &signed_tx,
-                &input_commitments_refs,
+                &input_commitments,
                 &destination,
             )
             .expect("{sighash_type:X?}, {destination:?}"),

@@ -15,7 +15,7 @@
 
 use std::{borrow::Cow, collections::BTreeMap};
 
-use serialization::Encode;
+use serialization::{Decode, Encode};
 use utils::cow_utils::CowUtils as _;
 
 use crate::{
@@ -36,7 +36,7 @@ use crate::{
 ///    with the `Option`, provided that only `None` and `Utxo` variants are used.
 /// 2) The `ProduceBlockFromStakeUtxo`, `FillOrderAccountCommand` and `ConcludeOrderAccountCommand`
 ///    commitments are enabled since `SighashInputCommitmentVersion::V1`.
-#[derive(Clone, Debug, Encode)]
+#[derive(Clone, Debug, Encode, Decode)]
 pub enum SighashInputCommitment<'a> {
     /// No extra commitment.
     ///
@@ -96,6 +96,7 @@ pub enum SighashInputCommitment<'a> {
 }
 
 impl<'a> SighashInputCommitment<'a> {
+    // FIXME rename to to_owned? Same for CowUtils
     pub fn deep_clone(&self) -> SighashInputCommitment<'static> {
         match self {
             SighashInputCommitment::None => SighashInputCommitment::None,

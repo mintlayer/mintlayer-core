@@ -128,7 +128,6 @@ impl SignatureHashableElement for SignatureHashableInputs<'_> {
 
 #[cfg(test)]
 mod tests {
-    use itertools::Itertools as _;
     use randomness::{CryptoRng, Rng};
     use rstest::rstest;
     use test_utils::random::{make_seedable_rng, Seed};
@@ -216,9 +215,7 @@ mod tests {
     ) {
         let inputs = (0..inputs_count).map(|_| generate_random_input(rng)).collect::<Vec<_>>();
 
-        let input_commitment_vals = generate_input_commitments(rng, inputs_utxos_count);
-        let input_commitments = input_commitment_vals.iter().map(|comm| comm.into()).collect_vec();
-
+        let input_commitments = generate_input_commitments(rng, inputs_utxos_count);
         let hashable_inputs_result = SignatureHashableInputs::new(&inputs, &input_commitments);
 
         if inputs_count != inputs_utxos_count {

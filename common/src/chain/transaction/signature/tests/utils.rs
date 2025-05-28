@@ -56,67 +56,18 @@ pub fn generate_input_utxo(
     (utxo, sk)
 }
 
-// FIXME: remove and use SighashInputCommitment directly instead?
-#[derive(Clone, Debug)]
-pub enum InputCommitmentVal {
-    None,
-    Utxo(TxOutput),
-    ProduceBlockFromStakeUtxo {
-        utxo: TxOutput,
-        staker_balance: Amount,
-    },
-    FillOrderAccountCommand {
-        initially_asked: OutputValue,
-        initially_given: OutputValue,
-    },
-    ConcludeOrderAccountCommand {
-        ask_balance: Amount,
-        give_balance: Amount,
-    },
-}
-
-impl<'a> Into<SighashInputCommitment<'a>> for &'a InputCommitmentVal {
-    fn into(self) -> SighashInputCommitment<'a> {
-        match self {
-            InputCommitmentVal::None => SighashInputCommitment::None,
-            InputCommitmentVal::Utxo(utxo) => SighashInputCommitment::Utxo(Cow::Borrowed(utxo)),
-            InputCommitmentVal::ProduceBlockFromStakeUtxo {
-                utxo,
-                staker_balance,
-            } => SighashInputCommitment::ProduceBlockFromStakeUtxo {
-                utxo: Cow::Borrowed(utxo),
-                staker_balance: *staker_balance,
-            },
-            InputCommitmentVal::FillOrderAccountCommand {
-                initially_asked,
-                initially_given,
-            } => SighashInputCommitment::FillOrderAccountCommand {
-                initially_asked: initially_asked.clone(),
-                initially_given: initially_given.clone(),
-            },
-            InputCommitmentVal::ConcludeOrderAccountCommand {
-                ask_balance,
-                give_balance,
-            } => SighashInputCommitment::ConcludeOrderAccountCommand {
-                ask_balance: *ask_balance,
-                give_balance: *give_balance,
-            },
-        }
-    }
-}
-
-pub fn generate_input_commitment(rng: &mut (impl Rng + CryptoRng)) -> InputCommitmentVal {
+pub fn generate_input_commitment(rng: &mut (impl Rng + CryptoRng)) -> SighashInputCommitment<'static> {
     match rng.gen_range(0..5) {
-        0 => InputCommitmentVal::None,
+        0 => SighashInputCommitment::None,
         1 => {
             let (utxo, _) = generate_input_utxo(rng);
-            InputCommitmentVal::Utxo(utxo)
+            SighashInputCommitment::Utxo(Cow::Owned(utxo))
         }
         2 => {
             let (utxo, _) = generate_input_utxo(rng);
             let staker_balance = Amount::from_atoms(rng.gen::<UnsignedIntType>());
-            InputCommitmentVal::ProduceBlockFromStakeUtxo {
-                utxo,
+            SighashInputCommitment::ProduceBlockFromStakeUtxo {
+                utxo: Cow::Owned(utxo),
                 staker_balance,
             }
         }
@@ -124,7 +75,7 @@ pub fn generate_input_commitment(rng: &mut (impl Rng + CryptoRng)) -> InputCommi
             let initially_asked = make_random_value(rng);
             let initially_given = make_random_value(rng);
 
-            InputCommitmentVal::FillOrderAccountCommand {
+            SighashInputCommitment::FillOrderAccountCommand {
                 initially_asked,
                 initially_given,
             }
@@ -133,7 +84,7 @@ pub fn generate_input_commitment(rng: &mut (impl Rng + CryptoRng)) -> InputCommi
             let ask_balance = Amount::from_atoms(rng.gen());
             let give_balance = Amount::from_atoms(rng.gen());
 
-            InputCommitmentVal::ConcludeOrderAccountCommand {
+            SighashInputCommitment::ConcludeOrderAccountCommand {
                 ask_balance,
                 give_balance,
             }
@@ -145,7 +96,7 @@ pub fn generate_input_commitment(rng: &mut (impl Rng + CryptoRng)) -> InputCommi
 pub fn generate_input_commitments(
     rng: &mut (impl Rng + CryptoRng),
     input_count: usize,
-) -> Vec<InputCommitmentVal> {
+) -> Vec<SighashInputCommitment<'static>> {
     (0..input_count).map(|_| generate_input_commitment(rng)).collect()
 }
 

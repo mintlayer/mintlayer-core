@@ -252,7 +252,6 @@ mod test {
         let destination = Destination::PublicKeyHash(PublicKeyHash::from(&public_key));
 
         let input_commitments = generate_input_commitments(&mut rng, 1);
-        let input_commitments_refs = input_commitments.iter().map(|comm| comm.into()).collect_vec();
 
         let tx = generate_unsigned_tx(&mut rng, &destination, input_commitments.len(), 2).unwrap();
 
@@ -264,7 +263,7 @@ mod test {
                     sighash_type,
                     destination.clone(),
                     &tx,
-                    &input_commitments_refs,
+                    &input_commitments,
                     INPUT_NUM,
                     &mut rng,
                 ),
@@ -284,7 +283,6 @@ mod test {
         let destination = Destination::PublicKey(public_key);
 
         let input_commitments = generate_input_commitments(&mut rng, 1);
-        let input_commitments_refs = input_commitments.iter().map(|comm| comm.into()).collect_vec();
 
         let tx = generate_unsigned_tx(&mut rng, &destination, input_commitments.len(), 2).unwrap();
 
@@ -296,7 +294,7 @@ mod test {
                     sighash_type,
                     destination.clone(),
                     &tx,
-                    &input_commitments_refs,
+                    &input_commitments,
                     INPUT_NUM,
                     &mut rng
                 ),
@@ -323,8 +321,6 @@ mod test {
         for (sighash_type, destination) in sig_hash_types().cartesian_product(outpoints.into_iter())
         {
             let input_commitments = generate_input_commitments(&mut rng, 1);
-            let input_commitments_refs =
-                input_commitments.iter().map(|comm| comm.into()).collect_vec();
 
             let tx =
                 generate_unsigned_tx(&mut rng, &destination, input_commitments.len(), 2).unwrap();
@@ -333,7 +329,7 @@ mod test {
                 sighash_type,
                 destination.clone(),
                 &tx,
-                &input_commitments_refs,
+                &input_commitments,
                 INPUT_NUM,
                 &mut rng,
             )
@@ -342,7 +338,7 @@ mod test {
             let sighash = signature_hash(
                 witness.sighash_type(),
                 &tx,
-                &input_commitments_refs,
+                &input_commitments,
                 INPUT_NUM,
             )
             .unwrap();

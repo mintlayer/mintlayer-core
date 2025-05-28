@@ -22,7 +22,10 @@ use crate::{
     chain::{
         config::create_mainnet,
         signature::{
-            sighash::sighashtype::{OutputsMode, SigHashType},
+            sighash::{
+                input_commitment::SighashInputCommitment,
+                sighashtype::{OutputsMode, SigHashType},
+            },
             tests::{
                 check_insert_input, check_insert_output, check_mutate_input, check_mutate_output,
                 sign_mutate_then_verify,
@@ -77,7 +80,6 @@ fn test_mutate_tx_internal_data(#[case] seed: Seed) {
             .cartesian_product(test_data)
     {
         let input_commitments = generate_input_commitments(&mut rng, inputs_count);
-        let input_commitments_refs = input_commitments.iter().map(|comm| comm.into()).collect_vec();
 
         let tx = generate_unsigned_tx(
             &mut rng,
@@ -89,7 +91,7 @@ fn test_mutate_tx_internal_data(#[case] seed: Seed) {
         match sign_whole_tx(
             &mut rng,
             tx,
-            &input_commitments_refs,
+            &input_commitments,
             &private_key,
             sighash_type,
             &destination,
@@ -98,12 +100,7 @@ fn test_mutate_tx_internal_data(#[case] seed: Seed) {
                 // Test flags change.
                 let updated_tx = change_flags(&mut rng, &signed_tx, 1234567890);
                 assert_eq!(
-                    verify_signed_tx(
-                        &chain_config,
-                        &updated_tx,
-                        &input_commitments_refs,
-                        &destination
-                    ),
+                    verify_signed_tx(&chain_config, &updated_tx, &input_commitments, &destination),
                     expected
                 );
             }
@@ -135,13 +132,11 @@ fn modify_and_verify(#[case] seed: Seed) {
 
     {
         let sighash_type = SigHashType::all();
-        // FIXME or reverse the naming? input_commitments -> input_commitment_vals, input_commitments_refs -> input_commitments
         let input_commitments = generate_input_commitments(&mut rng, 3);
-        let input_commitments_refs = input_commitments.iter().map(|comm| comm.into()).collect_vec();
         let tx = sign_mutate_then_verify(
             &chain_config,
             &mut rng,
-            &input_commitments_refs,
+            &input_commitments,
             &private_key,
             sighash_type,
             &destination,
@@ -150,7 +145,7 @@ fn modify_and_verify(#[case] seed: Seed) {
             &chain_config,
             &mut rng,
             &tx,
-            &input_commitments_refs,
+            &input_commitments,
             &destination,
             true,
         );
@@ -158,7 +153,7 @@ fn modify_and_verify(#[case] seed: Seed) {
             &chain_config,
             &mut rng,
             &tx,
-            &input_commitments_refs,
+            &input_commitments,
             &destination,
             true,
         );
@@ -166,28 +161,21 @@ fn modify_and_verify(#[case] seed: Seed) {
             &chain_config,
             &mut rng,
             &tx,
-            &input_commitments_refs,
+            &input_commitments,
             &destination,
             true,
         );
-        check_mutate_output(
-            &chain_config,
-            &tx,
-            &input_commitments_refs,
-            &destination,
-            true,
-        );
+        check_mutate_output(&chain_config, &tx, &input_commitments, &destination, true);
     }
 
     {
         let sighash_type =
             SigHashType::try_from(SigHashType::ALL | SigHashType::ANYONECANPAY).unwrap();
         let input_commitments = generate_input_commitments(&mut rng, 3);
-        let input_commitments_refs = input_commitments.iter().map(|comm| comm.into()).collect_vec();
         let tx = sign_mutate_then_verify(
             &chain_config,
             &mut rng,
-            &input_commitments_refs,
+            &input_commitments,
             &private_key,
             sighash_type,
             &destination,
@@ -196,7 +184,7 @@ fn modify_and_verify(#[case] seed: Seed) {
             &chain_config,
             &mut rng,
             &tx,
-            &input_commitments_refs,
+            &input_commitments,
             &destination,
             false,
         );
@@ -204,7 +192,7 @@ fn modify_and_verify(#[case] seed: Seed) {
             &chain_config,
             &mut rng,
             &tx,
-            &input_commitments_refs,
+            &input_commitments,
             &destination,
             true,
         );
@@ -212,27 +200,20 @@ fn modify_and_verify(#[case] seed: Seed) {
             &chain_config,
             &mut rng,
             &tx,
-            &input_commitments_refs,
+            &input_commitments,
             &destination,
             true,
         );
-        check_mutate_output(
-            &chain_config,
-            &tx,
-            &input_commitments_refs,
-            &destination,
-            true,
-        );
+        check_mutate_output(&chain_config, &tx, &input_commitments, &destination, true);
     }
 
     {
         let sighash_type = SigHashType::try_from(SigHashType::NONE).unwrap();
         let input_commitments = generate_input_commitments(&mut rng, 3);
-        let input_commitments_refs = input_commitments.iter().map(|comm| comm.into()).collect_vec();
         let tx = sign_mutate_then_verify(
             &chain_config,
             &mut rng,
-            &input_commitments_refs,
+            &input_commitments,
             &private_key,
             sighash_type,
             &destination,
@@ -241,7 +222,7 @@ fn modify_and_verify(#[case] seed: Seed) {
             &chain_config,
             &mut rng,
             &tx,
-            &input_commitments_refs,
+            &input_commitments,
             &destination,
             true,
         );
@@ -249,7 +230,7 @@ fn modify_and_verify(#[case] seed: Seed) {
             &chain_config,
             &mut rng,
             &tx,
-            &input_commitments_refs,
+            &input_commitments,
             &destination,
             true,
         );
@@ -257,28 +238,21 @@ fn modify_and_verify(#[case] seed: Seed) {
             &chain_config,
             &mut rng,
             &tx,
-            &input_commitments_refs,
+            &input_commitments,
             &destination,
             false,
         );
-        check_mutate_output(
-            &chain_config,
-            &tx,
-            &input_commitments_refs,
-            &destination,
-            false,
-        );
+        check_mutate_output(&chain_config, &tx, &input_commitments, &destination, false);
     }
 
     {
         let sighash_type =
             SigHashType::try_from(SigHashType::NONE | SigHashType::ANYONECANPAY).unwrap();
         let input_commitments = generate_input_commitments(&mut rng, 3);
-        let input_commitments_refs = input_commitments.iter().map(|comm| comm.into()).collect_vec();
         let tx = sign_mutate_then_verify(
             &chain_config,
             &mut rng,
-            &input_commitments_refs,
+            &input_commitments,
             &private_key,
             sighash_type,
             &destination,
@@ -287,7 +261,7 @@ fn modify_and_verify(#[case] seed: Seed) {
             &chain_config,
             &mut rng,
             &tx,
-            &input_commitments_refs,
+            &input_commitments,
             &destination,
             false,
         );
@@ -295,7 +269,7 @@ fn modify_and_verify(#[case] seed: Seed) {
             &chain_config,
             &mut rng,
             &tx,
-            &input_commitments_refs,
+            &input_commitments,
             &destination,
             true,
         );
@@ -303,27 +277,20 @@ fn modify_and_verify(#[case] seed: Seed) {
             &chain_config,
             &mut rng,
             &tx,
-            &input_commitments_refs,
+            &input_commitments,
             &destination,
             false,
         );
-        check_mutate_output(
-            &chain_config,
-            &tx,
-            &input_commitments_refs,
-            &destination,
-            false,
-        );
+        check_mutate_output(&chain_config, &tx, &input_commitments, &destination, false);
     }
 
     {
         let sighash_type = SigHashType::try_from(SigHashType::SINGLE).unwrap();
         let input_commitments = generate_input_commitments(&mut rng, 3);
-        let input_commitments_refs = input_commitments.iter().map(|comm| comm.into()).collect_vec();
         let tx = sign_mutate_then_verify(
             &chain_config,
             &mut rng,
-            &input_commitments_refs,
+            &input_commitments,
             &private_key,
             sighash_type,
             &destination,
@@ -332,7 +299,7 @@ fn modify_and_verify(#[case] seed: Seed) {
             &chain_config,
             &mut rng,
             &tx,
-            &input_commitments_refs,
+            &input_commitments,
             &destination,
             true,
         );
@@ -340,7 +307,7 @@ fn modify_and_verify(#[case] seed: Seed) {
             &chain_config,
             &mut rng,
             &tx,
-            &input_commitments_refs,
+            &input_commitments,
             &destination,
             true,
         );
@@ -348,28 +315,21 @@ fn modify_and_verify(#[case] seed: Seed) {
             &chain_config,
             &mut rng,
             &tx,
-            &input_commitments_refs,
+            &input_commitments,
             &destination,
             false,
         );
-        check_mutate_output(
-            &chain_config,
-            &tx,
-            &input_commitments_refs,
-            &destination,
-            true,
-        );
+        check_mutate_output(&chain_config, &tx, &input_commitments, &destination, true);
     }
 
     {
         let sighash_type =
             SigHashType::try_from(SigHashType::SINGLE | SigHashType::ANYONECANPAY).unwrap();
         let input_commitments = generate_input_commitments(&mut rng, 3);
-        let input_commitments_refs = input_commitments.iter().map(|comm| comm.into()).collect_vec();
         let tx = sign_mutate_then_verify(
             &chain_config,
             &mut rng,
-            &input_commitments_refs,
+            &input_commitments,
             &private_key,
             sighash_type,
             &destination,
@@ -378,7 +338,7 @@ fn modify_and_verify(#[case] seed: Seed) {
             &chain_config,
             &mut rng,
             &tx,
-            &input_commitments_refs,
+            &input_commitments,
             &destination,
             false,
         );
@@ -386,7 +346,7 @@ fn modify_and_verify(#[case] seed: Seed) {
             &chain_config,
             &mut rng,
             &tx,
-            &input_commitments_refs,
+            &input_commitments,
             &destination,
             true,
         );
@@ -394,17 +354,11 @@ fn modify_and_verify(#[case] seed: Seed) {
             &chain_config,
             &mut rng,
             &tx,
-            &input_commitments_refs,
+            &input_commitments,
             &destination,
             false,
         );
-        check_mutate_output(
-            &chain_config,
-            &tx,
-            &input_commitments_refs,
-            &destination,
-            true,
-        );
+        check_mutate_output(&chain_config, &tx, &input_commitments, &destination, true);
     }
 }
 
@@ -422,12 +376,11 @@ fn mutate_all(#[case] seed: Seed) {
     let destination = Destination::PublicKey(public_key);
     let sighash_type = SigHashType::all();
     let input_commitments = generate_input_commitments(&mut rng, INPUTS_COUNT);
-    let input_commitments_refs = input_commitments.iter().map(|comm| comm.into()).collect_vec();
     let tx = generate_and_sign_tx(
         &chain_config,
         &mut rng,
         &destination,
-        &input_commitments_refs,
+        &input_commitments,
         OUTPUTS_COUNT,
         &private_key,
         sighash_type,
@@ -471,12 +424,11 @@ fn mutate_all_anyonecanpay(#[case] seed: Seed) {
     let destination = Destination::PublicKey(public_key);
     let sighash_type = SigHashType::try_from(SigHashType::ALL | SigHashType::ANYONECANPAY).unwrap();
     let input_commitments = generate_input_commitments(&mut rng, INPUTS_COUNT);
-    let input_commitments_refs = input_commitments.iter().map(|comm| comm.into()).collect_vec();
     let tx = generate_and_sign_tx(
         &chain_config,
         &mut rng,
         &destination,
-        &input_commitments_refs,
+        &input_commitments,
         OUTPUTS_COUNT,
         &private_key,
         sighash_type,
@@ -500,8 +452,6 @@ fn mutate_all_anyonecanpay(#[case] seed: Seed) {
         Err(DestinationSigError::SignatureVerificationFailed),
     );
 
-    // FIXME this makes no sense (also, input_commitments_refs should probably come from mutated tx, just in case).
-    // Just add mutate_first_input to the above "mutations" list.
     {
         let tx = SignedTransactionWithInputCommitments {
             tx: tx.clone(),
@@ -514,7 +464,7 @@ fn mutate_all_anyonecanpay(#[case] seed: Seed) {
                 &destination,
                 &tx.tx,
                 &tx.tx.signatures()[0],
-                &input_commitments_refs,
+                &input_commitments,
                 0
             ),
             Err(DestinationSigError::SignatureVerificationFailed),
@@ -545,13 +495,12 @@ fn mutate_none(#[case] seed: Seed) {
     let destination = Destination::PublicKey(public_key);
     let sighash_type = SigHashType::try_from(SigHashType::NONE).unwrap();
     let input_commitments = generate_input_commitments(&mut rng, INPUTS_COUNT);
-    let input_commitments_refs = input_commitments.iter().map(|comm| comm.into()).collect_vec();
 
     let tx = generate_and_sign_tx(
         &chain_config,
         &mut rng,
         &destination,
-        &input_commitments_refs,
+        &input_commitments,
         OUTPUTS_COUNT,
         &private_key,
         sighash_type,
@@ -606,12 +555,11 @@ fn mutate_none_anyonecanpay(#[case] seed: Seed) {
     let sighash_type =
         SigHashType::try_from(SigHashType::NONE | SigHashType::ANYONECANPAY).unwrap();
     let input_commitments = generate_input_commitments(&mut rng, INPUTS_COUNT);
-    let input_commitments_refs = input_commitments.iter().map(|comm| comm.into()).collect_vec();
     let tx = generate_and_sign_tx(
         &chain_config,
         &mut rng,
         &destination,
-        &input_commitments_refs,
+        &input_commitments,
         OUTPUTS_COUNT,
         &private_key,
         sighash_type,
@@ -632,7 +580,7 @@ fn mutate_none_anyonecanpay(#[case] seed: Seed) {
                 &destination,
                 &tx.tx,
                 &tx.tx.signatures()[0],
-                &input_commitments_refs,
+                &input_commitments,
                 0
             ),
             Err(DestinationSigError::SignatureVerificationFailed),
@@ -644,7 +592,7 @@ fn mutate_none_anyonecanpay(#[case] seed: Seed) {
                     &destination,
                     &tx.tx,
                     &tx.tx.signatures()[input],
-                    &input_commitments_refs,
+                    &input_commitments,
                     input
                 ),
                 Ok(())
@@ -697,12 +645,11 @@ fn mutate_single(#[case] seed: Seed) {
     let destination = Destination::PublicKey(public_key);
     let sighash_type = SigHashType::try_from(SigHashType::SINGLE).unwrap();
     let input_commitments = generate_input_commitments(&mut rng, INPUTS_COUNT);
-    let input_commitments_refs = input_commitments.iter().map(|comm| comm.into()).collect_vec();
     let tx = generate_and_sign_tx(
         &chain_config,
         &mut rng,
         &destination,
-        &input_commitments_refs,
+        &input_commitments,
         OUTPUTS_COUNT,
         &private_key,
         sighash_type,
@@ -724,8 +671,6 @@ fn mutate_single(#[case] seed: Seed) {
     for mutate in mutations.into_iter() {
         let tx = mutate(&mut rng, &tx);
         let total_inputs = tx.tx.inputs().len();
-        let input_commitments_refs =
-            tx.input_commitments.iter().map(|info| info.into()).collect::<Vec<_>>();
 
         // Mutations make the last input number invalid, so verifying the signature for it should
         // result in the different error.
@@ -736,7 +681,7 @@ fn mutate_single(#[case] seed: Seed) {
                     &destination,
                     &tx.tx,
                     &tx.tx.signatures()[input],
-                    &input_commitments_refs,
+                    &tx.input_commitments,
                     input
                 ),
                 Err(DestinationSigError::SignatureVerificationFailed)
@@ -748,7 +693,7 @@ fn mutate_single(#[case] seed: Seed) {
                 &destination,
                 &tx.tx,
                 &tx.tx.signatures()[0],
-                &input_commitments_refs,
+                &tx.input_commitments,
                 total_inputs
             ),
             Err(DestinationSigError::InvalidSignatureIndex(
@@ -772,7 +717,7 @@ fn mutate_single(#[case] seed: Seed) {
                     &destination,
                     &tx.tx,
                     &tx.tx.signatures()[input],
-                    &input_commitments_refs,
+                    &tx.input_commitments,
                     input
                 ),
                 Ok(())
@@ -784,7 +729,7 @@ fn mutate_single(#[case] seed: Seed) {
                 &destination,
                 &tx.tx,
                 &tx.tx.signatures()[0],
-                &input_commitments_refs,
+                &tx.input_commitments,
                 inputs
             ),
             Err(DestinationSigError::InvalidSignatureIndex(inputs, inputs)),
@@ -794,8 +739,6 @@ fn mutate_single(#[case] seed: Seed) {
     {
         let tx = mutate_output(&mut rng, &tx);
         let total_inputs = tx.tx.inputs().len();
-        let input_commitments_refs =
-            tx.input_commitments.iter().map(|info| info.into()).collect::<Vec<_>>();
 
         // Mutation of the first output makes signature invalid.
         assert_eq!(
@@ -804,7 +747,7 @@ fn mutate_single(#[case] seed: Seed) {
                 &destination,
                 &tx.tx,
                 &tx.tx.signatures()[0],
-                &input_commitments_refs,
+                &tx.input_commitments,
                 0
             ),
             Err(DestinationSigError::SignatureVerificationFailed),
@@ -816,7 +759,7 @@ fn mutate_single(#[case] seed: Seed) {
                     &destination,
                     &tx.tx,
                     &tx.tx.signatures()[input],
-                    &input_commitments_refs,
+                    &tx.input_commitments,
                     input
                 ),
                 Ok(())
@@ -828,7 +771,7 @@ fn mutate_single(#[case] seed: Seed) {
                 &destination,
                 &tx.tx,
                 &tx.tx.signatures()[0],
-                &input_commitments_refs,
+                &tx.input_commitments,
                 total_inputs
             ),
             Err(DestinationSigError::InvalidSignatureIndex(
@@ -852,12 +795,11 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
     let sighash_type =
         SigHashType::try_from(SigHashType::SINGLE | SigHashType::ANYONECANPAY).unwrap();
     let input_commitments = generate_input_commitments(&mut rng, INPUTS_COUNT);
-    let input_commitments_refs = input_commitments.iter().map(|comm| comm.into()).collect_vec();
     let tx = generate_and_sign_tx(
         &chain_config,
         &mut rng,
         &destination,
-        &input_commitments_refs,
+        &input_commitments,
         OUTPUTS_COUNT,
         &private_key,
         sighash_type,
@@ -872,8 +814,6 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
     for mutate in mutations.into_iter() {
         let tx = mutate(&mut rng, &tx);
         let total_inputs = tx.tx.inputs().len();
-        let input_commitments_refs =
-            tx.input_commitments.iter().map(|info| info.into()).collect::<Vec<_>>();
 
         // Mutations make the last input number invalid, so verifying the signature for it should
         // result in the `InvalidInputIndex` error.
@@ -884,7 +824,7 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
                     &destination,
                     &tx.tx,
                     &tx.tx.signatures()[input],
-                    &input_commitments_refs,
+                    &tx.input_commitments,
                     input
                 ),
                 Ok(()),
@@ -897,7 +837,7 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
                 &destination,
                 &tx.tx,
                 &tx.tx.signatures()[0],
-                &input_commitments_refs,
+                &tx.input_commitments,
                 total_inputs
             ),
             Err(DestinationSigError::InvalidSignatureIndex(
@@ -911,8 +851,6 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
     for mutate in mutations.into_iter() {
         let tx = mutate(&mut rng, &tx);
         let total_inputs = tx.tx.inputs().len();
-        let input_commitments_refs =
-            tx.input_commitments.iter().map(|info| info.into()).collect::<Vec<_>>();
 
         assert_eq!(
             verify_signature(
@@ -920,7 +858,7 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
                 &destination,
                 &tx.tx,
                 &tx.tx.signatures()[0],
-                &input_commitments_refs,
+                &tx.input_commitments,
                 0
             ),
             Err(DestinationSigError::SignatureVerificationFailed),
@@ -932,7 +870,7 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
                     &destination,
                     &tx.tx,
                     &tx.tx.signatures()[input],
-                    &input_commitments_refs,
+                    &tx.input_commitments,
                     input
                 ),
                 Ok(()),
@@ -945,7 +883,7 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
                 &destination,
                 &tx.tx,
                 &tx.tx.signatures()[0],
-                &input_commitments_refs,
+                &tx.input_commitments,
                 total_inputs
             ),
             Err(DestinationSigError::InvalidSignatureIndex(
@@ -959,8 +897,6 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
     for mutate in mutations.into_iter() {
         let tx = mutate(&mut rng, &tx);
         let total_inputs = tx.tx.inputs().len();
-        let input_commitments_refs =
-            tx.input_commitments.iter().map(|info| info.into()).collect::<Vec<_>>();
 
         // Mutations make the last input number invalid, so verifying the signature for it should
         // result in the `InvalidInputIndex` error.
@@ -971,7 +907,7 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
                     &destination,
                     &tx.tx,
                     &tx.tx.signatures()[input],
-                    &input_commitments_refs,
+                    &tx.input_commitments,
                     input
                 ),
                 Err(DestinationSigError::SignatureVerificationFailed),
@@ -984,7 +920,7 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
                 &destination,
                 &tx.tx,
                 &tx.tx.signatures()[0],
-                &input_commitments_refs,
+                &tx.input_commitments,
                 total_inputs
             ),
             Err(DestinationSigError::InvalidSignatureIndex(
@@ -996,11 +932,11 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
 }
 
 #[track_caller]
-fn check_mutations<M, R>(
+fn check_mutations<'a, M, R>(
     chain_config: &ChainConfig,
     rng: &mut R,
     tx: &SignedTransaction,
-    input_commitments: &[InputCommitmentVal],
+    input_commitments: &[SighashInputCommitment<'a>],
     destination: &Destination,
     mutations: M,
     expected: Result<(), DestinationSigError>,
@@ -1015,14 +951,12 @@ fn check_mutations<M, R>(
 {
     let tx = SignedTransactionWithInputCommitments {
         tx: tx.clone(),
-        input_commitments: input_commitments.to_vec(),
+        input_commitments: input_commitments.iter().map(|comm| comm.deep_clone()).collect_vec(),
     };
     for mutate in mutations.into_iter() {
         let tx = mutate(rng, &tx);
         // The number of inputs can be changed by the `mutate` function.
         let inputs = tx.tx.inputs().len();
-        let input_commitments_refs =
-            tx.input_commitments.iter().map(|info| info.into()).collect::<Vec<_>>();
 
         assert_eq!(
             verify_signature(
@@ -1030,7 +964,7 @@ fn check_mutations<M, R>(
                 destination,
                 &tx.tx,
                 &tx.tx.signatures()[0],
-                &input_commitments_refs,
+                &tx.input_commitments,
                 INVALID_INPUT_INDEX
             ),
             Err(DestinationSigError::InvalidSignatureIndex(
@@ -1045,7 +979,7 @@ fn check_mutations<M, R>(
                     destination,
                     &tx.tx,
                     &tx.tx.signatures()[input],
-                    &input_commitments_refs,
+                    &tx.input_commitments,
                     input
                 ),
                 expected
@@ -1056,7 +990,7 @@ fn check_mutations<M, R>(
 
 struct SignedTransactionWithInputCommitments {
     tx: SignedTransaction,
-    input_commitments: Vec<InputCommitmentVal>,
+    input_commitments: Vec<SighashInputCommitment<'static>>,
 }
 
 fn add_input(

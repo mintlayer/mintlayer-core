@@ -99,7 +99,6 @@ fn sign_public_key_hash_spending_impl<R: Rng + CryptoRng>(
 
 #[cfg(test)]
 mod test {
-    use itertools::Itertools as _;
     use rstest::rstest;
 
     use crate::chain::{
@@ -131,7 +130,6 @@ mod test {
         let destination = Destination::PublicKeyHash(pubkey_hash);
 
         let input_commitments = generate_input_commitments(&mut rng, 1);
-        let input_commitments_refs = input_commitments.iter().map(|comm| comm.into()).collect_vec();
 
         let tx = generate_unsigned_tx(&mut rng, &destination, input_commitments.len(), 2).unwrap();
 
@@ -141,7 +139,7 @@ mod test {
                 sighash_type,
                 destination.clone(),
                 &tx,
-                &input_commitments_refs,
+                &input_commitments,
                 1,
                 &mut rng,
             );
@@ -161,7 +159,6 @@ mod test {
         let destination = Destination::PublicKey(public_key);
 
         let input_commitments = generate_input_commitments(&mut rng, INPUTS_COUNT);
-        let input_commitments_refs = input_commitments.iter().map(|comm| comm.into()).collect_vec();
 
         let tx = generate_unsigned_tx(
             &mut rng,
@@ -177,7 +174,7 @@ mod test {
                 sighash_type,
                 destination.clone(),
                 &tx,
-                &input_commitments_refs,
+                &input_commitments,
                 rng.gen_range(0..INPUTS_COUNT),
                 &mut rng,
             )
@@ -204,7 +201,6 @@ mod test {
         let destination = Destination::PublicKeyHash(pubkey_hash);
 
         let input_commitments = generate_input_commitments(&mut rng, INPUTS_COUNT);
-        let input_commitments_refs = input_commitments.iter().map(|comm| comm.into()).collect_vec();
 
         let tx = generate_unsigned_tx(
             &mut rng,
@@ -220,7 +216,7 @@ mod test {
                 sighash_type,
                 destination.clone(),
                 &tx,
-                &input_commitments_refs,
+                &input_commitments,
                 rng.gen_range(0..INPUTS_COUNT),
                 &mut rng,
             )
@@ -254,7 +250,6 @@ mod test {
         let destination = Destination::PublicKeyHash(pubkey_hash);
 
         let input_commitments = generate_input_commitments(&mut rng, INPUTS_COUNT);
-        let input_commitments_refs = input_commitments.iter().map(|comm| comm.into()).collect_vec();
 
         let tx = generate_unsigned_tx(
             &mut rng,
@@ -271,7 +266,7 @@ mod test {
                 sighash_type,
                 destination.clone(),
                 &tx,
-                &input_commitments_refs,
+                &input_commitments,
                 input,
                 &mut rng,
             )
@@ -279,7 +274,7 @@ mod test {
             let spender_signature =
                 AuthorizedPublicKeyHashSpend::from_data(witness.raw_signature()).unwrap();
             let sighash =
-                signature_hash(witness.sighash_type(), &tx, &input_commitments_refs, input)
+                signature_hash(witness.sighash_type(), &tx, &input_commitments, input)
                     .unwrap();
 
             verify_public_key_hash_spending(&pubkey_hash, &spender_signature, &sighash)
@@ -299,7 +294,6 @@ mod test {
         let pubkey_hash = PublicKeyHash::from(&public_key);
 
         let input_commitments = generate_input_commitments(&mut rng, INPUTS_COUNT);
-        let input_commitments_refs = input_commitments.iter().map(|comm| comm.into()).collect_vec();
 
         let tx = generate_unsigned_tx(
             &mut rng,
@@ -316,13 +310,13 @@ mod test {
                 sighash_type,
                 destination.clone(),
                 &tx,
-                &input_commitments_refs,
+                &input_commitments,
                 input,
                 &mut rng,
             )
             .unwrap();
             let sighash =
-                signature_hash(witness.sighash_type(), &tx, &input_commitments_refs, input)
+                signature_hash(witness.sighash_type(), &tx, &input_commitments, input)
                     .unwrap();
 
             sign_public_key_hash_spending(&private_key, &pubkey_hash, &sighash, &mut rng)
