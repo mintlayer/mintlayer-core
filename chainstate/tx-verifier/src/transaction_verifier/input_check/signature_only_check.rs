@@ -134,7 +134,7 @@ pub fn verify_tx_signature<T: Transactable + SignatureOnlyVerifiable>(
 
     ensure!(
         inputs.len() == input_commitments.len(),
-        map_sig_err(DestinationSigError::InvalidUtxoCountVsInputs(
+        map_sig_err(DestinationSigError::InvalidInputCommitmentsCountVsInputs(
             input_commitments.len(),
             inputs.len()
         ))

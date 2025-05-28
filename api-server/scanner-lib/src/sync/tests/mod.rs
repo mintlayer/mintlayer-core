@@ -17,6 +17,7 @@ mod simulation;
 
 use std::{
     borrow::Cow,
+    collections::BTreeMap,
     convert::Infallible,
     sync::{Arc, Mutex},
     time::Duration,
@@ -44,15 +45,18 @@ use common::{
                 standard_signature::StandardInputSignature, InputWitness,
             },
             sighash::{
-                input_commitment::{SighashInputCommitment, TrivialUtxoProvider},
+                input_commitment::{
+                    make_sighash_input_commitments_for_transaction_inputs, OrderInfo, PoolInfo,
+                    SighashInputCommitment, TrivialUtxoProvider,
+                },
                 sighashtype::SigHashType,
                 signature_hash,
             },
         },
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
-        CoinUnit, Destination, OutPointSourceId, PoolId, SignedTransaction, TxInput, TxOutput,
-        UtxoOutPoint,
+        CoinUnit, Destination, OrderId, OutPointSourceId, PoolId, SignedTransaction, TxInput,
+        TxOutput, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, CoinOrTokenId, Idable, H256},
 };
@@ -315,17 +319,6 @@ async fn randomized(#[case] seed: Seed) {
 #[case(test_utils::random::Seed::from_entropy())]
 #[tokio::test]
 async fn compare_pool_rewards_with_chainstate_real_state(#[case] seed: Seed) {
-    use std::collections::BTreeMap;
-
-    use common::chain::{
-        signature::sighash::input_commitment::{
-            make_sighash_input_commitments_for_transaction_inputs, OrderInfo, PoolInfo,
-        },
-        OrderId,
-    };
-
-    logging::init_logging();
-
     let mut rng = make_seedable_rng(seed);
 
     let initial_pledge = 40_000 * CoinUnit::ATOMS_PER_COIN + rng.gen_range(10000..100000);

@@ -43,8 +43,8 @@ pub enum DestinationSigError {
     InvalidSigHashValue(u8),
     #[error("Invalid input index was provided (provided: `{0}` vs available: `{1}`)")]
     InvalidInputIndex(usize, usize),
-    #[error("Utxos count does not match inputs count (Utxo count: `{0}` vs inputs: `{1}`)")]
-    InvalidUtxoCountVsInputs(usize, usize),
+    #[error("Input commitments count {0} does not match inputs count {1}")]
+    InvalidInputCommitmentsCountVsInputs(usize, usize),
     #[error("Invalid signature index was provided (provided: `{0}` vs available: `{1}`)")]
     InvalidSignatureIndex(usize, usize),
     #[error("Requested signature hash without the presence of any inputs")]

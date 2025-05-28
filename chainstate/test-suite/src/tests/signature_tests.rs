@@ -15,6 +15,8 @@
 
 use std::{borrow::Cow, num::NonZeroU8};
 
+use rstest::rstest;
+
 use chainstate::ConnectTransactionError;
 use chainstate_test_framework::{
     anyonecanspend_address, empty_witness, TestFramework, TransactionBuilder,
@@ -22,7 +24,9 @@ use chainstate_test_framework::{
 use common::{
     address::pubkeyhash::PublicKeyHash,
     chain::{
+        self,
         classic_multisig::ClassicMultisigChallenge,
+        config::ChainType,
         output_value::OutputValue,
         signature::{
             inputsig::{
@@ -41,7 +45,6 @@ use common::{
 };
 use crypto::key::{KeyKind, PrivateKey};
 use randomness::{Rng, SliceRandom};
-use rstest::rstest;
 use serialization::Encode;
 use test_utils::random::{gen_random_bytes, Seed};
 use tx_verifier::error::{InputCheckError, ScriptError};
@@ -576,18 +579,17 @@ fn no_sig_data_not_allowed(
 ) {
     utils::concurrency::model(move || {
         let mut rng = test_utils::random::make_seedable_rng(seed);
-        let chain_config =
-            common::chain::config::Builder::new(common::chain::config::ChainType::Regtest)
-                .data_in_no_signature_witness_allowed(data_allowed)
-                .consensus_upgrades(
-                    NetUpgrades::initialize(vec![(
-                        BlockHeight::zero(),
-                        ConsensusUpgrade::IgnoreConsensus,
-                    )])
-                    .unwrap(),
-                )
-                .genesis_unittest(Destination::AnyoneCanSpend)
-                .build();
+        let chain_config = chain::config::Builder::new(ChainType::Regtest)
+            .data_in_no_signature_witness_allowed(data_allowed)
+            .consensus_upgrades(
+                NetUpgrades::initialize(vec![(
+                    BlockHeight::zero(),
+                    ConsensusUpgrade::IgnoreConsensus,
+                )])
+                .unwrap(),
+            )
+            .genesis_unittest(Destination::AnyoneCanSpend)
+            .build();
 
         let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
 
@@ -648,16 +650,15 @@ fn no_sig_data_not_allowed(
 fn try_to_spend_with_no_signature_on_mainnet(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = test_utils::random::make_seedable_rng(seed);
-        let chain_config =
-            common::chain::config::Builder::new(common::chain::config::ChainType::Mainnet)
-                .consensus_upgrades(
-                    NetUpgrades::initialize(vec![(
-                        BlockHeight::zero(),
-                        ConsensusUpgrade::IgnoreConsensus,
-                    )])
-                    .unwrap(),
-                )
-                .build();
+        let chain_config = chain::config::Builder::new(ChainType::Mainnet)
+            .consensus_upgrades(
+                NetUpgrades::initialize(vec![(
+                    BlockHeight::zero(),
+                    ConsensusUpgrade::IgnoreConsensus,
+                )])
+                .unwrap(),
+            )
+            .build();
 
         let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
 

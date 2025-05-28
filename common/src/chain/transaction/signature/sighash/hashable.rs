@@ -72,7 +72,10 @@ impl<'a> SignatureHashableInputs<'a> {
     ) -> Result<Self, DestinationSigError> {
         ensure!(
             input_commitments.len() == inputs.len(),
-            DestinationSigError::InvalidUtxoCountVsInputs(input_commitments.len(), inputs.len())
+            DestinationSigError::InvalidInputCommitmentsCountVsInputs(
+                input_commitments.len(),
+                inputs.len()
+            )
         );
 
         let result = Self {
@@ -210,18 +213,18 @@ mod tests {
 
     fn do_test_hashable_inputs(
         inputs_count: usize,
-        inputs_utxos_count: usize,
+        input_commitments_count: usize,
         rng: &mut (impl Rng + CryptoRng),
     ) {
         let inputs = (0..inputs_count).map(|_| generate_random_input(rng)).collect::<Vec<_>>();
 
-        let input_commitments = generate_input_commitments(rng, inputs_utxos_count);
+        let input_commitments = generate_input_commitments(rng, input_commitments_count);
         let hashable_inputs_result = SignatureHashableInputs::new(&inputs, &input_commitments);
 
-        if inputs_count != inputs_utxos_count {
+        if inputs_count != input_commitments_count {
             assert_eq!(
                 hashable_inputs_result.unwrap_err(),
-                DestinationSigError::InvalidUtxoCountVsInputs(
+                DestinationSigError::InvalidInputCommitmentsCountVsInputs(
                     input_commitments.len(),
                     inputs.len(),
                 )

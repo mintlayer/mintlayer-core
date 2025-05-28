@@ -274,8 +274,7 @@ mod test {
             let spender_signature =
                 AuthorizedPublicKeyHashSpend::from_data(witness.raw_signature()).unwrap();
             let sighash =
-                signature_hash(witness.sighash_type(), &tx, &input_commitments, input)
-                    .unwrap();
+                signature_hash(witness.sighash_type(), &tx, &input_commitments, input).unwrap();
 
             verify_public_key_hash_spending(&pubkey_hash, &spender_signature, &sighash)
                 .unwrap_or_else(|_| panic!("{sighash_type:X?}"));
@@ -316,8 +315,7 @@ mod test {
             )
             .unwrap();
             let sighash =
-                signature_hash(witness.sighash_type(), &tx, &input_commitments, input)
-                    .unwrap();
+                signature_hash(witness.sighash_type(), &tx, &input_commitments, input).unwrap();
 
             sign_public_key_hash_spending(&private_key, &pubkey_hash, &sighash, &mut rng)
                 .unwrap_or_else(|_| panic!("{sighash_type:X?}"));

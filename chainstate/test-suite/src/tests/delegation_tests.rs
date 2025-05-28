@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use rstest::rstest;
+
 use chainstate::{BlockError, ChainstateError, ConnectTransactionError, IOPolicyError};
 use chainstate_storage::Transactional;
 use chainstate_test_framework::{
@@ -27,6 +29,7 @@ use common::{
         output_value::OutputValue,
         signature::{
             inputsig::{standard_signature::StandardInputSignature, InputWitness},
+            sighash::input_commitment::SighashInputCommitment,
             DestinationSigError,
         },
         stakelock::StakePoolData,
@@ -42,7 +45,6 @@ use crypto::{
 };
 use pos_accounting::{DelegationData, PoSAccountingStorageRead};
 use randomness::{CryptoRng, Rng};
-use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 use tx_verifier::error::{InputCheckError, ScriptError};
 
@@ -853,8 +855,6 @@ fn create_pool_and_delegation_and_delegate_same_block(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn check_signature_on_spend_share(#[case] seed: Seed) {
-    use common::chain::signature::sighash::input_commitment::SighashInputCommitment;
-
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();

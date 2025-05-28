@@ -56,7 +56,9 @@ pub fn generate_input_utxo(
     (utxo, sk)
 }
 
-pub fn generate_input_commitment(rng: &mut (impl Rng + CryptoRng)) -> SighashInputCommitment<'static> {
+pub fn generate_input_commitment(
+    rng: &mut (impl Rng + CryptoRng),
+) -> SighashInputCommitment<'static> {
     match rng.gen_range(0..5) {
         0 => SighashInputCommitment::None,
         1 => {

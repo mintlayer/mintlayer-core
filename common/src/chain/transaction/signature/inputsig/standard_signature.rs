@@ -335,13 +335,8 @@ mod test {
             )
             .unwrap();
 
-            let sighash = signature_hash(
-                witness.sighash_type(),
-                &tx,
-                &input_commitments,
-                INPUT_NUM,
-            )
-            .unwrap();
+            let sighash =
+                signature_hash(witness.sighash_type(), &tx, &input_commitments, INPUT_NUM).unwrap();
             witness
                 .verify_signature(&chain_config, &destination, &sighash)
                 .unwrap_or_else(|_| panic!("{sighash_type:X?} {destination:?}"));

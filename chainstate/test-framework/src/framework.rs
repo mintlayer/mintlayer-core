@@ -15,13 +15,31 @@
 
 use std::{collections::BTreeMap, sync::Arc};
 
+use rstest::rstest;
+
+use chainstate::{chainstate_interface::ChainstateInterface, BlockSource, ChainstateError};
 use chainstate_storage::{
     BlockchainStorageRead, BlockchainStorageWrite, TransactionRw, Transactional,
 };
+use chainstate_types::{
+    pos_randomness::PoSRandomness, BlockIndex, BlockStatus, EpochStorageRead as _, GenBlockIndex,
+    TipStorageTag,
+};
+use common::{
+    chain::{
+        signature::sighash::{self, input_commitment::SighashInputCommitment},
+        Block, ChainConfig, GenBlock, GenBlockId, Genesis, OutPointSourceId, PoolId, TxInput,
+        TxOutput, UtxoOutPoint,
+    },
+    primitives::{id::WithId, time::Time, Amount, BlockHeight, Id, Idable},
+    time_getter::TimeGetter,
+};
+use crypto::{key::PrivateKey, vrf::VRFPrivateKey};
 use orders_accounting::OrdersAccountingDB;
 use pos_accounting::PoSAccountingDB;
-use rstest::rstest;
-use utxo::UtxosDB;
+use randomness::{CryptoRng, Rng};
+use utils::atomics::SeqCstAtomicU64;
+use utxo::{Utxo, UtxosDB};
 
 use crate::{
     framework_builder::TestFrameworkBuilderValue,
@@ -37,23 +55,6 @@ use crate::{
     },
     BlockBuilder, TestChainstate, TestFrameworkBuilder, TestStore, TxVerificationStrategy,
 };
-use chainstate::{chainstate_interface::ChainstateInterface, BlockSource, ChainstateError};
-use chainstate_types::{
-    pos_randomness::PoSRandomness, BlockIndex, BlockStatus, EpochStorageRead as _, GenBlockIndex,
-    TipStorageTag,
-};
-use common::{
-    chain::{
-        signature::sighash::{self, input_commitment::SighashInputCommitment},
-        Block, ChainConfig, GenBlock, GenBlockId, Genesis, OutPointSourceId, PoolId, TxInput,
-        TxOutput, UtxoOutPoint,
-    },
-    primitives::{id::WithId, time::Time, Amount, BlockHeight, Id, Idable},
-    time_getter::TimeGetter,
-};
-use crypto::{key::PrivateKey, vrf::VRFPrivateKey};
-use randomness::{CryptoRng, Rng};
-use utils::atomics::SeqCstAtomicU64;
 
 /// The `Chainstate` wrapper that simplifies operations and checks in the tests.
 #[must_use]
@@ -621,6 +622,10 @@ impl TestFramework {
             .unwrap()
             .coin_amount()
             .unwrap()
+    }
+
+    pub fn utxo(&self, outpoint: &UtxoOutPoint) -> Utxo {
+        self.chainstate.utxo(&outpoint).unwrap().unwrap()
     }
 }
 

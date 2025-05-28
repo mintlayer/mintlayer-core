@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{num::NonZeroU64, time::Duration};
+use std::{borrow::Cow, num::NonZeroU64, time::Duration};
 
 use rstest::rstest;
 
@@ -42,10 +42,7 @@ use common::{
         output_value::OutputValue,
         signature::{
             inputsig::{standard_signature::StandardInputSignature, InputWitness},
-            sighash::{
-                self, input_commitment::make_sighash_input_commitments_for_kernel_inputs,
-                sighashtype::SigHashType,
-            },
+            sighash::{input_commitment::SighashInputCommitment, sighashtype::SigHashType},
         },
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
@@ -280,17 +277,10 @@ fn produce_kernel_signature(
     kernel_outpoint: UtxoOutPoint,
 ) -> StandardInputSignature {
     let block_outputs = tf.outputs_from_genblock(kernel_utxo_block_id);
-    let utxo = &block_outputs.get(&kernel_outpoint.source_id()).unwrap()
+
+    let kernel_input_utxo = &block_outputs.get(&kernel_outpoint.source_id()).unwrap()
         [kernel_outpoint.output_index() as usize];
-
     let kernel_inputs = vec![kernel_outpoint.into()];
-
-    let utxos = [Some(utxo.clone())];
-    let input_commitments = make_sighash_input_commitments_for_kernel_inputs(
-        &kernel_inputs,
-        &sighash::input_commitment::TrivialUtxoProvider(&utxos),
-    )
-    .unwrap();
 
     let block_reward_tx =
         BlockRewardTransactable::new(Some(kernel_inputs.as_slice()), Some(reward_outputs), None);
@@ -299,7 +289,7 @@ fn produce_kernel_signature(
         SigHashType::default(),
         staking_destination,
         &block_reward_tx,
-        &input_commitments,
+        &[SighashInputCommitment::Utxo(Cow::Borrowed(kernel_input_utxo))],
         0,
         rng,
     )
