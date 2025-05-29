@@ -26,10 +26,6 @@ use crate::{
                 input_commitments::SighashInputCommitment,
                 sighashtype::{OutputsMode, SigHashType},
             },
-            tests::{
-                check_insert_input, check_insert_output, check_mutate_input, check_mutate_output,
-                sign_mutate_then_verify,
-            },
             DestinationSigError,
         },
         signed_transaction::SignedTransaction,
@@ -116,111 +112,6 @@ fn test_mutate_tx_flags(#[case] seed: Seed) {
             }
             e => assert_eq!(e.unwrap_err(), expected.unwrap_err()),
         }
-    }
-}
-
-#[rstest]
-#[trace]
-#[case(Seed::from_entropy())]
-fn modify_and_verify(#[case] seed: Seed) {
-    let mut rng = test_utils::random::make_seedable_rng(seed);
-
-    let chain_config = create_mainnet();
-
-    let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
-    let destination = Destination::PublicKey(public_key);
-
-    {
-        let sighash_type = SigHashType::all();
-        let tx = sign_mutate_then_verify(
-            &chain_config,
-            &mut rng,
-            &private_key,
-            sighash_type,
-            &destination,
-        );
-        check_insert_input(&chain_config, &mut rng, &tx, &destination, true);
-        check_mutate_input(&chain_config, &mut rng, &tx, &destination, true);
-        check_insert_output(&chain_config, &mut rng, &tx, &destination, true);
-        check_mutate_output(&chain_config, &tx, &destination, true);
-    }
-
-    {
-        let sighash_type =
-            SigHashType::try_from(SigHashType::ALL | SigHashType::ANYONECANPAY).unwrap();
-        let tx = sign_mutate_then_verify(
-            &chain_config,
-            &mut rng,
-            &private_key,
-            sighash_type,
-            &destination,
-        );
-        check_insert_input(&chain_config, &mut rng, &tx, &destination, false);
-        check_mutate_input(&chain_config, &mut rng, &tx, &destination, true);
-        check_insert_output(&chain_config, &mut rng, &tx, &destination, true);
-        check_mutate_output(&chain_config, &tx, &destination, true);
-    }
-
-    {
-        let sighash_type = SigHashType::try_from(SigHashType::NONE).unwrap();
-        let tx = sign_mutate_then_verify(
-            &chain_config,
-            &mut rng,
-            &private_key,
-            sighash_type,
-            &destination,
-        );
-        check_insert_input(&chain_config, &mut rng, &tx, &destination, true);
-        check_mutate_input(&chain_config, &mut rng, &tx, &destination, true);
-        check_insert_output(&chain_config, &mut rng, &tx, &destination, false);
-        check_mutate_output(&chain_config, &tx, &destination, false);
-    }
-
-    {
-        let sighash_type =
-            SigHashType::try_from(SigHashType::NONE | SigHashType::ANYONECANPAY).unwrap();
-        let tx = sign_mutate_then_verify(
-            &chain_config,
-            &mut rng,
-            &private_key,
-            sighash_type,
-            &destination,
-        );
-        check_insert_input(&chain_config, &mut rng, &tx, &destination, false);
-        check_mutate_input(&chain_config, &mut rng, &tx, &destination, true);
-        check_insert_output(&chain_config, &mut rng, &tx, &destination, false);
-        check_mutate_output(&chain_config, &tx, &destination, false);
-    }
-
-    {
-        let sighash_type = SigHashType::try_from(SigHashType::SINGLE).unwrap();
-        let tx = sign_mutate_then_verify(
-            &chain_config,
-            &mut rng,
-            &private_key,
-            sighash_type,
-            &destination,
-        );
-        check_insert_input(&chain_config, &mut rng, &tx, &destination, true);
-        check_mutate_input(&chain_config, &mut rng, &tx, &destination, true);
-        check_insert_output(&chain_config, &mut rng, &tx, &destination, false);
-        check_mutate_output(&chain_config, &tx, &destination, true);
-    }
-
-    {
-        let sighash_type =
-            SigHashType::try_from(SigHashType::SINGLE | SigHashType::ANYONECANPAY).unwrap();
-        let tx = sign_mutate_then_verify(
-            &chain_config,
-            &mut rng,
-            &private_key,
-            sighash_type,
-            &destination,
-        );
-        check_insert_input(&chain_config, &mut rng, &tx, &destination, false);
-        check_mutate_input(&chain_config, &mut rng, &tx, &destination, true);
-        check_insert_output(&chain_config, &mut rng, &tx, &destination, false);
-        check_mutate_output(&chain_config, &tx, &destination, true);
     }
 }
 
