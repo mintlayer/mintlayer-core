@@ -17,6 +17,8 @@ mod info_providers;
 
 use std::borrow::Cow;
 
+use strum::{EnumDiscriminants, EnumIter};
+
 use serialization::{Decode, Encode};
 use utils::cow_utils::CowUtils as _;
 
@@ -42,7 +44,8 @@ pub use info_providers::{
 ///    with the `Option`, provided that only `None` and `Utxo` variants are used.
 /// 2) The `ProduceBlockFromStakeUtxo`, `FillOrderAccountCommand` and `ConcludeOrderAccountCommand`
 ///    commitments are enabled since `SighashInputCommitmentVersion::V1`.
-#[derive(Clone, Debug, Encode, Decode)]
+#[derive(Clone, Debug, Encode, Decode, EnumDiscriminants)]
+#[strum_discriminants(name(SighashInputCommitmentTag), derive(EnumIter))]
 pub enum SighashInputCommitment<'a> {
     /// No extra commitment.
     ///

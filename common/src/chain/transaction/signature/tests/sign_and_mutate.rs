@@ -132,233 +132,95 @@ fn modify_and_verify(#[case] seed: Seed) {
 
     {
         let sighash_type = SigHashType::all();
-        let input_commitments = generate_input_commitments(&mut rng, 3);
         let tx = sign_mutate_then_verify(
             &chain_config,
             &mut rng,
-            &input_commitments,
             &private_key,
             sighash_type,
             &destination,
         );
-        check_insert_input(
-            &chain_config,
-            &mut rng,
-            &tx,
-            &input_commitments,
-            &destination,
-            true,
-        );
-        check_mutate_input(
-            &chain_config,
-            &mut rng,
-            &tx,
-            &input_commitments,
-            &destination,
-            true,
-        );
-        check_insert_output(
-            &chain_config,
-            &mut rng,
-            &tx,
-            &input_commitments,
-            &destination,
-            true,
-        );
-        check_mutate_output(&chain_config, &tx, &input_commitments, &destination, true);
+        check_insert_input(&chain_config, &mut rng, &tx, &destination, true);
+        check_mutate_input(&chain_config, &mut rng, &tx, &destination, true);
+        check_insert_output(&chain_config, &mut rng, &tx, &destination, true);
+        check_mutate_output(&chain_config, &tx, &destination, true);
     }
 
     {
         let sighash_type =
             SigHashType::try_from(SigHashType::ALL | SigHashType::ANYONECANPAY).unwrap();
-        let input_commitments = generate_input_commitments(&mut rng, 3);
         let tx = sign_mutate_then_verify(
             &chain_config,
             &mut rng,
-            &input_commitments,
             &private_key,
             sighash_type,
             &destination,
         );
-        check_insert_input(
-            &chain_config,
-            &mut rng,
-            &tx,
-            &input_commitments,
-            &destination,
-            false,
-        );
-        check_mutate_input(
-            &chain_config,
-            &mut rng,
-            &tx,
-            &input_commitments,
-            &destination,
-            true,
-        );
-        check_insert_output(
-            &chain_config,
-            &mut rng,
-            &tx,
-            &input_commitments,
-            &destination,
-            true,
-        );
-        check_mutate_output(&chain_config, &tx, &input_commitments, &destination, true);
+        check_insert_input(&chain_config, &mut rng, &tx, &destination, false);
+        check_mutate_input(&chain_config, &mut rng, &tx, &destination, true);
+        check_insert_output(&chain_config, &mut rng, &tx, &destination, true);
+        check_mutate_output(&chain_config, &tx, &destination, true);
     }
 
     {
         let sighash_type = SigHashType::try_from(SigHashType::NONE).unwrap();
-        let input_commitments = generate_input_commitments(&mut rng, 3);
         let tx = sign_mutate_then_verify(
             &chain_config,
             &mut rng,
-            &input_commitments,
             &private_key,
             sighash_type,
             &destination,
         );
-        check_insert_input(
-            &chain_config,
-            &mut rng,
-            &tx,
-            &input_commitments,
-            &destination,
-            true,
-        );
-        check_mutate_input(
-            &chain_config,
-            &mut rng,
-            &tx,
-            &input_commitments,
-            &destination,
-            true,
-        );
-        check_insert_output(
-            &chain_config,
-            &mut rng,
-            &tx,
-            &input_commitments,
-            &destination,
-            false,
-        );
-        check_mutate_output(&chain_config, &tx, &input_commitments, &destination, false);
+        check_insert_input(&chain_config, &mut rng, &tx, &destination, true);
+        check_mutate_input(&chain_config, &mut rng, &tx, &destination, true);
+        check_insert_output(&chain_config, &mut rng, &tx, &destination, false);
+        check_mutate_output(&chain_config, &tx, &destination, false);
     }
 
     {
         let sighash_type =
             SigHashType::try_from(SigHashType::NONE | SigHashType::ANYONECANPAY).unwrap();
-        let input_commitments = generate_input_commitments(&mut rng, 3);
         let tx = sign_mutate_then_verify(
             &chain_config,
             &mut rng,
-            &input_commitments,
             &private_key,
             sighash_type,
             &destination,
         );
-        check_insert_input(
-            &chain_config,
-            &mut rng,
-            &tx,
-            &input_commitments,
-            &destination,
-            false,
-        );
-        check_mutate_input(
-            &chain_config,
-            &mut rng,
-            &tx,
-            &input_commitments,
-            &destination,
-            true,
-        );
-        check_insert_output(
-            &chain_config,
-            &mut rng,
-            &tx,
-            &input_commitments,
-            &destination,
-            false,
-        );
-        check_mutate_output(&chain_config, &tx, &input_commitments, &destination, false);
+        check_insert_input(&chain_config, &mut rng, &tx, &destination, false);
+        check_mutate_input(&chain_config, &mut rng, &tx, &destination, true);
+        check_insert_output(&chain_config, &mut rng, &tx, &destination, false);
+        check_mutate_output(&chain_config, &tx, &destination, false);
     }
 
     {
         let sighash_type = SigHashType::try_from(SigHashType::SINGLE).unwrap();
-        let input_commitments = generate_input_commitments(&mut rng, 3);
         let tx = sign_mutate_then_verify(
             &chain_config,
             &mut rng,
-            &input_commitments,
             &private_key,
             sighash_type,
             &destination,
         );
-        check_insert_input(
-            &chain_config,
-            &mut rng,
-            &tx,
-            &input_commitments,
-            &destination,
-            true,
-        );
-        check_mutate_input(
-            &chain_config,
-            &mut rng,
-            &tx,
-            &input_commitments,
-            &destination,
-            true,
-        );
-        check_insert_output(
-            &chain_config,
-            &mut rng,
-            &tx,
-            &input_commitments,
-            &destination,
-            false,
-        );
-        check_mutate_output(&chain_config, &tx, &input_commitments, &destination, true);
+        check_insert_input(&chain_config, &mut rng, &tx, &destination, true);
+        check_mutate_input(&chain_config, &mut rng, &tx, &destination, true);
+        check_insert_output(&chain_config, &mut rng, &tx, &destination, false);
+        check_mutate_output(&chain_config, &tx, &destination, true);
     }
 
     {
         let sighash_type =
             SigHashType::try_from(SigHashType::SINGLE | SigHashType::ANYONECANPAY).unwrap();
-        let input_commitments = generate_input_commitments(&mut rng, 3);
         let tx = sign_mutate_then_verify(
             &chain_config,
             &mut rng,
-            &input_commitments,
             &private_key,
             sighash_type,
             &destination,
         );
-        check_insert_input(
-            &chain_config,
-            &mut rng,
-            &tx,
-            &input_commitments,
-            &destination,
-            false,
-        );
-        check_mutate_input(
-            &chain_config,
-            &mut rng,
-            &tx,
-            &input_commitments,
-            &destination,
-            true,
-        );
-        check_insert_output(
-            &chain_config,
-            &mut rng,
-            &tx,
-            &input_commitments,
-            &destination,
-            false,
-        );
-        check_mutate_output(&chain_config, &tx, &input_commitments, &destination, true);
+        check_insert_input(&chain_config, &mut rng, &tx, &destination, false);
+        check_mutate_input(&chain_config, &mut rng, &tx, &destination, true);
+        check_insert_output(&chain_config, &mut rng, &tx, &destination, false);
+        check_mutate_output(&chain_config, &tx, &destination, true);
     }
 }
 
@@ -1087,11 +949,6 @@ fn check_mutations<'a, M, R>(
             );
         }
     }
-}
-
-struct SignedTransactionWithInputCommitments {
-    tx: SignedTransaction,
-    input_commitments: Vec<SighashInputCommitment<'static>>,
 }
 
 fn add_input(

@@ -34,7 +34,10 @@ use crate::{
         output_value::OutputValue,
         signature::{
             inputsig::{standard_signature::StandardInputSignature, InputWitness},
-            sighash::{input_commitments::SighashInputCommitment, sighashtype::SigHashType},
+            sighash::{
+                input_commitments::{SighashInputCommitment, SighashInputCommitmentTag},
+                sighashtype::SigHashType,
+            },
             DestinationSigError, EvaluatedInputWitness, Signable,
         },
         signed_transaction::SignedTransaction,
@@ -159,16 +162,17 @@ pub fn generate_input_utxo(rng: &mut (impl Rng + CryptoRng)) -> TxOutput {
     generate_input_utxo_for_tag(rng, tag)
 }
 
-pub fn generate_input_commitment(
+pub fn generate_input_commitment_for_tag(
     rng: &mut (impl Rng + CryptoRng),
+    tag: SighashInputCommitmentTag,
 ) -> SighashInputCommitment<'static> {
-    match rng.gen_range(0..5) {
-        0 => SighashInputCommitment::None,
-        1 => {
+    match tag {
+        SighashInputCommitmentTag::None => SighashInputCommitment::None,
+        SighashInputCommitmentTag::Utxo => {
             let utxo = generate_input_utxo(rng);
             SighashInputCommitment::Utxo(Cow::Owned(utxo))
         }
-        2 => {
+        SighashInputCommitmentTag::ProduceBlockFromStakeUtxo => {
             let utxo = generate_input_utxo(rng);
             let staker_balance = Amount::from_atoms(rng.gen::<UnsignedIntType>());
             SighashInputCommitment::ProduceBlockFromStakeUtxo {
@@ -176,7 +180,7 @@ pub fn generate_input_commitment(
                 staker_balance,
             }
         }
-        3 => {
+        SighashInputCommitmentTag::FillOrderAccountCommand => {
             let initially_asked = make_random_output_value(rng);
             let initially_given = make_random_output_value(rng);
 
@@ -185,7 +189,7 @@ pub fn generate_input_commitment(
                 initially_given,
             }
         }
-        4 => {
+        SighashInputCommitmentTag::ConcludeOrderAccountCommand => {
             let ask_balance = Amount::from_atoms(rng.gen());
             let give_balance = Amount::from_atoms(rng.gen());
 
@@ -194,8 +198,14 @@ pub fn generate_input_commitment(
                 give_balance,
             }
         }
-        _ => unreachable!(),
     }
+}
+
+pub fn generate_input_commitment(
+    rng: &mut (impl Rng + CryptoRng),
+) -> SighashInputCommitment<'static> {
+    let tag = SighashInputCommitmentTag::iter().choose(rng).unwrap();
+    generate_input_commitment_for_tag(rng, tag)
 }
 
 pub fn generate_input_commitments(
@@ -247,6 +257,11 @@ impl MutableTransaction {
             self.witness.clone(),
         )
     }
+}
+
+pub struct SignedTransactionWithInputCommitments {
+    pub tx: SignedTransaction,
+    pub input_commitments: Vec<SighashInputCommitment<'static>>,
 }
 
 pub fn generate_unsigned_tx(
@@ -321,11 +336,12 @@ pub fn generate_and_sign_tx(
     rng: &mut (impl Rng + CryptoRng),
     destination: &Destination,
     input_commitments: &[SighashInputCommitment],
-    outputs: usize,
+    outputs_count: usize,
     private_key: &PrivateKey,
     sighash_type: SigHashType,
 ) -> Result<SignedTransaction, TransactionCreationError> {
-    let tx = generate_unsigned_tx(rng, destination, input_commitments.len(), outputs).unwrap();
+    let tx =
+        generate_unsigned_tx(rng, destination, input_commitments.len(), outputs_count).unwrap();
     let signed_tx = sign_whole_tx(
         rng,
         tx,
