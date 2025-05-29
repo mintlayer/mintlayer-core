@@ -458,6 +458,8 @@ fn mutate_all_anyonecanpay(#[case] seed: Seed) {
             input_commitments: input_commitments.clone(),
         };
         let tx = mutate_first_input(&mut rng, &tx);
+        let inputs_count = tx.tx.inputs().len();
+
         assert_eq!(
             verify_signature(
                 &chain_config,
@@ -469,6 +471,19 @@ fn mutate_all_anyonecanpay(#[case] seed: Seed) {
             ),
             Err(DestinationSigError::SignatureVerificationFailed),
         );
+        for input_idx in 1..inputs_count {
+            assert_eq!(
+                verify_signature(
+                    &chain_config,
+                    &destination,
+                    &tx.tx,
+                    &tx.tx.signatures()[input_idx],
+                    &input_commitments,
+                    input_idx
+                ),
+                Ok(())
+            );
+        }
     }
 
     let mutations = [add_input, remove_first_input, remove_middle_input, remove_last_input];
@@ -572,7 +587,7 @@ fn mutate_none_anyonecanpay(#[case] seed: Seed) {
             input_commitments: input_commitments.clone(),
         };
         let tx = mutate_first_input(&mut rng, &tx);
-        let inputs = tx.tx.inputs().len();
+        let inputs_count = tx.tx.inputs().len();
 
         assert_eq!(
             verify_signature(
@@ -585,15 +600,15 @@ fn mutate_none_anyonecanpay(#[case] seed: Seed) {
             ),
             Err(DestinationSigError::SignatureVerificationFailed),
         );
-        for input in 1..inputs {
+        for input_idx in 1..inputs_count {
             assert_eq!(
                 verify_signature(
                     &chain_config,
                     &destination,
                     &tx.tx,
-                    &tx.tx.signatures()[input],
+                    &tx.tx.signatures()[input_idx],
                     &input_commitments,
-                    input
+                    input_idx
                 ),
                 Ok(())
             );
@@ -670,23 +685,43 @@ fn mutate_single(#[case] seed: Seed) {
     };
     for mutate in mutations.into_iter() {
         let tx = mutate(&mut rng, &tx);
-        let total_inputs = tx.tx.inputs().len();
+        let inputs_count = tx.tx.inputs().len();
+        let outputs_count = tx.tx.outputs().len();
 
-        // Mutations make the last input number invalid, so verifying the signature for it should
-        // result in the different error.
-        for input in 0..total_inputs - 1 {
+        // If a mutation makes the number of outputs smaller than the number of inputs,
+        // verifying the "extra" inputs will produce a different error.
+        for input_idx in 0..std::cmp::min(inputs_count, outputs_count) {
             assert_eq!(
                 verify_signature(
                     &chain_config,
                     &destination,
                     &tx.tx,
-                    &tx.tx.signatures()[input],
+                    &tx.tx.signatures()[input_idx],
                     &tx.input_commitments,
-                    input
+                    input_idx
                 ),
                 Err(DestinationSigError::SignatureVerificationFailed)
             );
         }
+
+        // Check the extra inputs, if any.
+        for input_idx in outputs_count..inputs_count {
+            assert_eq!(
+                verify_signature(
+                    &chain_config,
+                    &destination,
+                    &tx.tx,
+                    &tx.tx.signatures()[input_idx],
+                    &tx.input_commitments,
+                    input_idx
+                ),
+                Err(DestinationSigError::InvalidInputIndex(
+                    input_idx,
+                    outputs_count
+                ))
+            );
+        }
+
         assert_eq!(
             verify_signature(
                 &chain_config,
@@ -694,11 +729,11 @@ fn mutate_single(#[case] seed: Seed) {
                 &tx.tx,
                 &tx.tx.signatures()[0],
                 &tx.input_commitments,
-                total_inputs
+                inputs_count
             ),
             Err(DestinationSigError::InvalidSignatureIndex(
-                total_inputs,
-                total_inputs
+                inputs_count,
+                inputs_count
             )),
         );
     }
@@ -706,23 +741,43 @@ fn mutate_single(#[case] seed: Seed) {
     let mutations = [add_output, remove_last_output];
     for mutate in mutations.into_iter() {
         let tx = mutate(&mut rng, &tx);
-        let inputs = tx.tx.inputs().len();
+        let inputs_count = tx.tx.inputs().len();
+        let outputs_count = tx.tx.outputs().len();
 
-        // Mutations make the last input number invalid, so verifying the signature for it should
-        // result in the `InvalidInputIndex` error.
-        for input in 0..inputs - 1 {
+        // If a mutation makes the number of outputs smaller than the number of inputs,
+        // verifying the "extra" inputs will produce a different error.
+        for input_idx in 0..std::cmp::min(inputs_count, outputs_count) {
             assert_eq!(
                 verify_signature(
                     &chain_config,
                     &destination,
                     &tx.tx,
-                    &tx.tx.signatures()[input],
+                    &tx.tx.signatures()[input_idx],
                     &tx.input_commitments,
-                    input
+                    input_idx
                 ),
                 Ok(())
             );
         }
+
+        // Check the extra inputs, if any.
+        for input_idx in outputs_count..inputs_count {
+            assert_eq!(
+                verify_signature(
+                    &chain_config,
+                    &destination,
+                    &tx.tx,
+                    &tx.tx.signatures()[input_idx],
+                    &tx.input_commitments,
+                    input_idx
+                ),
+                Err(DestinationSigError::InvalidInputIndex(
+                    input_idx,
+                    outputs_count
+                ))
+            );
+        }
+
         assert_eq!(
             verify_signature(
                 &chain_config,
@@ -730,15 +785,18 @@ fn mutate_single(#[case] seed: Seed) {
                 &tx.tx,
                 &tx.tx.signatures()[0],
                 &tx.input_commitments,
-                inputs
+                inputs_count
             ),
-            Err(DestinationSigError::InvalidSignatureIndex(inputs, inputs)),
+            Err(DestinationSigError::InvalidSignatureIndex(
+                inputs_count,
+                inputs_count
+            )),
         );
     }
 
     {
         let tx = mutate_output(&mut rng, &tx);
-        let total_inputs = tx.tx.inputs().len();
+        let inputs_count = tx.tx.inputs().len();
 
         // Mutation of the first output makes signature invalid.
         assert_eq!(
@@ -752,15 +810,16 @@ fn mutate_single(#[case] seed: Seed) {
             ),
             Err(DestinationSigError::SignatureVerificationFailed),
         );
-        for input in 1..total_inputs - 1 {
+
+        for input_idx in 1..inputs_count {
             assert_eq!(
                 verify_signature(
                     &chain_config,
                     &destination,
                     &tx.tx,
-                    &tx.tx.signatures()[input],
+                    &tx.tx.signatures()[input_idx],
                     &tx.input_commitments,
-                    input
+                    input_idx
                 ),
                 Ok(())
             );
@@ -772,11 +831,11 @@ fn mutate_single(#[case] seed: Seed) {
                 &tx.tx,
                 &tx.tx.signatures()[0],
                 &tx.input_commitments,
-                total_inputs
+                inputs_count
             ),
             Err(DestinationSigError::InvalidSignatureIndex(
-                total_inputs,
-                total_inputs
+                inputs_count,
+                inputs_count
             )),
         );
     }
@@ -813,24 +872,44 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
     };
     for mutate in mutations.into_iter() {
         let tx = mutate(&mut rng, &tx);
-        let total_inputs = tx.tx.inputs().len();
+        let inputs_count = tx.tx.inputs().len();
+        let outputs_count = tx.tx.outputs().len();
 
-        // Mutations make the last input number invalid, so verifying the signature for it should
-        // result in the `InvalidInputIndex` error.
-        for input in 0..total_inputs - 1 {
+        // If a mutation makes the number of outputs smaller than the number of inputs,
+        // verifying the "extra" inputs will produce a different error.
+        for input_idx in 0..std::cmp::min(inputs_count, outputs_count) {
             assert_eq!(
                 verify_signature(
                     &chain_config,
                     &destination,
                     &tx.tx,
-                    &tx.tx.signatures()[input],
+                    &tx.tx.signatures()[input_idx],
                     &tx.input_commitments,
-                    input
+                    input_idx
                 ),
                 Ok(()),
-                "{input}"
+                "{input_idx}"
             );
         }
+
+        // Check the extra inputs, if any.
+        for input_idx in outputs_count..inputs_count {
+            assert_eq!(
+                verify_signature(
+                    &chain_config,
+                    &destination,
+                    &tx.tx,
+                    &tx.tx.signatures()[input_idx],
+                    &tx.input_commitments,
+                    input_idx
+                ),
+                Err(DestinationSigError::InvalidInputIndex(
+                    input_idx,
+                    outputs_count
+                ))
+            );
+        }
+
         assert_eq!(
             verify_signature(
                 &chain_config,
@@ -838,11 +917,11 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
                 &tx.tx,
                 &tx.tx.signatures()[0],
                 &tx.input_commitments,
-                total_inputs
+                inputs_count
             ),
             Err(DestinationSigError::InvalidSignatureIndex(
-                total_inputs,
-                total_inputs
+                inputs_count,
+                inputs_count
             ))
         );
     }
@@ -850,7 +929,7 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
     let mutations = [mutate_first_input, mutate_output];
     for mutate in mutations.into_iter() {
         let tx = mutate(&mut rng, &tx);
-        let total_inputs = tx.tx.inputs().len();
+        let inputs_count = tx.tx.inputs().len();
 
         assert_eq!(
             verify_signature(
@@ -863,20 +942,22 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
             ),
             Err(DestinationSigError::SignatureVerificationFailed),
         );
-        for input in 1..total_inputs - 1 {
+
+        for input_idx in 1..inputs_count {
             assert_eq!(
                 verify_signature(
                     &chain_config,
                     &destination,
                     &tx.tx,
-                    &tx.tx.signatures()[input],
+                    &tx.tx.signatures()[input_idx],
                     &tx.input_commitments,
-                    input
+                    input_idx
                 ),
                 Ok(()),
-                "## {input}"
+                "## {input_idx}"
             );
         }
+
         assert_eq!(
             verify_signature(
                 &chain_config,
@@ -884,11 +965,11 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
                 &tx.tx,
                 &tx.tx.signatures()[0],
                 &tx.input_commitments,
-                total_inputs
+                inputs_count
             ),
             Err(DestinationSigError::InvalidSignatureIndex(
-                total_inputs,
-                total_inputs
+                inputs_count,
+                inputs_count
             )),
         );
     }
@@ -896,24 +977,44 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
     let mutations = [remove_first_input, remove_first_output];
     for mutate in mutations.into_iter() {
         let tx = mutate(&mut rng, &tx);
-        let total_inputs = tx.tx.inputs().len();
+        let inputs_count = tx.tx.inputs().len();
+        let outputs_count = tx.tx.outputs().len();
 
-        // Mutations make the last input number invalid, so verifying the signature for it should
-        // result in the `InvalidInputIndex` error.
-        for input in 0..total_inputs - 1 {
+        // If a mutation makes the number of outputs smaller than the number of inputs,
+        // verifying the "extra" inputs will produce a different error.
+        for input_idx in 0..std::cmp::min(inputs_count, outputs_count) {
             assert_eq!(
                 verify_signature(
                     &chain_config,
                     &destination,
                     &tx.tx,
-                    &tx.tx.signatures()[input],
+                    &tx.tx.signatures()[input_idx],
                     &tx.input_commitments,
-                    input
+                    input_idx
                 ),
                 Err(DestinationSigError::SignatureVerificationFailed),
-                "{input}"
+                "{input_idx}"
             );
         }
+
+        // Check the extra inputs, if any.
+        for input_idx in outputs_count..inputs_count {
+            assert_eq!(
+                verify_signature(
+                    &chain_config,
+                    &destination,
+                    &tx.tx,
+                    &tx.tx.signatures()[input_idx],
+                    &tx.input_commitments,
+                    input_idx
+                ),
+                Err(DestinationSigError::InvalidInputIndex(
+                    input_idx,
+                    outputs_count
+                ))
+            );
+        }
+
         assert_eq!(
             verify_signature(
                 &chain_config,
@@ -921,11 +1022,11 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
                 &tx.tx,
                 &tx.tx.signatures()[0],
                 &tx.input_commitments,
-                total_inputs
+                inputs_count
             ),
             Err(DestinationSigError::InvalidSignatureIndex(
-                total_inputs,
-                total_inputs
+                inputs_count,
+                inputs_count
             )),
         );
     }
@@ -956,7 +1057,7 @@ fn check_mutations<'a, M, R>(
     for mutate in mutations.into_iter() {
         let tx = mutate(rng, &tx);
         // The number of inputs can be changed by the `mutate` function.
-        let inputs = tx.tx.inputs().len();
+        let inputs_count = tx.tx.inputs().len();
 
         assert_eq!(
             verify_signature(
@@ -969,10 +1070,10 @@ fn check_mutations<'a, M, R>(
             ),
             Err(DestinationSigError::InvalidSignatureIndex(
                 INVALID_INPUT_INDEX,
-                inputs
+                inputs_count
             ))
         );
-        for input in 0..inputs {
+        for input in 0..inputs_count {
             assert_eq!(
                 verify_signature(
                     chain_config,
