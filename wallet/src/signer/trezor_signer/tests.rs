@@ -42,7 +42,8 @@ fn trezor_signer(chain_config: Arc<ChainConfig>, _account_index: U31) -> TrezorS
 #[trace]
 #[serial]
 #[case(Seed::from_entropy())]
-fn sign_message(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn sign_message(#[case] seed: Seed) {
     use crate::signer::tests::generic_tests::test_sign_message;
 
     log::debug!("sign_message, seed = {seed:?}");
@@ -51,14 +52,15 @@ fn sign_message(#[case] seed: Seed) {
 
     let mut rng = make_seedable_rng(seed);
 
-    test_sign_message(&mut rng, trezor_signer);
+    test_sign_message(&mut rng, trezor_signer).await;
 }
 
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
 #[serial]
-fn sign_transaction_intent(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn sign_transaction_intent(#[case] seed: Seed) {
     use crate::signer::tests::generic_tests::test_sign_transaction_intent;
 
     log::debug!("sign_transaction_intent, seed = {seed:?}");
@@ -67,14 +69,15 @@ fn sign_transaction_intent(#[case] seed: Seed) {
 
     let mut rng = make_seedable_rng(seed);
 
-    test_sign_transaction_intent(&mut rng, trezor_signer);
+    test_sign_transaction_intent(&mut rng, trezor_signer).await;
 }
 
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
 #[serial]
-fn sign_transaction(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn sign_transaction(#[case] seed: Seed) {
     use crate::signer::tests::generic_tests::test_sign_transaction;
 
     log::debug!("sign_transaction, seed = {seed:?}");
@@ -83,5 +86,5 @@ fn sign_transaction(#[case] seed: Seed) {
 
     let mut rng = make_seedable_rng(seed);
 
-    test_sign_transaction(&mut rng, trezor_signer);
+    test_sign_transaction(&mut rng, trezor_signer).await;
 }
