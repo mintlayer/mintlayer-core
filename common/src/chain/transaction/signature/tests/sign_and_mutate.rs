@@ -17,15 +17,11 @@ use itertools::Itertools;
 use rstest::rstest;
 use test_utils::random::Seed;
 
-use super::{add_value, utils::*};
 use crate::{
     chain::{
         config::create_mainnet,
         signature::{
-            sighash::{
-                input_commitments::SighashInputCommitment,
-                sighashtype::{OutputsMode, SigHashType},
-            },
+            sighash::sighashtype::{OutputsMode, SigHashType},
             DestinationSigError,
         },
         signed_transaction::SignedTransaction,
@@ -38,13 +34,15 @@ use crate::{
 };
 use crypto::key::{KeyKind, PrivateKey};
 use randomness::{CryptoRng, Rng};
+use test_utils::gen_different_value;
+
+use super::{add_value, utils::*};
 
 const INPUTS_COUNT: usize = 15;
 const OUTPUTS_COUNT: usize = 15;
 const INVALID_INPUT_INDEX: usize = 1235466;
 
 // Create a transaction, sign it, modify its flags and try to verify the signature.
-// TODO: this is a strange test, which also seems to be redundant.
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -128,12 +126,11 @@ fn mutate_all(#[case] seed: Seed) {
     let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
     let destination = Destination::PublicKey(public_key);
     let sighash_type = SigHashType::all();
-    let input_commitments = generate_input_commitments(&mut rng, INPUTS_COUNT);
-    let tx = generate_and_sign_tx(
+    let tx = generate_signed_tx_with_input_commitments(
         &chain_config,
         &mut rng,
         &destination,
-        &input_commitments,
+        INPUTS_COUNT,
         OUTPUTS_COUNT,
         &private_key,
         sighash_type,
@@ -141,23 +138,22 @@ fn mutate_all(#[case] seed: Seed) {
     .unwrap();
 
     let mutations = [
-        add_input,
+        append_input,
         mutate_first_input,
+        mutate_first_input_commitment,
         remove_first_input,
         remove_middle_input,
         remove_last_input,
-        add_output,
-        mutate_output,
+        append_output,
+        mutate_first_output,
         remove_first_output,
         remove_middle_output,
         remove_last_output,
-        mutate_input_commitment,
     ];
     check_mutations(
         &chain_config,
         &mut rng,
         &tx,
-        &input_commitments,
         &destination,
         mutations,
         Err(DestinationSigError::SignatureVerificationFailed),
@@ -176,12 +172,11 @@ fn mutate_all_anyonecanpay(#[case] seed: Seed) {
     let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
     let destination = Destination::PublicKey(public_key);
     let sighash_type = SigHashType::try_from(SigHashType::ALL | SigHashType::ANYONECANPAY).unwrap();
-    let input_commitments = generate_input_commitments(&mut rng, INPUTS_COUNT);
-    let tx = generate_and_sign_tx(
+    let tx = generate_signed_tx_with_input_commitments(
         &chain_config,
         &mut rng,
         &destination,
-        &input_commitments,
+        INPUTS_COUNT,
         OUTPUTS_COUNT,
         &private_key,
         sighash_type,
@@ -189,8 +184,8 @@ fn mutate_all_anyonecanpay(#[case] seed: Seed) {
     .unwrap();
 
     let mutations = [
-        add_output,
-        mutate_output,
+        append_output,
+        mutate_first_output,
         remove_first_output,
         remove_middle_output,
         remove_last_output,
@@ -199,17 +194,12 @@ fn mutate_all_anyonecanpay(#[case] seed: Seed) {
         &chain_config,
         &mut rng,
         &tx,
-        &input_commitments,
         &destination,
         mutations,
         Err(DestinationSigError::SignatureVerificationFailed),
     );
 
     {
-        let tx = SignedTransactionWithInputCommitments {
-            tx: tx.clone(),
-            input_commitments: input_commitments.clone(),
-        };
         let tx = mutate_first_input(&mut rng, &tx);
         let inputs_count = tx.tx.inputs().len();
 
@@ -219,7 +209,7 @@ fn mutate_all_anyonecanpay(#[case] seed: Seed) {
                 &destination,
                 &tx.tx,
                 &tx.tx.signatures()[0],
-                &input_commitments,
+                &tx.input_commitments,
                 0
             ),
             Err(DestinationSigError::SignatureVerificationFailed),
@@ -231,7 +221,7 @@ fn mutate_all_anyonecanpay(#[case] seed: Seed) {
                     &destination,
                     &tx.tx,
                     &tx.tx.signatures()[input_idx],
-                    &input_commitments,
+                    &tx.input_commitments,
                     input_idx
                 ),
                 Ok(())
@@ -239,12 +229,41 @@ fn mutate_all_anyonecanpay(#[case] seed: Seed) {
         }
     }
 
-    let mutations = [add_input, remove_first_input, remove_middle_input, remove_last_input];
+    {
+        let tx = mutate_first_input_commitment(&mut rng, &tx);
+        let inputs_count = tx.tx.inputs().len();
+
+        assert_eq!(
+            verify_signature(
+                &chain_config,
+                &destination,
+                &tx.tx,
+                &tx.tx.signatures()[0],
+                &tx.input_commitments,
+                0
+            ),
+            Err(DestinationSigError::SignatureVerificationFailed),
+        );
+        for input_idx in 1..inputs_count {
+            assert_eq!(
+                verify_signature(
+                    &chain_config,
+                    &destination,
+                    &tx.tx,
+                    &tx.tx.signatures()[input_idx],
+                    &tx.input_commitments,
+                    input_idx
+                ),
+                Ok(())
+            );
+        }
+    }
+
+    let mutations = [append_input, remove_first_input, remove_middle_input, remove_last_input];
     check_mutations(
         &chain_config,
         &mut rng,
         &tx,
-        &input_commitments,
         &destination,
         mutations,
         Ok(()),
@@ -262,13 +281,11 @@ fn mutate_none(#[case] seed: Seed) {
     let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
     let destination = Destination::PublicKey(public_key);
     let sighash_type = SigHashType::try_from(SigHashType::NONE).unwrap();
-    let input_commitments = generate_input_commitments(&mut rng, INPUTS_COUNT);
-
-    let tx = generate_and_sign_tx(
+    let tx = generate_signed_tx_with_input_commitments(
         &chain_config,
         &mut rng,
         &destination,
-        &input_commitments,
+        INPUTS_COUNT,
         OUTPUTS_COUNT,
         &private_key,
         sighash_type,
@@ -276,8 +293,9 @@ fn mutate_none(#[case] seed: Seed) {
     .unwrap();
 
     let mutations = [
-        add_input,
+        append_input,
         mutate_first_input,
+        mutate_first_input_commitment,
         remove_first_input,
         remove_middle_input,
         remove_last_input,
@@ -286,15 +304,14 @@ fn mutate_none(#[case] seed: Seed) {
         &chain_config,
         &mut rng,
         &tx,
-        &input_commitments,
         &destination,
         mutations,
         Err(DestinationSigError::SignatureVerificationFailed),
     );
 
     let mutations = [
-        add_output,
-        mutate_output,
+        append_output,
+        mutate_first_output,
         remove_first_output,
         remove_middle_output,
         remove_last_output,
@@ -303,7 +320,6 @@ fn mutate_none(#[case] seed: Seed) {
         &chain_config,
         &mut rng,
         &tx,
-        &input_commitments,
         &destination,
         mutations,
         Ok(()),
@@ -322,12 +338,11 @@ fn mutate_none_anyonecanpay(#[case] seed: Seed) {
     let destination = Destination::PublicKey(public_key);
     let sighash_type =
         SigHashType::try_from(SigHashType::NONE | SigHashType::ANYONECANPAY).unwrap();
-    let input_commitments = generate_input_commitments(&mut rng, INPUTS_COUNT);
-    let tx = generate_and_sign_tx(
+    let tx = generate_signed_tx_with_input_commitments(
         &chain_config,
         &mut rng,
         &destination,
-        &input_commitments,
+        INPUTS_COUNT,
         OUTPUTS_COUNT,
         &private_key,
         sighash_type,
@@ -335,10 +350,6 @@ fn mutate_none_anyonecanpay(#[case] seed: Seed) {
     .unwrap();
 
     {
-        let tx = SignedTransactionWithInputCommitments {
-            tx: tx.clone(),
-            input_commitments: input_commitments.clone(),
-        };
         let tx = mutate_first_input(&mut rng, &tx);
         let inputs_count = tx.tx.inputs().len();
 
@@ -348,7 +359,7 @@ fn mutate_none_anyonecanpay(#[case] seed: Seed) {
                 &destination,
                 &tx.tx,
                 &tx.tx.signatures()[0],
-                &input_commitments,
+                &tx.input_commitments,
                 0
             ),
             Err(DestinationSigError::SignatureVerificationFailed),
@@ -360,7 +371,7 @@ fn mutate_none_anyonecanpay(#[case] seed: Seed) {
                     &destination,
                     &tx.tx,
                     &tx.tx.signatures()[input_idx],
-                    &input_commitments,
+                    &tx.input_commitments,
                     input_idx
                 ),
                 Ok(())
@@ -368,24 +379,43 @@ fn mutate_none_anyonecanpay(#[case] seed: Seed) {
         }
     }
 
-    let mutations = [];
-    check_mutations(
-        &chain_config,
-        &mut rng,
-        &tx,
-        &input_commitments,
-        &destination,
-        mutations,
-        Err(DestinationSigError::SignatureVerificationFailed),
-    );
+    {
+        let tx = mutate_first_input_commitment(&mut rng, &tx);
+        let inputs_count = tx.tx.inputs().len();
+
+        assert_eq!(
+            verify_signature(
+                &chain_config,
+                &destination,
+                &tx.tx,
+                &tx.tx.signatures()[0],
+                &tx.input_commitments,
+                0
+            ),
+            Err(DestinationSigError::SignatureVerificationFailed),
+        );
+        for input_idx in 1..inputs_count {
+            assert_eq!(
+                verify_signature(
+                    &chain_config,
+                    &destination,
+                    &tx.tx,
+                    &tx.tx.signatures()[input_idx],
+                    &tx.input_commitments,
+                    input_idx
+                ),
+                Ok(())
+            );
+        }
+    }
 
     let mutations = [
-        add_input,
+        append_input,
         remove_first_input,
         remove_middle_input,
         remove_last_input,
-        add_output,
-        mutate_output,
+        append_output,
+        mutate_first_output,
         remove_first_output,
         remove_middle_output,
         remove_last_output,
@@ -394,7 +424,6 @@ fn mutate_none_anyonecanpay(#[case] seed: Seed) {
         &chain_config,
         &mut rng,
         &tx,
-        &input_commitments,
         &destination,
         mutations,
         Ok(()),
@@ -412,12 +441,11 @@ fn mutate_single(#[case] seed: Seed) {
     let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
     let destination = Destination::PublicKey(public_key);
     let sighash_type = SigHashType::try_from(SigHashType::SINGLE).unwrap();
-    let input_commitments = generate_input_commitments(&mut rng, INPUTS_COUNT);
-    let tx = generate_and_sign_tx(
+    let tx = generate_signed_tx_with_input_commitments(
         &chain_config,
         &mut rng,
         &destination,
-        &input_commitments,
+        INPUTS_COUNT,
         OUTPUTS_COUNT,
         &private_key,
         sighash_type,
@@ -425,17 +453,14 @@ fn mutate_single(#[case] seed: Seed) {
     .unwrap();
 
     let mutations = [
-        add_input,
+        append_input,
         mutate_first_input,
+        mutate_first_input_commitment,
         remove_first_input,
         remove_middle_input,
         remove_last_input,
         remove_first_output,
     ];
-    let tx = SignedTransactionWithInputCommitments {
-        tx,
-        input_commitments: input_commitments.clone(),
-    };
     for mutate in mutations.into_iter() {
         let tx = mutate(&mut rng, &tx);
         let inputs_count = tx.tx.inputs().len();
@@ -491,7 +516,7 @@ fn mutate_single(#[case] seed: Seed) {
         );
     }
 
-    let mutations = [add_output, remove_last_output];
+    let mutations = [append_output, remove_last_output];
     for mutate in mutations.into_iter() {
         let tx = mutate(&mut rng, &tx);
         let inputs_count = tx.tx.inputs().len();
@@ -548,7 +573,7 @@ fn mutate_single(#[case] seed: Seed) {
     }
 
     {
-        let tx = mutate_output(&mut rng, &tx);
+        let tx = mutate_first_output(&mut rng, &tx);
         let inputs_count = tx.tx.inputs().len();
 
         // Mutation of the first output makes signature invalid.
@@ -606,23 +631,18 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
     let destination = Destination::PublicKey(public_key);
     let sighash_type =
         SigHashType::try_from(SigHashType::SINGLE | SigHashType::ANYONECANPAY).unwrap();
-    let input_commitments = generate_input_commitments(&mut rng, INPUTS_COUNT);
-    let tx = generate_and_sign_tx(
+    let tx = generate_signed_tx_with_input_commitments(
         &chain_config,
         &mut rng,
         &destination,
-        &input_commitments,
+        INPUTS_COUNT,
         OUTPUTS_COUNT,
         &private_key,
         sighash_type,
     )
     .unwrap();
 
-    let mutations = [add_input, remove_last_input, add_output, remove_last_output];
-    let tx = SignedTransactionWithInputCommitments {
-        tx,
-        input_commitments: input_commitments.clone(),
-    };
+    let mutations = [append_input, remove_last_input, append_output, remove_last_output];
     for mutate in mutations.into_iter() {
         let tx = mutate(&mut rng, &tx);
         let inputs_count = tx.tx.inputs().len();
@@ -679,8 +699,8 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
         );
     }
 
-    let mutations = [mutate_first_input, mutate_output];
-    for mutate in mutations.into_iter() {
+    let mutations = [mutate_first_input, mutate_first_input_commitment, mutate_first_output];
+    for (mutation_idx, mutate) in mutations.into_iter().enumerate() {
         let tx = mutate(&mut rng, &tx);
         let inputs_count = tx.tx.inputs().len();
 
@@ -694,6 +714,7 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
                 0
             ),
             Err(DestinationSigError::SignatureVerificationFailed),
+            "mutation_idx = {mutation_idx}"
         );
 
         for input_idx in 1..inputs_count {
@@ -789,8 +810,7 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
 fn check_mutations<'a, M, R>(
     chain_config: &ChainConfig,
     rng: &mut R,
-    tx: &SignedTransaction,
-    input_commitments: &[SighashInputCommitment<'a>],
+    tx: &SignedTransactionWithInputCommitments,
     destination: &Destination,
     mutations: M,
     expected: Result<(), DestinationSigError>,
@@ -803,10 +823,6 @@ fn check_mutations<'a, M, R>(
         ) -> SignedTransactionWithInputCommitments,
     >,
 {
-    let tx = SignedTransactionWithInputCommitments {
-        tx: tx.clone(),
-        input_commitments: input_commitments.iter().map(|comm| comm.deep_clone()).collect_vec(),
-    };
     for mutate in mutations.into_iter() {
         let tx = mutate(rng, &tx);
         // The number of inputs can be changed by the `mutate` function.
@@ -842,7 +858,7 @@ fn check_mutations<'a, M, R>(
     }
 }
 
-fn add_input(
+fn append_input(
     _rng: &mut impl Rng,
     tx: &SignedTransactionWithInputCommitments,
 ) -> SignedTransactionWithInputCommitments {
@@ -859,7 +875,6 @@ fn add_input(
     }
 }
 
-// FIXME choose input randomly
 fn mutate_first_input(
     rng: &mut impl Rng,
     tx: &SignedTransactionWithInputCommitments,
@@ -932,7 +947,20 @@ fn mutate_first_input(
     }
 }
 
-// FIXME all input remove's should be merged into one, same for outputs.
+fn mutate_first_input_commitment(
+    rng: &mut (impl Rng + CryptoRng),
+    tx: &SignedTransactionWithInputCommitments,
+) -> SignedTransactionWithInputCommitments {
+    let mut input_commitments = tx.input_commitments.clone();
+    input_commitments[0] =
+        gen_different_value(&tx.input_commitments[0], || generate_input_commitment(rng));
+
+    SignedTransactionWithInputCommitments {
+        tx: tx.tx.clone(),
+        input_commitments,
+    }
+}
+
 fn remove_first_input(
     _rng: &mut impl Rng,
     tx: &SignedTransactionWithInputCommitments,
@@ -985,7 +1013,7 @@ fn remove_last_input(
     }
 }
 
-fn add_output(
+fn append_output(
     _rng: &mut impl Rng,
     tx: &SignedTransactionWithInputCommitments,
 ) -> SignedTransactionWithInputCommitments {
@@ -997,8 +1025,9 @@ fn add_output(
     }
 }
 
-// FIXME choose output randomly
-fn mutate_output(
+// Note: this function is only called on the outcome of generate_unsigned_tx, which currently always
+// produces TxOutput::Transfer outputs.
+fn mutate_first_output(
     _rng: &mut impl Rng,
     tx: &SignedTransactionWithInputCommitments,
 ) -> SignedTransactionWithInputCommitments {
@@ -1058,22 +1087,6 @@ fn remove_last_output(
     SignedTransactionWithInputCommitments {
         tx: updater.generate_tx().unwrap(),
         input_commitments: tx.input_commitments.clone(),
-    }
-}
-
-// FIXME add this to tests
-// BUT mod.rs also has stuff related to mutations
-fn mutate_input_commitment(
-    rng: &mut (impl Rng + CryptoRng),
-    tx: &SignedTransactionWithInputCommitments,
-) -> SignedTransactionWithInputCommitments {
-    let index = rng.gen_range(0..tx.input_commitments.len());
-    let mut input_commitments = tx.input_commitments.clone();
-    input_commitments[index] = generate_input_commitment(rng);
-
-    SignedTransactionWithInputCommitments {
-        tx: tx.tx.clone(),
-        input_commitments,
     }
 }
 

@@ -358,6 +358,33 @@ pub fn generate_and_sign_tx(
     Ok(signed_tx)
 }
 
+pub fn generate_signed_tx_with_input_commitments(
+    chain_config: &ChainConfig,
+    rng: &mut (impl Rng + CryptoRng),
+    destination: &Destination,
+    inputs_count: usize,
+    outputs_count: usize,
+    private_key: &PrivateKey,
+    sighash_type: SigHashType,
+) -> Result<SignedTransactionWithInputCommitments, TransactionCreationError> {
+    let input_commitments = generate_input_commitments(rng, inputs_count);
+
+    let tx = generate_and_sign_tx(
+        chain_config,
+        rng,
+        destination,
+        &input_commitments,
+        outputs_count,
+        private_key,
+        sighash_type,
+    )?;
+
+    Ok(SignedTransactionWithInputCommitments {
+        tx,
+        input_commitments,
+    })
+}
+
 pub fn make_signature(
     rng: &mut (impl Rng + CryptoRng),
     tx: &Transaction,

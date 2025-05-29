@@ -44,7 +44,7 @@ pub use info_providers::{
 ///    with the `Option`, provided that only `None` and `Utxo` variants are used.
 /// 2) The `ProduceBlockFromStakeUtxo`, `FillOrderAccountCommand` and `ConcludeOrderAccountCommand`
 ///    commitments are enabled since `SighashInputCommitmentVersion::V1`.
-#[derive(Clone, Debug, Encode, Decode, EnumDiscriminants)]
+#[derive(Clone, Debug, Encode, Decode, Eq, PartialEq, EnumDiscriminants)]
 #[strum_discriminants(name(SighashInputCommitmentTag), derive(EnumIter))]
 pub enum SighashInputCommitment<'a> {
     /// No extra commitment.
