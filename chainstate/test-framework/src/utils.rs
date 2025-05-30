@@ -216,10 +216,27 @@ pub fn create_chain_config_with_staking_pool(
     pool_id: PoolId,
     pool_data: StakePoolData,
 ) -> ConfigBuilder {
+    create_chain_config_with_staking_pool_impl(
+        rng,
+        mint_amount,
+        pool_id,
+        pool_data,
+        BlockHeight::new(1),
+    )
+}
+
+// FIXME name
+pub fn create_chain_config_with_staking_pool_impl(
+    rng: &mut impl Rng,
+    mint_amount: Amount,
+    pool_id: PoolId,
+    pool_data: StakePoolData,
+    switch_to_pos_height: BlockHeight,
+) -> ConfigBuilder {
     let upgrades = vec![
         (BlockHeight::new(0), ConsensusUpgrade::IgnoreConsensus),
         (
-            BlockHeight::new(1),
+            switch_to_pos_height,
             ConsensusUpgrade::PoS {
                 initial_difficulty: Some(Uint256::MAX.into()),
                 config: PoSChainConfigBuilder::new_for_unit_test().build(),

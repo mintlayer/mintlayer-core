@@ -102,6 +102,7 @@ impl StandardInputSignature {
         Ok(())
     }
 
+    // FIXME pass outpoint_destination by ref
     pub fn produce_uniparty_signature_for_input<T: Signable, R: Rng + CryptoRng>(
         private_key: &crypto::key::PrivateKey,
         sighash_type: SigHashType,

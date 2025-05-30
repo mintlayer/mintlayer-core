@@ -36,10 +36,10 @@ use common::{
 };
 use crypto::{key::PrivateKey, vrf::VRFPrivateKey};
 use orders_accounting::OrdersAccountingDB;
-use pos_accounting::PoSAccountingDB;
+use pos_accounting::{PoSAccountingDB, PoSAccountingData};
 use randomness::{CryptoRng, Rng};
 use utils::atomics::SeqCstAtomicU64;
-use utxo::{Utxo, UtxosDB};
+use utxo::{Utxo, UtxosDB, UtxosStorageRead};
 
 use crate::{
     framework_builder::TestFrameworkBuilderValue,
@@ -626,6 +626,45 @@ impl TestFramework {
 
     pub fn utxo(&self, outpoint: &UtxoOutPoint) -> Utxo {
         self.chainstate.utxo(&outpoint).unwrap().unwrap()
+    }
+
+    pub fn pos_accounting_data_at_tip(&self) -> PoSAccountingData {
+        self.storage.transaction_ro().unwrap().read_pos_accounting_data_tip().unwrap()
+    }
+
+    pub fn find_kernel_outpoint_for_pool(&self, pool_id: &PoolId) -> Option<UtxoOutPoint> {
+        let utxos = self.storage.transaction_ro().unwrap().read_utxo_set().unwrap();
+
+        let mut outpoints_iter =
+            utxos.into_iter().filter_map(|(outpoint, utxo)| match utxo.output() {
+                TxOutput::ProduceBlockFromStake(_, used_pool_id)
+                | TxOutput::CreateStakePool(used_pool_id, _) => {
+                    (used_pool_id == pool_id).then_some(outpoint)
+                }
+
+                TxOutput::Transfer(_, _)
+                | TxOutput::LockThenTransfer(_, _, _)
+                | TxOutput::Burn(_)
+                | TxOutput::CreateDelegationId(_, _)
+                | TxOutput::DelegateStaking(_, _)
+                | TxOutput::IssueFungibleToken(_)
+                | TxOutput::IssueNft(_, _, _)
+                | TxOutput::DataDeposit(_)
+                | TxOutput::Htlc(_, _)
+                | TxOutput::CreateOrder(_) => None,
+            });
+
+        let result = outpoints_iter.next();
+        assert!(outpoints_iter.next().is_none());
+
+        result
+    }
+
+    // FIXME unify with `utxo` above
+    pub fn coin_amount_from_outpoint(&self, outpoint: &UtxoOutPoint) -> Amount {
+        let storage_tx = self.storage.transaction_ro().unwrap();
+        let utxo = storage_tx.get_utxo(outpoint).unwrap().unwrap();
+        get_output_value(utxo.output()).unwrap().coin_amount().unwrap()
     }
 }
 

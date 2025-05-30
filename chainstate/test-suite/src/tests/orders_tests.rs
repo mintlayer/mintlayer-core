@@ -27,7 +27,7 @@ use common::{
             inputsig::{standard_signature::StandardInputSignature, InputWitness},
             DestinationSigError,
         },
-        tokens::{IsTokenFreezable, TokenId, TokenIssuance, TokenIssuanceV1, TokenTotalSupply},
+        tokens::{IsTokenFreezable, TokenId, TokenTotalSupply},
         AccountCommand, AccountNonce, ChainstateUpgradeBuilder, Destination, OrderAccountCommand,
         OrderData, OrderId, OrdersVersion, SignedTransaction, TxInput, TxOutput, UtxoOutPoint,
     },
@@ -40,14 +40,13 @@ use randomness::{CryptoRng, Rng, SliceRandom};
 use test_utils::{
     nft_utils::random_nft_issuance,
     random::{make_seedable_rng, Seed},
-    random_ascii_alphanumeric_string,
 };
 use tx_verifier::{
     error::{InputCheckError, ScriptError, TranslationError},
     CheckTransactionError,
 };
 
-use crate::tests::helpers::{issue_token_from_block, mint_tokens_in_block};
+use super::helpers::issue_and_mint_random_token_from_best_block;
 
 fn create_test_framework_with_orders(
     rng: &mut (impl Rng + CryptoRng),
@@ -83,45 +82,15 @@ fn issue_and_mint_token_from_best_block(
     tf: &mut TestFramework,
     utxo_outpoint: UtxoOutPoint,
 ) -> (TokenId, UtxoOutPoint, UtxoOutPoint) {
-    let best_block_id = tf.best_block_id();
-    let issuance = {
-        let max_ticker_len = tf.chain_config().token_max_ticker_len();
-        let max_dec_count = tf.chain_config().token_max_dec_count();
-        let max_uri_len = tf.chain_config().token_max_uri_len();
-
-        let issuance = TokenIssuanceV1 {
-            token_ticker: random_ascii_alphanumeric_string(rng, 1..max_ticker_len)
-                .as_bytes()
-                .to_vec(),
-            number_of_decimals: rng.gen_range(1..max_dec_count),
-            metadata_uri: random_ascii_alphanumeric_string(rng, 1..max_uri_len).as_bytes().to_vec(),
-            total_supply: TokenTotalSupply::Unlimited,
-            is_freezable: IsTokenFreezable::Yes,
-            authority: Destination::AnyoneCanSpend,
-        };
-        TokenIssuance::V1(issuance)
-    };
-
-    let (token_id, _, utxo_with_change) =
-        issue_token_from_block(rng, tf, best_block_id, utxo_outpoint, issuance);
-
     let to_mint = Amount::from_atoms(rng.gen_range(100..100_000_000));
 
-    let best_block_id = tf.best_block_id();
-    let (_, mint_tx_id) = mint_tokens_in_block(
+    issue_and_mint_random_token_from_best_block(
         rng,
         tf,
-        best_block_id,
-        utxo_with_change,
-        token_id,
+        utxo_outpoint,
         to_mint,
-        true,
-    );
-
-    (
-        token_id,
-        UtxoOutPoint::new(mint_tx_id.into(), 0),
-        UtxoOutPoint::new(mint_tx_id.into(), 1),
+        TokenTotalSupply::Unlimited,
+        IsTokenFreezable::Yes,
     )
 }
 
