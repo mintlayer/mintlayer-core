@@ -40,7 +40,9 @@ use common::{
                 standard_signature::StandardInputSignature,
                 InputWitness,
             },
-            sighash::{sighashtype::SigHashType, signature_hash},
+            sighash::{
+                input_commitments::SighashInputCommitment, sighashtype::SigHashType, signature_hash,
+            },
             DestinationSigError,
         },
         timelock::OutputTimeLock,
@@ -48,7 +50,7 @@ use common::{
         AccountCommand, AccountSpending, ChainConfig, Destination, OutPointSourceId,
         SignedTransactionIntent, Transaction, TxInput, TxOutput,
     },
-    primitives::{Amount, Idable, H256},
+    primitives::{Amount, BlockHeight, Idable, H256},
 };
 use crypto::key::{
     extended::ExtendedPublicKey,
@@ -143,7 +145,7 @@ pub enum TrezorError {
     MultisigSignatureReturned,
     #[error("The file being loaded is a software wallet and does not correspond to the connected hardware wallet")]
     HardwareWalletDifferentFile,
-    #[error("Public keys mismatch. Wrong device or passphrase:\nfile device id \"{file_device_id}\", connected device id \"{connected_device_id}\",\nfile label \"{file_label}\" and connected device label \"{connected_device_id}\"")]
+    #[error("Public keys mismatch. Wrong device or passphrase:\nfile device id \"{file_device_id}\", connected device id \"{connected_device_id}\",\nfile label \"{file_label}\" and connected device label \"{connected_device_label}\"")]
     HardwareWalletDifferentMnemonicOrPassphrase {
         file_device_id: String,
         connected_device_id: String,
@@ -471,6 +473,7 @@ impl Signer for TrezorSigner {
         ptx: PartiallySignedTransaction,
         key_chain: &impl AccountKeyChains,
         db_tx: &impl WalletStorageReadUnlocked,
+        block_height: BlockHeight,
     ) -> SignerResult<(
         PartiallySignedTransaction,
         Vec<SignatureStatus>,
@@ -482,6 +485,8 @@ impl Signer for TrezorSigner {
         let utxos = to_trezor_utxo_msgs(&ptx, &self.chain_config)?;
         let chain_type = to_trezor_chain_type(&self.chain_config);
 
+        // FIXME: mintlayer_sign_tx should either accept a height, so that it can calculate the input
+        // commitments correctly OR it may accept the commitments themselves and just verify their contents.
         let new_signatures = self.perform_trezor_operation(
             move |client| {
                 client.mintlayer_sign_tx(chain_type, inputs.clone(), outputs.clone(), utxos.clone())
@@ -490,7 +495,8 @@ impl Signer for TrezorSigner {
             key_chain,
         )?;
 
-        let inputs_utxo_refs: Vec<_> = ptx.input_utxos().iter().map(|u| u.as_ref()).collect();
+        let input_commitments =
+            ptx.make_sighash_input_commitments(&self.chain_config, block_height)?;
 
         let (witnesses, prev_statuses, new_statuses) = itertools::process_results(ptx
             .witnesses()
@@ -522,10 +528,12 @@ impl Signer for TrezorSigner {
                         standalone,
                         destination,
                         &ptx,
-                        &inputs_utxo_refs,
+                        &input_commitments,
                         input_index,
                     )
                 };
+
+                let input_utxo = &ptx.input_utxos()[input_index];
 
                 match witness {
                     Some(w) => match w {
@@ -540,8 +548,9 @@ impl Signer for TrezorSigner {
                                     &self.chain_config,
                                     destination,
                                     &ptx,
-                                    &inputs_utxo_refs,
+                                    &input_commitments,
                                     input_index,
+                                    input_utxo.clone()
                                 )
                                 .is_ok()
                                 {
@@ -554,7 +563,7 @@ impl Signer for TrezorSigner {
                                     let sighash = signature_hash(
                                         sig.sighash_type(),
                                         ptx.tx(),
-                                        &inputs_utxo_refs,
+                                        &input_commitments,
                                         input_index,
                                     )?;
 
@@ -610,7 +619,7 @@ impl Signer for TrezorSigner {
                     None => match (destination, new_signatures.get(input_index)) {
                         (Some(destination), Some(sig)) => {
                             let sighash_type = SigHashType::all();
-                            let sighash = signature_hash(sighash_type, ptx.tx(), &inputs_utxo_refs, input_index)?;
+                            let sighash = signature_hash(sighash_type, ptx.tx(), &input_commitments, input_index)?;
                             let (sig, status) = self.make_signature(
                                 sig,
                                 standalone_inputs.get(&(input_index as u32)).map_or(&[], |x| x.as_slice()),
@@ -635,7 +644,7 @@ impl Signer for TrezorSigner {
                                 standalone,
                                 destination,
                                 &ptx,
-                                &inputs_utxo_refs,
+                                &input_commitments,
                                 input_index
                             )?;
 
@@ -650,7 +659,7 @@ impl Signer for TrezorSigner {
             |iter| iter.multiunzip()
         )?;
 
-        Ok((ptx.with_witnesses(witnesses), prev_statuses, new_statuses))
+        Ok((ptx.with_witnesses(witnesses)?, prev_statuses, new_statuses))
     }
 
     fn sign_challenge(
@@ -782,7 +791,7 @@ fn sign_input_with_standalone_key(
     standalone: &StandaloneInput,
     destination: &Destination,
     ptx: &PartiallySignedTransaction,
-    inputs_utxo_refs: &[Option<&TxOutput>],
+    input_commitments: &[SighashInputCommitment],
     input_index: usize,
 ) -> SignerResult<InputWitness> {
     let sighash_type = SigHashType::all();
@@ -792,7 +801,7 @@ fn sign_input_with_standalone_key(
             sighash_type,
             destination.clone(),
             ptx.tx(),
-            inputs_utxo_refs,
+            input_commitments,
             input_index,
             htlc_secret.clone(),
             make_true_rng(),
@@ -802,7 +811,7 @@ fn sign_input_with_standalone_key(
             sighash_type,
             destination.clone(),
             ptx.tx(),
-            inputs_utxo_refs,
+            input_commitments,
             input_index,
             make_true_rng(),
         ),

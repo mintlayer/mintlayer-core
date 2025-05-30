@@ -1,4 +1,4 @@
-// Copyright (c) 2023 RBB S.r.l
+// Copyright (c) 2021-2025 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -12,6 +12,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
+use wasm_bindgen::JsValue;
 
 use common::{
     address::AddressError,
@@ -31,8 +33,10 @@ use common::{
     size_estimation::SizeEstimationError,
 };
 use consensus::EffectivePoolBalanceError;
-use wasm_bindgen::JsValue;
 
+use crate::sighash_input_commitments::SighashInputCommitmentCreationError;
+
+#[allow(clippy::enum_variant_names)]
 #[derive(thiserror::Error, Debug, Clone)]
 pub enum Error {
     #[error("Invalid private key encoding: {0}")]
@@ -59,6 +63,9 @@ pub enum Error {
     #[error("Invalid transaction input encoding: {0}")]
     InvalidInputEncoding(serialization::Error),
 
+    #[error("Invalid transaction input utxo encoding: {0}")]
+    InvalidInputUtxoEncoding(serialization::Error),
+
     #[error("Invalid transaction witness encoding: {0}")]
     InvalidWitnessEncoding(serialization::Error),
 
@@ -78,7 +85,7 @@ pub enum Error {
     MultisigSpendCreationError(DestinationSigError),
 
     #[error("Error creating HTLC spend: {0}")]
-    HtlcSpendCreationError(DestinationSigError),
+    HtlcSpendDecodingError(DestinationSigError),
 
     #[error("Error signing a message: {0}")]
     SignMessageError(crypto::key::SignatureError),
@@ -165,9 +172,6 @@ pub enum Error {
     #[error("Id creation error: {0}")]
     IdCreationError(#[from] IdCreationError),
 
-    #[error("Error decoding a JsValue as an array of arrays of bytes: {error}")]
-    JsValueNotArrayOfArraysOfBytes { error: String },
-
     #[error("Signed transaction intent verification error: {0}")]
     SignedTransactionIntentVerificationError(SignedTransactionIntentError),
 
@@ -176,6 +180,27 @@ pub enum Error {
 
     #[error("Orders V1 not activated at the specified height")]
     OrdersV1NotActivatedAtSpecifiedHeight,
+
+    #[error("The currency amount contains tokens, not coins")]
+    CurrencyAmountContainsTokens,
+
+    #[error("The currency amount contains coins, not tokens")]
+    CurrencyAmountContainsCoins,
+
+    #[error("Error creating sighash input commitments: {0}")]
+    SighashInputCommitmentCreationError(#[from] SighashInputCommitmentCreationError),
+
+    #[error("Signature verification error: {0}")]
+    SignatureVerificationError(DestinationSigError),
+
+    #[error("Wrong input index or UTXO count")]
+    WrongInputIndexOrUtxoCount,
+
+    #[error("Input owner destination needed")]
+    InputOwnerDestinationNeeded,
+
+    #[error("Input owner destination not needed")]
+    InputOwnerDestinationNotNeeded,
 }
 
 // This is required to make an error readable in JavaScript

@@ -16,6 +16,8 @@
 mod simulation;
 
 use std::{
+    borrow::Cow,
+    collections::BTreeMap,
     convert::Infallible,
     sync::{Arc, Mutex},
     time::Duration,
@@ -42,12 +44,19 @@ use common::{
                 authorize_pubkey_spend::sign_public_key_spending,
                 standard_signature::StandardInputSignature, InputWitness,
             },
-            sighash::{sighashtype::SigHashType, signature_hash},
+            sighash::{
+                input_commitments::{
+                    make_sighash_input_commitments_for_transaction_inputs, OrderInfo, PoolInfo,
+                    SighashInputCommitment, TrivialUtxoProvider,
+                },
+                sighashtype::SigHashType,
+                signature_hash,
+            },
         },
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
-        CoinUnit, Destination, OutPointSourceId, PoolId, SignedTransaction, TxInput, TxOutput,
-        UtxoOutPoint,
+        CoinUnit, Destination, OrderId, OutPointSourceId, PoolId, SignedTransaction, TxInput,
+        TxOutput, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, CoinOrTokenId, Idable, H256},
 };
@@ -547,25 +556,47 @@ async fn compare_pool_rewards_with_chainstate_real_state(#[case] seed: Seed) {
     sync_and_compare(&mut tf, block, &mut local_state, pool_id).await;
 
     let remaining_coins = remaining_coins - rng.gen_range(0..10);
+    let input1 = TxInput::from_utxo(OutPointSourceId::Transaction(prev_tx_id), 0);
+    let input2 = TxInput::from_utxo(OutPointSourceId::BlockReward(prev_block_hash.into()), 0);
     let transaction = TransactionBuilder::new()
-        .add_input(
-            TxInput::from_utxo(OutPointSourceId::Transaction(prev_tx_id), 0),
-            InputWitness::NoSignature(None),
-        )
-        .add_input(
-            TxInput::from_utxo(OutPointSourceId::BlockReward(prev_block_hash.into()), 0),
-            InputWitness::NoSignature(None),
-        )
+        .add_input(input1.clone(), InputWitness::NoSignature(None))
+        .add_input(input2.clone(), InputWitness::NoSignature(None))
         .add_output(TxOutput::Transfer(
             OutputValue::Coin(Amount::from_atoms(remaining_coins)),
             Destination::AnyoneCanSpend,
         ))
         .build();
 
+    let utxos = [Some(coin_tx_out), Some(from_block_output)];
+    let decommissioned_pool_staker_balance = local_state
+        .storage()
+        .transaction_ro()
+        .await
+        .unwrap()
+        .get_pool_data(pool_id)
+        .await
+        .unwrap()
+        .unwrap()
+        .staker_balance()
+        .unwrap();
+    let input_commitments = make_sighash_input_commitments_for_transaction_inputs(
+        &[input1, input2],
+        &TrivialUtxoProvider(&utxos),
+        &BTreeMap::<PoolId, PoolInfo>::from([(
+            pool_id,
+            PoolInfo {
+                staker_balance: decommissioned_pool_staker_balance,
+            },
+        )]),
+        &BTreeMap::<OrderId, OrderInfo>::new(),
+        &chain_config,
+        tf.next_block_height(),
+    )
+    .unwrap();
     let sighash = signature_hash(
         SigHashType::default(),
         transaction.transaction(),
-        &[Some(&coin_tx_out), Some(&from_block_output)],
+        &input_commitments,
         1,
     )
     .unwrap();
@@ -787,7 +818,10 @@ async fn reorg_locked_balance(#[case] seed: Seed) {
             let sighash = signature_hash(
                 SigHashType::default(),
                 spend_transaction.transaction(),
-                &[Some(&lock_for_block_count), Some(&lock_until_height)],
+                &[
+                    SighashInputCommitment::Utxo(Cow::Borrowed(&lock_for_block_count)),
+                    SighashInputCommitment::Utxo(Cow::Borrowed(&lock_until_height)),
+                ],
                 idx,
             )
             .unwrap();
@@ -865,7 +899,10 @@ async fn reorg_locked_balance(#[case] seed: Seed) {
             let sighash = signature_hash(
                 SigHashType::default(),
                 spend_time_locked.transaction(),
-                &[Some(&lock_for_sec), Some(&lock_until_time)],
+                &[
+                    SighashInputCommitment::Utxo(Cow::Borrowed(&lock_for_sec)),
+                    SighashInputCommitment::Utxo(Cow::Borrowed(&lock_until_time)),
+                ],
                 idx,
             )
             .unwrap();

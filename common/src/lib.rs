@@ -22,3 +22,11 @@ pub mod time_getter;
 pub mod uint;
 
 pub use uint::{Uint128, Uint256, Uint512, UintConversionError};
+
+#[cfg(test)]
+mod tests {
+    #[ctor::ctor]
+    fn init() {
+        logging::init_logging();
+    }
+}

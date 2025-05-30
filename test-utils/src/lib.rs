@@ -108,6 +108,22 @@ pub fn gen_text_with_non_ascii(c: u8, rng: &mut impl Rng, max_len: usize) -> Vec
     token_ticker
 }
 
+pub fn gen_different_value<T, G>(orig_val: &T, mut gen: G) -> T
+where
+    T: Eq,
+    G: FnMut() -> T,
+{
+    for _ in 0..1000 {
+        let val = gen();
+
+        if val != *orig_val {
+            return val;
+        }
+    }
+
+    panic!("Failed to generate a value");
+}
+
 pub fn split_value(rng: &mut impl Rng, value: u128) -> Vec<u128> {
     let mut numbers = vec![0, value];
     let n = rng.gen_range(0..10);

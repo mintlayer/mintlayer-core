@@ -13,15 +13,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::convert::Infallible;
+mod input_commitments;
+pub mod signature_only_check;
+
+use std::{borrow::Cow, convert::Infallible};
 
 use chainstate_types::block_index_ancestor_getter;
 use common::{
     chain::{
         block::timestamp::BlockTimestamp,
-        signature::{inputsig::InputWitness, DestinationSigError, Transactable},
+        signature::{
+            inputsig::InputWitness,
+            sighash::{
+                self,
+                input_commitments::{SighashInputCommitment, SighashInputCommitmentCreationError},
+            },
+            DestinationSigError, Transactable,
+        },
         tokens::TokenId,
-        ChainConfig, DelegationId, Destination, GenBlock, PoolId, TxInput, TxOutput,
+        ChainConfig, DelegationId, Destination, GenBlock, OrderId, PoolId, TxInput, TxOutput,
     },
     primitives::{BlockHeight, Id},
 };
@@ -29,12 +39,13 @@ use mintscript::{
     translate::InputInfoProvider, InputInfo, SignatureContext, TimelockContext, TranslateInput,
     WitnessScript,
 };
+use utils::debug_assert_or_log;
 
 use crate::TransactionVerifierStorageRef;
 
 use super::TransactionSourceForConnect;
 
-pub mod signature_only_check;
+use self::input_commitments::SighashInputCommitmentSource;
 
 pub type HashlockError = mintscript::checker::HashlockError;
 pub type TimelockError = mintscript::checker::TimelockError<TimelockContextError>;
@@ -46,8 +57,26 @@ pub enum InputCheckErrorPayload {
     #[error("Utxo {0:?} missing or spent")]
     MissingUtxo(common::chain::UtxoOutPoint),
 
+    #[error("Pool not found: {0}")]
+    PoolNotFound(PoolId),
+
+    #[error("Order not found: {0}")]
+    OrderNotFound(OrderId),
+
+    #[error("Non-utxo kernel input: {0:?}")]
+    NonUtxoKernelInput(TxInput),
+
     #[error("Utxo view error: {0}")]
     UtxoView(#[from] utxo::Error),
+
+    #[error("Utxo info provider error: {0}")]
+    UtxoInfoProvider(chainstate_types::storage_result::Error),
+
+    #[error("Pool info provider error: {0}")]
+    PoolInfoProvider(pos_accounting::Error),
+
+    #[error("Orders info provider error: {0}")]
+    OrderInfoProvider(orders_accounting::Error),
 
     #[error(transparent)]
     Translation(#[from] mintscript::translate::TranslationError),
@@ -85,6 +114,49 @@ impl From<mintscript::script::ScriptError<DestinationSigError, Infallible, Infal
 pub struct InputCheckError {
     input_num: usize,
     error: InputCheckErrorPayload,
+}
+
+impl<UPE, PIPE, OIPE> From<SighashInputCommitmentCreationError<UPE, PIPE, OIPE>> for InputCheckError
+where
+    UPE: std::error::Error,
+    PIPE: std::error::Error,
+    OIPE: std::error::Error,
+    chainstate_types::storage_result::Error: From<UPE>,
+    pos_accounting::Error: From<PIPE>,
+    orders_accounting::Error: From<OIPE>,
+{
+    fn from(value: SighashInputCommitmentCreationError<UPE, PIPE, OIPE>) -> Self {
+        let (error, input_index) = match value {
+            SighashInputCommitmentCreationError::UtxoProviderError(err, input_index) => (
+                InputCheckErrorPayload::UtxoInfoProvider(err.into()),
+                input_index,
+            ),
+            SighashInputCommitmentCreationError::PoolInfoProviderError(err, input_index) => (
+                InputCheckErrorPayload::PoolInfoProvider(err.into()),
+                input_index,
+            ),
+            SighashInputCommitmentCreationError::OrderInfoProviderError(err, input_index) => (
+                InputCheckErrorPayload::OrderInfoProvider(err.into()),
+                input_index,
+            ),
+            SighashInputCommitmentCreationError::NonUtxoKernelInput(tx_input, input_index) => (
+                InputCheckErrorPayload::NonUtxoKernelInput(tx_input),
+                input_index,
+            ),
+            SighashInputCommitmentCreationError::UtxoNotFound(utxo_out_point, input_index) => (
+                InputCheckErrorPayload::MissingUtxo(utxo_out_point),
+                input_index,
+            ),
+            SighashInputCommitmentCreationError::PoolNotFound(id, input_index) => {
+                (InputCheckErrorPayload::PoolNotFound(id), input_index)
+            }
+            SighashInputCommitmentCreationError::OrderNotFound(id, input_index) => {
+                (InputCheckErrorPayload::OrderNotFound(id), input_index)
+            }
+        };
+
+        InputCheckError::new(input_index, error)
+    }
 }
 
 impl InputCheckError {
@@ -299,6 +371,38 @@ impl<'a> CoreContext<'a> {
     }
 }
 
+impl<'a, 'b> sighash::input_commitments::UtxoProvider<'a> for &'a CoreContext<'b> {
+    type Error = std::convert::Infallible;
+
+    fn get_utxo(
+        &self,
+        tx_input_index: usize,
+        outpoint: &common::chain::UtxoOutPoint,
+    ) -> Result<Option<Cow<'a, TxOutput>>, Self::Error> {
+        let utxo =
+            self.inputs_and_sigs.get(tx_input_index).and_then(|input_data| {
+                match &input_data.input {
+                    InputInfo::Utxo {
+                        outpoint: actual_outpoint,
+                        utxo,
+                        utxo_source: _,
+                    } => {
+                        debug_assert_or_log!(
+                            *actual_outpoint == outpoint,
+                            "actual_outpoint = {actual_outpoint:?}, outpoint = {outpoint:?}"
+                        );
+                        Some(Cow::Borrowed(utxo))
+                    }
+                    InputInfo::Account { .. }
+                    | InputInfo::AccountCommand { .. }
+                    | InputInfo::OrderAccountCommand { .. } => None,
+                }
+            });
+
+        Ok(utxo)
+    }
+}
+
 // Context shared between timelock and full verification.
 struct VerifyContextTimelock<'a, S> {
     // Information about the chain
@@ -442,20 +546,21 @@ impl<S: TransactionVerifierStorageRef> TimelockContext for InputVerifyContextTim
 struct VerifyContextFull<'a, T, S> {
     // Here we need more information about the transaction
     transaction: &'a T,
-    spent_utxos: Vec<Option<&'a TxOutput>>,
+    input_commitments: Vec<SighashInputCommitment<'a>>,
 
     // And the part of the context that's shared with timelock verification
     sub_ctx: &'a VerifyContextTimelock<'a, S>,
 }
 
 impl<'a, T, S> VerifyContextFull<'a, T, S> {
-    fn new(transaction: &'a T, sub_ctx: &'a VerifyContextTimelock<'a, S>) -> Self {
-        let inp_iter = sub_ctx.core_ctx.inputs_and_sigs.iter();
-        let spent_utxos = inp_iter.map(|d| d.input_info().as_utxo_output()).collect();
-
+    fn new(
+        transaction: &'a T,
+        input_commitments: Vec<SighashInputCommitment<'a>>,
+        sub_ctx: &'a VerifyContextTimelock<'a, S>,
+    ) -> Self {
         Self {
             transaction,
-            spent_utxos,
+            input_commitments,
             sub_ctx,
         }
     }
@@ -507,8 +612,8 @@ impl<T: Transactable, S> SignatureContext for InputVerifyContextFull<'_, T, S> {
         self.ctx.transaction
     }
 
-    fn input_utxos(&self) -> &[Option<&TxOutput>] {
-        &self.ctx.spent_utxos
+    fn input_commitments(&self) -> &[SighashInputCommitment] {
+        &self.ctx.input_commitments
     }
 
     fn input_num(&self) -> usize {
@@ -517,19 +622,23 @@ impl<T: Transactable, S> SignatureContext for InputVerifyContextFull<'_, T, S> {
 }
 
 pub trait FullyVerifiable<AV, TV, OV>:
-    Transactable + for<'a> TranslateInput<TranslationContextFull<'a, &'a AV, &'a TV, &'a OV>>
+    Transactable
+    + for<'a> TranslateInput<TranslationContextFull<'a, &'a AV, &'a TV, &'a OV>>
+    + SighashInputCommitmentSource
 {
 }
 
 impl<T, AV, TV, OV> FullyVerifiable<AV, TV, OV> for T where
-    T: Transactable + for<'a> TranslateInput<TranslationContextFull<'a, &'a AV, &'a TV, &'a OV>>
+    T: Transactable
+        + for<'a> TranslateInput<TranslationContextFull<'a, &'a AV, &'a TV, &'a OV>>
+        + SighashInputCommitmentSource
 {
 }
 
 /// Perform full verification of given input.
 #[allow(clippy::too_many_arguments)]
-pub fn verify_full<T, S, UV, AV, TV, OV>(
-    transaction: &T,
+pub fn verify_full<'a, T, S, UV, AV, TV, OV>(
+    transaction: &'a T,
     chain_config: &ChainConfig,
     utxos_view: &UV,
     pos_accounting: &AV,
@@ -538,6 +647,7 @@ pub fn verify_full<T, S, UV, AV, TV, OV>(
     storage: &S,
     tx_source: &TransactionSourceForConnect,
     spending_time: BlockTimestamp,
+    height: BlockHeight,
 ) -> Result<(), InputCheckError>
 where
     T: FullyVerifiable<AV, TV, OV>,
@@ -555,7 +665,14 @@ where
         spending_time,
         &core_ctx,
     );
-    let ctx = VerifyContextFull::new(transaction, &tl_ctx);
+    let input_commitments = transaction.get_input_commitments(
+        &core_ctx,
+        pos_accounting,
+        orders_accounting,
+        chain_config,
+        height,
+    )?;
+    let ctx = VerifyContextFull::new(transaction, input_commitments, &tl_ctx);
 
     for (n, inp) in core_ctx.inputs_iter() {
         let script =

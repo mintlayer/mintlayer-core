@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
+
 use chainstate::{BlockError, ChainstateError, ConnectTransactionError};
 use chainstate_test_framework::{TestFramework, TransactionBuilder};
 use common::{
@@ -32,7 +34,9 @@ use common::{
                 },
                 standard_signature::StandardInputSignature,
             },
-            sighash::{sighashtype::SigHashType, signature_hash},
+            sighash::{
+                input_commitments::SighashInputCommitment, sighashtype::SigHashType, signature_hash,
+            },
             DestinationSigError,
         },
         signed_transaction::SignedTransaction,
@@ -149,7 +153,7 @@ fn spend_htlc_with_secret(#[case] seed: Seed) {
                     (&PublicKey::from_private_key(&test_fixture.alice_sk)).into(),
                 ),
                 &tx,
-                &[Some(&tx_1.transaction().outputs()[0])],
+                &[SighashInputCommitment::Utxo(Cow::Borrowed(&tx_1.transaction().outputs()[0]))],
                 0,
                 test_fixture.secret.clone(),
                 &mut rng,
@@ -196,7 +200,7 @@ fn spend_htlc_with_secret(#[case] seed: Seed) {
                     (&PublicKey::from_private_key(&test_fixture.bob_sk)).into(),
                 ),
                 &tx,
-                &[Some(&tx_1.transaction().outputs()[0])],
+                &[SighashInputCommitment::Utxo(Cow::Borrowed(&tx_1.transaction().outputs()[0]))],
                 0,
                 &mut rng,
             )
@@ -244,7 +248,7 @@ fn spend_htlc_with_secret(#[case] seed: Seed) {
                     (&PublicKey::from_private_key(&test_fixture.bob_sk)).into(),
                 ),
                 &tx,
-                &[Some(&tx_1.transaction().outputs()[0])],
+                &[SighashInputCommitment::Utxo(Cow::Borrowed(&tx_1.transaction().outputs()[0]))],
                 0,
                 random_secret,
                 &mut rng,
@@ -286,7 +290,7 @@ fn spend_htlc_with_secret(#[case] seed: Seed) {
             SigHashType::all(),
             Destination::PublicKeyHash((&PublicKey::from_private_key(&test_fixture.bob_sk)).into()),
             &tx,
-            &[Some(&tx_1.transaction().outputs()[0])],
+            &[SighashInputCommitment::Utxo(Cow::Borrowed(&tx_1.transaction().outputs()[0]))],
             0,
             test_fixture.secret,
             &mut rng,
@@ -354,7 +358,9 @@ fn refund_htlc(#[case] seed: Seed) {
                 let sighash = signature_hash(
                     SigHashType::all(),
                     &tx,
-                    &[Some(&tx_1.transaction().outputs()[0])],
+                    &[SighashInputCommitment::Utxo(Cow::Borrowed(
+                        &tx_1.transaction().outputs()[0],
+                    ))],
                     0,
                 )
                 .unwrap();
@@ -373,7 +379,7 @@ fn refund_htlc(#[case] seed: Seed) {
                 &authorization,
                 SigHashType::all(),
                 &tx,
-                &[Some(&tx_1.transaction().outputs()[0])],
+                &[SighashInputCommitment::Utxo(Cow::Borrowed(&tx_1.transaction().outputs()[0]))],
                 0,
             )
             .unwrap();
@@ -425,7 +431,9 @@ fn refund_htlc(#[case] seed: Seed) {
                 let sighash = signature_hash(
                     SigHashType::all(),
                     &tx,
-                    &[Some(&tx_1.transaction().outputs()[0])],
+                    &[SighashInputCommitment::Utxo(Cow::Borrowed(
+                        &tx_1.transaction().outputs()[0],
+                    ))],
                     0,
                 )
                 .unwrap();
@@ -480,7 +488,9 @@ fn refund_htlc(#[case] seed: Seed) {
                 let sighash = signature_hash(
                     SigHashType::all(),
                     &tx,
-                    &[Some(&tx_1.transaction().outputs()[0])],
+                    &[SighashInputCommitment::Utxo(Cow::Borrowed(
+                        &tx_1.transaction().outputs()[0],
+                    ))],
                     0,
                 )
                 .unwrap();
@@ -533,7 +543,7 @@ fn refund_htlc(#[case] seed: Seed) {
             let sighash = signature_hash(
                 SigHashType::all(),
                 &tx,
-                &[Some(&tx_1.transaction().outputs()[0])],
+                &[SighashInputCommitment::Utxo(Cow::Borrowed(&tx_1.transaction().outputs()[0]))],
                 0,
             )
             .unwrap();
@@ -552,7 +562,7 @@ fn refund_htlc(#[case] seed: Seed) {
             &authorization,
             SigHashType::all(),
             &tx,
-            &[Some(&tx_1.transaction().outputs()[0])],
+            &[SighashInputCommitment::Utxo(Cow::Borrowed(&tx_1.transaction().outputs()[0]))],
             0,
         )
         .unwrap();
@@ -824,7 +834,9 @@ fn spend_tokens(#[case] seed: Seed) {
             SigHashType::all(),
             Destination::PublicKeyHash((&PublicKey::from_private_key(&test_fixture.bob_sk)).into()),
             &tx,
-            &[Some(&mint_token_v1_tx.transaction().outputs()[0])],
+            &[SighashInputCommitment::Utxo(Cow::Borrowed(
+                &mint_token_v1_tx.transaction().outputs()[0],
+            ))],
             0,
             test_fixture.secret,
             &mut rng,

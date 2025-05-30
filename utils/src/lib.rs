@@ -23,6 +23,7 @@ pub mod const_nonzero;
 pub mod const_value;
 pub mod cookie;
 pub mod counttracker;
+pub mod cow_utils;
 pub mod debug_panic;
 pub mod default_data_dir;
 pub mod displayable_option;

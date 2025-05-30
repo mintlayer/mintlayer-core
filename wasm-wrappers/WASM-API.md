@@ -91,7 +91,7 @@ corresponding to each input of the transaction.
 
 Parameters:
 `signed_message` - this must have been produced by `make_transaction_intent_message_to_sign`.
-`signatures` - this should be an array of arrays of bytes, each of them representing an individual signature
+`signatures` - this should be an array of Uint8Array, each of them representing an individual signature
 of `signed_message` produced by `sign_challenge` using the private key for the corresponding input destination
 of the transaction. The number of signatures must be equal to the number of inputs in the transaction.
 
@@ -107,16 +107,6 @@ produced by `make_transaction_intent_message_to_sign`.
 (note that this function treats "pub key" and "pub key hash" addresses interchangeably, so it's ok to pass
 one instead of the other).
 `network` - the network being used (needed to decode the addresses).
-
-### Function: `encode_output_transfer`
-
-Given a destination address, an amount and a network type (mainnet, testnet, etc), this function
-creates an output of type Transfer, and returns it as bytes.
-
-### Function: `encode_output_token_transfer`
-
-Given a destination address, an amount, token ID (in address form) and a network type (mainnet, testnet, etc), this function
-creates an output of type Transfer for tokens, and returns it as bytes.
 
 ### Function: `staking_pool_spend_maturity_block_count`
 
@@ -148,49 +138,10 @@ until the given timestamp
 Given a block height, this function returns the output timelock which is used in
 locked outputs to lock an output until that block height is reached.
 
-### Function: `encode_output_lock_then_transfer`
-
-Given a valid receiving address, and a locking rule as bytes (available in this file),
-and a network type (mainnet, testnet, etc), this function creates an output of type
-LockThenTransfer with the parameters provided.
-
-### Function: `encode_output_token_lock_then_transfer`
-
-Given a valid receiving address, token ID (in address form), a locking rule as bytes (available in this file),
-and a network type (mainnet, testnet, etc), this function creates an output of type
-LockThenTransfer with the parameters provided.
-
-### Function: `encode_output_coin_burn`
-
-Given an amount, this function creates an output (as bytes) to burn a given amount of coins
-
-### Function: `encode_output_token_burn`
-
-Given an amount, token ID (in address form) and network type (mainnet, testnet, etc),
-this function creates an output (as bytes) to burn a given amount of tokens
-
-### Function: `encode_output_create_delegation`
-
-Given a pool id as string, an owner address and a network type (mainnet, testnet, etc),
-this function returns an output (as bytes) to create a delegation to the given pool.
-The owner address is the address that is authorized to withdraw from that delegation.
-
-### Function: `encode_output_delegate_staking`
-
-Given a delegation id (as string, in address form), an amount and a network type (mainnet, testnet, etc),
-this function returns an output (as bytes) that would delegate coins to be staked in the specified delegation id.
-
 ### Function: `encode_stake_pool_data`
 
 This function returns the staking pool data needed to create a staking pool in an output as bytes,
 given its parameters and the network type (testnet, mainnet, etc).
-
-### Function: `encode_output_create_stake_pool`
-
-Given a pool id, staking data as bytes and the network type (mainnet, testnet, etc),
-this function returns an output that creates that staking pool.
-Note that the pool id is mandated to be taken from the hash of the first input.
-It is not arbitrary.
 
 ### Function: `fungible_token_issuance_fee`
 
@@ -221,48 +172,18 @@ Given the current block height and a network type (mainnet, testnet, etc),
 this will return the fee that needs to be paid by a transaction for changing the authority of a token
 The current block height information is used in case a network upgrade changed the value.
 
-### Function: `encode_output_issue_fungible_token`
-
-Given the parameters needed to issue a fungible token, and a network type (mainnet, testnet, etc),
-this function creates an output that issues that token.
-
 ### Function: `get_token_id`
 
 Returns the Fungible/NFT Token ID for the given inputs of a transaction
-
-### Function: `encode_output_issue_nft`
-
-Given the parameters needed to issue an NFT, and a network type (mainnet, testnet, etc),
-this function creates an output that issues that NFT.
-
-### Function: `encode_output_data_deposit`
-
-Given data to be deposited in the blockchain, this function provides the output that deposits this data
 
 ### Function: `data_deposit_fee`
 
 Returns the fee that needs to be paid by a transaction for issuing a data deposit
 
-### Function: `encode_output_htlc`
-
-Given the parameters needed to create hash timelock contract, and a network type (mainnet, testnet, etc),
-this function creates an output.
-
 ### Function: `extract_htlc_secret`
 
 Given a signed transaction and input outpoint that spends an htlc utxo, extract a secret that is
 encoded in the corresponding input signature
-
-### Function: `encode_input_for_utxo`
-
-Given an output source id as bytes, and an output index, together representing a utxo,
-this function returns the input that puts them together, as bytes.
-
-### Function: `encode_input_for_withdraw_from_delegation`
-
-Given a delegation id, an amount and a network type (mainnet, testnet, etc), this function
-creates an input that withdraws from a delegation.
-A nonce is needed because this spends from an account. The nonce must be in sequence for everything in that account.
 
 ### Function: `estimate_transaction_size`
 
@@ -284,8 +205,11 @@ Encode an input witness of the variant that contains no signature.
 
 ### Function: `encode_witness`
 
-Given a private key, inputs and an input number to sign, and the destination that owns that output (through the utxo),
-and a network type (mainnet, testnet, etc), this function returns a witness to be used in a signed transaction, as bytes.
+Sign the specified input of the transaction and encode the signature as InputWitness.
+
+`input_utxos` must be formed as follows: for each transaction input, emit byte 0 if it's a non-UTXO input,
+otherwise emit 1 followed by the corresponding transaction output encoded via the appropriate "encode_output_"
+function.
 
 ### Function: `encode_witness_htlc_secret`
 
@@ -326,6 +250,17 @@ It is recommended to use a strict `Transaction` size and set the second paramete
 Calculate the "effective balance" of a pool, given the total pool balance and pledge by the pool owner/staker.
 The effective balance is how the influence of a pool is calculated due to its balance.
 
+### Function: `encode_input_for_utxo`
+
+Given an output source id as bytes, and an output index, together representing a utxo,
+this function returns the input that puts them together, as bytes.
+
+### Function: `encode_input_for_withdraw_from_delegation`
+
+Given a delegation id, an amount and a network type (mainnet, testnet, etc), this function
+creates an input that withdraws from a delegation.
+A nonce is needed because this spends from an account. The nonce must be in sequence for everything in that account.
+
 ### Function: `encode_input_for_mint_tokens`
 
 Given a token_id, an amount of tokens to mint and nonce return an encoded mint tokens input
@@ -354,13 +289,6 @@ Given a token_id, new authority destination and nonce return an encoded change t
 
 Given a token_id, new metadata uri and nonce return an encoded change token metadata uri input
 
-### Function: `encode_create_order_output`
-
-Given ask and give amounts and a conclude key create output that creates an order.
-
-'ask_token_id': the parameter represents a Token if it's Some and coins otherwise.
-'give_token_id': the parameter represents a Token if it's Some and coins otherwise.
-
 ### Function: `encode_input_for_fill_order`
 
 Given an amount to fill an order (which is described in terms of ask currency) and a destination
@@ -381,6 +309,81 @@ Given an order id create an input that concludes the order.
 
 Note: the nonce is only needed before the orders V1 fork activation. After the fork the nonce is
 ignored and any value can be passed for the parameter.
+
+### Function: `encode_output_transfer`
+
+Given a destination address, an amount and a network type (mainnet, testnet, etc), this function
+creates an output of type Transfer, and returns it as bytes.
+
+### Function: `encode_output_token_transfer`
+
+Given a destination address, an amount, token ID (in address form) and a network type (mainnet, testnet, etc), this function
+creates an output of type Transfer for tokens, and returns it as bytes.
+
+### Function: `encode_output_lock_then_transfer`
+
+Given a valid receiving address, and a locking rule as bytes (available in this file),
+and a network type (mainnet, testnet, etc), this function creates an output of type
+LockThenTransfer with the parameters provided.
+
+### Function: `encode_output_token_lock_then_transfer`
+
+Given a valid receiving address, token ID (in address form), a locking rule as bytes (available in this file),
+and a network type (mainnet, testnet, etc), this function creates an output of type
+LockThenTransfer with the parameters provided.
+
+### Function: `encode_output_coin_burn`
+
+Given an amount, this function creates an output (as bytes) to burn a given amount of coins
+
+### Function: `encode_output_token_burn`
+
+Given an amount, token ID (in address form) and network type (mainnet, testnet, etc),
+this function creates an output (as bytes) to burn a given amount of tokens
+
+### Function: `encode_output_create_delegation`
+
+Given a pool id as string, an owner address and a network type (mainnet, testnet, etc),
+this function returns an output (as bytes) to create a delegation to the given pool.
+The owner address is the address that is authorized to withdraw from that delegation.
+
+### Function: `encode_output_delegate_staking`
+
+Given a delegation id (as string, in address form), an amount and a network type (mainnet, testnet, etc),
+this function returns an output (as bytes) that would delegate coins to be staked in the specified delegation id.
+
+### Function: `encode_output_create_stake_pool`
+
+Given a pool id, staking data as bytes and the network type (mainnet, testnet, etc),
+this function returns an output that creates that staking pool.
+Note that the pool id is mandated to be taken from the hash of the first input.
+It is not arbitrary.
+
+### Function: `encode_output_issue_fungible_token`
+
+Given the parameters needed to issue a fungible token, and a network type (mainnet, testnet, etc),
+this function creates an output that issues that token.
+
+### Function: `encode_output_issue_nft`
+
+Given the parameters needed to issue an NFT, and a network type (mainnet, testnet, etc),
+this function creates an output that issues that NFT.
+
+### Function: `encode_output_data_deposit`
+
+Given data to be deposited in the blockchain, this function provides the output that deposits this data
+
+### Function: `encode_output_htlc`
+
+Given the parameters needed to create hash timelock contract, and a network type (mainnet, testnet, etc),
+this function creates an output.
+
+### Function: `encode_create_order_output`
+
+Given ask and give amounts and a conclude key create output that creates an order.
+
+'ask_token_id': the parameter represents a Token if it's Some and coins otherwise.
+'give_token_id': the parameter represents a Token if it's Some and coins otherwise.
 
 ### Enum: `Network`
 
@@ -406,10 +409,34 @@ A utxo can either come from a transaction or a block reward. This enum signifies
 
 The part of the transaction that will be committed in the signature. Similar to bitcoin's sighash.
 
+### Enum: `SimpleCurrencyAmount`
+
+An mount of coins or some token,
+
 ### Struct: `Amount`
 
 Amount type abstraction. The amount type is stored in a string
 since JavaScript number type cannot fit 128-bit integers.
 The amount is given as an integer in units of "atoms".
 Atoms are the smallest, indivisible amount of a coin or token.
+
+### Struct: `SimpleAmount`
+
+An alternative representation of `Amount`.
+
+### Struct: `SimpleTokenAmount`
+
+An amount of some token.
+
+### Struct: `PoolAdditionalInfo`
+
+
+
+### Struct: `OrderAdditionalInfo`
+
+
+
+### Struct: `TxAdditionalInfo`
+
+
 

@@ -23,14 +23,16 @@ use common::{
         output_value::OutputValue,
         signature::inputsig::InputWitness,
         timelock::OutputTimeLock,
-        tokens::{TokenId, TokenIssuance},
-        AccountCommand, AccountNonce, AccountType, Block, Destination, GenBlock, Transaction,
-        TxInput, TxOutput, UtxoOutPoint,
+        tokens::{IsTokenFreezable, TokenId, TokenIssuance, TokenIssuanceV1, TokenTotalSupply},
+        AccountCommand, AccountNonce, AccountType, Block, Destination, GenBlock, OrderId,
+        OrdersVersion, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockDistance, BlockHeight, Id, Idable},
 };
 use crypto::key::{KeyKind, PrivateKey};
+use orders_accounting::OrdersAccountingDB;
 use randomness::{CryptoRng, Rng};
+use test_utils::random_ascii_alphanumeric_string;
 
 pub mod block_creation_helpers;
 pub mod block_index_handle_impl;
@@ -184,4 +186,74 @@ pub fn mint_tokens_in_block(
     tf.process_block(block, BlockSource::Local).unwrap();
 
     (block_id, tx_id)
+}
+
+// Note: this function will create 2 blocks
+pub fn issue_and_mint_random_token_from_best_block(
+    rng: &mut (impl Rng + CryptoRng),
+    tf: &mut TestFramework,
+    utxo_to_pay_fee: UtxoOutPoint,
+    amount_to_mint: Amount,
+    total_supply: TokenTotalSupply,
+    is_freezable: IsTokenFreezable,
+) -> (
+    TokenId,
+    /*tokens*/ UtxoOutPoint,
+    /*coins change*/ UtxoOutPoint,
+) {
+    let best_block_id = tf.best_block_id();
+    let issuance = {
+        let max_ticker_len = tf.chain_config().token_max_ticker_len();
+        let max_dec_count = tf.chain_config().token_max_dec_count();
+        let max_uri_len = tf.chain_config().token_max_uri_len();
+
+        let issuance = TokenIssuanceV1 {
+            token_ticker: random_ascii_alphanumeric_string(rng, 1..max_ticker_len)
+                .as_bytes()
+                .to_vec(),
+            number_of_decimals: rng.gen_range(1..max_dec_count),
+            metadata_uri: random_ascii_alphanumeric_string(rng, 1..max_uri_len).as_bytes().to_vec(),
+            total_supply,
+            is_freezable,
+            authority: Destination::AnyoneCanSpend,
+        };
+        TokenIssuance::V1(issuance)
+    };
+
+    let (token_id, _, utxo_with_change) =
+        issue_token_from_block(rng, tf, best_block_id, utxo_to_pay_fee, issuance);
+
+    let best_block_id = tf.best_block_id();
+    let (_, mint_tx_id) = mint_tokens_in_block(
+        rng,
+        tf,
+        best_block_id,
+        utxo_with_change,
+        token_id,
+        amount_to_mint,
+        true,
+    );
+
+    (
+        token_id,
+        UtxoOutPoint::new(mint_tx_id.into(), 0),
+        UtxoOutPoint::new(mint_tx_id.into(), 1),
+    )
+}
+
+pub fn calculate_fill_order(
+    tf: &TestFramework,
+    order_id: &OrderId,
+    fill_amount_in_ask_currency: Amount,
+    orders_version: OrdersVersion,
+) -> Amount {
+    let db_tx = tf.storage.transaction_ro().unwrap();
+    let orders_db = OrdersAccountingDB::new(&db_tx);
+    orders_accounting::calculate_fill_order(
+        &orders_db,
+        *order_id,
+        fill_amount_in_ask_currency,
+        orders_version,
+    )
+    .unwrap()
 }

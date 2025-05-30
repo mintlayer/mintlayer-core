@@ -1,0 +1,88 @@
+// Copyright (c) 2021-2025 RBB S.r.l
+// opensource@mintlayer.org
+// SPDX-License-Identifier: MIT
+// Licensed under the MIT License;
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Here we have some general definitions that are used by other tests.
+
+import {
+  make_private_key,
+  public_key_from_private_key,
+} from "../../pkg/wasm_wrappers.js";
+
+import {
+  gen_random_int,
+} from "./utils.js";
+
+// Taken from TESTNET_FORK_HEIGHT_5_ORDERS_V1 in common/src/chain/config/builder.rs.
+// This will be updated to the actual height after we choose one.
+export const ORDERS_V1_TESTNET_FORK_HEIGHT = 999_999_999;
+
+// Taken from TESTNET_FORK_HEIGHT_6_SIGHASH_INPUT_COMMITMENTS_V1 in common/src/chain/config/builder.rs.
+// This will be updated to the actual height after we choose one.
+export const SIGHASH_INPUT_COMMITMENTS_V1_TESTNET_FORK_HEIGHT = 1_999_999_999;
+
+// A random height for cases where the height doesn't matter.
+export const RANDOM_HEIGHT = gen_random_int(0, 10_000_000_000, "RANDOM_HEIGHT");
+
+export const MNEMONIC =
+  "walk exile faculty near leg neutral license matrix maple invite cupboard hat opinion excess coffee leopard latin regret document core limb crew dizzy movie";
+
+// A random private key that is generated only once and printed to the console.
+// Note: simply putting `const PRIVATE_KEY = make_private_key()` to the global scope won't
+// work if the tests are run in the browser.
+export const get_predefined_prv_key = (function () {
+  let PRIVATE_KEY: Uint8Array | null = null;
+  return function () {
+    if (!PRIVATE_KEY) {
+      PRIVATE_KEY = make_private_key();
+      console.log(`PRIVATE_KEY = ${PRIVATE_KEY}`);
+    }
+    return PRIVATE_KEY;
+  }
+})();
+
+// The public key corresponding to get_predefined_prv_key().
+export const get_predefined_pub_key = (function () {
+  let PUBLIC_KEY: Uint8Array | null = null;
+  return function () {
+    if (!PUBLIC_KEY) {
+      PUBLIC_KEY = public_key_from_private_key(get_predefined_prv_key());
+      console.log(`PUBLIC_KEY = ${PUBLIC_KEY}`);
+    }
+    return PUBLIC_KEY;
+  }
+})();
+
+export function generate_prv_key(description: string) {
+  const result = make_private_key();
+  console.log(`Generated ${description} private key: ${result}`);
+  return result;
+}
+
+// Some token id.
+export const TOKEN_ID = "tmltk15tgfrs49rv88v8utcllqh0nvpaqtgvn26vdxhuner5m6ewg9c3msn9fxns";
+
+// Some pool id
+export const POOL_ID = "tpool1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqza035u";
+
+// Some order ids
+export const ORDER_ID = "tordr1xxt0avjtt4flkq0tnlyphmdm4aaj9vmkx5r2m4g863nw3lgf7nzs7mlkqc";
+export const ANOTHER_ORDER_ID = "tordr1mslcn8z774t3ug9zcxa6mqr9yc29r60fg8fkhajnngc98ryh5m3sqz6jvz";
+
+// Some HTLC secret and its hash
+export const HTLC_SECRET = [
+  0, 229, 233, 72, 110, 22, 64, 36, 69, 188, 238, 51, 130, 168, 185, 241,
+  73, 48, 120, 151, 140, 45, 46, 39, 50, 207, 18, 50, 243, 30, 115, 93
+]
+export const HTLC_SECRET_HASH = "b5a48c7780e597de8012346fb30761965248e3f2"

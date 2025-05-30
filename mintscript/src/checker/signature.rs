@@ -14,8 +14,11 @@
 // limitations under the License.
 
 use common::chain::{
-    signature::{DestinationSigError, EvaluatedInputWitness, Transactable},
-    ChainConfig, Destination, TxOutput,
+    signature::{
+        sighash::input_commitments::SighashInputCommitment, DestinationSigError,
+        EvaluatedInputWitness, Transactable,
+    },
+    ChainConfig, Destination,
 };
 
 pub trait SignatureChecker<C> {
@@ -55,8 +58,8 @@ pub trait SignatureContext {
     /// Get the transaction being signed
     fn transaction(&self) -> &Self::Tx;
 
-    /// Get the list of input utxos
-    fn input_utxos(&self) -> &[Option<&TxOutput>];
+    /// Get the list of input commitments
+    fn input_commitments(&self) -> &[SighashInputCommitment];
 
     /// Get the input number
     fn input_num(&self) -> usize;
@@ -83,7 +86,7 @@ impl<C: SignatureContext> SignatureChecker<C> for StandardSignatureChecker {
             destination,
             tx,
             witness,
-            ctx.input_utxos(),
+            ctx.input_commitments(),
             input_num,
         )
     }
