@@ -23,7 +23,10 @@ use common::{
     primitives::{id::WithId, Amount, Id},
 };
 use crypto::{
-    key::hdkd::{child_number::ChildNumber, u31::U31},
+    key::{
+        extended::ExtendedPublicKey,
+        hdkd::{child_number::ChildNumber, u31::U31},
+    },
     vrf::VRFPublicKey,
 };
 use futures::{stream::FuturesUnordered, FutureExt, TryStreamExt};
@@ -86,6 +89,14 @@ where
 
     pub fn account_index(&self) -> U31 {
         self.account_index
+    }
+
+    pub fn account_extended_public_key(
+        &mut self,
+    ) -> Result<&ExtendedPublicKey, ControllerError<T>> {
+        self.wallet
+            .account_extended_public_key(self.account_index)
+            .map_err(ControllerError::WalletError)
     }
 
     pub fn get_balance(

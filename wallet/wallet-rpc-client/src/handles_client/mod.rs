@@ -40,14 +40,15 @@ use wallet_controller::{
 };
 use wallet_rpc_lib::{
     types::{
-        AddressInfo, AddressWithUsageInfo, Balances, BlockInfo, ComposedTransaction, CreatedWallet,
-        DelegationInfo, HardwareWalletType, LegacyVrfPublicKeyInfo, NewAccountInfo,
-        NewDelegationTransaction, NewOrderTransaction, NewSubmittedTransaction,
-        NewTokenTransaction, NftMetadata, NodeVersion, OpenedWallet, PoolInfo, PublicKeyInfo,
-        RpcHashedTimelockContract, RpcInspectTransaction, RpcNewTransaction,
-        RpcPreparedTransaction, RpcStandaloneAddresses, SendTokensFromMultisigAddressResult,
-        StakePoolBalance, StakingStatus, StandaloneAddressWithDetails, TokenMetadata,
-        TxOptionsOverrides, UtxoInfo, VrfPublicKeyInfo,
+        AccountExtendedPublicKey, AddressInfo, AddressWithUsageInfo, Balances, BlockInfo,
+        ComposedTransaction, CreatedWallet, DelegationInfo, HardwareWalletType,
+        LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegationTransaction, NewOrderTransaction,
+        NewSubmittedTransaction, NewTokenTransaction, NftMetadata, NodeVersion, OpenedWallet,
+        PoolInfo, PublicKeyInfo, RpcHashedTimelockContract, RpcInspectTransaction,
+        RpcNewTransaction, RpcPreparedTransaction, RpcStandaloneAddresses,
+        SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
+        StandaloneAddressWithDetails, TokenMetadata, TxOptionsOverrides, UtxoInfo,
+        VrfPublicKeyInfo,
     },
     RpcError, WalletRpc,
 };
@@ -846,6 +847,16 @@ where
     ) -> Result<LegacyVrfPublicKeyInfo, Self::Error> {
         self.wallet_rpc
             .get_legacy_vrf_public_key(account_index)
+            .await
+            .map_err(WalletRpcHandlesClientError::WalletRpcError)
+    }
+
+    async fn get_account_extended_public_key(
+        &self,
+        account_index: U31,
+    ) -> Result<AccountExtendedPublicKey, Self::Error> {
+        self.wallet_rpc
+            .get_account_extended_public_key(account_index)
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }

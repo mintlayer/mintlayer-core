@@ -38,8 +38,8 @@ use mempool_types::tx_options::TxOptionsOverrides;
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
 use serialization::{hex_encoded::HexEncoded, Decode, DecodeAll};
 use types::{
-    NewOrderTransaction, NewSubmittedTransaction, NewTokenTransaction, RpcHashedTimelockContract,
-    RpcNewTransaction, RpcPreparedTransaction,
+    AccountExtendedPublicKey, NewOrderTransaction, NewSubmittedTransaction, NewTokenTransaction,
+    RpcHashedTimelockContract, RpcNewTransaction, RpcPreparedTransaction,
 };
 use utils::{ensure, shallow_clone::ShallowClone};
 use utils_networking::IpOrSocketAddress;
@@ -497,6 +497,20 @@ where
             })
             .await??;
         Ok(PublicKeyInfo::new(public_key, &self.chain_config))
+    }
+
+    pub async fn get_account_extended_public_key(
+        &self,
+        account_index: U31,
+    ) -> WRpcResult<AccountExtendedPublicKey, N> {
+        self.wallet
+            .call_async(move |w| {
+                Box::pin(async move {
+                    w.readonly_controller(account_index).account_extended_public_key().cloned()
+                })
+            })
+            .await?
+            .map(AccountExtendedPublicKey::new)
     }
 
     pub async fn get_legacy_vrf_public_key(

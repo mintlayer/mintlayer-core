@@ -191,6 +191,10 @@ impl Secp256k1ExtendedPublicKey {
         self.public_key
     }
 
+    pub fn chain_code(&self) -> ChainCode {
+        self.chain_code
+    }
+
     pub fn from_private_key(private_key: &Secp256k1ExtendedPrivateKey) -> Self {
         let secp: secp256k1::Secp256k1<secp256k1::All> = secp256k1::Secp256k1::new();
         Secp256k1ExtendedPublicKey {

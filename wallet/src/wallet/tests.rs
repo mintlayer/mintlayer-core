@@ -677,6 +677,21 @@ fn wallet_seed_phrase_check_address() {
     .wallet()
     .unwrap();
 
+    let (public_key, chain_code) = wallet
+        .account_extended_public_key(DEFAULT_ACCOUNT_INDEX)
+        .unwrap()
+        .clone()
+        .into_public_key_and_chain_code();
+    // m/44'/19788'/0' for MNEMONIC
+    let expected_pk = "029103888be8638b733d54eba6c5a96ae12583881dfab4b9585366548b54e3f8fd";
+    assert_eq!(
+        expected_pk,
+        public_key.hex_encode().strip_prefix("00").unwrap()
+    );
+    // m/44'/19788'/0' chain code for MNEMONIC
+    let expected_chain_code = "0b71f99e82c97a4c8f75d8d215e7260bcf9e964d437ec252af26877adf7e8683";
+    assert_eq!(expected_chain_code, chain_code.hex_encode());
+
     let address = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap();
     let pk = wallet.find_public_key(DEFAULT_ACCOUNT_INDEX, address.1.into_object()).unwrap();
 

@@ -45,15 +45,15 @@ use wallet_controller::{
 };
 use wallet_rpc_lib::{
     types::{
-        AddressInfo, AddressWithUsageInfo, BlockInfo, ComposedTransaction, CreatedWallet,
-        DelegationInfo, HardwareWalletType, LegacyVrfPublicKeyInfo, NewAccountInfo,
-        NewDelegationTransaction, NewOrderTransaction, NewSubmittedTransaction,
-        NewTokenTransaction, NftMetadata, NodeVersion, OpenedWallet, PoolInfo, PublicKeyInfo,
-        RpcHashedTimelockContract, RpcInspectTransaction, RpcNewTransaction,
-        RpcPreparedTransaction, RpcStandaloneAddresses, SendTokensFromMultisigAddressResult,
-        StakePoolBalance, StakingStatus, StandaloneAddressWithDetails, TokenMetadata,
-        TransactionOptions, TransactionRequestOptions, TxOptionsOverrides, UtxoInfo,
-        VrfPublicKeyInfo,
+        AccountExtendedPublicKey, AddressInfo, AddressWithUsageInfo, BlockInfo,
+        ComposedTransaction, CreatedWallet, DelegationInfo, HardwareWalletType,
+        LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegationTransaction, NewOrderTransaction,
+        NewSubmittedTransaction, NewTokenTransaction, NftMetadata, NodeVersion, OpenedWallet,
+        PoolInfo, PublicKeyInfo, RpcHashedTimelockContract, RpcInspectTransaction,
+        RpcNewTransaction, RpcPreparedTransaction, RpcStandaloneAddresses,
+        SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
+        StandaloneAddressWithDetails, TokenMetadata, TransactionOptions, TransactionRequestOptions,
+        TxOptionsOverrides, UtxoInfo, VrfPublicKeyInfo,
     },
     ColdWalletRpcClient, WalletRpcClient,
 };
@@ -749,6 +749,18 @@ impl WalletInterface for ClientWalletRpc {
         ColdWalletRpcClient::get_legacy_vrf_public_key(&self.http_client, account_index.into())
             .await
             .map_err(WalletRpcError::ResponseError)
+    }
+
+    async fn get_account_extended_public_key(
+        &self,
+        account_index: U31,
+    ) -> Result<AccountExtendedPublicKey, Self::Error> {
+        ColdWalletRpcClient::get_account_extended_public_key(
+            &self.http_client,
+            account_index.into(),
+        )
+        .await
+        .map_err(WalletRpcError::ResponseError)
     }
 
     async fn issue_new_nft(

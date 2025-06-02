@@ -262,6 +262,9 @@ class WalletCliController(WalletCliControllerBase):
     async def reveal_public_key_as_address(self, address: str) -> str:
         return await self._write_command(f"address-reveal-public-key-as-address {address}\n")
 
+    async def account_extended_public_key(self) -> str:
+        return await self._write_command(f"account-extended-public-key-as-hex\n")
+
     async def new_address(self) -> str:
         return await self._write_command(f"address-new\n")
 

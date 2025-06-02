@@ -25,6 +25,8 @@ use crate::key::secp256k1::extended_keys::{
 use crate::key::{PrivateKey, PublicKey};
 use randomness::{make_true_rng, CryptoRng, Rng};
 
+use super::hdkd::chain_code::ChainCode;
+
 #[derive(Debug, PartialEq, Eq, Clone, Decode, Encode)]
 pub enum ExtendedKeyKind {
     #[codec(index = 0)]
@@ -131,6 +133,15 @@ impl ExtendedPublicKey {
     pub fn into_public_key(self) -> PublicKey {
         match self.pub_key {
             ExtendedPublicKeyHolder::Secp256k1Schnorr(k) => k.into_public_key().into(),
+        }
+    }
+
+    pub fn into_public_key_and_chain_code(self) -> (PublicKey, ChainCode) {
+        match self.pub_key {
+            ExtendedPublicKeyHolder::Secp256k1Schnorr(k) => {
+                let chain_code = k.chain_code();
+                (k.into_public_key().into(), chain_code)
+            }
         }
     }
 }

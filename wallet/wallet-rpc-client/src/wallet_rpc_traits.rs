@@ -35,13 +35,14 @@ use wallet_controller::{
     ConnectedPeer, ControllerConfig, UtxoState, UtxoType,
 };
 use wallet_rpc_lib::types::{
-    AddressInfo, AddressWithUsageInfo, Balances, BlockInfo, ComposedTransaction, CreatedWallet,
-    DelegationInfo, HardwareWalletType, LegacyVrfPublicKeyInfo, NewAccountInfo,
-    NewDelegationTransaction, NewOrderTransaction, NewSubmittedTransaction, NewTokenTransaction,
-    NftMetadata, NodeVersion, OpenedWallet, PoolInfo, PublicKeyInfo, RpcHashedTimelockContract,
-    RpcInspectTransaction, RpcNewTransaction, RpcPreparedTransaction, RpcSignatureStatus,
-    RpcStandaloneAddresses, SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
-    StandaloneAddressWithDetails, TokenMetadata, TxOptionsOverrides, UtxoInfo, VrfPublicKeyInfo,
+    AccountExtendedPublicKey, AddressInfo, AddressWithUsageInfo, Balances, BlockInfo,
+    ComposedTransaction, CreatedWallet, DelegationInfo, HardwareWalletType, LegacyVrfPublicKeyInfo,
+    NewAccountInfo, NewDelegationTransaction, NewOrderTransaction, NewSubmittedTransaction,
+    NewTokenTransaction, NftMetadata, NodeVersion, OpenedWallet, PoolInfo, PublicKeyInfo,
+    RpcHashedTimelockContract, RpcInspectTransaction, RpcNewTransaction, RpcPreparedTransaction,
+    RpcSignatureStatus, RpcStandaloneAddresses, SendTokensFromMultisigAddressResult,
+    StakePoolBalance, StakingStatus, StandaloneAddressWithDetails, TokenMetadata,
+    TxOptionsOverrides, UtxoInfo, VrfPublicKeyInfo,
 };
 use wallet_types::{
     partially_signed_transaction::PartiallySignedTransaction, with_locked::WithLocked,
@@ -183,6 +184,11 @@ pub trait WalletInterface {
         account_index: U31,
         address: String,
     ) -> Result<PublicKeyInfo, Self::Error>;
+
+    async fn get_account_extended_public_key(
+        &self,
+        account_index: U31,
+    ) -> Result<AccountExtendedPublicKey, Self::Error>;
 
     async fn get_balance(
         &self,
