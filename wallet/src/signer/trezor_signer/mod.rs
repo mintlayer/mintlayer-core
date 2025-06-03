@@ -45,8 +45,8 @@ use common::{
         },
         timelock::OutputTimeLock,
         tokens::{NftIssuance, TokenId, TokenIssuance, TokenTotalSupply},
-        AccountCommand, AccountSpending, ChainConfig, Destination, OutPointSourceId,
-        SignedTransactionIntent, Transaction, TxInput, TxOutput,
+        AccountCommand, AccountSpending, ChainConfig, Destination, OrderAccountCommand,
+        OutPointSourceId, SignedTransactionIntent, Transaction, TxInput, TxOutput,
     },
     primitives::{Amount, Idable, H256},
 };
@@ -69,14 +69,15 @@ use trezor_client::{
         MintlayerAccountCommandTxInput, MintlayerAccountSpendingDelegationBalance,
         MintlayerAccountTxInput, MintlayerAddressPath, MintlayerAddressType, MintlayerBurnTxOutput,
         MintlayerChainType, MintlayerChangeTokenAuthority, MintlayerChangeTokenMetadataUri,
-        MintlayerConcludeOrder, MintlayerCreateDelegationIdTxOutput, MintlayerCreateOrderTxOutput,
-        MintlayerCreateStakePoolTxOutput, MintlayerDataDepositTxOutput,
-        MintlayerDelegateStakingTxOutput, MintlayerFillOrder, MintlayerFreezeToken,
-        MintlayerHtlcTxOutput, MintlayerIssueFungibleTokenTxOutput, MintlayerIssueNftTxOutput,
+        MintlayerConcludeOrder, MintlayerConcludeOrderV1, MintlayerCreateDelegationIdTxOutput,
+        MintlayerCreateOrderTxOutput, MintlayerCreateStakePoolTxOutput,
+        MintlayerDataDepositTxOutput, MintlayerDelegateStakingTxOutput, MintlayerFillOrder,
+        MintlayerFillOrderV1, MintlayerFreezeOrder, MintlayerFreezeToken, MintlayerHtlcTxOutput,
+        MintlayerIssueFungibleTokenTxOutput, MintlayerIssueNftTxOutput,
         MintlayerLockThenTransferTxOutput, MintlayerLockTokenSupply, MintlayerMintTokens,
-        MintlayerOutputValue, MintlayerProduceBlockFromStakeTxOutput, MintlayerTokenOutputValue,
-        MintlayerTokenTotalSupply, MintlayerTokenTotalSupplyType, MintlayerUnfreezeToken,
-        MintlayerUnmintTokens, MintlayerUtxoType,
+        MintlayerOrderCommandTxInput, MintlayerOutputValue, MintlayerProduceBlockFromStakeTxOutput,
+        MintlayerTokenOutputValue, MintlayerTokenTotalSupply, MintlayerTokenTotalSupplyType,
+        MintlayerUnfreezeToken, MintlayerUnmintTokens, MintlayerUtxoType,
     },
     Model,
 };
@@ -837,10 +838,12 @@ fn to_trezor_input_msgs(
                         command,
                         ptx.additional_info(),
                     ),
-                    TxInput::OrderAccountCommand(_) => {
-                        //TODO: support OrdersVersion::V1
-                        unimplemented!();
-                    }
+                    TxInput::OrderAccountCommand(command) => to_trezor_order_command_input(
+                        chain_config,
+                        address_paths,
+                        command,
+                        ptx.additional_info(),
+                    ),
                 }?;
 
                 Ok((input, (idx as u32, standalone_inputs)))
@@ -987,6 +990,99 @@ fn to_trezor_account_command_input(
     }
     let mut inp = MintlayerTxInput::new();
     inp.account_command = Some(inp_req).into();
+    Ok(inp)
+}
+
+fn to_trezor_order_command_input(
+    chain_config: &ChainConfig,
+    address_paths: Vec<MintlayerAddressPath>,
+    command: &OrderAccountCommand,
+    additional_info: &TxAdditionalInfo,
+) -> SignerResult<MintlayerTxInput> {
+    let mut inp_req = MintlayerOrderCommandTxInput::new();
+    inp_req.addresses = address_paths;
+    match command {
+        OrderAccountCommand::FreezeOrder(order_id) => {
+            let mut req = MintlayerFreezeOrder::new();
+            req.set_order_id(Address::new(chain_config, *order_id)?.into_string());
+
+            inp_req.freeze = Some(req).into();
+        }
+        OrderAccountCommand::ConcludeOrder(order_id) => {
+            let mut req = MintlayerConcludeOrderV1::new();
+            req.set_order_id(Address::new(chain_config, *order_id)?.into_string());
+
+            let OrderAdditionalInfo {
+                initially_asked,
+                initially_given,
+                ask_balance,
+                give_balance,
+            } = additional_info
+                .get_order_info(order_id)
+                .ok_or(SignerError::MissingTxExtraInfo)?;
+
+            let filled_value = match initially_asked {
+                OutputValue::Coin(amount) => OutputValue::Coin(
+                    (*amount - *ask_balance).ok_or(SignerError::OrderFillUnderflow)?,
+                ),
+                OutputValue::TokenV1(id, amount) => OutputValue::TokenV1(
+                    *id,
+                    (*amount - *ask_balance).ok_or(SignerError::OrderFillUnderflow)?,
+                ),
+                OutputValue::TokenV0(_) => return Err(SignerError::UnsupportedTokensV0),
+            };
+            let give_value = value_with_new_amount(initially_given, give_balance)?;
+
+            req.filled_ask_amount = Some(to_trezor_output_value(
+                &filled_value,
+                additional_info,
+                chain_config,
+            )?)
+            .into();
+
+            req.give_balance = Some(to_trezor_output_value(
+                &give_value,
+                additional_info,
+                chain_config,
+            )?)
+            .into();
+
+            inp_req.conclude = Some(req).into();
+        }
+        OrderAccountCommand::FillOrder(order_id, amount, dest) => {
+            let mut req = MintlayerFillOrderV1::new();
+            req.set_order_id(Address::new(chain_config, *order_id)?.into_string());
+            req.set_amount(amount.into_atoms().to_be_bytes().to_vec());
+            req.set_destination(Address::new(chain_config, dest.clone())?.into_string());
+
+            let OrderAdditionalInfo {
+                initially_asked,
+                initially_given,
+                ask_balance: _,
+                give_balance: _,
+            } = additional_info
+                .get_order_info(order_id)
+                .ok_or(SignerError::MissingTxExtraInfo)?;
+
+            req.initially_asked = Some(to_trezor_output_value(
+                initially_asked,
+                additional_info,
+                chain_config,
+            )?)
+            .into();
+
+            req.initially_given = Some(to_trezor_output_value(
+                initially_given,
+                additional_info,
+                chain_config,
+            )?)
+            .into();
+
+            inp_req.fill = Some(req).into();
+        }
+    }
+    let mut inp = MintlayerTxInput::new();
+    inp.order_command = Some(inp_req).into();
     Ok(inp)
 }
 
