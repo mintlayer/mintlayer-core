@@ -20,11 +20,13 @@ use clap::Args;
 use crate::{
     chain::{
         config::{
+            builder::default_regtest_chainstate_upgrade_at_genesis,
             regtest::{create_regtest_pos_genesis, create_regtest_pow_genesis},
             Builder, ChainType, EmissionScheduleTabular, MagicBytes,
         },
         pos::{DEFAULT_BLOCK_COUNT_TO_AVERAGE, DEFAULT_MATURITY_BLOCK_COUNT_V0},
-        pos_initial_difficulty, ConsensusUpgrade, Destination, NetUpgrades, PoSChainConfig,
+        pos_initial_difficulty, ChainstateUpgradeBuilder, ChainstateUpgradesBuilder,
+        ConsensusUpgrade, Destination, NetUpgrades, OrdersVersion, PoSChainConfig,
         PoSConsensusVersion,
     },
     primitives::{self, per_thousand::PerThousand, semver::SemVer, BlockHeight},
@@ -78,11 +80,11 @@ pub struct ChainConfigOptions {
     pub chain_initial_difficulty: Option<u32>,
 
     /// If set, the consensus type will be switched to PoS at the specified height.
-    #[clap(long)]
+    #[clap(long, conflicts_with_all(["chain_pos_netupgrades_v0_to_v1"]))]
     pub chain_pos_netupgrades: Option<u64>,
 
     /// PoS NetUpgrade override after Genesis with upgrade of consensus version from V0 to V1
-    /// at specific height
+    /// at specific height.
     #[clap(long)]
     pub chain_pos_netupgrades_v0_to_v1: Option<u64>,
 
@@ -93,6 +95,11 @@ pub struct ChainConfigOptions {
     /// PoS Genesis staking settings
     #[clap(long, default_value_t)]
     pub chain_genesis_staking_settings: GenesisStakingSettings,
+
+    /// If set, chainstate will upgrade from orders v0 to v1 at the specified height
+    /// (if not specified, the latest orders version will be used from height 0).
+    #[clap(long)]
+    pub chain_chainstate_orders_v1_upgrade_height: Option<u64>,
 }
 
 pub fn regtest_chain_config_builder(options: &ChainConfigOptions) -> Result<Builder> {
@@ -111,6 +118,7 @@ pub fn regtest_chain_config_builder(options: &ChainConfigOptions) -> Result<Buil
         chain_initial_difficulty,
         chain_genesis_block_timestamp,
         chain_genesis_staking_settings,
+        chain_chainstate_orders_v1_upgrade_height,
     } = options;
 
     let mut builder = Builder::new(ChainType::Regtest);
@@ -225,6 +233,23 @@ pub fn regtest_chain_config_builder(options: &ChainConfigOptions) -> Result<Buil
                 *chain_genesis_block_timestamp,
                 Destination::AnyoneCanSpend,
             ));
+    }
+
+    if let Some(chain_chainstate_orders_v1_upgrade_height) =
+        chain_chainstate_orders_v1_upgrade_height
+    {
+        builder = builder.chainstate_upgrades(
+            ChainstateUpgradesBuilder::new(
+                ChainstateUpgradeBuilder::new(default_regtest_chainstate_upgrade_at_genesis())
+                    .orders_version(OrdersVersion::V0)
+                    .build(),
+            )
+            .then(
+                BlockHeight::new(*chain_chainstate_orders_v1_upgrade_height),
+                |builder| builder.orders_version(OrdersVersion::V1),
+            )
+            .build(),
+        );
     }
 
     Ok(builder)
