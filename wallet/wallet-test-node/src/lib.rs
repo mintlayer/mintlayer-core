@@ -131,6 +131,7 @@ pub fn default_chain_config_options() -> ChainConfigOptions {
         chain_pos_netupgrades_v0_to_v1: None,
         chain_genesis_block_timestamp: None,
         chain_genesis_staking_settings: GenesisStakingSettings::default(),
+        chain_chainstate_orders_v1_upgrade_height: None,
     }
 }
 

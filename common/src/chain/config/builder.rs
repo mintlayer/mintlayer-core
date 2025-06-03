@@ -230,19 +230,7 @@ impl ChainType {
             ChainType::Regtest | ChainType::Signet => {
                 let upgrades = vec![(
                     BlockHeight::new(0),
-                    ChainstateUpgrade::new(
-                        TokenIssuanceVersion::V1,
-                        RewardDistributionVersion::V1,
-                        TokensFeeVersion::V1,
-                        DataDepositFeeVersion::V1,
-                        ChangeTokenMetadataUriActivated::Yes,
-                        FrozenTokensValidationVersion::V1,
-                        HtlcActivated::Yes,
-                        OrdersActivated::Yes,
-                        OrdersVersion::V1,
-                        StakerDestinationUpdateForbidden::Yes,
-                        TokenIdGenerationVersion::V1,
-                    ),
+                    default_regtest_chainstate_upgrade_at_genesis(),
                 )];
                 NetUpgrades::initialize(upgrades).expect("net upgrades")
             }
@@ -290,6 +278,22 @@ impl ChainType {
             .build(),
         }
     }
+}
+
+pub fn default_regtest_chainstate_upgrade_at_genesis() -> ChainstateUpgrade {
+    ChainstateUpgrade::new(
+        TokenIssuanceVersion::V1,
+        RewardDistributionVersion::V1,
+        TokensFeeVersion::V1,
+        DataDepositFeeVersion::V1,
+        ChangeTokenMetadataUriActivated::Yes,
+        FrozenTokensValidationVersion::V1,
+        HtlcActivated::Yes,
+        OrdersActivated::Yes,
+        OrdersVersion::V1,
+        StakerDestinationUpdateForbidden::Yes,
+        TokenIdGenerationVersion::V1,
+    )
 }
 
 // Builder support types

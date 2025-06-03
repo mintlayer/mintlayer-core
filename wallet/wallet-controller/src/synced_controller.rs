@@ -1330,14 +1330,19 @@ where
         &mut self,
         tx: SignedTransaction,
     ) -> Result<SignedTransaction, ControllerError<T>> {
-        self.wallet
-            .add_account_unconfirmed_tx(self.account_index, &tx, self.wallet_events)
-            .map_err(ControllerError::WalletError)?;
-
+        // Submit the tx first and only add it to the wallet after the submission has succeeded.
+        // Note: if the call order is reversed and the mempool rejects the tx for some reason, we'll
+        // end up having a bogus unconfirmed tx in the wallet; after that, any new tx created by
+        // the wallet has a chance to be an orphan if it happens to consume some outputs of the
+        // bogus tx.
         self.rpc_client
             .submit_transaction(tx.clone(), Default::default())
             .await
             .map_err(ControllerError::NodeCallError)?;
+
+        self.wallet
+            .add_account_unconfirmed_tx(self.account_index, &tx, self.wallet_events)
+            .map_err(ControllerError::WalletError)?;
 
         Ok(tx)
     }

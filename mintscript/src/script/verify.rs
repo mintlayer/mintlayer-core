@@ -45,7 +45,7 @@ pub trait ScriptVisitor {
     /// Check timelock
     fn visit_timelock(&mut self, timelock: &OutputTimeLock) -> Result<(), Self::TimelockError>;
 
-    ///Check hashlock
+    /// Check hashlock
     fn visit_hashlock(
         &mut self,
         hash_challenge: &HashChallenge,

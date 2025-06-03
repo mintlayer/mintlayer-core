@@ -170,7 +170,6 @@ fn sign_verify_unsupported_destination(#[case] seed: Seed) {
         sig_err,
         SignArbitraryMessageError::AttemptedToProduceSignatureForAnyoneCanSpend
     );
-    // Verifying a random signature should also produce an "Unsupported" error.
     let ver_err = random_sig
         .verify_signature(&chain_config, &destination, &message_challenge)
         .unwrap_err();

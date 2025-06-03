@@ -109,23 +109,29 @@ pub enum AccountCommand {
     // Create certain amount of tokens and add them to circulating supply
     #[codec(index = 0)]
     MintTokens(TokenId, Amount),
+
     // Take tokens out of circulation. Not the same as Burn because unminting means that certain amount
     // of tokens is no longer supported by underlying fiat currency, which can only be done by the authority.
     #[codec(index = 1)]
     UnmintTokens(TokenId),
+
     // After supply is locked tokens cannot be minted or unminted ever again.
     // Works only for Lockable tokens supply.
     #[codec(index = 2)]
     LockTokenSupply(TokenId),
+
     // Freezing token forbids any operation with all the tokens (except for optional unfreeze)
     #[codec(index = 3)]
     FreezeToken(TokenId, IsTokenUnfreezable),
+
     // By unfreezing token all operations are available for the tokens again
     #[codec(index = 4)]
     UnfreezeToken(TokenId),
+
     // Change the authority who can authorize operations for a token
     #[codec(index = 5)]
     ChangeTokenAuthority(TokenId, Destination),
+
     // Close an order and withdraw all remaining funds from both give and ask balances.
     // Only the address specified as `conclude_key` can authorize this command.
     // After ChainstateUpgrade::OrdersVersion::V1 is activated this command becomes deprecated.
@@ -133,13 +139,23 @@ pub enum AccountCommand {
     //       https://github.com/mintlayer/mintlayer-core/issues/1901
     #[codec(index = 6)]
     ConcludeOrder(OrderId),
+
     // Satisfy an order completely or partially.
-    // Second parameter is an amount provided to fill an order which corresponds to order's ask currency.
+    // The second parameter is the fill amount in the order's "ask" currency.
+    // The third parameter is an arbitrary destination, whose purpose is to make sure that all
+    // "FillOrder" inputs in a block are distinct, so that the same order can be filled in the same
+    // block multiple times (note: all transaction inputs in a block must be distinct,
+    // see CheckBlockTransactionsError::DuplicateInputInBlock).
+    // Also note that though a FillOrder input can technically have a signature, it is not checked.
+    // So it's better not to provide one, to reduce the transaction size and avoid needlessly exposing
+    // the corresponding public key.
+    //
     // After ChainstateUpgrade::OrdersVersion::V1 is activated this command becomes deprecated.
     // TODO: rename this command to FillOrderDeprecated
     //       https://github.com/mintlayer/mintlayer-core/issues/1901
     #[codec(index = 7)]
     FillOrder(OrderId, Amount, Destination),
+
     // Change token metadata uri
     #[codec(index = 8)]
     ChangeTokenMetadataUri(TokenId, Vec<u8>),
@@ -191,14 +207,23 @@ impl AccountOutPoint {
 )]
 pub enum OrderAccountCommand {
     // Satisfy an order completely or partially.
-    // Second parameter is an amount provided to fill an order which corresponds to order's ask currency.
+    // The second parameter is the fill amount in the order's "ask" currency.
+    // The third parameter is an arbitrary destination, whose purpose is to make sure that all
+    // "FillOrder" inputs in a block are distinct, so that the same order can be filled in the same
+    // block multiple times (note: all transaction inputs in a block must be distinct,
+    // see CheckBlockTransactionsError::DuplicateInputInBlock).
+    // Also note that though a FillOrder input can technically have a signature, it is not checked.
+    // So it's better not to provide one, to reduce the transaction size and avoid needlessly exposing
+    // the corresponding public key.
     #[codec(index = 0)]
     FillOrder(OrderId, Amount, Destination),
+
     // Freeze an order which effectively forbids any fill operations.
     // Frozen order can only be concluded.
     // Only the address specified as `conclude_key` can authorize this command.
     #[codec(index = 1)]
     FreezeOrder(OrderId),
+
     // Close an order and withdraw all remaining funds from both give and ask balances.
     // Only the address specified as `conclude_key` can authorize this command.
     #[codec(index = 2)]
