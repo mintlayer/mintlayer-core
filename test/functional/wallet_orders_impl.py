@@ -256,7 +256,3 @@ class WalletOrdersImpl(BitcoinTestFramework):
             await self.switch_to_wallet(wallet, 'carol_wallet')
             fill_order_result = await wallet.fill_order(order_id, 1)
             assert_in("Unknown order", fill_order_result['error']['message'])
-
-
-if __name__ == '__main__':
-    WalletOrders().main()
