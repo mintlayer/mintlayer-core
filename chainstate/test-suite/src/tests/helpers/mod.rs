@@ -24,12 +24,13 @@ use common::{
         signature::inputsig::InputWitness,
         timelock::OutputTimeLock,
         tokens::{TokenId, TokenIssuance},
-        AccountCommand, AccountNonce, AccountType, Block, Destination, GenBlock, Transaction,
-        TxInput, TxOutput, UtxoOutPoint,
+        AccountCommand, AccountNonce, AccountType, Block, Destination, GenBlock, OrderId,
+        OrdersVersion, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockDistance, BlockHeight, Id, Idable},
 };
 use crypto::key::{KeyKind, PrivateKey};
+use orders_accounting::OrdersAccountingDB;
 use randomness::{CryptoRng, Rng};
 
 pub mod block_creation_helpers;
@@ -184,4 +185,22 @@ pub fn mint_tokens_in_block(
     tf.process_block(block, BlockSource::Local).unwrap();
 
     (block_id, tx_id)
+}
+
+/// Given the fill amount in the "ask" currency, return the filled amount in the "give" currency.
+pub fn calculate_fill_order(
+    tf: &TestFramework,
+    order_id: &OrderId,
+    fill_amount_in_ask_currency: Amount,
+    orders_version: OrdersVersion,
+) -> Amount {
+    let db_tx = tf.storage.transaction_ro().unwrap();
+    let orders_db = OrdersAccountingDB::new(&db_tx);
+    orders_accounting::calculate_fill_order(
+        &orders_db,
+        *order_id,
+        fill_amount_in_ask_currency,
+        orders_version,
+    )
+    .unwrap()
 }
