@@ -35,14 +35,22 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: ${{ matrix.node-version }}
+      - name: Install TypeScript & Knip
+        run: npm install typescript knip
       - name: Install wasm-pack
         run: cargo install wasm-pack
       - name: Build the wasm module
         working-directory: ./wasm-wrappers
         run: wasm-pack build --target nodejs
+      - name: Compile the tests
+        working-directory: ./wasm-wrappers
+        run: tsc --project js-bindings-test/tsconfig.json
       - name: Run the tests
         working-directory: ./wasm-wrappers
-        run: node js-bindings/node-entry.js
+        run: node --enable-source-maps js-bindings-test/node-entry.js
+      - name: Run Knip
+        working-directory: ./wasm-wrappers/js-bindings-test
+        run: npx knip
 
   wasm_artifacts:
     runs-on: ubuntu-latest

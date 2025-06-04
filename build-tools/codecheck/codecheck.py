@@ -34,7 +34,8 @@ COMMON_EXCLUDE_DIRS = [
     '.git',
     'build-tools/docker/example-mainnet/mintlayer-data',
     'build-tools/docker/example-mainnet-dns-server/mintlayer-data',
-    'wasm-wrappers/pkg'
+    'wasm-wrappers/pkg',
+    'wasm-wrappers/js-bindings-test/dist',
 ]
 
 
