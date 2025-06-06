@@ -30,7 +30,8 @@ use common::{
 };
 use crypto::{
     key::{
-        hdkd::{child_number::ChildNumber, u31::U31},
+        extended::ExtendedPublicKey,
+        hdkd::{chain_code::ChainCode, child_number::ChildNumber, u31::U31},
         PublicKey,
     },
     vrf::VRFPublicKey,
@@ -330,6 +331,22 @@ impl PublicKeyInfo {
         Self {
             public_key_hex: pub_key,
             public_key_address,
+        }
+    }
+}
+
+#[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
+pub struct AccountExtendedPublicKey {
+    pub public_key: HexEncoded<PublicKey>,
+    pub chain_code: HexEncoded<ChainCode>,
+}
+
+impl AccountExtendedPublicKey {
+    pub fn new(key: ExtendedPublicKey) -> Self {
+        let (public_key, chain_code) = key.into_public_key_and_chain_code();
+        Self {
+            public_key: public_key.into(),
+            chain_code: chain_code.into(),
         }
     }
 }
