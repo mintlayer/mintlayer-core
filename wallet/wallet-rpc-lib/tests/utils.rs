@@ -106,6 +106,7 @@ impl TestFramework {
             chain_max_future_block_time_offset: None,
             chain_max_block_size_with_standard_txs: None,
             chain_max_block_size_with_smart_contracts: None,
+            chain_chainstate_orders_v1_upgrade_height: None,
         };
 
         // Start the wallet service

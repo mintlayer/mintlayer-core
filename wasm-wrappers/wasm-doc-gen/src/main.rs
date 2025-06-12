@@ -185,8 +185,39 @@ fn pull_docs_from_attribute(attrs: &[syn::Attribute]) -> String {
             syn::Lit::Str(s) => Some(s),
             _ => None,
         })
-        .map(|s| s.value().trim().to_string())
+        .map(|s| s.value())
         .collect::<Vec<_>>();
+
+    // Remove the common number of spaces from each line, but keep the rest to preserve indentation.
+    // If a line consists only of whitespaces, it is emptied.
+    let docs = {
+        let mut docs = docs;
+        let mut min_leading_spaces = usize::MAX;
+
+        for doc in &mut docs {
+            if let Some(non_ws_idx) = doc
+                .chars()
+                .enumerate()
+                .find_map(|(idx, ch)| (!ch.is_whitespace()).then_some(idx))
+            {
+                min_leading_spaces = std::cmp::min(min_leading_spaces, non_ws_idx);
+            } else {
+                doc.replace_range(.., "");
+            }
+        }
+
+        if min_leading_spaces != 0 {
+            for doc in &mut docs {
+                let bytes_to_skip = doc
+                    .chars()
+                    .take(min_leading_spaces)
+                    .fold(0, |bytes_to_skip, ch| bytes_to_skip + ch.len_utf8());
+                doc.replace_range(0..bytes_to_skip, "");
+            }
+        }
+
+        docs
+    };
 
     docs.join("\n")
 }

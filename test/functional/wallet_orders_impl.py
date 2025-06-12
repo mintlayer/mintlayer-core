@@ -38,14 +38,19 @@ import random
 
 ATOMS_PER_TOKEN = 100
 
-class WalletOrders(BitcoinTestFramework):
-
-    def set_test_params(self):
+class WalletOrdersImpl(BitcoinTestFramework):
+    def set_test_params(self, use_orders_v1):
+        self.use_orders_v1 = use_orders_v1
         self.setup_clean_chain = True
         self.num_nodes = 1
-        self.extra_args = [[
-            "--blockprod-min-peers-to-produce-blocks=0",
-        ]]
+
+        extra_args = ["--blockprod-min-peers-to-produce-blocks=0"]
+        extra_args.extend(self.chain_config_args())
+
+        self.extra_args = [extra_args]
+
+    def chain_config_args(self):
+        return [f"--chain-chainstate-orders-v1-upgrade-height={1 if self.use_orders_v1 else 999}"]
 
     def setup_network(self):
         self.setup_nodes()
@@ -81,7 +86,7 @@ class WalletOrders(BitcoinTestFramework):
         node = self.nodes[0]
 
         # new wallet
-        async with WalletRpcController(node, self.config, self.log) as wallet:
+        async with WalletRpcController(node, self.config, self.log, [], self.chain_config_args()) as wallet:
             await wallet.create_wallet('alice_wallet')
 
             # check it is on genesis
@@ -114,13 +119,12 @@ class WalletOrders(BitcoinTestFramework):
 
             # Submit a valid transaction
             outputs = [{
-                    'Transfer': [ { 'Coin': 151 * ATOMS_PER_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': alice_pub_key_bytes}}} } ],
+                'Transfer': [ { 'Coin': 151 * ATOMS_PER_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': alice_pub_key_bytes}}} } ],
             }, {
-                    'Transfer': [ { 'Coin': 151 * ATOMS_PER_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': bob_pub_key_bytes}}} } ],
+                'Transfer': [ { 'Coin': 151 * ATOMS_PER_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': bob_pub_key_bytes}}} } ],
             }, {
-                    'Transfer': [ { 'Coin': 151 * ATOMS_PER_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': carol_pub_key_bytes}}} } ],
-            }
-            ]
+                'Transfer': [ { 'Coin': 151 * ATOMS_PER_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': carol_pub_key_bytes}}} } ],
+            }]
             encoded_tx, tx_id = make_tx([reward_input(tip_id)], outputs, 0)
 
             node.mempool_submit_transaction(encoded_tx, {})
@@ -217,21 +221,22 @@ class WalletOrders(BitcoinTestFramework):
             conclude_order_result = await wallet.conclude_order(order_id)
             assert_in("Failed to convert partially signed tx to signed", conclude_order_result['error']['message'])
 
-            ########################################################################################
-            # Alice freezes the order
-            await self.switch_to_wallet(wallet, 'alice_wallet')
-            assert_in("Success", await wallet.sync())
+            if self.use_orders_v1:
+                ########################################################################################
+                # Alice freezes the order
+                await self.switch_to_wallet(wallet, 'alice_wallet')
+                assert_in("Success", await wallet.sync())
 
-            freeze_order_result = await wallet.freeze_order(order_id)
-            assert freeze_order_result['result']['tx_id'] is not None
-            self.generate_block()
-            assert_in("Success", await wallet.sync())
+                freeze_order_result = await wallet.freeze_order(order_id)
+                assert freeze_order_result['result']['tx_id'] is not None
+                self.generate_block()
+                assert_in("Success", await wallet.sync())
 
-            ########################################################################################
-            # Carol tries filling again
-            await self.switch_to_wallet(wallet, 'carol_wallet')
-            fill_order_result = await wallet.fill_order(order_id, 1)
-            assert_in("Attempt to fill frozen order", fill_order_result['error']['message'])
+                ########################################################################################
+                # Carol tries filling again
+                await self.switch_to_wallet(wallet, 'carol_wallet')
+                fill_order_result = await wallet.fill_order(order_id, 1)
+                assert_in("Attempt to fill frozen order", fill_order_result['error']['message'])
 
             ########################################################################################
             # Alice concludes the order
@@ -251,7 +256,3 @@ class WalletOrders(BitcoinTestFramework):
             await self.switch_to_wallet(wallet, 'carol_wallet')
             fill_order_result = await wallet.fill_order(order_id, 1)
             assert_in("Unknown order", fill_order_result['error']['message'])
-
-
-if __name__ == '__main__':
-    WalletOrders().main()
