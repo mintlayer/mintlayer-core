@@ -313,7 +313,7 @@ mod tests {
             let tampered_signature = priv_keys[tampered_index as usize]
                 .sign_message(
                     &H256::random_using(rng).encode(),
-                    randomness::make_true_rng(),
+                    &mut randomness::make_true_rng(),
                 )
                 .unwrap();
             // replace the signatures with a tampered one
@@ -368,7 +368,7 @@ mod tests {
                 .0
                 .sign_message(
                     &H256::random_using(rng).encode(),
-                    randomness::make_true_rng(),
+                    &mut randomness::make_true_rng(),
                 )
                 .unwrap();
             // replace the signatures with a tampered one

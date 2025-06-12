@@ -62,10 +62,15 @@ use crate::{
     SendRequest,
 };
 
-pub fn test_sign_message<F, S>(rng: &mut (impl Rng + CryptoRng), make_signer: F)
-where
-    F: Fn(Arc<ChainConfig>, U31) -> S,
-    S: Signer,
+pub fn test_sign_message_generic<MkS1, MkS2, S1, S2>(
+    rng: &mut (impl Rng + CryptoRng),
+    make_signer: MkS1,
+    make_another_signer: Option<MkS2>,
+) where
+    MkS1: Fn(Arc<ChainConfig>, U31) -> S1,
+    MkS2: Fn(Arc<ChainConfig>, U31) -> S2,
+    S1: Signer,
+    S2: Signer,
 {
     let chain_config = Arc::new(create_regtest());
     let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
@@ -94,15 +99,28 @@ where
     let standalone_pk_destination = Destination::PublicKey(standalone_pk);
 
     for destination in [pkh_destination, pk_destination, standalone_pk_destination] {
-        let mut signer = make_signer(chain_config.clone(), account.account_index());
-
         let message = vec![rng.gen::<u8>(), rng.gen::<u8>(), rng.gen::<u8>()];
+        let message_challenge = produce_message_challenge(&message);
+
+        let mut signer = make_signer(chain_config.clone(), account.account_index());
         let res = signer
             .sign_challenge(&message, &destination, account.key_chain(), &db_tx)
             .unwrap();
-
-        let message_challenge = produce_message_challenge(&message);
         res.verify_signature(&chain_config, &destination, &message_challenge).unwrap();
+
+        if let Some(make_another_signer) = &make_another_signer {
+            let mut another_signer =
+                make_another_signer(chain_config.clone(), account.account_index());
+
+            let another_res = another_signer
+                .sign_challenge(&message, &destination, account.key_chain(), &db_tx)
+                .unwrap();
+            another_res
+                .verify_signature(&chain_config, &destination, &message_challenge)
+                .unwrap();
+
+            assert_eq!(res, another_res);
+        }
     }
 
     // Check we cannot sign if we don't know the destination
@@ -124,10 +142,15 @@ where
     assert_eq!(err, SignerError::DestinationNotFromThisWallet);
 }
 
-pub fn test_sign_transaction_intent<F, S>(rng: &mut (impl Rng + CryptoRng), make_signer: F)
-where
-    F: Fn(Arc<ChainConfig>, U31) -> S,
-    S: Signer,
+pub fn test_sign_transaction_intent_generic<MkS1, MkS2, S1, S2>(
+    rng: &mut (impl Rng + CryptoRng),
+    make_signer: MkS1,
+    make_another_signer: Option<MkS2>,
+) where
+    MkS1: Fn(Arc<ChainConfig>, U31) -> S1,
+    MkS2: Fn(Arc<ChainConfig>, U31) -> S2,
+    S1: Signer,
+    S2: Signer,
 {
     let chain_config = Arc::new(create_regtest());
     let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
@@ -142,8 +165,6 @@ where
         .add_standalone_private_key(&mut db_tx, standalone_private_key, None)
         .unwrap();
     let standalone_pk_destination = Destination::PublicKey(standalone_pk);
-
-    let mut signer = make_signer(chain_config.clone(), account.account_index());
 
     let inputs: Vec<TxInput> = (0..rng.gen_range(3..6))
         .map(|_| {
@@ -189,6 +210,10 @@ where
 
     let intent: String = [rng.gen::<char>(), rng.gen::<char>(), rng.gen::<char>()].iter().collect();
     log::debug!("Generated intent: `{intent}`");
+    let expected_signed_message =
+        SignedTransactionIntent::get_message_to_sign(&intent, &tx.get_id());
+
+    let mut signer = make_signer(chain_config.clone(), account.account_index());
     let res = signer
         .sign_transaction_intent(
             &tx,
@@ -198,11 +223,26 @@ where
             &db_tx,
         )
         .unwrap();
-
-    let expected_signed_message =
-        SignedTransactionIntent::get_message_to_sign(&intent, &tx.get_id());
     res.verify(&chain_config, &input_destinations, &expected_signed_message)
         .unwrap();
+
+    if let Some(make_another_signer) = &make_another_signer {
+        let mut another_signer = make_another_signer(chain_config.clone(), account.account_index());
+        let another_res = another_signer
+            .sign_transaction_intent(
+                &tx,
+                &input_destinations,
+                &intent,
+                account.key_chain(),
+                &db_tx,
+            )
+            .unwrap();
+        another_res
+            .verify(&chain_config, &input_destinations, &expected_signed_message)
+            .unwrap();
+
+        assert_eq!(res, another_res);
+    }
 
     // cannot sign when there is a random destination
     let (_, random_pk) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
@@ -222,10 +262,15 @@ where
     assert_eq!(err, SignerError::DestinationNotFromThisWallet);
 }
 
-pub fn test_sign_transaction<F, S>(rng: &mut (impl Rng + CryptoRng), make_signer: F)
-where
-    F: Fn(Arc<ChainConfig>, U31) -> S,
-    S: Signer,
+pub fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
+    rng: &mut (impl Rng + CryptoRng),
+    make_signer: MkS1,
+    make_another_signer: Option<MkS2>,
+) where
+    MkS1: Fn(Arc<ChainConfig>, U31) -> S1,
+    MkS2: Fn(Arc<ChainConfig>, U31) -> S2,
+    S1: Signer,
+    S2: Signer,
 {
     let chain_config = Arc::new(create_regtest());
     let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
@@ -533,12 +578,20 @@ where
             initially_given: OutputValue::TokenV1(token_id, Amount::from_atoms(200)),
         },
     ));
-    let ptx = req.into_partially_signed_tx(additional_info).unwrap();
+    let orig_ptx = req.into_partially_signed_tx(additional_info).unwrap();
 
     let mut signer = make_signer(chain_config.clone(), account.account_index());
-    let (ptx, _, _) = signer.sign_tx(ptx, account.key_chain(), &db_tx).unwrap();
-
+    let (ptx, _, _) = signer.sign_tx(orig_ptx.clone(), account.key_chain(), &db_tx).unwrap();
     assert!(ptx.all_signatures_available());
+
+    if let Some(make_another_signer) = &make_another_signer {
+        let mut another_signer = make_another_signer(chain_config.clone(), account.account_index());
+        let (another_ptx, _, _) =
+            another_signer.sign_tx(orig_ptx, account.key_chain(), &db_tx).unwrap();
+        assert!(another_ptx.all_signatures_available());
+
+        assert_eq!(ptx, another_ptx);
+    }
 
     let utxos_ref = utxos
         .iter()
@@ -579,11 +632,21 @@ where
         }
     }
 
+    let orig_ptx = ptx;
     // fully sign the remaining key in the multisig address
     let mut signer = make_signer(chain_config.clone(), account2.account_index());
-    let (ptx, _, _) = signer.sign_tx(ptx, account2.key_chain(), &db_tx).unwrap();
-
+    let (ptx, _, _) = signer.sign_tx(orig_ptx.clone(), account2.key_chain(), &db_tx).unwrap();
     assert!(ptx.all_signatures_available());
+
+    if let Some(make_another_signer) = &make_another_signer {
+        let mut another_signer =
+            make_another_signer(chain_config.clone(), account2.account_index());
+        let (another_ptx, _, _) =
+            another_signer.sign_tx(orig_ptx, account2.key_chain(), &db_tx).unwrap();
+        assert!(another_ptx.all_signatures_available());
+
+        assert_eq!(ptx, another_ptx);
+    }
 
     for (i, dest) in destinations.iter().enumerate() {
         tx_verifier::input_check::signature_only_check::verify_tx_signature(

@@ -18,7 +18,7 @@ use std::{
     num::{NonZeroU8, NonZeroUsize},
 };
 
-use crypto::key::{PrivateKey, PublicKey, Signature};
+use crypto::key::{PredefinedSigAuxDataProvider, PrivateKey, PublicKey, Signature};
 use serialization::{CompactLen, Encode};
 
 use crate::chain::{
@@ -63,7 +63,7 @@ lazy_static::lazy_static! {
         let (private_key, public_key) =
             PrivateKey::new_from_entropy(crypto::key::KeyKind::Secp256k1Schnorr);
         let signature = private_key
-            .sign_message(&[0; 32], randomness::make_true_rng())
+            .sign_message(&[0; 32], &mut PredefinedSigAuxDataProvider)
             .expect("should not fail");
         (private_key, public_key, signature)
     };

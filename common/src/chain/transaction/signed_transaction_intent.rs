@@ -13,8 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crypto::key::PrivateKey;
-use randomness::{CryptoRng, Rng};
+use crypto::key::{PrivateKey, SigAuxDataProvider};
 use serialization::{Decode, Encode};
 use utils::ensure;
 
@@ -85,17 +84,17 @@ impl SignedTransactionIntent {
     /// Create a signed intent given the id of the transaction and its input destinations.
     ///
     /// Only PublicKeyHash and PublicKey destinations are supported by this function.
-    pub fn produce_from_transaction_id<KeyGetter, Error, R>(
+    pub fn produce_from_transaction_id<KeyGetter, Error, AuxP>(
         tx_id: &Id<Transaction>,
         input_destinations: &[Destination],
         intent_str: &str,
         mut prv_key_getter: KeyGetter,
-        mut rng: R,
+        sig_aux_data_provider: &mut AuxP,
     ) -> Result<Self, Error>
     where
         KeyGetter: FnMut(&Destination) -> Result<PrivateKey, Error>,
         Error: From<SignedTransactionIntentError>,
-        R: Rng + CryptoRng,
+        AuxP: SigAuxDataProvider + ?Sized,
     {
         let message_to_sign = Self::get_message_to_sign(intent_str, tx_id);
 
@@ -120,7 +119,7 @@ impl SignedTransactionIntent {
                     ArbitraryMessageSignature::produce_uniparty_signature_as_pub_key_hash_spending(
                         &prv_key,
                         message_to_sign.as_bytes(),
-                        &mut rng,
+                        sig_aux_data_provider,
                     )
                     .map_err(SignedTransactionIntentError::MessageSigningError)?;
 
@@ -137,17 +136,17 @@ impl SignedTransactionIntent {
     /// Same as `produce_from_transaction_id`, but this one accepts the whole transaction instead of just an id
     /// and performs an additional check - that the number of passed destinations matches the number of
     /// transaction inputs.
-    pub fn produce_from_transaction<KeyGetter, Error, R>(
+    pub fn produce_from_transaction<KeyGetter, Error, AuxP>(
         transaction: &Transaction,
         input_destinations: &[Destination],
         intent_str: &str,
         prv_key_getter: KeyGetter,
-        rng: R,
+        sig_aux_data_provider: &mut AuxP,
     ) -> Result<Self, Error>
     where
         KeyGetter: FnMut(&Destination) -> Result<PrivateKey, Error>,
         Error: From<SignedTransactionIntentError>,
-        R: Rng + CryptoRng,
+        AuxP: SigAuxDataProvider + ?Sized,
     {
         ensure!(
             transaction.inputs().len() == input_destinations.len(),
@@ -162,7 +161,7 @@ impl SignedTransactionIntent {
             input_destinations,
             intent_str,
             prv_key_getter,
-            rng,
+            sig_aux_data_provider,
         )
     }
 
@@ -367,7 +366,7 @@ mod tests {
                 &input_destinations,
                 &intent_str,
                 |dest| Ok::<_, SignedTransactionIntentError>(prv_keys.get(dest).unwrap().clone()),
-                make_seedable_rng(signer_rng_seed),
+                &mut make_seedable_rng(signer_rng_seed),
             )
             .unwrap();
 
@@ -376,7 +375,7 @@ mod tests {
                 &input_destinations,
                 &intent_str,
                 |dest| Ok::<_, SignedTransactionIntentError>(prv_keys.get(dest).unwrap().clone()),
-                make_seedable_rng(signer_rng_seed),
+                &mut make_seedable_rng(signer_rng_seed),
             )
             .unwrap();
 
@@ -385,7 +384,7 @@ mod tests {
                 &flipped_input_destinations,
                 &intent_str,
                 |dest| Ok::<_, SignedTransactionIntentError>(prv_keys.get(dest).unwrap().clone()),
-                make_seedable_rng(signer_rng_seed),
+                &mut make_seedable_rng(signer_rng_seed),
             )
             .unwrap();
 
@@ -394,7 +393,7 @@ mod tests {
                 &flipped_input_destinations,
                 &intent_str,
                 |dest| Ok::<_, SignedTransactionIntentError>(prv_keys.get(dest).unwrap().clone()),
-                make_seedable_rng(signer_rng_seed),
+                &mut make_seedable_rng(signer_rng_seed),
             )
             .unwrap();
 

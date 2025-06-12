@@ -16,9 +16,9 @@
 const MESSAGE_MAGIC_PREFIX: &str = "===MINTLAYER MESSAGE BEGIN===\n";
 const MESSAGE_MAGIC_SUFFIX: &str = "\n===MINTLAYER MESSAGE END===";
 
-use randomness::{CryptoRng, Rng};
 use thiserror::Error;
 
+use crypto::key::SigAuxDataProvider;
 use serialization::Encode;
 
 use crate::{
@@ -99,21 +99,21 @@ impl ArbitraryMessageSignature {
         self.as_ref().verify_signature(chain_config, destination, challenge)
     }
 
-    pub fn produce_uniparty_signature<R: Rng + CryptoRng>(
+    pub fn produce_uniparty_signature<AuxP: SigAuxDataProvider + ?Sized>(
         private_key: &crypto::key::PrivateKey,
         destination: &Destination,
         message: &[u8],
-        rng: R,
+        sig_aux_data_provider: &mut AuxP,
     ) -> Result<Self, SignArbitraryMessageError> {
         let challenge = produce_message_challenge(message);
         let signature =
             match destination {
                 Destination::PublicKeyHash(pubkeyhash) => {
-                    let sig = sign_public_key_hash_spending(private_key, pubkeyhash, &challenge, rng)?;
+                    let sig = sign_public_key_hash_spending(private_key, pubkeyhash, &challenge, sig_aux_data_provider)?;
                     sig.encode()
                 }
                 Destination::PublicKey(pubkey) => {
-                    let sig = sign_public_key_spending(private_key, pubkey, &challenge, rng)?;
+                    let sig = sign_public_key_spending(private_key, pubkey, &challenge, sig_aux_data_provider)?;
                     sig.encode()
                 }
                 Destination::ScriptHash(_) => return Err(SignArbitraryMessageError::Unsupported),
@@ -132,13 +132,19 @@ impl ArbitraryMessageSignature {
         })
     }
 
-    pub fn produce_uniparty_signature_as_pub_key_hash_spending<R: Rng + CryptoRng>(
+    pub fn produce_uniparty_signature_as_pub_key_hash_spending<
+        AuxP: SigAuxDataProvider + ?Sized,
+    >(
         private_key: &crypto::key::PrivateKey,
         message: &[u8],
-        rng: R,
+        sig_aux_data_provider: &mut AuxP,
     ) -> Result<Self, SignArbitraryMessageError> {
         let challenge = produce_message_challenge(message);
-        let signature = sign_public_key_hash_spending_unchecked(private_key, &challenge, rng)?;
+        let signature = sign_public_key_hash_spending_unchecked(
+            private_key,
+            &challenge,
+            sig_aux_data_provider,
+        )?;
         let signature = signature.encode();
 
         Ok(Self {
