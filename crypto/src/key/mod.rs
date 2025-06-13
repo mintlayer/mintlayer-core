@@ -13,21 +13,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod aux_data_provider;
 pub mod extended;
 pub mod hdkd;
 mod key_holder;
 pub mod secp256k1;
 pub mod signature;
 
-use serialization::hex_encoded::HexEncoded;
-use serialization::{Decode, Encode};
-
-use crate::key::secp256k1::{Secp256k1PrivateKey, Secp256k1PublicKey};
-use crate::key::Signature::Secp256k1Schnorr;
 use randomness::{make_true_rng, CryptoRng, Rng};
-pub use signature::Signature;
+use serialization::{hex_encoded::HexEncoded, Decode, Encode};
+
+use crate::key::{
+    secp256k1::{Secp256k1PrivateKey, Secp256k1PublicKey},
+    Signature::Secp256k1Schnorr,
+};
 
 use self::key_holder::{PrivateKeyHolder, PublicKeyHolder};
+
+pub use aux_data_provider::{
+    PredefinedSigAuxDataProvider, Secp256k1SchnorrAuxDataProvider, SigAuxDataProvider,
+};
+pub use signature::Signature;
 
 #[derive(thiserror::Error, Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub enum SignatureError {
@@ -100,13 +106,15 @@ impl PrivateKey {
         &self.key
     }
 
-    pub fn sign_message<R: Rng + CryptoRng>(
+    pub fn sign_message<AuxP: SigAuxDataProvider + ?Sized>(
         &self,
         msg: &[u8],
-        rng: R,
+        aux_data_provider: &mut AuxP,
     ) -> Result<Signature, SignatureError> {
         let signature = match &self.key {
-            PrivateKeyHolder::Secp256k1Schnorr(ref k) => Secp256k1Schnorr(k.sign_message(msg, rng)),
+            PrivateKeyHolder::Secp256k1Schnorr(ref k) => {
+                Secp256k1Schnorr(k.sign_message(msg, aux_data_provider))
+            }
         };
         Ok(signature)
     }

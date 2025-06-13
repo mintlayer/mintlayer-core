@@ -39,10 +39,9 @@ use common::{
     primitives::{Amount, BlockHeight},
 };
 use crypto::{
-    key::{PrivateKey, PublicKey},
+    key::{PrivateKey, PublicKey, SigAuxDataProvider},
     vrf::{VRFPrivateKey, VRFPublicKey},
 };
-use randomness::{CryptoRng, Rng};
 use serialization::{Decode, Encode};
 
 /// Input needed to generate PoS consensus data
@@ -216,7 +215,7 @@ impl PoSFinalizeBlockInputData {
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn generate_pos_consensus_data_and_reward<G, R: Rng + CryptoRng>(
+pub fn generate_pos_consensus_data_and_reward<G, AuxP: SigAuxDataProvider + ?Sized>(
     chain_config: &ChainConfig,
     prev_block_index: &GenBlockIndex,
     pos_input_data: &PoSGenerateBlockInputData,
@@ -225,7 +224,7 @@ pub fn generate_pos_consensus_data_and_reward<G, R: Rng + CryptoRng>(
     block_timestamp: BlockTimestamp,
     block_height: BlockHeight,
     get_ancestor: G,
-    rng: R,
+    sig_aux_data_provider: &mut AuxP,
 ) -> Result<(PoSData, BlockReward), ConsensusCreationError>
 where
     G: Fn(&BlockIndex, BlockHeight) -> Result<GenBlockIndex, crate::ChainstateError>,
@@ -253,7 +252,7 @@ where
         pos_input_data.stake_private_key(),
         &pos_input_data.stake_public_key(),
         &sighash,
-        rng,
+        sig_aux_data_provider,
     )
     .map_err(|_| ConsensusPoSError::FailedToSignKernel)?;
 

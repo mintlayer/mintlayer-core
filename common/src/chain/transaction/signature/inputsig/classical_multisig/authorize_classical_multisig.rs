@@ -15,8 +15,7 @@
 
 use std::collections::BTreeMap;
 
-use crypto::key::Signature;
-use randomness::{CryptoRng, Rng};
+use crypto::key::{SigAuxDataProvider, Signature};
 use serialization::{Decode, DecodeAll, Encode};
 
 use crate::{
@@ -176,14 +175,14 @@ pub enum ClassicalMultisigSigningError {
 /// A signature cannot be added more than once. Also, in every iteration, all the signatures must be valid,
 /// and obviously the challenge must be valid too, since there is no point in adding signatures to anything
 /// that is considered invalid.
-pub fn sign_classical_multisig_spending(
+pub fn sign_classical_multisig_spending<AuxP: SigAuxDataProvider + ?Sized>(
     chain_config: &ChainConfig,
     key_index: u8,
     private_key: &crypto::key::PrivateKey,
     challenge: &ClassicMultisigChallenge,
     sighash: &H256,
     current_signatures: AuthorizedClassicalMultisigSpend,
-    rng: &mut (impl Rng + CryptoRng),
+    sig_aux_data_provider: &mut AuxP,
 ) -> Result<ClassicalMultisigCompletionStatus, ClassicalMultisigSigningError> {
     // ensure the challenge is valid before signing it
     if let Err(ch_err) = challenge.is_valid(chain_config) {
@@ -240,7 +239,7 @@ pub fn sign_classical_multisig_spending(
         return Err(ClassicalMultisigSigningError::SpendeePrivateChallengePublicKeyMismatch);
     }
     let signature = private_key
-        .sign_message(&msg, rng)
+        .sign_message(&msg, sig_aux_data_provider)
         .map_err(ClassicalMultisigSigningError::ProducingSignatureFailed)?;
 
     let mut current_signatures = current_signatures;
@@ -687,7 +686,7 @@ mod tests {
             signatures.insert(
                 *tampered_with_key_index,
                 new_random_private_key
-                    .sign_message(&sighash.encode(), randomness::make_true_rng())
+                    .sign_message(&sighash.encode(), &mut randomness::make_true_rng())
                     .unwrap(),
             );
 
@@ -920,7 +919,7 @@ mod tests {
             let (new_random_private_key, _) =
                 PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
             let sig = new_random_private_key
-                .sign_message(&sighash.encode(), randomness::make_true_rng())
+                .sign_message(&sighash.encode(), &mut randomness::make_true_rng())
                 .unwrap();
             let new_sigs = BTreeMap::from([(key_index, sig)]);
             let tampered_with_signatures = AuthorizedClassicalMultisigSpend::new(

@@ -55,7 +55,7 @@ use crypto::key::{
     hdkd::{chain_code::ChainCode, derivable::Derivable, u31::U31},
     secp256k1::{extended_keys::Secp256k1ExtendedPublicKey, Secp256k1PublicKey},
     signature::SignatureKind,
-    PrivateKey, Signature, SignatureError,
+    PrivateKey, SigAuxDataProvider, Signature, SignatureError,
 };
 use itertools::Itertools;
 use randomness::make_true_rng;
@@ -157,10 +157,14 @@ pub enum TrezorError {
     MissingHardwareWalletData,
 }
 
+// Note:
+// 1) sig_aux_data_provider is only used for signing with standalone keys.
+// 2) signing with Trezor is equivalent to signing with the software signer using PredefinedSigAuxDataProvider.
 pub struct TrezorSigner {
     chain_config: Arc<ChainConfig>,
     client: Arc<Mutex<Trezor>>,
     session_id: Vec<u8>,
+    sig_aux_data_provider: Mutex<Box<dyn SigAuxDataProvider>>,
 }
 
 impl TrezorSigner {
@@ -169,10 +173,25 @@ impl TrezorSigner {
         client: Arc<Mutex<Trezor>>,
         session_id: Vec<u8>,
     ) -> Self {
+        Self::new_with_sig_aux_data_provider(
+            chain_config,
+            client,
+            session_id,
+            Box::new(make_true_rng()),
+        )
+    }
+
+    pub fn new_with_sig_aux_data_provider(
+        chain_config: Arc<ChainConfig>,
+        client: Arc<Mutex<Trezor>>,
+        session_id: Vec<u8>,
+        sig_aux_data_provider: Box<dyn SigAuxDataProvider>,
+    ) -> Self {
         Self {
             chain_config,
             client,
             session_id,
+            sig_aux_data_provider: Mutex::new(sig_aux_data_provider),
         }
     }
 
@@ -420,7 +439,7 @@ impl TrezorSigner {
                     &challenge,
                     &sighash,
                     current_signatures,
-                    &mut make_true_rng(),
+                    self.sig_aux_data_provider.lock().expect("poisoned mutex").as_mut(),
                 )
                 .map_err(DestinationSigError::ClassicalMultisigSigningFailed)?;
 
@@ -525,6 +544,7 @@ impl Signer for TrezorSigner {
                         &ptx,
                         &inputs_utxo_refs,
                         input_index,
+                        self.sig_aux_data_provider.lock().expect("poisoned mutex").as_mut()
                     )
                 };
 
@@ -637,7 +657,8 @@ impl Signer for TrezorSigner {
                                 destination,
                                 &ptx,
                                 &inputs_utxo_refs,
-                                input_index
+                                input_index,
+                                self.sig_aux_data_provider.lock().expect("poisoned mutex").as_mut()
                             )?;
 
                             Ok((Some(sig), SignatureStatus::NotSigned, SignatureStatus::FullySigned))
@@ -740,7 +761,7 @@ impl Signer for TrezorSigner {
                     &standalone_pk,
                     destination,
                     message,
-                    make_true_rng(),
+                    self.sig_aux_data_provider.lock().expect("poisoned mutex").as_mut(),
                 )?;
                 return Ok(sig);
             }
@@ -778,13 +799,14 @@ impl Signer for TrezorSigner {
     }
 }
 
-fn sign_input_with_standalone_key(
+fn sign_input_with_standalone_key<AuxP: SigAuxDataProvider + ?Sized>(
     secret: &Option<common::chain::htlc::HtlcSecret>,
     standalone: &StandaloneInput,
     destination: &Destination,
     ptx: &PartiallySignedTransaction,
     inputs_utxo_refs: &[Option<&TxOutput>],
     input_index: usize,
+    sig_aux_data_provider: &mut AuxP,
 ) -> SignerResult<InputWitness> {
     let sighash_type = SigHashType::all();
     match secret {
@@ -796,7 +818,7 @@ fn sign_input_with_standalone_key(
             inputs_utxo_refs,
             input_index,
             htlc_secret.clone(),
-            make_true_rng(),
+            sig_aux_data_provider,
         ),
         None => StandardInputSignature::produce_uniparty_signature_for_input(
             &standalone.private_key,
@@ -805,7 +827,7 @@ fn sign_input_with_standalone_key(
             ptx.tx(),
             inputs_utxo_refs,
             input_index,
-            make_true_rng(),
+            sig_aux_data_provider,
         ),
     }
     .map(InputWitness::Standard)
@@ -1825,4 +1847,4 @@ mod tests;
 
 #[cfg(feature = "enable-trezor-device-tests")]
 #[cfg(test)]
-mod test_utils;
+pub mod test_utils;

@@ -38,31 +38,37 @@ use common::{
             IsTokenUnfreezable, Metadata, NftIssuance, NftIssuanceV0, TokenId, TokenIssuance,
             TokenIssuanceV1,
         },
-        AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, DelegationId, Destination,
-        OrderData, OrderId, OutPointSourceId, PoolId, Transaction, TxInput, TxOutput,
+        AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, ChainConfig, DelegationId,
+        Destination, OrderData, OrderId, OutPointSourceId, PoolId, Transaction, TxInput, TxOutput,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, H256},
 };
 use crypto::{
-    key::{secp256k1::Secp256k1PublicKey, PublicKey, Signature},
+    key::{hdkd::u31::U31, secp256k1::Secp256k1PublicKey, PublicKey, Signature},
     vrf::VRFPrivateKey,
 };
+use randomness::{CryptoRng, Rng};
 use serialization::{extras::non_empty_vec::DataOrNoVec, Encode as _};
+use test_utils::random_ascii_alphanumeric_string;
 use wallet_storage::{DefaultBackend, Store, Transactional};
 use wallet_types::{
-    account_info::DEFAULT_ACCOUNT_INDEX, partially_signed_transaction::TxAdditionalInfo,
-    seed_phrase::StoreSeedPhrase, KeyPurpose,
+    account_info::DEFAULT_ACCOUNT_INDEX,
+    partially_signed_transaction::{OrderAdditionalInfo, TokenAdditionalInfo, TxAdditionalInfo},
+    seed_phrase::StoreSeedPhrase,
+    KeyPurpose,
 };
 
 use crate::{
     key_chain::{MasterKeyChain, LOOKAHEAD_SIZE},
-    signer::tests::MNEMONIC,
+    signer::{tests::MNEMONIC, Signer},
     Account, SendRequest,
 };
 
-// Verify some signatures produced on a Trezor.
-#[test]
-fn fixed_trezor_signatures() {
+pub fn test_fixed_signatures_generic<MkS, S>(rng: &mut (impl Rng + CryptoRng), make_signer: MkS)
+where
+    MkS: Fn(Arc<ChainConfig>, U31) -> S,
+    S: Signer,
+{
     let chain_config = Arc::new(create_regtest());
     let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
     let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
@@ -279,8 +285,33 @@ fn fixed_trezor_signatures() {
         .with_inputs_and_destinations(acc_inputs.into_iter().zip(acc_dests.clone()))
         .with_outputs(outputs);
     let destinations = req.destinations().to_vec();
-    let additional_info = TxAdditionalInfo::new();
-    let ptx = req.into_partially_signed_tx(additional_info).unwrap();
+    let additional_info = TxAdditionalInfo::with_token_info(
+        token_id,
+        // Note: this info doesn't influence the signature and can be random.
+        TokenAdditionalInfo {
+            num_decimals: rng.gen_range(1..10),
+            ticker: random_ascii_alphanumeric_string(rng, 5..10).into_bytes(),
+        },
+    )
+    .join(TxAdditionalInfo::with_order_info(
+        order_id,
+        OrderAdditionalInfo {
+            ask_balance: Amount::from_atoms(10),
+            give_balance: Amount::from_atoms(100),
+            initially_asked: OutputValue::Coin(Amount::from_atoms(20)),
+            // Note: initially_given's amount isn't used by the signers in orders v0, only its
+            // currency matters.
+            initially_given: OutputValue::TokenV1(
+                token_id,
+                Amount::from_atoms(rng.gen_range(100..200)),
+            ),
+        },
+    ));
+    let orig_ptx = req.into_partially_signed_tx(additional_info).unwrap();
+
+    let mut signer = make_signer(chain_config.clone(), account.account_index());
+    let (ptx, _, _) = signer.sign_tx(orig_ptx, account.key_chain(), &db_tx).unwrap();
+    assert!(ptx.all_signatures_available());
 
     let utxos_ref = utxos
         .iter()
@@ -288,37 +319,6 @@ fn fixed_trezor_signatures() {
         .chain([Some(&multisig_utxo)])
         .chain(acc_dests.iter().map(|_| None))
         .collect::<Vec<_>>();
-
-    let multisig_signatures = [
-        (0, "7a99714dc6cc917faa2afded8028159a5048caf6f8382f67e6b61623fbe62c60423f8f7983f88f40c6f42924594f3de492a232e9e703b241c3b17b130f8daa59"),
-        (2, "0a0a17d71bc98fa5c24ea611c856d0d08c6a765ea3c4c8f068668e0bdff710b82b0d2eead83d059386cd3cbdf4308418d4b81e6f52c001a9141ec477a8d24845"),
-    ];
-
-    let mut current_signatures = AuthorizedClassicalMultisigSpend::new_empty(challenge.clone());
-
-    for (idx, sig) in multisig_signatures {
-        let mut signature = hex::decode(sig).unwrap();
-        signature.insert(0, 0);
-        let sig = Signature::from_data(signature).unwrap();
-        current_signatures.add_signature(idx as u8, sig);
-    }
-
-    let sighash_type: SigHashType = SigHashType::ALL.try_into().unwrap();
-    let multisig_sig = StandardInputSignature::new(sighash_type, current_signatures.encode());
-
-    let sig = "7a99714dc6cc917faa2afded8028159a5048caf6f8382f67e6b61623fbe62c60423f8f7983f88f40c6f42924594f3de492a232e9e703b241c3b17b130f8daa59";
-    let mut bytes = hex::decode(sig).unwrap();
-    bytes.insert(0, 0);
-
-    let sig = Signature::from_data(bytes).unwrap();
-    let sig = AuthorizedPublicKeyHashSpend::new(wallet_pk0.clone(), sig);
-    let sig = StandardInputSignature::new(SigHashType::ALL.try_into().unwrap(), sig.encode());
-
-    let mut sigs = vec![Some(InputWitness::Standard(sig)); ptx.count_inputs()];
-    sigs[1] = Some(InputWitness::Standard(multisig_sig));
-    let ptx = ptx.with_witnesses(sigs);
-
-    assert!(ptx.all_signatures_available());
 
     for (i, dest) in destinations.iter().enumerate() {
         tx_verifier::input_check::signature_only_check::verify_tx_signature(
@@ -330,4 +330,37 @@ fn fixed_trezor_signatures() {
         )
         .unwrap();
     }
+
+    let expected_sigs = {
+        let multisig_signatures = [
+            (0, "7a99714dc6cc917faa2afded8028159a5048caf6f8382f67e6b61623fbe62c60423f8f7983f88f40c6f42924594f3de492a232e9e703b241c3b17b130f8daa59"),
+            (2, "0a0a17d71bc98fa5c24ea611c856d0d08c6a765ea3c4c8f068668e0bdff710b82b0d2eead83d059386cd3cbdf4308418d4b81e6f52c001a9141ec477a8d24845"),
+        ];
+
+        let mut current_signatures = AuthorizedClassicalMultisigSpend::new_empty(challenge.clone());
+
+        for (idx, sig) in multisig_signatures {
+            let mut signature = hex::decode(sig).unwrap();
+            signature.insert(0, 0);
+            let sig = Signature::from_data(signature).unwrap();
+            current_signatures.add_signature(idx as u8, sig);
+        }
+
+        let sighash_type: SigHashType = SigHashType::ALL.try_into().unwrap();
+        let multisig_sig = StandardInputSignature::new(sighash_type, current_signatures.encode());
+
+        let sig = "7a99714dc6cc917faa2afded8028159a5048caf6f8382f67e6b61623fbe62c60423f8f7983f88f40c6f42924594f3de492a232e9e703b241c3b17b130f8daa59";
+        let mut bytes = hex::decode(sig).unwrap();
+        bytes.insert(0, 0);
+
+        let sig = Signature::from_data(bytes).unwrap();
+        let sig = AuthorizedPublicKeyHashSpend::new(wallet_pk0.clone(), sig);
+        let sig = StandardInputSignature::new(SigHashType::ALL.try_into().unwrap(), sig.encode());
+
+        let mut sigs = vec![Some(InputWitness::Standard(sig)); ptx.count_inputs()];
+        sigs[1] = Some(InputWitness::Standard(multisig_sig));
+        sigs
+    };
+
+    assert_eq!(ptx.witnesses(), &expected_sigs);
 }

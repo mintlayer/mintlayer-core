@@ -15,7 +15,7 @@
 
 use std::io::BufWriter;
 
-use randomness::{CryptoRng, Rng};
+use crypto::key::SigAuxDataProvider;
 use serialization::{Decode, DecodeAll, Encode};
 
 use crate::{
@@ -100,23 +100,23 @@ impl StandardInputSignature {
         Ok(())
     }
 
-    pub fn produce_uniparty_signature_for_input<T: Signable, R: Rng + CryptoRng>(
+    pub fn produce_uniparty_signature_for_input<T: Signable, AuxP: SigAuxDataProvider + ?Sized>(
         private_key: &crypto::key::PrivateKey,
         sighash_type: SigHashType,
         outpoint_destination: Destination,
         tx: &T,
         inputs_utxos: &[Option<&TxOutput>],
         input_num: usize,
-        rng: R,
+        sig_aux_data_provider: &mut AuxP,
     ) -> Result<Self, DestinationSigError> {
         let sighash = signature_hash(sighash_type, tx, inputs_utxos, input_num)?;
         let serialized_sig = match outpoint_destination {
             Destination::PublicKeyHash(ref addr) => {
-                let sig = sign_public_key_hash_spending(private_key, addr, &sighash, rng)?;
+                let sig = sign_public_key_hash_spending(private_key, addr, &sighash, sig_aux_data_provider)?;
                 sig.encode()
             }
             Destination::PublicKey(ref pubkey) => {
-                let sig = sign_public_key_spending(private_key, pubkey, &sighash, rng)?;
+                let sig = sign_public_key_spending(private_key, pubkey, &sighash, sig_aux_data_provider)?;
                 sig.encode()
             }
             Destination::ScriptHash(_) => return Err(DestinationSigError::Unsupported),

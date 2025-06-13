@@ -13,22 +13,53 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::{Arc, Mutex};
+
 use rstest::rstest;
 use serial_test::serial;
 
 use ::test_utils::random::{make_seedable_rng, Seed};
+use common::chain::ChainConfig;
+use crypto::key::{hdkd::u31::U31, PredefinedSigAuxDataProvider};
 use logging::log;
 
-use super::{
-    test_utils::{find_test_device_and_connect, maybe_spawn_auto_confirmer},
-    *,
+use crate::signer::{
+    tests::{
+        generic_fixed_signature_tests::test_fixed_signatures_generic,
+        generic_tests::{
+            test_sign_message_generic, test_sign_transaction_generic,
+            test_sign_transaction_intent_generic,
+        },
+        make_deterministic_software_signer, no_another_signer,
+    },
+    trezor_signer::{test_utils::find_test_device_and_connect, TrezorSigner},
 };
 
-fn trezor_signer(chain_config: Arc<ChainConfig>, _account_index: U31) -> TrezorSigner {
+use super::test_utils::maybe_spawn_auto_confirmer;
+
+pub fn make_trezor_signer(chain_config: Arc<ChainConfig>, _account_index: U31) -> TrezorSigner {
     let mut client = find_test_device_and_connect(false);
     let session_id = client.initialize(None).unwrap().ok().unwrap().session_id().to_vec();
 
     TrezorSigner::new(chain_config, Arc::new(Mutex::new(client)), session_id)
+}
+
+// Return a TrezorSigner that always produces Trezor-like signatures.
+// (Note: the default TrezorSigner will still produce non-deterministic signatures when using
+// standalone keys.)
+pub fn make_deterministic_trezor_signer(
+    chain_config: Arc<ChainConfig>,
+    _account_index: U31,
+) -> TrezorSigner {
+    let mut client = find_test_device_and_connect(false);
+    let session_id = client.initialize(None).unwrap().ok().unwrap().session_id().to_vec();
+
+    TrezorSigner::new_with_sig_aux_data_provider(
+        chain_config,
+        Arc::new(Mutex::new(client)),
+        session_id,
+        Box::new(PredefinedSigAuxDataProvider),
+    )
 }
 
 // Note: below, the auto-confirmer thread is spawned via `spawn_thread_aborting_on_panic`;
@@ -42,46 +73,108 @@ fn trezor_signer(chain_config: Arc<ChainConfig>, _account_index: U31) -> TrezorS
 #[trace]
 #[serial]
 #[case(Seed::from_entropy())]
-fn sign_message(#[case] seed: Seed) {
-    use crate::signer::tests::generic_tests::test_sign_message;
-
-    log::debug!("sign_message, seed = {seed:?}");
+fn test_sign_message(#[case] seed: Seed) {
+    log::debug!("test_sign_message, seed = {seed:?}");
 
     let _join_guard = maybe_spawn_auto_confirmer();
 
     let mut rng = make_seedable_rng(seed);
 
-    test_sign_message(&mut rng, trezor_signer);
+    test_sign_message_generic(&mut rng, make_trezor_signer, no_another_signer());
 }
 
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
 #[serial]
-fn sign_transaction_intent(#[case] seed: Seed) {
-    use crate::signer::tests::generic_tests::test_sign_transaction_intent;
-
-    log::debug!("sign_transaction_intent, seed = {seed:?}");
+fn test_sign_transaction_intent(#[case] seed: Seed) {
+    log::debug!("test_sign_transaction_intent, seed = {seed:?}");
 
     let _join_guard = maybe_spawn_auto_confirmer();
 
     let mut rng = make_seedable_rng(seed);
 
-    test_sign_transaction_intent(&mut rng, trezor_signer);
+    test_sign_transaction_intent_generic(&mut rng, make_trezor_signer, no_another_signer());
 }
 
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
 #[serial]
-fn sign_transaction(#[case] seed: Seed) {
-    use crate::signer::tests::generic_tests::test_sign_transaction;
-
-    log::debug!("sign_transaction, seed = {seed:?}");
+fn test_sign_transaction(#[case] seed: Seed) {
+    log::debug!("test_sign_transaction, seed = {seed:?}");
 
     let _join_guard = maybe_spawn_auto_confirmer();
 
     let mut rng = make_seedable_rng(seed);
 
-    test_sign_transaction(&mut rng, trezor_signer);
+    test_sign_transaction_generic(&mut rng, make_trezor_signer, no_another_signer());
+}
+
+#[rstest]
+#[trace]
+#[serial]
+#[case(Seed::from_entropy())]
+fn test_fixed_signatures(#[case] seed: Seed) {
+    log::debug!("test_fixed_signatures, seed = {seed:?}");
+
+    let _join_guard = maybe_spawn_auto_confirmer();
+
+    let mut rng = make_seedable_rng(seed);
+
+    test_fixed_signatures_generic(&mut rng, make_deterministic_trezor_signer);
+}
+
+#[rstest]
+#[trace]
+#[serial]
+#[case(Seed::from_entropy())]
+fn test_sign_message_sig_consistency(#[case] seed: Seed) {
+    log::debug!("test_sign_message_sig_consistency, seed = {seed:?}");
+
+    let _join_guard = maybe_spawn_auto_confirmer();
+
+    let mut rng = make_seedable_rng(seed);
+
+    test_sign_message_generic(
+        &mut rng,
+        make_deterministic_trezor_signer,
+        Some(make_deterministic_software_signer),
+    );
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[serial]
+fn test_sign_transaction_intent_sig_consistency(#[case] seed: Seed) {
+    log::debug!("test_sign_transaction_intent_sig_consistency, seed = {seed:?}");
+
+    let _join_guard = maybe_spawn_auto_confirmer();
+
+    let mut rng = make_seedable_rng(seed);
+
+    test_sign_transaction_intent_generic(
+        &mut rng,
+        make_deterministic_trezor_signer,
+        Some(make_deterministic_software_signer),
+    );
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[serial]
+fn test_sign_transaction_sig_consistency(#[case] seed: Seed) {
+    log::debug!("test_sign_transaction_sig_consistency, seed = {seed:?}");
+
+    let _join_guard = maybe_spawn_auto_confirmer();
+
+    let mut rng = make_seedable_rng(seed);
+
+    test_sign_transaction_generic(
+        &mut rng,
+        make_deterministic_trezor_signer,
+        Some(make_deterministic_software_signer),
+    );
 }

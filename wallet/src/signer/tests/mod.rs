@@ -13,18 +13,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod fixed_signature_tests;
+pub mod generic_fixed_signature_tests;
 pub mod generic_tests;
 
 use std::sync::Arc;
 
 use common::chain::ChainConfig;
-use crypto::key::hdkd::u31::U31;
+use crypto::key::{hdkd::u31::U31, PredefinedSigAuxDataProvider};
 use wallet_storage::StoreTxRwUnlocked;
 use wallet_types::seed_phrase::StoreSeedPhrase;
 
 use crate::{
     key_chain::{AccountKeyChainImplSoftware, MasterKeyChain, LOOKAHEAD_SIZE},
+    signer::software_signer::SoftwareSigner,
     Account,
 };
 
@@ -54,4 +55,24 @@ fn account_from_mnemonic<B: storage::Backend>(
         .create_account_key_chain(db_tx, account_index, LOOKAHEAD_SIZE)
         .unwrap();
     Account::new(chain_config.clone(), db_tx, key_chain, None).unwrap()
+}
+
+pub fn make_software_signer(chain_config: Arc<ChainConfig>, account_index: U31) -> SoftwareSigner {
+    SoftwareSigner::new(chain_config, account_index)
+}
+
+// Return a SoftwareSigner that will produce Trezor-like signatures.
+pub fn make_deterministic_software_signer(
+    chain_config: Arc<ChainConfig>,
+    account_index: U31,
+) -> SoftwareSigner {
+    SoftwareSigner::new_with_sig_aux_data_provider(
+        chain_config,
+        account_index,
+        Box::new(PredefinedSigAuxDataProvider),
+    )
+}
+
+pub fn no_another_signer() -> Option<impl Fn(Arc<ChainConfig>, U31) -> SoftwareSigner> {
+    None::<Box<dyn Fn(Arc<ChainConfig>, U31) -> SoftwareSigner>>
 }

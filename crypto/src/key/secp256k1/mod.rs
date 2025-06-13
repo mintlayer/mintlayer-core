@@ -15,7 +15,10 @@
 
 pub mod extended_keys;
 
-use crate::hash::{Blake2b32Stream, StreamHasher};
+use crate::{
+    hash::{Blake2b32Stream, StreamHasher},
+    key::Secp256k1SchnorrAuxDataProvider,
+};
 use randomness::{CryptoRng, Rng};
 use secp256k1;
 use serialization::{Decode, Encode};
@@ -83,10 +86,10 @@ impl Secp256k1PrivateKey {
         Self { data: native }
     }
 
-    pub(crate) fn sign_message<R: Rng + CryptoRng>(
+    pub(crate) fn sign_message<AuxP: Secp256k1SchnorrAuxDataProvider + ?Sized>(
         &self,
         msg: &[u8],
-        mut rng: R,
+        aux_data_provider: &mut AuxP,
     ) -> secp256k1::schnorr::Signature {
         let secp = secp256k1::Secp256k1::new();
         // Hash the message
@@ -97,10 +100,9 @@ impl Secp256k1PrivateKey {
         // TODO(SECURITY) erase keypair after signing
         let keypair = self.data.keypair(&secp);
 
-        let rng = &mut rng;
+        let aux_data = aux_data_provider.get_secp256k1_schnorr_aux_data();
 
-        // TODO(SECURITY) examine the usage of a RFC6979 scheme
-        secp.sign_schnorr_with_rng(&msg_hash, &keypair, rng)
+        secp.sign_schnorr_with_aux_rand(&msg_hash, &keypair, &aux_data)
     }
 }
 

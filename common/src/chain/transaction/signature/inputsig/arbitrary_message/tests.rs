@@ -92,7 +92,7 @@ fn produce_uniparty_signature_as_pub_key_hash_spending_matches_produce_uniparty_
         &private_key,
         &destination_addr,
         &message,
-        test_utils::random::make_seedable_rng(signer_rng_seed),
+        &mut test_utils::random::make_seedable_rng(signer_rng_seed),
     )
     .unwrap();
     sig1.verify_signature(&chain_config, &destination_addr, &message_challenge)
@@ -101,7 +101,7 @@ fn produce_uniparty_signature_as_pub_key_hash_spending_matches_produce_uniparty_
     let sig2 = ArbitraryMessageSignature::produce_uniparty_signature_as_pub_key_hash_spending(
         &private_key,
         &message,
-        test_utils::random::make_seedable_rng(signer_rng_seed),
+        &mut test_utils::random::make_seedable_rng(signer_rng_seed),
     )
     .unwrap();
 

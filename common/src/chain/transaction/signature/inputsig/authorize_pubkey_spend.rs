@@ -13,8 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crypto::key::Signature;
-use randomness::{CryptoRng, Rng};
+use crypto::key::{SigAuxDataProvider, Signature};
 use serialization::{Decode, DecodeAll, Encode};
 
 use crate::{chain::signature::DestinationSigError, primitives::H256};
@@ -48,11 +47,11 @@ pub fn verify_public_key_spending(
     Ok(())
 }
 
-pub fn sign_public_key_spending<R: Rng + CryptoRng>(
+pub fn sign_public_key_spending<AuxP: SigAuxDataProvider + ?Sized>(
     private_key: &crypto::key::PrivateKey,
     spendee_pubkey: &crypto::key::PublicKey,
     sighash: &H256,
-    rng: R,
+    sig_aux_data_provider: &mut AuxP,
 ) -> Result<AuthorizedPublicKeySpend, DestinationSigError> {
     let calculated_public_key = crypto::key::PublicKey::from_private_key(private_key);
     if *spendee_pubkey != calculated_public_key {
@@ -60,7 +59,7 @@ pub fn sign_public_key_spending<R: Rng + CryptoRng>(
     }
     let msg = sighash.encode();
     let signature = private_key
-        .sign_message(&msg, rng)
+        .sign_message(&msg, sig_aux_data_provider)
         .map_err(DestinationSigError::ProducingSignatureFailed)?;
 
     Ok(AuthorizedPublicKeySpend::new(signature))

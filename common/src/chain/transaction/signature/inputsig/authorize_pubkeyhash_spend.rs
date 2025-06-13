@@ -13,8 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crypto::key::{PrivateKey, PublicKey, Signature};
-use randomness::{CryptoRng, Rng};
+use crypto::key::{PrivateKey, PublicKey, SigAuxDataProvider, Signature};
 use serialization::{Decode, DecodeAll, Encode};
 
 use crate::{
@@ -58,40 +57,40 @@ pub fn verify_public_key_hash_spending(
     Ok(())
 }
 
-pub fn sign_public_key_hash_spending<R: Rng + CryptoRng>(
+pub fn sign_public_key_hash_spending<AuxP: SigAuxDataProvider + ?Sized>(
     private_key: &PrivateKey,
     spendee_addr: &PublicKeyHash,
     sighash: &H256,
-    rng: R,
+    sig_aux_data_provider: &mut AuxP,
 ) -> Result<AuthorizedPublicKeyHashSpend, DestinationSigError> {
     let public_key = PublicKey::from_private_key(private_key);
     let calculated_addr = PublicKeyHash::from(&public_key);
     if calculated_addr != *spendee_addr {
         return Err(DestinationSigError::PublicKeyToHashMismatch);
     }
-    sign_public_key_hash_spending_impl(private_key, public_key, sighash, rng)
+    sign_public_key_hash_spending_impl(private_key, public_key, sighash, sig_aux_data_provider)
 }
 
-pub fn sign_public_key_hash_spending_unchecked<R: Rng + CryptoRng>(
+pub fn sign_public_key_hash_spending_unchecked<AuxP: SigAuxDataProvider + ?Sized>(
     private_key: &PrivateKey,
     sighash: &H256,
-    rng: R,
+    sig_aux_data_provider: &mut AuxP,
 ) -> Result<AuthorizedPublicKeyHashSpend, DestinationSigError> {
     let public_key = PublicKey::from_private_key(private_key);
-    sign_public_key_hash_spending_impl(private_key, public_key, sighash, rng)
+    sign_public_key_hash_spending_impl(private_key, public_key, sighash, sig_aux_data_provider)
 }
 
-fn sign_public_key_hash_spending_impl<R: Rng + CryptoRng>(
+fn sign_public_key_hash_spending_impl<AuxP: SigAuxDataProvider + ?Sized>(
     private_key: &PrivateKey,
     public_key: PublicKey,
     sighash: &H256,
-    rng: R,
+    sig_aux_data_provider: &mut AuxP,
 ) -> Result<AuthorizedPublicKeyHashSpend, DestinationSigError> {
     debug_assert_eq!(public_key, PublicKey::from_private_key(private_key));
 
     let msg = sighash.encode();
     let signature = private_key
-        .sign_message(&msg, rng)
+        .sign_message(&msg, sig_aux_data_provider)
         .map_err(DestinationSigError::ProducingSignatureFailed)?;
 
     Ok(AuthorizedPublicKeyHashSpend::new(public_key, signature))

@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use common::chain::{
     htlc::HtlcSecret,
@@ -39,7 +39,7 @@ use common::chain::{
 use crypto::key::{
     extended::{ExtendedPrivateKey, ExtendedPublicKey},
     hdkd::{derivable::Derivable, u31::U31},
-    PrivateKey,
+    PrivateKey, SigAuxDataProvider,
 };
 use itertools::Itertools;
 use randomness::make_true_rng;
@@ -65,13 +65,23 @@ use super::{Signer, SignerError, SignerProvider, SignerResult};
 pub struct SoftwareSigner {
     chain_config: Arc<ChainConfig>,
     account_index: U31,
+    sig_aux_data_provider: Mutex<Box<dyn SigAuxDataProvider>>,
 }
 
 impl SoftwareSigner {
     pub fn new(chain_config: Arc<ChainConfig>, account_index: U31) -> Self {
+        Self::new_with_sig_aux_data_provider(chain_config, account_index, Box::new(make_true_rng()))
+    }
+
+    pub fn new_with_sig_aux_data_provider(
+        chain_config: Arc<ChainConfig>,
+        account_index: U31,
+        sig_aux_data_provider: Box<dyn SigAuxDataProvider>,
+    ) -> Self {
         Self {
             chain_config,
             account_index,
+            sig_aux_data_provider: Mutex::new(sig_aux_data_provider),
         }
     }
 
@@ -134,7 +144,7 @@ impl SoftwareSigner {
                                 inputs_utxo_refs,
                                 input_index,
                                 htlc_secret.clone(),
-                                make_true_rng(),
+                                self.sig_aux_data_provider.lock().expect("poisoned mutex").as_mut(),
                             )
                             .map(InputWitness::Standard)
                             .map_err(SignerError::SigningError),
@@ -145,7 +155,7 @@ impl SoftwareSigner {
                                 tx,
                                 inputs_utxo_refs,
                                 input_index,
-                                make_true_rng(),
+                                self.sig_aux_data_provider.lock().expect("poisoned mutex").as_mut(),
                             )
                             .map(InputWitness::Standard)
                             .map_err(SignerError::SigningError),
@@ -227,7 +237,7 @@ impl SoftwareSigner {
                     &challenge,
                     &sighash,
                     current_signatures,
-                    &mut make_true_rng(),
+                    self.sig_aux_data_provider.lock().expect("poisoned mutex").as_mut(),
                 )
                 .map_err(DestinationSigError::ClassicalMultisigSigningFailed)?;
 
@@ -372,7 +382,7 @@ impl Signer for SoftwareSigner {
             &private_key,
             destination,
             message,
-            make_true_rng(),
+            self.sig_aux_data_provider.lock().expect("poisoned mutex").as_mut(),
         )?;
 
         Ok(sig)
@@ -394,7 +404,7 @@ impl Signer for SoftwareSigner {
                 self.get_private_key_for_destination(dest, key_chain, db_tx)?
                     .ok_or(SignerError::DestinationNotFromThisWallet)
             },
-            make_true_rng(),
+            self.sig_aux_data_provider.lock().expect("poisoned mutex").as_mut(),
         )
     }
 }

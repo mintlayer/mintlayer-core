@@ -20,8 +20,6 @@ mod pos;
 mod pow;
 mod validator;
 
-pub use pos::calculate_effective_pool_balance;
-
 use std::{ops::Deref, sync::Arc};
 
 use chainstate_types::{BlockIndex, BlockIndexHandle, GenBlockIndex};
@@ -40,6 +38,7 @@ use common::{
     },
     primitives::{BlockHeight, Id},
 };
+use crypto::key::SigAuxDataProvider;
 use serialization::{Decode, Encode};
 use utils::atomics::RelaxedAtomicBool;
 
@@ -67,6 +66,8 @@ pub use crate::{
     },
     validator::validate_consensus,
 };
+
+pub use pos::calculate_effective_pool_balance;
 
 #[derive(thiserror::Error, Debug, PartialEq, Eq, Clone)]
 pub enum ConsensusCreationError {
@@ -144,7 +145,8 @@ pub fn generate_consensus_data_and_reward_ignore_consensus(
     Ok((consensus_data, block_reward))
 }
 
-pub fn finalize_consensus_data(
+#[allow(clippy::too_many_arguments)]
+pub fn finalize_consensus_data<AuxP: SigAuxDataProvider + ?Sized>(
     chain_config: &ChainConfig,
     block_header: &mut BlockHeader,
     block_height: BlockHeight,
@@ -152,6 +154,7 @@ pub fn finalize_consensus_data(
     max_block_timestamp_for_pos: BlockTimestamp,
     stop_flag: Arc<RelaxedAtomicBool>,
     finalize_data: FinalizeBlockInputData,
+    sig_aux_data_provider: &mut AuxP,
 ) -> Result<SignedBlockHeader, ConsensusCreationError> {
     match chain_config.consensus_upgrades().consensus_status(block_height.next_height()) {
         RequiredConsensus::IgnoreConsensus => Ok(block_header.clone().with_no_signature()),
@@ -183,7 +186,7 @@ pub fn finalize_consensus_data(
                     )?;
 
                     let signed_block_header = stake_private_key
-                        .sign_message(&block_header.encode(), randomness::make_true_rng())
+                        .sign_message(&block_header.encode(), sig_aux_data_provider)
                         .map_err(|_| {
                             ConsensusCreationError::StakingError(
                                 ConsensusPoSError::FailedToSignBlockHeader,

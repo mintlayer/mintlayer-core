@@ -13,49 +13,51 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use rstest::rstest;
 
-use common::chain::ChainConfig;
-use crypto::key::hdkd::u31::U31;
 use test_utils::random::{make_seedable_rng, Seed};
 
-use super::*;
+use crate::signer::tests::{
+    generic_fixed_signature_tests::test_fixed_signatures_generic,
+    generic_tests::{
+        test_sign_message_generic, test_sign_transaction_generic,
+        test_sign_transaction_intent_generic,
+    },
+    make_deterministic_software_signer, make_software_signer, no_another_signer,
+};
 
-fn software_signer(chain_config: Arc<ChainConfig>, account_index: U31) -> SoftwareSigner {
-    SoftwareSigner::new(chain_config, account_index)
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn test_sign_message(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    test_sign_message_generic(&mut rng, make_software_signer, no_another_signer());
 }
 
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn sign_message(#[case] seed: Seed) {
-    use crate::signer::tests::generic_tests::test_sign_message;
-
+fn test_sign_transaction_intent(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
-    test_sign_message(&mut rng, software_signer);
+    test_sign_transaction_intent_generic(&mut rng, make_software_signer, no_another_signer());
 }
 
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn sign_transaction_intent(#[case] seed: Seed) {
-    use crate::signer::tests::generic_tests::test_sign_transaction_intent;
-
+fn test_sign_transaction(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
-    test_sign_transaction_intent(&mut rng, software_signer);
+    test_sign_transaction_generic(&mut rng, make_software_signer, no_another_signer());
 }
 
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn sign_transaction(#[case] seed: Seed) {
-    use crate::signer::tests::generic_tests::test_sign_transaction;
-
+fn test_fixed_signatures(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
-    test_sign_transaction(&mut rng, software_signer);
+    test_fixed_signatures_generic(&mut rng, make_deterministic_software_signer);
 }

@@ -242,7 +242,7 @@ impl BlockProduction {
                                         block_timestamp,
                                         block_height,
                                         make_ancestor_getter(cs),
-                                        randomness::make_true_rng(),
+                                        &mut randomness::make_true_rng(),
                                     )?;
                                 let consensus_data = ConsensusData::PoS(Box::new(consensus_data));
 
@@ -591,6 +591,7 @@ impl BlockProduction {
                     max_block_timestamp_for_pos,
                     stop_flag,
                     finalize_block_data,
+                    &mut randomness::make_true_rng(),
                 )
                 .map_err(BlockProductionError::FailedConsensusInitialization);
 
