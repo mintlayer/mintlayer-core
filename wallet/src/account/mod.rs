@@ -1187,7 +1187,7 @@ impl<K: AccountKeyChains> Account<K> {
         tx_verifier::check_nft_issuance_data(&self.chain_config, &nft_issuance)?;
 
         // the first UTXO is needed in advance to issue a new nft, so just make a dummy one
-        // and then replace it with when we can calculate the pool_id
+        // and then replace it with when we can calculate the token id
         let dummy_token_id = TokenId::new(H256::zero());
         let dummy_issuance_output = TxOutput::IssueNft(
             dummy_token_id,

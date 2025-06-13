@@ -1101,7 +1101,7 @@ where
                 token_ticker,
                 number_of_decimals,
                 metadata_uri,
-                destination_address,
+                authority_address: destination_address,
                 token_supply,
                 is_freezable,
             } => {

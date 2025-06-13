@@ -105,3 +105,9 @@ pub enum Error {
 }
 
 pub type Result<T> = core::result::Result<T, Error>;
+
+impl From<std::convert::Infallible> for Error {
+    fn from(value: std::convert::Infallible) -> Self {
+        match value {}
+    }
+}

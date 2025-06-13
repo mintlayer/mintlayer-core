@@ -52,6 +52,7 @@ where
         },
     }
 }
+
 pub fn get_all_tx_output_destinations<'a, PoolDataGetter>(
     txo: &TxOutput,
     pool_data_getter: &PoolDataGetter,

@@ -19,7 +19,7 @@ use rstest::rstest;
 use serial_test::serial;
 
 use ::test_utils::random::{make_seedable_rng, Seed};
-use common::chain::ChainConfig;
+use common::chain::{ChainConfig, SighashInputCommitmentVersion};
 use crypto::key::{hdkd::u31::U31, PredefinedSigAuxDataProvider};
 use logging::log;
 
@@ -99,16 +99,26 @@ fn test_sign_transaction_intent(#[case] seed: Seed) {
 
 #[rstest]
 #[trace]
-#[case(Seed::from_entropy())]
+#[case(Seed::from_entropy(), SighashInputCommitmentVersion::V0)]
+#[trace]
+#[case(Seed::from_entropy(), SighashInputCommitmentVersion::V1)]
 #[serial]
-fn test_sign_transaction(#[case] seed: Seed) {
-    log::debug!("test_sign_transaction, seed = {seed:?}");
+fn test_sign_transaction(
+    #[case] seed: Seed,
+    #[case] input_commitments_version: SighashInputCommitmentVersion,
+) {
+    log::debug!("test_sign_transaction, seed = {seed:?}, input_commitments_version = {input_commitments_version:?}");
 
     let _join_guard = maybe_spawn_auto_confirmer();
 
     let mut rng = make_seedable_rng(seed);
 
-    test_sign_transaction_generic(&mut rng, make_trezor_signer, no_another_signer());
+    test_sign_transaction_generic(
+        &mut rng,
+        input_commitments_version,
+        make_trezor_signer,
+        no_another_signer(),
+    );
 }
 
 #[rstest]
@@ -163,10 +173,15 @@ fn test_sign_transaction_intent_sig_consistency(#[case] seed: Seed) {
 
 #[rstest]
 #[trace]
-#[case(Seed::from_entropy())]
+#[case(Seed::from_entropy(), SighashInputCommitmentVersion::V0)]
+#[trace]
+#[case(Seed::from_entropy(), SighashInputCommitmentVersion::V1)]
 #[serial]
-fn test_sign_transaction_sig_consistency(#[case] seed: Seed) {
-    log::debug!("test_sign_transaction_sig_consistency, seed = {seed:?}");
+fn test_sign_transaction_sig_consistency(
+    #[case] seed: Seed,
+    #[case] input_commitments_version: SighashInputCommitmentVersion,
+) {
+    log::debug!("test_sign_transaction_sig_consistency, seed = {seed:?}, input_commitments_version = {input_commitments_version:?}");
 
     let _join_guard = maybe_spawn_auto_confirmer();
 
@@ -174,6 +189,7 @@ fn test_sign_transaction_sig_consistency(#[case] seed: Seed) {
 
     test_sign_transaction_generic(
         &mut rng,
+        input_commitments_version,
         make_deterministic_trezor_signer,
         Some(make_deterministic_software_signer),
     );
