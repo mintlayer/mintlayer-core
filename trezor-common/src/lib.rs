@@ -334,13 +334,13 @@ impl UtxoOutPoint {
     }
 }
 
-#[derive(Encode)]
+#[derive(Encode, Decode)]
 pub enum AccountSpending {
     #[codec(index = 0)]
     DelegationBalance(H256, Amount),
 }
 
-#[derive(Encode)]
+#[derive(Encode, Decode)]
 pub struct AccountOutPoint {
     #[codec(compact)]
     pub nonce: u64,
@@ -360,7 +360,7 @@ type TokenId = H256;
 
 // Note: AccountCommandTag is used in the communication between the rust and python parts of the firmware,
 // which expects its values to be the same as in the protobuf-generated MintlayerAccountCommandType.
-#[derive(Encode, EnumDiscriminants)]
+#[derive(Encode, Decode, EnumDiscriminants)]
 #[strum_discriminants(name(AccountCommandTag), derive(EnumIter, FromPrimitive))]
 pub enum AccountCommand {
     // Create certain amount of tokens and add them to circulating supply
@@ -393,7 +393,7 @@ pub enum AccountCommand {
     ChangeTokenMetadataUri(TokenId, parity_scale_codec::alloc::vec::Vec<u8>),
 }
 
-#[derive(Encode, EnumDiscriminants)]
+#[derive(Encode, Decode, EnumDiscriminants)]
 #[strum_discriminants(name(OrderAccountCommandTag), derive(EnumIter))]
 pub enum OrderAccountCommand {
     // Satisfy an order completely or partially.
@@ -411,7 +411,7 @@ pub enum OrderAccountCommand {
     ConcludeOrder(OrderId),
 }
 
-#[derive(Encode)]
+#[derive(Encode, Decode)]
 pub enum TxInput {
     #[codec(index = 0)]
     Utxo(UtxoOutPoint),

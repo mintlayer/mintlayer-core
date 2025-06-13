@@ -13,11 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use parity_scale_codec::Encode;
+use parity_scale_codec::{Decode, Encode};
 
 use crate::{Amount, OutputValue, TxOutput};
 
-#[derive(Encode)]
+#[derive(Encode, Decode)]
 pub enum SighashInputCommitment {
     #[codec(index = 0)]
     None,
