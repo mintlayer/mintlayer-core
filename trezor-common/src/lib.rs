@@ -139,7 +139,7 @@ pub enum Destination {
     ClassicMultisig(PublicKeyHash),
 }
 
-#[derive(Encode)]
+#[derive(Encode, Decode)]
 pub enum TokenIssuance {
     #[codec(index = 1)]
     V1(TokenIssuanceV1),
@@ -164,7 +164,7 @@ pub enum TokenTotalSupply {
     Unlimited, // limited only by the Amount data type
 }
 
-#[derive(Encode)]
+#[derive(Encode, Decode)]
 pub struct TokenIssuanceV1 {
     pub token_ticker: parity_scale_codec::alloc::vec::Vec<u8>,
     pub number_of_decimals: u8,
@@ -174,18 +174,18 @@ pub struct TokenIssuanceV1 {
     pub is_freezable: IsTokenFreezable,
 }
 
-#[derive(Encode)]
+#[derive(Encode, Decode)]
 pub enum NftIssuance {
     #[codec(index = 0)]
     V0(NftIssuanceV0),
 }
 
-#[derive(Encode)]
+#[derive(Encode, Decode)]
 pub struct NftIssuanceV0 {
     pub metadata: Metadata,
 }
 
-#[derive(Encode)]
+#[derive(Encode, Decode)]
 pub struct Metadata {
     pub creator: Option<PublicKeyHolder>,
     pub name: parity_scale_codec::alloc::vec::Vec<u8>,
@@ -197,7 +197,7 @@ pub struct Metadata {
     pub media_hash: parity_scale_codec::alloc::vec::Vec<u8>,
 }
 
-#[derive(Encode)]
+#[derive(Encode, Decode)]
 pub struct OrderData {
     /// The key that can authorize conclusion of an order
     pub conclude_key: Destination,
@@ -209,7 +209,7 @@ pub struct OrderData {
     pub give: OutputValue,
 }
 
-#[derive(Encode)]
+#[derive(Encode, Decode)]
 pub enum TxOutput {
     /// Transfer an output, giving the provided Destination the authority to
     /// spend it (no conditions)
@@ -249,7 +249,7 @@ pub enum TxOutput {
     CreateOrder(OrderData),
 }
 
-#[derive(Encode)]
+#[derive(Encode, Decode)]
 pub struct HashedTimelockContract {
     // can be spent either by a specific address that knows the secret
     pub secret_hash: HtlcSecretHash,
@@ -298,13 +298,13 @@ impl UtxoOutPoint {
     }
 }
 
-#[derive(Encode)]
+#[derive(Encode, Decode)]
 pub enum AccountSpending {
     #[codec(index = 0)]
     DelegationBalance(H256, Amount),
 }
 
-#[derive(Encode)]
+#[derive(Encode, Decode)]
 pub struct AccountOutPoint {
     #[codec(compact)]
     pub nonce: u64,
@@ -322,7 +322,7 @@ pub enum IsTokenUnfreezable {
 type OrderId = H256;
 type TokenId = H256;
 
-#[derive(Encode, EnumDiscriminants)]
+#[derive(Encode, Decode, EnumDiscriminants)]
 #[strum_discriminants(name(AccountCommandTag), derive(EnumIter, FromPrimitive))]
 pub enum AccountCommand {
     // Create certain amount of tokens and add them to circulating supply
@@ -355,7 +355,7 @@ pub enum AccountCommand {
     ChangeTokenMetadataUri(TokenId, parity_scale_codec::alloc::vec::Vec<u8>),
 }
 
-#[derive(Encode, EnumDiscriminants)]
+#[derive(Encode, Decode, EnumDiscriminants)]
 #[strum_discriminants(name(OrderCommandTag), derive(EnumIter, FromPrimitive))]
 pub enum OrderAccountCommand {
     // Satisfy an order completely or partially.
@@ -373,7 +373,7 @@ pub enum OrderAccountCommand {
     ConcludeOrder(OrderId),
 }
 
-#[derive(Encode)]
+#[derive(Encode, Decode)]
 pub enum TxInput {
     #[codec(index = 0)]
     Utxo(UtxoOutPoint),
