@@ -176,6 +176,18 @@ The current block height information is used in case a network upgrade changed t
 
 Returns the Fungible/NFT Token ID for the given inputs of a transaction
 
+### Function: `get_order_id`
+
+Returns the Order ID for the given inputs of a transaction
+
+### Function: `get_delegation_id`
+
+Returns the Delegation ID for the given inputs of a transaction
+
+### Function: `get_pool_id`
+
+Returns the Pool ID for the given inputs of a transaction
+
 ### Function: `data_deposit_fee`
 
 Returns the fee that needs to be paid by a transaction for issuing a data deposit

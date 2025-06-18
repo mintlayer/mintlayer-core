@@ -42,7 +42,7 @@ use common::{
         classic_multisig::ClassicMultisigChallenge,
         config::{Builder, BIP44_PATH},
         htlc::HtlcSecret,
-        make_token_id,
+        make_delegation_id, make_order_id, make_pool_id, make_token_id,
         signature::{
             inputsig::{
                 arbitrary_message::{produce_message_challenge, ArbitraryMessageSignature},
@@ -544,6 +544,48 @@ pub fn get_token_id(
         BlockHeight::new(current_block_height),
         &inputs,
     )?;
+
+    Ok(Address::new(&chain_config, token_id)
+        .expect("Should not fail to create address")
+        .to_string())
+}
+
+/// Returns the Order ID for the given inputs of a transaction
+#[wasm_bindgen]
+pub fn get_order_id(inputs: &[u8], network: Network) -> Result<String, Error> {
+    let chain_config = Builder::new(network.into()).build();
+
+    let inputs = decode_raw_array::<TxInput>(inputs).map_err(Error::InvalidInputEncoding)?;
+
+    let token_id = make_order_id(&inputs)?;
+
+    Ok(Address::new(&chain_config, token_id)
+        .expect("Should not fail to create address")
+        .to_string())
+}
+
+/// Returns the Delegation ID for the given inputs of a transaction
+#[wasm_bindgen]
+pub fn get_delegation_id(inputs: &[u8], network: Network) -> Result<String, Error> {
+    let chain_config = Builder::new(network.into()).build();
+
+    let inputs = decode_raw_array::<TxInput>(inputs).map_err(Error::InvalidInputEncoding)?;
+
+    let token_id = make_delegation_id(&inputs)?;
+
+    Ok(Address::new(&chain_config, token_id)
+        .expect("Should not fail to create address")
+        .to_string())
+}
+
+/// Returns the Pool ID for the given inputs of a transaction
+#[wasm_bindgen]
+pub fn get_pool_id(inputs: &[u8], network: Network) -> Result<String, Error> {
+    let chain_config = Builder::new(network.into()).build();
+
+    let inputs = decode_raw_array::<TxInput>(inputs).map_err(Error::InvalidInputEncoding)?;
+
+    let token_id = make_pool_id(&inputs)?;
 
     Ok(Address::new(&chain_config, token_id)
         .expect("Should not fail to create address")
