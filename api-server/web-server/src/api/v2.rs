@@ -448,27 +448,59 @@ pub async fn transactions<T: ApiServerStorage>(
     Query(params): Query<BTreeMap<String, String>>,
     State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
+    const BEFORE_ORDER_NUMBER: &str = "before_order_number";
+    let before_order_number = params
+        .get(BEFORE_ORDER_NUMBER)
+        .map(|order_number| u64::from_str(order_number))
+        .transpose()
+        .map_err(|_| {
+            ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidOrderNumber)
+        })?
+        .unwrap_or_default();
     let offset_and_items = get_offset_and_items(&params)?;
 
-    let txs = state
-        .db
-        .transaction_ro()
-        .await
-        .map_err(|e| {
-            logging::log::error!("internal error: {e}");
-            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
-        })?
-        .get_transactions_with_block(offset_and_items.items, offset_and_items.offset)
-        .await
-        .map_err(|e| {
-            logging::log::error!("internal error: {e}");
-            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
-        })?;
+    // only 1 can be non zero
+    ensure!(
+        !(before_order_number != 0 && offset_and_items.offset != 0),
+        ApiServerWebServerError::ClientError(
+            ApiServerWebServerClientError::InvalidOffsetAndOrderNumber
+        )
+    );
+
+    let db_tx = state.db.transaction_ro().await.map_err(|e| {
+        logging::log::error!("internal error: {e}");
+        ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+    })?;
+
+    let txs = if before_order_number != 0 {
+        db_tx
+            .get_transactions_with_block_by_order_number(
+                offset_and_items.items,
+                before_order_number,
+            )
+            .await
+    } else {
+        db_tx
+            .get_transactions_with_block(offset_and_items.items, offset_and_items.offset)
+            .await
+    }
+    .map_err(|e| {
+        logging::log::error!("internal error: {e}");
+        ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+    })?;
 
     let tip_height = best_block(&state).await?.block_height();
     let txs = txs
         .into_iter()
-        .map(|(block, tx)| to_tx_json_with_block_info(&tx, &state.chain_config, tip_height, block))
+        .map(|tx| {
+            to_tx_json_with_block_info(
+                &tx.tx_info,
+                &state.chain_config,
+                tip_height,
+                tx.block_aux,
+                tx.order_number,
+            )
+        })
         .collect();
 
     Ok(Json(serde_json::Value::Array(txs)))
