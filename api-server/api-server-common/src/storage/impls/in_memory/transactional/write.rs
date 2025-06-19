@@ -19,7 +19,8 @@ use crate::storage::storage_api::{
     block_aux_data::{BlockAuxData, BlockWithExtraData},
     AmountWithDecimals, ApiServerStorageError, ApiServerStorageRead, ApiServerStorageWrite,
     BlockInfo, CoinOrTokenStatistic, Delegation, FungibleTokenData, LockedUtxo, NftWithOwner,
-    Order, PoolBlockStats, PoolDataWithExtraInfo, TransactionInfo, Utxo, UtxoWithExtraInfo,
+    Order, PoolBlockStats, PoolDataWithExtraInfo, TransactionInfo, TransactionWithBlockInfo, Utxo,
+    UtxoWithExtraInfo,
 };
 use common::{
     address::Address,
@@ -125,10 +126,12 @@ impl ApiServerStorageWrite for ApiServerInMemoryStorageTransactionalRw<'_> {
     async fn set_transaction(
         &mut self,
         transaction_id: Id<Transaction>,
+        order_number: u64,
         owning_block: Id<Block>,
         transaction: &TransactionInfo,
     ) -> Result<(), ApiServerStorageError> {
-        self.transaction.set_transaction(transaction_id, owning_block, transaction)
+        self.transaction
+            .set_transaction(transaction_id, order_number, owning_block, transaction)
     }
 
     async fn set_block_aux_data(
@@ -399,8 +402,20 @@ impl ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRw<'_> {
         &self,
         len: u32,
         offset: u32,
-    ) -> Result<Vec<(BlockAuxData, TransactionInfo)>, ApiServerStorageError> {
+    ) -> Result<Vec<TransactionWithBlockInfo>, ApiServerStorageError> {
         self.transaction.get_transactions_with_block(len, offset)
+    }
+
+    async fn get_transactions_with_block_by_order_number(
+        &self,
+        len: u32,
+        order_number: u64,
+    ) -> Result<Vec<TransactionWithBlockInfo>, ApiServerStorageError> {
+        self.transaction.get_transactions_with_block_by_order_number(len, order_number)
+    }
+
+    async fn get_last_transaction_order_number(&self) -> Result<u64, ApiServerStorageError> {
+        self.transaction.get_last_transaction_order_number()
     }
 
     async fn get_pool_data(
