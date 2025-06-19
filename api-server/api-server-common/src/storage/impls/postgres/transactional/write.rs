@@ -31,7 +31,8 @@ use crate::storage::{
         block_aux_data::{BlockAuxData, BlockWithExtraData},
         AmountWithDecimals, ApiServerStorageError, ApiServerStorageRead, ApiServerStorageWrite,
         BlockInfo, CoinOrTokenStatistic, Delegation, FungibleTokenData, LockedUtxo, NftWithOwner,
-        Order, PoolBlockStats, PoolDataWithExtraInfo, TransactionInfo, Utxo, UtxoWithExtraInfo,
+        Order, PoolBlockStats, PoolDataWithExtraInfo, TransactionInfo, TransactionWithBlockInfo,
+        Utxo, UtxoWithExtraInfo,
     },
 };
 
@@ -148,11 +149,13 @@ impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'_> {
     async fn set_transaction(
         &mut self,
         transaction_id: Id<Transaction>,
+        order_number: u64,
         owning_block: Id<Block>,
         transaction: &TransactionInfo,
     ) -> Result<(), ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
-        conn.set_transaction(transaction_id, owning_block, transaction).await?;
+        conn.set_transaction(transaction_id, order_number, owning_block, transaction)
+            .await?;
 
         Ok(())
     }
@@ -511,9 +514,31 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
         &self,
         len: u32,
         offset: u32,
-    ) -> Result<Vec<(BlockAuxData, TransactionInfo)>, ApiServerStorageError> {
+    ) -> Result<Vec<TransactionWithBlockInfo>, ApiServerStorageError> {
         let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_transactions_with_block(len, offset).await?;
+
+        Ok(res)
+    }
+
+    async fn get_transactions_with_block_before_tx_global_index(
+        &self,
+        len: u32,
+        tx_global_index: u64,
+    ) -> Result<Vec<TransactionWithBlockInfo>, ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn
+            .get_transactions_with_block_before_tx_global_index(len, tx_global_index)
+            .await?;
+
+        Ok(res)
+    }
+
+    async fn get_last_transaction_global_index(
+        &self,
+    ) -> Result<Option<u64>, ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_last_transaction_global_index().await?;
 
         Ok(res)
     }

@@ -459,6 +459,7 @@ pub fn to_tx_json_with_block_info(
     chain_config: &ChainConfig,
     tip_height: BlockHeight,
     block: BlockAuxData,
+    tx_global_index: u64,
 ) -> serde_json::Value {
     let mut json = tx_to_json(tx.tx.transaction(), &tx.additional_info, chain_config);
     let obj = json.as_object_mut().expect("object");
@@ -477,6 +478,7 @@ pub fn to_tx_json_with_block_info(
         "confirmations".into(),
         confirmations.map_or("".to_string(), |c| c.to_string()).into(),
     );
+    obj.insert("tx_global_index".into(), tx_global_index.to_string().into());
     json
 }
 

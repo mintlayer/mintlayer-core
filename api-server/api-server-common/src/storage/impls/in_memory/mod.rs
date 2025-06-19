@@ -19,7 +19,7 @@ use crate::storage::storage_api::{
     block_aux_data::{BlockAuxData, BlockWithExtraData},
     AmountWithDecimals, ApiServerStorageError, BlockInfo, CoinOrTokenStatistic, Delegation,
     FungibleTokenData, LockedUtxo, NftWithOwner, Order, PoolBlockStats, PoolDataWithExtraInfo,
-    TransactionInfo, Utxo, UtxoLock, UtxoWithExtraInfo,
+    TransactionInfo, TransactionWithBlockInfo, Utxo, UtxoLock, UtxoWithExtraInfo,
 };
 use common::{
     address::Address,
@@ -29,7 +29,7 @@ use common::{
         Block, ChainConfig, DelegationId, Destination, Genesis, OrderId, PoolId, Transaction,
         UtxoOutPoint,
     },
-    primitives::{id::WithId, Amount, BlockHeight, CoinOrTokenId, Id},
+    primitives::{id::WithId, Amount, BlockHeight, CoinOrTokenId, Id, Idable},
 };
 use std::{
     cmp::Reverse,
@@ -51,6 +51,7 @@ struct ApiServerInMemoryStorage {
     main_chain_blocks_table: BTreeMap<BlockHeight, Id<Block>>,
     pool_data_table: BTreeMap<PoolId, BTreeMap<BlockHeight, PoolDataWithExtraInfo>>,
     transaction_table: BTreeMap<Id<Transaction>, (Id<Block>, TransactionInfo)>,
+    ordered_transaction_table: BTreeMap<u64, Id<Transaction>>,
     utxo_table: BTreeMap<UtxoOutPoint, BTreeMap<BlockHeight, Utxo>>,
     address_utxos: BTreeMap<String, BTreeSet<UtxoOutPoint>>,
     locked_utxo_table: BTreeMap<UtxoOutPoint, BTreeMap<BlockHeight, LockedUtxo>>,
@@ -78,6 +79,7 @@ impl ApiServerInMemoryStorage {
             main_chain_blocks_table: BTreeMap::new(),
             pool_data_table: BTreeMap::new(),
             transaction_table: BTreeMap::new(),
+            ordered_transaction_table: BTreeMap::new(),
             utxo_table: BTreeMap::new(),
             address_utxos: BTreeMap::new(),
             locked_utxo_table: BTreeMap::new(),
@@ -198,7 +200,7 @@ impl ApiServerInMemoryStorage {
         &self,
         len: u32,
         offset: u32,
-    ) -> Result<Vec<(BlockAuxData, TransactionInfo)>, ApiServerStorageError> {
+    ) -> Result<Vec<TransactionWithBlockInfo>, ApiServerStorageError> {
         Ok(self
             .main_chain_blocks_table
             .values()
@@ -208,19 +210,53 @@ impl ApiServerInMemoryStorage {
                 let block = self.block_table.get(block_id).expect("must exist");
                 block.block.transactions().iter().zip(block.tx_additional_infos.iter()).map(
                     |(tx, additinal_data)| {
-                        (
-                            *block_aux,
-                            TransactionInfo {
+                        let tx_global_index = self
+                            .ordered_transaction_table
+                            .iter()
+                            .find(|(_, tx_id)| **tx_id == tx.transaction().get_id())
+                            .expect("must exist")
+                            .0;
+
+                        TransactionWithBlockInfo {
+                            tx_info: TransactionInfo {
                                 tx: tx.clone(),
                                 additional_info: additinal_data.clone(),
                             },
-                        )
+                            block_aux: *block_aux,
+                            global_tx_index: *tx_global_index,
+                        }
                     },
                 )
             })
             .skip(offset as usize)
             .take(len as usize)
             .collect())
+    }
+
+    fn get_transactions_with_block_before_tx_global_index(
+        &self,
+        len: u32,
+        tx_global_index: u64,
+    ) -> Result<Vec<TransactionWithBlockInfo>, ApiServerStorageError> {
+        Ok(self
+            .ordered_transaction_table
+            .range(..tx_global_index)
+            .rev()
+            .take(len as usize)
+            .map(|(tx_global_index, tx_id)| {
+                let (block_id, tx_info) = self.transaction_table.get(tx_id).expect("must exist");
+                let block_aux = self.block_aux_data_table.get(block_id).expect("must exist");
+                TransactionWithBlockInfo {
+                    tx_info: tx_info.clone(),
+                    block_aux: *block_aux,
+                    global_tx_index: *tx_global_index,
+                }
+            })
+            .collect())
+    }
+
+    fn get_last_transaction_global_indeex(&self) -> Result<Option<u64>, ApiServerStorageError> {
+        Ok(self.ordered_transaction_table.keys().last().copied())
     }
 
     #[allow(clippy::type_complexity)]
@@ -971,6 +1007,7 @@ impl ApiServerInMemoryStorage {
     fn set_transaction(
         &mut self,
         transaction_id: Id<Transaction>,
+        tx_global_index: u64,
         owning_block: Id<Block>,
         transaction: &TransactionInfo,
     ) -> Result<(), ApiServerStorageError> {
@@ -983,6 +1020,7 @@ impl ApiServerInMemoryStorage {
 
         self.transaction_table
             .insert(transaction_id, (owning_block, transaction.clone()));
+        self.ordered_transaction_table.insert(tx_global_index, transaction_id);
         Ok(())
     }
 

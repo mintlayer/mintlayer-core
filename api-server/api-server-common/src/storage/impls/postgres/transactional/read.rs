@@ -26,8 +26,8 @@ use crate::storage::{
     storage_api::{
         block_aux_data::BlockAuxData, AmountWithDecimals, ApiServerStorageError,
         ApiServerStorageRead, BlockInfo, CoinOrTokenStatistic, Delegation, FungibleTokenData,
-        NftWithOwner, Order, PoolBlockStats, PoolDataWithExtraInfo, TransactionInfo, Utxo,
-        UtxoWithExtraInfo,
+        NftWithOwner, Order, PoolBlockStats, PoolDataWithExtraInfo, TransactionInfo,
+        TransactionWithBlockInfo, Utxo, UtxoWithExtraInfo,
     },
 };
 use std::collections::BTreeMap;
@@ -198,9 +198,31 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRo<'_> {
         &self,
         len: u32,
         offset: u32,
-    ) -> Result<Vec<(BlockAuxData, TransactionInfo)>, ApiServerStorageError> {
+    ) -> Result<Vec<TransactionWithBlockInfo>, ApiServerStorageError> {
         let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_transactions_with_block(len, offset).await?;
+
+        Ok(res)
+    }
+
+    async fn get_transactions_with_block_before_tx_global_index(
+        &self,
+        len: u32,
+        order_number: u64,
+    ) -> Result<Vec<TransactionWithBlockInfo>, ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn
+            .get_transactions_with_block_before_tx_global_index(len, order_number)
+            .await?;
+
+        Ok(res)
+    }
+
+    async fn get_last_transaction_global_index(
+        &self,
+    ) -> Result<Option<u64>, ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_last_transaction_global_index().await?;
 
         Ok(res)
     }

@@ -448,27 +448,61 @@ pub async fn transactions<T: ApiServerStorage>(
     Query(params): Query<BTreeMap<String, String>>,
     State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
+    const BEFORE_TX_GLOBAL_INDEX: &str = "before_tx_global_index";
+    let before_tx_global_index = params
+        .get(BEFORE_TX_GLOBAL_INDEX)
+        .map(|tx_global_index| u64::from_str(tx_global_index))
+        .transpose()
+        .map_err(|_| {
+            ApiServerWebServerError::ClientError(
+                ApiServerWebServerClientError::InvalidTxGlobalIndex,
+            )
+        })?
+        .unwrap_or_default();
     let offset_and_items = get_offset_and_items(&params)?;
 
-    let txs = state
-        .db
-        .transaction_ro()
-        .await
-        .map_err(|e| {
-            logging::log::error!("internal error: {e}");
-            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
-        })?
-        .get_transactions_with_block(offset_and_items.items, offset_and_items.offset)
-        .await
-        .map_err(|e| {
-            logging::log::error!("internal error: {e}");
-            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
-        })?;
+    // only 1 can be non zero
+    ensure!(
+        !(before_tx_global_index != 0 && offset_and_items.offset != 0),
+        ApiServerWebServerError::ClientError(
+            ApiServerWebServerClientError::InvalidOffsetAndTxGlobalIndex
+        )
+    );
+
+    let db_tx = state.db.transaction_ro().await.map_err(|e| {
+        logging::log::error!("internal error: {e}");
+        ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+    })?;
+
+    let txs = if before_tx_global_index != 0 {
+        db_tx
+            .get_transactions_with_block_before_tx_global_index(
+                offset_and_items.items,
+                before_tx_global_index,
+            )
+            .await
+    } else {
+        db_tx
+            .get_transactions_with_block(offset_and_items.items, offset_and_items.offset)
+            .await
+    }
+    .map_err(|e| {
+        logging::log::error!("internal error: {e}");
+        ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+    })?;
 
     let tip_height = best_block(&state).await?.block_height();
     let txs = txs
         .into_iter()
-        .map(|(block, tx)| to_tx_json_with_block_info(&tx, &state.chain_config, tip_height, block))
+        .map(|tx| {
+            to_tx_json_with_block_info(
+                &tx.tx_info,
+                &state.chain_config,
+                tip_height,
+                tx.block_aux,
+                tx.global_tx_index,
+            )
+        })
         .collect();
 
     Ok(Json(serde_json::Value::Array(txs)))

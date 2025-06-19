@@ -544,6 +544,13 @@ pub struct TransactionInfo {
     pub additional_info: TxAdditionalInfo,
 }
 
+#[derive(Debug, Clone)]
+pub struct TransactionWithBlockInfo {
+    pub tx_info: TransactionInfo,
+    pub block_aux: BlockAuxData,
+    pub global_tx_index: u64,
+}
+
 pub struct PoolBlockStats {
     pub block_count: u64,
 }
@@ -663,7 +670,16 @@ pub trait ApiServerStorageRead: Sync {
         &self,
         len: u32,
         offset: u32,
-    ) -> Result<Vec<(BlockAuxData, TransactionInfo)>, ApiServerStorageError>;
+    ) -> Result<Vec<TransactionWithBlockInfo>, ApiServerStorageError>;
+
+    async fn get_transactions_with_block_before_tx_global_index(
+        &self,
+        len: u32,
+        tx_global_index: u64,
+    ) -> Result<Vec<TransactionWithBlockInfo>, ApiServerStorageError>;
+
+    async fn get_last_transaction_global_index(&self)
+        -> Result<Option<u64>, ApiServerStorageError>;
 
     async fn get_utxo(&self, outpoint: UtxoOutPoint)
         -> Result<Option<Utxo>, ApiServerStorageError>;
@@ -811,6 +827,7 @@ pub trait ApiServerStorageWrite: ApiServerStorageRead {
     async fn set_transaction(
         &mut self,
         transaction_id: Id<Transaction>,
+        tx_global_index: u64,
         owning_block: Id<Block>,
         transaction: &TransactionInfo,
     ) -> Result<(), ApiServerStorageError>;
