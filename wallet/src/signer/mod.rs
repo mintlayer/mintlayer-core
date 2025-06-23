@@ -93,6 +93,8 @@ pub enum SignerError {
     AddressError(#[from] AddressError),
     #[error("Order was filled more than the available balance")]
     OrderFillUnderflow,
+    #[error("Multisig HTLC destination expected")]
+    HtlcMultisigDestinationExpected,
 }
 
 type SignerResult<T> = Result<T, SignerError>;
