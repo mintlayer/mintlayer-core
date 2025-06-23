@@ -49,6 +49,7 @@ use common::{
 use crypto::{key::PrivateKey, vrf::VRFPrivateKey};
 use randomness::{CryptoRng, Rng};
 use utils::atomics::SeqCstAtomicU64;
+use utxo::Utxo;
 
 /// The `Chainstate` wrapper that simplifies operations and checks in the tests.
 #[must_use]
@@ -590,11 +591,12 @@ impl TestFramework {
         self.best_block_height().next_height()
     }
 
+    pub fn utxo(&self, outpoint: &UtxoOutPoint) -> Utxo {
+        self.chainstate.utxo(outpoint).unwrap().unwrap()
+    }
+
     pub fn coin_amount_from_utxo(&self, outpoint: &UtxoOutPoint) -> Amount {
-        get_output_value(self.chainstate.utxo(outpoint).unwrap().unwrap().output())
-            .unwrap()
-            .coin_amount()
-            .unwrap()
+        get_output_value(self.utxo(outpoint).output()).unwrap().coin_amount().unwrap()
     }
 }
 
