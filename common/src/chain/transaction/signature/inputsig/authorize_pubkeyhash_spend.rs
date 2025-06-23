@@ -29,7 +29,7 @@ pub struct AuthorizedPublicKeyHashSpend {
 impl AuthorizedPublicKeyHashSpend {
     pub fn from_data<T: AsRef<[u8]>>(data: T) -> Result<Self, DestinationSigError> {
         let decoded = AuthorizedPublicKeyHashSpend::decode_all(&mut data.as_ref())
-            .map_err(|e| DestinationSigError::AddressAuthDecodingFailed(e.to_string()))?;
+            .map_err(DestinationSigError::AddressAuthDecodingFailed)?;
         Ok(decoded)
     }
 
@@ -38,6 +38,10 @@ impl AuthorizedPublicKeyHashSpend {
             public_key,
             signature,
         }
+    }
+
+    pub fn signature(&self) -> &Signature {
+        &self.signature
     }
 }
 
