@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use randomness::{CryptoRng, Rng};
+use crypto::key::SigAuxDataProvider;
 use serialization::Encode;
 
 use standard_signature::StandardInputSignature;
@@ -28,7 +28,7 @@ use super::{
 };
 
 #[allow(clippy::too_many_arguments)]
-pub fn produce_uniparty_signature_for_htlc_input<T: Signable, R: Rng + CryptoRng>(
+pub fn produce_uniparty_signature_for_htlc_input<T: Signable, AuxP: SigAuxDataProvider + ?Sized>(
     private_key: &crypto::key::PrivateKey,
     sighash_type: SigHashType,
     outpoint_destination: Destination,
@@ -36,7 +36,7 @@ pub fn produce_uniparty_signature_for_htlc_input<T: Signable, R: Rng + CryptoRng
     inputs_utxos: &[Option<&TxOutput>],
     input_num: usize,
     htlc_secret: HtlcSecret,
-    rng: R,
+    sig_aux_data_provider: &mut AuxP,
 ) -> Result<StandardInputSignature, DestinationSigError> {
     let sig = StandardInputSignature::produce_uniparty_signature_for_input(
         private_key,
@@ -45,7 +45,7 @@ pub fn produce_uniparty_signature_for_htlc_input<T: Signable, R: Rng + CryptoRng
         tx,
         inputs_utxos,
         input_num,
-        rng,
+        sig_aux_data_provider,
     )?;
 
     let sig_with_secret =

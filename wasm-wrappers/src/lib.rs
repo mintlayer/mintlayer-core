@@ -244,7 +244,7 @@ pub fn sign_message_for_spending(private_key: &[u8], message: &[u8]) -> Result<V
     let private_key =
         PrivateKey::decode_all(&mut &private_key[..]).map_err(Error::InvalidPrivateKeyEncoding)?;
     let signature = private_key
-        .sign_message(message, randomness::make_true_rng())
+        .sign_message(message, &mut randomness::make_true_rng())
         .map_err(Error::SignMessageError)?;
     Ok(signature.encode())
 }
@@ -278,7 +278,7 @@ pub fn sign_challenge(private_key: &[u8], message: &[u8]) -> Result<Vec<u8>, Err
     let signature = ArbitraryMessageSignature::produce_uniparty_signature_as_pub_key_hash_spending(
         &private_key,
         message,
-        randomness::make_true_rng(),
+        &mut randomness::make_true_rng(),
     )
     .map_err(Error::ArbitraryMessageSigningError)?;
     Ok(signature.into_raw())
@@ -696,7 +696,7 @@ pub fn encode_witness(
         &tx,
         &utxos,
         input_index as usize,
-        randomness::make_true_rng(),
+        &mut randomness::make_true_rng(),
     )
     .map(InputWitness::Standard)
     .map_err(Error::InputSigningError)?;
@@ -743,7 +743,7 @@ pub fn encode_witness_htlc_secret(
         &utxos,
         input_index as usize,
         secret,
-        randomness::make_true_rng(),
+        &mut randomness::make_true_rng(),
     )
     .map(InputWitness::Standard)
     .map_err(Error::InputSigningError)?;
