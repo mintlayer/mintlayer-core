@@ -39,7 +39,7 @@ use crate::storage::{
         block_aux_data::{BlockAuxData, BlockWithExtraData},
         AmountWithDecimals, ApiServerStorageError, BlockInfo, CoinOrTokenStatistic, Delegation,
         FungibleTokenData, LockedUtxo, NftWithOwner, Order, PoolBlockStats, PoolDataWithExtraInfo,
-        TransactionInfo, Utxo, UtxoWithExtraInfo,
+        TransactionInfo, TransactionWithBlockInfo, Utxo, UtxoWithExtraInfo,
     },
 };
 
@@ -81,6 +81,11 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .as_int_seconds()
             .try_into()
             .map_err(|_| ApiServerStorageError::TimestampTooHigh(block_timestamp))
+    }
+
+    fn order_number_to_postgres_friendly(order_number: u64) -> i64 {
+        // Postgres doesn't like u64, so we have to convert it to i64
+        order_number.try_into().unwrap_or_else(|e| panic!("Invalid block height: {e}"))
     }
 
     pub async fn is_initialized(&mut self) -> Result<bool, ApiServerStorageError> {
@@ -670,6 +675,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         self.just_execute(
             "CREATE TABLE ml.transactions (
                     transaction_id bytea PRIMARY KEY,
+                    order_number bigint NOT NULL,
                     owning_block_id bytea NOT NULL REFERENCES ml.blocks(block_id),
                     transaction_data bytea NOT NULL
                 );", // block_id can be null if the transaction is not in the main chain
@@ -1777,7 +1783,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         &self,
         len: u32,
         offset: u32,
-    ) -> Result<Vec<(BlockAuxData, TransactionInfo)>, ApiServerStorageError> {
+    ) -> Result<Vec<TransactionWithBlockInfo>, ApiServerStorageError> {
         let len = len as i64;
         let offset = offset as i64;
         let rows = self
@@ -1786,7 +1792,8 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 r#"
                 SELECT
                     t.transaction_data,
-                    b.aux_data
+                    b.aux_data,
+                    t.order_number
                 FROM
                     ml.blocks mb
                 INNER JOIN
@@ -1807,8 +1814,9 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .map(|data| {
                 let transaction_data: Vec<u8> = data.get(0);
                 let block_data: Vec<u8> = data.get(1);
+                let order_number: i64 = data.get(2);
 
-                let block_data =
+                let block_aux =
                     BlockAuxData::decode_all(&mut block_data.as_slice()).map_err(|e| {
                         ApiServerStorageError::DeserializationError(format!(
                             "Block deserialization failed: {}",
@@ -1816,21 +1824,107 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                         ))
                     })?;
 
-                let transaction = TransactionInfo::decode_all(&mut transaction_data.as_slice())
+                let tx_info = TransactionInfo::decode_all(&mut transaction_data.as_slice())
                     .map_err(|e| {
                         ApiServerStorageError::DeserializationError(format!(
                             "Transaction deserialization failed: {e}"
                         ))
                     })?;
 
-                Ok((block_data, transaction))
+                Ok(TransactionWithBlockInfo {
+                    tx_info,
+                    block_aux,
+                    order_number: order_number as u64,
+                })
             })
             .collect()
+    }
+
+    pub async fn get_transactions_with_block_by_order_number(
+        &self,
+        len: u32,
+        order_number: u64,
+    ) -> Result<Vec<TransactionWithBlockInfo>, ApiServerStorageError> {
+        let len = len as i64;
+        let order_number = Self::order_number_to_postgres_friendly(order_number);
+        let rows = self
+            .tx
+            .query(
+                r#"
+                SELECT
+                    t.transaction_data,
+                    b.aux_data,
+                    t.order_number
+                FROM
+                    ml.transactions t
+                INNER JOIN
+                    ml.block_aux_data b ON t.owning_block_id = b.block_id
+                WHERE t.order_number < $1
+                ORDER BY t.order_number DESC
+                LIMIT $2;
+                "#,
+                &[&order_number, &len],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        rows.into_iter()
+            .map(|data| {
+                let transaction_data: Vec<u8> = data.get(0);
+                let block_data: Vec<u8> = data.get(1);
+                let order_number: i64 = data.get(2);
+
+                let block_aux =
+                    BlockAuxData::decode_all(&mut block_data.as_slice()).map_err(|e| {
+                        ApiServerStorageError::DeserializationError(format!(
+                            "Block deserialization failed: {}",
+                            e
+                        ))
+                    })?;
+
+                let tx_info = TransactionInfo::decode_all(&mut transaction_data.as_slice())
+                    .map_err(|e| {
+                        ApiServerStorageError::DeserializationError(format!(
+                            "Transaction deserialization failed: {e}"
+                        ))
+                    })?;
+
+                Ok(TransactionWithBlockInfo {
+                    tx_info,
+                    block_aux,
+                    order_number: order_number as u64,
+                })
+            })
+            .collect()
+    }
+
+    pub async fn get_last_transaction_order_number(&self) -> Result<u64, ApiServerStorageError> {
+        let row = self
+            .tx
+            .query_opt(
+                r#"
+                SELECT
+                    MAX(t.order_number)
+                FROM
+                    ml.transactions t;
+                "#,
+                &[],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        if let Some(row) = row {
+            let last_order_number: i64 = row.get(0);
+            Ok(last_order_number as u64)
+        } else {
+            Ok(0)
+        }
     }
 
     pub async fn set_transaction(
         &mut self,
         transaction_id: Id<Transaction>,
+        order_number: u64,
         owning_block: Id<Block>,
         transaction: &TransactionInfo,
     ) -> Result<(), ApiServerStorageError> {
@@ -1839,11 +1933,13 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             transaction_id,
             owning_block
         );
+        let order_number = Self::order_number_to_postgres_friendly(order_number);
 
         self.tx.execute(
-                "INSERT INTO ml.transactions (transaction_id, owning_block_id, transaction_data) VALUES ($1, $2, $3)
+                "INSERT INTO ml.transactions (transaction_id, owning_block_id, transaction_data, order_number) VALUES ($1, $2, $3, $4)
                     ON CONFLICT (transaction_id) DO UPDATE
-                    SET owning_block_id = $2, transaction_data = $3;", &[&transaction_id.encode(), &owning_block.encode(), &transaction.encode()]
+                    SET owning_block_id = $2, transaction_data = $3, order_number = $4;",
+                &[&transaction_id.encode(), &owning_block.encode(), &transaction.encode(), &order_number]
             ).await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
 

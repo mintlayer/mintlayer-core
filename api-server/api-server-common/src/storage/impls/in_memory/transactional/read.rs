@@ -26,7 +26,8 @@ use common::{
 use crate::storage::storage_api::{
     block_aux_data::BlockAuxData, AmountWithDecimals, ApiServerStorageError, ApiServerStorageRead,
     BlockInfo, CoinOrTokenStatistic, Delegation, FungibleTokenData, NftWithOwner, Order,
-    PoolBlockStats, PoolDataWithExtraInfo, TransactionInfo, Utxo, UtxoWithExtraInfo,
+    PoolBlockStats, PoolDataWithExtraInfo, TransactionInfo, TransactionWithBlockInfo, Utxo,
+    UtxoWithExtraInfo,
 };
 
 use super::ApiServerInMemoryStorageTransactionalRo;
@@ -92,8 +93,20 @@ impl ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'_> {
         &self,
         len: u32,
         offset: u32,
-    ) -> Result<Vec<(BlockAuxData, TransactionInfo)>, ApiServerStorageError> {
+    ) -> Result<Vec<TransactionWithBlockInfo>, ApiServerStorageError> {
         self.transaction.get_transactions_with_block(len, offset)
+    }
+
+    async fn get_transactions_with_block_by_order_number(
+        &self,
+        len: u32,
+        order_number: u64,
+    ) -> Result<Vec<TransactionWithBlockInfo>, ApiServerStorageError> {
+        self.transaction.get_transactions_with_block_by_order_number(len, order_number)
+    }
+
+    async fn get_last_transaction_order_number(&self) -> Result<u64, ApiServerStorageError> {
+        self.transaction.get_last_transaction_order_number()
     }
 
     async fn get_delegation(

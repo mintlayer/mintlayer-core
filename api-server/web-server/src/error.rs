@@ -91,8 +91,12 @@ pub enum ApiServerWebServerClientError {
     InvalidPoolId,
     #[error("Invalid offset")]
     InvalidOffset,
+    #[error("Invalid transaction order number")]
+    InvalidOrderNumber,
     #[error("Invalid number of items")]
     InvalidNumItems,
+    #[error("Cannot specify both offset and before order number")]
+    InvalidOffsetAndOrderNumber,
     #[error("Invalid pools sort order")]
     InvalidPoolsSortOrder,
     #[error("Invalid signed transaction")]
