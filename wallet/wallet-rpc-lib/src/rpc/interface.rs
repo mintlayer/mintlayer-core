@@ -41,17 +41,16 @@ use wallet_types::{
     partially_signed_transaction::PartiallySignedTransaction, with_locked::WithLocked,
 };
 
-use super::types::{NewTokenTransaction, UtxoInfo};
 use crate::types::{
-    AccountArg, AddressInfo, AddressWithUsageInfo, Balances, ChainInfo, ComposedTransaction,
-    CreatedWallet, DelegationInfo, HardwareWalletType, HexEncoded, LegacyVrfPublicKeyInfo,
-    MaybeSignedTransaction, NewAccountInfo, NewDelegationTransaction, NewOrderTransaction,
-    NewSubmittedTransaction, NftMetadata, NodeVersion, OpenedWallet, PoolInfo, PublicKeyInfo,
-    RpcAmountIn, RpcHashedTimelockContract, RpcInspectTransaction, RpcNewTransaction,
-    RpcPreparedTransaction, RpcStandaloneAddresses, RpcUtxoOutpoint, RpcUtxoState, RpcUtxoType,
-    SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
-    StandaloneAddressWithDetails, TokenMetadata, TransactionOptions, TransactionRequestOptions,
-    TxOptionsOverrides, VrfPublicKeyInfo,
+    AccountArg, AccountExtendedPublicKey, AddressInfo, AddressWithUsageInfo, Balances, ChainInfo,
+    ComposedTransaction, CreatedWallet, DelegationInfo, HardwareWalletType, HexEncoded,
+    LegacyVrfPublicKeyInfo, MaybeSignedTransaction, NewAccountInfo, NewDelegationTransaction,
+    NewOrderTransaction, NewSubmittedTransaction, NewTokenTransaction, NftMetadata, NodeVersion,
+    OpenedWallet, PoolInfo, PublicKeyInfo, RpcAmountIn, RpcHashedTimelockContract,
+    RpcInspectTransaction, RpcNewTransaction, RpcPreparedTransaction, RpcStandaloneAddresses,
+    RpcUtxoOutpoint, RpcUtxoState, RpcUtxoType, SendTokensFromMultisigAddressResult,
+    StakePoolBalance, StakingStatus, StandaloneAddressWithDetails, TokenMetadata,
+    TransactionOptions, TransactionRequestOptions, TxOptionsOverrides, UtxoInfo, VrfPublicKeyInfo,
 };
 
 #[rpc::rpc(server)]
@@ -215,6 +214,15 @@ trait ColdWalletRpc {
         &self,
         account: AccountArg,
     ) -> rpc::RpcResult<Vec<VrfPublicKeyInfo>>;
+
+    /// Shows the account's extended public key.
+    /// The returned extended public key can be used to derive receiving or change addresses for
+    /// this account.
+    #[method(name = "account_extended_public_key")]
+    async fn get_account_extended_public_key(
+        &self,
+        account_arg: AccountArg,
+    ) -> rpc::RpcResult<AccountExtendedPublicKey>;
 
     #[method(name = "account_sign_raw_transaction")]
     /// Signs the inputs that are not yet signed.

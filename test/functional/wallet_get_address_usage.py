@@ -81,6 +81,9 @@ class WalletGetAddressUsage(BitcoinTestFramework):
             best_block_height = await wallet.get_best_block_height()
             assert_equal(best_block_height, '0')
 
+            result = await wallet.account_extended_public_key()
+            assert_in("The account extended public key is: 00028b42cd4776376c82791b494155151f56c2d7b471e0c7a526a7ce60dd872e38676b22c5123ba10adeaf4bfcbb45d1a02d828f25bf8646957a98d06287c4e2b850", result)
+
             # new address
             for _ in range(4):
                 pub_key_bytes = await wallet.new_public_key()

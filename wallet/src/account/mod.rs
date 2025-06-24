@@ -33,6 +33,7 @@ use common::size_estimation::{
     tx_size_with_num_inputs_and_outputs, DestinationInfoProvider,
 };
 use common::Uint256;
+use crypto::key::extended::ExtendedPublicKey;
 use crypto::key::hdkd::child_number::ChildNumber;
 use mempool::FeeRate;
 use serialization::hex_encoded::HexEncoded;
@@ -1694,6 +1695,10 @@ impl<K: AccountKeyChains> Account<K> {
         self.key_chain
             .get_public_key_from_public_key_hash(public_key_hash)
             .ok_or(WalletError::AddressNotFound)
+    }
+
+    pub fn get_extended_public_key(&self) -> &ExtendedPublicKey {
+        self.account_info.account_key()
     }
 
     pub fn get_all_issued_addresses(
