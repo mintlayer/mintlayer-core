@@ -60,8 +60,8 @@ pub enum DestinationSigError {
     SignatureVerificationFailed,
     #[error("Public key to public key hash mismatch")]
     PublicKeyToHashMismatch,
-    #[error("Address authorization decoding failed")]
-    AddressAuthDecodingFailed(String),
+    #[error("Address authorization decoding failed: {0}")]
+    AddressAuthDecodingFailed(serialization::Error),
     #[error("Signature decoding failed")]
     InvalidSignatureEncoding,
     #[error("No signature!")]

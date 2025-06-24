@@ -33,6 +33,10 @@ impl AuthorizedPublicKeySpend {
     pub fn new(signature: Signature) -> Self {
         Self { signature }
     }
+
+    pub fn signature(&self) -> &Signature {
+        &self.signature
+    }
 }
 
 pub fn verify_public_key_spending(

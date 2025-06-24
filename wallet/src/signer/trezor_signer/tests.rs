@@ -25,7 +25,9 @@ use logging::log;
 
 use crate::signer::{
     tests::{
-        generic_fixed_signature_tests::test_fixed_signatures_generic,
+        generic_fixed_signature_tests::{
+            test_fixed_signatures_generic, test_fixed_signatures_generic2,
+        },
         generic_tests::{
             test_sign_message_generic, test_sign_transaction_generic,
             test_sign_transaction_intent_generic,
@@ -123,6 +125,20 @@ fn test_fixed_signatures(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     test_fixed_signatures_generic(&mut rng, make_deterministic_trezor_signer);
+}
+
+#[rstest]
+#[trace]
+#[serial]
+#[case(Seed::from_entropy())]
+fn test_fixed_signatures2(#[case] seed: Seed) {
+    log::debug!("test_fixed_signatures2, seed = {seed:?}");
+
+    let _join_guard = maybe_spawn_auto_confirmer();
+
+    let mut rng = make_seedable_rng(seed);
+
+    test_fixed_signatures_generic2(&mut rng, make_deterministic_trezor_signer);
 }
 
 #[rstest]
