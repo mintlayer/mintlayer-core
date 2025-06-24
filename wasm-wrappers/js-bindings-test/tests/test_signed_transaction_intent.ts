@@ -44,16 +44,6 @@ export function test_signed_transaction_intent() {
     "<tx_id:dfc2bb0cc4c7f3ed3fe682a48ee9f78bcd4962e55e7bc239bd340ec22aff8657;intent:the intent>");
   assert_eq_arrays(message, expected_message);
 
-  try {
-    const invalid_signatures = "invalid signatures";
-    encode_signed_transaction_intent(message, invalid_signatures);
-    throw new Error("Invalid signatures worked somehow!");
-  } catch (e) {
-    if (!get_err_msg(e).includes("Error decoding a JsValue as an array of arrays of bytes")) {
-      throw e;
-    }
-  }
-
   {
     const prv_key1 = [
       0, 142, 11, 183, 83, 79, 207, 79, 18, 172, 116, 88, 251, 128, 146, 254, 82,
@@ -71,7 +61,7 @@ export function test_signed_transaction_intent() {
     const signature1 = sign_challenge(Uint8Array.from(prv_key1), message);
     const signature2 = sign_challenge(Uint8Array.from(prv_key2), message);
 
-    const signed_intent = encode_signed_transaction_intent(message, [Array.from(signature1), Array.from(signature2)]);
+    const signed_intent = encode_signed_transaction_intent(message, [signature1, signature2]);
 
     verify_transaction_intent(message, signed_intent, [pubkey_addr1, pubkeyhash_addr2], Network.Regtest);
     verify_transaction_intent(message, signed_intent, [pubkeyhash_addr1, pubkey_addr2], Network.Regtest);
@@ -86,7 +76,7 @@ export function test_signed_transaction_intent() {
     }
 
     const bad_signature1 = sign_challenge(Uint8Array.from(prv_key1), Uint8Array.from([...message, 123]));
-    const bad_signed_intent = encode_signed_transaction_intent(message, [Array.from(bad_signature1), Array.from(signature2)]);
+    const bad_signed_intent = encode_signed_transaction_intent(message, [bad_signature1, signature2]);
 
     try {
       verify_transaction_intent(message, bad_signed_intent, [pubkey_addr1, pubkey_addr2], Network.Regtest);
@@ -128,7 +118,7 @@ export function test_signed_transaction_intent() {
     ];
 
     const encoded_signed_intent =
-      encode_signed_transaction_intent(message, [signature1, signature2]);
+      encode_signed_transaction_intent(message, [Uint8Array.from(signature1), Uint8Array.from(signature2)]);
     assert_eq_arrays(encoded_signed_intent, expected_encoded_signed_intent);
   }
 }

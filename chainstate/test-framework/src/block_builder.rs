@@ -48,6 +48,8 @@ pub struct BlockBuilder<'f> {
     framework: &'f mut TestFramework,
     transactions: Vec<SignedTransaction>,
     prev_block_hash: Id<GenBlock>,
+    // If true, prev_block_hash has been used in some way already and cannot be changed.
+    prev_block_hash_used: bool,
     timestamp: BlockTimestamp,
     consensus_data: ConsensusData,
     reward: BlockReward,
@@ -109,6 +111,7 @@ impl<'f> BlockBuilder<'f> {
             framework,
             transactions,
             prev_block_hash,
+            prev_block_hash_used: false,
             timestamp,
             consensus_data,
             reward,
@@ -135,6 +138,7 @@ impl<'f> BlockBuilder<'f> {
     }
 
     /// Adds a transaction that uses random utxos and accounts
+    // TODO: this function is currently unused. Remove it?
     pub fn add_test_transaction(mut self, rng: &mut (impl Rng + CryptoRng)) -> Self {
         let utxo_set = self
             .framework
@@ -147,6 +151,7 @@ impl<'f> BlockBuilder<'f> {
             .filter(|(outpoint, _)| !self.used_utxo.contains(outpoint))
             .collect();
         let utxo_set = utxo::UtxosDBInMemoryImpl::new(self.prev_block_hash, utxo_set);
+        self.prev_block_hash_used = true;
 
         let account_nonce_getter = Box::new(|account: AccountType| -> Option<AccountNonce> {
             self.account_nonce_tracker.get(&account).copied().or_else(|| {
@@ -296,14 +301,17 @@ impl<'f> BlockBuilder<'f> {
 
     /// Overrides the previous block hash that is deduced by default as the best block.
     pub fn with_parent(mut self, prev_block_hash: Id<GenBlock>) -> Self {
+        assert!(
+            !self.prev_block_hash_used,
+            "The current builder state may depend on the previous value of prev_block_hash; consider re-ordering function calls"
+        );
         self.prev_block_hash = prev_block_hash;
         self
     }
 
     /// Overrides the previous block hash by a random value making the resulting block an orphan.
-    pub fn make_orphan(mut self, rng: &mut impl Rng) -> Self {
-        self.prev_block_hash = Id::new(H256::random_using(rng));
-        self
+    pub fn make_orphan(self, rng: &mut impl Rng) -> Self {
+        self.with_parent(Id::new(H256::random_using(rng)))
     }
 
     /// Overrides the timestamp that is equal to the current time by default.

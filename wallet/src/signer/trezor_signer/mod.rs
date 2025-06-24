@@ -145,7 +145,7 @@ pub enum TrezorError {
     MultisigSignatureReturned,
     #[error("The file being loaded is a software wallet and does not correspond to the connected hardware wallet")]
     HardwareWalletDifferentFile,
-    #[error("Public keys mismatch. Wrong device or passphrase:\nfile device id \"{file_device_id}\", connected device id \"{connected_device_id}\",\nfile label \"{file_label}\" and connected device label \"{connected_device_id}\"")]
+    #[error("Public keys mismatch. Wrong device or passphrase:\nfile device id \"{file_device_id}\", connected device id \"{connected_device_id}\",\nfile label \"{file_label}\" and connected device label \"{connected_device_label}\"")]
     HardwareWalletDifferentMnemonicOrPassphrase {
         file_device_id: String,
         connected_device_id: String,

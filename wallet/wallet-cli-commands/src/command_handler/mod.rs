@@ -1101,7 +1101,7 @@ where
                 token_ticker,
                 number_of_decimals,
                 metadata_uri,
-                destination_address,
+                authority_address,
                 token_supply,
                 is_freezable,
             } => {
@@ -1111,7 +1111,7 @@ where
                 let new_token = wallet
                     .issue_new_token(
                         selected_account,
-                        destination_address,
+                        authority_address,
                         TokenMetadata {
                             token_ticker: token_ticker.into(),
                             number_of_decimals,

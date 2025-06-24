@@ -28,7 +28,7 @@ pub use rpc::RpcOrderInfo;
 /// The fields represent currencies and amounts to be exchanged and the trading pair can be deducted from it.
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serde::Serialize, serde::Deserialize)]
 pub struct OrderData {
-    /// The key that can authorize conclusion of an order.
+    /// The key that can authorize conclusion or freezing of an order.
     /// Conclusion closes an order and withdraws available funds.
     conclude_key: Destination,
     /// `Ask` and `give` fields represent amounts of currencies

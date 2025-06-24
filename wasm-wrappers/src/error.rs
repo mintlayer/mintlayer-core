@@ -83,7 +83,7 @@ pub enum Error {
     MultisigSpendCreationError(DestinationSigError),
 
     #[error("Error creating HTLC spend: {0}")]
-    HtlcSpendCreationError(DestinationSigError),
+    HtlcSpendDecodingError(DestinationSigError),
 
     #[error("Error signing a message: {0}")]
     SignMessageError(crypto::key::SignatureError),
@@ -169,9 +169,6 @@ pub enum Error {
     // Note: IdCreationError already contains the info about which kind of id is being created.
     #[error("Id creation error: {0}")]
     IdCreationError(#[from] IdCreationError),
-
-    #[error("Error decoding a JsValue as an array of arrays of bytes: {error}")]
-    JsValueNotArrayOfArraysOfBytes { error: String },
 
     #[error("Signed transaction intent verification error: {0}")]
     SignedTransactionIntentVerificationError(SignedTransactionIntentError),

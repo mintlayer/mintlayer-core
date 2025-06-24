@@ -30,7 +30,7 @@ export const MNEMONIC =
 // A random private key that is generated only once and printed to the console.
 // Note: simply putting `const PRIVATE_KEY = make_private_key()` to the global scope won't
 // work if the tests are run in the browser.
-export const get_predefined_prv_key = (function () {
+export const get_predefined_random_prv_key = (function () {
   let PRIVATE_KEY: Uint8Array | null = null;
   return function () {
     if (!PRIVATE_KEY) {
@@ -41,17 +41,23 @@ export const get_predefined_prv_key = (function () {
   }
 })();
 
-// The public key corresponding to get_predefined_prv_key().
-export const get_predefined_pub_key = (function () {
+// The public key corresponding to get_predefined_random_prv_key().
+export const get_predefined_random_pub_key = (function () {
   let PUBLIC_KEY: Uint8Array | null = null;
   return function () {
     if (!PUBLIC_KEY) {
-      PUBLIC_KEY = public_key_from_private_key(get_predefined_prv_key());
+      PUBLIC_KEY = public_key_from_private_key(get_predefined_random_prv_key());
       console.log(`PUBLIC_KEY = ${PUBLIC_KEY}`);
     }
     return PUBLIC_KEY;
   }
 })();
+
+export function generate_prv_key(description: string) {
+  const result = make_private_key();
+  console.log(`Generated ${description} private key: ${result}`);
+  return result;
+}
 
 // Some token id.
 export const TOKEN_ID = "tmltk15tgfrs49rv88v8utcllqh0nvpaqtgvn26vdxhuner5m6ewg9c3msn9fxns";
@@ -61,3 +67,31 @@ export const POOL_ID = "tpool1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq
 
 // Some order id
 export const ORDER_ID = "tordr1xxt0avjtt4flkq0tnlyphmdm4aaj9vmkx5r2m4g863nw3lgf7nzs7mlkqc";
+
+// Some HTLC secret and its hash
+export const HTLC_SECRET = [
+  0, 229, 233, 72, 110, 22, 64, 36, 69, 188, 238, 51, 130, 168, 185, 241,
+  73, 48, 120, 151, 140, 45, 46, 39, 50, 207, 18, 50, 243, 30, 115, 93
+]
+export const HTLC_SECRET_HASH = "b5a48c7780e597de8012346fb30761965248e3f2"
+
+// Some predefined key pairs (note that the prv keys are unused at the moment, so they are marked
+// with `/** @public */` to pacify knip).
+/** @public */
+export const PRV_KEY_A = [
+  0, 155, 37, 209, 155, 128, 40, 223, 139, 200, 13, 149, 126, 93, 4, 44,
+  190, 53, 102, 135, 246, 42, 84, 200, 61, 221, 125, 104, 135, 142, 0, 42, 12
+]
+export const PUB_KEY_A = [
+  0, 2, 204, 229, 50, 59, 113, 11, 253, 127, 50, 216, 85, 175, 139, 202,
+  118, 28, 122, 51, 91, 43, 137, 206, 188, 119, 57, 86, 49, 215, 37, 5, 134, 195
+]
+/** @public */
+export const PRV_KEY_B = [
+  0, 181, 124, 242, 82, 150, 38, 29, 109, 72, 118, 47, 37, 55, 218, 146,
+  84, 200, 134, 132, 108, 202, 174, 86, 48, 160, 159, 211, 78, 99, 66, 6, 173
+]
+export const PUB_KEY_B = [
+  0, 3, 68, 225, 99, 228, 45, 76, 242, 134, 151, 216, 99, 225, 215, 59,
+  77, 101, 3, 191, 248, 212, 205, 172, 178, 252, 65, 140, 255, 213, 205, 49, 234, 81
+]

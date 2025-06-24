@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use common::{
-    chain::{output_value::OutputValue, tokens::TokenData, TxInput, TxOutput},
+    chain::{output_value::OutputValue, TxInput, TxOutput},
     primitives::Amount,
 };
 
@@ -74,18 +74,7 @@ impl OutputGroup {
                 )))
             }
         };
-        let value = match output_value {
-            OutputValue::Coin(output_amount) => output_amount,
-            OutputValue::TokenV0(token_data) => {
-                let token_data = token_data.as_ref();
-                match token_data {
-                    TokenData::TokenTransfer(token_transfer) => token_transfer.amount,
-                    TokenData::TokenIssuance(token_issuance) => token_issuance.amount_to_issue,
-                    TokenData::NftIssuance(_) => Amount::from_atoms(1),
-                }
-            }
-            OutputValue::TokenV1(_, output_amount) => output_amount,
-        };
+        let value = output_value.amount();
 
         Ok(Self {
             outputs: vec![output],

@@ -26,11 +26,11 @@ use common::{
 
 use crate::{error::Error, utils::internal_amount_from_atoms_str};
 
-#[wasm_bindgen]
 /// Amount type abstraction. The amount type is stored in a string
 /// since JavaScript number type cannot fit 128-bit integers.
 /// The amount is given as an integer in units of "atoms".
 /// Atoms are the smallest, indivisible amount of a coin or token.
+#[wasm_bindgen]
 pub struct Amount {
     atoms: String,
 }
@@ -60,9 +60,9 @@ impl Amount {
     }
 }
 
+/// The network, for which an operation to be done. Mainnet, testnet, etc.
 #[wasm_bindgen]
 #[derive(Debug, Copy, Clone)]
-/// The network, for which an operation to be done. Mainnet, testnet, etc.
 pub enum Network {
     Mainnet,
     Testnet,

@@ -91,7 +91,7 @@ corresponding to each input of the transaction.
 
 Parameters:
 `signed_message` - this must have been produced by `make_transaction_intent_message_to_sign`.
-`signatures` - this should be an array of arrays of bytes, each of them representing an individual signature
+`signatures` - this should be an array of Uint8Array, each of them representing an individual signature
 of `signed_message` produced by `sign_challenge` using the private key for the corresponding input destination
 of the transaction. The number of signatures must be equal to the number of inputs in the transaction.
 
@@ -217,18 +217,27 @@ Encode an input witness of the variant that contains no signature.
 
 ### Function: `encode_witness`
 
-Given a private key, inputs and an input number to sign, and the destination that owns that output (through the utxo),
-and a network type (mainnet, testnet, etc), this function returns a witness to be used in a signed transaction, as bytes.
+Sign the specified input of the transaction and encode the signature as InputWitness.
+
+`input_utxos` must be formed as follows: for each transaction input, emit byte 0 if it's a non-UTXO input,
+otherwise emit 1 followed by the corresponding transaction output encoded via the appropriate "encode_output_"
+function.
 
 ### Function: `encode_witness_htlc_secret`
 
 Given a private key, inputs and an input number to sign, and the destination that owns that output (through the utxo),
 and a network type (mainnet, testnet, etc), and an htlc secret this function returns a witness to be used in a signed transaction, as bytes.
 
+`input_utxos` have the same format as in `encode_witness`.
+
 ### Function: `encode_multisig_challenge`
 
 Given an arbitrary number of public keys as bytes, number of minimum required signatures, and a network type, this function returns
 the multisig challenge, as bytes.
+
+### Function: `multisig_challenge_to_address`
+
+Produce a multisig address given a multisig challenge.
 
 ### Function: `encode_witness_htlc_multisig`
 
@@ -237,6 +246,8 @@ and a network type (mainnet, testnet, etc), this function returns a witness to b
 
 `key_index` parameter is an index of a public key in the challenge, against which is the signature produces from private key is to be verified.
 `input_witness` parameter can be either empty or a result of previous calls to this function.
+
+`input_utxos` have the same format as in `encode_witness`.
 
 ### Function: `encode_signed_transaction`
 
@@ -380,6 +391,17 @@ Given a pool id, staking data as bytes and the network type (mainnet, testnet, e
 this function returns an output that creates that staking pool.
 Note that the pool id is mandated to be taken from the hash of the first input.
 It is not arbitrary.
+
+Note: a UTXO of this kind is consumed when decommissioning a pool (provided that the pool
+never staked).
+
+### Function: `encode_output_produce_block_from_stake`
+
+Given a pool id and a staker address, this function returns an output that is emitted
+when producing a block via that pool.
+
+Note: a UTXO of this kind is consumed when decommissioning a pool (provided that the pool
+has staked at least once).
 
 ### Function: `encode_output_issue_fungible_token`
 
