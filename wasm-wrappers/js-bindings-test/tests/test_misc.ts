@@ -16,6 +16,9 @@
 import {
   Amount,
   get_token_id,
+  get_order_id,
+  get_delegation_id,
+  get_pool_id,
   get_transaction_id,
   effective_pool_balance,
   make_default_account_privkey,
@@ -52,6 +55,9 @@ export function test_misc() {
   run_one_test(test_sign_challenge);
   run_one_test(test_staking_pool_spend_maturity_block_count);
   run_one_test(test_get_token_id);
+  run_one_test(test_get_order_id);
+  run_one_test(test_get_delegation_id);
+  run_one_test(test_get_pool_id);
   run_one_test(test_effective_pool_balance);
   run_one_test(test_get_transaction_id);
 }
@@ -164,6 +170,81 @@ function test_get_token_id() {
 
     if (token_id != expected_token_id) {
       throw new Error("Different token id");
+    }
+  }
+}
+
+function test_get_order_id() {
+  try {
+    get_order_id(new Uint8Array(), Network.Testnet);
+    throw "Order Id generated without a UTXO input somehow!";
+  } catch (e) {
+    const msg = get_err_msg(e);
+    if (!(msg.includes("No UTXO inputs for order id creation") ||
+      msg.includes("No inputs for order id creation"))) {
+      throw e;
+    }
+    console.log("Tested no UTXO inputs for order ID successfully");
+  }
+
+  {
+    const expected_order_id =
+      "tordr1favkn4kqrxruqdtkjywhafeme30z8frlu85xut4euzfduplrsauqejwmlh";
+    const order_id = get_order_id(Uint8Array.from(INPUTS), Network.Testnet);
+    console.log(order_id);
+
+    if (order_id != expected_order_id) {
+      throw new Error("Different order id");
+    }
+  }
+}
+
+function test_get_delegation_id() {
+  try {
+    get_delegation_id(new Uint8Array(), Network.Testnet);
+    throw "Delegation Id generated without a UTXO input somehow!";
+  } catch (e) {
+    const msg = get_err_msg(e);
+    if (!(msg.includes("No UTXO inputs for delegation id creation") ||
+      msg.includes("No inputs for delegation id creation"))) {
+      throw e;
+    }
+    console.log("Tested no UTXO inputs for delegation ID successfully");
+  }
+
+  {
+    const expected_delegation_id =
+      "tdelg1uq9yjdlsny4txxz9vr833s2zq2h2p92weq9s4mpz7rrvcnqwztgqhg9ypf";
+    const delegation_id = get_delegation_id(Uint8Array.from(INPUTS), Network.Testnet);
+    console.log(delegation_id);
+
+    if (delegation_id != expected_delegation_id) {
+      throw new Error("Different delegation id");
+    }
+  }
+}
+
+function test_get_pool_id() {
+  try {
+    get_pool_id(new Uint8Array(), Network.Testnet);
+    throw "Pool Id generated without a UTXO input somehow!";
+  } catch (e) {
+    const msg = get_err_msg(e);
+    if (!(msg.includes("No UTXO inputs for pool id creation") ||
+      msg.includes("No inputs for pool id creation"))) {
+      throw e;
+    }
+    console.log("Tested no UTXO inputs for pool ID successfully");
+  }
+
+  {
+    const expected_pool_id =
+      "tpool10922a3v92kph0dheca07fzxjktvgcjs7lcrna0ny4tvw5t3t20squchyn5";
+    const pool_id = get_pool_id(Uint8Array.from(INPUTS), Network.Testnet);
+    console.log(pool_id);
+
+    if (pool_id != expected_pool_id) {
+      throw new Error("Different pool id");
     }
   }
 }
