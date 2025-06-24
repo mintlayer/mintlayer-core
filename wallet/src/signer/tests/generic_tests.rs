@@ -15,7 +15,7 @@
 
 use std::{
     num::NonZeroU8,
-    ops::{Add, Div, Sub},
+    ops::{Add, Div},
     sync::Arc,
 };
 
@@ -23,6 +23,7 @@ use itertools::izip;
 
 use common::{
     chain::{
+        block::timestamp::BlockTimestamp,
         classic_multisig::ClassicMultisigChallenge,
         config::create_regtest,
         htlc::{HashedTimelockContract, HtlcSecret},
@@ -36,7 +37,7 @@ use common::{
         },
         AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, ChainConfig, DelegationId,
         Destination, GenBlock, OrderAccountCommand, OrderData, OrderId, OutPointSourceId, PoolId,
-        SignedTransactionIntent, Transaction, TxInput, TxOutput,
+        SignedTransactionIntent, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, Idable, H256},
 };
@@ -47,17 +48,22 @@ use crypto::{
 use logging::log;
 use randomness::{CryptoRng, Rng};
 use serialization::extras::non_empty_vec::DataOrNoVec;
+use test_utils::{random::gen_random_bytes, random_ascii_alphanumeric_string};
 use tx_verifier::error::{InputCheckErrorPayload, ScriptError};
-use wallet_storage::{DefaultBackend, Store, Transactional};
+use wallet_storage::{DefaultBackend, Store, TransactionRwUnlocked, Transactional};
 use wallet_types::{
     account_info::DEFAULT_ACCOUNT_INDEX,
-    partially_signed_transaction::{OrderAdditionalInfo, TokenAdditionalInfo, TxAdditionalInfo},
-    KeyPurpose,
+    partially_signed_transaction::{
+        OrderAdditionalInfo, PoolAdditionalInfo, TokenAdditionalInfo, TxAdditionalInfo,
+    },
+    BlockInfo, Currency, KeyPurpose,
 };
 
 use crate::{
+    account::PoolData,
+    key_chain::AccountKeyChains,
     signer::{tests::account_from_mnemonic, Signer, SignerError},
-    SendRequest,
+    Account, SendRequest,
 };
 
 pub fn test_sign_message_generic<MkS1, MkS2, S1, S2>(
@@ -285,33 +291,43 @@ pub fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
         .unwrap();
     let standalone_pk_destination = Destination::PublicKey(standalone_pk.clone());
 
-    let amounts: Vec<Amount> = (0..(2 + rng.next_u32() % 5))
-        .map(|_| Amount::from_atoms(rng.gen_range(10..100)))
+    let coin_input_amounts: Vec<Amount> = (0..rng.gen_range(2..7))
+        .map(|_| Amount::from_atoms(rng.gen_range(100..1000)))
         .collect();
 
-    let total_amount = amounts.iter().fold(Amount::ZERO, |acc, a| acc.add(*a).unwrap());
-    eprintln!("total utxo amounts: {total_amount:?}");
+    let total_coin_input_amount =
+        coin_input_amounts.iter().fold(Amount::ZERO, |acc, a| acc.add(*a).unwrap());
 
-    let utxos: Vec<TxOutput> = amounts
+    let decommissioned_pool_id = PoolId::new(H256::random_using(rng));
+    let decommissioned_pool_balance = Amount::from_atoms(rng.gen_range(100..200));
+    let decommissioned_pool_data = PoolData {
+        utxo_outpoint: UtxoOutPoint::new(Id::<Transaction>::random_using(rng).into(), 1),
+        creation_block: BlockInfo {
+            height: BlockHeight::new(rng.gen()),
+            timestamp: BlockTimestamp::from_int_seconds(rng.gen()),
+        },
+        decommission_key: destination_from_account(&mut account, &mut db_tx, rng),
+        stake_destination: random_destination(rng),
+        vrf_public_key: VRFPrivateKey::new_from_rng(rng, crypto::vrf::VRFKeyKind::Schnorrkel).1,
+        margin_ratio_per_thousand: PerThousand::new_from_rng(rng),
+        cost_per_block: Amount::from_atoms(rng.gen_range(100..200)),
+    };
+
+    let produce_block_from_stake_utxo =
+        TxOutput::ProduceBlockFromStake(random_destination(rng), decommissioned_pool_id);
+    let utxos: Vec<TxOutput> = coin_input_amounts
         .iter()
         .skip(1)
         .map(|a| {
-            let dest = {
-                let purpose = if rng.gen_bool(0.5) {
-                    KeyPurpose::ReceiveFunds
-                } else {
-                    KeyPurpose::Change
-                };
-
-                account.get_new_address(&mut db_tx, purpose).unwrap().1.into_object()
-            };
+            let dest = destination_from_account(&mut account, &mut db_tx, rng);
 
             TxOutput::Transfer(OutputValue::Coin(*a), dest)
         })
         .chain([TxOutput::Transfer(
-            OutputValue::Coin(amounts[0]),
+            OutputValue::Coin(coin_input_amounts[0]),
             standalone_pk_destination.clone(),
         )])
+        .chain([produce_block_from_stake_utxo])
         .collect();
 
     let inputs: Vec<TxInput> = (0..utxos.len())
@@ -325,7 +341,7 @@ pub fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
         })
         .collect();
 
-    let (_dest_prv, pub_key1) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
+    let (_, pub_key1) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
     let pub_key2 = if let Destination::PublicKeyHash(pkh) =
         account.get_new_address(&mut db_tx, KeyPurpose::Change).unwrap().1.into_object()
     {
@@ -366,7 +382,7 @@ pub fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
     };
     let multisig_input = TxInput::from_utxo(source_id.clone(), rng.next_u32());
     let multisig_utxo = TxOutput::Transfer(
-        OutputValue::Coin(Amount::from_atoms(1)),
+        OutputValue::Coin(Amount::from_atoms(rng.gen_range(100..200))),
         multisig_dest.clone(),
     );
 
@@ -374,7 +390,7 @@ pub fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
     let hash_lock = HashedTimelockContract {
         secret_hash: secret.hash(),
         spend_key: Destination::PublicKey(pub_key2.clone()),
-        refund_timelock: OutputTimeLock::UntilHeight(BlockHeight::new(0)),
+        refund_timelock: OutputTimeLock::UntilHeight(BlockHeight::new(rng.gen_range(100..200))),
         refund_key: Destination::PublicKey(pub_key1),
     };
 
@@ -385,28 +401,50 @@ pub fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
     );
 
     let token_id = TokenId::new(H256::random_using(rng));
-    let order_id = OrderId::new(H256::random_using(rng));
+    let token_mint_amount = Amount::from_atoms(rng.gen_range(100..200));
 
-    let dest_amount = total_amount.div(10).unwrap();
-    let lock_amount = total_amount.div(10).unwrap();
-    let burn_amount = total_amount.div(10).unwrap();
-    let change_amount = total_amount.div(10).unwrap();
-    let outputs_amounts_sum = [dest_amount, lock_amount, burn_amount, change_amount]
-        .iter()
-        .fold(Amount::ZERO, |acc, a| acc.add(*a).unwrap());
-    let _fee_amount = total_amount.sub(outputs_amounts_sum).unwrap();
+    let coin_transfer_amount = total_coin_input_amount.div(rng.gen_range(10..20)).unwrap();
+    let coin_lock_then_transfer_amount =
+        total_coin_input_amount.div(rng.gen_range(10..20)).unwrap();
+    let coin_burn_amount = total_coin_input_amount.div(rng.gen_range(10..20)).unwrap();
+    let delegate_staking_amount = total_coin_input_amount.div(rng.gen_range(10..20)).unwrap();
+    let htlc_transfer_amount = total_coin_input_amount.div(rng.gen_range(10..20)).unwrap();
+
+    let filled_order1_id = OrderId::new(H256::random_using(rng));
+    let filled_order2_id = OrderId::new(H256::random_using(rng));
+    let concluded_order1_id = OrderId::new(H256::random_using(rng));
+    let concluded_order2_id = OrderId::new(H256::random_using(rng));
+    let frozen_order_id = OrderId::new(H256::random_using(rng));
+
+    let filled_order1_info = random_order_info(
+        &Currency::Coin,
+        &Currency::Token(token_id),
+        100,
+        200,
+        10,
+        rng,
+    );
+
+    let filled_order2_info = random_order_info(
+        &Currency::Token(token_id),
+        &Currency::Coin,
+        100,
+        200,
+        10,
+        rng,
+    );
 
     let acc_inputs = vec![
         TxInput::Account(AccountOutPoint::new(
-            AccountNonce::new(1),
+            AccountNonce::new(rng.gen_range(0..100)),
             AccountSpending::DelegationBalance(
                 DelegationId::new(H256::random_using(rng)),
-                Amount::from_atoms(1_u128),
+                Amount::from_atoms(rng.gen_range(100..200)),
             ),
         )),
         TxInput::AccountCommand(
             AccountNonce::new(rng.next_u64()),
-            AccountCommand::MintTokens(token_id, (dest_amount + Amount::from_atoms(100)).unwrap()),
+            AccountCommand::MintTokens(token_id, token_mint_amount),
         ),
         TxInput::AccountCommand(
             AccountNonce::new(rng.next_u64()),
@@ -433,57 +471,57 @@ pub fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
         ),
         TxInput::AccountCommand(
             AccountNonce::new(rng.next_u64()),
-            AccountCommand::ConcludeOrder(order_id),
+            AccountCommand::ConcludeOrder(concluded_order1_id),
         ),
         TxInput::AccountCommand(
             AccountNonce::new(rng.next_u64()),
-            AccountCommand::FillOrder(order_id, Amount::from_atoms(1), Destination::AnyoneCanSpend),
+            AccountCommand::FillOrder(
+                filled_order1_id,
+                Amount::from_atoms(
+                    rng.gen_range(1..filled_order1_info.initially_asked.amount().into_atoms()),
+                ),
+                Destination::AnyoneCanSpend,
+            ),
         ),
-        TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder(order_id)),
-        TxInput::OrderAccountCommand(OrderAccountCommand::FreezeOrder(order_id)),
+        TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder(concluded_order2_id)),
+        TxInput::OrderAccountCommand(OrderAccountCommand::FreezeOrder(frozen_order_id)),
         TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(
-            order_id,
-            Amount::from_atoms(1),
+            filled_order2_id,
+            Amount::from_atoms(
+                rng.gen_range(1..filled_order2_info.initially_asked.amount().into_atoms()),
+            ),
             Destination::AnyoneCanSpend,
         )),
         TxInput::AccountCommand(
             AccountNonce::new(rng.next_u64()),
             AccountCommand::ChangeTokenMetadataUri(
                 TokenId::new(H256::random_using(rng)),
-                "http://uri".as_bytes().to_vec(),
+                random_ascii_alphanumeric_string(rng, 10..20).into_bytes(),
             ),
         ),
     ];
     let acc_dests: Vec<Destination> = acc_inputs
         .iter()
-        .map(|_| {
-            let purpose = if rng.gen_bool(0.5) {
-                KeyPurpose::ReceiveFunds
-            } else {
-                KeyPurpose::Change
-            };
-
-            account.get_new_address(&mut db_tx, purpose).unwrap().1.into_object()
-        })
+        .map(|_| destination_from_account(&mut account, &mut db_tx, rng))
         .collect();
 
     let (_dest_prv, dest_pub) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
     let (_, vrf_public_key) = VRFPrivateKey::new_from_rng(rng, crypto::vrf::VRFKeyKind::Schnorrkel);
 
-    let pool_id = PoolId::new(H256::random_using(rng));
+    let created_pool_id = PoolId::new(H256::random_using(rng));
     let delegation_id = DelegationId::new(H256::random_using(rng));
     let pool_data = StakePoolData::new(
-        Amount::from_atoms(5),
+        Amount::from_atoms(rng.gen_range(100..200)),
         Destination::PublicKey(dest_pub.clone()),
         vrf_public_key,
         Destination::PublicKey(dest_pub.clone()),
         PerThousand::new_from_rng(rng),
-        Amount::from_atoms(100),
+        Amount::from_atoms(rng.gen_range(10..100)),
     );
     let token_issuance = TokenIssuance::V1(TokenIssuanceV1 {
-        token_ticker: "XXXX".as_bytes().to_vec(),
+        token_ticker: random_ascii_alphanumeric_string(rng, 2..10).into_bytes(),
         number_of_decimals: rng.gen_range(1..18),
-        metadata_uri: "http://uri".as_bytes().to_vec(),
+        metadata_uri: random_ascii_alphanumeric_string(rng, 10..20).into_bytes(),
         total_supply: common::chain::tokens::TokenTotalSupply::Unlimited,
         authority: Destination::PublicKey(dest_pub.clone()),
         is_freezable: common::chain::tokens::IsTokenFreezable::No,
@@ -492,59 +530,65 @@ pub fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
     let nft_issuance = NftIssuance::V0(NftIssuanceV0 {
         metadata: Metadata {
             creator: None,
-            name: "Name".as_bytes().to_vec(),
-            description: "SomeNFT".as_bytes().to_vec(),
-            ticker: "NFTX".as_bytes().to_vec(),
+            name: random_ascii_alphanumeric_string(rng, 10..20).into_bytes(),
+            description: random_ascii_alphanumeric_string(rng, 10..20).into_bytes(),
+            ticker: random_ascii_alphanumeric_string(rng, 2..10).into_bytes(),
             icon_uri: DataOrNoVec::from(None),
             additional_metadata_uri: DataOrNoVec::from(None),
             media_uri: DataOrNoVec::from(None),
-            media_hash: "123456".as_bytes().to_vec(),
+            media_hash: gen_random_bytes(rng, 4, 20),
         },
     });
     let nft_id = TokenId::new(H256::random_using(rng));
 
-    let order_data = OrderData::new(
+    let created_order_data = OrderData::new(
         Destination::PublicKey(dest_pub.clone()),
-        OutputValue::Coin(Amount::from_atoms(100)),
-        OutputValue::Coin(total_amount),
+        OutputValue::Coin(Amount::from_atoms(rng.gen_range(100..200))),
+        OutputValue::TokenV1(token_id, Amount::from_atoms(rng.gen_range(100..200))),
     );
 
     let outputs = vec![
         TxOutput::Transfer(
-            OutputValue::TokenV1(token_id, dest_amount),
+            OutputValue::TokenV1(
+                token_id,
+                Amount::from_atoms(rng.gen_range(1..=token_mint_amount.into_atoms())),
+            ),
             Destination::PublicKey(dest_pub.clone()),
         ),
         TxOutput::Transfer(
-            OutputValue::Coin(dest_amount),
+            OutputValue::Coin(coin_transfer_amount),
             Destination::PublicKey(dest_pub),
         ),
         TxOutput::LockThenTransfer(
-            OutputValue::Coin(lock_amount),
+            OutputValue::Coin(coin_lock_then_transfer_amount),
             Destination::AnyoneCanSpend,
             OutputTimeLock::ForSeconds(rng.next_u64()),
         ),
-        TxOutput::Burn(OutputValue::Coin(burn_amount)),
-        TxOutput::CreateStakePool(pool_id, Box::new(pool_data)),
+        TxOutput::Burn(OutputValue::Coin(coin_burn_amount)),
+        TxOutput::CreateStakePool(created_pool_id, Box::new(pool_data)),
         TxOutput::CreateDelegationId(
             Destination::AnyoneCanSpend,
             PoolId::new(H256::random_using(rng)),
         ),
-        TxOutput::DelegateStaking(burn_amount, delegation_id),
+        TxOutput::DelegateStaking(delegate_staking_amount, delegation_id),
         TxOutput::IssueFungibleToken(Box::new(token_issuance)),
         TxOutput::IssueNft(
             nft_id,
             Box::new(nft_issuance.clone()),
             Destination::AnyoneCanSpend,
         ),
-        TxOutput::DataDeposit(vec![1, 2, 3]),
-        TxOutput::Htlc(OutputValue::Coin(burn_amount), Box::new(hash_lock)),
-        TxOutput::CreateOrder(Box::new(order_data)),
+        TxOutput::DataDeposit(gen_random_bytes(rng, 10, 20)),
+        TxOutput::Htlc(OutputValue::Coin(htlc_transfer_amount), Box::new(hash_lock)),
+        TxOutput::CreateOrder(Box::new(created_order_data)),
     ];
 
     let req = SendRequest::new()
         .with_inputs(
             izip!(inputs.clone(), utxos.clone(), vec![None; inputs.len()]),
-            &|_| None,
+            &|pool_id| {
+                assert_eq!(*pool_id, decommissioned_pool_id);
+                Some(&decommissioned_pool_data)
+            },
         )
         .unwrap()
         .with_inputs(
@@ -560,22 +604,56 @@ pub fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
         .with_inputs_and_destinations(acc_inputs.into_iter().zip(acc_dests.clone()))
         .with_outputs(outputs);
     let destinations = req.destinations().to_vec();
-    let additional_info = TxAdditionalInfo::with_token_info(
-        token_id,
-        TokenAdditionalInfo {
-            num_decimals: 1,
-            ticker: "TKN".as_bytes().to_vec(),
-        },
-    )
-    .join(TxAdditionalInfo::with_order_info(
-        order_id,
-        OrderAdditionalInfo {
-            ask_balance: Amount::from_atoms(10),
-            give_balance: Amount::from_atoms(100),
-            initially_asked: OutputValue::Coin(Amount::from_atoms(20)),
-            initially_given: OutputValue::TokenV1(token_id, Amount::from_atoms(200)),
-        },
-    ));
+
+    let additional_info = TxAdditionalInfo::new()
+        .with_token_info(
+            token_id,
+            TokenAdditionalInfo {
+                num_decimals: rng.gen_range(5..10),
+                ticker: random_ascii_alphanumeric_string(rng, 5..10).into_bytes(),
+            },
+        )
+        .with_order_info(filled_order1_id, filled_order1_info)
+        .with_order_info(filled_order2_id, filled_order2_info)
+        .with_order_info(
+            concluded_order1_id,
+            random_order_info(
+                &Currency::Coin,
+                &Currency::Token(token_id),
+                100,
+                200,
+                10,
+                rng,
+            ),
+        )
+        .with_order_info(
+            concluded_order2_id,
+            random_order_info(
+                &Currency::Token(token_id),
+                &Currency::Coin,
+                100,
+                200,
+                10,
+                rng,
+            ),
+        )
+        .with_order_info(
+            frozen_order_id,
+            random_order_info(
+                &Currency::Coin,
+                &Currency::Token(token_id),
+                100,
+                200,
+                10,
+                rng,
+            ),
+        )
+        .with_pool_info(
+            decommissioned_pool_id,
+            PoolAdditionalInfo {
+                staker_balance: decommissioned_pool_balance,
+            },
+        );
     let orig_ptx = req.into_partially_signed_tx(additional_info).unwrap();
 
     let mut signer = make_signer(chain_config.clone(), account.account_index());
@@ -656,4 +734,44 @@ pub fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
         )
         .unwrap();
     }
+}
+
+fn random_order_info(
+    ask_currency: &Currency,
+    give_currency: &Currency,
+    min_initial_value: u128,
+    max_initial_value: u128,
+    min_balance: u128,
+    rng: &mut impl Rng,
+) -> OrderAdditionalInfo {
+    let initially_asked = rng.gen_range(min_initial_value..=max_initial_value);
+    let initially_given = rng.gen_range(min_initial_value..=max_initial_value);
+    let ask_balance = rng.gen_range(min_balance..=initially_asked);
+    let give_balance = rng.gen_range(min_balance..=initially_given);
+
+    OrderAdditionalInfo {
+        initially_asked: ask_currency.into_output_value(Amount::from_atoms(initially_asked)),
+        initially_given: give_currency.into_output_value(Amount::from_atoms(initially_given)),
+        ask_balance: Amount::from_atoms(ask_balance),
+        give_balance: Amount::from_atoms(give_balance),
+    }
+}
+
+fn random_destination(rng: &mut (impl Rng + CryptoRng)) -> Destination {
+    let (_sk, pk) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
+    Destination::PublicKey(pk)
+}
+
+fn destination_from_account<K: AccountKeyChains>(
+    account: &mut Account<K>,
+    db_tx: &mut impl TransactionRwUnlocked,
+    rng: &mut impl Rng,
+) -> Destination {
+    let purpose = if rng.gen_bool(0.5) {
+        KeyPurpose::ReceiveFunds
+    } else {
+        KeyPurpose::Change
+    };
+
+    account.get_new_address(db_tx, purpose).unwrap().1.into_object()
 }

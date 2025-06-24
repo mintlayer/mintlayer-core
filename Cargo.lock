@@ -9500,6 +9500,8 @@ dependencies = [
  "getrandom 0.2.16",
  "gloo-utils",
  "hex",
+ "itertools 0.14.0",
+ "js-sys",
  "randomness",
  "rstest",
  "serialization",

@@ -93,7 +93,7 @@ pub fn check_nft_description(
     // Check if description has alphanumeric chars
     ensure!(
         check_is_text_ascii_alphanumeric(description),
-        TokenIssuanceError::IssueErrorDescriptionHasNoneAlphaNumericChar
+        TokenIssuanceError::IssueErrorDescriptionHasNonAlphaNumericChar
     );
 
     Ok(())

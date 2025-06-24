@@ -54,7 +54,7 @@ use wallet_storage::{schema, WalletStorageEncryptionRead};
 use wallet_types::{
     account_info::DEFAULT_ACCOUNT_INDEX,
     partially_signed_transaction::{
-        PartiallySignedTransaction, PartiallySignedTransactionCreationError, TxAdditionalInfo,
+        PartiallySignedTransaction, PartiallySignedTransactionError, TxAdditionalInfo,
     },
     seed_phrase::{PassPhrase, StoreSeedPhrase},
     utxo_types::{UtxoState, UtxoType},
@@ -2874,7 +2874,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
         Destination::PublicKeyHash(some_other_address),
     );
 
-    let additional_info = TxAdditionalInfo::with_token_info(
+    let additional_info = TxAdditionalInfo::new().with_token_info(
         *token_id,
         TokenAdditionalInfo {
             num_decimals: number_of_decimals,
@@ -3230,7 +3230,7 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
         Destination::PublicKeyHash(some_other_address),
     );
 
-    let additional_info = TxAdditionalInfo::with_token_info(
+    let additional_info = TxAdditionalInfo::new().with_token_info(
         issued_token_id,
         TokenAdditionalInfo {
             num_decimals: unconfirmed_token_info.num_decimals(),
@@ -4876,7 +4876,7 @@ fn decommission_pool_request_wrong_account(#[case] seed: Seed) {
     assert!(!decommission_partial_tx.all_signatures_available());
     matches!(
         decommission_partial_tx.into_signed_tx().unwrap_err(),
-        PartiallySignedTransactionCreationError::FailedToConvertPartiallySignedTx(_)
+        PartiallySignedTransactionError::FailedToConvertPartiallySignedTx(_)
     );
 }
 
@@ -5903,7 +5903,7 @@ fn create_order(#[case] seed: Seed) {
     // Create an order selling tokens for coins
     let ask_value = OutputValue::Coin(Amount::from_atoms(111));
     let give_value = OutputValue::TokenV1(issued_token_id, token_amount_to_mint);
-    let additional_info = TxAdditionalInfo::with_token_info(
+    let additional_info = TxAdditionalInfo::new().with_token_info(
         issued_token_id,
         TokenAdditionalInfo {
             num_decimals: unconfirmed_token_info.num_decimals(),
@@ -6032,7 +6032,7 @@ fn create_order_and_conclude(#[case] seed: Seed) {
     // Create an order selling tokens for coins
     let ask_value = OutputValue::Coin(Amount::from_atoms(111));
     let give_value = OutputValue::TokenV1(issued_token_id, token_amount_to_mint);
-    let additional_info = TxAdditionalInfo::with_token_info(
+    let additional_info = TxAdditionalInfo::new().with_token_info(
         issued_token_id,
         TokenAdditionalInfo {
             num_decimals: unconfirmed_token_info.num_decimals(),
@@ -6077,7 +6077,7 @@ fn create_order_and_conclude(#[case] seed: Seed) {
     assert_eq!(coin_balance, expected_balance);
     assert!(token_balances.is_empty());
 
-    let additional_info = TxAdditionalInfo::with_token_info(
+    let additional_info = TxAdditionalInfo::new().with_token_info(
         issued_token_id,
         TokenAdditionalInfo {
             num_decimals: unconfirmed_token_info.num_decimals(),
@@ -6225,7 +6225,7 @@ fn create_order_fill_completely_conclude(#[case] seed: Seed) {
     let ask_value = OutputValue::TokenV1(issued_token_id, token_amount_to_mint);
     let sell_amount = Amount::from_atoms(1000);
     let give_value = OutputValue::Coin(sell_amount);
-    let additional_info = TxAdditionalInfo::with_token_info(
+    let additional_info = TxAdditionalInfo::new().with_token_info(
         issued_token_id,
         TokenAdditionalInfo {
             num_decimals: unconfirmed_token_info.num_decimals(),
@@ -6284,7 +6284,7 @@ fn create_order_fill_completely_conclude(#[case] seed: Seed) {
             Some(&(issued_token_id, token_amount_to_mint))
         );
     }
-    let additional_info = TxAdditionalInfo::with_token_info(
+    let additional_info = TxAdditionalInfo::new().with_token_info(
         issued_token_id,
         TokenAdditionalInfo {
             num_decimals: unconfirmed_token_info.num_decimals(),
@@ -6351,7 +6351,7 @@ fn create_order_fill_completely_conclude(#[case] seed: Seed) {
         nonce: Some(AccountNonce::new(0)),
     };
 
-    let additional_info = TxAdditionalInfo::with_token_info(
+    let additional_info = TxAdditionalInfo::new().with_token_info(
         issued_token_id,
         TokenAdditionalInfo {
             num_decimals: unconfirmed_token_info.num_decimals(),
@@ -6409,7 +6409,7 @@ fn create_order_fill_completely_conclude(#[case] seed: Seed) {
         ask_balance: Amount::ZERO,
         nonce: Some(AccountNonce::new(1)),
     };
-    let additional_info = TxAdditionalInfo::with_token_info(
+    let additional_info = TxAdditionalInfo::new().with_token_info(
         issued_token_id,
         TokenAdditionalInfo {
             num_decimals: unconfirmed_token_info.num_decimals(),
@@ -6568,7 +6568,7 @@ fn create_order_fill_partially_conclude(#[case] seed: Seed) {
     let ask_value = OutputValue::TokenV1(issued_token_id, token_amount_to_mint);
     let sell_amount = Amount::from_atoms(1000);
     let give_value = OutputValue::Coin(sell_amount);
-    let additional_info = TxAdditionalInfo::with_token_info(
+    let additional_info = TxAdditionalInfo::new().with_token_info(
         issued_token_id,
         TokenAdditionalInfo {
             num_decimals: unconfirmed_token_info.num_decimals(),
@@ -6628,7 +6628,7 @@ fn create_order_fill_partially_conclude(#[case] seed: Seed) {
         );
     }
 
-    let additional_info = TxAdditionalInfo::with_token_info(
+    let additional_info = TxAdditionalInfo::new().with_token_info(
         issued_token_id,
         TokenAdditionalInfo {
             num_decimals: unconfirmed_token_info.num_decimals(),
@@ -6694,7 +6694,7 @@ fn create_order_fill_partially_conclude(#[case] seed: Seed) {
         nonce: Some(AccountNonce::new(0)),
     };
 
-    let additional_info = TxAdditionalInfo::with_token_info(
+    let additional_info = TxAdditionalInfo::new().with_token_info(
         issued_token_id,
         TokenAdditionalInfo {
             num_decimals: unconfirmed_token_info.num_decimals(),
@@ -7451,18 +7451,10 @@ fn conflicting_order_account_nonce(#[case] seed: Seed) {
         )
         .unwrap();
 
-    let order_info = RpcOrderInfo {
-        conclude_key: address2.clone().into_object(),
-        initially_given: RpcOutputValue::Token {
-            id: issued_token_id,
-            amount: buy_amount,
-        },
-        initially_asked: RpcOutputValue::Coin {
-            amount: sell_amount,
-        },
-        give_balance: sell_amount,
-        ask_balance: buy_amount,
-        nonce: Some(AccountNonce::new(0)),
+    let order_info = {
+        let mut order_info = order_info.clone();
+        order_info.nonce = Some(AccountNonce::new(0));
+        order_info
     };
 
     let spend_coins_2 = Amount::from_atoms(3);
@@ -7471,7 +7463,7 @@ fn conflicting_order_account_nonce(#[case] seed: Seed) {
         .create_fill_order_tx(
             DEFAULT_ACCOUNT_INDEX,
             order_id,
-            order_info.clone(),
+            order_info,
             spend_coins_2,
             None,
             FeeRate::from_amount_per_kb(Amount::ZERO),

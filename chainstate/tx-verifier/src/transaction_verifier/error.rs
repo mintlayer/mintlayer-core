@@ -180,7 +180,7 @@ pub enum TokenIssuanceError {
     #[error("Invalid character in token name")]
     IssueErrorNameHasNoneAlphaNumericChar,
     #[error("Invalid character in token description")]
-    IssueErrorDescriptionHasNoneAlphaNumericChar,
+    IssueErrorDescriptionHasNonAlphaNumericChar,
     #[error("Incorrect amount")]
     IssueAmountIsZero,
     #[error("Too many decimals")]
