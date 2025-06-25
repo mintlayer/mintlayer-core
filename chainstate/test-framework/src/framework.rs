@@ -15,10 +15,31 @@
 
 use std::{collections::BTreeMap, sync::Arc};
 
+use rstest::rstest;
+
+use chainstate::{chainstate_interface::ChainstateInterface, BlockSource, ChainstateError};
 use chainstate_storage::{
     BlockchainStorageRead, BlockchainStorageWrite, TransactionRw, Transactional,
 };
-use rstest::rstest;
+use chainstate_types::{
+    pos_randomness::PoSRandomness, BlockIndex, BlockStatus, EpochStorageRead as _, GenBlockIndex,
+    TipStorageTag,
+};
+use common::{
+    chain::{
+        signature::sighash::{self, input_commitments::SighashInputCommitment},
+        Block, ChainConfig, GenBlock, GenBlockId, Genesis, OutPointSourceId, PoolId, TxInput,
+        TxOutput, UtxoOutPoint,
+    },
+    primitives::{id::WithId, time::Time, Amount, BlockHeight, Id, Idable},
+    time_getter::TimeGetter,
+};
+use crypto::{key::PrivateKey, vrf::VRFPrivateKey};
+use orders_accounting::OrdersAccountingDB;
+use pos_accounting::{PoSAccountingDB, PoSAccountingData};
+use randomness::{CryptoRng, Rng};
+use utils::atomics::SeqCstAtomicU64;
+use utxo::{Utxo, UtxosDB};
 
 use crate::{
     framework_builder::TestFrameworkBuilderValue,
@@ -34,23 +55,6 @@ use crate::{
     },
     BlockBuilder, TestChainstate, TestFrameworkBuilder, TestStore, TxVerificationStrategy,
 };
-use chainstate::{chainstate_interface::ChainstateInterface, BlockSource, ChainstateError};
-use chainstate_types::{
-    pos_randomness::PoSRandomness, BlockIndex, BlockStatus, EpochStorageRead as _, GenBlockIndex,
-};
-use common::{
-    chain::{
-        signature::sighash::{self, input_commitments::SighashInputCommitment},
-        Block, ChainConfig, GenBlock, GenBlockId, Genesis, OutPointSourceId, PoolId, TxInput,
-        TxOutput, UtxoOutPoint,
-    },
-    primitives::{id::WithId, time::Time, Amount, BlockHeight, Id, Idable},
-    time_getter::TimeGetter,
-};
-use crypto::{key::PrivateKey, vrf::VRFPrivateKey};
-use randomness::{CryptoRng, Rng};
-use utils::atomics::SeqCstAtomicU64;
-use utxo::{Utxo, UtxosDB};
 
 /// The `Chainstate` wrapper that simplifies operations and checks in the tests.
 #[must_use]
@@ -587,13 +591,20 @@ impl TestFramework {
     pub fn make_sighash_input_commitments_for_transaction_inputs(
         &self,
         inputs: &[TxInput],
+        block_height: BlockHeight,
     ) -> Vec<SighashInputCommitment<'static>> {
         let storage_tx = self.storage.transaction_ro().unwrap();
         let utxo_db = UtxosDB::new(&storage_tx);
+        let pos_db = PoSAccountingDB::<_, TipStorageTag>::new(&storage_tx);
+        let orders_db = OrdersAccountingDB::new(&storage_tx);
 
-        sighash::input_commitments::make_sighash_input_commitments_for_transaction_inputs(
+        sighash::input_commitments::make_sighash_input_commitments_for_transaction_inputs_at_height(
             inputs,
             &SighashInputCommitmentInfoProvider(&utxo_db),
+            &SighashInputCommitmentInfoProvider(&pos_db),
+            &SighashInputCommitmentInfoProvider(&orders_db),
+            self.chain_config(),
+            block_height,
         )
         .unwrap()
     }
@@ -612,6 +623,38 @@ impl TestFramework {
 
     pub fn coin_amount_from_utxo(&self, outpoint: &UtxoOutPoint) -> Amount {
         get_output_value(self.utxo(outpoint).output()).unwrap().coin_amount().unwrap()
+    }
+
+    pub fn pos_accounting_data_at_tip(&self) -> PoSAccountingData {
+        self.storage.transaction_ro().unwrap().read_pos_accounting_data_tip().unwrap()
+    }
+
+    pub fn find_kernel_outpoint_for_pool(&self, pool_id: &PoolId) -> Option<UtxoOutPoint> {
+        let utxos = self.storage.transaction_ro().unwrap().read_utxo_set().unwrap();
+
+        let mut outpoints_iter =
+            utxos.into_iter().filter_map(|(outpoint, utxo)| match utxo.output() {
+                TxOutput::ProduceBlockFromStake(_, used_pool_id)
+                | TxOutput::CreateStakePool(used_pool_id, _) => {
+                    (used_pool_id == pool_id).then_some(outpoint)
+                }
+
+                TxOutput::Transfer(_, _)
+                | TxOutput::LockThenTransfer(_, _, _)
+                | TxOutput::Burn(_)
+                | TxOutput::CreateDelegationId(_, _)
+                | TxOutput::DelegateStaking(_, _)
+                | TxOutput::IssueFungibleToken(_)
+                | TxOutput::IssueNft(_, _, _)
+                | TxOutput::DataDeposit(_)
+                | TxOutput::Htlc(_, _)
+                | TxOutput::CreateOrder(_) => None,
+            });
+
+        let result = outpoints_iter.next();
+        assert!(outpoints_iter.next().is_none());
+
+        result
     }
 }
 

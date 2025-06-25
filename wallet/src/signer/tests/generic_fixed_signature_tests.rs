@@ -19,9 +19,10 @@ use itertools::{izip, Itertools as _};
 
 use common::{
     chain::{
+        self,
         block::timestamp::BlockTimestamp,
         classic_multisig::ClassicMultisigChallenge,
-        config::create_regtest,
+        config::ChainType,
         htlc::{HashedTimelockContract, HtlcSecret},
         output_value::OutputValue,
         signature::{
@@ -40,9 +41,10 @@ use common::{
             IsTokenUnfreezable, Metadata, NftIssuance, NftIssuanceV0, TokenId, TokenIssuance,
             TokenIssuanceV1,
         },
-        AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, ChainConfig, DelegationId,
-        Destination, OrderAccountCommand, OrderData, OrderId, OutPointSourceId, PoolId,
-        Transaction, TxInput, TxOutput, UtxoOutPoint,
+        AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, ChainConfig,
+        ChainstateUpgradeBuilder, DelegationId, Destination, NetUpgrades, OrderAccountCommand,
+        OrderData, OrderId, OutPointSourceId, PoolId, SighashInputCommitmentVersion, Transaction,
+        TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{id::hash_encoded, per_thousand::PerThousand, Amount, BlockHeight, Id, H256},
 };
@@ -125,7 +127,33 @@ where
     MkS: Fn(Arc<ChainConfig>, U31) -> S,
     S: Signer,
 {
-    let chain_config = Arc::new(create_regtest());
+    let sighash_input_commitment_version_fork_height = BlockHeight::new(rng.gen_range(1..100_000));
+    // The height shouldn't matter as long as it's below the fork
+    let tx_block_height =
+        BlockHeight::new(rng.gen_range(0..sighash_input_commitment_version_fork_height.into_int()));
+
+    let chain_config = Arc::new(
+        chain::config::Builder::new(ChainType::Regtest)
+            .chainstate_upgrades(
+                NetUpgrades::initialize(vec![
+                    (
+                        BlockHeight::zero(),
+                        ChainstateUpgradeBuilder::latest()
+                            .sighash_input_commitment_version(SighashInputCommitmentVersion::V0)
+                            .build(),
+                    ),
+                    (
+                        sighash_input_commitment_version_fork_height,
+                        ChainstateUpgradeBuilder::latest()
+                            .sighash_input_commitment_version(SighashInputCommitmentVersion::V1)
+                            .build(),
+                    ),
+                ])
+                .unwrap(),
+            )
+            .build(),
+    );
+
     let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
     let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
 
@@ -343,10 +371,13 @@ where
     let orig_ptx = req.into_partially_signed_tx(additional_info).unwrap();
 
     let mut signer = make_signer(chain_config.clone(), account.account_index());
-    let (ptx, _, _) = signer.sign_tx(orig_ptx, account.key_chain(), &db_tx).unwrap();
+    let (ptx, _, _) =
+        signer.sign_tx(orig_ptx, account.key_chain(), &db_tx, tx_block_height).unwrap();
     assert!(ptx.all_signatures_available());
 
-    let input_commitments = ptx.make_sighash_input_commitments().unwrap();
+    let input_commitments = ptx
+        .make_sighash_input_commitments_at_height(&chain_config, tx_block_height)
+        .unwrap();
     let all_utxos = utxos
         .iter()
         .map(Some)
@@ -390,13 +421,50 @@ where
 /// we also test:
 /// 1) ProduceBlockFromState input;
 /// 2) v1 order inputs;
-/// 3) htlc inputs.
-pub fn test_fixed_signatures_generic2<MkS, S>(rng: &mut (impl Rng + CryptoRng), make_signer: MkS)
-where
+/// 3) htlc inputs;
+/// 4) v1 input commitments.
+pub fn test_fixed_signatures_generic2<MkS, S>(
+    rng: &mut (impl Rng + CryptoRng),
+    input_commitments_version: SighashInputCommitmentVersion,
+    make_signer: MkS,
+) where
     MkS: Fn(Arc<ChainConfig>, U31) -> S,
     S: Signer,
 {
-    let chain_config = Arc::new(create_regtest());
+    // The actual heights don't matter as long as tx block height is at the correct side of the fork.
+    let (sighash_input_commitment_version_fork_height, tx_block_height) = {
+        let fork_height = rng.gen_range(1000..2000);
+        let tx_block_height = match input_commitments_version {
+            SighashInputCommitmentVersion::V0 => rng.gen_range(1..fork_height),
+            SighashInputCommitmentVersion::V1 => rng.gen_range(fork_height..fork_height * 2),
+        };
+        (
+            BlockHeight::new(fork_height),
+            BlockHeight::new(tx_block_height),
+        )
+    };
+
+    let chain_config = Arc::new(
+        chain::config::Builder::new(ChainType::Regtest)
+            .chainstate_upgrades(
+                NetUpgrades::initialize(vec![
+                    (
+                        BlockHeight::zero(),
+                        ChainstateUpgradeBuilder::latest()
+                            .sighash_input_commitment_version(SighashInputCommitmentVersion::V0)
+                            .build(),
+                    ),
+                    (
+                        sighash_input_commitment_version_fork_height,
+                        ChainstateUpgradeBuilder::latest()
+                            .sighash_input_commitment_version(SighashInputCommitmentVersion::V1)
+                            .build(),
+                    ),
+                ])
+                .unwrap(),
+            )
+            .build(),
+    );
 
     let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
     let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
@@ -556,16 +624,30 @@ where
     let concluded_order_v1_id = OrderId::new(hash_encoded(&"some order 4"));
     let frozen_order_id = OrderId::new(hash_encoded(&"some order 5"));
 
-    let filled_order_v0_info = OrderAdditionalInfo {
-        // Note: the amounts in initially_asked and initially_given aren't used by the signers when handling
-        // v0 FillOrder, only the currencies matter.
-        initially_asked: OutputValue::Coin(Amount::from_atoms(rng.gen_range(100..200))),
-        initially_given: OutputValue::TokenV1(
-            token_id,
-            Amount::from_atoms(rng.gen_range(100..200)),
-        ),
-        ask_balance: Amount::from_atoms(50),
-        give_balance: Amount::from_atoms(100),
+    let filled_order_v0_info = match input_commitments_version {
+        SighashInputCommitmentVersion::V0 => {
+            OrderAdditionalInfo {
+                // Note: the amounts in initially_asked and initially_given aren't used by the signers when handling
+                // v0 FillOrder, only the currencies matter.
+                initially_asked: OutputValue::Coin(Amount::from_atoms(rng.gen_range(100..200))),
+                initially_given: OutputValue::TokenV1(
+                    token_id,
+                    Amount::from_atoms(rng.gen_range(100..200)),
+                ),
+                ask_balance: Amount::from_atoms(50),
+                give_balance: Amount::from_atoms(100),
+            }
+        }
+        SighashInputCommitmentVersion::V1 => {
+            OrderAdditionalInfo {
+                // Note: in commitments v1, we commit to initially_asked/initially_given values for FillOrder,
+                // so the values can't be random.
+                initially_asked: OutputValue::Coin(Amount::from_atoms(100)),
+                initially_given: OutputValue::TokenV1(token_id, Amount::from_atoms(200)),
+                ask_balance: Amount::from_atoms(50),
+                give_balance: Amount::from_atoms(100),
+            }
+        }
     };
     let filled_order_v1_info = OrderAdditionalInfo {
         initially_asked: OutputValue::TokenV1(token_id, Amount::from_atoms(300)),
@@ -574,27 +656,53 @@ where
         ask_balance: Amount::from_atoms(rng.gen_range(100..200)),
         give_balance: Amount::from_atoms(rng.gen_range(100..200)),
     };
-    let concluded_order_v0_info = OrderAdditionalInfo {
-        initially_asked: OutputValue::TokenV1(token_id, Amount::from_atoms(110)),
-        // Note: the amount in initially_given isn't used by the signers when handling ConcludeOrder
-        // (both v0 and v1), only the currency matters.
-        initially_given: OutputValue::TokenV1(
-            token_id,
-            Amount::from_atoms(rng.gen_range(100..200)),
-        ),
-        ask_balance: Amount::from_atoms(55),
-        give_balance: Amount::from_atoms(110),
+    let concluded_order_v0_info = match input_commitments_version {
+        SighashInputCommitmentVersion::V0 => {
+            OrderAdditionalInfo {
+                initially_asked: OutputValue::TokenV1(token_id, Amount::from_atoms(110)),
+                // Note: the amount in initially_given isn't used by the signers when handling ConcludeOrder
+                // (both v0 and v1), only the currency matters.
+                initially_given: OutputValue::TokenV1(
+                    token_id,
+                    Amount::from_atoms(rng.gen_range(100..200)),
+                ),
+                ask_balance: Amount::from_atoms(55),
+                give_balance: Amount::from_atoms(110),
+            }
+        }
+        SighashInputCommitmentVersion::V1 => OrderAdditionalInfo {
+            // Note: in commitments v1, we commit to all values for ConcludeOrder,
+            // so none of them can be random.
+            initially_asked: OutputValue::TokenV1(token_id, Amount::from_atoms(110)),
+            initially_given: OutputValue::TokenV1(token_id, Amount::from_atoms(220)),
+            ask_balance: Amount::from_atoms(55),
+            give_balance: Amount::from_atoms(110),
+        },
     };
-    let concluded_order_v1_info = OrderAdditionalInfo {
-        initially_asked: OutputValue::TokenV1(token_id, Amount::from_atoms(330)),
-        // Note: the amount in initially_given isn't used by the signers when handling ConcludeOrder
-        // (both v0 and v1), only the currency matters.
-        initially_given: OutputValue::TokenV1(
-            token_id,
-            Amount::from_atoms(rng.gen_range(100..200)),
-        ),
-        ask_balance: Amount::from_atoms(110),
-        give_balance: Amount::from_atoms(55),
+    let concluded_order_v1_info = match input_commitments_version {
+        SighashInputCommitmentVersion::V0 => {
+            OrderAdditionalInfo {
+                initially_asked: OutputValue::TokenV1(token_id, Amount::from_atoms(330)),
+                // Note: the amount in initially_given isn't used by the signers when handling ConcludeOrder
+                // (both v0 and v1), only the currency matters.
+                initially_given: OutputValue::TokenV1(
+                    token_id,
+                    Amount::from_atoms(rng.gen_range(100..200)),
+                ),
+                ask_balance: Amount::from_atoms(110),
+                give_balance: Amount::from_atoms(55),
+            }
+        }
+        SighashInputCommitmentVersion::V1 => {
+            OrderAdditionalInfo {
+                // Note: in commitments v1, we commit to all values for ConcludeOrder,
+                // so none of them can be random.
+                initially_asked: OutputValue::TokenV1(token_id, Amount::from_atoms(330)),
+                initially_given: OutputValue::TokenV1(token_id, Amount::from_atoms(165)),
+                ask_balance: Amount::from_atoms(110),
+                give_balance: Amount::from_atoms(55),
+            }
+        }
     };
     let frozen_order_info = OrderAdditionalInfo {
         // Note: the amounts aren't used by the signers when handling FreezeOrder.
@@ -792,19 +900,19 @@ where
     let ptx = req.into_partially_signed_tx(additional_info).unwrap();
 
     let input_commitments = ptx
-        .make_sighash_input_commitments()
+        .make_sighash_input_commitments_at_height(&chain_config, tx_block_height)
         .unwrap()
         .into_iter()
         .map(|comm| comm.deep_clone())
         .collect_vec();
 
     let mut signer = make_signer(chain_config.clone(), account1.account_index());
-    let (ptx, _, _) = signer.sign_tx(ptx, account1.key_chain(), &db_tx).unwrap();
+    let (ptx, _, _) = signer.sign_tx(ptx, account1.key_chain(), &db_tx, tx_block_height).unwrap();
     assert!(ptx.all_signatures_available());
 
     // Fully sign multisig inputs.
     let mut signer = make_signer(chain_config.clone(), account2.account_index());
-    let (ptx, _, _) = signer.sign_tx(ptx, account2.key_chain(), &db_tx).unwrap();
+    let (ptx, _, _) = signer.sign_tx(ptx, account2.key_chain(), &db_tx, tx_block_height).unwrap();
     assert!(ptx.all_signatures_available());
 
     for (i, dest) in destinations.iter().enumerate() {
@@ -827,94 +935,185 @@ where
         .unwrap();
     }
 
-    let expected_sigs = {
-        let htlc_multisig = {
-            let sigs_hex = [
+    let expected_sigs = match input_commitments_version {
+        SighashInputCommitmentVersion::V0 => {
+            let htlc_multisig = {
+                let sigs_hex = [
                 (0, "32eaee75673ebe681c3d8a44e9ae7310f93f99c5021cb5746f64d26d12e22b59a8517943f828c9bff06521bd0a421552f320aae1bd04bbc731629c350289d5eb"),
                 (1, "43786e4d3def2f1f1dd5e1afa9489f6e79c7eb4b0dbc09456c9e75f6dac7f2313c18663895ecc3b76141cc58b3e3eab3e927cf43b56c75d6313ca5c8ff6626c2"),
             ];
-            make_htlc_multisig_spend_sig(htlc_multisig_challenge, sigs_hex)
-        };
-        let multisig = {
-            let sigs_hex = [
+                make_htlc_multisig_spend_sig(htlc_multisig_challenge, sigs_hex)
+            };
+            let multisig = {
+                let sigs_hex = [
                 (1, "8f15883ae42988b3e1e4d68183a92f9a7102e2f2abf4b17474881eb2630f87dfc5f050dea079440a14be325211195cf58dc3681e7c5665892d433daa9ea935ff"),
                 (2, "bc8e6694b066f64003ad92f894ee560de9f51aa8253a8e336188db7fd36fa992923bf948490144c7b74533d56efa699db547fd5605aaf8eeb8a5cbda02d5c8c8"),
                 (3, "3945b0d96a08b0bb6994d3d722d8359f34761a4407fc6f2dd03734a8065a3ba246deea95fa78411ef23c2d05f0efcefb1984f9e2c38c9e11b6dff410cb72eb80")
             ];
-            make_multisig_spend_sig(multisig_challenge, sigs_hex)
-        };
+                make_multisig_spend_sig(multisig_challenge, sigs_hex)
+            };
 
-        vec![
-            Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
-                find_pub_key_for_pkh_dest(&account1_dest4, &account1),
-                "aa01ee31f91af118a2ceebb3995dbf5d8755f557b11fa5a68af9aa7da3998a1ee4ed41ea4f67c3658d51fbcbe7b24b65b8a99648d1dc20a3035541cd45e66a59",
-            ))),
-            Some(InputWitness::Standard(make_pub_key_spend_sig(
-                "bc8e6694b066f64003ad92f894ee560de9f51aa8253a8e336188db7fd36fa992923bf948490144c7b74533d56efa699db547fd5605aaf8eeb8a5cbda02d5c8c8",
-            ))),
-            Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
-                find_pub_key_for_pkh_dest(&decommission_dest, &account1),
-                "ee4b5a0febe45ebe8ce4ece0387111f7d53bb8acf7ce1635fcc13c41f6ff6b632ea434e8031781e53731839c782f33e87e06599a9e37d0f3aed63964635c1018",
-            ))),
-            Some(InputWitness::Standard(make_htlc_secret_spend_sig(
-                htlc_secret,
-                "0094a8bde764e97d9534d08c22cf8aa762e44338830ea058604d89b76c33c9b6dc8fd7f1f2e2d818841c10d47e8d504b9fc251a1d2ddb13eaeb7c045ea03727d8f",
-            ))),
-            Some(InputWitness::Standard(htlc_multisig)),
-            Some(InputWitness::Standard(multisig)),
-            Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
-                find_pub_key_for_pkh_dest(&acc_dests[0], &account1),
-                "5537743c018289f74aad5cc3672d14a502c31641fb8244f41e8412eac10128e8f5261c43b4f3615d20e97a99ab69f99625fa6adf3e9eeec890f4721044dbeb8b",
-            ))),
-            Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
-                find_pub_key_for_pkh_dest(&acc_dests[1], &account1),
-                "1b5f79c97ae5ab0717fa5460331271a328b8773735fd146082d6aab86023e94fd51613fcd6c76ab3e64a05548ae71a45920ba317cba8b04917f2b6ef38a1f72a",
-            ))),
-            Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
-                find_pub_key_for_pkh_dest(&acc_dests[2], &account1),
-                "315d46daa4fb008207d7888c406c65aaca86fe708db505227cd13e4cea968034ce961432c8747f51a5f47139571f8b72c0905ac0b9834c030019ad29b9c77995",
-            ))),
-            Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
-                find_pub_key_for_pkh_dest(&acc_dests[3], &account1),
-                "b283bf358bfd9ea494f46c1b50485a2bd76aba5db918fea738b5f86ee950e95359dcbce5c1db7eab483e15788abb8f921c0bf9d83e3f0ea40bc4a0b5b2003378",
-            ))),
-            Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
-                find_pub_key_for_pkh_dest(&acc_dests[4], &account1),
-                "46ccf257425b3fce609d99062152166bb41f1dca503e46aa989146fbfccdb92c83fe90c5d232f934429fb4aa2c9c529412b7c1a678a736fe9c8b183de6e9dd59",
-            ))),
-            Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
-                find_pub_key_for_pkh_dest(&acc_dests[5], &account1),
-                "66cb7bc3b42f40a08e15dd4539201da316b0ccd12594b0ef62cd5a0480f410a4791a5e928685ca764a9ed728bf960ad1b3ccce15cdd4e9369abe24853b6f395c",
-            ))),
-            Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
-                find_pub_key_for_pkh_dest(&acc_dests[6], &account1),
-                "ec29fa50efd02cf9bcceb9c43e01fea0ea16df2770aeced93cc1594fa8b6aeaca6e42cdb223a3dbd5daf978c4f716437ebe51bd079b5ea681c9587ec1ac1fa93",
-            ))),
-            Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
-                find_pub_key_for_pkh_dest(&acc_dests[7], &account1),
-                "a7fbcc42b4d2af00cc2a1636aa89ba66a8d89008dcf0e0f830ccd6aa0340d638b930b07e0babcf93da0d1b7302445998779b5af11125f2e15ffe1a4f43dc901d",
-            ))),
-            Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
-                find_pub_key_for_pkh_dest(&acc_dests[8], &account1),
-                "0bd5c0fb6d8c5d0ad7d7883bdc9b9f03b147b9d6c540c949ac544ee326e8137532ca7eb1e2256952d200b5228c630d10b60a4d2b1d37a0d1408865a3188deb65",
-            ))),
-            Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
-                find_pub_key_for_pkh_dest(&acc_dests[9], &account1),
-                "47c5dfc79c953a672d7b4f74a2b60cf56c7d74253803e4629dfe80458cb0758b54172823a97486d63611f1d26fcb672e13d25c3fc42834b040d1d41460fd6f78",
-            ))),
-            Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
-                find_pub_key_for_pkh_dest(&acc_dests[10], &account1),
-                "9ba0d5070c0ba2f35cd89d344b30b681eb5a69d5668216865189e84a15b8fc50fa49ace13a1702761d3a4632c04b5ef00088b0052250ff2f0e4fb51db56e295e",
-            ))),
-            Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
-                find_pub_key_for_pkh_dest(&acc_dests[11], &account1),
-                "1eddbbfdf09404546c5a4a15e89b7811a658559cdde1960bcebc3aefe0ae86dd1c05a8418b208c75f3ad011d839e045ffa522135cb2cabc5c08f34b2060b5431",
-            ))),
-            Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
-                find_pub_key_for_pkh_dest(&acc_dests[12], &account1),
-                "180a0f411eb920d7dd2b71cdf0a8f71a20ca82563c6cb6aa48fe20b7000ef05c1257968b3d6a7b369c8b131b83d421feae951c06ec27f5223e540a8eafb9842b",
-            ))),
-        ]
+            vec![
+                Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
+                    find_pub_key_for_pkh_dest(&account1_dest4, &account1),
+                    "aa01ee31f91af118a2ceebb3995dbf5d8755f557b11fa5a68af9aa7da3998a1ee4ed41ea4f67c3658d51fbcbe7b24b65b8a99648d1dc20a3035541cd45e66a59",
+                ))),
+                Some(InputWitness::Standard(make_pub_key_spend_sig(
+                    "bc8e6694b066f64003ad92f894ee560de9f51aa8253a8e336188db7fd36fa992923bf948490144c7b74533d56efa699db547fd5605aaf8eeb8a5cbda02d5c8c8",
+                ))),
+                Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
+                    find_pub_key_for_pkh_dest(&decommission_dest, &account1),
+                    "ee4b5a0febe45ebe8ce4ece0387111f7d53bb8acf7ce1635fcc13c41f6ff6b632ea434e8031781e53731839c782f33e87e06599a9e37d0f3aed63964635c1018",
+                ))),
+                Some(InputWitness::Standard(make_htlc_secret_spend_sig(
+                    htlc_secret,
+                    "0094a8bde764e97d9534d08c22cf8aa762e44338830ea058604d89b76c33c9b6dc8fd7f1f2e2d818841c10d47e8d504b9fc251a1d2ddb13eaeb7c045ea03727d8f",
+                ))),
+                Some(InputWitness::Standard(htlc_multisig)),
+                Some(InputWitness::Standard(multisig)),
+                Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
+                    find_pub_key_for_pkh_dest(&acc_dests[0], &account1),
+                    "5537743c018289f74aad5cc3672d14a502c31641fb8244f41e8412eac10128e8f5261c43b4f3615d20e97a99ab69f99625fa6adf3e9eeec890f4721044dbeb8b",
+                ))),
+                Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
+                    find_pub_key_for_pkh_dest(&acc_dests[1], &account1),
+                    "1b5f79c97ae5ab0717fa5460331271a328b8773735fd146082d6aab86023e94fd51613fcd6c76ab3e64a05548ae71a45920ba317cba8b04917f2b6ef38a1f72a",
+                ))),
+                Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
+                    find_pub_key_for_pkh_dest(&acc_dests[2], &account1),
+                    "315d46daa4fb008207d7888c406c65aaca86fe708db505227cd13e4cea968034ce961432c8747f51a5f47139571f8b72c0905ac0b9834c030019ad29b9c77995",
+                ))),
+                Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
+                    find_pub_key_for_pkh_dest(&acc_dests[3], &account1),
+                    "b283bf358bfd9ea494f46c1b50485a2bd76aba5db918fea738b5f86ee950e95359dcbce5c1db7eab483e15788abb8f921c0bf9d83e3f0ea40bc4a0b5b2003378",
+                ))),
+                Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
+                    find_pub_key_for_pkh_dest(&acc_dests[4], &account1),
+                    "46ccf257425b3fce609d99062152166bb41f1dca503e46aa989146fbfccdb92c83fe90c5d232f934429fb4aa2c9c529412b7c1a678a736fe9c8b183de6e9dd59",
+                ))),
+                Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
+                    find_pub_key_for_pkh_dest(&acc_dests[5], &account1),
+                    "66cb7bc3b42f40a08e15dd4539201da316b0ccd12594b0ef62cd5a0480f410a4791a5e928685ca764a9ed728bf960ad1b3ccce15cdd4e9369abe24853b6f395c",
+                ))),
+                Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
+                    find_pub_key_for_pkh_dest(&acc_dests[6], &account1),
+                    "ec29fa50efd02cf9bcceb9c43e01fea0ea16df2770aeced93cc1594fa8b6aeaca6e42cdb223a3dbd5daf978c4f716437ebe51bd079b5ea681c9587ec1ac1fa93",
+                ))),
+                Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
+                    find_pub_key_for_pkh_dest(&acc_dests[7], &account1),
+                    "a7fbcc42b4d2af00cc2a1636aa89ba66a8d89008dcf0e0f830ccd6aa0340d638b930b07e0babcf93da0d1b7302445998779b5af11125f2e15ffe1a4f43dc901d",
+                ))),
+                Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
+                    find_pub_key_for_pkh_dest(&acc_dests[8], &account1),
+                    "0bd5c0fb6d8c5d0ad7d7883bdc9b9f03b147b9d6c540c949ac544ee326e8137532ca7eb1e2256952d200b5228c630d10b60a4d2b1d37a0d1408865a3188deb65",
+                ))),
+                Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
+                    find_pub_key_for_pkh_dest(&acc_dests[9], &account1),
+                    "47c5dfc79c953a672d7b4f74a2b60cf56c7d74253803e4629dfe80458cb0758b54172823a97486d63611f1d26fcb672e13d25c3fc42834b040d1d41460fd6f78",
+                ))),
+                Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
+                    find_pub_key_for_pkh_dest(&acc_dests[10], &account1),
+                    "9ba0d5070c0ba2f35cd89d344b30b681eb5a69d5668216865189e84a15b8fc50fa49ace13a1702761d3a4632c04b5ef00088b0052250ff2f0e4fb51db56e295e",
+                ))),
+                Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
+                    find_pub_key_for_pkh_dest(&acc_dests[11], &account1),
+                    "1eddbbfdf09404546c5a4a15e89b7811a658559cdde1960bcebc3aefe0ae86dd1c05a8418b208c75f3ad011d839e045ffa522135cb2cabc5c08f34b2060b5431",
+                ))),
+                Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
+                    find_pub_key_for_pkh_dest(&acc_dests[12], &account1),
+                    "180a0f411eb920d7dd2b71cdf0a8f71a20ca82563c6cb6aa48fe20b7000ef05c1257968b3d6a7b369c8b131b83d421feae951c06ec27f5223e540a8eafb9842b",
+                ))),
+            ]
+        }
+        SighashInputCommitmentVersion::V1 => {
+            let htlc_multisig = {
+                let sigs_hex = [
+                (0, "354fc2b8b65823568fa2648abb15eaa368229db43dbd54f6ba6516ff0b863f08ce01b7bae776412b96770f19077194107f02d65bcbacc0c6a1783ae7e1d5775b"),
+                (1, "c1ec02cf76e3059293663831a08431d264426d32269047b88895da56af0dc5ceb6a59311820418673355ce1c7f23bf680999b08ceb2213020952a45d87e0a92c"),
+            ];
+                make_htlc_multisig_spend_sig(htlc_multisig_challenge, sigs_hex)
+            };
+            let multisig = {
+                let sigs_hex = [
+                (1, "50be3f9fe0f59a9e91300ad70db576e7fb7e4c2a0c63bfbc6b1412cc8ae7b1477c0a09bb9dc424cd5968da525f7d09abe5355a433f9dbebf060ec93dbc872853"),
+                (2, "c3555a38e7a6165b6059c8757eac62d8017d6f182b4bd676285f0660493d75832804742893eb6eb6b2aff98946ca2e4786bac509ff3bbebfa835fca5fe693f4d"),
+                (3, "f20620cdc0756f59969fb3eb441986d4a7480316e897a547b5a547d341ae74b98a302a485e3e1f670c744fb100bd8bfadeed86af6a3fbccbc72c80dd5520e4cd")
+            ];
+                make_multisig_spend_sig(multisig_challenge, sigs_hex)
+            };
+
+            vec![
+                Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
+                    find_pub_key_for_pkh_dest(&account1_dest4, &account1),
+                    "82df5fb0af60d649f864e329426fd5a4fcdc100754360732b6f1e58ec57daa8c80ae275afe42316c67ae1c95164388c8f6019795476ed291f8b76ec43bca83f2",
+                ))),
+                Some(InputWitness::Standard(make_pub_key_spend_sig(
+                    "c3555a38e7a6165b6059c8757eac62d8017d6f182b4bd676285f0660493d75832804742893eb6eb6b2aff98946ca2e4786bac509ff3bbebfa835fca5fe693f4d",
+                ))),
+                Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
+                    find_pub_key_for_pkh_dest(&decommission_dest, &account1),
+                    "ae781212213ee3204c81118abde2a572dda03cc0855ef9d5e928dec1f8403e15950f436c58d9b9d1b18b3b811d15664c58ade0951fa761f06d6efbd095da0091",
+                ))),
+                Some(InputWitness::Standard(make_htlc_secret_spend_sig(
+                    htlc_secret,
+                    "00ed606c3d0d71bdfbc9740ff5e173fd7595bbd29ccd0bd599b6e9213e6c9570d0d9795bf2fd77b9780149534f4bc23049336d486534932715f9b067ef41e51665",
+                ))),
+                Some(InputWitness::Standard(htlc_multisig)),
+                Some(InputWitness::Standard(multisig)),
+                Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
+                    find_pub_key_for_pkh_dest(&acc_dests[0], &account1),
+                    "1ce510fc3821c46a8d2bac667bb18ed317a99cd356eb4076c141f1c690f501bc46b7efdd182cc2b967e7a1a9457797907580bcdf73c9ecb50759f3b591c9988b",
+                ))),
+                Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
+                    find_pub_key_for_pkh_dest(&acc_dests[1], &account1),
+                    "dfac524704f63c99cb28dccadaa5db1407d8098d7dd4be2cba520af5a676cb377a707dd2f5c722eed7c4a42a2efc9e515e921a0109c6c78a233d09a1d57eae16",
+                ))),
+                Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
+                    find_pub_key_for_pkh_dest(&acc_dests[2], &account1),
+                    "99c4bb0537f33a38dbc417de14a3a0f1fd8067f8a03b2eaa1c1ceeeeb37a9124dc13b01437cff0c28ac0fbb27bf47bb7eb50ab1401546d67bd80c66bb8125a53",
+                ))),
+                Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
+                    find_pub_key_for_pkh_dest(&acc_dests[3], &account1),
+                    "9b92f34dc7a10cbe9c577f3969ceec4e0df80d3b9f052437f5b83f74638cd80260f304c78481cb574600a4f2e77da2b08a06925a6fdbb9e513f9d1315f0b547a",
+                ))),
+                Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
+                    find_pub_key_for_pkh_dest(&acc_dests[4], &account1),
+                    "85e2c6a26a4b2b6cfe95909fa76a83d98dbf687a5441d122cceca4ee39d011e1b7798ca97bb8129b595ff4361156e880a66bfe7416fac39e396ad7a1fe3bb37a",
+                ))),
+                Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
+                    find_pub_key_for_pkh_dest(&acc_dests[5], &account1),
+                    "0b520804361b8e89547cc2cd113c881734b353f7b96f5aa53949e78465cd430cb6428c558c7b44621f95be15129b3b95fbb2352dce63c7519d2cb733503bf94f",
+                ))),
+                Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
+                    find_pub_key_for_pkh_dest(&acc_dests[6], &account1),
+                    "9e01c6d0129956cbc19a82588ba26ac90f2311c85e4ae64474a662672ceb1c3d1744f0e2255b2cf1de56f112629bc36cfe1329b5649c4b0cec2942639fe0bf11",
+                ))),
+                Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
+                    find_pub_key_for_pkh_dest(&acc_dests[7], &account1),
+                    "9d0b35755453f4fdb50c447022a484ca744bbf8598054c90db5f42325fc4bb8e5937118def5bad5adcaaba5e5296e8cfd44cd74ec3718e3d42bd5d7fab44a443",
+                ))),
+                Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
+                    find_pub_key_for_pkh_dest(&acc_dests[8], &account1),
+                    "598f717400807bbc45f4044a89157b6c4f041299feb805f13e98e2396ece65dea4ed680e0841fa07919e49216939c700b189d4b6f946889c9b35ed633504c147",
+                ))),
+                Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
+                    find_pub_key_for_pkh_dest(&acc_dests[9], &account1),
+                    "2ed5e524d72535e19c78752e689e9d81d74df1d0378d4fe2842a7aba48d7eb475524c570e277612cbe1cf36453efa9545e407ff59dd62099be7e5f6310508157",
+                ))),
+                Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
+                    find_pub_key_for_pkh_dest(&acc_dests[10], &account1),
+                    "60cabd1ded089d9325c4165d60690286b3426c2f6397f65636f24537556cd69407c80ee18e479fe62344a7a669009154ac752bf292d4947d88076c684783119b",
+                ))),
+                Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
+                    find_pub_key_for_pkh_dest(&acc_dests[11], &account1),
+                    "ba3598eb2b0a7e031d75ab70dd4599e67bc58a12754ef3e844e00fca22e3967b21fd12c812f3019a4af7cb2910bb4d448beac520699863898729f4688fb1d840",
+                ))),
+                Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
+                    find_pub_key_for_pkh_dest(&acc_dests[12], &account1),
+                    "71b647ba2b911c93fa01395cf2c94d69178ebafb93b7e70d9d601a0259de47568e90c19ce71aa7669ca2f76caa7c7cbb8e2ca874930408fe3ec88dad688a608c",
+                ))),
+            ]
+        }
     };
 
     assert_eq!(ptx.witnesses().len(), expected_sigs.len());

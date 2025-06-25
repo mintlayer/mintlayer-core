@@ -13,9 +13,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Cow;
+use std::{borrow::Cow, collections::BTreeMap};
 
-use crate::chain::{TxOutput, UtxoOutPoint};
+use crate::{
+    chain::{output_value::OutputValue, OrderId, PoolId, TxOutput, UtxoOutPoint},
+    primitives::Amount,
+};
+
+#[derive(Debug, Clone)]
+pub struct PoolInfo {
+    pub staker_balance: Amount,
+}
+
+#[derive(Debug, Clone)]
+pub struct OrderInfo {
+    pub initially_asked: OutputValue,
+    pub initially_given: OutputValue,
+    pub ask_balance: Amount,
+    pub give_balance: Amount,
+}
 
 pub trait UtxoProvider<'a> {
     type Error: std::error::Error;
@@ -38,5 +54,33 @@ impl<'a> UtxoProvider<'a> for TrivialUtxoProvider<'a> {
         _outpoint: &UtxoOutPoint,
     ) -> Result<Option<Cow<'a, TxOutput>>, Self::Error> {
         Ok(self.0.get(tx_input_index).and_then(|utxo| utxo.as_ref().map(Cow::Borrowed)))
+    }
+}
+
+pub trait PoolInfoProvider {
+    type Error: std::error::Error;
+
+    fn get_pool_info(&self, pool_id: &PoolId) -> Result<Option<PoolInfo>, Self::Error>;
+}
+
+impl PoolInfoProvider for BTreeMap<PoolId, PoolInfo> {
+    type Error = std::convert::Infallible;
+
+    fn get_pool_info(&self, pool_id: &PoolId) -> Result<Option<PoolInfo>, Self::Error> {
+        Ok(self.get(pool_id).cloned())
+    }
+}
+
+pub trait OrderInfoProvider {
+    type Error: std::error::Error;
+
+    fn get_order_info(&self, order_id: &OrderId) -> Result<Option<OrderInfo>, Self::Error>;
+}
+
+impl OrderInfoProvider for BTreeMap<OrderId, OrderInfo> {
+    type Error = std::convert::Infallible;
+
+    fn get_order_info(&self, order_id: &OrderId) -> Result<Option<OrderInfo>, Self::Error> {
+        Ok(self.get(order_id).cloned())
     }
 }

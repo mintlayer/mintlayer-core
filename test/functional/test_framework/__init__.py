@@ -256,7 +256,7 @@ def init_mintlayer_types():
                     ["input_utxos", "Vec<Option<TxOutput>>"],
                     ["destinations", "Vec<Option<Destination>>"],
                     ["htlc_secrets", "Vec<Option<[u8; 32]>>"],
-                    ["additional_infos", "TxAdditionalInfo"],
+                    ["additional_info", "TxAdditionalInfo"],
                 ]
             },
 

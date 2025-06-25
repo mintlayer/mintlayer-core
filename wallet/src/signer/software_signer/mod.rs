@@ -17,28 +17,31 @@ use std::sync::{Arc, Mutex};
 
 use itertools::Itertools;
 
-use common::chain::{
-    htlc::HtlcSecret,
-    signature::{
-        inputsig::{
-            arbitrary_message::ArbitraryMessageSignature,
-            classical_multisig::{
-                authorize_classical_multisig::{
-                    sign_classical_multisig_spending, AuthorizedClassicalMultisigSpend,
-                    ClassicalMultisigCompletionStatus,
+use common::{
+    chain::{
+        htlc::HtlcSecret,
+        signature::{
+            inputsig::{
+                arbitrary_message::ArbitraryMessageSignature,
+                classical_multisig::{
+                    authorize_classical_multisig::{
+                        sign_classical_multisig_spending, AuthorizedClassicalMultisigSpend,
+                        ClassicalMultisigCompletionStatus,
+                    },
+                    encode_decode_multisig_spend::{decode_multisig_spend, encode_multisig_spend},
                 },
-                encode_decode_multisig_spend::{decode_multisig_spend, encode_multisig_spend},
+                htlc::produce_uniparty_signature_for_htlc_input,
+                standard_signature::StandardInputSignature,
+                InputWitness,
             },
-            htlc::produce_uniparty_signature_for_htlc_input,
-            standard_signature::StandardInputSignature,
-            InputWitness,
+            sighash::{
+                input_commitments::SighashInputCommitment, sighashtype::SigHashType, signature_hash,
+            },
+            DestinationSigError,
         },
-        sighash::{
-            input_commitments::SighashInputCommitment, sighashtype::SigHashType, signature_hash,
-        },
-        DestinationSigError,
+        ChainConfig, Destination, SignedTransactionIntent, Transaction, TxOutput,
     },
-    ChainConfig, Destination, SignedTransactionIntent, Transaction, TxOutput,
+    primitives::BlockHeight,
 };
 use crypto::key::{
     extended::{ExtendedPrivateKey, ExtendedPublicKey},
@@ -272,12 +275,14 @@ impl Signer for SoftwareSigner {
         ptx: PartiallySignedTransaction,
         key_chain: &impl AccountKeyChains,
         db_tx: &impl WalletStorageReadUnlocked,
+        block_height: BlockHeight,
     ) -> SignerResult<(
         PartiallySignedTransaction,
         Vec<SignatureStatus>,
         Vec<SignatureStatus>,
     )> {
-        let input_commitments = ptx.make_sighash_input_commitments()?;
+        let input_commitments =
+            ptx.make_sighash_input_commitments_at_height(&self.chain_config, block_height)?;
 
         let (witnesses, prev_statuses, new_statuses) = ptx
             .witnesses()
@@ -374,7 +379,7 @@ impl Signer for SoftwareSigner {
             .into_iter()
             .multiunzip();
 
-        Ok((ptx.with_witnesses(witnesses), prev_statuses, new_statuses))
+        Ok((ptx.with_witnesses(witnesses)?, prev_statuses, new_statuses))
     }
 
     fn sign_challenge(

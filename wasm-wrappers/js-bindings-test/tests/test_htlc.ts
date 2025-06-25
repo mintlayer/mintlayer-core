@@ -39,6 +39,7 @@ import {
   HTLC_SECRET,
   HTLC_SECRET_HASH,
   MNEMONIC,
+  RANDOM_HEIGHT,
   TOKEN_ID,
 } from "./defs.js";
 import {
@@ -92,6 +93,8 @@ export function test_htlc() {
     Uint8Array.from(opt_htlc_utxos),
     0,
     Uint8Array.from(HTLC_SECRET),
+    { pool_info: {}, order_info: {} },
+    BigInt(RANDOM_HEIGHT),
     Network.Testnet
   );
   console.log("Tested encode witness with htlc secret successfully");
@@ -114,6 +117,8 @@ export function test_htlc() {
     tx,
     Uint8Array.from(opt_htlc_utxos),
     1,
+    { pool_info: {}, order_info: {} },
+    BigInt(RANDOM_HEIGHT),
     Network.Testnet
   );
   console.log("Tested encode multisig witness 0 successfully");
@@ -127,6 +132,8 @@ export function test_htlc() {
     tx,
     Uint8Array.from(opt_htlc_utxos),
     1,
+    { pool_info: {}, order_info: {} },
+    BigInt(RANDOM_HEIGHT),
     Network.Testnet
   );
   console.log("Tested encode multisig witness 1 successfully");

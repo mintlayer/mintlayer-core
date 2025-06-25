@@ -17,6 +17,7 @@ mod simulation;
 
 use std::{
     borrow::Cow,
+    collections::BTreeMap,
     convert::Infallible,
     sync::{Arc, Mutex},
     time::Duration,
@@ -45,8 +46,8 @@ use common::{
             },
             sighash::{
                 input_commitments::{
-                    make_sighash_input_commitments_for_transaction_inputs, SighashInputCommitment,
-                    TrivialUtxoProvider,
+                    make_sighash_input_commitments_for_transaction_inputs_at_height, OrderInfo,
+                    PoolInfo, SighashInputCommitment, TrivialUtxoProvider,
                 },
                 sighashtype::SigHashType,
                 signature_hash,
@@ -54,8 +55,8 @@ use common::{
         },
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
-        CoinUnit, Destination, OutPointSourceId, PoolId, SignedTransaction, TxInput, TxOutput,
-        UtxoOutPoint,
+        CoinUnit, Destination, OrderId, OutPointSourceId, PoolId, SignedTransaction, TxInput,
+        TxOutput, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, CoinOrTokenId, Idable, H256},
 };
@@ -567,9 +568,29 @@ async fn compare_pool_rewards_with_chainstate_real_state(#[case] seed: Seed) {
         .build();
 
     let utxos = [Some(coin_tx_out), Some(from_block_output)];
-    let input_commitments = make_sighash_input_commitments_for_transaction_inputs(
+    let decommissioned_pool_staker_balance = local_state
+        .storage()
+        .transaction_ro()
+        .await
+        .unwrap()
+        .get_pool_data(pool_id)
+        .await
+        .unwrap()
+        .unwrap()
+        .staker_balance()
+        .unwrap();
+    let input_commitments = make_sighash_input_commitments_for_transaction_inputs_at_height(
         &[input1, input2],
         &TrivialUtxoProvider(&utxos),
+        &BTreeMap::<PoolId, PoolInfo>::from([(
+            pool_id,
+            PoolInfo {
+                staker_balance: decommissioned_pool_staker_balance,
+            },
+        )]),
+        &BTreeMap::<OrderId, OrderInfo>::new(),
+        &chain_config,
+        tf.next_block_height(),
     )
     .unwrap();
     let sighash = signature_hash(

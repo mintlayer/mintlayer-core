@@ -31,6 +31,7 @@ use common::{
         ChainConfig, Destination, SignedTransactionIntent, SignedTransactionIntentError,
         Transaction,
     },
+    primitives::BlockHeight,
 };
 use crypto::key::hdkd::{derivable::DerivationError, u31::U31};
 use wallet_storage::{
@@ -112,6 +113,7 @@ pub trait Signer {
         tx: PartiallySignedTransaction,
         key_chain: &impl AccountKeyChains,
         db_tx: &impl WalletStorageReadUnlocked,
+        block_height: BlockHeight,
     ) -> SignerResult<(
         PartiallySignedTransaction,
         Vec<SignatureStatus>,

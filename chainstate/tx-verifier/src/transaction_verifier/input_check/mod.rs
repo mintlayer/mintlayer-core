@@ -31,7 +31,7 @@ use common::{
             DestinationSigError, Transactable,
         },
         tokens::TokenId,
-        ChainConfig, DelegationId, Destination, GenBlock, PoolId, TxInput, TxOutput,
+        ChainConfig, DelegationId, Destination, GenBlock, OrderId, PoolId, TxInput, TxOutput,
     },
     primitives::{BlockHeight, Id},
 };
@@ -57,6 +57,12 @@ pub enum InputCheckErrorPayload {
     #[error("Utxo {0:?} missing or spent")]
     MissingUtxo(common::chain::UtxoOutPoint),
 
+    #[error("Pool not found: {0}")]
+    PoolNotFound(PoolId),
+
+    #[error("Order not found: {0}")]
+    OrderNotFound(OrderId),
+
     #[error("Non-utxo kernel input: {0:?}")]
     NonUtxoKernelInput(TxInput),
 
@@ -65,6 +71,13 @@ pub enum InputCheckErrorPayload {
 
     #[error("Utxo info provider error: {0}")]
     UtxoInfoProvider(chainstate_types::storage_result::Error),
+
+    #[error("Pool info provider error: {0}")]
+    PoolInfoProvider(pos_accounting::Error),
+
+    #[error("Orders info provider error: {0}")]
+    OrderInfoProvider(orders_accounting::Error),
+
     #[error(transparent)]
     Translation(#[from] mintscript::translate::TranslationError),
 
@@ -103,15 +116,27 @@ pub struct InputCheckError {
     error: InputCheckErrorPayload,
 }
 
-impl<UPE> From<SighashInputCommitmentCreationError<UPE>> for InputCheckError
+impl<UPE, PIPE, OIPE> From<SighashInputCommitmentCreationError<UPE, PIPE, OIPE>> for InputCheckError
 where
     UPE: std::error::Error,
+    PIPE: std::error::Error,
+    OIPE: std::error::Error,
     chainstate_types::storage_result::Error: From<UPE>,
+    pos_accounting::Error: From<PIPE>,
+    orders_accounting::Error: From<OIPE>,
 {
-    fn from(value: SighashInputCommitmentCreationError<UPE>) -> Self {
+    fn from(value: SighashInputCommitmentCreationError<UPE, PIPE, OIPE>) -> Self {
         let (error, input_index) = match value {
             SighashInputCommitmentCreationError::UtxoProviderError(err, input_index) => (
                 InputCheckErrorPayload::UtxoInfoProvider(err.into()),
+                input_index,
+            ),
+            SighashInputCommitmentCreationError::PoolInfoProviderError(err, input_index) => (
+                InputCheckErrorPayload::PoolInfoProvider(err.into()),
+                input_index,
+            ),
+            SighashInputCommitmentCreationError::OrderInfoProviderError(err, input_index) => (
+                InputCheckErrorPayload::OrderInfoProvider(err.into()),
                 input_index,
             ),
             SighashInputCommitmentCreationError::NonUtxoKernelInput(tx_input, input_index) => (
@@ -122,6 +147,12 @@ where
                 InputCheckErrorPayload::MissingUtxo(utxo_out_point),
                 input_index,
             ),
+            SighashInputCommitmentCreationError::PoolNotFound(id, input_index) => {
+                (InputCheckErrorPayload::PoolNotFound(id), input_index)
+            }
+            SighashInputCommitmentCreationError::OrderNotFound(id, input_index) => {
+                (InputCheckErrorPayload::OrderNotFound(id), input_index)
+            }
         };
 
         InputCheckError::new(input_index, error)
@@ -616,6 +647,7 @@ pub fn verify_full<T, S, UV, AV, TV, OV>(
     storage: &S,
     tx_source: &TransactionSourceForConnect,
     spending_time: BlockTimestamp,
+    height: BlockHeight,
 ) -> Result<(), InputCheckError>
 where
     T: FullyVerifiable<AV, TV, OV>,
@@ -633,7 +665,13 @@ where
         spending_time,
         &core_ctx,
     );
-    let input_commitments = transaction.get_input_commitments(&core_ctx)?;
+    let input_commitments = transaction.get_input_commitments(
+        &core_ctx,
+        pos_accounting,
+        orders_accounting,
+        chain_config,
+        height,
+    )?;
     let ctx = VerifyContextFull::new(transaction, input_commitments, &tl_ctx);
 
     for (n, inp) in core_ctx.inputs_iter() {

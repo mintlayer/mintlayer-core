@@ -54,8 +54,8 @@ mod tests {
     use crate::chain::{
         ChangeTokenMetadataUriActivated, DataDepositFeeVersion, FrozenTokensValidationVersion,
         HtlcActivated, OrdersActivated, OrdersVersion, RewardDistributionVersion,
-        StakerDestinationUpdateForbidden, TokenIdGenerationVersion, TokenIssuanceVersion,
-        TokensFeeVersion,
+        SighashInputCommitmentVersion, StakerDestinationUpdateForbidden, TokenIdGenerationVersion,
+        TokenIssuanceVersion, TokensFeeVersion,
     };
 
     use super::*;
@@ -74,6 +74,7 @@ mod tests {
             OrdersVersion::V0,
             StakerDestinationUpdateForbidden::No,
             TokenIdGenerationVersion::V0,
+            SighashInputCommitmentVersion::V0,
         ))
         .then(BlockHeight::new(1), |builder| {
             builder.token_issuance_version(TokenIssuanceVersion::V1)
@@ -108,6 +109,9 @@ mod tests {
         .then(BlockHeight::new(11), |builder| {
             builder.token_id_generation_version(TokenIdGenerationVersion::V1)
         })
+        .then(BlockHeight::new(12), |builder| {
+            builder.sighash_input_commitment_version(SighashInputCommitmentVersion::V1)
+        })
         .build();
 
         let expected_upgrades = NetUpgrades::initialize(vec![
@@ -125,6 +129,7 @@ mod tests {
                     OrdersVersion::V0,
                     StakerDestinationUpdateForbidden::No,
                     TokenIdGenerationVersion::V0,
+                    SighashInputCommitmentVersion::V0,
                 ),
             ),
             (
@@ -141,6 +146,7 @@ mod tests {
                     OrdersVersion::V0,
                     StakerDestinationUpdateForbidden::No,
                     TokenIdGenerationVersion::V0,
+                    SighashInputCommitmentVersion::V0,
                 ),
             ),
             (
@@ -157,6 +163,7 @@ mod tests {
                     OrdersVersion::V0,
                     StakerDestinationUpdateForbidden::No,
                     TokenIdGenerationVersion::V0,
+                    SighashInputCommitmentVersion::V0,
                 ),
             ),
             (
@@ -173,6 +180,7 @@ mod tests {
                     OrdersVersion::V0,
                     StakerDestinationUpdateForbidden::No,
                     TokenIdGenerationVersion::V0,
+                    SighashInputCommitmentVersion::V0,
                 ),
             ),
             (
@@ -189,6 +197,7 @@ mod tests {
                     OrdersVersion::V0,
                     StakerDestinationUpdateForbidden::No,
                     TokenIdGenerationVersion::V0,
+                    SighashInputCommitmentVersion::V0,
                 ),
             ),
             (
@@ -205,6 +214,7 @@ mod tests {
                     OrdersVersion::V0,
                     StakerDestinationUpdateForbidden::No,
                     TokenIdGenerationVersion::V0,
+                    SighashInputCommitmentVersion::V0,
                 ),
             ),
             (
@@ -221,6 +231,7 @@ mod tests {
                     OrdersVersion::V0,
                     StakerDestinationUpdateForbidden::No,
                     TokenIdGenerationVersion::V0,
+                    SighashInputCommitmentVersion::V0,
                 ),
             ),
             (
@@ -237,6 +248,7 @@ mod tests {
                     OrdersVersion::V0,
                     StakerDestinationUpdateForbidden::No,
                     TokenIdGenerationVersion::V0,
+                    SighashInputCommitmentVersion::V0,
                 ),
             ),
             (
@@ -253,6 +265,7 @@ mod tests {
                     OrdersVersion::V0,
                     StakerDestinationUpdateForbidden::No,
                     TokenIdGenerationVersion::V0,
+                    SighashInputCommitmentVersion::V0,
                 ),
             ),
             (
@@ -269,6 +282,7 @@ mod tests {
                     OrdersVersion::V1,
                     StakerDestinationUpdateForbidden::No,
                     TokenIdGenerationVersion::V0,
+                    SighashInputCommitmentVersion::V0,
                 ),
             ),
             (
@@ -285,6 +299,7 @@ mod tests {
                     OrdersVersion::V1,
                     StakerDestinationUpdateForbidden::Yes,
                     TokenIdGenerationVersion::V0,
+                    SighashInputCommitmentVersion::V0,
                 ),
             ),
             (
@@ -301,6 +316,24 @@ mod tests {
                     OrdersVersion::V1,
                     StakerDestinationUpdateForbidden::Yes,
                     TokenIdGenerationVersion::V1,
+                    SighashInputCommitmentVersion::V0,
+                ),
+            ),
+            (
+                BlockHeight::new(12),
+                ChainstateUpgrade::new(
+                    TokenIssuanceVersion::V1,
+                    RewardDistributionVersion::V1,
+                    TokensFeeVersion::V1,
+                    DataDepositFeeVersion::V1,
+                    ChangeTokenMetadataUriActivated::Yes,
+                    FrozenTokensValidationVersion::V1,
+                    HtlcActivated::Yes,
+                    OrdersActivated::Yes,
+                    OrdersVersion::V1,
+                    StakerDestinationUpdateForbidden::Yes,
+                    TokenIdGenerationVersion::V1,
+                    SighashInputCommitmentVersion::V1,
                 ),
             ),
         ])
@@ -324,6 +357,7 @@ mod tests {
             OrdersVersion::V0,
             StakerDestinationUpdateForbidden::No,
             TokenIdGenerationVersion::V0,
+            SighashInputCommitmentVersion::V0,
         ))
         .then(BlockHeight::new(2), |builder| {
             builder.token_issuance_version(TokenIssuanceVersion::V1)
@@ -349,6 +383,7 @@ mod tests {
             OrdersVersion::V0,
             StakerDestinationUpdateForbidden::No,
             TokenIdGenerationVersion::V0,
+            SighashInputCommitmentVersion::V0,
         ))
         .then(BlockHeight::new(1), |builder| {
             builder.token_issuance_version(TokenIssuanceVersion::V1)
@@ -374,6 +409,7 @@ mod tests {
             OrdersVersion::V0,
             StakerDestinationUpdateForbidden::No,
             TokenIdGenerationVersion::V0,
+            SighashInputCommitmentVersion::V0,
         ))
         .then(BlockHeight::new(0), |builder| {
             builder.token_issuance_version(TokenIssuanceVersion::V1)
@@ -396,6 +432,7 @@ mod tests {
             OrdersVersion::V0,
             StakerDestinationUpdateForbidden::No,
             TokenIdGenerationVersion::V0,
+            SighashInputCommitmentVersion::V0,
         ))
         .then(BlockHeight::new(1), |builder| {
             builder.token_issuance_version(TokenIssuanceVersion::V0)
