@@ -10,6 +10,7 @@ license.workspace = true
 [dependencies]
 common = { path = "../common" }
 crypto = { path = "../crypto" }
+logging = { path = "../logging" }
 orders-accounting = { path = "../orders-accounting" }
 pos-accounting = { path = "../pos-accounting" }
 serialization = { path = "../serialization" }

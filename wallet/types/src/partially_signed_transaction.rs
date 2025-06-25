@@ -19,7 +19,16 @@ use common::{
     chain::{
         htlc::HtlcSecret,
         output_value::OutputValue,
-        signature::{inputsig::InputWitness, Signable, Transactable},
+        signature::{
+            inputsig::InputWitness,
+            sighash::{
+                self,
+                input_commitments::{
+                    make_sighash_input_commitments_for_transaction_inputs, SighashInputCommitment,
+                },
+            },
+            Signable, Transactable,
+        },
         tokens::TokenId,
         Destination, OrderId, PoolId, SignedTransaction, Transaction, TransactionCreationError,
         TxInput, TxOutput,
@@ -50,6 +59,9 @@ pub enum PartiallySignedTransactionError {
 
     #[error("The number of htlc secrets does not match the number of inputs")]
     InvalidHtlcSecretsCount,
+
+    #[error("Error creating sighash input commitment: {0}")]
+    SighashInputCommitmentCreationError(#[from] SighashInputCommitmentCreationError),
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Encode, Decode)]
@@ -253,6 +265,28 @@ impl PartiallySignedTransaction {
     pub fn additional_info(&self) -> &TxAdditionalInfo {
         &self.additional_info
     }
+
+    pub fn make_sighash_input_commitments(
+        &self,
+    ) -> Result<Vec<SighashInputCommitment<'_>>, PartiallySignedTransactionError> {
+        Ok(make_sighash_input_commitments(
+            self.tx.inputs(),
+            &self.input_utxos,
+        )?)
+    }
+}
+
+pub type SighashInputCommitmentCreationError =
+    sighash::input_commitments::SighashInputCommitmentCreationError<std::convert::Infallible>;
+
+pub fn make_sighash_input_commitments<'a>(
+    tx_inputs: &[TxInput],
+    input_utxos: &'a [Option<TxOutput>],
+) -> Result<Vec<SighashInputCommitment<'a>>, SighashInputCommitmentCreationError> {
+    make_sighash_input_commitments_for_transaction_inputs(
+        tx_inputs,
+        &sighash::input_commitments::TrivialUtxoProvider(input_utxos),
+    )
 }
 
 impl Signable for PartiallySignedTransaction {

@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
+
 use rstest::rstest;
 
 use chainstate::{CheckBlockError, CheckBlockTransactionsError, ConnectTransactionError};
@@ -24,10 +26,10 @@ use common::{
         output_value::OutputValue,
         signature::{
             inputsig::{standard_signature::StandardInputSignature, InputWitness},
-            sighash::sighashtype::SigHashType,
+            sighash::{input_commitments::SighashInputCommitment, sighashtype::SigHashType},
             DestinationSigError,
         },
-        tokens::{IsTokenFreezable, TokenId, TokenIssuance, TokenIssuanceV1, TokenTotalSupply},
+        tokens::{IsTokenFreezable, TokenId, TokenTotalSupply},
         AccountCommand, AccountNonce, ChainstateUpgradeBuilder, Destination, OrderAccountCommand,
         OrderData, OrderId, OrdersVersion, SignedTransaction, Transaction, TxInput, TxOutput,
         UtxoOutPoint,
@@ -40,14 +42,13 @@ use randomness::{CryptoRng, Rng, SliceRandom};
 use test_utils::{
     nft_utils::random_nft_issuance,
     random::{gen_random_bytes, make_seedable_rng, Seed},
-    random_ascii_alphanumeric_string,
 };
 use tx_verifier::{
     error::{InputCheckError, ScriptError, TranslationError},
     CheckTransactionError,
 };
 
-use crate::tests::helpers::{calculate_fill_order, issue_token_from_block, mint_tokens_in_block};
+use crate::tests::helpers::{calculate_fill_order, issue_and_mint_random_token_from_best_block};
 
 fn create_test_framework_with_orders(
     rng: &mut (impl Rng + CryptoRng),
@@ -83,45 +84,15 @@ fn issue_and_mint_token_from_best_block(
     tf: &mut TestFramework,
     utxo_outpoint: UtxoOutPoint,
 ) -> (TokenId, UtxoOutPoint, UtxoOutPoint) {
-    let best_block_id = tf.best_block_id();
-    let issuance = {
-        let max_ticker_len = tf.chain_config().token_max_ticker_len();
-        let max_dec_count = tf.chain_config().token_max_dec_count();
-        let max_uri_len = tf.chain_config().token_max_uri_len();
-
-        let issuance = TokenIssuanceV1 {
-            token_ticker: random_ascii_alphanumeric_string(rng, 1..max_ticker_len)
-                .as_bytes()
-                .to_vec(),
-            number_of_decimals: rng.gen_range(1..max_dec_count),
-            metadata_uri: random_ascii_alphanumeric_string(rng, 1..max_uri_len).as_bytes().to_vec(),
-            total_supply: TokenTotalSupply::Unlimited,
-            is_freezable: IsTokenFreezable::Yes,
-            authority: Destination::AnyoneCanSpend,
-        };
-        TokenIssuance::V1(issuance)
-    };
-
-    let (token_id, _, utxo_with_change) =
-        issue_token_from_block(rng, tf, best_block_id, utxo_outpoint, issuance);
-
     let to_mint = Amount::from_atoms(rng.gen_range(100..100_000_000));
 
-    let best_block_id = tf.best_block_id();
-    let (_, mint_tx_id) = mint_tokens_in_block(
+    issue_and_mint_random_token_from_best_block(
         rng,
         tf,
-        best_block_id,
-        utxo_with_change,
-        token_id,
+        utxo_outpoint,
         to_mint,
-        true,
-    );
-
-    (
-        token_id,
-        UtxoOutPoint::new(mint_tx_id.into(), 0),
-        UtxoOutPoint::new(mint_tx_id.into(), 1),
+        TokenTotalSupply::Unlimited,
+        IsTokenFreezable::Yes,
     )
 }
 
@@ -1342,13 +1313,15 @@ fn conclude_order_check_signature(#[case] seed: Seed, #[case] version: OrdersVer
         let tokens_circulating_supply =
             tf.chainstate.get_token_circulating_supply(&token_id).unwrap().unwrap();
 
-        let ask_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
-        let give_amount =
-            Amount::from_atoms(rng.gen_range(1u128..=tokens_circulating_supply.into_atoms()));
+        let initially_asked = OutputValue::Coin(Amount::from_atoms(rng.gen_range(1u128..1000)));
+        let initially_given = OutputValue::TokenV1(
+            token_id,
+            Amount::from_atoms(rng.gen_range(1u128..=tokens_circulating_supply.into_atoms())),
+        );
         let order_data = OrderData::new(
             Destination::PublicKey(order_pk.clone()),
-            OutputValue::Coin(ask_amount),
-            OutputValue::TokenV1(token_id, give_amount),
+            initially_asked.clone(),
+            initially_given.clone(),
         );
 
         let tx = TransactionBuilder::new()
@@ -1358,25 +1331,30 @@ fn conclude_order_check_signature(#[case] seed: Seed, #[case] version: OrdersVer
         let order_id = make_order_id(tx.inputs()).unwrap();
         tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
+        let conclude_input = match version {
+            OrdersVersion::V0 => TxInput::AccountCommand(
+                AccountNonce::new(0),
+                AccountCommand::ConcludeOrder(order_id),
+            ),
+            OrdersVersion::V1 => {
+                TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder(order_id))
+            }
+        };
+        let tx = TransactionBuilder::new()
+            .add_input(conclude_input, InputWitness::NoSignature(None))
+            .add_output(TxOutput::Transfer(
+                initially_given.clone(),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+
+        let input_commitments =
+            tf.make_sighash_input_commitments_for_transaction_inputs(tx.inputs());
+
         // try conclude without signature
         {
-            let conclude_input = match version {
-                OrdersVersion::V0 => TxInput::AccountCommand(
-                    AccountNonce::new(0),
-                    AccountCommand::ConcludeOrder(order_id),
-                ),
-                OrdersVersion::V1 => {
-                    TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder(order_id))
-                }
-            };
-            let tx = TransactionBuilder::new()
-                .add_input(conclude_input, InputWitness::NoSignature(None))
-                .add_output(TxOutput::Transfer(
-                    OutputValue::TokenV1(token_id, give_amount),
-                    Destination::AnyoneCanSpend,
-                ))
-                .build();
-            let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
+            let result =
+                tf.make_block_builder().add_transaction(tx.clone()).build_and_process(&mut rng);
 
             assert_eq!(
                 result.unwrap_err(),
@@ -1393,40 +1371,20 @@ fn conclude_order_check_signature(#[case] seed: Seed, #[case] version: OrdersVer
 
         // try conclude with wrong signature
         {
-            let conclude_input = match version {
-                OrdersVersion::V0 => TxInput::AccountCommand(
-                    AccountNonce::new(0),
-                    AccountCommand::ConcludeOrder(order_id),
-                ),
-                OrdersVersion::V1 => {
-                    TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder(order_id))
-                }
-            };
-            let tx = TransactionBuilder::new()
-                .add_input(conclude_input, InputWitness::NoSignature(None))
-                .add_output(TxOutput::Transfer(
-                    OutputValue::TokenV1(token_id, give_amount),
-                    Destination::AnyoneCanSpend,
-                ))
-                .build();
-
-            let inputs_utxos: Vec<Option<TxOutput>> = vec![None];
-            let inputs_utxos_refs =
-                inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
             let (some_sk, some_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
             let account_sig = StandardInputSignature::produce_uniparty_signature_for_input(
                 &some_sk,
                 Default::default(),
                 Destination::PublicKey(some_pk),
                 &tx,
-                &inputs_utxos_refs,
+                &input_commitments,
                 0,
                 &mut rng,
             )
             .unwrap();
 
             let tx = SignedTransaction::new(
-                tx.take_transaction(),
+                tx.transaction().clone(),
                 vec![InputWitness::Standard(account_sig)],
             )
             .unwrap();
@@ -1448,42 +1406,25 @@ fn conclude_order_check_signature(#[case] seed: Seed, #[case] version: OrdersVer
         }
 
         // valid case
-        let conclude_input = match version {
-            OrdersVersion::V0 => TxInput::AccountCommand(
-                AccountNonce::new(0),
-                AccountCommand::ConcludeOrder(order_id),
-            ),
-            OrdersVersion::V1 => {
-                TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder(order_id))
-            }
-        };
-        let tx = TransactionBuilder::new()
-            .add_input(conclude_input, InputWitness::NoSignature(None))
-            .add_output(TxOutput::Transfer(
-                OutputValue::TokenV1(token_id, give_amount),
-                Destination::AnyoneCanSpend,
-            ))
-            .build();
+        {
+            let account_sig = StandardInputSignature::produce_uniparty_signature_for_input(
+                &order_sk,
+                Default::default(),
+                Destination::PublicKey(order_pk),
+                &tx,
+                &input_commitments,
+                0,
+                &mut rng,
+            )
+            .unwrap();
 
-        let inputs_utxos: Vec<Option<TxOutput>> = vec![None];
-        let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
-        let account_sig = StandardInputSignature::produce_uniparty_signature_for_input(
-            &order_sk,
-            Default::default(),
-            Destination::PublicKey(order_pk),
-            &tx,
-            &inputs_utxos_refs,
-            0,
-            &mut rng,
-        )
-        .unwrap();
-
-        let tx = SignedTransaction::new(
-            tx.take_transaction(),
-            vec![InputWitness::Standard(account_sig)],
-        )
-        .unwrap();
-        tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
+            let tx = SignedTransaction::new(
+                tx.take_transaction(),
+                vec![InputWitness::Standard(account_sig)],
+            )
+            .unwrap();
+            tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
+        }
     });
 }
 
@@ -3019,15 +2960,20 @@ fn freeze_order_check_signature(#[case] seed: Seed) {
         let order_id = make_order_id(tx.inputs()).unwrap();
         tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
+        let tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::OrderAccountCommand(OrderAccountCommand::FreezeOrder(order_id)),
+                InputWitness::NoSignature(None),
+            )
+            .build();
+
+        let input_commitments =
+            tf.make_sighash_input_commitments_for_transaction_inputs(tx.inputs());
+
         // try freeze without signature
         {
-            let tx = TransactionBuilder::new()
-                .add_input(
-                    TxInput::OrderAccountCommand(OrderAccountCommand::FreezeOrder(order_id)),
-                    InputWitness::NoSignature(None),
-                )
-                .build();
-            let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
+            let result =
+                tf.make_block_builder().add_transaction(tx.clone()).build_and_process(&mut rng);
 
             assert_eq!(
                 result.unwrap_err(),
@@ -3044,30 +2990,20 @@ fn freeze_order_check_signature(#[case] seed: Seed) {
 
         // try conclude with wrong signature
         {
-            let tx = TransactionBuilder::new()
-                .add_input(
-                    TxInput::OrderAccountCommand(OrderAccountCommand::FreezeOrder(order_id)),
-                    InputWitness::NoSignature(None),
-                )
-                .build();
-
-            let inputs_utxos: Vec<Option<TxOutput>> = vec![None];
-            let inputs_utxos_refs =
-                inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
             let (some_sk, some_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
             let account_sig = StandardInputSignature::produce_uniparty_signature_for_input(
                 &some_sk,
                 Default::default(),
                 Destination::PublicKey(some_pk),
                 &tx,
-                &inputs_utxos_refs,
+                &input_commitments,
                 0,
                 &mut rng,
             )
             .unwrap();
 
             let tx = SignedTransaction::new(
-                tx.take_transaction(),
+                tx.transaction().clone(),
                 vec![InputWitness::Standard(account_sig)],
             )
             .unwrap();
@@ -3089,32 +3025,25 @@ fn freeze_order_check_signature(#[case] seed: Seed) {
         }
 
         // valid case
-        let tx = TransactionBuilder::new()
-            .add_input(
-                TxInput::OrderAccountCommand(OrderAccountCommand::FreezeOrder(order_id)),
-                InputWitness::NoSignature(None),
+        {
+            let account_sig = StandardInputSignature::produce_uniparty_signature_for_input(
+                &order_sk,
+                Default::default(),
+                Destination::PublicKey(order_pk),
+                &tx,
+                &input_commitments,
+                0,
+                &mut rng,
             )
-            .build();
+            .unwrap();
 
-        let inputs_utxos: Vec<Option<TxOutput>> = vec![None];
-        let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
-        let account_sig = StandardInputSignature::produce_uniparty_signature_for_input(
-            &order_sk,
-            Default::default(),
-            Destination::PublicKey(order_pk),
-            &tx,
-            &inputs_utxos_refs,
-            0,
-            &mut rng,
-        )
-        .unwrap();
-
-        let tx = SignedTransaction::new(
-            tx.take_transaction(),
-            vec![InputWitness::Standard(account_sig)],
-        )
-        .unwrap();
-        tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
+            let tx = SignedTransaction::new(
+                tx.take_transaction(),
+                vec![InputWitness::Standard(account_sig)],
+            )
+            .unwrap();
+            tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
+        }
     });
 }
 
@@ -3259,7 +3188,7 @@ fn fill_freeze_conclude_order(#[case] seed: Seed) {
             .build_and_process(&mut rng)
             .unwrap();
 
-        //Try freezing concluded order
+        // Try freezing concluded order
         {
             let result = tf
                 .make_block_builder()
@@ -3477,7 +3406,10 @@ fn fill_order_destination_irrelevancy(#[case] seed: Seed, #[case] version: Order
                 Default::default(),
                 Destination::PublicKey(pk2),
                 &fill_tx_2,
-                &[Some(&coins_utxo), None],
+                &[
+                    SighashInputCommitment::Utxo(Cow::Borrowed(&coins_utxo)),
+                    SighashInputCommitment::None,
+                ],
                 0,
                 &mut rng,
             )

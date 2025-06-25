@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{num::NonZeroU64, time::Duration};
+use std::{borrow::Cow, num::NonZeroU64, time::Duration};
 
 use rstest::rstest;
 
@@ -42,7 +42,7 @@ use common::{
         output_value::OutputValue,
         signature::{
             inputsig::{standard_signature::StandardInputSignature, InputWitness},
-            sighash::sighashtype::SigHashType,
+            sighash::{input_commitments::SighashInputCommitment, sighashtype::SigHashType},
         },
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
@@ -277,9 +277,9 @@ fn produce_kernel_signature(
     kernel_outpoint: UtxoOutPoint,
 ) -> StandardInputSignature {
     let block_outputs = tf.outputs_from_genblock(kernel_utxo_block_id);
-    let utxo = &block_outputs.get(&kernel_outpoint.source_id()).unwrap()
-        [kernel_outpoint.output_index() as usize];
 
+    let kernel_input_utxo = &block_outputs.get(&kernel_outpoint.source_id()).unwrap()
+        [kernel_outpoint.output_index() as usize];
     let kernel_inputs = vec![kernel_outpoint.into()];
 
     let block_reward_tx =
@@ -289,7 +289,7 @@ fn produce_kernel_signature(
         SigHashType::default(),
         staking_destination,
         &block_reward_tx,
-        std::iter::once(Some(utxo)).collect::<Vec<_>>().as_slice(),
+        &[SighashInputCommitment::Utxo(Cow::Borrowed(kernel_input_utxo))],
         0,
         rng,
     )
@@ -2132,18 +2132,14 @@ fn pos_decommission_genesis_pool(#[case] seed: Seed) {
             .transaction()
             .clone();
 
-        let input_utxo = tf
-            .chainstate
-            .utxo(&UtxoOutPoint::new(tf.best_block_id().into(), 0))
-            .unwrap()
-            .unwrap();
-
+        let input_commitments =
+            tf.make_sighash_input_commitments_for_transaction_inputs(tx.inputs());
         let input_sign = StandardInputSignature::produce_uniparty_signature_for_input(
             &genesis_staking_sk,
             SigHashType::all(),
             Destination::PublicKey(genesis_staking_pk),
             &tx,
-            &[Some(input_utxo.output())],
+            &input_commitments,
             0,
             &mut rng,
         )

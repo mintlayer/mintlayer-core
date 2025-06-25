@@ -170,10 +170,18 @@ impl BanScore for tx_verifier::error::InputCheckErrorPayload {
     fn ban_score(&self) -> u32 {
         match self {
             Self::MissingUtxo(_) => 100,
+            Self::NonUtxoKernelInput(_) => 100,
             Self::UtxoView(e) => e.ban_score(),
+            Self::UtxoInfoProvider(e) => e.ban_score(),
             Self::Translation(e) => e.ban_score(),
             Self::Verification(e) => e.ban_score(),
         }
+    }
+}
+
+impl BanScore for chainstate_types::storage_result::Error {
+    fn ban_score(&self) -> u32 {
+        0
     }
 }
 

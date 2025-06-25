@@ -1141,20 +1141,22 @@ where
                 let mut signer =
                     signer_provider.provide(Arc::new(chain_config.clone()), account_index);
                 let ptx = signer.sign_tx(ptx, account.key_chain(), db_tx).map(|(ptx, _, _)| ptx)?;
+                let input_commitments = ptx.make_sighash_input_commitments()?;
 
-                let inputs_utxo_refs: Vec<_> =
-                    ptx.input_utxos().iter().map(|u| u.as_ref()).collect();
                 let is_fully_signed =
                     ptx.destinations().iter().enumerate().zip(ptx.witnesses()).all(
                         |((i, destination), witness)| match (witness, destination) {
                             (None | Some(_), None) | (None, Some(_)) => false,
                             (Some(_), Some(destination)) => {
+                                let input_utxo = ptx.input_utxos()[i].clone();
+
                                 tx_verifier::input_check::signature_only_check::verify_tx_signature(
                                     chain_config,
                                     destination,
                                     &ptx,
-                                    &inputs_utxo_refs,
+                                    &input_commitments,
                                     i,
+                                    input_utxo,
                                 )
                                 .is_ok()
                             }
