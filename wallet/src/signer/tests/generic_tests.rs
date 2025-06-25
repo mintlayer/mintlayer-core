@@ -23,9 +23,10 @@ use itertools::{izip, Itertools as _};
 
 use common::{
     chain::{
+        self,
         block::timestamp::BlockTimestamp,
         classic_multisig::ClassicMultisigChallenge,
-        config::create_regtest,
+        config::{create_regtest, ChainType},
         htlc::{HashedTimelockContract, HtlcSecret},
         output_value::OutputValue,
         signature::{inputsig::arbitrary_message::produce_message_challenge, DestinationSigError},
@@ -35,9 +36,11 @@ use common::{
             IsTokenUnfreezable, Metadata, NftIssuance, NftIssuanceV0, TokenId, TokenIssuance,
             TokenIssuanceV1,
         },
-        AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, ChainConfig, DelegationId,
-        Destination, GenBlock, OrderAccountCommand, OrderData, OrderId, OutPointSourceId, PoolId,
-        SignedTransactionIntent, Transaction, TxInput, TxOutput, UtxoOutPoint,
+        AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, ChainConfig,
+        ChainstateUpgradeBuilder, DelegationId, Destination, GenBlock, NetUpgrades,
+        OrderAccountCommand, OrderData, OrderId, OutPointSourceId, PoolId,
+        SighashInputCommitmentVersion, SignedTransactionIntent, Transaction, TxInput, TxOutput,
+        UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, Idable, H256},
 };
@@ -268,6 +271,7 @@ pub fn test_sign_transaction_intent_generic<MkS1, MkS2, S1, S2>(
 
 pub fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
     rng: &mut (impl Rng + CryptoRng),
+    input_commitments_version: SighashInputCommitmentVersion,
     make_signer: MkS1,
     make_another_signer: Option<MkS2>,
 ) where
@@ -276,7 +280,40 @@ pub fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
     S1: Signer,
     S2: Signer,
 {
-    let chain_config = Arc::new(create_regtest());
+    let (sighash_input_commitment_version_fork_height, tx_block_height) = {
+        let fork_height = rng.gen_range(100..100_000);
+        let tx_block_height = match input_commitments_version {
+            SighashInputCommitmentVersion::V0 => rng.gen_range(1..fork_height),
+            SighashInputCommitmentVersion::V1 => rng.gen_range(fork_height..fork_height * 2),
+        };
+        (
+            BlockHeight::new(fork_height),
+            BlockHeight::new(tx_block_height),
+        )
+    };
+
+    let chain_config = Arc::new(
+        chain::config::Builder::new(ChainType::Regtest)
+            .chainstate_upgrades(
+                NetUpgrades::initialize(vec![
+                    (
+                        BlockHeight::zero(),
+                        ChainstateUpgradeBuilder::latest()
+                            .sighash_input_commitment_version(SighashInputCommitmentVersion::V0)
+                            .build(),
+                    ),
+                    (
+                        sighash_input_commitment_version_fork_height,
+                        ChainstateUpgradeBuilder::latest()
+                            .sighash_input_commitment_version(SighashInputCommitmentVersion::V1)
+                            .build(),
+                    ),
+                ])
+                .unwrap(),
+            )
+            .build(),
+    );
+
     let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
     let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
 
@@ -657,20 +694,28 @@ pub fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
     let orig_ptx = req.into_partially_signed_tx(additional_info).unwrap();
 
     let mut signer = make_signer(chain_config.clone(), account.account_index());
-    let (ptx, _, _) = signer.sign_tx(orig_ptx.clone(), account.key_chain(), &db_tx).unwrap();
+    let (ptx, _, _) = signer
+        .sign_tx(
+            orig_ptx.clone(),
+            account.key_chain(),
+            &db_tx,
+            tx_block_height,
+        )
+        .unwrap();
     assert!(ptx.all_signatures_available());
 
     if let Some(make_another_signer) = &make_another_signer {
         let mut another_signer = make_another_signer(chain_config.clone(), account.account_index());
-        let (another_ptx, _, _) =
-            another_signer.sign_tx(orig_ptx, account.key_chain(), &db_tx).unwrap();
+        let (another_ptx, _, _) = another_signer
+            .sign_tx(orig_ptx, account.key_chain(), &db_tx, tx_block_height)
+            .unwrap();
         assert!(another_ptx.all_signatures_available());
 
         assert_eq!(ptx, another_ptx);
     }
 
     let input_commitments = ptx
-        .make_sighash_input_commitments()
+        .make_sighash_input_commitments_at_height(&chain_config, tx_block_height)
         .unwrap()
         .into_iter()
         .map(|comm| comm.deep_clone())
@@ -720,14 +765,22 @@ pub fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
     let orig_ptx = ptx;
     // fully sign the remaining key in the multisig address
     let mut signer = make_signer(chain_config.clone(), account2.account_index());
-    let (ptx, _, _) = signer.sign_tx(orig_ptx.clone(), account2.key_chain(), &db_tx).unwrap();
+    let (ptx, _, _) = signer
+        .sign_tx(
+            orig_ptx.clone(),
+            account2.key_chain(),
+            &db_tx,
+            tx_block_height,
+        )
+        .unwrap();
     assert!(ptx.all_signatures_available());
 
     if let Some(make_another_signer) = &make_another_signer {
         let mut another_signer =
             make_another_signer(chain_config.clone(), account2.account_index());
-        let (another_ptx, _, _) =
-            another_signer.sign_tx(orig_ptx, account2.key_chain(), &db_tx).unwrap();
+        let (another_ptx, _, _) = another_signer
+            .sign_tx(orig_ptx, account2.key_chain(), &db_tx, tx_block_height)
+            .unwrap();
         assert!(another_ptx.all_signatures_available());
 
         assert_eq!(ptx, another_ptx);

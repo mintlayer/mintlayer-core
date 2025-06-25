@@ -244,7 +244,7 @@ Produce a multisig address given a multisig challenge.
 Given a private key, inputs and an input number to sign, and multisig challenge,
 and a network type (mainnet, testnet, etc), this function returns a witness to be used in a signed transaction, as bytes.
 
-`key_index` parameter is an index of a public key in the challenge, against which is the signature produces from private key is to be verified.
+`key_index` parameter is an index of the public key in the challenge corresponding to the specified private key.
 `input_witness` parameter can be either empty or a result of previous calls to this function.
 
 `input_utxos` have the same format as in `encode_witness`.
@@ -453,10 +453,34 @@ A utxo can either come from a transaction or a block reward. This enum signifies
 
 The part of the transaction that will be committed in the signature. Similar to bitcoin's sighash.
 
+### Enum: `SimpleCurrencyAmount`
+
+An amount of coins or some token,
+
 ### Struct: `Amount`
 
 Amount type abstraction. The amount type is stored in a string
 since JavaScript number type cannot fit 128-bit integers.
 The amount is given as an integer in units of "atoms".
 Atoms are the smallest, indivisible amount of a coin or token.
+
+### Struct: `SimpleAmount`
+
+An alternative representation of `Amount`.
+
+### Struct: `SimpleTokenAmount`
+
+An amount of some token.
+
+### Struct: `PoolAdditionalInfo`
+
+Additional information for a pool.
+
+### Struct: `OrderAdditionalInfo`
+
+Additional information for an order.
+
+### Struct: `TxAdditionalInfo`
+
+Additional information for a transaction.
 

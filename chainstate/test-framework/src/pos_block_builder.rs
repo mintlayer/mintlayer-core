@@ -411,13 +411,21 @@ impl<'f> PoSBlockBuilder<'f> {
             let destination_getter = SignatureDestinationGetter::new_for_transaction(
                 &tokens_db, &pos_db, &orders_db, &utxo_set,
             );
+            let block_height = self
+                .framework
+                .gen_block_index(&self.prev_block_hash)
+                .block_height()
+                .next_height();
             let witnesses = sign_witnesses(
                 rng,
                 &self.framework.key_manager,
                 self.framework.chainstate.get_chain_config(),
                 &tx,
                 &utxo_set,
+                &pos_db,
+                &orders_db,
                 destination_getter,
+                block_height,
             );
             let tx = SignedTransaction::new(tx, witnesses).expect("invalid witness count");
 

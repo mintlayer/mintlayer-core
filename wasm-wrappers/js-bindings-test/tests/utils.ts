@@ -48,8 +48,28 @@ export function get_err_msg(error: unknown) {
 export function gen_random_int(min: number, max: number, description: string) {
   const min_int = Math.ceil(min);
   const max_int = Math.floor(max);
-  const result =  Math.floor(Math.random() * (max_int - min_int + 1) + min_int);
+  const result = Math.floor(Math.random() * (max_int - min_int + 1) + min_int);
   console.log(`Generated ${description}: ${result}`);
 
   return result;
+}
+
+export function expect_exception(test_func: () => void, expected_msg: string) {
+  let succeeded = false;
+
+  try {
+    test_func();
+    succeeded = true;
+  } catch (e) {
+    const actual_msg = get_err_msg(e);
+
+    if (!actual_msg.includes(expected_msg)) {
+      console.log(`Got error '${actual_msg}' while expecting '${expected_msg}'`);
+      throw e;
+    }
+  }
+
+  if (succeeded) {
+    throw new Error(`Got success while expecting error '${expected_msg}'`);
+  }
 }

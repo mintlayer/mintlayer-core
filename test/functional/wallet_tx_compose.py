@@ -103,7 +103,10 @@ class WalletComposeTransaction(BitcoinTestFramework):
             # Submit a valid transaction
             def make_output(pub_key_bytes):
                 return {
-                        'Transfer': [ { 'Coin': coins_to_send * ATOMS_PER_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': pub_key_bytes}}} } ],
+                    'Transfer': [
+                        { 'Coin': coins_to_send * ATOMS_PER_COIN },
+                        { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': pub_key_bytes}}} }
+                    ],
                 }
             encoded_tx, tx_id = make_tx([reward_input(tip_id)], [make_output(pk) for pk in addresses], 0)
 

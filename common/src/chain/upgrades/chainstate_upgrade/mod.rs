@@ -110,6 +110,12 @@ pub enum TokenIdGenerationVersion {
     V1,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
+pub enum SighashInputCommitmentVersion {
+    V0,
+    V1,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub struct ChainstateUpgrade {
     token_issuance_version: TokenIssuanceVersion,
@@ -123,6 +129,7 @@ pub struct ChainstateUpgrade {
     orders_version: OrdersVersion,
     staker_destination_update_forbidden: StakerDestinationUpdateForbidden,
     token_id_generation_version: TokenIdGenerationVersion,
+    sighash_input_commitment_version: SighashInputCommitmentVersion,
 }
 
 impl ChainstateUpgrade {
@@ -139,6 +146,7 @@ impl ChainstateUpgrade {
         orders_version: OrdersVersion,
         staker_destination_update_forbidden: StakerDestinationUpdateForbidden,
         token_id_generation_version: TokenIdGenerationVersion,
+        sighash_input_commitment_version: SighashInputCommitmentVersion,
     ) -> Self {
         Self {
             token_issuance_version,
@@ -152,6 +160,7 @@ impl ChainstateUpgrade {
             orders_version,
             staker_destination_update_forbidden,
             token_id_generation_version,
+            sighash_input_commitment_version,
         }
     }
 
@@ -197,5 +206,9 @@ impl ChainstateUpgrade {
 
     pub fn token_id_generation_version(&self) -> TokenIdGenerationVersion {
         self.token_id_generation_version
+    }
+
+    pub fn sighash_input_commitment_version(&self) -> SighashInputCommitmentVersion {
+        self.sighash_input_commitment_version
     }
 }

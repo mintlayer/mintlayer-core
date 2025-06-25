@@ -39,9 +39,14 @@ impl OrphanType {
             CTE::InputCheck(e) => match e.error() {
                 // Missing UTXO signifies a possible orphan
                 ICE::MissingUtxo(_) => Ok(Self::MissingUtxo),
+
+                ICE::PoolNotFound(_)
+                | ICE::OrderNotFound(_)
                 | ICE::NonUtxoKernelInput(_)
                 | ICE::UtxoView(_)
                 | ICE::UtxoInfoProvider(_)
+                | ICE::PoolInfoProvider(_)
+                | ICE::OrderInfoProvider(_)
                 | ICE::Translation(_)
                 | ICE::Verification(_) => Err(err),
             },

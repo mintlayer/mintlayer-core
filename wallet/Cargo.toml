@@ -26,10 +26,6 @@ utils-networking = { path = "../utils/networking" }
 utxo = { path = "../utxo" }
 wallet-storage = { path = "./storage" }
 wallet-types = { path = "./types" }
-trezor-client = { git = "https://github.com/mintlayer/mintlayer-trezor-firmware", branch = "mintlayer-master", features = [
-  "bitcoin",
-  "mintlayer",
-], optional = true }
 
 bip39 = { workspace = true, default-features = false, features = [
   "std",
@@ -40,6 +36,7 @@ itertools.workspace = true
 parity-scale-codec.workspace = true
 serde.workspace = true
 thiserror.workspace = true
+trezor-client = { workspace = true, optional = true }
 zeroize.workspace = true
 
 [dev-dependencies]

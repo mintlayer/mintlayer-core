@@ -1129,7 +1129,8 @@ where
         ) -> WalletResult<(SendRequest, AddlData)>,
         error_mapper: impl FnOnce(WalletError) -> WalletError,
     ) -> WalletResult<(SignedTxWithFees, AddlData)> {
-        let (_, block_height) = self.get_best_block_for_account(account_index)?;
+        let (_, best_block_height) = self.get_best_block_for_account(account_index)?;
+        let next_block_height = best_block_height.next_height();
 
         self.for_account_rw_unlocked(
             account_index,
@@ -1140,8 +1141,12 @@ where
 
                 let mut signer =
                     signer_provider.provide(Arc::new(chain_config.clone()), account_index);
-                let ptx = signer.sign_tx(ptx, account.key_chain(), db_tx).map(|(ptx, _, _)| ptx)?;
-                let input_commitments = ptx.make_sighash_input_commitments()?;
+                let ptx = signer
+                    .sign_tx(ptx, account.key_chain(), db_tx, next_block_height)
+                    .map(|(ptx, _, _)| ptx)?;
+
+                let input_commitments =
+                    ptx.make_sighash_input_commitments_at_height(chain_config, next_block_height)?;
 
                 let is_fully_signed =
                     ptx.destinations().iter().enumerate().zip(ptx.witnesses()).all(
@@ -1171,7 +1176,7 @@ where
 
                 let tx = ptx.into_signed_tx().map_err(|e| error_mapper(e.into()))?;
 
-                check_transaction(chain_config, block_height.next_height(), &tx)?;
+                check_transaction(chain_config, next_block_height, &tx)?;
                 let tx = SignedTxWithFees { tx, fees };
                 Ok((tx, additional_data))
             },
@@ -2082,6 +2087,9 @@ where
         output_address: Option<Destination>,
         current_fee_rate: FeeRate,
     ) -> WalletResult<PartiallySignedTransaction> {
+        let (_, best_block_height) = self.get_best_block_for_account(account_index)?;
+        let next_block_height = best_block_height.next_height();
+
         let additional_info =
             TxAdditionalInfo::new().with_pool_info(pool_id, PoolAdditionalInfo { staker_balance });
         self.for_account_rw_unlocked(
@@ -2099,7 +2107,9 @@ where
 
                 let mut signer =
                     signer_provider.provide(Arc::new(chain_config.clone()), account_index);
-                let ptx = signer.sign_tx(ptx, account.key_chain(), db_tx).map(|(ptx, _, _)| ptx)?;
+                let ptx = signer
+                    .sign_tx(ptx, account.key_chain(), db_tx, next_block_height)
+                    .map(|(ptx, _, _)| ptx)?;
 
                 if ptx.all_signatures_available() {
                     return Err(WalletError::FullySignedTransactionInDecommissionReq);
@@ -2279,13 +2289,16 @@ where
         Vec<SignatureStatus>,
         Vec<SignatureStatus>,
     )> {
+        let (_, best_block_height) = self.get_best_block_for_account(account_index)?;
+        let next_block_height = best_block_height.next_height();
+
         self.for_account_rw_unlocked(
             account_index,
             |account, db_tx, chain_config, signer_provider| {
                 let mut signer =
                     signer_provider.provide(Arc::new(chain_config.clone()), account_index);
 
-                let res = signer.sign_tx(ptx, account.key_chain(), db_tx)?;
+                let res = signer.sign_tx(ptx, account.key_chain(), db_tx, next_block_height)?;
                 Ok(res)
             },
         )

@@ -2132,8 +2132,10 @@ fn pos_decommission_genesis_pool(#[case] seed: Seed) {
             .transaction()
             .clone();
 
-        let input_commitments =
-            tf.make_sighash_input_commitments_for_transaction_inputs(tx.inputs());
+        let input_commitments = tf.make_sighash_input_commitments_for_transaction_inputs(
+            tx.inputs(),
+            tf.next_block_height(),
+        );
         let input_sign = StandardInputSignature::produce_uniparty_signature_for_input(
             &genesis_staking_sk,
             SigHashType::all(),

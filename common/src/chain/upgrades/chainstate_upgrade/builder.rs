@@ -16,8 +16,8 @@
 use crate::chain::{
     ChainstateUpgrade, ChangeTokenMetadataUriActivated, DataDepositFeeVersion,
     FrozenTokensValidationVersion, HtlcActivated, OrdersActivated, OrdersVersion,
-    RewardDistributionVersion, StakerDestinationUpdateForbidden, TokenIdGenerationVersion,
-    TokenIssuanceVersion, TokensFeeVersion,
+    RewardDistributionVersion, SighashInputCommitmentVersion, StakerDestinationUpdateForbidden,
+    TokenIdGenerationVersion, TokenIssuanceVersion, TokensFeeVersion,
 };
 
 /// A builder for `ChainstateUpgrade`.
@@ -73,6 +73,7 @@ impl ChainstateUpgradeBuilder {
             orders_version: OrdersVersion::V1,
             staker_destination_update_forbidden: StakerDestinationUpdateForbidden::Yes,
             token_id_generation_version: TokenIdGenerationVersion::V1,
+            sighash_input_commitment_version: SighashInputCommitmentVersion::V1,
         })
     }
 
@@ -91,4 +92,5 @@ impl ChainstateUpgradeBuilder {
     builder_method!(orders_version: OrdersVersion);
     builder_method!(staker_destination_update_forbidden: StakerDestinationUpdateForbidden);
     builder_method!(token_id_generation_version: TokenIdGenerationVersion);
+    builder_method!(sighash_input_commitment_version: SighashInputCommitmentVersion);
 }

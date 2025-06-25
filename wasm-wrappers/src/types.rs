@@ -13,6 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+
+use serde::{Deserialize, Serialize};
+use tsify::Tsify;
 use wasm_bindgen::prelude::*;
 
 use common::{
@@ -152,4 +156,61 @@ impl From<SignatureHashType> for SigHashType {
 
         SigHashType::try_from(value).expect("should not fail")
     }
+}
+
+// Note: we want to pass maps from JS, in particular for the tx additional info.
+// This is only possible via a serde-based approach (e.g. via JsValue/JsValueSerdeExt, or via
+// serde_wasm_bindgen, or via tsify), where the original JS object becomes accessible
+// on the Rust side in the Json form and is deserialized via serde.
+// In this case however we cannot re-use the existing `Amount` type (because an instance
+// of `Amount` on the JS side already refers to the WASM's internal memory buffer, so its
+// only field is "__wbg_ptr").
+// This is why `SimpleAmount` was introduced.
+//
+// TODO: perhaps we could get rid of `Amount` in favor of `SimpleAmount` (in which case the latter
+// can be renamed to just `Amount`).  But the existing JS code that uses `Amount` will have to
+// be updated.
+
+/// An alternative representation of `Amount`.
+#[derive(Clone, Tsify, Debug, Serialize, Deserialize)]
+pub struct SimpleAmount {
+    pub atoms: String,
+}
+
+/// An amount of some token.
+#[derive(Clone, Debug, Tsify, Serialize, Deserialize)]
+pub struct SimpleTokenAmount {
+    pub token_id: String,
+    pub amount: SimpleAmount,
+}
+
+/// An amount of coins or some token,
+#[derive(Clone, Debug, Tsify, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SimpleCurrencyAmount {
+    Coins(SimpleAmount),
+    Tokens(SimpleTokenAmount),
+}
+
+/// Additional information for a pool.
+#[derive(Clone, Debug, Tsify, Serialize, Deserialize)]
+pub struct PoolAdditionalInfo {
+    pub staker_balance: SimpleAmount,
+}
+
+/// Additional information for an order.
+#[derive(Clone, Debug, Tsify, Serialize, Deserialize)]
+pub struct OrderAdditionalInfo {
+    pub initially_asked: SimpleCurrencyAmount,
+    pub initially_given: SimpleCurrencyAmount,
+    pub ask_balance: SimpleAmount,
+    pub give_balance: SimpleAmount,
+}
+
+/// Additional information for a transaction.
+#[derive(Clone, Debug, Tsify, Serialize, Deserialize)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct TxAdditionalInfo {
+    pub pool_info: BTreeMap<String, PoolAdditionalInfo>,
+    pub order_info: BTreeMap<String, OrderAdditionalInfo>,
 }
