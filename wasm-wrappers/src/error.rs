@@ -26,7 +26,7 @@ use common::{
                 classical_multisig::authorize_classical_multisig::ClassicalMultisigSigningError,
                 InputWitnessTag,
             },
-            DestinationSigError,
+            sighash, DestinationSigError,
         },
         IdCreationError, SignedTransactionIntentError, TransactionCreationError,
     },
@@ -178,6 +178,9 @@ pub enum Error {
 
     #[error("Orders V1 not activated at the specified height")]
     OrdersV1NotActivatedAtSpecifiedHeight,
+
+    #[error("Error creating sighash input commitments: {0}")]
+    SighashInputCommitmentCreationError(#[from] SighashInputCommitmentCreationError),
 }
 
 // This is required to make an error readable in JavaScript
@@ -186,3 +189,6 @@ impl From<Error> for JsValue {
         JsValue::from_str(&format!("{}", value))
     }
 }
+
+pub type SighashInputCommitmentCreationError =
+    sighash::input_commitments::SighashInputCommitmentCreationError<std::convert::Infallible>;

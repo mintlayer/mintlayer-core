@@ -13,39 +13,41 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::{borrow::Cow, num::NonZeroU8};
+
+use rstest::rstest;
+
 use chainstate::ConnectTransactionError;
-use common::address::pubkeyhash::PublicKeyHash;
-use common::chain;
-use common::chain::classic_multisig::ClassicMultisigChallenge;
-use common::chain::signature::inputsig::classical_multisig::authorize_classical_multisig::AuthorizedClassicalMultisigSpend;
-use common::chain::signature::DestinationSigError;
-use common::chain::signed_transaction::SignedTransaction;
-use common::chain::ConsensusUpgrade;
-use common::chain::NetUpgrades;
-use common::primitives::BlockHeight;
-use common::primitives::Idable;
+use chainstate_test_framework::{
+    anyonecanspend_address, empty_witness, TestFramework, TransactionBuilder,
+};
 use common::{
+    address::pubkeyhash::PublicKeyHash,
     chain::{
+        self,
+        classic_multisig::ClassicMultisigChallenge,
+        config::ChainType,
         output_value::OutputValue,
-        signature::{inputsig::InputWitness, sighash::sighashtype::SigHashType},
-        Destination, OutPointSourceId, TxInput, TxOutput,
+        signature::{
+            inputsig::{
+                classical_multisig::authorize_classical_multisig::AuthorizedClassicalMultisigSpend,
+                standard_signature::StandardInputSignature, InputWitness,
+            },
+            sighash::{
+                input_commitments::SighashInputCommitment, sighashtype::SigHashType, signature_hash,
+            },
+            DestinationSigError,
+        },
+        signed_transaction::SignedTransaction,
+        ConsensusUpgrade, Destination, NetUpgrades, OutPointSourceId, TxInput, TxOutput,
     },
-    primitives::Amount,
+    primitives::{Amount, BlockHeight, Idable},
 };
 use crypto::key::{KeyKind, PrivateKey};
-
-use chainstate_test_framework::TransactionBuilder;
-use chainstate_test_framework::{anyonecanspend_address, empty_witness, TestFramework};
-use common::chain::signature::inputsig::standard_signature::StandardInputSignature;
-use common::chain::signature::sighash::signature_hash;
 use randomness::{Rng, SliceRandom};
-use rstest::rstest;
 use serialization::Encode;
-use std::num::NonZeroU8;
-use test_utils::random::gen_random_bytes;
-use test_utils::random::Seed;
-use tx_verifier::error::InputCheckError;
-use tx_verifier::error::ScriptError;
+use test_utils::random::{gen_random_bytes, Seed};
+use tx_verifier::error::{InputCheckError, ScriptError};
 
 #[rstest]
 #[trace]
@@ -157,7 +159,9 @@ fn signed_tx(#[case] seed: Seed) {
                     SigHashType::all(),
                     Destination::PublicKey(public_key),
                     &tx,
-                    &[Some(&tx_1.transaction().outputs()[0])],
+                    &[SighashInputCommitment::Utxo(Cow::Borrowed(
+                        &tx_1.transaction().outputs()[0],
+                    ))],
                     0,
                     &mut rng,
                 )
@@ -244,7 +248,7 @@ fn signed_classical_multisig_tx(#[case] seed: Seed) {
             let sighash = signature_hash(
                 SigHashType::all(),
                 &tx,
-                &[Some(&tx_1.transaction().outputs()[0])],
+                &[SighashInputCommitment::Utxo(Cow::Borrowed(&tx_1.transaction().outputs()[0]))],
                 0,
             )
             .unwrap();
@@ -324,7 +328,9 @@ fn signed_classical_multisig_tx(#[case] seed: Seed) {
                         &authorization,
                         SigHashType::all(),
                         &tx,
-                        &[Some(&tx_1.transaction().outputs()[0])],
+                        &[SighashInputCommitment::Utxo(Cow::Borrowed(
+                            &tx_1.transaction().outputs()[0],
+                        ))],
                         0,
                     )
                     .unwrap();
@@ -413,7 +419,7 @@ fn signed_classical_multisig_tx_missing_sigs(#[case] seed: Seed) {
         let sighash = signature_hash(
             SigHashType::all(),
             &tx,
-            &[Some(&tx_1.transaction().outputs()[0])],
+            &[SighashInputCommitment::Utxo(Cow::Borrowed(&tx_1.transaction().outputs()[0]))],
             0,
         )
         .unwrap();
@@ -435,7 +441,9 @@ fn signed_classical_multisig_tx_missing_sigs(#[case] seed: Seed) {
                         &authorization,
                         SigHashType::all(),
                         &tx,
-                        &[Some(&tx_1.transaction().outputs()[0])],
+                        &[SighashInputCommitment::Utxo(Cow::Borrowed(
+                            &tx_1.transaction().outputs()[0],
+                        ))],
                         0,
                     )
                     .unwrap();
@@ -571,7 +579,7 @@ fn no_sig_data_not_allowed(
 ) {
     utils::concurrency::model(move || {
         let mut rng = test_utils::random::make_seedable_rng(seed);
-        let chain_config = chain::config::Builder::new(chain::config::ChainType::Regtest)
+        let chain_config = chain::config::Builder::new(ChainType::Regtest)
             .data_in_no_signature_witness_allowed(data_allowed)
             .consensus_upgrades(
                 NetUpgrades::initialize(vec![(
@@ -642,7 +650,7 @@ fn no_sig_data_not_allowed(
 fn try_to_spend_with_no_signature_on_mainnet(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = test_utils::random::make_seedable_rng(seed);
-        let chain_config = chain::config::Builder::new(chain::config::ChainType::Mainnet)
+        let chain_config = chain::config::Builder::new(ChainType::Mainnet)
             .consensus_upgrades(
                 NetUpgrades::initialize(vec![(
                     BlockHeight::zero(),

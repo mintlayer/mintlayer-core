@@ -46,6 +46,7 @@ thiserror.workspace = true
 test-utils = { path = "../test-utils" }
 
 bitcoin-bech32.workspace = true
+ctor.workspace = true
 expect-test.workspace = true
 indoc.workspace = true
 proptest.workspace = true

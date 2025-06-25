@@ -30,7 +30,9 @@ use common::{
                 standard_signature::StandardInputSignature,
                 InputWitness,
             },
-            sighash::{sighashtype::SigHashType, signature_hash},
+            sighash::{
+                input_commitments::SighashInputCommitment, sighashtype::SigHashType, signature_hash,
+            },
         },
         ChainConfig, Destination, Transaction, TxOutput,
     },
@@ -143,14 +145,16 @@ impl KeyManager {
         Destination::ClassicMultisig(multisig_hash)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn get_signature(
         &self,
         rng: &mut (impl Rng + CryptoRng),
         destination: &Destination,
         chain_config: &ChainConfig,
         tx: &Transaction,
-        inputs_utxos: &[Option<&TxOutput>],
+        input_commitments: &[SighashInputCommitment],
         input_num: usize,
+        input_utxo: Option<&TxOutput>,
     ) -> Option<InputWitness> {
         match destination {
             Destination::AnyoneCanSpend => Some(InputWitness::NoSignature(None)),
@@ -163,7 +167,7 @@ impl KeyManager {
                     sighash_type,
                     destination.clone(),
                     tx,
-                    inputs_utxos,
+                    input_commitments,
                     input_num,
                     rng,
                 )
@@ -180,7 +184,7 @@ impl KeyManager {
                     sighash_type,
                     destination.clone(),
                     tx,
-                    inputs_utxos,
+                    input_commitments,
                     input_num,
                     rng,
                 )
@@ -195,7 +199,8 @@ impl KeyManager {
                     AuthorizedClassicalMultisigSpend::new_empty(challenge.clone());
                 let sighash_type = SigHashType::all();
 
-                let sighash = signature_hash(sighash_type, tx, inputs_utxos, input_num).unwrap();
+                let sighash =
+                    signature_hash(sighash_type, tx, input_commitments, input_num).unwrap();
 
                 for (key_index, (private_key, _pub_key)) in multisig.keys.iter().enumerate() {
                     let res = sign_classical_multisig_spending(
@@ -211,13 +216,13 @@ impl KeyManager {
 
                     match res {
                         ClassicalMultisigCompletionStatus::Complete(sigs) => {
-                            let sig = if inputs_utxos[input_num].is_some_and(is_htlc_output) {
+                            let sig = if input_utxo.is_some_and(is_htlc_output) {
                                 produce_classical_multisig_signature_for_htlc_input(
                                     chain_config,
                                     &sigs,
                                     sighash_type,
                                     tx,
-                                    inputs_utxos,
+                                    input_commitments,
                                     input_num,
                                 )
                                 .unwrap()

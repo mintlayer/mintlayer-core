@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
+use std::{borrow::Cow, collections::BTreeMap};
 
 use rstest::rstest;
 
@@ -29,6 +29,7 @@ use common::{
         output_value::OutputValue,
         signature::{
             inputsig::{standard_signature::StandardInputSignature, InputWitness},
+            sighash::input_commitments::SighashInputCommitment,
             DestinationSigError,
         },
         timelock::OutputTimeLock,
@@ -110,21 +111,21 @@ fn unmint_tokens_in_block(
     .unwrap()
     .map_or(AccountNonce::new(0), |n| n.increment().unwrap());
 
-    let fee_input_utxo_coins = chainstate_test_framework::get_output_value(
-        tf.chainstate.utxo(&utxo_to_pay_fee).unwrap().unwrap().output(),
-    )
-    .unwrap()
-    .coin_amount()
-    .unwrap();
+    let fee_input_utxo_coins =
+        chainstate_test_framework::get_output_value(tf.utxo(&utxo_to_pay_fee).output())
+            .unwrap()
+            .coin_amount()
+            .unwrap();
 
-    let tokens_input_utxo_amount = match chainstate_test_framework::get_output_value(
-        tf.chainstate.utxo(&utxo_to_burn_tokens).unwrap().unwrap().output(),
-    )
-    .unwrap()
-    {
-        OutputValue::Coin(_) | OutputValue::TokenV0(_) => panic!("Invalid input to burn tokens"),
-        OutputValue::TokenV1(_, amount) => amount,
-    };
+    let tokens_input_utxo_amount =
+        match chainstate_test_framework::get_output_value(tf.utxo(&utxo_to_burn_tokens).output())
+            .unwrap()
+        {
+            OutputValue::Coin(_) | OutputValue::TokenV0(_) => {
+                panic!("Invalid input to burn tokens")
+            }
+            OutputValue::TokenV1(_, amount) => amount,
+        };
 
     let tx_builder = TransactionBuilder::new()
         .add_input(
@@ -3351,11 +3352,10 @@ fn check_signature_on_mint(#[case] seed: Seed) {
             ))
         );
 
-        let inputs_utxos = vec![
-            None,
-            tf.chainstate.utxo(&utxo_with_change).unwrap().map(|utxo| utxo.output().clone()),
+        let input_commitments = vec![
+            SighashInputCommitment::None,
+            SighashInputCommitment::Utxo(Cow::Owned(tf.utxo(&utxo_with_change).take_output())),
         ];
-        let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
 
         // Try to mint with wrong signature
         let tx = {
@@ -3367,7 +3367,7 @@ fn check_signature_on_mint(#[case] seed: Seed) {
                 Default::default(),
                 Destination::PublicKey(some_pk),
                 &tx,
-                &inputs_utxos_refs,
+                &input_commitments,
                 0,
                 &mut rng,
             )
@@ -3401,7 +3401,7 @@ fn check_signature_on_mint(#[case] seed: Seed) {
                 Default::default(),
                 Destination::PublicKey(controller_pk),
                 &tx,
-                &inputs_utxos_refs,
+                &input_commitments,
                 0,
                 &mut rng,
             )
@@ -3456,12 +3456,10 @@ fn check_signature_on_unmint(#[case] seed: Seed) {
         // Mint some tokens
         let amount_to_mint = Amount::from_atoms(rng.gen_range(2..100_000_000));
         let mint_tx = {
-            let inputs_utxos = vec![
-                None,
-                tf.chainstate.utxo(&utxo_with_change).unwrap().map(|utxo| utxo.output().clone()),
+            let input_commitments = vec![
+                SighashInputCommitment::None,
+                SighashInputCommitment::Utxo(Cow::Owned(tf.utxo(&utxo_with_change).take_output())),
             ];
-            let inputs_utxos_refs =
-                inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
 
             let tx = TransactionBuilder::new()
                 .add_input(
@@ -3492,7 +3490,7 @@ fn check_signature_on_unmint(#[case] seed: Seed) {
                 Default::default(),
                 Destination::PublicKey(controller_pk.clone()),
                 &tx,
-                &inputs_utxos_refs,
+                &input_commitments,
                 0,
                 &mut rng,
             )
@@ -3545,18 +3543,23 @@ fn check_signature_on_unmint(#[case] seed: Seed) {
             ))
         );
 
-        let inputs_utxos = vec![
-            None,
-            tf.chainstate
-                .utxo(&UtxoOutPoint::new(mint_tx_id.into(), 0))
-                .unwrap()
-                .map(|utxo| utxo.output().clone()),
-            tf.chainstate
-                .utxo(&UtxoOutPoint::new(mint_tx_id.into(), 1))
-                .unwrap()
-                .map(|utxo| utxo.output().clone()),
+        let input_commitments = vec![
+            SighashInputCommitment::None,
+            SighashInputCommitment::Utxo(Cow::Owned(
+                tf.chainstate
+                    .utxo(&UtxoOutPoint::new(mint_tx_id.into(), 0))
+                    .unwrap()
+                    .unwrap()
+                    .take_output(),
+            )),
+            SighashInputCommitment::Utxo(Cow::Owned(
+                tf.chainstate
+                    .utxo(&UtxoOutPoint::new(mint_tx_id.into(), 1))
+                    .unwrap()
+                    .unwrap()
+                    .take_output(),
+            )),
         ];
-        let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
 
         // Try to unmint with wrong signature
         let tx = {
@@ -3568,7 +3571,7 @@ fn check_signature_on_unmint(#[case] seed: Seed) {
                 Default::default(),
                 Destination::PublicKey(some_pk),
                 &tx,
-                &inputs_utxos_refs,
+                &input_commitments,
                 0,
                 &mut rng,
             )
@@ -3606,7 +3609,7 @@ fn check_signature_on_unmint(#[case] seed: Seed) {
                 Default::default(),
                 Destination::PublicKey(controller_pk),
                 &tx,
-                &inputs_utxos_refs,
+                &input_commitments,
                 0,
                 &mut rng,
             )
@@ -3690,11 +3693,10 @@ fn check_signature_on_lock_supply(#[case] seed: Seed) {
             ))
         );
 
-        let inputs_utxos = vec![
-            None,
-            tf.chainstate.utxo(&utxo_with_change).unwrap().map(|utxo| utxo.output().clone()),
+        let input_commitments = vec![
+            SighashInputCommitment::None,
+            SighashInputCommitment::Utxo(Cow::Owned(tf.utxo(&utxo_with_change).take_output())),
         ];
-        let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
 
         // Try to lock with wrong signature
         let tx = {
@@ -3706,7 +3708,7 @@ fn check_signature_on_lock_supply(#[case] seed: Seed) {
                 Default::default(),
                 Destination::PublicKey(some_pk),
                 &tx,
-                &inputs_utxos_refs,
+                &input_commitments,
                 0,
                 &mut rng,
             )
@@ -3740,7 +3742,7 @@ fn check_signature_on_lock_supply(#[case] seed: Seed) {
                 Default::default(),
                 Destination::PublicKey(controller_pk),
                 &tx,
-                &inputs_utxos_refs,
+                &input_commitments,
                 0,
                 &mut rng,
             )
@@ -4889,19 +4891,18 @@ fn check_signature_on_freeze_unfreeze(#[case] seed: Seed) {
             ))
         );
 
-        let inputs_utxos = vec![
-            None,
-            tf.chainstate.utxo(&utxo_with_change).unwrap().map(|utxo| utxo.output().clone()),
+        let input_commitments = vec![
+            SighashInputCommitment::None,
+            SighashInputCommitment::Utxo(Cow::Owned(tf.utxo(&utxo_with_change).take_output())),
         ];
-        let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
 
-        let mut replace_signature_for_tx = |tx, sk, pk, inputs_utxos_refs| {
+        let mut replace_signature_for_tx = |tx, sk, pk, input_commitments| {
             let account_sig = StandardInputSignature::produce_uniparty_signature_for_input(
                 &sk,
                 Default::default(),
                 Destination::PublicKey(pk),
                 &tx,
-                inputs_utxos_refs,
+                input_commitments,
                 0,
                 &mut rng3,
             )
@@ -4920,7 +4921,7 @@ fn check_signature_on_freeze_unfreeze(#[case] seed: Seed) {
             freeze_tx_no_signatures.transaction().clone(),
             random_sk,
             random_pk,
-            &inputs_utxos_refs,
+            &input_commitments,
         );
 
         let result = tf.make_block_builder().add_transaction(signed_tx).build_and_process(&mut rng);
@@ -4939,7 +4940,7 @@ fn check_signature_on_freeze_unfreeze(#[case] seed: Seed) {
             freeze_tx_no_signatures.transaction().clone(),
             controller_sk.clone(),
             controller_pk.clone(),
-            &inputs_utxos_refs,
+            &input_commitments,
         );
         tf.make_block_builder()
             .add_transaction(signed_tx)
@@ -4976,14 +4977,16 @@ fn check_signature_on_freeze_unfreeze(#[case] seed: Seed) {
             ))
         );
 
-        let inputs_utxos = vec![
-            None,
-            tf.chainstate
-                .utxo(&UtxoOutPoint::new(freeze_tx_id.into(), 0))
-                .unwrap()
-                .map(|utxo| utxo.output().clone()),
+        let input_commitments = vec![
+            SighashInputCommitment::None,
+            SighashInputCommitment::Utxo(Cow::Owned(
+                tf.chainstate
+                    .utxo(&UtxoOutPoint::new(freeze_tx_id.into(), 0))
+                    .unwrap()
+                    .unwrap()
+                    .take_output(),
+            )),
         ];
-        let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
 
         // Try unfreeze with random signature
         let (random_sk, random_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
@@ -4991,7 +4994,7 @@ fn check_signature_on_freeze_unfreeze(#[case] seed: Seed) {
             unfreeze_tx_no_signatures.transaction().clone(),
             random_sk,
             random_pk,
-            &inputs_utxos_refs,
+            &input_commitments,
         );
 
         let result = tf.make_block_builder().add_transaction(signed_tx).build_and_process(&mut rng);
@@ -5010,7 +5013,7 @@ fn check_signature_on_freeze_unfreeze(#[case] seed: Seed) {
             unfreeze_tx_no_signatures.transaction().clone(),
             controller_sk,
             controller_pk,
-            &inputs_utxos_refs,
+            &input_commitments,
         );
         tf.make_block_builder()
             .add_transaction(signed_tx)
@@ -5091,11 +5094,10 @@ fn check_signature_on_change_authority(#[case] seed: Seed) {
             ))
         );
 
-        let inputs_utxos = vec![
-            None,
-            tf.chainstate.utxo(&utxo_with_change).unwrap().map(|utxo| utxo.output().clone()),
+        let input_commitments = vec![
+            SighashInputCommitment::None,
+            SighashInputCommitment::Utxo(Cow::Owned(tf.utxo(&utxo_with_change).take_output())),
         ];
-        let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
 
         // Try to change authority with wrong signature
         let tx = {
@@ -5107,7 +5109,7 @@ fn check_signature_on_change_authority(#[case] seed: Seed) {
                 Default::default(),
                 Destination::PublicKey(some_pk),
                 &tx,
-                &inputs_utxos_refs,
+                &input_commitments,
                 0,
                 &mut rng,
             )
@@ -5141,7 +5143,7 @@ fn check_signature_on_change_authority(#[case] seed: Seed) {
                 Default::default(),
                 Destination::PublicKey(original_pk.clone()),
                 &tx,
-                &inputs_utxos_refs,
+                &input_commitments,
                 0,
                 &mut rng,
             )
@@ -5158,14 +5160,16 @@ fn check_signature_on_change_authority(#[case] seed: Seed) {
         tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
         // Now try to change authority once more with original key
-        let inputs_utxos = vec![
-            None,
-            tf.chainstate
-                .utxo(&UtxoOutPoint::new(tx_1_id.into(), 0))
-                .unwrap()
-                .map(|utxo| utxo.output().clone()),
+        let input_commitments = vec![
+            SighashInputCommitment::None,
+            SighashInputCommitment::Utxo(Cow::Owned(
+                tf.chainstate
+                    .utxo(&UtxoOutPoint::new(tx_1_id.into(), 0))
+                    .unwrap()
+                    .unwrap()
+                    .take_output(),
+            )),
         ];
-        let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
 
         let tx_2_no_signatures = TransactionBuilder::new()
             .add_input(
@@ -5189,7 +5193,7 @@ fn check_signature_on_change_authority(#[case] seed: Seed) {
                 Default::default(),
                 Destination::PublicKey(original_pk),
                 &tx,
-                &inputs_utxos_refs,
+                &input_commitments,
                 0,
                 &mut rng,
             )
@@ -5222,7 +5226,7 @@ fn check_signature_on_change_authority(#[case] seed: Seed) {
                 Default::default(),
                 Destination::PublicKey(new_pk),
                 &tx,
-                &inputs_utxos_refs,
+                &input_commitments,
                 0,
                 &mut rng,
             )
@@ -6304,11 +6308,10 @@ fn only_authority_can_change_metadata_uri(#[case] seed: Seed) {
             ))
         );
 
-        let inputs_utxos = vec![
-            None,
-            tf.chainstate.utxo(&utxo_with_change).unwrap().map(|utxo| utxo.output().clone()),
+        let input_commitments = vec![
+            SighashInputCommitment::None,
+            SighashInputCommitment::Utxo(Cow::Owned(tf.utxo(&utxo_with_change).take_output())),
         ];
-        let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
 
         // Try to change metadata with wrong signature
         let tx = {
@@ -6320,7 +6323,7 @@ fn only_authority_can_change_metadata_uri(#[case] seed: Seed) {
                 Default::default(),
                 Destination::PublicKey(some_pk),
                 &tx,
-                &inputs_utxos_refs,
+                &input_commitments,
                 0,
                 &mut rng,
             )
@@ -6354,7 +6357,7 @@ fn only_authority_can_change_metadata_uri(#[case] seed: Seed) {
                 Default::default(),
                 Destination::PublicKey(original_pk.clone()),
                 &tx,
-                &inputs_utxos_refs,
+                &input_commitments,
                 0,
                 &mut rng,
             )

@@ -56,7 +56,10 @@ use common::{
                 standard_signature::StandardInputSignature,
                 InputWitness,
             },
-            sighash::signature_hash,
+            sighash::{
+                self, input_commitments::make_sighash_input_commitments_for_transaction_inputs,
+                signature_hash,
+            },
         },
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
@@ -719,14 +722,17 @@ pub fn encode_witness(
     let input_utxos = decode_raw_array::<Option<TxOutput>>(input_utxos)
         .map_err(Error::InvalidInputUtxoEncoding)?;
 
-    let utxos = input_utxos.iter().map(Option::as_ref).collect::<Vec<_>>();
+    let input_commitments = make_sighash_input_commitments_for_transaction_inputs(
+        tx.inputs(),
+        &sighash::input_commitments::TrivialUtxoProvider(&input_utxos),
+    )?;
 
     let witness = StandardInputSignature::produce_uniparty_signature_for_input(
         &private_key,
         sighashtype.into(),
         destination,
         &tx,
-        &utxos,
+        &input_commitments,
         input_index as usize,
         &mut randomness::make_true_rng(),
     )
@@ -765,7 +771,10 @@ pub fn encode_witness_htlc_secret(
     let input_utxos = decode_raw_array::<Option<TxOutput>>(input_utxos)
         .map_err(Error::InvalidInputUtxoEncoding)?;
 
-    let utxos = input_utxos.iter().map(Option::as_ref).collect::<Vec<_>>();
+    let input_commitments = make_sighash_input_commitments_for_transaction_inputs(
+        tx.inputs(),
+        &sighash::input_commitments::TrivialUtxoProvider(&input_utxos),
+    )?;
 
     let secret =
         HtlcSecret::decode_all(&mut &secret[..]).map_err(Error::InvalidHtlcSecretEncoding)?;
@@ -775,7 +784,7 @@ pub fn encode_witness_htlc_secret(
         sighashtype.into(),
         destination,
         &tx,
-        &utxos,
+        &input_commitments,
         input_index as usize,
         secret,
         &mut randomness::make_true_rng(),
@@ -859,9 +868,13 @@ pub fn encode_witness_htlc_multisig(
     let input_utxos = decode_raw_array::<Option<TxOutput>>(input_utxos)
         .map_err(Error::InvalidInputUtxoEncoding)?;
 
-    let utxos = input_utxos.iter().map(Option::as_ref).collect::<Vec<_>>();
+    let input_commitments = make_sighash_input_commitments_for_transaction_inputs(
+        tx.inputs(),
+        &sighash::input_commitments::TrivialUtxoProvider(&input_utxos),
+    )?;
+
     let sighashtype = sighashtype.into();
-    let sighash = signature_hash(sighashtype, &tx, &utxos, input_index as usize)
+    let sighash = signature_hash(sighashtype, &tx, &input_commitments, input_index as usize)
         .map_err(Error::SighashCalculationError)?;
 
     let mut rng = randomness::make_true_rng();

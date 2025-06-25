@@ -21,10 +21,12 @@ use serialization::{Decode, DecodeAll, Encode};
 use crate::{
     chain::{
         signature::{
-            sighash::{sighashtype::SigHashType, signature_hash},
+            sighash::{
+                input_commitments::SighashInputCommitment, sighashtype::SigHashType, signature_hash,
+            },
             DestinationSigError, Signable,
         },
-        ChainConfig, Destination, Transaction, TxOutput,
+        ChainConfig, Destination, Transaction,
     },
     primitives::H256,
 };
@@ -105,11 +107,11 @@ impl StandardInputSignature {
         sighash_type: SigHashType,
         outpoint_destination: Destination,
         tx: &T,
-        inputs_utxos: &[Option<&TxOutput>],
-        input_num: usize,
+        input_commitments: &[SighashInputCommitment],
+        input_index: usize,
         sig_aux_data_provider: &mut AuxP,
     ) -> Result<Self, DestinationSigError> {
-        let sighash = signature_hash(sighash_type, tx, inputs_utxos, input_num)?;
+        let sighash = signature_hash(sighash_type, tx, input_commitments, input_index)?;
         let serialized_sig = match outpoint_destination {
             Destination::PublicKeyHash(ref addr) => {
                 let sig = sign_public_key_hash_spending(private_key, addr, &sighash, sig_aux_data_provider)?;
@@ -141,12 +143,12 @@ impl StandardInputSignature {
         authorization: &AuthorizedClassicalMultisigSpend,
         sighash_type: SigHashType,
         tx: &Transaction,
-        inputs_utxos: &[Option<&TxOutput>],
-        input_num: usize,
+        input_commitments: &[SighashInputCommitment],
+        input_index: usize,
     ) -> Result<Self, DestinationSigError> {
         use super::classical_multisig::multisig_partial_signature::SigsVerifyResult;
 
-        let sighash = signature_hash(sighash_type, tx, inputs_utxos, input_num)?;
+        let sighash = signature_hash(sighash_type, tx, input_commitments, input_index)?;
         let message = sighash.encode();
 
         let verifier =
@@ -223,14 +225,15 @@ mod test {
         address::pubkeyhash::PublicKeyHash,
         chain::{
             config::create_mainnet,
-            transaction::signature::tests::utils::{generate_unsigned_tx, sig_hash_types},
+            signature::{sighash::signature_hash, DestinationSigError},
+            transaction::signature::tests::utils::{
+                generate_input_commitments, generate_unsigned_tx, sig_hash_types,
+            },
+            Destination,
         },
     };
 
     use super::*;
-    use crate::chain::signature::tests::utils::generate_inputs_utxos;
-    use crate::chain::signature::{sighash::signature_hash, DestinationSigError};
-    use crate::chain::Destination;
     use crypto::key::{KeyKind, PrivateKey};
     use itertools::Itertools;
     use rstest::rstest;
@@ -248,10 +251,9 @@ mod test {
         let (_, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         let destination = Destination::PublicKeyHash(PublicKeyHash::from(&public_key));
 
-        let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, 1);
-        let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
+        let input_commitments = generate_input_commitments(&mut rng, 1);
 
-        let tx = generate_unsigned_tx(&mut rng, &destination, &inputs_utxos, 2).unwrap();
+        let tx = generate_unsigned_tx(&mut rng, &destination, input_commitments.len(), 2).unwrap();
 
         for sighash_type in sig_hash_types() {
             assert_eq!(
@@ -261,7 +263,7 @@ mod test {
                     sighash_type,
                     destination.clone(),
                     &tx,
-                    &inputs_utxos_refs,
+                    &input_commitments,
                     INPUT_NUM,
                     &mut rng,
                 ),
@@ -280,10 +282,9 @@ mod test {
         let (_, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         let destination = Destination::PublicKey(public_key);
 
-        let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, 1);
-        let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
+        let input_commitments = generate_input_commitments(&mut rng, 1);
 
-        let tx = generate_unsigned_tx(&mut rng, &destination, &inputs_utxos, 2).unwrap();
+        let tx = generate_unsigned_tx(&mut rng, &destination, input_commitments.len(), 2).unwrap();
 
         for sighash_type in sig_hash_types() {
             assert_eq!(
@@ -293,7 +294,7 @@ mod test {
                     sighash_type,
                     destination.clone(),
                     &tx,
-                    &inputs_utxos_refs,
+                    &input_commitments,
                     INPUT_NUM,
                     &mut rng
                 ),
@@ -319,24 +320,23 @@ mod test {
 
         for (sighash_type, destination) in sig_hash_types().cartesian_product(outpoints.into_iter())
         {
-            let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, 1);
-            let inputs_utxos_refs =
-                inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
+            let input_commitments = generate_input_commitments(&mut rng, 1);
 
-            let tx = generate_unsigned_tx(&mut rng, &destination, &inputs_utxos, 2).unwrap();
+            let tx =
+                generate_unsigned_tx(&mut rng, &destination, input_commitments.len(), 2).unwrap();
             let witness = StandardInputSignature::produce_uniparty_signature_for_input(
                 &private_key,
                 sighash_type,
                 destination.clone(),
                 &tx,
-                &inputs_utxos_refs,
+                &input_commitments,
                 INPUT_NUM,
                 &mut rng,
             )
             .unwrap();
 
             let sighash =
-                signature_hash(witness.sighash_type(), &tx, &inputs_utxos_refs, INPUT_NUM).unwrap();
+                signature_hash(witness.sighash_type(), &tx, &input_commitments, INPUT_NUM).unwrap();
             witness
                 .verify_signature(&chain_config, &destination, &sighash)
                 .unwrap_or_else(|_| panic!("{sighash_type:X?} {destination:?}"));
