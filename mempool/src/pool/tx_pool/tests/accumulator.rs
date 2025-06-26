@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
+
 use common::{
     address::pubkeyhash::PublicKeyHash,
     chain::{
@@ -23,7 +25,9 @@ use common::{
                 classical_multisig::authorize_classical_multisig::AuthorizedClassicalMultisigSpend,
                 htlc::produce_classical_multisig_signature_for_htlc_input,
             },
-            sighash::{sighashtype::SigHashType, signature_hash},
+            sighash::{
+                input_commitments::SighashInputCommitment, sighashtype::SigHashType, signature_hash,
+            },
         },
         timelock::OutputTimeLock,
     },
@@ -546,7 +550,7 @@ async fn timelocked_htlc_refund(
         let sighash = signature_hash(
             SigHashType::all(),
             &tx,
-            &[Some(&tx0.transaction().outputs()[0])],
+            &[SighashInputCommitment::Utxo(Cow::Borrowed(&tx0.transaction().outputs()[0]))],
             0,
         )
         .unwrap();
@@ -565,7 +569,7 @@ async fn timelocked_htlc_refund(
         &authorization,
         SigHashType::all(),
         &tx,
-        &[Some(&tx0.transaction().outputs()[0])],
+        &[SighashInputCommitment::Utxo(Cow::Borrowed(&tx0.transaction().outputs()[0]))],
         0,
     )
     .unwrap();

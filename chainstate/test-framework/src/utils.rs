@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
+
 use crate::{
     framework::BlockOutputs, key_manager::KeyManager,
     signature_destination_getter::SignatureDestinationGetter, TestFramework,
@@ -27,7 +29,13 @@ use common::{
         output_value::OutputValue,
         signature::{
             inputsig::{standard_signature::StandardInputSignature, InputWitness},
-            sighash::sighashtype::SigHashType,
+            sighash::{
+                self,
+                input_commitments::{
+                    make_sighash_input_commitments_for_transaction_inputs, SighashInputCommitment,
+                },
+                sighashtype::SigHashType,
+            },
         },
         stakelock::StakePoolData,
         Block, ChainConfig, CoinUnit, ConsensusUpgrade, Destination, GenBlock, Genesis,
@@ -267,7 +275,9 @@ pub fn produce_kernel_signature(
         SigHashType::default(),
         staking_destination,
         &block_reward_tx,
-        std::iter::once(Some(&utxo)).collect::<Vec<_>>().as_slice(),
+        std::iter::once(SighashInputCommitment::Utxo(Cow::Borrowed(&utxo)))
+            .collect::<Vec<_>>()
+            .as_slice(),
         0,
         rng,
     )
@@ -377,7 +387,11 @@ pub fn sign_witnesses(
             | TxInput::OrderAccountCommand(..) => None,
         })
         .collect::<Vec<_>>();
-    let input_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
+    let input_commitments = make_sighash_input_commitments_for_transaction_inputs(
+        tx.inputs(),
+        &sighash::input_commitments::TrivialUtxoProvider(&inputs_utxos),
+    )
+    .unwrap();
 
     let witnesses = tx
         .inputs()
@@ -386,7 +400,15 @@ pub fn sign_witnesses(
         .map(|(idx, input)| {
             let dest = destination_getter.call(input).unwrap();
             key_manager
-                .get_signature(rng, &dest, chain_config, tx, &input_utxos_refs, idx)
+                .get_signature(
+                    rng,
+                    &dest,
+                    chain_config,
+                    tx,
+                    &input_commitments,
+                    idx,
+                    inputs_utxos[idx].as_ref(),
+                )
                 .unwrap()
         })
         .collect();
@@ -464,4 +486,22 @@ pub fn create_custom_genesis_with_stake_pool(
         BlockTimestamp::from_int_seconds(1685025323),
         vec![mint_output, initial_pool],
     )
+}
+
+pub struct SighashInputCommitmentInfoProvider<'a, T>(pub &'a T);
+
+impl<UV> sighash::input_commitments::UtxoProvider<'static>
+    for SighashInputCommitmentInfoProvider<'_, UV>
+where
+    UV: UtxosView,
+{
+    type Error = std::convert::Infallible;
+
+    fn get_utxo(
+        &self,
+        _tx_input_index: usize,
+        outpoint: &UtxoOutPoint,
+    ) -> Result<Option<Cow<'static, TxOutput>>, Self::Error> {
+        Ok(self.0.utxo(outpoint).unwrap().map(|utxo| Cow::Owned(utxo.take_output())))
+    }
 }

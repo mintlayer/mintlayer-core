@@ -184,7 +184,7 @@ export function test_transaction_and_witness_encoding() {
     );
     throw new Error("Invalid utxo worked somehow!");
   } catch (e) {
-    if (!get_err_msg(e).includes("Utxos count does not match inputs count")) {
+    if (!get_err_msg(e).includes("Error creating sighash input commitments: Utxo not found")) {
       throw e;
     }
     console.log("Tested invalid utxo count in encode witness successfully");

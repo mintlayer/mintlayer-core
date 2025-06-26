@@ -1,4 +1,4 @@
-// Copyright (c) 2021-2022 RBB S.r.l
+// Copyright (c) 2021-2025 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,20 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod address;
-pub mod chain;
-pub mod primitives;
-pub mod size_estimation;
-pub mod text_summary;
-pub mod time_getter;
-pub mod uint;
+use std::borrow::Cow;
 
-pub use uint::{Uint128, Uint256, Uint512, UintConversionError};
+pub trait CowUtils<'a, T: Clone> {
+    fn to_owned_cow(&self) -> Cow<'static, T>;
+}
 
-#[cfg(test)]
-mod tests {
-    #[ctor::ctor]
-    fn init() {
-        logging::init_logging();
+impl<'a, T: Clone> CowUtils<'a, T> for Cow<'a, T> {
+    fn to_owned_cow(&self) -> Cow<'static, T> {
+        Cow::Owned(self.clone().into_owned())
     }
 }

@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use utils::ensure;
+
 use crate::{
     chain::{
         signature::{sighash::sighashtype, DestinationSigError},
@@ -20,6 +22,8 @@ use crate::{
     },
     primitives::id::{hash_encoded_to, DefaultHashAlgoStream},
 };
+
+use super::SighashInputCommitment;
 
 pub trait SignatureHashableElement {
     fn signature_hash(
@@ -37,7 +41,7 @@ impl SignatureHashableElement for &[TxOutput] {
         stream: &mut DefaultHashAlgoStream,
         mode: sighashtype::SigHashType,
         _target_input: &TxInput,
-        target_input_num: usize,
+        target_input_index: usize,
     ) -> Result<(), DestinationSigError> {
         match mode.outputs_mode() {
             sighashtype::OutputsMode::All => {
@@ -45,8 +49,8 @@ impl SignatureHashableElement for &[TxOutput] {
             }
             sighashtype::OutputsMode::None => (),
             sighashtype::OutputsMode::Single => {
-                let output = self.get(target_input_num).ok_or({
-                    DestinationSigError::InvalidInputIndex(target_input_num, self.len())
+                let output = self.get(target_input_index).ok_or({
+                    DestinationSigError::InvalidInputIndex(target_input_index, self.len())
                 })?;
                 hash_encoded_to(&output, stream);
             }
@@ -58,26 +62,25 @@ impl SignatureHashableElement for &[TxOutput] {
 #[derive(Debug, Clone)]
 pub struct SignatureHashableInputs<'a> {
     inputs: &'a [TxInput],
-    /// Include utxos of the inputs to make it possible to verify the inputs scripts and amounts without downloading the full transactions
-    /// It can be None which means that input spends from an account not utxo
-    inputs_utxos: &'a [Option<&'a TxOutput>],
+    input_commitments: &'a [SighashInputCommitment<'a>],
 }
 
 impl<'a> SignatureHashableInputs<'a> {
     pub fn new(
         inputs: &'a [TxInput],
-        inputs_utxos: &'a [Option<&'a TxOutput>],
+        input_commitments: &'a [SighashInputCommitment<'a>],
     ) -> Result<Self, DestinationSigError> {
-        if inputs.len() != inputs_utxos.len() {
-            return Err(DestinationSigError::InvalidUtxoCountVsInputs(
-                inputs_utxos.len(),
-                inputs.len(),
-            ));
-        }
+        ensure!(
+            input_commitments.len() == inputs.len(),
+            DestinationSigError::InvalidInputCommitmentsCountVsInputs(
+                input_commitments.len(),
+                inputs.len()
+            )
+        );
 
         let result = Self {
             inputs,
-            inputs_utxos,
+            input_commitments,
         };
 
         Ok(result)
@@ -90,40 +93,36 @@ impl SignatureHashableElement for SignatureHashableInputs<'_> {
         stream: &mut DefaultHashAlgoStream,
         mode: sighashtype::SigHashType,
         target_input: &TxInput,
-        target_input_num: usize,
+        target_input_index: usize,
     ) -> Result<(), DestinationSigError> {
-        if target_input_num >= self.inputs.len() {
-            return Err(DestinationSigError::InvalidInputIndex(
-                target_input_num,
-                self.inputs.len(),
-            ));
-        }
+        ensure!(
+            target_input_index < self.inputs.len(),
+            DestinationSigError::InvalidInputIndex(target_input_index, self.inputs.len(),)
+        );
 
         match mode.inputs_mode() {
             sighashtype::InputsMode::CommitWhoPays => {
                 {
                     // Commit inputs
-                    let inputs = self.inputs;
-                    hash_encoded_to(&(inputs.len() as u32), stream);
-                    for input in inputs {
+                    hash_encoded_to(&(self.inputs.len() as u32), stream);
+                    for input in self.inputs {
                         hash_encoded_to(&input, stream);
                     }
                 }
 
                 {
-                    // Commit inputs' utxos
-                    let inputs_utxos = self.inputs_utxos;
-                    hash_encoded_to(&(inputs_utxos.len() as u32), stream);
-                    for input_utxo in inputs_utxos {
-                        hash_encoded_to(&input_utxo, stream);
+                    // Commit the extra commitments
+                    hash_encoded_to(&(self.input_commitments.len() as u32), stream);
+                    for input_info in self.input_commitments {
+                        hash_encoded_to(&input_info, stream);
                     }
                 }
             }
             sighashtype::InputsMode::AnyoneCanPay => {
                 // Commit the input being signed (target input)
                 hash_encoded_to(&target_input, stream);
-                // Commit the utxo of the input being signed (target input)
-                hash_encoded_to(&self.inputs_utxos[target_input_num], stream);
+                // Commit the extra commitment of the input being signed (target input)
+                hash_encoded_to(&self.input_commitments[target_input_index], stream);
             }
         }
         Ok(())
@@ -132,24 +131,29 @@ impl SignatureHashableElement for SignatureHashableInputs<'_> {
 
 #[cfg(test)]
 mod tests {
-    use crypto::key::{KeyKind, PrivateKey};
-    use randomness::{CryptoRng, Rng};
+    use std::borrow::Cow;
+
     use rstest::rstest;
+
+    use crypto::hash::StreamHasher;
+    use randomness::{CryptoRng, Rng};
     use test_utils::random::{make_seedable_rng, Seed};
 
     use crate::{
         chain::{
-            output_value::OutputValue, signature::sighash::sighashtype::SigHashType, Destination,
+            signature::{
+                sighash::{sighashtype::SigHashType, SighashInputCommitment},
+                tests::utils::{generate_input_commitments, generate_inputs_utxos, sig_hash_types},
+            },
             OutPointSourceId,
         },
-        primitives::{Amount, Id, H256},
+        primitives::{Id, H256},
     };
-    use crypto::hash::StreamHasher;
 
     use super::*;
 
-    fn generate_random_invalid_input(rng: &mut impl Rng) -> TxInput {
-        let outpoint = if rng.next_u32() % 2 == 0 {
+    fn generate_random_input(rng: &mut impl Rng) -> TxInput {
+        let outpoint = if rng.gen::<bool>() {
             OutPointSourceId::Transaction(Id::new(H256::random_using(rng)))
         } else {
             OutPointSourceId::BlockReward(Id::new(H256::random_using(rng)))
@@ -158,39 +162,27 @@ mod tests {
         TxInput::from_utxo(outpoint, rng.next_u32())
     }
 
-    fn generate_random_invalid_output(rng: &mut (impl Rng + CryptoRng)) -> TxOutput {
-        let (_, pub_key) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
-        TxOutput::Transfer(
-            OutputValue::Coin(Amount::from_atoms(rng.next_u64() as u128)),
-            Destination::PublicKey(pub_key),
-        )
-    }
-
     fn do_test_hashable_inputs(
         inputs_count: usize,
-        inputs_utxos_count: usize,
+        input_commitments_count: usize,
         rng: &mut (impl Rng + CryptoRng),
     ) {
-        let inputs = (0..inputs_count)
-            .map(|_| generate_random_invalid_input(rng))
-            .collect::<Vec<_>>();
+        let inputs = (0..inputs_count).map(|_| generate_random_input(rng)).collect::<Vec<_>>();
 
-        let inputs_utxos = (0..inputs_utxos_count)
-            .map(|_| generate_random_invalid_output(rng))
-            .collect::<Vec<_>>();
-
-        let inputs_utxos = inputs_utxos.iter().map(Some).collect::<Vec<_>>();
-
-        let hashable_inputs_result = SignatureHashableInputs::new(&inputs, &inputs_utxos);
+        let input_commitments = generate_input_commitments(rng, input_commitments_count);
+        let hashable_inputs_result = SignatureHashableInputs::new(&inputs, &input_commitments);
 
         if inputs_count == 0 {
             return;
         }
 
-        if inputs_count != inputs_utxos_count {
+        if inputs_count != input_commitments_count {
             assert_eq!(
                 hashable_inputs_result.unwrap_err(),
-                DestinationSigError::InvalidUtxoCountVsInputs(inputs_utxos.len(), inputs.len(),)
+                DestinationSigError::InvalidInputCommitmentsCountVsInputs(
+                    input_commitments.len(),
+                    inputs.len(),
+                )
             );
         } else {
             assert!(hashable_inputs_result.is_ok());
@@ -209,7 +201,7 @@ mod tests {
                     &inputs[index_to_hash],
                     index_to_hash,
                 )
-                .is_ok(),);
+                .is_ok());
 
             // Valid case
             assert_eq!(
@@ -241,5 +233,112 @@ mod tests {
 
         // valid case
         do_test_hashable_inputs(inputs_count, inputs_count, &mut rng);
+    }
+
+    // The legacy SignatureHashableInputs
+    #[derive(Debug, Clone)]
+    pub struct LegacySignatureHashableInputs<'a> {
+        inputs: &'a [TxInput],
+        inputs_utxos: &'a [Option<&'a TxOutput>],
+    }
+
+    impl SignatureHashableElement for LegacySignatureHashableInputs<'_> {
+        fn signature_hash(
+            &self,
+            stream: &mut DefaultHashAlgoStream,
+            mode: sighashtype::SigHashType,
+            target_input: &TxInput,
+            target_input_num: usize,
+        ) -> Result<(), DestinationSigError> {
+            if target_input_num >= self.inputs.len() {
+                return Err(DestinationSigError::InvalidInputIndex(
+                    target_input_num,
+                    self.inputs.len(),
+                ));
+            }
+
+            match mode.inputs_mode() {
+                sighashtype::InputsMode::CommitWhoPays => {
+                    {
+                        // Commit inputs
+                        let inputs = self.inputs;
+                        hash_encoded_to(&(inputs.len() as u32), stream);
+                        for input in inputs {
+                            hash_encoded_to(&input, stream);
+                        }
+                    }
+
+                    {
+                        // Commit inputs' utxos
+                        let inputs_utxos = self.inputs_utxos;
+                        hash_encoded_to(&(inputs_utxos.len() as u32), stream);
+                        for input_utxo in inputs_utxos {
+                            hash_encoded_to(&input_utxo, stream);
+                        }
+                    }
+                }
+                sighashtype::InputsMode::AnyoneCanPay => {
+                    // Commit the input being signed (target input)
+                    hash_encoded_to(&target_input, stream);
+                    // Commit the utxo of the input being signed (target input)
+                    hash_encoded_to(&self.inputs_utxos[target_input_num], stream);
+                }
+            }
+            Ok(())
+        }
+    }
+
+    // Make sure that `SignatureHashableInputs::signature_hash` produces the same hash as
+    // the legacy one.
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn signature_hash_backward_compatibility(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+
+        for sighash_type in sig_hash_types() {
+            let inputs_count = rng.gen_range(1..100);
+            let inputs =
+                (0..inputs_count).map(|_| generate_random_input(&mut rng)).collect::<Vec<_>>();
+            let inputs_utxos = generate_inputs_utxos(&mut rng, inputs_count);
+
+            let inputs_utxos_refs = inputs_utxos.iter().map(|u| u.as_ref()).collect::<Vec<_>>();
+
+            let hashable_inputs_legacy = LegacySignatureHashableInputs {
+                inputs: &inputs,
+                inputs_utxos: &inputs_utxos_refs,
+            };
+
+            let input_index = rng.gen_range(0..inputs_count);
+
+            let hash_legacy: H256 = {
+                let mut stream = DefaultHashAlgoStream::new();
+                hashable_inputs_legacy
+                    .signature_hash(&mut stream, sighash_type, &inputs[input_index], input_index)
+                    .unwrap();
+                stream.finalize().into()
+            };
+
+            let input_commitments = inputs_utxos
+                .iter()
+                .map(|utxo| {
+                    utxo.as_ref().map_or(SighashInputCommitment::None, |utxo| {
+                        SighashInputCommitment::Utxo(Cow::Borrowed(utxo))
+                    })
+                })
+                .collect::<Vec<_>>();
+            let hashable_inputs_new =
+                SignatureHashableInputs::new(&inputs, &input_commitments).unwrap();
+
+            let hash_new: H256 = {
+                let mut stream = DefaultHashAlgoStream::new();
+                hashable_inputs_new
+                    .signature_hash(&mut stream, sighash_type, &inputs[input_index], input_index)
+                    .unwrap();
+                stream.finalize().into()
+            };
+
+            assert_eq!(hash_legacy, hash_new);
+        }
     }
 }

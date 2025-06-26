@@ -32,8 +32,10 @@ use chainstate::tx_verifier::{
 };
 use futures::{never::Never, stream::FuturesOrdered, TryStreamExt};
 use helpers::{
-    fetch_order_info, fetch_token_info, fetch_utxo, fetch_utxo_extra_info, into_balances,
+    fetch_input_infos, fetch_order_info, fetch_token_info, fetch_utxo, fetch_utxo_extra_info,
+    into_balances,
 };
+use itertools::Itertools as _;
 use node_comm::rpc_client::ColdWalletClient;
 use runtime_wallet::RuntimeWallet;
 use std::{
@@ -60,7 +62,10 @@ use common::{
     chain::{
         block::timestamp::BlockTimestamp,
         htlc::HtlcSecret,
-        signature::{inputsig::InputWitness, DestinationSigError, Transactable},
+        signature::{
+            inputsig::InputWitness, sighash::input_commitments::SighashInputCommitment,
+            DestinationSigError, Transactable,
+        },
         tokens::{RPCTokenInfo, TokenId},
         Block, ChainConfig, Destination, GenBlock, OrderId, PoolId, RpcOrderInfo,
         SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
@@ -103,7 +108,8 @@ pub use wallet_types::{
 };
 use wallet_types::{
     partially_signed_transaction::{
-        PartiallySignedTransaction, PartiallySignedTransactionError, TxAdditionalInfo,
+        make_sighash_input_commitments, PartiallySignedTransaction,
+        PartiallySignedTransactionError, SighashInputCommitmentCreationError, TxAdditionalInfo,
     },
     signature_status::SignatureStatus,
     wallet_type::{WalletControllerMode, WalletType},
@@ -161,6 +167,8 @@ pub enum ControllerError<T: NodeInterface> {
     PartiallySignedTransactionError(#[from] PartiallySignedTransactionError),
     #[error("Invalid token ID")]
     InvalidTokenId,
+    #[error("Error creating sighash input commitment")]
+    SighashInputCommitmentCreationError(#[from] SighashInputCommitmentCreationError),
 }
 
 #[derive(Clone, Copy)]
@@ -908,25 +916,14 @@ where
         // spent. Ideally this should be fixed, though it's non-trivial, because we don't have a
         // tx index, so there is no easy way of obtaining a txo for an already spent input.
 
-        let tasks: FuturesOrdered<_> =
-            stx.inputs().iter().map(|input| self.fetch_opt_utxo(input)).collect();
-        let input_utxos: Vec<Option<TxOutput>> = tasks.try_collect().await?;
-        let only_input_utxos: Vec<_> = input_utxos.clone().into_iter().flatten().collect();
+        let (input_utxos, _, destinations) =
+            fetch_input_infos(&self.rpc_client, &self.wallet, stx.inputs()).await?;
+
+        let only_input_utxos = input_utxos.iter().flatten().cloned().collect_vec();
         let fees = self.get_fees(&only_input_utxos, stx.outputs()).await?;
-        let inputs_utxos_refs: Vec<_> = input_utxos.iter().map(|out| out.as_ref()).collect();
-        let destinations = inputs_utxos_refs
-            .iter()
-            .map(|txo| {
-                txo.map(|txo| {
-                    get_tx_output_destination(txo, &|_| None, HtlcSpendingCondition::Skip)
-                        .ok_or_else(|| {
-                            WalletError::UnsupportedTransactionOutput(Box::new(txo.clone()))
-                        })
-                })
-                .transpose()
-            })
-            .collect::<Result<Vec<_>, WalletError>>()
-            .map_err(ControllerError::WalletError)?;
+
+        let input_commitments = make_sighash_input_commitments(stx.inputs(), &input_utxos)?;
+
         let signature_statuses = stx
             .signatures()
             .iter()
@@ -936,9 +933,13 @@ where
                 (InputWitness::NoSignature(_), None) => SignatureStatus::FullySigned,
                 (InputWitness::NoSignature(_), Some(_)) => SignatureStatus::NotSigned,
                 (InputWitness::Standard(_), None) => SignatureStatus::InvalidSignature,
-                (InputWitness::Standard(_), Some(dest)) => {
-                    self.verify_tx_signature(stx, &inputs_utxos_refs, input_num, &dest)
-                }
+                (InputWitness::Standard(_), Some(dest)) => self.verify_tx_signature(
+                    stx,
+                    &input_commitments,
+                    input_num,
+                    input_utxos[input_num].clone(),
+                    &dest,
+                ),
             })
             .collect();
         Ok((fees, signature_statuses))
@@ -950,7 +951,9 @@ where
     ) -> Result<InspectTransaction, ControllerError<T>> {
         let input_utxos: Vec<_> = ptx.input_utxos().iter().flatten().cloned().collect();
         let fees = self.get_fees(&input_utxos, ptx.tx().outputs()).await?;
-        let inputs_utxos_refs: Vec<_> = ptx.input_utxos().iter().map(|out| out.as_ref()).collect();
+
+        let input_commitments = ptx.make_sighash_input_commitments()?;
+
         let signature_statuses: Vec<_> = ptx
             .witnesses()
             .iter()
@@ -960,9 +963,13 @@ where
                 (Some(InputWitness::NoSignature(_)), None) => SignatureStatus::FullySigned,
                 (Some(InputWitness::NoSignature(_)), Some(_)) => SignatureStatus::InvalidSignature,
                 (Some(InputWitness::Standard(_)), None) => SignatureStatus::UnknownSignature,
-                (Some(InputWitness::Standard(_)), Some(dest)) => {
-                    self.verify_tx_signature(&ptx, &inputs_utxos_refs, input_num, dest)
-                }
+                (Some(InputWitness::Standard(_)), Some(dest)) => self.verify_tx_signature(
+                    &ptx,
+                    &input_commitments,
+                    input_num,
+                    ptx.input_utxos()[input_num].clone(),
+                    dest,
+                ),
                 (None, _) => SignatureStatus::NotSigned,
             })
             .collect();
@@ -1012,16 +1019,18 @@ where
     fn verify_tx_signature(
         &self,
         tx: &(impl Transactable + SignatureOnlyVerifiable),
-        inputs_utxos_refs: &[Option<&TxOutput>],
+        input_commitments: &[SighashInputCommitment],
         input_num: usize,
+        input_utxo: Option<TxOutput>,
         dest: &Destination,
     ) -> SignatureStatus {
         let valid = tx_verifier::input_check::signature_only_check::verify_tx_signature(
             &self.chain_config,
             dest,
             tx,
-            inputs_utxos_refs,
+            input_commitments,
             input_num,
+            input_utxo,
         );
 
         match valid {
@@ -1040,7 +1049,9 @@ where
                 },
 
                 tx_verifier::error::InputCheckErrorPayload::MissingUtxo(_)
+                | tx_verifier::error::InputCheckErrorPayload::NonUtxoKernelInput(_)
                 | tx_verifier::error::InputCheckErrorPayload::UtxoView(_)
+                | tx_verifier::error::InputCheckErrorPayload::UtxoInfoProvider(_)
                 | tx_verifier::error::InputCheckErrorPayload::Translation(_)
                 | tx_verifier::error::InputCheckErrorPayload::Verification(_) => {
                     SignatureStatus::InvalidSignature
@@ -1197,18 +1208,6 @@ where
             .map(|input| fetch_utxo_extra_info(&self.rpc_client, input))
             .collect();
         tasks.try_collect().await
-    }
-
-    async fn fetch_opt_utxo(
-        &self,
-        input: &TxInput,
-    ) -> Result<Option<TxOutput>, ControllerError<T>> {
-        match input {
-            TxInput::Utxo(utxo) => fetch_utxo(&self.rpc_client, utxo, &self.wallet).await.map(Some),
-            TxInput::Account(_)
-            | TxInput::AccountCommand(_, _)
-            | TxInput::OrderAccountCommand(_) => Ok(None),
-        }
     }
 
     /// Synchronize the wallet in the background from the node's blockchain.

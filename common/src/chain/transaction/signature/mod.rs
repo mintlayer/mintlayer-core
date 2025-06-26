@@ -13,7 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use thiserror::Error;
+
+use serialization::{Decode, Encode};
+use utils::ensure;
+
 use crate::chain::{ChainConfig, TxInput};
+
+use super::{Destination, TxOutput};
 
 use self::{
     inputsig::{
@@ -24,17 +31,11 @@ use self::{
         standard_signature::StandardInputSignature,
         InputWitness,
     },
-    sighash::signature_hash,
+    sighash::{input_commitments::SighashInputCommitment, signature_hash},
 };
 
 pub mod inputsig;
 pub mod sighash;
-
-use serialization::{Decode, Encode};
-use thiserror::Error;
-use utils::ensure;
-
-use super::{Destination, TxOutput};
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum DestinationSigError {
@@ -42,8 +43,8 @@ pub enum DestinationSigError {
     InvalidSigHashValue(u8),
     #[error("Invalid input index was provided (provided: `{0}` vs available: `{1}`)")]
     InvalidInputIndex(usize, usize),
-    #[error("Utxos count does not match inputs count (Utxo count: `{0}` vs inputs: `{1}`)")]
-    InvalidUtxoCountVsInputs(usize, usize),
+    #[error("Input commitments count {0} does not match inputs count {1}")]
+    InvalidInputCommitmentsCountVsInputs(usize, usize),
     #[error("Invalid signature index was provided (provided: `{0}` vs available: `{1}`)")]
     InvalidSignatureIndex(usize, usize),
     #[error("Requested signature hash without the presence of any inputs")]
@@ -128,13 +129,13 @@ pub fn verify_signature<T: Signable>(
     outpoint_destination: &Destination,
     tx: &T,
     input_witness: &EvaluatedInputWitness,
-    inputs_utxos: &[Option<&TxOutput>],
-    input_num: usize,
+    input_commitments: &[SighashInputCommitment],
+    input_index: usize,
 ) -> Result<(), DestinationSigError> {
     let inputs = tx.inputs().ok_or(DestinationSigError::SignatureVerificationWithoutInputs)?;
     ensure!(
-        input_num < inputs.len(),
-        DestinationSigError::InvalidSignatureIndex(input_num, inputs.len(),)
+        input_index < inputs.len(),
+        DestinationSigError::InvalidSignatureIndex(input_index, inputs.len(),)
     );
 
     match input_witness {
@@ -147,28 +148,12 @@ pub fn verify_signature<T: Signable>(
             }
             Destination::AnyoneCanSpend => {}
         },
-        EvaluatedInputWitness::Standard(witness) => verify_standard_input_signature(
-            chain_config,
-            outpoint_destination,
-            witness,
-            tx,
-            inputs_utxos,
-            input_num,
-        )?,
+        EvaluatedInputWitness::Standard(witness) => {
+            let sighash =
+                signature_hash(witness.sighash_type(), tx, input_commitments, input_index)?;
+            witness.verify_signature(chain_config, outpoint_destination, &sighash)?;
+        }
     }
-    Ok(())
-}
-
-fn verify_standard_input_signature<T: Signable>(
-    chain_config: &ChainConfig,
-    outpoint_destination: &Destination,
-    witness: &StandardInputSignature,
-    tx: &T,
-    inputs_utxos: &[Option<&TxOutput>],
-    input_num: usize,
-) -> Result<(), DestinationSigError> {
-    let sighash = signature_hash(witness.sighash_type(), tx, inputs_utxos, input_num)?;
-    witness.verify_signature(chain_config, outpoint_destination, &sighash)?;
     Ok(())
 }
 

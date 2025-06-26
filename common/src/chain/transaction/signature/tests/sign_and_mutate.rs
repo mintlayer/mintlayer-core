@@ -17,16 +17,11 @@ use itertools::Itertools;
 use rstest::rstest;
 use test_utils::random::Seed;
 
-use super::{add_value, utils::*};
 use crate::{
     chain::{
         config::create_mainnet,
         signature::{
             sighash::sighashtype::{OutputsMode, SigHashType},
-            tests::{
-                check_insert_input, check_insert_output, check_mutate_input, check_mutate_output,
-                sign_mutate_then_verify,
-            },
             DestinationSigError,
         },
         signed_transaction::SignedTransaction,
@@ -38,18 +33,20 @@ use crate::{
     primitives::{Amount, Id, H256},
 };
 use crypto::key::{KeyKind, PrivateKey};
-use randomness::Rng;
+use randomness::{CryptoRng, Rng};
+use test_utils::gen_different_value;
 
-const INPUTS: usize = 15;
-const OUTPUTS: usize = 15;
-const INVALID_INPUT: usize = 1235466;
+use super::{add_value, utils::*};
 
-// Create a transaction, sign it, modify and try to verify the signature. Modifications include
-// changing flags and lock time.
+const INPUTS_COUNT: usize = 15;
+const OUTPUTS_COUNT: usize = 15;
+const INVALID_INPUT_INDEX: usize = 1235466;
+
+// Create a transaction, sign it, modify its flags and try to verify the signature.
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn test_mutate_tx_internal_data(#[case] seed: Seed) {
+fn test_mutate_tx_flags(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
     let chain_config = create_mainnet();
@@ -60,8 +57,8 @@ fn test_mutate_tx_internal_data(#[case] seed: Seed) {
         (0, 31, Ok(())),
         (31, 0, Err(DestinationSigError::SignatureVerificationFailed)),
         (
-            INPUTS,
-            OUTPUTS,
+            INPUTS_COUNT,
+            OUTPUTS_COUNT,
             Err(DestinationSigError::SignatureVerificationFailed),
         ),
         (
@@ -71,19 +68,24 @@ fn test_mutate_tx_internal_data(#[case] seed: Seed) {
         ),
     ];
 
-    for ((destination, sighash_type), (inputs, outputs, expected)) in
+    for ((destination, sighash_type), (inputs_count, outputs_count, expected)) in
         destinations(&mut rng, public_key)
             .cartesian_product(sig_hash_types())
             .cartesian_product(test_data)
     {
-        let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, inputs);
-        let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
+        let input_commitments = generate_input_commitments(&mut rng, inputs_count);
 
-        let tx = generate_unsigned_tx(&mut rng, &destination, &inputs_utxos, outputs).unwrap();
+        let tx = generate_unsigned_tx(
+            &mut rng,
+            &destination,
+            input_commitments.len(),
+            outputs_count,
+        )
+        .unwrap();
         match sign_whole_tx(
             &mut rng,
             tx,
-            &inputs_utxos_refs,
+            &input_commitments,
             &private_key,
             sighash_type,
             &destination,
@@ -92,7 +94,7 @@ fn test_mutate_tx_internal_data(#[case] seed: Seed) {
                 // Test flags change.
                 let updated_tx = change_flags(&mut rng, &signed_tx, 1234567890);
                 assert_eq!(
-                    verify_signed_tx(&chain_config, &updated_tx, &inputs_utxos_refs, &destination),
+                    verify_signed_tx(&chain_config, &updated_tx, &input_commitments, &destination),
                     expected
                 );
             }
@@ -111,255 +113,6 @@ fn test_mutate_tx_internal_data(#[case] seed: Seed) {
     }
 }
 
-#[rstest]
-#[trace]
-#[case(Seed::from_entropy())]
-fn modify_and_verify(#[case] seed: Seed) {
-    let mut rng = test_utils::random::make_seedable_rng(seed);
-
-    let chain_config = create_mainnet();
-
-    let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
-    let destination = Destination::PublicKey(public_key);
-
-    {
-        let sighash_type = SigHashType::all();
-        let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, 3);
-        let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
-        let tx = sign_mutate_then_verify(
-            &chain_config,
-            &mut rng,
-            &inputs_utxos,
-            &private_key,
-            sighash_type,
-            &destination,
-        );
-        check_insert_input(
-            &chain_config,
-            &mut rng,
-            &tx,
-            &inputs_utxos_refs,
-            &destination,
-            true,
-        );
-        check_mutate_input(
-            &chain_config,
-            &mut rng,
-            &tx,
-            &inputs_utxos_refs,
-            &destination,
-            true,
-        );
-        check_insert_output(
-            &chain_config,
-            &mut rng,
-            &tx,
-            &inputs_utxos_refs,
-            &destination,
-            true,
-        );
-        check_mutate_output(&chain_config, &tx, &inputs_utxos_refs, &destination, true);
-    }
-
-    {
-        let sighash_type =
-            SigHashType::try_from(SigHashType::ALL | SigHashType::ANYONECANPAY).unwrap();
-        let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, 3);
-        let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
-        let tx = sign_mutate_then_verify(
-            &chain_config,
-            &mut rng,
-            &inputs_utxos,
-            &private_key,
-            sighash_type,
-            &destination,
-        );
-        check_insert_input(
-            &chain_config,
-            &mut rng,
-            &tx,
-            &inputs_utxos_refs,
-            &destination,
-            false,
-        );
-        check_mutate_input(
-            &chain_config,
-            &mut rng,
-            &tx,
-            &inputs_utxos_refs,
-            &destination,
-            true,
-        );
-        check_insert_output(
-            &chain_config,
-            &mut rng,
-            &tx,
-            &inputs_utxos_refs,
-            &destination,
-            true,
-        );
-        check_mutate_output(&chain_config, &tx, &inputs_utxos_refs, &destination, true);
-    }
-
-    {
-        let sighash_type = SigHashType::try_from(SigHashType::NONE).unwrap();
-        let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, 3);
-        let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
-        let tx = sign_mutate_then_verify(
-            &chain_config,
-            &mut rng,
-            &inputs_utxos,
-            &private_key,
-            sighash_type,
-            &destination,
-        );
-        check_insert_input(
-            &chain_config,
-            &mut rng,
-            &tx,
-            &inputs_utxos_refs,
-            &destination,
-            true,
-        );
-        check_mutate_input(
-            &chain_config,
-            &mut rng,
-            &tx,
-            &inputs_utxos_refs,
-            &destination,
-            true,
-        );
-        check_insert_output(
-            &chain_config,
-            &mut rng,
-            &tx,
-            &inputs_utxos_refs,
-            &destination,
-            false,
-        );
-        check_mutate_output(&chain_config, &tx, &inputs_utxos_refs, &destination, false);
-    }
-
-    {
-        let sighash_type =
-            SigHashType::try_from(SigHashType::NONE | SigHashType::ANYONECANPAY).unwrap();
-        let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, 3);
-        let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
-        let tx = sign_mutate_then_verify(
-            &chain_config,
-            &mut rng,
-            &inputs_utxos,
-            &private_key,
-            sighash_type,
-            &destination,
-        );
-        check_insert_input(
-            &chain_config,
-            &mut rng,
-            &tx,
-            &inputs_utxos_refs,
-            &destination,
-            false,
-        );
-        check_mutate_input(
-            &chain_config,
-            &mut rng,
-            &tx,
-            &inputs_utxos_refs,
-            &destination,
-            true,
-        );
-        check_insert_output(
-            &chain_config,
-            &mut rng,
-            &tx,
-            &inputs_utxos_refs,
-            &destination,
-            false,
-        );
-        check_mutate_output(&chain_config, &tx, &inputs_utxos_refs, &destination, false);
-    }
-
-    {
-        let sighash_type = SigHashType::try_from(SigHashType::SINGLE).unwrap();
-        let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, 3);
-        let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
-        let tx = sign_mutate_then_verify(
-            &chain_config,
-            &mut rng,
-            &inputs_utxos,
-            &private_key,
-            sighash_type,
-            &destination,
-        );
-        check_insert_input(
-            &chain_config,
-            &mut rng,
-            &tx,
-            &inputs_utxos_refs,
-            &destination,
-            true,
-        );
-        check_mutate_input(
-            &chain_config,
-            &mut rng,
-            &tx,
-            &inputs_utxos_refs,
-            &destination,
-            true,
-        );
-        check_insert_output(
-            &chain_config,
-            &mut rng,
-            &tx,
-            &inputs_utxos_refs,
-            &destination,
-            false,
-        );
-        check_mutate_output(&chain_config, &tx, &inputs_utxos_refs, &destination, true);
-    }
-
-    {
-        let sighash_type =
-            SigHashType::try_from(SigHashType::SINGLE | SigHashType::ANYONECANPAY).unwrap();
-        let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, 3);
-        let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
-        let tx = sign_mutate_then_verify(
-            &chain_config,
-            &mut rng,
-            &inputs_utxos,
-            &private_key,
-            sighash_type,
-            &destination,
-        );
-        check_insert_input(
-            &chain_config,
-            &mut rng,
-            &tx,
-            &inputs_utxos_refs,
-            &destination,
-            false,
-        );
-        check_mutate_input(
-            &chain_config,
-            &mut rng,
-            &tx,
-            &inputs_utxos_refs,
-            &destination,
-            true,
-        );
-        check_insert_output(
-            &chain_config,
-            &mut rng,
-            &tx,
-            &inputs_utxos_refs,
-            &destination,
-            false,
-        );
-        check_mutate_output(&chain_config, &tx, &inputs_utxos_refs, &destination, true);
-    }
-}
-
 // The `ALL` signature hash type is applied to all inputs and all outputs, so any change must result
 // in the signature verification error.
 #[rstest]
@@ -373,26 +126,26 @@ fn mutate_all(#[case] seed: Seed) {
     let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
     let destination = Destination::PublicKey(public_key);
     let sighash_type = SigHashType::all();
-    let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, INPUTS);
-    let tx = generate_and_sign_tx(
+    let tx = generate_signed_tx_with_input_commitments(
         &chain_config,
         &mut rng,
         &destination,
-        &inputs_utxos,
-        OUTPUTS,
+        INPUTS_COUNT,
+        OUTPUTS_COUNT,
         &private_key,
         sighash_type,
     )
     .unwrap();
 
     let mutations = [
-        add_input,
+        append_input,
         mutate_first_input,
+        mutate_first_input_commitment,
         remove_first_input,
         remove_middle_input,
         remove_last_input,
-        add_output,
-        mutate_output,
+        append_output,
+        mutate_first_output,
         remove_first_output,
         remove_middle_output,
         remove_last_output,
@@ -401,7 +154,6 @@ fn mutate_all(#[case] seed: Seed) {
         &chain_config,
         &mut rng,
         &tx,
-        &inputs_utxos,
         &destination,
         mutations,
         Err(DestinationSigError::SignatureVerificationFailed),
@@ -420,22 +172,20 @@ fn mutate_all_anyonecanpay(#[case] seed: Seed) {
     let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
     let destination = Destination::PublicKey(public_key);
     let sighash_type = SigHashType::try_from(SigHashType::ALL | SigHashType::ANYONECANPAY).unwrap();
-    let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, INPUTS);
-    let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
-    let tx = generate_and_sign_tx(
+    let tx = generate_signed_tx_with_input_commitments(
         &chain_config,
         &mut rng,
         &destination,
-        &inputs_utxos,
-        OUTPUTS,
+        INPUTS_COUNT,
+        OUTPUTS_COUNT,
         &private_key,
         sighash_type,
     )
     .unwrap();
 
     let mutations = [
-        add_output,
-        mutate_output,
+        append_output,
+        mutate_first_output,
         remove_first_output,
         remove_middle_output,
         remove_last_output,
@@ -444,37 +194,76 @@ fn mutate_all_anyonecanpay(#[case] seed: Seed) {
         &chain_config,
         &mut rng,
         &tx,
-        &inputs_utxos,
         &destination,
         mutations,
         Err(DestinationSigError::SignatureVerificationFailed),
     );
 
     {
-        let tx = SignedTransactionWithUtxo {
-            tx: tx.clone(),
-            inputs_utxos: inputs_utxos.clone(),
-        };
         let tx = mutate_first_input(&mut rng, &tx);
+        let inputs_count = tx.tx.inputs().len();
+
         assert_eq!(
             verify_signature(
                 &chain_config,
                 &destination,
                 &tx.tx,
                 &tx.tx.signatures()[0],
-                &inputs_utxos_refs,
+                &tx.input_commitments,
                 0
             ),
             Err(DestinationSigError::SignatureVerificationFailed),
         );
+        for input_idx in 1..inputs_count {
+            assert_eq!(
+                verify_signature(
+                    &chain_config,
+                    &destination,
+                    &tx.tx,
+                    &tx.tx.signatures()[input_idx],
+                    &tx.input_commitments,
+                    input_idx
+                ),
+                Ok(())
+            );
+        }
     }
 
-    let mutations = [add_input, remove_first_input, remove_middle_input, remove_last_input];
+    {
+        let tx = mutate_first_input_commitment(&mut rng, &tx);
+        let inputs_count = tx.tx.inputs().len();
+
+        assert_eq!(
+            verify_signature(
+                &chain_config,
+                &destination,
+                &tx.tx,
+                &tx.tx.signatures()[0],
+                &tx.input_commitments,
+                0
+            ),
+            Err(DestinationSigError::SignatureVerificationFailed),
+        );
+        for input_idx in 1..inputs_count {
+            assert_eq!(
+                verify_signature(
+                    &chain_config,
+                    &destination,
+                    &tx.tx,
+                    &tx.tx.signatures()[input_idx],
+                    &tx.input_commitments,
+                    input_idx
+                ),
+                Ok(())
+            );
+        }
+    }
+
+    let mutations = [append_input, remove_first_input, remove_middle_input, remove_last_input];
     check_mutations(
         &chain_config,
         &mut rng,
         &tx,
-        &inputs_utxos,
         &destination,
         mutations,
         Ok(()),
@@ -492,22 +281,21 @@ fn mutate_none(#[case] seed: Seed) {
     let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
     let destination = Destination::PublicKey(public_key);
     let sighash_type = SigHashType::try_from(SigHashType::NONE).unwrap();
-    let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, INPUTS);
-
-    let tx = generate_and_sign_tx(
+    let tx = generate_signed_tx_with_input_commitments(
         &chain_config,
         &mut rng,
         &destination,
-        &inputs_utxos,
-        OUTPUTS,
+        INPUTS_COUNT,
+        OUTPUTS_COUNT,
         &private_key,
         sighash_type,
     )
     .unwrap();
 
     let mutations = [
-        add_input,
+        append_input,
         mutate_first_input,
+        mutate_first_input_commitment,
         remove_first_input,
         remove_middle_input,
         remove_last_input,
@@ -516,15 +304,14 @@ fn mutate_none(#[case] seed: Seed) {
         &chain_config,
         &mut rng,
         &tx,
-        &inputs_utxos,
         &destination,
         mutations,
         Err(DestinationSigError::SignatureVerificationFailed),
     );
 
     let mutations = [
-        add_output,
-        mutate_output,
+        append_output,
+        mutate_first_output,
         remove_first_output,
         remove_middle_output,
         remove_last_output,
@@ -533,7 +320,6 @@ fn mutate_none(#[case] seed: Seed) {
         &chain_config,
         &mut rng,
         &tx,
-        &inputs_utxos,
         &destination,
         mutations,
         Ok(()),
@@ -552,26 +338,20 @@ fn mutate_none_anyonecanpay(#[case] seed: Seed) {
     let destination = Destination::PublicKey(public_key);
     let sighash_type =
         SigHashType::try_from(SigHashType::NONE | SigHashType::ANYONECANPAY).unwrap();
-    let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, INPUTS);
-    let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
-    let tx = generate_and_sign_tx(
+    let tx = generate_signed_tx_with_input_commitments(
         &chain_config,
         &mut rng,
         &destination,
-        &inputs_utxos,
-        OUTPUTS,
+        INPUTS_COUNT,
+        OUTPUTS_COUNT,
         &private_key,
         sighash_type,
     )
     .unwrap();
 
     {
-        let tx = SignedTransactionWithUtxo {
-            tx: tx.clone(),
-            inputs_utxos: inputs_utxos.clone(),
-        };
         let tx = mutate_first_input(&mut rng, &tx);
-        let inputs = tx.tx.inputs().len();
+        let inputs_count = tx.tx.inputs().len();
 
         assert_eq!(
             verify_signature(
@@ -579,44 +359,63 @@ fn mutate_none_anyonecanpay(#[case] seed: Seed) {
                 &destination,
                 &tx.tx,
                 &tx.tx.signatures()[0],
-                &inputs_utxos_refs,
+                &tx.input_commitments,
                 0
             ),
             Err(DestinationSigError::SignatureVerificationFailed),
         );
-        for input in 1..inputs {
+        for input_idx in 1..inputs_count {
             assert_eq!(
                 verify_signature(
                     &chain_config,
                     &destination,
                     &tx.tx,
-                    &tx.tx.signatures()[input],
-                    &inputs_utxos_refs,
-                    input
+                    &tx.tx.signatures()[input_idx],
+                    &tx.input_commitments,
+                    input_idx
                 ),
                 Ok(())
             );
         }
     }
 
-    let mutations = [];
-    check_mutations(
-        &chain_config,
-        &mut rng,
-        &tx,
-        &inputs_utxos,
-        &destination,
-        mutations,
-        Err(DestinationSigError::SignatureVerificationFailed),
-    );
+    {
+        let tx = mutate_first_input_commitment(&mut rng, &tx);
+        let inputs_count = tx.tx.inputs().len();
+
+        assert_eq!(
+            verify_signature(
+                &chain_config,
+                &destination,
+                &tx.tx,
+                &tx.tx.signatures()[0],
+                &tx.input_commitments,
+                0
+            ),
+            Err(DestinationSigError::SignatureVerificationFailed),
+        );
+        for input_idx in 1..inputs_count {
+            assert_eq!(
+                verify_signature(
+                    &chain_config,
+                    &destination,
+                    &tx.tx,
+                    &tx.tx.signatures()[input_idx],
+                    &tx.input_commitments,
+                    input_idx
+                ),
+                Ok(())
+            );
+        }
+    }
 
     let mutations = [
-        add_input,
+        append_input,
         remove_first_input,
         remove_middle_input,
         remove_last_input,
-        add_output,
-        mutate_output,
+        append_output,
+        mutate_first_output,
         remove_first_output,
         remove_middle_output,
         remove_last_output,
@@ -625,7 +424,6 @@ fn mutate_none_anyonecanpay(#[case] seed: Seed) {
         &chain_config,
         &mut rng,
         &tx,
-        &inputs_utxos,
         &destination,
         mutations,
         Ok(()),
@@ -643,106 +441,140 @@ fn mutate_single(#[case] seed: Seed) {
     let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
     let destination = Destination::PublicKey(public_key);
     let sighash_type = SigHashType::try_from(SigHashType::SINGLE).unwrap();
-    let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, INPUTS);
-    let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
-    let tx = generate_and_sign_tx(
+    let tx = generate_signed_tx_with_input_commitments(
         &chain_config,
         &mut rng,
         &destination,
-        &inputs_utxos,
-        OUTPUTS,
+        INPUTS_COUNT,
+        OUTPUTS_COUNT,
         &private_key,
         sighash_type,
     )
     .unwrap();
 
     let mutations = [
-        add_input,
+        append_input,
         mutate_first_input,
+        mutate_first_input_commitment,
         remove_first_input,
         remove_middle_input,
         remove_last_input,
         remove_first_output,
     ];
-    let tx = SignedTransactionWithUtxo {
-        tx,
-        inputs_utxos: inputs_utxos.clone(),
-    };
     for mutate in mutations.into_iter() {
         let tx = mutate(&mut rng, &tx);
-        let total_inputs = tx.tx.inputs().len();
-        let inputs_utxos_refs =
-            tx.inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
+        let inputs_count = tx.tx.inputs().len();
+        let outputs_count = tx.tx.outputs().len();
 
-        // Mutations make the last input number invalid, so verifying the signature for it should
-        // result in the different error.
-        for input in 0..total_inputs - 1 {
+        // If a mutation makes the number of outputs smaller than the number of inputs,
+        // verifying the "extra" inputs will produce a different error.
+        for input_idx in 0..std::cmp::min(inputs_count, outputs_count) {
             assert_eq!(
                 verify_signature(
                     &chain_config,
                     &destination,
                     &tx.tx,
-                    &tx.tx.signatures()[input],
-                    &inputs_utxos_refs,
-                    input
+                    &tx.tx.signatures()[input_idx],
+                    &tx.input_commitments,
+                    input_idx
                 ),
                 Err(DestinationSigError::SignatureVerificationFailed)
             );
         }
-        assert_eq!(
-            verify_signature(
-                &chain_config,
-                &destination,
-                &tx.tx,
-                &tx.tx.signatures()[0],
-                &inputs_utxos_refs,
-                total_inputs
-            ),
-            Err(DestinationSigError::InvalidSignatureIndex(
-                total_inputs,
-                total_inputs
-            )),
-        );
-    }
 
-    let mutations = [add_output, remove_last_output];
-    for mutate in mutations.into_iter() {
-        let tx = mutate(&mut rng, &tx);
-        let inputs = tx.tx.inputs().len();
-
-        // Mutations make the last input number invalid, so verifying the signature for it should
-        // result in the `InvalidInputIndex` error.
-        for input in 0..inputs - 1 {
+        // Check the extra inputs, if any.
+        for input_idx in outputs_count..inputs_count {
             assert_eq!(
                 verify_signature(
                     &chain_config,
                     &destination,
                     &tx.tx,
-                    &tx.tx.signatures()[input],
-                    &inputs_utxos_refs,
-                    input
+                    &tx.tx.signatures()[input_idx],
+                    &tx.input_commitments,
+                    input_idx
                 ),
-                Ok(())
+                Err(DestinationSigError::InvalidInputIndex(
+                    input_idx,
+                    outputs_count
+                ))
             );
         }
+
         assert_eq!(
             verify_signature(
                 &chain_config,
                 &destination,
                 &tx.tx,
                 &tx.tx.signatures()[0],
-                &inputs_utxos_refs,
-                inputs
+                &tx.input_commitments,
+                inputs_count
             ),
-            Err(DestinationSigError::InvalidSignatureIndex(inputs, inputs)),
+            Err(DestinationSigError::InvalidSignatureIndex(
+                inputs_count,
+                inputs_count
+            )),
+        );
+    }
+
+    let mutations = [append_output, remove_last_output];
+    for mutate in mutations.into_iter() {
+        let tx = mutate(&mut rng, &tx);
+        let inputs_count = tx.tx.inputs().len();
+        let outputs_count = tx.tx.outputs().len();
+
+        // If a mutation makes the number of outputs smaller than the number of inputs,
+        // verifying the "extra" inputs will produce a different error.
+        for input_idx in 0..std::cmp::min(inputs_count, outputs_count) {
+            assert_eq!(
+                verify_signature(
+                    &chain_config,
+                    &destination,
+                    &tx.tx,
+                    &tx.tx.signatures()[input_idx],
+                    &tx.input_commitments,
+                    input_idx
+                ),
+                Ok(())
+            );
+        }
+
+        // Check the extra inputs, if any.
+        for input_idx in outputs_count..inputs_count {
+            assert_eq!(
+                verify_signature(
+                    &chain_config,
+                    &destination,
+                    &tx.tx,
+                    &tx.tx.signatures()[input_idx],
+                    &tx.input_commitments,
+                    input_idx
+                ),
+                Err(DestinationSigError::InvalidInputIndex(
+                    input_idx,
+                    outputs_count
+                ))
+            );
+        }
+
+        assert_eq!(
+            verify_signature(
+                &chain_config,
+                &destination,
+                &tx.tx,
+                &tx.tx.signatures()[0],
+                &tx.input_commitments,
+                inputs_count
+            ),
+            Err(DestinationSigError::InvalidSignatureIndex(
+                inputs_count,
+                inputs_count
+            )),
         );
     }
 
     {
-        let tx = mutate_output(&mut rng, &tx);
-        let total_inputs = tx.tx.inputs().len();
-        let inputs_utxos_refs =
-            tx.inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
+        let tx = mutate_first_output(&mut rng, &tx);
+        let inputs_count = tx.tx.inputs().len();
 
         // Mutation of the first output makes signature invalid.
         assert_eq!(
@@ -751,20 +583,21 @@ fn mutate_single(#[case] seed: Seed) {
                 &destination,
                 &tx.tx,
                 &tx.tx.signatures()[0],
-                &inputs_utxos_refs,
+                &tx.input_commitments,
                 0
             ),
             Err(DestinationSigError::SignatureVerificationFailed),
         );
-        for input in 1..total_inputs - 1 {
+
+        for input_idx in 1..inputs_count {
             assert_eq!(
                 verify_signature(
                     &chain_config,
                     &destination,
                     &tx.tx,
-                    &tx.tx.signatures()[input],
-                    &inputs_utxos_refs,
-                    input
+                    &tx.tx.signatures()[input_idx],
+                    &tx.input_commitments,
+                    input_idx
                 ),
                 Ok(())
             );
@@ -775,12 +608,12 @@ fn mutate_single(#[case] seed: Seed) {
                 &destination,
                 &tx.tx,
                 &tx.tx.signatures()[0],
-                &inputs_utxos_refs,
-                total_inputs
+                &tx.input_commitments,
+                inputs_count
             ),
             Err(DestinationSigError::InvalidSignatureIndex(
-                total_inputs,
-                total_inputs
+                inputs_count,
+                inputs_count
             )),
         );
     }
@@ -798,67 +631,78 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
     let destination = Destination::PublicKey(public_key);
     let sighash_type =
         SigHashType::try_from(SigHashType::SINGLE | SigHashType::ANYONECANPAY).unwrap();
-    let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, INPUTS);
-    let tx = generate_and_sign_tx(
+    let tx = generate_signed_tx_with_input_commitments(
         &chain_config,
         &mut rng,
         &destination,
-        &inputs_utxos,
-        OUTPUTS,
+        INPUTS_COUNT,
+        OUTPUTS_COUNT,
         &private_key,
         sighash_type,
     )
     .unwrap();
 
-    let mutations = [add_input, remove_last_input, add_output, remove_last_output];
-    let tx = SignedTransactionWithUtxo {
-        tx,
-        inputs_utxos: inputs_utxos.clone(),
-    };
+    let mutations = [append_input, remove_last_input, append_output, remove_last_output];
     for mutate in mutations.into_iter() {
         let tx = mutate(&mut rng, &tx);
-        let total_inputs = tx.tx.inputs().len();
-        let inputs_utxos_refs =
-            tx.inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
+        let inputs_count = tx.tx.inputs().len();
+        let outputs_count = tx.tx.outputs().len();
 
-        // Mutations make the last input number invalid, so verifying the signature for it should
-        // result in the `InvalidInputIndex` error.
-        for input in 0..total_inputs - 1 {
+        // If a mutation makes the number of outputs smaller than the number of inputs,
+        // verifying the "extra" inputs will produce a different error.
+        for input_idx in 0..std::cmp::min(inputs_count, outputs_count) {
             assert_eq!(
                 verify_signature(
                     &chain_config,
                     &destination,
                     &tx.tx,
-                    &tx.tx.signatures()[input],
-                    &inputs_utxos_refs,
-                    input
+                    &tx.tx.signatures()[input_idx],
+                    &tx.input_commitments,
+                    input_idx
                 ),
                 Ok(()),
-                "{input}"
+                "{input_idx}"
             );
         }
+
+        // Check the extra inputs, if any.
+        for input_idx in outputs_count..inputs_count {
+            assert_eq!(
+                verify_signature(
+                    &chain_config,
+                    &destination,
+                    &tx.tx,
+                    &tx.tx.signatures()[input_idx],
+                    &tx.input_commitments,
+                    input_idx
+                ),
+                Err(DestinationSigError::InvalidInputIndex(
+                    input_idx,
+                    outputs_count
+                ))
+            );
+        }
+
         assert_eq!(
             verify_signature(
                 &chain_config,
                 &destination,
                 &tx.tx,
                 &tx.tx.signatures()[0],
-                &inputs_utxos_refs,
-                total_inputs
+                &tx.input_commitments,
+                inputs_count
             ),
             Err(DestinationSigError::InvalidSignatureIndex(
-                total_inputs,
-                total_inputs
+                inputs_count,
+                inputs_count
             ))
         );
     }
 
-    let mutations = [mutate_first_input, mutate_output];
-    for mutate in mutations.into_iter() {
+    let mutations = [mutate_first_input, mutate_first_input_commitment, mutate_first_output];
+    for (mutation_idx, mutate) in mutations.into_iter().enumerate() {
         let tx = mutate(&mut rng, &tx);
-        let total_inputs = tx.tx.inputs().len();
-        let inputs_utxos_refs =
-            tx.inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
+        let inputs_count = tx.tx.inputs().len();
 
         assert_eq!(
             verify_signature(
@@ -866,37 +710,40 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
                 &destination,
                 &tx.tx,
                 &tx.tx.signatures()[0],
-                &inputs_utxos_refs,
+                &tx.input_commitments,
                 0
             ),
             Err(DestinationSigError::SignatureVerificationFailed),
+            "mutation_idx = {mutation_idx}"
         );
-        for input in 1..total_inputs - 1 {
+
+        for input_idx in 1..inputs_count {
             assert_eq!(
                 verify_signature(
                     &chain_config,
                     &destination,
                     &tx.tx,
-                    &tx.tx.signatures()[input],
-                    &inputs_utxos_refs,
-                    input
+                    &tx.tx.signatures()[input_idx],
+                    &tx.input_commitments,
+                    input_idx
                 ),
                 Ok(()),
-                "## {input}"
+                "## {input_idx}"
             );
         }
+
         assert_eq!(
             verify_signature(
                 &chain_config,
                 &destination,
                 &tx.tx,
                 &tx.tx.signatures()[0],
-                &inputs_utxos_refs,
-                total_inputs
+                &tx.input_commitments,
+                inputs_count
             ),
             Err(DestinationSigError::InvalidSignatureIndex(
-                total_inputs,
-                total_inputs
+                inputs_count,
+                inputs_count
             )),
         );
     }
@@ -904,38 +751,56 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
     let mutations = [remove_first_input, remove_first_output];
     for mutate in mutations.into_iter() {
         let tx = mutate(&mut rng, &tx);
-        let total_inputs = tx.tx.inputs().len();
-        let inputs_utxos_refs =
-            tx.inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
+        let inputs_count = tx.tx.inputs().len();
+        let outputs_count = tx.tx.outputs().len();
 
-        // Mutations make the last input number invalid, so verifying the signature for it should
-        // result in the `InvalidInputIndex` error.
-        for input in 0..total_inputs - 1 {
+        // If a mutation makes the number of outputs smaller than the number of inputs,
+        // verifying the "extra" inputs will produce a different error.
+        for input_idx in 0..std::cmp::min(inputs_count, outputs_count) {
             assert_eq!(
                 verify_signature(
                     &chain_config,
                     &destination,
                     &tx.tx,
-                    &tx.tx.signatures()[input],
-                    &inputs_utxos_refs,
-                    input
+                    &tx.tx.signatures()[input_idx],
+                    &tx.input_commitments,
+                    input_idx
                 ),
                 Err(DestinationSigError::SignatureVerificationFailed),
-                "{input}"
+                "{input_idx}"
             );
         }
+
+        // Check the extra inputs, if any.
+        for input_idx in outputs_count..inputs_count {
+            assert_eq!(
+                verify_signature(
+                    &chain_config,
+                    &destination,
+                    &tx.tx,
+                    &tx.tx.signatures()[input_idx],
+                    &tx.input_commitments,
+                    input_idx
+                ),
+                Err(DestinationSigError::InvalidInputIndex(
+                    input_idx,
+                    outputs_count
+                ))
+            );
+        }
+
         assert_eq!(
             verify_signature(
                 &chain_config,
                 &destination,
                 &tx.tx,
                 &tx.tx.signatures()[0],
-                &inputs_utxos_refs,
-                total_inputs
+                &tx.input_commitments,
+                inputs_count
             ),
             Err(DestinationSigError::InvalidSignatureIndex(
-                total_inputs,
-                total_inputs
+                inputs_count,
+                inputs_count
             )),
         );
     }
@@ -945,25 +810,23 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
 fn check_mutations<M, R>(
     chain_config: &ChainConfig,
     rng: &mut R,
-    tx: &SignedTransaction,
-    inputs_utxos: &[Option<TxOutput>],
+    tx: &SignedTransactionWithInputCommitments,
     destination: &Destination,
     mutations: M,
     expected: Result<(), DestinationSigError>,
 ) where
     R: Rng,
-    M: IntoIterator<Item = fn(&mut R, &SignedTransactionWithUtxo) -> SignedTransactionWithUtxo>,
+    M: IntoIterator<
+        Item = fn(
+            &mut R,
+            &SignedTransactionWithInputCommitments,
+        ) -> SignedTransactionWithInputCommitments,
+    >,
 {
-    let tx = SignedTransactionWithUtxo {
-        tx: tx.clone(),
-        inputs_utxos: inputs_utxos.to_vec(),
-    };
     for mutate in mutations.into_iter() {
-        let tx = mutate(rng, &tx);
+        let tx = mutate(rng, tx);
         // The number of inputs can be changed by the `mutate` function.
-        let inputs = tx.tx.inputs().len();
-        let inputs_utxos_refs =
-            tx.inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
+        let inputs_count = tx.tx.inputs().len();
 
         assert_eq!(
             verify_signature(
@@ -971,22 +834,22 @@ fn check_mutations<M, R>(
                 destination,
                 &tx.tx,
                 &tx.tx.signatures()[0],
-                &inputs_utxos_refs,
-                INVALID_INPUT
+                &tx.input_commitments,
+                INVALID_INPUT_INDEX
             ),
             Err(DestinationSigError::InvalidSignatureIndex(
-                INVALID_INPUT,
-                inputs
+                INVALID_INPUT_INDEX,
+                inputs_count
             ))
         );
-        for input in 0..inputs {
+        for input in 0..inputs_count {
             assert_eq!(
                 verify_signature(
                     chain_config,
                     destination,
                     &tx.tx,
                     &tx.tx.signatures()[input],
-                    &inputs_utxos_refs,
+                    &tx.input_commitments,
                     input
                 ),
                 expected
@@ -995,27 +858,27 @@ fn check_mutations<M, R>(
     }
 }
 
-struct SignedTransactionWithUtxo {
-    tx: SignedTransaction,
-    inputs_utxos: Vec<Option<TxOutput>>,
-}
-
-fn add_input(_rng: &mut impl Rng, tx: &SignedTransactionWithUtxo) -> SignedTransactionWithUtxo {
+fn append_input(
+    _rng: &mut impl Rng,
+    tx: &SignedTransactionWithInputCommitments,
+) -> SignedTransactionWithInputCommitments {
     let mut updater = MutableTransaction::from(&tx.tx);
     updater.inputs.push(updater.inputs[0].clone());
     updater.witness.push(updater.witness[0].clone());
-    let mut inputs_utxos = tx.inputs_utxos.clone();
-    inputs_utxos.push(inputs_utxos[0].clone());
-    SignedTransactionWithUtxo {
+
+    let mut input_commitments = tx.input_commitments.clone();
+    input_commitments.push(input_commitments[0].clone());
+
+    SignedTransactionWithInputCommitments {
         tx: updater.generate_tx().unwrap(),
-        inputs_utxos,
+        input_commitments,
     }
 }
 
 fn mutate_first_input(
     rng: &mut impl Rng,
-    tx: &SignedTransactionWithUtxo,
-) -> SignedTransactionWithUtxo {
+    tx: &SignedTransactionWithInputCommitments,
+) -> SignedTransactionWithInputCommitments {
     let mut updater = MutableTransaction::from(&tx.tx);
 
     let mutated_input = match updater.inputs.first().unwrap() {
@@ -1078,68 +941,96 @@ fn mutate_first_input(
     };
     updater.inputs[0] = mutated_input;
 
-    SignedTransactionWithUtxo {
+    SignedTransactionWithInputCommitments {
         tx: updater.generate_tx().unwrap(),
-        inputs_utxos: tx.inputs_utxos.clone(),
+        input_commitments: tx.input_commitments.clone(),
+    }
+}
+
+fn mutate_first_input_commitment(
+    rng: &mut (impl Rng + CryptoRng),
+    tx: &SignedTransactionWithInputCommitments,
+) -> SignedTransactionWithInputCommitments {
+    let mut input_commitments = tx.input_commitments.clone();
+    input_commitments[0] =
+        gen_different_value(&tx.input_commitments[0], || generate_input_commitment(rng));
+
+    SignedTransactionWithInputCommitments {
+        tx: tx.tx.clone(),
+        input_commitments,
     }
 }
 
 fn remove_first_input(
     _rng: &mut impl Rng,
-    tx: &SignedTransactionWithUtxo,
-) -> SignedTransactionWithUtxo {
+    tx: &SignedTransactionWithInputCommitments,
+) -> SignedTransactionWithInputCommitments {
     let mut updater = MutableTransaction::from(&tx.tx);
     updater.inputs.remove(0);
     updater.witness.remove(0);
-    let mut inputs_utxos = tx.inputs_utxos.clone();
-    inputs_utxos.remove(0);
-    SignedTransactionWithUtxo {
+
+    let mut input_commitments = tx.input_commitments.clone();
+    input_commitments.remove(0);
+
+    SignedTransactionWithInputCommitments {
         tx: updater.generate_tx().unwrap(),
-        inputs_utxos,
+        input_commitments,
     }
 }
 
 fn remove_middle_input(
     _rng: &mut impl Rng,
-    tx: &SignedTransactionWithUtxo,
-) -> SignedTransactionWithUtxo {
+    tx: &SignedTransactionWithInputCommitments,
+) -> SignedTransactionWithInputCommitments {
     let mut updater = MutableTransaction::from(&tx.tx);
     assert!(updater.inputs.len() > 8);
     updater.inputs.remove(7);
     updater.witness.remove(7);
-    let mut inputs_utxos = tx.inputs_utxos.clone();
-    inputs_utxos.remove(7);
-    SignedTransactionWithUtxo {
+
+    let mut input_commitments = tx.input_commitments.clone();
+    input_commitments.remove(7);
+
+    SignedTransactionWithInputCommitments {
         tx: updater.generate_tx().unwrap(),
-        inputs_utxos,
+        input_commitments,
     }
 }
 
 fn remove_last_input(
     _rng: &mut impl Rng,
-    tx: &SignedTransactionWithUtxo,
-) -> SignedTransactionWithUtxo {
+    tx: &SignedTransactionWithInputCommitments,
+) -> SignedTransactionWithInputCommitments {
     let mut updater = MutableTransaction::from(&tx.tx);
     updater.inputs.pop().expect("Unexpected empty inputs");
     updater.witness.pop().expect("Unexpected empty witness");
-    let mut inputs_utxos = tx.inputs_utxos.clone();
-    inputs_utxos.pop().expect("Unexpected empty witness");
-    SignedTransactionWithUtxo {
+
+    let mut input_commitments = tx.input_commitments.clone();
+    input_commitments.pop().expect("Unexpected empty witness");
+
+    SignedTransactionWithInputCommitments {
         tx: updater.generate_tx().unwrap(),
-        inputs_utxos,
+        input_commitments,
     }
 }
 
-fn add_output(_rng: &mut impl Rng, tx: &SignedTransactionWithUtxo) -> SignedTransactionWithUtxo {
+fn append_output(
+    _rng: &mut impl Rng,
+    tx: &SignedTransactionWithInputCommitments,
+) -> SignedTransactionWithInputCommitments {
     let mut updater = MutableTransaction::from(&tx.tx);
     updater.outputs.push(updater.outputs[0].clone());
-    SignedTransactionWithUtxo {
+    SignedTransactionWithInputCommitments {
         tx: updater.generate_tx().unwrap(),
-        inputs_utxos: tx.inputs_utxos.clone(),
+        input_commitments: tx.input_commitments.clone(),
     }
 }
 
-fn mutate_output(_rng: &mut impl Rng, tx: &SignedTransactionWithUtxo) -> SignedTransactionWithUtxo {
+// Note: this function is only called on the outcome of generate_unsigned_tx, which currently always
+// produces TxOutput::Transfer outputs.
+fn mutate_first_output(
+    _rng: &mut impl Rng,
+    tx: &SignedTransactionWithInputCommitments,
+) -> SignedTransactionWithInputCommitments {
     let mut updater = MutableTransaction::from(&tx.tx);
     // Should fail due to change in output value
     updater.outputs[0] = match updater.outputs[0].clone() {
@@ -1156,46 +1047,46 @@ fn mutate_output(_rng: &mut impl Rng, tx: &SignedTransactionWithUtxo) -> SignedT
         TxOutput::Htlc(_, _) => unreachable!(),
         TxOutput::CreateOrder(_) => unreachable!(),
     };
-    SignedTransactionWithUtxo {
+    SignedTransactionWithInputCommitments {
         tx: updater.generate_tx().unwrap(),
-        inputs_utxos: tx.inputs_utxos.clone(),
+        input_commitments: tx.input_commitments.clone(),
     }
 }
 
 fn remove_first_output(
     _rng: &mut impl Rng,
-    tx: &SignedTransactionWithUtxo,
-) -> SignedTransactionWithUtxo {
+    tx: &SignedTransactionWithInputCommitments,
+) -> SignedTransactionWithInputCommitments {
     let mut updater = MutableTransaction::from(&tx.tx);
     updater.outputs.remove(0);
-    SignedTransactionWithUtxo {
+    SignedTransactionWithInputCommitments {
         tx: updater.generate_tx().unwrap(),
-        inputs_utxos: tx.inputs_utxos.clone(),
+        input_commitments: tx.input_commitments.clone(),
     }
 }
 
 fn remove_middle_output(
     _rng: &mut impl Rng,
-    tx: &SignedTransactionWithUtxo,
-) -> SignedTransactionWithUtxo {
+    tx: &SignedTransactionWithInputCommitments,
+) -> SignedTransactionWithInputCommitments {
     let mut updater = MutableTransaction::from(&tx.tx);
     assert!(updater.outputs.len() > 8);
     updater.outputs.remove(7);
-    SignedTransactionWithUtxo {
+    SignedTransactionWithInputCommitments {
         tx: updater.generate_tx().unwrap(),
-        inputs_utxos: tx.inputs_utxos.clone(),
+        input_commitments: tx.input_commitments.clone(),
     }
 }
 
 fn remove_last_output(
     _rng: &mut impl Rng,
-    tx: &SignedTransactionWithUtxo,
-) -> SignedTransactionWithUtxo {
+    tx: &SignedTransactionWithInputCommitments,
+) -> SignedTransactionWithInputCommitments {
     let mut updater = MutableTransaction::from(&tx.tx);
     updater.outputs.pop().expect("Unexpected empty outputs");
-    SignedTransactionWithUtxo {
+    SignedTransactionWithInputCommitments {
         tx: updater.generate_tx().unwrap(),
-        inputs_utxos: tx.inputs_utxos.clone(),
+        input_commitments: tx.input_commitments.clone(),
     }
 }
 
