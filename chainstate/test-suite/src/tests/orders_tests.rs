@@ -1348,8 +1348,10 @@ fn conclude_order_check_signature(#[case] seed: Seed, #[case] version: OrdersVer
             ))
             .build();
 
-        let input_commitments =
-            tf.make_sighash_input_commitments_for_transaction_inputs(tx.inputs());
+        let input_commitments = tf.make_sighash_input_commitments_for_transaction_inputs(
+            tx.inputs(),
+            tf.next_block_height(),
+        );
 
         // try conclude without signature
         {
@@ -2967,8 +2969,10 @@ fn freeze_order_check_signature(#[case] seed: Seed) {
             )
             .build();
 
-        let input_commitments =
-            tf.make_sighash_input_commitments_for_transaction_inputs(tx.inputs());
+        let input_commitments = tf.make_sighash_input_commitments_for_transaction_inputs(
+            tx.inputs(),
+            tf.next_block_height(),
+        );
 
         // try freeze without signature
         {

@@ -13,13 +13,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{boxed::Box, println, vec::Vec};
+use std::{borrow::Cow, boxed::Box, println, vec::Vec};
 
 use num_traits::FromPrimitive as _;
 use rstest::rstest;
 use strum::IntoEnumIterator;
 
-use common::{chain, primitives};
+use common::{
+    chain::{self},
+    primitives,
+};
 use crypto::key::KeyKind;
 use parity_scale_codec::{DecodeAll, Encode};
 
@@ -336,6 +339,45 @@ impl From<chain::TxOutput> for crate::TxOutput {
     }
 }
 
+impl From<chain::signature::sighash::input_commitments::SighashInputCommitment<'_>>
+    for crate::SighashInputCommitment
+{
+    fn from(value: chain::signature::sighash::input_commitments::SighashInputCommitment) -> Self {
+        type ChainComm<'a> =
+            chain::signature::sighash::input_commitments::SighashInputCommitment<'a>;
+
+        match value {
+            ChainComm::None => crate::SighashInputCommitment::None,
+            ChainComm::Utxo(utxo) => crate::SighashInputCommitment::Utxo(utxo.into_owned().into()),
+            ChainComm::ProduceBlockFromStakeUtxo {
+                utxo,
+                staker_balance,
+            } => crate::SighashInputCommitment::ProduceBlockFromStakeUtxo {
+                utxo: utxo.into_owned().into(),
+                staker_balance: staker_balance.into(),
+            },
+            ChainComm::FillOrderAccountCommand {
+                initially_asked,
+                initially_given,
+            } => crate::SighashInputCommitment::FillOrderAccountCommand {
+                initially_asked: initially_asked.into(),
+                initially_given: initially_given.into(),
+            },
+            ChainComm::ConcludeOrderAccountCommand {
+                initially_asked,
+                initially_given,
+                ask_balance,
+                give_balance,
+            } => crate::SighashInputCommitment::ConcludeOrderAccountCommand {
+                initially_asked: initially_asked.into(),
+                initially_given: initially_given.into(),
+                ask_balance: ask_balance.into(),
+                give_balance: give_balance.into(),
+            },
+        }
+    }
+}
+
 fn make_random_destination(rng: &mut (impl Rng + CryptoRng)) -> chain::Destination {
     match chain::DestinationTag::iter().choose(rng).unwrap() {
         chain::DestinationTag::AnyoneCanSpend => chain::Destination::AnyoneCanSpend,
@@ -573,13 +615,40 @@ fn make_random_output(rng: &mut (impl Rng + CryptoRng)) -> chain::TxOutput {
     }
 }
 
+fn make_random_input_commitment_for_tag(
+    rng: &mut (impl Rng + CryptoRng),
+    tag: chain::signature::sighash::input_commitments::SighashInputCommitmentTag,
+) -> chain::signature::sighash::input_commitments::SighashInputCommitment<'static> {
+    type ChainCommTag = chain::signature::sighash::input_commitments::SighashInputCommitmentTag;
+    type ChainComm = chain::signature::sighash::input_commitments::SighashInputCommitment<'static>;
+
+    match tag {
+        ChainCommTag::None => ChainComm::None,
+        ChainCommTag::Utxo => ChainComm::Utxo(Cow::Owned(make_random_output(rng))),
+        ChainCommTag::ProduceBlockFromStakeUtxo => ChainComm::ProduceBlockFromStakeUtxo {
+            utxo: Cow::Owned(make_random_output(rng)),
+            staker_balance: primitives::Amount::from_atoms(rng.gen()),
+        },
+        ChainCommTag::FillOrderAccountCommand => ChainComm::FillOrderAccountCommand {
+            initially_asked: make_random_value(rng),
+            initially_given: make_random_value(rng),
+        },
+        ChainCommTag::ConcludeOrderAccountCommand => ChainComm::ConcludeOrderAccountCommand {
+            initially_asked: make_random_value(rng),
+            initially_given: make_random_value(rng),
+            ask_balance: primitives::Amount::from_atoms(rng.gen()),
+            give_balance: primitives::Amount::from_atoms(rng.gen()),
+        },
+    }
+}
+
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
 fn check_input_encodings(#[case] seed: Seed) {
-    for _ in 0..1000 {
-        let mut rng = make_seedable_rng(seed);
+    let mut rng = make_seedable_rng(seed);
 
+    for _ in 0..1000 {
         let inp = make_random_input(&mut rng);
 
         let simple_inp: crate::TxInput = inp.clone().into();
@@ -596,9 +665,9 @@ fn check_input_encodings(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn check_output_encodings(#[case] seed: Seed) {
-    for _ in 0..1000 {
-        let mut rng = make_seedable_rng(seed);
+    let mut rng = make_seedable_rng(seed);
 
+    for _ in 0..1000 {
         let out = make_random_output(&mut rng);
 
         let simple_out: crate::TxOutput = out.clone().into();
@@ -608,6 +677,24 @@ fn check_output_encodings(#[case] seed: Seed) {
         let decoded_simple_out =
             chain::TxOutput::decode_all(&mut simple_out.encode().as_slice()).unwrap();
         assert_eq!(decoded_simple_out, out);
+    }
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn check_input_commitment_encodings(#[case] seed: Seed) {
+    type Tag = chain::signature::sighash::input_commitments::SighashInputCommitmentTag;
+
+    let mut rng = make_seedable_rng(seed);
+
+    for _ in 0..100 {
+        for tag in Tag::iter() {
+            let chain_commitment = make_random_input_commitment_for_tag(&mut rng, tag);
+            let crate_commitment: crate::SighashInputCommitment = chain_commitment.clone().into();
+
+            assert_eq!(chain_commitment.encode(), crate_commitment.encode());
+        }
     }
 }
 

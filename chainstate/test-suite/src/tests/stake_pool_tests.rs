@@ -758,8 +758,10 @@ fn decommission_from_stake_pool_with_staker_key(#[case] seed: Seed) {
                     .build()
                     .transaction()
                     .clone();
-                let input_commitments =
-                    tf.make_sighash_input_commitments_for_transaction_inputs(tx.inputs());
+                let input_commitments = tf.make_sighash_input_commitments_for_transaction_inputs(
+                    tx.inputs(),
+                    tf.next_block_height(),
+                );
 
                 let staking_sig = StandardInputSignature::produce_uniparty_signature_for_input(
                     &staking_sk,
@@ -806,8 +808,10 @@ fn decommission_from_stake_pool_with_staker_key(#[case] seed: Seed) {
                 .build()
                 .transaction()
                 .clone();
-            let input_commitments =
-                tf.make_sighash_input_commitments_for_transaction_inputs(tx.inputs());
+            let input_commitments = tf.make_sighash_input_commitments_for_transaction_inputs(
+                tx.inputs(),
+                tf.next_block_height(),
+            );
 
             let decommission_sig = StandardInputSignature::produce_uniparty_signature_for_input(
                 &decommission_sk,

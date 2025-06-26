@@ -68,7 +68,8 @@ use common::{
         },
         tokens::{RPCTokenInfo, TokenId},
         Block, ChainConfig, Destination, GenBlock, OrderId, PoolId, RpcOrderInfo,
-        SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
+        SighashInputCommitmentVersion, SignedTransaction, Transaction, TxInput, TxOutput,
+        UtxoOutPoint,
     },
     primitives::{
         time::{get_time, Time},
@@ -916,13 +917,24 @@ where
         // spent. Ideally this should be fixed, though it's non-trivial, because we don't have a
         // tx index, so there is no easy way of obtaining a txo for an already spent input.
 
-        let (input_utxos, _, destinations) =
+        let (input_utxos, additional_infos, destinations) =
             fetch_input_infos(&self.rpc_client, &self.wallet, stx.inputs()).await?;
 
         let only_input_utxos = input_utxos.iter().flatten().cloned().collect_vec();
         let fees = self.get_fees(&only_input_utxos, stx.outputs()).await?;
 
-        let input_commitments = make_sighash_input_commitments(stx.inputs(), &input_utxos)?;
+        let input_commitments_v0 = make_sighash_input_commitments(
+            stx.inputs(),
+            &input_utxos,
+            &additional_infos,
+            SighashInputCommitmentVersion::V0,
+        )?;
+        let input_commitments_v1 = make_sighash_input_commitments(
+            stx.inputs(),
+            &input_utxos,
+            &additional_infos,
+            SighashInputCommitmentVersion::V1,
+        )?;
 
         let signature_statuses = stx
             .signatures()
@@ -933,13 +945,31 @@ where
                 (InputWitness::NoSignature(_), None) => SignatureStatus::FullySigned,
                 (InputWitness::NoSignature(_), Some(_)) => SignatureStatus::NotSigned,
                 (InputWitness::Standard(_), None) => SignatureStatus::InvalidSignature,
-                (InputWitness::Standard(_), Some(dest)) => self.verify_tx_signature(
-                    stx,
-                    &input_commitments,
-                    input_num,
-                    input_utxos[input_num].clone(),
-                    &dest,
-                ),
+                (InputWitness::Standard(_), Some(dest)) => {
+                    // Try v0 commitments first; if the verification fails, try v1 commitments.
+                    let v0_commitments_status = self.verify_tx_signature(
+                        stx,
+                        &input_commitments_v0,
+                        input_num,
+                        input_utxos[input_num].clone(),
+                        &dest,
+                    );
+
+                    match v0_commitments_status {
+                        SignatureStatus::NotSigned
+                        | SignatureStatus::UnknownSignature
+                        | SignatureStatus::FullySigned
+                        | SignatureStatus::PartialMultisig { .. } => v0_commitments_status,
+
+                        SignatureStatus::InvalidSignature => self.verify_tx_signature(
+                            stx,
+                            &input_commitments_v1,
+                            input_num,
+                            input_utxos[input_num].clone(),
+                            &dest,
+                        ),
+                    }
+                }
             })
             .collect();
         Ok((fees, signature_statuses))
@@ -952,7 +982,10 @@ where
         let input_utxos: Vec<_> = ptx.input_utxos().iter().flatten().cloned().collect();
         let fees = self.get_fees(&input_utxos, ptx.tx().outputs()).await?;
 
-        let input_commitments = ptx.make_sighash_input_commitments()?;
+        let input_commitments_v0 =
+            ptx.make_sighash_input_commitments(SighashInputCommitmentVersion::V0)?;
+        let input_commitments_v1 =
+            ptx.make_sighash_input_commitments(SighashInputCommitmentVersion::V1)?;
 
         let signature_statuses: Vec<_> = ptx
             .witnesses()
@@ -963,13 +996,31 @@ where
                 (Some(InputWitness::NoSignature(_)), None) => SignatureStatus::FullySigned,
                 (Some(InputWitness::NoSignature(_)), Some(_)) => SignatureStatus::InvalidSignature,
                 (Some(InputWitness::Standard(_)), None) => SignatureStatus::UnknownSignature,
-                (Some(InputWitness::Standard(_)), Some(dest)) => self.verify_tx_signature(
-                    &ptx,
-                    &input_commitments,
-                    input_num,
-                    ptx.input_utxos()[input_num].clone(),
-                    dest,
-                ),
+                (Some(InputWitness::Standard(_)), Some(dest)) => {
+                    // Try v0 commitments first; if the verification fails, try v1 commitments.
+                    let v0_commitments_status = self.verify_tx_signature(
+                        &ptx,
+                        &input_commitments_v0,
+                        input_num,
+                        ptx.input_utxos()[input_num].clone(),
+                        dest,
+                    );
+
+                    match v0_commitments_status {
+                        SignatureStatus::NotSigned
+                        | SignatureStatus::UnknownSignature
+                        | SignatureStatus::FullySigned
+                        | SignatureStatus::PartialMultisig { .. } => v0_commitments_status,
+
+                        SignatureStatus::InvalidSignature => self.verify_tx_signature(
+                            &ptx,
+                            &input_commitments_v1,
+                            input_num,
+                            ptx.input_utxos()[input_num].clone(),
+                            dest,
+                        ),
+                    }
+                }
                 (None, _) => SignatureStatus::NotSigned,
             })
             .collect();
@@ -1049,9 +1100,13 @@ where
                 },
 
                 tx_verifier::error::InputCheckErrorPayload::MissingUtxo(_)
+                | tx_verifier::error::InputCheckErrorPayload::PoolNotFound(_)
+                | tx_verifier::error::InputCheckErrorPayload::OrderNotFound(_)
                 | tx_verifier::error::InputCheckErrorPayload::NonUtxoKernelInput(_)
                 | tx_verifier::error::InputCheckErrorPayload::UtxoView(_)
                 | tx_verifier::error::InputCheckErrorPayload::UtxoInfoProvider(_)
+                | tx_verifier::error::InputCheckErrorPayload::PoolInfoProvider(_)
+                | tx_verifier::error::InputCheckErrorPayload::OrderInfoProvider(_)
                 | tx_verifier::error::InputCheckErrorPayload::Translation(_)
                 | tx_verifier::error::InputCheckErrorPayload::Verification(_) => {
                     SignatureStatus::InvalidSignature

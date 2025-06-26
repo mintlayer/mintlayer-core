@@ -26,13 +26,15 @@ use common::{
                 classical_multisig::authorize_classical_multisig::ClassicalMultisigSigningError,
                 InputWitnessTag,
             },
-            sighash, DestinationSigError,
+            DestinationSigError,
         },
         IdCreationError, SignedTransactionIntentError, TransactionCreationError,
     },
     size_estimation::SizeEstimationError,
 };
 use consensus::EffectivePoolBalanceError;
+
+use crate::sighash_input_commitments::SighashInputCommitmentCreationError;
 
 #[allow(clippy::enum_variant_names)]
 #[derive(thiserror::Error, Debug, Clone)]
@@ -179,8 +181,26 @@ pub enum Error {
     #[error("Orders V1 not activated at the specified height")]
     OrdersV1NotActivatedAtSpecifiedHeight,
 
+    #[error("The currency amount contains tokens, not coins")]
+    CurrencyAmountContainsTokens,
+
+    #[error("The currency amount contains coins, not tokens")]
+    CurrencyAmountContainsCoins,
+
     #[error("Error creating sighash input commitments: {0}")]
     SighashInputCommitmentCreationError(#[from] SighashInputCommitmentCreationError),
+
+    #[error("Signature verification error: {0}")]
+    SignatureVerificationError(DestinationSigError),
+
+    #[error("Wrong input index or UTXO count")]
+    WrongInputIndexOrUtxoCount,
+
+    #[error("Input owner destination needed")]
+    InputOwnerDestinationNeeded,
+
+    #[error("Input owner destination not needed")]
+    InputOwnerDestinationNotNeeded,
 }
 
 // This is required to make an error readable in JavaScript
@@ -189,6 +209,3 @@ impl From<Error> for JsValue {
         JsValue::from_str(&format!("{}", value))
     }
 }
-
-pub type SighashInputCommitmentCreationError =
-    sighash::input_commitments::SighashInputCommitmentCreationError<std::convert::Infallible>;

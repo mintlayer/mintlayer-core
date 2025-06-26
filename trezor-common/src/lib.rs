@@ -17,6 +17,8 @@
 
 #![no_std]
 
+mod input_commitments;
+
 use num_derive::FromPrimitive;
 use parity_scale_codec::{Decode, Encode};
 use strum::{EnumDiscriminants, EnumIter};
@@ -37,6 +39,8 @@ use strum::{EnumDiscriminants, EnumIter};
 // 3) Normally, these enums should be in the firmware repo. The only reason for keeping them in the core repo is that
 // here it's easier to test that they indeed have the required values. But they and their tests should probably live in
 // a separate module, so that they are not confused with the "normal" enums.
+
+pub use input_commitments::*;
 
 /// Specifies which parts of the transaction a signature commits to.
 ///
@@ -158,7 +162,7 @@ pub enum Destination {
     ClassicMultisig(PublicKeyHash),
 }
 
-#[derive(Encode)]
+#[derive(Encode, Decode)]
 pub enum TokenIssuance {
     #[codec(index = 1)]
     V1(TokenIssuanceV1),
@@ -191,7 +195,7 @@ pub enum TokenTotalSupply {
     Unlimited, // limited only by the Amount data type
 }
 
-#[derive(Encode)]
+#[derive(Encode, Decode)]
 pub struct TokenIssuanceV1 {
     pub token_ticker: parity_scale_codec::alloc::vec::Vec<u8>,
     pub number_of_decimals: u8,
@@ -201,18 +205,18 @@ pub struct TokenIssuanceV1 {
     pub is_freezable: IsTokenFreezable,
 }
 
-#[derive(Encode)]
+#[derive(Encode, Decode)]
 pub enum NftIssuance {
     #[codec(index = 0)]
     V0(NftIssuanceV0),
 }
 
-#[derive(Encode)]
+#[derive(Encode, Decode)]
 pub struct NftIssuanceV0 {
     pub metadata: Metadata,
 }
 
-#[derive(Encode)]
+#[derive(Encode, Decode)]
 pub struct Metadata {
     pub creator: Option<PublicKeyHolder>,
     pub name: parity_scale_codec::alloc::vec::Vec<u8>,
@@ -224,7 +228,7 @@ pub struct Metadata {
     pub media_hash: parity_scale_codec::alloc::vec::Vec<u8>,
 }
 
-#[derive(Encode)]
+#[derive(Encode, Decode)]
 pub struct OrderData {
     /// The key that can authorize conclusion of an order
     pub conclude_key: Destination,
@@ -236,7 +240,7 @@ pub struct OrderData {
     pub give: OutputValue,
 }
 
-#[derive(Encode)]
+#[derive(Encode, Decode)]
 pub enum TxOutput {
     /// Transfer an output, giving the provided Destination the authority to
     /// spend it (no conditions)
@@ -276,7 +280,7 @@ pub enum TxOutput {
     CreateOrder(OrderData),
 }
 
-#[derive(Encode)]
+#[derive(Encode, Decode)]
 pub struct HashedTimelockContract {
     // can be spent either by a specific address that knows the secret
     pub secret_hash: HtlcSecretHash,

@@ -15,6 +15,7 @@
 
 use rstest::rstest;
 
+use common::chain::SighashInputCommitmentVersion;
 use test_utils::random::{make_seedable_rng, Seed};
 
 use crate::signer::tests::{
@@ -48,11 +49,21 @@ fn test_sign_transaction_intent(#[case] seed: Seed) {
 
 #[rstest]
 #[trace]
-#[case(Seed::from_entropy())]
-fn test_sign_transaction(#[case] seed: Seed) {
+#[case(Seed::from_entropy(), SighashInputCommitmentVersion::V0)]
+#[trace]
+#[case(Seed::from_entropy(), SighashInputCommitmentVersion::V1)]
+fn test_sign_transaction(
+    #[case] seed: Seed,
+    #[case] input_commitments_version: SighashInputCommitmentVersion,
+) {
     let mut rng = make_seedable_rng(seed);
 
-    test_sign_transaction_generic(&mut rng, make_software_signer, no_another_signer());
+    test_sign_transaction_generic(
+        &mut rng,
+        input_commitments_version,
+        make_software_signer,
+        no_another_signer(),
+    );
 }
 
 #[rstest]
@@ -66,9 +77,18 @@ fn test_fixed_signatures(#[case] seed: Seed) {
 
 #[rstest]
 #[trace]
-#[case(Seed::from_entropy())]
-fn test_fixed_signatures2(#[case] seed: Seed) {
+#[case(Seed::from_entropy(), SighashInputCommitmentVersion::V0)]
+#[trace]
+#[case(Seed::from_entropy(), SighashInputCommitmentVersion::V1)]
+fn test_fixed_signatures2(
+    #[case] seed: Seed,
+    #[case] input_commitments_version: SighashInputCommitmentVersion,
+) {
     let mut rng = make_seedable_rng(seed);
 
-    test_fixed_signatures_generic2(&mut rng, make_deterministic_software_signer);
+    test_fixed_signatures_generic2(
+        &mut rng,
+        input_commitments_version,
+        make_deterministic_software_signer,
+    );
 }

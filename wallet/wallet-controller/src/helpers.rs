@@ -264,6 +264,7 @@ pub async fn into_balances<T: NodeInterface>(
 }
 
 // TODO: optimize RPC calls to the Node
+// TODO: this function should probably not assume None for htlc_secrets and accept them from the outside instead.
 pub async fn tx_to_partially_signed_tx<T: NodeInterface, B: storage::Backend>(
     rpc_client: &T,
     wallet: &RuntimeWallet<B>,

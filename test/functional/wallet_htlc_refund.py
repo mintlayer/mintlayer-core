@@ -108,9 +108,9 @@ class WalletHtlcRefund(BitcoinTestFramework):
 
             # Submit a valid transaction
             outputs = [{
-                    'Transfer': [ { 'Coin': 151 * ATOMS_PER_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': alice_pub_key_bytes}}} } ],
+                'Transfer': [ { 'Coin': 151 * ATOMS_PER_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': alice_pub_key_bytes}}} } ],
             }, {
-                    'Transfer': [ { 'Coin': 151 * ATOMS_PER_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': bob_pub_key_bytes}}} } ],
+                'Transfer': [ { 'Coin': 151 * ATOMS_PER_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': bob_pub_key_bytes}}} } ],
             }]
             encoded_tx, tx_id = make_tx([reward_input(tip_id)], outputs, 0)
 
@@ -138,6 +138,7 @@ class WalletHtlcRefund(BitcoinTestFramework):
             assert token_id is not None
             self.log.info(f"new token id: {token_id}")
             token_id_hex = node.test_functions_reveal_token_id(token_id)
+            token_id_dec_array = hex_to_dec_array(token_id_hex)
 
             self.generate_block()
             assert_in("Success", await wallet.sync())
@@ -155,6 +156,16 @@ class WalletHtlcRefund(BitcoinTestFramework):
             print(balance)
             assert_in("Coins amount: 0", balance)
             assert_in(f"Token: {token_id} amount: {amount_to_mint}", balance)
+
+            token_additional_info_for_ptx = [
+                (
+                    token_id_dec_array,
+                    {
+                        'num_decimals': token_number_of_decimals,
+                        'ticker': token_ticker.encode('utf-8')
+                    }
+                )
+            ]
 
             ########################################################################################
             # Setup Alice's htlc
@@ -175,10 +186,9 @@ class WalletHtlcRefund(BitcoinTestFramework):
             refund_dest_obj = refund_dest_obj.decode()
 
             # Create Alice's refund transaction
-            token_id_hex = node.test_functions_reveal_token_id(token_id)
             output = {
-                    'Transfer': [ { 'TokenV1': [hex_to_dec_array(token_id_hex), alice_amount_to_swap * ATOMS_PER_TOKEN] },
-                                  { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': alice_pub_key_bytes}}} } ],
+                'Transfer': [ { 'TokenV1': [token_id_dec_array, alice_amount_to_swap * ATOMS_PER_TOKEN] },
+                              { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': alice_pub_key_bytes}}} } ],
             }
             tx = make_tx_dict([tx_input(alice_htlc_tx_id, 0), tx_input(alice_htlc_tx_id, 1)], [output])
             alice_refund_ptx = {
@@ -187,7 +197,7 @@ class WalletHtlcRefund(BitcoinTestFramework):
                 'input_utxos': alice_htlc_outputs,
                 'destinations': [refund_dest_obj, alice_htlc_change_dest],
                 'htlc_secrets': [None, None],
-                'additional_infos': {'token_info': [], 'pool_info': [], 'order_info': []}
+                'additional_info': {'token_info': token_additional_info_for_ptx, 'pool_info': [], 'order_info': []}
             }
             alice_refund_tx_hex = scalecodec.base.RuntimeConfiguration().create_scale_object('PartiallySignedTransaction').encode(alice_refund_ptx).to_hex()[2:]
 
@@ -207,7 +217,7 @@ class WalletHtlcRefund(BitcoinTestFramework):
 
             # Create Bob's refund transaction
             output = {
-                    'Transfer': [ { 'Coin': bob_amount_to_swap * ATOMS_PER_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': bob_pub_key_bytes}}} } ],
+                'Transfer': [ { 'Coin': bob_amount_to_swap * ATOMS_PER_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': bob_pub_key_bytes}}} } ],
             }
             tx = make_tx_dict([tx_input(bob_htlc_tx_id, 0), tx_input(bob_htlc_tx_id, 1)], [output])
             bob_refund_ptx = {
@@ -216,7 +226,7 @@ class WalletHtlcRefund(BitcoinTestFramework):
                 'input_utxos': bob_htlc_outputs,
                 'destinations': [refund_dest_obj, bob_htlc_change_dest],
                 'htlc_secrets': [None, None],
-                'additional_infos': {'token_info': [], 'pool_info': [], 'order_info': []}
+                'additional_info': {'token_info': token_additional_info_for_ptx, 'pool_info': [], 'order_info': []}
             }
             bob_refund_tx_hex = scalecodec.base.RuntimeConfiguration().create_scale_object('PartiallySignedTransaction').encode(bob_refund_ptx).to_hex()[2:]
 

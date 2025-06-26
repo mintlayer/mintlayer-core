@@ -194,9 +194,13 @@ impl MempoolBanScore for tx_verifier::error::InputCheckErrorPayload {
     fn mempool_ban_score(&self) -> u32 {
         match self {
             Self::MissingUtxo(_) => 100,
+            Self::PoolNotFound(_) => 100,
+            Self::OrderNotFound(_) => 100,
             Self::NonUtxoKernelInput(_) => 100,
             Self::UtxoView(e) => e.ban_score(),
             Self::UtxoInfoProvider(e) => e.ban_score(),
+            Self::PoolInfoProvider(e) => e.ban_score(),
+            Self::OrderInfoProvider(e) => e.ban_score(),
             Self::Translation(e) => e.ban_score(),
             Self::Verification(e) => e.ban_score(),
         }
