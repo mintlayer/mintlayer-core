@@ -77,7 +77,7 @@ use wallet_storage::{
 use wallet_types::account_info::{StandaloneAddressDetails, StandaloneAddresses};
 use wallet_types::chain_info::ChainInfo;
 use wallet_types::partially_signed_transaction::{
-    PartiallySignedTransaction, PartiallySignedTransactionCreationError, PoolAdditionalInfo,
+    PartiallySignedTransaction, PartiallySignedTransactionError, PoolAdditionalInfo,
     TokenAdditionalInfo, TxAdditionalInfo,
 };
 use wallet_types::seed_phrase::SerializableSeedPhrase;
@@ -162,8 +162,8 @@ pub enum WalletError {
     UnknownOrderId(OrderId),
     #[error("Transaction creation error: {0}")]
     TransactionCreation(#[from] TransactionCreationError),
-    #[error("Transaction creation error: {0}")]
-    PartiallySignedTransactionCreation(#[from] PartiallySignedTransactionCreationError),
+    #[error("Partially signed transaction error: {0}")]
+    PartiallySignedTransactionError(#[from] PartiallySignedTransactionError),
     #[error("Transaction signing error: {0}")]
     TransactionSig(#[from] DestinationSigError),
     #[error("Delegation not found with id {0}")]
@@ -1167,9 +1167,7 @@ where
                     )));
                 }
 
-                let tx = ptx.into_signed_tx().map_err(|e| {
-                    error_mapper(WalletError::PartiallySignedTransactionCreation(e))
-                })?;
+                let tx = ptx.into_signed_tx().map_err(|e| error_mapper(e.into()))?;
 
                 check_transaction(chain_config, block_height.next_height(), &tx)?;
                 let tx = SignedTxWithFees { tx, fees };
@@ -2052,7 +2050,7 @@ where
         current_fee_rate: FeeRate,
     ) -> WalletResult<SignedTxWithFees> {
         let additional_info =
-            TxAdditionalInfo::with_pool_info(pool_id, PoolAdditionalInfo { staker_balance });
+            TxAdditionalInfo::new().with_pool_info(pool_id, PoolAdditionalInfo { staker_balance });
         Ok(self
             .for_account_rw_unlocked_and_check_tx_generic(
                 account_index,
@@ -2083,7 +2081,7 @@ where
         current_fee_rate: FeeRate,
     ) -> WalletResult<PartiallySignedTransaction> {
         let additional_info =
-            TxAdditionalInfo::with_pool_info(pool_id, PoolAdditionalInfo { staker_balance });
+            TxAdditionalInfo::new().with_pool_info(pool_id, PoolAdditionalInfo { staker_balance });
         self.for_account_rw_unlocked(
             account_index,
             |account, db_tx, chain_config, signer_provider| {
@@ -2249,11 +2247,12 @@ where
         order_info: RpcOrderInfo,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
+        additional_info: TxAdditionalInfo,
     ) -> WalletResult<SignedTxWithFees> {
         let latest_median_time = self.latest_median_time;
         self.for_account_rw_unlocked_and_check_tx_with_fees(
             account_index,
-            TxAdditionalInfo::new(),
+            additional_info,
             |account, db_tx| {
                 account.create_freeze_order_tx(
                     db_tx,
@@ -2476,7 +2475,7 @@ where
 }
 
 fn to_token_additional_info(token_info: &UnconfirmedTokenInfo) -> TxAdditionalInfo {
-    TxAdditionalInfo::with_token_info(
+    TxAdditionalInfo::new().with_token_info(
         token_info.token_id(),
         TokenAdditionalInfo {
             num_decimals: token_info.num_decimals(),

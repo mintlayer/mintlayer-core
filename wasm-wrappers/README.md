@@ -28,6 +28,19 @@ Also, install TypeScript:
 npm install -g typescript
 ```
 
+### Build the wasm package
+
+In the wasm Cargo.toml directory, execute one of the following:
+  * for running the tests in a web browser:
+    ```
+    wasm-pack build --target web
+    ```
+
+  * for running the tests in Node.js:
+    ```
+    wasm-pack build --target nodejs
+    ```
+
 ### Compile the tests via `tsc`
 
 In the wasm Cargo.toml directory, run:
@@ -36,12 +49,6 @@ tsc --project js-bindings-test/tsconfig.json
 ```
 
 ### Run the tests in a web browser
-
-To build the wasm package from the crate, run (in the wasm Cargo.toml directory):
-
-```
-wasm-pack build --target web
-```
 
 To test the wasm binary, first install `http-server` web server (feel free to use any other web-server of your choosing):
 
@@ -61,20 +68,13 @@ If you're using a remote server, either tunnel to port 8080, or expose that port
 http-server --port 8080 --host 0.0.0.0
 ```
 
-To run test tests, choose the file `js-bindings-test/index.html` in the browser. Use browser's console to see the output.
+To run the tests, choose the file `js-bindings-test/index.html` in the browser. Use browser's console to see the output.
 
 ### Run the tests in Node.js
 
-To build the wasm package from the crate, run (in the wasm Cargo.toml directory):
-
+In the wasm Cargo.toml directory, execute the following:
 ```
-wasm-pack build --target nodejs
-```
-
-Finally, to run the tests, run:
-
-```
-node --enable-source-maps  js-bindings-test/node-entry.js
+node --enable-source-maps js-bindings-test/node-entry.js
 ```
 
 ### Run `knip`

@@ -223,15 +223,6 @@ def init_mintlayer_types():
                 ]
             },
 
-            "InfoId": {
-                "type": "enum",
-                "type_mapping": [
-                    ["TokenId", "H256"],
-                    ["PoolId", "H256"],
-                    ["OrderId", "H256"],
-                ],
-            },
-
             "TxAdditionalInfo": {
                 "type": "struct",
                 "type_mapping": [

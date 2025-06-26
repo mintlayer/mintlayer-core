@@ -31,7 +31,9 @@ use chainstate::tx_verifier::{
     self, error::ScriptError, input_check::signature_only_check::SignatureOnlyVerifiable,
 };
 use futures::{never::Never, stream::FuturesOrdered, TryStreamExt};
-use helpers::{fetch_token_info, fetch_utxo, fetch_utxo_extra_info_for_hw_wallet, into_balances};
+use helpers::{
+    fetch_order_info, fetch_token_info, fetch_utxo, fetch_utxo_extra_info, into_balances,
+};
 use node_comm::rpc_client::ColdWalletClient;
 use runtime_wallet::RuntimeWallet;
 use std::{
@@ -100,7 +102,9 @@ pub use wallet_types::{
     utxo_types::{UtxoState, UtxoStates, UtxoType, UtxoTypes},
 };
 use wallet_types::{
-    partially_signed_transaction::{PartiallySignedTransaction, TxAdditionalInfo},
+    partially_signed_transaction::{
+        PartiallySignedTransaction, PartiallySignedTransactionError, TxAdditionalInfo,
+    },
     signature_status::SignatureStatus,
     wallet_type::{WalletControllerMode, WalletType},
     with_locked::WithLocked,
@@ -151,6 +155,12 @@ pub enum ControllerError<T: NodeInterface> {
     InvalidTxOutput(GenericCurrencyTransferToTxOutputConversionError),
     #[error("The specified token {0} is not a fungible token")]
     NotFungibleToken(TokenId),
+    #[error("Invalid coin amount")]
+    InvalidCoinAmount,
+    #[error("Partially signed transaction error: {0}")]
+    PartiallySignedTransactionError(#[from] PartiallySignedTransactionError),
+    #[error("Invalid token ID")]
+    InvalidTokenId,
 }
 
 #[derive(Clone, Copy)]
@@ -544,13 +554,7 @@ where
         &self,
         order_id: OrderId,
     ) -> Result<RpcOrderInfo, ControllerError<T>> {
-        self.rpc_client
-            .get_order_info(order_id)
-            .await
-            .map_err(ControllerError::NodeCallError)?
-            .ok_or(ControllerError::WalletError(WalletError::UnknownOrderId(
-                order_id,
-            )))
+        fetch_order_info(&self.rpc_client, order_id).await
     }
 
     pub async fn generate_block_by_pool(
@@ -894,6 +898,16 @@ where
         &self,
         stx: &SignedTransaction,
     ) -> Result<(Balances, Vec<SignatureStatus>), ControllerError<T>> {
+        // TODO:
+        // 1) Make this function support HTLCs.
+        // Note: tx verifier's `verify_tx_signature` should probably accept an optional destination,
+        // because the actual destination to check the signature against is taken from the utxo
+        // inside `mintscript` directly, based on the `AuthorizedHashedTimelockContractSpend` type
+        // encoded in the witness.
+        // 2) Currently this function only works for transactions whose inputs has not yet been
+        // spent. Ideally this should be fixed, though it's non-trivial, because we don't have a
+        // tx index, so there is no easy way of obtaining a txo for an already spent input.
+
         let tasks: FuturesOrdered<_> =
             stx.inputs().iter().map(|input| self.fetch_opt_utxo(input)).collect();
         let input_utxos: Vec<Option<TxOutput>> = tasks.try_collect().await?;
@@ -1013,12 +1027,6 @@ where
         match valid {
             Ok(_) => SignatureStatus::FullySigned,
             Err(e) => match e.error() {
-                tx_verifier::error::InputCheckErrorPayload::MissingUtxo(_)
-                | tx_verifier::error::InputCheckErrorPayload::UtxoView(_)
-                | tx_verifier::error::InputCheckErrorPayload::Translation(_) => {
-                    SignatureStatus::InvalidSignature
-                }
-
                 tx_verifier::error::InputCheckErrorPayload::Verification(
                     ScriptError::Signature(
                         DestinationSigError::IncompleteClassicalMultisigSignature(
@@ -1031,7 +1039,12 @@ where
                     num_signatures: *num_signatures,
                 },
 
-                _ => SignatureStatus::InvalidSignature,
+                tx_verifier::error::InputCheckErrorPayload::MissingUtxo(_)
+                | tx_verifier::error::InputCheckErrorPayload::UtxoView(_)
+                | tx_verifier::error::InputCheckErrorPayload::Translation(_)
+                | tx_verifier::error::InputCheckErrorPayload::Verification(_) => {
+                    SignatureStatus::InvalidSignature
+                }
             },
         }
     }
@@ -1074,7 +1087,7 @@ where
                 .map_err(ControllerError::WalletError)?;
 
             let (input_utxos, additional_infos) =
-                self.fetch_utxos_extra_info_for_hw_wallet(input_utxos).await?.into_iter().fold(
+                self.fetch_utxos_extra_info(input_utxos).await?.into_iter().fold(
                     (Vec::new(), TxAdditionalInfo::new()),
                     |(mut input_utxos, additional_info), (x, y)| {
                         input_utxos.push(x);
@@ -1083,7 +1096,7 @@ where
                 );
 
             let additional_infos = self
-                .fetch_utxos_extra_info_for_hw_wallet(tx.outputs().to_vec())
+                .fetch_utxos_extra_info(tx.outputs().to_vec())
                 .await?
                 .into_iter()
                 .fold(additional_infos, |acc, (_, info)| acc.join(info));
@@ -1094,8 +1107,7 @@ where
                 destinations.into_iter().map(Option::Some).collect(),
                 htlc_secrets,
                 additional_infos,
-            )
-            .map_err(WalletError::PartiallySignedTransactionCreation)?;
+            )?;
 
             TransactionToSign::Partial(tx)
         };
@@ -1176,13 +1188,13 @@ where
         Ok(input_utxos)
     }
 
-    async fn fetch_utxos_extra_info_for_hw_wallet(
+    async fn fetch_utxos_extra_info(
         &self,
         inputs: Vec<TxOutput>,
     ) -> Result<Vec<(TxOutput, TxAdditionalInfo)>, ControllerError<T>> {
         let tasks: FuturesOrdered<_> = inputs
             .into_iter()
-            .map(|input| fetch_utxo_extra_info_for_hw_wallet(&self.rpc_client, input))
+            .map(|input| fetch_utxo_extra_info(&self.rpc_client, input))
             .collect();
         tasks.try_collect().await
     }

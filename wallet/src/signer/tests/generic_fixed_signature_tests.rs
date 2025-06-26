@@ -317,28 +317,29 @@ where
         .with_inputs_and_destinations(acc_inputs.into_iter().zip(acc_dests.clone()))
         .with_outputs(outputs);
     let destinations = req.destinations().to_vec();
-    let additional_info = TxAdditionalInfo::with_token_info(
-        token_id,
-        // Note: this info doesn't influence the signature and can be random.
-        TokenAdditionalInfo {
-            num_decimals: rng.gen_range(1..10),
-            ticker: random_ascii_alphanumeric_string(rng, 5..10).into_bytes(),
-        },
-    )
-    .join(TxAdditionalInfo::with_order_info(
-        order_id,
-        OrderAdditionalInfo {
-            ask_balance: Amount::from_atoms(10),
-            give_balance: Amount::from_atoms(100),
-            initially_asked: OutputValue::Coin(Amount::from_atoms(20)),
-            // Note: initially_given's amount isn't used by the signers in orders v0, only its
-            // currency matters.
-            initially_given: OutputValue::TokenV1(
-                token_id,
-                Amount::from_atoms(rng.gen_range(100..200)),
-            ),
-        },
-    ));
+    let additional_info = TxAdditionalInfo::new()
+        .with_token_info(
+            token_id,
+            // Note: this info doesn't influence the signature and can be random.
+            TokenAdditionalInfo {
+                num_decimals: rng.gen_range(1..10),
+                ticker: random_ascii_alphanumeric_string(rng, 5..10).into_bytes(),
+            },
+        )
+        .with_order_info(
+            order_id,
+            OrderAdditionalInfo {
+                ask_balance: Amount::from_atoms(10),
+                give_balance: Amount::from_atoms(100),
+                initially_asked: OutputValue::Coin(Amount::from_atoms(20)),
+                // Note: initially_given's amount isn't used by the signers in orders v0, only its
+                // currency matters.
+                initially_given: OutputValue::TokenV1(
+                    token_id,
+                    Amount::from_atoms(rng.gen_range(100..200)),
+                ),
+            },
+        );
     let orig_ptx = req.into_partially_signed_tx(additional_info).unwrap();
 
     let mut signer = make_signer(chain_config.clone(), account.account_index());
@@ -766,40 +767,26 @@ where
         .chain(acc_dests.iter().map(|_| None))
         .collect::<Vec<_>>();
 
-    let additional_info = TxAdditionalInfo::with_token_info(
-        token_id,
-        // Note: token info doesn't influence the signature and can be random.
-        TokenAdditionalInfo {
-            num_decimals: rng.gen_range(1..10),
-            ticker: random_ascii_alphanumeric_string(rng, 5..10).into_bytes(),
-        },
-    )
-    .join(TxAdditionalInfo::with_order_info(
-        filled_order_v0_id,
-        filled_order_v0_info,
-    ))
-    .join(TxAdditionalInfo::with_order_info(
-        filled_order_v1_id,
-        filled_order_v1_info,
-    ))
-    .join(TxAdditionalInfo::with_order_info(
-        concluded_order_v0_id,
-        concluded_order_v0_info,
-    ))
-    .join(TxAdditionalInfo::with_order_info(
-        concluded_order_v1_id,
-        concluded_order_v1_info,
-    ))
-    .join(TxAdditionalInfo::with_order_info(
-        frozen_order_id,
-        frozen_order_info,
-    ))
-    .join(TxAdditionalInfo::with_pool_info(
-        decommissioned_pool_id,
-        PoolAdditionalInfo {
-            staker_balance: decommissioned_pool_balance,
-        },
-    ));
+    let additional_info = TxAdditionalInfo::new()
+        .with_token_info(
+            token_id,
+            // Note: token info doesn't influence the signature and can be random.
+            TokenAdditionalInfo {
+                num_decimals: rng.gen_range(1..10),
+                ticker: random_ascii_alphanumeric_string(rng, 5..10).into_bytes(),
+            },
+        )
+        .with_order_info(filled_order_v0_id, filled_order_v0_info)
+        .with_order_info(filled_order_v1_id, filled_order_v1_info)
+        .with_order_info(concluded_order_v0_id, concluded_order_v0_info)
+        .with_order_info(concluded_order_v1_id, concluded_order_v1_info)
+        .with_order_info(frozen_order_id, frozen_order_info)
+        .with_pool_info(
+            decommissioned_pool_id,
+            PoolAdditionalInfo {
+                staker_balance: decommissioned_pool_balance,
+            },
+        );
     let ptx = req.into_partially_signed_tx(additional_info).unwrap();
 
     let mut signer = make_signer(chain_config.clone(), account1.account_index());
@@ -810,9 +797,6 @@ where
     let mut signer = make_signer(chain_config.clone(), account2.account_index());
     let (ptx, _, _) = signer.sign_tx(ptx, account2.key_chain(), &db_tx).unwrap();
     assert!(ptx.all_signatures_available());
-
-    let inputs_utxo_refs2 = ptx.input_utxos().iter().map(|u| u.as_ref()).collect::<Vec<_>>();
-    assert_eq!(inputs_utxo_refs2, utxos_ref);
 
     for (i, dest) in destinations.iter().enumerate() {
         let raw_sig = assert_matches_return_val!(

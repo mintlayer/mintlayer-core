@@ -670,7 +670,7 @@ fn nft_invalid_description(#[case] seed: Seed) {
                     BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
                         CheckBlockTransactionsError::CheckTransactionError(
                             CheckTransactionError::TokensError(TokensError::IssueError(
-                                TokenIssuanceError::IssueErrorDescriptionHasNoneAlphaNumericChar,
+                                TokenIssuanceError::IssueErrorDescriptionHasNonAlphaNumericChar,
                                 _,
                             ))
                         )
@@ -1772,7 +1772,7 @@ fn only_ascii_alphanumeric_after_v1(#[case] seed: Seed) {
                 CheckBlockError::CheckTransactionFailed(
                     CheckBlockTransactionsError::CheckTransactionError(
                         CheckTransactionError::TokensError(TokensError::IssueError(
-                            TokenIssuanceError::IssueErrorDescriptionHasNoneAlphaNumericChar,
+                            TokenIssuanceError::IssueErrorDescriptionHasNonAlphaNumericChar,
                             tx_id,
                         ))
                     )
