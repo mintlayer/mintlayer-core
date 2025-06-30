@@ -62,6 +62,8 @@ fn create_htlc(
 #[case(Seed::from_entropy())]
 #[tokio::test]
 async fn spend(#[case] seed: Seed) {
+    use api_web_server::api::json_helpers::to_json_string;
+
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
 
@@ -131,7 +133,7 @@ async fn spend(#[case] seed: Seed) {
                     &tx2,
                     &[Some(&tx_1.transaction().outputs()[0])],
                     0,
-                    secret,
+                    secret.clone(),
                     &mut rng,
                 )
                 .unwrap();
@@ -150,6 +152,7 @@ async fn spend(#[case] seed: Seed) {
                     tx_1_id.to_hash().encode_hex::<String>(),
                     block2.get_id().to_hash().encode_hex::<String>(),
                     tx_2_id.to_hash().encode_hex::<String>(),
+                    secret,
                 ));
 
                 vec![
@@ -189,7 +192,7 @@ async fn spend(#[case] seed: Seed) {
         web_server(listener, web_server_state, true).await
     });
 
-    let (block1_id, tx_1_id, block2_id, tx_2_id) = rx.await.unwrap();
+    let (block1_id, tx_1_id, block2_id, tx_2_id, secret) = rx.await.unwrap();
 
     let url = format!("/api/v2/block/{block1_id}");
     let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
@@ -214,6 +217,9 @@ async fn spend(#[case] seed: Seed) {
         .await
         .unwrap();
     assert_eq!(response.status(), 200);
+
+    let body = response.text().await.unwrap();
+    assert!(body.contains(&format!("\"secret\":{}", to_json_string(secret.secret()))));
 
     task.abort();
 }
@@ -372,6 +378,9 @@ async fn refund(#[case] seed: Seed) {
         .unwrap();
 
     assert_eq!(response.status(), 200);
+
+    let body = response.text().await.unwrap();
+    assert!(body.contains("\"secret\":null"));
 
     task.abort();
 }

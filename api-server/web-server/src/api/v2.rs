@@ -194,7 +194,7 @@ pub async fn block<T: ApiServerStorage>(
                 .iter()
                 .zip(block.tx_additional_infos.iter())
                 .map(|(tx, additinal_info)| {
-                    tx_to_json(tx.transaction(), additinal_info, &state.chain_config)
+                    tx_to_json(tx, additinal_info, &state.chain_config)
                 })
                 .collect::<Vec<_>>(),
         },
@@ -526,7 +526,7 @@ pub async fn transaction<T: ApiServerStorage>(
     } else {
         None
     };
-    let mut json = tx_to_json(tx.transaction(), &additional_info, &state.chain_config);
+    let mut json = tx_to_json(&tx, &additional_info, &state.chain_config);
     let obj = json.as_object_mut().expect("object");
 
     obj.insert(
