@@ -4646,6 +4646,8 @@ version = "1.0.2"
 dependencies = [
  "common",
  "crypto",
+ "ctor",
+ "derive_more",
  "expect-test",
  "hex",
  "logging",
@@ -4654,6 +4656,7 @@ dependencies = [
  "rstest",
  "serialization",
  "static_assertions",
+ "strum",
  "test-utils",
  "thiserror",
  "tokens-accounting",
