@@ -309,7 +309,6 @@ fn fill_order_constraints(#[case] seed: Seed, #[case] version: OrdersVersion) {
             OrdersVersion::V1 => TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(
                 order_id,
                 (ask_amount + Amount::from_atoms(1)).unwrap(),
-                Destination::AnyoneCanSpend,
             )),
         };
         let inputs = vec![
@@ -354,11 +353,9 @@ fn fill_order_constraints(#[case] seed: Seed, #[case] version: OrdersVersion) {
                 AccountNonce::new(0),
                 AccountCommand::FillOrder(order_id, ask_amount, Destination::AnyoneCanSpend),
             ),
-            OrdersVersion::V1 => TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(
-                order_id,
-                ask_amount,
-                Destination::AnyoneCanSpend,
-            )),
+            OrdersVersion::V1 => {
+                TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(order_id, ask_amount))
+            }
         };
         let inputs = vec![
             TxInput::Utxo(UtxoOutPoint::new(
@@ -395,11 +392,9 @@ fn fill_order_constraints(#[case] seed: Seed, #[case] version: OrdersVersion) {
                 AccountNonce::new(0),
                 AccountCommand::FillOrder(order_id, ask_amount, Destination::AnyoneCanSpend),
             ),
-            OrdersVersion::V1 => TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(
-                order_id,
-                ask_amount,
-                Destination::AnyoneCanSpend,
-            )),
+            OrdersVersion::V1 => {
+                TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(order_id, ask_amount))
+            }
         };
         let inputs = vec![
             TxInput::Utxo(UtxoOutPoint::new(
@@ -451,11 +446,9 @@ fn fill_order_constraints(#[case] seed: Seed, #[case] version: OrdersVersion) {
                 AccountNonce::new(0),
                 AccountCommand::FillOrder(order_id, ask_amount, Destination::AnyoneCanSpend),
             ),
-            OrdersVersion::V1 => TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(
-                order_id,
-                ask_amount,
-                Destination::AnyoneCanSpend,
-            )),
+            OrdersVersion::V1 => {
+                TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(order_id, ask_amount))
+            }
         };
         let inputs = vec![
             TxInput::Utxo(UtxoOutPoint::new(
@@ -512,11 +505,9 @@ fn fill_order_constraints(#[case] seed: Seed, #[case] version: OrdersVersion) {
                 AccountNonce::new(0),
                 AccountCommand::FillOrder(order_id, ask_amount, Destination::AnyoneCanSpend),
             ),
-            OrdersVersion::V1 => TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(
-                order_id,
-                ask_amount,
-                Destination::AnyoneCanSpend,
-            )),
+            OrdersVersion::V1 => {
+                TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(order_id, ask_amount))
+            }
         };
         let inputs = vec![
             TxInput::Utxo(UtxoOutPoint::new(
@@ -571,11 +562,9 @@ fn fill_order_constraints(#[case] seed: Seed, #[case] version: OrdersVersion) {
             AccountNonce::new(0),
             AccountCommand::FillOrder(order_id, ask_amount, Destination::AnyoneCanSpend),
         ),
-        OrdersVersion::V1 => TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(
-            order_id,
-            ask_amount,
-            Destination::AnyoneCanSpend,
-        )),
+        OrdersVersion::V1 => {
+            TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(order_id, ask_amount))
+        }
     };
     let inputs = vec![
         TxInput::Utxo(UtxoOutPoint::new(

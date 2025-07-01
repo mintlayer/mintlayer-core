@@ -10,6 +10,7 @@ rust-version.workspace = true
 [dependencies]
 common = { path = "../../common/" }
 crypto = { path = "../../crypto/" }
+logging = { path = "../../logging/" }
 tx-verifier = { path = "../../chainstate/tx-verifier" }
 rpc-description = { path = "../../rpc/description" }
 randomness = { path = "../../randomness" }

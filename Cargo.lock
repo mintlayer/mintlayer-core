@@ -9370,6 +9370,7 @@ dependencies = [
  "crypto",
  "hex",
  "itertools 0.14.0",
+ "logging",
  "parity-scale-codec",
  "randomness",
  "rpc-description",

@@ -859,7 +859,6 @@ impl TestFixture {
                 TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(
                     order_id,
                     coin_amount_to_fill,
-                    Destination::AnyoneCanSpend,
                 )),
                 InputWitness::NoSignature(None),
             )

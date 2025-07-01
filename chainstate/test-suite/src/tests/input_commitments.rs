@@ -853,11 +853,9 @@ fn make_fill_order_input(
             nonce,
             AccountCommand::FillOrder(*order_id, fill_amount, Destination::AnyoneCanSpend),
         ),
-        OrdersVersion::V1 => TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(
-            *order_id,
-            fill_amount,
-            Destination::AnyoneCanSpend,
-        )),
+        OrdersVersion::V1 => {
+            TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(*order_id, fill_amount))
+        }
     }
 }
 

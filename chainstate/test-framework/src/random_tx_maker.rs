@@ -1021,13 +1021,9 @@ impl<'a> RandomTxMaker<'a> {
                         if !is_frozen_token(&filled_value, tokens_cache)
                             && !is_frozen_order(&orders_cache, order_id)
                         {
-                            let input =
-                                TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(
-                                    order_id,
-                                    amount_to_spend,
-                                    key_manager
-                                        .new_destination(self.chainstate.get_chain_config(), rng),
-                                ));
+                            let input = TxInput::OrderAccountCommand(
+                                OrderAccountCommand::FillOrder(order_id, amount_to_spend),
+                            );
 
                             let output = TxOutput::Transfer(
                                 filled_value,
@@ -1260,10 +1256,6 @@ impl<'a> RandomTxMaker<'a> {
                                     OrderAccountCommand::FillOrder(
                                         order_id,
                                         Amount::from_atoms(atoms),
-                                        key_manager.new_destination(
-                                            self.chainstate.get_chain_config(),
-                                            rng,
-                                        ),
                                     ),
                                 ));
 

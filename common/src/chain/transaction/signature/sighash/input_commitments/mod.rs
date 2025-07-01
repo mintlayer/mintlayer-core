@@ -382,7 +382,7 @@ where
             | AccountCommand::ChangeTokenMetadataUri(_, _) => Ok(SighashInputCommitment::None),
         },
         | TxInput::OrderAccountCommand(command) => match command {
-            OrderAccountCommand::FillOrder(order_id, _, _) => {
+            OrderAccountCommand::FillOrder(order_id, _) => {
                 let order_info = order_info_getter(order_id, input_idx)?;
 
                 Ok(SighashInputCommitment::FillOrderAccountCommand {

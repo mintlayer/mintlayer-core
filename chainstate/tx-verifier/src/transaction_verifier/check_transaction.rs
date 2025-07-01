@@ -414,7 +414,7 @@ fn check_order_inputs_outputs(
                     OrdersVersion::V1 => {}
                 };
                 match cmd {
-                    common::chain::OrderAccountCommand::FillOrder(id, fill, _) => {
+                    common::chain::OrderAccountCommand::FillOrder(id, fill) => {
                         // Forbidding fills with zero amount ensures that tx has utxo and therefore is unique.
                         // Unique txs cannot be replayed.
                         ensure!(

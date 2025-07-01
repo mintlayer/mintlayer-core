@@ -397,9 +397,9 @@ pub enum AccountCommand {
 #[strum_discriminants(name(OrderAccountCommandTag), derive(EnumIter))]
 pub enum OrderAccountCommand {
     // Satisfy an order completely or partially.
-    // Second parameter is an amount provided to fill an order which corresponds to order's ask currency.
+    // The second element is the fill amount in the order's "ask" currency.
     #[codec(index = 0)]
-    FillOrder(OrderId, Amount, Destination),
+    FillOrder(OrderId, Amount),
     // Freeze an order which effectively forbids any fill operations.
     // Frozen order can only be concluded.
     // Only the address specified as `conclude_key` can authorize this command.

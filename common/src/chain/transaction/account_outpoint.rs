@@ -64,7 +64,7 @@ impl From<&AccountCommand> for AccountType {
 impl From<OrderAccountCommand> for AccountType {
     fn from(cmd: OrderAccountCommand) -> Self {
         match cmd {
-            OrderAccountCommand::FillOrder(order_id, _, _)
+            OrderAccountCommand::FillOrder(order_id, _)
             | OrderAccountCommand::FreezeOrder(order_id)
             | OrderAccountCommand::ConcludeOrder(order_id) => AccountType::Order(order_id),
         }
@@ -141,11 +141,10 @@ pub enum AccountCommand {
     ConcludeOrder(OrderId),
 
     // Satisfy an order completely or partially.
-    // The second parameter is the fill amount in the order's "ask" currency.
-    // The third parameter is an arbitrary destination, whose purpose is to make sure that all
-    // "FillOrder" inputs in a block are distinct, so that the same order can be filled in the same
-    // block multiple times (note: all transaction inputs in a block must be distinct,
-    // see CheckBlockTransactionsError::DuplicateInputInBlock).
+    // The second element is the fill amount in the order's "ask" currency.
+    // The third element is an arbitrary destination, which is present here due to historical reasons.
+    // (Though it can technically be the same as the actual output destination, this is not enforced).
+    //
     // Also note that though a FillOrder input can technically have a signature, it is not checked.
     // So it's better not to provide one, to reduce the transaction size and avoid needlessly exposing
     // the corresponding public key.
@@ -207,16 +206,10 @@ impl AccountOutPoint {
 )]
 pub enum OrderAccountCommand {
     // Satisfy an order completely or partially.
-    // The second parameter is the fill amount in the order's "ask" currency.
-    // The third parameter is an arbitrary destination, whose purpose is to make sure that all
-    // "FillOrder" inputs in a block are distinct, so that the same order can be filled in the same
-    // block multiple times (note: all transaction inputs in a block must be distinct,
-    // see CheckBlockTransactionsError::DuplicateInputInBlock).
-    // Also note that though a FillOrder input can technically have a signature, it is not checked.
-    // So it's better not to provide one, to reduce the transaction size and avoid needlessly exposing
-    // the corresponding public key.
+    // The second element is the fill amount in the order's "ask" currency.
+    // Note that in orders v1 there is no `Destination` element inside `FillOrder`.
     #[codec(index = 0)]
-    FillOrder(OrderId, Amount, Destination),
+    FillOrder(OrderId, Amount),
 
     // Freeze an order which effectively forbids any fill operations.
     // Frozen order can only be concluded.
