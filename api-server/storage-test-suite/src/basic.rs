@@ -391,7 +391,7 @@ where
 
             let take_txs = rng.gen_range(1..expected_last_tx_global_index - start_tx_global_index);
             let txs = db_tx
-                .get_transactions_with_block_before_tx_global_index(
+                .get_transactions_with_block_info_before_tx_global_index(
                     take_txs as u32,
                     last_num.unwrap() + 1,
                 )

@@ -444,47 +444,54 @@ pub async fn submit_transaction<T: ApiServerStorage>(
     ))
 }
 
+enum OffsetMode {
+    Legacy,
+    Absolute,
+}
+
+impl FromStr for OffsetMode {
+    type Err = ApiServerWebServerClientError;
+
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
+        match input {
+            "legacy" => Ok(Self::Legacy),
+            "absolute" => Ok(Self::Absolute),
+            _ => Err(ApiServerWebServerClientError::InvalidOffsetMode),
+        }
+    }
+}
+
 pub async fn transactions<T: ApiServerStorage>(
     Query(params): Query<BTreeMap<String, String>>,
     State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
-    const BEFORE_TX_GLOBAL_INDEX: &str = "before_tx_global_index";
-    let before_tx_global_index = params
-        .get(BEFORE_TX_GLOBAL_INDEX)
-        .map(|tx_global_index| u64::from_str(tx_global_index))
-        .transpose()
-        .map_err(|_| {
-            ApiServerWebServerError::ClientError(
-                ApiServerWebServerClientError::InvalidTxGlobalIndex,
-            )
-        })?
-        .unwrap_or_default();
+    const OFFSET_MODE: &str = "offset_mode";
+    let offset_mode = params
+        .get(OFFSET_MODE)
+        .map(|mode| OffsetMode::from_str(mode))
+        .transpose()?
+        .unwrap_or(OffsetMode::Legacy);
     let offset_and_items = get_offset_and_items(&params)?;
-
-    // only 1 can be non zero
-    ensure!(
-        !(before_tx_global_index != 0 && offset_and_items.offset != 0),
-        ApiServerWebServerError::ClientError(
-            ApiServerWebServerClientError::InvalidOffsetAndTxGlobalIndex
-        )
-    );
 
     let db_tx = state.db.transaction_ro().await.map_err(|e| {
         logging::log::error!("internal error: {e}");
         ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
     })?;
 
-    let txs = if before_tx_global_index != 0 {
-        db_tx
-            .get_transactions_with_block_before_tx_global_index(
-                offset_and_items.items,
-                before_tx_global_index,
-            )
-            .await
-    } else {
-        db_tx
-            .get_transactions_with_block(offset_and_items.items, offset_and_items.offset)
-            .await
+    let txs = match offset_mode {
+        OffsetMode::Absolute => {
+            db_tx
+                .get_transactions_with_block_info_before_tx_global_index(
+                    offset_and_items.items,
+                    offset_and_items.offset,
+                )
+                .await
+        }
+        OffsetMode::Legacy => {
+            db_tx
+                .get_transactions_with_block_info(offset_and_items.items, offset_and_items.offset)
+                .await
+        }
     }
     .map_err(|e| {
         logging::log::error!("internal error: {e}");
@@ -882,7 +889,7 @@ pub async fn pools<T: ApiServerStorage>(
 
     let sort = params
         .get(SORT)
-        .map(|offset| PoolSorting::from_str(offset))
+        .map(|sort| PoolSorting::from_str(sort))
         .transpose()?
         .unwrap_or(PoolSorting::ByHeight);
 
@@ -1540,7 +1547,7 @@ pub async fn order_pair<T: ApiServerStorage>(
 }
 
 struct OffsetAndItems {
-    offset: u32,
+    offset: u64,
     items: u32,
 }
 
@@ -1554,7 +1561,7 @@ fn get_offset_and_items(
 
     let offset = params
         .get(OFFSET)
-        .map(|offset| u32::from_str(offset))
+        .map(|offset| u64::from_str(offset))
         .transpose()
         .map_err(|_| {
             ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidOffset)

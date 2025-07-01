@@ -37,35 +37,14 @@ async fn invalid_offset() {
 
 #[tokio::test]
 async fn invalid_before_tx_global_index() {
-    let (task, response) = spawn_webserver("/api/v2/transaction?before_tx_global_index=asd").await;
+    let (task, response) = spawn_webserver("/api/v2/transaction?offset_mode=asd").await;
 
     assert_eq!(response.status(), 400);
 
     let body = response.text().await.unwrap();
     let body: serde_json::Value = serde_json::from_str(&body).unwrap();
 
-    assert_eq!(
-        body["error"].as_str().unwrap(),
-        "Invalid transaction global index"
-    );
-
-    task.abort();
-}
-
-#[tokio::test]
-async fn invalid_offset_and_before_tx_global_index() {
-    let (task, response) =
-        spawn_webserver("/api/v2/transaction?offset=1&before_tx_global_index=1").await;
-
-    assert_eq!(response.status(), 400);
-
-    let body = response.text().await.unwrap();
-    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
-
-    assert_eq!(
-        body["error"].as_str().unwrap(),
-        "Cannot specify both offset and before tx global index"
-    );
+    assert_eq!(body["error"].as_str().unwrap(), "Invalid offset mode");
 
     task.abort();
 }
@@ -274,7 +253,8 @@ async fn ok(#[case] seed: Seed) {
     // test before_tx_global_index instead of offset
     let tx_global_index = &expected_transactions[offset - 1]["tx_global_index"].as_str().unwrap();
     eprintln!("tx_global_index: '{tx_global_index}'");
-    let url = format!("/api/v2/transaction?before_tx_global_index={tx_global_index}&items={items}");
+    let url =
+        format!("/api/v2/transaction?offset={tx_global_index}&items={items}&offset_mode=absolute");
 
     let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
         .await

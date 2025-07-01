@@ -1568,7 +1568,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
     pub async fn get_latest_pool_data(
         &self,
         len: u32,
-        offset: u32,
+        offset: u64,
         chain_config: &ChainConfig,
     ) -> Result<Vec<(PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError> {
         let len = len as i64;
@@ -1612,7 +1612,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
     pub async fn get_pool_data_with_largest_staker_balance(
         &self,
         len: u32,
-        offset: u32,
+        offset: u64,
         chain_config: &ChainConfig,
     ) -> Result<Vec<(PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError> {
         let len = len as i64;
@@ -1784,7 +1784,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
     pub async fn get_transactions_with_block(
         &self,
         len: u32,
-        offset: u32,
+        offset: u64,
     ) -> Result<Vec<TransactionWithBlockInfo>, ApiServerStorageError> {
         let len = len as i64;
         let offset = offset as i64;
@@ -1797,13 +1797,10 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     b.aux_data,
                     t.global_tx_index
                 FROM
-                    ml.blocks mb
-                INNER JOIN
-                    ml.transactions t ON t.owning_block_id = mb.block_id
+                    ml.transactions t
                 INNER JOIN
                     ml.block_aux_data b ON t.owning_block_id = b.block_id
-                WHERE mb.block_height IS NOT NULL
-                ORDER BY mb.block_height DESC
+                ORDER BY t.global_tx_index DESC
                 OFFSET $1
                 LIMIT $2;
                 "#,
@@ -2348,7 +2345,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
     pub async fn get_token_ids(
         &self,
         len: u32,
-        offset: u32,
+        offset: u64,
     ) -> Result<Vec<TokenId>, ApiServerStorageError> {
         let len = len as i64;
         let offset = offset as i64;
@@ -2390,7 +2387,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
     pub async fn get_token_ids_by_ticker(
         &self,
         len: u32,
-        offset: u32,
+        offset: u64,
         ticker: &[u8],
     ) -> Result<Vec<TokenId>, ApiServerStorageError> {
         let len = len as i64;
@@ -2814,7 +2811,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
     pub async fn get_orders_by_height(
         &self,
         len: u32,
-        offset: u32,
+        offset: u64,
         chain_config: &ChainConfig,
     ) -> Result<Vec<(OrderId, Order)>, ApiServerStorageError> {
         let len = len as i64;
@@ -2847,7 +2844,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         &self,
         pair: (CoinOrTokenId, CoinOrTokenId),
         len: u32,
-        offset: u32,
+        offset: u64,
         chain_config: &ChainConfig,
     ) -> Result<Vec<(OrderId, Order)>, ApiServerStorageError> {
         let len = len as i64;

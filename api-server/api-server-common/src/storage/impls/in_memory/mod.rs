@@ -196,10 +196,10 @@ impl ApiServerInMemoryStorage {
         }))
     }
 
-    fn get_transactions_with_block(
+    fn get_transactions_with_block_info(
         &self,
         len: u32,
-        offset: u32,
+        offset: u64,
     ) -> Result<Vec<TransactionWithBlockInfo>, ApiServerStorageError> {
         Ok(self
             .main_chain_blocks_table
@@ -416,7 +416,7 @@ impl ApiServerInMemoryStorage {
     fn get_orders_by_height(
         &self,
         len: u32,
-        offset: u32,
+        offset: u64,
     ) -> Result<Vec<(OrderId, Order)>, ApiServerStorageError> {
         let len = len as usize;
         let offset = offset as usize;
@@ -449,7 +449,7 @@ impl ApiServerInMemoryStorage {
         &self,
         pair: (CoinOrTokenId, CoinOrTokenId),
         len: u32,
-        offset: u32,
+        offset: u64,
     ) -> Result<Vec<(OrderId, Order)>, ApiServerStorageError> {
         let len = len as usize;
         let offset = offset as usize;
@@ -483,7 +483,7 @@ impl ApiServerInMemoryStorage {
     fn get_latest_pool_ids(
         &self,
         len: u32,
-        offset: u32,
+        offset: u64,
     ) -> Result<Vec<(PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError> {
         let len = len as usize;
         let offset = offset as usize;
@@ -514,7 +514,7 @@ impl ApiServerInMemoryStorage {
     fn get_pool_data_with_largest_staker_balance(
         &self,
         len: u32,
-        offset: u32,
+        offset: u64,
     ) -> Result<Vec<(PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError> {
         let len = len as usize;
         let offset = offset as usize;
@@ -707,7 +707,7 @@ impl ApiServerInMemoryStorage {
             .or_else(|| self.nft_token_issuances.get(&token_id).map(|_| 0)))
     }
 
-    fn get_token_ids(&self, len: u32, offset: u32) -> Result<Vec<TokenId>, ApiServerStorageError> {
+    fn get_token_ids(&self, len: u32, offset: u64) -> Result<Vec<TokenId>, ApiServerStorageError> {
         Ok(self
             .fungible_token_data
             .keys()
@@ -721,7 +721,7 @@ impl ApiServerInMemoryStorage {
     fn get_token_ids_by_ticker(
         &self,
         len: u32,
-        offset: u32,
+        offset: u64,
         ticker: &[u8],
     ) -> Result<Vec<TokenId>, ApiServerStorageError> {
         Ok(self

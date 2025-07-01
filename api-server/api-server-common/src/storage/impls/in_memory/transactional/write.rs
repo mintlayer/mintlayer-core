@@ -398,15 +398,15 @@ impl ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRw<'_> {
         self.transaction.get_transaction_with_block(transaction_id)
     }
 
-    async fn get_transactions_with_block(
+    async fn get_transactions_with_block_info(
         &self,
         len: u32,
-        offset: u32,
+        offset: u64,
     ) -> Result<Vec<TransactionWithBlockInfo>, ApiServerStorageError> {
-        self.transaction.get_transactions_with_block(len, offset)
+        self.transaction.get_transactions_with_block_info(len, offset)
     }
 
-    async fn get_transactions_with_block_before_tx_global_index(
+    async fn get_transactions_with_block_info_before_tx_global_index(
         &self,
         len: u32,
         tx_global_index: u64,
@@ -431,7 +431,7 @@ impl ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRw<'_> {
     async fn get_latest_pool_data(
         &self,
         len: u32,
-        offset: u32,
+        offset: u64,
     ) -> Result<Vec<(PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError> {
         self.transaction.get_latest_pool_ids(len, offset)
     }
@@ -439,7 +439,7 @@ impl ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRw<'_> {
     async fn get_pool_data_with_largest_staker_balance(
         &self,
         len: u32,
-        offset: u32,
+        offset: u64,
     ) -> Result<Vec<(PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError> {
         self.transaction.get_pool_data_with_largest_staker_balance(len, offset)
     }
@@ -518,7 +518,7 @@ impl ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRw<'_> {
     async fn get_token_ids(
         &self,
         len: u32,
-        offset: u32,
+        offset: u64,
     ) -> Result<Vec<TokenId>, ApiServerStorageError> {
         self.transaction.get_token_ids(len, offset)
     }
@@ -526,7 +526,7 @@ impl ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRw<'_> {
     async fn get_token_ids_by_ticker(
         &self,
         len: u32,
-        offset: u32,
+        offset: u64,
         ticker: &[u8],
     ) -> Result<Vec<TokenId>, ApiServerStorageError> {
         self.transaction.get_token_ids_by_ticker(len, offset, ticker)
@@ -554,7 +554,7 @@ impl ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRw<'_> {
     async fn get_all_orders(
         &self,
         len: u32,
-        offset: u32,
+        offset: u64,
     ) -> Result<Vec<(OrderId, Order)>, ApiServerStorageError> {
         self.transaction.get_orders_by_height(len, offset)
     }
@@ -563,7 +563,7 @@ impl ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRw<'_> {
         &self,
         pair: (CoinOrTokenId, CoinOrTokenId),
         len: u32,
-        offset: u32,
+        offset: u64,
     ) -> Result<Vec<(OrderId, Order)>, ApiServerStorageError> {
         self.transaction.get_orders_for_trading_pair(pair, len, offset)
     }

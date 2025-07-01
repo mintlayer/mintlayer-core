@@ -645,13 +645,13 @@ pub trait ApiServerStorageRead: Sync {
     async fn get_latest_pool_data(
         &self,
         len: u32,
-        offset: u32,
+        offset: u64,
     ) -> Result<Vec<(PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError>;
 
     async fn get_pool_data_with_largest_staker_balance(
         &self,
         len: u32,
-        offset: u32,
+        offset: u64,
     ) -> Result<Vec<(PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError>;
 
     #[allow(clippy::type_complexity)]
@@ -666,13 +666,13 @@ pub trait ApiServerStorageRead: Sync {
         transaction_id: Id<Transaction>,
     ) -> Result<Option<(Id<Block>, TransactionInfo)>, ApiServerStorageError>;
 
-    async fn get_transactions_with_block(
+    async fn get_transactions_with_block_info(
         &self,
         len: u32,
-        offset: u32,
+        offset: u64,
     ) -> Result<Vec<TransactionWithBlockInfo>, ApiServerStorageError>;
 
-    async fn get_transactions_with_block_before_tx_global_index(
+    async fn get_transactions_with_block_info_before_tx_global_index(
         &self,
         len: u32,
         tx_global_index: u64,
@@ -728,13 +728,13 @@ pub trait ApiServerStorageRead: Sync {
     async fn get_token_ids(
         &self,
         len: u32,
-        offset: u32,
+        offset: u64,
     ) -> Result<Vec<TokenId>, ApiServerStorageError>;
 
     async fn get_token_ids_by_ticker(
         &self,
         len: u32,
-        offset: u32,
+        offset: u64,
         ticker: &[u8],
     ) -> Result<Vec<TokenId>, ApiServerStorageError>;
 
@@ -754,14 +754,14 @@ pub trait ApiServerStorageRead: Sync {
     async fn get_all_orders(
         &self,
         len: u32,
-        offset: u32,
+        offset: u64,
     ) -> Result<Vec<(OrderId, Order)>, ApiServerStorageError>;
 
     async fn get_orders_for_trading_pair(
         &self,
         pair: (CoinOrTokenId, CoinOrTokenId),
         len: u32,
-        offset: u32,
+        offset: u64,
     ) -> Result<Vec<(OrderId, Order)>, ApiServerStorageError>;
 }
 
