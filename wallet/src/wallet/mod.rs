@@ -249,7 +249,7 @@ pub enum WalletError {
     #[error("Input cannot be spent {0:?}")]
     InputCannotBeSpent(TxOutput),
     #[error("Failed to convert partially signed tx to signed")]
-    FailedToConvertPartiallySignedTx(PartiallySignedTransaction),
+    FailedToConvertPartiallySignedTx(Box<PartiallySignedTransaction>),
     #[error("The specified address is not found in this wallet")]
     AddressNotFound,
     #[error("The specified standalone address {0} is not found in this wallet")]
@@ -1163,7 +1163,7 @@ where
 
                 if !is_fully_signed {
                     return Err(error_mapper(WalletError::FailedToConvertPartiallySignedTx(
-                        ptx,
+                        Box::new(ptx),
                     )));
                 }
 

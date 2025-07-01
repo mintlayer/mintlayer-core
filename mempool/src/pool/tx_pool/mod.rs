@@ -701,6 +701,7 @@ pub enum TxAdditionAttemptOutcome {
 }
 
 /// Result of transaction validation
+#[allow(clippy::large_enum_variant)]
 enum TxValidationOutcome {
     Valid {
         fee: Fee,

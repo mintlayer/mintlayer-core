@@ -444,8 +444,8 @@ fn long_offline(#[case] seed: Seed) {
     for _ in 0..24 * 7 {
         crawler.timer(Duration::from_secs(3600), &mut rng);
     }
-    assert!(!crawler.connect_requests.iter().any(|addr| *addr == loaded_node));
-    assert!(crawler.connect_requests.iter().any(|addr| *addr == added_node));
+    assert!(!crawler.connect_requests.contains(&loaded_node));
+    assert!(crawler.connect_requests.contains(&added_node));
     crawler.connect_requests.clear();
 }
 

@@ -38,8 +38,8 @@ impl PoSAdapter {
     ) -> Self {
         let pool_balances = (pool_data.staker_balance().expect("cannot fail")
             + delegations
-                .iter()
-                .map(|(_, d)| *d.balance())
+                .values()
+                .map(|d| *d.balance())
                 .sum::<Option<Amount>>()
                 .expect("cannot fail"))
         .expect("cannot fail");

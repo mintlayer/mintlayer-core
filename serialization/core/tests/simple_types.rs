@@ -201,7 +201,7 @@ fn test_scale_options() {
     assert_eq!(dec, Some(OptionWrapper::new(result)));
 
     // Decode and encode 1_048_576 chars 'X'
-    let result = Some(format!("!{:X<4194304}!", ""));
+    let result = Some(std::iter::repeat_n('X', 1_048_576).collect::<String>());
     let enc = OptionWrapper::encode(&OptionWrapper::new(result.clone()));
     assert!(!enc.is_empty());
     let dec = OptionWrapper::decode_all(&mut &enc[..]).ok();

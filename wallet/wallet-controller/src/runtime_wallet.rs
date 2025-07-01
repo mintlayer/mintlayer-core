@@ -62,6 +62,7 @@ use wallet_types::{
 #[cfg(feature = "trezor")]
 use wallet::signer::trezor_signer::TrezorSignerProvider;
 
+#[allow(clippy::large_enum_variant)]
 pub enum RuntimeWallet<B: storage::Backend + 'static> {
     Software(Wallet<B, SoftwareSignerProvider>),
     #[cfg(feature = "trezor")]
