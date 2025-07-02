@@ -248,7 +248,7 @@ zeroize = "1.5"
 
 [workspace.dependencies.trezor-client]
 git = "https://github.com/mintlayer/mintlayer-trezor-firmware"
-rev = "26d7b91a07d5b1ea1b110fe73426caff844f9205" # sighash_input_commitments branch
+rev = "07229ff4943537b81c18a612fe971792d2a37574" # Commit "Support Mintlayer input commitments V1"
 features = ["bitcoin", "mintlayer"]
 
 [workspace.metadata.dist.dependencies.apt]
