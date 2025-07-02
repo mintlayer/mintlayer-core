@@ -70,7 +70,11 @@ where
 fn find_python_exe() -> PathBuf {
     let possible_python_execs = ["python3", "python"];
 
-    let file_suffix = (env::consts::OS == "windows").then_some(".exe").unwrap_or_default();
+    let file_suffix = if env::consts::OS == "windows" {
+        ".exe"
+    } else {
+        ""
+    };
 
     let python_exe = possible_python_execs
         .into_iter()

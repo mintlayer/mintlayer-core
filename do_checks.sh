@@ -13,11 +13,18 @@ cargo fmt --check -- --config newline_style=Unix
 # Note: "--allow duplicate" silences the warning "found x duplicate entries for crate y".
 cargo deny check --allow duplicate --hide-inclusion-graph
 
-# Checks enabled everywhere, including tests, benchmarks
+# Checks enabled everywhere, including tests, benchmarks.
+# Note about "uninlined_format_args": this is about changing `format!("{}", x)` to `format!("{x}")`.
+#   Most of the time this makes the code look better, but:
+#     * there are way too many places like this;
+#     * in some cases it may lead to uglier code; in particular, when the format string is already
+#       quite long.
+#   So we disable it for now.
 cargo clippy --all-features --workspace --all-targets -- \
     -D warnings \
     -A clippy::unnecessary_literal_unwrap \
     -A clippy::new_without_default \
+    -A clippy::uninlined_format_args \
     -D clippy::implicit_saturating_sub \
     -D clippy::implicit_clone \
     -D clippy::map_unwrap_or \
