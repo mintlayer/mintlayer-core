@@ -17,7 +17,16 @@ use std::str::FromStr as _;
 
 use common::{
     address::{traits::Addressable, Address},
-    chain::ChainConfig,
+    chain::{
+        signature::{
+            inputsig::{
+                authorize_hashed_timelock_contract_spend::AuthorizedHashedTimelockContractSpend,
+                InputWitness, InputWitnessTag,
+            },
+            sighash::sighashtype::SigHashType,
+        },
+        ChainConfig,
+    },
     primitives,
 };
 use serialization::Decode;
@@ -55,4 +64,19 @@ pub fn internal_amount_from_atoms_str(atoms: &str) -> Result<primitives::Amount,
         .ok_or_else(|| Error::AtomsAmountParseError {
             atoms: atoms.to_owned(),
         })
+}
+
+pub fn extract_htlc_spend(
+    witness: &InputWitness,
+) -> Result<(AuthorizedHashedTimelockContractSpend, SigHashType), Error> {
+    match witness {
+        InputWitness::NoSignature(_) => {
+            Err(Error::UnexpectedWitnessType(InputWitnessTag::NoSignature))
+        }
+        InputWitness::Standard(sig) => Ok((
+            AuthorizedHashedTimelockContractSpend::from_data(sig.raw_signature())
+                .map_err(Error::HtlcSpendDecodingError)?,
+            sig.sighash_type(),
+        )),
+    }
 }

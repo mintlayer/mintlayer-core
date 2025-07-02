@@ -24,7 +24,6 @@ import {
   encode_witness_htlc_secret,
   extract_htlc_secret,
   make_default_account_privkey,
-  make_private_key,
   make_receiving_address,
   public_key_from_private_key,
   Network,
@@ -36,6 +35,9 @@ import {
 } from "./utils.js";
 
 import {
+  generate_prv_key,
+  HTLC_SECRET,
+  HTLC_SECRET_HASH,
   MNEMONIC,
   TOKEN_ID,
 } from "./defs.js";
@@ -57,13 +59,10 @@ export function test_htlc() {
   );
   const receiving_privkey = make_receiving_address(account_pubkey, 0);
 
-  const secret = [0, 229, 233, 72, 110, 22, 64, 36, 69, 188, 238, 51, 130, 168, 185, 241, 73, 48, 120, 151, 140, 45, 46, 39, 50, 207, 18, 50, 243, 30, 115, 93]
-  const secret_hash = "b5a48c7780e597de8012346fb30761965248e3f2"
-
   const htlc_coins_output = encode_output_htlc(
     Amount.from_atoms("40000"),
     undefined,
-    secret_hash,
+    HTLC_SECRET_HASH,
     ADDRESS,
     ADDRESS,
     encode_lock_until_height(BigInt(100)),
@@ -74,7 +73,7 @@ export function test_htlc() {
   const htlc_tokens_output = encode_output_htlc(
     Amount.from_atoms("40000"),
     TOKEN_ID,
-    secret_hash,
+    HTLC_SECRET_HASH,
     ADDRESS,
     ADDRESS,
     encode_lock_until_height(BigInt(100)),
@@ -92,15 +91,15 @@ export function test_htlc() {
     tx,
     Uint8Array.from(opt_htlc_utxos),
     0,
-    Uint8Array.from(secret),
+    Uint8Array.from(HTLC_SECRET),
     Network.Testnet
   );
   console.log("Tested encode witness with htlc secret successfully");
 
   // encode multisig challenge
-  const alice_sk = make_private_key();
+  const alice_sk = generate_prv_key("alice_sk");
   const alice_pk = public_key_from_private_key(alice_sk);
-  const bob_sk = make_private_key();
+  const bob_sk = generate_prv_key("bob_sk");
   const bob_pk = public_key_from_private_key(bob_sk);
   let challenge = encode_multisig_challenge(Uint8Array.from([...alice_pk, ...bob_pk]), 2, Network.Testnet);
   console.log("Tested multisig challenge successfully");
@@ -136,5 +135,5 @@ export function test_htlc() {
   const htlc_signed_tx = encode_signed_transaction(tx, Uint8Array.from([...witness_with_htlc_secret, ...witness_with_htlc_multisig]));
   // extract secret from signed tx
   const secret_extracted = extract_htlc_secret(htlc_signed_tx, true, TX_OUTPOINT, 1);
-  assert_eq_arrays(secret, secret_extracted);
+  assert_eq_arrays(HTLC_SECRET, secret_extracted);
 }

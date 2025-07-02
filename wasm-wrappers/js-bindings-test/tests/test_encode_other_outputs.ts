@@ -24,6 +24,7 @@ import {
   encode_output_issue_fungible_token,
   encode_output_issue_nft,
   encode_output_lock_then_transfer,
+  encode_output_produce_block_from_stake,
   encode_output_token_burn,
   encode_output_token_lock_then_transfer,
   encode_output_token_transfer,
@@ -70,6 +71,7 @@ export const OUTPUTS = [...OUTPUT_LOCK_THEN_TRANSFER, ...OUTPUT_CREATE_STAKE_POO
 export function test_encode_other_outputs() {
   run_one_test(create_stake_pool_test);
   run_one_test(stake_pool_data_test);
+  run_one_test(produce_block_from_stake_test);
   run_one_test(coin_burn_test);
   run_one_test(token_burn_test);
   run_one_test(lock_then_transfer_test);
@@ -156,6 +158,22 @@ function stake_pool_data_test() {
     }
     console.log("Tested invalid margin_ratio_per_thousand successfully");
   }
+}
+
+function produce_block_from_stake_test() {
+  const output = encode_output_produce_block_from_stake(
+    POOL_ID,
+    ADDRESS,
+    Network.Testnet
+  );
+  const expected_output = [
+    4, 1, 91, 58, 110, 176, 100, 207, 6, 194, 41, 193, 30, 91, 4, 195,
+    202, 103, 207, 80, 217, 178, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0
+  ];
+
+  assert_eq_arrays(output, expected_output);
 }
 
 function coin_burn_test() {

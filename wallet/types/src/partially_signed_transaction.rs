@@ -32,15 +32,22 @@ use tx_verifier::input_check::signature_only_check::SignatureOnlyVerifiable;
 use utils::ensure;
 
 #[derive(Error, Debug, Clone, PartialEq, Eq)]
-pub enum PartiallySignedTransactionCreationError {
+pub enum PartiallySignedTransactionError {
     #[error("Failed to convert partially signed tx to signed")]
     FailedToConvertPartiallySignedTx(PartiallySignedTransaction),
+
     #[error("Failed to create transaction: {0}")]
-    TxCreationError(#[from] TransactionCreationError),
+    TxCreationError(TransactionCreationError),
+
+    #[error("The number of witnesses does not match the number of inputs")]
+    InvalidWitnessCount,
+
     #[error("The number of input utxos does not match the number of inputs")]
     InvalidInputUtxosCount,
+
     #[error("The number of destinations does not match the number of inputs")]
     InvalidDestinationsCount,
+
     #[error("The number of htlc secrets does not match the number of inputs")]
     InvalidHtlcSecretsCount,
 }
@@ -82,28 +89,19 @@ impl TxAdditionalInfo {
         }
     }
 
-    pub fn with_token_info(token_id: TokenId, info: TokenAdditionalInfo) -> Self {
-        Self {
-            token_info: BTreeMap::from([(token_id, info)]),
-            pool_info: BTreeMap::new(),
-            order_info: BTreeMap::new(),
-        }
+    pub fn with_token_info(mut self, token_id: TokenId, info: TokenAdditionalInfo) -> Self {
+        self.token_info.insert(token_id, info);
+        self
     }
 
-    pub fn with_pool_info(pool_id: PoolId, info: PoolAdditionalInfo) -> Self {
-        Self {
-            token_info: BTreeMap::new(),
-            pool_info: BTreeMap::from([(pool_id, info)]),
-            order_info: BTreeMap::new(),
-        }
+    pub fn with_pool_info(mut self, pool_id: PoolId, info: PoolAdditionalInfo) -> Self {
+        self.pool_info.insert(pool_id, info);
+        self
     }
 
-    pub fn with_order_info(order_id: OrderId, info: OrderAdditionalInfo) -> Self {
-        Self {
-            token_info: BTreeMap::new(),
-            pool_info: BTreeMap::new(),
-            order_info: BTreeMap::from([(order_id, info)]),
-        }
+    pub fn with_order_info(mut self, order_id: OrderId, info: OrderAdditionalInfo) -> Self {
+        self.order_info.insert(order_id, info);
+        self
     }
 
     pub fn add_token_info(&mut self, token_id: TokenId, info: TokenAdditionalInfo) {
@@ -154,7 +152,7 @@ impl PartiallySignedTransaction {
         destinations: Vec<Option<Destination>>,
         htlc_secrets: Option<Vec<Option<HtlcSecret>>>,
         additional_info: TxAdditionalInfo,
-    ) -> Result<Self, PartiallySignedTransactionCreationError> {
+    ) -> Result<Self, PartiallySignedTransactionError> {
         let htlc_secrets = htlc_secrets.unwrap_or_else(|| vec![None; tx.inputs().len()]);
 
         let this = Self {
@@ -171,25 +169,25 @@ impl PartiallySignedTransaction {
         Ok(this)
     }
 
-    pub fn ensure_consistency(&self) -> Result<(), PartiallySignedTransactionCreationError> {
+    pub fn ensure_consistency(&self) -> Result<(), PartiallySignedTransactionError> {
         ensure!(
             self.tx.inputs().len() == self.witnesses.len(),
-            TransactionCreationError::InvalidWitnessCount
+            PartiallySignedTransactionError::InvalidWitnessCount
         );
 
         ensure!(
             self.tx.inputs().len() == self.input_utxos.len(),
-            PartiallySignedTransactionCreationError::InvalidInputUtxosCount,
+            PartiallySignedTransactionError::InvalidInputUtxosCount,
         );
 
         ensure!(
             self.tx.inputs().len() == self.destinations.len(),
-            PartiallySignedTransactionCreationError::InvalidDestinationsCount
+            PartiallySignedTransactionError::InvalidDestinationsCount
         );
 
         ensure!(
             self.tx.inputs().len() == self.htlc_secrets.len(),
-            PartiallySignedTransactionCreationError::InvalidHtlcSecretsCount
+            PartiallySignedTransactionError::InvalidHtlcSecretsCount
         );
 
         Ok(())
@@ -242,14 +240,13 @@ impl PartiallySignedTransaction {
             })
     }
 
-    pub fn into_signed_tx(
-        self,
-    ) -> Result<SignedTransaction, PartiallySignedTransactionCreationError> {
+    pub fn into_signed_tx(self) -> Result<SignedTransaction, PartiallySignedTransactionError> {
         if self.all_signatures_available() {
             let witnesses = self.witnesses.into_iter().map(|w| w.expect("cannot fail")).collect();
-            Ok(SignedTransaction::new(self.tx, witnesses)?)
+            Ok(SignedTransaction::new(self.tx, witnesses)
+                .map_err(PartiallySignedTransactionError::TxCreationError)?)
         } else {
-            Err(PartiallySignedTransactionCreationError::FailedToConvertPartiallySignedTx(self))
+            Err(PartiallySignedTransactionError::FailedToConvertPartiallySignedTx(self))
         }
     }
 

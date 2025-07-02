@@ -32,7 +32,7 @@
 use std::{num::NonZeroU8, str::FromStr};
 
 use bip39::Language;
-use gloo_utils::format::JsValueSerdeExt as _;
+use itertools::Itertools as _;
 use wasm_bindgen::prelude::*;
 
 use common::{
@@ -54,7 +54,7 @@ use common::{
                 },
                 htlc::produce_uniparty_signature_for_htlc_input,
                 standard_signature::StandardInputSignature,
-                InputWitness, InputWitnessTag,
+                InputWitness,
             },
             sighash::signature_hash,
         },
@@ -79,7 +79,7 @@ use serialization::{Decode, DecodeAll, Encode};
 use crate::{
     error::Error,
     types::{Amount, Network, SignatureHashType, SourceId},
-    utils::{decode_raw_array, parse_addressable},
+    utils::{decode_raw_array, extract_htlc_spend, parse_addressable},
 };
 
 mod encode_input;
@@ -332,22 +332,17 @@ pub fn make_transaction_intent_message_to_sign(
 ///
 /// Parameters:
 /// `signed_message` - this must have been produced by `make_transaction_intent_message_to_sign`.
-/// `signatures` - this should be an array of arrays of bytes, each of them representing an individual signature
+/// `signatures` - this should be an array of Uint8Array, each of them representing an individual signature
 /// of `signed_message` produced by `sign_challenge` using the private key for the corresponding input destination
 /// of the transaction. The number of signatures must be equal to the number of inputs in the transaction.
 #[wasm_bindgen]
 pub fn encode_signed_transaction_intent(
     signed_message: &[u8],
-    // Note: we could also accept it as `Vec<JsValue>` where the inner JsValue would represent `Vec<u8>`.
-    // But such "semi-structured" approach doesn't make much sense (and accepting `Vec<Vec<u8>>` directly is not allowed).
-    signatures: &JsValue,
+    signatures: Vec<js_sys::Uint8Array>,
 ) -> Result<Vec<u8>, Error> {
     let signed_message_str = String::from_utf8(signed_message.to_owned())
         .map_err(|_| Error::SignedTransactionIntentMessageIsNotAValidUtf8String)?;
-    let signatures: Vec<Vec<u8>> =
-        signatures.into_serde().map_err(|err| Error::JsValueNotArrayOfArraysOfBytes {
-            error: err.to_string(),
-        })?;
+    let signatures = signatures.iter().map(js_sys::Uint8Array::to_vec).collect_vec();
 
     let signed_intent =
         SignedTransactionIntent::from_components_unchecked(signed_message_str, signatures);
@@ -633,22 +628,14 @@ pub fn extract_htlc_secret(
         })
         .ok_or(Error::NoInputOutpointFound)?;
 
-    match tx.signatures().get(htlc_position).ok_or(Error::InvalidWitnessCount)? {
-        InputWitness::NoSignature(_) => {
-            Err(Error::UnexpectedWitnessType(InputWitnessTag::NoSignature))
-        }
-        InputWitness::Standard(sig) => {
-            let htlc_spend = AuthorizedHashedTimelockContractSpend::from_data(sig.raw_signature())
-                .map_err(Error::HtlcSpendCreationError)?;
-            match htlc_spend {
-                AuthorizedHashedTimelockContractSpend::Secret(secret, _) => Ok(secret.encode()),
-                AuthorizedHashedTimelockContractSpend::Multisig(_) => {
-                    Err(Error::UnexpectedHtlcSpendType(
-                        AuthorizedHashedTimelockContractSpendTag::Multisig,
-                    ))
-                }
-            }
-        }
+    let (htlc_spend, _) =
+        extract_htlc_spend(tx.signatures().get(htlc_position).ok_or(Error::InvalidWitnessCount)?)?;
+
+    match htlc_spend {
+        AuthorizedHashedTimelockContractSpend::Secret(secret, _) => Ok(secret.encode()),
+        AuthorizedHashedTimelockContractSpend::Multisig(_) => Err(Error::UnexpectedHtlcSpendType(
+            AuthorizedHashedTimelockContractSpendTag::Multisig,
+        )),
     }
 }
 
@@ -704,8 +691,11 @@ pub fn encode_witness_no_signature() -> Vec<u8> {
     InputWitness::NoSignature(None).encode()
 }
 
-/// Given a private key, inputs and an input number to sign, and the destination that owns that output (through the utxo),
-/// and a network type (mainnet, testnet, etc), this function returns a witness to be used in a signed transaction, as bytes.
+/// Sign the specified input of the transaction and encode the signature as InputWitness.
+///
+/// `input_utxos` must be formed as follows: for each transaction input, emit byte 0 if it's a non-UTXO input,
+/// otherwise emit 1 followed by the corresponding transaction output encoded via the appropriate "encode_output_"
+/// function.
 #[wasm_bindgen]
 pub fn encode_witness(
     sighashtype: SignatureHashType,
@@ -748,6 +738,8 @@ pub fn encode_witness(
 
 /// Given a private key, inputs and an input number to sign, and the destination that owns that output (through the utxo),
 /// and a network type (mainnet, testnet, etc), and an htlc secret this function returns a witness to be used in a signed transaction, as bytes.
+///
+/// `input_utxos` have the same format as in `encode_witness`.
 #[allow(clippy::too_many_arguments)]
 #[wasm_bindgen]
 pub fn encode_witness_htlc_secret(
@@ -757,7 +749,7 @@ pub fn encode_witness_htlc_secret(
     transaction: &[u8],
     input_utxos: &[u8],
     input_index: u32,
-    mut secret: &[u8],
+    secret: &[u8],
     network: Network,
 ) -> Result<Vec<u8>, Error> {
     let chain_config = Builder::new(network.into()).build();
@@ -775,7 +767,8 @@ pub fn encode_witness_htlc_secret(
 
     let utxos = input_utxos.iter().map(Option::as_ref).collect::<Vec<_>>();
 
-    let secret = HtlcSecret::decode_all(&mut secret).map_err(Error::InvalidHtlcSecretEncoding)?;
+    let secret =
+        HtlcSecret::decode_all(&mut &secret[..]).map_err(Error::InvalidHtlcSecretEncoding)?;
 
     let witness = produce_uniparty_signature_for_htlc_input(
         &private_key,
@@ -815,19 +808,41 @@ pub fn encode_multisig_challenge(
     Ok(challenge.encode())
 }
 
+/// Produce a multisig address given a multisig challenge.
+#[wasm_bindgen]
+pub fn multisig_challenge_to_address(
+    multisig_challenge: &[u8],
+    network: Network,
+) -> Result<String, Error> {
+    let chain_config = Builder::new(network.into()).build();
+
+    let challenge = ClassicMultisigChallenge::decode_all(&mut &multisig_challenge[..])
+        .map_err(Error::InvalidMultisigChallengeEncoding)?;
+
+    let pkh: PublicKeyHash = (&challenge).into();
+    let destination = Destination::ClassicMultisig(pkh);
+    let address = Address::new(&chain_config, destination)
+        .expect("Should not fail to create address")
+        .to_string();
+
+    Ok(address)
+}
+
 /// Given a private key, inputs and an input number to sign, and multisig challenge,
 /// and a network type (mainnet, testnet, etc), this function returns a witness to be used in a signed transaction, as bytes.
 ///
 /// `key_index` parameter is an index of a public key in the challenge, against which is the signature produces from private key is to be verified.
 /// `input_witness` parameter can be either empty or a result of previous calls to this function.
+///
+/// `input_utxos` have the same format as in `encode_witness`.
 #[allow(clippy::too_many_arguments)]
 #[wasm_bindgen]
 pub fn encode_witness_htlc_multisig(
     sighashtype: SignatureHashType,
     private_key: &[u8],
     key_index: u8,
-    mut input_witness: &[u8],
-    mut multisig_challenge: &[u8],
+    input_witness: &[u8],
+    multisig_challenge: &[u8],
     transaction: &[u8],
     input_utxos: &[u8],
     input_index: u32,
@@ -850,31 +865,22 @@ pub fn encode_witness_htlc_multisig(
         .map_err(Error::SighashCalculationError)?;
 
     let mut rng = randomness::make_true_rng();
-    let challenge = ClassicMultisigChallenge::decode_all(&mut multisig_challenge)
+    let challenge = ClassicMultisigChallenge::decode_all(&mut &multisig_challenge[..])
         .map_err(Error::InvalidMultisigChallengeEncoding)?;
     let authorization = if !input_witness.is_empty() {
-        let input_witness =
-            InputWitness::decode_all(&mut input_witness).map_err(Error::InvalidWitnessEncoding)?;
+        let input_witness = InputWitness::decode_all(&mut &input_witness[..])
+            .map_err(Error::InvalidWitnessEncoding)?;
+        let (htlc_spend, _) = extract_htlc_spend(&input_witness)?;
 
-        match input_witness {
-            InputWitness::NoSignature(_) => {
-                return Err(Error::UnexpectedWitnessType(InputWitnessTag::NoSignature))
+        match htlc_spend {
+            AuthorizedHashedTimelockContractSpend::Secret(_, _) => {
+                return Err(Error::UnexpectedHtlcSpendType(
+                    AuthorizedHashedTimelockContractSpendTag::Secret,
+                ));
             }
-            InputWitness::Standard(sig) => {
-                let htlc_spend =
-                    AuthorizedHashedTimelockContractSpend::from_data(sig.raw_signature())
-                        .map_err(Error::HtlcSpendCreationError)?;
-                match htlc_spend {
-                    AuthorizedHashedTimelockContractSpend::Secret(_, _) => {
-                        return Err(Error::UnexpectedHtlcSpendType(
-                            AuthorizedHashedTimelockContractSpendTag::Secret,
-                        ));
-                    }
-                    AuthorizedHashedTimelockContractSpend::Multisig(raw_signature) => {
-                        AuthorizedClassicalMultisigSpend::from_data(&raw_signature)
-                            .map_err(Error::MultisigSpendCreationError)?
-                    }
-                }
+            AuthorizedHashedTimelockContractSpend::Multisig(raw_signature) => {
+                AuthorizedClassicalMultisigSpend::from_data(&raw_signature)
+                    .map_err(Error::MultisigSpendCreationError)?
             }
         }
     } else {

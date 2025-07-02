@@ -21,8 +21,9 @@ import {
   get_pool_id,
   get_transaction_id,
   effective_pool_balance,
+  encode_multisig_challenge,
   make_default_account_privkey,
-  make_private_key,
+  multisig_challenge_to_address,
   Network,
   pubkey_to_pubkeyhash_address,
   public_key_from_private_key,
@@ -34,6 +35,8 @@ import {
 } from "../../pkg/wasm_wrappers.js";
 
 import {
+  assert_eq_arrays,
+  assert_eq_vals,
   gen_random_int,
   get_err_msg,
   run_one_test,
@@ -41,8 +44,11 @@ import {
 } from "./utils.js";
 
 import {
-  get_predefined_prv_key,
-  get_predefined_pub_key,
+  generate_prv_key,
+  get_predefined_random_prv_key,
+  get_predefined_random_pub_key,
+  PUB_KEY_A,
+  PUB_KEY_B,
 } from "./defs.js";
 import {
   INPUTS,
@@ -60,11 +66,12 @@ export function test_misc() {
   run_one_test(test_get_pool_id);
   run_one_test(test_effective_pool_balance);
   run_one_test(test_get_transaction_id);
+  run_one_test(test_multisig_challenge);
 }
 
 function test_verify_signature_for_spending() {
-  const prv_key = get_predefined_prv_key();
-  const pub_key = get_predefined_pub_key();
+  const prv_key = get_predefined_random_prv_key();
+  const pub_key = get_predefined_random_pub_key();
   const message = TEXT_ENCODER.encode("Hello, world!");
 
   const signature = sign_message_for_spending(prv_key, message);
@@ -114,8 +121,8 @@ function test_make_default_account_privkey_from_bad_mnemonic() {
 }
 
 function test_sign_challenge() {
-  const prv_key = get_predefined_prv_key();
-  const pub_key = get_predefined_pub_key();
+  const prv_key = get_predefined_random_prv_key();
+  const pub_key = get_predefined_random_pub_key();
   const message = TEXT_ENCODER.encode("Hello, world!");
 
   let challenge = sign_challenge(prv_key, message);
@@ -125,7 +132,7 @@ function test_sign_challenge() {
     throw new Error("Invalid sing and verify challenge");
   }
 
-  const different_priv_key = make_private_key();
+  const different_priv_key = generate_prv_key("different_priv_key");
   const different_pub_key = public_key_from_private_key(different_priv_key);
   let different_address = pubkey_to_pubkeyhash_address(different_pub_key, Network.Testnet);
   try {
@@ -380,4 +387,20 @@ function test_get_transaction_id() {
       }
     }
   }
+}
+
+function test_multisig_challenge() {
+  let challenge = encode_multisig_challenge(Uint8Array.from([...PUB_KEY_A, ...PUB_KEY_B]), 2, Network.Testnet);
+  let expected_challenge = [
+    2, 8, 0, 2, 204, 229, 50, 59, 113, 11, 253, 127, 50, 216, 85, 175,
+    139, 202, 118, 28, 122, 51, 91, 43, 137, 206, 188, 119, 57, 86, 49, 215,
+    37, 5, 134, 195, 0, 3, 68, 225, 99, 228, 45, 76, 242, 134, 151, 216,
+    99, 225, 215, 59, 77, 101, 3, 191, 248, 212, 205, 172, 178, 252, 65, 140,
+    255, 213, 205, 49, 234, 81
+  ]
+  assert_eq_arrays(challenge, expected_challenge);
+
+  let address = multisig_challenge_to_address(challenge, Network.Testnet);
+  let expected_address = "tmtc1q3a9qcp92m6elfgruz30xz50a46ze0gtnqu23lv3";
+  assert_eq_vals(address, expected_address);
 }

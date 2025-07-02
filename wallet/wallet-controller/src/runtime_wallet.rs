@@ -1258,6 +1258,7 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
         order_info: RpcOrderInfo,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
+        additional_info: TxAdditionalInfo,
     ) -> WalletResult<SignedTxWithFees> {
         match self {
             RuntimeWallet::Software(w) => w.create_freeze_order_tx(
@@ -1266,6 +1267,7 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
                 order_info,
                 current_fee_rate,
                 consolidate_fee_rate,
+                additional_info,
             ),
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => w.create_freeze_order_tx(
@@ -1274,6 +1276,7 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
                 order_info,
                 current_fee_rate,
                 consolidate_fee_rate,
+                additional_info,
             ),
         }
     }

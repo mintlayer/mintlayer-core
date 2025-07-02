@@ -176,6 +176,9 @@ pub fn encode_output_delegate_staking(
 /// this function returns an output that creates that staking pool.
 /// Note that the pool id is mandated to be taken from the hash of the first input.
 /// It is not arbitrary.
+///
+/// Note: a UTXO of this kind is consumed when decommissioning a pool (provided that the pool
+/// never staked).
 #[wasm_bindgen]
 pub fn encode_output_create_stake_pool(
     pool_id: &str,
@@ -188,6 +191,25 @@ pub fn encode_output_create_stake_pool(
         .map_err(Error::InvalidStakePoolDataEncoding)?;
 
     let output = TxOutput::CreateStakePool(pool_id, Box::new(pool_data));
+    Ok(output.encode())
+}
+
+/// Given a pool id and a staker address, this function returns an output that is emitted
+/// when producing a block via that pool.
+///
+/// Note: a UTXO of this kind is consumed when decommissioning a pool (provided that the pool
+/// has staked at least once).
+#[wasm_bindgen]
+pub fn encode_output_produce_block_from_stake(
+    pool_id: &str,
+    staker: &str,
+    network: Network,
+) -> Result<Vec<u8>, Error> {
+    let chain_config = Builder::new(network.into()).build();
+    let pool_id = parse_addressable(&chain_config, pool_id)?;
+    let staker = parse_addressable(&chain_config, staker)?;
+
+    let output = TxOutput::ProduceBlockFromStake(staker, pool_id);
     Ok(output.encode())
 }
 

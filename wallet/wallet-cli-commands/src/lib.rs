@@ -536,8 +536,8 @@ pub enum WalletCommand {
         number_of_decimals: u8,
         /// URI for data related to the token (website, media, etc)
         metadata_uri: String,
-        /// The address of the receiver of this token
-        destination_address: String,
+        /// The address of the authority who will be able to manage this token
+        authority_address: String,
         /// The total supply of this token
         token_supply: String,
         /// Whether it's possible to centrally freeze this token for all users (due to migration requirements, for example)

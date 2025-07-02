@@ -11,20 +11,22 @@ rust-version.workspace = true
 crate-type = ["cdylib"]
 
 [dependencies]
+common = { path = "../common" }
 consensus = { path = "../consensus" }
 crypto = { path = "../crypto" }
 randomness = { path = "../randomness" }
 serialization = { path = "../serialization" }
-common = { path = "../common" }
 tx-verifier = { path = "../chainstate/tx-verifier" }
 
 bip39 = { workspace = true, default-features = false, features = ["std", "zeroize"] }
 fixed-hash.workspace = true
+itertools.workspace = true
 thiserror.workspace = true
 
 # This crate is required for rand to work with wasm. See: https://docs.rs/getrandom/latest/getrandom/#webassembly-support
 getrandom = { version = "0.2", features = ["js"] }
 gloo-utils = "0.2"
+js-sys = "0.3"
 wasm-bindgen = "0.2"
 # web-sys provides `console::log` and is useful during debugging.
 web-sys = { version = "0.3", features = ["console"] }

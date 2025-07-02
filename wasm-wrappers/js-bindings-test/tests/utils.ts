@@ -17,6 +17,10 @@ export const TEXT_ENCODER = new TextEncoder();
 
 type AnyArray = any[] | Uint8Array;
 
+export function assert_eq_vals(val1: any, val2: any) {
+  assert(val1 == val2, `val1 ${val1} differs from val2 ${val2}`)
+}
+
 export function assert_eq_arrays(arr1: AnyArray, arr2: AnyArray) {
   const equal = arr1.length == arr2.length && arr1.every((value, index) => value == arr2[index]);
 
