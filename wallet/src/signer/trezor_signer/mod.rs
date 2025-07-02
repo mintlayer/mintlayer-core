@@ -18,6 +18,8 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use itertools::{izip, Itertools};
+
 use common::{
     address::Address,
     chain::{
@@ -57,7 +59,6 @@ use crypto::key::{
     signature::SignatureKind,
     PrivateKey, SigAuxDataProvider, Signature, SignatureError,
 };
-use itertools::Itertools;
 use randomness::make_true_rng;
 use serialization::Encode;
 use trezor_client::{
@@ -506,14 +507,15 @@ impl Signer for TrezorSigner {
 
         let inputs_utxo_refs: Vec<_> = ptx.input_utxos().iter().map(|u| u.as_ref()).collect();
 
-        let (witnesses, prev_statuses, new_statuses) = itertools::process_results(ptx
-            .witnesses()
-            .iter()
+        let (witnesses, prev_statuses, new_statuses) = itertools::process_results(
+            izip!(
+                ptx.witnesses(),
+                ptx.input_utxos(),
+                ptx.destinations(),
+                ptx.htlc_secrets()
+            )
             .enumerate()
-            .zip(ptx.input_utxos())
-            .zip(ptx.destinations())
-            .zip(ptx.htlc_secrets())
-            .map(|((((input_index, witness), input_utxo), destination), secret)| -> SignerResult<_> {
+            .map(|(input_index, (witness, input_utxo, destination, secret))| -> SignerResult<_> {
                 let is_htlc_input = input_utxo.as_ref().is_some_and(is_htlc_utxo);
                 let make_witness = |sig: StandardInputSignature| {
                     let sig = if is_htlc_input {
