@@ -38,9 +38,7 @@ use common::{
         Destination, GenBlock, OrderAccountCommand, OrderData, OrderId, OutPointSourceId, PoolId,
         SignedTransactionIntent, Transaction, TxInput, TxOutput,
     },
-    primitives::{
-        amount::UnsignedIntType, per_thousand::PerThousand, Amount, BlockHeight, Id, Idable, H256,
-    },
+    primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, Idable, H256},
 };
 use crypto::{
     key::{hdkd::u31::U31, KeyKind, PrivateKey},
@@ -288,7 +286,7 @@ pub fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
     let standalone_pk_destination = Destination::PublicKey(standalone_pk.clone());
 
     let amounts: Vec<Amount> = (0..(2 + rng.next_u32() % 5))
-        .map(|_| Amount::from_atoms(rng.gen_range(10..100) as UnsignedIntType))
+        .map(|_| Amount::from_atoms(rng.gen_range(10..100)))
         .collect();
 
     let total_amount = amounts.iter().fold(Amount::ZERO, |acc, a| acc.add(*a).unwrap());

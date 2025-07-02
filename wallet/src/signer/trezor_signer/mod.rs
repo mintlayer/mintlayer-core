@@ -18,6 +18,8 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use itertools::{izip, Itertools};
+
 use common::{
     address::Address,
     chain::{
@@ -57,7 +59,6 @@ use crypto::key::{
     signature::SignatureKind,
     PrivateKey, SigAuxDataProvider, Signature, SignatureError,
 };
-use itertools::Itertools;
 use randomness::make_true_rng;
 use serialization::Encode;
 use trezor_client::{
@@ -260,7 +261,7 @@ impl TrezorSigner {
         sighash_type: SigHashType,
         sighash: H256,
         key_chain: &impl AccountKeyChains,
-        add_secret_if_needed: F,
+        make_witness: F,
         sign_with_standalone_private_key: F2,
     ) -> SignerResult<(Option<InputWitness>, SignatureStatus)>
     where
@@ -284,10 +285,7 @@ impl TrezorSigner {
                     )
                     .map_err(TrezorError::SignatureError)?;
                     let sig = AuthorizedPublicKeyHashSpend::new(pk, sig);
-                    let sig = add_secret_if_needed(StandardInputSignature::new(
-                        sighash_type,
-                        sig.encode(),
-                    ));
+                    let sig = make_witness(StandardInputSignature::new(sighash_type, sig.encode()));
 
                     Ok((Some(sig), SignatureStatus::FullySigned))
                 } else {
@@ -309,10 +307,7 @@ impl TrezorSigner {
                     )
                     .map_err(TrezorError::SignatureError)?;
                     let sig = AuthorizedPublicKeySpend::new(sig);
-                    let sig = add_secret_if_needed(StandardInputSignature::new(
-                        sighash_type,
-                        sig.encode(),
-                    ));
+                    let sig = make_witness(StandardInputSignature::new(sighash_type, sig.encode()));
 
                     Ok((Some(sig), SignatureStatus::FullySigned))
                 } else {
@@ -341,7 +336,7 @@ impl TrezorSigner {
                         sighash,
                     )?;
 
-                    let sig = add_secret_if_needed(StandardInputSignature::new(
+                    let sig = make_witness(StandardInputSignature::new(
                         sighash_type,
                         current_signatures.encode(),
                     ));
@@ -512,24 +507,32 @@ impl Signer for TrezorSigner {
 
         let inputs_utxo_refs: Vec<_> = ptx.input_utxos().iter().map(|u| u.as_ref()).collect();
 
-        let (witnesses, prev_statuses, new_statuses) = itertools::process_results(ptx
-            .witnesses()
-            .iter()
+        let (witnesses, prev_statuses, new_statuses) = itertools::process_results(
+            izip!(
+                ptx.witnesses(),
+                ptx.input_utxos(),
+                ptx.destinations(),
+                ptx.htlc_secrets()
+            )
             .enumerate()
-            .zip(ptx.destinations())
-            .zip(ptx.htlc_secrets())
-            .map(|(((input_index, witness), destination), secret)| -> SignerResult<_> {
-                let add_secret_if_needed = |sig: StandardInputSignature| {
-                    let sig = if let Some(htlc_secret) = secret {
+            .map(|(input_index, (witness, input_utxo, destination, secret))| -> SignerResult<_> {
+                let is_htlc_input = input_utxo.as_ref().is_some_and(is_htlc_utxo);
+                let make_witness = |sig: StandardInputSignature| {
+                    let sig = if is_htlc_input {
                         let sighash_type = sig.sighash_type();
-                        let sig_with_secret = AuthorizedHashedTimelockContractSpend::Secret(
-                            htlc_secret.clone(),
-                            sig.into_raw_signature(),
-                        );
-                        let serialized_sig = sig_with_secret.encode();
+                        let spend = if let Some(htlc_secret) = secret {
+                            AuthorizedHashedTimelockContractSpend::Secret(
+                                htlc_secret.clone(),
+                                sig.into_raw_signature(),
+                            )
+                        } else {
+                            AuthorizedHashedTimelockContractSpend::Multisig(sig.into_raw_signature())
+                        };
 
-                        StandardInputSignature::new(sighash_type, serialized_sig)
-                    } else {
+                        let serialized_spend = spend.encode();
+                        StandardInputSignature::new(sighash_type, serialized_spend)
+                    }
+                    else {
                         sig
                     };
 
@@ -579,10 +582,19 @@ impl Signer for TrezorSigner {
                                         input_index,
                                     )?;
 
-                                    let current_signatures =
-                                        AuthorizedClassicalMultisigSpend::from_data(
-                                            sig.raw_signature(),
-                                        )?;
+                                    let current_signatures = if is_htlc_input {
+                                        let htlc_spend = AuthorizedHashedTimelockContractSpend::from_data(sig.raw_signature())?;
+                                        match htlc_spend {
+                                            AuthorizedHashedTimelockContractSpend::Secret(_, _) => {
+                                                return Err(SignerError::HtlcMultisigDestinationExpected);
+                                            },
+                                            AuthorizedHashedTimelockContractSpend::Multisig(raw_sig) => {
+                                                AuthorizedClassicalMultisigSpend::from_data(&raw_sig)?
+                                            },
+                                        }
+                                    } else {
+                                        AuthorizedClassicalMultisigSpend::from_data(sig.raw_signature())?
+                                    };
 
                                     let previous_status = SignatureStatus::PartialMultisig {
                                         required_signatures: current_signatures
@@ -607,7 +619,7 @@ impl Signer for TrezorSigner {
                                         )?;
 
                                     let sighash_type = SigHashType::all();
-                                    let sig = add_secret_if_needed(StandardInputSignature::new(
+                                    let sig = make_witness(StandardInputSignature::new(
                                         sighash_type,
                                         current_signatures.encode(),
                                     ));
@@ -639,7 +651,7 @@ impl Signer for TrezorSigner {
                                 sighash_type,
                                 sighash,
                                 key_chain,
-                                add_secret_if_needed,
+                                make_witness,
                                 sign_with_standalone_private_key,
                             )?;
                             Ok((sig, SignatureStatus::NotSigned, status))
@@ -1838,6 +1850,24 @@ fn single_signature(
             Ok(Some(single))
         }
         _ => Err(TrezorError::MultipleSignaturesReturned),
+    }
+}
+
+fn is_htlc_utxo(utxo: &TxOutput) -> bool {
+    match utxo {
+        TxOutput::Htlc(_, _) => true,
+
+        TxOutput::Transfer(_, _)
+        | TxOutput::LockThenTransfer(_, _, _)
+        | TxOutput::Burn(_)
+        | TxOutput::CreateStakePool(_, _)
+        | TxOutput::ProduceBlockFromStake(_, _)
+        | TxOutput::CreateDelegationId(_, _)
+        | TxOutput::DelegateStaking(_, _)
+        | TxOutput::IssueFungibleToken(_)
+        | TxOutput::IssueNft(_, _, _)
+        | TxOutput::DataDeposit(_)
+        | TxOutput::CreateOrder(_) => false,
     }
 }
 
