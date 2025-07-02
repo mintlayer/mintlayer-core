@@ -19,7 +19,7 @@ use std::{
     sync::Arc,
 };
 
-use itertools::izip;
+use itertools::{izip, Itertools as _};
 
 use common::{
     chain::{
@@ -669,7 +669,14 @@ pub fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
         assert_eq!(ptx, another_ptx);
     }
 
-    let utxos_ref = utxos
+    let input_commitments = ptx
+        .make_sighash_input_commitments()
+        .unwrap()
+        .into_iter()
+        .map(|comm| comm.deep_clone())
+        .collect_vec();
+
+    let all_utxos = utxos
         .iter()
         .map(Some)
         .chain([Some(&htlc_utxo), Some(&multisig_utxo)])
@@ -683,8 +690,9 @@ pub fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
                 &chain_config,
                 dest,
                 &ptx,
-                &utxos_ref,
+                &input_commitments,
                 i,
+                all_utxos[i].cloned(),
             )
             .unwrap_err();
             assert_eq!(
@@ -701,8 +709,9 @@ pub fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
                 &chain_config,
                 dest,
                 &ptx,
-                &utxos_ref,
+                &input_commitments,
                 i,
+                all_utxos[i].cloned(),
             )
             .unwrap();
         }
@@ -729,8 +738,9 @@ pub fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
             &chain_config,
             dest,
             &ptx,
-            &utxos_ref,
+            &input_commitments,
             i,
+            all_utxos[i].cloned(),
         )
         .unwrap();
     }

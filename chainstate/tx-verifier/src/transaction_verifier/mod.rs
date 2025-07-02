@@ -1019,13 +1019,14 @@ where
         total_fees: Fee,
         median_time_past: BlockTimestamp,
     ) -> Result<(), ConnectTransactionError> {
+        let block_height = block_index.block_height();
+        let block_id = *block_index.block_id();
+
         // TODO: test spending block rewards from chains outside the mainchain
         if reward_transactable.inputs().is_some() {
             let tx_source = TransactionSourceForConnect::for_chain(block_index);
             self.verify_inputs(&reward_transactable, &tx_source, median_time_past)?;
         }
-
-        let block_id = *block_index.block_id();
 
         // spend inputs of the block reward
         // if block reward has no inputs then only outputs will be added to the utxo set
@@ -1049,7 +1050,7 @@ where
             ConsensusData::PoS(pos_data) => {
                 // distribute reward among staker and delegators
                 let block_subsidy =
-                    self.chain_config.as_ref().block_subsidy_at_height(&block_index.block_height());
+                    self.chain_config.as_ref().block_subsidy_at_height(&block_height);
                 let total_reward = (block_subsidy + total_fees.0)
                     .ok_or(ConnectTransactionError::RewardAdditionError(block_id))?;
 
@@ -1061,7 +1062,7 @@ where
                         .chain_config
                         .as_ref()
                         .chainstate_upgrades()
-                        .version_at_height(block_index.block_height())
+                        .version_at_height(block_height)
                         .1
                         .reward_distribution_version();
 

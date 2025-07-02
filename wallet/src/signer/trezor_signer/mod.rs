@@ -42,7 +42,9 @@ use common::{
                 standard_signature::StandardInputSignature,
                 InputWitness,
             },
-            sighash::{sighashtype::SigHashType, signature_hash},
+            sighash::{
+                input_commitments::SighashInputCommitment, sighashtype::SigHashType, signature_hash,
+            },
             DestinationSigError,
         },
         timelock::OutputTimeLock,
@@ -505,7 +507,7 @@ impl Signer for TrezorSigner {
             key_chain,
         )?;
 
-        let inputs_utxo_refs: Vec<_> = ptx.input_utxos().iter().map(|u| u.as_ref()).collect();
+        let input_commitments = ptx.make_sighash_input_commitments()?;
 
         let (witnesses, prev_statuses, new_statuses) = itertools::process_results(
             izip!(
@@ -545,11 +547,13 @@ impl Signer for TrezorSigner {
                         standalone,
                         destination,
                         &ptx,
-                        &inputs_utxo_refs,
+                        &input_commitments,
                         input_index,
                         self.sig_aux_data_provider.lock().expect("poisoned mutex").as_mut()
                     )
                 };
+
+                let input_utxo = &ptx.input_utxos()[input_index];
 
                 match witness {
                     Some(w) => match w {
@@ -564,8 +568,9 @@ impl Signer for TrezorSigner {
                                     &self.chain_config,
                                     destination,
                                     &ptx,
-                                    &inputs_utxo_refs,
+                                    &input_commitments,
                                     input_index,
+                                    input_utxo.clone()
                                 )
                                 .is_ok()
                                 {
@@ -578,7 +583,7 @@ impl Signer for TrezorSigner {
                                     let sighash = signature_hash(
                                         sig.sighash_type(),
                                         ptx.tx(),
-                                        &inputs_utxo_refs,
+                                        &input_commitments,
                                         input_index,
                                     )?;
 
@@ -643,7 +648,7 @@ impl Signer for TrezorSigner {
                     None => match (destination, new_signatures.get(input_index)) {
                         (Some(destination), Some(sig)) => {
                             let sighash_type = SigHashType::all();
-                            let sighash = signature_hash(sighash_type, ptx.tx(), &inputs_utxo_refs, input_index)?;
+                            let sighash = signature_hash(sighash_type, ptx.tx(), &input_commitments, input_index)?;
                             let (sig, status) = self.make_signature(
                                 sig,
                                 standalone_inputs.get(&(input_index as u32)).map_or(&[], |x| x.as_slice()),
@@ -668,7 +673,7 @@ impl Signer for TrezorSigner {
                                 standalone,
                                 destination,
                                 &ptx,
-                                &inputs_utxo_refs,
+                                &input_commitments,
                                 input_index,
                                 self.sig_aux_data_provider.lock().expect("poisoned mutex").as_mut()
                             )?;
@@ -816,7 +821,7 @@ fn sign_input_with_standalone_key<AuxP: SigAuxDataProvider + ?Sized>(
     standalone: &StandaloneInput,
     destination: &Destination,
     ptx: &PartiallySignedTransaction,
-    inputs_utxo_refs: &[Option<&TxOutput>],
+    input_commitments: &[SighashInputCommitment],
     input_index: usize,
     sig_aux_data_provider: &mut AuxP,
 ) -> SignerResult<InputWitness> {
@@ -827,7 +832,7 @@ fn sign_input_with_standalone_key<AuxP: SigAuxDataProvider + ?Sized>(
             sighash_type,
             destination.clone(),
             ptx.tx(),
-            inputs_utxo_refs,
+            input_commitments,
             input_index,
             htlc_secret.clone(),
             sig_aux_data_provider,
@@ -837,7 +842,7 @@ fn sign_input_with_standalone_key<AuxP: SigAuxDataProvider + ?Sized>(
             sighash_type,
             destination.clone(),
             ptx.tx(),
-            inputs_utxo_refs,
+            input_commitments,
             input_index,
             sig_aux_data_provider,
         ),

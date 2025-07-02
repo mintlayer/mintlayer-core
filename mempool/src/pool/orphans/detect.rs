@@ -39,7 +39,11 @@ impl OrphanType {
             CTE::InputCheck(e) => match e.error() {
                 // Missing UTXO signifies a possible orphan
                 ICE::MissingUtxo(_) => Ok(Self::MissingUtxo),
-                ICE::UtxoView(_) | ICE::Translation(_) | ICE::Verification(_) => Err(err),
+                | ICE::NonUtxoKernelInput(_)
+                | ICE::UtxoView(_)
+                | ICE::UtxoInfoProvider(_)
+                | ICE::Translation(_)
+                | ICE::Verification(_) => Err(err),
             },
 
             // These do not

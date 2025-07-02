@@ -30,7 +30,7 @@ use crate::{
     utils::{
         assert_block_index_opt_identical_to, assert_gen_block_index_identical_to,
         assert_gen_block_index_opt_identical_to, find_create_pool_tx_in_genesis,
-        outputs_from_block, outputs_from_genesis,
+        outputs_from_block, outputs_from_genesis, SighashInputCommitmentInfoProvider,
     },
     BlockBuilder, TestChainstate, TestFrameworkBuilder, TestStore, TxVerificationStrategy,
 };
@@ -40,8 +40,9 @@ use chainstate_types::{
 };
 use common::{
     chain::{
-        Block, ChainConfig, GenBlock, GenBlockId, Genesis, OutPointSourceId, PoolId, TxOutput,
-        UtxoOutPoint,
+        signature::sighash::{self, input_commitments::SighashInputCommitment},
+        Block, ChainConfig, GenBlock, GenBlockId, Genesis, OutPointSourceId, PoolId, TxInput,
+        TxOutput, UtxoOutPoint,
     },
     primitives::{id::WithId, time::Time, Amount, BlockHeight, Id, Idable},
     time_getter::TimeGetter,
@@ -49,7 +50,7 @@ use common::{
 use crypto::{key::PrivateKey, vrf::VRFPrivateKey};
 use randomness::{CryptoRng, Rng};
 use utils::atomics::SeqCstAtomicU64;
-use utxo::Utxo;
+use utxo::{Utxo, UtxosDB};
 
 /// The `Chainstate` wrapper that simplifies operations and checks in the tests.
 #[must_use]
@@ -581,6 +582,20 @@ impl TestFramework {
                     .map(|epoch_data| *epoch_data.randomness())
             })
             .unwrap_or(PoSRandomness::new(chain_config.initial_randomness()))
+    }
+
+    pub fn make_sighash_input_commitments_for_transaction_inputs(
+        &self,
+        inputs: &[TxInput],
+    ) -> Vec<SighashInputCommitment<'static>> {
+        let storage_tx = self.storage.transaction_ro().unwrap();
+        let utxo_db = UtxosDB::new(&storage_tx);
+
+        sighash::input_commitments::make_sighash_input_commitments_for_transaction_inputs(
+            inputs,
+            &SighashInputCommitmentInfoProvider(&utxo_db),
+        )
+        .unwrap()
     }
 
     pub fn best_block_height(&self) -> BlockHeight {

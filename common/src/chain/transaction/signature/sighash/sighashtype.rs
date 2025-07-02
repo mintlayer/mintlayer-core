@@ -24,9 +24,14 @@ use super::DestinationSigError;
 pub struct SigHashType(u8);
 
 impl SigHashType {
+    // Signature commits all inputs (unless ANYONECANPAY is set) and all outputs.
     pub const ALL: u8 = 0x01;
+    // Signature commits all inputs (unless ANYONECANPAY is set) and none of the outputs.
     pub const NONE: u8 = 0x02;
+    // Signature commits all inputs (unless ANYONECANPAY is set) and only the one output
+    // with the same index as the input being signed.
     pub const SINGLE: u8 = 0x03;
+    // If set, instead of committing all inputs the signature only commits the input being signed.
     pub const ANYONECANPAY: u8 = 0x80;
 
     const MASK_OUT: u8 = 0x7f;

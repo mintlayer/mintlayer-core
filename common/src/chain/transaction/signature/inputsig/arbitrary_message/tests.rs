@@ -13,11 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
+
 use rstest::rstest;
 
 use chain::signature::{
     inputsig::{standard_signature::StandardInputSignature, InputWitness},
+    sighash::input_commitments::SighashInputCommitment,
     sighash::{sighashtype::SigHashType, signature_hash},
+    tests::utils::verify_signature,
     tests::utils::{generate_input_utxo, generate_unsigned_tx},
 };
 use crypto::{
@@ -353,26 +357,18 @@ fn verify_corrupted_signature(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn signing_transactions_shouldnt_work(#[case] seed: Seed) {
-    use crate::chain::signature::tests::utils::verify_signature;
-
+fn signing_transactions_should_not_work(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
     let chain_config = chain::config::create_testnet();
 
     let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
-    let (input_utxo, _) = generate_input_utxo(&mut rng);
+    let input_utxo = generate_input_utxo(&mut rng);
     let destination = Destination::PublicKey(public_key.clone());
     let sighash_type =
         SigHashType::try_from(SigHashType::NONE | SigHashType::ANYONECANPAY).unwrap();
 
-    let tx = generate_unsigned_tx(
-        &mut rng,
-        &Destination::AnyoneCanSpend,
-        &[Some(input_utxo.clone())],
-        1,
-    )
-    .unwrap();
+    let tx = generate_unsigned_tx(&mut rng, &Destination::AnyoneCanSpend, 1, 1).unwrap();
 
     let unhashed_tx_data_to_sign = {
         let mut data = Vec::<u8>::new();
@@ -393,7 +389,13 @@ fn signing_transactions_shouldnt_work(#[case] seed: Seed) {
     // Sanity check - if we sign tx_data_hash normally, it will actually produce a correct
     // transaction signature.
     {
-        let expected_hash = signature_hash(sighash_type, &tx, &[Some(&input_utxo)], 0).unwrap();
+        let expected_hash = signature_hash(
+            sighash_type,
+            &tx,
+            &[SighashInputCommitment::Utxo(Cow::Borrowed(&input_utxo))],
+            0,
+        )
+        .unwrap();
         assert_eq!(tx_data_hash, expected_hash);
 
         let raw_sig = sign_public_key_spending(&private_key, &public_key, &tx_data_hash, &mut rng)
@@ -409,7 +411,7 @@ fn signing_transactions_shouldnt_work(#[case] seed: Seed) {
             &destination,
             &signed_tx,
             &signed_tx.signatures()[0],
-            &[Some(&input_utxo)],
+            &[SighashInputCommitment::Utxo(Cow::Borrowed(&input_utxo))],
             0,
         )
         .unwrap();
@@ -436,7 +438,7 @@ fn signing_transactions_shouldnt_work(#[case] seed: Seed) {
         &destination,
         &signed_tx,
         &signed_tx.signatures()[0],
-        &[Some(&input_utxo)],
+        &[SighashInputCommitment::Utxo(Cow::Borrowed(&input_utxo))],
         0,
     )
     .unwrap_err();

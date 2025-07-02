@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+use std::{borrow::Cow, sync::Arc};
 
 use chainstate::{
     chainstate_interface::ChainstateInterface, make_chainstate, BlockError,
@@ -36,7 +36,7 @@ use common::{
         output_value::OutputValue,
         signature::{
             inputsig::{standard_signature::StandardInputSignature, InputWitness},
-            sighash::sighashtype::SigHashType,
+            sighash::{input_commitments::SighashInputCommitment, sighashtype::SigHashType},
             DestinationSigError,
         },
         signed_transaction::SignedTransaction,
@@ -1461,7 +1461,9 @@ fn spend_timelocked_signed_output(#[case] seed: Seed) {
                     SigHashType::all(),
                     Destination::PublicKey(public_key.clone()),
                     &tx_2,
-                    &[Some(&tx_1.transaction().outputs()[0])],
+                    &[SighashInputCommitment::Utxo(Cow::Borrowed(
+                        &tx_1.transaction().outputs()[0],
+                    ))],
                     0,
                     &mut rng,
                 )
@@ -1515,7 +1517,9 @@ fn spend_timelocked_signed_output(#[case] seed: Seed) {
                     SigHashType::all(),
                     Destination::PublicKey(random_public_key),
                     &tx_2,
-                    &[Some(&tx_1.transaction().outputs()[0])],
+                    &[SighashInputCommitment::Utxo(Cow::Borrowed(
+                        &tx_1.transaction().outputs()[0],
+                    ))],
                     0,
                     &mut rng,
                 )
@@ -1543,7 +1547,7 @@ fn spend_timelocked_signed_output(#[case] seed: Seed) {
                 SigHashType::all(),
                 Destination::PublicKey(public_key),
                 &tx_2,
-                &[Some(&tx_1.transaction().outputs()[0])],
+                &[SighashInputCommitment::Utxo(Cow::Borrowed(&tx_1.transaction().outputs()[0]))],
                 0,
                 &mut rng,
             )

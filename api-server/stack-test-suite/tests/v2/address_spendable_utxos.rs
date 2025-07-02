@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeMap, sync::RwLock};
+use std::{borrow::Cow, collections::BTreeMap, sync::RwLock};
 
 use api_web_server::{api::json_helpers::utxo_outpoint_to_json, CachedValues};
 use common::{chain::UtxoOutPoint, primitives::time::get_time};
@@ -128,7 +128,7 @@ async fn multiple_utxos_to_single_address(#[case] seed: Seed) {
                         SigHashType::all(),
                         alice_destination.clone(),
                         &transaction,
-                        &[Some(&previous_tx_out)],
+                        &[SighashInputCommitment::Utxo(Cow::Borrowed(&previous_tx_out))],
                         0,
                         &mut rng,
                     )
@@ -203,7 +203,7 @@ async fn multiple_utxos_to_single_address(#[case] seed: Seed) {
                         SigHashType::all(),
                         alice_destination.clone(),
                         &transaction,
-                        &[Some(&previous_tx_out)],
+                        &[SighashInputCommitment::Utxo(Cow::Borrowed(&previous_tx_out))],
                         0,
                         &mut rng,
                     )
@@ -377,7 +377,7 @@ async fn ok(#[case] seed: Seed) {
                         SigHashType::all(),
                         alice_destination.clone(),
                         &transaction,
-                        &[Some(&previous_tx_out)],
+                        &[SighashInputCommitment::Utxo(Cow::Borrowed(&previous_tx_out))],
                         0,
                         &mut rng,
                     )
@@ -445,7 +445,7 @@ async fn ok(#[case] seed: Seed) {
                             SigHashType::all(),
                             alice_destination.clone(),
                             &transaction,
-                            &[Some(&previous_tx_out)],
+                            &[SighashInputCommitment::Utxo(Cow::Borrowed(&previous_tx_out))],
                             0,
                             &mut rng,
                         )

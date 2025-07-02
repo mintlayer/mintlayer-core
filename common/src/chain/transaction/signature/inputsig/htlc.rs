@@ -18,7 +18,10 @@ use serialization::Encode;
 
 use standard_signature::StandardInputSignature;
 
-use crate::chain::{htlc::HtlcSecret, ChainConfig, Destination, Transaction, TxOutput};
+use crate::chain::{
+    htlc::HtlcSecret, signature::sighash::input_commitments::SighashInputCommitment, ChainConfig,
+    Destination, Transaction,
+};
 
 use super::{
     super::sighash::sighashtype::SigHashType,
@@ -33,7 +36,7 @@ pub fn produce_uniparty_signature_for_htlc_input<T: Signable, AuxP: SigAuxDataPr
     sighash_type: SigHashType,
     outpoint_destination: Destination,
     tx: &T,
-    inputs_utxos: &[Option<&TxOutput>],
+    input_commitments: &[SighashInputCommitment],
     input_num: usize,
     htlc_secret: HtlcSecret,
     sig_aux_data_provider: &mut AuxP,
@@ -43,7 +46,7 @@ pub fn produce_uniparty_signature_for_htlc_input<T: Signable, AuxP: SigAuxDataPr
         sighash_type,
         outpoint_destination,
         tx,
-        inputs_utxos,
+        input_commitments,
         input_num,
         sig_aux_data_provider,
     )?;
@@ -63,7 +66,7 @@ pub fn produce_classical_multisig_signature_for_htlc_input(
     authorization: &AuthorizedClassicalMultisigSpend,
     sighash_type: SigHashType,
     tx: &Transaction,
-    inputs_utxos: &[Option<&TxOutput>],
+    input_commitments: &[SighashInputCommitment],
     input_num: usize,
 ) -> Result<StandardInputSignature, DestinationSigError> {
     let sig = StandardInputSignature::produce_classical_multisig_signature_for_input(
@@ -71,7 +74,7 @@ pub fn produce_classical_multisig_signature_for_htlc_input(
         authorization,
         sighash_type,
         tx,
-        inputs_utxos,
+        input_commitments,
         input_num,
     )?;
 

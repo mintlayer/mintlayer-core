@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use rstest::rstest;
+
 use chainstate::{BlockError, ChainstateError, ConnectTransactionError, IOPolicyError};
 use chainstate_storage::Transactional;
 use chainstate_test_framework::{
@@ -27,6 +29,7 @@ use common::{
         output_value::OutputValue,
         signature::{
             inputsig::{standard_signature::StandardInputSignature, InputWitness},
+            sighash::input_commitments::SighashInputCommitment,
             DestinationSigError,
         },
         stakelock::StakePoolData,
@@ -42,7 +45,6 @@ use crypto::{
 };
 use pos_accounting::{DelegationData, PoSAccountingStorageRead};
 use randomness::{CryptoRng, Rng};
-use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 use tx_verifier::error::{InputCheckError, ScriptError};
 
@@ -921,9 +923,6 @@ fn check_signature_on_spend_share(#[case] seed: Seed) {
             ))
         );
 
-        let inputs_utxos = [None];
-        let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
-
         // Try to spend share with wrong signature
         let tx = {
             let tx = spend_share_tx_no_signature.transaction().clone();
@@ -934,7 +933,7 @@ fn check_signature_on_spend_share(#[case] seed: Seed) {
                 Default::default(),
                 Destination::PublicKey(some_pk),
                 &tx,
-                &inputs_utxos_refs,
+                &[SighashInputCommitment::None],
                 0,
                 &mut rng,
             )
@@ -964,7 +963,7 @@ fn check_signature_on_spend_share(#[case] seed: Seed) {
                 Default::default(),
                 Destination::PublicKey(delegation_pk),
                 &tx,
-                &inputs_utxos_refs,
+                &[SighashInputCommitment::None],
                 0,
                 &mut rng,
             )

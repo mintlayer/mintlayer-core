@@ -13,14 +13,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chainstate::{BlockError, ChainstateError, ConnectTransactionError, IOPolicyError};
-use chainstate::{BlockSource, CheckBlockError};
+use rstest::rstest;
+
+use chainstate::{
+    BlockError, BlockSource, ChainstateError, CheckBlockError, ConnectTransactionError,
+    IOPolicyError,
+};
 use chainstate_test_framework::{
     anyonecanspend_address, create_stake_pool_data_with_all_reward_to_staker, empty_witness,
     get_output_value, TestFramework, TransactionBuilder,
 };
 use chainstate_types::TipStorageTag;
-use common::primitives::BlockHeight;
 use common::{
     chain::{
         output_value::OutputValue,
@@ -34,7 +37,7 @@ use common::{
         AccountCommand, AccountNonce, Destination, GenBlock, OutPointSourceId, PoolId,
         SignedTransaction, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{per_thousand::PerThousand, Amount, CoinOrTokenId, Id, Idable},
+    primitives::{per_thousand::PerThousand, Amount, BlockHeight, CoinOrTokenId, Id, Idable},
 };
 use crypto::{
     key::{KeyKind, PrivateKey},
@@ -42,7 +45,6 @@ use crypto::{
 };
 use pos_accounting::PoSAccountingStorageRead;
 use randomness::Rng;
-use rstest::rstest;
 use test_utils::{
     nft_utils::random_token_issuance_v1,
     random::{make_seedable_rng, Seed},
@@ -737,9 +739,8 @@ fn decommission_from_stake_pool_with_staker_key(#[case] seed: Seed) {
             .build_and_process(&mut rng)
             .unwrap();
 
-        let (best_block_source_id, best_block_utxos) =
+        let (best_block_source_id, _) =
             tf.outputs_from_genblock(tf.best_block_id()).into_iter().next().unwrap();
-        let inputs_utxos = best_block_utxos.iter().map(Some).collect::<Vec<_>>();
 
         {
             // sign with staking key
@@ -757,13 +758,15 @@ fn decommission_from_stake_pool_with_staker_key(#[case] seed: Seed) {
                     .build()
                     .transaction()
                     .clone();
+                let input_commitments =
+                    tf.make_sighash_input_commitments_for_transaction_inputs(tx.inputs());
 
                 let staking_sig = StandardInputSignature::produce_uniparty_signature_for_input(
                     &staking_sk,
                     Default::default(),
                     Destination::PublicKey(staking_pk),
                     &tx,
-                    &inputs_utxos,
+                    &input_commitments,
                     0,
                     &mut rng,
                 )
@@ -803,13 +806,15 @@ fn decommission_from_stake_pool_with_staker_key(#[case] seed: Seed) {
                 .build()
                 .transaction()
                 .clone();
+            let input_commitments =
+                tf.make_sighash_input_commitments_for_transaction_inputs(tx.inputs());
 
             let decommission_sig = StandardInputSignature::produce_uniparty_signature_for_input(
                 &decommission_sk,
                 Default::default(),
                 Destination::PublicKey(decommission_pk),
                 &tx,
-                &inputs_utxos,
+                &input_commitments,
                 0,
                 &mut rng,
             )

@@ -30,7 +30,7 @@ impl crate::SignatureContext for EmptyContext {
         unreachable!()
     }
 
-    fn input_utxos(&self) -> &[Option<&common::chain::TxOutput>] {
+    fn input_commitments(&self) -> &[SighashInputCommitment] {
         unreachable!()
     }
 

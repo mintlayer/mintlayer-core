@@ -37,8 +37,10 @@ use wallet_storage::{
     WalletStorageReadLocked, WalletStorageReadUnlocked, WalletStorageWriteUnlocked,
 };
 use wallet_types::{
-    hw_data::HardwareWalletData, partially_signed_transaction::PartiallySignedTransaction,
-    signature_status::SignatureStatus, AccountId,
+    hw_data::HardwareWalletData,
+    partially_signed_transaction::{PartiallySignedTransaction, PartiallySignedTransactionError},
+    signature_status::SignatureStatus,
+    AccountId,
 };
 
 use crate::{
@@ -95,6 +97,8 @@ pub enum SignerError {
     OrderFillUnderflow,
     #[error("Multisig HTLC destination expected")]
     HtlcMultisigDestinationExpected,
+    #[error("Partially signed transaction error: {0}")]
+    PartiallySignedTransactionError(#[from] PartiallySignedTransactionError),
 }
 
 type SignerResult<T> = Result<T, SignerError>;

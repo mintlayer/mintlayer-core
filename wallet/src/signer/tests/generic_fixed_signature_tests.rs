@@ -15,7 +15,7 @@
 
 use std::{num::NonZeroU8, sync::Arc};
 
-use itertools::izip;
+use itertools::{izip, Itertools as _};
 
 use common::{
     chain::{
@@ -346,7 +346,8 @@ where
     let (ptx, _, _) = signer.sign_tx(orig_ptx, account.key_chain(), &db_tx).unwrap();
     assert!(ptx.all_signatures_available());
 
-    let utxos_ref = utxos
+    let input_commitments = ptx.make_sighash_input_commitments().unwrap();
+    let all_utxos = utxos
         .iter()
         .map(Some)
         .chain([Some(&multisig_utxo)])
@@ -358,8 +359,9 @@ where
             &chain_config,
             dest,
             &ptx,
-            &utxos_ref,
+            &input_commitments,
             i,
+            all_utxos[i].cloned(),
         )
         .unwrap();
     }
@@ -760,7 +762,7 @@ where
         .with_inputs_and_destinations(acc_inputs.into_iter().zip(acc_dests.clone()))
         .with_outputs(outputs);
     let destinations = req.destinations().to_vec();
-    let utxos_ref = utxos
+    let all_utxos = utxos
         .iter()
         .map(Some)
         .chain([Some(&htlc1_utxo), Some(&htlc2_utxo), Some(&multisig_utxo)])
@@ -789,6 +791,13 @@ where
         );
     let ptx = req.into_partially_signed_tx(additional_info).unwrap();
 
+    let input_commitments = ptx
+        .make_sighash_input_commitments()
+        .unwrap()
+        .into_iter()
+        .map(|comm| comm.deep_clone())
+        .collect_vec();
+
     let mut signer = make_signer(chain_config.clone(), account1.account_index());
     let (ptx, _, _) = signer.sign_tx(ptx, account1.key_chain(), &db_tx).unwrap();
     assert!(ptx.all_signatures_available());
@@ -811,8 +820,9 @@ where
             &chain_config,
             dest,
             &ptx,
-            &utxos_ref,
+            &input_commitments,
             i,
+            all_utxos[i].cloned(),
         )
         .unwrap();
     }

@@ -13,53 +13,195 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use itertools::Itertools;
+use std::borrow::Cow;
 
-use crypto::key::{KeyKind, PrivateKey, PublicKey};
-use randomness::{CryptoRng, Rng};
+use itertools::Itertools;
+use strum::IntoEnumIterator as _;
+
+use crypto::{
+    key::{KeyKind, PrivateKey, PublicKey},
+    vrf::{VRFKeyKind, VRFPrivateKey, VRFPublicKey},
+};
+use randomness::{seq::IteratorRandom as _, CryptoRng, Rng};
 use script::Script;
+use test_utils::{random::gen_random_bytes, random_ascii_alphanumeric_string};
 
 use crate::{
     address::pubkeyhash::PublicKeyHash,
     chain::{
         self,
+        htlc::{HashedTimelockContract, HtlcSecretHash},
         output_value::OutputValue,
         signature::{
             inputsig::{standard_signature::StandardInputSignature, InputWitness},
-            sighash::sighashtype::SigHashType,
+            sighash::{
+                input_commitments::{SighashInputCommitment, SighashInputCommitmentTag},
+                sighashtype::SigHashType,
+            },
             DestinationSigError, EvaluatedInputWitness, Signable,
         },
         signed_transaction::SignedTransaction,
-        AccountNonce, AccountSpending, ChainConfig, DelegationId, Destination, Transaction,
-        TransactionCreationError, TxInput, TxOutput,
+        stakelock::StakePoolData,
+        timelock::OutputTimeLock,
+        tokens::{
+            IsTokenFreezable, Metadata, NftIssuance, NftIssuanceV0, TokenId, TokenIssuance,
+            TokenIssuanceV1, TokenTotalSupply,
+        },
+        AccountNonce, AccountSpending, ChainConfig, DelegationId, Destination, OrderData, PoolId,
+        Transaction, TransactionCreationError, TxInput, TxOutput, TxOutputTag,
     },
-    primitives::{amount::UnsignedIntType, Amount, Id, H256},
+    primitives::{amount::UnsignedIntType, per_thousand::PerThousand, Amount, Id, H256},
 };
 
-pub fn generate_input_utxo(
+fn make_random_output_value(rng: &mut (impl Rng + CryptoRng)) -> OutputValue {
+    if rng.gen::<bool>() {
+        OutputValue::Coin(Amount::from_atoms(rng.gen()))
+    } else {
+        OutputValue::TokenV1(H256(rng.gen()).into(), Amount::from_atoms(rng.gen()))
+    }
+}
+
+fn make_random_destination(rng: &mut (impl Rng + CryptoRng)) -> Destination {
+    Destination::PublicKey(make_random_pub_key(rng))
+}
+
+fn make_random_pub_key(rng: &mut (impl Rng + CryptoRng)) -> PublicKey {
+    PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr).1
+}
+
+fn make_random_vrf_pub_key(rng: &mut (impl Rng + CryptoRng)) -> VRFPublicKey {
+    VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel).1
+}
+
+pub fn generate_input_utxo_for_tag(rng: &mut (impl Rng + CryptoRng), tag: TxOutputTag) -> TxOutput {
+    match tag {
+        TxOutputTag::Transfer => {
+            TxOutput::Transfer(make_random_output_value(rng), make_random_destination(rng))
+        }
+        TxOutputTag::LockThenTransfer => TxOutput::LockThenTransfer(
+            make_random_output_value(rng),
+            make_random_destination(rng),
+            OutputTimeLock::ForBlockCount(rng.gen()),
+        ),
+        TxOutputTag::Burn => TxOutput::Burn(make_random_output_value(rng)),
+        TxOutputTag::CreateStakePool => {
+            let pool_id = PoolId::random_using(rng);
+            let pool_data = StakePoolData::new(
+                Amount::from_atoms(rng.gen()),
+                make_random_destination(rng),
+                make_random_vrf_pub_key(rng),
+                make_random_destination(rng),
+                PerThousand::new(rng.gen_range(0..=1000)).unwrap(),
+                Amount::from_atoms(rng.gen()),
+            );
+            TxOutput::CreateStakePool(pool_id, Box::new(pool_data))
+        }
+        TxOutputTag::ProduceBlockFromStake => {
+            TxOutput::ProduceBlockFromStake(make_random_destination(rng), PoolId::random_using(rng))
+        }
+        TxOutputTag::CreateDelegationId => {
+            TxOutput::CreateDelegationId(make_random_destination(rng), PoolId::random_using(rng))
+        }
+        TxOutputTag::DelegateStaking => TxOutput::DelegateStaking(
+            Amount::from_atoms(rng.gen()),
+            DelegationId::random_using(rng),
+        ),
+        TxOutputTag::IssueFungibleToken => {
+            let issuance = TokenIssuance::V1(TokenIssuanceV1 {
+                token_ticker: random_ascii_alphanumeric_string(rng, 3..5).into_bytes(),
+                number_of_decimals: rng.gen(),
+                metadata_uri: random_ascii_alphanumeric_string(rng, 10..20).into_bytes(),
+                total_supply: TokenTotalSupply::Fixed(Amount::from_atoms(rng.gen())),
+                authority: make_random_destination(rng),
+                is_freezable: IsTokenFreezable::Yes,
+            });
+            TxOutput::IssueFungibleToken(Box::new(issuance))
+        }
+        TxOutputTag::IssueNft => {
+            let token_id = TokenId::random_using(rng);
+            let metadata = Metadata {
+                creator: Some(make_random_pub_key(rng).into()),
+                name: random_ascii_alphanumeric_string(rng, 10..20).into_bytes(),
+                description: random_ascii_alphanumeric_string(rng, 10..20).into_bytes(),
+                ticker: random_ascii_alphanumeric_string(rng, 10..20).into_bytes(),
+                icon_uri: Some(random_ascii_alphanumeric_string(rng, 10..20).into_bytes()).into(),
+                additional_metadata_uri: Some(
+                    random_ascii_alphanumeric_string(rng, 10..20).into_bytes(),
+                )
+                .into(),
+                media_uri: Some(random_ascii_alphanumeric_string(rng, 10..20).into_bytes()).into(),
+                media_hash: gen_random_bytes(rng, 10, 20),
+            };
+            let issuance = NftIssuance::V0(NftIssuanceV0 { metadata });
+            let destination = make_random_destination(rng);
+            TxOutput::IssueNft(token_id, Box::new(issuance), destination)
+        }
+        TxOutputTag::DataDeposit => TxOutput::DataDeposit(gen_random_bytes(rng, 10, 20)),
+        TxOutputTag::Htlc => {
+            let htlc = HashedTimelockContract {
+                secret_hash: HtlcSecretHash::random_using(rng),
+                spend_key: make_random_destination(rng),
+                refund_timelock: OutputTimeLock::ForBlockCount(rng.gen()),
+                refund_key: make_random_destination(rng),
+            };
+            TxOutput::Htlc(make_random_output_value(rng), Box::new(htlc))
+        }
+        TxOutputTag::CreateOrder => {
+            let order_data = OrderData::new(
+                make_random_destination(rng),
+                make_random_output_value(rng),
+                make_random_output_value(rng),
+            );
+            TxOutput::CreateOrder(Box::new(order_data))
+        }
+    }
+}
+
+pub fn generate_input_utxo(rng: &mut (impl Rng + CryptoRng)) -> TxOutput {
+    let tag = TxOutputTag::iter().choose(rng).unwrap();
+    generate_input_utxo_for_tag(rng, tag)
+}
+
+pub fn generate_input_commitment_for_tag(
     rng: &mut (impl Rng + CryptoRng),
-) -> (TxOutput, crypto::key::PrivateKey) {
-    let (private_key, public_key) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
-    let destination = Destination::PublicKey(public_key);
-    let output_value = OutputValue::Coin(Amount::from_atoms(rng.next_u64() as u128));
-    let utxo = TxOutput::Transfer(output_value, destination);
-    (utxo, private_key)
+    tag: SighashInputCommitmentTag,
+) -> SighashInputCommitment<'static> {
+    match tag {
+        SighashInputCommitmentTag::None => SighashInputCommitment::None,
+        SighashInputCommitmentTag::Utxo => {
+            let utxo = generate_input_utxo(rng);
+            SighashInputCommitment::Utxo(Cow::Owned(utxo))
+        }
+    }
+}
+
+pub fn generate_input_commitment(
+    rng: &mut (impl Rng + CryptoRng),
+) -> SighashInputCommitment<'static> {
+    let tag = SighashInputCommitmentTag::iter().choose(rng).unwrap();
+    generate_input_commitment_for_tag(rng, tag)
+}
+
+pub fn generate_input_commitments(
+    rng: &mut (impl Rng + CryptoRng),
+    input_count: usize,
+) -> Vec<SighashInputCommitment<'static>> {
+    (0..input_count).map(|_| generate_input_commitment(rng)).collect()
 }
 
 pub fn generate_inputs_utxos(
     rng: &mut (impl Rng + CryptoRng),
     input_count: usize,
-) -> (Vec<Option<TxOutput>>, Vec<Option<PrivateKey>>) {
+) -> Vec<Option<TxOutput>> {
     (0..input_count)
         .map(|_| {
             if rng.gen::<bool>() {
-                let (utxo, priv_key) = generate_input_utxo(rng);
-                (Some(utxo), Some(priv_key))
+                Some(generate_input_utxo(rng))
             } else {
-                (None, None)
+                None
             }
         })
-        .unzip()
+        .collect_vec()
 }
 
 // This is required because we can't access private fields of the Transaction class
@@ -91,26 +233,33 @@ impl MutableTransaction {
     }
 }
 
+pub struct SignedTransactionWithInputCommitments {
+    pub tx: SignedTransaction,
+    pub input_commitments: Vec<SighashInputCommitment<'static>>,
+}
+
 pub fn generate_unsigned_tx(
     rng: &mut (impl Rng + CryptoRng),
     destination: &Destination,
-    inputs_utxos: &[Option<TxOutput>],
+    inputs_count: usize,
     outputs_count: usize,
 ) -> Result<Transaction, TransactionCreationError> {
-    let inputs = inputs_utxos
-        .iter()
-        .map(|utxo| match utxo {
-            Some(_) => TxInput::from_utxo(
-                Id::<Transaction>::new(H256::random_using(rng)).into(),
-                rng.gen(),
-            ),
-            None => TxInput::from_account(
-                AccountNonce::new(rng.gen()),
-                AccountSpending::DelegationBalance(
-                    DelegationId::new(H256::random_using(rng)),
-                    Amount::from_atoms(rng.gen()),
-                ),
-            ),
+    let inputs = (0..inputs_count)
+        .map(|_| {
+            if rng.gen_bool(0.5) {
+                TxInput::from_utxo(
+                    Id::<Transaction>::new(H256::random_using(rng)).into(),
+                    rng.gen(),
+                )
+            } else {
+                TxInput::from_account(
+                    AccountNonce::new(rng.gen()),
+                    AccountSpending::DelegationBalance(
+                        DelegationId::new(H256::random_using(rng)),
+                        Amount::from_atoms(rng.gen()),
+                    ),
+                )
+            }
         })
         .collect();
 
@@ -130,7 +279,7 @@ pub fn generate_unsigned_tx(
 pub fn sign_whole_tx(
     rng: &mut (impl Rng + CryptoRng),
     tx: Transaction,
-    inputs_utxos: &[Option<&TxOutput>],
+    input_commitments: &[SighashInputCommitment],
     private_key: &PrivateKey,
     sighash_type: SigHashType,
     destination: &Destination,
@@ -143,7 +292,7 @@ pub fn sign_whole_tx(
             make_signature(
                 rng,
                 &tx,
-                inputs_utxos,
+                input_commitments,
                 i,
                 private_key,
                 sighash_type,
@@ -160,38 +309,60 @@ pub fn generate_and_sign_tx(
     chain_config: &ChainConfig,
     rng: &mut (impl Rng + CryptoRng),
     destination: &Destination,
-    inputs_utxos: &[Option<TxOutput>],
-    outputs: usize,
+    input_commitments: &[SighashInputCommitment],
+    outputs_count: usize,
     private_key: &PrivateKey,
     sighash_type: SigHashType,
 ) -> Result<SignedTransaction, TransactionCreationError> {
-    let tx = generate_unsigned_tx(rng, destination, inputs_utxos, outputs).unwrap();
-    let inputs_utxos_refs = inputs_utxos.iter().map(|i| i.as_ref()).collect::<Vec<_>>();
+    let tx =
+        generate_unsigned_tx(rng, destination, input_commitments.len(), outputs_count).unwrap();
     let signed_tx = sign_whole_tx(
         rng,
         tx,
-        inputs_utxos_refs.as_slice(),
+        input_commitments,
         private_key,
         sighash_type,
         destination,
     )
     .unwrap();
     assert_eq!(
-        verify_signed_tx(
-            chain_config,
-            &signed_tx,
-            inputs_utxos_refs.as_slice(),
-            destination
-        ),
+        verify_signed_tx(chain_config, &signed_tx, input_commitments, destination),
         Ok(())
     );
     Ok(signed_tx)
 }
 
+pub fn generate_signed_tx_with_input_commitments(
+    chain_config: &ChainConfig,
+    rng: &mut (impl Rng + CryptoRng),
+    destination: &Destination,
+    inputs_count: usize,
+    outputs_count: usize,
+    private_key: &PrivateKey,
+    sighash_type: SigHashType,
+) -> Result<SignedTransactionWithInputCommitments, TransactionCreationError> {
+    let input_commitments = generate_input_commitments(rng, inputs_count);
+
+    let tx = generate_and_sign_tx(
+        chain_config,
+        rng,
+        destination,
+        &input_commitments,
+        outputs_count,
+        private_key,
+        sighash_type,
+    )?;
+
+    Ok(SignedTransactionWithInputCommitments {
+        tx,
+        input_commitments,
+    })
+}
+
 pub fn make_signature(
     rng: &mut (impl Rng + CryptoRng),
     tx: &Transaction,
-    inputs_utxos: &[Option<&TxOutput>],
+    input_commitments: &[SighashInputCommitment],
     input_num: usize,
     private_key: &PrivateKey,
     sighash_type: SigHashType,
@@ -202,7 +373,7 @@ pub fn make_signature(
         sighash_type,
         outpoint_dest,
         tx,
-        inputs_utxos,
+        input_commitments,
         input_num,
         rng,
     )?;
@@ -212,7 +383,7 @@ pub fn make_signature(
 pub fn verify_signed_tx(
     chain_config: &ChainConfig,
     tx: &SignedTransaction,
-    inputs_utxos: &[Option<&TxOutput>],
+    input_commitments: &[SighashInputCommitment],
     destination: &Destination,
 ) -> Result<(), DestinationSigError> {
     for i in 0..tx.inputs().len() {
@@ -221,7 +392,7 @@ pub fn verify_signed_tx(
             destination,
             tx,
             &tx.signatures()[i],
-            inputs_utxos,
+            input_commitments,
             i,
         )?
     }
@@ -262,8 +433,8 @@ pub fn verify_signature<T: Signable>(
     outpoint_destination: &Destination,
     tx: &T,
     input_witness: &InputWitness,
-    inputs_utxos: &[Option<&TxOutput>],
-    input_num: usize,
+    input_commitments: &[SighashInputCommitment],
+    input_index: usize,
 ) -> Result<(), DestinationSigError> {
     let eval_witness = match input_witness.clone() {
         InputWitness::NoSignature(d) => EvaluatedInputWitness::NoSignature(d),
@@ -274,7 +445,7 @@ pub fn verify_signature<T: Signable>(
         outpoint_destination,
         tx,
         &eval_witness,
-        inputs_utxos,
-        input_num,
+        input_commitments,
+        input_index,
     )
 }

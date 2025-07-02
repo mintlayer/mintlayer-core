@@ -19,7 +19,7 @@ pub struct MockContext<'a, C> {
     chain_config: C,
     input_num: usize,
     transaction: &'a SignedTransaction,
-    utxos: Vec<Option<&'a TxOutput>>,
+    input_commitments: Vec<SighashInputCommitment<'a>>,
     source_height: BlockHeight,
     spending_height: BlockHeight,
     source_time: BlockTimestamp,
@@ -27,25 +27,16 @@ pub struct MockContext<'a, C> {
 }
 
 impl<'a> MockContext<'a, ChainConfig> {
-    /// New mock context, all inputs have utxos.
+    /// New mock context
     pub fn new(
         input_num: usize,
         transaction: &'a SignedTransaction,
-        utxos: impl IntoIterator<Item = &'a TxOutput>,
-    ) -> Self {
-        Self::new_some_utxos(input_num, transaction, utxos.into_iter().map(Some))
-    }
-
-    /// New mock context, not all inputs have utxos.
-    pub fn new_some_utxos(
-        input_num: usize,
-        transaction: &'a SignedTransaction,
-        utxos: impl IntoIterator<Item = Option<&'a TxOutput>>,
+        input_commitments: Vec<SighashInputCommitment<'a>>,
     ) -> Self {
         Self {
             input_num,
             transaction,
-            utxos: utxos.into_iter().collect(),
+            input_commitments,
             source_height: BlockHeight::zero(),
             spending_height: BlockHeight::one(),
             source_time: BlockTimestamp::from_int_seconds(0),
@@ -74,7 +65,7 @@ impl<'a, C> MockContext<'a, C> {
             chain_config: _,
             input_num,
             transaction,
-            utxos,
+            input_commitments,
             source_height,
             spending_height,
             source_time,
@@ -85,7 +76,7 @@ impl<'a, C> MockContext<'a, C> {
             chain_config,
             input_num,
             transaction,
-            utxos,
+            input_commitments,
             source_height,
             spending_height,
             source_time,
@@ -115,8 +106,8 @@ impl<C: AsRef<ChainConfig>> crate::SignatureContext for MockContext<'_, C> {
         self.transaction
     }
 
-    fn input_utxos(&self) -> &[Option<&common::chain::TxOutput>] {
-        self.utxos.as_slice()
+    fn input_commitments(&self) -> &[SighashInputCommitment] {
+        self.input_commitments.as_slice()
     }
 
     fn input_num(&self) -> usize {
