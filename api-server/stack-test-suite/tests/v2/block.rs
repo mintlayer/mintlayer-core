@@ -157,7 +157,7 @@ async fn ok(#[case] seed: Seed) {
                     "transactions": block.transactions()
                                         .iter()
                                         .zip(tx_additional_data.iter())
-                                        .map(|(tx, additional_data)| tx_to_json(tx.transaction(), additional_data, tf.chain_config()))
+                                        .map(|(tx, additional_data)| tx_to_json(tx, additional_data, tf.chain_config()))
                                         .collect::<Vec<_>>(),
                 },
             });
@@ -209,7 +209,7 @@ async fn ok(#[case] seed: Seed) {
                     "transactions": block.transactions()
                                         .iter()
                                         .zip(tx_additional_data.iter())
-                                        .map(|(tx, additinal_data)| tx_to_json(tx.transaction(), additinal_data, tf.chain_config()))
+                                        .map(|(tx, additinal_data)| tx_to_json(tx, additinal_data, tf.chain_config()))
                                         .collect::<Vec<_>>(),
                 },
             });
