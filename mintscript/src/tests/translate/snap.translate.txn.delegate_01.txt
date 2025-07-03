@@ -1,1 +1,0 @@
-ERROR: Attempt to spend an unspendable output

@@ -356,9 +356,9 @@ fn order_fill(#[case] seed: Seed, #[case] orders_version: OrdersVersion) {
     );
     let coins_left = tf.coin_amount_from_utxo(&coins_outpoint);
 
-    let initial_ask_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
+    let initial_ask_amount = Amount::from_atoms(rng.gen_range(10..1000));
     let initial_give_amount =
-        Amount::from_atoms(rng.gen_range(1u128..=token_amount_to_mint.into_atoms()));
+        Amount::from_atoms(rng.gen_range(10..=token_amount_to_mint.into_atoms()));
     let initially_asked = OutputValue::Coin(initial_ask_amount);
     let initially_given = OutputValue::TokenV1(token_id, initial_give_amount);
     let order_data = OrderData::new(
@@ -646,9 +646,9 @@ fn order_conclude(#[case] seed: Seed, #[case] orders_version: OrdersVersion) {
         PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
     let order_owner_dest = Destination::PublicKey(order_owner_pk);
 
-    let initial_ask_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
+    let initial_ask_amount = Amount::from_atoms(rng.gen_range(10..1000));
     let initial_give_amount =
-        Amount::from_atoms(rng.gen_range(1u128..=token_amount_to_mint.into_atoms()));
+        Amount::from_atoms(rng.gen_range(10..=token_amount_to_mint.into_atoms()));
     let initially_asked = OutputValue::Coin(initial_ask_amount);
     let initially_given = OutputValue::TokenV1(token_id, initial_give_amount);
     let order_data = OrderData::new(

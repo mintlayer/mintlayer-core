@@ -1,4 +1,0 @@
-threshold(2, [
-    after_seconds(124),
-    signature(0x041c9bb73a209c49363022813e7197ac80c761d80b, 0x0101085454),
-])
