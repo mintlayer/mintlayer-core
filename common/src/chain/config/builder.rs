@@ -32,8 +32,8 @@ use crate::{
         ConsensusUpgrade, DataDepositFeeVersion, Destination, FrozenTokensValidationVersion,
         GenBlock, Genesis, HtlcActivated, NetUpgrades, OrdersActivated, OrdersVersion,
         PoSChainConfig, PoSConsensusVersion, PoWChainConfig, RewardDistributionVersion,
-        StakerDestinationUpdateForbidden, TokenIdGenerationVersion, TokenIssuanceVersion,
-        TokensFeeVersion,
+        SighashInputCommitmentVersion, StakerDestinationUpdateForbidden, TokenIdGenerationVersion,
+        TokenIssuanceVersion, TokensFeeVersion,
     },
     primitives::{
         id::WithId, per_thousand::PerThousand, semver::SemVer, Amount, BlockCount, BlockDistance,
@@ -82,6 +82,10 @@ const TESTNET_FORK_HEIGHT_4_ORDERS: BlockHeight = BlockHeight::new(325_180);
 // * prohibit updating the staker destination in ProduceBlockFromStake.
 const TESTNET_FORK_HEIGHT_5_ORDERS_V1: BlockHeight = BlockHeight::new(999_999_999);
 
+// The fork at which we switch to sighash input commitments v1.
+const TESTNET_FORK_HEIGHT_6_SIGHASH_INPUT_COMMITMENTS_V1: BlockHeight =
+    BlockHeight::new(1_999_999_999);
+
 // The fork at which:
 // * txs with htlc and order outputs become valid;
 // * data deposit fee and size are changed;
@@ -94,6 +98,10 @@ const MAINNET_FORK_HEIGHT_1_HTLC_AND_ORDERS: BlockHeight = BlockHeight::new(254_
 // * enable token id generation v1;
 // * prohibit updating the staker destination in ProduceBlockFromStake.
 const MAINNET_FORK_HEIGHT_2_ORDERS_V1: BlockHeight = BlockHeight::new(999_999_999);
+
+// The fork at which we switch to sighash input commitments v1.
+const MAINNET_FORK_HEIGHT_3_SIGHASH_INPUT_COMMITMENTS_V1: BlockHeight =
+    BlockHeight::new(1_999_999_999);
 
 impl ChainType {
     fn default_genesis_init(&self) -> GenesisBlockInit {
@@ -211,6 +219,7 @@ impl ChainType {
                 OrdersVersion::V0,
                 StakerDestinationUpdateForbidden::No,
                 TokenIdGenerationVersion::V0,
+                SighashInputCommitmentVersion::V0,
             ))
             .then(MAINNET_FORK_HEIGHT_1_HTLC_AND_ORDERS, |builder| {
                 builder
@@ -226,6 +235,12 @@ impl ChainType {
                     .staker_destination_update_forbidden(StakerDestinationUpdateForbidden::Yes)
                     .token_id_generation_version(TokenIdGenerationVersion::V1)
             })
+            .then(
+                MAINNET_FORK_HEIGHT_3_SIGHASH_INPUT_COMMITMENTS_V1,
+                |builder| {
+                    builder.sighash_input_commitment_version(SighashInputCommitmentVersion::V1)
+                },
+            )
             .build(),
             ChainType::Regtest | ChainType::Signet => {
                 let upgrades = vec![(
@@ -246,6 +261,7 @@ impl ChainType {
                 OrdersVersion::V0,
                 StakerDestinationUpdateForbidden::No,
                 TokenIdGenerationVersion::V0,
+                SighashInputCommitmentVersion::V0,
             ))
             .then(TESTNET_FORK_HEIGHT_1_TOKENS_V1, |builder| {
                 builder.token_issuance_version(TokenIssuanceVersion::V1)
@@ -275,6 +291,12 @@ impl ChainType {
                     .staker_destination_update_forbidden(StakerDestinationUpdateForbidden::Yes)
                     .token_id_generation_version(TokenIdGenerationVersion::V1)
             })
+            .then(
+                TESTNET_FORK_HEIGHT_6_SIGHASH_INPUT_COMMITMENTS_V1,
+                |builder| {
+                    builder.sighash_input_commitment_version(SighashInputCommitmentVersion::V1)
+                },
+            )
             .build(),
         }
     }
@@ -293,6 +315,7 @@ pub fn default_regtest_chainstate_upgrade_at_genesis() -> ChainstateUpgrade {
         OrdersVersion::V1,
         StakerDestinationUpdateForbidden::Yes,
         TokenIdGenerationVersion::V1,
+        SighashInputCommitmentVersion::V1,
     )
 }
 
@@ -751,6 +774,7 @@ mod tests {
                             OrdersVersion::V0,
                             StakerDestinationUpdateForbidden::No,
                             TokenIdGenerationVersion::V0,
+                            SighashInputCommitmentVersion::V0
                         ),
                     ),
                     (
@@ -767,6 +791,7 @@ mod tests {
                             OrdersVersion::V0,
                             StakerDestinationUpdateForbidden::No,
                             TokenIdGenerationVersion::V0,
+                            SighashInputCommitmentVersion::V0
                         ),
                     ),
                     (
@@ -783,6 +808,24 @@ mod tests {
                             OrdersVersion::V1,
                             StakerDestinationUpdateForbidden::Yes,
                             TokenIdGenerationVersion::V1,
+                            SighashInputCommitmentVersion::V0
+                        ),
+                    ),
+                    (
+                        MAINNET_FORK_HEIGHT_3_SIGHASH_INPUT_COMMITMENTS_V1,
+                        ChainstateUpgrade::new(
+                            TokenIssuanceVersion::V1,
+                            RewardDistributionVersion::V1,
+                            TokensFeeVersion::V1,
+                            DataDepositFeeVersion::V1,
+                            ChangeTokenMetadataUriActivated::Yes,
+                            FrozenTokensValidationVersion::V1,
+                            HtlcActivated::Yes,
+                            OrdersActivated::Yes,
+                            OrdersVersion::V1,
+                            StakerDestinationUpdateForbidden::Yes,
+                            TokenIdGenerationVersion::V1,
+                            SighashInputCommitmentVersion::V1
                         ),
                     ),
                 ])
@@ -811,6 +854,7 @@ mod tests {
                             OrdersVersion::V0,
                             StakerDestinationUpdateForbidden::No,
                             TokenIdGenerationVersion::V0,
+                            SighashInputCommitmentVersion::V0
                         ),
                     ),
                     (
@@ -827,6 +871,7 @@ mod tests {
                             OrdersVersion::V0,
                             StakerDestinationUpdateForbidden::No,
                             TokenIdGenerationVersion::V0,
+                            SighashInputCommitmentVersion::V0
                         ),
                     ),
                     (
@@ -843,6 +888,7 @@ mod tests {
                             OrdersVersion::V0,
                             StakerDestinationUpdateForbidden::No,
                             TokenIdGenerationVersion::V0,
+                            SighashInputCommitmentVersion::V0
                         ),
                     ),
                     (
@@ -859,6 +905,7 @@ mod tests {
                             OrdersVersion::V0,
                             StakerDestinationUpdateForbidden::No,
                             TokenIdGenerationVersion::V0,
+                            SighashInputCommitmentVersion::V0
                         ),
                     ),
                     (
@@ -875,6 +922,7 @@ mod tests {
                             OrdersVersion::V0,
                             StakerDestinationUpdateForbidden::No,
                             TokenIdGenerationVersion::V0,
+                            SighashInputCommitmentVersion::V0
                         ),
                     ),
                     (
@@ -891,6 +939,24 @@ mod tests {
                             OrdersVersion::V1,
                             StakerDestinationUpdateForbidden::Yes,
                             TokenIdGenerationVersion::V1,
+                            SighashInputCommitmentVersion::V0
+                        ),
+                    ),
+                    (
+                        TESTNET_FORK_HEIGHT_6_SIGHASH_INPUT_COMMITMENTS_V1,
+                        ChainstateUpgrade::new(
+                            TokenIssuanceVersion::V1,
+                            RewardDistributionVersion::V1,
+                            TokensFeeVersion::V1,
+                            DataDepositFeeVersion::V1,
+                            ChangeTokenMetadataUriActivated::Yes,
+                            FrozenTokensValidationVersion::V1,
+                            HtlcActivated::Yes,
+                            OrdersActivated::Yes,
+                            OrdersVersion::V1,
+                            StakerDestinationUpdateForbidden::Yes,
+                            TokenIdGenerationVersion::V1,
+                            SighashInputCommitmentVersion::V1
                         ),
                     ),
                 ])

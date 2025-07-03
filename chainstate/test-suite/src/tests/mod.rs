@@ -44,6 +44,7 @@ mod history_iteration;
 mod homomorphism;
 mod htlc;
 mod initialization;
+mod input_commitments;
 mod mempool_output_timelock;
 mod nft_burn;
 mod nft_issuance;

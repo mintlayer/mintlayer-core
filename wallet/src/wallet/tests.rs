@@ -54,7 +54,8 @@ use wallet_storage::{schema, WalletStorageEncryptionRead};
 use wallet_types::{
     account_info::DEFAULT_ACCOUNT_INDEX,
     partially_signed_transaction::{
-        PartiallySignedTransaction, PartiallySignedTransactionError, TxAdditionalInfo,
+        OrderAdditionalInfo, PartiallySignedTransaction, PartiallySignedTransactionError,
+        TxAdditionalInfo,
     },
     seed_phrase::{PassPhrase, StoreSeedPhrase},
     utxo_types::{UtxoState, UtxoType},
@@ -6077,13 +6078,23 @@ fn create_order_and_conclude(#[case] seed: Seed) {
     assert_eq!(coin_balance, expected_balance);
     assert!(token_balances.is_empty());
 
-    let additional_info = TxAdditionalInfo::new().with_token_info(
-        issued_token_id,
-        TokenAdditionalInfo {
-            num_decimals: unconfirmed_token_info.num_decimals(),
-            ticker: unconfirmed_token_info.token_ticker().to_vec(),
-        },
-    );
+    let additional_info = TxAdditionalInfo::new()
+        .with_token_info(
+            issued_token_id,
+            TokenAdditionalInfo {
+                num_decimals: unconfirmed_token_info.num_decimals(),
+                ticker: unconfirmed_token_info.token_ticker().to_vec(),
+            },
+        )
+        .with_order_info(
+            order_id,
+            OrderAdditionalInfo {
+                initially_asked: order_info.initially_asked.into(),
+                initially_given: order_info.initially_given.into(),
+                ask_balance: order_info.ask_balance,
+                give_balance: order_info.give_balance,
+            },
+        );
     let conclude_order_tx = wallet
         .create_conclude_order_tx(
             DEFAULT_ACCOUNT_INDEX,
@@ -6284,13 +6295,23 @@ fn create_order_fill_completely_conclude(#[case] seed: Seed) {
             Some(&(issued_token_id, token_amount_to_mint))
         );
     }
-    let additional_info = TxAdditionalInfo::new().with_token_info(
-        issued_token_id,
-        TokenAdditionalInfo {
-            num_decimals: unconfirmed_token_info.num_decimals(),
-            ticker: unconfirmed_token_info.token_ticker().to_vec(),
-        },
-    );
+    let additional_info = TxAdditionalInfo::new()
+        .with_token_info(
+            issued_token_id,
+            TokenAdditionalInfo {
+                num_decimals: unconfirmed_token_info.num_decimals(),
+                ticker: unconfirmed_token_info.token_ticker().to_vec(),
+            },
+        )
+        .with_order_info(
+            order_id,
+            OrderAdditionalInfo {
+                initially_asked: order_info.initially_asked.into(),
+                initially_given: order_info.initially_given.into(),
+                ask_balance: order_info.ask_balance,
+                give_balance: order_info.give_balance,
+            },
+        );
 
     // Fill order partially
     let fill_order_tx_1 = wallet2
@@ -6351,13 +6372,23 @@ fn create_order_fill_completely_conclude(#[case] seed: Seed) {
         nonce: Some(AccountNonce::new(0)),
     };
 
-    let additional_info = TxAdditionalInfo::new().with_token_info(
-        issued_token_id,
-        TokenAdditionalInfo {
-            num_decimals: unconfirmed_token_info.num_decimals(),
-            ticker: unconfirmed_token_info.token_ticker().to_vec(),
-        },
-    );
+    let additional_info = TxAdditionalInfo::new()
+        .with_token_info(
+            issued_token_id,
+            TokenAdditionalInfo {
+                num_decimals: unconfirmed_token_info.num_decimals(),
+                ticker: unconfirmed_token_info.token_ticker().to_vec(),
+            },
+        )
+        .with_order_info(
+            order_id,
+            OrderAdditionalInfo {
+                initially_asked: order_info.initially_asked.into(),
+                initially_given: order_info.initially_given.into(),
+                ask_balance: order_info.ask_balance,
+                give_balance: order_info.give_balance,
+            },
+        );
     let fill_order_tx_2 = wallet2
         .create_fill_order_tx(
             DEFAULT_ACCOUNT_INDEX,
@@ -6409,13 +6440,23 @@ fn create_order_fill_completely_conclude(#[case] seed: Seed) {
         ask_balance: Amount::ZERO,
         nonce: Some(AccountNonce::new(1)),
     };
-    let additional_info = TxAdditionalInfo::new().with_token_info(
-        issued_token_id,
-        TokenAdditionalInfo {
-            num_decimals: unconfirmed_token_info.num_decimals(),
-            ticker: unconfirmed_token_info.token_ticker().to_vec(),
-        },
-    );
+    let additional_info = TxAdditionalInfo::new()
+        .with_token_info(
+            issued_token_id,
+            TokenAdditionalInfo {
+                num_decimals: unconfirmed_token_info.num_decimals(),
+                ticker: unconfirmed_token_info.token_ticker().to_vec(),
+            },
+        )
+        .with_order_info(
+            order_id,
+            OrderAdditionalInfo {
+                initially_asked: order_info.initially_asked.into(),
+                initially_given: order_info.initially_given.into(),
+                ask_balance: order_info.ask_balance,
+                give_balance: order_info.give_balance,
+            },
+        );
     let conclude_order_tx = wallet1
         .create_conclude_order_tx(
             DEFAULT_ACCOUNT_INDEX,
@@ -6628,13 +6669,23 @@ fn create_order_fill_partially_conclude(#[case] seed: Seed) {
         );
     }
 
-    let additional_info = TxAdditionalInfo::new().with_token_info(
-        issued_token_id,
-        TokenAdditionalInfo {
-            num_decimals: unconfirmed_token_info.num_decimals(),
-            ticker: unconfirmed_token_info.token_ticker().to_vec(),
-        },
-    );
+    let additional_info = TxAdditionalInfo::new()
+        .with_token_info(
+            issued_token_id,
+            TokenAdditionalInfo {
+                num_decimals: unconfirmed_token_info.num_decimals(),
+                ticker: unconfirmed_token_info.token_ticker().to_vec(),
+            },
+        )
+        .with_order_info(
+            order_id,
+            OrderAdditionalInfo {
+                initially_asked: order_info.initially_asked.into(),
+                initially_given: order_info.initially_given.into(),
+                ask_balance: order_info.ask_balance,
+                give_balance: order_info.give_balance,
+            },
+        );
     // Fill order partially
     let fill_order_tx_1 = wallet2
         .create_fill_order_tx(
@@ -6694,13 +6745,23 @@ fn create_order_fill_partially_conclude(#[case] seed: Seed) {
         nonce: Some(AccountNonce::new(0)),
     };
 
-    let additional_info = TxAdditionalInfo::new().with_token_info(
-        issued_token_id,
-        TokenAdditionalInfo {
-            num_decimals: unconfirmed_token_info.num_decimals(),
-            ticker: unconfirmed_token_info.token_ticker().to_vec(),
-        },
-    );
+    let additional_info = TxAdditionalInfo::new()
+        .with_token_info(
+            issued_token_id,
+            TokenAdditionalInfo {
+                num_decimals: unconfirmed_token_info.num_decimals(),
+                ticker: unconfirmed_token_info.token_ticker().to_vec(),
+            },
+        )
+        .with_order_info(
+            order_id,
+            OrderAdditionalInfo {
+                initially_asked: order_info.initially_asked.into(),
+                initially_given: order_info.initially_given.into(),
+                ask_balance: order_info.ask_balance,
+                give_balance: order_info.give_balance,
+            },
+        );
     let conclude_order_tx = wallet1
         .create_conclude_order_tx(
             DEFAULT_ACCOUNT_INDEX,
@@ -7348,6 +7409,10 @@ fn conflicting_order_account_nonce(#[case] seed: Seed) {
         RPCIsTokenFrozen::NotFrozen { freezable },
         token_issuance.authority,
     );
+    let token_additional_info_for_ptx = TokenAdditionalInfo {
+        num_decimals: token_info.number_of_decimals,
+        ticker: token_info.token_ticker.as_bytes().to_vec(),
+    };
 
     let unconfirmed_token_info =
         wallet.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, token_info).unwrap();
@@ -7387,7 +7452,8 @@ fn conflicting_order_account_nonce(#[case] seed: Seed) {
             address2.clone(),
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
-            TxAdditionalInfo::new(),
+            TxAdditionalInfo::new()
+                .with_token_info(issued_token_id, token_additional_info_for_ptx.clone()),
         )
         .map(|(id, tx)| (id, tx.tx))
         .unwrap();
@@ -7426,6 +7492,12 @@ fn conflicting_order_account_nonce(#[case] seed: Seed) {
         ask_balance: buy_amount,
         nonce: None,
     };
+    let order_additional_info_for_ptx = OrderAdditionalInfo {
+        initially_asked: order_info.initially_asked.into(),
+        initially_given: order_info.initially_given.into(),
+        ask_balance: order_info.ask_balance,
+        give_balance: order_info.give_balance,
+    };
 
     let spend_coins_1 = Amount::from_atoms(10);
     let received_tokens_1 = spend_coins_1;
@@ -7438,7 +7510,9 @@ fn conflicting_order_account_nonce(#[case] seed: Seed) {
             None,
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
-            TxAdditionalInfo::new(),
+            TxAdditionalInfo::new()
+                .with_order_info(order_id, order_additional_info_for_ptx.clone())
+                .with_token_info(issued_token_id, token_additional_info_for_ptx.clone()),
         )
         .unwrap()
         .tx;
@@ -7468,7 +7542,9 @@ fn conflicting_order_account_nonce(#[case] seed: Seed) {
             None,
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
-            TxAdditionalInfo::new(),
+            TxAdditionalInfo::new()
+                .with_order_info(order_id, order_additional_info_for_ptx)
+                .with_token_info(issued_token_id, token_additional_info_for_ptx),
         )
         .unwrap()
         .tx;

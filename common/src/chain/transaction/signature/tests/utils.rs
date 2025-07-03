@@ -172,6 +172,36 @@ pub fn generate_input_commitment_for_tag(
             let utxo = generate_input_utxo(rng);
             SighashInputCommitment::Utxo(Cow::Owned(utxo))
         }
+        SighashInputCommitmentTag::ProduceBlockFromStakeUtxo => {
+            let utxo = generate_input_utxo(rng);
+            let staker_balance = Amount::from_atoms(rng.gen::<UnsignedIntType>());
+            SighashInputCommitment::ProduceBlockFromStakeUtxo {
+                utxo: Cow::Owned(utxo),
+                staker_balance,
+            }
+        }
+        SighashInputCommitmentTag::FillOrderAccountCommand => {
+            let initially_asked = make_random_output_value(rng);
+            let initially_given = make_random_output_value(rng);
+
+            SighashInputCommitment::FillOrderAccountCommand {
+                initially_asked,
+                initially_given,
+            }
+        }
+        SighashInputCommitmentTag::ConcludeOrderAccountCommand => {
+            let initially_asked = make_random_output_value(rng);
+            let initially_given = make_random_output_value(rng);
+            let ask_balance = Amount::from_atoms(rng.gen());
+            let give_balance = Amount::from_atoms(rng.gen());
+
+            SighashInputCommitment::ConcludeOrderAccountCommand {
+                initially_asked,
+                initially_given,
+                ask_balance,
+                give_balance,
+            }
+        }
     }
 }
 

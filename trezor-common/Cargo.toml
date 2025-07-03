@@ -16,7 +16,8 @@ strum = { workspace = true, default-features = false, features = ["derive"] }
 [dev-dependencies]
 test-utils = { path = "../test-utils" }
 common = { path = "../common" }
-crypto = { path = "../crypto/" }
-trezor-client = { git = "https://github.com/mintlayer/mintlayer-trezor-firmware", branch = "feature/mintlayer-pk", features = ["bitcoin", "mintlayer"] }
+crypto = { path = "../crypto" }
+serialization = { path = "../serialization" }
 
 rstest.workspace = true
+trezor-client.workspace = true

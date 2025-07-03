@@ -56,10 +56,7 @@ use common::{
                 standard_signature::StandardInputSignature,
                 InputWitness,
             },
-            sighash::{
-                self, input_commitments::make_sighash_input_commitments_for_transaction_inputs,
-                signature_hash,
-            },
+            sighash::signature_hash,
         },
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
@@ -81,6 +78,8 @@ use serialization::{Decode, DecodeAll, Encode};
 
 use crate::{
     error::Error,
+    sighash_input_commitments::{make_sighash_input_commitments, TxInputsAdditionalInfo},
+    types::TxAdditionalInfo,
     types::{Amount, Network, SignatureHashType, SourceId},
     utils::{decode_raw_array, extract_htlc_spend, parse_addressable},
 };
@@ -88,6 +87,8 @@ use crate::{
 mod encode_input;
 mod encode_output;
 mod error;
+mod internal;
+mod sighash_input_commitments;
 #[cfg(test)]
 mod tests;
 mod types;
@@ -700,6 +701,7 @@ pub fn encode_witness_no_signature() -> Vec<u8> {
 /// otherwise emit 1 followed by the corresponding transaction output encoded via the appropriate "encode_output_"
 /// function.
 #[wasm_bindgen]
+#[allow(clippy::too_many_arguments)]
 pub fn encode_witness(
     sighashtype: SignatureHashType,
     private_key: &[u8],
@@ -707,6 +709,8 @@ pub fn encode_witness(
     transaction: &[u8],
     input_utxos: &[u8],
     input_index: u32,
+    additional_info: TxAdditionalInfo,
+    current_block_height: u64,
     network: Network,
 ) -> Result<Vec<u8>, Error> {
     let chain_config = Builder::new(network.into()).build();
@@ -722,9 +726,15 @@ pub fn encode_witness(
     let input_utxos = decode_raw_array::<Option<TxOutput>>(input_utxos)
         .map_err(Error::InvalidInputUtxoEncoding)?;
 
-    let input_commitments = make_sighash_input_commitments_for_transaction_inputs(
+    let input_infos =
+        TxInputsAdditionalInfo::from_tx_additional_info(&chain_config, &additional_info)?;
+
+    let input_commitments = make_sighash_input_commitments(
         tx.inputs(),
-        &sighash::input_commitments::TrivialUtxoProvider(&input_utxos),
+        &input_utxos,
+        &input_infos,
+        &chain_config,
+        BlockHeight::new(current_block_height),
     )?;
 
     let witness = StandardInputSignature::produce_uniparty_signature_for_input(
@@ -756,6 +766,8 @@ pub fn encode_witness_htlc_secret(
     input_utxos: &[u8],
     input_index: u32,
     secret: &[u8],
+    additional_info: TxAdditionalInfo,
+    current_block_height: u64,
     network: Network,
 ) -> Result<Vec<u8>, Error> {
     let chain_config = Builder::new(network.into()).build();
@@ -771,9 +783,15 @@ pub fn encode_witness_htlc_secret(
     let input_utxos = decode_raw_array::<Option<TxOutput>>(input_utxos)
         .map_err(Error::InvalidInputUtxoEncoding)?;
 
-    let input_commitments = make_sighash_input_commitments_for_transaction_inputs(
+    let input_infos =
+        TxInputsAdditionalInfo::from_tx_additional_info(&chain_config, &additional_info)?;
+
+    let input_commitments = make_sighash_input_commitments(
         tx.inputs(),
-        &sighash::input_commitments::TrivialUtxoProvider(&input_utxos),
+        &input_utxos,
+        &input_infos,
+        &chain_config,
+        BlockHeight::new(current_block_height),
     )?;
 
     let secret =
@@ -840,7 +858,7 @@ pub fn multisig_challenge_to_address(
 /// Given a private key, inputs and an input number to sign, and multisig challenge,
 /// and a network type (mainnet, testnet, etc), this function returns a witness to be used in a signed transaction, as bytes.
 ///
-/// `key_index` parameter is an index of a public key in the challenge, against which is the signature produces from private key is to be verified.
+/// `key_index` parameter is an index of the public key in the challenge corresponding to the specified private key.
 /// `input_witness` parameter can be either empty or a result of previous calls to this function.
 ///
 /// `input_utxos` have the same format as in `encode_witness`.
@@ -855,6 +873,8 @@ pub fn encode_witness_htlc_multisig(
     transaction: &[u8],
     input_utxos: &[u8],
     input_index: u32,
+    additional_info: TxAdditionalInfo,
+    current_block_height: u64,
     network: Network,
 ) -> Result<Vec<u8>, Error> {
     let chain_config = Builder::new(network.into()).build();
@@ -868,9 +888,15 @@ pub fn encode_witness_htlc_multisig(
     let input_utxos = decode_raw_array::<Option<TxOutput>>(input_utxos)
         .map_err(Error::InvalidInputUtxoEncoding)?;
 
-    let input_commitments = make_sighash_input_commitments_for_transaction_inputs(
+    let input_infos =
+        TxInputsAdditionalInfo::from_tx_additional_info(&chain_config, &additional_info)?;
+
+    let input_commitments = make_sighash_input_commitments(
         tx.inputs(),
-        &sighash::input_commitments::TrivialUtxoProvider(&input_utxos),
+        &input_utxos,
+        &input_infos,
+        &chain_config,
+        BlockHeight::new(current_block_height),
     )?;
 
     let sighashtype = sighashtype.into();

@@ -346,11 +346,14 @@ impl BlockProcessingErrorClassification for tx_verifier::error::InputCheckError 
 impl BlockProcessingErrorClassification for tx_verifier::error::InputCheckErrorPayload {
     fn classify(&self) -> BlockProcessingErrorClass {
         match self {
-            Self::MissingUtxo(_) | Self::NonUtxoKernelInput(_) => {
-                BlockProcessingErrorClass::BadBlock
-            }
+            Self::MissingUtxo(_)
+            | Self::PoolNotFound(_)
+            | Self::OrderNotFound(_)
+            | Self::NonUtxoKernelInput(_) => BlockProcessingErrorClass::BadBlock,
             Self::UtxoView(e) => e.classify(),
             Self::UtxoInfoProvider(e) => e.classify(),
+            Self::PoolInfoProvider(e) => e.classify(),
+            Self::OrderInfoProvider(e) => e.classify(),
             Self::Translation(e) => e.classify(),
             Self::Verification(e) => e.classify(),
         }

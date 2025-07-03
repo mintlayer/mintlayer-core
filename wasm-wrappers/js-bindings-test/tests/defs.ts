@@ -20,9 +20,20 @@ import {
   public_key_from_private_key,
 } from "../../pkg/wasm_wrappers.js";
 
+import {
+  gen_random_int,
+} from "./utils.js";
+
 // Taken from TESTNET_FORK_HEIGHT_5_ORDERS_V1 in common/src/chain/config/builder.rs.
 // This will be updated to the actual height after we choose one.
 export const ORDERS_V1_TESTNET_FORK_HEIGHT = 999_999_999;
+
+// Taken from TESTNET_FORK_HEIGHT_6_SIGHASH_INPUT_COMMITMENTS_V1 in common/src/chain/config/builder.rs.
+// This will be updated to the actual height after we choose one.
+export const SIGHASH_INPUT_COMMITMENTS_V1_TESTNET_FORK_HEIGHT = 1_999_999_999;
+
+// A random height for cases where the height doesn't matter.
+export const RANDOM_HEIGHT = gen_random_int(0, 10_000_000_000, "RANDOM_HEIGHT");
 
 export const MNEMONIC =
   "walk exile faculty near leg neutral license matrix maple invite cupboard hat opinion excess coffee leopard latin regret document core limb crew dizzy movie";
@@ -65,8 +76,9 @@ export const TOKEN_ID = "tmltk15tgfrs49rv88v8utcllqh0nvpaqtgvn26vdxhuner5m6ewg9c
 // Some pool id
 export const POOL_ID = "tpool1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqza035u";
 
-// Some order id
+// Some order ids
 export const ORDER_ID = "tordr1xxt0avjtt4flkq0tnlyphmdm4aaj9vmkx5r2m4g863nw3lgf7nzs7mlkqc";
+export const ANOTHER_ORDER_ID = "tordr1mslcn8z774t3ug9zcxa6mqr9yc29r60fg8fkhajnngc98ryh5m3sqz6jvz";
 
 // Some HTLC secret and its hash
 export const HTLC_SECRET = [

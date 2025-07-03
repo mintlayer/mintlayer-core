@@ -988,7 +988,12 @@ where
             &self.utxo_cache,
         )?;
 
-        self.verify_inputs(tx, tx_source, *median_time_past)?;
+        self.verify_inputs(
+            tx,
+            tx_source,
+            *median_time_past,
+            tx_source.expected_block_height(),
+        )?;
 
         self.connect_pos_accounting_outputs(tx_source, tx.transaction())?;
 
@@ -1025,18 +1030,19 @@ where
         // TODO: test spending block rewards from chains outside the mainchain
         if reward_transactable.inputs().is_some() {
             let tx_source = TransactionSourceForConnect::for_chain(block_index);
-            self.verify_inputs(&reward_transactable, &tx_source, median_time_past)?;
+            self.verify_inputs(
+                &reward_transactable,
+                &tx_source,
+                median_time_past,
+                block_height,
+            )?;
         }
 
         // spend inputs of the block reward
         // if block reward has no inputs then only outputs will be added to the utxo set
         let reward_undo = self
             .utxo_cache
-            .connect_block_transactable(
-                &reward_transactable,
-                &block_id.into(),
-                block_index.block_height(),
-            )
+            .connect_block_transactable(&reward_transactable, &block_id.into(), block_height)
             .map_err(ConnectTransactionError::from)?;
 
         if let Some(reward_undo) = reward_undo {
@@ -1212,6 +1218,7 @@ where
         tx: &Tx,
         tx_source: &TransactionSourceForConnect,
         median_time_past: BlockTimestamp,
+        height: BlockHeight,
     ) -> Result<(), input_check::InputCheckError>
     where
         Tx: input_check::FullyVerifiable<
@@ -1230,6 +1237,7 @@ where
             &self.storage,
             tx_source,
             median_time_past,
+            height,
         )
     }
 
