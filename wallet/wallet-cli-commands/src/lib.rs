@@ -329,6 +329,9 @@ pub enum ColdWalletCommand {
     #[clap(name = "staking-show-legacy-vrf-key")]
     GetLegacyVrfPublicKey,
 
+    #[clap(name = "account-extended-public-key-as-hex")]
+    AccountExtendedPublicKey,
+
     #[clap(name = "account-sign-raw-transaction")]
     SignRawTransaction {
         /// Hex encoded transaction or PartiallySignedTransaction.

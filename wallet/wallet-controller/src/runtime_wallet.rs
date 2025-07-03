@@ -31,6 +31,7 @@ use common::{
 };
 use crypto::{
     key::{
+        extended::ExtendedPublicKey,
         hdkd::{child_number::ChildNumber, u31::U31},
         PrivateKey, PublicKey,
     },
@@ -596,6 +597,17 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             RuntimeWallet::Software(w) => w.find_public_key(account_index, address),
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => w.find_public_key(account_index, address),
+        }
+    }
+
+    pub fn account_extended_public_key(
+        &self,
+        account_index: U31,
+    ) -> WalletResult<&ExtendedPublicKey> {
+        match self {
+            RuntimeWallet::Software(w) => w.account_extended_public_key(account_index),
+            #[cfg(feature = "trezor")]
+            RuntimeWallet::Trezor(w) => w.account_extended_public_key(account_index),
         }
     }
 

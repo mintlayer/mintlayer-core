@@ -462,6 +462,25 @@ where
                 ))
             }
 
+            ColdWalletCommand::AccountExtendedPublicKey => {
+                let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
+                let key = wallet.get_account_extended_public_key(selected_account).await?;
+                let hex_public_key = key.public_key.to_string();
+                let hex_chain_code = key.chain_code.to_string();
+
+                let extended_public_key = format!("{hex_public_key}{hex_chain_code}");
+                let qr_code = if !self.no_qr {
+                    let qr_code = qrcode_or_error_string(&extended_public_key);
+                    format!("\nOr contained in the QR code:\n{qr_code}")
+                } else {
+                    String::new()
+                };
+
+                Ok(ConsoleCommand::Print(format!(
+                    "The account extended public key is: {extended_public_key}{qr_code}"
+                )))
+            }
+
             ColdWalletCommand::ShowAddresses { include_change } => {
                 let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
                 let addresses_with_usage =
