@@ -45,7 +45,7 @@ use utils::ensure;
 #[derive(Error, Debug, Clone, PartialEq, Eq)]
 pub enum PartiallySignedTransactionError {
     #[error("Failed to convert partially signed tx to signed")]
-    FailedToConvertPartiallySignedTx(PartiallySignedTransaction),
+    FailedToConvertPartiallySignedTx(Box<PartiallySignedTransaction>),
 
     #[error("Failed to create transaction: {0}")]
     TxCreationError(TransactionCreationError),
@@ -439,7 +439,7 @@ impl PartiallySignedTransaction {
             Ok(SignedTransaction::new(self.tx, witnesses)
                 .map_err(PartiallySignedTransactionError::TxCreationError)?)
         } else {
-            Err(PartiallySignedTransactionError::FailedToConvertPartiallySignedTx(self))
+            Err(PartiallySignedTransactionError::FailedToConvertPartiallySignedTx(Box::new(self)))
         }
     }
 
