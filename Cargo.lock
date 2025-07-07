@@ -4513,6 +4513,7 @@ dependencies = [
  "chainstate-types",
  "common",
  "crypto",
+ "ctor",
  "hex",
  "jsonrpsee",
  "logging",

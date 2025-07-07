@@ -300,14 +300,17 @@ impl<'p> PoolEntry<'p> {
 
     /// Check no dependencies of given transaction are still in orphan pool so it can be considered
     /// as a candidate to move out.
+    ///
+    /// Note: this function is allowed to produce false positives - if true is returned but
+    /// the tx is still an orphan (e.g. due to account-based dependencies), the tx will be returned
+    /// to the orphan pool.
     pub fn is_ready(&self) -> bool {
         let entry = self.get();
         !entry.requires().any(|dep| match dep {
             // Always consider account deps. TODO: can be optimized in the future
-            TxDependency::DelegationAccount(_)
-            | TxDependency::TokenSupplyAccount(_)
-            | TxDependency::OrderAccount(_)
-            | TxDependency::OrderV1Account(_) => false,
+            TxDependency::DelegationAccount(_, _)
+            | TxDependency::TokenSupplyAccount(_, _)
+            | TxDependency::OrderV0Account(_, _) => false,
             TxDependency::TxOutput(tx_id, _) => self.pool.maps.by_tx_id.contains_key(&tx_id),
         })
     }
