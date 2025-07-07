@@ -118,7 +118,6 @@ impl PeerIdSupply {
 #[trace]
 #[case(Seed::from_entropy())]
 fn simulation(#[case] seed: Seed) {
-    logging::init_logging();
     let mut rng = make_seedable_rng(seed);
     let mut peer_supply = PeerIdSupply::new();
 
@@ -198,7 +197,6 @@ fn scheduling_fairness_full_queues(#[case] seed: Seed) {
     // Minimum number of work items in each peer's queue at the start
     const MIN_WORK: usize = 100;
 
-    logging::init_logging();
     let mut rng = make_seedable_rng(seed);
     let num_peers: usize = rng.gen_range(2..=8);
     let peer1 = PeerId::from_u64(1);

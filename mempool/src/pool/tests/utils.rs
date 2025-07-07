@@ -28,7 +28,6 @@ use super::{Error, MemoryUsageEstimator, Mempool, TxEntry};
 pub fn setup_with_chainstate(
     chainstate: Box<dyn ChainstateInterface>,
 ) -> Mempool<StoreMemoryUsageEstimator> {
-    logging::init_logging();
     let chain_config = std::sync::Arc::clone(chainstate.get_chain_config());
     let mempool_config = create_mempool_config();
     let chainstate_handle = start_chainstate(chainstate);

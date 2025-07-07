@@ -664,6 +664,7 @@ impl TxMempoolEntry {
         self.entry.creation_time()
     }
 
+    // Note: only the parents that are currently in the mempool are included here.
     pub fn parents(&self) -> impl Iterator<Item = &Id<Transaction>> {
         self.parents.iter()
     }

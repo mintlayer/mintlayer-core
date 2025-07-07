@@ -18,6 +18,7 @@
 mod block_builder;
 mod framework;
 mod framework_builder;
+pub mod helpers;
 mod key_manager;
 mod pos_block_builder;
 mod random_tx_maker;
