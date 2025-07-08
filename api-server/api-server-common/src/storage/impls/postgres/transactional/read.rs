@@ -26,8 +26,8 @@ use crate::storage::{
     storage_api::{
         block_aux_data::BlockAuxData, AmountWithDecimals, ApiServerStorageError,
         ApiServerStorageRead, BlockInfo, CoinOrTokenStatistic, Delegation, FungibleTokenData,
-        NftWithOwner, Order, PoolBlockStats, PoolDataWithExtraInfo, TransactionInfo, Utxo,
-        UtxoWithExtraInfo,
+        NftWithOwner, Order, PoolBlockStats, PoolDataWithExtraInfo, TransactionInfo,
+        TransactionWithBlockInfo, Utxo, UtxoWithExtraInfo,
     },
 };
 use std::collections::BTreeMap;
@@ -194,13 +194,35 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRo<'_> {
         Ok(res)
     }
 
-    async fn get_transactions_with_block(
+    async fn get_transactions_with_block_info(
         &self,
         len: u32,
-        offset: u32,
-    ) -> Result<Vec<(BlockAuxData, TransactionInfo)>, ApiServerStorageError> {
+        offset: u64,
+    ) -> Result<Vec<TransactionWithBlockInfo>, ApiServerStorageError> {
         let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_transactions_with_block(len, offset).await?;
+
+        Ok(res)
+    }
+
+    async fn get_transactions_with_block_info_before_tx_global_index(
+        &self,
+        len: u32,
+        order_number: u64,
+    ) -> Result<Vec<TransactionWithBlockInfo>, ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn
+            .get_transactions_with_block_before_tx_global_index(len, order_number)
+            .await?;
+
+        Ok(res)
+    }
+
+    async fn get_last_transaction_global_index(
+        &self,
+    ) -> Result<Option<u64>, ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_last_transaction_global_index().await?;
 
         Ok(res)
     }
@@ -219,7 +241,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRo<'_> {
     async fn get_latest_pool_data(
         &self,
         len: u32,
-        offset: u32,
+        offset: u64,
     ) -> Result<Vec<(PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError> {
         let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_latest_pool_data(len, offset, &self.chain_config).await?;
@@ -230,7 +252,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRo<'_> {
     async fn get_pool_data_with_largest_staker_balance(
         &self,
         len: u32,
-        offset: u32,
+        offset: u64,
     ) -> Result<Vec<(PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError> {
         let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn
@@ -344,7 +366,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRo<'_> {
     async fn get_token_ids(
         &self,
         len: u32,
-        offset: u32,
+        offset: u64,
     ) -> Result<Vec<TokenId>, ApiServerStorageError> {
         let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_token_ids(len, offset).await?;
@@ -355,7 +377,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRo<'_> {
     async fn get_token_ids_by_ticker(
         &self,
         len: u32,
-        offset: u32,
+        offset: u64,
         ticker: &[u8],
     ) -> Result<Vec<TokenId>, ApiServerStorageError> {
         let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
@@ -395,7 +417,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRo<'_> {
     async fn get_all_orders(
         &self,
         len: u32,
-        offset: u32,
+        offset: u64,
     ) -> Result<Vec<(OrderId, Order)>, ApiServerStorageError> {
         let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_orders_by_height(len, offset, &self.chain_config).await?;
@@ -407,7 +429,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRo<'_> {
         &self,
         pair: (CoinOrTokenId, CoinOrTokenId),
         len: u32,
-        offset: u32,
+        offset: u64,
     ) -> Result<Vec<(OrderId, Order)>, ApiServerStorageError> {
         let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_orders_for_trading_pair(pair, len, offset, &self.chain_config).await?;

@@ -194,7 +194,7 @@ pub async fn block<T: ApiServerStorage>(
                 .iter()
                 .zip(block.tx_additional_infos.iter())
                 .map(|(tx, additinal_info)| {
-                    tx_to_json(tx.transaction(), additinal_info, &state.chain_config)
+                    tx_to_json(tx, additinal_info, &state.chain_config)
                 })
                 .collect::<Vec<_>>(),
         },
@@ -444,31 +444,72 @@ pub async fn submit_transaction<T: ApiServerStorage>(
     ))
 }
 
+enum OffsetMode {
+    Legacy,
+    Absolute,
+}
+
+impl FromStr for OffsetMode {
+    type Err = ApiServerWebServerClientError;
+
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
+        match input {
+            "legacy" => Ok(Self::Legacy),
+            "absolute" => Ok(Self::Absolute),
+            _ => Err(ApiServerWebServerClientError::InvalidOffsetMode),
+        }
+    }
+}
+
 pub async fn transactions<T: ApiServerStorage>(
     Query(params): Query<BTreeMap<String, String>>,
     State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
+    const OFFSET_MODE: &str = "offset_mode";
+    let offset_mode = params
+        .get(OFFSET_MODE)
+        .map(|mode| OffsetMode::from_str(mode))
+        .transpose()?
+        .unwrap_or(OffsetMode::Legacy);
     let offset_and_items = get_offset_and_items(&params)?;
 
-    let txs = state
-        .db
-        .transaction_ro()
-        .await
-        .map_err(|e| {
-            logging::log::error!("internal error: {e}");
-            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
-        })?
-        .get_transactions_with_block(offset_and_items.items, offset_and_items.offset)
-        .await
-        .map_err(|e| {
-            logging::log::error!("internal error: {e}");
-            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
-        })?;
+    let db_tx = state.db.transaction_ro().await.map_err(|e| {
+        logging::log::error!("internal error: {e}");
+        ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+    })?;
+
+    let txs = match offset_mode {
+        OffsetMode::Absolute => {
+            db_tx
+                .get_transactions_with_block_info_before_tx_global_index(
+                    offset_and_items.items,
+                    offset_and_items.offset,
+                )
+                .await
+        }
+        OffsetMode::Legacy => {
+            db_tx
+                .get_transactions_with_block_info(offset_and_items.items, offset_and_items.offset)
+                .await
+        }
+    }
+    .map_err(|e| {
+        logging::log::error!("internal error: {e}");
+        ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+    })?;
 
     let tip_height = best_block(&state).await?.block_height();
     let txs = txs
         .into_iter()
-        .map(|(block, tx)| to_tx_json_with_block_info(&tx, &state.chain_config, tip_height, block))
+        .map(|tx| {
+            to_tx_json_with_block_info(
+                &tx.tx_info,
+                &state.chain_config,
+                tip_height,
+                tx.block_aux,
+                tx.global_tx_index,
+            )
+        })
         .collect();
 
     Ok(Json(serde_json::Value::Array(txs)))
@@ -492,7 +533,7 @@ pub async fn transaction<T: ApiServerStorage>(
     } else {
         None
     };
-    let mut json = tx_to_json(tx.transaction(), &additional_info, &state.chain_config);
+    let mut json = tx_to_json(&tx, &additional_info, &state.chain_config);
     let obj = json.as_object_mut().expect("object");
 
     obj.insert(
@@ -848,7 +889,7 @@ pub async fn pools<T: ApiServerStorage>(
 
     let sort = params
         .get(SORT)
-        .map(|offset| PoolSorting::from_str(offset))
+        .map(|sort| PoolSorting::from_str(sort))
         .transpose()?
         .unwrap_or(PoolSorting::ByHeight);
 
@@ -1506,7 +1547,7 @@ pub async fn order_pair<T: ApiServerStorage>(
 }
 
 struct OffsetAndItems {
-    offset: u32,
+    offset: u64,
     items: u32,
 }
 
@@ -1520,7 +1561,7 @@ fn get_offset_and_items(
 
     let offset = params
         .get(OFFSET)
-        .map(|offset| u32::from_str(offset))
+        .map(|offset| u64::from_str(offset))
         .transpose()
         .map_err(|_| {
             ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidOffset)
