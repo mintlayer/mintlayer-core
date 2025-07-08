@@ -1,4 +1,0 @@
-threshold(2, [
-    until_time(1718120714),
-    signature(0x0200039315c9da756f584d5a7fff618d230bf13115a43d63e7c7d464bb513ab6be7bbc, 0x0101085b5b),
-])
