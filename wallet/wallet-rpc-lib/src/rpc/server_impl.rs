@@ -59,8 +59,8 @@ use crate::{
 };
 
 use super::types::{
-    NewOrderTransaction, NewTokenTransaction, RpcHashedTimelockContract, RpcNewTransaction,
-    RpcPreparedTransaction,
+    AccountExtendedPublicKey, NewOrderTransaction, NewTokenTransaction, RpcHashedTimelockContract,
+    RpcNewTransaction, RpcPreparedTransaction,
 };
 
 #[async_trait::async_trait]
@@ -261,6 +261,13 @@ where
         account_arg: AccountArg,
     ) -> rpc::RpcResult<LegacyVrfPublicKeyInfo> {
         rpc::handle_result(self.get_legacy_vrf_public_key(account_arg.index::<N>()?).await)
+    }
+
+    async fn get_account_extended_public_key(
+        &self,
+        account_arg: AccountArg,
+    ) -> rpc::RpcResult<AccountExtendedPublicKey> {
+        rpc::handle_result(self.get_account_extended_public_key(account_arg.index::<N>()?).await)
     }
 
     async fn sign_raw_transaction(

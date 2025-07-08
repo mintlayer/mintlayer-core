@@ -3691,6 +3691,26 @@ Returns:
 }, .. ]
 ```
 
+### Method `account_extended_public_key`
+
+Shows the account's extended public key.
+The returned extended public key can be used to derive receiving or change addresses for
+this account.
+
+
+Parameters:
+```
+{ "account_arg": number }
+```
+
+Returns:
+```
+{
+    "public_key": hex string,
+    "chain_code": hex string,
+}
+```
+
 ### Method `account_sign_raw_transaction`
 
 Signs the inputs that are not yet signed.

@@ -59,6 +59,7 @@ use common::primitives::id::{hash_encoded, WithId};
 use common::primitives::{Amount, BlockHeight, Id, H256};
 use common::size_estimation::SizeEstimationError;
 use consensus::PoSGenerateBlockInputData;
+use crypto::key::extended::ExtendedPublicKey;
 use crypto::key::hdkd::child_number::ChildNumber;
 use crypto::key::hdkd::derivable::Derivable;
 use crypto::key::hdkd::u31::U31;
@@ -1439,6 +1440,13 @@ where
             | Destination::AnyoneCanSpend
             | Destination::ClassicMultisig(_) => Err(WalletError::NoUtxos),
         }
+    }
+
+    pub fn account_extended_public_key(
+        &self,
+        account_index: U31,
+    ) -> WalletResult<&ExtendedPublicKey> {
+        Ok(self.get_account(account_index)?.get_extended_public_key())
     }
 
     pub fn get_transaction_list(
