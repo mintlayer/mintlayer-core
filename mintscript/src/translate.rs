@@ -107,6 +107,7 @@ pub trait SignatureInfoProvider: InputInfoProvider {
         token_id: &TokenId,
     ) -> Result<Option<Destination>, tokens_accounting::Error>;
 
+    // Note: this is used for FreezeOrder too.
     fn get_orders_conclude_destination(
         &self,
         order_id: &OrderId,
@@ -229,10 +230,20 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for SignedTransaction {
                         .ok_or(TranslationError::OrderNotFound(*order_id))?;
                     Ok(to_signature_witness_script(ctx, &dest))
                 }
-                AccountCommand::FillOrder(_, _, _) => Ok(WitnessScript::TRUE),
+                AccountCommand::FillOrder(_, _, _) => {
+                    // In orders V0, FillOrder inputs can have arbitrary signatures.
+                    Ok(WitnessScript::TRUE)
+                }
             },
             InputInfo::OrderAccountCommand { command } => match command {
-                OrderAccountCommand::FillOrder(_, _, _) => Ok(WitnessScript::TRUE),
+                OrderAccountCommand::FillOrder(_, _) => {
+                    // In orders V1, FillOrder inputs must not be signed.
+                    // Note: Destination::AnyoneCanSpend requires InputWitness::NoSignature.
+                    Ok(to_signature_witness_script(
+                        ctx,
+                        &Destination::AnyoneCanSpend,
+                    ))
+                }
                 OrderAccountCommand::FreezeOrder(order_id)
                 | OrderAccountCommand::ConcludeOrder(order_id) => {
                     let dest = ctx
@@ -450,10 +461,20 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for SignatureOnlyTx {
                         .ok_or(TranslationError::OrderNotFound(*order_id))?;
                     Ok(to_signature_witness_script(ctx, &dest))
                 }
-                AccountCommand::FillOrder(_, _, _) => Ok(WitnessScript::TRUE),
+                AccountCommand::FillOrder(_, _, _) => {
+                    // In orders V0, FillOrder inputs can have arbitrary signatures.
+                    Ok(WitnessScript::TRUE)
+                }
             },
             InputInfo::OrderAccountCommand { command } => match command {
-                OrderAccountCommand::FillOrder(_, _, _) => Ok(WitnessScript::TRUE),
+                OrderAccountCommand::FillOrder(_, _) => {
+                    // In orders V1, FillOrder inputs must not be signed.
+                    // Note: Destination::AnyoneCanSpend requires InputWitness::NoSignature.
+                    Ok(to_signature_witness_script(
+                        ctx,
+                        &Destination::AnyoneCanSpend,
+                    ))
+                }
                 OrderAccountCommand::FreezeOrder(order_id)
                 | OrderAccountCommand::ConcludeOrder(order_id) => {
                     let dest = ctx

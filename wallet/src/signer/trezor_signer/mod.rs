@@ -1087,11 +1087,10 @@ fn to_trezor_order_command_input(
 
             inp_req.conclude = Some(req).into();
         }
-        OrderAccountCommand::FillOrder(order_id, amount, dest) => {
+        OrderAccountCommand::FillOrder(order_id, amount) => {
             let mut req = MintlayerFillOrderV1::new();
             req.set_order_id(Address::new(chain_config, *order_id)?.into_string());
             req.set_amount(amount.into_atoms().to_be_bytes().to_vec());
-            req.set_destination(Address::new(chain_config, dest.clone())?.into_string());
 
             let OrderAdditionalInfo {
                 initially_asked,

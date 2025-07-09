@@ -24,7 +24,7 @@ use common::{
         htlc::{HashedTimelockContract, HtlcSecret, HtlcSecretHash},
         signature::inputsig::authorize_hashed_timelock_contract_spend::AuthorizedHashedTimelockContractSpend,
         stakelock::StakePoolData,
-        tokens, AccountNonce, AccountSpending, OrderData, OrderId,
+        tokens, AccountNonce, AccountSpending, OrderAccountCommand, OrderData, OrderId,
     },
     primitives::per_thousand::PerThousand,
 };
@@ -57,6 +57,9 @@ enum TestInputInfo {
     AccountCommand {
         command: AccountCommand,
     },
+    OrderAccountCommand {
+        command: OrderAccountCommand,
+    },
 }
 
 impl TestInputInfo {
@@ -73,6 +76,7 @@ impl TestInputInfo {
             },
             Self::Account { outpoint } => InputInfo::Account { outpoint },
             Self::AccountCommand { command } => InputInfo::AccountCommand { command },
+            Self::OrderAccountCommand { command } => InputInfo::OrderAccountCommand { command },
         }
     }
 }
@@ -261,14 +265,29 @@ fn mint(id: TokenId, amount: u128) -> TestInputInfo {
     TestInputInfo::AccountCommand { command }
 }
 
-fn conclude_order(id: OrderId) -> TestInputInfo {
+fn conclude_order_v0(id: OrderId) -> TestInputInfo {
     let command = AccountCommand::ConcludeOrder(id);
     TestInputInfo::AccountCommand { command }
 }
 
-fn fill_order(id: OrderId) -> TestInputInfo {
+fn fill_order_v0(id: OrderId) -> TestInputInfo {
     let command = AccountCommand::FillOrder(id, Amount::from_atoms(1), dest_pk(0x4));
     TestInputInfo::AccountCommand { command }
+}
+
+fn conclude_order_v1(id: OrderId) -> TestInputInfo {
+    let command = OrderAccountCommand::ConcludeOrder(id);
+    TestInputInfo::OrderAccountCommand { command }
+}
+
+fn fill_order_v1(id: OrderId) -> TestInputInfo {
+    let command = OrderAccountCommand::FillOrder(id, Amount::from_atoms(1));
+    TestInputInfo::OrderAccountCommand { command }
+}
+
+fn freeze_order(id: OrderId) -> TestInputInfo {
+    let command = OrderAccountCommand::FreezeOrder(id);
+    TestInputInfo::OrderAccountCommand { command }
 }
 
 #[derive(
@@ -553,49 +572,120 @@ enum Mode {
     (Mode::TxTimelockOnly, "ERROR: Attempt to spend an unspendable output"),
     (Mode::TxFull, "ERROR: Attempt to spend an unspendable output"),
 ])]
-#[case(conclude_order(order0().0), nosig(), &[
+// Conclude order v0
+#[case(conclude_order_v0(order0().0), nosig(), &[
     (Mode::Reward, "ERROR: Illegal account spend"),
     (Mode::TxSigOnly, "signature(0x02000236d8c927b785e27385737e82cdde2e06dc510ab8545d6eab0ca05c36040a437c, 0x0000)"),
     (Mode::TxTimelockOnly, "true"),
     (Mode::TxFull, "signature(0x02000236d8c927b785e27385737e82cdde2e06dc510ab8545d6eab0ca05c36040a437c, 0x0000)"),
 ])]
-#[case(conclude_order(fake_id(0x88)), nosig(), &[
+#[case(conclude_order_v0(fake_id(0x88)), nosig(), &[
     (Mode::Reward, "ERROR: Illegal account spend"),
     (Mode::TxSigOnly, "ERROR: Order with id 8888…8888 does not exist"),
     (Mode::TxTimelockOnly, "true"),
     (Mode::TxFull, "ERROR: Order with id 8888…8888 does not exist"),
 ])]
-#[case(conclude_order(order0().0), stdsig(0x44), &[
+#[case(conclude_order_v0(order0().0), stdsig(0x44), &[
     (Mode::Reward, "ERROR: Illegal account spend"),
     (Mode::TxSigOnly, "signature(0x02000236d8c927b785e27385737e82cdde2e06dc510ab8545d6eab0ca05c36040a437c, 0x0101084444)"),
     (Mode::TxTimelockOnly, "true"),
     (Mode::TxFull, "signature(0x02000236d8c927b785e27385737e82cdde2e06dc510ab8545d6eab0ca05c36040a437c, 0x0101084444)"),
 ])]
-#[case(conclude_order(order0().0), stdsig(0x45), &[
+#[case(conclude_order_v0(order0().0), stdsig(0x45), &[
     (Mode::Reward, "ERROR: Illegal account spend"),
     (Mode::TxSigOnly, "signature(0x02000236d8c927b785e27385737e82cdde2e06dc510ab8545d6eab0ca05c36040a437c, 0x0101084545)"),
     (Mode::TxTimelockOnly, "true"),
     (Mode::TxFull, "signature(0x02000236d8c927b785e27385737e82cdde2e06dc510ab8545d6eab0ca05c36040a437c, 0x0101084545)"),
 ])]
-#[case(fill_order(order0().0), nosig(), &[
+// Conclude order v1
+#[case(conclude_order_v1(order0().0), nosig(), &[
+    (Mode::Reward, "ERROR: Illegal account spend"),
+    (Mode::TxSigOnly, "signature(0x02000236d8c927b785e27385737e82cdde2e06dc510ab8545d6eab0ca05c36040a437c, 0x0000)"),
+    (Mode::TxTimelockOnly, "true"),
+    (Mode::TxFull, "signature(0x02000236d8c927b785e27385737e82cdde2e06dc510ab8545d6eab0ca05c36040a437c, 0x0000)"),
+])]
+#[case(conclude_order_v1(fake_id(0x88)), nosig(), &[
+    (Mode::Reward, "ERROR: Illegal account spend"),
+    (Mode::TxSigOnly, "ERROR: Order with id 8888…8888 does not exist"),
+    (Mode::TxTimelockOnly, "true"),
+    (Mode::TxFull, "ERROR: Order with id 8888…8888 does not exist"),
+])]
+#[case(conclude_order_v1(order0().0), stdsig(0x44), &[
+    (Mode::Reward, "ERROR: Illegal account spend"),
+    (Mode::TxSigOnly, "signature(0x02000236d8c927b785e27385737e82cdde2e06dc510ab8545d6eab0ca05c36040a437c, 0x0101084444)"),
+    (Mode::TxTimelockOnly, "true"),
+    (Mode::TxFull, "signature(0x02000236d8c927b785e27385737e82cdde2e06dc510ab8545d6eab0ca05c36040a437c, 0x0101084444)"),
+])]
+#[case(conclude_order_v1(order0().0), stdsig(0x45), &[
+    (Mode::Reward, "ERROR: Illegal account spend"),
+    (Mode::TxSigOnly, "signature(0x02000236d8c927b785e27385737e82cdde2e06dc510ab8545d6eab0ca05c36040a437c, 0x0101084545)"),
+    (Mode::TxTimelockOnly, "true"),
+    (Mode::TxFull, "signature(0x02000236d8c927b785e27385737e82cdde2e06dc510ab8545d6eab0ca05c36040a437c, 0x0101084545)"),
+])]
+// Fill order v0
+#[case(fill_order_v0(order0().0), nosig(), &[
     (Mode::Reward, "ERROR: Illegal account spend"),
     (Mode::TxSigOnly, "true"),
     (Mode::TxTimelockOnly, "true"),
     (Mode::TxFull, "true"),
 ])]
-#[case(fill_order(fake_id(0x77)), nosig(), &[
+#[case(fill_order_v0(fake_id(0x77)), nosig(), &[
     (Mode::Reward, "ERROR: Illegal account spend"),
     (Mode::TxSigOnly, "true"),
     (Mode::TxTimelockOnly, "true"),
     (Mode::TxFull, "true"),
 ])]
-#[case(fill_order(order0().0), stdsig(0x45), &[
+#[case(fill_order_v0(order0().0), stdsig(0x45), &[
     (Mode::Reward, "ERROR: Illegal account spend"),
     (Mode::TxSigOnly, "true"),
     (Mode::TxTimelockOnly, "true"),
     (Mode::TxFull, "true"),
 ])]
-fn translate_snap(
+// Fill order v1
+#[case(fill_order_v1(order0().0), nosig(), &[
+    (Mode::Reward, "ERROR: Illegal account spend"),
+    (Mode::TxSigOnly, "signature(0x00, 0x0000)"),
+    (Mode::TxTimelockOnly, "true"),
+    (Mode::TxFull, "signature(0x00, 0x0000)"),
+])]
+#[case(fill_order_v1(fake_id(0x77)), nosig(), &[
+    (Mode::Reward, "ERROR: Illegal account spend"),
+    (Mode::TxSigOnly, "signature(0x00, 0x0000)"),
+    (Mode::TxTimelockOnly, "true"),
+    (Mode::TxFull, "signature(0x00, 0x0000)"),
+])]
+#[case(fill_order_v1(order0().0), stdsig(0x45), &[
+    (Mode::Reward, "ERROR: Illegal account spend"),
+    (Mode::TxSigOnly, "signature(0x00, 0x0101084545)"),
+    (Mode::TxTimelockOnly, "true"),
+    (Mode::TxFull, "signature(0x00, 0x0101084545)"),
+])]
+// Freeze order
+#[case(freeze_order(order0().0), nosig(), &[
+    (Mode::Reward, "ERROR: Illegal account spend"),
+    (Mode::TxSigOnly, "signature(0x02000236d8c927b785e27385737e82cdde2e06dc510ab8545d6eab0ca05c36040a437c, 0x0000)"),
+    (Mode::TxTimelockOnly, "true"),
+    (Mode::TxFull, "signature(0x02000236d8c927b785e27385737e82cdde2e06dc510ab8545d6eab0ca05c36040a437c, 0x0000)"),
+])]
+#[case(freeze_order(fake_id(0x88)), nosig(), &[
+    (Mode::Reward, "ERROR: Illegal account spend"),
+    (Mode::TxSigOnly, "ERROR: Order with id 8888…8888 does not exist"),
+    (Mode::TxTimelockOnly, "true"),
+    (Mode::TxFull, "ERROR: Order with id 8888…8888 does not exist"),
+])]
+#[case(freeze_order(order0().0), stdsig(0x44), &[
+    (Mode::Reward, "ERROR: Illegal account spend"),
+    (Mode::TxSigOnly, "signature(0x02000236d8c927b785e27385737e82cdde2e06dc510ab8545d6eab0ca05c36040a437c, 0x0101084444)"),
+    (Mode::TxTimelockOnly, "true"),
+    (Mode::TxFull, "signature(0x02000236d8c927b785e27385737e82cdde2e06dc510ab8545d6eab0ca05c36040a437c, 0x0101084444)"),
+])]
+#[case(freeze_order(order0().0), stdsig(0x45), &[
+    (Mode::Reward, "ERROR: Illegal account spend"),
+    (Mode::TxSigOnly, "signature(0x02000236d8c927b785e27385737e82cdde2e06dc510ab8545d6eab0ca05c36040a437c, 0x0101084545)"),
+    (Mode::TxTimelockOnly, "true"),
+    (Mode::TxFull, "signature(0x02000236d8c927b785e27385737e82cdde2e06dc510ab8545d6eab0ca05c36040a437c, 0x0101084545)"),
+])]
+fn translate(
     #[case] test_input_info: TestInputInfo,
     #[case] witness: InputWitness,
     #[case] expected_results: &[(Mode, &str)],

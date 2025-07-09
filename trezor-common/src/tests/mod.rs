@@ -149,8 +149,8 @@ impl From<chain::AccountCommand> for crate::AccountCommand {
 impl From<chain::OrderAccountCommand> for crate::OrderAccountCommand {
     fn from(value: chain::OrderAccountCommand) -> Self {
         match value {
-            chain::OrderAccountCommand::FillOrder(order_id, amount, destination) => {
-                Self::FillOrder(order_id.to_hash().into(), amount.into(), destination.into())
+            chain::OrderAccountCommand::FillOrder(order_id, amount) => {
+                Self::FillOrder(order_id.to_hash().into(), amount.into())
             }
             chain::OrderAccountCommand::FreezeOrder(order_id) => {
                 Self::FreezeOrder(order_id.to_hash().into())

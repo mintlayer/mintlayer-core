@@ -924,7 +924,7 @@ impl OutputCache {
                 }
             },
             TxInput::OrderAccountCommand(cmd) => match cmd {
-                OrderAccountCommand::FillOrder(order_id, _, _)
+                OrderAccountCommand::FillOrder(order_id, _)
                 | OrderAccountCommand::ConcludeOrder(order_id) => {
                     self.order_data(order_id).is_some_and(|data| {
                         [data.ask_currency, data.give_currency].iter().any(|v| match v {
@@ -1182,7 +1182,7 @@ impl OutputCache {
                     }
                 },
                 TxInput::OrderAccountCommand(cmd) => match cmd {
-                    OrderAccountCommand::FillOrder(order_id, _, _)
+                    OrderAccountCommand::FillOrder(order_id, _)
                     | OrderAccountCommand::FreezeOrder(order_id)
                     | OrderAccountCommand::ConcludeOrder(order_id) => {
                         if !already_present {
@@ -1573,7 +1573,7 @@ impl OutputCache {
                     }
                 },
                 TxInput::OrderAccountCommand(cmd) => match cmd {
-                    OrderAccountCommand::FillOrder(order_id, _, _)
+                    OrderAccountCommand::FillOrder(order_id, _)
                     | OrderAccountCommand::FreezeOrder(order_id)
                     | OrderAccountCommand::ConcludeOrder(order_id) => {
                         if let Some(data) = self.orders.get_mut(order_id) {

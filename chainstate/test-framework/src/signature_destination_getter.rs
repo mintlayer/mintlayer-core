@@ -184,10 +184,12 @@ impl<'a> SignatureDestinationGetter<'a> {
                                 ))?;
                             Ok(order_data.conclude_key().clone())
                         }
-                        AccountCommand::FillOrder(_, _, d) => Ok(d.clone()),
+                        // Signatures on FillOrder v0 inputs are not checked.
+                        AccountCommand::FillOrder(_, _, _) => Ok(Destination::AnyoneCanSpend),
                     },
                     TxInput::OrderAccountCommand(command) => match command {
-                        OrderAccountCommand::FillOrder(_, _, d) => Ok(d.clone()),
+                        // FillOrder v1 inputs must not be signed.
+                        OrderAccountCommand::FillOrder(_, _) => Ok(Destination::AnyoneCanSpend),
                         OrderAccountCommand::FreezeOrder(order_id)
                         | OrderAccountCommand::ConcludeOrder(order_id) => {
                             let order_data = orders_view

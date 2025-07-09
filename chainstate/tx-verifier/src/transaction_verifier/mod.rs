@@ -774,7 +774,7 @@ where
                         }
                     },
                     TxInput::OrderAccountCommand(cmd) => match cmd {
-                        OrderAccountCommand::FillOrder(order_id, _, _)
+                        OrderAccountCommand::FillOrder(order_id, _)
                         | OrderAccountCommand::ConcludeOrder(order_id) => {
                             check_order_doesnt_use_frozen_token(order_id)
                         }
@@ -857,7 +857,7 @@ where
                     }
                 },
                 TxInput::OrderAccountCommand(cmd) => match cmd {
-                    OrderAccountCommand::FillOrder(order_id, fill, _) => {
+                    OrderAccountCommand::FillOrder(order_id, fill) => {
                         let res = self
                             .orders_accounting_cache
                             .fill_order(*order_id, *fill, OrdersVersion::V1)

@@ -8638,7 +8638,7 @@ dependencies = [
 [[package]]
 name = "trezor-client"
 version = "0.1.4"
-source = "git+https://github.com/mintlayer/mintlayer-trezor-firmware?rev=07229ff4943537b81c18a612fe971792d2a37574#07229ff4943537b81c18a612fe971792d2a37574"
+source = "git+https://github.com/mintlayer/mintlayer-trezor-firmware?rev=8bde1135d9ea313cc04a6f1755893acd237e5515#8bde1135d9ea313cc04a6f1755893acd237e5515"
 dependencies = [
  "bitcoin",
  "byteorder",
@@ -9370,6 +9370,7 @@ dependencies = [
  "crypto",
  "hex",
  "itertools 0.14.0",
+ "logging",
  "parity-scale-codec",
  "randomness",
  "rpc-description",

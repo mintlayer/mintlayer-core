@@ -329,15 +329,13 @@ impl ConstrainedValueAccumulator {
         O: OrdersAccountingOperations + OrdersAccountingView<Error = orders_accounting::Error>,
     {
         let result = match command {
-            OrderAccountCommand::FillOrder(id, amount, _) => {
-                Some(self.process_fill_order_command(
-                    chain_config,
-                    block_height,
-                    *id,
-                    *amount,
-                    orders_accounting_delta,
-                )?)
-            }
+            OrderAccountCommand::FillOrder(id, amount) => Some(self.process_fill_order_command(
+                chain_config,
+                block_height,
+                *id,
+                *amount,
+                orders_accounting_delta,
+            )?),
             OrderAccountCommand::ConcludeOrder(order_id) => {
                 Some(self.process_conclude_order_command(*order_id, orders_accounting_delta)?)
             }

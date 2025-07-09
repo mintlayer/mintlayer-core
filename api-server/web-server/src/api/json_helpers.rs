@@ -323,13 +323,12 @@ pub fn tx_input_to_json(
             }
         },
         TxInput::OrderAccountCommand(cmd) => match cmd {
-            OrderAccountCommand::FillOrder(id, fill, dest) => {
+            OrderAccountCommand::FillOrder(id, fill) => {
                 json!({
                     "input_type": "OrderAccountCommand",
                     "command": "FillOrder",
                     "order_id": Address::new(chain_config, *id).expect("addressable").to_string(),
                     "fill_atoms": json!({"atoms": fill.into_atoms().to_string()}),
-                    "destination": Address::new(chain_config, dest.clone()).expect("addressable").as_str(),
                 })
             }
             OrderAccountCommand::ConcludeOrder(order_id) => {
@@ -410,13 +409,12 @@ pub fn tx_input_to_json(
                     "order_id": Address::new(chain_config, *order_id).expect("addressable").to_string(),
                 })
             }
-            AccountCommand::FillOrder(order_id, fill, dest) => {
+            AccountCommand::FillOrder(order_id, fill, _) => {
                 json!({
                     "input_type": "AccountCommand",
                     "command": "FillOrder",
                     "order_id": Address::new(chain_config, *order_id).expect("addressable").to_string(),
                     "fill_atoms": json!({"atoms": fill.into_atoms().to_string()}),
-                    "destination": Address::new(chain_config, dest.clone()).expect("no error").as_str(),
                 })
             }
             AccountCommand::ChangeTokenMetadataUri(token_id, metadata_uri) => {

@@ -508,6 +508,13 @@ pub fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
         ),
         TxInput::AccountCommand(
             AccountNonce::new(rng.next_u64()),
+            AccountCommand::ChangeTokenMetadataUri(
+                TokenId::new(H256::random_using(rng)),
+                random_ascii_alphanumeric_string(rng, 10..20).into_bytes(),
+            ),
+        ),
+        TxInput::AccountCommand(
+            AccountNonce::new(rng.next_u64()),
             AccountCommand::ConcludeOrder(concluded_order1_id),
         ),
         TxInput::AccountCommand(
@@ -527,20 +534,13 @@ pub fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
             Amount::from_atoms(
                 rng.gen_range(1..filled_order2_info.initially_asked.amount().into_atoms()),
             ),
-            Destination::AnyoneCanSpend,
         )),
-        TxInput::AccountCommand(
-            AccountNonce::new(rng.next_u64()),
-            AccountCommand::ChangeTokenMetadataUri(
-                TokenId::new(H256::random_using(rng)),
-                random_ascii_alphanumeric_string(rng, 10..20).into_bytes(),
-            ),
-        ),
     ];
-    let acc_dests: Vec<Destination> = acc_inputs
-        .iter()
+    // Note: the last input is v1 FillOrder, which must not be signed.
+    let acc_dests = (0..acc_inputs.len() - 1)
         .map(|_| destination_from_account(&mut account, &mut db_tx, rng))
-        .collect();
+        .chain(std::iter::once(Destination::AnyoneCanSpend))
+        .collect_vec();
 
     let (_dest_prv, dest_pub) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
     let (_, vrf_public_key) = VRFPrivateKey::new_from_rng(rng, crypto::vrf::VRFKeyKind::Schnorrkel);

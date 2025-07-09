@@ -14,12 +14,13 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
-""" Try submitting two FillOrder transactions using the same "destination", without mining a block in between.
+""" Try submitting two transactions with "similar" FillOrder inputs (i.e. using the same amount
+and, in the case of orders v0, the same destination), without mining a block in between.
 
 Note: the exact result differs depending on the orders version; the purpose of the test is to
-prove that nothing bad can happen as a result (e.g. in orders v1, where orders don't use nonces, using
-the same destination and the same amount results in exactly the same FillOrder input being produced;
-if both of the txs are included in the same block, the block will be invalid).
+prove that nothing bad can happen as a result (e.g. in orders v1, where orders don't use nonces,
+using the same amount results in exactly the same FillOrder input being produced; under older
+consensus rules, if both of the txs are included in the same block, the block would be invalid).
 """
 
 from test_framework.test_framework import BitcoinTestFramework

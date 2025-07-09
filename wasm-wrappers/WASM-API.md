@@ -316,19 +316,10 @@ Given an order id and an amount in the order's ask currency, create an input tha
 Note:
 1) The nonce is only needed before the orders V1 fork activation. After the fork the nonce is
    ignored and any value can be passed for the parameter.
-2) Regarding the destination parameter:
-   a) It can be arbitrary, i.e. it doesn't have to be the same as the destination used
-      in the output that will transfer away the result.
-   b) Though a FillOrder input is technically allowed to have a signature, it is not enforced.
-      I.e. not only you don't have to sign it with the private key corresponding to this
-      destination, you may just provide an empty signature (use `encode_witness_no_signature`
-      for the input instead of `encode_witness`).
-   c) The reasons for having a destination in FillOrder inputs are historical, however it does
-      serve a purpose in orders V1. This is because the current consensus rules require all
-      transaction inputs in a block to be distinct. And since orders V1 don't use nonces,
-      re-using the same destination in the inputs of multiple order-filling transactions
-      for the same order may result in the later transactions being rejected, if they are
-      broadcast to mempool at the same time.
+2) FillOrder inputs should not be signed, i.e. use `encode_witness_no_signature` for the inputs
+   instead of `encode_witness`).
+   Note that in orders v0 FillOrder inputs can technically have a signature, it's just not checked.
+   But in orders V1 we actually require that those inputs don't have signatures.
 
 ### Function: `encode_input_for_freeze_order`
 

@@ -67,6 +67,8 @@ pub enum DestinationSigError {
     InvalidSignatureEncoding,
     #[error("No signature!")]
     SignatureNotFound,
+    #[error("Signature present where it's not needed")]
+    SignatureNotNeeded,
     #[error("Producing signature failed!")]
     ProducingSignatureFailed(crypto::key::SignatureError),
     #[error("Private key does not match with spender public key")]
@@ -138,22 +140,28 @@ pub fn verify_signature<T: Signable>(
         DestinationSigError::InvalidSignatureIndex(input_index, inputs.len(),)
     );
 
-    match input_witness {
-        EvaluatedInputWitness::NoSignature(_) => match outpoint_destination {
-            Destination::PublicKeyHash(_)
-            | Destination::PublicKey(_)
-            | Destination::ScriptHash(_)
-            | Destination::ClassicMultisig(_) => {
+    match outpoint_destination {
+        Destination::PublicKeyHash(_)
+        | Destination::PublicKey(_)
+        | Destination::ScriptHash(_)
+        | Destination::ClassicMultisig(_) => match input_witness {
+            EvaluatedInputWitness::NoSignature(_) => {
                 return Err(DestinationSigError::SignatureNotFound)
             }
-            Destination::AnyoneCanSpend => {}
+            EvaluatedInputWitness::Standard(witness) => {
+                let sighash =
+                    signature_hash(witness.sighash_type(), tx, input_commitments, input_index)?;
+                witness.verify_signature(chain_config, outpoint_destination, &sighash)?;
+            }
         },
-        EvaluatedInputWitness::Standard(witness) => {
-            let sighash =
-                signature_hash(witness.sighash_type(), tx, input_commitments, input_index)?;
-            witness.verify_signature(chain_config, outpoint_destination, &sighash)?;
-        }
+        Destination::AnyoneCanSpend => match input_witness {
+            EvaluatedInputWitness::NoSignature(_) => {}
+            EvaluatedInputWitness::Standard(_) => {
+                return Err(DestinationSigError::SignatureNotNeeded)
+            }
+        },
     }
+
     Ok(())
 }
 

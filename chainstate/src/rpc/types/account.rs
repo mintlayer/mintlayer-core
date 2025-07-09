@@ -145,7 +145,6 @@ pub enum RpcOrderAccountCommand {
     Fill {
         order_id: RpcAddress<OrderId>,
         fill_value: RpcAmountOut,
-        destination: RpcAddress<Destination>,
     },
     Freeze {
         order_id: RpcAddress<OrderId>,
@@ -161,10 +160,9 @@ impl RpcOrderAccountCommand {
             OrderAccountCommand::ConcludeOrder(order_id) => RpcOrderAccountCommand::Conclude {
                 order_id: RpcAddress::new(chain_config, *order_id)?,
             },
-            OrderAccountCommand::FillOrder(id, fill, dest) => RpcOrderAccountCommand::Fill {
+            OrderAccountCommand::FillOrder(id, fill) => RpcOrderAccountCommand::Fill {
                 order_id: RpcAddress::new(chain_config, *id)?,
                 fill_value: RpcAmountOut::from_amount(*fill, chain_config.coin_decimals()),
-                destination: RpcAddress::new(chain_config, dest.clone())?,
             },
             OrderAccountCommand::FreezeOrder(id) => RpcOrderAccountCommand::Freeze {
                 order_id: RpcAddress::new(chain_config, *id)?,

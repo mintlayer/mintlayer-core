@@ -924,13 +924,9 @@ fn mutate_first_input(
             }
         }
         TxInput::OrderAccountCommand(cmd) => match cmd {
-            OrderAccountCommand::FillOrder(id, amount, destination) => {
-                TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(
-                    *id,
-                    Amount::from_atoms(amount.into_atoms() + 1),
-                    destination.clone(),
-                ))
-            }
+            OrderAccountCommand::FillOrder(id, amount) => TxInput::OrderAccountCommand(
+                OrderAccountCommand::FillOrder(*id, Amount::from_atoms(amount.into_atoms() + 1)),
+            ),
             OrderAccountCommand::ConcludeOrder(order_id) => {
                 TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder(*order_id))
             }

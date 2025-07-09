@@ -41,8 +41,8 @@ use common::{
         },
         config::EpochIndex,
         tokens::{TokenAuxiliaryData, TokenId},
-        AccountNonce, AccountType, Block, ChainConfig, GenBlock, GenBlockId, PoolId, Transaction,
-        TxOutput, UtxoOutPoint,
+        AccountNonce, AccountType, Block, ChainConfig, GenBlock, GenBlockId, OrderAccountCommand,
+        PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{
         id::WithId, time::Time, Amount, BlockCount, BlockDistance, BlockHeight, Id, Idable,
@@ -779,14 +779,29 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
 
     #[log_error]
     fn check_duplicate_inputs(&self, block: &Block) -> Result<(), CheckBlockTransactionsError> {
-        // check for duplicate inputs (see CVE-2018-17144)
-        let mut block_inputs = BTreeSet::new();
+        // Reject the block if it has duplicate inputs, with the exception of v1 FillOrder inputs,
+        // which can't be unique (because they only contain the order id and the amount).
+        // Note that this is a precaution "inspired" by the Bitcoin vulnerability CVE-2018-17144.
+        // I.e. even if this check is removed, the corresponding erroneous conditions (like spending
+        // the same UTXO twice or concluding an already concluded order) should be captured elsewhere.
+        let mut block_unique_inputs = BTreeSet::new();
         for tx in block.transactions() {
             for input in tx.inputs() {
-                ensure!(
-                    block_inputs.insert(input),
-                    CheckBlockTransactionsError::DuplicateInputInBlock(block.get_id())
-                );
+                let must_be_unique = match input {
+                    TxInput::Utxo(_) | TxInput::Account(_) | TxInput::AccountCommand(_, _) => true,
+                    TxInput::OrderAccountCommand(cmd) => match cmd {
+                        OrderAccountCommand::FillOrder(_, _) => false,
+                        | OrderAccountCommand::FreezeOrder(_)
+                        | OrderAccountCommand::ConcludeOrder(_) => true,
+                    },
+                };
+
+                if must_be_unique {
+                    ensure!(
+                        block_unique_inputs.insert(input),
+                        CheckBlockTransactionsError::DuplicateInputInBlock(block.get_id())
+                    );
+                }
             }
         }
         Ok(())
