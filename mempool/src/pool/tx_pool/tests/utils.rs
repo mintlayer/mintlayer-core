@@ -339,7 +339,6 @@ pub fn make_test_block(
 }
 
 pub fn setup() -> TxPool<StoreMemoryUsageEstimator> {
-    logging::init_logging();
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
     let chainstate_interface = start_chainstate_with_config(Arc::clone(&chain_config));
     TxPool::new(
@@ -352,7 +351,6 @@ pub fn setup() -> TxPool<StoreMemoryUsageEstimator> {
 }
 
 pub fn setup_with_min_tx_relay_fee_rate(fee_rate: FeeRate) -> TxPool<StoreMemoryUsageEstimator> {
-    logging::init_logging();
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
     let mempool_config = MempoolConfig {
         min_tx_relay_fee_rate: fee_rate.into(),
@@ -370,7 +368,6 @@ pub fn setup_with_min_tx_relay_fee_rate(fee_rate: FeeRate) -> TxPool<StoreMemory
 pub fn setup_with_chainstate(
     chainstate: Box<dyn ChainstateInterface>,
 ) -> TxPool<StoreMemoryUsageEstimator> {
-    logging::init_logging();
     let chain_config = Arc::clone(chainstate.get_chain_config());
     let chainstate_handle = start_chainstate(chainstate);
     TxPool::new(

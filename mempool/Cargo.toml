@@ -48,5 +48,6 @@ chainstate-test-framework = { path = "../chainstate/test-framework" }
 crypto = { path = "../crypto" }
 test-utils = { path = "../test-utils" }
 
+ctor.workspace = true
 mockall.workspace = true
 rstest.workspace = true
