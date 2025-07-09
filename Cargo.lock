@@ -27,7 +27,7 @@ dependencies = [
  "proptest",
  "rstest",
  "serialization",
- "thiserror",
+ "thiserror 1.0.69",
  "utils",
 ]
 
@@ -154,7 +154,7 @@ dependencies = [
  "ndk-context",
  "ndk-sys 0.6.0+11769913",
  "num_enum",
- "thiserror",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -252,7 +252,7 @@ dependencies = [
  "node-comm",
  "node-lib",
  "rpc",
- "thiserror",
+ "thiserror 1.0.69",
  "tokio",
  "utils",
  "utils-networking",
@@ -281,7 +281,7 @@ dependencies = [
  "rstest",
  "serialization",
  "test-utils",
- "thiserror",
+ "thiserror 1.0.69",
  "tokens-accounting",
  "tokio",
  "tx-verifier",
@@ -331,7 +331,7 @@ dependencies = [
  "rstest",
  "serialization",
  "test-utils",
- "thiserror",
+ "thiserror 1.0.69",
  "tokio",
  "tokio-postgres",
 ]
@@ -384,7 +384,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serialization",
- "thiserror",
+ "thiserror 1.0.69",
  "tokio",
  "tower-http 0.5.2",
  "utils",
@@ -706,6 +706,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "base58ck"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2c8d66485a3a2ea485c1913c4572ce0256067a5377ac8c75c4960e1cda98605f"
+dependencies = [
+ "bitcoin-internals 0.3.0",
+ "bitcoin_hashes 0.14.0",
+]
+
+[[package]]
 name = "base64"
 version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -761,12 +771,6 @@ checksum = "d86b93f97252c47b41663388e6d155714a9d0c398b99f1005cbc5f978b29f445"
 
 [[package]]
 name = "bech32"
-version = "0.10.0-beta"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "98f7eed2b2781a6f0b5c903471d48e15f56fb4e1165df8a9a2337fd1a59d45ea"
-
-[[package]]
-name = "bech32"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d965446196e3b7decd44aa7ee49e31d630118f90ef12f97900f262eb915c951d"
@@ -795,7 +799,7 @@ version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "33415e24172c1b7d6066f6d999545375ab8e1d95421d6784bdfff9496f292387"
 dependencies = [
- "bitcoin_hashes",
+ "bitcoin_hashes 0.13.0",
  "serde",
  "unicode-normalization",
  "zeroize",
@@ -833,16 +837,19 @@ checksum = "5e764a1d40d510daf35e07be9eb06e75770908c27d411ee6c92109c9840eaaf7"
 
 [[package]]
 name = "bitcoin"
-version = "0.31.2"
+version = "0.32.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6c85783c2fe40083ea54a33aa2f0ba58831d90fcd190f5bdc47e74e84d2a96ae"
+checksum = "ad8929a18b8e33ea6b3c09297b687baaa71fb1b97353243a3f1029fad5c59c5b"
 dependencies = [
- "bech32 0.10.0-beta",
- "bitcoin-internals",
- "bitcoin_hashes",
- "hex-conservative",
+ "base58ck",
+ "bech32 0.11.0",
+ "bitcoin-internals 0.3.0",
+ "bitcoin-io",
+ "bitcoin-units",
+ "bitcoin_hashes 0.14.0",
+ "hex-conservative 0.2.1",
  "hex_lit",
- "secp256k1 0.28.2",
+ "secp256k1",
 ]
 
 [[package]]
@@ -861,13 +868,44 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9425c3bf7089c983facbae04de54513cce73b41c7f9ff8c845b54e7bc64ebbfb"
 
 [[package]]
+name = "bitcoin-internals"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "30bdbe14aa07b06e6cfeffc529a1f099e5fbe249524f8125358604df99a4bed2"
+
+[[package]]
+name = "bitcoin-io"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0b47c4ab7a93edb0c7198c5535ed9b52b63095f4e9b45279c6736cec4b856baf"
+
+[[package]]
+name = "bitcoin-units"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5285c8bcaa25876d07f37e3d30c303f2609179716e11d688f51e8f1fe70063e2"
+dependencies = [
+ "bitcoin-internals 0.3.0",
+]
+
+[[package]]
 name = "bitcoin_hashes"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1930a4dabfebb8d7d9992db18ebe3ae2876f0a305fab206fd168df931ede293b"
 dependencies = [
- "bitcoin-internals",
- "hex-conservative",
+ "bitcoin-internals 0.2.0",
+ "hex-conservative 0.1.2",
+]
+
+[[package]]
+name = "bitcoin_hashes"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bb18c03d0db0247e147a21a6faafd5a7eb851c743db062de72018b6b7e8e4d16"
+dependencies = [
+ "bitcoin-io",
+ "hex-conservative 0.2.1",
 ]
 
 [[package]]
@@ -995,7 +1033,7 @@ dependencies = [
  "storage-inmemory",
  "subsystem",
  "test-utils",
- "thiserror",
+ "thiserror 1.0.69",
  "tokio",
  "utils",
 ]
@@ -1128,7 +1166,7 @@ dependencies = [
  "polling",
  "rustix 0.38.44",
  "slab",
- "thiserror",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -1243,7 +1281,7 @@ dependencies = [
  "storage",
  "subsystem",
  "test-utils",
- "thiserror",
+ "thiserror 1.0.69",
  "tokens-accounting",
  "tokio",
  "tracing",
@@ -1372,7 +1410,7 @@ dependencies = [
  "serialization",
  "static_assertions",
  "storage",
- "thiserror",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -1503,7 +1541,7 @@ version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4274ea815e013e0f9f04a2633423e14194e408a0576c943ce3d14ca56c50031c"
 dependencies = [
- "thiserror",
+ "thiserror 1.0.69",
  "x11rb",
 ]
 
@@ -1606,7 +1644,7 @@ dependencies = [
  "static_assertions",
  "strum",
  "test-utils",
- "thiserror",
+ "thiserror 1.0.69",
  "typename",
  "utils",
 ]
@@ -1636,7 +1674,7 @@ dependencies = [
  "rstest",
  "serialization",
  "test-utils",
- "thiserror",
+ "thiserror 1.0.69",
  "utils",
  "utxo",
 ]
@@ -1673,7 +1711,7 @@ dependencies = [
  "randomness",
  "rstest",
  "test-utils",
- "thiserror",
+ "thiserror 1.0.69",
  "tokens-accounting",
  "utils",
  "utxo",
@@ -1949,14 +1987,14 @@ dependencies = [
  "rpc-description",
  "rstest",
  "schnorrkel",
- "secp256k1 0.29.1",
+ "secp256k1",
  "serde",
  "serialization",
  "sha-1 0.10.1",
  "sha2",
  "sha3",
  "test-utils",
- "thiserror",
+ "thiserror 1.0.69",
  "x25519-dalek",
  "zeroize",
 ]
@@ -2338,7 +2376,7 @@ dependencies = [
  "storage-inmemory",
  "storage-lmdb",
  "test-utils",
- "thiserror",
+ "thiserror 1.0.69",
  "tokio",
  "utils",
  "utils-networking",
@@ -3107,7 +3145,7 @@ checksum = "6f56f6318968d03c18e1bcf4857ff88c61157e9da8e47c5f29055d60e1228884"
 dependencies = [
  "log",
  "presser",
- "thiserror",
+ "thiserror 1.0.69",
  "winapi",
  "windows 0.52.0",
 ]
@@ -3218,7 +3256,7 @@ dependencies = [
  "com",
  "libc",
  "libloading 0.8.8",
- "thiserror",
+ "thiserror 1.0.69",
  "widestring",
  "winapi",
 ]
@@ -3254,6 +3292,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "212ab92002354b4819390025006c897e8140934349e8635c9b077f47b4dcbd20"
 
 [[package]]
+name = "hex-conservative"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5313b072ce3c597065a808dbf612c4c8e8590bdbf8b579508bf7a762c5eae6cd"
+dependencies = [
+ "arrayvec",
+]
+
+[[package]]
 name = "hex-literal"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3285,7 +3332,7 @@ dependencies = [
  "once_cell",
  "radix_trie",
  "rand 0.8.5",
- "thiserror",
+ "thiserror 1.0.69",
  "tokio",
  "tracing",
 ]
@@ -3307,7 +3354,7 @@ dependencies = [
  "ipnet",
  "once_cell",
  "rand 0.8.5",
- "thiserror",
+ "thiserror 1.0.69",
  "tinyvec",
  "tokio",
  "tracing",
@@ -3327,7 +3374,7 @@ dependencies = [
  "futures-util",
  "hickory-proto",
  "serde",
- "thiserror",
+ "thiserror 1.0.69",
  "time",
  "tokio",
  "tokio-util",
@@ -3546,7 +3593,7 @@ dependencies = [
  "iced_renderer",
  "iced_widget",
  "iced_winit",
- "thiserror",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -3580,7 +3627,7 @@ dependencies = [
  "palette",
  "rustc-hash 2.1.1",
  "smol_str",
- "thiserror",
+ "thiserror 1.0.69",
  "web-time",
 ]
 
@@ -3638,7 +3685,7 @@ dependencies = [
  "once_cell",
  "raw-window-handle",
  "rustc-hash 2.1.1",
- "thiserror",
+ "thiserror 1.0.69",
  "unicode-segmentation",
 ]
 
@@ -3652,7 +3699,7 @@ dependencies = [
  "iced_tiny_skia",
  "iced_wgpu",
  "log",
- "thiserror",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -3665,7 +3712,7 @@ dependencies = [
  "iced_core",
  "iced_futures",
  "raw-window-handle",
- "thiserror",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -3701,7 +3748,7 @@ dependencies = [
  "lyon",
  "once_cell",
  "rustc-hash 2.1.1",
- "thiserror",
+ "thiserror 1.0.69",
  "wgpu",
 ]
 
@@ -3717,7 +3764,7 @@ dependencies = [
  "once_cell",
  "ouroboros",
  "rustc-hash 2.1.1",
- "thiserror",
+ "thiserror 1.0.69",
  "unicode-segmentation",
 ]
 
@@ -3732,7 +3779,7 @@ dependencies = [
  "iced_runtime",
  "log",
  "rustc-hash 2.1.1",
- "thiserror",
+ "thiserror 1.0.69",
  "tracing",
  "wasm-bindgen-futures",
  "web-sys",
@@ -3987,7 +4034,7 @@ dependencies = [
  "combine",
  "jni-sys",
  "log",
- "thiserror",
+ "thiserror 1.0.69",
  "walkdir",
  "windows-sys 0.45.0",
 ]
@@ -4047,7 +4094,7 @@ dependencies = [
  "rustls-native-certs 0.7.3",
  "rustls-pki-types",
  "soketto",
- "thiserror",
+ "thiserror 1.0.69",
  "tokio",
  "tokio-rustls 0.25.0",
  "tokio-util",
@@ -4074,7 +4121,7 @@ dependencies = [
  "rustc-hash 1.1.0",
  "serde",
  "serde_json",
- "thiserror",
+ "thiserror 1.0.69",
  "tokio",
  "tokio-stream",
  "tracing",
@@ -4093,7 +4140,7 @@ dependencies = [
  "jsonrpsee-types",
  "serde",
  "serde_json",
- "thiserror",
+ "thiserror 1.0.69",
  "tokio",
  "tower 0.4.13",
  "tracing",
@@ -4129,7 +4176,7 @@ dependencies = [
  "serde",
  "serde_json",
  "soketto",
- "thiserror",
+ "thiserror 1.0.69",
  "tokio",
  "tokio-stream",
  "tokio-util",
@@ -4147,7 +4194,7 @@ dependencies = [
  "beef",
  "serde",
  "serde_json",
- "thiserror",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -4364,7 +4411,7 @@ name = "logging"
 version = "1.0.2"
 dependencies = [
  "log",
- "thiserror",
+ "thiserror 1.0.69",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -4533,7 +4580,7 @@ dependencies = [
  "static_assertions",
  "subsystem",
  "test-utils",
- "thiserror",
+ "thiserror 1.0.69",
  "tokens-accounting",
  "tokio",
  "tracing",
@@ -4559,7 +4606,7 @@ checksum = "8b69f92eb22368186aa4d25e71d2263f822b137ed3c022356acf37634c1ddda0"
 dependencies = [
  "itertools 0.12.1",
  "parity-scale-codec",
- "thiserror",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -4632,7 +4679,7 @@ dependencies = [
  "libtest-mimic",
  "logging",
  "node-lib",
- "thiserror",
+ "thiserror 1.0.69",
  "tokio",
  "utils",
  "wallet-address-generator-lib",
@@ -4658,7 +4705,7 @@ dependencies = [
  "static_assertions",
  "strum",
  "test-utils",
- "thiserror",
+ "thiserror 1.0.69",
  "tokens-accounting",
  "utils",
  "utxo",
@@ -4739,7 +4786,7 @@ dependencies = [
  "rustc-hash 1.1.0",
  "spirv",
  "termcolor",
- "thiserror",
+ "thiserror 1.0.69",
  "unicode-xid",
 ]
 
@@ -4772,7 +4819,7 @@ dependencies = [
  "ndk-sys 0.6.0+11769913",
  "num_enum",
  "raw-window-handle",
- "thiserror",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -4816,7 +4863,7 @@ dependencies = [
  "snowstorm",
  "socket2",
  "test-utils",
- "thiserror",
+ "thiserror 1.0.69",
  "tokio",
  "tokio-socks",
  "tokio-util",
@@ -4879,7 +4926,7 @@ dependencies = [
  "serde_json",
  "serialization",
  "subsystem",
- "thiserror",
+ "thiserror 1.0.69",
  "tokio",
  "tower 0.4.13",
  "utils-networking",
@@ -4922,7 +4969,7 @@ dependencies = [
  "serialization",
  "storage",
  "strum",
- "thiserror",
+ "thiserror 1.0.69",
  "tokio",
  "utils",
  "wallet",
@@ -4955,7 +5002,7 @@ dependencies = [
  "serialization",
  "subsystem",
  "test-utils",
- "thiserror",
+ "thiserror 1.0.69",
  "tokio",
  "utils",
  "wallet",
@@ -5546,7 +5593,7 @@ dependencies = [
  "serialization",
  "strum",
  "test-utils",
- "thiserror",
+ "thiserror 1.0.69",
  "utils",
 ]
 
@@ -5633,7 +5680,7 @@ dependencies = [
  "storage-inmemory",
  "subsystem",
  "test-utils",
- "thiserror",
+ "thiserror 1.0.69",
  "tokio",
  "tokio-socks",
  "tokio-stream",
@@ -6012,7 +6059,7 @@ dependencies = [
  "serialization",
  "strum",
  "test-utils",
- "thiserror",
+ "thiserror 1.0.69",
  "typename",
  "utils",
 ]
@@ -6189,22 +6236,22 @@ dependencies = [
 
 [[package]]
 name = "protobuf"
-version = "3.3.0"
+version = "3.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b65f4a8ec18723a734e5dc09c173e0abf9690432da5340285d536edcb4dac190"
+checksum = "d65a1d4ddae7d8b5de68153b48f6aa3bba8cb002b243dbdbc55a5afbc98f99f4"
 dependencies = [
  "once_cell",
  "protobuf-support",
- "thiserror",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
 name = "protobuf-support"
-version = "3.3.0"
+version = "3.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6872f4d4f4b98303239a2b5838f5bbbb77b01ffc892d627957f37a22d7cfe69c"
+checksum = "3e36c2f31e0a47f9280fb347ef5e461ffcd2c52dd520d8e216b52f93b0b0d7d6"
 dependencies = [
- "thiserror",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -6502,7 +6549,7 @@ checksum = "ba009ff324d1fc1b900bd1fdb31564febe58a8ccc8a6fdbb93b543d33b13ca43"
 dependencies = [
  "getrandom 0.2.16",
  "libredox",
- "thiserror",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -6521,7 +6568,7 @@ dependencies = [
  "strip-ansi-escapes",
  "strum",
  "strum_macros",
- "thiserror",
+ "thiserror 1.0.69",
  "unicode-segmentation",
  "unicode-width",
 ]
@@ -6770,7 +6817,7 @@ dependencies = [
  "serde_json",
  "subsystem",
  "test-utils",
- "thiserror",
+ "thiserror 1.0.69",
  "tokio",
  "tower 0.4.13",
  "tower-http 0.4.4",
@@ -6804,7 +6851,7 @@ dependencies = [
  "rstest",
  "serde",
  "serde_json",
- "thiserror",
+ "thiserror 1.0.69",
  "utils",
 ]
 
@@ -7159,7 +7206,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serialization",
- "thiserror",
+ "thiserror 1.0.69",
  "typename",
  "utils",
 ]
@@ -7201,31 +7248,13 @@ checksum = "1c107b6f4780854c8b126e228ea8869f4d7b71260f962fefb57b996b8959ba6b"
 
 [[package]]
 name = "secp256k1"
-version = "0.28.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d24b59d129cdadea20aea4fb2352fa053712e5d713eee47d700cd4b2bc002f10"
-dependencies = [
- "bitcoin_hashes",
- "secp256k1-sys 0.9.2",
-]
-
-[[package]]
-name = "secp256k1"
 version = "0.29.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9465315bc9d4566e1724f0fffcbcc446268cb522e60f9a27bcded6b19c108113"
 dependencies = [
+ "bitcoin_hashes 0.13.0",
  "rand 0.8.5",
- "secp256k1-sys 0.10.1",
-]
-
-[[package]]
-name = "secp256k1-sys"
-version = "0.9.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e5d1746aae42c19d583c3c1a8c646bfad910498e2051c551a7f2e3c0c9fbb7eb"
-dependencies = [
- "cc",
+ "secp256k1-sys",
 ]
 
 [[package]]
@@ -7440,7 +7469,7 @@ dependencies = [
  "serde_json",
  "serialization-core",
  "serialization-tagged",
- "thiserror",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -7657,7 +7686,7 @@ dependencies = [
  "log",
  "memmap2",
  "rustix 0.38.44",
- "thiserror",
+ "thiserror 1.0.69",
  "wayland-backend",
  "wayland-client",
  "wayland-csd-frame",
@@ -7716,7 +7745,7 @@ dependencies = [
  "pin-project",
  "rand 0.8.5",
  "snow",
- "thiserror",
+ "thiserror 1.0.69",
  "tokio",
 ]
 
@@ -7836,7 +7865,7 @@ dependencies = [
  "logging",
  "rstest",
  "test-utils",
- "thiserror",
+ "thiserror 1.0.69",
  "utils",
 ]
 
@@ -7848,7 +7877,7 @@ dependencies = [
  "storage",
  "storage-core",
  "test-utils",
- "thiserror",
+ "thiserror 1.0.69",
  "utils",
 ]
 
@@ -7953,7 +7982,7 @@ dependencies = [
  "oneshot",
  "static_assertions",
  "testing_logger",
- "thiserror",
+ "thiserror 1.0.69",
  "tokio",
  "tracing",
  "utils",
@@ -8120,7 +8149,7 @@ dependencies = [
  "serde",
  "serialization",
  "subsystem",
- "thiserror",
+ "thiserror 1.0.69",
  "tokio",
  "wallet-types",
 ]
@@ -8158,7 +8187,16 @@ version = "1.0.69"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6aaf5339b578ea85b50e080feb250a3e8ae8cfcdff9a461c9ec2904bc923f52"
 dependencies = [
- "thiserror-impl",
+ "thiserror-impl 1.0.69",
+]
+
+[[package]]
+name = "thiserror"
+version = "2.0.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "567b8a2dae586314f7be2a752ec7474332959c6460e02bde30d702a66d488708"
+dependencies = [
+ "thiserror-impl 2.0.12",
 ]
 
 [[package]]
@@ -8166,6 +8204,17 @@ name = "thiserror-impl"
 version = "1.0.69"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4fee6c4efc90059e10f81e6d42c60a18f76588c3d74cb83a0b242a2b6c7504c1"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.101",
+]
+
+[[package]]
+name = "thiserror-impl"
+version = "2.0.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f7cf42b4507d8ea322120659672cf1b9dbb93f8f2d4ecfd6e51350ff5b17a1d"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -8302,7 +8351,7 @@ dependencies = [
  "serialization",
  "strum",
  "test-utils",
- "thiserror",
+ "thiserror 1.0.69",
  "utils",
 ]
 
@@ -8401,7 +8450,7 @@ checksum = "0d4770b8024672c1101b3f6733eab95b18007dbe0847a8afe341fcf79e06043f"
 dependencies = [
  "either",
  "futures-util",
- "thiserror",
+ "thiserror 1.0.69",
  "tokio",
 ]
 
@@ -8637,15 +8686,15 @@ dependencies = [
 
 [[package]]
 name = "trezor-client"
-version = "0.1.4"
-source = "git+https://github.com/mintlayer/mintlayer-trezor-firmware?rev=07229ff4943537b81c18a612fe971792d2a37574#07229ff4943537b81c18a612fe971792d2a37574"
+version = "0.1.5"
+source = "git+https://github.com/mintlayer/mintlayer-trezor-firmware?rev=198346c2f731e7ff34be03b7a16818008eeeae0d#198346c2f731e7ff34be03b7a16818008eeeae0d"
 dependencies = [
  "bitcoin",
  "byteorder",
  "hex",
  "protobuf",
  "rusb",
- "thiserror",
+ "thiserror 2.0.12",
  "tracing",
  "unicode-normalization",
 ]
@@ -8738,7 +8787,7 @@ dependencies = [
  "serialization",
  "static_assertions",
  "test-utils",
- "thiserror",
+ "thiserror 1.0.69",
  "tokens-accounting",
  "utils",
  "utxo",
@@ -8930,7 +8979,7 @@ dependencies = [
  "static_assertions",
  "tempfile",
  "test-utils",
- "thiserror",
+ "thiserror 1.0.69",
  "tokio",
  "tracing",
  "zeroize",
@@ -8946,7 +8995,7 @@ dependencies = [
  "serde_test",
  "serde_with",
  "test-utils",
- "thiserror",
+ "thiserror 1.0.69",
  "tokio",
 ]
 
@@ -8964,7 +9013,7 @@ dependencies = [
  "rstest",
  "serialization",
  "test-utils",
- "thiserror",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -9052,7 +9101,7 @@ dependencies = [
  "storage",
  "tempfile",
  "test-utils",
- "thiserror",
+ "thiserror 1.0.69",
  "trezor-client",
  "tx-verifier",
  "utils",
@@ -9070,7 +9119,7 @@ dependencies = [
  "clap",
  "common",
  "crypto",
- "thiserror",
+ "thiserror 1.0.69",
  "utils",
  "wallet",
  "wallet-address-generator-lib",
@@ -9085,7 +9134,7 @@ dependencies = [
  "clap",
  "common",
  "crypto",
- "thiserror",
+ "thiserror 1.0.69",
  "utils",
  "wallet",
  "wallet-controller",
@@ -9138,7 +9187,7 @@ dependencies = [
  "shlex",
  "subsystem",
  "test-utils",
- "thiserror",
+ "thiserror 1.0.69",
  "tokio",
  "utils",
  "utils-networking",
@@ -9185,7 +9234,7 @@ dependencies = [
  "shlex",
  "subsystem",
  "test-utils",
- "thiserror",
+ "thiserror 1.0.69",
  "tokio",
  "utils",
  "utils-networking",
@@ -9225,7 +9274,7 @@ dependencies = [
  "serialization",
  "storage",
  "test-utils",
- "thiserror",
+ "thiserror 1.0.69",
  "tokio",
  "utils",
  "utils-networking",
@@ -9254,7 +9303,7 @@ dependencies = [
  "serde_json",
  "serialization",
  "subsystem",
- "thiserror",
+ "thiserror 1.0.69",
  "tokio",
  "tower 0.4.13",
  "utils",
@@ -9275,7 +9324,7 @@ dependencies = [
  "logging",
  "rpc",
  "rpc-description",
- "thiserror",
+ "thiserror 1.0.69",
  "tokio",
  "utils",
  "wallet-rpc-lib",
@@ -9310,7 +9359,7 @@ dependencies = [
  "serialization",
  "subsystem",
  "test-utils",
- "thiserror",
+ "thiserror 1.0.69",
  "tokio",
  "utils",
  "utils-networking",
@@ -9334,7 +9383,7 @@ dependencies = [
  "storage",
  "storage-sqlite",
  "test-utils",
- "thiserror",
+ "thiserror 1.0.69",
  "utils",
  "utxo",
  "wallet-types",
@@ -9379,7 +9428,7 @@ dependencies = [
  "serialization",
  "storage",
  "test-utils",
- "thiserror",
+ "thiserror 1.0.69",
  "tx-verifier",
  "utils",
  "zeroize",
@@ -9535,7 +9584,7 @@ dependencies = [
  "serde",
  "serialization",
  "test-utils",
- "thiserror",
+ "thiserror 1.0.69",
  "tsify",
  "tx-verifier",
  "utils",
@@ -9717,7 +9766,7 @@ dependencies = [
  "raw-window-handle",
  "rustc-hash 1.1.0",
  "smallvec",
- "thiserror",
+ "thiserror 1.0.69",
  "web-sys",
  "wgpu-hal",
  "wgpu-types",
@@ -9761,7 +9810,7 @@ dependencies = [
  "renderdoc-sys",
  "rustc-hash 1.1.0",
  "smallvec",
- "thiserror",
+ "thiserror 1.0.69",
  "wasm-bindgen",
  "web-sys",
  "wgpu-types",
@@ -9838,7 +9887,7 @@ dependencies = [
  "clipboard_wayland",
  "clipboard_x11",
  "raw-window-handle",
- "thiserror",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
