@@ -220,10 +220,7 @@ class WalletHtlcSpend(BitcoinTestFramework):
             # Bob can't spend it without secret
             result = await wallet.compose_transaction([tx_output], [UtxoOutpoint(alice_htlc_tx_id, 0)], [None])
             output = await wallet.sign_raw_transaction(result['result']['hex'])
-            assert_in("The transaction has been fully signed and is ready to be broadcast to network", output)
-            signed_tx = output.split('\n')[2]
-            output = await wallet.submit_transaction(signed_tx)
-            assert_in("Signature decoding failed", output)
+            assert_in("Not all transaction inputs have been signed", output)
             # Bob can't spend it with incorrect secret
             result = await wallet.compose_transaction([tx_output], [UtxoOutpoint(alice_htlc_tx_id, 0)], [random_secret_hex])
             output = await wallet.sign_raw_transaction(result['result']['hex'])
@@ -240,10 +237,7 @@ class WalletHtlcSpend(BitcoinTestFramework):
             tx_output = TransferTxOutput(bob_amount_to_swap * ATOMS_PER_COIN, alice_pub_key_hex, None)
             result = await wallet.compose_transaction([tx_output], [UtxoOutpoint(bob_htlc_tx_id, 0)], [None])
             output = await wallet.sign_raw_transaction(result['result']['hex'])
-            assert_in("The transaction has been fully signed and is ready to be broadcast to network", output)
-            signed_tx = output.split('\n')[2]
-            output = await wallet.submit_transaction(signed_tx)
-            assert_in("Signature decoding failed", output)
+            assert_in("Not all transaction inputs have been signed", output)
             # Alice can't spend it with incorrect secret
             result = await wallet.compose_transaction([tx_output], [UtxoOutpoint(bob_htlc_tx_id, 0)], [random_secret_hex])
             output = await wallet.sign_raw_transaction(result['result']['hex'])

@@ -13,7 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+    collections::BTreeMap,
+    sync::{Arc, Mutex},
+};
 
 use crate::{
     key_manager::KeyManager,
@@ -241,6 +244,10 @@ impl TestFrameworkBuilder {
 
     pub fn build(self) -> TestFramework {
         self.try_build().unwrap()
+    }
+
+    pub fn build_arc_mutex(self) -> Arc<Mutex<TestFramework>> {
+        Arc::new(Mutex::new(self.build()))
     }
 }
 

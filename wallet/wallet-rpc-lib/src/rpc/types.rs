@@ -108,7 +108,7 @@ pub enum RpcError<N: NodeInterface> {
     #[error("Invalid block ID")]
     InvalidBlockId,
 
-    #[error("Wallet error: {0}")]
+    #[error("Wallet controller error: {0}")]
     Controller(#[from] wallet_controller::ControllerError<N>),
 
     #[error("RPC error: {0}")]

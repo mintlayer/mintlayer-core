@@ -202,7 +202,7 @@ impl MockNode {
 impl NodeInterface for MockNode {
     type Error = NodeRpcError;
 
-    fn is_cold_wallet_node(&self) -> WalletControllerMode {
+    async fn is_cold_wallet_node(&self) -> WalletControllerMode {
         WalletControllerMode::Hot
     }
 

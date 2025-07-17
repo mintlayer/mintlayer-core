@@ -25,6 +25,7 @@ use futures::{
 use common::{
     address::RpcAddress,
     chain::{
+        htlc::HtlcSecret,
         output_value::OutputValue,
         tokens::{RPCTokenInfo, TokenId},
         AccountCommand, ChainConfig, Destination, OrderAccountCommand, OrderId, PoolId,
@@ -33,6 +34,7 @@ use common::{
     primitives::{amount::RpcAmountOut, Amount},
 };
 use node_comm::node_traits::NodeInterface;
+use utils::ensure;
 use wallet::{
     destination_getters::{get_tx_output_destination, HtlcSpendingCondition},
     WalletError,
@@ -100,11 +102,17 @@ pub async fn fetch_order_info<T: NodeInterface>(
 
 pub async fn fetch_utxo<T: NodeInterface, B: storage::Backend>(
     rpc_client: &T,
-    input: &UtxoOutPoint,
     wallet: &RuntimeWallet<B>,
+    input: &UtxoOutPoint,
 ) -> Result<TxOutput, ControllerError<T>> {
-    // search locally for the unspent utxo
-    if let Some(out) = wallet.find_unspent_utxo_and_destination(input) {
+    // Search locally for the unspent utxo.
+    // Note: if HtlcSpendingCondition::Skip is used, find_unspent_utxo_and_destination will return None for htlc
+    // inputs. So we use arbitrary condition other than Skip.
+    // TODO: perhaps find_unspent_utxo_and_destination should return Option<Destination> for the cases when it's
+    // not actually needed.
+    if let Some(out) =
+        wallet.find_unspent_utxo_and_destination(input, HtlcSpendingCondition::WithMultisig)
+    {
         return Ok(out.0);
     }
 
@@ -120,11 +128,12 @@ pub async fn fetch_utxo<T: NodeInterface, B: storage::Backend>(
 
 async fn fetch_utxo_and_destination<T: NodeInterface, B: storage::Backend>(
     rpc_client: &T,
-    input: &UtxoOutPoint,
     wallet: &RuntimeWallet<B>,
+    input: &UtxoOutPoint,
+    htlc_spending_condition: HtlcSpendingCondition,
 ) -> Result<(TxOutput, Destination), ControllerError<T>> {
     // search locally for the unspent utxo
-    if let Some(out) = wallet.find_unspent_utxo_and_destination(input) {
+    if let Some(out) = wallet.find_unspent_utxo_and_destination(input, htlc_spending_condition) {
         return Ok(out);
     }
 
@@ -144,7 +153,7 @@ async fn fetch_utxo_and_destination<T: NodeInterface, B: storage::Backend>(
             .await
             .map_err(ControllerError::NodeCallError)?
     } else {
-        get_tx_output_destination(&utxo, &|_| None, HtlcSpendingCondition::Skip)
+        get_tx_output_destination(&utxo, &|_| None, htlc_spending_condition)
     }
     .ok_or(ControllerError::WalletError(WalletError::CannotFindUtxo(
         input.clone(),
@@ -264,14 +273,30 @@ pub async fn into_balances<T: NodeInterface>(
 }
 
 // TODO: optimize RPC calls to the Node
-// TODO: this function should probably not assume None for htlc_secrets and accept them from the outside instead.
 pub async fn tx_to_partially_signed_tx<T: NodeInterface, B: storage::Backend>(
     rpc_client: &T,
     wallet: &RuntimeWallet<B>,
     tx: Transaction,
+    htlc_secrets: Option<Vec<Option<HtlcSecret>>>,
 ) -> Result<PartiallySignedTransaction, ControllerError<T>> {
-    let (input_utxos, additional_infos, destinations) =
-        fetch_input_infos(rpc_client, wallet, tx.inputs()).await?;
+    if let Some(htlc_secrets) = &htlc_secrets {
+        ensure!(
+            tx.inputs().len() == htlc_secrets.len(),
+            ControllerError::InvalidHtlcSecretsCount
+        );
+    }
+
+    let (input_utxos, additional_infos, destinations) = fetch_input_infos(
+        rpc_client,
+        wallet,
+        tx.inputs().iter().enumerate().map(|(idx, inp)| {
+            (
+                inp,
+                HtlcSpendingCondition::from_opt_secrets_array_item(htlc_secrets.as_deref(), idx),
+            )
+        }),
+    )
+    .await?;
 
     let num_inputs = tx.inputs().len();
 
@@ -291,7 +316,7 @@ pub async fn tx_to_partially_signed_tx<T: NodeInterface, B: storage::Backend>(
         vec![None; num_inputs],
         input_utxos,
         destinations,
-        None,
+        htlc_secrets,
         additional_infos,
     )?;
     Ok(ptx)
@@ -300,7 +325,7 @@ pub async fn tx_to_partially_signed_tx<T: NodeInterface, B: storage::Backend>(
 pub async fn fetch_input_infos<T: NodeInterface, B: storage::Backend>(
     rpc_client: &T,
     wallet: &RuntimeWallet<B>,
-    inputs: &[TxInput],
+    inputs: impl IntoIterator<Item = (&TxInput, HtlcSpendingCondition)>,
 ) -> Result<
     (
         Vec<Option<TxOutput>>,
@@ -310,8 +335,10 @@ pub async fn fetch_input_infos<T: NodeInterface, B: storage::Backend>(
     ControllerError<T>,
 > {
     let tasks: FuturesOrdered<_> = inputs
-        .iter()
-        .map(|inp| into_utxo_and_destination(rpc_client, wallet, inp))
+        .into_iter()
+        .map(|(inp, htpc_spend_cond)| {
+            into_utxo_and_destination(rpc_client, wallet, inp, htpc_spend_cond)
+        })
         .collect();
     let (input_utxos, additional_infos, destinations) =
         tasks.try_collect::<Vec<_>>().await?.into_iter().fold(
@@ -331,10 +358,13 @@ async fn into_utxo_and_destination<T: NodeInterface, B: storage::Backend>(
     rpc_client: &T,
     wallet: &RuntimeWallet<B>,
     tx_inp: &TxInput,
+    htlc_spending_condition: HtlcSpendingCondition,
 ) -> Result<(Option<TxOutput>, TxAdditionalInfo, Option<Destination>), ControllerError<T>> {
     Ok(match tx_inp {
         TxInput::Utxo(outpoint) => {
-            let (utxo, dest) = fetch_utxo_and_destination(rpc_client, outpoint, wallet).await?;
+            let (utxo, dest) =
+                fetch_utxo_and_destination(rpc_client, wallet, outpoint, htlc_spending_condition)
+                    .await?;
             let (utxo, additional_infos) = fetch_utxo_extra_info(rpc_client, utxo).await?;
             (Some(utxo), additional_infos, Some(dest))
         }
@@ -415,3 +445,6 @@ async fn fetch_order_additional_info<T: NodeInterface>(
             ));
     Ok(result)
 }
+
+#[cfg(test)]
+mod tests;

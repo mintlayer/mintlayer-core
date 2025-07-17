@@ -103,7 +103,7 @@ impl WalletHandlesClient {
 impl NodeInterface for WalletHandlesClient {
     type Error = WalletHandlesClientError;
 
-    fn is_cold_wallet_node(&self) -> WalletControllerMode {
+    async fn is_cold_wallet_node(&self) -> WalletControllerMode {
         WalletControllerMode::Hot
     }
 

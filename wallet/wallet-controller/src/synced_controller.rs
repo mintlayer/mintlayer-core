@@ -671,7 +671,7 @@ where
     ) -> Result<(PartiallySignedTransaction, Balances), ControllerError<T>> {
         let output = make_address_output(address.into_object(), amount);
 
-        let utxo_output = fetch_utxo(&self.rpc_client, &selected_utxo, self.wallet).await?;
+        let utxo_output = fetch_utxo(&self.rpc_client, self.wallet, &selected_utxo).await?;
         let change_address = if let Some(change_address) = change_address {
             change_address
         } else {
@@ -1361,6 +1361,10 @@ where
 
     /// Tries to sign any unsigned inputs of a raw or partially signed transaction with the private
     /// keys in this wallet.
+    // TODO: this function only supports HTLC inputs if a PartiallySignedTransaction is passed
+    // (which could be created with compose_transaction, for example) and not if it's a simple
+    // Transaction; to support HTLC inputs in the latter case we need to somehow pass HTLC secrets
+    // here (probably `TransactionToSign::Tx` should contain the secrets too).
     pub async fn sign_raw_transaction(
         &mut self,
         tx: TransactionToSign,
@@ -1375,7 +1379,7 @@ where
         let ptx = match tx {
             TransactionToSign::Partial(ptx) => ptx,
             TransactionToSign::Tx(tx) => {
-                tx_to_partially_signed_tx(&self.rpc_client, self.wallet, tx).await?
+                tx_to_partially_signed_tx(&self.rpc_client, self.wallet, tx, None).await?
             }
         };
 

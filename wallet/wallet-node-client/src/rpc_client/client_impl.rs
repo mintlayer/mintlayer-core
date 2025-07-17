@@ -48,7 +48,7 @@ use super::{NodeRpcClient, NodeRpcError};
 impl NodeInterface for NodeRpcClient {
     type Error = NodeRpcError;
 
-    fn is_cold_wallet_node(&self) -> WalletControllerMode {
+    async fn is_cold_wallet_node(&self) -> WalletControllerMode {
         WalletControllerMode::Hot
     }
 

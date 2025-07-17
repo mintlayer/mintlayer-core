@@ -43,6 +43,7 @@ use wallet::{
         transaction_list::TransactionList, CoinSelectionAlgo, DelegationData, PoolData, TxInfo,
         UnconfirmedTokenInfo,
     },
+    destination_getters::HtlcSpendingCondition,
     send_request::{SelectedInputs, StakePoolCreationArguments},
     signer::software_signer::SoftwareSignerProvider,
     wallet::WalletPoolsFilter,
@@ -74,11 +75,16 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
     pub fn find_unspent_utxo_and_destination(
         &self,
         input: &UtxoOutPoint,
+        htlc_spending_condition: HtlcSpendingCondition,
     ) -> Option<(TxOutput, Destination)> {
         match self {
-            RuntimeWallet::Software(w) => w.find_unspent_utxo_and_destination(input),
+            RuntimeWallet::Software(w) => {
+                w.find_unspent_utxo_and_destination(input, htlc_spending_condition)
+            }
             #[cfg(feature = "trezor")]
-            RuntimeWallet::Trezor(w) => w.find_unspent_utxo_and_destination(input),
+            RuntimeWallet::Trezor(w) => {
+                w.find_unspent_utxo_and_destination(input, htlc_spending_condition)
+            }
         }
     }
 

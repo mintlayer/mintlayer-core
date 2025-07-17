@@ -168,7 +168,7 @@ where
             self.chain_config.clone(),
             wallet_path,
             password,
-            self.node_rpc.is_cold_wallet_node(),
+            self.node_rpc.is_cold_wallet_node().await,
             force_migrate_wallet_type,
             open_as_wallet_type,
             device_id,
@@ -213,7 +213,7 @@ where
             self.controller.is_none(),
             ControllerError::WalletFileAlreadyOpen
         );
-        let wallet_type = args.wallet_type(self.node_rpc.is_cold_wallet_node());
+        let wallet_type = args.wallet_type(self.node_rpc.is_cold_wallet_node().await);
         let (computed_args, wallet_created) =
             args.parse_or_generate_mnemonic_if_needed().map_err(RpcError::InvalidMnemonic)?;
 

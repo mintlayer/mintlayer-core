@@ -13,14 +13,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::chain::{Destination, PoolId, TxOutput};
+use common::chain::{htlc::HtlcSecret, Destination, PoolId, TxOutput};
 
 use crate::account::PoolData;
 
+#[derive(Clone, Copy, Debug)]
 pub enum HtlcSpendingCondition {
     WithSecret,
     WithMultisig,
     Skip,
+}
+
+impl HtlcSpendingCondition {
+    pub fn from_opt_secrets_array_item(
+        secrets: Option<&[Option<HtlcSecret>]>,
+        index: usize,
+    ) -> Self {
+        secrets.map_or(Self::Skip, |secrets| {
+            secrets
+                .get(index)
+                .and_then(Option::as_ref)
+                .map_or(Self::WithMultisig, |_: &HtlcSecret| Self::WithSecret)
+        })
+    }
 }
 
 pub fn get_tx_output_destination<'a, PoolDataGetter>(
