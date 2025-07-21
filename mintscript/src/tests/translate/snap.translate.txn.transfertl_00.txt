@@ -1,4 +1,0 @@
-threshold(2, [
-    after_blocks(600),
-    signature(0x020003e843fa18427b5e71eb6b94eaffcbf52ddc8dc6e843d259f31d7d5566ddc1b6c2, 0x0101085d5d),
-])

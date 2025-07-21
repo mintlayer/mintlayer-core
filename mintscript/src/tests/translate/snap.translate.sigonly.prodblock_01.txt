@@ -1,1 +1,0 @@
-ERROR: Stake pool e1e1…e1e1 does not exist

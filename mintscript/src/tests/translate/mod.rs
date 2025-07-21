@@ -13,9 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use self::mocks::MockSigInfoProvider;
+use std::collections::BTreeMap;
 
-use super::*;
+use strum::IntoEnumIterator as _;
+
+use ::utils::concatln;
 use common::{
     chain::{
         block::BlockRewardTransactable,
@@ -27,11 +29,21 @@ use common::{
     primitives::per_thousand::PerThousand,
 };
 use crypto::vrf::{VRFPrivateKey, VRFPublicKey};
+use logging::log;
 use pos_accounting::{DelegationData, PoolData};
 use serialization::Encode;
 use tokens_accounting::TokenData;
 
+use super::*;
+
+use self::mocks::MockSigInfoProvider;
+
 mod mocks;
+
+#[ctor::ctor]
+fn init() {
+    logging::init_logging();
+}
 
 // Like input info but owned
 enum TestInputInfo {
@@ -259,131 +271,360 @@ fn fill_order(id: OrderId) -> TestInputInfo {
     TestInputInfo::AccountCommand { command }
 }
 
-// A hack to specify all the modes in the parametrized test below. The mode specification ought to
-// be simplified in the actual implementation and then this may be dropped.
-
-trait TranslationMode<'b> {
-    const NAME: &'static str;
-    type Mode: for<'a> TranslateInput<MockSigInfoProvider<'a>> + 'b;
-    fn translate_input_and_witness(
-        &self,
-        info: &mocks::MockSigInfoProvider,
-    ) -> Result<WitnessScript, TranslationError> {
-        Self::Mode::translate_input(info)
-    }
-}
-
-struct TxnMode;
-impl TranslationMode<'_> for TxnMode {
-    const NAME: &'static str = "txn";
-    type Mode = SignedTransaction;
-}
-
-struct RewardMode;
-impl<'a> TranslationMode<'a> for RewardMode {
-    const NAME: &'static str = "reward";
-    type Mode = BlockRewardTransactable<'a>;
-}
-
-impl TranslationMode<'_> for TimelockOnly {
-    const NAME: &'static str = "tlockonly";
-    type Mode = Self;
-}
-
-impl TranslationMode<'_> for SignatureOnlyTx {
-    const NAME: &'static str = "sigonly";
-    type Mode = Self;
-}
-
-fn mode_name<'a, T: TranslationMode<'a>>(_: &T) -> &'static str {
-    T::NAME
+#[derive(
+    Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Debug, strum::EnumIter, derive_more::Display,
+)]
+enum Mode {
+    Reward,
+    TxSigOnly,
+    TxTimelockOnly,
+    TxFull,
 }
 
 // The test itself
+// TODO: it's better to refactor this test further and:
+// * split the single test into multiple ones;
+// * compare the original Rust objects instead of their string representations.
 
 #[rstest::rstest]
-#[case("burn_00", burn(100_000), nosig())]
-#[case("burn_01", burn(200_000), stdsig(0x51))]
-#[case("transfer_00", transfer_pk(12, 555), nosig())]
-#[case("transfer_01", transfer_pk(13, 557), stdsig(0x51))]
-#[case("transfer_02", transfer_pkh(0x12, 300_000), stdsig(0x52))]
-#[case("transfer_03", transfer_pkh(0x12, 300_000), nosig())]
+#[case(burn(100_000), nosig(), &[
+    (Mode::Reward, "ERROR: Attempt to spend an unspendable output"),
+    (Mode::TxSigOnly, "ERROR: Attempt to spend an unspendable output"),
+    (Mode::TxTimelockOnly, "ERROR: Attempt to spend an unspendable output"),
+    (Mode::TxFull, "ERROR: Attempt to spend an unspendable output"),
+])]
+#[case(burn(200_000), stdsig(0x51), &[
+    (Mode::Reward, "ERROR: Attempt to spend an unspendable output"),
+    (Mode::TxSigOnly, "ERROR: Attempt to spend an unspendable output"),
+    (Mode::TxTimelockOnly, "ERROR: Attempt to spend an unspendable output"),
+    (Mode::TxFull, "ERROR: Attempt to spend an unspendable output"),
+])]
+#[case(transfer_pk(12, 555), nosig(), &[
+    (Mode::Reward, "ERROR: Illegal output spend"),
+    (Mode::TxSigOnly, "signature(0x020003e843fa18427b5e71eb6b94eaffcbf52ddc8dc6e843d259f31d7d5566ddc1b6c2, 0x0000)"),
+    (Mode::TxTimelockOnly, "true"),
+    (Mode::TxFull, "signature(0x020003e843fa18427b5e71eb6b94eaffcbf52ddc8dc6e843d259f31d7d5566ddc1b6c2, 0x0000)"),
+])]
+#[case(transfer_pk(13, 557), stdsig(0x51), &[
+    (Mode::Reward, "ERROR: Illegal output spend"),
+    (Mode::TxSigOnly, "signature(0x020002a3fe239606e407ea161143e42c7c3ef0059573466950a910b28289df247df7a3, 0x0101085151)"),
+    (Mode::TxTimelockOnly, "true"),
+    (Mode::TxFull, "signature(0x020002a3fe239606e407ea161143e42c7c3ef0059573466950a910b28289df247df7a3, 0x0101085151)"),
+])]
+#[case(transfer_pkh(0x12, 300_000), stdsig(0x52), &[
+    (Mode::Reward, "ERROR: Illegal output spend"),
+    (Mode::TxSigOnly, "signature(0x011212121212121212121212121212121212121212, 0x0101085252)"),
+    (Mode::TxTimelockOnly, "true"),
+    (Mode::TxFull, "signature(0x011212121212121212121212121212121212121212, 0x0101085252)"),
+])]
+#[case(transfer_pkh(0x12, 300_000), nosig(), &[
+    (Mode::Reward, "ERROR: Illegal output spend"),
+    (Mode::TxSigOnly, "signature(0x011212121212121212121212121212121212121212, 0x0000)"),
+    (Mode::TxTimelockOnly, "true"),
+    (Mode::TxFull, "signature(0x011212121212121212121212121212121212121212, 0x0000)"),
+])]
 #[case(
-    "transfertl_00",
     transfer_pk_tl(12, 555, tl_for_blocks(600)),
-    stdsig(0x5d)
+    stdsig(0x5d),
+    &[
+        (Mode::Reward, "ERROR: Illegal output spend"),
+        (Mode::TxSigOnly, "signature(0x020003e843fa18427b5e71eb6b94eaffcbf52ddc8dc6e843d259f31d7d5566ddc1b6c2, 0x0101085d5d)"),
+        (Mode::TxTimelockOnly, "after_blocks(600)"),
+        (Mode::TxFull, concatln!(
+            "threshold(2, [",
+            "    after_blocks(600),",
+            "    signature(0x020003e843fa18427b5e71eb6b94eaffcbf52ddc8dc6e843d259f31d7d5566ddc1b6c2, 0x0101085d5d),",
+            "])"
+        )),
+    ]
 )]
 #[case(
-    "transfertl_01",
     transfer_pk_tl(13, 557, tl_until_height(155_554)),
-    stdsig(0x59)
+    stdsig(0x59),
+    &[
+        (Mode::Reward, "ERROR: Illegal output spend"),
+        (Mode::TxSigOnly, "signature(0x020002a3fe239606e407ea161143e42c7c3ef0059573466950a910b28289df247df7a3, 0x0101085959)"),
+        (Mode::TxTimelockOnly, "until_height(155554)"),
+        (Mode::TxFull, concatln!(
+            "threshold(2, [",
+            "    until_height(155554),",
+            "    signature(0x020002a3fe239606e407ea161143e42c7c3ef0059573466950a910b28289df247df7a3, 0x0101085959),",
+            "])"
+        )),
+    ]
 )]
 #[case(
-    "transfertl_02",
     transfer_pk_tl(14, 558, tl_for_secs(365 * 24 * 60 * 60)),
     stdsig(0x5a),
+    &[
+        (Mode::Reward, "ERROR: Illegal output spend"),
+        (Mode::TxSigOnly, "signature(0x02000253f0022f209dfa5c224294e4aaf337dc062ec9f689fcc04b4f2196a71fad3758, 0x0101085a5a)"),
+        (Mode::TxTimelockOnly, "after_seconds(31536000)"),
+        (Mode::TxFull, concatln!(
+            "threshold(2, [",
+            "    after_seconds(31536000),",
+            "    signature(0x02000253f0022f209dfa5c224294e4aaf337dc062ec9f689fcc04b4f2196a71fad3758, 0x0101085a5a),",
+            "])"
+        )),
+    ]
 )]
 #[case(
-    "transfertl_03",
     transfer_pk_tl(15, 559, tl_until_time(1_718_120_714)),
-    stdsig(0x5b)
+    stdsig(0x5b),
+    &[
+        (Mode::Reward, "ERROR: Illegal output spend"),
+        (Mode::TxSigOnly, "signature(0x0200039315c9da756f584d5a7fff618d230bf13115a43d63e7c7d464bb513ab6be7bbc, 0x0101085b5b)"),
+        (Mode::TxTimelockOnly, "until_time(1718120714)"),
+        (Mode::TxFull, concatln!(
+            "threshold(2, [",
+            "    until_time(1718120714),",
+            "    signature(0x0200039315c9da756f584d5a7fff618d230bf13115a43d63e7c7d464bb513ab6be7bbc, 0x0101085b5b),",
+            "])"
+        )),
+    ]
 )]
 #[case(
-    "transfertl_04",
     transfer_pk_tl(16, 560, tl_until_height(999_999)),
-    nosig()
+    nosig(),
+    &[
+        (Mode::Reward, "ERROR: Illegal output spend"),
+        (Mode::TxSigOnly, "signature(0x020002ebcadc73233ea7fc2c8e2e5bcafc7dd4b46444a60d9b5bc9a965d2c6d8a44ebb, 0x0000)"),
+        (Mode::TxTimelockOnly, "until_height(999999)"),
+        (Mode::TxFull, concatln!(
+            "threshold(2, [",
+            "    until_height(999999),",
+            "    signature(0x020002ebcadc73233ea7fc2c8e2e5bcafc7dd4b46444a60d9b5bc9a965d2c6d8a44ebb, 0x0000),",
+            "])"
+        )),
+    ]
 )]
 #[case(
-    "prodblock_00",
     prod_block(dest_pk(0x543), fake_id(0xe0)),
-    stdsig(0x60)
+    stdsig(0x60),
+    &[
+        (Mode::Reward, "signature(0x0200032318d5bcf9bd716cad704d6052b9ea8419b7f691be78be7e76d393a4ed86448a, 0x0101086060)"),
+        (Mode::TxSigOnly, "ERROR: Stake pool e0e0…e0e0 does not exist"),
+        (Mode::TxTimelockOnly, "true"),
+        (Mode::TxFull, "ERROR: Stake pool e0e0…e0e0 does not exist"),
+    ]
 )]
-#[case("prodblock_01", prod_block(dest_pk(0x544), fake_id(0xe1)), nosig())]
-#[case("prodblock_02", prod_block(pool0_decom(), fake_id(0xe2)), stdsig(0x63))]
-#[case("prodblock_03", prod_block(dest_pk(0x545), pool0().0), stdsig(0x64))]
-#[case("prodblock_04", prod_block(pool0_decom(), pool0().0), stdsig(0x65))]
-#[case("delegate_00", delegate(5_000_000, 0xe2), stdsig(0x61))]
-#[case("delegate_01", delegate(6_000_000, 0xe3), nosig())]
-#[case("newpool_00", create_pool(14, 15), stdsig(0x53))]
-#[case("acctspend_00", account_spend(deleg0().0, 579), stdsig(0x54))]
-#[case("acctspend_01", account_spend(fake_id(0xf5), 580), stdsig(0x55))]
-#[case("acctspend_02", account_spend(deleg0().0, 581), nosig())]
-#[case("mint_00", mint(fake_id(0xa1), 581), stdsig(0x56))]
-#[case("mint_01", mint(token0().0, 582), stdsig(0x57))]
-#[case("mint_02", mint(token0().0, 582), nosig())]
-#[case("htlc_00", htlc(11, 12, tl_until_height(999_999)), htlc_stdsig(0x54))]
-#[case("htlc_01", htlc(13, 14, tl_for_secs(1111)), htlc_stdsig(0x58))]
-#[case("htlc_02", htlc(15, 16, tl_until_time(99)), htlc_stdsig(0x53))]
-#[case("htlc_03", htlc(17, 18, tl_for_secs(124)), htlc_multisig(0x54))]
-#[case("htlc_04", htlc(19, 20, tl_for_blocks(1000)), htlc_multisig(0x55))]
-#[case("createorder_00", create_order(order0().1), nosig())]
-#[case("createorder_01", create_order(order0().1), stdsig(0x57))]
-#[case("concludeorder_00", conclude_order(order0().0), nosig())]
-#[case("concludeorder_01", conclude_order(fake_id(0x88)), nosig())]
-#[case("concludeorder_02", conclude_order(order0().0), stdsig(0x44))]
-#[case("concludeorder_03", conclude_order(order0().0), stdsig(0x45))]
-#[case("fillorder_00", fill_order(order0().0), nosig())]
-#[case("fillorder_01", fill_order(fake_id(0x77)), nosig())]
-#[case("fillorder_00", fill_order(order0().0), stdsig(0x45))]
+#[case(prod_block(dest_pk(0x544), fake_id(0xe1)), nosig(), &[
+    (Mode::Reward, "signature(0x0200034696310c540f0a749bc023003c3c698dcc61bbb75a4b37f429f250eb8b7554b1, 0x0000)"),
+    (Mode::TxSigOnly, "ERROR: Stake pool e1e1…e1e1 does not exist"),
+    (Mode::TxTimelockOnly, "true"),
+    (Mode::TxFull, "ERROR: Stake pool e1e1…e1e1 does not exist"),
+])]
+#[case(prod_block(pool0_decom(), fake_id(0xe2)), stdsig(0x63), &[
+    (Mode::Reward, "signature(0x0200024efcfcb197750301c44ffc5a8b176159a2c5de0b9945c5998245054efea6ac89, 0x0101086363)"),
+    (Mode::TxSigOnly, "ERROR: Stake pool e2e2…e2e2 does not exist"),
+    (Mode::TxTimelockOnly, "true"),
+    (Mode::TxFull, "ERROR: Stake pool e2e2…e2e2 does not exist"),
+])]
+#[case(prod_block(dest_pk(0x545), pool0().0), stdsig(0x64), &[
+    (Mode::Reward, "signature(0x020002e7759586e15d0e2b961f097a714515c4e145f4963f24ce99063f3ec9d0211e7a, 0x0101086464)"),
+    (Mode::TxSigOnly, "signature(0x0200024efcfcb197750301c44ffc5a8b176159a2c5de0b9945c5998245054efea6ac89, 0x0101086464)"),
+    (Mode::TxTimelockOnly, "true"),
+    (Mode::TxFull, "signature(0x0200024efcfcb197750301c44ffc5a8b176159a2c5de0b9945c5998245054efea6ac89, 0x0101086464)"),
+])]
+#[case(prod_block(pool0_decom(), pool0().0), stdsig(0x65), &[
+    (Mode::Reward, "signature(0x0200024efcfcb197750301c44ffc5a8b176159a2c5de0b9945c5998245054efea6ac89, 0x0101086565)"),
+    (Mode::TxSigOnly, "signature(0x0200024efcfcb197750301c44ffc5a8b176159a2c5de0b9945c5998245054efea6ac89, 0x0101086565)"),
+    (Mode::TxTimelockOnly, "true"),
+    (Mode::TxFull, "signature(0x0200024efcfcb197750301c44ffc5a8b176159a2c5de0b9945c5998245054efea6ac89, 0x0101086565)"),
+])]
+#[case(delegate(5_000_000, 0xe2), stdsig(0x61), &[
+    (Mode::Reward, "ERROR: Attempt to spend an unspendable output"),
+    (Mode::TxSigOnly, "ERROR: Attempt to spend an unspendable output"),
+    (Mode::TxTimelockOnly, "ERROR: Attempt to spend an unspendable output"),
+    (Mode::TxFull, "ERROR: Attempt to spend an unspendable output"),
+])]
+#[case(delegate(6_000_000, 0xe3), nosig(), &[
+    (Mode::Reward, "ERROR: Attempt to spend an unspendable output"),
+    (Mode::TxSigOnly, "ERROR: Attempt to spend an unspendable output"),
+    (Mode::TxTimelockOnly, "ERROR: Attempt to spend an unspendable output"),
+    (Mode::TxFull, "ERROR: Attempt to spend an unspendable output"),
+])]
+#[case(create_pool(14, 15), stdsig(0x53), &[
+    (Mode::Reward, "signature(0x02000253f0022f209dfa5c224294e4aaf337dc062ec9f689fcc04b4f2196a71fad3758, 0x0101085353)"),
+    (Mode::TxSigOnly, "signature(0x0200039315c9da756f584d5a7fff618d230bf13115a43d63e7c7d464bb513ab6be7bbc, 0x0101085353)"),
+    (Mode::TxTimelockOnly, "true"),
+    (Mode::TxFull, "signature(0x0200039315c9da756f584d5a7fff618d230bf13115a43d63e7c7d464bb513ab6be7bbc, 0x0101085353)"),
+])]
+#[case(account_spend(deleg0().0, 579), stdsig(0x54), &[
+    (Mode::Reward, "ERROR: Illegal account spend"),
+    (Mode::TxSigOnly, "signature(0x020002819f7f36a2790938e5f45ac07053110b8e985fbf7cff8a60a403e95b2a2c24fc, 0x0101085454)"),
+    (Mode::TxTimelockOnly, "true"),
+    (Mode::TxFull, "signature(0x020002819f7f36a2790938e5f45ac07053110b8e985fbf7cff8a60a403e95b2a2c24fc, 0x0101085454)"),
+])]
+#[case(account_spend(fake_id(0xf5), 580), stdsig(0x55), &[
+    (Mode::Reward, "ERROR: Illegal account spend"),
+    (Mode::TxSigOnly, "ERROR: Delegation f5f5…f5f5 does not exist"),
+    (Mode::TxTimelockOnly, "true"),
+    (Mode::TxFull, "ERROR: Delegation f5f5…f5f5 does not exist"),
+])]
+#[case(account_spend(deleg0().0, 581), nosig(), &[
+    (Mode::Reward, "ERROR: Illegal account spend"),
+    (Mode::TxSigOnly, "signature(0x020002819f7f36a2790938e5f45ac07053110b8e985fbf7cff8a60a403e95b2a2c24fc, 0x0000)"),
+    (Mode::TxTimelockOnly, "true"),
+    (Mode::TxFull, "signature(0x020002819f7f36a2790938e5f45ac07053110b8e985fbf7cff8a60a403e95b2a2c24fc, 0x0000)"),
+])]
+#[case(mint(fake_id(0xa1), 581), stdsig(0x56), &[
+    (Mode::Reward, "ERROR: Illegal account spend"),
+    (Mode::TxSigOnly, "ERROR: Token with id a1a1…a1a1 does not exist"),
+    (Mode::TxTimelockOnly, "true"),
+    (Mode::TxFull, "ERROR: Token with id a1a1…a1a1 does not exist"),
+])]
+#[case(mint(token0().0, 582), stdsig(0x57), &[
+    (Mode::Reward, "ERROR: Illegal account spend"),
+    (Mode::TxSigOnly, "signature(0x020003745607a08b12634e402eec525ddaaaaab73cc3951cd232cb88ad934f4be717f6, 0x0101085757)"),
+    (Mode::TxTimelockOnly, "true"),
+    (Mode::TxFull, "signature(0x020003745607a08b12634e402eec525ddaaaaab73cc3951cd232cb88ad934f4be717f6, 0x0101085757)"),
+])]
+#[case(mint(token0().0, 582), nosig(), &[
+    (Mode::Reward, "ERROR: Illegal account spend"),
+    (Mode::TxSigOnly, "signature(0x020003745607a08b12634e402eec525ddaaaaab73cc3951cd232cb88ad934f4be717f6, 0x0000)"),
+    (Mode::TxTimelockOnly, "true"),
+    (Mode::TxFull, "signature(0x020003745607a08b12634e402eec525ddaaaaab73cc3951cd232cb88ad934f4be717f6, 0x0000)"),
+])]
+#[case(htlc(11, 12, tl_until_height(999_999)), htlc_stdsig(0x54), &[
+    (Mode::Reward, "ERROR: Illegal output spend"),
+    (Mode::TxSigOnly, "signature(0x020003574c6b846c9a4c555ea75d771d5a40564b9ef37419682da12573e1d8ac27d71e, 0x0101085454)"),
+    (Mode::TxTimelockOnly, "true"),
+    (Mode::TxFull, concatln!(
+        "threshold(2, [",
+        "    Hash160(0x50000000000000000000000000000000000000000d, 0x0606060606060606060606060606060606060606060606060606060606060606),",
+        "    signature(0x020003574c6b846c9a4c555ea75d771d5a40564b9ef37419682da12573e1d8ac27d71e, 0x0101085454),",
+        "])"
+    )),
+])]
+#[case(htlc(13, 14, tl_for_secs(1111)), htlc_stdsig(0x58), &[
+    (Mode::Reward, "ERROR: Illegal output spend"),
+    (Mode::TxSigOnly, "signature(0x020002a3fe239606e407ea161143e42c7c3ef0059573466950a910b28289df247df7a3, 0x0101085858)"),
+    (Mode::TxTimelockOnly, "true"),
+    (Mode::TxFull, concatln!(
+        "threshold(2, [",
+        "    Hash160(0x50000000000000000000000000000000000000000d, 0x0606060606060606060606060606060606060606060606060606060606060606),",
+        "    signature(0x020002a3fe239606e407ea161143e42c7c3ef0059573466950a910b28289df247df7a3, 0x0101085858),",
+        "])"
+    )),
+])]
+#[case(htlc(15, 16, tl_until_time(99)), htlc_stdsig(0x53), &[
+    (Mode::Reward, "ERROR: Illegal output spend"),
+    (Mode::TxSigOnly, "signature(0x0200039315c9da756f584d5a7fff618d230bf13115a43d63e7c7d464bb513ab6be7bbc, 0x0101085353)"),
+    (Mode::TxTimelockOnly, "true"),
+    (Mode::TxFull, concatln!(
+        "threshold(2, [",
+        "    Hash160(0x50000000000000000000000000000000000000000d, 0x0606060606060606060606060606060606060606060606060606060606060606),",
+        "    signature(0x0200039315c9da756f584d5a7fff618d230bf13115a43d63e7c7d464bb513ab6be7bbc, 0x0101085353),",
+        "])"
+    )),
+])]
+#[case(htlc(17, 18, tl_for_secs(124)), htlc_multisig(0x54), &[
+    (Mode::Reward, "ERROR: Illegal output spend"),
+    (Mode::TxSigOnly, "signature(0x041c9bb73a209c49363022813e7197ac80c761d80b, 0x0101085454)"),
+    (Mode::TxTimelockOnly, "after_seconds(124)"),
+    (Mode::TxFull, concatln!(
+        "threshold(2, [",
+        "    after_seconds(124),",
+        "    signature(0x041c9bb73a209c49363022813e7197ac80c761d80b, 0x0101085454),",
+        "])"
+    )),
+])]
+#[case(htlc(19, 20, tl_for_blocks(1000)), htlc_multisig(0x55), &[
+    (Mode::Reward, "ERROR: Illegal output spend"),
+    (Mode::TxSigOnly, "signature(0x04d55789fd7dd4b58f8bdb889a0d31cac70e67df92, 0x0101085555)"),
+    (Mode::TxTimelockOnly, "after_blocks(1000)"),
+    (Mode::TxFull, concatln!(
+        "threshold(2, [",
+        "    after_blocks(1000),",
+        "    signature(0x04d55789fd7dd4b58f8bdb889a0d31cac70e67df92, 0x0101085555),",
+        "])"
+    )),
+])]
+#[case(create_order(order0().1), nosig(), &[
+    (Mode::Reward, "ERROR: Attempt to spend an unspendable output"),
+    (Mode::TxSigOnly, "ERROR: Attempt to spend an unspendable output"),
+    (Mode::TxTimelockOnly, "ERROR: Attempt to spend an unspendable output"),
+    (Mode::TxFull, "ERROR: Attempt to spend an unspendable output"),
+])]
+#[case(create_order(order0().1), stdsig(0x57), &[
+    (Mode::Reward, "ERROR: Attempt to spend an unspendable output"),
+    (Mode::TxSigOnly, "ERROR: Attempt to spend an unspendable output"),
+    (Mode::TxTimelockOnly, "ERROR: Attempt to spend an unspendable output"),
+    (Mode::TxFull, "ERROR: Attempt to spend an unspendable output"),
+])]
+#[case(conclude_order(order0().0), nosig(), &[
+    (Mode::Reward, "ERROR: Illegal account spend"),
+    (Mode::TxSigOnly, "signature(0x02000236d8c927b785e27385737e82cdde2e06dc510ab8545d6eab0ca05c36040a437c, 0x0000)"),
+    (Mode::TxTimelockOnly, "true"),
+    (Mode::TxFull, "signature(0x02000236d8c927b785e27385737e82cdde2e06dc510ab8545d6eab0ca05c36040a437c, 0x0000)"),
+])]
+#[case(conclude_order(fake_id(0x88)), nosig(), &[
+    (Mode::Reward, "ERROR: Illegal account spend"),
+    (Mode::TxSigOnly, "ERROR: Order with id 8888…8888 does not exist"),
+    (Mode::TxTimelockOnly, "true"),
+    (Mode::TxFull, "ERROR: Order with id 8888…8888 does not exist"),
+])]
+#[case(conclude_order(order0().0), stdsig(0x44), &[
+    (Mode::Reward, "ERROR: Illegal account spend"),
+    (Mode::TxSigOnly, "signature(0x02000236d8c927b785e27385737e82cdde2e06dc510ab8545d6eab0ca05c36040a437c, 0x0101084444)"),
+    (Mode::TxTimelockOnly, "true"),
+    (Mode::TxFull, "signature(0x02000236d8c927b785e27385737e82cdde2e06dc510ab8545d6eab0ca05c36040a437c, 0x0101084444)"),
+])]
+#[case(conclude_order(order0().0), stdsig(0x45), &[
+    (Mode::Reward, "ERROR: Illegal account spend"),
+    (Mode::TxSigOnly, "signature(0x02000236d8c927b785e27385737e82cdde2e06dc510ab8545d6eab0ca05c36040a437c, 0x0101084545)"),
+    (Mode::TxTimelockOnly, "true"),
+    (Mode::TxFull, "signature(0x02000236d8c927b785e27385737e82cdde2e06dc510ab8545d6eab0ca05c36040a437c, 0x0101084545)"),
+])]
+#[case(fill_order(order0().0), nosig(), &[
+    (Mode::Reward, "ERROR: Illegal account spend"),
+    (Mode::TxSigOnly, "true"),
+    (Mode::TxTimelockOnly, "true"),
+    (Mode::TxFull, "true"),
+])]
+#[case(fill_order(fake_id(0x77)), nosig(), &[
+    (Mode::Reward, "ERROR: Illegal account spend"),
+    (Mode::TxSigOnly, "true"),
+    (Mode::TxTimelockOnly, "true"),
+    (Mode::TxFull, "true"),
+])]
+#[case(fill_order(order0().0), stdsig(0x45), &[
+    (Mode::Reward, "ERROR: Illegal account spend"),
+    (Mode::TxSigOnly, "true"),
+    (Mode::TxTimelockOnly, "true"),
+    (Mode::TxFull, "true"),
+])]
 fn translate_snap(
-    #[values(TxnMode, RewardMode, TimelockOnly, SignatureOnlyTx)] mode: impl for<'a> TranslationMode<'a>,
-    #[case] name: &str,
     #[case] test_input_info: TestInputInfo,
     #[case] witness: InputWitness,
+    #[case] expected_results: &[(Mode, &str)],
 ) {
     let input_info = test_input_info.to_input_info();
     let tokens = [token0()];
     let delegs = [deleg0()];
     let pools = [pool0()];
     let orders = [order0()];
-    let sig_info =
-        mocks::MockSigInfoProvider::new(input_info, witness, tokens, pools, delegs, orders);
-    let mode_str = mode_name(&mode);
+    let sig_info = MockSigInfoProvider::new(input_info, witness, tokens, pools, delegs, orders);
+    let expected_results = expected_results.iter().copied().collect::<BTreeMap<_, _>>();
 
-    let result = match mode.translate_input_and_witness(&sig_info) {
-        Ok(script) => format!("{script}\n"),
-        Err(err) => format!("ERROR: {err}"),
-    };
+    for mode in Mode::iter() {
+        log::debug!("Checking mode {mode}");
 
-    expect_test::expect_file![format!("snap.translate.{mode_str}.{name}.txt")].assert_eq(&result);
+        let result = match mode {
+            Mode::Reward => BlockRewardTransactable::<'_>::translate_input(&sig_info),
+            Mode::TxFull => SignedTransaction::translate_input(&sig_info),
+            Mode::TxTimelockOnly => TimelockOnly::translate_input(&sig_info),
+            Mode::TxSigOnly => SignatureOnlyTx::translate_input(&sig_info),
+        };
+
+        let expected_result = *expected_results.get(&mode).unwrap();
+
+        let result_str = match result {
+            Ok(script) => format!("{script}"),
+            Err(err) => format!("ERROR: {err}"),
+        };
+
+        assert_eq!(result_str, expected_result);
+    }
 }
