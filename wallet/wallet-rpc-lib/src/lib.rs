@@ -102,8 +102,9 @@ pub async fn start_services<N>(
 where
     N: NodeInterface + Clone + Sync + Send + 'static + Debug,
 {
+    let is_cold_wallet_node = node_rpc.is_cold_wallet_node().await;
     let wallet_type = wallet_config.hardware_wallet_type.map_or_else(
-        || node_rpc.is_cold_wallet_node().into(),
+        || is_cold_wallet_node.into(),
         |hw| match hw {
             #[cfg(feature = "trezor")]
             HardwareWalletType::Trezor { device_id: _ } => WalletType::Trezor,

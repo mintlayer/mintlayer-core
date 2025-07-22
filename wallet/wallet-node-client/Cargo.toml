@@ -23,16 +23,17 @@ subsystem = { path = "../../subsystem" }
 utils-networking = { path = "../../utils/networking" }
 wallet-types = { path = "../types" }
 
+anyhow.workspace = true
 async-trait.workspace = true
 base64.workspace = true
+mockall.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "sync"] }
 tower.workspace = true
 
 [dev-dependencies]
 chainstate-storage = { path = "../../chainstate/storage" }
-
-tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "sync"] }
 
 [features]
 trezor = ["wallet-types/trezor"]

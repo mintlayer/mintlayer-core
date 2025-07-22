@@ -26,6 +26,7 @@ use rpc::RpcAuthData;
 use rpc_client::NodeRpcError;
 
 pub mod handles_client;
+pub mod mock;
 pub mod node_traits;
 pub mod rpc_client;
 

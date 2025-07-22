@@ -21,6 +21,7 @@ use crate::account::{
     transaction_list::TransactionList, CoinSelectionAlgo, CurrentFeeRate, DelegationData,
     OrderData, PoolData, TxInfo, UnconfirmedTokenInfo, UtxoSelectorError,
 };
+use crate::destination_getters::HtlcSpendingCondition;
 use crate::key_chain::{
     make_account_path, make_path_to_vrf_key, AccountKeyChainImplSoftware, KeyChainError,
     MasterKeyChain, LOOKAHEAD_SIZE, VRF_INDEX,
@@ -1301,13 +1302,19 @@ where
     pub fn find_unspent_utxo_and_destination(
         &self,
         outpoint: &UtxoOutPoint,
+        htlc_spending_condition: HtlcSpendingCondition,
     ) -> Option<(TxOutput, Destination)> {
         self.accounts.values().find_map(|acc: &Account<P::K>| {
             let current_block_info = BlockInfo {
                 height: acc.best_block().1,
                 timestamp: self.latest_median_time,
             };
-            acc.find_unspent_utxo_and_destination(outpoint, current_block_info).ok()
+            acc.find_unspent_utxo_and_destination(
+                outpoint,
+                current_block_info,
+                htlc_spending_condition,
+            )
+            .ok()
         })
     }
 
@@ -2589,3 +2596,5 @@ where
 
 #[cfg(test)]
 mod tests;
+
+pub mod test_helpers;

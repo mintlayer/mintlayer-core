@@ -47,7 +47,8 @@ pub fn find_test_device(debug: bool) -> AvailableDevice {
         .into_iter()
         .filter(|device| {
             if use_real_device {
-                device.model == Model::Trezor || device.model == Model::TrezorLegacy
+                // Note: we don't support `Model::TrezorLegacy` AKA Trezor Model One.
+                device.model == Model::Trezor
             } else {
                 device.model == Model::TrezorEmulator
             }

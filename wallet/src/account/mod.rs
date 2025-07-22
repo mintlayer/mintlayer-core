@@ -103,6 +103,7 @@ pub struct CurrentFeeRate {
     pub consolidate_fee_rate: FeeRate,
 }
 
+#[derive(Debug)]
 pub enum TransactionToSign {
     Tx(Transaction),
     Partial(PartiallySignedTransaction),
@@ -1614,6 +1615,7 @@ impl<K: AccountKeyChains> Account<K> {
         &self,
         outpoint: &UtxoOutPoint,
         current_block_info: BlockInfo,
+        htlc_spending_condition: HtlcSpendingCondition,
     ) -> WalletResult<(TxOutput, Destination)> {
         let txo = self.output_cache.find_unspent_unlocked_utxo(outpoint, current_block_info)?;
 
@@ -1622,7 +1624,7 @@ impl<K: AccountKeyChains> Account<K> {
             get_tx_output_destination(
                 txo,
                 &|pool_id| self.output_cache.pool_data(*pool_id).ok(),
-                HtlcSpendingCondition::Skip,
+                htlc_spending_condition,
             )
             .ok_or(WalletError::InputCannotBeSpent(txo.clone()))?,
         ))

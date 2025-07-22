@@ -66,6 +66,7 @@ use crate::{
     key_chain::{make_account_path, LOOKAHEAD_SIZE},
     send_request::{make_address_output, make_create_delegation_output},
     signer::software_signer::SoftwareSignerProvider,
+    wallet::test_helpers::{create_wallet_with_mnemonic, scan_wallet},
     wallet_events::WalletEventsNoOp,
     DefaultWallet,
 };
@@ -88,23 +89,6 @@ where
     P: SignerProvider,
 {
     *wallet.get_best_block().first_key_value().unwrap().1
-}
-
-#[track_caller]
-fn scan_wallet<B, P>(wallet: &mut Wallet<B, P>, height: BlockHeight, blocks: Vec<Block>)
-where
-    B: storage::Backend + 'static,
-    P: SignerProvider,
-{
-    for account in wallet.get_best_block().keys() {
-        wallet
-            .scan_new_blocks(*account, height, blocks.clone(), &WalletEventsNoOp)
-            .unwrap();
-    }
-
-    wallet
-        .scan_new_blocks_unused_account(height, blocks, &WalletEventsNoOp)
-        .unwrap();
 }
 
 fn gen_random_password(rng: &mut (impl Rng + CryptoRng)) -> String {
@@ -311,30 +295,6 @@ fn verify_wallet_balance<B, P>(
 #[track_caller]
 fn create_wallet(chain_config: Arc<ChainConfig>) -> DefaultWallet {
     create_wallet_with_mnemonic(chain_config, MNEMONIC)
-}
-
-#[track_caller]
-fn create_wallet_with_mnemonic(chain_config: Arc<ChainConfig>, mnemonic: &str) -> DefaultWallet {
-    let db = create_wallet_in_memory().unwrap();
-    let genesis_block_id = chain_config.genesis_block_id();
-    Wallet::create_new_wallet(
-        chain_config.clone(),
-        db,
-        (BlockHeight::new(0), genesis_block_id),
-        WalletType::Hot,
-        |db_tx| {
-            Ok(SoftwareSignerProvider::new_from_mnemonic(
-                chain_config,
-                db_tx,
-                mnemonic,
-                None,
-                StoreSeedPhrase::DoNotStore,
-            )?)
-        },
-    )
-    .unwrap()
-    .wallet()
-    .unwrap()
 }
 
 #[track_caller]

@@ -19,7 +19,7 @@ use wallet_types::WalletTx;
 
 /// Callbacks that are called when the database is updated and the UI should be re-rendered.
 /// For example, when a new wallet is imported and the wallet scan is in progress,
-/// the wallet balance and address/transaction lists should be updated after this callbacks.
+/// the wallet balance and address/transaction lists should be updated after these callbacks.
 pub trait WalletEvents {
     /// New block is scanned
     fn new_block(&self);

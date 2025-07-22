@@ -24,20 +24,22 @@ use common::{
     },
     primitives::{time::Time, Amount, BlockHeight, Id},
 };
-
 use consensus::GenerateBlockInputData;
 use crypto::ephemeral_e2e::EndToEndPublicKey;
 use mempool::{tx_accumulator::PackingStrategy, tx_options::TxOptionsOverrides, FeeRate};
 use p2p::types::{bannable_address::BannableAddress, socket_address::SocketAddress};
-pub use p2p::{interface::types::ConnectedPeer, types::peer_id::PeerId};
 use utils_networking::IpOrSocketAddress;
 use wallet_types::wallet_type::WalletControllerMode;
 
+pub use p2p::{interface::types::ConnectedPeer, types::peer_id::PeerId};
+
+#[mockall::automock(type Error = anyhow::Error;)]
 #[async_trait::async_trait]
 pub trait NodeInterface {
-    type Error: std::error::Error + Send + Sync + 'static;
+    // Note: not requiring the `Error` trait here so that `anyhow::Error` can be used.
+    type Error: std::fmt::Debug + std::fmt::Display + Send + Sync + 'static;
 
-    fn is_cold_wallet_node(&self) -> WalletControllerMode;
+    async fn is_cold_wallet_node(&self) -> WalletControllerMode;
 
     async fn chainstate_info(&self) -> Result<ChainInfo, Self::Error>;
     async fn get_best_block_id(&self) -> Result<Id<GenBlock>, Self::Error>;

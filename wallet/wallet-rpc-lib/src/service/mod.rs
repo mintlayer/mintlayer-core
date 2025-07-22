@@ -73,7 +73,7 @@ where
                     chain_config.shallow_clone(),
                     wallet_file,
                     wallet_password,
-                    node_rpc.is_cold_wallet_node(),
+                    node_rpc.is_cold_wallet_node().await,
                     force_change_wallet_type,
                     *open_as_wallet_type,
                     None,
