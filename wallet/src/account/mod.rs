@@ -1108,10 +1108,15 @@ impl<K: AccountKeyChains> Account<K> {
                         AccountCommand::FillOrder(
                             order_id,
                             fill_amount_in_ask_currency,
-                            output_destination.clone(),
+                            // Note: this destination is only present here due to historical reasons
+                            // and can be arbitrary.
+                            Destination::AnyoneCanSpend,
                         ),
                     ),
-                    output_destination,
+                    // In orders v0, FillOrder input signatures are not checked. It's still better to
+                    // use AnyoneCanSpend here instead of output_destination, to avoid revealing the
+                    // public key associated with the destination (which is normally PublicKeyHash).
+                    Destination::AnyoneCanSpend,
                 )])
             }
             common::chain::OrdersVersion::V1 => {
@@ -1131,9 +1136,9 @@ impl<K: AccountKeyChains> Account<K> {
                     TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(
                         order_id,
                         fill_amount_in_ask_currency,
-                        output_destination.clone(),
                     )),
-                    output_destination,
+                    // In orders v1, FillOrder inputs are required not to have signatures.
+                    Destination::AnyoneCanSpend,
                 )])
             }
         };
@@ -1594,7 +1599,8 @@ impl<K: AccountKeyChains> Account<K> {
         cmd: &OrderAccountCommand,
     ) -> WalletResult<Destination> {
         match cmd {
-            OrderAccountCommand::FillOrder(_, _, destination) => Ok(destination.clone()),
+            // In orders v1 FillOrder inputs must not be signed.
+            OrderAccountCommand::FillOrder(_, _) => Ok(Destination::AnyoneCanSpend),
             OrderAccountCommand::FreezeOrder(order_id)
             | OrderAccountCommand::ConcludeOrder(order_id) => self
                 .output_cache
@@ -2062,9 +2068,7 @@ impl<K: AccountKeyChains> Account<K> {
                 }
             },
             TxInput::OrderAccountCommand(cmd) => match cmd {
-                OrderAccountCommand::FillOrder(order_id, _, dest) => {
-                    self.find_order(order_id).is_ok() || self.is_destination_mine_or_watched(dest)
-                }
+                OrderAccountCommand::FillOrder(order_id, _) => self.find_order(order_id).is_ok(),
                 OrderAccountCommand::FreezeOrder(order_id)
                 | OrderAccountCommand::ConcludeOrder(order_id) => self.find_order(order_id).is_ok(),
             },
@@ -2082,9 +2086,8 @@ impl<K: AccountKeyChains> Account<K> {
                         || self.is_destination_mine_or_watched(address)
                 }
                 AccountCommand::ConcludeOrder(order_id) => self.find_order(order_id).is_ok(),
-                AccountCommand::FillOrder(order_id, _, dest) => {
-                    self.find_order(order_id).is_ok() || self.is_destination_mine_or_watched(dest)
-                }
+                // Note: the destination in v0 FillOrder can be arbitrary, so we ignore it.
+                AccountCommand::FillOrder(order_id, _, _) => self.find_order(order_id).is_ok(),
             },
         });
         let relevant_outputs = self.mark_outputs_as_seen(db_tx, tx.outputs())?;
@@ -2685,7 +2688,7 @@ fn group_preselected_inputs(
                 }
             },
             TxInput::OrderAccountCommand(cmd) => match cmd {
-                OrderAccountCommand::FillOrder(id, fill_amount_in_ask_currency, _) => {
+                OrderAccountCommand::FillOrder(id, fill_amount_in_ask_currency) => {
                     handle_fill_order_op(
                         *id,
                         *fill_amount_in_ask_currency,

@@ -353,7 +353,7 @@ impl PartiallySignedTransaction {
                 }
                 TxInput::OrderAccountCommand(command) => {
                     let id = match command {
-                        OrderAccountCommand::FillOrder(id, _, _) => id,
+                        OrderAccountCommand::FillOrder(id, _) => id,
                         OrderAccountCommand::FreezeOrder(id) => id,
                         OrderAccountCommand::ConcludeOrder(id) => id,
                     };
@@ -424,12 +424,26 @@ impl PartiallySignedTransaction {
             .iter()
             .enumerate()
             .zip(&self.destinations)
-            .all(|((_, w), d)| match (w, d) {
-                (Some(InputWitness::NoSignature(_)), None) => true,
-                (Some(InputWitness::NoSignature(_)), Some(_)) => false,
-                (Some(InputWitness::Standard(_)), None) => false,
-                (Some(InputWitness::Standard(_)), Some(_)) => true,
-                (None, _) => false,
+            .all(|((_, witness), dest)| {
+                let dest_needs_signature = match dest {
+                    Some(dest) => match dest {
+                        Destination::AnyoneCanSpend => false,
+                        Destination::PublicKeyHash(_)
+                        | Destination::PublicKey(_)
+                        | Destination::ScriptHash(_)
+                        | Destination::ClassicMultisig(_) => true,
+                    },
+                    None => false,
+                };
+
+                match (witness, dest_needs_signature) {
+                    (Some(InputWitness::NoSignature(_)), false) => true,
+                    (Some(InputWitness::NoSignature(_)), true) => false,
+                    // TODO: consider returning a Result and produce an error in this case.
+                    (Some(InputWitness::Standard(_)), false) => false,
+                    (Some(InputWitness::Standard(_)), true) => true,
+                    (None, _) => false,
+                }
             })
     }
 

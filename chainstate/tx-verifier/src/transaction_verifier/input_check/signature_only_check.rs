@@ -105,6 +105,13 @@ impl<T: Transactable> InputInfoProvider for InputVerifyContextSignature<'_, T> {
 pub trait SignatureOnlyVerifiable {}
 impl SignatureOnlyVerifiable for SignedTransaction {}
 
+// Note: the passed `outpoint_destination` value is only used in a limited number of scenarios
+// (see `impl SignatureInfoProvider for InputVerifyContextSignature` above). In all other cases
+// this parameter is ignored and the actual destination to verify the signature against is taken
+// from other sources (e.g. from the utxo or, in the case of a v1 FillOrder input, it is always
+// AnyoneCanSpend).
+// TODO: the parameter should at least be made optional. Or maybe some kind of `SignatureInfoProvider`
+// should be passed here instead of the plain `Destination`.
 pub fn verify_tx_signature<T: Transactable + SignatureOnlyVerifiable>(
     chain_config: &ChainConfig,
     outpoint_destination: &Destination,

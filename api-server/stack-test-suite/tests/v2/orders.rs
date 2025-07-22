@@ -86,13 +86,9 @@ async fn create_fill_conclude_order(#[case] seed: Seed, #[case] version: OrdersV
                             Destination::AnyoneCanSpend,
                         ),
                     ),
-                    OrdersVersion::V1 => {
-                        TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(
-                            order_id,
-                            Amount::from_atoms(1),
-                            Destination::AnyoneCanSpend,
-                        ))
-                    }
+                    OrdersVersion::V1 => TxInput::OrderAccountCommand(
+                        OrderAccountCommand::FillOrder(order_id, Amount::from_atoms(1)),
+                    ),
                 };
                 let tx2 = TransactionBuilder::new()
                     .add_input(

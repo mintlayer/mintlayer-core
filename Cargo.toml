@@ -248,7 +248,8 @@ zeroize = "1.5"
 
 [workspace.dependencies.trezor-client]
 git = "https://github.com/mintlayer/mintlayer-trezor-firmware"
-rev = "07229ff4943537b81c18a612fe971792d2a37574" # Commit "Support Mintlayer input commitments V1"
+# The commit "Remove destination from MintlayerFillOrderV1; fail if the host asks to sign a FillOrder input"
+rev = "198346c2f731e7ff34be03b7a16818008eeeae0d"
 features = ["bitcoin", "mintlayer"]
 
 [workspace.metadata.dist.dependencies.apt]
