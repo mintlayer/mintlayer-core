@@ -18,7 +18,10 @@ serialization = { path = "../../serialization" }
 storage = { path = "../../storage" }
 utils = { path = "../../utils" }
 
-bip39 = { workspace = true, default-features = false, features = ["std", "zeroize"] }
+bip39 = { workspace = true, default-features = false, features = [
+  "std",
+  "zeroize",
+] }
 hex.workspace = true
 itertools.workspace = true
 parity-scale-codec.workspace = true
@@ -35,4 +38,5 @@ rstest.workspace = true
 
 [features]
 trezor = []
-default = ["trezor"]
+ledger = []
+default = ["trezor", "ledger"]

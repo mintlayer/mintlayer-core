@@ -8,7 +8,7 @@ on:
     branches:
       - "**" # target all branches
   schedule:
-    - cron: '15 0 * * *'  # every day at 00:15 UTC
+    - cron: "15 0 * * *" # every day at 00:15 UTC
 
 env:
   CARGO_TERM_COLOR: always
@@ -28,12 +28,12 @@ jobs:
         run: sudo apt-get update
 
       - name: Install build dependencies
-        run: sudo apt-get install -yqq --no-install-recommends build-essential
+        run: sudo apt-get install -yqq --no-install-recommends build-essential libdbus-1-dev libusb-1.0-0-dev
 
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
-          python-version-file: './build-tools/.python-version'
+          python-version-file: "./build-tools/.python-version"
 
       - name: Install Rust
         run: |
@@ -69,7 +69,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
-          python-version-file: './build-tools/.python-version'
+          python-version-file: "./build-tools/.python-version"
 
       - name: Install Rust
         # Use bash to be able to escape the newline via '\'.
@@ -102,7 +102,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
-          python-version-file: './build-tools/.python-version'
+          python-version-file: "./build-tools/.python-version"
 
       - name: Install Rust
         run: |
