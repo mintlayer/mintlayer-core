@@ -38,7 +38,15 @@ parity-scale-codec.workspace = true
 semver.workspace = true
 serde.workspace = true
 thiserror.workspace = true
+tokio = { workspace = true, default-features = false, features = [
+  "io-util",
+  "macros",
+  "rt",
+  "sync",
+] }
 trezor-client = { workspace = true, optional = true }
+ledger-lib = { workspace = true, optional = true }
+ledger-proto = { workspace = true, optional = true }
 zeroize.workspace = true
 
 [dev-dependencies]
@@ -51,6 +59,15 @@ tokio = { workspace = true, default-features = false, features = [
   "rt",
   "sync",
 ] }
+strum = { workspace = true }
+reqwest = { workspace = true, features = ["json"] }
+tracing = { workspace = true }
+anyhow = { workspace = true }
+clap = { workspace = true }
+bollard = "0.14"
+bytes = "1.10"
+tar = "0.4"
+
 
 ctor.workspace = true
 lazy_static.workspace = true
@@ -63,8 +80,10 @@ tempfile.workspace = true
 [features]
 trezor = ["dep:trezor-client", "wallet-types/trezor"]
 enable-trezor-device-tests = []
+enable-ledger-device-tests = []
 # Note: currently this is used in certain external tests (in particular, in the bridge), so we only
 # allow it for regtest. TODO: it's better to have some regtest-specific options for the wallet,
 # similar to what we have for the node.
 use-deterministic-signatures-in-software-signer-for-regtest = []
-default = ["trezor"]
+ledger = ["dep:ledger-lib", "dep:ledger-proto", "wallet-types/ledger"]
+default = ["trezor", "ledger"]

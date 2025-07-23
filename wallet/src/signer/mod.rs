@@ -48,6 +48,8 @@ use wallet_types::{
     AccountId,
 };
 
+#[cfg(feature = "ledger")]
+use crate::signer::ledger_signer::LedgerError;
 use crate::{
     key_chain::{AccountKeyChains, KeyChainError},
     Account, WalletResult,
@@ -60,6 +62,9 @@ pub mod utils;
 
 #[cfg(feature = "trezor")]
 use self::trezor_signer::TrezorError;
+
+#[cfg(feature = "ledger")]
+pub mod ledger_signer;
 
 /// Signer errors
 #[derive(thiserror::Error, Debug, Eq, PartialEq)]
@@ -87,6 +92,9 @@ pub enum SignerError {
     #[cfg(feature = "trezor")]
     #[error("Trezor error: {0}")]
     TrezorError(#[from] TrezorError),
+    #[cfg(feature = "ledger")]
+    #[error("Ledger error: {0}")]
+    LedgerError(#[from] LedgerError),
     #[error("Partially signed tx is missing input's destination")]
     MissingDestinationInTransaction,
     #[error("Partially signed tx is missing UTXO type input's UTXO")]

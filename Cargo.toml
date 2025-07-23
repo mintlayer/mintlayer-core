@@ -6,81 +6,85 @@ repository = "https://github.com/mintlayer/mintlayer-core"
 readme = "README.md"
 license = "MIT"
 version = "1.1.0"
-authors = ["Samer Afach <samer.afach@mintlayer.org>", "Ben Marsh <benjamin.marsh@mintlayer.org>", "Enrico Rubboli <enrico.rubboli@mintlayer.org>"]
+authors = [
+  "Samer Afach <samer.afach@mintlayer.org>",
+  "Ben Marsh <benjamin.marsh@mintlayer.org>",
+  "Enrico Rubboli <enrico.rubboli@mintlayer.org>",
+]
 edition = "2021"
 
 [workspace]
 members = [
-  "accounting",                         # Accounting and balances abstractions.
-  "api-server/api-server-common",       # API server, for light-wallets and block explorers: common between web-server and scanner.
-  "api-server/storage-test-suite",      # Test suite for the abstract storage layer of the API server to ensure consistent behavior.
-  "api-server/scanner-daemon",          # API server, for light-wallets and block explorers: blockchain scanner daemon.
-  "api-server/scanner-lib",             # API server, for light-wallets and block explorers: blockchain scanner library.
-  "api-server/stack-test-suite",        # API server, for light-wallets and block explorers: testing the scanner and web-server.
-  "api-server/web-server",              # API server, for light-wallets and block explorers: web-server.
-  "blockprod",                          # Block production with whatever consensus algorithm.
-  "chainstate",                         # Code on chainstate of blocks and transactions.
-  "chainstate/db-dumper",               # A tool for dumping the contents of the chainstate db.
-  "chainstate/test-suite",              # Tests for the chainstate, separated to make use of the chainstate test framework.
-  "common",                             # Everything else, until it's moved to another crate.
-  "consensus",                          # Consensus related logic.
-  "crypto",                             # Cryptographic primitives and their interfaces.
-  "dns-server",                         # DNS-server.
-  "logging",                            # Logging engine and its interfaces.
-  "mempool",                            # Mempool interface and implementation.
-  "mempool/types",                      # Common mempool types.
-  "mintscript",                         # Basic scripting language for validating transactions.
-  "mocks",                              # Mock implementations of our traits (used for testing).
-  "node-daemon",                        # Node terminal binary.
-  "networking",                         # Pure networking implementations
-  "node-gui",                           # Node GUI binary.
-  "node-gui/backend",                   # Node GUI backend, common logic for implementing GUI clients.
-  "node-lib",                           # Node lib; the common library between daemon, tui and gui node executables.
-  "orders-accounting",                  # Orders accounting
-  "p2p",                                # P2p communication interfaces and protocols.
-  "p2p/backend-test-suite",             # P2p backend agnostic tests.
-  "p2p/types",                          # P2p support types with minimal dependencies.
-  "pos-accounting",                     # PoS accounting and balances abstractions.
-  "randomness",                         # A wrapper around all randomness functionality to make audits easier
-  "rpc",                                # Rpc abstraction and implementation.
-  "rpc/description",                    # Data types describing an RPC interface.
-  "rpc/description-macro",              # Macro to generate rpc interface description.
-  "rpc/types",                          # Support types for use in RPC interfaces.
-  "script",                             # Bitcoin script and its interfaces.
-  "serialization",                      # Full featured serialization interfaces and implementations.
-  "serialization/core",                 # Serialization core tools.
-  "serialization/tagged",               # Serialization for direct/tagged encoding style.
-  "serialization/tagged/derive",        # direct/tagged encoding style derive macros.
-  "storage",                            # storage abstraction layer and its implementation.
-  "storage/backend-test-suite",         # Tests for validating storage backend implementations.
-  "storage/core",                       # Core backend-agnostic storage abstraction.
-  "storage/failing",                    # Storage adapter to occasionally fail certain operations, for testing.
-  "storage/inmemory",                   # In-memory storage backend implementation.
-  "storage/lmdb",                       # LMDB-based persistent storage backend implementation.
-  "storage/sqlite",                     # SQLite-based persistent storage backend implementation.
-  "subsystem",                          # Utilities for working with concurrent subsystems.
-  "test",                               # Integration tests.
-  "test-rpc-functions",                 # RPC functions specifically for tests.
-  "test-utils",                         # Various utilities for tests.
-  "tokens-accounting",                  # Tokens accounting
-  "utils",                              # Various utilities.
-  "utils/networking",                   # Various async/tokio utilities.
-  "utxo",                               # Utxo and related utilities (cache, undo, etc.).
-  "trezor-common",                      # Code used by Trezor firmware repository.
-  "wallet",                             # Wallet primitives.
-  "wallet/wallet-cli",                  # Wallet CLI/REPL binary.
-  "wallet/wallet-cli-lib",              # Wallet CLI/REPL lib.
-  "wallet/wallet-cli-commands",         # Wallet CLI/REPL commands.
-  "wallet/wallet-controller",           # Common code for wallet UI applications.
-  "wallet/wallet-node-client",          # Wallet-to-node communication tools.
-  "wallet/wallet-address-generator",    # Wallet address generator binary.
-  "wallet/wallet-address-generator-lib",# Wallet address generator lib.
-  "wallet/wallet-rpc-client",           # Wallet RPC communication.
-  "wallet/wallet-rpc-daemon",           # Wallet RPC daemon binary.
-  "wallet/wallet-rpc-lib",              # Wallet RPC definitions library.
-  "wallet/wallet-test-node",            # Node for wallet testing as a library.
-  "wasm-wrappers",                      # WASM wrappers for various components.
-  "wasm-wrappers/wasm-doc-gen",         # WASM wrappers documentation generator.
+  "accounting",                          # Accounting and balances abstractions.
+  "api-server/api-server-common",        # API server, for light-wallets and block explorers: common between web-server and scanner.
+  "api-server/storage-test-suite",       # Test suite for the abstract storage layer of the API server to ensure consistent behavior.
+  "api-server/scanner-daemon",           # API server, for light-wallets and block explorers: blockchain scanner daemon.
+  "api-server/scanner-lib",              # API server, for light-wallets and block explorers: blockchain scanner library.
+  "api-server/stack-test-suite",         # API server, for light-wallets and block explorers: testing the scanner and web-server.
+  "api-server/web-server",               # API server, for light-wallets and block explorers: web-server.
+  "blockprod",                           # Block production with whatever consensus algorithm.
+  "chainstate",                          # Code on chainstate of blocks and transactions.
+  "chainstate/db-dumper",                # A tool for dumping the contents of the chainstate db.
+  "chainstate/test-suite",               # Tests for the chainstate, separated to make use of the chainstate test framework.
+  "common",                              # Everything else, until it's moved to another crate.
+  "consensus",                           # Consensus related logic.
+  "crypto",                              # Cryptographic primitives and their interfaces.
+  "dns-server",                          # DNS-server.
+  "logging",                             # Logging engine and its interfaces.
+  "mempool",                             # Mempool interface and implementation.
+  "mempool/types",                       # Common mempool types.
+  "mintscript",                          # Basic scripting language for validating transactions.
+  "mocks",                               # Mock implementations of our traits (used for testing).
+  "node-daemon",                         # Node terminal binary.
+  "networking",                          # Pure networking implementations
+  "node-gui",                            # Node GUI binary.
+  "node-gui/backend",                    # Node GUI backend, common logic for implementing GUI clients.
+  "node-lib",                            # Node lib; the common library between daemon, tui and gui node executables.
+  "orders-accounting",                   # Orders accounting
+  "p2p",                                 # P2p communication interfaces and protocols.
+  "p2p/backend-test-suite",              # P2p backend agnostic tests.
+  "p2p/types",                           # P2p support types with minimal dependencies.
+  "pos-accounting",                      # PoS accounting and balances abstractions.
+  "randomness",                          # A wrapper around all randomness functionality to make audits easier
+  "rpc",                                 # Rpc abstraction and implementation.
+  "rpc/description",                     # Data types describing an RPC interface.
+  "rpc/description-macro",               # Macro to generate rpc interface description.
+  "rpc/types",                           # Support types for use in RPC interfaces.
+  "script",                              # Bitcoin script and its interfaces.
+  "serialization",                       # Full featured serialization interfaces and implementations.
+  "serialization/core",                  # Serialization core tools.
+  "serialization/tagged",                # Serialization for direct/tagged encoding style.
+  "serialization/tagged/derive",         # direct/tagged encoding style derive macros.
+  "storage",                             # storage abstraction layer and its implementation.
+  "storage/backend-test-suite",          # Tests for validating storage backend implementations.
+  "storage/core",                        # Core backend-agnostic storage abstraction.
+  "storage/failing",                     # Storage adapter to occasionally fail certain operations, for testing.
+  "storage/inmemory",                    # In-memory storage backend implementation.
+  "storage/lmdb",                        # LMDB-based persistent storage backend implementation.
+  "storage/sqlite",                      # SQLite-based persistent storage backend implementation.
+  "subsystem",                           # Utilities for working with concurrent subsystems.
+  "test",                                # Integration tests.
+  "test-rpc-functions",                  # RPC functions specifically for tests.
+  "test-utils",                          # Various utilities for tests.
+  "tokens-accounting",                   # Tokens accounting
+  "utils",                               # Various utilities.
+  "utils/networking",                    # Various async/tokio utilities.
+  "utxo",                                # Utxo and related utilities (cache, undo, etc.).
+  "trezor-common",                       # Code used by Trezor firmware repository.
+  "wallet",                              # Wallet primitives.
+  "wallet/wallet-cli",                   # Wallet CLI/REPL binary.
+  "wallet/wallet-cli-lib",               # Wallet CLI/REPL lib.
+  "wallet/wallet-cli-commands",          # Wallet CLI/REPL commands.
+  "wallet/wallet-controller",            # Common code for wallet UI applications.
+  "wallet/wallet-node-client",           # Wallet-to-node communication tools.
+  "wallet/wallet-address-generator",     # Wallet address generator binary.
+  "wallet/wallet-address-generator-lib", # Wallet address generator lib.
+  "wallet/wallet-rpc-client",            # Wallet RPC communication.
+  "wallet/wallet-rpc-daemon",            # Wallet RPC daemon binary.
+  "wallet/wallet-rpc-lib",               # Wallet RPC definitions library.
+  "wallet/wallet-test-node",             # Node for wallet testing as a library.
+  "wasm-wrappers",                       # WASM wrappers for various components.
+  "wasm-wrappers/wasm-doc-gen",          # WASM wrappers documentation generator.
 ]
 
 default-members = [
@@ -245,7 +249,11 @@ tempfile = "3.3"
 testing_logger = "0.1"
 thiserror = "1.0"
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["registry", "env-filter", "json"] }
+tracing-subscriber = { version = "0.3", features = [
+  "registry",
+  "env-filter",
+  "json",
+] }
 tokio = { version = "1.27", default-features = false }
 tokio-socks = "0.5"
 tokio-stream = "0.1"
@@ -255,6 +263,16 @@ tower = "0.4"
 tower-http-axum = { package = "tower-http", version = "0.5" }
 x25519-dalek = "2.0"
 zeroize = "1.5"
+
+reqwest = "0.12"
+
+[workspace.dependencies.ledger-lib]
+git = "https://github.com/ledger-community/rust-ledger.git"
+rev = "4be10b810bb6500b7d8bc0b67e64fef24257e0e8"
+
+[workspace.dependencies.ledger-proto]
+git = "https://github.com/ledger-community/rust-ledger.git"
+rev = "4be10b810bb6500b7d8bc0b67e64fef24257e0e8"
 
 [workspace.dependencies.trezor-client]
 git = "https://github.com/mintlayer/mintlayer-trezor-firmware"
@@ -295,7 +313,8 @@ opt-level = 2
 
 [features]
 trezor = []
-default = ["trezor"]
+ledger = []
+default = ["trezor", "ledger"]
 
 [patch.crates-io]
 # Using fontconfig-parser v0.5.8 completely breaks UI in node-gui on Linux - most of the text disappears and the few
@@ -307,3 +326,4 @@ default = ["trezor"]
 # is fontconfig-parser <- fontdb <- cosmic-text <- various "iced" crates.
 # TODO: investigate this further.
 fontconfig-parser = { git = "https://github.com/Riey/fontconfig-parser", rev = "f7d13a779e6ee282ce75acbc00a1270c0350e0c2" }
+ledger-proto = { git = "https://github.com/ledger-community/rust-ledger.git", rev = "4be10b810bb6500b7d8bc0b67e64fef24257e0e8" }
