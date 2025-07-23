@@ -8,7 +8,7 @@ on:
     branches:
       - master
   schedule:
-    - cron: '15 0 * * *'  # every day at 00:15 UTC
+    - cron: "15 0 * * *" # every day at 00:15 UTC
 
 env:
   CARGO_TERM_COLOR: always
@@ -59,7 +59,7 @@ jobs:
       - name: Update local dependency repositories
         run: sudo apt-get update
       - name: Install build dependencies
-        run: sudo apt-get install -yqq --no-install-recommends build-essential python3 python3-toml podman pkg-config libssl-dev
+        run: sudo apt-get install -yqq --no-install-recommends build-essential python3 python3-toml podman pkg-config libssl-dev libdbus-1-dev libusb-1.0-0-dev
       - name: Install rust
         run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain $(python3 ./build-tools/cargo-info-extractor/extract.py --rust-version)
       - name: Build
@@ -117,9 +117,9 @@ jobs:
   run_tests_on_trezor_preparation:
     runs-on: ubuntu-latest
     steps:
-       # Note: we need to mimic the directory structure of the run_tests_on_trezor job, otherwise nextest
-       # will fail to execute archived tests. So we checkout the source code to "./mintlayer-core".
-       # (Also note that because of this the resulting path of the source dir will be "/.../mintlayer-core/mintlayer-core/mintlayer-core")
+      # Note: we need to mimic the directory structure of the run_tests_on_trezor job, otherwise nextest
+      # will fail to execute archived tests. So we checkout the source code to "./mintlayer-core".
+      # (Also note that because of this the resulting path of the source dir will be "/.../mintlayer-core/mintlayer-core/mintlayer-core")
       - name: Checkout the core repository
         uses: actions/checkout@v4
         with:
@@ -227,13 +227,12 @@ jobs:
       # Note: since we haven't installed Cargo in this job, we have to execute "cargo-nextest nextest"
       # instead of "cargo nextest".
       - name: Run tests in the emulator
-        run:
-          nix-shell --run "
-            poetry run core/emu.py
-              --headless --quiet --temporary-profile
-              --mnemonic \"abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about\"
-              --command env --chdir ../mintlayer-core
-                cargo-nextest nextest run --archive-file tests.tar.zst -j1 trezor_signer
+        run: nix-shell --run "
+          poetry run core/emu.py
+          --headless --quiet --temporary-profile
+          --mnemonic \"abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about\"
+          --command env --chdir ../mintlayer-core
+          cargo-nextest nextest run --archive-file tests.tar.zst -j1 trezor_signer
           "
         working-directory: ./mintlayer-trezor-firmware
         timeout-minutes: 10
