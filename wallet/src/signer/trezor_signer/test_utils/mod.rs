@@ -16,7 +16,10 @@
 mod auto_confirmer;
 
 use itertools::Itertools as _;
-use trezor_client::{find_devices, AvailableDevice, Model, Trezor, TrezorMessage};
+use trezor_client::{
+    transport::{udp::UdpTransport, webusb::WebUsbTransport},
+    AvailableDevice, Model, Trezor, TrezorMessage,
+};
 
 use logging::log;
 use utils::env_utils::bool_from_env;
@@ -41,25 +44,32 @@ pub fn find_test_device_and_connect(debug: bool) -> Trezor {
 }
 
 pub fn find_test_device(debug: bool) -> AvailableDevice {
-    let use_real_device = should_use_real_device();
-
-    let devices = find_devices(debug)
-        .into_iter()
-        .filter(|device| {
-            if use_real_device {
+    // Note: calling `WebUsbTransport::find_devices` on CI will panic with the message
+    // "Can't init Global usb context, error Other" (due to `unwrap()` on `rusb::devices()`).
+    // Which means that we can't use `trezor_client::find_devices` here because it calls
+    // `WebUsbTransport::find_devices` unconditionally.
+    let devices = if should_use_real_device() {
+        WebUsbTransport::find_devices(debug)
+            .unwrap()
+            .into_iter()
+            .filter(|device| {
                 // Note: we don't support `Model::TrezorLegacy` AKA Trezor Model One.
                 device.model == Model::Trezor
-            } else {
-                device.model == Model::TrezorEmulator
-            }
-        })
-        .collect_vec();
+            })
+            .collect_vec()
+    } else {
+        let devices = UdpTransport::find_devices(debug, None).unwrap();
+        assert!(devices.iter().all(|device| device.model == Model::TrezorEmulator));
+        devices
+    };
 
     if devices.len() > 1 {
         log::warn!("More than one device found, using the first one in the list");
     }
 
-    devices.into_iter().next().unwrap()
+    let device = devices.into_iter().next().unwrap();
+    log::debug!("Using device {device:?}");
+    device
 }
 
 // Note: `trezor_client::Trezor` only exposes `call_raw`, in which `write_message` is always followed

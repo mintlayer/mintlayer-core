@@ -25,7 +25,7 @@ jobs:
       - name: Install python toml package
         run: python3 -m pip install toml
       - name: Install rust
-        run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain $(python3 ./build-tools/rust-version-extractor/rust-version-extractor.py)
+        run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain $(python3 ./build-tools/cargo-info-extractor/extract.py --rust-version)
       - name: Build
         run: cargo build --release --locked --features trezor
       - name: Run tests
@@ -58,12 +58,10 @@ jobs:
           submodules: recursive
       - name: Update local dependency repositories
         run: sudo apt-get update
-      - name: Install dependencies
-        run: sudo apt-get install -yqq --no-install-recommends build-essential python3 python3-toml podman build-essential pkg-config libssl-dev
-      - name: Install rust deps
-        run: sudo apt-get install -yqq build-essential pkg-config libssl-dev
+      - name: Install build dependencies
+        run: sudo apt-get install -yqq --no-install-recommends build-essential python3 python3-toml podman pkg-config libssl-dev
       - name: Install rust
-        run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain $(python3 ./build-tools/rust-version-extractor/rust-version-extractor.py)
+        run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain $(python3 ./build-tools/cargo-info-extractor/extract.py --rust-version)
       - name: Build
         run: cargo build --release --locked --features trezor
       - name: Run tests
@@ -95,7 +93,7 @@ jobs:
       - name: Install python toml package
         run: python3 -m pip install toml --break-system-packages --user
       - name: Install rust
-        run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain $(python3 ./build-tools/rust-version-extractor/rust-version-extractor.py)
+        run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain $(python3 ./build-tools/cargo-info-extractor/extract.py --rust-version)
       - name: Build
         run: cargo build --release --locked --features trezor
       - name: Run tests
@@ -115,3 +113,128 @@ jobs:
         with:
           name: macos-functional-test-artifacts
           path: target/tmp
+
+  # Build Trezor-specific tests and archive them using cargo-nextest's "archive" feature.
+  run_tests_on_trezor_preparation:
+    runs-on: ubuntu-latest
+    steps:
+       # Note: we need to mimic the directory structure of the run_tests_on_trezor job, otherwise nextest
+       # will fail to execute archived tests. So we checkout the source code to "./mintlayer-core".
+       # (Also note that because of this the resulting path of the source dir will be "/.../mintlayer-core/mintlayer-core/mintlayer-core")
+      - name: Checkout the core repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          path: ./mintlayer-core
+
+      - name: Update local dependency repositories
+        run: sudo apt-get update
+
+      - name: Install build dependencies
+        run: sudo apt-get install -yqq --no-install-recommends build-essential python3 python3-toml pkg-config libssl-dev
+
+      - name: Extract required info from Cargo.toml
+        id: extract_cargo_info
+        run: echo "RUST_VERSION=$(python3 ./build-tools/cargo-info-extractor/extract.py --rust-version)" >> $GITHUB_OUTPUT
+        working-directory: ./mintlayer-core
+
+      - name: Install rust
+        run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain ${{ steps.extract_cargo_info.outputs.RUST_VERSION }}
+
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@nextest
+
+      - name: Build and archive the tests
+        run: cargo nextest archive --release --locked -p wallet --features enable-trezor-device-tests --archive-file tests.tar.zst
+        working-directory: ./mintlayer-core
+
+      - name: Upload archived tests
+        uses: actions/upload-artifact@v4
+        with:
+          name: archived-trezor-tests
+          path: ./mintlayer-core/tests.tar.zst
+          retention-days: 1
+
+  run_tests_on_trezor:
+    needs: run_tests_on_trezor_preparation
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        model: [T2T1, T3B1, T3T1, T3W1]
+    env:
+      TREZOR_MODEL: ${{ matrix.model }}
+      # Note: these are the default values, but it's better to specify them explicitly.
+      TREZOR_TESTS_USE_REAL_DEVICE: false
+      TREZOR_TESTS_AUTO_CONFIRM: true
+    steps:
+      # Note: cargo-nextest requires the source code to be present when running archived test binaries.
+      - name: Checkout the core repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          path: ./mintlayer-core
+
+      - name: Download archived tests
+        uses: actions/download-artifact@v4
+        with:
+          name: archived-trezor-tests
+          path: ./mintlayer-core
+
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@nextest
+
+      - name: Update local dependency repositories
+        run: sudo apt-get update
+
+      - name: Install other necessary tools
+        run: sudo apt-get install -yqq --no-install-recommends python3 python3-toml
+
+      - name: Extract required info from Cargo.toml
+        id: extract_cargo_info
+        run: |
+          echo "TREZOR_REPO_REV=$(python3 ./build-tools/cargo-info-extractor/extract.py --trezor-repo-rev)" >> $GITHUB_OUTPUT
+        working-directory: ./mintlayer-core
+
+      - name: Checkout mintlayer-trezor-firmware repository
+        uses: actions/checkout@v4
+        with:
+          repository: mintlayer/mintlayer-trezor-firmware
+          ref: ${{ steps.extract_cargo_info.outputs.TREZOR_REPO_REV }}
+          submodules: recursive
+          path: ./mintlayer-trezor-firmware
+
+      # Note: this is basically a copy of ".github/actions/environment" from the trezor repo, with
+      # the "full-deps" parameter equal to false (which is the default).
+      # Also note that the original "environment" action could technically be called from here
+      # via "uses", so in theory the duplication could be avoided. Unfortunately, the "nix-shell"
+      # calls require the current directory to be the one where the trezor repo has been checked out
+      # and there is no way of overriding the working dir for another action (unless the action itself
+      # supports it).
+      - name: Install nix
+        uses: cachix/install-nix-action@v23
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+      - name: Setup trezor repo build dependencies, part 1
+        run: nix-shell --arg fullDeps false --run "true"
+        working-directory: ./mintlayer-trezor-firmware
+      - name: Setup trezor repo build dependencies, part 2
+        run: nix-shell --arg fullDeps false --run "poetry install"
+        working-directory: ./mintlayer-trezor-firmware
+
+      - name: Build the firmware
+        run: nix-shell --run "poetry run make -C core build_unix"
+        working-directory: ./mintlayer-trezor-firmware
+
+      # Note: since we haven't installed Cargo in this job, we have to execute "cargo-nextest nextest"
+      # instead of "cargo nextest".
+      - name: Run tests in the emulator
+        run:
+          nix-shell --run "
+            poetry run core/emu.py
+              --headless --quiet --temporary-profile
+              --mnemonic \"abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about\"
+              --command env --chdir ../mintlayer-core
+                cargo-nextest nextest run --archive-file tests.tar.zst -j1 trezor_signer
+          "
+        working-directory: ./mintlayer-trezor-firmware
+        timeout-minutes: 10
