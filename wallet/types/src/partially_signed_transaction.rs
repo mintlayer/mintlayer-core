@@ -32,8 +32,9 @@ use common::{
             Signable, Transactable,
         },
         tokens::TokenId,
-        ChainConfig, Destination, OrderId, PoolId, SighashInputCommitmentVersion,
-        SignedTransaction, Transaction, TransactionCreationError, TxInput, TxOutput,
+        AccountCommand, ChainConfig, Destination, OrderAccountCommand, OrderId, PoolId,
+        SighashInputCommitmentVersion, SignedTransaction, Transaction, TransactionCreationError,
+        TxInput, TxOutput,
     },
     primitives::{Amount, BlockHeight},
 };
@@ -160,6 +161,14 @@ impl TxAdditionalInfo {
         self.order_info.get(order_id)
     }
 
+    pub fn token_info_iter(&self) -> impl Iterator<Item = (&'_ TokenId, &'_ TokenAdditionalInfo)> {
+        self.token_info.iter()
+    }
+
+    pub fn pool_info_iter(&self) -> impl Iterator<Item = (&'_ PoolId, &'_ PoolAdditionalInfo)> {
+        self.pool_info.iter()
+    }
+
     pub fn order_info_iter(&self) -> impl Iterator<Item = (&'_ OrderId, &'_ OrderAdditionalInfo)> {
         self.order_info.iter()
     }
@@ -211,6 +220,26 @@ pub struct PartiallySignedTransaction {
 }
 
 impl PartiallySignedTransaction {
+    pub fn new_unchecked(
+        tx: Transaction,
+        witnesses: Vec<Option<InputWitness>>,
+        input_utxos: Vec<Option<TxOutput>>,
+        destinations: Vec<Option<Destination>>,
+        htlc_secrets: Option<Vec<Option<HtlcSecret>>>,
+        additional_info: TxAdditionalInfo,
+    ) -> Self {
+        let htlc_secrets = htlc_secrets.unwrap_or_else(|| vec![None; tx.inputs().len()]);
+
+        Self {
+            tx,
+            witnesses,
+            input_utxos,
+            destinations,
+            htlc_secrets,
+            additional_info,
+        }
+    }
+
     pub fn new(
         tx: Transaction,
         witnesses: Vec<Option<InputWitness>>,
@@ -219,23 +248,23 @@ impl PartiallySignedTransaction {
         htlc_secrets: Option<Vec<Option<HtlcSecret>>>,
         additional_info: TxAdditionalInfo,
     ) -> Result<Self, PartiallySignedTransactionError> {
-        let htlc_secrets = htlc_secrets.unwrap_or_else(|| vec![None; tx.inputs().len()]);
-
-        let this = Self {
+        let this = Self::new_unchecked(
             tx,
             witnesses,
             input_utxos,
             destinations,
             htlc_secrets,
             additional_info,
-        };
+        );
 
-        this.ensure_consistency()?;
-
+        this.ensure_consistency(Self::need_heavy_consistency_checks())?;
         Ok(this)
     }
 
-    pub fn ensure_consistency(&self) -> Result<(), PartiallySignedTransactionError> {
+    pub fn ensure_consistency(
+        &self,
+        with_heavy_checks: bool,
+    ) -> Result<(), PartiallySignedTransactionError> {
         ensure!(
             self.tx.inputs().len() == self.witnesses.len(),
             PartiallySignedTransactionError::InvalidWitnessCount
@@ -256,18 +285,18 @@ impl PartiallySignedTransaction {
             PartiallySignedTransactionError::InvalidHtlcSecretsCount
         );
 
-        #[cfg(debug_assertions)]
-        {
+        if with_heavy_checks {
             self.ensure_additional_info_completeness()?;
         }
 
         Ok(())
     }
 
-    #[cfg(debug_assertions)]
-    fn ensure_additional_info_completeness(&self) -> Result<(), PartiallySignedTransactionError> {
-        use common::chain::{AccountCommand, OrderAccountCommand};
+    fn need_heavy_consistency_checks() -> bool {
+        cfg!(debug_assertions)
+    }
 
+    fn ensure_additional_info_completeness(&self) -> Result<(), PartiallySignedTransactionError> {
         let ensure_order_info_present =
             |order_id: &OrderId| -> Result<_, PartiallySignedTransactionError> {
                 ensure!(
@@ -387,7 +416,7 @@ impl PartiallySignedTransaction {
         witnesses: Vec<Option<InputWitness>>,
     ) -> Result<Self, PartiallySignedTransactionError> {
         self.witnesses = witnesses;
-        self.ensure_consistency()?;
+        self.ensure_consistency(Self::need_heavy_consistency_checks())?;
         Ok(self)
     }
 
