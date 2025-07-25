@@ -117,6 +117,8 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
         disconnect_tables_above_height(&mut db_tx, common_block_height)
             .await
             .expect("Unable to disconnect tables");
+        let mut next_order_number =
+            db_tx.get_last_transaction_global_index().await?.map_or(0, |idx| idx + 1);
 
         // Connect the new blocks in the new chain
         for (index, block) in blocks.into_iter().map(WithId::new).enumerate() {
@@ -190,12 +192,18 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
                 .await
                 .expect("Unable to set block");
 
-            for tx_info in transactions {
+            for (i, tx_info) in transactions.iter().enumerate() {
                 db_tx
-                    .set_transaction(tx_info.tx.transaction().get_id(), block_id, &tx_info)
+                    .set_transaction(
+                        tx_info.tx.transaction().get_id(),
+                        next_order_number + i as u64,
+                        block_id,
+                        tx_info,
+                    )
                     .await
                     .expect("Unable to set transaction");
             }
+            next_order_number += transactions.len() as u64;
 
             db_tx
                 .set_block_aux_data(

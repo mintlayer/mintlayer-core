@@ -91,6 +91,8 @@ pub enum ApiServerWebServerClientError {
     InvalidPoolId,
     #[error("Invalid offset")]
     InvalidOffset,
+    #[error("Invalid offset mode")]
+    InvalidOffsetMode,
     #[error("Invalid number of items")]
     InvalidNumItems,
     #[error("Invalid pools sort order")]

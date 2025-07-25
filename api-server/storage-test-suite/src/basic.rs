@@ -327,7 +327,7 @@ where
             };
             let random_owning_block = Id::<Block>::new(H256::random_using(&mut rng));
             let result = db_tx
-                .set_transaction(tx1.transaction().get_id(), random_owning_block, &tx_info)
+                .set_transaction(tx1.transaction().get_id(), 1, random_owning_block, &tx_info)
                 .await
                 .unwrap_err();
 
@@ -347,7 +347,7 @@ where
                 },
             };
             db_tx
-                .set_transaction(tx1.transaction().get_id(), owning_block1, &tx_info)
+                .set_transaction(tx1.transaction().get_id(), 2, owning_block1, &tx_info)
                 .await
                 .unwrap();
 
@@ -360,6 +360,50 @@ where
         }
 
         db_tx.commit().await.unwrap();
+
+        let mut db_tx = storage.transaction_rw().await.unwrap();
+        {
+            let height1_u64 = rng.gen_range::<u64, _>(1..i64::MAX as u64);
+            let height1 = height1_u64.into();
+            let random_block_timestamp = BlockTimestamp::from_int_seconds(rng.gen::<u64>());
+            let aux_data1 =
+                BlockAuxData::new(owning_block1.into(), height1, random_block_timestamp);
+            db_tx.set_block_aux_data(owning_block1, &aux_data1).await.unwrap();
+
+            let tx_info = TransactionInfo {
+                tx: tx1.clone(),
+                additional_info: TxAdditionalInfo {
+                    fee: Amount::from_atoms(rng.gen_range(0..100)),
+                    input_utxos: tx1_input_utxos.clone(),
+                    token_decimals: BTreeMap::new(),
+                },
+            };
+
+            let expected_last_tx_global_index = 20;
+            let start_tx_global_index = 10;
+            for i in start_tx_global_index..=expected_last_tx_global_index {
+                let tx_id = H256::random_using(&mut rng);
+                db_tx.set_transaction(tx_id.into(), i, owning_block1, &tx_info).await.unwrap();
+            }
+
+            let last_num = db_tx.get_last_transaction_global_index().await.unwrap();
+            assert_eq!(last_num, Some(expected_last_tx_global_index));
+
+            let take_txs = rng.gen_range(1..expected_last_tx_global_index - start_tx_global_index);
+            let txs = db_tx
+                .get_transactions_with_block_info_before_tx_global_index(
+                    take_txs as u32,
+                    last_num.unwrap() + 1,
+                )
+                .await
+                .unwrap();
+            assert_eq!(txs.len() as u64, take_txs);
+            for (i, tx) in txs.iter().enumerate() {
+                assert_eq!(tx.global_tx_index, expected_last_tx_global_index - i as u64);
+            }
+        }
+
+        db_tx.rollback().await.unwrap();
     }
 
     // Test setting/getting block aux data

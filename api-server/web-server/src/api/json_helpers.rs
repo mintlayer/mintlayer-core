@@ -23,15 +23,20 @@ use common::{
     chain::{
         block::ConsensusData,
         output_value::OutputValue,
+        signature::inputsig::{
+            authorize_hashed_timelock_contract_spend::AuthorizedHashedTimelockContractSpend,
+            InputWitness,
+        },
         tokens::{IsTokenUnfreezable, NftIssuance, TokenId, TokenTotalSupply},
         AccountCommand, AccountSpending, Block, ChainConfig, Destination, OrderAccountCommand,
-        OrderId, OutPointSourceId, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
+        OrderId, OutPointSourceId, PoolId, SignedTransaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Idable},
     Uint256,
 };
 use hex::ToHex;
 use serde_json::json;
+use serialization::DecodeAll;
 
 pub enum TokenDecimals<'a> {
     Map(&'a BTreeMap<TokenId, u8>),
@@ -107,6 +112,17 @@ pub fn txoutput_to_json(
     out: &TxOutput,
     chain_config: &ChainConfig,
     token_decimals: &TokenDecimals,
+) -> serde_json::Value {
+    opt_spent_utxo_to_json(out, chain_config, token_decimals, None)
+}
+
+/// This is reused for both Tx outputs and UTXOs.
+/// In the UTXOs case we have a signature which we use to extract the HTLC secret if any.
+fn opt_spent_utxo_to_json(
+    out: &TxOutput,
+    chain_config: &ChainConfig,
+    token_decimals: &TokenDecimals,
+    signature: Option<&InputWitness>,
 ) -> serde_json::Value {
     match out {
         TxOutput::Transfer(value, dest) => {
@@ -202,10 +218,26 @@ pub fn txoutput_to_json(
             })
         }
         TxOutput::Htlc(value, htlc) => {
+            let secret = if let Some(InputWitness::Standard(sig)) = signature {
+                let htlc_sig =
+                    AuthorizedHashedTimelockContractSpend::decode_all(&mut sig.raw_signature())
+                        .expect("proper signature");
+
+                match htlc_sig {
+                    AuthorizedHashedTimelockContractSpend::Secret(secret, _) => {
+                        Some(to_json_string(secret.secret()))
+                    }
+                    AuthorizedHashedTimelockContractSpend::Multisig(_) => None,
+                }
+            } else {
+                None
+            };
+
             json!({
                 "type": "Htlc",
                 "value": outputvalue_to_json(value, chain_config, token_decimals),
                 "htlc": {
+                    "secret": secret,
                     "secret_hash": to_json_string(htlc.secret_hash.as_bytes()),
                     "spend_key": Address::new(chain_config, htlc.spend_key.clone()).expect("no error").as_str(),
                     "refund_timelock": htlc.refund_timelock,
@@ -430,21 +462,30 @@ pub fn tx_input_to_json(
 }
 
 pub fn tx_to_json(
-    tx: &Transaction,
+    signed_tx: &SignedTransaction,
     additional_info: &TxAdditionalInfo,
     chain_config: &ChainConfig,
 ) -> serde_json::Value {
     let token_decimals = &(&additional_info.token_decimals).into();
+    let tx = signed_tx.transaction();
     json!({
         "id": tx.get_id().to_hash().encode_hex::<String>(),
         "version_byte": tx.version_byte(),
         "is_replaceable": tx.is_replaceable(),
         "flags": tx.flags(),
         "fee": amount_to_json(additional_info.fee, chain_config.coin_decimals()),
-        "inputs": tx.inputs().iter().zip(additional_info.input_utxos.iter()).map(|(inp, utxo)| json!({
-            "input": tx_input_to_json(inp, token_decimals, chain_config),
-            "utxo": utxo.as_ref().map(|txo| txoutput_to_json(txo, chain_config, token_decimals)),
-            })).collect::<Vec<_>>(),
+        "inputs": tx.inputs()
+                    .iter()
+                    .zip(additional_info.input_utxos.iter())
+                    .zip(signed_tx.signatures())
+                    .map(|((inp, utxo), sig)|
+                        json!({
+                            "input": tx_input_to_json(inp, token_decimals, chain_config),
+                            "utxo": utxo
+                                    .as_ref()
+                                    .map(|txo| opt_spent_utxo_to_json(txo, chain_config, token_decimals, Some(sig))),
+                        }))
+                    .collect::<Vec<_>>(),
         "outputs": tx.outputs()
                 .iter()
                 .map(|out| txoutput_to_json(out, chain_config, token_decimals))
@@ -457,8 +498,9 @@ pub fn to_tx_json_with_block_info(
     chain_config: &ChainConfig,
     tip_height: BlockHeight,
     block: BlockAuxData,
+    tx_global_index: u64,
 ) -> serde_json::Value {
-    let mut json = tx_to_json(tx.tx.transaction(), &tx.additional_info, chain_config);
+    let mut json = tx_to_json(&tx.tx, &tx.additional_info, chain_config);
     let obj = json.as_object_mut().expect("object");
 
     let confirmations = tip_height.sub(block.block_height());
@@ -475,6 +517,7 @@ pub fn to_tx_json_with_block_info(
         "confirmations".into(),
         confirmations.map_or("".to_string(), |c| c.to_string()).into(),
     );
+    obj.insert("tx_global_index".into(), tx_global_index.to_string().into());
     json
 }
 
