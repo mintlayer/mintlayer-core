@@ -21,7 +21,10 @@ use chainstate::{
     BlockError, ChainstateError, CheckBlockError, CheckBlockTransactionsError,
     ConnectTransactionError,
 };
-use chainstate_test_framework::{output_value_amount, TestFramework, TransactionBuilder};
+use chainstate_test_framework::{
+    helpers::{calculate_fill_order, issue_and_mint_random_token_from_best_block},
+    output_value_amount, TestFramework, TransactionBuilder,
+};
 use common::{
     address::pubkeyhash::PublicKeyHash,
     chain::{
@@ -51,8 +54,6 @@ use tx_verifier::{
     input_check::signature_only_check::verify_tx_signature,
     CheckTransactionError,
 };
-
-use crate::tests::helpers::{calculate_fill_order, issue_and_mint_random_token_from_best_block};
 
 fn create_test_framework_with_orders(
     rng: &mut (impl Rng + CryptoRng),

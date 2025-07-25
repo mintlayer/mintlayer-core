@@ -173,45 +173,41 @@ class WalletOrderDoubleFillWithSameDestImpl(BitcoinTestFramework):
             assert_not_in("Tokens", balance)
 
             fill_dest_address = await wallet.new_address()
+            # This will buy one token.
+            fill_amount = 2
 
-            # Buy 1 token
-            result = await wallet.fill_order(order_id, 2, fill_dest_address)
+            # Perform the fill.
+            result = await wallet.fill_order(order_id, fill_amount, fill_dest_address)
             fill_tx1_id = result['result']['tx_id']
             assert fill_tx1_id is not None
 
             if self.use_orders_v1:
-                # Immediately buy 1 more token using the same destination address. Since the wallet also uses
-                # the passed destination as the destination in the FillOrder input, mempool will think that the
-                # second transaction conflicts with the first one.
-                result = await wallet.fill_order(order_id, 2, fill_dest_address)
-                assert_in("Mempool error: Transaction conflicts with another, irreplaceable transaction", result['error']['message'])
-
-                # We are able to successfully generate a block.
-                self.generate_block()
-                assert_in("Success", await wallet.sync())
-
-                # Try creating the transaction again, in a new block. Now it should succeed.
-                result = await wallet.fill_order(order_id, 2, fill_dest_address)
+                # Perform another fill for the same amount.
+                result = await wallet.fill_order(order_id, fill_amount, fill_dest_address)
                 fill_tx2_id = result['result']['tx_id']
                 assert fill_tx2_id is not None
+
+                # We're able to successfully mine a block, which will contain both transactions.
+                self.generate_block()
+                assert_in("Success", await wallet.sync())
             else:
-                # In orders v0 the destination shouldn't be a problem due to nonces.
-                # However, at this moment the wallet gets the nonce from the chainstate only,
-                # so creating another "fill" tx when the previos one hasn't been mined yet
+                # Perform another fill for the same amount.
+                # But note that orders v0 use nonces and at this moment the wallet gets the current nonce from
+                # the chainstate only, so creating another "fill" tx when the previos one hasn't been mined yet
                 # will use the same nonce.
-                result = await wallet.fill_order(order_id, 2, fill_dest_address)
+                result = await wallet.fill_order(order_id, fill_amount, fill_dest_address)
                 assert_in("Mempool error: Nonce is not incremental", result['error']['message'])
 
                 self.generate_block()
                 assert_in("Success", await wallet.sync())
 
                 # After the first tx has been mined, a new one will be created with the correct nonce.
-                result = await wallet.fill_order(order_id, 2, fill_dest_address)
+                result = await wallet.fill_order(order_id, fill_amount, fill_dest_address)
                 fill_tx2_id = result['result']['tx_id']
                 assert fill_tx2_id is not None
 
-            self.generate_block()
-            assert_in("Success", await wallet.sync())
+                self.generate_block()
+                assert_in("Success", await wallet.sync())
 
             balance = await wallet.get_balance()
             assert_in(f"Coins amount: 146.99", balance)
