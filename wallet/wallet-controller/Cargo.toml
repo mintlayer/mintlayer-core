@@ -28,7 +28,10 @@ wallet-storage = { path = "../storage" }
 wallet-types = { path = "../types" }
 
 async-trait.workspace = true
-bip39 = { workspace = true, default-features = false, features = ["std", "zeroize"] }
+bip39 = { workspace = true, default-features = false, features = [
+  "std",
+  "zeroize",
+] }
 ctor.workspace = true
 derive_more.workspace = true
 futures = { workspace = true, default-features = false }
@@ -36,7 +39,13 @@ itertools.workspace = true
 serde.workspace = true
 strum.workspace = true
 thiserror.workspace = true
-tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "sync"] }
+tokio = { workspace = true, default-features = false, features = [
+  "io-util",
+  "macros",
+  "net",
+  "rt",
+  "sync",
+] }
 zeroize.workspace = true
 
 [dev-dependencies]
@@ -52,4 +61,5 @@ rstest.workspace = true
 
 [features]
 trezor = ["wallet-types/trezor"]
-default = ["trezor"]
+ledger = ["wallet-types/ledger"]
+default = ["trezor", "ledger"]

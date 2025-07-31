@@ -68,6 +68,10 @@ pub enum WalletExtraInfo {
         // Note: semver::Version is not serializable, so we can't use it here.
         firmware_version: String,
     },
+    #[cfg(feature = "ledger")]
+    LedgerWallet {
+        app_version: String,
+    },
 }
 
 impl rpc_description::HasValueHint for WalletExtraInfo {

@@ -36,8 +36,25 @@ tower.workspace = true
 [dev-dependencies]
 chainstate-storage = { path = "../../chainstate/storage" }
 
-tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "sync"] }
+tokio = { workspace = true, default-features = false, features = [
+  "io-util",
+  "macros",
+  "net",
+  "rt",
+  "sync",
+] }
 
 [features]
-trezor = ["wallet/trezor", "wallet-types/trezor", "wallet-rpc-lib/trezor", "wallet-controller/trezor"]
-default = ["trezor"]
+trezor = [
+  "wallet/trezor",
+  "wallet-types/trezor",
+  "wallet-rpc-lib/trezor",
+  "wallet-controller/trezor",
+]
+ledger = [
+  "wallet/ledger",
+  "wallet-types/ledger",
+  "wallet-rpc-lib/ledger",
+  "wallet-controller/ledger",
+]
+default = ["trezor", "ledger"]
