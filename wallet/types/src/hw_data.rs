@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common::primitives::semver::SemVer;
 use serialization::{Decode, Encode};
 
 /// This is the data that will be stored in the wallet db.
@@ -32,6 +33,7 @@ pub struct TrezorFullInfo {
     pub firmware_version: semver::Version,
 }
 
+#[cfg(feature = "trezor")]
 impl From<TrezorFullInfo> for TrezorData {
     fn from(info: TrezorFullInfo) -> Self {
         Self {
@@ -44,6 +46,19 @@ impl From<TrezorFullInfo> for TrezorData {
 #[cfg(feature = "ledger")]
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub struct LedgerData {}
+
+#[cfg(feature = "ledger")]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+pub struct LedgerDataFullInfo {
+    pub firmware_version: SemVer,
+}
+
+#[cfg(feature = "ledger")]
+impl From<LedgerDataFullInfo> for LedgerData {
+    fn from(_value: LedgerDataFullInfo) -> Self {
+        Self {}
+    }
+}
 
 /// This is the data that will be stored in the wallet db.
 #[derive(Debug, Clone, Encode, Decode)]
@@ -61,6 +76,8 @@ pub enum HardwareWalletData {
 pub enum HardwareWalletFullInfo {
     #[cfg(feature = "trezor")]
     Trezor(TrezorFullInfo),
+    #[cfg(feature = "ledger")]
+    Ledger(LedgerDataFullInfo),
 }
 
 impl From<HardwareWalletFullInfo> for HardwareWalletData {
@@ -68,6 +85,8 @@ impl From<HardwareWalletFullInfo> for HardwareWalletData {
         match info {
             #[cfg(feature = "trezor")]
             HardwareWalletFullInfo::Trezor(trezor_data) => Self::Trezor(trezor_data.into()),
+            #[cfg(feature = "ledger")]
+            HardwareWalletFullInfo::Ledger(ledger_data) => Self::Ledger(ledger_data.into()),
         }
     }
 }

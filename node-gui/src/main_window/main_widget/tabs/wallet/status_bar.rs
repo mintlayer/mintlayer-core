@@ -36,6 +36,11 @@ pub fn estimate_status_bar_height(wallet_info: &WalletExtraInfo) -> f32 {
             // For some reason, the status bar gets a bit of additional height.
             + 4.
         }
+        WalletExtraInfo::LedgerWallet { .. } => {
+            TEXT_SIZE + 2. * VERTICAL_PADDING
+            // For some reason, the status bar gets a bit of additional height.
+            + 4.
+        }
     }
 }
 
@@ -66,6 +71,16 @@ pub fn view_status_bar(wallet_info: &WalletExtraInfo) -> Option<Element<'static,
                 ])
                 .size(TEXT_SIZE),
             ]
+        }
+        #[cfg(feature = "ledger")]
+        WalletExtraInfo::LedgerWallet { firmware_version } => {
+            use iced::widget::{rich_text, span};
+
+            row![rich_text([
+                span("Firmware version: ").font(bold_font),
+                span(firmware_version.clone())
+            ])
+            .size(TEXT_SIZE),]
         }
     };
 

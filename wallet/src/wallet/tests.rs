@@ -258,8 +258,7 @@ where
     (coins, token_balances)
 }
 
-#[track_caller]
-fn verify_wallet_balance<B, P>(
+async fn verify_wallet_balance<B, P>(
     chain_config: &Arc<ChainConfig>,
     wallet: &Wallet<B, P>,
     expected_balance: Amount,
@@ -281,6 +280,7 @@ fn verify_wallet_balance<B, P>(
         false,
         |db_tx| SoftwareSignerProvider::load_from_database(chain_config.clone(), db_tx),
     )
+    .await
     .unwrap()
     .wallet()
     .unwrap();
@@ -292,13 +292,11 @@ fn verify_wallet_balance<B, P>(
     assert_eq!(coin_balance, expected_balance);
 }
 
-#[track_caller]
-fn create_wallet(chain_config: Arc<ChainConfig>) -> DefaultWallet {
-    create_wallet_with_mnemonic(chain_config, MNEMONIC)
+async fn create_wallet(chain_config: Arc<ChainConfig>) -> DefaultWallet {
+    create_wallet_with_mnemonic(chain_config, MNEMONIC).await
 }
 
-#[track_caller]
-fn create_block_with_reward_address<B, P>(
+async fn create_block_with_reward_address<B, P>(
     chain_config: &Arc<ChainConfig>,
     wallet: &mut Wallet<B, P>,
     transactions: Vec<SignedTransaction>,
@@ -319,12 +317,11 @@ where
     )
     .unwrap();
 
-    scan_wallet(wallet, BlockHeight::new(block_height), vec![block1.clone()]);
+    scan_wallet(wallet, BlockHeight::new(block_height), vec![block1.clone()]).await;
     block1
 }
 
-#[track_caller]
-fn create_block<B, P>(
+async fn create_block<B, P>(
     chain_config: &Arc<ChainConfig>,
     wallet: &mut Wallet<B, P>,
     transactions: Vec<SignedTransaction>,
@@ -343,12 +340,12 @@ where
         reward,
         block_height,
         address.clone().into_object(),
-    );
+    )
+    .await;
     (address, block)
 }
 
-#[track_caller]
-fn test_balance_from_genesis(
+async fn test_balance_from_genesis(
     chain_type: ChainType,
     utxos: Vec<TxOutput>,
     expected_balance: Amount,
@@ -366,13 +363,13 @@ fn test_balance_from_genesis(
             .build(),
     );
 
-    let wallet = create_wallet(chain_config.clone());
+    let wallet = create_wallet(chain_config.clone()).await;
 
-    verify_wallet_balance(&chain_config, &wallet, expected_balance);
+    verify_wallet_balance(&chain_config, &wallet, expected_balance).await;
 }
 
-#[test]
-fn wallet_creation_in_memory() {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn wallet_creation_in_memory() {
     let chain_config = Arc::new(create_regtest());
     let empty_db = create_wallet_in_memory().unwrap();
     let chain_config2 = chain_config.clone();
@@ -386,13 +383,15 @@ fn wallet_creation_in_memory() {
         WalletControllerMode::Hot,
         false,
         |db_tx| SoftwareSignerProvider::load_from_database(chain_config2, db_tx),
-    ) {
+    )
+    .await
+    {
         Ok(_) => panic!("Wallet loading should fail"),
         Err(err) => assert_eq!(err, WalletError::WalletNotInitialized),
     }
 
     // initialize a new wallet with mnemonic
-    let wallet = create_wallet(chain_config.clone());
+    let wallet = create_wallet(chain_config.clone()).await;
     let initialized_db = wallet.db;
 
     // successfully load a wallet from initialized db
@@ -405,13 +404,15 @@ fn wallet_creation_in_memory() {
         false,
         |db_tx| SoftwareSignerProvider::load_from_database(chain_config.clone(), db_tx),
     )
+    .await
     .unwrap();
 }
 
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn wallet_migration_to_v2(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn wallet_migration_to_v2(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let address = get_address(
         &create_regtest(),
@@ -445,11 +446,12 @@ fn wallet_migration_to_v2(#[case] seed: Seed) {
             )?)
         },
     )
+    .await
     .unwrap()
     .wallet()
     .unwrap();
 
-    verify_wallet_balance(&chain_config, &wallet, genesis_amount);
+    verify_wallet_balance(&chain_config, &wallet, genesis_amount).await;
 
     let password = Some("password".into());
     wallet.encrypt_wallet(&password).unwrap();
@@ -499,6 +501,7 @@ fn wallet_migration_to_v2(#[case] seed: Seed) {
         false,
         |db_tx| SoftwareSignerProvider::load_from_database(chain_config.clone(), db_tx),
     )
+    .await
     .unwrap()
     .wallet()
     .unwrap();
@@ -514,13 +517,14 @@ fn wallet_migration_to_v2(#[case] seed: Seed) {
         wallet.get_best_block_for_account(DEFAULT_ACCOUNT_INDEX).unwrap(),
         (chain_config.genesis_block_id(), BlockHeight::new(0))
     );
-    verify_wallet_balance(&chain_config, &wallet, genesis_amount);
+    verify_wallet_balance(&chain_config, &wallet, genesis_amount).await;
 }
 
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn wallet_seed_phrase_retrieval(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn wallet_seed_phrase_retrieval(#[case] seed: Seed) {
     use wallet_types::seed_phrase::SeedPhraseLanguage;
 
     let mut rng = make_seedable_rng(seed);
@@ -528,7 +532,7 @@ fn wallet_seed_phrase_retrieval(#[case] seed: Seed) {
 
     // create wallet without saving the seed phrase
     {
-        let wallet = create_wallet(chain_config.clone());
+        let wallet = create_wallet(chain_config.clone()).await;
         let seed_phrase = wallet.seed_phrase().unwrap();
         assert!(seed_phrase.is_none());
     }
@@ -557,6 +561,7 @@ fn wallet_seed_phrase_retrieval(#[case] seed: Seed) {
             )?)
         },
     )
+    .await
     .unwrap()
     .wallet()
     .unwrap();
@@ -631,8 +636,8 @@ fn wallet_seed_phrase_retrieval(#[case] seed: Seed) {
     assert!(seed_phrase.is_none());
 }
 
-#[test]
-fn wallet_seed_phrase_check_address() {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn wallet_seed_phrase_check_address() {
     let chain_config = Arc::new(create_mainnet());
 
     // create wallet with saving the seed phrase
@@ -654,6 +659,7 @@ fn wallet_seed_phrase_check_address() {
             )?)
         },
     )
+    .await
     .unwrap()
     .wallet()
     .unwrap();
@@ -697,6 +703,7 @@ fn wallet_seed_phrase_check_address() {
             )?)
         },
     )
+    .await
     .unwrap()
     .wallet()
     .unwrap();
@@ -717,8 +724,8 @@ fn wallet_seed_phrase_check_address() {
     assert_eq!(expected_pk2, pk.hex_encode().strip_prefix("00").unwrap());
 }
 
-#[test]
-fn wallet_balance_genesis() {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn wallet_balance_genesis() {
     let chain_type = ChainType::Mainnet;
 
     let genesis_amount = Amount::from_atoms(12345);
@@ -735,7 +742,7 @@ fn wallet_balance_genesis() {
         address.as_object().clone(),
     );
 
-    test_balance_from_genesis(chain_type, vec![genesis_output.clone()], genesis_amount);
+    test_balance_from_genesis(chain_type, vec![genesis_output.clone()], genesis_amount).await;
 
     let genesis_amount_2 = Amount::from_atoms(54321);
     let genesis_output_2 = TxOutput::LockThenTransfer(
@@ -748,7 +755,8 @@ fn wallet_balance_genesis() {
         chain_type,
         vec![genesis_output, genesis_output_2],
         (genesis_amount + genesis_amount_2).unwrap(),
-    );
+    )
+    .await;
 
     let address_indexes = [0, LOOKAHEAD_SIZE - 1, LOOKAHEAD_SIZE];
     for purpose in KeyPurpose::ALL {
@@ -766,9 +774,9 @@ fn wallet_balance_genesis() {
             let genesis_output = make_address_output(address.into_object(), genesis_amount);
 
             if address_index.into_u32() == LOOKAHEAD_SIZE {
-                test_balance_from_genesis(chain_type, vec![genesis_output], Amount::ZERO);
+                test_balance_from_genesis(chain_type, vec![genesis_output], Amount::ZERO).await;
             } else {
-                test_balance_from_genesis(chain_type, vec![genesis_output], genesis_amount);
+                test_balance_from_genesis(chain_type, vec![genesis_output], genesis_amount).await;
             }
         }
     }
@@ -777,7 +785,8 @@ fn wallet_balance_genesis() {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn locked_wallet_balance_works(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn locked_wallet_balance_works(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_type = ChainType::Mainnet;
     let genesis_amount = Amount::from_atoms(rng.gen_range(1..10000));
@@ -804,7 +813,7 @@ fn locked_wallet_balance_works(#[case] seed: Seed) {
             .build(),
     );
 
-    let mut wallet = create_wallet(chain_config.clone());
+    let mut wallet = create_wallet(chain_config.clone()).await;
 
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, genesis_amount);
@@ -817,11 +826,11 @@ fn locked_wallet_balance_works(#[case] seed: Seed) {
     assert_eq!(coin_balance, genesis_amount);
 }
 
-#[test]
-fn wallet_balance_block_reward() {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn wallet_balance_block_reward() {
     let chain_config = Arc::new(create_mainnet());
 
-    let mut wallet = create_wallet(chain_config.clone());
+    let mut wallet = create_wallet(chain_config.clone()).await;
 
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, Amount::ZERO);
@@ -831,13 +840,13 @@ fn wallet_balance_block_reward() {
 
     // Generate a new block which sends reward to the wallet
     let block1_amount = Amount::from_atoms(10000);
-    let (_, block1) = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
+    let (_, block1) = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0).await;
 
     // Verify that the first block reward has been received
     let (best_block_id, best_block_height) = get_best_block(&wallet);
     assert_eq!(best_block_id, block1.get_id());
     assert_eq!(best_block_height, BlockHeight::new(1));
-    verify_wallet_balance(&chain_config, &wallet, block1_amount);
+    verify_wallet_balance(&chain_config, &wallet, block1_amount).await;
 
     // Create the second block that sends the reward to the wallet
     let block2_amount = Amount::from_atoms(20000);
@@ -860,7 +869,7 @@ fn wallet_balance_block_reward() {
     )
     .unwrap();
     let block2_id = block2.header().block_id();
-    scan_wallet(&mut wallet, BlockHeight::new(1), vec![block2]);
+    scan_wallet(&mut wallet, BlockHeight::new(1), vec![block2]).await;
 
     // Verify that the second block reward is also received
     let (best_block_id, best_block_height) = get_best_block(&wallet);
@@ -870,7 +879,8 @@ fn wallet_balance_block_reward() {
         &chain_config,
         &wallet,
         (block1_amount + block2_amount).unwrap(),
-    );
+    )
+    .await;
 
     // Create a new block to replace the second block
     let block2_amount_new = Amount::from_atoms(30000);
@@ -893,7 +903,7 @@ fn wallet_balance_block_reward() {
     )
     .unwrap();
     let block2_new_id = block2_new.header().block_id();
-    scan_wallet(&mut wallet, BlockHeight::new(1), vec![block2_new]);
+    scan_wallet(&mut wallet, BlockHeight::new(1), vec![block2_new]).await;
 
     // Verify that the balance includes outputs from block1 and block2_new, but not block2
     let (best_block_id, best_block_height) = get_best_block(&wallet);
@@ -903,14 +913,15 @@ fn wallet_balance_block_reward() {
         &chain_config,
         &wallet,
         (block1_amount + block2_amount_new).unwrap(),
-    );
+    )
+    .await;
 }
 
-#[test]
-fn wallet_balance_block_transactions() {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn wallet_balance_block_transactions() {
     let chain_config = Arc::new(create_mainnet());
 
-    let mut wallet = create_wallet(chain_config.clone());
+    let mut wallet = create_wallet(chain_config.clone()).await;
 
     let tx_amount1 = Amount::from_atoms(10000);
     let address = get_address(
@@ -934,17 +945,18 @@ fn wallet_balance_block_transactions() {
         vec![signed_transaction1],
         Amount::ZERO,
         0,
-    );
+    )
+    .await;
 
-    verify_wallet_balance(&chain_config, &wallet, tx_amount1);
+    verify_wallet_balance(&chain_config, &wallet, tx_amount1).await;
 }
 
-#[test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 // Verify that outputs can be created and consumed in the same block
-fn wallet_balance_parent_child_transactions() {
+async fn wallet_balance_parent_child_transactions() {
     let chain_config = Arc::new(create_mainnet());
 
-    let mut wallet = create_wallet(chain_config.clone());
+    let mut wallet = create_wallet(chain_config.clone()).await;
 
     let tx_amount1 = Amount::from_atoms(20000);
     let tx_amount2 = Amount::from_atoms(10000);
@@ -988,13 +1000,13 @@ fn wallet_balance_parent_child_transactions() {
         vec![signed_transaction1, signed_transaction2],
         Amount::ZERO,
         0,
-    );
+    )
+    .await;
 
-    verify_wallet_balance(&chain_config, &wallet, tx_amount2);
+    verify_wallet_balance(&chain_config, &wallet, tx_amount2).await;
 }
 
-#[track_caller]
-fn test_wallet_accounts<B, P>(
+async fn test_wallet_accounts<B, P>(
     chain_config: &Arc<ChainConfig>,
     wallet: &Wallet<B, P>,
     expected_accounts: Vec<U31>,
@@ -1015,6 +1027,7 @@ fn test_wallet_accounts<B, P>(
         false,
         |db_tx| SoftwareSignerProvider::load_from_database(chain_config.clone(), db_tx),
     )
+    .await
     .unwrap()
     .wallet()
     .unwrap();
@@ -1026,9 +1039,9 @@ fn test_wallet_accounts<B, P>(
 async fn wallet_accounts_creation() {
     let chain_config = Arc::new(create_mainnet());
 
-    let mut wallet = create_wallet(chain_config.clone());
+    let mut wallet = create_wallet(chain_config.clone()).await;
 
-    test_wallet_accounts(&chain_config, &wallet, vec![DEFAULT_ACCOUNT_INDEX]);
+    test_wallet_accounts(&chain_config, &wallet, vec![DEFAULT_ACCOUNT_INDEX]).await;
     // DEFAULT_ACCOUNT_INDEX now has 1 transaction so next account can be created
     let _ = create_block(
         &chain_config,
@@ -1036,13 +1049,14 @@ async fn wallet_accounts_creation() {
         vec![],
         Amount::from_atoms(100),
         0,
-    );
+    )
+    .await;
 
-    let res = wallet.create_next_account(Some("name".into())).unwrap();
+    let res = wallet.create_next_account(Some("name".into())).await.unwrap();
     assert_eq!(res, (U31::from_u32(1).unwrap(), Some("name".into())));
 
     // but we cannot create a third account as the new one has no transactions
-    let error = wallet.create_next_account(None).err().unwrap();
+    let error = wallet.create_next_account(None).await.err().unwrap();
     assert_eq!(error, WalletError::EmptyLastAccount);
 
     let acc1_pk = wallet.get_new_address(res.0).unwrap().1;
@@ -1065,38 +1079,39 @@ async fn wallet_accounts_creation() {
 
     // even with an unconfirmed transaction we cannot create a new account
     wallet.add_unconfirmed_tx(tx.clone(), &WalletEventsNoOp).unwrap();
-    let error = wallet.create_next_account(None).err().unwrap();
+    let error = wallet.create_next_account(None).await.err().unwrap();
     assert_eq!(error, WalletError::EmptyLastAccount);
 
     // after getting a confirmed transaction we can create a new account
-    let _ = create_block(&chain_config, &mut wallet, vec![tx], Amount::ZERO, 1);
-    let res = wallet.create_next_account(Some("name2".into())).unwrap();
+    let _ = create_block(&chain_config, &mut wallet, vec![tx], Amount::ZERO, 1).await;
+    let res = wallet.create_next_account(Some("name2".into())).await.unwrap();
     assert_eq!(res, (U31::from_u32(2).unwrap(), Some("name2".into())));
 }
 
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn locked_wallet_accounts_creation_fail(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn locked_wallet_accounts_creation_fail(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_mainnet());
 
-    let mut wallet = create_wallet(chain_config.clone());
+    let mut wallet = create_wallet(chain_config.clone()).await;
 
     // Need at least one address used from the previous account in order to create a new account
     // Generate a new block which sends reward to the wallet
     let block1_amount = Amount::from_atoms(rng.gen_range(NETWORK_FEE + 1..NETWORK_FEE + 10000));
-    let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
+    let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0).await;
     let password = Some(gen_random_password(&mut rng));
     wallet.encrypt_wallet(&password).unwrap();
     wallet.lock_wallet().unwrap();
 
-    let err = wallet.create_next_account(None);
+    let err = wallet.create_next_account(None).await;
     assert_eq!(
         err,
-        Err(WalletError::DatabaseError(
+        Err(WalletError::KeyChainError(KeyChainError::DatabaseError(
             wallet_storage::Error::WalletLocked
-        ))
+        )))
     );
 
     let name: String = (0..rng.gen_range(0..10)).map(|_| rng.gen::<char>()).collect();
@@ -1104,10 +1119,11 @@ fn locked_wallet_accounts_creation_fail(#[case] seed: Seed) {
     // success after unlock
     wallet.unlock_wallet(&password.unwrap()).unwrap();
     if name.is_empty() {
-        let err = wallet.create_next_account(Some(name));
+        let err = wallet.create_next_account(Some(name)).await;
         assert_eq!(err, Err(WalletError::EmptyAccountName));
     } else {
-        let (new_account_index, new_name) = wallet.create_next_account(Some(name.clone())).unwrap();
+        let (new_account_index, new_name) =
+            wallet.create_next_account(Some(name.clone())).await.unwrap();
         assert_ne!(new_account_index, DEFAULT_ACCOUNT_INDEX);
         assert_eq!(new_name.unwrap(), name);
         assert_eq!(wallet.number_of_accounts(), 2);
@@ -1117,48 +1133,49 @@ fn locked_wallet_accounts_creation_fail(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn wallet_recover_new_account(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn wallet_recover_new_account(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_mainnet());
 
-    let mut wallet = create_wallet(chain_config.clone());
+    let mut wallet = create_wallet(chain_config.clone()).await;
 
-    let err = wallet.create_next_account(None).err().unwrap();
+    let err = wallet.create_next_account(None).await.err().unwrap();
     assert_eq!(err, WalletError::EmptyLastAccount);
 
     let mut total_amounts = BTreeMap::new();
     let mut last_account_index = DEFAULT_ACCOUNT_INDEX;
-    let blocks = (0..rng.gen_range(1..100))
-        .map(|idx| {
-            let tx_amount1 = Amount::from_atoms(rng.gen_range(1..10));
-            total_amounts
-                .entry(last_account_index)
-                .and_modify(|amount: &mut Amount| *amount = (*amount + tx_amount1).unwrap())
-                .or_insert(tx_amount1);
+    let mut blocks = vec![];
+    for idx in 0..rng.gen_range(1..100) {
+        let tx_amount1 = Amount::from_atoms(rng.gen_range(1..10));
+        total_amounts
+            .entry(last_account_index)
+            .and_modify(|amount: &mut Amount| *amount = (*amount + tx_amount1).unwrap())
+            .or_insert(tx_amount1);
 
-            let address = wallet.get_new_address(last_account_index).unwrap().1;
+        let address = wallet.get_new_address(last_account_index).unwrap().1;
 
-            let transaction1 = Transaction::new(
-                0,
-                Vec::new(),
-                vec![make_address_output(address.into_object(), tx_amount1)],
-            )
-            .unwrap();
-            let signed_transaction1 = SignedTransaction::new(transaction1, Vec::new()).unwrap();
-            let (_, block) = create_block(
-                &chain_config,
-                &mut wallet,
-                vec![signed_transaction1],
-                Amount::ZERO,
-                idx,
-            );
+        let transaction1 = Transaction::new(
+            0,
+            Vec::new(),
+            vec![make_address_output(address.into_object(), tx_amount1)],
+        )
+        .unwrap();
+        let signed_transaction1 = SignedTransaction::new(transaction1, Vec::new()).unwrap();
+        let (_, block) = create_block(
+            &chain_config,
+            &mut wallet,
+            vec![signed_transaction1],
+            Amount::ZERO,
+            idx,
+        )
+        .await;
 
-            if rng.gen_bool(0.2) {
-                last_account_index = wallet.create_next_account(None).unwrap().0;
-            }
-            block
-        })
-        .collect_vec();
+        if rng.gen_bool(0.2) {
+            last_account_index = wallet.create_next_account(None).await.unwrap().0;
+        }
+        blocks.push(block);
+    }
 
     // verify all accounts have the expected balances
     for (acc_idx, expected_balance) in total_amounts.iter() {
@@ -1167,9 +1184,9 @@ fn wallet_recover_new_account(#[case] seed: Seed) {
     }
 
     // Create a new wallet with the same mnemonic
-    let mut wallet = create_wallet(chain_config);
+    let mut wallet = create_wallet(chain_config).await;
     // scan the blocks again
-    scan_wallet(&mut wallet, BlockHeight::new(0), blocks.clone());
+    scan_wallet(&mut wallet, BlockHeight::new(0), blocks.clone()).await;
 
     // verify the wallet has recovered all of the accounts
     assert_eq!(wallet.number_of_accounts(), total_amounts.len(),);
@@ -1189,14 +1206,14 @@ async fn locked_wallet_cant_sign_transaction(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_mainnet());
 
-    let mut wallet = create_wallet(chain_config.clone());
+    let mut wallet = create_wallet(chain_config.clone()).await;
 
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, Amount::ZERO);
 
     // Generate a new block which sends reward to the wallet
     let block1_amount = Amount::from_atoms(rng.gen_range(NETWORK_FEE + 1..NETWORK_FEE + 10000));
-    let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
+    let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0).await;
 
     let password = Some(gen_random_password(&mut rng));
     wallet.encrypt_wallet(&password).unwrap();
@@ -1290,7 +1307,7 @@ async fn locked_wallet_standalone_keys(
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_mainnet());
 
-    let mut wallet = create_wallet(chain_config.clone());
+    let mut wallet = create_wallet(chain_config.clone()).await;
 
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, Amount::ZERO);
@@ -1334,7 +1351,8 @@ async fn locked_wallet_standalone_keys(
             block1_amount,
             0,
             standalone_destination,
-        );
+        )
+        .await;
     } else {
         // test that wallet will recognise a destination belonging to a standalone key in a
         // transaction
@@ -1352,7 +1370,7 @@ async fn locked_wallet_standalone_keys(
         )
         .unwrap();
 
-        scan_wallet(&mut wallet, BlockHeight::new(0), vec![block1.clone()]);
+        scan_wallet(&mut wallet, BlockHeight::new(0), vec![block1.clone()]).await;
 
         // check the transaction has been added to the wallet
         let tx_data = wallet
@@ -1429,10 +1447,10 @@ async fn wallet_get_transaction(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_mainnet());
 
-    let mut wallet = create_wallet(chain_config.clone());
+    let mut wallet = create_wallet(chain_config.clone()).await;
     // Generate a new block which sends reward to the wallet
     let block1_amount = Amount::from_atoms(rng.gen_range(100000..1000000));
-    let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
+    let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0).await;
 
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, block1_amount);
@@ -1472,7 +1490,8 @@ async fn wallet_get_transaction(#[case] seed: Seed) {
         vec![tx.clone()],
         Amount::ZERO,
         1,
-    );
+    )
+    .await;
     let found_tx = wallet.get_transaction(DEFAULT_ACCOUNT_INDEX, tx_id).unwrap();
 
     assert_eq!(
@@ -1490,10 +1509,10 @@ async fn wallet_list_mainchain_transactions(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_regtest());
 
-    let mut wallet = create_wallet(chain_config.clone());
+    let mut wallet = create_wallet(chain_config.clone()).await;
     // Generate a new block which sends reward to the wallet
     let block1_amount = Amount::from_atoms(rng.gen_range(100000..1000000));
-    let (addr, _) = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
+    let (addr, _) = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0).await;
     let dest = addr.into_object();
 
     let coin_balance = get_coin_balance(&wallet);
@@ -1523,7 +1542,8 @@ async fn wallet_list_mainchain_transactions(#[case] seed: Seed) {
         vec![tx.clone()],
         Amount::ZERO,
         1,
-    );
+    )
+    .await;
 
     let tx = wallet
         .create_transaction_to_addresses(
@@ -1546,7 +1566,8 @@ async fn wallet_list_mainchain_transactions(#[case] seed: Seed) {
         vec![tx.clone()],
         Amount::ZERO,
         2,
-    );
+    )
+    .await;
 
     let txs = wallet.mainchain_transactions(DEFAULT_ACCOUNT_INDEX, Some(dest), 100).unwrap();
     // should have 2 txs the send to and the spent from
@@ -1575,14 +1596,14 @@ async fn wallet_transactions_with_fees(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_mainnet());
 
-    let mut wallet = create_wallet(chain_config.clone());
+    let mut wallet = create_wallet(chain_config.clone()).await;
 
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, Amount::ZERO);
 
     // Generate a new block which sends reward to the wallet
     let block1_amount = Amount::from_atoms(rng.gen_range(30000000..50000000));
-    let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
+    let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0).await;
 
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, block1_amount);
@@ -1693,7 +1714,7 @@ async fn wallet_transactions_with_fees(#[case] seed: Seed) {
     // make sure we have selected all of the previously created outputs
     assert!(selected_utxos.len() >= num_outputs as usize);
 
-    let account1 = wallet.create_next_account(None).unwrap().0;
+    let account1 = wallet.create_next_account(None).await.unwrap().0;
     let address2 = wallet.get_new_address(account1).unwrap().1.into_object();
     let feerate = FeeRate::from_amount_per_kb(Amount::from_atoms(rng.gen_range(1..1000)));
     let SignedTxWithFees { tx, fees } = wallet
@@ -1740,11 +1761,11 @@ async fn wallet_transactions_with_fees(#[case] seed: Seed) {
     assert_eq!(*exact_fee, *fees.get(&Currency::Coin).unwrap());
 }
 
-#[test]
-fn lock_wallet_fail_empty_password() {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn lock_wallet_fail_empty_password() {
     let chain_config = Arc::new(create_mainnet());
 
-    let mut wallet = create_wallet(chain_config);
+    let mut wallet = create_wallet(chain_config).await;
     let empty_password = Some(String::new());
     assert_eq!(
         wallet.encrypt_wallet(&empty_password),
@@ -1762,7 +1783,7 @@ async fn spend_from_user_specified_utxos(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_mainnet());
 
-    let mut wallet = create_wallet(chain_config.clone());
+    let mut wallet = create_wallet(chain_config.clone()).await;
 
     // Generate a new block which sends reward to the wallet
     let utxo_amount = Amount::from_atoms(rng.gen_range(100..10000));
@@ -1786,7 +1807,7 @@ async fn spend_from_user_specified_utxos(#[case] seed: Seed) {
         BlockReward::new(reward_outputs),
     )
     .unwrap();
-    scan_wallet(&mut wallet, BlockHeight::new(0), vec![block1]);
+    scan_wallet(&mut wallet, BlockHeight::new(0), vec![block1]).await;
 
     let utxos = wallet
         .get_utxos(
@@ -1899,14 +1920,14 @@ async fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_regtest());
 
-    let mut wallet = create_wallet(chain_config.clone());
+    let mut wallet = create_wallet(chain_config.clone()).await;
 
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, Amount::ZERO);
 
     // Generate a new block which sends reward to the wallet
     let block1_amount = Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
-    let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
+    let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0).await;
 
     let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
     assert!(pool_ids.is_empty());
@@ -1966,7 +1987,8 @@ async fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
         vec![stake_pool_transaction],
         Amount::ZERO,
         1,
-    );
+    )
+    .await;
 
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, Amount::ZERO);
@@ -2028,7 +2050,7 @@ async fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
     )
     .unwrap();
 
-    scan_wallet(&mut wallet, BlockHeight::new(2), vec![block3.clone()]);
+    scan_wallet(&mut wallet, BlockHeight::new(2), vec![block3.clone()]).await;
 
     let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
     assert_eq!(pool_ids.len(), 1);
@@ -2039,7 +2061,7 @@ async fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
     );
 
     // do a reorg back to block 2
-    scan_wallet(&mut wallet, BlockHeight::new(1), vec![block2.clone()]);
+    scan_wallet(&mut wallet, BlockHeight::new(1), vec![block2.clone()]).await;
     let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
     assert_eq!(pool_ids.len(), 1);
     let (pool_id, pool_data) = pool_ids.first().unwrap();
@@ -2066,7 +2088,8 @@ async fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
         vec![decommission_tx],
         Amount::ZERO,
         2,
-    );
+    )
+    .await;
     let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
     assert!(pool_ids.is_empty());
     let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::Stake).unwrap();
@@ -2093,8 +2116,8 @@ async fn create_stake_pool_for_different_wallet_and_list_pool_ids(#[case] seed: 
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_regtest());
 
-    let mut wallet1 = create_wallet_with_mnemonic(chain_config.clone(), MNEMONIC);
-    let mut wallet2 = create_wallet_with_mnemonic(chain_config.clone(), MNEMONIC2);
+    let mut wallet1 = create_wallet_with_mnemonic(chain_config.clone(), MNEMONIC).await;
+    let mut wallet2 = create_wallet_with_mnemonic(chain_config.clone(), MNEMONIC2).await;
 
     let coin_balance1 = get_coin_balance(&wallet1);
     assert_eq!(coin_balance1, Amount::ZERO);
@@ -2103,8 +2126,8 @@ async fn create_stake_pool_for_different_wallet_and_list_pool_ids(#[case] seed: 
 
     // Generate a new block which sends reward to the wallet
     let block1_amount = Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
-    let (_, block1) = create_block(&chain_config, &mut wallet1, vec![], block1_amount, 0);
-    scan_wallet(&mut wallet2, BlockHeight::new(0), vec![block1]);
+    let (_, block1) = create_block(&chain_config, &mut wallet1, vec![], block1_amount, 0).await;
+    scan_wallet(&mut wallet2, BlockHeight::new(0), vec![block1]).await;
 
     let pool_ids1 = wallet1.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
     assert!(pool_ids1.is_empty());
@@ -2202,8 +2225,9 @@ async fn create_stake_pool_for_different_wallet_and_list_pool_ids(#[case] seed: 
         vec![stake_pool_transaction],
         Amount::ZERO,
         1,
-    );
-    scan_wallet(&mut wallet2, BlockHeight::new(1), vec![block2.clone()]);
+    )
+    .await;
+    scan_wallet(&mut wallet2, BlockHeight::new(1), vec![block2.clone()]).await;
 
     let coin_balance1 = get_coin_balance(&wallet1);
     assert_eq!(coin_balance1, Amount::ZERO);
@@ -2288,8 +2312,8 @@ async fn create_stake_pool_for_different_wallet_and_list_pool_ids(#[case] seed: 
     )
     .unwrap();
 
-    scan_wallet(&mut wallet1, BlockHeight::new(2), vec![block3.clone()]);
-    scan_wallet(&mut wallet2, BlockHeight::new(2), vec![block3.clone()]);
+    scan_wallet(&mut wallet1, BlockHeight::new(2), vec![block3.clone()]).await;
+    scan_wallet(&mut wallet2, BlockHeight::new(2), vec![block3.clone()]).await;
 
     let pool_ids_for_staking1 =
         wallet1.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::Stake).unwrap();
@@ -2342,8 +2366,9 @@ async fn create_stake_pool_for_different_wallet_and_list_pool_ids(#[case] seed: 
         vec![decommission_tx],
         Amount::ZERO,
         3,
-    );
-    scan_wallet(&mut wallet2, BlockHeight::new(3), vec![block4]);
+    )
+    .await;
+    scan_wallet(&mut wallet2, BlockHeight::new(3), vec![block4]).await;
 
     let pool_ids1 = wallet1.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
     assert!(pool_ids1.is_empty());
@@ -2364,14 +2389,14 @@ async fn reset_keys_after_failed_transaction(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_mainnet());
 
-    let mut wallet = create_wallet(chain_config.clone());
+    let mut wallet = create_wallet(chain_config.clone()).await;
 
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, Amount::ZERO);
 
     // Generate a new block which sends reward to the wallet
     let block1_amount = Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
-    let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
+    let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0).await;
 
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, block1_amount);
@@ -2417,8 +2442,8 @@ async fn send_to_unknown_delegation(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_mainnet());
 
-    let mut wallet = create_wallet_with_mnemonic(chain_config.clone(), MNEMONIC);
-    let mut wallet2 = create_wallet_with_mnemonic(chain_config.clone(), MNEMONIC2);
+    let mut wallet = create_wallet_with_mnemonic(chain_config.clone(), MNEMONIC).await;
+    let mut wallet2 = create_wallet_with_mnemonic(chain_config.clone(), MNEMONIC2).await;
 
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, Amount::ZERO);
@@ -2433,13 +2458,15 @@ async fn send_to_unknown_delegation(#[case] seed: Seed) {
         vec![],
         block1_amount,
         block_height,
-    );
+    )
+    .await;
 
     scan_wallet(
         &mut wallet2,
         BlockHeight::new(block_height),
         vec![block.clone()],
-    );
+    )
+    .await;
 
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, delegation_amount);
@@ -2453,13 +2480,15 @@ async fn send_to_unknown_delegation(#[case] seed: Seed) {
         vec![],
         block1_amount,
         block_height,
-    );
+    )
+    .await;
 
     scan_wallet(
         &mut wallet,
         BlockHeight::new(block_height),
         vec![block.clone()],
-    );
+    )
+    .await;
 
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, delegation_amount);
@@ -2489,12 +2518,14 @@ async fn send_to_unknown_delegation(#[case] seed: Seed) {
         vec![delegation_tx],
         Amount::ZERO,
         block_height,
-    );
+    )
+    .await;
     scan_wallet(
         &mut wallet2,
         BlockHeight::new(block_height),
         vec![block.clone()],
-    );
+    )
+    .await;
 
     let delegation_data =
         wallet2.get_delegation(DEFAULT_ACCOUNT_INDEX, wallet2_delegation_id).unwrap();
@@ -2524,12 +2555,14 @@ async fn send_to_unknown_delegation(#[case] seed: Seed) {
         vec![delegation_stake_tx],
         block1_amount,
         block_height,
-    );
+    )
+    .await;
     scan_wallet(
         &mut wallet2,
         BlockHeight::new(block_height),
         vec![block.clone()],
-    );
+    )
+    .await;
 
     // Wallet2 should see the transaction and know that someone has staked to the delegation
     let delegation_data =
@@ -2541,7 +2574,7 @@ async fn send_to_unknown_delegation(#[case] seed: Seed) {
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, block1_amount);
 
-    let (other_acc_idx, _) = wallet.create_next_account(None).unwrap();
+    let (other_acc_idx, _) = wallet.create_next_account(None).await.unwrap();
     let address = wallet.get_new_address(other_acc_idx).unwrap().1;
 
     let unknown_pool_id = PoolId::new(H256::zero());
@@ -2565,7 +2598,8 @@ async fn send_to_unknown_delegation(#[case] seed: Seed) {
         vec![delegation_tx],
         Amount::ZERO,
         2,
-    );
+    )
+    .await;
 
     // the new delegation even though created from DEFAULT_ACCOUNT_INDEX is not theirs
     assert_eq!(
@@ -2586,7 +2620,7 @@ async fn create_spend_from_delegations(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_mainnet());
 
-    let mut wallet = create_wallet(chain_config.clone());
+    let mut wallet = create_wallet(chain_config.clone()).await;
 
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, Amount::ZERO);
@@ -2594,7 +2628,7 @@ async fn create_spend_from_delegations(#[case] seed: Seed) {
     // Generate a new block which sends reward to the wallet
     let delegation_amount = Amount::from_atoms(rng.gen_range(2..100));
     let block1_amount = (chain_config.min_stake_pool_pledge() + delegation_amount).unwrap();
-    let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
+    let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0).await;
 
     let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
     assert!(pool_ids.is_empty());
@@ -2628,7 +2662,8 @@ async fn create_spend_from_delegations(#[case] seed: Seed) {
         vec![stake_pool_transaction],
         Amount::ZERO,
         1,
-    );
+    )
+    .await;
 
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, (block1_amount - pool_amount).unwrap(),);
@@ -2657,7 +2692,8 @@ async fn create_spend_from_delegations(#[case] seed: Seed) {
         vec![delegation_tx],
         Amount::ZERO,
         2,
-    );
+    )
+    .await;
 
     let mut delegations = wallet.get_delegations(DEFAULT_ACCOUNT_INDEX).unwrap().collect_vec();
     assert_eq!(delegations.len(), 1);
@@ -2688,7 +2724,8 @@ async fn create_spend_from_delegations(#[case] seed: Seed) {
         vec![delegation_stake_tx],
         Amount::ZERO,
         3,
-    );
+    )
+    .await;
 
     let delegation_tx1 = wallet
         .create_transaction_to_addresses_from_delegation(
@@ -2721,7 +2758,7 @@ async fn create_spend_from_delegations(#[case] seed: Seed) {
 
     // Send delegation to account 1
     // test that account 1 will receive the money but not register the delegation id as theirs
-    let (other_acc_idx, _) = wallet.create_next_account(None).unwrap();
+    let (other_acc_idx, _) = wallet.create_next_account(None).await.unwrap();
     let address = wallet.get_new_address(other_acc_idx).unwrap().1;
 
     let delegation_tx2 = wallet
@@ -2751,7 +2788,8 @@ async fn create_spend_from_delegations(#[case] seed: Seed) {
     assert_eq!(*deleg_id, delegation_id);
     assert_eq!(deleg_data.last_nonce, Some(AccountNonce::new(1)));
 
-    let (_, block5) = create_block(&chain_config, &mut wallet, delegation_tx1, Amount::ZERO, 4);
+    let (_, block5) =
+        create_block(&chain_config, &mut wallet, delegation_tx1, Amount::ZERO, 4).await;
 
     let _ = create_block(
         &chain_config,
@@ -2759,7 +2797,8 @@ async fn create_spend_from_delegations(#[case] seed: Seed) {
         vec![delegation_tx2.clone()],
         Amount::ZERO,
         5,
-    );
+    )
+    .await;
 
     // Check delegation balance after confirmed tx status
     let mut delegations = wallet.get_delegations(DEFAULT_ACCOUNT_INDEX).unwrap().collect_vec();
@@ -2780,7 +2819,7 @@ async fn create_spend_from_delegations(#[case] seed: Seed) {
     assert!(delegations.is_empty());
 
     // roll back the delegation tx to test removal code
-    scan_wallet(&mut wallet, BlockHeight::new(4), vec![block5]);
+    scan_wallet(&mut wallet, BlockHeight::new(4), vec![block5]).await;
 
     let coin_balance = wallet
         .get_balance(other_acc_idx, UtxoState::Confirmed.into(), WithLocked::Any)
@@ -2839,8 +2878,8 @@ async fn issue_and_transfer_tokens(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_mainnet());
 
-    let mut wallet = create_wallet_with_mnemonic(chain_config.clone(), MNEMONIC);
-    let mut wallet2 = create_wallet_with_mnemonic(chain_config.clone(), MNEMONIC2);
+    let mut wallet = create_wallet_with_mnemonic(chain_config.clone(), MNEMONIC).await;
+    let mut wallet2 = create_wallet_with_mnemonic(chain_config.clone(), MNEMONIC2).await;
 
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, Amount::ZERO);
@@ -2881,8 +2920,9 @@ async fn issue_and_transfer_tokens(#[case] seed: Seed) {
         vec![],
         block1_amount,
         0,
-    );
-    scan_wallet(other_wallet, BlockHeight::new(0), vec![block.clone()]);
+    )
+    .await;
+    scan_wallet(other_wallet, BlockHeight::new(0), vec![block.clone()]).await;
 
     let coin_balance = get_coin_balance(random_issuing_wallet);
     assert_eq!(coin_balance, block1_amount);
@@ -3039,7 +3079,8 @@ async fn issue_and_transfer_tokens(#[case] seed: Seed) {
         token_issuance_transactions,
         block1_amount,
         1,
-    );
+    )
+    .await;
 
     let (coin_balance, token_balances) = get_currency_balances(&wallet);
 
@@ -3099,7 +3140,8 @@ async fn issue_and_transfer_tokens(#[case] seed: Seed) {
         vec![transfer_tokens_transaction],
         block1_amount,
         2,
-    );
+    )
+    .await;
 
     let (coin_balance, token_balances) = get_currency_balances(&wallet);
     let mut expected_amount = ((block1_amount * 3).unwrap() - issuance_fee).unwrap();
@@ -3166,7 +3208,7 @@ async fn check_tokens_v0_are_ignored(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_regtest());
 
-    let mut wallet = create_wallet(chain_config.clone());
+    let mut wallet = create_wallet(chain_config.clone()).await;
 
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, Amount::ZERO);
@@ -3176,7 +3218,7 @@ async fn check_tokens_v0_are_ignored(#[case] seed: Seed) {
         + chain_config.fungible_token_issuance_fee())
     .unwrap();
 
-    let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
+    let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0).await;
 
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, block1_amount);
@@ -3227,7 +3269,7 @@ async fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_regtest());
 
-    let mut wallet = create_wallet(chain_config.clone());
+    let mut wallet = create_wallet(chain_config.clone()).await;
 
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, Amount::ZERO);
@@ -3237,7 +3279,7 @@ async fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
         + (chain_config.fungible_token_issuance_fee() * 4).unwrap())
     .unwrap();
 
-    let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
+    let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0).await;
 
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, block1_amount);
@@ -3271,7 +3313,8 @@ async fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
         vec![token_issuance_transaction],
         block1_amount,
         1,
-    );
+    )
+    .await;
 
     let freezable = token_issuance.is_freezable.as_bool();
     let token_info = RPCFungibleTokenInfo::new(
@@ -3304,7 +3347,7 @@ async fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
         .unwrap()
         .tx;
 
-    let _ = create_block(&chain_config, &mut wallet, vec![mint_tx], block2_amount, 2);
+    let _ = create_block(&chain_config, &mut wallet, vec![mint_tx], block2_amount, 2).await;
 
     let unconfirmed_token_info = wallet
         .get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, token_info.clone())
@@ -3395,7 +3438,8 @@ async fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
         vec![freeze_tx, unfreeze_tx],
         block2_amount,
         3,
-    );
+    )
+    .await;
 
     let unconfirmed_token_info = wallet
         .get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, token_info.clone())
@@ -3508,7 +3552,8 @@ async fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
         vec![freeze_tx],
         block2_amount,
         4,
-    );
+    )
+    .await;
 
     // now the transfer tx should be conflicting
     let pending_txs = wallet.pending_transactions(DEFAULT_ACCOUNT_INDEX).unwrap();
@@ -3541,7 +3586,7 @@ async fn change_token_supply_fixed(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_mainnet());
 
-    let mut wallet = create_wallet(chain_config.clone());
+    let mut wallet = create_wallet(chain_config.clone()).await;
 
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, Amount::ZERO);
@@ -3551,7 +3596,7 @@ async fn change_token_supply_fixed(#[case] seed: Seed) {
         + chain_config.fungible_token_issuance_fee())
     .unwrap();
 
-    let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
+    let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0).await;
 
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, block1_amount);
@@ -3584,7 +3629,8 @@ async fn change_token_supply_fixed(#[case] seed: Seed) {
         vec![token_issuance_transaction],
         block1_amount,
         1,
-    );
+    )
+    .await;
 
     let freezable = token_issuance.is_freezable.as_bool();
     let mut token_info = RPCFungibleTokenInfo::new(
@@ -3703,7 +3749,8 @@ async fn change_token_supply_fixed(#[case] seed: Seed) {
         vec![mint_transaction],
         block2_amount,
         2,
-    );
+    )
+    .await;
     token_info.circulating_supply = unconfirmed_token_info.current_supply().unwrap();
 
     let unconfirmed_token_info = wallet
@@ -3764,7 +3811,8 @@ async fn change_token_supply_fixed(#[case] seed: Seed) {
         vec![unmint_transaction],
         block2_amount,
         3,
-    );
+    )
+    .await;
     token_info.circulating_supply = unconfirmed_token_info.current_supply().unwrap();
 
     let unconfirmed_token_info = wallet
@@ -3805,7 +3853,7 @@ async fn change_token_supply_unlimited(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_mainnet());
 
-    let mut wallet = create_wallet(chain_config.clone());
+    let mut wallet = create_wallet(chain_config.clone()).await;
 
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, Amount::ZERO);
@@ -3815,7 +3863,7 @@ async fn change_token_supply_unlimited(#[case] seed: Seed) {
         + chain_config.fungible_token_issuance_fee())
     .unwrap();
 
-    let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
+    let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0).await;
 
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, block1_amount);
@@ -3848,7 +3896,8 @@ async fn change_token_supply_unlimited(#[case] seed: Seed) {
         vec![token_issuance_transaction],
         block2_amount,
         1,
-    );
+    )
+    .await;
 
     let freezable = token_issuance.is_freezable.as_bool();
     let mut token_info = RPCFungibleTokenInfo::new(
@@ -3907,7 +3956,8 @@ async fn change_token_supply_unlimited(#[case] seed: Seed) {
         vec![mint_transaction],
         block2_amount,
         2,
-    );
+    )
+    .await;
     token_info.circulating_supply = unconfirmed_token_info.current_supply().unwrap();
 
     let unconfirmed_token_info = wallet
@@ -3967,7 +4017,8 @@ async fn change_token_supply_unlimited(#[case] seed: Seed) {
         vec![unmint_transaction],
         block2_amount,
         3,
-    );
+    )
+    .await;
     token_info.circulating_supply = unconfirmed_token_info.current_supply().unwrap();
 
     let unconfirmed_token_info = wallet
@@ -4008,7 +4059,7 @@ async fn change_and_lock_token_supply_lockable(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_mainnet());
 
-    let mut wallet = create_wallet(chain_config.clone());
+    let mut wallet = create_wallet(chain_config.clone()).await;
 
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, Amount::ZERO);
@@ -4018,7 +4069,7 @@ async fn change_and_lock_token_supply_lockable(#[case] seed: Seed) {
         + chain_config.fungible_token_issuance_fee())
     .unwrap();
 
-    let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
+    let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0).await;
 
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, block1_amount);
@@ -4051,7 +4102,8 @@ async fn change_and_lock_token_supply_lockable(#[case] seed: Seed) {
         vec![token_issuance_transaction],
         block2_amount,
         1,
-    );
+    )
+    .await;
 
     let freezable = token_issuance.is_freezable.as_bool();
     let mut token_info = RPCFungibleTokenInfo::new(
@@ -4109,7 +4161,8 @@ async fn change_and_lock_token_supply_lockable(#[case] seed: Seed) {
         vec![mint_transaction],
         block2_amount,
         2,
-    );
+    )
+    .await;
     token_info.circulating_supply = unconfirmed_token_info.current_supply().unwrap();
 
     let unconfirmed_token_info = wallet
@@ -4170,7 +4223,8 @@ async fn change_and_lock_token_supply_lockable(#[case] seed: Seed) {
         vec![unmint_transaction],
         block2_amount,
         3,
-    );
+    )
+    .await;
     token_info.circulating_supply = unconfirmed_token_info.current_supply().unwrap();
 
     let unconfirmed_token_info = wallet
@@ -4205,7 +4259,8 @@ async fn change_and_lock_token_supply_lockable(#[case] seed: Seed) {
         vec![lock_transaction],
         block2_amount,
         4,
-    );
+    )
+    .await;
     token_info.is_locked = true;
 
     let unconfirmed_token_info = wallet
@@ -4271,7 +4326,7 @@ async fn lock_then_transfer(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_mainnet());
 
-    let mut wallet = create_wallet(chain_config.clone());
+    let mut wallet = create_wallet(chain_config.clone()).await;
 
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, Amount::ZERO);
@@ -4304,7 +4359,7 @@ async fn lock_then_transfer(#[case] seed: Seed) {
     // not important that it is not the actual median
     wallet.set_median_time(timestamp).unwrap();
     let timestamp = block1.timestamp().add_int_seconds(seconds_between_blocks).unwrap();
-    scan_wallet(&mut wallet, BlockHeight::new(0), vec![block1]);
+    scan_wallet(&mut wallet, BlockHeight::new(0), vec![block1]).await;
 
     // check balance
     let coin_balance = get_coin_balance(&wallet);
@@ -4359,7 +4414,7 @@ async fn lock_then_transfer(#[case] seed: Seed) {
     // not important that it is not the actual median
     wallet.set_median_time(timestamp).unwrap();
     let mut timestamp = block2.timestamp().add_int_seconds(seconds_between_blocks).unwrap();
-    scan_wallet(&mut wallet, BlockHeight::new(1), vec![block2]);
+    scan_wallet(&mut wallet, BlockHeight::new(1), vec![block2]).await;
 
     // check balance
     let balance_without_locked_transfer =
@@ -4398,7 +4453,7 @@ async fn lock_then_transfer(#[case] seed: Seed) {
         // not important that it is not the actual median
         wallet.set_median_time(timestamp).unwrap();
         timestamp = new_block.timestamp().add_int_seconds(seconds_between_blocks).unwrap();
-        scan_wallet(&mut wallet, BlockHeight::new(2 + idx), vec![new_block]);
+        scan_wallet(&mut wallet, BlockHeight::new(2 + idx), vec![new_block]).await;
     }
 
     // check that after block_count_lock, the amount is included
@@ -4417,7 +4472,7 @@ async fn wallet_multiple_transactions_in_single_block(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_mainnet());
 
-    let mut wallet = create_wallet(chain_config.clone());
+    let mut wallet = create_wallet(chain_config.clone()).await;
 
     let blocks_to_add = rng.gen_range(1..10);
 
@@ -4425,7 +4480,7 @@ async fn wallet_multiple_transactions_in_single_block(#[case] seed: Seed) {
     for i in 0..blocks_to_add {
         // Generate a new block which sends reward to the wallet
         let block1_amount = Amount::from_atoms(rng.gen_range(NETWORK_FEE + 1..NETWORK_FEE + 10000));
-        let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, i as u64);
+        let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, i as u64).await;
         amounts.push(block1_amount);
     }
 
@@ -4481,7 +4536,8 @@ async fn wallet_multiple_transactions_in_single_block(#[case] seed: Seed) {
         transactions,
         Amount::ZERO,
         blocks_to_add as u64,
-    );
+    )
+    .await;
 
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, total_change);
@@ -4495,7 +4551,7 @@ async fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_mainnet());
 
-    let mut wallet = create_wallet(chain_config.clone());
+    let mut wallet = create_wallet(chain_config.clone()).await;
 
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, Amount::ZERO);
@@ -4510,7 +4566,7 @@ async fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
         (NETWORK_FEE + 1) * (total_num_transactions as u128)
             ..=(NETWORK_FEE + 1) * (total_num_transactions as u128) + 10000,
     ));
-    let (_, block1) = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
+    let (_, block1) = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0).await;
 
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, block1_amount);
@@ -4603,10 +4659,10 @@ async fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
     wallet.scan_mempool(transactions.as_slice(), &WalletEventsNoOp).unwrap();
 
     // create new wallet
-    let mut wallet = create_wallet(chain_config);
+    let mut wallet = create_wallet(chain_config).await;
 
     // scan the first block
-    scan_wallet(&mut wallet, BlockHeight::new(0), vec![block1]);
+    scan_wallet(&mut wallet, BlockHeight::new(0), vec![block1]).await;
 
     // scan mempool transaction in random order
     transactions.shuffle(&mut rng);
@@ -4686,7 +4742,7 @@ async fn wallet_abandon_transactions(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_mainnet());
 
-    let mut wallet = create_wallet(chain_config.clone());
+    let mut wallet = create_wallet(chain_config.clone()).await;
 
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, Amount::ZERO);
@@ -4699,7 +4755,7 @@ async fn wallet_abandon_transactions(#[case] seed: Seed) {
         (NETWORK_FEE + 1) * (total_num_transactions as u128)
             ..=(NETWORK_FEE + 1) * (total_num_transactions as u128) + 10000,
     ));
-    let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
+    let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0).await;
 
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, block1_amount);
@@ -4822,10 +4878,11 @@ async fn wallet_abandon_transactions(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn wallet_address_usage(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn wallet_address_usage(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_regtest());
-    let mut wallet = create_wallet(chain_config.clone());
+    let mut wallet = create_wallet(chain_config.clone()).await;
 
     let usage = wallet
         .get_addresses_usage(DEFAULT_ACCOUNT_INDEX, KeyPurpose::ReceiveFunds)
@@ -4849,7 +4906,7 @@ fn wallet_address_usage(#[case] seed: Seed) {
     );
 
     let block1_amount = Amount::from_atoms(10000);
-    let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
+    let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0).await;
 
     let last_used = addresses_to_issue + 1;
     let usage = wallet
@@ -4862,10 +4919,11 @@ fn wallet_address_usage(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn wallet_set_lookahead_size(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn wallet_set_lookahead_size(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_regtest());
-    let mut wallet = create_wallet(chain_config.clone());
+    let mut wallet = create_wallet(chain_config.clone()).await;
 
     let usage = wallet
         .get_addresses_usage(DEFAULT_ACCOUNT_INDEX, KeyPurpose::ReceiveFunds)
@@ -4889,7 +4947,7 @@ fn wallet_set_lookahead_size(#[case] seed: Seed) {
     );
 
     let block1_amount = Amount::from_atoms(10000);
-    let (_, block1) = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
+    let (_, block1) = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0).await;
 
     let last_used = addresses_to_issue + 1;
     let usage = wallet
@@ -4910,7 +4968,7 @@ fn wallet_set_lookahead_size(#[case] seed: Seed) {
 
     wallet.set_lookahead_size(less_than_last_used, true).unwrap();
 
-    scan_wallet(&mut wallet, BlockHeight::new(0), vec![block1.clone()]);
+    scan_wallet(&mut wallet, BlockHeight::new(0), vec![block1.clone()]).await;
     let coins = get_coin_balance_for_acc(&wallet, DEFAULT_ACCOUNT_INDEX);
     assert_eq!(coins, Amount::ZERO);
     let usage = wallet
@@ -4922,7 +4980,7 @@ fn wallet_set_lookahead_size(#[case] seed: Seed) {
     let more_than_last_used = rng.gen_range(last_used + 1..100);
     wallet.set_lookahead_size(more_than_last_used, false).unwrap();
 
-    scan_wallet(&mut wallet, BlockHeight::new(0), vec![block1.clone()]);
+    scan_wallet(&mut wallet, BlockHeight::new(0), vec![block1.clone()]).await;
     let coins = get_coin_balance_for_acc(&wallet, DEFAULT_ACCOUNT_INDEX);
     assert_eq!(coins, block1_amount);
     let usage = wallet
@@ -4943,14 +5001,14 @@ async fn decommission_pool_wrong_account(#[case] seed: Seed) {
     let acc_0_index = DEFAULT_ACCOUNT_INDEX;
     let acc_1_index = U31::ONE;
 
-    let mut wallet = create_wallet(chain_config.clone());
+    let mut wallet = create_wallet(chain_config.clone()).await;
 
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, Amount::ZERO);
 
     // Generate a new block which sends reward to the wallet
     let block1_amount = Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
-    let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
+    let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0).await;
 
     let pool_ids = wallet.get_pool_ids(acc_0_index, WalletPoolsFilter::All).unwrap();
     assert!(pool_ids.is_empty());
@@ -4960,7 +5018,7 @@ async fn decommission_pool_wrong_account(#[case] seed: Seed) {
 
     let pool_amount = block1_amount;
 
-    let res = wallet.create_next_account(Some("name".into())).unwrap();
+    let res = wallet.create_next_account(Some("name".into())).await.unwrap();
     assert_eq!(res, (U31::from_u32(1).unwrap(), Some("name".into())));
 
     let decommission_key = wallet.get_new_address(acc_1_index).unwrap().1;
@@ -4988,7 +5046,8 @@ async fn decommission_pool_wrong_account(#[case] seed: Seed) {
         vec![stake_pool_transaction],
         Amount::ZERO,
         1,
-    );
+    )
+    .await;
 
     let pool_ids = wallet.get_pool_ids(acc_0_index, WalletPoolsFilter::All).unwrap();
     assert_eq!(pool_ids.len(), 1);
@@ -5028,7 +5087,8 @@ async fn decommission_pool_wrong_account(#[case] seed: Seed) {
         vec![decommission_tx],
         Amount::ZERO,
         2,
-    );
+    )
+    .await;
 
     let coin_balance = get_coin_balance_for_acc(&wallet, acc_1_index);
     assert_eq!(coin_balance, pool_amount);
@@ -5045,14 +5105,14 @@ async fn decommission_pool_request_wrong_account(#[case] seed: Seed) {
     let acc_0_index = DEFAULT_ACCOUNT_INDEX;
     let acc_1_index = U31::ONE;
 
-    let mut wallet = create_wallet(chain_config.clone());
+    let mut wallet = create_wallet(chain_config.clone()).await;
 
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, Amount::ZERO);
 
     // Generate a new block which sends reward to the wallet
     let block1_amount = Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
-    let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
+    let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0).await;
 
     let pool_ids = wallet.get_pool_ids(acc_0_index, WalletPoolsFilter::All).unwrap();
     assert!(pool_ids.is_empty());
@@ -5062,7 +5122,7 @@ async fn decommission_pool_request_wrong_account(#[case] seed: Seed) {
 
     let pool_amount = block1_amount;
 
-    let res = wallet.create_next_account(Some("name".into())).unwrap();
+    let res = wallet.create_next_account(Some("name".into())).await.unwrap();
     assert_eq!(res, (U31::from_u32(1).unwrap(), Some("name".into())));
 
     let decommission_key = wallet.get_new_address(acc_1_index).unwrap().1;
@@ -5090,7 +5150,8 @@ async fn decommission_pool_request_wrong_account(#[case] seed: Seed) {
         vec![stake_pool_transaction],
         Amount::ZERO,
         1,
-    );
+    )
+    .await;
 
     let pool_ids = wallet.get_pool_ids(acc_0_index, WalletPoolsFilter::All).unwrap();
     assert_eq!(pool_ids.len(), 1);
@@ -5139,14 +5200,14 @@ async fn sign_decommission_pool_request_between_accounts(#[case] seed: Seed) {
     let acc_0_index = DEFAULT_ACCOUNT_INDEX;
     let acc_1_index = U31::ONE;
 
-    let mut wallet = create_wallet(chain_config.clone());
+    let mut wallet = create_wallet(chain_config.clone()).await;
 
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, Amount::ZERO);
 
     // Generate a new block which sends reward to the wallet
     let block1_amount = Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
-    let (addr, _) = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
+    let (addr, _) = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0).await;
     let utxo = make_address_output(addr.clone().into_object(), block1_amount);
 
     let pool_ids = wallet.get_pool_ids(acc_0_index, WalletPoolsFilter::All).unwrap();
@@ -5157,7 +5218,7 @@ async fn sign_decommission_pool_request_between_accounts(#[case] seed: Seed) {
 
     let pool_amount = block1_amount;
 
-    let res = wallet.create_next_account(Some("name".into())).unwrap();
+    let res = wallet.create_next_account(Some("name".into())).await.unwrap();
     assert_eq!(res, (U31::from_u32(1).unwrap(), Some("name".into())));
 
     let decommission_key = wallet.get_new_address(acc_1_index).unwrap().1;
@@ -5206,7 +5267,8 @@ async fn sign_decommission_pool_request_between_accounts(#[case] seed: Seed) {
         vec![stake_pool_transaction],
         Amount::ZERO,
         1,
-    );
+    )
+    .await;
 
     assert_eq!(get_coin_balance(&wallet), Amount::ZERO);
 
@@ -5242,7 +5304,7 @@ async fn sign_decommission_pool_request_between_accounts(#[case] seed: Seed) {
         .into_signed_tx()
         .unwrap();
 
-    let _ = create_block(&chain_config, &mut wallet, vec![signed_tx], Amount::ZERO, 2);
+    let _ = create_block(&chain_config, &mut wallet, vec![signed_tx], Amount::ZERO, 2).await;
 
     // the pool amount is back after decommission
     assert_eq!(get_coin_balance(&wallet), pool_amount);
@@ -5257,12 +5319,12 @@ async fn sign_decommission_pool_request_cold_wallet(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_regtest());
 
-    let mut hot_wallet = create_wallet(chain_config.clone());
+    let mut hot_wallet = create_wallet(chain_config.clone()).await;
 
     // create cold wallet that is not synced and only contains decommission key
     let another_mnemonic =
         "legal winner thank year wave sausage worth useful legal winner thank yellow";
-    let mut cold_wallet = create_wallet_with_mnemonic(chain_config.clone(), another_mnemonic);
+    let mut cold_wallet = create_wallet_with_mnemonic(chain_config.clone(), another_mnemonic).await;
     let decommission_key = cold_wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1;
 
     let coin_balance = get_coin_balance(&hot_wallet);
@@ -5270,7 +5332,7 @@ async fn sign_decommission_pool_request_cold_wallet(#[case] seed: Seed) {
 
     // Generate a new block which sends reward to the wallet
     let block1_amount = Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
-    let _ = create_block(&chain_config, &mut hot_wallet, vec![], block1_amount, 0);
+    let _ = create_block(&chain_config, &mut hot_wallet, vec![], block1_amount, 0).await;
 
     let pool_ids = hot_wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
     assert!(pool_ids.is_empty());
@@ -5280,7 +5342,7 @@ async fn sign_decommission_pool_request_cold_wallet(#[case] seed: Seed) {
 
     let pool_amount = block1_amount;
 
-    let res = hot_wallet.create_next_account(Some("name".into())).unwrap();
+    let res = hot_wallet.create_next_account(Some("name".into())).await.unwrap();
     assert_eq!(res, (U31::from_u32(1).unwrap(), Some("name".into())));
 
     let stake_pool_transaction = hot_wallet
@@ -5306,7 +5368,8 @@ async fn sign_decommission_pool_request_cold_wallet(#[case] seed: Seed) {
         vec![stake_pool_transaction],
         Amount::ZERO,
         1,
-    );
+    )
+    .await;
 
     let pool_ids = hot_wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
     assert_eq!(pool_ids.len(), 1);
@@ -5348,7 +5411,8 @@ async fn sign_decommission_pool_request_cold_wallet(#[case] seed: Seed) {
         vec![signed_tx],
         Amount::ZERO,
         2,
-    );
+    )
+    .await;
 
     let coin_balance = get_coin_balance(&hot_wallet);
     assert_eq!(coin_balance, pool_amount,);
@@ -5362,12 +5426,12 @@ async fn filter_pools(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_regtest());
 
-    let mut wallet1 = create_wallet(chain_config.clone());
+    let mut wallet1 = create_wallet(chain_config.clone()).await;
 
     // create another wallet to store decommission key
     let another_mnemonic =
         "legal winner thank year wave sausage worth useful legal winner thank yellow";
-    let mut wallet2 = create_wallet_with_mnemonic(chain_config.clone(), another_mnemonic);
+    let mut wallet2 = create_wallet_with_mnemonic(chain_config.clone(), another_mnemonic).await;
     let decommission_key = wallet2.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1;
 
     let coin_balance = get_coin_balance(&wallet1);
@@ -5375,8 +5439,8 @@ async fn filter_pools(#[case] seed: Seed) {
 
     // Generate a new block which sends reward to the wallet
     let block1_amount = Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
-    let _ = create_block(&chain_config, &mut wallet1, vec![], block1_amount, 0);
-    let _ = create_block(&chain_config, &mut wallet2, vec![], block1_amount, 0);
+    let _ = create_block(&chain_config, &mut wallet1, vec![], block1_amount, 0).await;
+    let _ = create_block(&chain_config, &mut wallet2, vec![], block1_amount, 0).await;
 
     let pool_ids = wallet1.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
     assert!(pool_ids.is_empty());
@@ -5410,7 +5474,8 @@ async fn filter_pools(#[case] seed: Seed) {
         vec![stake_pool_transaction.clone()],
         Amount::ZERO,
         1,
-    );
+    )
+    .await;
     // sync for wallet2
     let _ = create_block(
         &chain_config,
@@ -5418,7 +5483,8 @@ async fn filter_pools(#[case] seed: Seed) {
         vec![stake_pool_transaction],
         Amount::ZERO,
         1,
-    );
+    )
+    .await;
 
     // check wallet1 filter
     let pool_ids = wallet1.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
@@ -5453,12 +5519,12 @@ async fn sign_send_request_cold_wallet(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_regtest());
 
-    let mut hot_wallet = create_wallet(chain_config.clone());
+    let mut hot_wallet = create_wallet(chain_config.clone()).await;
 
     // create cold wallet that is not synced
     let another_mnemonic =
         "legal winner thank year wave sausage worth useful legal winner thank yellow";
-    let mut cold_wallet = create_wallet_with_mnemonic(chain_config.clone(), another_mnemonic);
+    let mut cold_wallet = create_wallet_with_mnemonic(chain_config.clone(), another_mnemonic).await;
     let cold_wallet_address = cold_wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1;
 
     let coin_balance = get_coin_balance(&hot_wallet);
@@ -5477,7 +5543,7 @@ async fn sign_send_request_cold_wallet(#[case] seed: Seed) {
     )
     .unwrap();
 
-    scan_wallet(&mut hot_wallet, BlockHeight::new(0), vec![block1.clone()]);
+    scan_wallet(&mut hot_wallet, BlockHeight::new(0), vec![block1.clone()]).await;
 
     // hot wallet has 0 balance
     let coin_balance = get_coin_balance(&hot_wallet);
@@ -5525,7 +5591,8 @@ async fn sign_send_request_cold_wallet(#[case] seed: Seed) {
         vec![signed_tx],
         Amount::ZERO,
         1,
-    );
+    )
+    .await;
 
     let coin_balance = get_coin_balance(&hot_wallet);
     assert_eq!(coin_balance, to_send,);
@@ -5567,7 +5634,7 @@ async fn test_not_exhaustion_of_keys(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_regtest());
 
-    let mut wallet = create_wallet(chain_config.clone());
+    let mut wallet = create_wallet(chain_config.clone()).await;
 
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, Amount::ZERO);
@@ -5585,7 +5652,7 @@ async fn test_not_exhaustion_of_keys(#[case] seed: Seed) {
     )
     .unwrap();
 
-    scan_wallet(&mut wallet, BlockHeight::new(0), vec![block1.clone()]);
+    scan_wallet(&mut wallet, BlockHeight::new(0), vec![block1.clone()]).await;
 
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, block1_amount);
@@ -5618,8 +5685,8 @@ async fn test_add_standalone_multisig(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_regtest());
 
-    let mut wallet1 = create_wallet_with_mnemonic(chain_config.clone(), MNEMONIC);
-    let mut wallet2 = create_wallet_with_mnemonic(chain_config.clone(), MNEMONIC2);
+    let mut wallet1 = create_wallet_with_mnemonic(chain_config.clone(), MNEMONIC).await;
+    let mut wallet2 = create_wallet_with_mnemonic(chain_config.clone(), MNEMONIC2).await;
 
     let coin_balance = get_coin_balance(&wallet1);
     assert_eq!(coin_balance, Amount::ZERO);
@@ -5664,7 +5731,7 @@ async fn test_add_standalone_multisig(#[case] seed: Seed) {
     )
     .unwrap();
 
-    scan_wallet(&mut wallet1, BlockHeight::new(0), vec![block1.clone()]);
+    scan_wallet(&mut wallet1, BlockHeight::new(0), vec![block1.clone()]).await;
 
     // Check amount is still zero
     let coin_balance = get_coin_balance(&wallet1);
@@ -5739,15 +5806,15 @@ async fn create_htlc_and_spend(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_regtest());
 
-    let mut wallet1 = create_wallet_with_mnemonic(chain_config.clone(), MNEMONIC);
-    let mut wallet2 = create_wallet_with_mnemonic(chain_config.clone(), MNEMONIC2);
+    let mut wallet1 = create_wallet_with_mnemonic(chain_config.clone(), MNEMONIC).await;
+    let mut wallet2 = create_wallet_with_mnemonic(chain_config.clone(), MNEMONIC2).await;
 
     let coin_balance = get_coin_balance(&wallet1);
     assert_eq!(coin_balance, Amount::ZERO);
 
     // Generate a new block which sends reward to the wallet
     let block1_amount = Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
-    let _ = create_block(&chain_config, &mut wallet1, vec![], block1_amount, 0);
+    let _ = create_block(&chain_config, &mut wallet1, vec![], block1_amount, 0).await;
 
     let coin_balance = get_coin_balance(&wallet1);
     assert_eq!(coin_balance, block1_amount);
@@ -5803,8 +5870,9 @@ async fn create_htlc_and_spend(#[case] seed: Seed) {
         vec![create_htlc_tx.clone()],
         Amount::ZERO,
         1,
-    );
-    scan_wallet(&mut wallet2, BlockHeight::new(0), vec![block2]);
+    )
+    .await;
+    scan_wallet(&mut wallet2, BlockHeight::new(0), vec![block2]).await;
 
     // Htlc is not accounted in balance
     assert_eq!(get_coin_balance(&wallet1), Amount::ZERO);
@@ -5862,8 +5930,9 @@ async fn create_htlc_and_spend(#[case] seed: Seed) {
 
     let spend_tx = spend_ptx.into_signed_tx().unwrap();
 
-    let (_, block2) = create_block(&chain_config, &mut wallet2, vec![spend_tx], Amount::ZERO, 1);
-    scan_wallet(&mut wallet2, BlockHeight::new(0), vec![block2]);
+    let (_, block2) =
+        create_block(&chain_config, &mut wallet2, vec![spend_tx], Amount::ZERO, 1).await;
+    scan_wallet(&mut wallet2, BlockHeight::new(0), vec![block2]).await;
 
     // Coins from htlc successfully transferred
     assert_eq!(get_coin_balance(&wallet1), Amount::ZERO);
@@ -5880,15 +5949,15 @@ async fn create_htlc_and_refund(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_regtest());
 
-    let mut wallet1 = create_wallet_with_mnemonic(chain_config.clone(), MNEMONIC);
-    let mut wallet2 = create_wallet_with_mnemonic(chain_config.clone(), MNEMONIC2);
+    let mut wallet1 = create_wallet_with_mnemonic(chain_config.clone(), MNEMONIC).await;
+    let mut wallet2 = create_wallet_with_mnemonic(chain_config.clone(), MNEMONIC2).await;
 
     let coin_balance = get_coin_balance(&wallet1);
     assert_eq!(coin_balance, Amount::ZERO);
 
     // Generate a new block which sends reward to the wallet
     let block1_amount = Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
-    let _ = create_block(&chain_config, &mut wallet1, vec![], block1_amount, 0);
+    let _ = create_block(&chain_config, &mut wallet1, vec![], block1_amount, 0).await;
 
     let coin_balance = get_coin_balance(&wallet1);
     assert_eq!(coin_balance, block1_amount);
@@ -5964,8 +6033,9 @@ async fn create_htlc_and_refund(#[case] seed: Seed) {
         vec![create_htlc_tx],
         Amount::ZERO,
         1,
-    );
-    scan_wallet(&mut wallet2, BlockHeight::new(0), vec![block2]);
+    )
+    .await;
+    scan_wallet(&mut wallet2, BlockHeight::new(0), vec![block2]).await;
 
     // Htlc is not accounted in balance
     assert_eq!(get_coin_balance(&wallet1), Amount::ZERO);
@@ -6021,8 +6091,9 @@ async fn create_htlc_and_refund(#[case] seed: Seed) {
         vec![refund_tx],
         Amount::ZERO,
         2,
-    );
-    scan_wallet(&mut wallet2, BlockHeight::new(0), vec![block3]);
+    )
+    .await;
+    scan_wallet(&mut wallet2, BlockHeight::new(0), vec![block3]).await;
 
     // Refund can be seen in the wallet balance
     assert_eq!(get_coin_balance(&wallet1), coin_balance);
@@ -6037,7 +6108,7 @@ async fn create_order(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_unit_test_config());
 
-    let mut wallet = create_wallet(chain_config.clone());
+    let mut wallet = create_wallet(chain_config.clone()).await;
 
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, Amount::ZERO);
@@ -6047,7 +6118,7 @@ async fn create_order(#[case] seed: Seed) {
         + chain_config.fungible_token_issuance_fee())
     .unwrap();
 
-    let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
+    let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0).await;
 
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, block1_amount);
@@ -6079,7 +6150,8 @@ async fn create_order(#[case] seed: Seed) {
         vec![token_issuance_transaction],
         block2_amount,
         1,
-    );
+    )
+    .await;
 
     // Mint some tokens
     let freezable = token_issuance.is_freezable.as_bool();
@@ -6119,7 +6191,8 @@ async fn create_order(#[case] seed: Seed) {
         vec![mint_transaction],
         Amount::ZERO,
         2,
-    );
+    )
+    .await;
 
     let expected_balance = (block1_amount - chain_config.fungible_token_issuance_fee()).unwrap();
     let (coin_balance, token_balances) = get_currency_balances(&wallet);
@@ -6159,7 +6232,8 @@ async fn create_order(#[case] seed: Seed) {
         vec![create_order_tx],
         Amount::ZERO,
         3,
-    );
+    )
+    .await;
 
     let (coin_balance, token_balances) = get_currency_balances(&wallet);
     assert_eq!(coin_balance, expected_balance);
@@ -6174,7 +6248,7 @@ async fn create_order_and_conclude(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_unit_test_config());
 
-    let mut wallet = create_wallet(chain_config.clone());
+    let mut wallet = create_wallet(chain_config.clone()).await;
 
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, Amount::ZERO);
@@ -6184,7 +6258,7 @@ async fn create_order_and_conclude(#[case] seed: Seed) {
         + chain_config.fungible_token_issuance_fee())
     .unwrap();
 
-    let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
+    let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0).await;
 
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, block1_amount);
@@ -6216,7 +6290,8 @@ async fn create_order_and_conclude(#[case] seed: Seed) {
         vec![token_issuance_transaction],
         block2_amount,
         1,
-    );
+    )
+    .await;
 
     // Mint some tokens
     let freezable = token_issuance.is_freezable.as_bool();
@@ -6256,7 +6331,8 @@ async fn create_order_and_conclude(#[case] seed: Seed) {
         vec![mint_transaction],
         Amount::ZERO,
         2,
-    );
+    )
+    .await;
 
     let expected_balance = (block1_amount - chain_config.fungible_token_issuance_fee()).unwrap();
     let (coin_balance, token_balances) = get_currency_balances(&wallet);
@@ -6309,7 +6385,8 @@ async fn create_order_and_conclude(#[case] seed: Seed) {
         vec![create_order_tx],
         Amount::ZERO,
         3,
-    );
+    )
+    .await;
 
     let (coin_balance, token_balances) = get_currency_balances(&wallet);
     assert_eq!(coin_balance, expected_balance);
@@ -6352,7 +6429,8 @@ async fn create_order_and_conclude(#[case] seed: Seed) {
         vec![conclude_order_tx],
         Amount::ZERO,
         4,
-    );
+    )
+    .await;
 
     let (coin_balance, token_balances) = get_currency_balances(&wallet);
     assert_eq!(coin_balance, expected_balance);
@@ -6370,8 +6448,8 @@ async fn create_order_fill_completely_conclude(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_unit_test_config());
 
-    let mut wallet1 = create_wallet_with_mnemonic(chain_config.clone(), MNEMONIC);
-    let mut wallet2 = create_wallet_with_mnemonic(chain_config.clone(), MNEMONIC2);
+    let mut wallet1 = create_wallet_with_mnemonic(chain_config.clone(), MNEMONIC).await;
+    let mut wallet2 = create_wallet_with_mnemonic(chain_config.clone(), MNEMONIC2).await;
 
     assert_eq!(get_coin_balance(&wallet1), Amount::ZERO);
     assert_eq!(get_coin_balance(&wallet2), Amount::ZERO);
@@ -6381,8 +6459,8 @@ async fn create_order_fill_completely_conclude(#[case] seed: Seed) {
         + chain_config.fungible_token_issuance_fee())
     .unwrap();
 
-    let (_, block1) = create_block(&chain_config, &mut wallet1, vec![], block1_amount, 0);
-    scan_wallet(&mut wallet2, BlockHeight::new(0), vec![block1]);
+    let (_, block1) = create_block(&chain_config, &mut wallet1, vec![], block1_amount, 0).await;
+    scan_wallet(&mut wallet2, BlockHeight::new(0), vec![block1]).await;
 
     let coin_balance = get_coin_balance(&wallet1);
     assert_eq!(coin_balance, block1_amount);
@@ -6414,8 +6492,9 @@ async fn create_order_fill_completely_conclude(#[case] seed: Seed) {
         vec![token_issuance_transaction],
         block2_amount,
         1,
-    );
-    scan_wallet(&mut wallet2, BlockHeight::new(1), vec![block2]);
+    )
+    .await;
+    scan_wallet(&mut wallet2, BlockHeight::new(1), vec![block2]).await;
 
     // Mint some tokens
     let address2 = wallet2.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1;
@@ -6457,8 +6536,9 @@ async fn create_order_fill_completely_conclude(#[case] seed: Seed) {
         vec![mint_transaction],
         Amount::from_atoms(NETWORK_FEE),
         2,
-    );
-    scan_wallet(&mut wallet1, BlockHeight::new(2), vec![block3]);
+    )
+    .await;
+    scan_wallet(&mut wallet1, BlockHeight::new(2), vec![block3]).await;
 
     {
         let expected_balance =
@@ -6521,8 +6601,9 @@ async fn create_order_fill_completely_conclude(#[case] seed: Seed) {
         vec![create_order_tx],
         Amount::ZERO,
         3,
-    );
-    scan_wallet(&mut wallet2, BlockHeight::new(3), vec![block4]);
+    )
+    .await;
+    scan_wallet(&mut wallet2, BlockHeight::new(3), vec![block4]).await;
 
     {
         let expected_balance =
@@ -6581,8 +6662,9 @@ async fn create_order_fill_completely_conclude(#[case] seed: Seed) {
         vec![fill_order_tx_1],
         Amount::ZERO,
         4,
-    );
-    scan_wallet(&mut wallet1, BlockHeight::new(4), vec![block5]);
+    )
+    .await;
+    scan_wallet(&mut wallet1, BlockHeight::new(4), vec![block5]).await;
 
     {
         let expected_balance =
@@ -6657,8 +6739,9 @@ async fn create_order_fill_completely_conclude(#[case] seed: Seed) {
         vec![fill_order_tx_2],
         Amount::ZERO,
         5,
-    );
-    scan_wallet(&mut wallet1, BlockHeight::new(5), vec![block6]);
+    )
+    .await;
+    scan_wallet(&mut wallet1, BlockHeight::new(5), vec![block6]).await;
 
     {
         let expected_balance =
@@ -6725,8 +6808,9 @@ async fn create_order_fill_completely_conclude(#[case] seed: Seed) {
         vec![conclude_order_tx],
         Amount::ZERO,
         6,
-    );
-    scan_wallet(&mut wallet2, BlockHeight::new(6), vec![block7]);
+    )
+    .await;
+    scan_wallet(&mut wallet2, BlockHeight::new(6), vec![block7]).await;
 
     {
         let expected_balance =
@@ -6754,8 +6838,8 @@ async fn create_order_fill_partially_conclude(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_unit_test_config());
 
-    let mut wallet1 = create_wallet_with_mnemonic(chain_config.clone(), MNEMONIC);
-    let mut wallet2 = create_wallet_with_mnemonic(chain_config.clone(), MNEMONIC2);
+    let mut wallet1 = create_wallet_with_mnemonic(chain_config.clone(), MNEMONIC).await;
+    let mut wallet2 = create_wallet_with_mnemonic(chain_config.clone(), MNEMONIC2).await;
 
     assert_eq!(get_coin_balance(&wallet1), Amount::ZERO);
     assert_eq!(get_coin_balance(&wallet2), Amount::ZERO);
@@ -6765,8 +6849,8 @@ async fn create_order_fill_partially_conclude(#[case] seed: Seed) {
         + chain_config.fungible_token_issuance_fee())
     .unwrap();
 
-    let (_, block1) = create_block(&chain_config, &mut wallet1, vec![], block1_amount, 0);
-    scan_wallet(&mut wallet2, BlockHeight::new(0), vec![block1]);
+    let (_, block1) = create_block(&chain_config, &mut wallet1, vec![], block1_amount, 0).await;
+    scan_wallet(&mut wallet2, BlockHeight::new(0), vec![block1]).await;
 
     let coin_balance = get_coin_balance(&wallet1);
     assert_eq!(coin_balance, block1_amount);
@@ -6798,8 +6882,9 @@ async fn create_order_fill_partially_conclude(#[case] seed: Seed) {
         vec![token_issuance_transaction],
         block2_amount,
         1,
-    );
-    scan_wallet(&mut wallet2, BlockHeight::new(1), vec![block2]);
+    )
+    .await;
+    scan_wallet(&mut wallet2, BlockHeight::new(1), vec![block2]).await;
 
     // Mint some tokens
     let address2 = wallet2.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1;
@@ -6841,8 +6926,9 @@ async fn create_order_fill_partially_conclude(#[case] seed: Seed) {
         vec![mint_transaction],
         Amount::from_atoms(NETWORK_FEE),
         2,
-    );
-    scan_wallet(&mut wallet1, BlockHeight::new(2), vec![block3]);
+    )
+    .await;
+    scan_wallet(&mut wallet1, BlockHeight::new(2), vec![block3]).await;
 
     {
         let expected_balance =
@@ -6905,8 +6991,9 @@ async fn create_order_fill_partially_conclude(#[case] seed: Seed) {
         vec![create_order_tx],
         Amount::ZERO,
         3,
-    );
-    scan_wallet(&mut wallet2, BlockHeight::new(3), vec![block4]);
+    )
+    .await;
+    scan_wallet(&mut wallet2, BlockHeight::new(3), vec![block4]).await;
 
     {
         let expected_balance =
@@ -6965,8 +7052,9 @@ async fn create_order_fill_partially_conclude(#[case] seed: Seed) {
         vec![fill_order_tx_1],
         Amount::ZERO,
         4,
-    );
-    scan_wallet(&mut wallet1, BlockHeight::new(4), vec![block5]);
+    )
+    .await;
+    scan_wallet(&mut wallet1, BlockHeight::new(4), vec![block5]).await;
 
     {
         let expected_balance =
@@ -7040,8 +7128,9 @@ async fn create_order_fill_partially_conclude(#[case] seed: Seed) {
         vec![conclude_order_tx],
         Amount::ZERO,
         5,
-    );
-    scan_wallet(&mut wallet2, BlockHeight::new(5), vec![block6]);
+    )
+    .await;
+    scan_wallet(&mut wallet2, BlockHeight::new(5), vec![block6]).await;
 
     {
         let expected_balance = ((block1_amount - chain_config.fungible_token_issuance_fee())
@@ -7082,8 +7171,8 @@ async fn conflicting_delegation_account_nonce(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_unit_test_config());
 
-    let mut wallet1 = create_wallet(chain_config.clone());
-    let mut wallet2 = create_wallet(chain_config.clone());
+    let mut wallet1 = create_wallet(chain_config.clone()).await;
+    let mut wallet2 = create_wallet(chain_config.clone()).await;
 
     let coin_balance = get_coin_balance(&wallet1);
     assert_eq!(coin_balance, Amount::ZERO);
@@ -7091,8 +7180,8 @@ async fn conflicting_delegation_account_nonce(#[case] seed: Seed) {
     // Generate a new block which sends reward to the wallet
     let delegation_amount = Amount::from_atoms(rng.gen_range(10..100));
     let block1_amount = (chain_config.min_stake_pool_pledge() + delegation_amount).unwrap();
-    let (_, block1) = create_block(&chain_config, &mut wallet1, vec![], block1_amount, 0);
-    scan_wallet(&mut wallet2, BlockHeight::new(0), vec![block1]);
+    let (_, block1) = create_block(&chain_config, &mut wallet1, vec![], block1_amount, 0).await;
+    scan_wallet(&mut wallet2, BlockHeight::new(0), vec![block1]).await;
 
     let pool_ids = wallet1.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
     assert!(pool_ids.is_empty());
@@ -7127,8 +7216,9 @@ async fn conflicting_delegation_account_nonce(#[case] seed: Seed) {
         vec![stake_pool_transaction.clone()],
         Amount::ZERO,
         1,
-    );
-    scan_wallet(&mut wallet2, BlockHeight::new(1), vec![block2]);
+    )
+    .await;
+    scan_wallet(&mut wallet2, BlockHeight::new(1), vec![block2]).await;
 
     let coin_balance = get_coin_balance(&wallet1);
     assert_eq!(coin_balance, (block1_amount - pool_amount).unwrap(),);
@@ -7158,8 +7248,9 @@ async fn conflicting_delegation_account_nonce(#[case] seed: Seed) {
         vec![delegation_tx],
         Amount::ZERO,
         2,
-    );
-    scan_wallet(&mut wallet2, BlockHeight::new(2), vec![block3]);
+    )
+    .await;
+    scan_wallet(&mut wallet2, BlockHeight::new(2), vec![block3]).await;
 
     let mut delegations = wallet1.get_delegations(DEFAULT_ACCOUNT_INDEX).unwrap().collect_vec();
     assert_eq!(delegations.len(), 1);
@@ -7191,8 +7282,9 @@ async fn conflicting_delegation_account_nonce(#[case] seed: Seed) {
         vec![delegation_stake_tx],
         Amount::ZERO,
         3,
-    );
-    scan_wallet(&mut wallet2, BlockHeight::new(3), vec![block4]);
+    )
+    .await;
+    scan_wallet(&mut wallet2, BlockHeight::new(3), vec![block4]).await;
 
     let coin_balance_after_delegating = get_coin_balance(&wallet1);
     assert_eq!(
@@ -7276,9 +7368,10 @@ async fn conflicting_delegation_account_nonce(#[case] seed: Seed) {
         vec![spend_from_delegation_tx_3],
         Amount::ZERO,
         4,
-    );
+    )
+    .await;
     let block5_id = block5.get_id();
-    scan_wallet(&mut wallet1, BlockHeight::new(4), vec![block5]);
+    scan_wallet(&mut wallet1, BlockHeight::new(4), vec![block5]).await;
 
     // if confirmed tx is added conflicting txs must be removed from the output cache
     let mut delegations = wallet1.get_delegations(DEFAULT_ACCOUNT_INDEX).unwrap().collect_vec();
@@ -7384,7 +7477,7 @@ async fn conflicting_delegation_account_nonce_same_wallet(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_unit_test_config());
 
-    let mut wallet = create_wallet(chain_config.clone());
+    let mut wallet = create_wallet(chain_config.clone()).await;
 
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, Amount::ZERO);
@@ -7392,7 +7485,7 @@ async fn conflicting_delegation_account_nonce_same_wallet(#[case] seed: Seed) {
     // Generate a new block which sends reward to the wallet
     let delegation_amount = Amount::from_atoms(rng.gen_range(2..100));
     let block1_amount = (chain_config.min_stake_pool_pledge() + delegation_amount).unwrap();
-    let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
+    let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0).await;
 
     // Create a pool
     let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
@@ -7427,7 +7520,8 @@ async fn conflicting_delegation_account_nonce_same_wallet(#[case] seed: Seed) {
         vec![stake_pool_transaction],
         Amount::ZERO,
         1,
-    );
+    )
+    .await;
 
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, (block1_amount - pool_amount).unwrap(),);
@@ -7457,7 +7551,8 @@ async fn conflicting_delegation_account_nonce_same_wallet(#[case] seed: Seed) {
         vec![delegation_tx],
         Amount::ZERO,
         2,
-    );
+    )
+    .await;
 
     let mut delegations = wallet.get_delegations(DEFAULT_ACCOUNT_INDEX).unwrap().collect_vec();
     assert_eq!(delegations.len(), 1);
@@ -7489,7 +7584,8 @@ async fn conflicting_delegation_account_nonce_same_wallet(#[case] seed: Seed) {
         vec![delegation_stake_tx],
         Amount::ZERO,
         3,
-    );
+    )
+    .await;
 
     let coin_balance_after_delegating = get_coin_balance(&wallet);
     assert_eq!(
@@ -7578,7 +7674,8 @@ async fn conflicting_delegation_account_nonce_same_wallet(#[case] seed: Seed) {
         vec![spend_from_delegation_tx_1],
         Amount::ZERO,
         4,
-    );
+    )
+    .await;
 
     // Confirmed tx should replace the first one leaving the second one as descendant
     let mut delegations = wallet.get_delegations(DEFAULT_ACCOUNT_INDEX).unwrap().collect_vec();
@@ -7636,14 +7733,14 @@ async fn conflicting_order_account_nonce(#[case] seed: Seed) {
         .build();
     let chain_config = Arc::new(chain_config);
 
-    let mut wallet = create_wallet(chain_config.clone());
+    let mut wallet = create_wallet(chain_config.clone()).await;
 
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, Amount::ZERO);
 
     // Generate a new block which sends reward to the wallet
     let block1_amount = chain_config.fungible_token_issuance_fee();
-    let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
+    let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0).await;
 
     // Issue a token
     let address2 = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1;
@@ -7672,7 +7769,8 @@ async fn conflicting_order_account_nonce(#[case] seed: Seed) {
         vec![token_issuance_transaction],
         block2_amount,
         1,
-    );
+    )
+    .await;
 
     // Mint some tokens
     let freezable = token_issuance.is_freezable.as_bool();
@@ -7716,7 +7814,8 @@ async fn conflicting_order_account_nonce(#[case] seed: Seed) {
         vec![mint_transaction],
         reward_to_spend_on_orders,
         2,
-    );
+    )
+    .await;
 
     // Create an order selling tokens for coins
     let buy_amount = reward_to_spend_on_orders;
@@ -7744,7 +7843,8 @@ async fn conflicting_order_account_nonce(#[case] seed: Seed) {
         vec![create_order_tx],
         Amount::ZERO,
         3,
-    );
+    )
+    .await;
 
     let (coin_balance_after_create_order, token_balance_after_create_order) =
         get_currency_balances(&wallet);
@@ -7852,7 +7952,8 @@ async fn conflicting_order_account_nonce(#[case] seed: Seed) {
         vec![fill_order_tx_1],
         Amount::ZERO,
         4,
-    );
+    )
+    .await;
 
     // if confirmed tx is added conflicting txs must be replaced in the output cache, leaving descendants intact
     let mut orders = wallet.get_orders(DEFAULT_ACCOUNT_INDEX).unwrap().collect_vec();
@@ -7919,8 +8020,8 @@ async fn conflicting_delegation_account_nonce_multiple_inputs(#[case] seed: Seed
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_unit_test_config());
 
-    let mut wallet = create_wallet(chain_config.clone());
-    let mut wallet2 = create_wallet(chain_config.clone());
+    let mut wallet = create_wallet(chain_config.clone()).await;
+    let mut wallet2 = create_wallet(chain_config.clone()).await;
 
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, Amount::ZERO);
@@ -7928,8 +8029,8 @@ async fn conflicting_delegation_account_nonce_multiple_inputs(#[case] seed: Seed
     // Generate a new block which sends reward to the wallet
     let delegation_amount = Amount::from_atoms(rng.gen_range(10..100));
     let block1_amount = (chain_config.min_stake_pool_pledge() + delegation_amount).unwrap();
-    let (_, block1) = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
-    scan_wallet(&mut wallet2, BlockHeight::new(0), vec![block1]);
+    let (_, block1) = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0).await;
+    scan_wallet(&mut wallet2, BlockHeight::new(0), vec![block1]).await;
 
     let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
     assert!(pool_ids.is_empty());
@@ -7964,8 +8065,9 @@ async fn conflicting_delegation_account_nonce_multiple_inputs(#[case] seed: Seed
         vec![stake_pool_transaction.clone()],
         Amount::ZERO,
         1,
-    );
-    scan_wallet(&mut wallet2, BlockHeight::new(1), vec![block2]);
+    )
+    .await;
+    scan_wallet(&mut wallet2, BlockHeight::new(1), vec![block2]).await;
 
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, (block1_amount - pool_amount).unwrap(),);
@@ -7995,8 +8097,9 @@ async fn conflicting_delegation_account_nonce_multiple_inputs(#[case] seed: Seed
         vec![delegation_tx],
         Amount::ZERO,
         2,
-    );
-    scan_wallet(&mut wallet2, BlockHeight::new(2), vec![block3]);
+    )
+    .await;
+    scan_wallet(&mut wallet2, BlockHeight::new(2), vec![block3]).await;
 
     let mut delegations = wallet.get_delegations(DEFAULT_ACCOUNT_INDEX).unwrap().collect_vec();
     assert_eq!(delegations.len(), 1);
@@ -8029,8 +8132,9 @@ async fn conflicting_delegation_account_nonce_multiple_inputs(#[case] seed: Seed
         vec![delegation_stake_tx],
         Amount::ZERO,
         3,
-    );
-    scan_wallet(&mut wallet2, BlockHeight::new(3), vec![block4]);
+    )
+    .await;
+    scan_wallet(&mut wallet2, BlockHeight::new(3), vec![block4]).await;
 
     let coin_balance_after_delegating = get_coin_balance(&wallet);
     assert_eq!(
@@ -8116,9 +8220,10 @@ async fn conflicting_delegation_account_nonce_multiple_inputs(#[case] seed: Seed
         vec![spend_from_delegation_tx_confirmed],
         Amount::ZERO,
         4,
-    );
+    )
+    .await;
     let block5_id = block5.get_id();
-    scan_wallet(&mut wallet, BlockHeight::new(4), vec![block5]);
+    scan_wallet(&mut wallet, BlockHeight::new(4), vec![block5]).await;
 
     // if confirmed tx is added conflicting txs must be removed from the output cache
     let mut delegations = wallet.get_delegations(DEFAULT_ACCOUNT_INDEX).unwrap().collect_vec();
@@ -8200,8 +8305,8 @@ async fn conflicting_delegation_account_with_reorg(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_unit_test_config());
 
-    let mut wallet = create_wallet(chain_config.clone());
-    let mut wallet2 = create_wallet(chain_config.clone());
+    let mut wallet = create_wallet(chain_config.clone()).await;
+    let mut wallet2 = create_wallet(chain_config.clone()).await;
 
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, Amount::ZERO);
@@ -8209,8 +8314,8 @@ async fn conflicting_delegation_account_with_reorg(#[case] seed: Seed) {
     // Generate a new block which sends reward to the wallet
     let delegation_amount = Amount::from_atoms(rng.gen_range(10..100));
     let block1_amount = (chain_config.min_stake_pool_pledge() + delegation_amount).unwrap();
-    let (_, block1) = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
-    scan_wallet(&mut wallet2, BlockHeight::new(0), vec![block1]);
+    let (_, block1) = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0).await;
+    scan_wallet(&mut wallet2, BlockHeight::new(0), vec![block1]).await;
 
     let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
     assert!(pool_ids.is_empty());
@@ -8245,8 +8350,9 @@ async fn conflicting_delegation_account_with_reorg(#[case] seed: Seed) {
         vec![stake_pool_transaction.clone()],
         Amount::ZERO,
         1,
-    );
-    scan_wallet(&mut wallet2, BlockHeight::new(1), vec![block2]);
+    )
+    .await;
+    scan_wallet(&mut wallet2, BlockHeight::new(1), vec![block2]).await;
 
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, (block1_amount - pool_amount).unwrap(),);
@@ -8276,8 +8382,9 @@ async fn conflicting_delegation_account_with_reorg(#[case] seed: Seed) {
         vec![delegation_tx],
         Amount::ZERO,
         2,
-    );
-    scan_wallet(&mut wallet2, BlockHeight::new(2), vec![block3]);
+    )
+    .await;
+    scan_wallet(&mut wallet2, BlockHeight::new(2), vec![block3]).await;
 
     let mut delegations = wallet.get_delegations(DEFAULT_ACCOUNT_INDEX).unwrap().collect_vec();
     assert_eq!(delegations.len(), 1);
@@ -8309,8 +8416,9 @@ async fn conflicting_delegation_account_with_reorg(#[case] seed: Seed) {
         vec![delegation_stake_tx],
         Amount::ZERO,
         3,
-    );
-    scan_wallet(&mut wallet2, BlockHeight::new(3), vec![block4.clone()]);
+    )
+    .await;
+    scan_wallet(&mut wallet2, BlockHeight::new(3), vec![block4.clone()]).await;
 
     let coin_balance_after_delegating = get_coin_balance(&wallet);
     assert_eq!(
@@ -8319,7 +8427,7 @@ async fn conflicting_delegation_account_with_reorg(#[case] seed: Seed) {
     );
 
     // Create an empty block to disconnect later and trigger unconfirmed tx removal
-    let (_, _) = create_block(&chain_config, &mut wallet, vec![], Amount::ZERO, 4);
+    let (_, _) = create_block(&chain_config, &mut wallet, vec![], Amount::ZERO, 4).await;
 
     // Add unconfirmed tx that spends from delegations
     let spend_from_delegation_tx_1 = wallet
@@ -8352,7 +8460,7 @@ async fn conflicting_delegation_account_with_reorg(#[case] seed: Seed) {
     assert_eq!(deleg_data.last_nonce, Some(AccountNonce::new(0)));
 
     // Reset empty block and unconfirmed tx
-    scan_wallet(&mut wallet, BlockHeight::new(3), vec![block4]);
+    scan_wallet(&mut wallet, BlockHeight::new(3), vec![block4]).await;
 
     // Create and submit tx with different tx id
     let withdraw_amount_2 = Amount::from_atoms(5);
@@ -8376,9 +8484,10 @@ async fn conflicting_delegation_account_with_reorg(#[case] seed: Seed) {
         vec![spend_from_delegation_tx_2],
         Amount::ZERO,
         4,
-    );
+    )
+    .await;
     let block5_id = block5.get_id();
-    scan_wallet(&mut wallet, BlockHeight::new(4), vec![block5]);
+    scan_wallet(&mut wallet, BlockHeight::new(4), vec![block5]).await;
 
     // if confirmed tx is added, conflicting txs must be removed from the output cache
     let mut delegations = wallet.get_delegations(DEFAULT_ACCOUNT_INDEX).unwrap().collect_vec();
@@ -8438,7 +8547,7 @@ async fn rollback_utxos_after_abandon(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_mainnet());
 
-    let mut wallet = create_wallet(chain_config.clone());
+    let mut wallet = create_wallet(chain_config.clone()).await;
 
     // Generate a new block which sends reward to the wallet
     let utxo_amount = Amount::from_atoms(rng.gen_range(100..10000));
@@ -8462,7 +8571,7 @@ async fn rollback_utxos_after_abandon(#[case] seed: Seed) {
         BlockReward::new(reward_outputs),
     )
     .unwrap();
-    scan_wallet(&mut wallet, BlockHeight::new(0), vec![block1]);
+    scan_wallet(&mut wallet, BlockHeight::new(0), vec![block1]).await;
 
     let utxos = wallet
         .get_utxos(
@@ -8565,7 +8674,7 @@ async fn token_id_generation_v1_uses_first_tx_input(#[case] seed: Seed) {
             .build(),
     );
 
-    let mut wallet = create_wallet_with_mnemonic(chain_config.clone(), MNEMONIC);
+    let mut wallet = create_wallet_with_mnemonic(chain_config.clone(), MNEMONIC).await;
 
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, Amount::ZERO);
@@ -8592,7 +8701,8 @@ async fn token_id_generation_v1_uses_first_tx_input(#[case] seed: Seed) {
                 vec![],
                 block_amount,
                 generated_blocks_count,
-            );
+            )
+            .await;
             cur_balance = (cur_balance + block_amount).unwrap();
             generated_blocks_count += 1;
         }
