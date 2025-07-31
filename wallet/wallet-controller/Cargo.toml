@@ -29,9 +29,12 @@ wallet-types = { path = "../types" }
 
 async-trait.workspace = true
 bip39 = { workspace = true, default-features = false, features = ["std", "zeroize"] }
+ctor.workspace = true
+derive_more.workspace = true
 futures = { workspace = true, default-features = false }
 itertools.workspace = true
 serde.workspace = true
+strum.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "sync"] }
 zeroize.workspace = true
@@ -39,7 +42,9 @@ zeroize.workspace = true
 [dev-dependencies]
 chainstate-test-framework = { path = "../../chainstate/test-framework" }
 p2p-types = { path = "../../p2p/types" }
+rpc = { path = "../../rpc" }
 test-utils = { path = "../../test-utils" }
+
 futures = { workspace = true, features = ["executor"] }
 
 anyhow.workspace = true

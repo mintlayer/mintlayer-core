@@ -31,12 +31,12 @@ async-trait.workspace = true
 clap.workspace = true
 enum-iterator.workspace = true
 futures.workspace = true
+hex.workspace = true
 jsonrpsee.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
-hex.workspace = true
 
 [dev-dependencies]
 

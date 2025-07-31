@@ -155,13 +155,13 @@ where
         scan_blockchain: ScanBlockchain,
         open_as_hw_wallet: Option<HardwareWalletType>,
     ) -> WRpcResult<OpenedWallet, N> {
-        let (open_as_wallet_type, device_id) = open_as_hw_wallet.map_or(
-            (self.node.is_cold_wallet_node().into(), None),
-            |hw| match hw {
-                #[cfg(feature = "trezor")]
-                HardwareWalletType::Trezor { device_id } => (WalletType::Trezor, device_id),
-            },
-        );
+        let (open_as_wallet_type, device_id) =
+            open_as_hw_wallet.map_or((self.node.is_cold_wallet_node().await.into(), None), |hw| {
+                match hw {
+                    #[cfg(feature = "trezor")]
+                    HardwareWalletType::Trezor { device_id } => (WalletType::Trezor, device_id),
+                }
+            });
         Ok(self
             .wallet
             .manage_async(move |wallet_manager| {

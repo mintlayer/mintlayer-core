@@ -1724,9 +1724,8 @@ fn find_trezor_device(
     let mut devices = devices
         .into_iter()
         .filter(|device| {
-            device.model == Model::Trezor
-                || device.model == Model::TrezorEmulator
-                || device.model == Model::TrezorLegacy
+            // Note: we don't support `Model::TrezorLegacy` AKA Trezor Model One.
+            device.model == Model::Trezor || device.model == Model::TrezorEmulator
         })
         .filter_map(|d| {
             d.connect().ok().and_then(|mut c| {

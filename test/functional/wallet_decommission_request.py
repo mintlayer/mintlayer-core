@@ -105,7 +105,7 @@ class WalletDecommissionRequest(WalletPOSTestBase):
 
             # try decommission from hot wallet
             address = await wallet.new_address()
-            assert (await wallet.decommission_stake_pool(pools[0].pool_id, address)).startswith("Wallet error: Wallet error: Failed to completely sign")
+            assert (await wallet.decommission_stake_pool(pools[0].pool_id, address)).startswith("Wallet controller error: Wallet error: Failed to completely sign")
 
             # create decommission request
             decommission_req_output = await wallet.decommission_stake_pool_request(pools[0].pool_id, address)

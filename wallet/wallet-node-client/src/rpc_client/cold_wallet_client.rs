@@ -49,7 +49,7 @@ pub enum ColdWalletRpcError {
 impl NodeInterface for ColdWalletClient {
     type Error = ColdWalletRpcError;
 
-    fn is_cold_wallet_node(&self) -> WalletControllerMode {
+    async fn is_cold_wallet_node(&self) -> WalletControllerMode {
         WalletControllerMode::Cold
     }
 

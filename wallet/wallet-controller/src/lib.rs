@@ -21,6 +21,8 @@ pub mod read;
 mod runtime_wallet;
 mod sync;
 pub mod synced_controller;
+#[cfg(test)]
+mod tests;
 pub mod types;
 
 const NORMAL_DELAY: Duration = Duration::from_secs(1);
@@ -32,8 +34,7 @@ use chainstate::tx_verifier::{
 };
 use futures::{never::Never, stream::FuturesOrdered, TryStreamExt};
 use helpers::{
-    fetch_input_infos, fetch_order_info, fetch_token_info, fetch_utxo, fetch_utxo_extra_info,
-    into_balances,
+    fetch_input_infos, fetch_token_info, fetch_utxo, fetch_utxo_extra_info, into_balances,
 };
 use itertools::Itertools as _;
 use node_comm::rpc_client::ColdWalletClient;
@@ -67,9 +68,8 @@ use common::{
             DestinationSigError, Transactable,
         },
         tokens::{RPCTokenInfo, TokenId},
-        Block, ChainConfig, Destination, GenBlock, OrderId, PoolId, RpcOrderInfo,
-        SighashInputCommitmentVersion, SignedTransaction, Transaction, TxInput, TxOutput,
-        UtxoOutPoint,
+        Block, ChainConfig, Destination, GenBlock, PoolId, SighashInputCommitmentVersion,
+        SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{
         time::{get_time, Time},
@@ -118,10 +118,12 @@ use wallet_types::{
     Currency,
 };
 
-#[derive(thiserror::Error, Debug)]
-pub enum ControllerError<T: NodeInterface> {
+// Note: the standard `Debug` macro is not smart enough and requires N to implement the `Debug`
+// trait even though only `N::Error` needs it. So we use `derive_more::Debug` instead.
+#[derive(thiserror::Error, derive_more::Debug)]
+pub enum ControllerError<N: NodeInterface> {
     #[error("Node call error: {0}")]
-    NodeCallError(T::Error),
+    NodeCallError(N::Error),
     #[error("Wallet sync error: {0}")]
     SyncError(String),
     #[error("Synchronization is paused until the node has {0} blocks ({1} blocks currently)")]
@@ -170,6 +172,8 @@ pub enum ControllerError<T: NodeInterface> {
     InvalidTokenId,
     #[error("Error creating sighash input commitment")]
     SighashInputCommitmentCreationError(#[from] SighashInputCommitmentCreationError),
+    #[error("The number of htlc secrets does not match the number of inputs")]
+    InvalidHtlcSecretsCount,
 }
 
 #[derive(Clone, Copy)]
@@ -207,17 +211,18 @@ pub type HandlesController<WalletEvents> =
     Controller<WalletHandlesClient, WalletEvents, DefaultBackend>;
 pub type ColdController<WalletEvents> = Controller<ColdWalletClient, WalletEvents, DefaultBackend>;
 
-impl<T, W> Controller<T, W, DefaultBackend>
+impl<N, W, B> Controller<N, W, B>
 where
-    T: NodeInterface + Clone + Send + Sync + 'static,
+    N: NodeInterface + Clone + Send + Sync + 'static,
     W: WalletEvents,
+    B: storage::Backend + 'static,
 {
     pub async fn new(
         chain_config: Arc<ChainConfig>,
-        rpc_client: T,
-        wallet: RuntimeWallet<DefaultBackend>,
+        rpc_client: N,
+        wallet: RuntimeWallet<B>,
         wallet_events: W,
-    ) -> Result<Self, ControllerError<T>> {
+    ) -> Result<Self, ControllerError<N>> {
         let mut controller = Self {
             chain_config,
             rpc_client,
@@ -234,8 +239,8 @@ where
 
     pub fn new_unsynced(
         chain_config: Arc<ChainConfig>,
-        rpc_client: T,
-        wallet: RuntimeWallet<DefaultBackend>,
+        rpc_client: N,
+        wallet: RuntimeWallet<B>,
         wallet_events: W,
     ) -> Self {
         Self {
@@ -254,7 +259,7 @@ where
         best_block: (BlockHeight, Id<GenBlock>),
         wallet_type: WalletType,
         overwrite_wallet_file: bool,
-    ) -> Result<WalletCreation<RuntimeWallet<DefaultBackend>>, ControllerError<T>> {
+    ) -> Result<WalletCreation<RuntimeWallet<DefaultBackend>>, ControllerError<N>> {
         utils::ensure!(
             overwrite_wallet_file || !file_path.as_ref().exists(),
             ControllerError::WalletFileError(
@@ -320,7 +325,7 @@ where
         file_path: impl AsRef<Path>,
         args: WalletTypeArgsComputed,
         wallet_type: WalletType,
-    ) -> Result<WalletCreation<RuntimeWallet<DefaultBackend>>, ControllerError<T>> {
+    ) -> Result<WalletCreation<RuntimeWallet<DefaultBackend>>, ControllerError<N>> {
         utils::ensure!(
             !file_path.as_ref().exists(),
             ControllerError::WalletFileError(
@@ -411,7 +416,7 @@ where
         force_change_wallet_type: bool,
         open_as_wallet_type: WalletType,
         device_id: Option<String>,
-    ) -> Result<WalletCreation<RuntimeWallet<DefaultBackend>>, ControllerError<T>> {
+    ) -> Result<WalletCreation<RuntimeWallet<DefaultBackend>>, ControllerError<N>> {
         utils::ensure!(
             file_path.as_ref().exists(),
             ControllerError::WalletFileError(
@@ -460,7 +465,7 @@ where
         }
     }
 
-    pub fn seed_phrase(&self) -> Result<Option<SeedWithPassPhrase>, ControllerError<T>> {
+    pub fn seed_phrase(&self) -> Result<Option<SeedWithPassPhrase>, ControllerError<N>> {
         self.wallet
             .seed_phrase()
             .map(|opt| opt.map(SeedWithPassPhrase::from_serializable_seed_phrase))
@@ -468,7 +473,7 @@ where
     }
 
     /// Delete the seed phrase if stored in the database
-    pub fn delete_seed_phrase(&self) -> Result<Option<SeedWithPassPhrase>, ControllerError<T>> {
+    pub fn delete_seed_phrase(&self) -> Result<Option<SeedWithPassPhrase>, ControllerError<N>> {
         self.wallet
             .delete_seed_phrase()
             .map(|opt| opt.map(SeedWithPassPhrase::from_serializable_seed_phrase))
@@ -477,7 +482,7 @@ where
 
     /// Rescan the blockchain
     /// Resets the wallet to the genesis block
-    pub fn reset_wallet_to_genesis(&mut self) -> Result<(), ControllerError<T>> {
+    pub fn reset_wallet_to_genesis(&mut self) -> Result<(), ControllerError<N>> {
         self.wallet.reset_wallet_to_genesis().map_err(ControllerError::WalletError)
     }
 
@@ -490,7 +495,7 @@ where
     /// # Returns
     ///
     /// This method returns an error if the wallet is locked
-    pub fn encrypt_wallet(&mut self, password: &Option<String>) -> Result<(), ControllerError<T>> {
+    pub fn encrypt_wallet(&mut self, password: &Option<String>) -> Result<(), ControllerError<N>> {
         self.wallet.encrypt_wallet(password).map_err(ControllerError::WalletError)
     }
 
@@ -503,7 +508,7 @@ where
     /// # Returns
     ///
     /// This method returns an error if the password is incorrect
-    pub fn unlock_wallet(&mut self, password: &String) -> Result<(), ControllerError<T>> {
+    pub fn unlock_wallet(&mut self, password: &String) -> Result<(), ControllerError<N>> {
         self.wallet.unlock_wallet(password).map_err(ControllerError::WalletError)
     }
 
@@ -512,7 +517,7 @@ where
     /// # Returns
     ///
     /// This method returns an error if the wallet is not encrypted.
-    pub fn lock_wallet(&mut self) -> Result<(), ControllerError<T>> {
+    pub fn lock_wallet(&mut self) -> Result<(), ControllerError<N>> {
         utils::ensure!(
             self.staking_started.is_empty(),
             ControllerError::StakingRunning
@@ -529,7 +534,7 @@ where
         &mut self,
         lookahead_size: u32,
         force_reduce: bool,
-    ) -> Result<(), ControllerError<T>> {
+    ) -> Result<(), ControllerError<N>> {
         utils::ensure!(lookahead_size > 0, ControllerError::InvalidLookaheadSize);
 
         self.wallet
@@ -548,22 +553,15 @@ where
     pub async fn get_token_number_of_decimals(
         &self,
         token_id: TokenId,
-    ) -> Result<u8, ControllerError<T>> {
+    ) -> Result<u8, ControllerError<N>> {
         Ok(self.get_token_info(token_id).await?.token_number_of_decimals())
     }
 
     pub async fn get_token_info(
         &self,
         token_id: TokenId,
-    ) -> Result<RPCTokenInfo, ControllerError<T>> {
+    ) -> Result<RPCTokenInfo, ControllerError<N>> {
         fetch_token_info(&self.rpc_client, token_id).await
-    }
-
-    pub async fn get_order_info(
-        &self,
-        order_id: OrderId,
-    ) -> Result<RpcOrderInfo, ControllerError<T>> {
-        fetch_order_info(&self.rpc_client, order_id).await
     }
 
     pub async fn generate_block_by_pool(
@@ -573,7 +571,7 @@ where
         transactions: Vec<SignedTransaction>,
         transaction_ids: Vec<Id<Transaction>>,
         packing_strategy: PackingStrategy,
-    ) -> Result<Block, ControllerError<T>> {
+    ) -> Result<Block, ControllerError<N>> {
         let pos_data = self
             .wallet
             .get_pos_gen_block_data(account_index, pool_id)
@@ -613,7 +611,7 @@ where
         transactions: Vec<SignedTransaction>,
         transaction_ids: Vec<Id<Transaction>>,
         packing_strategy: PackingStrategy,
-    ) -> Result<Block, ControllerError<T>> {
+    ) -> Result<Block, ControllerError<N>> {
         let pools = self
             .wallet
             .get_pool_ids(account_index, WalletPoolsFilter::Stake)
@@ -644,7 +642,7 @@ where
         &mut self,
         account_index: U31,
         block_count: u32,
-    ) -> Result<(), ControllerError<T>> {
+    ) -> Result<(), ControllerError<N>> {
         for _ in 0..block_count {
             self.sync_once().await?;
             let block = self
@@ -682,7 +680,7 @@ where
         max_height: Option<BlockHeight>,
         seconds_to_check_for_height: u64,
         check_all_timestamps_between_blocks: bool,
-    ) -> Result<BTreeMap<BlockHeight, Vec<BlockTimestamp>>, ControllerError<T>> {
+    ) -> Result<BTreeMap<BlockHeight, Vec<BlockTimestamp>>, ControllerError<N>> {
         let pos_data = self
             .wallet
             .get_pos_gen_block_data_by_pool_id(pool_id)
@@ -711,7 +709,7 @@ where
     pub fn create_account(
         &mut self,
         name: Option<String>,
-    ) -> Result<(U31, Option<String>), ControllerError<T>> {
+    ) -> Result<(U31, Option<String>), ControllerError<N>> {
         self.wallet.create_next_account(name).map_err(ControllerError::WalletError)
     }
 
@@ -719,13 +717,13 @@ where
         &mut self,
         account_index: U31,
         name: Option<String>,
-    ) -> Result<(U31, Option<String>), ControllerError<T>> {
+    ) -> Result<(U31, Option<String>), ControllerError<N>> {
         self.wallet
             .set_account_name(account_index, name)
             .map_err(ControllerError::WalletError)
     }
 
-    pub fn stop_staking(&mut self, account_index: U31) -> Result<(), ControllerError<T>> {
+    pub fn stop_staking(&mut self, account_index: U31) -> Result<(), ControllerError<N>> {
         log::info!("Stop staking, account_index: {}", account_index);
         self.staking_started.remove(&account_index);
         Ok(())
@@ -747,7 +745,7 @@ where
     pub async fn get_stake_pool_balances(
         &self,
         account_index: U31,
-    ) -> Result<BTreeMap<PoolId, Amount>, ControllerError<T>> {
+    ) -> Result<BTreeMap<PoolId, Amount>, ControllerError<N>> {
         let stake_pool_utxos = self
             .wallet
             .get_utxos(
@@ -787,7 +785,7 @@ where
     }
 
     /// Synchronize the wallet to the current node tip height and return
-    pub async fn sync_once(&mut self) -> Result<(), ControllerError<T>> {
+    pub async fn sync_once(&mut self) -> Result<(), ControllerError<N>> {
         let res = match &mut self.wallet {
             RuntimeWallet::Software(w) => {
                 sync::sync_once(&self.chain_config, &self.rpc_client, w, &self.wallet_events).await
@@ -804,7 +802,7 @@ where
         }
     }
 
-    pub async fn try_sync_once(&mut self) -> Result<(), ControllerError<T>> {
+    pub async fn try_sync_once(&mut self) -> Result<(), ControllerError<N>> {
         match &mut self.wallet {
             RuntimeWallet::Software(w) => {
                 sync::sync_once(&self.chain_config, &self.rpc_client, w, &self.wallet_events)
@@ -824,7 +822,7 @@ where
         &mut self,
         account_index: U31,
         config: ControllerConfig,
-    ) -> Result<SyncedController<'_, T, W, DefaultBackend>, ControllerError<T>> {
+    ) -> Result<SyncedController<'_, N, W, B>, ControllerError<N>> {
         self.sync_once().await?;
         Ok(SyncedController::new(
             &mut self.wallet,
@@ -837,10 +835,7 @@ where
         ))
     }
 
-    pub fn readonly_controller(
-        &self,
-        account_index: U31,
-    ) -> ReadOnlyController<'_, T, DefaultBackend> {
+    pub fn readonly_controller(&self, account_index: U31) -> ReadOnlyController<'_, N, B> {
         ReadOnlyController::new(
             &self.wallet,
             self.rpc_client.clone(),
@@ -849,10 +844,17 @@ where
         )
     }
 
+    // TODO: this function is currently very limited:
+    // 1) HTLC inputs are not supported in the `TransactionToInspect::Signed` case.
+    // 2) ProduceBlockFromStake and account-based inputs are not supported.
+    // 3) It only works for transactions whose inputs have not yet been spent. Note that this part
+    // may be hard to fix, because we don't have a tx index, so there is no easy way of obtaining
+    // a txo for an already spent input.
+    // https://github.com/mintlayer/mintlayer-core/issues/1939
     pub async fn inspect_transaction(
         &self,
         tx: TransactionToInspect,
-    ) -> Result<InspectTransaction, ControllerError<T>> {
+    ) -> Result<InspectTransaction, ControllerError<N>> {
         let result = match tx {
             TransactionToInspect::Tx(tx) => self.inspect_tx(tx).await?,
             TransactionToInspect::Partial(ptx) => self.inspect_partial_tx(ptx).await?,
@@ -865,7 +867,7 @@ where
     async fn inspect_signed_tx(
         &self,
         stx: SignedTransaction,
-    ) -> Result<InspectTransaction, ControllerError<T>> {
+    ) -> Result<InspectTransaction, ControllerError<N>> {
         let (fees, signature_statuses) = match self.calculate_fees_and_valid_signatures(&stx).await
         {
             Ok((fees, num_valid_signatures)) => (Some(fees), Some(num_valid_signatures)),
@@ -906,19 +908,13 @@ where
     async fn calculate_fees_and_valid_signatures(
         &self,
         stx: &SignedTransaction,
-    ) -> Result<(Balances, Vec<SignatureStatus>), ControllerError<T>> {
-        // TODO:
-        // 1) Make this function support HTLCs.
-        // Note: tx verifier's `verify_tx_signature` should probably accept an optional destination,
-        // because the actual destination to check the signature against is taken from the utxo
-        // inside `mintscript` directly, based on the `AuthorizedHashedTimelockContractSpend` type
-        // encoded in the witness.
-        // 2) Currently this function only works for transactions whose inputs has not yet been
-        // spent. Ideally this should be fixed, though it's non-trivial, because we don't have a
-        // tx index, so there is no easy way of obtaining a txo for an already spent input.
-
-        let (input_utxos, additional_infos, destinations) =
-            fetch_input_infos(&self.rpc_client, &self.wallet, stx.inputs()).await?;
+    ) -> Result<(Balances, Vec<SignatureStatus>), ControllerError<N>> {
+        let (input_utxos, additional_infos, destinations) = fetch_input_infos(
+            &self.rpc_client,
+            &self.wallet,
+            stx.inputs().iter().map(|inp| (inp, HtlcSpendingCondition::Skip)),
+        )
+        .await?;
 
         let only_input_utxos = input_utxos.iter().flatten().cloned().collect_vec();
         let fees = self.get_fees(&only_input_utxos, stx.outputs()).await?;
@@ -947,6 +943,11 @@ where
                 (InputWitness::Standard(_), None) => SignatureStatus::InvalidSignature,
                 (InputWitness::Standard(_), Some(dest)) => {
                     // Try v0 commitments first; if the verification fails, try v1 commitments.
+                    // Note: currently this logic is useless, because inputs for which the commitments
+                    // are different in v0 and v1 (i.e. ProduceBlockFromStake, FillOrder, ConcludeOrder)
+                    // are currently not supported by inspect_transaction.
+                    // TODO: if the v1 commitments fork lands before we get to revamping inspect_transaction
+                    // (which is likely), this logic can just be removed.
                     let v0_commitments_status = self.verify_tx_signature(
                         stx,
                         &input_commitments_v0,
@@ -978,7 +979,7 @@ where
     async fn inspect_partial_tx(
         &self,
         ptx: PartiallySignedTransaction,
-    ) -> Result<InspectTransaction, ControllerError<T>> {
+    ) -> Result<InspectTransaction, ControllerError<N>> {
         let input_utxos: Vec<_> = ptx.input_utxos().iter().flatten().cloned().collect();
         let fees = self.get_fees(&input_utxos, ptx.tx().outputs()).await?;
 
@@ -998,6 +999,11 @@ where
                 (Some(InputWitness::Standard(_)), None) => SignatureStatus::UnknownSignature,
                 (Some(InputWitness::Standard(_)), Some(dest)) => {
                     // Try v0 commitments first; if the verification fails, try v1 commitments.
+                    // Note: currently this logic is useless, because inputs for which the commitments
+                    // are different in v0 and v1 (i.e. ProduceBlockFromStake, FillOrder, ConcludeOrder)
+                    // are currently not supported by inspect_transaction.
+                    // TODO: if the v1 commitments fork lands before we get to revamping inspect_transaction
+                    // (which is likely), this logic can just be removed.
                     let v0_commitments_status = self.verify_tx_signature(
                         &ptx,
                         &input_commitments_v0,
@@ -1041,7 +1047,7 @@ where
         })
     }
 
-    async fn inspect_tx(&self, tx: Transaction) -> Result<InspectTransaction, ControllerError<T>> {
+    async fn inspect_tx(&self, tx: Transaction) -> Result<InspectTransaction, ControllerError<N>> {
         let inputs: Vec<_> = tx
             .inputs()
             .iter()
@@ -1121,7 +1127,7 @@ where
         outputs: Vec<TxOutput>,
         htlc_secrets: Option<Vec<Option<HtlcSecret>>>,
         only_transaction: bool,
-    ) -> Result<(TransactionToSign, Balances), ControllerError<T>> {
+    ) -> Result<(TransactionToSign, Balances), ControllerError<N>> {
         let input_utxos = self.fetch_utxos(&inputs).await?;
         let fees = self.get_fees(&input_utxos, &outputs).await?;
 
@@ -1138,12 +1144,10 @@ where
                 .iter()
                 .enumerate()
                 .map(|(i, txo)| {
-                    let htlc_spending =
-                        htlc_secrets.as_ref().map_or(HtlcSpendingCondition::Skip, |secrets| {
-                            secrets.get(i).map_or(HtlcSpendingCondition::WithMultisig, |_| {
-                                HtlcSpendingCondition::WithSecret
-                            })
-                        });
+                    let htlc_spending = HtlcSpendingCondition::from_opt_secrets_array_item(
+                        htlc_secrets.as_deref(),
+                        i,
+                    );
 
                     get_tx_output_destination(txo, &|_| None, htlc_spending).ok_or_else(|| {
                         WalletError::UnsupportedTransactionOutput(Box::new(txo.clone()))
@@ -1185,7 +1189,7 @@ where
         &self,
         inputs: &[TxOutput],
         outputs: &[TxOutput],
-    ) -> Result<Balances, ControllerError<T>> {
+    ) -> Result<Balances, ControllerError<N>> {
         let mut inputs = self.group_inputs(inputs)?;
         let outputs = self.group_outputs(outputs)?;
 
@@ -1193,13 +1197,15 @@ where
 
         for (currency, output) in outputs {
             let input_amount = inputs.remove(&currency).ok_or(
-                ControllerError::<T>::WalletError(WalletError::NotEnoughUtxo(Amount::ZERO, output)),
+                ControllerError::<N>::WalletError(WalletError::NotEnoughUtxo(Amount::ZERO, output)),
             )?;
 
-            let fee = (input_amount - output).ok_or(ControllerError::<T>::WalletError(
+            let fee = (input_amount - output).ok_or(ControllerError::<N>::WalletError(
                 WalletError::NotEnoughUtxo(input_amount, output),
             ))?;
-            fees.insert(currency, fee);
+            if fee != Amount::ZERO {
+                fees.insert(currency, fee);
+            }
         }
         // add any leftover inputs
         fees.extend(inputs);
@@ -1210,7 +1216,7 @@ where
     fn group_outputs(
         &self,
         outputs: &[TxOutput],
-    ) -> Result<BTreeMap<Currency, Amount>, ControllerError<T>> {
+    ) -> Result<BTreeMap<Currency, Amount>, ControllerError<N>> {
         let best_block_height = self.best_block().1;
         currency_grouper::group_outputs_with_issuance_fee(
             outputs.iter(),
@@ -1229,7 +1235,7 @@ where
     fn group_inputs(
         &self,
         input_utxos: &[TxOutput],
-    ) -> Result<BTreeMap<Currency, Amount>, ControllerError<T>> {
+    ) -> Result<BTreeMap<Currency, Amount>, ControllerError<N>> {
         currency_grouper::group_utxos_for_input(
             input_utxos.iter(),
             |tx_output| tx_output,
@@ -1245,10 +1251,10 @@ where
     async fn fetch_utxos(
         &self,
         inputs: &[UtxoOutPoint],
-    ) -> Result<Vec<TxOutput>, ControllerError<T>> {
+    ) -> Result<Vec<TxOutput>, ControllerError<N>> {
         let tasks: FuturesOrdered<_> = inputs
             .iter()
-            .map(|input| fetch_utxo(&self.rpc_client, input, &self.wallet))
+            .map(|input| fetch_utxo(&self.rpc_client, &self.wallet, input))
             .collect();
         let input_utxos: Vec<TxOutput> = tasks.try_collect().await?;
         Ok(input_utxos)
@@ -1257,7 +1263,7 @@ where
     async fn fetch_utxos_extra_info(
         &self,
         inputs: Vec<TxOutput>,
-    ) -> Result<Vec<(TxOutput, TxAdditionalInfo)>, ControllerError<T>> {
+    ) -> Result<Vec<(TxOutput, TxAdditionalInfo)>, ControllerError<N>> {
         let tasks: FuturesOrdered<_> = inputs
             .into_iter()
             .map(|input| fetch_utxo_extra_info(&self.rpc_client, input))
@@ -1267,7 +1273,7 @@ where
 
     /// Synchronize the wallet in the background from the node's blockchain.
     /// Try staking new blocks if staking was started.
-    pub async fn run(&mut self) -> Result<Never, ControllerError<T>> {
+    pub async fn run(&mut self) -> Result<Never, ControllerError<N>> {
         let mut rebroadcast_txs_timer = get_time();
         let staking_started = self.staking_started.clone();
 

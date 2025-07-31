@@ -4911,6 +4911,7 @@ dependencies = [
 name = "node-comm"
 version = "1.0.2"
 dependencies = [
+ "anyhow",
  "async-trait",
  "base64 0.22.1",
  "blockprod",
@@ -4921,6 +4922,7 @@ dependencies = [
  "crypto",
  "logging",
  "mempool",
+ "mockall",
  "node-lib",
  "p2p",
  "rpc",
@@ -9261,6 +9263,8 @@ dependencies = [
  "common",
  "consensus",
  "crypto",
+ "ctor",
+ "derive_more",
  "futures",
  "itertools 0.14.0",
  "logging",
@@ -9269,11 +9273,13 @@ dependencies = [
  "node-comm",
  "p2p-types",
  "randomness",
+ "rpc",
  "rpc-description",
  "rstest",
  "serde",
  "serialization",
  "storage",
+ "strum",
  "test-utils",
  "thiserror 1.0.69",
  "tokio",
