@@ -92,7 +92,7 @@ impl ReorgData {
             })
             .collect();
 
-        // The transactions are returned in the order of them being disconnected which is the
+        // The blocks are returned in the order of them being disconnected which is the
         // opposite of what we want for connecting, so we need to reverse the iterator here.
         self.disconnected
             .into_iter()
@@ -169,6 +169,9 @@ pub fn handle_new_tip<M: MemoryUsageEstimator>(
         }
         return Ok(());
     }
+
+    // TODO: also check whether any of the existing txs in the orphan pool are no longer orphans
+    // due to the newly mined txs.
 
     match fetch_disconnected_txs(tx_pool, new_tip) {
         Ok(to_insert) => reorg_mempool_transactions(tx_pool, to_insert, finalizer),

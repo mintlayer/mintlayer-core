@@ -22,8 +22,9 @@ use chainstate::{
     chainstate_interface::ChainstateInterface, BlockError, ChainstateError, ConnectTransactionError,
 };
 use chainstate_test_framework::{
-    create_chain_config_with_staking_pool, empty_witness, PoSBlockBuilder, TestFramework,
-    TransactionBuilder,
+    create_chain_config_with_staking_pool, empty_witness,
+    helpers::{calculate_fill_order, issue_and_mint_random_token_from_best_block},
+    PoSBlockBuilder, TestFramework, TransactionBuilder,
 };
 use common::{
     chain::{
@@ -59,10 +60,6 @@ use tx_verifier::{
     error::{InputCheckError, ScriptError},
     input_check::InputCheckErrorPayload,
 };
-
-use crate::tests::helpers::calculate_fill_order;
-
-use super::helpers::issue_and_mint_random_token_from_best_block;
 
 #[rstest]
 #[trace]

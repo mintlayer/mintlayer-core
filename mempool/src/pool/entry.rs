@@ -17,7 +17,7 @@ use std::num::NonZeroUsize;
 
 use common::{
     chain::{
-        AccountCommand, AccountNonce, AccountSpending, AccountType, OrderAccountCommand,
+        tokens::TokenId, AccountCommand, AccountNonce, AccountSpending, DelegationId, OrderId,
         SignedTransaction, Transaction, TxInput, UtxoOutPoint,
     },
     primitives::{Id, Idable},
@@ -26,30 +26,38 @@ use common::{
 use super::{Fee, Time, TxOptions, TxOrigin};
 use crate::tx_origin::IsOrigin;
 
-/// A dependency of a transaction on a previous account state.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct TxAccountDependency {
-    account: AccountType,
-    nonce: AccountNonce,
-}
-
-impl TxAccountDependency {
-    pub fn new(account: AccountType, nonce: AccountNonce) -> Self {
-        TxAccountDependency { account, nonce }
-    }
-}
-
 /// A dependency of a transaction. May be another transaction or a previous account state.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum TxDependency {
-    DelegationAccount(TxAccountDependency),
-    TokenSupplyAccount(TxAccountDependency),
-    OrderAccount(TxAccountDependency),
-    // TODO: keep only V1 version after OrdersVersion::V1 is activated
+    DelegationAccount(DelegationId, AccountNonce),
+    TokenSupplyAccount(TokenId, AccountNonce),
+    // TODO: remove OrderV0Account after OrdersVersion::V1 is activated
     //       https://github.com/mintlayer/mintlayer-core/issues/1901
-    OrderV1Account(AccountType),
+    OrderV0Account(OrderId, AccountNonce),
     TxOutput(Id<Transaction>, u32),
     // TODO: Block reward?
+
+    // Note that orders v1 are not needed here, because:
+    // 1) Since they don't use nonces, they don't create dependencies the way other account-based
+    //    inputs do.
+    // 2) We could introduce a pseudo-dependency, e.g. in the form of an `enum { Fillable, Freezable, Concludable }`
+    //    (we'd have to differentiate between dependencies that a tx requires vs those that it consumes,
+    //    so e.g. a `FreezeOrder` input would require `Freezable` but consume both `Freezable` and `Fillable`).
+    //    However, this doesn't seem to be useful because currently, with RBF disabled, `TxDependency`
+    //    itself has limited use:
+    //    a) It's used to check for conflicts (`check_mempool_policy` calls `conflicting_tx_ids`
+    //       and returns `MempoolConflictError::Irreplacable` if any), but this check doesn't seem
+    //       to be really needed, because a conflicting tx will always be rejected by the tx verifier
+    //       anyway (also, since the tx verifier call happens first, it doesn't seem that this
+    //       `Irreplacable` result is possible at all, unless it's a bug).
+    //       Though technically, we could use the pseudo-dependency as an optimization, to avoid calling
+    //       the tx verifier when we know it'll fail anyway.
+    //    b) The orphan pool uses a TxDependency map to check whether tx's dependencies could have become
+    //       satisfied. The pseudo-dependency won't be useful here at all.
+    //    (Also note that even when RBF is finally implemented, RBFing an order-related tx will probably
+    //    be based on re-using one of the UTXOs of the original tx, so tracking order inputs will probably
+    //    not be needed anyway).
+    // TODO: return to this when enabling RBF.
 }
 
 impl TxDependency {
@@ -62,33 +70,36 @@ impl TxDependency {
 
     fn from_account(account: &AccountSpending, nonce: AccountNonce) -> Self {
         match account {
-            AccountSpending::DelegationBalance(_, _) => {
-                Self::DelegationAccount(TxAccountDependency::new(account.into(), nonce))
+            AccountSpending::DelegationBalance(delegation_id, _) => {
+                Self::DelegationAccount(*delegation_id, nonce)
             }
         }
     }
 
     fn from_account_cmd(cmd: &AccountCommand, nonce: AccountNonce) -> Self {
         match cmd {
-            AccountCommand::MintTokens(_, _)
-            | AccountCommand::UnmintTokens(_)
-            | AccountCommand::LockTokenSupply(_)
-            | AccountCommand::FreezeToken(_, _)
-            | AccountCommand::UnfreezeToken(_)
-            | AccountCommand::ChangeTokenMetadataUri(_, _)
-            | AccountCommand::ChangeTokenAuthority(_, _) => {
-                Self::TokenSupplyAccount(TxAccountDependency::new(cmd.into(), nonce))
+            AccountCommand::MintTokens(token_id, _)
+            | AccountCommand::UnmintTokens(token_id)
+            | AccountCommand::LockTokenSupply(token_id)
+            | AccountCommand::FreezeToken(token_id, _)
+            | AccountCommand::UnfreezeToken(token_id)
+            | AccountCommand::ChangeTokenMetadataUri(token_id, _)
+            | AccountCommand::ChangeTokenAuthority(token_id, _) => {
+                Self::TokenSupplyAccount(*token_id, nonce)
             }
-            AccountCommand::ConcludeOrder(_) | AccountCommand::FillOrder(_, _, _) => {
-                Self::OrderAccount(TxAccountDependency::new(cmd.into(), nonce))
+            AccountCommand::ConcludeOrder(order_id) | AccountCommand::FillOrder(order_id, _, _) => {
+                Self::OrderV0Account(*order_id, nonce)
             }
         }
     }
-    fn from_order_account_cmd(cmd: &OrderAccountCommand) -> Self {
-        Self::OrderV1Account(cmd.clone().into())
-    }
 
     fn from_input_requires(input: &TxInput) -> Option<Self> {
+        // TODO: the "nonce().decrement().map()" calls below don't seem to be correct, because
+        // returning None for account-based inputs with zero nonce means that such inputs will
+        // never be considered as conflicting. Perhaps we should store `Option<AccountNonce>`
+        // inside TxDependency's variants instead.
+        // (Note that this issue doesn't seem to have a noticeable impact at this moment,
+        // with disabled RBF).
         match input {
             TxInput::Utxo(utxo) => Self::from_utxo(utxo),
             TxInput::Account(acct) => {
@@ -97,7 +108,7 @@ impl TxDependency {
             TxInput::AccountCommand(nonce, op) => {
                 nonce.decrement().map(|nonce| Self::from_account_cmd(op, nonce))
             }
-            TxInput::OrderAccountCommand(cmd) => Some(Self::from_order_account_cmd(cmd)),
+            TxInput::OrderAccountCommand(_) => None,
         }
     }
 
@@ -106,7 +117,7 @@ impl TxDependency {
             TxInput::Utxo(_) => None,
             TxInput::Account(acct) => Some(Self::from_account(acct.account(), acct.nonce())),
             TxInput::AccountCommand(nonce, op) => Some(Self::from_account_cmd(op, *nonce)),
-            TxInput::OrderAccountCommand(cmd) => Some(Self::from_order_account_cmd(cmd)),
+            TxInput::OrderAccountCommand(_) => None,
         }
     }
 }

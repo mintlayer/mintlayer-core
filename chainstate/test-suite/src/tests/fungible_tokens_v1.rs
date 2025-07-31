@@ -22,7 +22,10 @@ use chainstate::{
     ConnectTransactionError, IOPolicyError, TokensError,
 };
 use chainstate_storage::{BlockchainStorageRead, Transactional};
-use chainstate_test_framework::{TestFramework, TransactionBuilder};
+use chainstate_test_framework::{
+    helpers::{issue_token_from_block, mint_tokens_in_block},
+    TestFramework, TransactionBuilder,
+};
 use common::{
     chain::{
         make_token_id,
@@ -56,8 +59,6 @@ use tx_verifier::{
     transaction_verifier::error::TokenIssuanceError,
     CheckTransactionError,
 };
-
-use crate::tests::helpers::{issue_token_from_block, mint_tokens_in_block};
 
 fn make_issuance(
     rng: &mut impl Rng,
