@@ -51,8 +51,8 @@ use crypto::key::{
 };
 use randomness::make_true_rng;
 use wallet_storage::{
-    StoreTxRwUnlocked, WalletStorageReadLocked, WalletStorageReadUnlocked,
-    WalletStorageWriteUnlocked,
+    StoreLocalReadWriteUnlocked, StoreTxRwUnlocked, WalletStorageReadLocked,
+    WalletStorageReadUnlocked,
 };
 use wallet_types::{
     hw_data::HardwareWalletData, partially_signed_transaction::PartiallySignedTransaction,
@@ -473,6 +473,7 @@ impl SoftwareSignerProvider {
     }
 }
 
+#[async_trait]
 impl SignerProvider for SoftwareSignerProvider {
     type S = SoftwareSigner;
     type K = AccountKeyChainImplSoftware;
@@ -481,12 +482,12 @@ impl SignerProvider for SoftwareSignerProvider {
         SoftwareSigner::new(chain_config, account_index)
     }
 
-    fn make_new_account(
+    async fn make_new_account<B: storage::Backend>(
         &mut self,
         chain_config: Arc<ChainConfig>,
         next_account_index: U31,
         name: Option<String>,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
+        db_tx: &mut StoreLocalReadWriteUnlocked<B>,
     ) -> WalletResult<Account<AccountKeyChainImplSoftware>> {
         let lookahead_size = db_tx.get_lookahead_size()?;
         let account_key_chain = self.master_key_chain.create_account_key_chain(
