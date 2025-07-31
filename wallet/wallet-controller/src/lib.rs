@@ -119,7 +119,7 @@ use wallet_types::{
     Currency,
 };
 
-#[cfg(feature = "trezor")]
+#[cfg(any(feature = "trezor", feature = "ledger"))]
 use crate::types::WalletExtraInfo;
 
 // Note: the standard `Debug` macro is not smart enough and requires N to implement the `Debug`
@@ -598,6 +598,10 @@ where
                     device_name: trezor_info.device_name,
                     device_id: trezor_info.device_id,
                     firmware_version: trezor_info.firmware_version.to_string(),
+                },
+                #[cfg(feature = "ledger")]
+                HardwareWalletFullInfo::Ledger(ledger_data) => WalletExtraInfo::LedgerWallet {
+                    firmware_version: ledger_data.firmware_version.to_string(),
                 },
             },
             None => WalletExtraInfo::SoftwareWallet,

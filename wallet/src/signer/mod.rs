@@ -110,6 +110,8 @@ pub enum SignerError {
     HtlcMultisigDestinationExpected,
     #[error("Partially signed transaction error: {0}")]
     PartiallySignedTransactionError(#[from] PartiallySignedTransactionError),
+    #[error("Wallet not initialized")]
+    WalletNotInitialized,
 }
 
 type SignerResult<T> = Result<T, SignerError>;
@@ -156,19 +158,20 @@ pub trait Signer {
     ) -> (T, SignerResult<SignedTransactionIntent>);
 }
 
-pub trait SignerProvider {
+#[async_trait]
+pub trait SignerProvider: Send {
     type S: Signer + Send;
     type K: AccountKeyChains + Sync + Send;
 
     fn provide(&mut self, chain_config: Arc<ChainConfig>, account_index: U31) -> Self::S;
 
-    fn make_new_account(
+    async fn make_new_account<T: WalletStorageWriteUnlocked + Send>(
         &mut self,
         chain_config: Arc<ChainConfig>,
         account_index: U31,
         name: Option<String>,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
-    ) -> WalletResult<Account<Self::K>>;
+        db_tx: T,
+    ) -> (T, WalletResult<Account<Self::K>>);
 
     fn load_account_from_database(
         &self,

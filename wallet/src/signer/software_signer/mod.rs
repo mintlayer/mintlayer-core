@@ -516,6 +516,7 @@ impl SoftwareSignerProvider {
     }
 }
 
+#[async_trait]
 impl SignerProvider for SoftwareSignerProvider {
     type S = SoftwareSigner;
     type K = AccountKeyChainImplSoftware;
@@ -524,21 +525,25 @@ impl SignerProvider for SoftwareSignerProvider {
         SoftwareSigner::new(chain_config, account_index)
     }
 
-    fn make_new_account(
+    async fn make_new_account<T: WalletStorageWriteUnlocked + Send>(
         &mut self,
         chain_config: Arc<ChainConfig>,
         next_account_index: U31,
         name: Option<String>,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
-    ) -> WalletResult<Account<AccountKeyChainImplSoftware>> {
-        let lookahead_size = db_tx.get_lookahead_size()?;
-        let account_key_chain = self.master_key_chain.create_account_key_chain(
-            db_tx,
-            next_account_index,
-            lookahead_size,
-        )?;
+        mut db_tx: T,
+    ) -> (T, WalletResult<Account<AccountKeyChainImplSoftware>>) {
+        let res = (|| {
+            let lookahead_size = db_tx.get_lookahead_size()?;
+            let account_key_chain = self.master_key_chain.create_account_key_chain(
+                &mut db_tx,
+                next_account_index,
+                lookahead_size,
+            )?;
 
-        Account::new(chain_config, db_tx, account_key_chain, name)
+            Account::new(chain_config, &mut db_tx, account_key_chain, name)
+        })();
+
+        (db_tx, res)
     }
 
     fn load_account_from_database(

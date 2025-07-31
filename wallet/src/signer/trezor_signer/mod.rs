@@ -1852,6 +1852,7 @@ fn get_checked_firmware_version(client: &mut Trezor) -> Result<semver::Version, 
     Ok(version)
 }
 
+#[async_trait]
 impl SignerProvider for TrezorSignerProvider {
     type S = TrezorSigner;
     type K = AccountKeyChainImplHardware;
@@ -1860,26 +1861,30 @@ impl SignerProvider for TrezorSignerProvider {
         TrezorSigner::new(chain_config, self.client.clone(), self.session_id.clone())
     }
 
-    fn make_new_account(
+    async fn make_new_account<T: WalletStorageWriteUnlocked + Send>(
         &mut self,
         chain_config: Arc<ChainConfig>,
         account_index: U31,
         name: Option<String>,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
-    ) -> WalletResult<Account<Self::K>> {
-        let account_pubkey = self.fetch_extended_pub_key(&chain_config, account_index)?;
+        mut db_tx: T,
+    ) -> (T, WalletResult<Account<Self::K>>) {
+        let res = (|| {
+            let account_pubkey = self.fetch_extended_pub_key(&chain_config, account_index)?;
 
-        let lookahead_size = db_tx.get_lookahead_size()?;
+            let lookahead_size = db_tx.get_lookahead_size()?;
 
-        let key_chain = AccountKeyChainImplHardware::new_from_hardware_key(
-            chain_config.clone(),
-            db_tx,
-            account_pubkey,
-            account_index,
-            lookahead_size,
-        )?;
+            let key_chain = AccountKeyChainImplHardware::new_from_hardware_key(
+                chain_config.clone(),
+                &mut db_tx,
+                account_pubkey,
+                account_index,
+                lookahead_size,
+            )?;
 
-        Account::new(chain_config, db_tx, key_chain, name)
+            Account::new(chain_config, &mut db_tx, key_chain, name)
+        })();
+
+        (db_tx, res)
     }
 
     fn load_account_from_database(

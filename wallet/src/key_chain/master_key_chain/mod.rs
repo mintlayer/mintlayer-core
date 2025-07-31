@@ -22,7 +22,7 @@ use crypto::vrf::ExtendedVRFPrivateKey;
 use std::sync::Arc;
 use wallet_storage::{
     StoreTxRwUnlocked, WalletStorageReadLocked, WalletStorageReadUnlocked,
-    WalletStorageWriteUnlocked,
+    WalletStorageWriteLocked, WalletStorageWriteUnlocked,
 };
 use wallet_types::seed_phrase::{SerializableSeedPhrase, StoreSeedPhrase};
 
@@ -131,7 +131,7 @@ impl MasterKeyChain {
 
     pub fn create_account_key_chain(
         &self,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
+        db_tx: &mut (impl WalletStorageWriteLocked + WalletStorageReadUnlocked),
         account_index: U31,
         lookahead_size: u32,
     ) -> KeyChainResult<AccountKeyChainImplSoftware> {
