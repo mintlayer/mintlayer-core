@@ -26,7 +26,7 @@ jobs:
         run: sudo apt-get install -yqq build-essential pkg-config libssl-dev
       - uses: actions/checkout@v2
       - name: Install rust
-        run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain $(python3 ./build-tools/rust-version-extractor/rust-version-extractor.py)
+        run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain $(python3 ./build-tools/cargo-info-extractor/extract.py --rust-version)
       - name: Checkout repository and submodules
         uses: actions/checkout@v2
         with:

@@ -30,7 +30,7 @@ jobs:
         run: sudo apt-get install -yqq build-essential pkg-config libssl-dev
       - uses: actions/checkout@v3
       - name: Install rust
-        run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain $(python3 ./build-tools/rust-version-extractor/rust-version-extractor.py)
+        run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain $(python3 ./build-tools/cargo-info-extractor/extract.py --rust-version)
       - name: Use Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v3
         with:
@@ -63,7 +63,7 @@ jobs:
         run: sudo apt-get install -yqq build-essential pkg-config libssl-dev
       - uses: actions/checkout@v3
       - name: Install rust
-        run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain $(python3 ./build-tools/rust-version-extractor/rust-version-extractor.py)
+        run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain $(python3 ./build-tools/cargo-info-extractor/extract.py --rust-version)
       - name: Install wasm-pack
         run: cargo install wasm-pack
 
