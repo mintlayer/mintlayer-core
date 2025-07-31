@@ -38,7 +38,15 @@ itertools.workspace = true
 parity-scale-codec.workspace = true
 serde.workspace = true
 thiserror.workspace = true
+tokio = { workspace = true, default-features = false, features = [
+  "io-util",
+  "macros",
+  "rt",
+  "sync",
+] }
 trezor-client = { workspace = true, optional = true }
+ledger-lib = { workspace = true, optional = true }
+ledger-proto = { workspace = true, optional = true }
 zeroize.workspace = true
 
 [dev-dependencies]
@@ -51,6 +59,15 @@ tokio = { workspace = true, default-features = false, features = [
   "rt",
   "sync",
 ] }
+strum = { workspace = true }
+reqwest = { workspace = true, features = ["json"] }
+tracing = { workspace = true }
+anyhow = { workspace = true }
+clap = { workspace = true }
+bollard = "0.14"
+bytes = "1.10"
+tar = "0.4"
+
 
 ctor.workspace = true
 lazy_static.workspace = true
@@ -62,4 +79,6 @@ tempfile.workspace = true
 [features]
 trezor = ["dep:trezor-client", "wallet-types/trezor"]
 enable-trezor-device-tests = []
-default = ["trezor"]
+enable-ledger-device-tests = []
+ledger = ["dep:ledger-lib", "dep:ledger-proto", "wallet-types/ledger"]
+default = ["trezor", "ledger"]
