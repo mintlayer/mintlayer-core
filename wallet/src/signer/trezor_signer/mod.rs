@@ -1589,17 +1589,12 @@ fn to_trezor_output_lock(lock: &OutputTimeLock) -> trezor_client::protos::Mintla
     lock_req
 }
 
-#[derive(Clone)]
+#[derive(Clone, derive_more::Debug)]
 pub struct TrezorSignerProvider {
+    #[debug(skip)]
     client: Arc<Mutex<Trezor>>,
     info: TrezorFullInfo,
     session_id: Vec<u8>,
-}
-
-impl std::fmt::Debug for TrezorSignerProvider {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("TrezorSignerProvider")
-    }
 }
 
 impl TrezorSignerProvider {
@@ -1856,6 +1851,7 @@ fn get_checked_firmware_version(client: &mut Trezor) -> Result<semver::Version, 
     Ok(version)
 }
 
+#[async_trait]
 impl SignerProvider for TrezorSignerProvider {
     type S = TrezorSigner;
     type K = AccountKeyChainImplHardware;
@@ -1864,12 +1860,12 @@ impl SignerProvider for TrezorSignerProvider {
         TrezorSigner::new(chain_config, self.client.clone(), self.session_id.clone())
     }
 
-    fn make_new_account(
+    async fn make_new_account<T: WalletStorageWriteUnlocked + Send>(
         &mut self,
         chain_config: Arc<ChainConfig>,
         account_index: U31,
         name: Option<String>,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
+        db_tx: &mut T,
     ) -> WalletResult<Account<Self::K>> {
         let account_pubkey = self.fetch_extended_pub_key(&chain_config, account_index)?;
 

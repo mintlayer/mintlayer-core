@@ -170,7 +170,8 @@ where
             force_migrate_wallet_type,
             open_as_wallet_type,
             device_id,
-        )?;
+        )
+        .await?;
 
         let wallet = match wallet {
             wallet::wallet::WalletCreation::Wallet(w) => w,
@@ -226,6 +227,7 @@ where
                 wallet_type,
                 options.overwrite_wallet_file,
             )
+            .await
         } else {
             WalletController::recover_wallet(
                 self.chain_config.clone(),
@@ -233,6 +235,7 @@ where
                 computed_args,
                 wallet_type,
             )
+            .await
         }
         .map_err(RpcError::Controller)?;
 

@@ -291,7 +291,10 @@ where
     }
 
     pub async fn create_account(&self, name: Option<String>) -> WRpcResult<NewAccountInfo, N> {
-        let (num, name) = self.wallet.call(|w| w.create_account(name)).await??;
+        let (num, name) = self
+            .wallet
+            .call_async(move |w| Box::pin(async move { w.create_account(name).await }))
+            .await??;
         Ok(NewAccountInfo::new(num, name))
     }
 

@@ -80,6 +80,7 @@ impl TestFramework {
                     )?)
                 },
             )
+            .await
             .unwrap();
 
             wallet_path
