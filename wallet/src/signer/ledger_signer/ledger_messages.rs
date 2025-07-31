@@ -30,6 +30,7 @@ use crypto::key::{
 };
 use serialization::{Decode, DecodeAll, Encode};
 use utils::ensure;
+use wallet_types::hw_data::LedgerDataFullInfo;
 
 use ledger_lib::Exchange;
 
@@ -57,6 +58,7 @@ impl From<LedgerAddrType> for u8 {
 struct Ins {}
 
 impl Ins {
+    const APP_VER: u8 = 0x03;
     const APP_NAME: u8 = 0x04;
     const PUB_KEY: u8 = 0x05;
     const SIGN_TX: u8 = 0x06;
@@ -199,8 +201,13 @@ pub async fn get_app_name<L: Exchange>(ledger: &mut L) -> Result<Vec<u8>, ledger
     ledger.exchange(&msg_buf, Duration::from_millis(100)).await
 }
 
+async fn get_app_version<L: Exchange>(ledger: &mut L) -> Result<Vec<u8>, ledger_lib::Error> {
+    let msg_buf = [CLA, Ins::APP_VER, 0, P2::DONE];
+    ledger.exchange(&msg_buf, Duration::from_millis(100)).await
+}
+
 #[allow(dead_code)]
-pub async fn check_current_app<L: Exchange>(ledger: &mut L) -> SignerResult<()> {
+pub async fn check_current_app<L: Exchange>(ledger: &mut L) -> SignerResult<LedgerDataFullInfo> {
     let resp = get_app_name(ledger)
         .await
         .map_err(|err| LedgerError::DeviceError(err.to_string()))?;
@@ -212,7 +219,19 @@ pub async fn check_current_app<L: Exchange>(ledger: &mut L) -> SignerResult<()> 
         LedgerError::DifferentActiveApp(name)
     );
 
-    Ok(())
+    let ver = get_app_version(ledger)
+        .await
+        .map_err(|err| LedgerError::DeviceError(err.to_string()))?;
+    let firmware_version = match ver.as_slice() {
+        [major, minor, patch] => common::primitives::semver::SemVer {
+            major: *major,
+            minor: *minor,
+            patch: *patch as u16,
+        },
+        _ => return Err(SignerError::LedgerError(LedgerError::InvalidResponse)),
+    };
+
+    Ok(LedgerDataFullInfo { firmware_version })
 }
 
 pub async fn get_extended_public_key<L: Exchange>(

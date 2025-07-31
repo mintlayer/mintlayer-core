@@ -335,6 +335,10 @@ where
                             device_name, device_id, firmware_version
                         )
                     }
+                    WalletExtraInfo::LedgerWallet { firmware_version } => format!(
+                        "This is a ledger wallet' firmware version {}",
+                        firmware_version
+                    ),
                 };
                 let account_names = info
                     .account_names
