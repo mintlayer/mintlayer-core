@@ -311,6 +311,9 @@ where
         let tx_and_block_id = db_tx.get_transaction(tx1.transaction().get_id()).await.unwrap();
         assert!(tx_and_block_id.is_none());
 
+        let last_num = db_tx.get_last_transaction_global_index().await.unwrap();
+        assert_eq!(last_num, None);
+
         drop(db_tx);
 
         // Set with not existing owning block

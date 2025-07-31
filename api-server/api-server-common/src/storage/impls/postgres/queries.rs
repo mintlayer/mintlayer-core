@@ -1902,7 +1902,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
     ) -> Result<Option<u64>, ApiServerStorageError> {
         let row = self
             .tx
-            .query_opt(
+            .query_one(
                 r#"
                 SELECT
                     MAX(t.global_tx_index)
@@ -1914,10 +1914,9 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
 
-        Ok(row.map(|row| {
-            let last_tx_global_index: i64 = row.get(0);
-            last_tx_global_index as u64
-        }))
+        let last_tx_global_index: Option<i64> = row.get(0);
+
+        Ok(last_tx_global_index.map(|last_tx_global_index| last_tx_global_index as u64))
     }
 
     pub async fn set_transaction(
