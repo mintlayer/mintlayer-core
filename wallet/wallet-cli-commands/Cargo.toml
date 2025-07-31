@@ -47,7 +47,13 @@ serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 shlex.workspace = true
 thiserror.workspace = true
-tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "sync"] }
+tokio = { workspace = true, default-features = false, features = [
+  "io-util",
+  "macros",
+  "net",
+  "rt",
+  "sync",
+] }
 
 [dev-dependencies]
 blockprod = { path = "../../blockprod" }
@@ -66,4 +72,5 @@ rstest.workspace = true
 
 [features]
 trezor = ["wallet-types/trezor", "wallet-rpc-lib/trezor"]
-default = ["trezor"]
+ledger = ["wallet-types/ledger", "wallet-rpc-lib/ledger"]
+default = ["trezor", "ledger"]

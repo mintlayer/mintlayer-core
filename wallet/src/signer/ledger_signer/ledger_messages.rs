@@ -30,6 +30,7 @@ use crypto::key::{
 };
 use serialization::{Decode, DecodeAll, Encode};
 use utils::ensure;
+use wallet_types::hw_data::LedgerFullInfo;
 
 use ledger_lib::Exchange;
 use mintlayer_ledger_messages::{
@@ -37,7 +38,7 @@ use mintlayer_ledger_messages::{
     Bip32Path as LedgerBip32Path, CoinType, InputAdditionalInfoReq, Ins,
     OutputValue as LOutputValue, P1SignTx, PubKeyP1, PublicKeyReq, SignMessageReq, SignTxReq,
     TxInput as LTxInput, TxInputReq, TxMetadataReq, TxOutput as LTxOutput, TxOutputReq, APDU_CLASS,
-    H256 as LH256, P1_APP_NAME, P1_SIGN_NEXT, P1_SIGN_START, P2_DONE, P2_SIGN_MORE,
+    H256 as LH256, P1_APP_NAME, P1_GET_VERSION, P1_SIGN_NEXT, P1_SIGN_START, P2_DONE, P2_SIGN_MORE,
 };
 
 const MAX_ADPU_LEN: usize = (u8::MAX - 5) as usize; // 4 bytes for the header + 1 for len
@@ -136,11 +137,15 @@ pub async fn sign_challenge<L: Exchange>(
 
 pub async fn get_app_name<L: Exchange>(ledger: &mut L) -> Result<Vec<u8>, ledger_lib::Error> {
     let msg_buf = [APDU_CLASS, Ins::APP_NAME, P1_APP_NAME, P2_DONE];
-    ledger.exchange(&msg_buf, Duration::from_millis(100)).await
+    ledger.exchange(&msg_buf, Duration::from_millis(500)).await
 }
 
-#[allow(dead_code)]
-pub async fn check_current_app<L: Exchange>(ledger: &mut L) -> SignerResult<()> {
+async fn get_app_version<L: Exchange>(ledger: &mut L) -> Result<Vec<u8>, ledger_lib::Error> {
+    let msg_buf = [APDU_CLASS, Ins::GET_VERSION, P1_GET_VERSION, P2_DONE];
+    ledger.exchange(&msg_buf, Duration::from_millis(500)).await
+}
+
+pub async fn check_current_app<L: Exchange>(ledger: &mut L) -> SignerResult<LedgerFullInfo> {
     let resp = get_app_name(ledger)
         .await
         .map_err(|err| LedgerError::DeviceError(err.to_string()))?;
@@ -152,7 +157,20 @@ pub async fn check_current_app<L: Exchange>(ledger: &mut L) -> SignerResult<()> 
         LedgerError::DifferentActiveApp(name)
     );
 
-    Ok(())
+    let resp = get_app_version(ledger)
+        .await
+        .map_err(|err| LedgerError::DeviceError(err.to_string()))?;
+    let ver = ok_response(resp)?;
+    let app_version = match ver.as_slice() {
+        [major, minor, patch] => common::primitives::semver::SemVer {
+            major: *major,
+            minor: *minor,
+            patch: *patch as u16,
+        },
+        _ => return Err(SignerError::LedgerError(LedgerError::InvalidResponse)),
+    };
+
+    Ok(LedgerFullInfo { app_version })
 }
 
 pub async fn get_extended_public_key<L: Exchange>(

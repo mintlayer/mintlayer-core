@@ -67,7 +67,7 @@ async fn general_test(#[case] seed: Seed, #[case] use_htlc_secret: bool) {
     let mut rng = make_seedable_rng(seed);
 
     let chain_config = Arc::new(create_regtest());
-    let mut wallet = create_wallet_with_mnemonic(Arc::clone(&chain_config), MNEMONIC);
+    let mut wallet = create_wallet_with_mnemonic(Arc::clone(&chain_config), MNEMONIC).await;
 
     let token1_id = TokenId::random_using(&mut rng);
     let token2_id = TokenId::random_using(&mut rng);
@@ -98,7 +98,8 @@ async fn general_test(#[case] seed: Seed, #[case] use_htlc_secret: bool) {
         block_reward_amount,
         Destination::PublicKeyHash(PublicKeyHash::random_using(&mut rng)),
         0,
-    );
+    )
+    .await;
     let last_height = 1;
 
     let token1_outpoint = UtxoOutPoint::new(tx_with_token1_id.into(), 0);
