@@ -59,14 +59,19 @@ use randomness::make_true_rng;
 use serialization::Encode;
 use tokio::sync::Mutex;
 use utils::ensure;
-use wallet_storage::{WalletStorageReadLocked, WalletStorageReadUnlocked};
+use wallet_storage::{
+    StoreLocalReadWriteUnlocked, WalletStorageReadLocked, WalletStorageReadUnlocked,
+};
 use wallet_types::{
-    hw_data::LedgerData, partially_signed_transaction::PartiallySignedTransaction,
+    account_info::DEFAULT_ACCOUNT_INDEX,
+    hw_data::{HardwareWalletData, LedgerData},
+    partially_signed_transaction::PartiallySignedTransaction,
     signature_status::SignatureStatus,
+    AccountId,
 };
 
 use crate::{
-    key_chain::{make_account_path, AccountKeyChains, FoundPubKey},
+    key_chain::{make_account_path, AccountKeyChainImplHardware, AccountKeyChains, FoundPubKey},
     signer::{
         ledger_signer::ledger_messages::{
             check_current_app, get_app_name, get_extended_public_key, sign_challenge, sign_tx,
@@ -74,8 +79,9 @@ use crate::{
             LedgerTxInputCommitment, LedgerTxOutput,
         },
         signer_utils::{is_htlc_utxo, sign_input_with_standalone_key},
-        Signer, SignerError, SignerResult,
+        Signer, SignerError, SignerProvider, SignerResult,
     },
+    Account, WalletResult,
 };
 
 /// Signer errors
@@ -122,7 +128,8 @@ pub trait LProvider {
 
     async fn find_ledger_device_from_db(
         &self,
-        db_tx: &impl WalletStorageReadLocked,
+        db_tx: &(impl WalletStorageReadLocked + Sync),
+        chain_config: Arc<ChainConfig>,
     ) -> SignerResult<(Self::L, LedgerData)>;
 }
 
@@ -167,7 +174,7 @@ where
     /// the function will attempt to reconnect to the Ledger device once before returning an error.
     async fn check_session(
         &mut self,
-        db_tx: &impl WalletStorageReadLocked,
+        db_tx: &(impl WalletStorageReadLocked + Sync),
         key_chain: &impl AccountKeyChains,
     ) -> SignerResult<()> {
         let mut client = self.client.lock().await;
@@ -184,13 +191,14 @@ where
                     | ledger_lib::Error::Tcp(_)
                     | ledger_lib::Error::Ble(_),
                 ) => {
-                    let (mut new_client, data) =
-                        self.provider.find_ledger_device_from_db(db_tx).await?;
+                    let (mut new_client, _data) = self
+                        .provider
+                        .find_ledger_device_from_db(db_tx, self.chain_config.clone())
+                        .await?;
 
                     check_public_keys_against_key_chain(
                         db_tx,
                         &mut new_client,
-                        &data,
                         key_chain,
                         &self.chain_config,
                     )
@@ -215,7 +223,7 @@ where
     async fn perform_ledger_operation<F, R>(
         &mut self,
         operation: F,
-        db_tx: &impl WalletStorageReadLocked,
+        db_tx: &(impl WalletStorageReadLocked + Sync),
         key_chain: &impl AccountKeyChains,
     ) -> SignerResult<R>
     where
@@ -1007,7 +1015,6 @@ fn to_ledger_chain_type(chain_config: &ChainConfig) -> u8 {
     }
 }
 
-#[allow(dead_code)]
 async fn find_ledger_device() -> SignerResult<(LedgerHandle, LedgerData)> {
     let mut provider = LedgerProvider::init().await;
     let mut devices = provider
@@ -1030,9 +1037,8 @@ async fn find_ledger_device() -> SignerResult<(LedgerHandle, LedgerData)> {
 /// Check that the public keys in the provided key chain are the same as the ones from the
 /// connected hardware wallet
 async fn check_public_keys_against_key_chain<L: Exchange>(
-    db_tx: &impl WalletStorageReadLocked,
+    db_tx: &(impl WalletStorageReadLocked + Sync),
     client: &mut L,
-    _ledger_data: &LedgerData,
     key_chain: &impl AccountKeyChains,
     chain_config: &ChainConfig,
 ) -> SignerResult<()> {
@@ -1048,6 +1054,31 @@ async fn check_public_keys_against_key_chain<L: Exchange>(
     }
 
     Err(LedgerError::HardwareWalletDifferentFile)?
+}
+
+/// Check that the public keys in the DB are the same as the ones from the connected hardware
+/// wallet
+async fn check_public_keys_against_db(
+    db_tx: &(impl WalletStorageReadLocked + Sync),
+    client: &mut LedgerHandle,
+    chain_config: Arc<ChainConfig>,
+) -> SignerResult<()> {
+    let (id, first_acc) = db_tx
+        .get_accounts_info()?
+        .iter()
+        .find_map(|(id, info)| {
+            (info.account_index() == DEFAULT_ACCOUNT_INDEX).then_some((id.clone(), info.clone()))
+        })
+        .ok_or(SignerError::WalletNotInitialized)?;
+
+    let loaded_acc = AccountKeyChainImplHardware::load_from_database(
+        chain_config.clone(),
+        db_tx,
+        &id,
+        &first_acc,
+    )?;
+
+    check_public_keys_against_key_chain(db_tx, client, &loaded_acc, &chain_config).await
 }
 
 async fn fetch_extended_pub_key<L: Exchange>(
@@ -1076,6 +1107,119 @@ fn single_signature(
             Ok(Some(single))
         }
         _ => Err(LedgerError::MultipleSignaturesReturned),
+    }
+}
+
+#[derive(Clone)]
+pub struct LedgerSignerProvider {
+    client: Arc<Mutex<LedgerHandle>>,
+    data: LedgerData,
+}
+
+impl std::fmt::Debug for LedgerSignerProvider {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("LedgerSignerProvider")
+    }
+}
+
+#[async_trait]
+impl LProvider for LedgerSignerProvider {
+    type L = LedgerHandle;
+
+    async fn find_ledger_device_from_db(
+        &self,
+        db_tx: &(impl WalletStorageReadLocked + Sync),
+        chain_config: Arc<ChainConfig>,
+    ) -> SignerResult<(Self::L, LedgerData)> {
+        let (mut client, data) = find_ledger_device().await?;
+
+        check_public_keys_against_db(db_tx, &mut client, chain_config).await?;
+
+        Ok((client, data))
+    }
+}
+
+impl LedgerSignerProvider {
+    pub async fn new() -> SignerResult<Self> {
+        let (client, data) = find_ledger_device().await?;
+
+        Ok(Self {
+            client: Arc::new(Mutex::new(client)),
+            data,
+        })
+    }
+
+    pub async fn load_from_database(
+        chain_config: Arc<ChainConfig>,
+        db_tx: &(impl WalletStorageReadLocked + Sync),
+        _device_id: Option<String>,
+    ) -> WalletResult<Self> {
+        //let (client, data) = find_trezor_device_from_db(db_tx, device_id)?;
+        let (mut client, data) = find_ledger_device().await?;
+
+        check_public_keys_against_db(db_tx, &mut client, chain_config).await?;
+
+        let provider = Self {
+            client: Arc::new(Mutex::new(client)),
+            data,
+        };
+
+        Ok(provider)
+    }
+
+    async fn fetch_extended_pub_key(
+        &self,
+        chain_config: &Arc<ChainConfig>,
+        account_index: U31,
+    ) -> SignerResult<ExtendedPublicKey> {
+        fetch_extended_pub_key(&mut *self.client.lock().await, chain_config, account_index)
+            .await
+            .map_err(SignerError::LedgerError)
+    }
+}
+
+#[async_trait]
+impl SignerProvider for LedgerSignerProvider {
+    type S = LedgerSigner<LedgerHandle, LedgerSignerProvider>;
+    type K = AccountKeyChainImplHardware;
+
+    fn provide(&mut self, chain_config: Arc<ChainConfig>, _account_index: U31) -> Self::S {
+        LedgerSigner::new(chain_config, self.client.clone(), self.clone())
+    }
+
+    async fn make_new_account<B: storage::Backend>(
+        &mut self,
+        chain_config: Arc<ChainConfig>,
+        account_index: U31,
+        name: Option<String>,
+        db_tx: &mut StoreLocalReadWriteUnlocked<B>,
+    ) -> WalletResult<Account<Self::K>> {
+        let account_pubkey = self.fetch_extended_pub_key(&chain_config, account_index).await?;
+
+        let lookahead_size = db_tx.get_lookahead_size()?;
+
+        let key_chain = AccountKeyChainImplHardware::new_from_hardware_key(
+            chain_config.clone(),
+            db_tx,
+            account_pubkey,
+            account_index,
+            lookahead_size,
+        )?;
+
+        Account::new(chain_config, db_tx, key_chain, name)
+    }
+
+    fn load_account_from_database(
+        &self,
+        chain_config: Arc<ChainConfig>,
+        db_tx: &impl WalletStorageReadLocked,
+        id: &AccountId,
+    ) -> WalletResult<Account<Self::K>> {
+        Account::load_from_database(chain_config, db_tx, id)
+    }
+
+    fn get_hardware_wallet_data(&self) -> Option<HardwareWalletData> {
+        Some(HardwareWalletData::Ledger(self.data.clone()))
     }
 }
 

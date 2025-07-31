@@ -104,7 +104,8 @@ impl LProvider for DummyProvider {
 
     async fn find_ledger_device_from_db(
         &self,
-        _db_tx: &(impl WalletStorageReadLocked),
+        _db_tx: &(impl WalletStorageReadLocked + Sync),
+        _chain_config: Arc<ChainConfig>,
     ) -> SignerResult<(Self::L, LedgerData)> {
         Err(SignerError::LedgerError(LedgerError::NoDeviceFound))
     }

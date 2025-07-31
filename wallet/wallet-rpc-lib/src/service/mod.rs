@@ -77,7 +77,8 @@ where
                     force_change_wallet_type,
                     *open_as_wallet_type,
                     None,
-                )?
+                )
+                .await?
                 .wallet()?
             };
 
