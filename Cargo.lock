@@ -2752,9 +2752,8 @@ dependencies = [
 
 [[package]]
 name = "fontconfig-parser"
-version = "0.5.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bbc773e24e02d4ddd8395fd30dc147524273a83e54e0f312d986ea30de5f5646"
+version = "0.5.7"
+source = "git+https://github.com/Riey/fontconfig-parser?rev=f7d13a779e6ee282ce75acbc00a1270c0350e0c2#f7d13a779e6ee282ce75acbc00a1270c0350e0c2"
 dependencies = [
  "roxmltree",
 ]

@@ -286,3 +286,14 @@ opt-level = 2
 [features]
 trezor = []
 default = ["trezor"]
+
+[patch.crates-io]
+# Using fontconfig-parser v0.5.8 completely breaks UI in node-gui on Linux - most of the text disappears and the few
+# characters that remain have broken spacing, so we force the usage of v0.5.7 via "patch".
+# Note: the commit is called "Bump version" and it's where the version was bumped to "0.5.7"; it is the last "good"
+# revision. The following ("bad") revision belongs to the PR https://github.com/Riey/fontconfig-parser/pull/11 which
+# claims to fix certain issues. So it's possible that fontconfig-parser v0.5.8 is actually good, but a dependent crate
+# uses it incorrectly (so v0.5.7 works only because several bugs cancel each other out). The current dependency chain
+# is fontconfig-parser <- fontdb <- cosmic-text <- various "iced" crates.
+# TODO: investigate this further.
+fontconfig-parser = { git = "https://github.com/Riey/fontconfig-parser", rev = "f7d13a779e6ee282ce75acbc00a1270c0350e0c2" }
