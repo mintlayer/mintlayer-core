@@ -53,4 +53,8 @@ tempfile.workspace = true
 [features]
 trezor = ["dep:trezor-client", "wallet-types/trezor"]
 enable-trezor-device-tests = []
+# Note: currently this is used in certain external tests (in particular, in the bridge), so we only
+# allow it for regtest. TODO: it's better to have some regtest-specific options for the wallet,
+# similar to what we have for the node.
+use-deterministic-signatures-in-software-signer-for-regtest = []
 default = ["trezor"]

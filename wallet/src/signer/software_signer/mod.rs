@@ -19,6 +19,7 @@ use itertools::Itertools;
 
 use common::{
     chain::{
+        config::ChainType,
         htlc::HtlcSecret,
         signature::{
             inputsig::{
@@ -46,7 +47,7 @@ use common::{
 use crypto::key::{
     extended::{ExtendedPrivateKey, ExtendedPublicKey},
     hdkd::{derivable::Derivable, u31::U31},
-    PrivateKey, SigAuxDataProvider,
+    PredefinedSigAuxDataProvider, PrivateKey, SigAuxDataProvider,
 };
 use randomness::make_true_rng;
 use wallet_storage::{
@@ -76,7 +77,22 @@ pub struct SoftwareSigner {
 
 impl SoftwareSigner {
     pub fn new(chain_config: Arc<ChainConfig>, account_index: U31) -> Self {
-        Self::new_with_sig_aux_data_provider(chain_config, account_index, Box::new(make_true_rng()))
+        let use_deterministic_signer = *chain_config.chain_type() == ChainType::Regtest
+            && cfg!(feature = "use-deterministic-signatures-in-software-signer-for-regtest");
+
+        if use_deterministic_signer {
+            Self::new_with_sig_aux_data_provider(
+                chain_config,
+                account_index,
+                Box::new(PredefinedSigAuxDataProvider),
+            )
+        } else {
+            Self::new_with_sig_aux_data_provider(
+                chain_config,
+                account_index,
+                Box::new(make_true_rng()),
+            )
+        }
     }
 
     pub fn new_with_sig_aux_data_provider(
