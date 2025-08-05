@@ -4,7 +4,11 @@ license.workspace = true
 edition.workspace = true
 version.workspace = true
 rust-version.workspace = true
-authors = ["Samer Afach <samer.afach@mintlayer.org>", "Ben Marsh <benjamin.marsh@mintlayer.org>", "Enrico Rubboli <enrico.rubboli@mintlayer.org>"]
+authors = [
+  "Samer Afach <samer.afach@mintlayer.org>",
+  "Ben Marsh <benjamin.marsh@mintlayer.org>",
+  "Enrico Rubboli <enrico.rubboli@mintlayer.org>",
+]
 
 [dependencies]
 
@@ -26,4 +30,5 @@ expect-test.workspace = true
 
 [features]
 trezor = ["wallet-rpc-lib/trezor"]
-default = ["trezor"]
+ledger = ["wallet-rpc-lib/ledger"]
+default = ["trezor", "ledger"]

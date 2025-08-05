@@ -263,8 +263,10 @@ pub enum WalletError {
         "A VRF public key must be specified when creating a staking pool using a hardware wallet"
     )]
     VrfKeyMustBeProvided,
-    #[error("Cannot change a Trezor wallet type")]
-    CannotChangeTrezorWalletType,
+    #[error("Cannot change a {from} wallet type to {to}")]
+    CannotChangeWalletType { from: WalletType, to: WalletType },
+    #[error("Cannot change a Ledger wallet type")]
+    CannotChangeLedgerWalletType,
     #[error("Missing additional data for Pool {0}")]
     MissingPoolAdditionalData(PoolId),
     #[error("Missing additional data for Token {0}")]
@@ -351,7 +353,7 @@ where
     B: storage::BackendWithSendableTransactions + 'static,
     P: SignerProvider,
 {
-    pub async fn create_new_wallet<F: FnOnce(&mut StoreTxRwUnlocked<B>) -> WalletResult<P>>(
+    pub async fn create_new_wallet<F: AsyncFnOnce(&mut StoreTxRwUnlocked<B>) -> WalletResult<P>>(
         chain_config: Arc<ChainConfig>,
         db: Store<B>,
         best_block: (BlockHeight, Id<GenBlock>),
@@ -367,7 +369,7 @@ where
         Ok(wallet)
     }
 
-    pub async fn recover_wallet<F: FnOnce(&mut StoreTxRwUnlocked<B>) -> WalletResult<P>>(
+    pub async fn recover_wallet<F: AsyncFnOnce(&mut StoreTxRwUnlocked<B>) -> WalletResult<P>>(
         chain_config: Arc<ChainConfig>,
         db: Store<B>,
         wallet_type: WalletType,
@@ -376,7 +378,7 @@ where
         Self::new_wallet(chain_config, db, wallet_type, signer_provider).await
     }
 
-    async fn new_wallet<F: FnOnce(&mut StoreTxRwUnlocked<B>) -> WalletResult<P>>(
+    async fn new_wallet<F: AsyncFnOnce(&mut StoreTxRwUnlocked<B>) -> WalletResult<P>>(
         chain_config: Arc<ChainConfig>,
         mut db: Store<B>,
         wallet_type: WalletType,
@@ -388,7 +390,7 @@ where
         db_tx.set_chain_info(&ChainInfo::new(chain_config.as_ref()))?;
         db_tx.set_lookahead_size(LOOKAHEAD_SIZE)?;
         db_tx.set_wallet_type(wallet_type)?;
-        let mut signer_provider = match signer_provider(&mut db_tx) {
+        let mut signer_provider = match signer_provider(&mut db_tx).await {
             Ok(x) => x,
             #[cfg(feature = "trezor")]
             Err(WalletError::SignerError(SignerError::TrezorError(
@@ -592,7 +594,7 @@ where
     /// Check the wallet DB version and perform any migrations needed
     async fn check_and_migrate_db<
         F: Fn(u32) -> Result<(), WalletError>,
-        F2: FnOnce(&StoreTxRo<B>) -> WalletResult<P>,
+        F2: AsyncFnOnce(StoreTxRo<B>) -> WalletResult<P>,
     >(
         db: &mut Store<B>,
         chain_config: Arc<ChainConfig>,
@@ -605,7 +607,7 @@ where
             version != WALLET_VERSION_UNINITIALIZED,
             WalletError::WalletNotInitialized
         );
-        let mut signer_provider = signer_provider(&db.transaction_ro()?)?;
+        let mut signer_provider = signer_provider(db.transaction_ro()?).await?;
 
         loop {
             let version = db.transaction_ro()?.get_storage_version()?;
@@ -701,12 +703,32 @@ where
             #[cfg(feature = "trezor")]
             (WalletType::Cold | WalletType::Hot, WalletType::Trezor)
             | (WalletType::Trezor, WalletType::Hot | WalletType::Cold) => {
-                return Err(WalletError::CannotChangeTrezorWalletType)
+                return Err(WalletError::CannotChangeWalletType {
+                    from: current_wallet_type,
+                    to: wallet_type,
+                })
+            }
+            #[cfg(all(feature = "trezor", feature = "ledger"))]
+            (WalletType::Ledger, WalletType::Trezor) | (WalletType::Trezor, WalletType::Ledger) => {
+                return Err(WalletError::CannotChangeWalletType {
+                    from: current_wallet_type,
+                    to: wallet_type,
+                })
+            }
+            #[cfg(feature = "ledger")]
+            (WalletType::Cold | WalletType::Hot, WalletType::Ledger)
+            | (WalletType::Ledger, WalletType::Hot | WalletType::Cold) => {
+                return Err(WalletError::CannotChangeWalletType {
+                    from: current_wallet_type,
+                    to: wallet_type,
+                })
             }
             (WalletType::Cold, WalletType::Cold) => {}
             (WalletType::Hot, WalletType::Hot) => {}
             #[cfg(feature = "trezor")]
             (WalletType::Trezor, WalletType::Trezor) => {}
+            #[cfg(feature = "trezor")]
+            (WalletType::Ledger, WalletType::Ledger) => {}
         }
         Ok(())
     }
@@ -818,7 +840,7 @@ where
 
     pub async fn load_wallet<
         F: Fn(u32) -> WalletResult<()>,
-        F2: FnOnce(&StoreTxRo<B>) -> WalletResult<P>,
+        F2: AsyncFnOnce(StoreTxRo<B>) -> WalletResult<P>,
     >(
         chain_config: Arc<ChainConfig>,
         mut db: Store<B>,

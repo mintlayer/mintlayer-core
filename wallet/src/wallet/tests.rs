@@ -285,7 +285,7 @@ async fn verify_wallet_balance<B, P, RDF>(
         |_| Ok(()),
         WalletControllerMode::Hot,
         false,
-        |db_tx| SoftwareSignerProvider::load_from_database(chain_config.clone(), db_tx),
+        async |db_tx| SoftwareSignerProvider::load_from_database(chain_config.clone(), &db_tx),
     )
     .await
     .unwrap()
@@ -393,7 +393,7 @@ async fn wallet_creation_in_memory() {
         |_| Ok(()),
         WalletControllerMode::Hot,
         false,
-        |db_tx| SoftwareSignerProvider::load_from_database(chain_config2, db_tx),
+        async |db_tx| SoftwareSignerProvider::load_from_database(chain_config2, &db_tx),
     )
     .await
     {
@@ -413,7 +413,7 @@ async fn wallet_creation_in_memory() {
         |_| Ok(()),
         WalletControllerMode::Hot,
         false,
-        |db_tx| SoftwareSignerProvider::load_from_database(chain_config.clone(), db_tx),
+        async |db_tx| SoftwareSignerProvider::load_from_database(chain_config.clone(), &db_tx),
     )
     .await
     .unwrap();
@@ -448,14 +448,15 @@ async fn wallet_migration_to_v2(#[case] seed: Seed) {
         db,
         (BlockHeight::new(0), genesis_block_id),
         WalletType::Hot,
-        |db_tx| {
-            Ok(SoftwareSignerProvider::new_from_mnemonic(
+        async |db_tx| {
+            SoftwareSignerProvider::new_from_mnemonic(
                 chain_config.clone(),
                 db_tx,
                 MNEMONIC,
                 None,
                 StoreSeedPhrase::DoNotStore,
-            )?)
+            )
+            .map_err(Into::into)
         },
     )
     .await
@@ -516,7 +517,7 @@ async fn wallet_migration_to_v2(#[case] seed: Seed) {
         |_| Ok(()),
         WalletControllerMode::Hot,
         false,
-        |db_tx| SoftwareSignerProvider::load_from_database(chain_config.clone(), db_tx),
+        async |db_tx| SoftwareSignerProvider::load_from_database(chain_config.clone(), &db_tx),
     )
     .await
     .unwrap()
@@ -571,14 +572,15 @@ async fn wallet_seed_phrase_retrieval(#[case] seed: Seed) {
         db,
         (BlockHeight::new(0), genesis_block_id),
         WalletType::Hot,
-        |db_tx| {
-            Ok(SoftwareSignerProvider::new_from_mnemonic(
+        async |db_tx| {
+            SoftwareSignerProvider::new_from_mnemonic(
                 chain_config.clone(),
                 db_tx,
                 MNEMONIC,
                 wallet_passphrase.as_ref().map(|p| p.as_ref()),
                 StoreSeedPhrase::Store,
-            )?)
+            )
+            .map_err(Into::into)
         },
     )
     .await
@@ -669,14 +671,15 @@ async fn wallet_seed_phrase_check_address() {
         db,
         (BlockHeight::new(0), genesis_block_id),
         WalletType::Hot,
-        |db_tx| {
-            Ok(SoftwareSignerProvider::new_from_mnemonic(
+        async |db_tx| {
+            SoftwareSignerProvider::new_from_mnemonic(
                 chain_config.clone(),
                 db_tx,
                 MNEMONIC,
                 wallet_passphrase.as_ref().map(|p| p.as_ref()),
                 StoreSeedPhrase::Store,
-            )?)
+            )
+            .map_err(Into::into)
         },
     )
     .await
@@ -713,14 +716,15 @@ async fn wallet_seed_phrase_check_address() {
         db,
         (BlockHeight::new(0), genesis_block_id),
         WalletType::Hot,
-        |db_tx| {
-            Ok(SoftwareSignerProvider::new_from_mnemonic(
+        async |db_tx| {
+            SoftwareSignerProvider::new_from_mnemonic(
                 chain_config.clone(),
                 db_tx,
                 MNEMONIC,
                 wallet_passphrase.as_ref().map(|p| p.as_ref()),
                 StoreSeedPhrase::Store,
-            )?)
+            )
+            .map_err(Into::into)
         },
     )
     .await
@@ -1094,7 +1098,7 @@ async fn test_wallet_accounts<B, P, RDF>(
         |_| Ok(()),
         WalletControllerMode::Hot,
         false,
-        |db_tx| SoftwareSignerProvider::load_from_database(chain_config.clone(), db_tx),
+        async |db_tx| SoftwareSignerProvider::load_from_database(chain_config.clone(), &db_tx),
     )
     .await
     .unwrap()
