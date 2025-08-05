@@ -51,8 +51,7 @@ use crypto::key::{
 };
 use randomness::make_true_rng;
 use wallet_storage::{
-    StoreLocalReadWriteUnlocked, StoreTxRwUnlocked, WalletStorageReadLocked,
-    WalletStorageReadUnlocked,
+    StoreLocalReadWriteUnlocked, WalletStorageReadLocked, WalletStorageReadUnlocked,
 };
 use wallet_types::{
     hw_data::HardwareWalletData, partially_signed_transaction::PartiallySignedTransaction,
@@ -448,7 +447,7 @@ pub struct SoftwareSignerProvider {
 impl SoftwareSignerProvider {
     pub fn new_from_mnemonic<B: storage::Backend>(
         chain_config: Arc<ChainConfig>,
-        db_tx: &mut StoreTxRwUnlocked<B>,
+        db_tx: &mut StoreLocalReadWriteUnlocked<B>,
         mnemonic_str: &str,
         passphrase: Option<&str>,
         save_seed_phrase: StoreSeedPhrase,

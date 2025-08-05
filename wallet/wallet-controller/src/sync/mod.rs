@@ -160,7 +160,7 @@ pub async fn sync_once<T: NodeInterface>(
 
         wallet
             .update_median_time(chain_info.median_time)
-            .map_err(ControllerError::WalletError)?;
+            .map_err(ControllerError::wallet_error)?;
 
         // Group accounts in the same state
         let mut accounts_grouped = group_accounts_by_mainchain_blocks(
@@ -291,7 +291,7 @@ async fn scan_new_blocks<T: NodeInterface>(
             wallet
                 .scan_blocks(*account, common_block_height, blocks, wallet_events)
                 .await
-                .map_err(ControllerError::WalletError)?;
+                .map_err(ControllerError::wallet_error)?;
         }
         AccountType::UnusedAccount => {
             log::debug!(
@@ -303,7 +303,7 @@ async fn scan_new_blocks<T: NodeInterface>(
             wallet
                 .scan_blocks_for_unused_account(common_block_height, blocks, wallet_events)
                 .await
-                .map_err(ControllerError::WalletError)?;
+                .map_err(ControllerError::wallet_error)?;
         }
     }
 

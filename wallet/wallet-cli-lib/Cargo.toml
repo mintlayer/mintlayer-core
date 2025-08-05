@@ -39,7 +39,13 @@ reedline = { workspace = true, features = ["external_printer"] }
 serde_json.workspace = true
 shlex.workspace = true
 thiserror.workspace = true
-tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "sync"] }
+tokio = { workspace = true, default-features = false, features = [
+  "io-util",
+  "macros",
+  "net",
+  "rt",
+  "sync",
+] }
 futures.workspace = true
 
 prettytable-rs = "0.10"
@@ -58,5 +64,18 @@ wallet-test-node = { path = "../wallet-test-node" }
 rstest.workspace = true
 
 [features]
-trezor = ["wallet/trezor", "wallet-cli-commands/trezor", "wallet-types/trezor", "wallet-rpc-lib/trezor", "wallet-rpc-client/trezor"]
-default = ["trezor"]
+trezor = [
+  "wallet/trezor",
+  "wallet-cli-commands/trezor",
+  "wallet-types/trezor",
+  "wallet-rpc-lib/trezor",
+  "wallet-rpc-client/trezor",
+]
+ledger = [
+  "wallet/ledger",
+  "wallet-cli-commands/ledger",
+  "wallet-types/ledger",
+  "wallet-rpc-lib/ledger",
+  "wallet-rpc-client/ledger",
+]
+default = ["trezor", "ledger"]
