@@ -183,6 +183,8 @@ impl WalletTab {
             WalletType::Cold => SelectedPanel::Addresses,
             #[cfg(feature = "trezor")]
             WalletType::Trezor => SelectedPanel::Transactions,
+            #[cfg(feature = "ledger")]
+            WalletType::Ledger => SelectedPanel::Transactions,
         };
 
         WalletTab {
@@ -490,15 +492,12 @@ impl Tab for WalletTab {
             .get(&self.selected_account)
             .expect("selected account must be known");
 
-        let still_syncing = match wallet_info.wallet_type {
-            WalletType::Cold => false,
-            #[cfg(feature = "trezor")]
-            WalletType::Trezor => {
-                wallet_info.best_block.1.next_height() < node_state.chain_info.best_block_height
-            }
-            WalletType::Hot => {
-                wallet_info.best_block.1.next_height() < node_state.chain_info.best_block_height
-            }
+        let is_cold_wallet = wallet_info.wallet_type == WalletType::Cold;
+
+        let still_syncing = if is_cold_wallet {
+            false
+        } else {
+            wallet_info.best_block.1.next_height() < node_state.chain_info.best_block_height
         }
         .then_some(WalletMessage::StillSyncing);
 

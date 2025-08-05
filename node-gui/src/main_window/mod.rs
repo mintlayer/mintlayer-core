@@ -38,7 +38,7 @@ use wallet_cli_commands::ConsoleCommand;
 use wallet_controller::types::WalletTypeArgs;
 use wallet_types::{seed_phrase::StoreSeedPhrase, wallet_type::WalletType, ImportOrCreate};
 
-#[cfg(feature = "trezor")]
+#[cfg(any(feature = "trezor", feature = "ledger"))]
 use crate::widgets::create_hw_wallet::hw_wallet_create_dialog;
 use crate::{
     main_window::{main_menu::MenuMessage, main_widget::MainWidgetMessage},
@@ -148,6 +148,8 @@ pub enum WalletArgs {
     },
     #[cfg(feature = "trezor")]
     Trezor,
+    #[cfg(feature = "ledger")]
+    Ledger,
 }
 
 impl From<&WalletArgs> for WalletType {
@@ -165,6 +167,8 @@ impl From<&WalletArgs> for WalletType {
             }
             #[cfg(feature = "trezor")]
             WalletArgs::Trezor => WalletType::Trezor,
+            #[cfg(feature = "ledger")]
+            WalletArgs::Ledger => WalletType::Ledger,
         }
     }
 }
@@ -291,6 +295,8 @@ impl MainWindow {
                                 },
                                 #[cfg(feature = "trezor")]
                                 WalletType::Trezor => WalletArgs::Trezor,
+                                #[cfg(feature = "ledger")]
+                                WalletType::Ledger => WalletArgs::Ledger,
                             };
                             self.active_dialog = ActiveDialog::WalletCreate { wallet_args };
                             Task::none()
@@ -733,6 +739,8 @@ impl MainWindow {
                     }
                     #[cfg(feature = "trezor")]
                     WalletArgs::Trezor => WalletTypeArgs::Trezor { device_id: None },
+                    #[cfg(feature = "ledger")]
+                    WalletArgs::Ledger => WalletTypeArgs::Ledger,
                 };
 
                 self.file_dialog_active = true;
@@ -864,6 +872,16 @@ impl MainWindow {
                             ImportOrCreate::Create,
                         )
                         .into(),
+                        #[cfg(feature = "ledger")]
+                        WalletArgs::Ledger => hw_wallet_create_dialog(
+                            Box::new(move || MainWindowMessage::ImportWalletMnemonic {
+                                args: WalletArgs::Ledger,
+                                import: ImportOrCreate::Create,
+                            }),
+                            Box::new(|| MainWindowMessage::CloseDialog),
+                            ImportOrCreate::Create,
+                        )
+                        .into(),
                     },
                     ActiveDialog::WalletRecover { wallet_type } => {
                         let is_cold = *wallet_type == WalletType::Cold;
@@ -883,6 +901,16 @@ impl MainWindow {
                                 Box::new(move || MainWindowMessage::ImportWalletMnemonic {
                                     args: WalletArgs::Trezor,
                                     import: ImportOrCreate::Import,
+                                }),
+                                Box::new(|| MainWindowMessage::CloseDialog),
+                                ImportOrCreate::Import,
+                            )
+                            .into(),
+                            #[cfg(feature = "ledger")]
+                            WalletType::Ledger => hw_wallet_create_dialog(
+                                Box::new(move || MainWindowMessage::ImportWalletMnemonic {
+                                    args: WalletArgs::Ledger,
+                                    import: ImportOrCreate::Create,
                                 }),
                                 Box::new(|| MainWindowMessage::CloseDialog),
                                 ImportOrCreate::Import,

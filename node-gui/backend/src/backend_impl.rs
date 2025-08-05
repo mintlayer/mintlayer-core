@@ -354,9 +354,43 @@ impl Backend {
 
                 (wallet_data, accounts_info, best_block)
             }
+            #[cfg(feature = "ledger")]
+            (WalletType::Ledger, ColdHotNodeController::Hot(controller)) => {
+                let handles_client = WalletHandlesClient::new(
+                    controller.chainstate.clone(),
+                    controller.mempool.clone(),
+                    controller.block_prod.clone(),
+                    controller.p2p.clone(),
+                )
+                .await
+                .map_err(|e| BackendError::WalletError(e.to_string()))?;
+
+                let (wallet_rpc, command_handler, best_block, accounts_info, accounts_data) = self
+                    .create_wallet(
+                        handles_client,
+                        file_path.clone(),
+                        wallet_args,
+                        import,
+                        wallet_events,
+                    )
+                    .await?;
+
+                let wallet_data = WalletData {
+                    controller: GuiHotColdController::Hot(wallet_rpc, command_handler),
+                    accounts: accounts_data,
+                    best_block,
+                    updated: false,
+                };
+
+                (wallet_data, accounts_info, best_block)
+            }
             #[cfg(feature = "trezor")]
             (WalletType::Trezor, ColdHotNodeController::Cold) => {
-                return Err(BackendError::ColdTrezorNotSupported)
+                return Err(BackendError::HardwareWalletNotSupportedInColdMode)
+            }
+            #[cfg(feature = "ledger")]
+            (WalletType::Ledger, ColdHotNodeController::Cold) => {
+                return Err(BackendError::HardwareWalletNotSupportedInColdMode)
             }
             (WalletType::Hot, ColdHotNodeController::Cold) => {
                 return Err(BackendError::HotNotSupported)
@@ -593,9 +627,49 @@ impl Backend {
 
                     (wallet_data, accounts_info, best_block, encryption_state)
                 }
+                #[cfg(feature = "ledger")]
+                (WalletType::Ledger, ColdHotNodeController::Hot(controller)) => {
+                    let handles_client = WalletHandlesClient::new(
+                        controller.chainstate.clone(),
+                        controller.mempool.clone(),
+                        controller.block_prod.clone(),
+                        controller.p2p.clone(),
+                    )
+                    .await
+                    .map_err(|e| BackendError::WalletError(e.to_string()))?;
+
+                    let (
+                        wallet_rpc,
+                        command_handler,
+                        encryption_state,
+                        best_block,
+                        accounts_info,
+                        accounts_data,
+                    ) = self
+                        .open_wallet(
+                            handles_client,
+                            file_path.clone(),
+                            wallet_events,
+                            Some(HardwareWalletType::Ledger),
+                        )
+                        .await?;
+
+                    let wallet_data = WalletData {
+                        controller: GuiHotColdController::Hot(wallet_rpc, command_handler),
+                        accounts: accounts_data,
+                        best_block,
+                        updated: false,
+                    };
+
+                    (wallet_data, accounts_info, best_block, encryption_state)
+                }
                 #[cfg(feature = "trezor")]
                 (WalletType::Trezor, ColdHotNodeController::Cold) => {
-                    return Err(BackendError::ColdTrezorNotSupported)
+                    return Err(BackendError::HardwareWalletNotSupportedInColdMode)
+                }
+                #[cfg(feature = "ledger")]
+                (WalletType::Ledger, ColdHotNodeController::Cold) => {
+                    return Err(BackendError::HardwareWalletNotSupportedInColdMode)
                 }
                 (WalletType::Hot, ColdHotNodeController::Cold) => {
                     return Err(BackendError::HotNotSupported)
