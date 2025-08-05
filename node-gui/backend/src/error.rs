@@ -46,8 +46,8 @@ pub enum BackendError {
     ColdWallet,
     #[error("Cannot interact with a hot wallet when in Cold wallet mode")]
     HotNotSupported,
-    #[error("Cannot use a Trezor wallet in a Cold wallet mode")]
-    ColdTrezorNotSupported,
+    #[error("Cannot use a Hardware wallet in a Cold wallet mode")]
+    HardwareWalletNotSupportedInColdMode,
     #[error("Invalid console command: {0}")]
     InvalidConsoleCommand(String),
     #[error("Empty console command")]

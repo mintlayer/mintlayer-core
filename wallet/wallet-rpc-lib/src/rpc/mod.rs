@@ -85,8 +85,6 @@ use wallet_controller::{
     ConnectedPeer, ControllerConfig, ControllerError, NodeInterface, UtxoState, UtxoStates,
     UtxoType, UtxoTypes, DEFAULT_ACCOUNT_INDEX,
 };
-#[cfg(feature = "trezor")]
-use wallet_types::wallet_type::WalletType;
 use wallet_types::{
     account_info::StandaloneAddressDetails, generic_transaction::GenericTransaction,
     partially_signed_transaction::PartiallySignedTransaction, scan_blockchain::ScanBlockchain,
@@ -98,6 +96,9 @@ use crate::{
     types::{ActiveOrderInfo, ExistingOwnOrderData},
     WalletHandle, WalletRpcConfig,
 };
+
+#[cfg(any(feature = "trezor", feature = "ledger"))]
+use wallet_types::wallet_type::WalletType;
 
 use self::types::{
     AddressInfo, AddressWithUsageInfo, DelegationInfo, HardwareWalletType, LegacyVrfPublicKeyInfo,
@@ -174,6 +175,8 @@ where
                 match hw {
                     #[cfg(feature = "trezor")]
                     HardwareWalletType::Trezor { device_id } => (WalletType::Trezor, device_id),
+                    #[cfg(feature = "ledger")]
+                    HardwareWalletType::Ledger => (WalletType::Ledger, None),
                 }
             });
         Ok(self
