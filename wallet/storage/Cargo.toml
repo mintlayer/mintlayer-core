@@ -33,4 +33,5 @@ tokio-test.workspace = true
 
 [features]
 trezor = ["wallet-types/trezor"]
-default = ["trezor"]
+ledger = ["wallet-types/ledger"]
+default = ["trezor", "ledger"]

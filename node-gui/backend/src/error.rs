@@ -48,6 +48,8 @@ pub enum BackendError {
     HotNotSupported,
     #[error("Cannot use a Trezor wallet in a Cold wallet mode")]
     ColdTrezorNotSupported,
+    #[error("Cannot use a Ledger wallet in a Cold wallet mode")]
+    ColdLedgerNotSupported,
     #[error("Invalid console command: {0}")]
     InvalidConsoleCommand(String),
     #[error("Empty console command")]
