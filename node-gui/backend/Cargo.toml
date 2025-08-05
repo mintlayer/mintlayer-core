@@ -44,3 +44,5 @@ rstest.workspace = true
 
 [features]
 trezor = ["wallet/trezor", "wallet-controller/trezor", "wallet-types/trezor", "wallet-rpc-lib/trezor", "wallet-rpc-client/trezor", "wallet-cli-commands/trezor"]
+ledger = ["wallet/ledger", "wallet-controller/ledger", "wallet-types/ledger", "wallet-rpc-lib/ledger", "wallet-rpc-client/ledger", "wallet-cli-commands/ledger"]
+default = ["trezor", "ledger"]

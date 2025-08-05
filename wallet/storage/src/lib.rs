@@ -29,8 +29,8 @@ use crypto::{
     symkey::SymmetricKey,
 };
 pub use internal::{
-    Store, StoreLocalReadOnlyUnlocked, StoreLocalReadWriteUnlocked, StoreTxRo, StoreTxRoUnlocked,
-    StoreTxRw, StoreTxRwUnlocked,
+    Store, StoreLocalReadOnly, StoreLocalReadOnlyUnlocked, StoreLocalReadWriteUnlocked, StoreTxRo,
+    StoreTxRoUnlocked, StoreTxRw, StoreTxRwUnlocked,
 };
 use std::collections::BTreeMap;
 

@@ -104,7 +104,8 @@ fn make_menu_file<'a>(wallet_mode: WalletMode) -> Item<'a, MenuMessage, Theme, i
         labeled_button("File", MenuMessage::NoOp),
         Menu::new(match wallet_mode {
             WalletMode::Hot => {
-                let menu = vec![
+                let mut menu = vec![];
+                menu.extend([
                     menu_item(
                         "Create new Software wallet",
                         MenuMessage::CreateNewWallet {
@@ -126,10 +127,9 @@ fn make_menu_file<'a>(wallet_mode: WalletMode) -> Item<'a, MenuMessage, Theme, i
                     // TODO: enable setting when needed
                     // menu_item("Settings", MenuMessage::NoOp),
                     menu_item("Exit", MenuMessage::Exit),
-                ];
+                ]);
                 #[cfg(feature = "trezor")]
                 {
-                    let mut menu = menu;
                     menu.insert(
                         1,
                         menu_item(
@@ -157,9 +157,38 @@ fn make_menu_file<'a>(wallet_mode: WalletMode) -> Item<'a, MenuMessage, Theme, i
                             },
                         ),
                     );
-                    menu
                 }
-                #[cfg(not(feature = "trezor"))]
+                #[cfg(feature = "ledger")]
+                {
+                    menu.insert(
+                        1,
+                        menu_item(
+                            "Create new Ledger wallet",
+                            MenuMessage::CreateNewWallet {
+                                wallet_type: WalletType::Ledger,
+                            },
+                        ),
+                    );
+                    menu.insert(
+                        4,
+                        menu_item(
+                            "Recover from Ledger wallet",
+                            MenuMessage::RecoverWallet {
+                                wallet_type: WalletType::Ledger,
+                            },
+                        ),
+                    );
+                    menu.insert(
+                        7,
+                        menu_item(
+                            "Open Ledger wallet",
+                            MenuMessage::OpenWallet {
+                                wallet_type: WalletType::Ledger,
+                            },
+                        ),
+                    );
+                }
+
                 menu
             }
             WalletMode::Cold => {

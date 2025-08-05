@@ -25,8 +25,8 @@ use password::{challenge_to_sym_key, password_to_sym_key};
 
 mod store_tx;
 pub use store_tx::{
-    StoreLocalReadOnlyUnlocked, StoreLocalReadWriteUnlocked, StoreTxRo, StoreTxRoUnlocked,
-    StoreTxRw, StoreTxRwUnlocked,
+    StoreLocalReadOnly, StoreLocalReadOnlyUnlocked, StoreLocalReadWriteUnlocked, StoreTxRo,
+    StoreTxRoUnlocked, StoreTxRw, StoreTxRwUnlocked,
 };
 
 use self::store_tx::EncryptionState;
@@ -157,6 +157,10 @@ impl<B: storage::Backend> Store<B> {
 
     pub fn local_rw_unlocked(&self) -> StoreLocalReadWriteUnlocked<B> {
         StoreLocalReadWriteUnlocked::new(self.clone())
+    }
+
+    pub fn local_ro(&self) -> StoreLocalReadOnly<B> {
+        StoreLocalReadOnly::new(self.clone())
     }
 }
 

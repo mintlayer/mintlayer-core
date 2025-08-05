@@ -42,7 +42,7 @@ hex.workspace = true
 
 consensus = { path = "../../consensus" }
 mempool = { path = "../../mempool" }
-rpc = { path = "../../rpc", features = [ "test-support" ] }
+rpc = { path = "../../rpc", features = ["test-support"] }
 subsystem = { path = "../../subsystem" }
 test-utils = { path = "../../test-utils" }
 wallet-test-node = { path = "../wallet-test-node" }
@@ -52,4 +52,5 @@ rstest.workspace = true
 
 [features]
 trezor = ["wallet-types/trezor", "wallet/trezor", "wallet-controller/trezor"]
-default = ["trezor"]
+ledger = ["wallet-types/ledger", "wallet/ledger", "wallet-controller/ledger"]
+default = ["trezor", "ledger"]
