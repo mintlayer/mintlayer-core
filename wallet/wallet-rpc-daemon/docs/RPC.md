@@ -3217,7 +3217,7 @@ Returns:
          1) {
                 "type": "Trezor",
                 "content": { "devices": [ {
-                    "name": string,
+                    "device_name": string,
                     "device_id": string,
                 }, .. ] },
             }
@@ -3265,7 +3265,7 @@ Returns:
          1) {
                 "type": "Trezor",
                 "content": { "devices": [ {
-                    "name": string,
+                    "device_name": string,
                     "device_id": string,
                 }, .. ] },
             }
@@ -3308,7 +3308,7 @@ EITHER OF
             "content": { "available": {
                 "type": "Trezor",
                 "content": { "devices": [ {
-                    "name": string,
+                    "device_name": string,
                     "device_id": string,
                 }, .. ] },
             } },
@@ -3347,6 +3347,7 @@ Returns:
     "account_names": [ EITHER OF
          1) string
          2) null, .. ],
+    "extra_info": object,
 }
 ```
 

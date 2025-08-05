@@ -13,6 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use itertools::Itertools as _;
+
+#[cfg(feature = "trezor")]
+use wallet::signer::trezor_signer;
+
 use super::{account_id::AccountId, messages::WalletId};
 
 #[derive(thiserror::Error, Debug, Clone)]
@@ -47,4 +52,18 @@ pub enum BackendError {
     InvalidConsoleCommand(String),
     #[error("Empty console command")]
     EmptyConsoleCommand,
+
+    #[cfg(feature = "trezor")]
+    #[error(
+        "Multiple Trezor devices found: {}.\nLeave only one of them connected and try again.",
+        format_multiple_trezor_devices_err(_0)
+    )]
+    MultipleTrezorDevicesFound(Vec<trezor_signer::FoundDevice>),
+}
+
+fn format_multiple_trezor_devices_err(devices: &[trezor_signer::FoundDevice]) -> String {
+    devices
+        .iter()
+        .map(|device| format!("{} (device id = {})", device.device_name, device.device_id))
+        .join(", ")
 }

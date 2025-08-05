@@ -52,6 +52,7 @@ use wallet::{
 };
 use wallet_types::{
     account_info::{StandaloneAddressDetails, StandaloneAddresses},
+    hw_data::HardwareWalletFullInfo,
     partially_signed_transaction::{PartiallySignedTransaction, TxAdditionalInfo},
     seed_phrase::SerializableSeedPhrase,
     signature_status::SignatureStatus,
@@ -180,6 +181,14 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             RuntimeWallet::Software(w) => w.wallet_info(),
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => w.wallet_info(),
+        }
+    }
+
+    pub fn hardware_wallet_info(&self) -> Option<HardwareWalletFullInfo> {
+        match self {
+            RuntimeWallet::Software(w) => w.hardware_wallet_info(),
+            #[cfg(feature = "trezor")]
+            RuntimeWallet::Trezor(w) => w.hardware_wallet_info(),
         }
     }
 

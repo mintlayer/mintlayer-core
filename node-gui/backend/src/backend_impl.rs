@@ -15,21 +15,22 @@
 
 use std::{collections::BTreeMap, fmt::Debug, path::PathBuf, str::FromStr, sync::Arc};
 
+use futures::{stream::FuturesOrdered, TryStreamExt};
+use tokio::{
+    sync::mpsc::{UnboundedReceiver, UnboundedSender},
+    task::JoinHandle,
+};
+
 use common::{
     address::{Address, RpcAddress},
     chain::{ChainConfig, GenBlock, SignedTransaction},
     primitives::{per_thousand::PerThousand, BlockHeight, Id},
 };
 use crypto::key::hdkd::{child_number::ChildNumber, u31::U31};
-use futures::{stream::FuturesOrdered, TryStreamExt};
 use logging::log;
 use node_comm::rpc_client::ColdWalletClient;
 use node_lib::node_controller::NodeController;
 use serialization::hex_encoded::HexEncoded;
-use tokio::{
-    sync::mpsc::{UnboundedReceiver, UnboundedSender},
-    task::JoinHandle,
-};
 use wallet::{account::transaction_list::TransactionList, wallet::Error, WalletError};
 use wallet_cli_commands::{
     get_repl_command, parse_input, CommandHandler, ConsoleCommand, ManageableWalletCommand,
@@ -37,7 +38,7 @@ use wallet_cli_commands::{
 };
 use wallet_controller::{
     make_cold_wallet_rpc_client,
-    types::{Balances, WalletCreationOptions, WalletTypeArgs},
+    types::{Balances, WalletCreationOptions, WalletExtraInfo, WalletTypeArgs},
     ControllerConfig, NodeInterface, UtxoState, WalletHandlesClient,
 };
 use wallet_rpc_client::handles_client::WalletRpcHandlesClient;
@@ -361,6 +362,7 @@ impl Backend {
         };
 
         let encryption = EncryptionState::Disabled;
+        let wallet_extra_info = Self::get_wallet_extra_info(&wallet_data.controller).await?;
 
         let wallet_info = WalletInfo {
             wallet_id,
@@ -369,11 +371,29 @@ impl Backend {
             accounts: accounts_info,
             best_block,
             wallet_type,
+            extra_info: wallet_extra_info,
         };
 
         self.wallets.insert(wallet_id, wallet_data);
 
         Ok(wallet_info)
+    }
+
+    async fn get_wallet_extra_info(
+        controller: &GuiHotColdController,
+    ) -> Result<WalletExtraInfo, BackendError> {
+        let wallet_info_from_rpc = match controller {
+            GuiHotColdController::Hot(wallet_rpc, _) => wallet_rpc
+                .wallet_info()
+                .await
+                .map_err(|err| BackendError::WalletError(err.to_string()))?,
+            GuiHotColdController::Cold(wallet_rpc, _) => wallet_rpc
+                .wallet_info()
+                .await
+                .map_err(|err| BackendError::WalletError(err.to_string()))?,
+        };
+
+        Ok(wallet_info_from_rpc.extra_info)
     }
 
     async fn create_wallet<N>(
@@ -414,10 +434,18 @@ impl Backend {
             overwrite_wallet_file: true,
             scan_blockchain: import.should_scan_blockchain(),
         };
-        wallet_rpc
+        let created_wallet = wallet_rpc
             .create_wallet(file_path, wallet_args, options)
             .await
             .map_err(|err| BackendError::WalletError(err.to_string()))?;
+        match created_wallet {
+            wallet_controller::types::CreatedWallet::UserProvidedMnemonic
+            | wallet_controller::types::CreatedWallet::NewlyGeneratedMnemonic(_) => {}
+            #[cfg(feature = "trezor")]
+            wallet_controller::types::CreatedWallet::TrezorDeviceSelection(found_devices) => {
+                return Err(BackendError::MultipleTrezorDevicesFound(found_devices))
+            }
+        }
         tokio::spawn(forward_events(
             wallet_events,
             wallet_service
@@ -572,6 +600,8 @@ impl Backend {
                 }
             };
 
+        let wallet_extra_info = Self::get_wallet_extra_info(&wallet_data.controller).await?;
+
         let wallet_info = WalletInfo {
             wallet_id,
             path: file_path,
@@ -579,6 +609,7 @@ impl Backend {
             accounts: accounts_info,
             best_block,
             wallet_type,
+            extra_info: wallet_extra_info,
         };
 
         self.wallets.insert(wallet_id, wallet_data);
@@ -619,7 +650,7 @@ impl Backend {
         let node_rpc = wallet_service.node_rpc().clone();
         let chain_config = wallet_service.chain_config().clone();
         let wallet_rpc = WalletRpc::new(wallet_handle, node_rpc.clone(), chain_config.clone());
-        wallet_rpc
+        let opened_wallet = wallet_rpc
             .open_wallet(
                 file_path,
                 None,
@@ -629,6 +660,13 @@ impl Backend {
             )
             .await
             .map_err(|err| BackendError::WalletError(err.to_string()))?;
+        match opened_wallet {
+            | wallet_controller::types::OpenedWallet::Opened => {}
+            #[cfg(feature = "trezor")]
+            wallet_controller::types::OpenedWallet::TrezorDeviceSelection(found_devices) => {
+                return Err(BackendError::MultipleTrezorDevicesFound(found_devices))
+            }
+        }
         tokio::spawn(forward_events(
             wallet_events,
             wallet_service

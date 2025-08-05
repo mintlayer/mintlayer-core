@@ -55,7 +55,7 @@ use wallet_storage::{
     WalletStorageWriteUnlocked,
 };
 use wallet_types::{
-    hw_data::HardwareWalletData, partially_signed_transaction::PartiallySignedTransaction,
+    hw_data::HardwareWalletFullInfo, partially_signed_transaction::PartiallySignedTransaction,
     seed_phrase::StoreSeedPhrase, signature_status::SignatureStatus, AccountId,
 };
 
@@ -521,7 +521,7 @@ impl SignerProvider for SoftwareSignerProvider {
         Account::load_from_database(chain_config, db_tx, id)
     }
 
-    fn get_hardware_wallet_data(&self) -> Option<HardwareWalletData> {
+    fn get_hardware_wallet_info(&self) -> Option<HardwareWalletFullInfo> {
         None
     }
 }

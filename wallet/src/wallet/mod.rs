@@ -78,6 +78,7 @@ use wallet_storage::{
 };
 use wallet_types::account_info::{StandaloneAddressDetails, StandaloneAddresses};
 use wallet_types::chain_info::ChainInfo;
+use wallet_types::hw_data::HardwareWalletFullInfo;
 use wallet_types::partially_signed_transaction::{
     PartiallySignedTransaction, PartiallySignedTransactionError, PoolAdditionalInfo,
     TokenAdditionalInfo, TxAdditionalInfo,
@@ -402,8 +403,8 @@ where
             Err(err) => return Err(err),
         };
 
-        if let Some(data) = signer_provider.get_hardware_wallet_data() {
-            db_tx.set_hardware_wallet_data(data)?;
+        if let Some(info) = signer_provider.get_hardware_wallet_info() {
+            db_tx.set_hardware_wallet_data(info.into())?;
         }
 
         let default_account = Wallet::<B, P>::create_next_unused_account(
@@ -858,9 +859,9 @@ where
         // The device id stored in the db may not match the actual device id;
         // this may happen if the user has reset the device after the wallet file was created.
         // So we overwrite the hardware wallet data to update the id.
-        if let Some(data) = signer_provider.get_hardware_wallet_data() {
+        if let Some(info) = signer_provider.get_hardware_wallet_info() {
             let mut db_tx = db.transaction_rw(None)?;
-            db_tx.set_hardware_wallet_data(data)?;
+            db_tx.set_hardware_wallet_data(info.into())?;
             db_tx.commit()?;
         }
 
@@ -978,6 +979,10 @@ where
         let acc_id = self.accounts.values().next().expect("not empty").get_account_id();
         let names = self.accounts.values().map(|acc| acc.name().clone()).collect();
         (hash_encoded(&acc_id), names)
+    }
+
+    pub fn hardware_wallet_info(&self) -> Option<HardwareWalletFullInfo> {
+        self.signer_provider.get_hardware_wallet_info()
     }
 
     fn create_next_unused_account(

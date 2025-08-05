@@ -38,7 +38,7 @@ use wallet_storage::{
     WalletStorageReadLocked, WalletStorageReadUnlocked, WalletStorageWriteUnlocked,
 };
 use wallet_types::{
-    hw_data::HardwareWalletData,
+    hw_data::HardwareWalletFullInfo,
     partially_signed_transaction::{PartiallySignedTransaction, PartiallySignedTransactionError},
     signature_status::SignatureStatus,
     AccountId,
@@ -163,5 +163,5 @@ pub trait SignerProvider {
         id: &AccountId,
     ) -> WalletResult<Account<Self::K>>;
 
-    fn get_hardware_wallet_data(&self) -> Option<HardwareWalletData>;
+    fn get_hardware_wallet_info(&self) -> Option<HardwareWalletFullInfo>;
 }
