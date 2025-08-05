@@ -78,19 +78,34 @@ fn issue_and_mint_token_from_genesis(
     rng: &mut (impl Rng + CryptoRng),
     tf: &mut TestFramework,
 ) -> (TokenId, UtxoOutPoint, UtxoOutPoint) {
+    let to_mint = Amount::from_atoms(rng.gen_range(100..100_000_000));
+    issue_and_mint_token_amount_from_genesis(rng, tf, to_mint)
+}
+
+fn issue_and_mint_token_amount_from_genesis(
+    rng: &mut (impl Rng + CryptoRng),
+    tf: &mut TestFramework,
+    to_mint: Amount,
+) -> (TokenId, UtxoOutPoint, UtxoOutPoint) {
     let genesis_block_id = tf.genesis().get_id();
     let utxo = UtxoOutPoint::new(genesis_block_id.into(), 0);
 
-    issue_and_mint_token_from_best_block(rng, tf, utxo)
+    issue_and_mint_random_token_from_best_block(
+        rng,
+        tf,
+        utxo,
+        to_mint,
+        TokenTotalSupply::Unlimited,
+        IsTokenFreezable::Yes,
+    )
 }
 
-fn issue_and_mint_token_from_best_block(
+fn issue_and_mint_token_amount_from_best_block(
     rng: &mut (impl Rng + CryptoRng),
     tf: &mut TestFramework,
     utxo_outpoint: UtxoOutPoint,
+    to_mint: Amount,
 ) -> (TokenId, UtxoOutPoint, UtxoOutPoint) {
-    let to_mint = Amount::from_atoms(rng.gen_range(100..100_000_000));
-
     issue_and_mint_random_token_from_best_block(
         rng,
         tf,
@@ -394,15 +409,17 @@ fn create_order_tokens_for_tokens(#[case] seed: Seed) {
 
         let (token_id_1, _, coins_outpoint) = issue_and_mint_token_from_genesis(&mut rng, &mut tf);
 
-        let (token_id_2, tokens_outpoint_2, _) =
-            issue_and_mint_token_from_best_block(&mut rng, &mut tf, coins_outpoint);
-
-        let tokens_circulating_supply_2 =
-            tf.chainstate.get_token_circulating_supply(&token_id_2).unwrap().unwrap();
+        let token_2_mint_amount = Amount::from_atoms(rng.gen_range(100..100_000_000));
+        let (token_id_2, tokens_outpoint_2, _) = issue_and_mint_token_amount_from_best_block(
+            &mut rng,
+            &mut tf,
+            coins_outpoint,
+            token_2_mint_amount,
+        );
 
         let ask_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
         let give_amount =
-            Amount::from_atoms(rng.gen_range(1u128..tokens_circulating_supply_2.into_atoms()));
+            Amount::from_atoms(rng.gen_range(1u128..token_2_mint_amount.into_atoms()));
 
         // Trade tokens for coins
         let order_data = OrderData::new(
@@ -2365,6 +2382,111 @@ fn fill_order_with_zero(#[case] seed: Seed, #[case] version: OrdersVersion) {
 
 #[rstest]
 #[trace]
+#[case(Seed::from_entropy(), OrdersVersion::V0)]
+#[trace]
+#[case(Seed::from_entropy(), OrdersVersion::V1)]
+fn fill_order_underbid(#[case] seed: Seed, #[case] version: OrdersVersion) {
+    utils::concurrency::model(move || {
+        use orders_accounting::calculate_filled_amount;
+
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = create_test_framework_with_orders(&mut rng, version);
+
+        let min_ask_atoms = 1000;
+        let max_ask_atoms = 2000;
+        let min_give_atoms = 100;
+        let max_give_atoms = 200;
+
+        let token_amount_to_mint = Amount::from_atoms(rng.gen_range(max_give_atoms..100_000_000));
+        let (token_id, tokens_outpoint, coins_outpoint) =
+            issue_and_mint_token_amount_from_genesis(&mut rng, &mut tf, token_amount_to_mint);
+
+        let ask_amount = Amount::from_atoms(rng.gen_range(min_ask_atoms..max_ask_atoms));
+        let give_amount = Amount::from_atoms(rng.gen_range(min_give_atoms..=max_give_atoms));
+        let order_data = OrderData::new(
+            Destination::AnyoneCanSpend,
+            OutputValue::Coin(ask_amount),
+            OutputValue::TokenV1(token_id, give_amount),
+        );
+
+        let tx = TransactionBuilder::new()
+            .add_input(tokens_outpoint.into(), InputWitness::NoSignature(None))
+            .add_output(TxOutput::CreateOrder(Box::new(order_data.clone())))
+            .build();
+        let order_id = make_order_id(tx.inputs()).unwrap();
+        tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
+
+        let max_fill_atoms = ask_amount.into_atoms() / give_amount.into_atoms() - 1;
+        let fill_amount = Amount::from_atoms(rng.gen_range(1..=max_fill_atoms));
+
+        // Sanity check: the filled_amount is zero.
+        // Note:
+        // a) we can't use calculate_fill_order, because it'd fail with OrderUnderbid for orders V1;
+        // b) we can use original ask/give amounts for orders V0, since it's our first fill.
+        let filled_amount = calculate_filled_amount(ask_amount, give_amount, fill_amount).unwrap();
+        assert_eq!(filled_amount, Amount::ZERO);
+
+        // Fill the order
+        let fill_input = match version {
+            OrdersVersion::V0 => TxInput::AccountCommand(
+                AccountNonce::new(0),
+                AccountCommand::FillOrder(order_id, fill_amount, Destination::AnyoneCanSpend),
+            ),
+            OrdersVersion::V1 => {
+                TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(order_id, fill_amount))
+            }
+        };
+        let tx = TransactionBuilder::new()
+            .add_input(coins_outpoint.into(), InputWitness::NoSignature(None))
+            .add_input(fill_input, InputWitness::NoSignature(None))
+            .build();
+        let tx_id = tx.transaction().get_id();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
+
+        match version {
+            OrdersVersion::V0 => {
+                // The ask balance must have changed, but the give balance must not.
+                let expected_ask_balance = (ask_amount - fill_amount).unwrap();
+                assert!(result.is_ok());
+                assert_eq!(
+                    tf.chainstate
+                        .get_account_nonce_count(common::chain::AccountType::Order(order_id))
+                        .unwrap(),
+                    Some(AccountNonce::new(0))
+                );
+                assert_eq!(
+                    tf.chainstate.get_order_data(&order_id).unwrap(),
+                    Some(order_data.into())
+                );
+                assert_eq!(
+                    tf.chainstate.get_order_ask_balance(&order_id).unwrap(),
+                    Some(expected_ask_balance),
+                );
+                assert_eq!(
+                    tf.chainstate.get_order_give_balance(&order_id).unwrap(),
+                    Some(give_amount),
+                );
+            }
+            OrdersVersion::V1 => {
+                assert_eq!(
+                    result.unwrap_err(),
+                    chainstate::ChainstateError::ProcessBlockError(
+                        chainstate::BlockError::StateUpdateFailed(
+                            ConnectTransactionError::ConstrainedValueAccumulatorError(
+                                orders_accounting::Error::OrderUnderbid(order_id, fill_amount)
+                                    .into(),
+                                tx_id.into()
+                            )
+                        )
+                    )
+                );
+            }
+        }
+    });
+}
+
+#[rstest]
+#[trace]
 #[case(Seed::from_entropy(), vec![108, 56, 65, 38, 217, 22, 244, 28, 38, 184])]
 fn fill_orders_shuffle(#[case] seed: Seed, #[case] fills: Vec<u128>) {
     utils::concurrency::model(move || {
@@ -3053,7 +3175,7 @@ fn fill_freeze_conclude_order(#[case] seed: Seed) {
         tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
         // Fill order partially
-        let fill_amount = Amount::from_atoms(rng.gen_range(1..ask_amount.into_atoms()));
+        let fill_amount = Amount::from_atoms(rng.gen_range(1..=ask_amount.into_atoms()));
         let filled_amount = calculate_fill_order(&tf, &order_id, fill_amount, OrdersVersion::V1);
         let left_to_fill = (ask_amount - fill_amount).unwrap();
         let fill_tx = TransactionBuilder::new()
@@ -3105,17 +3227,37 @@ fn fill_freeze_conclude_order(#[case] seed: Seed) {
             let tx_id = tx.transaction().get_id();
             let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
 
-            assert_eq!(
-                result.unwrap_err(),
-                chainstate::ChainstateError::ProcessBlockError(
-                    chainstate::BlockError::StateUpdateFailed(
-                        ConnectTransactionError::ConstrainedValueAccumulatorError(
-                            orders_accounting::Error::AttemptedFillFrozenOrder(order_id,).into(),
-                            tx_id.into()
+            if left_to_fill != Amount::ZERO {
+                assert_eq!(
+                    result.unwrap_err(),
+                    chainstate::ChainstateError::ProcessBlockError(
+                        chainstate::BlockError::StateUpdateFailed(
+                            ConnectTransactionError::ConstrainedValueAccumulatorError(
+                                orders_accounting::Error::AttemptedFillFrozenOrder(order_id,)
+                                    .into(),
+                                tx_id.into()
+                            )
                         )
                     )
-                )
-            );
+                );
+            } else {
+                // Note: in orders V1 zero fills are not allowed and the zero fill check happens earlier,
+                // so we'll hit this error instead.
+                assert_eq!(
+                    result.unwrap_err(),
+                    chainstate::ChainstateError::ProcessBlockError(
+                        chainstate::BlockError::CheckBlockFailed(
+                            CheckBlockError::CheckTransactionFailed(
+                                CheckBlockTransactionsError::CheckTransactionError(
+                                    CheckTransactionError::AttemptToFillOrderWithZero(
+                                        order_id, tx_id
+                                    )
+                                )
+                            )
+                        )
+                    )
+                );
+            }
         }
 
         //Try freezing the order once more
@@ -3502,8 +3644,11 @@ fn fill_order_v1_must_not_be_signed(#[case] seed: Seed) {
         let (sk, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         let output_destination = Destination::PublicKey(pk);
 
-        let fill_amount =
-            Amount::from_atoms(rng.gen_range(1..initial_ask_amount.into_atoms() / 10));
+        let min_fill_amount =
+            initial_ask_amount.into_atoms().div_ceil(initial_give_amount.into_atoms());
+        let fill_amount = Amount::from_atoms(
+            rng.gen_range(min_fill_amount..initial_ask_amount.into_atoms() / 10),
+        );
         let filled_amount = calculate_fill_order(&tf, &order_id, fill_amount, OrdersVersion::V1);
         let fill_order_input =
             TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(order_id, fill_amount));
