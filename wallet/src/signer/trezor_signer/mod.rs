@@ -61,6 +61,7 @@ use crypto::key::{
     signature::SignatureKind,
     PrivateKey, SigAuxDataProvider, Signature, SignatureError,
 };
+use logging::log;
 use randomness::make_true_rng;
 use serialization::Encode;
 use trezor_client::{
@@ -82,7 +83,7 @@ use trezor_client::{
         MintlayerTokenOutputValue, MintlayerTokenTotalSupply, MintlayerTokenTotalSupplyType,
         MintlayerUnfreezeToken, MintlayerUnmintTokens, MintlayerUtxoType,
     },
-    Model,
+    Features, Model,
 };
 use trezor_client::{
     protos::{MintlayerTransferTxOutput, MintlayerUtxoTxInput},
@@ -94,7 +95,7 @@ use wallet_storage::{
 };
 use wallet_types::{
     account_info::DEFAULT_ACCOUNT_INDEX,
-    hw_data::{HardwareWalletData, TrezorData},
+    hw_data::{HardwareWalletData, HardwareWalletFullInfo, TrezorFullInfo},
     partially_signed_transaction::{
         OrderAdditionalInfo, PartiallySignedTransaction, TokenAdditionalInfo, TxAdditionalInfo,
     },
@@ -109,9 +110,11 @@ use crate::{
 
 use super::{Signer, SignerError, SignerProvider, SignerResult};
 
+const REQUIRED_FIRMWARE_MAJOR_VERSION: u32 = 1;
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct FoundDevice {
-    pub name: String,
+    pub device_name: String,
     pub device_id: String,
 }
 
@@ -147,17 +150,32 @@ pub enum TrezorError {
     MultisigSignatureReturned,
     #[error("The file being loaded is a software wallet and does not correspond to the connected hardware wallet")]
     HardwareWalletDifferentFile,
-    #[error("Public keys mismatch. Wrong device or passphrase:\nfile device id \"{file_device_id}\", connected device id \"{connected_device_id}\",\nfile label \"{file_label}\" and connected device label \"{connected_device_label}\"")]
+    #[error(
+        "Public keys mismatch - wrong device or passphrase.\n\
+         Last used device id: \"{file_device_id}\", connected device id: \"{connected_device_id}\".\n\
+         Last used device name: \"{file_device_name}\", connected device name: \"{connected_device_name}\".",
+    )]
     HardwareWalletDifferentMnemonicOrPassphrase {
         file_device_id: String,
         connected_device_id: String,
-        file_label: String,
-        connected_device_label: String,
+        file_device_name: String,
+        connected_device_name: String,
     },
     #[error("The file being loaded corresponds to the connected hardware wallet, but public keys are different. Maybe a wrong passphrase was entered?")]
     HardwareWalletDifferentPassphrase,
     #[error("Missing hardware wallet data in database")]
     MissingHardwareWalletData,
+    #[error("Firmware prerelease id parse error: {0}")]
+    FirmwarePrereleaseIdParseError(String),
+    #[error("Firmware build metadata parse error: {0}")]
+    FirmwareBuildMetadataParseError(String),
+    #[error(
+        "Wrong firmware version, required: {required_major_version}.x.x, actual: {actual_version}"
+    )]
+    WrongFirmwareVersion {
+        required_major_version: u32,
+        actual_version: semver::Version,
+    },
 }
 
 // Note:
@@ -215,12 +233,12 @@ impl TrezorSigner {
             Err(trezor_client::Error::TransportSendMessage(
                 trezor_client::transport::error::Error::Usb(_),
             )) => {
-                let (mut new_client, data, session_id) = find_trezor_device_from_db(db_tx, None)?;
+                let (mut new_client, info, session_id) = find_trezor_device_from_db(db_tx, None)?;
 
                 check_public_keys_against_key_chain(
                     db_tx,
                     &mut new_client,
-                    &data,
+                    &info,
                     key_chain,
                     &self.chain_config,
                 )?;
@@ -463,7 +481,7 @@ impl TrezorSigner {
 fn find_trezor_device_from_db(
     db_tx: &impl WalletStorageReadLocked,
     selected_device_id: Option<String>,
-) -> SignerResult<(Trezor, TrezorData, Vec<u8>)> {
+) -> SignerResult<(Trezor, TrezorFullInfo, Vec<u8>)> {
     if let Some(device_id) = selected_device_id {
         return find_trezor_device(Some(SelectedDevice { device_id }))
             .map_err(SignerError::TrezorError);
@@ -1565,7 +1583,7 @@ fn to_trezor_output_lock(lock: &OutputTimeLock) -> trezor_client::protos::Mintla
 #[derive(Clone)]
 pub struct TrezorSignerProvider {
     client: Arc<Mutex<Trezor>>,
-    data: TrezorData,
+    info: TrezorFullInfo,
     session_id: Vec<u8>,
 }
 
@@ -1577,11 +1595,11 @@ impl std::fmt::Debug for TrezorSignerProvider {
 
 impl TrezorSignerProvider {
     pub fn new(selected: Option<SelectedDevice>) -> Result<Self, TrezorError> {
-        let (client, data, session_id) = find_trezor_device(selected)?;
+        let (client, info, session_id) = find_trezor_device(selected)?;
 
         Ok(Self {
             client: Arc::new(Mutex::new(client)),
-            data,
+            info,
             session_id,
         })
     }
@@ -1591,11 +1609,11 @@ impl TrezorSignerProvider {
         db_tx: &impl WalletStorageReadLocked,
         device_id: Option<String>,
     ) -> WalletResult<Self> {
-        let (client, data, session_id) = find_trezor_device_from_db(db_tx, device_id)?;
+        let (client, info, session_id) = find_trezor_device_from_db(db_tx, device_id)?;
 
         let provider = Self {
             client: Arc::new(Mutex::new(client)),
-            data,
+            info,
             session_id,
         };
 
@@ -1632,7 +1650,7 @@ fn to_trezor_chain_type(chain_config: &ChainConfig) -> MintlayerChainType {
 fn check_public_keys_against_key_chain(
     db_tx: &impl WalletStorageReadLocked,
     client: &mut Trezor,
-    trezor_data: &TrezorData,
+    trezor_info: &TrezorFullInfo,
     key_chain: &impl AccountKeyChains,
     chain_config: &ChainConfig,
 ) -> SignerResult<()> {
@@ -1647,14 +1665,14 @@ fn check_public_keys_against_key_chain(
             HardwareWalletData::Trezor(data) => {
                 // If the device_id is the same but public keys are different, maybe a
                 // different passphrase was used
-                if data.device_id == trezor_data.device_id {
+                if data.device_id == trezor_info.device_id {
                     return Err(TrezorError::HardwareWalletDifferentPassphrase.into());
                 } else {
                     return Err(TrezorError::HardwareWalletDifferentMnemonicOrPassphrase {
                         file_device_id: data.device_id,
-                        connected_device_id: trezor_data.device_id.clone(),
-                        file_label: data.label,
-                        connected_device_label: trezor_data.label.clone(),
+                        connected_device_id: trezor_info.device_id.clone(),
+                        file_device_name: data.device_name,
+                        connected_device_name: trezor_info.device_name.clone(),
                     }
                     .into());
                 }
@@ -1708,7 +1726,7 @@ fn check_public_keys_against_db(
     check_public_keys_against_key_chain(
         db_tx,
         &mut provider.client.lock().expect("poisoned lock"),
-        &provider.data,
+        &provider.info,
         loaded_acc.key_chain(),
         &chain_config,
     )
@@ -1717,7 +1735,7 @@ fn check_public_keys_against_db(
 
 fn find_trezor_device(
     selected: Option<SelectedDevice>,
-) -> Result<(Trezor, TrezorData, Vec<u8>), TrezorError> {
+) -> Result<(Trezor, TrezorFullInfo, Vec<u8>), TrezorError> {
     let devices = find_devices(false);
     ensure!(!devices.is_empty(), TrezorError::NoDeviceFound);
 
@@ -1747,7 +1765,7 @@ fn find_trezor_device(
             .position(|d| d.features().is_some_and(|f| s.device_id == f.device_id()))
     });
 
-    let client = if let Some(position) = found_selected_device {
+    let mut client = if let Some(position) = found_selected_device {
         devices.remove(position)
     } else {
         match devices.len() {
@@ -1758,12 +1776,7 @@ fn find_trezor_device(
                     .into_iter()
                     .filter_map(|c| {
                         c.features().map(|f| FoundDevice {
-                            name: if !f.label().is_empty() {
-                                f.label()
-                            } else {
-                                f.model()
-                            }
-                            .to_owned(),
+                            device_name: get_trezor_device_name(f),
                             device_id: f.device_id().to_owned(),
                         })
                     })
@@ -1774,13 +1787,60 @@ fn find_trezor_device(
     };
 
     let features = client.features().ok_or(TrezorError::CannotGetDeviceFeatures)?;
-    let data = TrezorData {
-        label: features.label().to_owned(),
-        device_id: features.device_id().to_owned(),
-    };
-    let session_id = features.session_id().to_vec();
+    log::debug!(
+        "Found Trezor device: id = {}, label = '{}', model = '{}'",
+        features.device_id(),
+        features.label(),
+        features.model()
+    );
 
-    Ok((client, data, session_id))
+    let session_id = features.session_id().to_vec();
+    let device_name = get_trezor_device_name(features);
+    let device_id = features.device_id().to_owned();
+
+    let firmware_version = get_checked_firmware_version(&mut client)?;
+    let device_info = TrezorFullInfo {
+        device_name,
+        device_id,
+        firmware_version,
+    };
+
+    Ok((client, device_info, session_id))
+}
+
+fn get_trezor_device_name(features: &Features) -> String {
+    if !features.label().is_empty() {
+        features.label()
+    } else {
+        features.model()
+    }
+    .to_owned()
+}
+
+fn get_checked_firmware_version(client: &mut Trezor) -> Result<semver::Version, TrezorError> {
+    let firmware_info = client
+        .mintlayer_get_firmware_info()
+        .map_err(|e| TrezorError::DeviceError(e.to_string()))?;
+
+    let version = semver::Version {
+        major: firmware_info.major_version.into(),
+        minor: firmware_info.minor_version.into(),
+        patch: firmware_info.patch_version.into(),
+        pre: semver::Prerelease::new(&firmware_info.prerelease_id)
+            .map_err(|err| TrezorError::FirmwarePrereleaseIdParseError(err.to_string()))?,
+        build: semver::BuildMetadata::new(&firmware_info.build_metadata)
+            .map_err(|err| TrezorError::FirmwareBuildMetadataParseError(err.to_string()))?,
+    };
+
+    ensure!(
+        firmware_info.major_version == REQUIRED_FIRMWARE_MAJOR_VERSION,
+        TrezorError::WrongFirmwareVersion {
+            required_major_version: REQUIRED_FIRMWARE_MAJOR_VERSION,
+            actual_version: version.clone(),
+        }
+    );
+
+    Ok(version)
 }
 
 impl SignerProvider for TrezorSignerProvider {
@@ -1822,8 +1882,8 @@ impl SignerProvider for TrezorSignerProvider {
         Account::load_from_database(chain_config, db_tx, id)
     }
 
-    fn get_hardware_wallet_data(&self) -> Option<HardwareWalletData> {
-        Some(HardwareWalletData::Trezor(self.data.clone()))
+    fn get_hardware_wallet_info(&self) -> Option<HardwareWalletFullInfo> {
+        Some(HardwareWalletFullInfo::Trezor(self.info.clone()))
     }
 }
 

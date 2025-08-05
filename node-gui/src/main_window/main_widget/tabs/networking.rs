@@ -43,12 +43,11 @@ impl NetworkingTab {
 impl Tab for NetworkingTab {
     type Message = TabsMessage;
 
-    fn title(&self) -> String {
-        String::from("Networking")
-    }
-
-    fn tab_label(&self) -> TabLabel {
-        TabLabel::IconText(iced_fonts::Bootstrap::Wifi.into(), self.title())
+    fn tab_label(&self, _node_state: &NodeState) -> TabLabel {
+        TabLabel::IconText(
+            iced_fonts::Bootstrap::Wifi.into(),
+            String::from("Networking"),
+        )
     }
 
     fn content(&self, node_state: &NodeState) -> Element<Self::Message> {

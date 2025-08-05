@@ -68,7 +68,7 @@ pub enum CreateWalletSubCommand {
         #[arg(long = "passphrase")]
         passphrase: Option<String>,
     },
-    /// Create a wallet using a connected hardware wallet. Only the public keys will be kept in
+    /// (Beta) Create a wallet using a connected Trezor hardware wallet. Only the public keys will be kept in
     /// the software wallet. Cannot specify a mnemonic or passphrase here,
     /// the former must have been entered on the hardware during the device setup
     /// and the latter will have to be entered every time the device is connected to the host machine.
@@ -135,7 +135,7 @@ pub enum RecoverWalletSubCommand {
         #[arg(long = "passphrase")]
         passphrase: Option<String>,
     },
-    /// Recover a wallet using a connected hardware wallet. Only the public keys will be kept in
+    /// (Beta) Recover a wallet using a connected Trezor hardware wallet. Only the public keys will be kept in
     /// the software wallet. Cannot specify a mnemonic or passphrase here,
     /// the former must have been entered on the hardware during the device setup
     /// and the latter will have to be entered every time the device is connected to the host machine.
@@ -193,7 +193,7 @@ pub enum OpenWalletSubCommand {
         #[arg(long)]
         force_change_wallet_type: bool,
     },
-    /// Open a wallet file that is connected to a hardware wallet.
+    /// (Beta) Open a wallet file that is connected to a Trezor hardware wallet.
     #[command()]
     Trezor {
         /// File path of the wallet file
@@ -1052,7 +1052,7 @@ impl ChoiceMenu for CreateWalletDeviceSelectMenu {
     fn choice_list(&self) -> Vec<String> {
         self.available_devices
             .iter()
-            .map(|d| format!("{} (device id: {})", d.name, d.device_id))
+            .map(|d| format!("{} (device id: {})", d.device_name, d.device_id))
             .collect()
     }
 
@@ -1109,7 +1109,7 @@ impl ChoiceMenu for OpenWalletDeviceSelectMenu {
     fn choice_list(&self) -> Vec<String> {
         self.available_devices
             .iter()
-            .map(|d| format!("{} (device id: {})", d.name, d.device_id))
+            .map(|d| format!("{} (device id: {})", d.device_name, d.device_id))
             .collect()
     }
 

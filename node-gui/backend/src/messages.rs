@@ -33,7 +33,7 @@ use p2p::P2pEvent;
 use serialization::hex_encoded::hex_encoded_serialization;
 use wallet::account::transaction_list::TransactionList;
 use wallet_cli_commands::ConsoleCommand;
-use wallet_controller::types::{Balances, WalletTypeArgs};
+use wallet_controller::types::{Balances, WalletExtraInfo, WalletTypeArgs};
 use wallet_rpc_lib::types::PoolInfo;
 use wallet_types::wallet_type::WalletType;
 
@@ -58,6 +58,7 @@ pub struct WalletInfo {
     pub accounts: BTreeMap<AccountId, AccountInfo>,
     pub best_block: (Id<GenBlock>, BlockHeight),
     pub wallet_type: WalletType,
+    pub extra_info: WalletExtraInfo,
 }
 
 #[derive(Debug, Clone, Serialize)]

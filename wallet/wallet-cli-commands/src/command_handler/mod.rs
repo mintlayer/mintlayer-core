@@ -36,7 +36,7 @@ use utils::{
     qrcode::{QrCode, QrCodeError},
 };
 use wallet::version::get_version;
-use wallet_controller::types::GenericTokenTransfer;
+use wallet_controller::types::{GenericTokenTransfer, WalletExtraInfo};
 use wallet_rpc_client::wallet_rpc_traits::{PartialOrSignedTx, WalletInterface};
 use wallet_rpc_lib::types::{
     Balances, ComposedTransaction, ControllerConfig, HardwareWalletType, MnemonicInfo,
@@ -323,7 +323,20 @@ where
         match command {
             ColdWalletCommand::WalletInfo => {
                 let info = self.non_empty_wallet().await?.wallet_info().await?;
-                let names = info
+                let wallet_description = match info.extra_info {
+                    WalletExtraInfo::SoftwareWallet => "This is a software wallet".to_owned(),
+                    WalletExtraInfo::TrezorWallet {
+                        device_name,
+                        device_id,
+                        firmware_version,
+                    } => {
+                        format!(
+                            "This is a Trezor wallet; device name: {}, device id: {}, firmware version: {}",
+                            device_name, device_id, firmware_version
+                        )
+                    }
+                };
+                let account_names = info
                     .account_names
                     .into_iter()
                     .enumerate()
@@ -333,7 +346,9 @@ where
                     })
                     .join("\n");
 
-                Ok(ConsoleCommand::Print(format!("Wallet Accounts:\n{names}")))
+                Ok(ConsoleCommand::Print(format!(
+                    "{wallet_description}\nWallet Accounts:\n{account_names}"
+                )))
             }
 
             ColdWalletCommand::EncryptPrivateKeys { password } => {

@@ -832,8 +832,6 @@ impl MainWindow {
             self.main_widget
                 .view(&self.node_state)
                 .map(MainWindowMessage::MainWidgetMessage),
-            // TODO: workaround for the tabview component not accounting for the tab labels height
-            iced::widget::Column::new().height(70),
         ];
 
         let show_dialog = self.active_dialog != ActiveDialog::None;
