@@ -45,7 +45,7 @@ pub async fn create_wallet_with_mnemonic(
         db,
         (BlockHeight::new(0), genesis_block_id),
         WalletType::Hot,
-        |db_tx| {
+        async |db_tx| {
             Ok(SoftwareSignerProvider::new_from_mnemonic(
                 chain_config,
                 db_tx,
@@ -81,14 +81,15 @@ pub async fn create_wallet_with_mnemonic_and_named_db(
         db,
         (BlockHeight::new(0), genesis_block_id),
         WalletType::Hot,
-        |db_tx| {
-            Ok(SoftwareSignerProvider::new_from_mnemonic(
+        async |db_tx| {
+            SoftwareSignerProvider::new_from_mnemonic(
                 chain_config,
                 db_tx,
                 mnemonic,
                 None,
                 StoreSeedPhrase::DoNotStore,
-            )?)
+            )
+            .map_err(Into::into)
         },
     )
     .await
