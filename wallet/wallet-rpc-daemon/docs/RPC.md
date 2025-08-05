@@ -3238,7 +3238,8 @@ Parameters:
                      1) string
                      2) null },
             }
-         2) null,
+         2) { "type": "Ledger" }
+         3) null,
 }
 ```
 
@@ -3288,7 +3289,8 @@ Parameters:
                      1) string
                      2) null },
             }
-         2) null,
+         2) { "type": "Ledger" }
+         3) null,
 }
 ```
 
@@ -3335,7 +3337,8 @@ Parameters:
                      1) string
                      2) null },
             }
-         2) null,
+         2) { "type": "Ledger" }
+         3) null,
 }
 ```
 

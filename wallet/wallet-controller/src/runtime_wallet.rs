@@ -62,6 +62,8 @@ use wallet_types::{
     Currency, KeyPurpose, KeychainUsageState, SignedTxWithFees,
 };
 
+#[cfg(feature = "ledger")]
+use wallet::signer::ledger_signer::LedgerSignerProvider;
 #[cfg(feature = "trezor")]
 use wallet::signer::trezor_signer::TrezorSignerProvider;
 
@@ -70,6 +72,8 @@ pub enum RuntimeWallet<B: storage::Backend + 'static> {
     Software(Wallet<B, SoftwareSignerProvider>),
     #[cfg(feature = "trezor")]
     Trezor(Wallet<B, TrezorSignerProvider>),
+    #[cfg(feature = "ledger")]
+    Ledger(Wallet<B, LedgerSignerProvider>),
 }
 
 impl<B: storage::Backend + 'static> RuntimeWallet<B> {
@@ -86,6 +90,10 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             RuntimeWallet::Trezor(w) => {
                 w.find_unspent_utxo_and_destination(input, htlc_spending_condition)
             }
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => {
+                w.find_unspent_utxo_and_destination(input, htlc_spending_condition)
+            }
         }
     }
 
@@ -94,6 +102,8 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             RuntimeWallet::Software(w) => w.find_account_destination(acc_outpoint),
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => w.find_account_destination(acc_outpoint),
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => w.find_account_destination(acc_outpoint),
         }
     }
 
@@ -102,6 +112,8 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             RuntimeWallet::Software(w) => w.find_account_command_destination(cmd),
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => w.find_account_command_destination(cmd),
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => w.find_account_command_destination(cmd),
         }
     }
 
@@ -113,6 +125,8 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             RuntimeWallet::Software(w) => w.find_order_account_command_destination(cmd),
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => w.find_order_account_command_destination(cmd),
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => w.find_order_account_command_destination(cmd),
         }
     }
 
@@ -121,6 +135,8 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             RuntimeWallet::Software(w) => w.seed_phrase(),
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => w.seed_phrase(),
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => w.seed_phrase(),
         }
     }
 
@@ -129,6 +145,8 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             RuntimeWallet::Software(w) => w.delete_seed_phrase(),
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => w.delete_seed_phrase(),
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => w.delete_seed_phrase(),
         }
     }
 
@@ -137,6 +155,8 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             RuntimeWallet::Software(w) => w.reset_wallet_to_genesis(),
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => w.reset_wallet_to_genesis(),
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => w.reset_wallet_to_genesis(),
         }
     }
 
@@ -145,6 +165,8 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             RuntimeWallet::Software(w) => w.encrypt_wallet(password),
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => w.encrypt_wallet(password),
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => w.encrypt_wallet(password),
         }
     }
 
@@ -153,6 +175,8 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             RuntimeWallet::Software(w) => w.unlock_wallet(password),
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => w.unlock_wallet(password),
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => w.unlock_wallet(password),
         }
     }
 
@@ -161,6 +185,8 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             RuntimeWallet::Software(w) => w.lock_wallet(),
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => w.lock_wallet(),
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => w.lock_wallet(),
         }
     }
 
@@ -173,6 +199,8 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             RuntimeWallet::Software(w) => w.set_lookahead_size(lookahead_size, force_reduce),
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => w.set_lookahead_size(lookahead_size, force_reduce),
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => w.set_lookahead_size(lookahead_size, force_reduce),
         }
     }
 
@@ -181,6 +209,8 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             RuntimeWallet::Software(w) => w.wallet_info(),
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => w.wallet_info(),
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => w.wallet_info(),
         }
     }
 
@@ -189,6 +219,8 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             RuntimeWallet::Software(w) => w.hardware_wallet_info(),
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => w.hardware_wallet_info(),
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => w.hardware_wallet_info(),
         }
     }
 
@@ -200,6 +232,8 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             RuntimeWallet::Software(w) => w.create_next_account(name).await,
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => w.create_next_account(name).await,
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => w.create_next_account(name).await,
         }
     }
 
@@ -212,6 +246,8 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             RuntimeWallet::Software(w) => w.set_account_name(account_index, name),
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => w.set_account_name(account_index, name),
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => w.set_account_name(account_index, name),
         }
     }
 
@@ -224,6 +260,8 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             RuntimeWallet::Software(w) => w.get_pos_gen_block_data(account_index, pool_id),
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(_) => Err(WalletError::UnsupportedHardwareWalletOperation),
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(_) => Err(WalletError::UnsupportedHardwareWalletOperation),
         }
     }
 
@@ -235,6 +273,8 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             RuntimeWallet::Software(w) => w.get_pos_gen_block_data_by_pool_id(pool_id),
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(_) => Err(WalletError::UnsupportedHardwareWalletOperation),
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(_) => Err(WalletError::UnsupportedHardwareWalletOperation),
         }
     }
 
@@ -247,6 +287,8 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             RuntimeWallet::Software(w) => w.get_pool_ids(account_index, filter),
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => w.get_pool_ids(account_index, filter),
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => w.get_pool_ids(account_index, filter),
         }
     }
 
@@ -255,6 +297,8 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             RuntimeWallet::Software(w) => w.get_best_block(),
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => w.get_best_block(),
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => w.get_best_block(),
         }
     }
 
@@ -266,6 +310,8 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             RuntimeWallet::Software(w) => w.get_best_block_for_account(account_index),
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => w.get_best_block_for_account(account_index),
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => w.get_best_block_for_account(account_index),
         }
     }
 
@@ -274,6 +320,8 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             RuntimeWallet::Software(w) => w.is_locked(),
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => w.is_locked(),
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => w.is_locked(),
         }
     }
 
@@ -292,6 +340,10 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             RuntimeWallet::Trezor(w) => {
                 w.get_utxos(account_index, utxo_types, utxo_states, with_locked)
             }
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => {
+                w.get_utxos(account_index, utxo_types, utxo_states, with_locked)
+            }
         }
     }
 
@@ -302,6 +354,8 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             RuntimeWallet::Software(w) => w.get_transactions_to_be_broadcast(),
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => w.get_transactions_to_be_broadcast(),
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => w.get_transactions_to_be_broadcast(),
         }
     }
 
@@ -315,6 +369,8 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             RuntimeWallet::Software(w) => w.get_balance(account_index, utxo_states, with_locked),
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => w.get_balance(account_index, utxo_states, with_locked),
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => w.get_balance(account_index, utxo_states, with_locked),
         }
     }
 
@@ -333,6 +389,10 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             RuntimeWallet::Trezor(w) => {
                 w.get_multisig_utxos(account_index, utxo_types, utxo_states, with_locked)
             }
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => {
+                w.get_multisig_utxos(account_index, utxo_types, utxo_states, with_locked)
+            }
         }
     }
 
@@ -344,6 +404,8 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             RuntimeWallet::Software(w) => w.pending_transactions(account_index),
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => w.pending_transactions(account_index),
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => w.pending_transactions(account_index),
         }
     }
 
@@ -359,6 +421,8 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             }
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => w.mainchain_transactions(account_index, destination, limit),
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => w.mainchain_transactions(account_index, destination, limit),
         }
     }
 
@@ -372,6 +436,8 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             RuntimeWallet::Software(w) => w.get_transaction_list(account_index, skip, count),
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => w.get_transaction_list(account_index, skip, count),
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => w.get_transaction_list(account_index, skip, count),
         }
     }
 
@@ -384,6 +450,8 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             RuntimeWallet::Software(w) => w.get_transaction(account_index, transaction_id),
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => w.get_transaction(account_index, transaction_id),
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => w.get_transaction(account_index, transaction_id),
         }
     }
 
@@ -396,6 +464,8 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             RuntimeWallet::Software(w) => w.get_all_issued_addresses(account_index, key_purpose),
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => w.get_all_issued_addresses(account_index, key_purpose),
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => w.get_all_issued_addresses(account_index, key_purpose),
         }
     }
 
@@ -415,6 +485,12 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
                 UtxoState::Confirmed.into(),
                 WithLocked::Unlocked,
             ),
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => w.get_address_coin_balances(
+                account_index,
+                UtxoState::Confirmed.into(),
+                WithLocked::Unlocked,
+            ),
         }
     }
 
@@ -426,6 +502,8 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             RuntimeWallet::Software(w) => w.get_all_issued_vrf_public_keys(account_index),
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(_) => Err(WalletError::UnsupportedHardwareWalletOperation),
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(_) => Err(WalletError::UnsupportedHardwareWalletOperation),
         }
     }
 
@@ -437,6 +515,8 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             RuntimeWallet::Software(w) => w.get_legacy_vrf_public_key(account_index),
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(_) => Err(WalletError::UnsupportedHardwareWalletOperation),
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(_) => Err(WalletError::UnsupportedHardwareWalletOperation),
         }
     }
 
@@ -449,6 +529,8 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             RuntimeWallet::Software(w) => w.get_addresses_usage(account_index, key_purpose),
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => w.get_addresses_usage(account_index, key_purpose),
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => w.get_addresses_usage(account_index, key_purpose),
         }
     }
 
@@ -460,6 +542,8 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             RuntimeWallet::Software(w) => w.get_all_standalone_addresses(account_index),
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => w.get_all_standalone_addresses(account_index),
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => w.get_all_standalone_addresses(account_index),
         }
     }
 
@@ -480,6 +564,10 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             RuntimeWallet::Trezor(w) => {
                 w.get_all_standalone_address_details(account_index, address)
             }
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => {
+                w.get_all_standalone_address_details(account_index, address)
+            }
         }
     }
 
@@ -491,6 +579,8 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             RuntimeWallet::Software(w) => w.get_created_blocks(account_index),
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => w.get_created_blocks(account_index),
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => w.get_created_blocks(account_index),
         }
     }
 
@@ -503,6 +593,8 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             RuntimeWallet::Software(w) => w.find_used_tokens(account_index, input_utxos),
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => w.find_used_tokens(account_index, input_utxos),
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => w.find_used_tokens(account_index, input_utxos),
         }
     }
 
@@ -515,6 +607,8 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             RuntimeWallet::Software(w) => w.get_token_unconfirmed_info(account_index, token_info),
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => w.get_token_unconfirmed_info(account_index, token_info),
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => w.get_token_unconfirmed_info(account_index, token_info),
         }
     }
 
@@ -527,6 +621,8 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             RuntimeWallet::Software(w) => w.abandon_transaction(account_index, tx_id),
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => w.abandon_transaction(account_index, tx_id),
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => w.abandon_transaction(account_index, tx_id),
         }
     }
 
@@ -544,6 +640,10 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             RuntimeWallet::Trezor(w) => {
                 w.standalone_address_label_rename(account_index, address, label)
             }
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => {
+                w.standalone_address_label_rename(account_index, address, label)
+            }
         }
     }
 
@@ -557,6 +657,8 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             RuntimeWallet::Software(w) => w.add_standalone_address(account_index, address, label),
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => w.add_standalone_address(account_index, address, label),
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => w.add_standalone_address(account_index, address, label),
         }
     }
 
@@ -574,6 +676,10 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             RuntimeWallet::Trezor(w) => {
                 w.add_standalone_private_key(account_index, private_key, label)
             }
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => {
+                w.add_standalone_private_key(account_index, private_key, label)
+            }
         }
     }
 
@@ -589,6 +695,8 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             }
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => w.add_standalone_multisig(account_index, challenge, label),
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => w.add_standalone_multisig(account_index, challenge, label),
         }
     }
 
@@ -600,6 +708,8 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             RuntimeWallet::Software(w) => w.get_new_address(account_index),
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => w.get_new_address(account_index),
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => w.get_new_address(account_index),
         }
     }
 
@@ -612,6 +722,8 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             RuntimeWallet::Software(w) => w.find_public_key(account_index, address),
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => w.find_public_key(account_index, address),
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => w.find_public_key(account_index, address),
         }
     }
 
@@ -623,6 +735,8 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             RuntimeWallet::Software(w) => w.account_extended_public_key(account_index),
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => w.account_extended_public_key(account_index),
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => w.account_extended_public_key(account_index),
         }
     }
 
@@ -634,6 +748,8 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             RuntimeWallet::Software(w) => w.get_vrf_key(account_index),
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(_) => Err(WalletError::UnsupportedHardwareWalletOperation),
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(_) => Err(WalletError::UnsupportedHardwareWalletOperation),
         }
     }
 
@@ -656,6 +772,16 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             }
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => {
+                w.issue_new_token(
+                    account_index,
+                    token_issuance,
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                )
+                .await
+            }
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => {
                 w.issue_new_token(
                     account_index,
                     token_issuance,
@@ -688,6 +814,17 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             }
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => {
+                w.issue_new_nft(
+                    account_index,
+                    address,
+                    metadata,
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                )
+                .await
+            }
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => {
                 w.issue_new_nft(
                     account_index,
                     address,
@@ -733,6 +870,18 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
                 )
                 .await
             }
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => {
+                w.mint_tokens(
+                    account_index,
+                    &token_info,
+                    amount,
+                    address,
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                )
+                .await
+            }
         }
     }
 
@@ -766,6 +915,17 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
                 )
                 .await
             }
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => {
+                w.unmint_tokens(
+                    account_index,
+                    &token_info,
+                    amount,
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                )
+                .await
+            }
         }
     }
 
@@ -788,6 +948,16 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             }
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => {
+                w.lock_token_supply(
+                    account_index,
+                    &token_info,
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                )
+                .await
+            }
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => {
                 w.lock_token_supply(
                     account_index,
                     &token_info,
@@ -829,6 +999,17 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
                 )
                 .await
             }
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => {
+                w.freeze_token(
+                    account_index,
+                    &token_info,
+                    is_token_unfreezable,
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                )
+                .await
+            }
         }
     }
 
@@ -851,6 +1032,16 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             }
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => {
+                w.unfreeze_token(
+                    account_index,
+                    &token_info,
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                )
+                .await
+            }
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => {
                 w.unfreeze_token(
                     account_index,
                     &token_info,
@@ -892,6 +1083,17 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
                 )
                 .await
             }
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => {
+                w.change_token_authority(
+                    account_index,
+                    &token_info,
+                    address,
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                )
+                .await
+            }
         }
     }
 
@@ -916,6 +1118,17 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             }
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => {
+                w.change_token_metadata_uri(
+                    account_index,
+                    &token_info,
+                    metadata_uri,
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                )
+                .await
+            }
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => {
                 w.change_token_metadata_uri(
                     account_index,
                     &token_info,
@@ -965,6 +1178,19 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
                 )
                 .await
             }
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => {
+                w.create_transaction_to_addresses(
+                    account_index,
+                    outputs,
+                    inputs,
+                    change_addresses,
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                    additional_info,
+                )
+                .await
+            }
         }
     }
 
@@ -998,6 +1224,17 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
                 )
                 .await
             }
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => {
+                w.create_sweep_transaction(
+                    account_index,
+                    destination_address,
+                    filtered_inputs,
+                    current_fee_rate,
+                    additional_info,
+                )
+                .await
+            }
         }
     }
 
@@ -1010,6 +1247,8 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             RuntimeWallet::Software(w) => w.get_delegation(account_index, delegation_id),
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => w.get_delegation(account_index, delegation_id),
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => w.get_delegation(account_index, delegation_id),
         }
     }
 
@@ -1034,6 +1273,17 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             }
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => {
+                w.create_sweep_from_delegation_transaction(
+                    account_index,
+                    destination_address,
+                    delegation_id,
+                    delegation_share,
+                    current_fee_rate,
+                )
+                .await
+            }
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => {
                 w.create_sweep_from_delegation_transaction(
                     account_index,
                     destination_address,
@@ -1080,6 +1330,17 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
                 consolidate_fee_rate,
                 additional_info,
             ),
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => w.create_unsigned_transaction_to_addresses(
+                account_index,
+                outputs,
+                selected_inputs,
+                selection_algo,
+                change_addresses,
+                current_fee_rate,
+                consolidate_fee_rate,
+                additional_info,
+            ),
         }
     }
 
@@ -1102,6 +1363,16 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             }
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => {
+                w.create_delegation(
+                    account_index,
+                    vec![output],
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                )
+                .await
+            }
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => {
                 w.create_delegation(
                     account_index,
                     vec![output],
@@ -1146,6 +1417,18 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
                 )
                 .await
             }
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => {
+                w.create_transaction_to_addresses_from_delegation(
+                    account_index,
+                    address,
+                    amount,
+                    delegation_id,
+                    delegation_share,
+                    current_fee_rate,
+                )
+                .await
+            }
         }
     }
 
@@ -1168,6 +1451,16 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             }
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => {
+                w.create_stake_pool_with_vrf_key(
+                    account_index,
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                    stake_pool_arguments,
+                )
+                .await
+            }
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => {
                 w.create_stake_pool_with_vrf_key(
                     account_index,
                     current_fee_rate,
@@ -1200,6 +1493,17 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             }
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => {
+                w.decommission_stake_pool(
+                    account_index,
+                    pool_id,
+                    staker_balance,
+                    output_address,
+                    current_fee_rate,
+                )
+                .await
+            }
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => {
                 w.decommission_stake_pool(
                     account_index,
                     pool_id,
@@ -1242,6 +1546,17 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
                 )
                 .await
             }
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => {
+                w.decommission_stake_pool_request(
+                    account_index,
+                    pool_id,
+                    staker_balance,
+                    output_address,
+                    current_fee_rate,
+                )
+                .await
+            }
         }
     }
 
@@ -1268,6 +1583,18 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             }
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => {
+                w.create_htlc_tx(
+                    account_index,
+                    output_value,
+                    htlc,
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                    additional_info,
+                )
+                .await
+            }
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => {
                 w.create_htlc_tx(
                     account_index,
                     output_value,
@@ -1318,6 +1645,19 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
                 )
                 .await
             }
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => {
+                w.create_order_tx(
+                    account_index,
+                    ask_value,
+                    give_value,
+                    conclude_key,
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                    additional_info,
+                )
+                .await
+            }
         }
     }
 
@@ -1347,6 +1687,19 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             }
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => {
+                w.create_conclude_order_tx(
+                    account_index,
+                    order_id,
+                    order_info,
+                    output_address,
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                    additional_info,
+                )
+                .await
+            }
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => {
                 w.create_conclude_order_tx(
                     account_index,
                     order_id,
@@ -1401,6 +1754,20 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
                 )
                 .await
             }
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => {
+                w.create_fill_order_tx(
+                    account_index,
+                    order_id,
+                    order_info,
+                    fill_amount_in_ask_currency,
+                    output_address,
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                    additional_info,
+                )
+                .await
+            }
         }
     }
 
@@ -1437,6 +1804,18 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
                 )
                 .await
             }
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => {
+                w.create_freeze_order_tx(
+                    account_index,
+                    order_id,
+                    order_info,
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                    additional_info,
+                )
+                .await
+            }
         }
     }
 
@@ -1453,6 +1832,8 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             RuntimeWallet::Software(w) => w.sign_raw_transaction(account_index, ptx).await,
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => w.sign_raw_transaction(account_index, ptx).await,
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => w.sign_raw_transaction(account_index, ptx).await,
         }
     }
 
@@ -1468,6 +1849,10 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             }
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => {
+                w.sign_challenge(account_index, challenge, destination).await
+            }
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => {
                 w.sign_challenge(account_index, challenge, destination).await
             }
         }
@@ -1513,6 +1898,20 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
                 )
                 .await
             }
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => {
+                w.create_transaction_to_addresses_with_intent(
+                    account_index,
+                    outputs,
+                    inputs,
+                    change_addresses,
+                    intent,
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                    additional_info,
+                )
+                .await
+            }
         }
     }
 
@@ -1525,6 +1924,8 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             RuntimeWallet::Software(w) => w.add_unconfirmed_tx(tx, wallet_events),
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => w.add_unconfirmed_tx(tx, wallet_events),
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => w.add_unconfirmed_tx(tx, wallet_events),
         }
     }
 
@@ -1542,6 +1943,10 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             RuntimeWallet::Trezor(w) => {
                 w.add_account_unconfirmed_tx(account_index, tx.clone(), wallet_events)
             }
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => {
+                w.add_account_unconfirmed_tx(account_index, tx.clone(), wallet_events)
+            }
         }
     }
 
@@ -1555,6 +1960,10 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
                 .map(|it| -> Box<dyn Iterator<Item = _>> { Box::new(it) }),
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => w
+                .get_delegations(account_index)
+                .map(|it| -> Box<dyn Iterator<Item = _>> { Box::new(it) }),
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => w
                 .get_delegations(account_index)
                 .map(|it| -> Box<dyn Iterator<Item = _>> { Box::new(it) }),
         }

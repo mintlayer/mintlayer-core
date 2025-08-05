@@ -86,6 +86,8 @@ pub use node_comm::{
     rpc_client::NodeRpcClient,
 };
 use randomness::{make_pseudo_rng, make_true_rng, Rng};
+#[cfg(feature = "ledger")]
+use wallet::signer::ledger_signer::LedgerSignerProvider;
 #[cfg(feature = "trezor")]
 use wallet::signer::trezor_signer::TrezorSignerProvider;
 #[cfg(feature = "trezor")]
@@ -178,6 +180,12 @@ pub enum ControllerError<N: NodeInterface> {
     SighashInputCommitmentCreationError(#[from] SighashInputCommitmentCreationError),
     #[error("The number of htlc secrets does not match the number of inputs")]
     InvalidHtlcSecretsCount,
+}
+
+impl<T: NodeInterface> ControllerError<T> {
+    pub fn wallet_error(value: WalletError) -> Self {
+        Self::WalletError(value)
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -273,7 +281,7 @@ where
         );
 
         let db = wallet::wallet::open_or_create_wallet_file(file_path.as_ref())
-            .map_err(ControllerError::WalletError)?;
+            .map_err(ControllerError::wallet_error)?;
         let res = match args {
             WalletTypeArgsComputed::Software {
                 mnemonic,
@@ -287,7 +295,7 @@ where
                     db,
                     best_block,
                     wallet_type,
-                    |db_tx| {
+                    async |db_tx| {
                         Ok(SoftwareSignerProvider::new_from_mnemonic(
                             chain_config.clone(),
                             db_tx,
@@ -298,7 +306,7 @@ where
                     },
                 )
                 .await
-                .map_err(ControllerError::WalletError)
+                .map_err(ControllerError::wallet_error)
                 .map(|w| w.map_wallet(RuntimeWallet::Software))
             }
             #[cfg(feature = "trezor")]
@@ -307,7 +315,7 @@ where
                 db,
                 best_block,
                 wallet_type,
-                |_db_tx| {
+                async |_db_tx| {
                     Ok(TrezorSignerProvider::new(
                         device_id.map(|device_id| SelectedDevice { device_id }),
                     )
@@ -315,8 +323,19 @@ where
                 },
             )
             .await
-            .map_err(ControllerError::WalletError)
+            .map_err(ControllerError::wallet_error)
             .map(|w| w.map_wallet(RuntimeWallet::Trezor)),
+            #[cfg(feature = "ledger")]
+            WalletTypeArgsComputed::Ledger => wallet::Wallet::create_new_wallet(
+                Arc::clone(&chain_config),
+                db,
+                best_block,
+                wallet_type,
+                async |_db_tx| Ok(LedgerSignerProvider::new().await?),
+            )
+            .await
+            .map_err(ControllerError::wallet_error)
+            .map(|w| w.map_wallet(RuntimeWallet::Ledger)),
         };
 
         Self::delete_wallet_file_on_wallet_creation_failure(&res, file_path);
@@ -352,7 +371,7 @@ where
                     Arc::clone(&chain_config),
                     db,
                     wallet_type,
-                    |db_tx| {
+                    async |db_tx| {
                         Ok(SoftwareSignerProvider::new_from_mnemonic(
                             chain_config.clone(),
                             db_tx,
@@ -363,7 +382,7 @@ where
                     },
                 )
                 .await
-                .map_err(ControllerError::WalletError)?;
+                .map_err(ControllerError::wallet_error)?;
                 Ok(wallet.map_wallet(RuntimeWallet::Software))
             }
             #[cfg(feature = "trezor")]
@@ -372,7 +391,7 @@ where
                     Arc::clone(&chain_config),
                     db,
                     wallet_type,
-                    |_db_tx| {
+                    async |_db_tx| {
                         Ok(TrezorSignerProvider::new(
                             device_id.map(|device_id| SelectedDevice { device_id }),
                         )
@@ -380,8 +399,20 @@ where
                     },
                 )
                 .await
-                .map_err(ControllerError::WalletError)?;
+                .map_err(ControllerError::wallet_error)?;
                 Ok(wallet.map_wallet(RuntimeWallet::Trezor))
+            }
+            #[cfg(feature = "ledger")]
+            WalletTypeArgsComputed::Ledger => {
+                let wallet = wallet::Wallet::recover_wallet(
+                    Arc::clone(&chain_config),
+                    db,
+                    wallet_type,
+                    async |_db_tx| Ok(LedgerSignerProvider::new().await?),
+                )
+                .await
+                .map_err(ControllerError::wallet_error)?;
+                Ok(wallet.map_wallet(RuntimeWallet::Ledger))
             }
         };
 
@@ -456,7 +487,7 @@ where
         );
 
         let db = wallet::wallet::open_or_create_wallet_file(&file_path)
-            .map_err(ControllerError::WalletError)?;
+            .map_err(ControllerError::wallet_error)?;
 
         match open_as_wallet_type {
             WalletType::Cold | WalletType::Hot => {
@@ -467,10 +498,12 @@ where
                     |version| Self::make_backup_wallet_file(file_path.as_ref(), version),
                     current_controller_mode,
                     force_change_wallet_type,
-                    |db_tx| SoftwareSignerProvider::load_from_database(chain_config.clone(), db_tx),
+                    async |db_tx| {
+                        SoftwareSignerProvider::load_from_database(chain_config.clone(), db_tx)
+                    },
                 )
                 .await
-                .map_err(ControllerError::WalletError)?;
+                .map_err(ControllerError::wallet_error)?;
                 Ok(wallet.map_wallet(RuntimeWallet::Software))
             }
             #[cfg(feature = "trezor")]
@@ -482,7 +515,7 @@ where
                     |version| Self::make_backup_wallet_file(file_path.as_ref(), version),
                     current_controller_mode,
                     force_change_wallet_type,
-                    |db_tx| {
+                    async |db_tx| {
                         TrezorSignerProvider::load_from_database(
                             chain_config.clone(),
                             db_tx,
@@ -491,8 +524,25 @@ where
                     },
                 )
                 .await
-                .map_err(ControllerError::WalletError)?;
+                .map_err(ControllerError::wallet_error)?;
                 Ok(wallet.map_wallet(RuntimeWallet::Trezor))
+            }
+            #[cfg(feature = "ledger")]
+            WalletType::Ledger => {
+                let wallet = wallet::Wallet::load_wallet(
+                    Arc::clone(&chain_config),
+                    db,
+                    password,
+                    |version| Self::make_backup_wallet_file(file_path.as_ref(), version),
+                    current_controller_mode,
+                    force_change_wallet_type,
+                    async |db_tx| {
+                        LedgerSignerProvider::load_from_database(chain_config.clone(), db_tx).await
+                    },
+                )
+                .await
+                .map_err(ControllerError::wallet_error)?;
+                Ok(wallet.map_wallet(RuntimeWallet::Ledger))
             }
         }
     }
@@ -501,7 +551,7 @@ where
         self.wallet
             .seed_phrase()
             .map(|opt| opt.map(SeedWithPassPhrase::from_serializable_seed_phrase))
-            .map_err(ControllerError::WalletError)
+            .map_err(ControllerError::wallet_error)
     }
 
     /// Delete the seed phrase if stored in the database
@@ -509,7 +559,7 @@ where
         self.wallet
             .delete_seed_phrase()
             .map(|opt| opt.map(SeedWithPassPhrase::from_serializable_seed_phrase))
-            .map_err(ControllerError::WalletError)
+            .map_err(ControllerError::wallet_error)
     }
 
     /// Rescan the blockchain
@@ -554,7 +604,7 @@ where
             self.staking_started.is_empty(),
             ControllerError::StakingRunning
         );
-        self.wallet.lock_wallet().map_err(ControllerError::WalletError)
+        self.wallet.lock_wallet().map_err(ControllerError::wallet_error)
     }
 
     /// Sets the lookahead size for key generation
@@ -571,7 +621,7 @@ where
 
         self.wallet
             .set_lookahead_size(lookahead_size, force_reduce)
-            .map_err(ControllerError::WalletError)
+            .map_err(ControllerError::wallet_error)
     }
 
     pub fn wallet_info(&self) -> WalletInfo {
@@ -625,7 +675,7 @@ where
         let pos_data = self
             .wallet
             .get_pos_gen_block_data(account_index, pool_id)
-            .map_err(ControllerError::WalletError)?;
+            .map_err(ControllerError::wallet_error)?;
 
         let public_key = self
             .rpc_client
@@ -665,7 +715,7 @@ where
         let pools = self
             .wallet
             .get_pool_ids(account_index, WalletPoolsFilter::Stake)
-            .map_err(ControllerError::WalletError)?;
+            .map_err(ControllerError::wallet_error)?;
 
         let mut last_error = ControllerError::NoStakingPool;
         for (pool_id, _) in pools {
@@ -734,7 +784,7 @@ where
         let pos_data = self
             .wallet
             .get_pos_gen_block_data_by_pool_id(pool_id)
-            .map_err(ControllerError::WalletError)?;
+            .map_err(ControllerError::wallet_error)?;
 
         let input_data =
             PoSTimestampSearchInputData::new(pool_id, pos_data.vrf_private_key().clone());
@@ -763,7 +813,7 @@ where
         self.wallet
             .create_next_account(name)
             .await
-            .map_err(ControllerError::WalletError)
+            .map_err(ControllerError::wallet_error)
     }
 
     pub fn update_account_name(
@@ -773,7 +823,7 @@ where
     ) -> Result<(U31, Option<String>), ControllerError<N>> {
         self.wallet
             .set_account_name(account_index, name)
-            .map_err(ControllerError::WalletError)
+            .map_err(ControllerError::wallet_error)
     }
 
     pub fn stop_staking(&mut self, account_index: U31) -> Result<(), ControllerError<N>> {
@@ -807,7 +857,7 @@ where
                 UtxoState::Confirmed.into(),
                 WithLocked::Unlocked,
             )
-            .map_err(ControllerError::WalletError)?;
+            .map_err(ControllerError::wallet_error)?;
         let pool_ids = stake_pool_utxos.into_iter().filter_map(|(_, utxo)| match utxo {
             TxOutput::ProduceBlockFromStake(_, pool_id) | TxOutput::CreateStakePool(pool_id, _) => {
                 Some(pool_id)
@@ -847,6 +897,10 @@ where
             RuntimeWallet::Trezor(w) => {
                 sync::sync_once(&self.chain_config, &self.rpc_client, w, &self.wallet_events).await
             }
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => {
+                sync::sync_once(&self.chain_config, &self.rpc_client, w, &self.wallet_events).await
+            }
         }?;
 
         match res {
@@ -863,6 +917,11 @@ where
             }
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => {
+                sync::sync_once(&self.chain_config, &self.rpc_client, w, &self.wallet_events)
+                    .await?;
+            }
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => {
                 sync::sync_once(&self.chain_config, &self.rpc_client, w, &self.wallet_events)
                     .await?;
             }
@@ -1188,7 +1247,7 @@ where
         let inputs = inputs.into_iter().map(TxInput::Utxo).collect();
 
         let tx = Transaction::new(0, inputs, outputs)
-            .map_err(|err| ControllerError::WalletError(WalletError::TransactionCreation(err)))?;
+            .map_err(|err| ControllerError::wallet_error(WalletError::TransactionCreation(err)))?;
 
         let tx = if only_transaction {
             TransactionToSign::Tx(tx)
@@ -1207,7 +1266,7 @@ where
                     })
                 })
                 .collect::<Result<Vec<_>, WalletError>>()
-                .map_err(ControllerError::WalletError)?;
+                .map_err(ControllerError::wallet_error)?;
 
             let (input_utxos, additional_infos) =
                 self.fetch_utxos_extra_info(input_utxos).await?.into_iter().fold(
@@ -1282,7 +1341,7 @@ where
             &self.chain_config,
             best_block_height,
         )
-        .map_err(|err| ControllerError::WalletError(err))
+        .map_err(|err| ControllerError::wallet_error(err))
     }
 
     fn group_inputs(
@@ -1298,7 +1357,7 @@ where
             },
             Amount::ZERO,
         )
-        .map_err(|err| ControllerError::WalletError(err))
+        .map_err(|err| ControllerError::wallet_error(err))
     }
 
     async fn fetch_utxos(

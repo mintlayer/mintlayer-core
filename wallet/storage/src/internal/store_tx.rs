@@ -160,7 +160,8 @@ impl<'st, B: storage::Backend> StoreTxRwUnlocked<'st, B> {
     }
 }
 
-type TxOperation<B> = dyn FnOnce(&mut StoreTxRw<'_, B>) -> crate::Result<()> + 'static + Send;
+type TxOperation<B> =
+    dyn FnOnce(&mut StoreTxRwUnlocked<'_, B>) -> crate::Result<()> + 'static + Send;
 
 /// A local read/write object, stores each write operation and performs them only at the end
 /// Avoids references to avoid lifetime issues in async functions
@@ -173,6 +174,18 @@ pub struct StoreLocalReadWriteUnlocked<B: Backend> {
 /// Can be used in async contexts
 pub struct StoreLocalReadOnlyUnlocked<B: Backend> {
     local_read: Store<B>,
+}
+
+/// A wrapper around the store itself that opens a new read only transaction on each read operation
+/// Can be used in async contexts
+pub struct StoreLocalReadOnly<B: Backend> {
+    local_read: Store<B>,
+}
+
+impl<B: Backend> StoreLocalReadOnly<B> {
+    pub fn new(local_read: Store<B>) -> Self {
+        Self { local_read }
+    }
 }
 
 impl<B: Backend> StoreLocalReadWriteUnlocked<B> {
@@ -188,7 +201,7 @@ impl<B: Backend> StoreLocalReadWriteUnlocked<B> {
     }
 
     /// perform the local operations
-    pub fn perform_operations(self, dbtx: &mut StoreTxRw<'_, B>) -> crate::Result<()> {
+    pub fn perform_operations(self, dbtx: &mut StoreTxRwUnlocked<'_, B>) -> crate::Result<()> {
         for op in self.operations {
             op(dbtx)?;
         }
@@ -517,6 +530,143 @@ impl<B: storage::Backend> WalletStorageReadUnlocked for StoreLocalReadOnlyUnlock
     }
 }
 
+impl<B: storage::Backend> WalletStorageReadLocked for StoreLocalReadOnly<B> {
+    fn get_storage_version(&self) -> crate::Result<u32> {
+        self.local_read.transaction_ro()?.get_storage_version()
+    }
+
+    fn get_wallet_type(&self) -> crate::Result<WalletType> {
+        self.local_read.transaction_ro()?.get_wallet_type()
+    }
+
+    fn get_chain_info(&self) -> crate::Result<ChainInfo> {
+        self.local_read.transaction_ro()?.get_chain_info()
+    }
+
+    fn get_transaction(&self, id: &AccountWalletTxId) -> crate::Result<Option<WalletTx>> {
+        self.local_read.transaction_ro()?.get_transaction(id)
+    }
+
+    fn get_accounts_info(&self) -> crate::Result<BTreeMap<AccountId, AccountInfo>> {
+        self.local_read.transaction_ro()?.get_accounts_info()
+    }
+
+    fn get_address(&self, id: &AccountDerivationPathId) -> crate::Result<Option<String>> {
+        self.local_read.transaction_ro()?.get_address(id)
+    }
+
+    fn get_addresses(
+        &self,
+        account_id: &AccountId,
+    ) -> crate::Result<BTreeMap<AccountDerivationPathId, String>> {
+        self.local_read.transaction_ro()?.get_addresses(account_id)
+    }
+
+    fn check_root_keys_sanity(&self) -> crate::Result<()> {
+        self.local_read.transaction_ro()?.check_root_keys_sanity()
+    }
+
+    /// Collect and return all transactions from the storage
+    fn get_transactions(
+        &self,
+        account_id: &AccountId,
+    ) -> crate::Result<Vec<(AccountWalletTxId, WalletTx)>> {
+        self.local_read.transaction_ro()?.get_transactions(account_id)
+    }
+
+    /// Collect and return all signed transactions from the storage
+    fn get_user_transactions(&self) -> crate::Result<Vec<SignedTransaction>> {
+        self.local_read.transaction_ro()?.get_user_transactions()
+    }
+
+    fn get_account_unconfirmed_tx_counter(
+        &self,
+        account_id: &AccountId,
+    ) -> crate::Result<Option<u64>> {
+        self.local_read.transaction_ro()?.get_account_unconfirmed_tx_counter(account_id)
+    }
+
+    fn get_account_vrf_public_keys(
+        &self,
+        account_id: &AccountId,
+    ) -> crate::Result<Option<AccountVrfKeys>> {
+        self.local_read.transaction_ro()?.get_account_vrf_public_keys(account_id)
+    }
+
+    fn get_account_standalone_watch_only_keys(
+        &self,
+        account_id: &AccountId,
+    ) -> crate::Result<BTreeMap<Destination, StandaloneWatchOnlyKey>> {
+        self.local_read
+            .transaction_ro()?
+            .get_account_standalone_watch_only_keys(account_id)
+    }
+    fn get_account_standalone_multisig_keys(
+        &self,
+        account_id: &AccountId,
+    ) -> crate::Result<BTreeMap<Destination, StandaloneMultisig>> {
+        self.local_read
+            .transaction_ro()?
+            .get_account_standalone_multisig_keys(account_id)
+    }
+
+    fn get_account_standalone_private_keys(
+        &self,
+        account_id: &AccountId,
+    ) -> crate::Result<Vec<(AccountPublicKey, Option<String>)>> {
+        self.local_read
+            .transaction_ro()?
+            .get_account_standalone_private_keys(account_id)
+    }
+
+    fn get_keychain_usage_state(
+        &self,
+        id: &AccountKeyPurposeId,
+    ) -> crate::Result<Option<KeychainUsageState>> {
+        self.local_read.transaction_ro()?.get_keychain_usage_state(id)
+    }
+
+    fn get_vrf_keychain_usage_state(
+        &self,
+        id: &AccountId,
+    ) -> crate::Result<Option<KeychainUsageState>> {
+        self.local_read.transaction_ro()?.get_vrf_keychain_usage_state(id)
+    }
+
+    fn get_keychain_usage_states(
+        &self,
+        account_id: &AccountId,
+    ) -> crate::Result<BTreeMap<AccountKeyPurposeId, KeychainUsageState>> {
+        self.local_read.transaction_ro()?.get_keychain_usage_states(account_id)
+    }
+
+    fn get_public_key(
+        &self,
+        id: &AccountDerivationPathId,
+    ) -> crate::Result<Option<ExtendedPublicKey>> {
+        self.local_read.transaction_ro()?.get_public_key(id)
+    }
+
+    fn get_public_keys(
+        &self,
+        account_id: &AccountId,
+    ) -> crate::Result<BTreeMap<AccountDerivationPathId, ExtendedPublicKey>> {
+        self.local_read.transaction_ro()?.get_public_keys(account_id)
+    }
+
+    fn get_median_time(&self) -> crate::Result<Option<BlockTimestamp>> {
+        self.local_read.transaction_ro()?.get_median_time()
+    }
+
+    fn get_lookahead_size(&self) -> crate::Result<u32> {
+        self.local_read.transaction_ro()?.get_lookahead_size()
+    }
+
+    fn get_hardware_wallet_data(&self) -> crate::Result<Option<hw_data::HardwareWalletData>> {
+        self.local_read.transaction_ro()?.get_hardware_wallet_data()
+    }
+}
+
 impl<B: storage::Backend> WalletStorageWriteLocked for StoreLocalReadWriteUnlocked<B> {
     fn set_storage_version(&mut self, version: u32) -> crate::Result<()> {
         self.add_operation(Box::new(move |dbtx| dbtx.set_storage_version(version)));
@@ -728,6 +878,44 @@ impl<B: storage::Backend> WalletStorageWriteLocked for StoreLocalReadWriteUnlock
 
     fn set_hardware_wallet_data(&mut self, data: hw_data::HardwareWalletData) -> crate::Result<()> {
         self.add_operation(Box::new(move |dbtx| dbtx.set_hardware_wallet_data(data)));
+        Ok(())
+    }
+}
+
+impl<B: storage::Backend> WalletStorageWriteUnlocked for StoreLocalReadWriteUnlocked<B> {
+    fn set_root_key(&mut self, content: &RootKeys) -> crate::Result<()> {
+        let content = content.clone();
+        self.add_operation(Box::new(move |dbtx| dbtx.set_root_key(&content)));
+        Ok(())
+    }
+
+    fn del_root_key(&mut self) -> crate::Result<()> {
+        self.add_operation(Box::new(move |dbtx| dbtx.del_root_key()));
+        Ok(())
+    }
+
+    fn set_seed_phrase(&mut self, seed_phrase: SerializableSeedPhrase) -> crate::Result<()> {
+        self.add_operation(Box::new(move |dbtx| dbtx.set_seed_phrase(seed_phrase)));
+        Ok(())
+    }
+
+    fn del_seed_phrase(&mut self) -> crate::Result<Option<SerializableSeedPhrase>> {
+        let result = self.local_read.local_rw_unlocked().get_seed_phrase()?;
+        self.add_operation(Box::new(move |dbtx| dbtx.del_seed_phrase().map(|_| ())));
+        Ok(result)
+    }
+
+    fn set_standalone_private_key(
+        &mut self,
+        id: &AccountPublicKey,
+        key: &PrivateKey,
+        label: Option<String>,
+    ) -> crate::Result<()> {
+        let id = id.clone();
+        let key = key.clone();
+        self.add_operation(Box::new(move |dbtx| {
+            dbtx.set_standalone_private_key(&id, &key, label)
+        }));
         Ok(())
     }
 }

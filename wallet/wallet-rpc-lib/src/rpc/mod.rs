@@ -89,7 +89,7 @@ use wallet_types::{
 
 use crate::{WalletHandle, WalletRpcConfig};
 
-#[cfg(feature = "trezor")]
+#[cfg(any(feature = "trezor", feature = "ledger"))]
 use wallet_types::wallet_type::WalletType;
 
 pub use self::types::RpcError;
@@ -160,6 +160,8 @@ where
                 match hw {
                     #[cfg(feature = "trezor")]
                     HardwareWalletType::Trezor { device_id } => (WalletType::Trezor, device_id),
+                    #[cfg(feature = "ledger")]
+                    HardwareWalletType::Ledger => (WalletType::Ledger, None),
                 }
             });
         Ok(self
@@ -814,7 +816,7 @@ where
         let tx = tx.take();
         let block_height = self.best_block().await?.height;
         check_transaction(&self.chain_config, block_height, &tx).map_err(|err| {
-            RpcError::Controller(ControllerError::WalletError(
+            RpcError::Controller(ControllerError::wallet_error(
                 WalletError::InvalidTransaction(err),
             ))
         })?;
@@ -1781,7 +1783,7 @@ where
     ) -> WRpcResult<NewTokenTransaction, N> {
         ensure!(
             number_of_decimals <= self.chain_config.token_max_dec_count(),
-            RpcError::Controller(ControllerError::WalletError(WalletError::TokenIssuance(
+            RpcError::Controller(ControllerError::wallet_error(WalletError::TokenIssuance(
                 TokenIssuanceError::IssueErrorTooManyDecimals
             ),))
         );
