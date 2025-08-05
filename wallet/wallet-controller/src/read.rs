@@ -96,7 +96,7 @@ where
     ) -> Result<&ExtendedPublicKey, ControllerError<T>> {
         self.wallet
             .account_extended_public_key(self.account_index)
-            .map_err(ControllerError::WalletError)
+            .map_err(ControllerError::wallet_error)
     }
 
     pub fn get_balance(
@@ -106,7 +106,7 @@ where
     ) -> Result<BTreeMap<Currency, Amount>, ControllerError<T>> {
         self.wallet
             .get_balance(self.account_index, utxo_states, with_locked)
-            .map_err(ControllerError::WalletError)
+            .map_err(ControllerError::wallet_error)
     }
 
     pub async fn get_decimal_balance(
@@ -127,7 +127,7 @@ where
         self.wallet
             .get_multisig_utxos(self.account_index, utxo_types, utxo_states, with_locked)
             .map(|utxos| utxos.into_iter().collect())
-            .map_err(ControllerError::WalletError)
+            .map_err(ControllerError::wallet_error)
     }
 
     pub fn get_utxos(
@@ -138,13 +138,13 @@ where
     ) -> Result<Vec<(UtxoOutPoint, TxOutput)>, ControllerError<T>> {
         self.wallet
             .get_utxos(self.account_index, utxo_types, utxo_states, with_locked)
-            .map_err(ControllerError::WalletError)
+            .map_err(ControllerError::wallet_error)
     }
 
     pub fn pending_transactions(&self) -> Result<Vec<WithId<&'a Transaction>>, ControllerError<T>> {
         self.wallet
             .pending_transactions(self.account_index)
-            .map_err(ControllerError::WalletError)
+            .map_err(ControllerError::wallet_error)
     }
 
     pub fn mainchain_transactions(
@@ -154,7 +154,7 @@ where
     ) -> Result<Vec<TxInfo>, ControllerError<T>> {
         self.wallet
             .mainchain_transactions(self.account_index, destination, limit)
-            .map_err(ControllerError::WalletError)
+            .map_err(ControllerError::wallet_error)
     }
 
     pub fn get_transaction_list(
@@ -164,7 +164,7 @@ where
     ) -> Result<TransactionList, ControllerError<T>> {
         self.wallet
             .get_transaction_list(self.account_index, skip, count)
-            .map_err(ControllerError::WalletError)
+            .map_err(ControllerError::wallet_error)
     }
 
     pub fn get_transaction(
@@ -173,7 +173,7 @@ where
     ) -> Result<&TxData, ControllerError<T>> {
         self.wallet
             .get_transaction(self.account_index, transaction_id)
-            .map_err(ControllerError::WalletError)
+            .map_err(ControllerError::wallet_error)
     }
 
     pub fn get_all_issued_addresses(
@@ -182,7 +182,7 @@ where
     ) -> Result<BTreeMap<ChildNumber, Address<Destination>>, ControllerError<T>> {
         self.wallet
             .get_all_issued_addresses(self.account_index, key_purpose)
-            .map_err(ControllerError::WalletError)
+            .map_err(ControllerError::wallet_error)
     }
 
     fn get_address_coin_balances(
@@ -190,7 +190,7 @@ where
     ) -> Result<BTreeMap<Destination, Amount>, ControllerError<T>> {
         self.wallet
             .get_address_coin_balances(self.account_index)
-            .map_err(ControllerError::WalletError)
+            .map_err(ControllerError::wallet_error)
     }
 
     pub fn get_all_issued_vrf_public_keys(
@@ -198,13 +198,13 @@ where
     ) -> Result<MapAddressWithUsage<VRFPublicKey>, ControllerError<T>> {
         self.wallet
             .get_all_issued_vrf_public_keys(self.account_index)
-            .map_err(ControllerError::WalletError)
+            .map_err(ControllerError::wallet_error)
     }
 
     pub fn get_legacy_vrf_public_key(&self) -> Result<Address<VRFPublicKey>, ControllerError<T>> {
         self.wallet
             .get_legacy_vrf_public_key(self.account_index)
-            .map_err(ControllerError::WalletError)
+            .map_err(ControllerError::wallet_error)
     }
 
     pub fn get_addresses_usage(
@@ -213,7 +213,7 @@ where
     ) -> Result<&'a KeychainUsageState, ControllerError<T>> {
         self.wallet
             .get_addresses_usage(self.account_index, key_purpose)
-            .map_err(ControllerError::WalletError)
+            .map_err(ControllerError::wallet_error)
     }
 
     /// Get all addresses with usage information and coin balances.
@@ -260,7 +260,7 @@ where
     pub fn get_standalone_addresses(&self) -> Result<StandaloneAddresses, ControllerError<T>> {
         self.wallet
             .get_all_standalone_addresses(self.account_index)
-            .map_err(ControllerError::WalletError)
+            .map_err(ControllerError::wallet_error)
     }
 
     /// Get all standalone addresses with their labels and balances
@@ -271,7 +271,7 @@ where
         let (address, balances, details) = self
             .wallet
             .get_all_standalone_address_details(self.account_index, address)
-            .map_err(ControllerError::WalletError)?;
+            .map_err(ControllerError::wallet_error)?;
 
         let balances = super::into_balances(&self.rpc_client, self.chain_config, balances).await?;
 
@@ -314,7 +314,7 @@ where
         let pools = self
             .wallet
             .get_pool_ids(self.account_index, filter)
-            .map_err(ControllerError::WalletError)?;
+            .map_err(ControllerError::wallet_error)?;
 
         let tasks: FuturesUnordered<_> = pools
             .into_iter()
@@ -362,7 +362,7 @@ where
         let tasks: FuturesUnordered<_> = self
             .wallet
             .get_delegations(self.account_index)
-            .map_err(ControllerError::WalletError)?
+            .map_err(ControllerError::wallet_error)?
             .map(|(delegation_id, delegation_data)| {
                 self.get_delegation_share(delegation_data, *delegation_id).map(|res| {
                     res.map(|opt| {
@@ -382,7 +382,7 @@ where
     pub fn get_created_blocks(&self) -> Result<Vec<CreatedBlockInfo>, ControllerError<T>> {
         self.wallet
             .get_created_blocks(self.account_index)
-            .map_err(ControllerError::WalletError)
+            .map_err(ControllerError::wallet_error)
             .map(|blocks| {
                 blocks
                     .into_iter()

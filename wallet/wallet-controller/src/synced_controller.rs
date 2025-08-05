@@ -134,7 +134,7 @@ where
         let token_ids = self
             .wallet
             .find_used_tokens(self.account_index, input_utxos)
-            .map_err(ControllerError::WalletError)?;
+            .map_err(ControllerError::wallet_error)?;
 
         for token_info in self.fetch_token_infos(token_ids).await? {
             match token_info {
@@ -153,9 +153,9 @@ where
     ) -> Result<(), ControllerError<T>> {
         self.wallet
             .get_token_unconfirmed_info(self.account_index, token_info)
-            .map_err(ControllerError::WalletError)?
+            .map_err(ControllerError::wallet_error)?
             .check_can_be_used()
-            .map_err(ControllerError::WalletError)?;
+            .map_err(ControllerError::wallet_error)?;
 
         Ok(())
     }
@@ -184,7 +184,7 @@ where
                                         self.account_index,
                                         token_info.clone(),
                                     )
-                                    .map_err(ControllerError::WalletError)?
+                                    .map_err(ControllerError::wallet_error)?
                                     .check_can_be_used()
                                     .is_ok(),
                                 RPCTokenInfo::NonFungibleToken(_) => true,
@@ -280,7 +280,7 @@ where
     ) -> Result<PublicKey, ControllerError<T>> {
         self.wallet
             .find_public_key(self.account_index, address)
-            .map_err(ControllerError::WalletError)
+            .map_err(ControllerError::wallet_error)
     }
 
     pub async fn new_vrf_key(
@@ -668,7 +668,7 @@ where
         let pool_id = self
             .wallet
             .get_delegation(self.account_index, delegation_id)
-            .map_err(ControllerError::WalletError)?
+            .map_err(ControllerError::wallet_error)?
             .pool_id;
 
         let delegation_share = self
@@ -676,7 +676,7 @@ where
             .get_delegation_share(pool_id, delegation_id)
             .await
             .map_err(ControllerError::NodeCallError)?
-            .ok_or(ControllerError::WalletError(
+            .ok_or(ControllerError::wallet_error(
                 WalletError::DelegationNotFound(delegation_id),
             ))?;
 
@@ -720,7 +720,7 @@ where
             let utxo_dest =
                 get_tx_output_destination(&utxo_output, &|_| None, HtlcSpendingCondition::Skip)
                     .ok_or_else(|| {
-                        ControllerError::WalletError(WalletError::UnsupportedTransactionOutput(
+                        ControllerError::wallet_error(WalletError::UnsupportedTransactionOutput(
                             Box::new(utxo_output.clone()),
                         ))
                     })?;
@@ -977,7 +977,7 @@ where
             .get_delegation_share(pool_id, delegation_id)
             .await
             .map_err(ControllerError::NodeCallError)?
-            .ok_or(ControllerError::WalletError(
+            .ok_or(ControllerError::wallet_error(
                 WalletError::DelegationNotFound(delegation_id),
             ))?;
 
@@ -1130,7 +1130,7 @@ where
             .get_staker_balance(pool_id)
             .await
             .map_err(ControllerError::NodeCallError)?
-            .ok_or(ControllerError::WalletError(WalletError::UnknownPoolId(
+            .ok_or(ControllerError::wallet_error(WalletError::UnknownPoolId(
                 pool_id,
             )))?;
 
@@ -1164,7 +1164,7 @@ where
             .get_staker_balance(pool_id)
             .await
             .map_err(ControllerError::NodeCallError)?
-            .ok_or(ControllerError::WalletError(WalletError::UnknownPoolId(
+            .ok_or(ControllerError::wallet_error(WalletError::UnknownPoolId(
                 pool_id,
             )))?;
 
@@ -1179,7 +1179,7 @@ where
                 current_fee_rate,
             )
             .await
-            .map_err(ControllerError::WalletError)
+            .map_err(ControllerError::wallet_error)
     }
 
     pub async fn create_htlc_tx(
@@ -1458,7 +1458,7 @@ where
         self.wallet
             .sign_raw_transaction(self.account_index, ptx)
             .await
-            .map_err(ControllerError::WalletError)
+            .map_err(ControllerError::wallet_error)
     }
 
     pub async fn sign_challenge(
@@ -1469,7 +1469,7 @@ where
         self.wallet
             .sign_challenge(self.account_index, challenge, destination)
             .await
-            .map_err(ControllerError::WalletError)
+            .map_err(ControllerError::wallet_error)
     }
 
     pub async fn add_unconfirmed_tx(
@@ -1594,7 +1594,7 @@ where
             token_freezable_info,
         )
         .await
-        .map_err(ControllerError::WalletError)?;
+        .map_err(ControllerError::wallet_error)?;
 
         Ok(tx)
     }
@@ -1665,7 +1665,7 @@ where
             self.account_index,
         )
         .await
-        .map_err(ControllerError::WalletError)?;
+        .map_err(ControllerError::wallet_error)?;
 
         let (tx, broadcasted) = self.broadcast_to_mempool_if_needed(tx).await?;
         let fees = into_balances(&self.rpc_client, self.chain_config, fees).await?;
