@@ -211,6 +211,7 @@ rlimit = "0.10"
 rstest = "0.24"
 rusqlite = "0.33"
 schnorrkel = "0.11"
+semver = "1.0"
 serde = "1.0"
 serde_json = "1.0"
 serde_test = "1.0"
@@ -248,8 +249,8 @@ zeroize = "1.5"
 
 [workspace.dependencies.trezor-client]
 git = "https://github.com/mintlayer/mintlayer-trezor-firmware"
-# The commit "Remove destination from MintlayerFillOrderV1; fail if the host asks to sign a FillOrder input"
-rev = "198346c2f731e7ff34be03b7a16818008eeeae0d"
+# The commit "Mintlayer firmware versioning"
+rev = "d9faedb97d55d7e75823fbc68125cc6c01a3e02a"
 features = ["bitcoin", "mintlayer"]
 
 [workspace.metadata.dist.dependencies.apt]

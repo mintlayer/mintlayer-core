@@ -7,7 +7,7 @@ Note: If you're running mintlayer in your home or behind a consumer router, thes
 
 Also, there are managed services that do this for you, but they're more expensive. We never had to use any of them, but it's up to you. One that comes to mind is Plesk. It's made to make server management easier. But it's not free.
 
-1. NEVER run mintlayer software as root or a user that has access to root. It's preferable to create a separate user for this
+1. NEVER run mintlayer software as root or a user that has access to root. It's preferable to create a separate user for this.
 2. NEVER keep all your server ports open. This is a huge security flaw that can endanger both your server and make stealing your coins easy. Mintlayer needs only port 13031 (testnet p2p) or 3031 (mainnet p2p). All other ports (maybe besides ssh) should be blocked by a firewall.
 3. DO NOT allow public access to RPC (port 13030 for testnet, 3030 for mainnet). RPC basically gives full control and it's meant for the owner.
 4. DO NOT bind RPC to 0.0.0.0 unless you know what you're doing. The correct way to reach your RPC is with an ssh tunnel, not by opening the RPC to the public.

@@ -55,6 +55,23 @@ use crate::mnemonic;
 pub struct WalletInfo {
     pub wallet_id: H256,
     pub account_names: Vec<Option<String>>,
+    pub extra_info: WalletExtraInfo,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub enum WalletExtraInfo {
+    SoftwareWallet,
+    #[cfg(feature = "trezor")]
+    TrezorWallet {
+        device_name: String,
+        device_id: String,
+        // Note: semver::Version is not serializable, so we can't use it here.
+        firmware_version: String,
+    },
+}
+
+impl rpc_description::HasValueHint for WalletExtraInfo {
+    const HINT_SER: rpc_description::ValueHint = rpc_description::ValueHint::GENERIC_OBJECT;
 }
 
 // A struct that represents sending a particular amount of unspecified currency.
