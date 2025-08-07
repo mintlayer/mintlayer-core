@@ -4,7 +4,7 @@
 
 The Mintlayer API server is a tool that scans the blockchain and publishes its data in a database for easy access. Technically speaking, this is done to achieve the trade-off where the blockchain itself contains the minimal required amount of data, while the API server indexes all the data for easy reach. The API server is used by block explorers and web wallets. The API server is made to be usable in many ways, including in exchanges, by people interested in writing tooling for the blockchain, or anything else.
 
-For example to understand what problem the API server solves, the node software only stores blocks of the blockchain, but it does not index the transactions by their id. Meaning: Attempting to find a transaction by its id is virtually impossible without going through all blocks. This same applies to more information that's not directly, minimally, required to operate the blockchain. In that case, using the API server solves all these problems, since the API server is made to index the information and put it in the database.
+For example to understand what problem the API server solves, the node software only stores blocks of the blockchain, but it does not index the transactions by their id. Meaning: Attempting to find a transaction by its id is virtually impossible without going through all blocks. The same applies to more information that's not directly, minimally, required to operate the blockchain. In that case, using the API server solves all these problems, since the API server is made to index the information and put it in the database.
 
 ## Architecture
 

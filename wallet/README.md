@@ -8,7 +8,7 @@ We assume here that you already have a mintlayer node running as a daemon. If yo
 
 ### How are wallets stored?
 
-Our wallets use BIP-39 for deriving a master key from seed words. It also uses BIP-32 for deriving child keys, and finally BIP-44 is used for path derivation. The path is `m/44'/'19788/'0/0/0` for mainnet and `m/44'/'1/'0/0/0` for testnet.
+Our wallets use BIP-39 for deriving a master key from seed words. They also use BIP-32 for deriving child keys, and finally BIP-44 is used for path derivation. The path is `m/44'/'19788/'0/0/0` for mainnet and `m/44'/'1/'0/0/0` for testnet.
 
 Wallets load the 12- or 24-word seed (and possibly the passphrase as well), then follow the above-mentioned standards for key derivation.
 
