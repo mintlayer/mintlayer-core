@@ -1046,7 +1046,7 @@ impl CreateWalletDeviceSelectMenu {
 
 impl ChoiceMenu for CreateWalletDeviceSelectMenu {
     fn header(&self) -> &str {
-        "Please chose one of the available Trezor devices:"
+        "Please choose one of the available Trezor devices:"
     }
 
     fn choice_list(&self) -> Vec<String> {
@@ -1103,7 +1103,7 @@ impl OpenWalletDeviceSelectMenu {
 
 impl ChoiceMenu for OpenWalletDeviceSelectMenu {
     fn header(&self) -> &str {
-        "Please chose one of the available Trezor devices:"
+        "Please choose one of the available Trezor devices:"
     }
 
     fn choice_list(&self) -> Vec<String> {
