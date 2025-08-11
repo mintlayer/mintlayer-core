@@ -20,7 +20,7 @@
 mod input_commitments;
 
 use num_derive::FromPrimitive;
-use parity_scale_codec::{Decode, Encode};
+use parity_scale_codec::{Compact, Decode, Encode, Error, Input};
 use strum::{EnumDiscriminants, EnumIter};
 
 // Note: below we have a bunch of numeric enums (most of which are implicitly generated via `strum_discriminants`,
@@ -200,9 +200,9 @@ pub enum TokenTotalSupply {
 
 #[derive(Encode, Decode)]
 pub struct TokenIssuanceV1 {
-    pub token_ticker: parity_scale_codec::alloc::vec::Vec<u8>,
+    pub token_ticker: BoundedVec<u8, 256>,
     pub number_of_decimals: u8,
-    pub metadata_uri: parity_scale_codec::alloc::vec::Vec<u8>,
+    pub metadata_uri: BoundedVec<u8, 256>,
     pub total_supply: TokenTotalSupply,
     pub authority: Destination,
     pub is_freezable: IsTokenFreezable,
@@ -222,13 +222,13 @@ pub struct NftIssuanceV0 {
 #[derive(Encode, Decode)]
 pub struct Metadata {
     pub creator: Option<PublicKeyHolder>,
-    pub name: parity_scale_codec::alloc::vec::Vec<u8>,
-    pub description: parity_scale_codec::alloc::vec::Vec<u8>,
-    pub ticker: parity_scale_codec::alloc::vec::Vec<u8>,
-    pub icon_uri: parity_scale_codec::alloc::vec::Vec<u8>,
-    pub additional_metadata_uri: parity_scale_codec::alloc::vec::Vec<u8>,
-    pub media_uri: parity_scale_codec::alloc::vec::Vec<u8>,
-    pub media_hash: parity_scale_codec::alloc::vec::Vec<u8>,
+    pub name: BoundedVec<u8, 256>,
+    pub description: BoundedVec<u8, 256>,
+    pub ticker: BoundedVec<u8, 256>,
+    pub icon_uri: BoundedVec<u8, 256>,
+    pub additional_metadata_uri: BoundedVec<u8, 256>,
+    pub media_uri: BoundedVec<u8, 256>,
+    pub media_hash: BoundedVec<u8, 256>,
 }
 
 #[derive(Encode, Decode)]
@@ -276,7 +276,7 @@ pub enum TxOutput {
     #[codec(index = 8)]
     IssueNft(H256, NftIssuance, Destination),
     #[codec(index = 9)]
-    DataDeposit(parity_scale_codec::alloc::vec::Vec<u8>),
+    DataDeposit(BoundedVec<u8, 1024>),
     #[codec(index = 10)]
     Htlc(OutputValue, HashedTimelockContract),
     #[codec(index = 11)]
@@ -390,7 +390,7 @@ pub enum AccountCommand {
     FillOrder(OrderId, Amount, Destination),
     // Change token metadata uri
     #[codec(index = 8)]
-    ChangeTokenMetadataUri(TokenId, parity_scale_codec::alloc::vec::Vec<u8>),
+    ChangeTokenMetadataUri(TokenId, BoundedVec<u8, 256>),
 }
 
 #[derive(Encode, Decode, EnumDiscriminants)]
@@ -421,6 +421,38 @@ pub enum TxInput {
     AccountCommand(#[codec(compact)] u64, AccountCommand),
     #[codec(index = 3)]
     OrderAccountCommand(OrderAccountCommand),
+}
+
+/// A struct with custom decoder that check the length of the vector does not exceed the specified
+/// limit.
+/// It is useful to not crash memory limited devices like Ledger when decoding invalid bytes.
+#[derive(Encode, Debug, PartialEq, Eq, Clone)]
+pub struct BoundedVec<T, const N: usize>(parity_scale_codec::alloc::vec::Vec<T>);
+
+impl<T, const N: usize> AsRef<[T]> for BoundedVec<T, N> {
+    fn as_ref(&self) -> &[T] {
+        &self.0
+    }
+}
+
+impl<T: Decode, const N: usize> Decode for BoundedVec<T, N> {
+    fn decode<I: Input>(input: &mut I) -> Result<Self, Error> {
+        let len: u32 = <Compact<u32> as Decode>::decode(input)?.0;
+        let len_usize = len as usize;
+
+        // Check if the decoded length exceeds the compile-time maximum `N`.
+        if len_usize > N {
+            return Err("Vector length exceeds the maximum allowed limit".into());
+        }
+
+        // If the length is within the limit, decode the vector elements.
+        let mut vec = parity_scale_codec::alloc::vec::Vec::with_capacity(len_usize);
+        for _ in 0..len_usize {
+            vec.push(T::decode(input)?);
+        }
+
+        Ok(BoundedVec(vec))
+    }
 }
 
 #[cfg(test)]

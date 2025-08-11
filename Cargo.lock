@@ -23,7 +23,7 @@ name = "accounting"
 version = "1.0.2"
 dependencies = [
  "common",
- "parity-scale-codec",
+ "parity-scale-codec 3.7.5 (git+https://github.com/OBorce/parity-scale-codec.git?branch=fix%2Fmissing-target-atomic-ptr)",
  "proptest",
  "rstest",
  "serialization",
@@ -326,7 +326,7 @@ dependencies = [
  "logging",
  "mempool",
  "orders-accounting",
- "parity-scale-codec",
+ "parity-scale-codec 3.7.5 (git+https://github.com/OBorce/parity-scale-codec.git?branch=fix%2Fmissing-target-atomic-ptr)",
  "pos-accounting",
  "rstest",
  "serialization",
@@ -982,7 +982,7 @@ dependencies = [
  "mockall",
  "mocks",
  "p2p",
- "parity-scale-codec",
+ "parity-scale-codec 3.7.5 (git+https://github.com/OBorce/parity-scale-codec.git?branch=fix%2Fmissing-target-atomic-ptr)",
  "pos-accounting",
  "randomness",
  "rayon",
@@ -1230,7 +1230,7 @@ dependencies = [
  "num",
  "oneshot",
  "orders-accounting",
- "parity-scale-codec",
+ "parity-scale-codec 3.7.5 (git+https://github.com/OBorce/parity-scale-codec.git?branch=fix%2Fmissing-target-atomic-ptr)",
  "pos-accounting",
  "randomness",
  "rpc",
@@ -1281,7 +1281,7 @@ dependencies = [
  "mockall",
  "num-traits",
  "orders-accounting",
- "parity-scale-codec",
+ "parity-scale-codec 3.7.5 (git+https://github.com/OBorce/parity-scale-codec.git?branch=fix%2Fmissing-target-atomic-ptr)",
  "pos-accounting",
  "randomness",
  "rstest",
@@ -1367,7 +1367,7 @@ dependencies = [
  "logging",
  "num-derive",
  "num-traits",
- "parity-scale-codec",
+ "parity-scale-codec 3.7.5 (git+https://github.com/OBorce/parity-scale-codec.git?branch=fix%2Fmissing-target-atomic-ptr)",
  "pos-accounting",
  "serialization",
  "static_assertions",
@@ -1586,7 +1586,7 @@ dependencies = [
  "merkletree-mintlayer",
  "num",
  "once_cell",
- "parity-scale-codec",
+ "parity-scale-codec 3.7.5 (git+https://github.com/OBorce/parity-scale-codec.git?branch=fix%2Fmissing-target-atomic-ptr)",
  "paste",
  "proptest",
  "randomness",
@@ -1630,7 +1630,7 @@ dependencies = [
  "itertools 0.14.0",
  "logging",
  "num",
- "parity-scale-codec",
+ "parity-scale-codec 3.7.5 (git+https://github.com/OBorce/parity-scale-codec.git?branch=fix%2Fmissing-target-atomic-ptr)",
  "pos-accounting",
  "randomness",
  "rstest",
@@ -1942,7 +1942,7 @@ dependencies = [
  "num",
  "num-derive",
  "num-traits",
- "parity-scale-codec",
+ "parity-scale-codec 3.7.5 (git+https://github.com/OBorce/parity-scale-codec.git?branch=fix%2Fmissing-target-atomic-ptr)",
  "rand_chacha 0.3.1",
  "randomness",
  "ripemd",
@@ -2330,7 +2330,7 @@ dependencies = [
  "networking",
  "p2p",
  "p2p-test-utils",
- "parity-scale-codec",
+ "parity-scale-codec 3.7.5 (git+https://github.com/OBorce/parity-scale-codec.git?branch=fix%2Fmissing-target-atomic-ptr)",
  "randomness",
  "rstest",
  "serialization",
@@ -4558,7 +4558,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b69f92eb22368186aa4d25e71d2263f822b137ed3c022356acf37634c1ddda0"
 dependencies = [
  "itertools 0.12.1",
- "parity-scale-codec",
+ "parity-scale-codec 3.7.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "thiserror",
 ]
 
@@ -4805,7 +4805,7 @@ dependencies = [
  "futures",
  "logging",
  "once_cell",
- "parity-scale-codec",
+ "parity-scale-codec 3.7.5 (git+https://github.com/OBorce/parity-scale-codec.git?branch=fix%2Fmissing-target-atomic-ptr)",
  "randomness",
  "rstest",
  "serde",
@@ -5537,7 +5537,7 @@ dependencies = [
  "common",
  "crypto",
  "logging",
- "parity-scale-codec",
+ "parity-scale-codec 3.7.5 (git+https://github.com/OBorce/parity-scale-codec.git?branch=fix%2Fmissing-target-atomic-ptr)",
  "randomness",
  "rstest",
  "serialization",
@@ -5617,7 +5617,7 @@ dependencies = [
  "p2p-backend-test-suite",
  "p2p-test-utils",
  "p2p-types",
- "parity-scale-codec",
+ "parity-scale-codec 3.7.5 (git+https://github.com/OBorce/parity-scale-codec.git?branch=fix%2Fmissing-target-atomic-ptr)",
  "pos-accounting",
  "randomness",
  "rpc",
@@ -5685,7 +5685,7 @@ name = "p2p-types"
 version = "1.0.2"
 dependencies = [
  "common",
- "parity-scale-codec",
+ "parity-scale-codec 3.7.5 (git+https://github.com/OBorce/parity-scale-codec.git?branch=fix%2Fmissing-target-atomic-ptr)",
  "rpc-description",
  "serde",
  "serialization",
@@ -5726,16 +5726,27 @@ dependencies = [
  "byte-slice-cast",
  "const_format",
  "impl-trait-for-tuples",
- "parity-scale-codec-derive",
  "rustversion",
  "serde",
 ]
 
 [[package]]
+name = "parity-scale-codec"
+version = "3.7.5"
+source = "git+https://github.com/OBorce/parity-scale-codec.git?branch=fix%2Fmissing-target-atomic-ptr#b6aafd677f9b83d8bcd0d1a614ed115f7e43568a"
+dependencies = [
+ "arrayvec",
+ "byte-slice-cast",
+ "const_format",
+ "impl-trait-for-tuples",
+ "parity-scale-codec-derive",
+ "rustversion",
+]
+
+[[package]]
 name = "parity-scale-codec-derive"
 version = "3.7.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34b4653168b563151153c9e4c08ebed57fb8262bebfa79711552fa983c623e7a"
+source = "git+https://github.com/OBorce/parity-scale-codec.git?branch=fix%2Fmissing-target-atomic-ptr#b6aafd677f9b83d8bcd0d1a614ed115f7e43568a"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
@@ -6003,7 +6014,7 @@ dependencies = [
  "accounting",
  "common",
  "crypto",
- "parity-scale-codec",
+ "parity-scale-codec 3.7.5 (git+https://github.com/OBorce/parity-scale-codec.git?branch=fix%2Fmissing-target-atomic-ptr)",
  "randomness",
  "rstest",
  "serialization",
@@ -7151,7 +7162,7 @@ dependencies = [
  "hex",
  "hex-literal",
  "logging",
- "parity-scale-codec",
+ "parity-scale-codec 3.7.5 (git+https://github.com/OBorce/parity-scale-codec.git?branch=fix%2Fmissing-target-atomic-ptr)",
  "proptest",
  "serde",
  "serde_json",
@@ -7446,7 +7457,7 @@ version = "1.0.2"
 dependencies = [
  "arraytools",
  "hex-literal",
- "parity-scale-codec",
+ "parity-scale-codec 3.7.5 (git+https://github.com/OBorce/parity-scale-codec.git?branch=fix%2Fmissing-target-atomic-ptr)",
  "rand 0.8.5",
 ]
 
@@ -7454,7 +7465,7 @@ dependencies = [
 name = "serialization-tagged"
 version = "1.0.2"
 dependencies = [
- "parity-scale-codec",
+ "parity-scale-codec 3.7.5 (git+https://github.com/OBorce/parity-scale-codec.git?branch=fix%2Fmissing-target-atomic-ptr)",
  "proptest",
  "serialization",
  "serialization-core",
@@ -7815,7 +7826,7 @@ version = "1.0.2"
 dependencies = [
  "libtest-mimic",
  "logging",
- "parity-scale-codec",
+ "parity-scale-codec 3.7.5 (git+https://github.com/OBorce/parity-scale-codec.git?branch=fix%2Fmissing-target-atomic-ptr)",
  "proptest",
  "serialization",
  "storage",
@@ -8111,7 +8122,7 @@ dependencies = [
  "futures",
  "hex",
  "jsonrpsee",
- "parity-scale-codec",
+ "parity-scale-codec 3.7.5 (git+https://github.com/OBorce/parity-scale-codec.git?branch=fix%2Fmissing-target-atomic-ptr)",
  "randomness",
  "rpc",
  "serde",
@@ -8293,7 +8304,7 @@ dependencies = [
  "common",
  "crypto",
  "logging",
- "parity-scale-codec",
+ "parity-scale-codec 3.7.5 (git+https://github.com/OBorce/parity-scale-codec.git?branch=fix%2Fmissing-target-atomic-ptr)",
  "randomness",
  "rstest",
  "serialization",
@@ -8655,7 +8666,7 @@ dependencies = [
  "crypto",
  "num-derive",
  "num-traits",
- "parity-scale-codec",
+ "parity-scale-codec 3.7.5 (git+https://github.com/OBorce/parity-scale-codec.git?branch=fix%2Fmissing-target-atomic-ptr)",
  "rstest",
  "serialization",
  "strum",
@@ -8916,7 +8927,7 @@ dependencies = [
  "logging",
  "loom",
  "num-traits",
- "parity-scale-codec",
+ "parity-scale-codec 3.7.5 (git+https://github.com/OBorce/parity-scale-codec.git?branch=fix%2Fmissing-target-atomic-ptr)",
  "probabilistic-collections",
  "qrcodegen",
  "randomness",
@@ -8956,7 +8967,7 @@ dependencies = [
  "crypto",
  "itertools 0.14.0",
  "logging",
- "parity-scale-codec",
+ "parity-scale-codec 3.7.5 (git+https://github.com/OBorce/parity-scale-codec.git?branch=fix%2Fmissing-target-atomic-ptr)",
  "randomness",
  "rstest",
  "serialization",
@@ -9037,7 +9048,7 @@ dependencies = [
  "logging",
  "mempool",
  "orders-accounting",
- "parity-scale-codec",
+ "parity-scale-codec 3.7.5 (git+https://github.com/OBorce/parity-scale-codec.git?branch=fix%2Fmissing-target-atomic-ptr)",
  "pos-accounting",
  "randomness",
  "rpc-description",
@@ -9367,7 +9378,7 @@ dependencies = [
  "crypto",
  "hex",
  "itertools 0.14.0",
- "parity-scale-codec",
+ "parity-scale-codec 3.7.5 (git+https://github.com/OBorce/parity-scale-codec.git?branch=fix%2Fmissing-target-atomic-ptr)",
  "randomness",
  "rpc-description",
  "rstest",
