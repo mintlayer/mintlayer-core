@@ -2,8 +2,6 @@
 
 Welcome to the official Github repository for Mintlayer, an innovative, open-source blockchain project. For detailed technical insights, we recommend visiting our [documentation](https://docs.mintlayer.org/).
 
-Please note, the code in this repository is currently under active development. Consequently, it should not be deemed production-ready. Nonetheless, you're invited to test the code in our active testnet environment.
-
 ## Security
 
 Discovered a potential security issue? We urge you to contact us directly at security@mintlayer.org. When reporting, please encrypt your report using Ben's GPG key which can be found [here](https://www.mintlayer.org/assets/keys/ben).
@@ -54,24 +52,26 @@ You can either keep running the code from source, using `cargo run --release --b
 
 ### Running software and how to control logging
 
-The logging of mintlayer-core is configured via the `RUST_LOG` environment variable. All log messages are printed to the terminal screen; we prefer simplicity over complicated log machinery. For example, to see all logs of the `info` level and above (the default level for normal operation), you can run the node with `RUST_LOG=info cargo run --bin node-daemon -- testnet`. If you're facing an issue, it's recommended to use `RUST_LOG=debug` instead. We recommend using these commands that not only print the logs on the screen, but also write them to a file in case you face an issue. On Linux, this can be achieved using `tee` as shown below.
+Normally, the logging of mintlayer-core is configured via the `RUST_LOG` environment variable and all log messages are printed to the terminal screen. For example, to see all logs of the `info` level and above (the default level for normal operation), you can run the node with `RUST_LOG=info cargo run --bin node-daemon -- testnet`. If you're facing an issue, it's recommended to use `RUST_LOG=debug` instead. We recommend using the commands that not only print the logs on the screen, but also write them to a file in case you face an issue. On Linux, this can be achieved using `tee` as shown below.
 
 If the `RUST_LOG` environment variable is not specified, the log level `info` will be used by default.
+
+Additionally, independent of what is printed to the console, node's logs may also be automatically written to the data directory (on Linux, they will be inside `~/.mintlayer/mainnet/logs/` and `~/.mintlayer/testnet/logs/` for mainnet and testnet respectively); this is controlled by the `--log-to-file` option (e.g. `--log-to-file true`), which is accepted by both node-daemon and node-gui. By default, its value is false for node-daemon and true for node-gui. The log files are rotated based on size, so older logs will be automatically deleted eventually. Also note that the log level used in this case is always `info`, regardless of the value of `RUST_LOG`.
 
 Here are the commands as recommended for different scenarios:
 
 #### Assuming you're using the source code
 
-Every release has a tag and a release branch. Make sure you checkout the release you need. For example, if you need v0.5.1, you should first run the following to check out the release branch:
+Every release has a tag and a release branch. Make sure you checkout the release you need. For example, if you need v1.0.0, you should first run the following to check out the release branch:
 
 ```sh
-git checkout release-v0.5.1
+git checkout release-v1.0.0
 ```
 
 or to checkout the tag:
 
 ```sh
-git checkout tags/v0.5.1
+git checkout tags/v1.0.0
 ```
 
 Release branches are more recommended than tags, because they get necessary security patches, if any. Tags are just markers.
@@ -156,10 +156,15 @@ cargo build --bin wallet-cli --target=aarch64-unknown-linux-gnu --release
 
 The artifacts can be found in `target/aarch64-unknown-linux-gnu/release`, or a similar directory name.
 
-
 ## Wallets
 
 For more information about the wallets and their usage, [visit this readme file](wallet/README.md).
+
+## Trezor support
+
+Mintlayer wallets support Trezor hardware wallets, though it's still in Beta at this moment.
+
+For details, [visit this readme file](wallet/TREZOR_SUPPORT.md).
 
 ## The API server
 

@@ -102,32 +102,32 @@ impl TabsWidget {
             WalletMode::Hot => tabs
                 .push(
                     TabIndex::Summary as usize,
-                    self.summary_tab.tab_label(),
-                    self.summary_tab.view(node_state),
+                    self.summary_tab.tab_label(node_state),
+                    self.summary_tab.content(node_state),
                 )
                 .push(
                     TabIndex::Networking as usize,
-                    self.networking_tab.tab_label(),
-                    self.networking_tab.view(node_state),
+                    self.networking_tab.tab_label(node_state),
+                    self.networking_tab.content(node_state),
                 ),
             WalletMode::Cold => tabs.push(
                 TabIndex::Summary as usize,
-                self.cold_wallet_tab.tab_label(),
-                self.cold_wallet_tab.view(node_state),
+                self.cold_wallet_tab.tab_label(node_state),
+                self.cold_wallet_tab.content(node_state),
             ),
         };
         // TODO: enable settings tab when needed
         //.push(
         //    TabIndex::Settings as usize,
-        //    self.settings_tab.tab_label(),
-        //    self.settings_tab.view(node_state),
+        //    self.settings_tab.tab_label(node_state),
+        //    self.settings_tab.content(node_state),
         //);
 
         for (idx, wallet) in self.wallets.iter().enumerate() {
             tabs = tabs.push(
                 idx + TabIndex::COUNT,
-                wallet.tab_label(),
-                wallet.view(node_state),
+                wallet.tab_label(node_state),
+                wallet.content(node_state),
             )
         }
 
@@ -194,13 +194,7 @@ impl TabsWidget {
 trait Tab {
     type Message;
 
-    fn title(&self) -> String;
-
-    fn tab_label(&self) -> TabLabel;
-
-    fn view(&self, node_state: &NodeState) -> Element<Self::Message> {
-        self.content(node_state)
-    }
+    fn tab_label(&self, node_state: &NodeState) -> TabLabel;
 
     fn content(&self, node_state: &NodeState) -> Element<Self::Message>;
 }

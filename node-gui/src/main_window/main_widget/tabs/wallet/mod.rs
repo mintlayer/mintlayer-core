@@ -18,6 +18,7 @@ mod delegation;
 mod left_panel;
 mod send;
 mod stake;
+mod status_bar;
 mod top_panel;
 mod transactions;
 
@@ -463,12 +464,16 @@ impl WalletTab {
 impl Tab for WalletTab {
     type Message = TabsMessage;
 
-    fn title(&self) -> String {
-        String::from("Wallet")
-    }
+    fn tab_label(&self, node_state: &NodeState) -> TabLabel {
+        let text = match node_state.wallets.get(&self.wallet_id) {
+            Some(wallet_info) => match wallet_info.extra_info {
+                wallet_controller::types::WalletExtraInfo::SoftwareWallet => "Software wallet",
+                wallet_controller::types::WalletExtraInfo::TrezorWallet { .. } => "Trezor wallet",
+            },
+            None => "No wallet",
+        };
 
-    fn tab_label(&self) -> TabLabel {
-        TabLabel::IconText(iced_fonts::Bootstrap::Wallet.into(), self.title())
+        TabLabel::IconText(iced_fonts::Bootstrap::Wallet.into(), text.to_owned())
     }
 
     fn content(&self, node_state: &NodeState) -> Element<Self::Message> {
@@ -568,6 +573,17 @@ impl Tab for WalletTab {
             .on_resize(10, WalletMessage::Resized)
             .into();
 
-        pane_grid.map(|msg| TabsMessage::WalletMessage(self.wallet_id, msg))
+        let result = if let Some(status_bar) = status_bar::view_status_bar(&wallet_info.extra_info)
+        {
+            Element::new(column![
+                pane_grid,
+                horizontal_rule(1),
+                container(status_bar).width(Length::Fill)
+            ])
+        } else {
+            pane_grid
+        };
+
+        result.map(|msg| TabsMessage::WalletMessage(self.wallet_id, msg))
     }
 }

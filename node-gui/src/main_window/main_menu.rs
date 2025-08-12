@@ -96,7 +96,8 @@ fn labeled_button<'a>(label: &'a str, msg: MenuMessage) -> button::Button<'a, Me
 }
 
 fn menu_item(label: &str, msg: MenuMessage) -> Item<'_, MenuMessage, Theme, iced::Renderer> {
-    Item::new(labeled_button(label, msg).width(Length::Fixed(230.0)))
+    // Note: if this width is smaller than the text, the menu item will drop the whole last word.
+    Item::new(labeled_button(label, msg).width(Length::Fixed(270.0)))
 }
 
 fn make_menu_file<'a>(wallet_mode: WalletMode) -> Item<'a, MenuMessage, Theme, iced::Renderer> {
@@ -104,7 +105,7 @@ fn make_menu_file<'a>(wallet_mode: WalletMode) -> Item<'a, MenuMessage, Theme, i
         labeled_button("File", MenuMessage::NoOp),
         Menu::new(match wallet_mode {
             WalletMode::Hot => {
-                let menu = vec![
+                let mut menu = vec![
                     menu_item(
                         "Create new Software wallet",
                         MenuMessage::CreateNewWallet {
@@ -123,43 +124,31 @@ fn make_menu_file<'a>(wallet_mode: WalletMode) -> Item<'a, MenuMessage, Theme, i
                             wallet_type: WalletType::Hot,
                         },
                     ),
-                    // TODO: enable setting when needed
-                    // menu_item("Settings", MenuMessage::NoOp),
-                    menu_item("Exit", MenuMessage::Exit),
                 ];
                 #[cfg(feature = "trezor")]
                 {
-                    let mut menu = menu;
-                    menu.insert(
-                        1,
-                        menu_item(
-                            "Create new Trezor wallet",
-                            MenuMessage::CreateNewWallet {
-                                wallet_type: WalletType::Trezor,
-                            },
-                        ),
-                    );
-                    menu.insert(
-                        3,
-                        menu_item(
-                            "Recover from Trezor wallet",
-                            MenuMessage::RecoverWallet {
-                                wallet_type: WalletType::Trezor,
-                            },
-                        ),
-                    );
-                    menu.insert(
-                        5,
-                        menu_item(
-                            "Open Trezor wallet",
-                            MenuMessage::OpenWallet {
-                                wallet_type: WalletType::Trezor,
-                            },
-                        ),
-                    );
-                    menu
+                    menu.push(menu_item(
+                        "(Beta) Create new Trezor wallet",
+                        MenuMessage::CreateNewWallet {
+                            wallet_type: WalletType::Trezor,
+                        },
+                    ));
+                    menu.push(menu_item(
+                        "(Beta) Recover from Trezor wallet",
+                        MenuMessage::RecoverWallet {
+                            wallet_type: WalletType::Trezor,
+                        },
+                    ));
+                    menu.push(menu_item(
+                        "(Beta) Open Trezor wallet",
+                        MenuMessage::OpenWallet {
+                            wallet_type: WalletType::Trezor,
+                        },
+                    ));
                 }
-                #[cfg(not(feature = "trezor"))]
+                // TODO: enable setting when needed
+                // menu.push(menu_item("Settings", MenuMessage::NoOp));
+                menu.push(menu_item("Exit", MenuMessage::Exit));
                 menu
             }
             WalletMode::Cold => {
@@ -188,7 +177,7 @@ fn make_menu_file<'a>(wallet_mode: WalletMode) -> Item<'a, MenuMessage, Theme, i
                 ]
             }
         })
-        .width(260),
+        .width(300),
     );
 
     root

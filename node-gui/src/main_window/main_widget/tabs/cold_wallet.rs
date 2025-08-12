@@ -40,12 +40,11 @@ fn get_network_type_capitalized(chain_config: &ChainConfig) -> String {
 impl Tab for ColdWalletTab {
     type Message = TabsMessage;
 
-    fn title(&self) -> String {
-        String::from("Cold wallet summary")
-    }
-
-    fn tab_label(&self) -> TabLabel {
-        TabLabel::IconText(iced_fonts::Bootstrap::Info.into(), self.title())
+    fn tab_label(&self, _node_state: &NodeState) -> TabLabel {
+        TabLabel::IconText(
+            iced_fonts::Bootstrap::Info.into(),
+            String::from("Cold wallet summary"),
+        )
     }
 
     fn content(&self, node_state: &NodeState) -> Element<Self::Message> {

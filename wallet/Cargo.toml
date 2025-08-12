@@ -34,6 +34,7 @@ bip39 = { workspace = true, default-features = false, features = [
 hex.workspace = true
 itertools.workspace = true
 parity-scale-codec.workspace = true
+semver.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 trezor-client = { workspace = true, optional = true }

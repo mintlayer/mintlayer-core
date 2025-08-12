@@ -28,10 +28,10 @@ Using `curl` over HTTP (replace all caps placeholders as appropriate):
 curl -H 'Content-Type: application/json' -d '{"jsonrpc": "2.0", "id": ID, "method": METHOD, "params": [PARAM1, PARAM2, ...]}' http://USER:PASS@HOST:PORT
 ```
 
-for example, to get the balance of account with index 0 from an open wallet, with RPC, assuming authentication is disabled
+for example, to get the balance of account with index 0 from an open wallet, counting only confirmed UTXOs, assuming authentication is disabled
 
 ```sh
-curl -H 'Content-Type: application/json' -d '{"jsonrpc": "2.0", "id": 1, "method": "account_balance", "params": {"account": 0}}' http://127.0.0.1:3034
+curl -H 'Content-Type: application/json' -d '{"jsonrpc": "2.0", "id": 1, "method": "account_balance", "params": {"account": 0, "utxo_states": ["Confirmed"]}}' http://127.0.0.1:3034
 ```
 
 For websocket, you can use `websocat` (replace all caps placeholders as appropriate):
@@ -49,7 +49,7 @@ and then type in the method invocations one per line in the following format:
 for example, to get the balance of account with index 0 from an open wallet, with RPC
 
 ```
-{"jsonrpc": "2.0", "id": 1, "method": "account_balance", "params": {"account": 0}}
+{"jsonrpc": "2.0", "id": 1, "method": "account_balance", "params": {"account": 0, "utxo_states": ["Confirmed"]}}
 ```
 
 as another example, since this is websocket, you can also subscribe to events. So to do that, send the function:
@@ -83,7 +83,7 @@ The mechanism to subscribe to and to deliver events follows the [Ethereum pubsub
 However, the emitted events take slightly different shape.
 
 To see how the events are defined in full detail, see the `Event` type
-in [src/service/events.rs](src/service/events.rs).
+in [events.rs](/wallet/wallet-rpc-lib/src/service/events.rs).
 
 ### NewBlock
 

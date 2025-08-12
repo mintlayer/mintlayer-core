@@ -820,7 +820,7 @@ pub enum MnemonicInfo {
 #[cfg(feature = "trezor")]
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct FoundDevice {
-    pub name: String,
+    pub device_name: String,
     pub device_id: String,
 }
 
@@ -828,7 +828,7 @@ pub struct FoundDevice {
 impl From<wallet::signer::trezor_signer::FoundDevice> for FoundDevice {
     fn from(value: wallet::signer::trezor_signer::FoundDevice) -> Self {
         Self {
-            name: value.name,
+            device_name: value.device_name,
             device_id: value.device_id,
         }
     }

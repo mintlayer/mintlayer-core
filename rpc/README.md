@@ -51,7 +51,7 @@ for example, to get the current state of chainstate
 as another example, since this is websocket, you can also subscribe to events. So to do that, send the function:
 
 ```
-{"jsonrpc": "2.0", "method": "chainstate_subscribe_events", "params":[{}], "id": 1}
+{"jsonrpc": "2.0", "method": "chainstate_subscribe_to_events", "params":[{}], "id": 1}
 ```
 
 which will return a confirmation with a result. Then, the node will notify you for events, like new blocks becoming the chainstate tip.

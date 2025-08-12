@@ -87,12 +87,8 @@ impl SettingsTab {
 impl Tab for SettingsTab {
     type Message = TabsMessage;
 
-    fn title(&self) -> String {
-        String::from("Settings")
-    }
-
-    fn tab_label(&self) -> TabLabel {
-        TabLabel::IconText(iced_fonts::Bootstrap::Gear.into(), self.title())
+    fn tab_label(&self, _node_state: &NodeState) -> TabLabel {
+        TabLabel::IconText(iced_fonts::Bootstrap::Gear.into(), String::from("Settings"))
     }
 
     fn content(&self, _node_state: &NodeState) -> Element<Self::Message> {

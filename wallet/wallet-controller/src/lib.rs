@@ -108,6 +108,7 @@ pub use wallet_types::{
     utxo_types::{UtxoState, UtxoStates, UtxoType, UtxoTypes},
 };
 use wallet_types::{
+    hw_data::HardwareWalletFullInfo,
     partially_signed_transaction::{
         make_sighash_input_commitments, PartiallySignedTransaction,
         PartiallySignedTransactionError, SighashInputCommitmentCreationError, TxAdditionalInfo,
@@ -117,6 +118,9 @@ use wallet_types::{
     with_locked::WithLocked,
     Currency,
 };
+
+#[cfg(feature = "trezor")]
+use crate::types::WalletExtraInfo;
 
 // Note: the standard `Debug` macro is not smart enough and requires N to implement the `Debug`
 // trait even though only `N::Error` needs it. So we use `derive_more::Debug` instead.
@@ -313,10 +317,7 @@ where
             .map(|w| w.map_wallet(RuntimeWallet::Trezor)),
         };
 
-        if res.is_err() {
-            let _ = fs::remove_file(file_path);
-        }
-
+        Self::delete_wallet_file_on_wallet_creation_failure(&res, file_path);
         res
     }
 
@@ -334,10 +335,10 @@ where
             )
         );
 
-        let db = wallet::wallet::open_or_create_wallet_file(file_path)
+        let db = wallet::wallet::open_or_create_wallet_file(file_path.as_ref())
             .map_err(ControllerError::WalletError)?;
 
-        match args {
+        let res = match args {
             WalletTypeArgsComputed::Software {
                 mnemonic,
                 passphrase,
@@ -378,6 +379,31 @@ where
                 .map_err(ControllerError::WalletError)?;
                 Ok(wallet.map_wallet(RuntimeWallet::Trezor))
             }
+        };
+
+        Self::delete_wallet_file_on_wallet_creation_failure(&res, file_path);
+        res
+    }
+
+    /// If wallet creation/recovery didn't succeed (e.g. due to a hard error, or because
+    /// user intervention is required), we must delete the wallet file.
+    fn delete_wallet_file_on_wallet_creation_failure(
+        result: &Result<WalletCreation<RuntimeWallet<DefaultBackend>>, ControllerError<N>>,
+        file_path: impl AsRef<Path>,
+    ) {
+        let must_remove_wallet_file = match result {
+            Err(_) => true,
+            Ok(wallet_creation) => match wallet_creation {
+                // Wallet was created successfully.
+                WalletCreation::Wallet(_) => false,
+                // Wallet was not created successfully. The caller will need to handle this result
+                // and either fail or try again.
+                WalletCreation::MultipleAvailableTrezorDevices(_) => true,
+            },
+        };
+
+        if must_remove_wallet_file {
+            let _ = fs::remove_file(file_path);
         }
     }
 
@@ -544,9 +570,23 @@ where
 
     pub fn wallet_info(&self) -> WalletInfo {
         let (wallet_id, account_names) = self.wallet.wallet_info();
+        let hw_wallet_info = self.wallet.hardware_wallet_info();
+        let extra_info = match hw_wallet_info {
+            Some(hw_wallet_info) => match hw_wallet_info {
+                #[cfg(feature = "trezor")]
+                HardwareWalletFullInfo::Trezor(trezor_info) => WalletExtraInfo::TrezorWallet {
+                    device_name: trezor_info.device_name,
+                    device_id: trezor_info.device_id,
+                    firmware_version: trezor_info.firmware_version.to_string(),
+                },
+            },
+            None => WalletExtraInfo::SoftwareWallet,
+        };
+
         WalletInfo {
             wallet_id,
             account_names,
+            extra_info,
         }
     }
 

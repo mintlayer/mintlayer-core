@@ -4992,12 +4992,14 @@ dependencies = [
  "common",
  "crypto",
  "futures",
+ "itertools 0.14.0",
  "logging",
  "mempool",
  "node-comm",
  "node-lib",
  "p2p",
  "rstest",
+ "semver",
  "serde",
  "serde_json",
  "serde_with",
@@ -8689,7 +8691,7 @@ dependencies = [
 [[package]]
 name = "trezor-client"
 version = "0.1.5"
-source = "git+https://github.com/mintlayer/mintlayer-trezor-firmware?rev=198346c2f731e7ff34be03b7a16818008eeeae0d#198346c2f731e7ff34be03b7a16818008eeeae0d"
+source = "git+https://github.com/mintlayer/mintlayer-trezor-firmware?rev=397155e26660993a044e78447dad893852fa44d1#397155e26660993a044e78447dad893852fa44d1"
 dependencies = [
  "bitcoin",
  "byteorder",
@@ -9096,6 +9098,7 @@ dependencies = [
  "randomness",
  "rpc-description",
  "rstest",
+ "semver",
  "serde",
  "serde_json",
  "serial_test",
@@ -9430,6 +9433,7 @@ dependencies = [
  "randomness",
  "rpc-description",
  "rstest",
+ "semver",
  "serde",
  "serialization",
  "storage",

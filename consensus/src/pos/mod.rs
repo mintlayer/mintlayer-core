@@ -230,9 +230,9 @@ pub fn stake(
     let first_timestamp = *block_timestamp;
 
     log::debug!(
-        "Search for a valid block ({}..{}), pool_id: {}",
-        first_timestamp,
-        max_block_timestamp,
+        "Search for a valid block, start: {}, slots count: {}, pool_id: {}",
+        first_timestamp.into_time(),
+        max_block_timestamp.as_int_seconds() - first_timestamp.as_int_seconds() + 1,
         Address::new(chain_config, *pos_data.stake_pool_id())
             .expect("Pool id to address cannot fail")
     );
