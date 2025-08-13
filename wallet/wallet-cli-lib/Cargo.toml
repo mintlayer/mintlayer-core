@@ -31,6 +31,7 @@ wallet-cli-commands = { path = "../wallet-cli-commands" }
 clap = { workspace = true, features = ["derive"] }
 async-trait.workspace = true
 crossterm.workspace = true
+derive_more.workspace = true
 directories.workspace = true
 humantime.workspace = true
 hex.workspace = true

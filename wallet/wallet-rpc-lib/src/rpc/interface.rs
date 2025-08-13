@@ -59,6 +59,32 @@ trait WalletEventsRpc {
     async fn subscribe_wallet_events(&self) -> rpc::subscription::Reply;
 }
 
+// IMPORTANT: the documentation for the RPC functions below may be re-used as the description for
+// the corresponding wallet-cli commands, in the case they don't have a doc comment of their own
+// (see the `get_repl_command` function in `wallet-cli-commands`).
+//
+// So, for any particular RPC function:
+// 1) Make sure that either the corresponding wallet-cli command has its own doc comment OR
+// that the RPC function's doc comment is generic enough, e.g.:
+// a) It doesn't mention the exact parameter names.
+// b) It doesn't reference other functions; this is because RPC function names use underscores
+//    as separators and wallet-cli ones use dashes, so the names are not identical.
+//    Note however, that we currently do sometimes mention other RPC functions, but using
+//    "dashed" names, which look fine in the wallet-cli documentation, but ugly-yet-still-understandable
+//    in the RPC's (which we find acceptable).
+// Also, keep an eye on the functions that accept an account number - wallet-cli has the notion
+// of a pre-selected "current account", so wallet-cli commands won't have such a parameter.
+// Currently, we refer to this parameter as "this account" or "the selected account", which sounds
+// somewhat off in the RPC documentation, but is still considered acceptable.
+//
+// 2) If you go with the re-use, run `wallet-cli` and visually check that the re-used documentation
+// makes sense. One possible issue to look for is tautology - the "inherited" description may
+// be explaining the parameters (e.g. in some generic way, without mentioning the exact names),
+// but the wallet-cli command may have doc strings on its parameters, explaining them again.
+//
+// 3) In general, the visual quality of the wallet-cli documentation is more important than
+// the RPC documentation's, because more people will see the former.
+
 /// RPC methods available in the cold wallet mode.
 #[rpc::describe]
 #[rpc::rpc(server, client)]
@@ -66,7 +92,7 @@ trait ColdWalletRpc {
     #[method(name = "shutdown")]
     async fn shutdown(&self) -> rpc::RpcResult<()>;
 
-    /// Print the version of the wallet software and possibly the git commit hash, if found WWW!!
+    /// Print the version of the wallet software and possibly the git commit hash, if found
     #[method(name = "version")]
     async fn version(&self) -> rpc::RpcResult<String>;
 
@@ -102,11 +128,11 @@ trait ColdWalletRpc {
         hardware_wallet: Option<HardwareWalletType>,
     ) -> rpc::RpcResult<OpenedWallet>;
 
-    /// Close the currently open wallet file
+    /// Close the currently opened wallet file
     #[method(name = "wallet_close")]
     async fn close_wallet(&self) -> rpc::RpcResult<()>;
 
-    /// Check the current wallet's number of accounts and their names
+    /// Obtain certain information about the wallet, such as the number of accounts and their names
     #[method(name = "wallet_info")]
     async fn wallet_info(&self) -> rpc::RpcResult<WalletInfo>;
 
@@ -138,9 +164,9 @@ trait ColdWalletRpc {
     /// Set the lookahead size for key generation.
     ///
     /// The lookahead size, also known as the gap limit, determines the number of addresses
-    /// to generate and monitor on the blockchain for incoming transactions, following the last
-    /// known address with a transaction.
-    /// Only reduce this value if you are certain there are no incoming transactions on these addresses.
+    /// to generate and monitor on the blockchain, following the last known address used in a transaction.
+    ///
+    /// Only reduce this value if you are certain there are no incoming transactions using these addresses.
     #[method(name = "wallet_set_lookahead_size")]
     async fn set_lookahead_size(
         &self,
@@ -149,6 +175,7 @@ trait ColdWalletRpc {
     ) -> rpc::RpcResult<()>;
 
     /// Show receive-addresses with their usage state.
+    ///
     /// Note that whether an address is used isn't based on the wallet,
     /// but on the blockchain. So if an address is used in a transaction,
     /// it will be marked as used only when the transaction is included
@@ -160,14 +187,14 @@ trait ColdWalletRpc {
         include_change_addresses: bool,
     ) -> rpc::RpcResult<Vec<AddressWithUsageInfo>>;
 
-    /// Show standalone added addresses with their labels.
+    /// Show added standalone addresses with their labels.
     #[method(name = "standalone_address_show")]
     async fn get_standalone_addresses(
         &self,
         account: AccountArg,
     ) -> rpc::RpcResult<RpcStandaloneAddresses>;
 
-    /// Show standalone addresses details.
+    /// Show standalone address details.
     #[method(name = "standalone_address_details")]
     async fn get_standalone_address_details(
         &self,
@@ -180,6 +207,7 @@ trait ColdWalletRpc {
     async fn issue_address(&self, account: AccountArg) -> rpc::RpcResult<AddressInfo>;
 
     /// Reveal the public key behind this address in hex encoding and address encoding.
+    ///
     /// Note that this isn't a normal address to be used in transactions.
     /// It's preferred to take the address from address-show command
     #[method(name = "address_reveal_public_key")]
@@ -190,14 +218,17 @@ trait ColdWalletRpc {
     ) -> rpc::RpcResult<PublicKeyInfo>;
 
     /// Issue a new staking VRF (Verifiable Random Function) key for this account.
+    ///
     /// VRF keys are used as a trustless mechanism to ensure the randomness of the staking process,
     /// where no one can control the possible outcomes, to ensure decentralization.
+    ///
     /// NOTE: Under normal circumstances you don't need to generate VRF keys manually.
     /// Creating a new staking pool will do it for you. This is available for specialized use-cases.
     #[method(name = "staking_new_vrf_public_key")]
     async fn new_vrf_public_key(&self, account: AccountArg) -> rpc::RpcResult<VrfPublicKeyInfo>;
 
     /// Shows the legacy VRF key that uses an abandoned derivation mechanism.
+    ///
     /// This will not be used for new pools and should be avoided
     #[method(name = "staking_show_legacy_vrf_key")]
     async fn get_legacy_vrf_public_key(
@@ -206,6 +237,7 @@ trait ColdWalletRpc {
     ) -> rpc::RpcResult<LegacyVrfPublicKeyInfo>;
 
     /// Show the issued staking VRF (Verifiable Random Function) keys for this account.
+    ///
     /// These keys are generated when pools are created.
     /// VRF keys are used as a trustless mechanism to ensure the randomness of the staking process,
     /// where no one can control the possible outcomes, to ensure decentralization.
@@ -216,6 +248,7 @@ trait ColdWalletRpc {
     ) -> rpc::RpcResult<Vec<VrfPublicKeyInfo>>;
 
     /// Shows the account's extended public key.
+    ///
     /// The returned extended public key can be used to derive receiving or change addresses for
     /// this account.
     #[method(name = "account_extended_public_key")]
@@ -224,11 +257,13 @@ trait ColdWalletRpc {
         account_arg: AccountArg,
     ) -> rpc::RpcResult<AccountExtendedPublicKey>;
 
+    /// Signs transaction inputs that are not yet signed.
+    ///
+    /// The input is a hex encoded transaction or PartiallySignedTransaction. This format is
+    /// automatically used in this wallet in functions such as staking-decommission-pool-request.
+    ///
+    /// Once all signatures are complete, the result can be broadcast to the network.
     #[method(name = "account_sign_raw_transaction")]
-    /// Signs the inputs that are not yet signed.
-    /// The input is a special format of the transaction serialized to hex. This format is automatically used in this wallet
-    /// in functions such as staking-decommission-pool-request. Once all signatures are complete, the result can be broadcast
-    /// to the network.
     async fn sign_raw_transaction(
         &self,
         account: AccountArg,
@@ -236,8 +271,8 @@ trait ColdWalletRpc {
         options: TransactionRequestOptions,
     ) -> rpc::RpcResult<MaybeSignedTransaction>;
 
+    /// Signs a challenge with a private key corresponding to the provided address.
     #[method(name = "challenge_sign_plain")]
-    /// Signs a challenge with a private key corresponding to the provided address destination.
     async fn sign_challenge(
         &self,
         account: AccountArg,
@@ -245,8 +280,8 @@ trait ColdWalletRpc {
         address: RpcAddress<Destination>,
     ) -> rpc::RpcResult<RpcHexString>;
 
+    /// Signs a challenge with a private key corresponding to the provided address.
     #[method(name = "challenge_sign_hex")]
-    /// Signs a challenge with a private key corresponding to the provided address destination.
     async fn sign_challenge_hex(
         &self,
         account: AccountArg,
@@ -254,8 +289,8 @@ trait ColdWalletRpc {
         address: RpcAddress<Destination>,
     ) -> rpc::RpcResult<RpcHexString>;
 
+    /// Verifies a signed challenge against an address.
     #[method(name = "challenge_verify_plain")]
-    /// Verifies a signed challenge against an address destination
     async fn verify_challenge(
         &self,
         message: String,
@@ -263,8 +298,8 @@ trait ColdWalletRpc {
         address: RpcAddress<Destination>,
     ) -> rpc::RpcResult<()>;
 
+    /// Verifies a signed challenge against an address.
     #[method(name = "challenge_verify_hex")]
-    /// Verifies a signed challenge against an address destination
     async fn verify_challenge_hex(
         &self,
         message: RpcHexString,
@@ -285,10 +320,12 @@ trait WalletRpc {
     #[method(name = "wallet_rescan")]
     async fn rescan(&self) -> rpc::RpcResult<()>;
 
+    /// Returns information about the current best block
     #[method(name = "wallet_best_block")]
     async fn best_block(&self) -> rpc::RpcResult<BlockInfo>;
 
     /// Creates a new account with an optional name.
+    ///
     /// Returns an error if the last created account does not have a transaction history.
     #[method(name = "account_create")]
     async fn create_account(&self, name: Option<String>) -> rpc::RpcResult<NewAccountInfo>;
@@ -303,6 +340,7 @@ trait WalletRpc {
     ) -> rpc::RpcResult<NewAccountInfo>;
 
     /// Add, rename or delete a label to an already added standalone address.
+    ///
     /// Specifying a label will add or replace the existing one,
     /// and not specifying a label will remove the existing one.
     #[method(name = "standalone_address_label_rename")]
@@ -313,7 +351,7 @@ trait WalletRpc {
         label: Option<String>,
     ) -> rpc::RpcResult<()>;
 
-    /// Add a new standalone watch only address not derived from the selected account's key chain
+    /// Add a new standalone watch-only address not derived from the selected account's key chain
     #[method(name = "standalone_add_watch_only_address")]
     async fn add_standalone_address(
         &self,
@@ -323,7 +361,7 @@ trait WalletRpc {
         no_rescan: Option<bool>,
     ) -> rpc::RpcResult<()>;
 
-    /// Add a new standalone private key not derived from the selected account's key chain to be watched
+    /// Add a new standalone private key not derived from the selected account's key chain
     #[method(name = "standalone_add_private_key_from_hex")]
     async fn add_standalone_private_key(
         &self,
@@ -333,7 +371,8 @@ trait WalletRpc {
         no_rescan: Option<bool>,
     ) -> rpc::RpcResult<()>;
 
-    /// Add a new standalone multi signature address
+    /// Add a new standalone multi-signature address.
+    ///
     /// Use the `transaction_compose` command to use the new multisig address as input or output
     #[method(name = "standalone_add_multisig")]
     async fn add_standalone_multisig(
@@ -345,7 +384,7 @@ trait WalletRpc {
         no_rescan: Option<bool>,
     ) -> rpc::RpcResult<String>;
 
-    /// Lists all the utxos owned by a multisig watched by this account
+    /// Lists all the utxos owned by multisig addresses watched by this account
     #[method(name = "standalone_multisig_utxos")]
     async fn get_multisig_utxos(
         &self,
@@ -377,8 +416,9 @@ trait WalletRpc {
         options: TxOptionsOverrides,
     ) -> rpc::RpcResult<NewSubmittedTransaction>;
 
-    /// Send a given coin amount to a given address. The wallet will automatically calculate the required information
-    /// Optionally, one can also mention the utxos to be used.
+    /// Send a given coin amount to a given address. The wallet will automatically calculate the required fees.
+    ///
+    /// Optionally, you can also mention the utxos to be used.
     #[method(name = "address_send")]
     async fn send_coins(
         &self,
@@ -395,7 +435,7 @@ trait WalletRpc {
     /// `from_addresses` needs to be empty and `all` set to true.
     ///
     /// Spendable coins are any coins that are not locked, and tokens that are not frozen or locked.
-    /// The wallet will automatically calculate the required fees
+    /// The wallet will automatically calculate the required fees.
     #[method(name = "address_sweep_spendable")]
     async fn sweep_addresses(
         &self,
@@ -407,7 +447,7 @@ trait WalletRpc {
     ) -> rpc::RpcResult<RpcNewTransaction>;
 
     /// Sweep all the coins from a delegation to a given address.
-    /// The wallet will automatically calculate the required fees
+    /// The wallet will automatically calculate the required fees.
     #[method(name = "staking_sweep_delegation")]
     async fn sweep_delegation(
         &self,
@@ -419,6 +459,7 @@ trait WalletRpc {
 
     /// Creates a transaction that spends from a specific address,
     /// and returns the change to the same address (unless one is specified), without signature.
+    ///
     /// This transaction is used for "withdrawing" small amounts from a cold storage
     /// without changing the ownership address. Once this is created,
     /// it can be signed using account-sign-raw-transaction in the cold wallet
@@ -436,7 +477,14 @@ trait WalletRpc {
         options: TransactionRequestOptions,
     ) -> rpc::RpcResult<ComposedTransaction>;
 
-    /// Print the summary of the transaction
+    /// Print the summary of a transaction.
+    ///
+    /// Note that currently this will only work for transactions whose inputs have not been spent
+    /// yet (i.e. it won't work if the transaction has already been included in a block).
+    /// Also, it doesn't support certain input types (such as account-based inputs).
+    ///
+    /// The main purpose of this command is to be able to inspect the result of transaction-compose
+    /// and account-sign-raw-transaction before sending it to the network.
     #[method(name = "transaction_inspect")]
     async fn transaction_inspect(
         &self,
@@ -444,24 +492,24 @@ trait WalletRpc {
     ) -> rpc::RpcResult<RpcInspectTransaction>;
 
     /// Create a staking pool. The pool will be capable of creating blocks and gaining rewards,
-    /// and will be capable of taking delegations from other users and staking.
+    /// as well as taking delegations from other users.
     ///
     /// The decommission key is the key that can decommission the pool.
     ///
-    /// Cost per block, and margin ratio are parameters that control how delegators receive rewards.
+    /// Cost per block and margin ratio are parameters that control how delegators receive rewards.
     /// The cost per block is an amount in coins to be subtracted from the total rewards in a block first,
     /// and handed to the staking pool. After subtracting the cost per block, a fraction equal to
-    /// margin ratio is taken from what is left, and given to the staking pool. Finally, what is left
+    /// the margin ratio is taken from what is left, and given to the staking pool. Finally, what is left
     /// is distributed among delegators, pro-rata, based on their delegation amounts.
     ///
-    /// The optional parameters `staker_address` and `vrf_public_key` specify the key that will sign new blocks
-    /// and the VRF key that will be used to produce POS hashes during staking.
+    /// The optional "staker address" and "vrf public key" specify, respectively, the key that will sign new blocks
+    /// and the VRF key that will be used to produce PoS hashes during staking.
     /// You only need to specify them if the wallet where the pool is being created differs from
     /// the one where the actual staking will be performed.
     /// In such a case, make sure that the specified keys are owned by the wallet that will be used to stake.
     /// On the other hand, if the current wallet will be used for staking, just leave them empty
     /// and the wallet will select appropriate values itself.
-    /// Note: staker_address must be a "public key" address and not a "public key hash" one.
+    /// Note: the staker address must be a "public key" address and not a "public key hash" one.
     #[method(name = "staking_create_pool")]
     async fn create_stake_pool(
         &self,
@@ -487,9 +535,11 @@ trait WalletRpc {
     ) -> rpc::RpcResult<RpcNewTransaction>;
 
     /// Create a request to decommission a pool. This assumes that the decommission key is owned
-    /// by another wallet. The output of this command should be passed to account-sign-raw-transaction
+    /// by another wallet.
+    ///
+    /// The output of this command should be passed to account-sign-raw-transaction
     /// in the wallet that owns the decommission key. The result from signing, assuming success, can
-    /// then be broadcast to network to commence with decommissioning.
+    /// then be broadcast to network to commence the decommissioning.
     #[method(name = "staking_decommission_pool_request")]
     async fn decommission_stake_pool_request(
         &self,
@@ -500,6 +550,7 @@ trait WalletRpc {
     ) -> rpc::RpcResult<HexEncoded<PartiallySignedTransaction>>;
 
     /// Create a delegation to a given pool id and the owner address/destination.
+    ///
     /// The owner of a delegation is the key authorized to withdraw from the delegation.
     /// The delegation creation will result in creating a delegation id, where coins sent to that id will be staked by the pool id provided, automatically.
     /// The pool, to which the delegation is made, doesn't have the authority to spend the coins.
@@ -557,14 +608,14 @@ trait WalletRpc {
         account: AccountArg,
     ) -> rpc::RpcResult<Vec<PoolInfo>>;
 
-    /// Print the balance of available staking pools
+    /// Obtain the balance of a staking pool
     #[method(name = "staking_pool_balance")]
     async fn stake_pool_balance(
         &self,
         pool_id: RpcAddress<PoolId>,
     ) -> rpc::RpcResult<StakePoolBalance>;
 
-    /// List delegation ids controlled by the selected account in this wallet with their balances
+    /// List delegation ids controlled by the selected account in this wallet, with their balances
     #[method(name = "delegation_list_ids")]
     async fn list_delegation_ids(&self, account: AccountArg)
         -> rpc::RpcResult<Vec<DelegationInfo>>;
@@ -576,7 +627,7 @@ trait WalletRpc {
         account: AccountArg,
     ) -> rpc::RpcResult<Vec<CreatedBlockInfo>>;
 
-    /// Issue a new non-fungible token (NFT) from scratch
+    /// Issue a new non-fungible token (NFT)
     #[method(name = "token_nft_issue_new")]
     async fn issue_new_nft(
         &self,
@@ -586,9 +637,10 @@ trait WalletRpc {
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTokenTransaction>;
 
-    /// Issue a new fungible token from scratch.
-    /// Notice that issuing a token fills an issuers supply. To have tokens that are spendable,
-    /// the issuer must "mint" tokens to take from the supply
+    /// Issue a new fungible token.
+    ///
+    /// Notice that issuing a token defines the token's total supply. To have tokens that are spendable,
+    /// the issuer must "mint" tokens, taking them from the total supply into the circulating supply.
     #[method(name = "token_issue_new")]
     async fn issue_new_token(
         &self,
@@ -598,7 +650,7 @@ trait WalletRpc {
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTokenTransaction>;
 
-    /// Change the authority of a token; i.e., the cryptographic authority that can do all authority token operations
+    /// Change the authority address of a token.
     #[method(name = "token_change_authority")]
     async fn change_token_authority(
         &self,
@@ -618,7 +670,7 @@ trait WalletRpc {
         options: TransactionOptions,
     ) -> rpc::RpcResult<RpcNewTransaction>;
 
-    /// Given a token that is already issued, mint new tokens and increase the total supply
+    /// Given a token that is already issued, mint new tokens and increase the circulating supply
     #[method(name = "token_mint")]
     async fn mint_tokens(
         &self,
@@ -629,8 +681,10 @@ trait WalletRpc {
         options: TransactionOptions,
     ) -> rpc::RpcResult<RpcNewTransaction>;
 
-    /// Unmint existing tokens and reduce the total supply
-    /// Unminting reduces the total supply and puts the unminted tokens back at the issuer's control.
+    /// Unmint existing tokens and reduce the circulating supply.
+    ///
+    /// Unminting reduces the circulating supply and puts the unminted tokens back at the issuer's control.
+    ///
     /// The wallet must own the tokens that are being unminted.
     #[method(name = "token_unmint")]
     async fn unmint_tokens(
@@ -652,10 +706,11 @@ trait WalletRpc {
         options: TransactionOptions,
     ) -> rpc::RpcResult<RpcNewTransaction>;
 
-    /// Freezing the token (by token authority) forbids any operation with all the tokens (except for the optional unfreeze).
+    /// Freeze the token, which forbids any operations with it (except for the optional unfreeze).
     ///
     /// After a token is frozen, no transfers, spends, or any other operation can be done.
-    /// This wallet (and selected account) must own the authority keys to be able to freeze.
+    ///
+    /// This wallet (and selected account) must own the authority key to be able to freeze.
     #[method(name = "token_freeze")]
     async fn freeze_token(
         &self,
@@ -665,10 +720,11 @@ trait WalletRpc {
         options: TransactionOptions,
     ) -> rpc::RpcResult<RpcNewTransaction>;
 
-    /// By unfreezing the token all operations are available for the tokens again.
+    /// Unfreeze the token, making all operations available for it again.
     ///
-    /// Notice that this is only possible if the tokens were made to be unfreezable during freezing.
-    /// This wallet (and selected account) must own the authority keys to be able to unfreeze.
+    /// Notice that this is only possible if the token was specified to be unfreezable during freezing.
+    ///
+    /// This wallet (and selected account) must own the authority key to be able to unfreeze.
     #[method(name = "token_unfreeze")]
     async fn unfreeze_token(
         &self,
@@ -677,7 +733,9 @@ trait WalletRpc {
         options: TransactionOptions,
     ) -> rpc::RpcResult<RpcNewTransaction>;
 
-    /// Send the given token amount to the given address. The wallet will automatically calculate the required information.
+    /// Send the given token amount to the given address.
+    ///
+    /// The wallet will automatically calculate the required fees.
     #[method(name = "token_send")]
     async fn send_tokens(
         &self,
@@ -688,8 +746,9 @@ trait WalletRpc {
         options: TransactionOptions,
     ) -> rpc::RpcResult<RpcNewTransaction>;
 
-    /// Create a transaction for sending tokens to the given address, without submitting it.
-    /// The wallet will automatically calculate the required information.
+    /// Create a transaction for sending tokens to the given address, together with the so-called "intent".
+    ///
+    /// The wallet will automatically calculate the required fees.
     ///
     /// The "intent" is an arbitrary string that will be concatenated with the id of the created transaction
     /// and signed by all the keys that were used to sign the transaction itself; this can be used to declare
@@ -698,7 +757,7 @@ trait WalletRpc {
     /// by the bridge and provide the bridge with the destination address on the foreign chain where you want
     /// to receive them. In this case you will set "intent" to this foreign destination address; the signed intent
     /// will then serve as a proof to the bridge that the provided destination address is what it's meant to be.
-    #[method(name = "token_make_tx_for_sending_with_intent")]
+    #[method(name = "token_make_tx_to_send_with_intent")]
     async fn make_tx_for_sending_tokens_with_intent(
         &self,
         account: AccountArg,
@@ -728,7 +787,9 @@ trait WalletRpc {
         options: TransactionRequestOptions,
     ) -> rpc::RpcResult<SendTokensFromMultisigAddressResult>;
 
-    /// Store data on the blockchain, the data is provided as hex encoded string.
+    /// Store data on the blockchain.
+    ///
+    /// The data is provided as a hex string.
     /// Note that there is a high fee for storing data on the blockchain.
     #[method(name = "address_deposit_data")]
     async fn deposit_data(
@@ -739,7 +800,8 @@ trait WalletRpc {
     ) -> rpc::RpcResult<RpcNewTransaction>;
 
     /// Creates a transaction that locks a given number of coins or tokens in a Hashed Timelock Contract.
-    /// Created transaction is not broadcasted by this function.
+    ///
+    /// The created transaction is not broadcast by this function.
     #[method(name = "create_htlc_transaction")]
     async fn create_htlc_transaction(
         &self,
@@ -752,7 +814,8 @@ trait WalletRpc {
 
     /// Create an order for exchanging "given" amount of an arbitrary currency (coins or tokens) for
     /// an arbitrary amount of "asked" currency.
-    /// Conclude key is the key that can authorize a conclude order command closing the order and withdrawing
+    ///
+    /// Conclude key is the key that can authorize a conclude order command, closing the order and withdrawing
     /// all the remaining funds from it.
     #[method(name = "create_order")]
     async fn create_order(
@@ -764,9 +827,11 @@ trait WalletRpc {
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewOrderTransaction>;
 
-    /// Conclude an order, given its id. This assumes that the conclude key is owned
-    /// by the selected account in this wallet.
-    /// Optionally output address can be provided where remaining funds from the order are transferred.
+    /// Conclude an order, given its id.
+    ///
+    /// This assumes that the conclude key is owned by the selected account in this wallet.
+    ///
+    /// Optionally, an output address can be provided where remaining funds from the order are transferred.
     #[method(name = "conclude_order")]
     async fn conclude_order(
         &self,
@@ -776,8 +841,9 @@ trait WalletRpc {
         options: TransactionOptions,
     ) -> rpc::RpcResult<RpcNewTransaction>;
 
-    /// Fill order completely or partially given its id and an amount that satisfy what an order can offer.
-    /// Optionally output address can be provided where the exchanged funds from the order are transferred.
+    /// Fill order completely or partially given its id and an amount in the order's "asked" currency.
+    ///
+    /// Optionally, an output address can be provided where the exchanged funds from the order are transferred.
     #[method(name = "fill_order")]
     async fn fill_order(
         &self,
@@ -798,11 +864,11 @@ trait WalletRpc {
         options: TransactionOptions,
     ) -> rpc::RpcResult<RpcNewTransaction>;
 
-    /// Node version
+    /// Obtain the node version
     #[method(name = "node_version")]
     async fn node_version(&self) -> rpc::RpcResult<NodeVersion>;
 
-    /// Node shutdown
+    /// Shutdown the node
     #[method(name = "node_shutdown")]
     async fn node_shutdown(&self) -> rpc::RpcResult<()>;
 
@@ -814,11 +880,11 @@ trait WalletRpc {
     #[method(name = "node_connect_to_peer")]
     async fn connect_to_peer(&self, address: String) -> rpc::RpcResult<()>;
 
-    /// Disconnected a remote peer in the node
+    /// Disconnect a remote peer in the node
     #[method(name = "node_disconnect_peer")]
     async fn disconnect_peer(&self, peer_id: u64) -> rpc::RpcResult<()>;
 
-    /// List banned addresses/peers in the node
+    /// List banned peers in the node
     #[method(name = "node_list_banned_peers")]
     async fn list_banned(
         &self,
@@ -832,29 +898,29 @@ trait WalletRpc {
         duration: std::time::Duration,
     ) -> rpc::RpcResult<()>;
 
-    /// Unban address in the node
+    /// Unban an address in the node
     #[method(name = "node_unban_peer_address")]
     async fn unban_address(&self, address: BannableAddress) -> rpc::RpcResult<()>;
 
-    /// List discouraged addresses/peers in the node
+    /// List discouraged peers in the node
     #[method(name = "node_list_discouraged_peers")]
     async fn list_discouraged(
         &self,
     ) -> rpc::RpcResult<Vec<(BannableAddress, common::primitives::time::Time)>>;
 
-    /// Undiscourage address in the node
+    /// Undiscourage an address in the node
     #[method(name = "node_undiscourage_peer_address")]
     async fn undiscourage_address(&self, address: BannableAddress) -> rpc::RpcResult<()>;
 
-    /// Get the number of connected peer in the node
+    /// Get the number of connected peers in the node
     #[method(name = "node_peer_count")]
     async fn peer_count(&self) -> rpc::RpcResult<usize>;
 
-    /// Get connected peers in the node
+    /// List connected peers in the node
     #[method(name = "node_list_connected_peers")]
     async fn connected_peers(&self) -> rpc::RpcResult<Vec<ConnectedPeer>>;
 
-    /// Get reserved peers in the node
+    /// List reserved peers in the node
     #[method(name = "node_list_reserved_peers")]
     async fn reserved_peers(&self) -> rpc::RpcResult<Vec<SocketAddress>>;
 
@@ -862,7 +928,7 @@ trait WalletRpc {
     #[method(name = "node_add_reserved_peer")]
     async fn add_reserved_peer(&self, address: String) -> rpc::RpcResult<()>;
 
-    /// Remove a reserved peer from the node
+    /// Remove a reserved peer in the node
     #[method(name = "node_remove_reserved_peer")]
     async fn remove_reserved_peer(&self, address: String) -> rpc::RpcResult<()>;
 
@@ -870,11 +936,12 @@ trait WalletRpc {
     #[method(name = "node_submit_block")]
     async fn submit_block(&self, block: HexEncoded<Block>) -> rpc::RpcResult<()>;
 
-    /// Returns the current node's chainstate (block height information and more)
+    /// Returns the current node's chainstate information (block height and more)
     #[method(name = "node_chainstate_info")]
     async fn chainstate_info(&self) -> rpc::RpcResult<ChainInfo>;
 
-    /// Abandon an unconfirmed transaction in the wallet database, and make the consumed inputs available to be used again
+    /// Abandon an unconfirmed transaction in the wallet database, and make the consumed inputs available to be used again.
+    ///
     /// Note that this doesn't necessarily mean that the network will agree. This assumes the transaction is either still
     /// not confirmed in the network or somehow invalid.
     #[method(name = "transaction_abandon")]
@@ -891,7 +958,7 @@ trait WalletRpc {
         account: AccountArg,
     ) -> rpc::RpcResult<Vec<Id<Transaction>>>;
 
-    /// List mainchain transactions with optional address filter
+    /// List transactions owned by this account that have already been included in a block, with an optional address filter.
     #[method(name = "transaction_list_by_address")]
     async fn list_transactions_by_address(
         &self,
@@ -924,9 +991,11 @@ trait WalletRpc {
         transaction_id: Id<Transaction>,
     ) -> rpc::RpcResult<HexEncoded<SignedTransaction>>;
 
-    /// Compose a new transaction from the specified outputs and selected utxos
-    /// The transaction is returned in a hex encoded form that can be passed to account-sign-raw-transaction
-    /// and also prints the fees that will be paid by the transaction
+    /// Compose a new transaction from the specified outputs and selected utxos.
+    ///
+    /// The transaction is returned in a hex encoded form that can be passed to account-sign-raw-transaction.
+    ///
+    /// The fees that will be paid by the transaction are also returned.
     #[method(name = "transaction_compose")]
     async fn compose_transaction(
         &self,
@@ -936,7 +1005,7 @@ trait WalletRpc {
         only_transaction: bool,
     ) -> rpc::RpcResult<ComposedTransaction>;
 
-    /// Returns the current best block hash
+    /// Returns the current best block id
     #[method(name = "node_best_block_id")]
     async fn node_best_block_id(&self) -> rpc::RpcResult<Id<GenBlock>>;
 
@@ -944,7 +1013,7 @@ trait WalletRpc {
     #[method(name = "node_best_block_height")]
     async fn node_best_block_height(&self) -> rpc::RpcResult<BlockHeight>;
 
-    /// Get the block ID of the block at a given height
+    /// Get the block id of the block at a given height
     #[method(name = "node_block_id")]
     async fn node_block_id(
         &self,
@@ -952,7 +1021,9 @@ trait WalletRpc {
     ) -> rpc::RpcResult<Option<Id<GenBlock>>>;
 
     /// Generate a block with the given transactions to the specified
-    /// reward destination. If transactions are None, the block will be
+    /// reward destination.
+    ///
+    /// If no transactions are provided, the block will be
     /// generated with available transactions in the mempool
     #[method(name = "node_generate_block")]
     async fn node_generate_block(
@@ -988,11 +1059,11 @@ trait WalletRpc {
         check_all_timestamps_between_blocks: bool,
     ) -> rpc::RpcResult<BTreeMap<BlockHeight, Vec<BlockTimestamp>>>;
 
-    /// Get a block by its hash, represented with hex encoded bytes
+    /// Get a block by its id, represented as hex encoded bytes
     #[method(name = "node_get_block")]
     async fn node_block(&self, block_id: Id<Block>) -> rpc::RpcResult<Option<HexEncoded<Block>>>;
 
-    /// Returns mainchain block ids with heights in the range start_height..end_height using
+    /// Return mainchain block ids with heights in the range start_height..end_height using
     /// the given step.
     #[method(name = "node_get_block_ids_as_checkpoints")]
     async fn node_get_block_ids_as_checkpoints(

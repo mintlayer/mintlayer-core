@@ -20,7 +20,7 @@ use wallet_controller::types::GenericCurrencyTransferToTxOutputConversionError;
 use wallet_rpc_client::{handles_client::WalletRpcHandlesClientError, rpc_client::WalletRpcError};
 use wallet_rpc_lib::RpcError;
 
-#[derive(thiserror::Error, Debug)]
+#[derive(thiserror::Error, derive_more::Debug)]
 pub enum WalletCliCommandError<N: NodeInterface> {
     #[error("Invalid quoting")]
     InvalidQuoting,

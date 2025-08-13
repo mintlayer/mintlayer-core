@@ -846,9 +846,9 @@ where
                 }
             }
 
-            WalletCommand::GetBlock { hash } => {
-                let hash = self.wallet().await?.node_block(hash).await?;
-                match hash {
+            WalletCommand::GetBlock { id } => {
+                let block = self.wallet().await?.node_block(id).await?;
+                match block {
                     Some(block) => Ok(ConsoleCommand::Print(block)),
                     None => Ok(ConsoleCommand::Print("Not found".to_owned())),
                 }
