@@ -467,7 +467,7 @@ async fn mint_tokens(#[case] seed: Seed) {
                 let token_issuance_fee =
                     tf.chainstate.get_chain_config().fungible_token_issuance_fee();
 
-                let issuance = test_utils::nft_utils::random_token_issuance_v1(
+                let issuance = test_utils::token_utils::random_token_issuance_v1(
                     tf.chain_config(),
                     Destination::AnyoneCanSpend,
                     &mut rng,

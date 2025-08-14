@@ -29,7 +29,7 @@ use common::{
     },
     primitives::{Amount, Id, Idable},
 };
-use test_utils::nft_utils::random_nft_issuance;
+use test_utils::token_utils::random_nft_issuance;
 use utxo::{Utxo, UtxosStorageRead, UtxosTxUndo};
 
 use super::*;

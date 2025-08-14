@@ -144,7 +144,7 @@ async fn ok(#[case] seed: Seed) {
 
                 let mut nft_ids = vec![];
                 for _ in 0..10 {
-                    let nft = test_utils::nft_utils::random_nft_issuance(&chain_config, &mut rng);
+                    let nft = test_utils::token_utils::random_nft_issuance(&chain_config, &mut rng);
                     let token_id =
                         make_token_id(&chain_config, tf.next_block_height(), &[input.clone()])
                             .unwrap();

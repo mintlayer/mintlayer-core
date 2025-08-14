@@ -51,9 +51,10 @@ use p2p_types::PeerId;
 use randomness::Rng;
 use test_utils::{
     assert_matches,
-    nft_utils::random_nft_issuance,
     random::{gen_random_bytes, Seed},
-    random_ascii_alphanumeric_string, BasicTestTimeGetter,
+    random_ascii_alphanumeric_string,
+    token_utils::random_nft_issuance,
+    BasicTestTimeGetter,
 };
 
 use crate::{

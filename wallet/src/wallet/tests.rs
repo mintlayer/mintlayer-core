@@ -47,8 +47,8 @@ use serialization::{extras::non_empty_vec::DataOrNoVec, hex::HexEncode, Encode};
 use storage::raw::DbMapId;
 use test_utils::{
     assert_matches, assert_matches_return_val,
-    nft_utils::random_token_issuance_v1,
     random::{make_seedable_rng, Seed},
+    token_utils::random_token_issuance_v1_with_min_supply,
 };
 use wallet_storage::{schema, WalletStorageEncryptionRead};
 use wallet_types::{
@@ -5808,8 +5808,12 @@ fn create_order(#[case] seed: Seed) {
     // Issue a token
     let address2 = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1;
 
-    let token_issuance =
-        random_token_issuance_v1(&chain_config, address2.as_object().clone(), &mut rng);
+    let token_issuance = random_token_issuance_v1_with_min_supply(
+        &chain_config,
+        address2.as_object().clone(),
+        100,
+        &mut rng,
+    );
     let (issued_token_id, token_issuance_transaction) = wallet
         .issue_new_token(
             DEFAULT_ACCOUNT_INDEX,
@@ -5937,8 +5941,12 @@ fn create_order_and_conclude(#[case] seed: Seed) {
     // Issue a token
     let address2 = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1;
 
-    let token_issuance =
-        random_token_issuance_v1(&chain_config, address2.as_object().clone(), &mut rng);
+    let token_issuance = random_token_issuance_v1_with_min_supply(
+        &chain_config,
+        address2.as_object().clone(),
+        100,
+        &mut rng,
+    );
     let (issued_token_id, token_issuance_transaction) = wallet
         .issue_new_token(
             DEFAULT_ACCOUNT_INDEX,
@@ -6126,8 +6134,12 @@ fn create_order_fill_completely_conclude(#[case] seed: Seed) {
     // Issue a token
     let address1 = wallet1.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1;
 
-    let token_issuance =
-        random_token_issuance_v1(&chain_config, address1.as_object().clone(), &mut rng);
+    let token_issuance = random_token_issuance_v1_with_min_supply(
+        &chain_config,
+        address1.as_object().clone(),
+        100,
+        &mut rng,
+    );
     let (issued_token_id, token_issuance_transaction) = wallet1
         .issue_new_token(
             DEFAULT_ACCOUNT_INDEX,
@@ -6499,8 +6511,12 @@ fn create_order_fill_partially_conclude(#[case] seed: Seed) {
     // Issue a token
     let address1 = wallet1.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1;
 
-    let token_issuance =
-        random_token_issuance_v1(&chain_config, address1.as_object().clone(), &mut rng);
+    let token_issuance = random_token_issuance_v1_with_min_supply(
+        &chain_config,
+        address1.as_object().clone(),
+        100,
+        &mut rng,
+    );
     let (issued_token_id, token_issuance_transaction) = wallet1
         .issue_new_token(
             DEFAULT_ACCOUNT_INDEX,
@@ -7350,8 +7366,12 @@ fn conflicting_order_account_nonce(#[case] seed: Seed) {
     // Issue a token
     let address2 = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1;
 
-    let token_issuance =
-        random_token_issuance_v1(&chain_config, address2.as_object().clone(), &mut rng);
+    let token_issuance = random_token_issuance_v1_with_min_supply(
+        &chain_config,
+        address2.as_object().clone(),
+        100,
+        &mut rng,
+    );
     let (issued_token_id, token_issuance_transaction) = wallet
         .issue_new_token(
             DEFAULT_ACCOUNT_INDEX,

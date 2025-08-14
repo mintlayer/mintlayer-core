@@ -50,7 +50,7 @@ use common::{
 use crypto::key::{KeyKind, PrivateKey, PublicKey};
 use randomness::CryptoRng;
 use serialization::Encode;
-use test_utils::nft_utils::{random_token_issuance, random_token_issuance_v1};
+use test_utils::token_utils::{random_token_issuance, random_token_issuance_v1};
 use tx_verifier::{
     error::{InputCheckError, TranslationError},
     input_check::HashlockError,

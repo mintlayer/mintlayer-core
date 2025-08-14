@@ -28,7 +28,7 @@ use common::{
     primitives::{Amount, Idable},
 };
 use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
-use test_utils::nft_utils::random_token_issuance_v1;
+use test_utils::token_utils::random_token_issuance_v1;
 
 // These tests prove that TransactionVerifiers hierarchy has homomorphic property: f(ab) == f(a)f(b)
 // Meaning that multiple operations done via a single verifier give the same result as using one

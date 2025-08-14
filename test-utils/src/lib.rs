@@ -15,10 +15,10 @@
 
 mod basic_test_time_getter;
 pub mod mock_time_getter;
-pub mod nft_utils;
 pub mod random;
 pub mod test_dir;
 pub mod threading;
+pub mod token_utils;
 
 use std::collections::BTreeMap;
 

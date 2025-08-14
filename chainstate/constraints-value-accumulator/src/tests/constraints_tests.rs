@@ -37,8 +37,8 @@ use pos_accounting::{DelegationData, InMemoryPoSAccounting, PoSAccountingDB, Poo
 use randomness::{CryptoRng, Rng};
 use rstest::rstest;
 use test_utils::{
-    nft_utils::random_nft_issuance,
     random::{make_seedable_rng, Seed},
+    token_utils::random_nft_issuance,
 };
 
 use crate::{ConstrainedValueAccumulator, Error};
@@ -755,7 +755,7 @@ fn calculate_fee_for_token_issuance(#[case] seed: Seed) {
     ))];
 
     let outputs = vec![TxOutput::IssueFungibleToken(Box::new(TokenIssuance::V1(
-        test_utils::nft_utils::random_token_issuance_v1(
+        test_utils::token_utils::random_token_issuance_v1(
             &chain_config,
             Destination::AnyoneCanSpend,
             &mut rng,
@@ -805,7 +805,7 @@ fn calculate_token_supply_change_fee(#[case] seed: Seed) {
     let orders_db = OrdersAccountingDB::new(&orders_store);
 
     let token_data = tokens_accounting::TokenData::FungibleToken(
-        TokenIssuance::V1(test_utils::nft_utils::random_token_issuance_v1(
+        TokenIssuance::V1(test_utils::token_utils::random_token_issuance_v1(
             &chain_config,
             Destination::AnyoneCanSpend,
             &mut rng,
@@ -978,7 +978,7 @@ fn calculate_token_fee_freeze(#[case] seed: Seed) {
     let orders_db = OrdersAccountingDB::new(&orders_store);
 
     let token_data = tokens_accounting::TokenData::FungibleToken(
-        TokenIssuance::V1(test_utils::nft_utils::random_token_issuance_v1(
+        TokenIssuance::V1(test_utils::token_utils::random_token_issuance_v1(
             &chain_config,
             Destination::AnyoneCanSpend,
             &mut rng,
@@ -1110,7 +1110,7 @@ fn calculate_token_fee_change_authority(#[case] seed: Seed) {
     let orders_db = OrdersAccountingDB::new(&orders_store);
 
     let token_data = tokens_accounting::TokenData::FungibleToken(
-        TokenIssuance::V1(test_utils::nft_utils::random_token_issuance_v1(
+        TokenIssuance::V1(test_utils::token_utils::random_token_issuance_v1(
             &chain_config,
             Destination::AnyoneCanSpend,
             &mut rng,
@@ -1305,7 +1305,7 @@ fn calculate_token_fee_change_metadata_uri(#[case] seed: Seed) {
     let orders_db = OrdersAccountingDB::new(&orders_store);
 
     let token_data = tokens_accounting::TokenData::FungibleToken(
-        TokenIssuance::V1(test_utils::nft_utils::random_token_issuance_v1(
+        TokenIssuance::V1(test_utils::token_utils::random_token_issuance_v1(
             &chain_config,
             Destination::AnyoneCanSpend,
             &mut rng,

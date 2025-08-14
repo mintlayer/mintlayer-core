@@ -46,8 +46,8 @@ use crypto::key::{KeyKind, PrivateKey};
 use logging::log;
 use randomness::{CryptoRng, Rng, SliceRandom};
 use test_utils::{
-    nft_utils::random_nft_issuance,
     random::{gen_random_bytes, make_seedable_rng, Seed},
+    token_utils::random_nft_issuance,
 };
 use tx_verifier::{
     error::{InputCheckError, InputCheckErrorPayload, ScriptError, TranslationError},
