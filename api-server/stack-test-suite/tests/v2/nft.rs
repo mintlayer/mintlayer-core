@@ -93,7 +93,7 @@ async fn ok(#[case] seed: Seed) {
 
                 let alice_destination = Destination::PublicKeyHash(PublicKeyHash::from(&alice_pk));
 
-                let nft = test_utils::nft_utils::random_nft_issuance(&chain_config, &mut rng);
+                let nft = test_utils::token_utils::random_nft_issuance(&chain_config, &mut rng);
 
                 let input = TxInput::from_utxo(
                     OutPointSourceId::BlockReward(tf.genesis().get_id().into()),

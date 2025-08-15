@@ -50,7 +50,7 @@ use pos_accounting::{
     PoolData,
 };
 use randomness::{seq::IteratorRandom, CryptoRng, Rng, SliceRandom};
-use test_utils::{nft_utils::*, random_ascii_alphanumeric_string};
+use test_utils::{random_ascii_alphanumeric_string, token_utils::*};
 use tokens_accounting::{
     InMemoryTokensAccounting, TokensAccountingCache, TokensAccountingDB, TokensAccountingDeltaData,
     TokensAccountingOperations, TokensAccountingView,

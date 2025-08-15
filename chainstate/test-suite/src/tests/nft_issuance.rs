@@ -35,9 +35,9 @@ use randomness::{CryptoRng, Rng};
 use serialization::extras::non_empty_vec::DataOrNoVec;
 use test_utils::{
     gen_text_with_non_ascii,
-    nft_utils::{random_creator, random_nft_issuance, random_token_issuance_v1},
     random::{make_seedable_rng, Seed},
     random_ascii_alphanumeric_string,
+    token_utils::{random_creator, random_nft_issuance, random_token_issuance_v1},
 };
 use tx_verifier::{error::TokenIssuanceError, CheckTransactionError};
 

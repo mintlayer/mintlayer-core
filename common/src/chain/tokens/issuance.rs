@@ -29,7 +29,9 @@ use serialization::{Decode, Encode};
     Decode,
     serde::Serialize,
     serde::Deserialize,
+    strum::EnumDiscriminants,
 )]
+#[strum_discriminants(name(TokenTotalSupplyTag), derive(strum::EnumIter))]
 pub enum TokenTotalSupply {
     #[codec(index = 0)]
     Fixed(Amount), // fixed to a certain amount

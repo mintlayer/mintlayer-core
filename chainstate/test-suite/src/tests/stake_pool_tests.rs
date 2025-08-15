@@ -46,8 +46,8 @@ use crypto::{
 use pos_accounting::PoSAccountingStorageRead;
 use randomness::Rng;
 use test_utils::{
-    nft_utils::random_token_issuance_v1,
     random::{make_seedable_rng, Seed},
+    token_utils::random_token_issuance_v1,
 };
 use tx_verifier::error::{InputCheckError, ScriptError};
 

@@ -13,21 +13,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::random_ascii_alphanumeric_string;
+use strum::IntoEnumIterator as _;
+
 use common::{
     chain::{
         config::ChainConfig,
         tokens::{
             IsTokenFreezable, Metadata, NftIssuanceV0, TokenCreator, TokenIssuanceV0,
-            TokenIssuanceV1, TokenTotalSupply,
+            TokenIssuanceV1, TokenTotalSupply, TokenTotalSupplyTag,
         },
         Destination,
     },
-    primitives::Amount,
+    primitives::{amount, Amount},
 };
 use crypto::key::{KeyKind, PrivateKey};
-use randomness::{CryptoRng, Rng};
+use randomness::{seq::IteratorRandom as _, CryptoRng, Rng};
 use serialization::extras::non_empty_vec::DataOrNoVec;
+
+use crate::random_ascii_alphanumeric_string;
 
 pub fn random_creator(rng: &mut (impl Rng + CryptoRng)) -> TokenCreator {
     let (_, public_key) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
@@ -47,29 +50,24 @@ pub fn random_token_issuance(chain_config: &ChainConfig, rng: &mut impl Rng) -> 
     }
 }
 
-pub fn random_token_issuance_v1(
+pub fn random_token_issuance_v1_with_min_supply(
     chain_config: &ChainConfig,
     authority: Destination,
+    min_supply: amount::UnsignedIntType,
     rng: &mut impl Rng,
 ) -> TokenIssuanceV1 {
     let max_ticker_len = chain_config.token_max_ticker_len();
     let max_dec_count = chain_config.token_max_dec_count();
     let max_uri_len = chain_config.token_max_uri_len();
 
-    let _fix_code_below_if_enum_changes = |supply: TokenTotalSupply| match supply {
-        TokenTotalSupply::Fixed(_) => unreachable!(),
-        TokenTotalSupply::Lockable => unreachable!(),
-        TokenTotalSupply::Unlimited => unreachable!(),
-    };
-
-    let supply = match rng.gen_range(0..3) {
-        0 => {
-            let supply = Amount::from_atoms(rng.gen_range(1..1_000_000));
+    let supply = match TokenTotalSupplyTag::iter().choose(rng).expect("cannot fail") {
+        TokenTotalSupplyTag::Fixed => {
+            let max_supply = std::cmp::max(min_supply * 2, 1_000_000);
+            let supply = Amount::from_atoms(rng.gen_range(min_supply..=max_supply));
             TokenTotalSupply::Fixed(supply)
         }
-        1 => TokenTotalSupply::Lockable,
-        2 => TokenTotalSupply::Unlimited,
-        _ => unreachable!(),
+        TokenTotalSupplyTag::Lockable => TokenTotalSupply::Lockable,
+        TokenTotalSupplyTag::Unlimited => TokenTotalSupply::Unlimited,
     };
 
     let is_freezable = if rng.gen::<bool>() {
@@ -86,6 +84,14 @@ pub fn random_token_issuance_v1(
         is_freezable,
         authority,
     }
+}
+
+pub fn random_token_issuance_v1(
+    chain_config: &ChainConfig,
+    authority: Destination,
+    rng: &mut impl Rng,
+) -> TokenIssuanceV1 {
+    random_token_issuance_v1_with_min_supply(chain_config, authority, 1, rng)
 }
 
 pub fn random_nft_issuance(

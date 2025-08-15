@@ -38,9 +38,9 @@ use crypto::hash::StreamHasher;
 use randomness::{CryptoRng, Rng};
 use serialization::extras::non_empty_vec::DataOrNoVec;
 use test_utils::{
-    nft_utils::random_token_issuance,
     random::{make_seedable_rng, Seed},
     random_ascii_alphanumeric_string,
+    token_utils::random_token_issuance,
 };
 use tx_verifier::CheckTransactionError;
 

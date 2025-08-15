@@ -26,8 +26,8 @@ use common::{
 };
 use rstest::rstest;
 use test_utils::{
-    nft_utils::random_nft_issuance,
     random::{make_seedable_rng, Seed},
+    token_utils::random_nft_issuance,
 };
 
 #[rstest]
