@@ -16,6 +16,7 @@
 use std::{collections::VecDeque, path::PathBuf};
 
 use crossterm::tty::IsTty;
+
 use wallet_cli_commands::WalletCliCommandError;
 use wallet_rpc_lib::types::NodeInterface;
 
