@@ -159,7 +159,7 @@ pub fn run<N: NodeInterface>(
             &mut console,
             &mut prompt,
             &mut line_editor,
-            logger.printer(),
+            &logger,
             vi_mode,
             true,
         ) {
@@ -192,7 +192,7 @@ pub fn run<N: NodeInterface>(
             &mut console,
             &mut prompt,
             &mut line_editor,
-            logger.printer(),
+            &logger,
             vi_mode,
             exit_on_error,
         ) {
@@ -216,7 +216,7 @@ fn handle_response<N: NodeInterface>(
     console: &mut impl ConsoleOutput,
     prompt: &mut wallet_prompt::WalletPrompt,
     line_editor: &mut Reedline,
-    printer: &reedline::ExternalPrinter<String>,
+    logger: &log::InteractiveLogger,
     vi_mode: bool,
     exit_on_error: bool,
 ) -> CommandResponse<N> {
@@ -225,7 +225,8 @@ fn handle_response<N: NodeInterface>(
             console.print_line(&text);
         }
         Ok(Some(ConsoleCommand::PaginatedPrint { header, body })) => {
-            paginate_output(header, body, line_editor, console).expect("Should not fail normally");
+            paginate_output(header, body, line_editor, console, logger)
+                .expect("Should not fail normally");
         }
         Ok(Some(ConsoleCommand::SetStatus {
             status,
@@ -246,7 +247,8 @@ fn handle_response<N: NodeInterface>(
         Ok(Some(ConsoleCommand::Exit)) => return CommandResponse::Exit,
 
         Ok(Some(ConsoleCommand::ChoiceMenu(choice))) => {
-            let line_editor_helper = create_line_editor(printer.clone(), vec![], None, vi_mode);
+            let line_editor_helper =
+                create_line_editor(logger.printer().clone(), vec![], None, vi_mode);
             let cmd = handle_choice_menu(choice.as_ref(), line_editor_helper);
             if let Some(cmd) = cmd {
                 return CommandResponse::Command(Box::new(cmd));
@@ -317,8 +319,30 @@ fn paginate_output(
     body: String,
     line_editor: &mut Reedline,
     console: &mut impl ConsoleOutput,
+    logger: &log::InteractiveLogger,
 ) -> std::io::Result<()> {
     let mut current_index = 0;
+
+    // Disable the direct logging, because:
+    // a) we don't want any log output to appear in the paginated output;
+    // b) the log output will appear broken in the raw mode anyway (which we switch the terminal
+    // into inside `read_command`).
+    // Note: the logs will be collected inside `reedline::ExternalPrinter` and printed
+    // by `Readline::read_line` later.
+    logger.set_print_directly(false);
+    // Enter the alternate screen, to preserve the existing contents of the terminal.
+    // Note: this call will basically send a certain ANSI code to the specified stream and then
+    // flush the stream. It shouldn't matter whether we use stdout or stderr here.
+    crossterm::execute!(std::io::stdout(), crossterm::terminal::EnterAlternateScreen)?;
+    // Undo all of the above on function exit.
+    let _cleanup = OnceDestructor::new(|| {
+        // Note: we can't do anything about the possible error here. Panicking is probably
+        // better than ignoring it, because the UI will likely be broken anyway
+        // (though it's not clear under which conditions such an error can occur).
+        crossterm::execute!(std::io::stdout(), crossterm::terminal::LeaveAlternateScreen)
+            .expect("failure when leaving alternate terminal screen");
+        logger.set_print_directly(true);
+    });
 
     let (mut page_rows, mut offsets) = compute_page_line_offsets(&body);
     let mut last_batch = offsets.len() - 1;
@@ -398,7 +422,8 @@ fn read_command(
     // TODO: maybe enable raw mode only once per pagination
     crossterm::terminal::enable_raw_mode()?;
     let _cleanup = OnceDestructor::new(|| {
-        crossterm::terminal::disable_raw_mode().expect("Should not fail normally")
+        // Same as in `paginate_output`, we can't do much about the possible error, so we just panic.
+        crossterm::terminal::disable_raw_mode().expect("failure when disabling raw terminal mode")
     });
 
     loop {
