@@ -83,8 +83,14 @@ impl Checkpoints {
             .checkpoints
             .range(..=height)
             .next_back()
-            .expect("Genesis must be there, at least.");
+            .expect("Genesis must be there, at least");
         (*cp.0, *cp.1)
+    }
+
+    pub fn last_checkpoint(&self) -> (BlockHeight, Id<GenBlock>) {
+        let (height, cp) =
+            self.checkpoints.last_key_value().expect("Genesis must be there, at least");
+        (*height, *cp)
     }
 
     #[cfg(test)]
