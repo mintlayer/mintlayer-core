@@ -63,7 +63,9 @@ use super::{
     wallet_events::GuiWalletEvents,
 };
 
-const TRANSACTION_LIST_PAGE_COUNT: usize = 10;
+/// This number of transactions will fit into the corresponding widget when the main window
+/// has the initial height (both when the status bar is visible and when it's not).
+const TRANSACTION_LIST_PAGE_COUNT: usize = 16;
 /// In which top N MB should we aim for our transactions to be in the mempool
 /// e.g. for 5, we aim to be in the top 5 MB of transactions based on paid fees
 /// This is to avoid getting trimmed off the lower end if the mempool runs out of memory

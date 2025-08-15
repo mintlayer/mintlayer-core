@@ -23,12 +23,27 @@ use wallet_controller::types::WalletExtraInfo;
 
 use super::WalletMessage;
 
+const TEXT_SIZE: f32 = 16.;
+const VERTICAL_PADDING: f32 = 5.;
+const HORIZONTAL_PADDING: f32 = 10.;
+
+#[allow(clippy::float_arithmetic)]
+pub fn estimate_status_bar_height(wallet_info: &WalletExtraInfo) -> f32 {
+    match wallet_info {
+        WalletExtraInfo::SoftwareWallet => 0.,
+        WalletExtraInfo::TrezorWallet { .. } => {
+            TEXT_SIZE + 2. * VERTICAL_PADDING
+            // For some reason, the status bar gets a bit of additional height.
+            + 4.
+        }
+    }
+}
+
 pub fn view_status_bar(wallet_info: &WalletExtraInfo) -> Option<Element<'static, WalletMessage>> {
     let bold_font = Font {
         weight: font::Weight::Bold,
         ..Font::default()
     };
-    let text_size = 16;
 
     let row = match wallet_info {
         WalletExtraInfo::SoftwareWallet => {
@@ -44,28 +59,25 @@ pub fn view_status_bar(wallet_info: &WalletExtraInfo) -> Option<Element<'static,
 
             row![
                 rich_text([span("Device name: ").font(bold_font), span(device_name.clone())])
-                    .size(text_size),
+                    .size(TEXT_SIZE),
                 rich_text([
                     span("Firmware version: ").font(bold_font),
                     span(firmware_version.clone())
                 ])
-                .size(text_size),
+                .size(TEXT_SIZE),
             ]
         }
     };
 
-    let vertical_padding = 5.;
-    let horizontal_padding = 10.;
-
     let status_bar = Container::new(
         row.width(Length::Fill)
             .padding(Padding {
-                top: vertical_padding,
-                right: horizontal_padding,
-                bottom: vertical_padding,
-                left: horizontal_padding,
+                top: VERTICAL_PADDING,
+                right: HORIZONTAL_PADDING,
+                bottom: VERTICAL_PADDING,
+                left: HORIZONTAL_PADDING,
             })
-            .spacing(horizontal_padding)
+            .spacing(HORIZONTAL_PADDING)
             .align_y(Alignment::Center),
     )
     .style(|theme: &Theme| {

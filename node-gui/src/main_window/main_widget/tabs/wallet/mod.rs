@@ -52,6 +52,8 @@ use crate::main_window::NodeState;
 
 use super::{Tab, TabsMessage};
 
+pub const STATUS_BAR_SEPARATOR_HEIGHT: f32 = 1.0;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SelectedPanel {
     Transactions,
@@ -550,6 +552,7 @@ impl Tab for WalletTab {
                         SelectedPanel::Console => console::view_console(
                             &self.account_state.console_state,
                             still_syncing.clone(),
+                            wallet_info,
                         ),
                     };
 
@@ -577,7 +580,7 @@ impl Tab for WalletTab {
         {
             Element::new(column![
                 pane_grid,
-                horizontal_rule(1),
+                horizontal_rule(STATUS_BAR_SEPARATOR_HEIGHT),
                 container(status_bar).width(Length::Fill)
             ])
         } else {

@@ -82,10 +82,11 @@ pub struct TransactionInfo {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct TransactionList {
-    /// How many transactions are in the single page (currently it's always 10)
+    /// How many transactions are in a single page.
     pub count: usize,
 
-    /// How many transactions the user has seen and scrolled through (normally it can be 0, 10, 20, etc.)
+    /// How many transactions the user has seen and scrolled through
+    /// (normally it will be a multiple of `count`).
     pub skip: usize,
 
     /// Total number of transactions

@@ -26,7 +26,7 @@ use iced::{
     advanced::graphics::core::window,
     executor, font,
     widget::{column, row, text, tooltip, Text},
-    Element, Length, Settings, Subscription, Task, Theme,
+    Element, Length, Settings, Size, Subscription, Task, Theme,
 };
 use iced_aw::widgets::spinner::Spinner;
 use tokio::sync::mpsc::UnboundedReceiver;
@@ -46,6 +46,10 @@ const HOT_WALLET_TOOLTIP_TEXT: &str = "Start the wallet in Hot mode and connect 
 const MAIN_NETWORK_TOOLTIP: &str = "The 'Mainnet' is the main network that has coins with value.";
 const TEST_NETWORK_TOOLTIP: &str = "The 'Testnet' is the network with coins that have no value, but is used for testing various applications before deploying them on Mainnet.";
 
+// Note: these are the default values used by iced.
+const INITIAL_MAIN_WINDOW_WIDTH: f32 = 1024.0;
+const INITIAL_MAIN_WINDOW_HEIGHT: f32 = 768.0;
+
 pub fn main() -> iced::Result {
     utils::rust_backtrace::enable();
 
@@ -56,6 +60,7 @@ pub fn main() -> iced::Result {
         .subscription(subscription)
         .theme(theme)
         .window(window::Settings {
+            size: Size::new(INITIAL_MAIN_WINDOW_WIDTH, INITIAL_MAIN_WINDOW_HEIGHT),
             exit_on_close_request: false,
             ..Default::default()
         })
