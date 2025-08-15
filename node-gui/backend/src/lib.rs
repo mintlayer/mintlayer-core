@@ -16,13 +16,11 @@
 pub mod error;
 pub mod messages;
 
+mod account_id;
 mod backend_impl;
 mod chainstate_event_handler;
 mod p2p_event_handler;
 mod wallet_events;
-
-mod account_id;
-use wallet_types::scan_blockchain::ScanBlockchain;
 
 use std::fmt::Debug;
 use std::sync::Arc;
@@ -52,21 +50,6 @@ pub enum InitNetwork {
     Mainnet,
     Testnet,
     Regtest,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum ImportOrCreate {
-    Import,
-    Create,
-}
-
-impl ImportOrCreate {
-    pub fn should_scan_blockchain(&self) -> ScanBlockchain {
-        match self {
-            Self::Create => ScanBlockchain::SkipScanning,
-            Self::Import => ScanBlockchain::ScanNoWait,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy)]

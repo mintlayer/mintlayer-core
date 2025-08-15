@@ -25,9 +25,10 @@ wallet-controller = { path = "../wallet-controller" }
 wallet-rpc-lib = { path = "../wallet-rpc-lib" }
 wallet-types = { path = "../types" }
 
-hex.workspace = true
 async-trait.workspace = true
 base64.workspace = true
+derive_more.workspace = true
+hex.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 tower.workspace = true

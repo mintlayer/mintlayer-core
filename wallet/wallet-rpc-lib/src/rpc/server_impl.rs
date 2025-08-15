@@ -40,7 +40,7 @@ use wallet_controller::{
 };
 use wallet_types::{
     partially_signed_transaction::PartiallySignedTransaction, scan_blockchain::ScanBlockchain,
-    signature_status::SignatureStatus, with_locked::WithLocked,
+    signature_status::SignatureStatus, with_locked::WithLocked, ImportOrCreate,
 };
 
 use crate::{
@@ -103,6 +103,7 @@ where
             store_seed_phrase,
             mnemonic,
             passphrase,
+            ImportOrCreate::Create,
         )?;
 
         let options = WalletCreationOptions {
@@ -129,6 +130,7 @@ where
             store_seed_phrase,
             mnemonic,
             passphrase,
+            ImportOrCreate::Import,
         )?;
 
         let options = WalletCreationOptions {

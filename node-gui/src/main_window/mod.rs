@@ -30,13 +30,13 @@ use node_gui_backend::{
         BackendEvent, BackendRequest, EncryptionAction, SignedTransactionWrapper, TransactionInfo,
         WalletId, WalletInfo,
     },
-    BackendSender, ImportOrCreate, InitializedNode,
+    BackendSender, InitializedNode,
 };
 use p2p::{net::types::services::Services, types::peer_id::PeerId, P2pEvent};
 use rfd::AsyncFileDialog;
 use wallet_cli_commands::ConsoleCommand;
 use wallet_controller::types::WalletTypeArgs;
-use wallet_types::{seed_phrase::StoreSeedPhrase, wallet_type::WalletType};
+use wallet_types::{seed_phrase::StoreSeedPhrase, wallet_type::WalletType, ImportOrCreate};
 
 #[cfg(feature = "trezor")]
 use crate::widgets::create_hw_wallet::hw_wallet_create_dialog;

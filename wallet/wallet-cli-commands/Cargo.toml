@@ -31,11 +31,14 @@ wallet-rpc-client = { path = "../wallet-rpc-client" }
 clap = { workspace = true, features = ["derive"] }
 async-trait.workspace = true
 crossterm.workspace = true
+derive_more.workspace = true
 directories.workspace = true
 dyn-clone.workspace = true
 humantime.workspace = true
 hex.workspace = true
 itertools.workspace = true
+lazy_static.workspace = true
+regex.workspace = true
 reedline = { workspace = true, features = ["external_printer"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
@@ -57,6 +60,7 @@ subsystem = { path = "../../subsystem" }
 test-utils = { path = "../../test-utils" }
 wallet-test-node = { path = "../wallet-test-node" }
 
+jsonrpsee.workspace = true
 rstest.workspace = true
 
 [features]

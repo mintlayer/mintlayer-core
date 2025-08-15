@@ -61,12 +61,12 @@ use wallet_controller::{types::WalletTypeArgs, UtxoState, UtxoType};
 pub use wallet_controller::{ControllerConfig, NodeInterface};
 use wallet_types::{
     partially_signed_transaction::PartiallySignedTransaction, seed_phrase::StoreSeedPhrase,
-    signature_status::SignatureStatus, KeyPurpose,
+    signature_status::SignatureStatus, ImportOrCreate, KeyPurpose,
 };
 
 use crate::service::SubmitError;
 
-#[derive(Debug, thiserror::Error)]
+#[derive(derive_more::Debug, thiserror::Error)]
 pub enum RpcError<N: NodeInterface> {
     #[error("Account index out of supported range")]
     AcctIndexOutOfRange,
@@ -166,6 +166,9 @@ pub enum RpcError<N: NodeInterface> {
 
     #[error("Either set `all` to sweep all addresses, or provide specific addresses — not both")]
     InvalidSweepParameters,
+
+    #[error("Wallet recovery requires mnemonic to be specified")]
+    WalletRecoveryWithoutMnemonic,
 }
 
 impl<N: NodeInterface> From<RpcError<N>> for rpc::Error {
@@ -1053,6 +1056,7 @@ impl HardwareWalletType {
         store_seed_phrase: bool,
         mnemonic: Option<String>,
         passphrase: Option<String>,
+        import_or_create: ImportOrCreate,
     ) -> Result<WalletTypeArgs, RpcError<N>> {
         let store_seed_phrase = if store_seed_phrase {
             StoreSeedPhrase::Store
@@ -1061,11 +1065,20 @@ impl HardwareWalletType {
         };
 
         match hardware_wallet {
-            None => Ok(WalletTypeArgs::Software {
-                mnemonic,
-                passphrase,
-                store_seed_phrase,
-            }),
+            None => {
+                match import_or_create {
+                    ImportOrCreate::Import => {
+                        ensure!(mnemonic.is_some(), RpcError::WalletRecoveryWithoutMnemonic);
+                    }
+                    ImportOrCreate::Create => {}
+                };
+
+                Ok(WalletTypeArgs::Software {
+                    mnemonic,
+                    passphrase,
+                    store_seed_phrase,
+                })
+            }
             Some(hw_type) => {
                 ensure!(
                     mnemonic.is_none()

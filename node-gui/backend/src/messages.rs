@@ -35,9 +35,9 @@ use wallet::account::transaction_list::TransactionList;
 use wallet_cli_commands::ConsoleCommand;
 use wallet_controller::types::{Balances, WalletExtraInfo, WalletTypeArgs};
 use wallet_rpc_lib::types::PoolInfo;
-use wallet_types::wallet_type::WalletType;
+use wallet_types::{wallet_type::WalletType, ImportOrCreate};
 
-use super::{AccountId, BackendError, ImportOrCreate};
+use super::{AccountId, BackendError};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct WalletId(u64);

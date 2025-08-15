@@ -20,7 +20,7 @@ use wallet_cli_commands::WalletCliCommandError;
 use wallet_rpc_client::rpc_client::WalletRpcError;
 use wallet_rpc_lib::types::NodeInterface;
 
-#[derive(thiserror::Error, Debug)]
+#[derive(thiserror::Error, derive_more::Debug)]
 pub enum WalletCliError<N: NodeInterface> {
     #[error("File {0} I/O error: {1}")]
     FileError(PathBuf, String),

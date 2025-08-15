@@ -29,6 +29,7 @@ p2p-types = { path = "../../p2p/types" }
 anyhow.workspace = true
 async-trait.workspace = true
 clap.workspace = true
+derive_more.workspace = true
 enum-iterator.workspace = true
 futures.workspace = true
 hex.workspace = true

@@ -66,7 +66,7 @@ pub struct WalletRpcHandlesClient<N: Clone> {
     server_rpc: Option<rpc::Rpc>,
 }
 
-#[derive(thiserror::Error, Debug)]
+#[derive(thiserror::Error, derive_more::Debug)]
 pub enum WalletRpcHandlesClientError<N: NodeInterface> {
     #[error(transparent)]
     WalletRpcError(#[from] wallet_rpc_lib::RpcError<N>),

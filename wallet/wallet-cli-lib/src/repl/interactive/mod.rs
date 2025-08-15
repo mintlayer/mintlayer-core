@@ -135,7 +135,6 @@ pub fn run<N: NodeInterface>(
         .get_subcommands()
         .filter(|command| !command.is_hide_set())
         .map(|command| command.get_name().to_owned())
-        .chain(std::iter::once("help".to_owned()))
         .collect::<Vec<_>>();
 
     let history = if let Some(file_name) = history_file {
