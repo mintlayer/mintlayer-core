@@ -55,15 +55,18 @@ pub enum CreateWalletSubCommand {
         /// File path of the wallet file
         wallet_path: PathBuf,
 
-        /// Specifies whether the seed-phrase should be stored in the wallet file or
+        /// Specifies whether the seed phrase should be stored in the wallet file or
         /// only printed on the screen.
         ///
-        /// Not storing the seed-phrase can be seen as a security measure
-        /// to ensure sufficient secrecy in case that seed-phrase is reused
+        /// Not storing the seed phrase can be seen as a security measure
+        /// to ensure sufficient secrecy in case that the seed phrase is reused
         /// elsewhere if this wallet is compromised.
+        ///
+        /// Note: if you decide to store the seed phrase, consider encrypting the wallet with
+        /// the wallet-encrypt-private-keys command, which will also encrypt the seed phrase.
         whether_to_store_seed_phrase: CliStoreSeedPhrase,
 
-        /// Mnemonic phrase (12, 15, or 24 words as a single quoted argument).
+        /// Mnemonic (seed) phrase (12, 15, or 24 words as a single quoted argument).
         ///
         /// If not specified, a new mnemonic phrase will be generated and printed.
         mnemonic: Option<String>,
@@ -129,15 +132,18 @@ pub enum RecoverWalletSubCommand {
         /// File path of the wallet file
         wallet_path: PathBuf,
 
-        /// Specifies whether the seed-phrase should be stored in the wallet file or
+        /// Specifies whether the seed phrase should be stored in the wallet file or
         /// only printed on the screen.
         ///
-        /// Not storing the seed-phrase can be seen as a security measure
-        /// to ensure sufficient secrecy in case that seed-phrase is reused
+        /// Not storing the seed phrase can be seen as a security measure
+        /// to ensure sufficient secrecy in case that the seed phrase is reused
         /// elsewhere if this wallet is compromised.
+        ///
+        /// Note: if you decide to store the seed phrase, consider encrypting the wallet with
+        /// the wallet-encrypt-private-keys command, which will also encrypt the seed phrase.
         whether_to_store_seed_phrase: CliStoreSeedPhrase,
 
-        /// Mnemonic phrase (12, 15, or 24 words as a single quoted argument).
+        /// Mnemonic (seed) phrase (12, 15, or 24 words as a single quoted argument).
         mnemonic: String,
 
         /// Passphrase along the mnemonic
@@ -226,18 +232,32 @@ pub enum OpenWalletSubCommand {
 #[derive(Debug, Parser)]
 #[clap(rename_all = "kebab-case")]
 pub enum WalletManagementCommand {
+    /// Create a new wallet. This will create a new file without scanning the blockchain.
+    ///
+    /// Use this command if the seed phrase is brand new and has no associated transactions.
+    ///
+    /// If, on the other hand, the seed phrase has been used in the past and may have
+    /// associated transactions, use wallet-recover instead.
     #[clap(name = "wallet-create")]
     CreateWallet {
         #[command(subcommand)]
         wallet: CreateWalletSubCommand,
     },
 
+    /// Recover a wallet. This will create a new wallet file and scan the blockchain for associated
+    /// transactions.
+    ///
+    /// Use this command if the seed phrase has been used in the past.
+    ///
+    /// If, on the other hand, the seed phrase is brand new, consider using wallet-create,
+    /// which will save you some time (as scanning the entire blockchain is a lengthy process).
     #[clap(name = "wallet-recover")]
     RecoverWallet {
         #[command(subcommand)]
         wallet: RecoverWalletSubCommand,
     },
 
+    /// Open an exiting wallet file.
     #[clap(name = "wallet-open")]
     OpenWallet {
         #[command(subcommand)]
@@ -997,8 +1017,12 @@ pub enum WalletCommand {
         /// This specifies that instead of a (hex encoded) PartiallySignedTransaction
         /// the result should be a (hex encoded) "simple" transaction.
         ///
-        /// Note that both variants are accepted by account-sign-raw-transaction,
-        /// so the presence of this option doesn't matter much.
+        /// Producing a "simple" transaction will result in a shorter hex string, but you won't
+        /// be able to use it with account-sign-raw-transaction in the cold wallet mode, which
+        /// relies on some additional information contained inside PartiallySignedTransaction.
+        ///
+        /// In general, there is no reason in specifying this option unless you care about the size
+        /// of the resulting hex string.
         #[arg(long = "only-transaction", default_value_t = false)]
         only_transaction: bool,
     },

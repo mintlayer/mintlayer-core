@@ -3217,7 +3217,7 @@ string
 
 ### Method `wallet_create`
 
-Create a new wallet, this will skip scanning the blockchain
+Create a new wallet. This will create a new file without scanning the blockchain.
 
 
 Parameters:
@@ -3265,7 +3265,9 @@ Returns:
 
 ### Method `wallet_recover`
 
-Recover new wallet, this will rescan the blockchain upon creation
+Recover a wallet. This will create a new wallet file and scan the blockchain for associated transactions.
+
+Note: mnemonic must be specified when recovering a software wallet.
 
 
 Parameters:
@@ -3313,7 +3315,7 @@ Returns:
 
 ### Method `wallet_open`
 
-Open an exiting wallet by specifying the file location of the wallet file
+Open an exiting wallet file.
 
 
 Parameters:

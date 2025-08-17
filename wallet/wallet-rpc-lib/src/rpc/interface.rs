@@ -96,7 +96,7 @@ trait ColdWalletRpc {
     #[method(name = "version")]
     async fn version(&self) -> rpc::RpcResult<String>;
 
-    /// Create a new wallet, this will skip scanning the blockchain
+    /// Create a new wallet. This will create a new file without scanning the blockchain.
     #[method(name = "wallet_create")]
     async fn create_wallet(
         &self,
@@ -107,7 +107,9 @@ trait ColdWalletRpc {
         hardware_wallet: Option<HardwareWalletType>,
     ) -> rpc::RpcResult<CreatedWallet>;
 
-    /// Recover new wallet, this will rescan the blockchain upon creation
+    /// Recover a wallet. This will create a new wallet file and scan the blockchain for associated transactions.
+    ///
+    /// Note: mnemonic must be specified when recovering a software wallet.
     #[method(name = "wallet_recover")]
     async fn recover_wallet(
         &self,
@@ -118,7 +120,7 @@ trait ColdWalletRpc {
         hardware_wallet: Option<HardwareWalletType>,
     ) -> rpc::RpcResult<CreatedWallet>;
 
-    /// Open an exiting wallet by specifying the file location of the wallet file
+    /// Open an exiting wallet file.
     #[method(name = "wallet_open")]
     async fn open_wallet(
         &self,
