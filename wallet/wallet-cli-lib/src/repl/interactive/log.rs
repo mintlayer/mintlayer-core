@@ -67,7 +67,10 @@ impl InteractiveLogger {
         // Increase the buffer to prevent dropped log output.
         // Do not use very large buffers here, as this will increase
         // the amount of allocated memory (even if the buffer is not used).
-        let external_printer = reedline::ExternalPrinter::new(1024);
+        // Note that it shouldn't be too small either, because InteractiveLogger is also used
+        // to collect logs when displaying paginated output; 8k should be enough to collect
+        // relatively verbose debug logs for several minutes.
+        let external_printer = reedline::ExternalPrinter::new(8192);
 
         let print_directly = Arc::new(Mutex::new(true));
 
