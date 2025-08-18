@@ -21,6 +21,7 @@ pub use command_handler::CommandHandler;
 use dyn_clone::DynClone;
 pub use errors::WalletCliCommandError;
 use helper_types::YesNo;
+use regex::Regex;
 use rpc::description::{Described, Module};
 use wallet_controller::types::WalletTypeArgs;
 use wallet_rpc_lib::{
@@ -28,7 +29,7 @@ use wallet_rpc_lib::{
     ColdWalletRpcDescription, WalletRpcDescription,
 };
 
-use std::{fmt::Debug, num::NonZeroUsize, path::PathBuf, time::Duration};
+use std::{collections::BTreeMap, fmt::Debug, num::NonZeroUsize, path::PathBuf, time::Duration};
 
 use clap::{Command, FromArgMatches, Parser, Subcommand};
 
@@ -54,24 +55,33 @@ pub enum CreateWalletSubCommand {
         /// File path of the wallet file
         wallet_path: PathBuf,
 
-        /// If 'store-seed-phrase', the seed-phrase will be stored in the wallet file.
-        /// If 'do-not-store-seed-phrase', the seed-phrase will only be printed on the screen.
-        /// Not storing the seed-phrase can be seen as a security measure
-        /// to ensure sufficient secrecy in case that seed-phrase is reused
+        /// Specifies whether the seed phrase should be stored in the wallet file or
+        /// only printed on the screen.
+        ///
+        /// Not storing the seed phrase can be seen as a security measure
+        /// to ensure sufficient secrecy in case that the seed phrase is reused
         /// elsewhere if this wallet is compromised.
+        ///
+        /// Note: if you decide to store the seed phrase, consider encrypting the wallet with
+        /// the wallet-encrypt-private-keys command, which will also encrypt the seed phrase.
         whether_to_store_seed_phrase: CliStoreSeedPhrase,
 
-        /// Mnemonic phrase (12, 15, or 24 words as a single quoted argument). If not specified, a new mnemonic phrase is generated and printed.
+        /// Mnemonic (seed) phrase (12, 15, or 24 words as a single quoted argument).
+        ///
+        /// If not specified, a new mnemonic phrase will be generated and printed.
         mnemonic: Option<String>,
 
         /// Passphrase along the mnemonic
         #[arg(long = "passphrase")]
         passphrase: Option<String>,
     },
-    /// (Beta) Create a wallet using a connected Trezor hardware wallet. Only the public keys will be kept in
-    /// the software wallet. Cannot specify a mnemonic or passphrase here,
-    /// the former must have been entered on the hardware during the device setup
-    /// and the latter will have to be entered every time the device is connected to the host machine.
+    /// (Beta) Create a wallet using a connected Trezor hardware wallet.
+    ///
+    /// Only the public keys will be kept in the wallet file.
+    ///
+    /// Cannot specify a mnemonic or passphrase here, the mnemonic must have been entered on
+    /// the device during its initial setup and the passphrase will have to be entered every
+    /// time the device is connected to the host machine.
     #[command()]
     Trezor {
         /// File path of the wallet file
@@ -79,7 +89,8 @@ pub enum CreateWalletSubCommand {
 
         /// Optionally specify the ID for the Trezor device to connect to in case there
         /// are multiple Trezor devices connected at the same time.
-        /// If not specified and there are multiple devices connected a choice will be presented
+        ///
+        /// If not specified and if there are multiple devices connected, a choice will be presented.
         #[arg(long)]
         device_id: Option<String>,
     },
@@ -115,30 +126,37 @@ impl CreateWalletSubCommand {
 
 #[derive(Debug, Subcommand, Clone)]
 pub enum RecoverWalletSubCommand {
-    /// Recover a software.
+    /// Recover a software wallet
     #[command()]
     Software {
         /// File path of the wallet file
         wallet_path: PathBuf,
 
-        /// If 'store-seed-phrase', the seed-phrase will be stored in the wallet file.
-        /// If 'do-not-store-seed-phrase', the seed-phrase will only be printed on the screen.
-        /// Not storing the seed-phrase can be seen as a security measure
-        /// to ensure sufficient secrecy in case that seed-phrase is reused
+        /// Specifies whether the seed phrase should be stored in the wallet file or
+        /// only printed on the screen.
+        ///
+        /// Not storing the seed phrase can be seen as a security measure
+        /// to ensure sufficient secrecy in case that the seed phrase is reused
         /// elsewhere if this wallet is compromised.
+        ///
+        /// Note: if you decide to store the seed phrase, consider encrypting the wallet with
+        /// the wallet-encrypt-private-keys command, which will also encrypt the seed phrase.
         whether_to_store_seed_phrase: CliStoreSeedPhrase,
 
-        /// Mnemonic phrase (12, 15, or 24 words as a single quoted argument). If not specified, a new mnemonic phrase is generated and printed.
-        mnemonic: Option<String>,
+        /// Mnemonic (seed) phrase (12, 15, or 24 words as a single quoted argument).
+        mnemonic: String,
 
         /// Passphrase along the mnemonic
         #[arg(long = "passphrase")]
         passphrase: Option<String>,
     },
-    /// (Beta) Recover a wallet using a connected Trezor hardware wallet. Only the public keys will be kept in
-    /// the software wallet. Cannot specify a mnemonic or passphrase here,
-    /// the former must have been entered on the hardware during the device setup
-    /// and the latter will have to be entered every time the device is connected to the host machine.
+    /// (Beta) Recover a wallet using a connected Trezor hardware wallet.
+    ///
+    /// Only the public keys will be kept in the wallet file.
+    ///
+    /// Cannot specify a mnemonic or passphrase here, the mnemonic must have been entered on
+    /// the device during its initial setup and the passphrase will have to be entered every
+    /// time the device is connected to the host machine.
     #[command()]
     Trezor {
         /// File path of the wallet file
@@ -146,7 +164,8 @@ pub enum RecoverWalletSubCommand {
 
         /// Optionally specify the ID for the Trezor device to connect to in case there
         /// are multiple Trezor devices connected at the same time.
-        /// If not specified and there are multiple devices connected a choice will be presented
+        ///
+        /// If not specified and if there are multiple devices connected, a choice will be presented.
         #[arg(long)]
         device_id: Option<String>,
     },
@@ -165,7 +184,7 @@ impl RecoverWalletSubCommand {
                 (
                     wallet_path,
                     WalletTypeArgs::Software {
-                        mnemonic,
+                        mnemonic: Some(mnemonic),
                         passphrase,
                         store_seed_phrase,
                     },
@@ -203,7 +222,8 @@ pub enum OpenWalletSubCommand {
 
         /// Optionally specify the ID for the Trezor device to connect to in case there
         /// are multiple Trezor devices connected at the same time.
-        /// If not specified and there are multiple devices connected a choice will be presented.
+        ///
+        /// If not specified and if there are multiple devices connected, a choice will be presented.
         #[arg(long)]
         device_id: Option<String>,
     },
@@ -212,18 +232,32 @@ pub enum OpenWalletSubCommand {
 #[derive(Debug, Parser)]
 #[clap(rename_all = "kebab-case")]
 pub enum WalletManagementCommand {
+    /// Create a new wallet. This will create a new file without scanning the blockchain.
+    ///
+    /// Use this command if the seed phrase is brand new and has no associated transactions.
+    ///
+    /// If, on the other hand, the seed phrase has been used in the past and may have
+    /// associated transactions, use wallet-recover instead.
     #[clap(name = "wallet-create")]
     CreateWallet {
         #[command(subcommand)]
         wallet: CreateWalletSubCommand,
     },
 
+    /// Recover a wallet. This will create a new wallet file and scan the blockchain for associated
+    /// transactions.
+    ///
+    /// Use this command if the seed phrase has been used in the past.
+    ///
+    /// If, on the other hand, the seed phrase is brand new, consider using wallet-create,
+    /// which will save you some time (as scanning the entire blockchain is a lengthy process).
     #[clap(name = "wallet-recover")]
     RecoverWallet {
         #[command(subcommand)]
         wallet: RecoverWalletSubCommand,
     },
 
+    /// Open an exiting wallet file.
     #[clap(name = "wallet-open")]
     OpenWallet {
         #[command(subcommand)]
@@ -276,28 +310,28 @@ pub enum ColdWalletCommand {
         /// The new lookahead size
         lookahead_size: u32,
 
-        /// Forces the reduction of lookahead size even below the known last used address
-        /// the new wallet can lose track of known addresses and balance
+        /// Forces the reduction of lookahead size even below the last used address;
+        /// this may cause the wallet to lose track of used addresses and its actual balance.
         i_know_what_i_am_doing: Option<CliForceReduce>,
     },
 
     /// Creates a QR code of the provided address
     #[clap(name = "address-qrcode")]
     AddressQRCode {
-        /// A Destination address
         address: String,
     },
 
     #[clap(name = "address-new")]
     NewAddress,
 
-    /// Reveal the public key behind this address in hex encoding
+    /// Reveal the public key behind the specified "public key hash" address as a hex encoded string.
     #[clap(name = "address-reveal-public-key-as-hex")]
     RevealPublicKeyHex {
         public_key_hash: String,
     },
 
-    /// Reveal the public key behind this address in address encoding.
+    /// Reveal the public key behind the specified "public key hash" address in address encoding.
+    ///
     /// Note that this isn't a normal address to be used in transactions.
     /// It's preferred to take the address from address-show command
     #[clap(name = "address-reveal-public-key-as-address")]
@@ -421,13 +455,13 @@ pub enum WalletCommand {
 
     #[clap(name = "account-utxos")]
     ListUtxo {
-        /// The type of utxo to be listed. Default is "all".
+        /// The type of utxos to be listed.
         #[arg(value_enum, default_value_t = CliUtxoTypes::All)]
         utxo_type: CliUtxoTypes,
-        /// Whether to include locked outputs. Default is "unlocked"
+        /// Whether to include locked outputs.
         #[arg(value_enum, default_value_t = CliWithLocked::Unlocked)]
         with_locked: CliWithLocked,
-        /// The state of the utxos; e.g., confirmed, unconfirmed, etc.
+        /// The state of the utxos.
         #[arg(default_values_t = vec![CliUtxoState::Confirmed])]
         utxo_states: Vec<CliUtxoState>,
     },
@@ -499,13 +533,13 @@ pub enum WalletCommand {
 
     #[clap(name = "standalone-multisig-utxos")]
     ListMultisigUtxo {
-        /// The type of utxo to be listed. Default is "all".
+        /// The type of utxos to be listed.
         #[arg(value_enum, default_value_t = CliUtxoTypes::All)]
         utxo_type: CliUtxoTypes,
-        /// Whether to include locked outputs. Default is "unlocked"
+        /// Whether to include locked outputs.
         #[arg(value_enum, default_value_t = CliWithLocked::Unlocked)]
         with_locked: CliWithLocked,
-        /// The state of the utxos; e.g., confirmed, unconfirmed, etc.
+        /// The state of the utxos.
         #[arg(default_values_t = vec![CliUtxoState::Confirmed])]
         utxo_states: Vec<CliUtxoState>,
     },
@@ -528,6 +562,7 @@ pub enum WalletCommand {
         icon_uri: Option<String>,
         /// URI of the media
         media_uri: Option<String>,
+        /// URI of the additional metadata
         additional_metadata_uri: Option<String>,
     },
 
@@ -623,7 +658,7 @@ pub enum WalletCommand {
     /// the original multisig address.
     ///
     /// The utxos to pay fees from will be selected automatically; these will be normal, single-sig utxos.
-    /// The optional `fee_change_address` specifies the destination for the change for the fee payment;
+    /// The optional "fee change address" specifies the destination for the change for the fee payment;
     /// If it's unset, the destination will be taken from one of existing single-sig utxos.
     #[clap(name = "token-make-tx-to-send-from-multisig-address")]
     #[clap(hide = true)]
@@ -646,25 +681,25 @@ pub enum WalletCommand {
         address: String,
         /// The amount to be sent, in decimal format
         amount: DecimalAmount,
-        /// You can choose what utxos to spend (space separated as additional arguments). A utxo can be from a transaction output or a block reward output:
+        /// You can choose what utxos to spend (space separated as additional arguments).
+        /// A utxo can be from a transaction output or a block reward output:
         /// e.g tx(000000000000000000059fa50103b9683e51e5aba83b8a34c9b98ce67d66136c,1) or
         /// block(000000000000000000059fa50103b9683e51e5aba83b8a34c9b98ce67d66136c,2)
         #[arg(default_values_t = Vec::<String>::new())]
         utxos: Vec<String>,
     },
 
-    #[clap(name = "address-sweep-spendable")]
-    /// Sweep all spendable coins or tokens from an address or addresses specified in `addresses`
-    /// or all addresses from this account if `--all` is specified, to the given destination address.
-    /// Either 1 or more addresses need to be specified in `addresses` without `--all` being set, or
-    /// `addresses` needs to be empty and `--all` being set.
+    /// Sweep all spendable coins or tokens from the specified (or all) addresses to the given destination address.
     ///
     /// Spendable coins are any coins that are not locked, and tokens that are not frozen or locked.
-    /// The wallet will automatically calculate the required fees
+    /// The wallet will automatically calculate the required fees.
+    #[clap(name = "address-sweep-spendable")]
     SweepFromAddress {
         /// The receiving address of the coins or tokens
         destination_address: String,
-        /// The addresses to be swept
+        /// The addresses to be swept. Mutually exclusive with --all.
+        ///
+        /// If --all is not specified, this has to contain at least one address.
         #[arg(required_unless_present("all"))]
         addresses: Vec<String>,
         /// Sweep all addresses
@@ -690,7 +725,7 @@ pub enum WalletCommand {
         /// e.g tx(000000000000000000059fa50103b9683e51e5aba83b8a34c9b98ce67d66136c,1) or
         /// block(000000000000000000059fa50103b9683e51e5aba83b8a34c9b98ce67d66136c,2)
         utxo: String,
-        /// Optional change address, if not specified it returns the change to the same address from the input
+        /// Optional change address; if not specified, it returns the change to the same address from the input.
         #[arg(long = "change")]
         change_address: Option<String>,
     },
@@ -720,9 +755,9 @@ pub enum WalletCommand {
 
     #[clap(name = "delegation-stake")]
     DelegateStaking {
-        /// The amount to be delegated for staking
+        /// The amount to be delegated for staking.
         amount: DecimalAmount,
-        /// The delegation id that was created. Every pool you want to delegate to must have a delegation id.
+        /// The delegation id.
         delegation_id: String,
     },
 
@@ -790,7 +825,7 @@ pub enum WalletCommand {
         /// (run it in the wallet that owns the key).
         staker_address: Option<String>,
 
-        /// This specifies the VRF key that will be used to produce POS hashes during staking.
+        /// This specifies the VRF key that will be used to produce PoS hashes during staking.
         ///
         /// The key must be owned by the wallet that will do the actual staking. Leave it empty if the current
         /// wallet will be the staking wallet.
@@ -914,8 +949,8 @@ pub enum WalletCommand {
 
     #[clap(name = "node-get-block")]
     GetBlock {
-        /// Block hash
-        hash: String,
+        /// Block id
+        id: String,
     },
 
     #[clap(name = "node-generate-block")]
@@ -929,29 +964,40 @@ pub enum WalletCommand {
 
     /// For each block height in the specified range, find timestamps where staking is/was possible
     /// for the given pool.
-    ///
-    /// `min_height` must not be zero; `max_height` must not exceed the best block height plus one.
-    ///
-    /// If `check_all_timestamps_between_blocks` is "no", `seconds_to_check_for_height + 1` is the number
-    /// of seconds that will be checked at each height in the range.
-    /// If `check_all_timestamps_between_blocks` is "yes", `seconds_to_check_for_height` only applies to the
-    /// last height in the range; for all other heights the maximum timestamp is the timestamp
-    /// of the next block.
     #[clap(name = "node-find-timestamps-for-staking")]
     #[clap(hide = true)]
     FindTimestampsForStaking {
+        /// The pool in question
         pool_id: String,
+        /// The minimum block height to consider; must not be zero
         min_height: BlockHeight,
+        /// The maximum block height to consider; must not exceed the best block height plus one
         max_height: BlockHeight,
+        /// If "check_all_timestamps_between_blocks" is "no", this value plus one is the number
+        /// of seconds that will be checked at each height in the range.
+        ///
+        /// If "check_all_timestamps_between_blocks" is "yes", this value only applies to the
+        /// last height in the range; for all other heights the maximum timestamp is the timestamp
+        /// of the next block.
         seconds_to_check_for_height: u64,
+        /// This determines how "seconds_to_check_for_height" will be interpreted
         check_all_timestamps_between_blocks: YesNo,
     },
 
+    /// Return mainchain block ids with heights in the given range using the given step.
+    ///
+    /// The purpose of this is to populate CHECKPOINTS_DATA arrays located in
+    /// `common/src/chain/config/checkpoints_data/` in `mainnet.rs` and `testnet.rs`.
     #[clap(name = "node-get-block-ids-as-checkpoints")]
     #[clap(hide = true)]
     GetBlockIdsAsCheckpoints {
+        /// The starting height; normally, this will be the last height mentioned in
+        /// the corresponding CHECKPOINTS_DATA array.
         start_height: BlockHeight,
+        /// The end (exclusive) height; normally, this will be some large number, which
+        /// is definitely bigger than the current best block height, e.g. a million.
         end_height: BlockHeight,
+        /// The step; in our current CHECKPOINTS_DATA arrays we use 500 as the step.
         step: NonZeroUsize,
     },
 
@@ -960,12 +1006,23 @@ pub enum WalletCommand {
         /// The transaction outputs, in the format `transfer(address,amount)`
         /// e.g. transfer(tmt1q8lhgxhycm8e6yk9zpnetdwtn03h73z70c3ha4l7,0.9)
         outputs: Vec<String>,
-        /// You can choose what utxos to spend (space separated as additional arguments). A utxo can be from a transaction output or a block reward output:
+        /// You can choose what utxos to spend (space separated as additional arguments).
+        ///
+        /// A utxo can be from a transaction output or a block reward output:
         /// e.g tx(000000000000000000059fa50103b9683e51e5aba83b8a34c9b98ce67d66136c,1) or
         /// block(000000000000000000059fa50103b9683e51e5aba83b8a34c9b98ce67d66136c,2)
         #[arg(long = "utxos", default_values_t = Vec::<String>::new())]
         utxos: Vec<String>,
 
+        /// This specifies that instead of a (hex encoded) PartiallySignedTransaction
+        /// the result should be a (hex encoded) "simple" transaction.
+        ///
+        /// Producing a "simple" transaction will result in a shorter hex string, but you won't
+        /// be able to use it with account-sign-raw-transaction in the cold wallet mode, which
+        /// relies on some additional information contained inside PartiallySignedTransaction.
+        ///
+        /// In general, there is no reason in specifying this option unless you care about the size
+        /// of the resulting hex string.
         #[arg(long = "only-transaction", default_value_t = false)]
         only_transaction: bool,
     },
@@ -983,7 +1040,7 @@ pub enum WalletCommand {
     ListMainchainTransactions {
         /// Address to filter by
         address: Option<String>,
-        /// limit the number of printed transactions, default is 100
+        /// Limit the number of printed transactions.
         #[arg(long = "limit", default_value_t = 100)]
         limit: usize,
     },
@@ -1150,9 +1207,10 @@ const MAIN_HELP_TEMPLATE: &str = "\
     {all-args}
 ";
 
-// Strip out name/version
+// Strip out name/version.
+// Note: here we expect "about" to have a trailing EOL, see the comments inside get_repl_command.
 const COMMAND_HELP_TEMPLATE: &str = "\
-    {about-with-newline}\n\
+    {about}\n\
     {usage-heading}\n    {usage}\n\
     \n\
     {all-args}{after-help}\
@@ -1183,28 +1241,111 @@ pub fn get_repl_command(cold_wallet: bool, mutable_wallet: bool) -> Command {
         repl_command
     };
 
-    // Customize the help template for all commands to make it more REPL friendly
+    lazy_static::lazy_static! {
+        static ref CUSTOM_RPC_TO_CLI_NAME_MAPPINGS: BTreeMap<&'static str, &'static str> =
+            BTreeMap::from([("account_extended_public_key", "account-extended-public-key-as-hex")]);
+    }
+
+    let method_desc_from_rpc = COLD_WALLET_DESC
+        .methods
+        .iter()
+        .chain(WALLET_DESC.methods)
+        .map(|method| {
+            let expected_cmd_name =
+                if let Some(cmd_name) = CUSTOM_RPC_TO_CLI_NAME_MAPPINGS.get(&method.name) {
+                    cmd_name.to_string()
+                } else {
+                    method.name.replace("_", "-")
+                };
+            (expected_cmd_name, method)
+        })
+        .collect::<BTreeMap<_, _>>();
+
+    // Postprocess the commands:
+    // 1) Customize the help template to make it more REPL friendly.
+    // 2) Set display_order of all commands to the same value, so that they get sorted
+    // in the alphabetical order (except "help", which will be added automatically by clap
+    // later, so it will always be at the end).
+    // 3) If the command's "about" is empty, re-use the description of the corresponding RPC
+    // method.
     for subcommand in repl_command.get_subcommands_mut() {
-        let mut new_subcommand = subcommand.clone().help_template(COMMAND_HELP_TEMPLATE);
+        let mut new_subcommand =
+            subcommand.clone().help_template(COMMAND_HELP_TEMPLATE).display_order(0);
+
         if new_subcommand.get_about().is_none() {
-            if let Some(desc) =
-                COLD_WALLET_DESC.methods.iter().chain(WALLET_DESC.methods).find_map(|method| {
-                    method
-                        .name
-                        .split('_')
-                        .zip(subcommand.get_name().split('-'))
-                        .all(|(x, y)| x == y)
-                        .then_some(method.description)
-                })
-            {
-                new_subcommand = new_subcommand.about(desc);
+            if let Some(rpc_method) = method_desc_from_rpc.get(subcommand.get_name()) {
+                let (about, long_about) = clapify_and_split_rpc_description(rpc_method.description);
+
+                new_subcommand = new_subcommand.about(about);
+
+                if let Some(long_about) = long_about {
+                    new_subcommand = new_subcommand.long_about(long_about);
+                }
             }
+        }
+
+        // Force-append a single EOL to all "about"s, to make the output of the "help" command nicer.
+        if let Some(about) = new_subcommand.get_about() {
+            let new_about = format!("{about}\n");
+            new_subcommand = new_subcommand.about(new_about);
+        }
+
+        // For consistency, we also have to append an EOL to long_about.
+        // (because "about" is printed by "some_command -h" and "long_about" by "some_command --help").
+        if let Some(long_about) = new_subcommand.get_long_about() {
+            let new_long_about = format!("{long_about}\n");
+            new_subcommand = new_subcommand.long_about(new_long_about);
         }
 
         *subcommand = new_subcommand;
     }
 
+    // This will add the "help" subcommand.
+    // (note: if this is not called here, the "help" subcommand will still be added, but later,
+    // during the `try_get_matches_from` call in `parse_input`).
+    repl_command.build();
+
     repl_command
+}
+
+/// Clap-ify the provided RPC method description and split it into the "about" and "long_about"
+/// parts.
+///
+/// Note: the generated RPC descriptions look different from those generated by clap:
+/// 1) The RPC ones always have at least one trailing EOL, the clap ones don't.
+/// 2) The RPC ones preserve all EOLs of the original doc string; in the clap ones all EOLs
+///    within each paragraph are removed and empty lines between paragraphs are squashed into one.
+/// 3) In the clap ones, if there are more than 1 paragraph, the first paragraph goes into "about"
+///    and the whole text goes into "long_about".
+///    Also, if the "about" part ends in exactly one period, the period is removed.
+fn clapify_and_split_rpc_description(descr: &str) -> (String, Option<String>) {
+    let descr = descr.trim();
+
+    lazy_static::lazy_static! {
+        static ref PARA_SEPARATOR_REGEX:Regex = Regex::new(r"(?m)\n{3,}").expect("regex construction must succeed");
+        static ref EXTRA_EOL_REGEX:Regex = Regex::new(r"(?m)([^\n])\n([^\n])").expect("regex construction must succeed");
+    }
+
+    let descr = PARA_SEPARATOR_REGEX.replace_all(descr, "\n\n");
+    let descr = EXTRA_EOL_REGEX.replace_all(&descr, "$1 $2");
+
+    let (mut about, long_about) = if let Some(first_double_eol_pos) = descr.find("\n\n") {
+        (
+            // We know that the position is at a char boundary.
+            #[allow(clippy::string_slice)]
+            descr[..first_double_eol_pos].to_owned(),
+            Some(descr.into_owned()),
+        )
+    } else {
+        (descr.into_owned(), None)
+    };
+
+    let mut about_chars = about.chars();
+    if about_chars.next_back() == Some('.') && about_chars.next_back() != Some('.') {
+        about.pop();
+    }
+
+    (about, long_about)
 }
 
 /// Try to parse REPL input string as a [WalletCommands]
@@ -1225,4 +1366,150 @@ pub fn parse_input<N: NodeInterface>(
     let command = ManageableWalletCommand::from_arg_matches_mut(&mut matches)
         .map_err(WalletCliCommandError::InvalidCommandInput)?;
     Ok(Some(command))
+}
+
+#[cfg(test)]
+mod tests {
+    use rstest::rstest;
+
+    use super::*;
+
+    #[rstest]
+    fn ensure_commands_have_description(
+        #[values(false, true)] cold_wallet: bool,
+        #[values(false, true)] mutable_wallet: bool,
+    ) {
+        let repl_command = get_repl_command(cold_wallet, mutable_wallet);
+
+        let command_names_without_descr = repl_command
+            .get_subcommands()
+            .filter(|command| command.get_about().is_none())
+            .map(|command| command.get_name().to_owned())
+            .collect::<Vec<_>>();
+        assert_eq!(command_names_without_descr, Vec::<String>::new());
+    }
+
+    mod clapify_rpc_descr_test {
+        use super::*;
+
+        #[test]
+        fn test() {
+            let expected_descrs = BTreeMap::from([
+                ("func1", ("This is a test description. It has some EOLs. Also, it ends with a period".to_owned(), None)),
+                ("func2", ("This is a test description. It has some EOLs. Also, it ends with a double period..".to_owned(), None)),
+                ("func3", (
+                    "This is a test description. It has some EOLs. Also, it ends with a period".to_owned(),
+                    Some(concat!(
+                        "This is a test description. It has some EOLs. Also, it ends with a period.\n\n",
+                        "And it has an extra paragraph with extra EOL.").to_owned()
+                    ))
+                ),
+                ("func4", (
+                    "This is a test description. It has some EOLs. Also, it ends with a double period..".to_owned(),
+                    Some(concat!("This is a test description. It has some EOLs. Also, it ends with a double period..\n\n",
+                        "And it has an extra paragraph with extra EOL.\n\n",
+                        "And one more paragraph.").to_owned()
+                    ))
+                ),
+            ]);
+
+            let command = TestCommand::augment_subcommands(Command::new("test_cmd"));
+
+            let descrs_from_command = command
+                .get_subcommands()
+                .map(|sub_cmd| {
+                    (
+                        sub_cmd.get_name(),
+                        (
+                            sub_cmd.get_about().unwrap().to_string(),
+                            sub_cmd.get_long_about().map(|s| s.to_string()),
+                        ),
+                    )
+                })
+                .collect::<BTreeMap<_, _>>();
+            assert_eq!(descrs_from_command, expected_descrs);
+
+            let descrs_from_rpc = TestRpcDescription::DESCRIPTION
+                .methods
+                .iter()
+                .map(|method| {
+                    let (about, long_about) = clapify_and_split_rpc_description(method.description);
+
+                    (method.name, (about, long_about))
+                })
+                .collect::<BTreeMap<_, _>>();
+            assert_eq!(descrs_from_rpc, expected_descrs);
+        }
+
+        #[rpc::describe]
+        #[rpc::rpc(server, client)]
+        trait TestRpc {
+            /// This is a test description.
+            /// It has some EOLs.
+            /// Also, it ends with a period.
+            #[method(name = "func1")]
+            fn func1(&self) -> rpc::RpcResult<()>;
+
+            /// This is a test description.
+            /// It has some EOLs.
+            /// Also, it ends with a double period..
+            #[method(name = "func2")]
+            fn func2(&self) -> rpc::RpcResult<()>;
+
+            /// This is a test description.
+            /// It has some EOLs.
+            /// Also, it ends with a period.
+            ///
+            /// And it has an extra paragraph
+            /// with extra EOL.
+            #[method(name = "func3")]
+            fn func3(&self) -> rpc::RpcResult<()>;
+
+            /// This is a test description.
+            /// It has some EOLs.
+            /// Also, it ends with a double period..
+            ///
+            /// And it has an extra paragraph
+            /// with extra EOL.
+            ///
+            /// And one more paragraph.
+            #[method(name = "func4")]
+            fn func4(&self) -> rpc::RpcResult<()>;
+        }
+
+        #[derive(Debug, Parser)]
+        pub enum TestCommand {
+            /// This is a test description.
+            /// It has some EOLs.
+            /// Also, it ends with a period.
+            #[clap(name = "func1")]
+            Func1,
+
+            /// This is a test description.
+            /// It has some EOLs.
+            /// Also, it ends with a double period..
+            #[clap(name = "func2")]
+            Func2,
+
+            /// This is a test description.
+            /// It has some EOLs.
+            /// Also, it ends with a period.
+            ///
+            /// And it has an extra paragraph
+            /// with extra EOL.
+            #[clap(name = "func3")]
+            Func3,
+
+            /// This is a test description.
+            /// It has some EOLs.
+            /// Also, it ends with a double period..
+            ///
+            /// And it has an extra paragraph
+            /// with extra EOL.
+            ///
+            /// And one more paragraph.
+            #[clap(name = "func4")]
+            Func4,
+        }
+    }
 }

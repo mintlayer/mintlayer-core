@@ -39,6 +39,9 @@ nothing
 
 ### Method `wallet_best_block`
 
+Returns information about the current best block
+
+
 Parameters:
 ```
 {}
@@ -55,6 +58,7 @@ Returns:
 ### Method `account_create`
 
 Creates a new account with an optional name.
+
 Returns an error if the last created account does not have a transaction history.
 
 
@@ -104,6 +108,7 @@ Returns:
 ### Method `standalone_address_label_rename`
 
 Add, rename or delete a label to an already added standalone address.
+
 Specifying a label will add or replace the existing one,
 and not specifying a label will remove the existing one.
 
@@ -126,7 +131,7 @@ nothing
 
 ### Method `standalone_add_watch_only_address`
 
-Add a new standalone watch only address not derived from the selected account's key chain
+Add a new standalone watch-only address not derived from the selected account's key chain
 
 
 Parameters:
@@ -150,7 +155,7 @@ nothing
 
 ### Method `standalone_add_private_key_from_hex`
 
-Add a new standalone private key not derived from the selected account's key chain to be watched
+Add a new standalone private key not derived from the selected account's key chain
 
 
 Parameters:
@@ -174,7 +179,8 @@ nothing
 
 ### Method `standalone_add_multisig`
 
-Add a new standalone multi signature address
+Add a new standalone multi-signature address.
+
 Use the `transaction_compose` command to use the new multisig address as input or output
 
 
@@ -200,7 +206,7 @@ string
 
 ### Method `standalone_multisig_utxos`
 
-Lists all the utxos owned by a multisig watched by this account
+Lists all the utxos owned by multisig addresses watched by this account
 
 
 Parameters:
@@ -948,8 +954,9 @@ Returns:
 
 ### Method `address_send`
 
-Send a given coin amount to a given address. The wallet will automatically calculate the required information
-Optionally, one can also mention the utxos to be used.
+Send a given coin amount to a given address. The wallet will automatically calculate the required fees.
+
+Optionally, you can also mention the utxos to be used.
 
 
 Parameters:
@@ -1010,7 +1017,7 @@ Either 1 or more addresses need to be specified in `from_addresses` with `all` s
 `from_addresses` needs to be empty and `all` set to true.
 
 Spendable coins are any coins that are not locked, and tokens that are not frozen or locked.
-The wallet will automatically calculate the required fees
+The wallet will automatically calculate the required fees.
 
 
 Parameters:
@@ -1053,7 +1060,7 @@ Returns:
 ### Method `staking_sweep_delegation`
 
 Sweep all the coins from a delegation to a given address.
-The wallet will automatically calculate the required fees
+The wallet will automatically calculate the required fees.
 
 
 Parameters:
@@ -1096,6 +1103,7 @@ Returns:
 
 Creates a transaction that spends from a specific address,
 and returns the change to the same address (unless one is specified), without signature.
+
 This transaction is used for "withdrawing" small amounts from a cold storage
 without changing the ownership address. Once this is created,
 it can be signed using account-sign-raw-transaction in the cold wallet
@@ -1152,7 +1160,14 @@ Returns:
 
 ### Method `transaction_inspect`
 
-Print the summary of the transaction
+Print the summary of a transaction.
+
+Note that currently this will only work for transactions whose inputs have not been spent
+yet (i.e. it won't work if the transaction has already been included in a block).
+Also, it doesn't support certain input types (such as account-based inputs).
+
+The main purpose of this command is to be able to inspect the result of transaction-compose
+and account-sign-raw-transaction before sending it to the network.
 
 
 Parameters:
@@ -1204,24 +1219,24 @@ Returns:
 ### Method `staking_create_pool`
 
 Create a staking pool. The pool will be capable of creating blocks and gaining rewards,
-and will be capable of taking delegations from other users and staking.
+as well as taking delegations from other users.
 
 The decommission key is the key that can decommission the pool.
 
-Cost per block, and margin ratio are parameters that control how delegators receive rewards.
+Cost per block and margin ratio are parameters that control how delegators receive rewards.
 The cost per block is an amount in coins to be subtracted from the total rewards in a block first,
 and handed to the staking pool. After subtracting the cost per block, a fraction equal to
-margin ratio is taken from what is left, and given to the staking pool. Finally, what is left
+the margin ratio is taken from what is left, and given to the staking pool. Finally, what is left
 is distributed among delegators, pro-rata, based on their delegation amounts.
 
-The optional parameters `staker_address` and `vrf_public_key` specify the key that will sign new blocks
-and the VRF key that will be used to produce POS hashes during staking.
+The optional "staker address" and "vrf public key" specify, respectively, the key that will sign new blocks
+and the VRF key that will be used to produce PoS hashes during staking.
 You only need to specify them if the wallet where the pool is being created differs from
 the one where the actual staking will be performed.
 In such a case, make sure that the specified keys are owned by the wallet that will be used to stake.
 On the other hand, if the current wallet will be used for staking, just leave them empty
 and the wallet will select appropriate values itself.
-Note: staker_address must be a "public key" address and not a "public key hash" one.
+Note: the staker address must be a "public key" address and not a "public key hash" one.
 
 
 Parameters:
@@ -1319,9 +1334,11 @@ Returns:
 ### Method `staking_decommission_pool_request`
 
 Create a request to decommission a pool. This assumes that the decommission key is owned
-by another wallet. The output of this command should be passed to account-sign-raw-transaction
+by another wallet.
+
+The output of this command should be passed to account-sign-raw-transaction
 in the wallet that owns the decommission key. The result from signing, assuming success, can
-then be broadcast to network to commence with decommissioning.
+then be broadcast to network to commence the decommissioning.
 
 
 Parameters:
@@ -1346,6 +1363,7 @@ hex string
 ### Method `delegation_create`
 
 Create a delegation to a given pool id and the owner address/destination.
+
 The owner of a delegation is the key authorized to withdraw from the delegation.
 The delegation creation will result in creating a delegation id, where coins sent to that id will be staked by the pool id provided, automatically.
 The pool, to which the delegation is made, doesn't have the authority to spend the coins.
@@ -1595,7 +1613,7 @@ Returns:
 
 ### Method `staking_pool_balance`
 
-Print the balance of available staking pools
+Obtain the balance of a staking pool
 
 
 Parameters:
@@ -1612,7 +1630,7 @@ Returns:
 
 ### Method `delegation_list_ids`
 
-List delegation ids controlled by the selected account in this wallet with their balances
+List delegation ids controlled by the selected account in this wallet, with their balances
 
 
 Parameters:
@@ -1653,7 +1671,7 @@ Returns:
 
 ### Method `token_nft_issue_new`
 
-Issue a new non-fungible token (NFT) from scratch
+Issue a new non-fungible token (NFT)
 
 
 Parameters:
@@ -1719,9 +1737,10 @@ Returns:
 
 ### Method `token_issue_new`
 
-Issue a new fungible token from scratch.
-Notice that issuing a token fills an issuers supply. To have tokens that are spendable,
-the issuer must "mint" tokens to take from the supply
+Issue a new fungible token.
+
+Notice that issuing a token defines the token's total supply. To have tokens that are spendable,
+the issuer must "mint" tokens, taking them from the total supply into the circulating supply.
 
 
 Parameters:
@@ -1781,7 +1800,7 @@ Returns:
 
 ### Method `token_change_authority`
 
-Change the authority of a token; i.e., the cryptographic authority that can do all authority token operations
+Change the authority address of a token.
 
 
 Parameters:
@@ -1863,7 +1882,7 @@ Returns:
 
 ### Method `token_mint`
 
-Given a token that is already issued, mint new tokens and increase the total supply
+Given a token that is already issued, mint new tokens and increase the circulating supply
 
 
 Parameters:
@@ -1907,8 +1926,10 @@ Returns:
 
 ### Method `token_unmint`
 
-Unmint existing tokens and reduce the total supply
-Unminting reduces the total supply and puts the unminted tokens back at the issuer's control.
+Unmint existing tokens and reduce the circulating supply.
+
+Unminting reduces the circulating supply and puts the unminted tokens back at the issuer's control.
+
 The wallet must own the tokens that are being unminted.
 
 
@@ -1994,10 +2015,11 @@ Returns:
 
 ### Method `token_freeze`
 
-Freezing the token (by token authority) forbids any operation with all the tokens (except for the optional unfreeze).
+Freeze the token, which forbids any operations with it (except for the optional unfreeze).
 
 After a token is frozen, no transfers, spends, or any other operation can be done.
-This wallet (and selected account) must own the authority keys to be able to freeze.
+
+This wallet (and selected account) must own the authority key to be able to freeze.
 
 
 Parameters:
@@ -2038,10 +2060,11 @@ Returns:
 
 ### Method `token_unfreeze`
 
-By unfreezing the token all operations are available for the tokens again.
+Unfreeze the token, making all operations available for it again.
 
-Notice that this is only possible if the tokens were made to be unfreezable during freezing.
-This wallet (and selected account) must own the authority keys to be able to unfreeze.
+Notice that this is only possible if the token was specified to be unfreezable during freezing.
+
+This wallet (and selected account) must own the authority key to be able to unfreeze.
 
 
 Parameters:
@@ -2081,7 +2104,9 @@ Returns:
 
 ### Method `token_send`
 
-Send the given token amount to the given address. The wallet will automatically calculate the required information.
+Send the given token amount to the given address.
+
+The wallet will automatically calculate the required fees.
 
 
 Parameters:
@@ -2123,10 +2148,11 @@ Returns:
 }
 ```
 
-### Method `token_make_tx_for_sending_with_intent`
+### Method `token_make_tx_to_send_with_intent`
 
-Create a transaction for sending tokens to the given address, without submitting it.
-The wallet will automatically calculate the required information.
+Create a transaction for sending tokens to the given address, together with the so-called "intent".
+
+The wallet will automatically calculate the required fees.
 
 The "intent" is an arbitrary string that will be concatenated with the id of the created transaction
 and signed by all the keys that were used to sign the transaction itself; this can be used to declare
@@ -2217,7 +2243,9 @@ Returns:
 
 ### Method `address_deposit_data`
 
-Store data on the blockchain, the data is provided as hex encoded string.
+Store data on the blockchain.
+
+The data is provided as a hex string.
 Note that there is a high fee for storing data on the blockchain.
 
 
@@ -2259,7 +2287,8 @@ Returns:
 ### Method `create_htlc_transaction`
 
 Creates a transaction that locks a given number of coins or tokens in a Hashed Timelock Contract.
-Created transaction is not broadcasted by this function.
+
+The created transaction is not broadcast by this function.
 
 
 Parameters:
@@ -2322,7 +2351,8 @@ Returns:
 
 Create an order for exchanging "given" amount of an arbitrary currency (coins or tokens) for
 an arbitrary amount of "asked" currency.
-Conclude key is the key that can authorize a conclude order command closing the order and withdrawing
+
+Conclude key is the key that can authorize a conclude order command, closing the order and withdrawing
 all the remaining funds from it.
 
 
@@ -2396,9 +2426,11 @@ Returns:
 
 ### Method `conclude_order`
 
-Conclude an order, given its id. This assumes that the conclude key is owned
-by the selected account in this wallet.
-Optionally output address can be provided where remaining funds from the order are transferred.
+Conclude an order, given its id.
+
+This assumes that the conclude key is owned by the selected account in this wallet.
+
+Optionally, an output address can be provided where remaining funds from the order are transferred.
 
 
 Parameters:
@@ -2441,8 +2473,9 @@ Returns:
 
 ### Method `fill_order`
 
-Fill order completely or partially given its id and an amount that satisfy what an order can offer.
-Optionally output address can be provided where the exchanged funds from the order are transferred.
+Fill order completely or partially given its id and an amount in the order's "asked" currency.
+
+Optionally, an output address can be provided where the exchanged funds from the order are transferred.
 
 
 Parameters:
@@ -2529,7 +2562,7 @@ Returns:
 
 ### Method `node_version`
 
-Node version
+Obtain the node version
 
 
 Parameters:
@@ -2544,7 +2577,7 @@ Returns:
 
 ### Method `node_shutdown`
 
-Node shutdown
+Shutdown the node
 
 
 Parameters:
@@ -2589,7 +2622,7 @@ nothing
 
 ### Method `node_disconnect_peer`
 
-Disconnected a remote peer in the node
+Disconnect a remote peer in the node
 
 
 Parameters:
@@ -2604,7 +2637,7 @@ nothing
 
 ### Method `node_list_banned_peers`
 
-List banned addresses/peers in the node
+List banned peers in the node
 
 
 Parameters:
@@ -2646,7 +2679,7 @@ nothing
 
 ### Method `node_unban_peer_address`
 
-Unban address in the node
+Unban an address in the node
 
 
 Parameters:
@@ -2661,7 +2694,7 @@ nothing
 
 ### Method `node_list_discouraged_peers`
 
-List discouraged addresses/peers in the node
+List discouraged peers in the node
 
 
 Parameters:
@@ -2682,7 +2715,7 @@ Returns:
 
 ### Method `node_undiscourage_peer_address`
 
-Undiscourage address in the node
+Undiscourage an address in the node
 
 
 Parameters:
@@ -2697,7 +2730,7 @@ nothing
 
 ### Method `node_peer_count`
 
-Get the number of connected peer in the node
+Get the number of connected peers in the node
 
 
 Parameters:
@@ -2712,7 +2745,7 @@ number
 
 ### Method `node_list_connected_peers`
 
-Get connected peers in the node
+List connected peers in the node
 
 
 Parameters:
@@ -2749,7 +2782,7 @@ Returns:
 
 ### Method `node_list_reserved_peers`
 
-Get reserved peers in the node
+List reserved peers in the node
 
 
 Parameters:
@@ -2779,7 +2812,7 @@ nothing
 
 ### Method `node_remove_reserved_peer`
 
-Remove a reserved peer from the node
+Remove a reserved peer in the node
 
 
 Parameters:
@@ -2809,7 +2842,7 @@ nothing
 
 ### Method `node_chainstate_info`
 
-Returns the current node's chainstate (block height information and more)
+Returns the current node's chainstate information (block height and more)
 
 
 Parameters:
@@ -2830,7 +2863,8 @@ Returns:
 
 ### Method `transaction_abandon`
 
-Abandon an unconfirmed transaction in the wallet database, and make the consumed inputs available to be used again
+Abandon an unconfirmed transaction in the wallet database, and make the consumed inputs available to be used again.
+
 Note that this doesn't necessarily mean that the network will agree. This assumes the transaction is either still
 not confirmed in the network or somehow invalid.
 
@@ -2865,7 +2899,7 @@ Returns:
 
 ### Method `transaction_list_by_address`
 
-List mainchain transactions with optional address filter
+List transactions owned by this account that have already been included in a block, with an optional address filter.
 
 
 Parameters:
@@ -2944,9 +2978,11 @@ hex string
 
 ### Method `transaction_compose`
 
-Compose a new transaction from the specified outputs and selected utxos
-The transaction is returned in a hex encoded form that can be passed to account-sign-raw-transaction
-and also prints the fees that will be paid by the transaction
+Compose a new transaction from the specified outputs and selected utxos.
+
+The transaction is returned in a hex encoded form that can be passed to account-sign-raw-transaction.
+
+The fees that will be paid by the transaction are also returned.
 
 
 Parameters:
@@ -2993,7 +3029,7 @@ Returns:
 
 ### Method `node_best_block_id`
 
-Returns the current best block hash
+Returns the current best block id
 
 
 Parameters:
@@ -3023,7 +3059,7 @@ number
 
 ### Method `node_block_id`
 
-Get the block ID of the block at a given height
+Get the block id of the block at a given height
 
 
 Parameters:
@@ -3041,7 +3077,9 @@ EITHER OF
 ### Method `node_generate_block`
 
 Generate a block with the given transactions to the specified
-reward destination. If transactions are None, the block will be
+reward destination.
+
+If no transactions are provided, the block will be
 generated with available transactions in the mempool
 
 
@@ -3107,7 +3145,7 @@ Returns:
 
 ### Method `node_get_block`
 
-Get a block by its hash, represented with hex encoded bytes
+Get a block by its id, represented as hex encoded bytes
 
 
 Parameters:
@@ -3124,7 +3162,7 @@ EITHER OF
 
 ### Method `node_get_block_ids_as_checkpoints`
 
-Returns mainchain block ids with heights in the range start_height..end_height using
+Return mainchain block ids with heights in the range start_height..end_height using
 the given step.
 
 
@@ -3164,7 +3202,7 @@ nothing
 
 ### Method `version`
 
-Print the version of the wallet software and possibly the git commit hash, if found WWW!!
+Print the version of the wallet software and possibly the git commit hash, if found
 
 
 Parameters:
@@ -3179,7 +3217,7 @@ string
 
 ### Method `wallet_create`
 
-Create a new wallet, this will skip scanning the blockchain
+Create a new wallet. This will create a new file without scanning the blockchain.
 
 
 Parameters:
@@ -3227,7 +3265,9 @@ Returns:
 
 ### Method `wallet_recover`
 
-Recover new wallet, this will rescan the blockchain upon creation
+Recover a wallet. This will create a new wallet file and scan the blockchain for associated transactions.
+
+Note: mnemonic must be specified when recovering a software wallet.
 
 
 Parameters:
@@ -3275,7 +3315,7 @@ Returns:
 
 ### Method `wallet_open`
 
-Open an exiting wallet by specifying the file location of the wallet file
+Open an exiting wallet file.
 
 
 Parameters:
@@ -3317,7 +3357,7 @@ EITHER OF
 
 ### Method `wallet_close`
 
-Close the currently open wallet file
+Close the currently opened wallet file
 
 
 Parameters:
@@ -3332,7 +3372,7 @@ nothing
 
 ### Method `wallet_info`
 
-Check the current wallet's number of accounts and their names
+Obtain certain information about the wallet, such as the number of accounts and their names
 
 
 Parameters:
@@ -3461,9 +3501,9 @@ EITHER OF
 Set the lookahead size for key generation.
 
 The lookahead size, also known as the gap limit, determines the number of addresses
-to generate and monitor on the blockchain for incoming transactions, following the last
-known address with a transaction.
-Only reduce this value if you are certain there are no incoming transactions on these addresses.
+to generate and monitor on the blockchain, following the last known address used in a transaction.
+
+Only reduce this value if you are certain there are no incoming transactions using these addresses.
 
 
 Parameters:
@@ -3482,6 +3522,7 @@ nothing
 ### Method `address_show`
 
 Show receive-addresses with their usage state.
+
 Note that whether an address is used isn't based on the wallet,
 but on the blockchain. So if an address is used in a transaction,
 it will be marked as used only when the transaction is included
@@ -3514,7 +3555,7 @@ Returns:
 
 ### Method `standalone_address_show`
 
-Show standalone added addresses with their labels.
+Show added standalone addresses with their labels.
 
 
 Parameters:
@@ -3549,7 +3590,7 @@ Returns:
 
 ### Method `standalone_address_details`
 
-Show standalone addresses details.
+Show standalone address details.
 
 
 Parameters:
@@ -3611,6 +3652,7 @@ Returns:
 ### Method `address_reveal_public_key`
 
 Reveal the public key behind this address in hex encoding and address encoding.
+
 Note that this isn't a normal address to be used in transactions.
 It's preferred to take the address from address-show command
 
@@ -3634,8 +3676,10 @@ Returns:
 ### Method `staking_new_vrf_public_key`
 
 Issue a new staking VRF (Verifiable Random Function) key for this account.
+
 VRF keys are used as a trustless mechanism to ensure the randomness of the staking process,
 where no one can control the possible outcomes, to ensure decentralization.
+
 NOTE: Under normal circumstances you don't need to generate VRF keys manually.
 Creating a new staking pool will do it for you. This is available for specialized use-cases.
 
@@ -3657,6 +3701,7 @@ Returns:
 ### Method `staking_show_legacy_vrf_key`
 
 Shows the legacy VRF key that uses an abandoned derivation mechanism.
+
 This will not be used for new pools and should be avoided
 
 
@@ -3673,6 +3718,7 @@ Returns:
 ### Method `staking_show_vrf_public_keys`
 
 Show the issued staking VRF (Verifiable Random Function) keys for this account.
+
 These keys are generated when pools are created.
 VRF keys are used as a trustless mechanism to ensure the randomness of the staking process,
 where no one can control the possible outcomes, to ensure decentralization.
@@ -3695,6 +3741,7 @@ Returns:
 ### Method `account_extended_public_key`
 
 Shows the account's extended public key.
+
 The returned extended public key can be used to derive receiving or change addresses for
 this account.
 
@@ -3714,10 +3761,12 @@ Returns:
 
 ### Method `account_sign_raw_transaction`
 
-Signs the inputs that are not yet signed.
-The input is a special format of the transaction serialized to hex. This format is automatically used in this wallet
-in functions such as staking-decommission-pool-request. Once all signatures are complete, the result can be broadcast
-to the network.
+Signs transaction inputs that are not yet signed.
+
+The input is a hex encoded transaction or PartiallySignedTransaction. This format is
+automatically used in this wallet in functions such as staking-decommission-pool-request.
+
+Once all signatures are complete, the result can be broadcast to the network.
 
 
 Parameters:
@@ -3765,7 +3814,7 @@ Returns:
 
 ### Method `challenge_sign_plain`
 
-Signs a challenge with a private key corresponding to the provided address destination.
+Signs a challenge with a private key corresponding to the provided address.
 
 
 Parameters:
@@ -3784,7 +3833,7 @@ hex string
 
 ### Method `challenge_sign_hex`
 
-Signs a challenge with a private key corresponding to the provided address destination.
+Signs a challenge with a private key corresponding to the provided address.
 
 
 Parameters:
@@ -3803,7 +3852,7 @@ hex string
 
 ### Method `challenge_verify_plain`
 
-Verifies a signed challenge against an address destination
+Verifies a signed challenge against an address.
 
 
 Parameters:
@@ -3822,7 +3871,7 @@ nothing
 
 ### Method `challenge_verify_hex`
 
-Verifies a signed challenge against an address destination
+Verifies a signed challenge against an address.
 
 
 Parameters:

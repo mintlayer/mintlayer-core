@@ -45,6 +45,7 @@ use wallet_rpc_client::handles_client::WalletRpcHandlesClient;
 use wallet_rpc_lib::{types::HardwareWalletType, EventStream, WalletRpc, WalletService};
 use wallet_types::{
     scan_blockchain::ScanBlockchain, wallet_type::WalletType, with_locked::WithLocked,
+    ImportOrCreate,
 };
 
 use super::{
@@ -60,7 +61,6 @@ use super::{
     p2p_event_handler::P2pEventHandler,
     parse_address, parse_coin_amount,
     wallet_events::GuiWalletEvents,
-    ImportOrCreate,
 };
 
 const TRANSACTION_LIST_PAGE_COUNT: usize = 10;

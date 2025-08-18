@@ -22,7 +22,8 @@ use iced::{
     Element, Length, Theme,
 };
 use iced_aw::Card;
-use node_gui_backend::ImportOrCreate;
+
+use wallet_types::ImportOrCreate;
 
 pub struct CreateHwWalletDialog<Message> {
     on_import: Box<dyn Fn() -> Message>,

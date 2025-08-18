@@ -44,6 +44,8 @@ use common::{
     primitives::Amount,
 };
 
+use crate::scan_blockchain::ScanBlockchain;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SignedTxWithFees {
     pub tx: SignedTransaction,
@@ -53,5 +55,20 @@ pub struct SignedTxWithFees {
 impl SignedTxWithFees {
     pub fn transaction(&self) -> &Transaction {
         self.tx.transaction()
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum ImportOrCreate {
+    Import,
+    Create,
+}
+
+impl ImportOrCreate {
+    pub fn should_scan_blockchain(&self) -> ScanBlockchain {
+        match self {
+            Self::Create => ScanBlockchain::SkipScanning,
+            Self::Import => ScanBlockchain::ScanNoWait,
+        }
     }
 }
