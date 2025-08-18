@@ -28,7 +28,18 @@ use standard_signature::StandardInputSignature;
 
 use super::{DestinationSigError, Signable};
 
-#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, Ord, PartialOrd, EnumDiscriminants)]
+#[derive(
+    Debug,
+    Encode,
+    Decode,
+    Clone,
+    Eq,
+    PartialEq,
+    Ord,
+    PartialOrd,
+    EnumDiscriminants,
+    serde::Serialize,
+)]
 #[strum_discriminants(name(InputWitnessTag))]
 pub enum InputWitness {
     #[codec(index = 0)]

@@ -31,12 +31,14 @@
 
 use std::{num::NonZeroU8, str::FromStr};
 
+use wasm_bindgen::JsValue;
+
 use bip39::Language;
 use itertools::Itertools as _;
 use wasm_bindgen::prelude::*;
 
 use common::{
-    address::{pubkeyhash::PublicKeyHash, Address},
+    address::{dehexify::dehexify_all_addresses, pubkeyhash::PublicKeyHash, Address},
     chain::{
         block::timestamp::BlockTimestamp,
         classic_multisig::ClassicMultisigChallenge,
@@ -74,7 +76,7 @@ use crypto::key::{
     hdkd::{child_number::ChildNumber, derivable::Derivable, u31::U31},
     KeyKind, PrivateKey, PublicKey, Signature,
 };
-use serialization::{Decode, DecodeAll, Encode};
+use serialization::{json_encoded::JsonEncoded, Decode, DecodeAll, Encode};
 
 use crate::{
     error::Error,
@@ -687,6 +689,23 @@ pub fn encode_transaction(inputs: &[u8], outputs: &[u8], flags: u64) -> Result<V
 
     let tx = Transaction::new(flags as u128, inputs, outputs).expect("no error");
     Ok(tx.encode())
+}
+
+/// Decodes a signed transaction from its binary encoding into a Json string.
+#[wasm_bindgen]
+pub fn decode_signed_transaction_to_json_str(
+    transaction: &[u8],
+    network: Network,
+) -> Result<JsValue, Error> {
+    let chain_config = Builder::new(network.into()).build();
+    let tx = SignedTransaction::decode_all(&mut &transaction[..])
+        .map_err(Error::InvalidSignedTransactionEncoding)?;
+
+    let str = JsonEncoded::new(&tx).to_string();
+    let str = dehexify_all_addresses(&chain_config, &str);
+
+    let value = JsValue::from_str(&str);
+    Ok(value)
 }
 
 /// Encode an input witness of the variant that contains no signature.
