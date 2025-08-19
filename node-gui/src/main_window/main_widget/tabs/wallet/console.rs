@@ -18,6 +18,12 @@ use iced::{
     Element, Length,
 };
 
+use node_gui_backend::messages::WalletInfo;
+
+use crate::main_window::main_widget::tabs::wallet::{
+    status_bar::estimate_status_bar_height, STATUS_BAR_SEPARATOR_HEIGHT,
+};
+
 use super::{ConsoleState, WalletMessage};
 
 const SUBMIT_TOOLTIP_TEXT: &str = "Submit the provided command to be processed";
@@ -26,6 +32,7 @@ pub const CONSOLE_OUTPUT_ID: &str = "console_input_id";
 pub fn view_console(
     state: &ConsoleState,
     still_syncing: Option<WalletMessage>,
+    wallet_info: &WalletInfo,
 ) -> Element<'static, WalletMessage> {
     let s: Vec<String> = state
         .console_inputs
@@ -35,8 +42,20 @@ pub fn view_console(
         .collect();
 
     let output = s.join("\n");
+    // Note: it doesn't seem possible to make Scrollable fill the entire parent container,
+    // e.g. passing Length::Fill for height will result in a panic:
+    // "scrollable content must not fill its vertical scrolling axis".
+    // So we have to use a fixed height. The value is chosen such that when the main window
+    // has the initial height, the console widget fills the entire area of its parent.
+    // But we also have to take the status bar into account.
+    #[allow(clippy::float_arithmetic)]
+    let height = {
+        let status_bar_height =
+            estimate_status_bar_height(&wallet_info.extra_info) + STATUS_BAR_SEPARATOR_HEIGHT;
+        Length::Fixed(570.0 - status_bar_height)
+    };
     let console_output = Scrollable::new(iced::widget::text(output.clone()))
-        .height(Length::Fixed(350.0))
+        .height(height)
         .width(Length::Fill)
         .id(Id::new(CONSOLE_OUTPUT_ID));
 

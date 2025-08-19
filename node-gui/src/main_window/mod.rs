@@ -882,7 +882,7 @@ impl MainWindow {
                             WalletType::Trezor => hw_wallet_create_dialog(
                                 Box::new(move || MainWindowMessage::ImportWalletMnemonic {
                                     args: WalletArgs::Trezor,
-                                    import: ImportOrCreate::Create,
+                                    import: ImportOrCreate::Import,
                                 }),
                                 Box::new(|| MainWindowMessage::CloseDialog),
                                 ImportOrCreate::Import,
