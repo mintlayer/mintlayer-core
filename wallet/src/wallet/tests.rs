@@ -298,34 +298,29 @@ fn create_wallet(chain_config: Arc<ChainConfig>) -> DefaultWallet {
 }
 
 #[track_caller]
-fn create_block_with_address_reward<B, P>(
+fn create_block_with_reward_address<B, P>(
     chain_config: &Arc<ChainConfig>,
     wallet: &mut Wallet<B, P>,
     transactions: Vec<SignedTransaction>,
     reward: Amount,
     block_height: u64,
     address: Destination,
-) -> (Address<Destination>, Block)
+) -> Block
 where
     B: storage::Backend + 'static,
     P: SignerProvider,
 {
-    let address = Address::new(chain_config, address).unwrap();
-
     let block1 = Block::new(
         transactions,
         chain_config.genesis_block_id(),
         chain_config.genesis_block().timestamp(),
         ConsensusData::None,
-        BlockReward::new(vec![make_address_output(
-            address.clone().into_object(),
-            reward,
-        )]),
+        BlockReward::new(vec![make_address_output(address, reward)]),
     )
     .unwrap();
 
     scan_wallet(wallet, BlockHeight::new(block_height), vec![block1.clone()]);
-    (address, block1)
+    block1
 }
 
 #[track_caller]
@@ -341,14 +336,15 @@ where
     P: SignerProvider,
 {
     let address = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1;
-    create_block_with_address_reward(
+    let block = create_block_with_reward_address(
         chain_config,
         wallet,
         transactions,
         reward,
         block_height,
-        address.into_object(),
-    )
+        address.clone().into_object(),
+    );
+    (address, block)
 }
 
 #[track_caller]
@@ -1279,7 +1275,11 @@ fn locked_wallet_cant_sign_transaction(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn locked_wallet_standalone_keys(#[case] seed: Seed) {
+fn locked_wallet_standalone_keys(
+    #[case] seed: Seed,
+    #[values(true, false)] insert_before_encrypt: bool,
+    #[values(true, false)] change_password: bool,
+) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_mainnet());
 
@@ -1290,27 +1290,89 @@ fn locked_wallet_standalone_keys(#[case] seed: Seed) {
 
     let (standalone_sk, standalone_pk) =
         PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
-    wallet
-        .add_standalone_private_key(DEFAULT_ACCOUNT_INDEX, standalone_sk, None)
+    let mut password = Some(gen_random_password(&mut rng));
+
+    if insert_before_encrypt {
+        wallet
+            .add_standalone_private_key(DEFAULT_ACCOUNT_INDEX, standalone_sk, None)
+            .unwrap();
+        wallet.encrypt_wallet(&password).unwrap();
+    } else {
+        wallet.encrypt_wallet(&password).unwrap();
+        wallet
+            .add_standalone_private_key(DEFAULT_ACCOUNT_INDEX, standalone_sk, None)
+            .unwrap();
+    }
+
+    if change_password {
+        password = Some(gen_random_password(&mut rng));
+        wallet.encrypt_wallet(&password).unwrap();
+    }
+
+    let block1_amount = Amount::from_atoms(rng.gen_range(NETWORK_FEE + 1..NETWORK_FEE + 10000));
+
+    let standalone_destination = if rng.gen::<bool>() {
+        Destination::PublicKey(standalone_pk)
+    } else {
+        Destination::PublicKeyHash((&standalone_pk).into())
+    };
+
+    if rng.gen::<bool>() {
+        // test that wallet will recognise a destination belonging to a standalone key in a block
+        // reward
+        let _ = create_block_with_reward_address(
+            &chain_config,
+            &mut wallet,
+            vec![],
+            block1_amount,
+            0,
+            standalone_destination,
+        );
+    } else {
+        // test that wallet will recognise a destination belonging to a standalone key in a
+        // transaction
+        let output = make_address_output(standalone_destination, block1_amount);
+
+        let tx = SignedTransaction::new(Transaction::new(0, vec![], vec![output]).unwrap(), vec![])
+            .unwrap();
+
+        let block1 = Block::new(
+            vec![tx.clone()],
+            chain_config.genesis_block_id(),
+            chain_config.genesis_block().timestamp(),
+            ConsensusData::None,
+            BlockReward::new(vec![]),
+        )
         .unwrap();
 
-    // Generate a new block which sends reward to the wallet
-    let block1_amount = Amount::from_atoms(rng.gen_range(NETWORK_FEE + 1..NETWORK_FEE + 10000));
-    let _ = create_block_with_address_reward(
-        &chain_config,
-        &mut wallet,
-        vec![],
-        block1_amount,
-        0,
-        Destination::PublicKey(standalone_pk),
-    );
+        scan_wallet(&mut wallet, BlockHeight::new(0), vec![block1.clone()]);
 
-    let password = Some(gen_random_password(&mut rng));
-    wallet.encrypt_wallet(&password).unwrap();
+        // check the transaction has been added to the wallet
+        let tx_data = wallet
+            .get_transaction(DEFAULT_ACCOUNT_INDEX, tx.transaction().get_id())
+            .unwrap();
+
+        assert_eq!(tx_data.get_transaction(), tx.transaction());
+    }
+
     wallet.lock_wallet().unwrap();
 
+    // check balance is recognising spendable UTXOs belonging to the standalone private key
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, block1_amount);
+
+    // also check utxos
+    let utxos = wallet
+        .get_utxos(
+            DEFAULT_ACCOUNT_INDEX,
+            UtxoType::Transfer | UtxoType::LockThenTransfer | UtxoType::IssueNft,
+            UtxoState::Confirmed | UtxoState::Inactive,
+            WithLocked::Unlocked,
+        )
+        .unwrap();
+    assert_eq!(utxos.len(), 1);
+
+    // try to spend the UTXO belonging to the standalone key
 
     let new_output = TxOutput::Transfer(
         OutputValue::Coin(Amount::from_atoms(
@@ -1336,49 +1398,17 @@ fn locked_wallet_standalone_keys(#[case] seed: Seed) {
 
     // success after unlock
     wallet.unlock_wallet(&password.unwrap()).unwrap();
-    if rng.gen::<bool>() {
-        wallet
-            .create_transaction_to_addresses(
-                DEFAULT_ACCOUNT_INDEX,
-                [new_output],
-                SelectedInputs::Utxos(vec![]),
-                BTreeMap::new(),
-                FeeRate::from_amount_per_kb(Amount::ZERO),
-                FeeRate::from_amount_per_kb(Amount::ZERO),
-                TxAdditionalInfo::new(),
-            )
-            .unwrap();
-    } else {
-        // check if we remove the password it should fail to lock
-        wallet.encrypt_wallet(&None).unwrap();
-
-        let err = wallet.lock_wallet().unwrap_err();
-        assert_eq!(
-            err,
-            WalletError::DatabaseError(wallet_storage::Error::WalletLockedWithoutAPassword)
-        );
-
-        // check that the kdf challenge has been deleted
-        assert!(wallet
-            .db
-            .transaction_ro()
-            .unwrap()
-            .get_encryption_key_kdf_challenge()
-            .unwrap()
-            .is_none());
-
-        wallet
-            .create_transaction_to_addresses(
-                DEFAULT_ACCOUNT_INDEX,
-                [new_output],
-                SelectedInputs::Utxos(vec![]),
-                BTreeMap::new(),
-                FeeRate::from_amount_per_kb(Amount::ZERO),
-                FeeRate::from_amount_per_kb(Amount::ZERO),
-                TxAdditionalInfo::new(),
-            )
-            .unwrap();
-    }
+    wallet
+        .create_transaction_to_addresses(
+            DEFAULT_ACCOUNT_INDEX,
+            [new_output],
+            SelectedInputs::Utxos(vec![]),
+            BTreeMap::new(),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            TxAdditionalInfo::new(),
+        )
+        .unwrap();
 }
 
 #[rstest]
@@ -5448,59 +5478,6 @@ fn test_not_exhaustion_of_keys(#[case] seed: Seed) {
             )
             .unwrap();
     }
-}
-
-#[rstest]
-#[trace]
-#[case(Seed::from_entropy())]
-fn test_add_standalone_private_key(#[case] seed: Seed) {
-    let mut rng = make_seedable_rng(seed);
-    let chain_config = Arc::new(create_regtest());
-
-    let mut wallet = create_wallet(chain_config.clone());
-
-    let coin_balance = get_coin_balance(&wallet);
-    assert_eq!(coin_balance, Amount::ZERO);
-    // generate a random private key unrelated to the wallet and add it
-    let (private_key, pub_key) =
-        crypto::key::PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
-
-    wallet
-        .add_standalone_private_key(DEFAULT_ACCOUNT_INDEX, private_key, None)
-        .unwrap();
-
-    // get the destination address from the new private key and send some coins to it
-    let address =
-        Address::new(&chain_config, Destination::PublicKeyHash((&pub_key).into())).unwrap();
-
-    // Generate a new block which sends reward to the new address
-    let block1_amount = Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
-    let output = make_address_output(address.clone().into_object(), block1_amount);
-
-    let tx =
-        SignedTransaction::new(Transaction::new(0, vec![], vec![output]).unwrap(), vec![]).unwrap();
-
-    let block1 = Block::new(
-        vec![tx.clone()],
-        chain_config.genesis_block_id(),
-        chain_config.genesis_block().timestamp(),
-        ConsensusData::None,
-        BlockReward::new(vec![]),
-    )
-    .unwrap();
-
-    scan_wallet(&mut wallet, BlockHeight::new(0), vec![block1.clone()]);
-
-    // Check amount is still zero
-    let coin_balance = get_coin_balance(&wallet);
-    assert_eq!(coin_balance, block1_amount);
-
-    // but the transaction has been added to the wallet
-    let tx_data = wallet
-        .get_transaction(DEFAULT_ACCOUNT_INDEX, tx.transaction().get_id())
-        .unwrap();
-
-    assert_eq!(tx_data.get_transaction(), tx.transaction());
 }
 
 #[rstest]
