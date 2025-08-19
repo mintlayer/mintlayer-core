@@ -223,12 +223,26 @@ Sign the specified input of the transaction and encode the signature as InputWit
 otherwise emit 1 followed by the corresponding transaction output encoded via the appropriate "encode_output_"
 function.
 
+`additional_info` must contain the following:
+1) for each `ProduceBlockFromStake` input of the transaction, the pool info for the pool referenced by that input;
+2) for each `FillOrder` and `ConcludeOrder` input of the transaction, the order info for the order referenced by
+   that input.
+Note:
+- It doesn't matter which input witness is currently being encoded. E.g. even if you are encoding a witness
+  for some UTXO-based input but another input of the same transaction is `FillOrder`, you have to include the order
+  info when encoding the witness for the UTXO-based input too.
+- After a certain hard fork, the produced signature will "commit" to the provided additional info, i.e. the info
+  will become a part of what is being signed. So, passing invalid additional info will result in an invalid signature
+  (with one small caveat: for `FillOrder` we only commit to order's initial balances and not the current ones;
+  so if you only have `FillOrder` inputs, you can technically pass bogus values for the current balances and
+  the resulting signature will still be valid; though it's better to avoid doing this).
+
 ### Function: `encode_witness_htlc_secret`
 
 Given a private key, inputs and an input number to sign, and the destination that owns that output (through the utxo),
 and a network type (mainnet, testnet, etc), and an htlc secret this function returns a witness to be used in a signed transaction, as bytes.
 
-`input_utxos` have the same format as in `encode_witness`.
+`input_utxos` and `additional_info` have the same format and requirements as in `encode_witness`.
 
 ### Function: `encode_multisig_challenge`
 
@@ -247,7 +261,7 @@ and a network type (mainnet, testnet, etc), this function returns a witness to b
 `key_index` parameter is an index of the public key in the challenge corresponding to the specified private key.
 `input_witness` parameter can be either empty or a result of previous calls to this function.
 
-`input_utxos` have the same format as in `encode_witness`.
+`input_utxos` and `additional_info` have the same format and requirements as in `encode_witness`.
 
 ### Function: `encode_signed_transaction`
 
