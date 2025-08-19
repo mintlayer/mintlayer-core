@@ -4,9 +4,9 @@ Welcome to the official Github repository for Mintlayer, an innovative, open-sou
 
 ## Security
 
-Discovered a potential security issue? We urge you to contact us directly at security@mintlayer.org. When reporting, please encrypt your report using Ben's GPG key which can be found [here](https://www.mintlayer.org/assets/keys/ben).
+Discovered a potential security issue? We urge you to contact us directly, see our [SECURITY.md](https://github.com/mintlayer/mintlayer-core/blob/master/SECURITY.md) for the guidelines.
 
-Mintlayer runs a [bug bounty program](https://www.mintlayer.org/bug-bounties), meaning that if your report is valid, you could be eligible for a reward paid in ML tokens. Please refrain from publicly disclosing any potential security issues until our core Mintlayer team has confirmed that the matter can be shared. Further information can be found in our [SECURITY.md](https://github.com/mintlayer/mintlayer-core/blob/master/SECURITY.md) guidelines.
+Mintlayer runs a [bug bounty program](https://www.mintlayer.org/bug-bounty-program), meaning that if your report is valid, you could be eligible for a reward paid in ML tokens. Please refrain from publicly disclosing any potential security issues until our core Mintlayer team has confirmed that the matter can be shared.
 
 ## Bug Reporting
 
