@@ -44,13 +44,14 @@ pub fn to_dehexified_json<T: serde::Serialize>(
 // TODO: add tests that create blocks, and ensure the replacement in json works properly.
 #[cfg(test)]
 mod tests {
+    use rstest::rstest;
+    use strum::{EnumCount, EnumDiscriminants, EnumIter, IntoEnumIterator};
+
     use crypto::{
         key::{KeyKind, PrivateKey},
         vrf::{VRFKeyKind, VRFPrivateKey, VRFPublicKey},
     };
-    use rstest::rstest;
-    use strum::{EnumCount, EnumDiscriminants, EnumIter, IntoEnumIterator};
-    use test_utils::random::{make_seedable_rng, Rng, Seed};
+    use test_utils::random::{gen_random_alnum_string, make_seedable_rng, Seed};
 
     use crate::{
         address::{hexified::HexifiedAddress, pubkeyhash::PublicKeyHash, Address},
@@ -60,13 +61,6 @@ mod tests {
         },
         primitives::H256,
     };
-
-    fn random_string(length: usize, rng: &mut impl Rng) -> String {
-        rng.sample_iter(&randomness::distributions::Alphanumeric)
-            .take(length)
-            .map(char::from)
-            .collect()
-    }
 
     #[derive(PartialEq, Eq, PartialOrd, Ord, EnumCount, EnumDiscriminants)]
     #[strum_discriminants(name(HexifiableTag), derive(EnumIter))]
@@ -90,51 +84,44 @@ mod tests {
         let chain_config = create_regtest();
 
         let strings = (0..100)
-            .map(|_| {
-                let size = rng.gen::<usize>() % 50;
-                random_string(size, &mut rng)
-            })
+            .map(|_| gen_random_alnum_string(&mut rng, 0, 50))
             .collect::<Vec<String>>();
 
         let keys = (0..strings.len())
-            .map(|_| {
-                //
-
-                match HexifiableTag::iter().choose(&mut rng).unwrap() {
-                    HexifiableTag::Destination => {
-                        let dest = match DestinationTag::iter().choose(&mut rng).unwrap() {
-                            DestinationTag::AnyoneCanSpend => Destination::AnyoneCanSpend,
-                            DestinationTag::PublicKey => {
-                                let (_private_key, public_key) =
-                                    PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
-                                Destination::PublicKey(public_key)
-                            }
-                            DestinationTag::PublicKeyHash => {
-                                let (_private_key, public_key) =
-                                    PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
-                                Destination::PublicKeyHash(PublicKeyHash::from(&public_key))
-                            }
-                            DestinationTag::ScriptHash => Destination::ScriptHash(
-                                crate::primitives::Id::new(H256::random_using(&mut rng)),
-                            ),
-                            DestinationTag::ClassicMultisig => {
-                                let (_private_key, public_key) =
-                                    PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
-                                Destination::ClassicMultisig(PublicKeyHash::from(&public_key))
-                            }
-                        };
-                        Hexifiable::Destination(dest)
-                    }
-                    HexifiableTag::PoolId => Hexifiable::PoolId(PoolId::random_using(&mut rng)),
-                    HexifiableTag::DelegationId => {
-                        Hexifiable::DelegationId(DelegationId::random_using(&mut rng))
-                    }
-                    HexifiableTag::TokenId => Hexifiable::TokenId(TokenId::random_using(&mut rng)),
-                    HexifiableTag::OrderId => Hexifiable::OrderId(OrderId::random_using(&mut rng)),
-                    HexifiableTag::VRFPublicKey => Hexifiable::VRFPublicKey(
-                        VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel).1,
-                    ),
+            .map(|_| match HexifiableTag::iter().choose(&mut rng).unwrap() {
+                HexifiableTag::Destination => {
+                    let dest = match DestinationTag::iter().choose(&mut rng).unwrap() {
+                        DestinationTag::AnyoneCanSpend => Destination::AnyoneCanSpend,
+                        DestinationTag::PublicKey => {
+                            let (_private_key, public_key) =
+                                PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+                            Destination::PublicKey(public_key)
+                        }
+                        DestinationTag::PublicKeyHash => {
+                            let (_private_key, public_key) =
+                                PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+                            Destination::PublicKeyHash(PublicKeyHash::from(&public_key))
+                        }
+                        DestinationTag::ScriptHash => Destination::ScriptHash(
+                            crate::primitives::Id::new(H256::random_using(&mut rng)),
+                        ),
+                        DestinationTag::ClassicMultisig => {
+                            let (_private_key, public_key) =
+                                PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+                            Destination::ClassicMultisig(PublicKeyHash::from(&public_key))
+                        }
+                    };
+                    Hexifiable::Destination(dest)
                 }
+                HexifiableTag::PoolId => Hexifiable::PoolId(PoolId::random_using(&mut rng)),
+                HexifiableTag::DelegationId => {
+                    Hexifiable::DelegationId(DelegationId::random_using(&mut rng))
+                }
+                HexifiableTag::TokenId => Hexifiable::TokenId(TokenId::random_using(&mut rng)),
+                HexifiableTag::OrderId => Hexifiable::OrderId(OrderId::random_using(&mut rng)),
+                HexifiableTag::VRFPublicKey => Hexifiable::VRFPublicKey(
+                    VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel).1,
+                ),
             })
             .collect::<Vec<_>>();
 

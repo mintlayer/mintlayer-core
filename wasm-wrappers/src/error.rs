@@ -81,8 +81,8 @@ pub enum Error {
     #[error("Invalid signed transaction intent encoding: {0}")]
     InvalidSignedTransactionIntentEncoding(serialization::Error),
 
-    #[error("Invalid signed transaction encoding: {0}")]
-    InvalidSignedTransactionEncoding(serialization::Error),
+    #[error("JSON parsing error: {0:?}")]
+    JsonParseError(JsValue),
 
     #[error("Error creating multisig spend: {0}")]
     MultisigSpendCreationError(DestinationSigError),

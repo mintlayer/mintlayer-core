@@ -21,7 +21,7 @@ import {
   estimate_transaction_size,
   make_default_account_privkey,
   make_receiving_address,
-  decode_signed_transaction_to_json_str,
+  decode_signed_transaction_to_js,
   Network,
   SignatureHashType,
 } from "../../pkg/wasm_wrappers.js";
@@ -331,10 +331,7 @@ export function test_transaction_and_witness_encoding() {
     `estimated size ${estimated_size} vs real ${expected_signed_tx.length}`,
   );
 
-  let decoded_tx = decode_signed_transaction_to_json_str(
-    signed_tx,
-    Network.Testnet,
-  );
+  let decoded_tx = decode_signed_transaction_to_js(signed_tx, Network.Testnet);
 
   const expected_decoded_tx = {
     transaction: {
@@ -421,5 +418,8 @@ export function test_transaction_and_witness_encoding() {
     ],
   };
 
-  assert_eq_vals(decoded_tx, JSON.stringify(expected_decoded_tx));
+  assert_eq_vals(
+    JSON.stringify(decoded_tx),
+    JSON.stringify(expected_decoded_tx),
+  );
 }
