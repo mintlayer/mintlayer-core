@@ -91,6 +91,10 @@ pub fn view_left_panel(
         WalletMessage::SelectAccount(item.account_id)
     });
 
+    let panel_button_row_padding = 8;
+    // The pick-list row looks a bit nicer when these values are equal.
+    let pick_list_row_spacing = panel_button_row_padding;
+
     let panel_button = |label, panel, selected_panel, tooltip_text| {
         let label = row![
             text(label).size(16).width(Length::Fill),
@@ -101,7 +105,7 @@ pub fn view_left_panel(
                 tooltip::Position::Bottom
             )
             .gap(10)
-            .style(iced::widget::container::bordered_box),
+            .style(iced::widget::container::bordered_box)
         ];
 
         button(label)
@@ -112,7 +116,7 @@ pub fn view_left_panel(
             })
             .width(Length::Fill)
             .on_press(WalletMessage::SelectPanel(panel))
-            .padding(8)
+            .padding(panel_button_row_padding)
     };
 
     // `next_height` is used to prevent flickering when a new block is found
@@ -159,7 +163,7 @@ pub fn view_left_panel(
         column![
             text(file_name).size(25),
             row![
-                pick_list,
+                pick_list.width(Length::Fill),
                 button(Text::new("+"))
                     .style(iced::widget::button::success)
                     .on_press(WalletMessage::NewAccount),
@@ -170,14 +174,17 @@ pub fn view_left_panel(
                     tooltip::Position::Bottom
                 )
                 .gap(10)
-                .style(iced::widget::container::bordered_box),
+                .style(iced::widget::container::bordered_box)
             ]
             .align_y(Alignment::Center)
-            .spacing(10)
+            .spacing(pick_list_row_spacing)
             .width(Length::Fill)
         ]
         .spacing(10)
-        .padding(10),
+        // Note: this specifies both vertical and horizontal padding; so if this value is different
+        // from the one used in `panel_button`, the tooltip's question mark will be misaligned with
+        // `panel_button's question marks.
+        .padding(panel_button_row_padding),
         match wallet_info.wallet_type {
             #[cfg(feature = "trezor")]
             WalletType::Trezor => {

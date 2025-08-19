@@ -55,7 +55,8 @@ use super::{
 
 // The fork at which we:
 // * enable tokens v1;
-// * upgrade consensus to PoSConsensusVersion::V1 to dis-incentivize large pools.
+// * upgrade consensus to PoSConsensusVersion::V1 to dis-incentivize large pools;
+// * change the maturity block count to 7200.
 const TESTNET_FORK_HEIGHT_1_TOKENS_V1: BlockHeight = BlockHeight::new(78_440);
 
 // The fork at which we:

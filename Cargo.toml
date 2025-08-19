@@ -174,7 +174,9 @@ hex = "0.4"
 hex-literal = "0.4"
 hmac = "0.12"
 iced = "0.13"
-iced_aw = "0.11"
+# Note: we need this fix - https://github.com/iced-rs/iced_aw/pull/329
+# TODO: switch back to a released version of iced_aw once the fix is released (need version > 0.12)
+iced_aw = { git = "https://github.com/iced-rs/iced_aw", branch = "main" }
 iced_fonts = "0.1"
 indoc = "2.0"
 itertools = "0.14"
