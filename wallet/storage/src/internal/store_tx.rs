@@ -690,6 +690,34 @@ impl<B: storage::Backend> WalletStorageEncryptionWrite for StoreTxRwUnlocked<'_,
             .into_iter()
             .try_for_each(|(k, v)| self.write::<db::DBSeedPhrase, _, _, _>(k, v))
     }
+
+    fn encrypt_standalone_private_keys(
+        &mut self,
+        new_encryption_key: &Option<SymmetricKey>,
+    ) -> crate::Result<()> {
+        let encrypted_standalone_private_keys: Vec<_> = self
+            .storage
+            .get::<db::DBStandalonePrivateKeys, _>()
+            .prefix_iter_decoded(&())?
+            .map(|(k, v)| {
+                let decrypted = v
+                    .private_key
+                    .try_take(self.encryption_key)
+                    .expect("key was checked when unlocked");
+                (
+                    k,
+                    StandalonePrivateKey {
+                        label: v.label,
+                        private_key: MaybeEncrypted::new(&decrypted, new_encryption_key),
+                    },
+                )
+            })
+            .collect();
+
+        encrypted_standalone_private_keys
+            .into_iter()
+            .try_for_each(|(k, v)| self.write::<db::DBStandalonePrivateKeys, _, _, _>(k, v))
+    }
 }
 
 /// Wallet data storage transaction

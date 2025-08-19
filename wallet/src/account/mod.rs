@@ -1833,12 +1833,7 @@ impl<K: AccountKeyChains> Account<K> {
 
     /// Return true if this destination can be spent by this account
     fn is_destination_mine(&self, destination: &Destination) -> bool {
-        match destination {
-            Destination::PublicKeyHash(pkh) => self.key_chain.is_public_key_hash_mine(pkh),
-            Destination::PublicKey(pk) => self.key_chain.is_public_key_mine(pk),
-            Destination::AnyoneCanSpend => false,
-            Destination::ScriptHash(_) | Destination::ClassicMultisig(_) => false,
-        }
+        self.key_chain.has_private_key_for_destination(destination)
     }
 
     /// Return true if this destination can be spent by this account or if it is being watched.
@@ -1847,7 +1842,7 @@ impl<K: AccountKeyChains> Account<K> {
             Destination::PublicKeyHash(pkh) => {
                 self.key_chain.is_public_key_hash_mine_or_watched(*pkh)
             }
-            Destination::PublicKey(pk) => self.key_chain.is_public_key_mine(pk),
+            Destination::PublicKey(pk) => self.key_chain.is_public_key_mine_or_watched(pk.clone()),
             Destination::AnyoneCanSpend => false,
             Destination::ScriptHash(_) => false,
             Destination::ClassicMultisig(_) => {
@@ -1886,7 +1881,7 @@ impl<K: AccountKeyChains> Account<K> {
                 }
                 Destination::PublicKey(pk) => {
                     let found = self.key_chain.mark_public_key_as_used(db_tx, &pk)?;
-                    if found {
+                    if found || self.key_chain.is_public_key_watched(pk.clone()) {
                         return Ok(true);
                     }
                 }

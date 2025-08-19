@@ -298,18 +298,19 @@ fn create_wallet(chain_config: Arc<ChainConfig>) -> DefaultWallet {
 }
 
 #[track_caller]
-fn create_block<B, P>(
+fn create_block_with_address_reward<B, P>(
     chain_config: &Arc<ChainConfig>,
     wallet: &mut Wallet<B, P>,
     transactions: Vec<SignedTransaction>,
     reward: Amount,
     block_height: u64,
+    address: Destination,
 ) -> (Address<Destination>, Block)
 where
     B: storage::Backend + 'static,
     P: SignerProvider,
 {
-    let address = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1;
+    let address = Address::new(chain_config, address).unwrap();
 
     let block1 = Block::new(
         transactions,
@@ -325,6 +326,29 @@ where
 
     scan_wallet(wallet, BlockHeight::new(block_height), vec![block1.clone()]);
     (address, block1)
+}
+
+#[track_caller]
+fn create_block<B, P>(
+    chain_config: &Arc<ChainConfig>,
+    wallet: &mut Wallet<B, P>,
+    transactions: Vec<SignedTransaction>,
+    reward: Amount,
+    block_height: u64,
+) -> (Address<Destination>, Block)
+where
+    B: storage::Backend + 'static,
+    P: SignerProvider,
+{
+    let address = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1;
+    create_block_with_address_reward(
+        chain_config,
+        wallet,
+        transactions,
+        reward,
+        block_height,
+        address.into_object(),
+    )
 }
 
 #[track_caller]
@@ -1251,6 +1275,112 @@ fn locked_wallet_cant_sign_transaction(#[case] seed: Seed) {
             .unwrap();
     }
 }
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn locked_wallet_standalone_keys(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let chain_config = Arc::new(create_mainnet());
+
+    let mut wallet = create_wallet(chain_config.clone());
+
+    let coin_balance = get_coin_balance(&wallet);
+    assert_eq!(coin_balance, Amount::ZERO);
+
+    let (standalone_sk, standalone_pk) =
+        PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+    wallet
+        .add_standalone_private_key(DEFAULT_ACCOUNT_INDEX, standalone_sk, None)
+        .unwrap();
+
+    // Generate a new block which sends reward to the wallet
+    let block1_amount = Amount::from_atoms(rng.gen_range(NETWORK_FEE + 1..NETWORK_FEE + 10000));
+    let _ = create_block_with_address_reward(
+        &chain_config,
+        &mut wallet,
+        vec![],
+        block1_amount,
+        0,
+        Destination::PublicKey(standalone_pk),
+    );
+
+    let password = Some(gen_random_password(&mut rng));
+    wallet.encrypt_wallet(&password).unwrap();
+    wallet.lock_wallet().unwrap();
+
+    let coin_balance = get_coin_balance(&wallet);
+    assert_eq!(coin_balance, block1_amount);
+
+    let new_output = TxOutput::Transfer(
+        OutputValue::Coin(Amount::from_atoms(
+            rng.gen_range(1..=block1_amount.into_atoms() - NETWORK_FEE),
+        )),
+        Destination::AnyoneCanSpend,
+    );
+
+    assert_eq!(
+        wallet.create_transaction_to_addresses(
+            DEFAULT_ACCOUNT_INDEX,
+            [new_output.clone()],
+            SelectedInputs::Utxos(vec![]),
+            BTreeMap::new(),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            TxAdditionalInfo::new(),
+        ),
+        Err(WalletError::DatabaseError(
+            wallet_storage::Error::WalletLocked
+        ))
+    );
+
+    // success after unlock
+    wallet.unlock_wallet(&password.unwrap()).unwrap();
+    if rng.gen::<bool>() {
+        wallet
+            .create_transaction_to_addresses(
+                DEFAULT_ACCOUNT_INDEX,
+                [new_output],
+                SelectedInputs::Utxos(vec![]),
+                BTreeMap::new(),
+                FeeRate::from_amount_per_kb(Amount::ZERO),
+                FeeRate::from_amount_per_kb(Amount::ZERO),
+                TxAdditionalInfo::new(),
+            )
+            .unwrap();
+    } else {
+        // check if we remove the password it should fail to lock
+        wallet.encrypt_wallet(&None).unwrap();
+
+        let err = wallet.lock_wallet().unwrap_err();
+        assert_eq!(
+            err,
+            WalletError::DatabaseError(wallet_storage::Error::WalletLockedWithoutAPassword)
+        );
+
+        // check that the kdf challenge has been deleted
+        assert!(wallet
+            .db
+            .transaction_ro()
+            .unwrap()
+            .get_encryption_key_kdf_challenge()
+            .unwrap()
+            .is_none());
+
+        wallet
+            .create_transaction_to_addresses(
+                DEFAULT_ACCOUNT_INDEX,
+                [new_output],
+                SelectedInputs::Utxos(vec![]),
+                BTreeMap::new(),
+                FeeRate::from_amount_per_kb(Amount::ZERO),
+                FeeRate::from_amount_per_kb(Amount::ZERO),
+                TxAdditionalInfo::new(),
+            )
+            .unwrap();
+    }
+}
+
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -5363,7 +5493,7 @@ fn test_add_standalone_private_key(#[case] seed: Seed) {
 
     // Check amount is still zero
     let coin_balance = get_coin_balance(&wallet);
-    assert_eq!(coin_balance, Amount::ZERO);
+    assert_eq!(coin_balance, block1_amount);
 
     // but the transaction has been added to the wallet
     let tx_data = wallet

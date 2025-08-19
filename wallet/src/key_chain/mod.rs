@@ -193,14 +193,21 @@ where
     // Return true if the provided public key belongs to this key chain
     fn is_public_key_mine(&self, public_key: &PublicKey) -> bool;
 
+    // Return true if the provided public key is one of the standalone added keys
+    fn is_public_key_watched(&self, public_key: PublicKey) -> bool;
+
+    // Return true if the provided public key belongs to this key chain
+    // or is one of the standalone added keys
+    fn is_public_key_mine_or_watched(&self, public_key: PublicKey) -> bool;
+
     // Return true if the provided public key hash belongs to this key chain
     fn is_public_key_hash_mine(&self, pubkey_hash: &PublicKeyHash) -> bool;
 
-    // Return true if the provided public key hash is one the standalone added keys
+    // Return true if the provided public key hash is one of the standalone added keys
     fn is_public_key_hash_watched(&self, pubkey_hash: PublicKeyHash) -> bool;
 
     // Return true if the provided public key hash belongs to this key chain
-    // or is one the standalone added keys
+    // or is one of the standalone added keys
     fn is_public_key_hash_mine_or_watched(&self, pubkey_hash: PublicKeyHash) -> bool;
 
     /// Find the corresponding public key for a given public key hash

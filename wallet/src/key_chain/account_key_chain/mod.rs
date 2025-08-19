@@ -471,6 +471,16 @@ impl<V: VrfKeyChain> AccountKeyChains for AccountKeyChainImpl<V> {
         self.is_public_key_hash_mine(&pubkey_hash) || self.is_public_key_hash_watched(pubkey_hash)
     }
 
+    fn is_public_key_watched(&self, public_key: PublicKey) -> bool {
+        let dest = Destination::PublicKey(public_key);
+        self.standalone_watch_only_keys.contains_key(&dest)
+            || self.standalone_private_keys.contains_key(&dest)
+    }
+
+    fn is_public_key_mine_or_watched(&self, public_key: PublicKey) -> bool {
+        self.is_public_key_mine(&public_key) || self.is_public_key_watched(public_key)
+    }
+
     /// Find the corresponding public key for a given public key hash
     fn get_public_key_from_public_key_hash(
         &self,
