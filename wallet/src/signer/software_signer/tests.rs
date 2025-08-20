@@ -24,7 +24,7 @@ use crate::signer::tests::{
     },
     generic_tests::{
         test_sign_message_generic, test_sign_transaction_generic,
-        test_sign_transaction_intent_generic,
+        test_sign_transaction_intent_generic, MessageToSign,
     },
     make_deterministic_software_signer, make_software_signer, no_another_signer,
 };
@@ -35,7 +35,12 @@ use crate::signer::tests::{
 fn test_sign_message(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
-    test_sign_message_generic(&mut rng, make_software_signer, no_another_signer());
+    test_sign_message_generic(
+        &mut rng,
+        MessageToSign::Random,
+        make_software_signer,
+        no_another_signer(),
+    );
 }
 
 #[rstest]

@@ -51,7 +51,10 @@ use crypto::{
 use logging::log;
 use randomness::{CryptoRng, Rng};
 use serialization::extras::non_empty_vec::DataOrNoVec;
-use test_utils::{random::gen_random_bytes, random_ascii_alphanumeric_string};
+use test_utils::{
+    random::{gen_random_bytes, make_seedable_rng},
+    random_ascii_alphanumeric_string,
+};
 use tx_verifier::error::{InputCheckErrorPayload, ScriptError};
 use wallet_storage::{DefaultBackend, Store, TransactionRwUnlocked, Transactional};
 use wallet_types::{
@@ -69,8 +72,15 @@ use crate::{
     Account, SendRequest,
 };
 
+#[derive(Debug)]
+pub enum MessageToSign {
+    Random,
+    Predefined(Vec<u8>),
+}
+
 pub fn test_sign_message_generic<MkS1, MkS2, S1, S2>(
     rng: &mut (impl Rng + CryptoRng),
+    message_to_sign: MessageToSign,
     make_signer: MkS1,
     make_another_signer: Option<MkS2>,
 ) where
@@ -84,6 +94,21 @@ pub fn test_sign_message_generic<MkS1, MkS2, S1, S2>(
     let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
 
     let mut account = account_from_mnemonic(&chain_config, &mut db_tx, DEFAULT_ACCOUNT_INDEX);
+
+    let mut make_message = {
+        // Note: can't pass rng to the closure without knowing its exact type, so we create a new one.
+        let mut rng = make_seedable_rng(rng.gen());
+        move || {
+            let msg = match &message_to_sign {
+                MessageToSign::Random => {
+                    vec![rng.r#gen::<u8>(), rng.r#gen::<u8>(), rng.r#gen::<u8>()]
+                }
+                MessageToSign::Predefined(msg) => msg.clone(),
+            };
+            log::debug!("Using message: {msg:?}");
+            msg
+        }
+    };
 
     let pkh_destination = account
         .get_new_address(&mut db_tx, KeyPurpose::ReceiveFunds)
@@ -106,7 +131,7 @@ pub fn test_sign_message_generic<MkS1, MkS2, S1, S2>(
     let standalone_pk_destination = Destination::PublicKey(standalone_pk);
 
     for destination in [pkh_destination, pk_destination, standalone_pk_destination] {
-        let message = vec![rng.gen::<u8>(), rng.gen::<u8>(), rng.gen::<u8>()];
+        let message = make_message();
         let message_challenge = produce_message_challenge(&message);
 
         let mut signer = make_signer(chain_config.clone(), account.account_index());
@@ -136,7 +161,7 @@ pub fn test_sign_message_generic<MkS1, MkS2, S1, S2>(
 
     let mut signer = make_signer(chain_config.clone(), account.account_index());
 
-    let message = vec![rng.gen::<u8>(), rng.gen::<u8>(), rng.gen::<u8>()];
+    let message = make_message();
     let err = signer
         .sign_challenge(
             &message,
