@@ -110,9 +110,14 @@ pub async fn node_initialize(
     mode: WalletMode,
 ) -> anyhow::Result<NodeInitializationOutcome> {
     if std::env::var("RUST_LOG").is_err() {
+        // Note: wgpu_hal=error is included to prevent it from spamming warnings
+        // "Unrecognized present mode 1000361000" on Windows. Note that this seems
+        // to have been fixed in https://github.com/gfx-rs/wgpu/pull/7850 and
+        // the fix has already been released, however our dependencies still use
+        // a pretty old version of wgpu.
         std::env::set_var(
             "RUST_LOG",
-            "info,wgpu_core=error,hyper=error,jsonrpsee-server=error",
+            "info,wgpu_core=error,wgpu_hal=error,hyper=error,jsonrpsee-server=error",
         );
     }
 
