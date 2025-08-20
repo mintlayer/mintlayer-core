@@ -251,8 +251,8 @@ zeroize = "1.5"
 
 [workspace.dependencies.trezor-client]
 git = "https://github.com/mintlayer/mintlayer-trezor-firmware"
-# The commit "Mintlayer firmware versioning"
-rev = "397155e26660993a044e78447dad893852fa44d1"
+# The commit "Merge pull request #16 from mintlayer/sign_message_convert_to_hex_if_non_ascii"
+rev = "8154c7a3bc65d27d64186f1b733750e029f8cad0"
 features = ["bitcoin", "mintlayer"]
 
 [workspace.metadata.dist.dependencies.apt]

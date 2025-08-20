@@ -30,7 +30,7 @@ use crate::signer::{
         },
         generic_tests::{
             test_sign_message_generic, test_sign_transaction_generic,
-            test_sign_transaction_intent_generic,
+            test_sign_transaction_intent_generic, MessageToSign,
         },
         make_deterministic_software_signer, no_another_signer,
     },
@@ -75,14 +75,28 @@ pub fn make_deterministic_trezor_signer(
 #[trace]
 #[serial]
 #[case(Seed::from_entropy())]
-fn test_sign_message(#[case] seed: Seed) {
+fn test_sign_message(
+    #[case] seed: Seed,
+    #[values(
+        MessageToSign::Random,
+        // Special case: an "overlong" utf-8 string (basically, the letter 'K' encoded with 2 bytes
+        // instead of 1). The firmware used to have troubles with this.
+        MessageToSign::Predefined(vec![193, 139])
+    )]
+    message_to_sign: MessageToSign,
+) {
     log::debug!("test_sign_message, seed = {seed:?}");
 
     let _join_guard = maybe_spawn_auto_confirmer();
 
     let mut rng = make_seedable_rng(seed);
 
-    test_sign_message_generic(&mut rng, make_trezor_signer, no_another_signer());
+    test_sign_message_generic(
+        &mut rng,
+        message_to_sign,
+        make_trezor_signer,
+        no_another_signer(),
+    );
 }
 
 #[rstest]
@@ -175,6 +189,7 @@ fn test_sign_message_sig_consistency(#[case] seed: Seed) {
 
     test_sign_message_generic(
         &mut rng,
+        MessageToSign::Random,
         make_deterministic_trezor_signer,
         Some(make_deterministic_software_signer),
     );
