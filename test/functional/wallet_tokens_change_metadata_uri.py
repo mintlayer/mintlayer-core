@@ -133,7 +133,6 @@ class WalletTokens(BitcoinTestFramework):
             assert_in("Success", await wallet.sync())
 
             token_info = node.chainstate_token_info(token_id)
-            print(token_info)
             assert_equal(new_metadata_uri, token_info['content']['metadata_uri']['hex']);
             assert token_info['content']['metadata_uri']['text'] is not metadata_uri
 
