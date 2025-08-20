@@ -21,26 +21,21 @@ import {
   estimate_transaction_size,
   make_default_account_privkey,
   make_receiving_address,
+  decode_signed_transaction_to_js,
   Network,
   SignatureHashType,
 } from "../../pkg/wasm_wrappers.js";
 
 import {
   assert_eq_arrays,
+  assert_eq_vals,
   get_err_msg,
   TEXT_ENCODER,
 } from "./utils.js";
 
-import {
-  MNEMONIC,
-  RANDOM_HEIGHT,
-} from "./defs.js";
-import {
-  ADDRESS
-} from "./test_address_generation.js";
-import {
-  INPUTS,
-} from "./test_encode_other_inputs.js";
+import { MNEMONIC, RANDOM_HEIGHT } from "./defs.js";
+import { ADDRESS } from "./test_address_generation.js";
+import { INPUTS } from "./test_encode_other_inputs.js";
 import {
   OUTPUTS,
   OUTPUT_CREATE_STAKE_POOL,
@@ -50,7 +45,7 @@ import {
 export function test_transaction_and_witness_encoding() {
   const account_pubkey = make_default_account_privkey(
     MNEMONIC,
-    Network.Testnet
+    Network.Testnet,
   );
   const receiving_privkey = make_receiving_address(account_pubkey, 0);
 
@@ -76,19 +71,23 @@ export function test_transaction_and_witness_encoding() {
     console.log("Tested invalid outputs successfully");
   }
 
-  const tx = encode_transaction(Uint8Array.from(INPUTS), Uint8Array.from(OUTPUTS), BigInt(0));
+  const tx = encode_transaction(
+    Uint8Array.from(INPUTS),
+    Uint8Array.from(OUTPUTS),
+    BigInt(0),
+  );
   const expected_tx = [
     1, 0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 4, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 4, 8, 1, 0, 145, 1, 1, 91, 58, 110, 176, 100, 207, 6, 194, 41, 193, 30,
-    91, 4, 195, 202, 103, 207, 80, 217, 178, 0, 145, 1, 3, 0, 0, 0, 0, 0, 0,
+    91, 4, 195, 202, 103, 207, 80, 217, 178, 0, 145, 1, 3, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 2, 113, 2, 0, 1, 91, 58, 110, 176, 100, 207, 6, 194, 41, 193, 30, 91,
-    4, 195, 202, 103, 207, 80, 217, 178, 0, 108, 245, 234, 97, 170, 9, 247,
-    158, 169, 100, 84, 123, 235, 183, 147, 29, 136, 118, 203, 24, 146, 56, 60,
-    217, 2, 198, 32, 133, 255, 240, 84, 123, 1, 91, 58, 110, 176, 100, 207, 6,
-    194, 41, 193, 30, 91, 4, 195, 202, 103, 207, 80, 217, 178, 100, 0, 0,
+    2, 113, 2, 0, 1, 91, 58, 110, 176, 100, 207, 6, 194, 41, 193, 30, 91, 4,
+    195, 202, 103, 207, 80, 217, 178, 0, 108, 245, 234, 97, 170, 9, 247, 158,
+    169, 100, 84, 123, 235, 183, 147, 29, 136, 118, 203, 24, 146, 56, 60, 217,
+    2, 198, 32, 133, 255, 240, 84, 123, 1, 91, 58, 110, 176, 100, 207, 6, 194,
+    41, 193, 30, 91, 4, 195, 202, 103, 207, 80, 217, 178, 100, 0, 0,
   ];
   assert_eq_arrays(tx, expected_tx);
   console.log("tx encoding ok");
@@ -98,7 +97,12 @@ export function test_transaction_and_witness_encoding() {
   assert_eq_arrays(witness, expected_no_signature_witness);
   console.log("empty witness encoding ok");
 
-  const opt_utxos = [1, ...OUTPUT_LOCK_THEN_TRANSFER, 1, ...OUTPUT_CREATE_STAKE_POOL];
+  const opt_utxos = [
+    1,
+    ...OUTPUT_LOCK_THEN_TRANSFER,
+    1,
+    ...OUTPUT_CREATE_STAKE_POOL,
+  ];
 
   try {
     const invalid_private_key = TEXT_ENCODER.encode("invalid private key");
@@ -111,7 +115,7 @@ export function test_transaction_and_witness_encoding() {
       0,
       { pool_info: {}, order_info: {} },
       BigInt(RANDOM_HEIGHT),
-      Network.Testnet
+      Network.Testnet,
     );
     throw new Error("Invalid private key worked somehow!");
   } catch (e) {
@@ -131,7 +135,7 @@ export function test_transaction_and_witness_encoding() {
       0,
       { pool_info: {}, order_info: {} },
       BigInt(RANDOM_HEIGHT),
-      Network.Testnet
+      Network.Testnet,
     );
     throw new Error("Invalid address worked somehow!");
   } catch (e) {
@@ -151,7 +155,7 @@ export function test_transaction_and_witness_encoding() {
       0,
       { pool_info: {}, order_info: {} },
       BigInt(RANDOM_HEIGHT),
-      Network.Testnet
+      Network.Testnet,
     );
     throw new Error("Invalid transaction worked somehow!");
   } catch (e) {
@@ -171,7 +175,7 @@ export function test_transaction_and_witness_encoding() {
       0,
       { pool_info: {}, order_info: {} },
       BigInt(RANDOM_HEIGHT),
-      Network.Testnet
+      Network.Testnet,
     );
     throw new Error("Invalid utxo worked somehow!");
   } catch (e) {
@@ -191,11 +195,15 @@ export function test_transaction_and_witness_encoding() {
       0,
       { pool_info: {}, order_info: {} },
       BigInt(RANDOM_HEIGHT),
-      Network.Testnet
+      Network.Testnet,
     );
     throw new Error("Invalid utxo worked somehow!");
   } catch (e) {
-    if (!get_err_msg(e).includes("Error creating sighash input commitments: Utxo not found")) {
+    if (
+      !get_err_msg(e).includes(
+        "Error creating sighash input commitments: Utxo not found",
+      )
+    ) {
       throw e;
     }
     console.log("Tested invalid utxo count in encode witness successfully");
@@ -211,7 +219,7 @@ export function test_transaction_and_witness_encoding() {
       invalid_input_idx,
       { pool_info: {}, order_info: {} },
       BigInt(RANDOM_HEIGHT),
-      Network.Testnet
+      Network.Testnet,
     );
     throw new Error("Invalid address worked somehow!");
   } catch (e) {
@@ -230,18 +238,18 @@ export function test_transaction_and_witness_encoding() {
     0,
     { pool_info: {}, order_info: {} },
     BigInt(RANDOM_HEIGHT),
-    Network.Testnet
+    Network.Testnet,
   );
 
   // as signatures are random, hardcode one so we can test the encodings for the signed transaction
   const random_witness2 = [
     1, 1, 141, 1, 0, 2, 227, 252, 33, 195, 223, 44, 38, 35, 73, 145, 212, 180,
-    49, 115, 4, 150, 204, 250, 205, 123, 131, 201, 114, 130, 186, 209, 98,
-    181, 118, 233, 133, 89, 0, 99, 87, 109, 227, 15, 21, 164, 83, 151, 14,
-    235, 106, 83, 230, 40, 64, 146, 112, 52, 103, 203, 31, 216, 54, 141, 223,
-    27, 175, 133, 164, 172, 239, 122, 121, 17, 88, 114, 99, 6, 19, 220, 156,
-    167, 40, 17, 211, 196, 45, 209, 111, 170, 161, 2, 254, 122, 169, 127, 235,
-    158, 62, 127, 177, 12, 228,
+    49, 115, 4, 150, 204, 250, 205, 123, 131, 201, 114, 130, 186, 209, 98, 181,
+    118, 233, 133, 89, 0, 99, 87, 109, 227, 15, 21, 164, 83, 151, 14, 235, 106,
+    83, 230, 40, 64, 146, 112, 52, 103, 203, 31, 216, 54, 141, 223, 27, 175,
+    133, 164, 172, 239, 122, 121, 17, 88, 114, 99, 6, 19, 220, 156, 167, 40, 17,
+    211, 196, 45, 209, 111, 170, 161, 2, 254, 122, 169, 127, 235, 158, 62, 127,
+    177, 12, 228,
   ];
 
   try {
@@ -261,7 +269,7 @@ export function test_transaction_and_witness_encoding() {
   } catch (e) {
     if (
       !get_err_msg(e).includes(
-        "The number of signatures does not match the number of inputs"
+        "The number of signatures does not match the number of inputs",
       )
     ) {
       throw e;
@@ -287,26 +295,26 @@ export function test_transaction_and_witness_encoding() {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 4, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 4, 8, 1, 0, 145, 1, 1, 91, 58, 110, 176, 100, 207, 6, 194, 41, 193, 30,
-    91, 4, 195, 202, 103, 207, 80, 217, 178, 0, 145, 1, 3, 0, 0, 0, 0, 0, 0,
+    91, 4, 195, 202, 103, 207, 80, 217, 178, 0, 145, 1, 3, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 2, 113, 2, 0, 1, 91, 58, 110, 176, 100, 207, 6, 194, 41, 193, 30, 91,
-    4, 195, 202, 103, 207, 80, 217, 178, 0, 108, 245, 234, 97, 170, 9, 247,
-    158, 169, 100, 84, 123, 235, 183, 147, 29, 136, 118, 203, 24, 146, 56, 60,
-    217, 2, 198, 32, 133, 255, 240, 84, 123, 1, 91, 58, 110, 176, 100, 207, 6,
-    194, 41, 193, 30, 91, 4, 195, 202, 103, 207, 80, 217, 178, 100, 0, 0, 8,
-    1, 1, 141, 1, 0, 2, 227, 252, 33, 195, 223, 44, 38, 35, 73, 145, 212, 180,
-    49, 115, 4, 150, 204, 250, 205, 123, 131, 201, 114, 130, 186, 209, 98,
-    181, 118, 233, 133, 89, 0, 99, 87, 109, 227, 15, 21, 164, 83, 151, 14,
+    2, 113, 2, 0, 1, 91, 58, 110, 176, 100, 207, 6, 194, 41, 193, 30, 91, 4,
+    195, 202, 103, 207, 80, 217, 178, 0, 108, 245, 234, 97, 170, 9, 247, 158,
+    169, 100, 84, 123, 235, 183, 147, 29, 136, 118, 203, 24, 146, 56, 60, 217,
+    2, 198, 32, 133, 255, 240, 84, 123, 1, 91, 58, 110, 176, 100, 207, 6, 194,
+    41, 193, 30, 91, 4, 195, 202, 103, 207, 80, 217, 178, 100, 0, 0, 8, 1, 1,
+    141, 1, 0, 2, 227, 252, 33, 195, 223, 44, 38, 35, 73, 145, 212, 180, 49,
+    115, 4, 150, 204, 250, 205, 123, 131, 201, 114, 130, 186, 209, 98, 181, 118,
+    233, 133, 89, 0, 99, 87, 109, 227, 15, 21, 164, 83, 151, 14, 235, 106, 83,
+    230, 40, 64, 146, 112, 52, 103, 203, 31, 216, 54, 141, 223, 27, 175, 133,
+    164, 172, 239, 122, 121, 17, 88, 114, 99, 6, 19, 220, 156, 167, 40, 17, 211,
+    196, 45, 209, 111, 170, 161, 2, 254, 122, 169, 127, 235, 158, 62, 127, 177,
+    12, 228, 1, 1, 141, 1, 0, 2, 227, 252, 33, 195, 223, 44, 38, 35, 73, 145,
+    212, 180, 49, 115, 4, 150, 204, 250, 205, 123, 131, 201, 114, 130, 186, 209,
+    98, 181, 118, 233, 133, 89, 0, 99, 87, 109, 227, 15, 21, 164, 83, 151, 14,
     235, 106, 83, 230, 40, 64, 146, 112, 52, 103, 203, 31, 216, 54, 141, 223,
     27, 175, 133, 164, 172, 239, 122, 121, 17, 88, 114, 99, 6, 19, 220, 156,
     167, 40, 17, 211, 196, 45, 209, 111, 170, 161, 2, 254, 122, 169, 127, 235,
-    158, 62, 127, 177, 12, 228, 1, 1, 141, 1, 0, 2, 227, 252, 33, 195, 223,
-    44, 38, 35, 73, 145, 212, 180, 49, 115, 4, 150, 204, 250, 205, 123, 131,
-    201, 114, 130, 186, 209, 98, 181, 118, 233, 133, 89, 0, 99, 87, 109, 227,
-    15, 21, 164, 83, 151, 14, 235, 106, 83, 230, 40, 64, 146, 112, 52, 103,
-    203, 31, 216, 54, 141, 223, 27, 175, 133, 164, 172, 239, 122, 121, 17, 88,
-    114, 99, 6, 19, 220, 156, 167, 40, 17, 211, 196, 45, 209, 111, 170, 161,
-    2, 254, 122, 169, 127, 235, 158, 62, 127, 177, 12, 228,
+    158, 62, 127, 177, 12, 228,
   ];
   assert_eq_arrays(signed_tx, expected_signed_tx);
 
@@ -314,12 +322,104 @@ export function test_transaction_and_witness_encoding() {
     Uint8Array.from(INPUTS),
     [ADDRESS, ADDRESS],
     Uint8Array.from(OUTPUTS),
-    Network.Testnet
+    Network.Testnet,
   );
   if (estimated_size != expected_signed_tx.length) {
     throw new Error("wrong estimated size");
   }
   console.log(
-    `estimated size ${estimated_size} vs real ${expected_signed_tx.length}`
+    `estimated size ${estimated_size} vs real ${expected_signed_tx.length}`,
+  );
+
+  let decoded_tx = decode_signed_transaction_to_js(signed_tx, Network.Testnet);
+
+  const expected_decoded_tx = {
+    transaction: {
+      V1: {
+        version: 1,
+        flags: 0,
+        inputs: [
+          {
+            Utxo: {
+              id: {
+                Transaction:
+                  "0000000000000000000000000000000000000000000000000000000000000000",
+              },
+              index: 1,
+            },
+          },
+          {
+            Account: {
+              nonce: 1,
+              account: {
+                DelegationBalance: [
+                  "tdelg1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqnu8zn4",
+                  { atoms: "1" },
+                ],
+              },
+            },
+          },
+        ],
+        outputs: [
+          {
+            LockThenTransfer: [
+              { Coin: { atoms: "100" } },
+              "tmt1q9dn5m4svn8sds3fcy09kpxrefnu75xekgr5wa3n",
+              { type: "UntilHeight", content: 100 },
+            ],
+          },
+          {
+            CreateStakePool: [
+              "tpool1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqza035u",
+              {
+                pledge: { atoms: "40000" },
+                staker: "tmt1q9dn5m4svn8sds3fcy09kpxrefnu75xekgr5wa3n",
+                vrf_public_key:
+                  "006cf5ea61aa09f79ea964547bebb7931d8876cb1892383cd902c62085fff0547b",
+                decommission_key:
+                  "tmt1q9dn5m4svn8sds3fcy09kpxrefnu75xekgr5wa3n",
+                margin_ratio_per_thousand: "10%",
+                cost_per_block: { atoms: "0" },
+              },
+            ],
+          },
+        ],
+      },
+    },
+    signatures: [
+      {
+        Standard: {
+          sighash_type: 1,
+          raw_signature: [
+            0, 2, 227, 252, 33, 195, 223, 44, 38, 35, 73, 145, 212, 180, 49,
+            115, 4, 150, 204, 250, 205, 123, 131, 201, 114, 130, 186, 209, 98,
+            181, 118, 233, 133, 89, 0, 99, 87, 109, 227, 15, 21, 164, 83, 151,
+            14, 235, 106, 83, 230, 40, 64, 146, 112, 52, 103, 203, 31, 216, 54,
+            141, 223, 27, 175, 133, 164, 172, 239, 122, 121, 17, 88, 114, 99, 6,
+            19, 220, 156, 167, 40, 17, 211, 196, 45, 209, 111, 170, 161, 2, 254,
+            122, 169, 127, 235, 158, 62, 127, 177, 12, 228,
+          ],
+        },
+      },
+      {
+        Standard: {
+          sighash_type: 1,
+          raw_signature: [
+            0, 2, 227, 252, 33, 195, 223, 44, 38, 35, 73, 145, 212, 180, 49,
+            115, 4, 150, 204, 250, 205, 123, 131, 201, 114, 130, 186, 209, 98,
+            181, 118, 233, 133, 89, 0, 99, 87, 109, 227, 15, 21, 164, 83, 151,
+            14, 235, 106, 83, 230, 40, 64, 146, 112, 52, 103, 203, 31, 216, 54,
+            141, 223, 27, 175, 133, 164, 172, 239, 122, 121, 17, 88, 114, 99, 6,
+            19, 220, 156, 167, 40, 17, 211, 196, 45, 209, 111, 170, 161, 2, 254,
+            122, 169, 127, 235, 158, 62, 127, 177, 12, 228,
+          ],
+        },
+      },
+    ],
+  };
+
+  assert_eq_vals(
+    JSON.stringify(decoded_tx),
+    JSON.stringify(expected_decoded_tx),
   );
 }

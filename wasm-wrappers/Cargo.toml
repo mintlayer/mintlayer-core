@@ -19,7 +19,10 @@ serialization = { path = "../serialization" }
 tx-verifier = { path = "../chainstate/tx-verifier" }
 utils = { path = "../utils" }
 
-bip39 = { workspace = true, default-features = false, features = ["std", "zeroize"] }
+bip39 = { workspace = true, default-features = false, features = [
+  "std",
+  "zeroize",
+] }
 fixed-hash.workspace = true
 itertools.workspace = true
 serde.workspace = true
@@ -33,6 +36,7 @@ tsify = "0.5"
 wasm-bindgen = "0.2"
 # web-sys provides `console::log` and is useful during debugging.
 web-sys = { version = "0.3", features = ["console"] }
+serde-wasm-bindgen = "0.6"
 
 [dev-dependencies]
 hex.workspace = true

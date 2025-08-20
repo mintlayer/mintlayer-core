@@ -211,6 +211,10 @@ ScriptHash and ClassicMultisig destinations are not supported.
 Given inputs as bytes, outputs as bytes, and flags settings, this function returns
 the transaction that contains them all, as bytes.
 
+### Function: `decode_signed_transaction_to_js`
+
+Decodes a signed transaction from its binary encoding into a JavaScript object.
+
 ### Function: `encode_witness_no_signature`
 
 Encode an input witness of the variant that contains no signature.
