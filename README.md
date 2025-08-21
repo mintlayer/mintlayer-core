@@ -56,7 +56,13 @@ Normally, the logging of mintlayer-core is configured via the `RUST_LOG` environ
 
 If the `RUST_LOG` environment variable is not specified, the log level `info` will be used by default.
 
-Additionally, independent of what is printed to the console, node's logs may also be automatically written to the data directory (on Linux, they will be inside `~/.mintlayer/mainnet/logs/` and `~/.mintlayer/testnet/logs/` for mainnet and testnet respectively); this is controlled by the `--log-to-file` option (e.g. `--log-to-file true`), which is accepted by both node-daemon and node-gui. By default, its value is false for node-daemon and true for node-gui. The log files are rotated based on size, so older logs will be automatically deleted eventually. Also note that the log level used in this case is always `info`, regardless of the value of `RUST_LOG`.
+Additionally, independent of what is printed to the console, node's logs may also be automatically written to the data directory -
+by default, on Linux they will appear inside `~/.mintlayer/mainnet/logs/` and `~/.mintlayer/testnet/logs/`
+and on Windows in `C:\Users\Username\AppData\Roaming\Mintlayer\mainnet\logs` and `C:\Users\Username\AppData\Roaming\Mintlayer\testnet\logs`
+(for mainnet and testnet respectively).
+This is controlled by the `--log-to-file` option (e.g. `--log-to-file true`), which is accepted by both node-daemon and node-gui.
+By default, its value is false for node-daemon and true for node-gui. The log files are rotated based on size, so older logs
+will be automatically deleted eventually. Also note that the log level used in this case is always `info`, regardless of the value of `RUST_LOG`.
 
 Here are the commands as recommended for different scenarios:
 
