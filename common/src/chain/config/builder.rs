@@ -79,13 +79,10 @@ const TESTNET_FORK_HEIGHT_4_ORDERS: BlockHeight = BlockHeight::new(325_180);
 
 // The fork at which we:
 // * enable orders v1;
+// * switch to sighash input commitments v1;
 // * enable token id generation v1;
 // * prohibit updating the staker destination in ProduceBlockFromStake.
-const TESTNET_FORK_HEIGHT_5_ORDERS_V1: BlockHeight = BlockHeight::new(999_999_999);
-
-// The fork at which we switch to sighash input commitments v1.
-const TESTNET_FORK_HEIGHT_6_SIGHASH_INPUT_COMMITMENTS_V1: BlockHeight =
-    BlockHeight::new(1_999_999_999);
+const TESTNET_FORK_HEIGHT_5_ORDERS_V1: BlockHeight = BlockHeight::new(566060);
 
 // The fork at which:
 // * txs with htlc and order outputs become valid;
@@ -96,13 +93,10 @@ const MAINNET_FORK_HEIGHT_1_HTLC_AND_ORDERS: BlockHeight = BlockHeight::new(254_
 
 // The fork at which we:
 // * enable orders v1;
+// * switch to sighash input commitments v1;
 // * enable token id generation v1;
 // * prohibit updating the staker destination in ProduceBlockFromStake.
 const MAINNET_FORK_HEIGHT_2_ORDERS_V1: BlockHeight = BlockHeight::new(999_999_999);
-
-// The fork at which we switch to sighash input commitments v1.
-const MAINNET_FORK_HEIGHT_3_SIGHASH_INPUT_COMMITMENTS_V1: BlockHeight =
-    BlockHeight::new(1_999_999_999);
 
 impl ChainType {
     fn default_genesis_init(&self) -> GenesisBlockInit {
@@ -235,13 +229,8 @@ impl ChainType {
                     .orders_version(OrdersVersion::V1)
                     .staker_destination_update_forbidden(StakerDestinationUpdateForbidden::Yes)
                     .token_id_generation_version(TokenIdGenerationVersion::V1)
+                    .sighash_input_commitment_version(SighashInputCommitmentVersion::V1)
             })
-            .then(
-                MAINNET_FORK_HEIGHT_3_SIGHASH_INPUT_COMMITMENTS_V1,
-                |builder| {
-                    builder.sighash_input_commitment_version(SighashInputCommitmentVersion::V1)
-                },
-            )
             .build(),
             ChainType::Regtest | ChainType::Signet => {
                 let upgrades = vec![(
@@ -291,13 +280,8 @@ impl ChainType {
                     .orders_version(OrdersVersion::V1)
                     .staker_destination_update_forbidden(StakerDestinationUpdateForbidden::Yes)
                     .token_id_generation_version(TokenIdGenerationVersion::V1)
+                    .sighash_input_commitment_version(SighashInputCommitmentVersion::V1)
             })
-            .then(
-                TESTNET_FORK_HEIGHT_6_SIGHASH_INPUT_COMMITMENTS_V1,
-                |builder| {
-                    builder.sighash_input_commitment_version(SighashInputCommitmentVersion::V1)
-                },
-            )
             .build(),
         }
     }
@@ -809,23 +793,6 @@ mod tests {
                             OrdersVersion::V1,
                             StakerDestinationUpdateForbidden::Yes,
                             TokenIdGenerationVersion::V1,
-                            SighashInputCommitmentVersion::V0
-                        ),
-                    ),
-                    (
-                        MAINNET_FORK_HEIGHT_3_SIGHASH_INPUT_COMMITMENTS_V1,
-                        ChainstateUpgrade::new(
-                            TokenIssuanceVersion::V1,
-                            RewardDistributionVersion::V1,
-                            TokensFeeVersion::V1,
-                            DataDepositFeeVersion::V1,
-                            ChangeTokenMetadataUriActivated::Yes,
-                            FrozenTokensValidationVersion::V1,
-                            HtlcActivated::Yes,
-                            OrdersActivated::Yes,
-                            OrdersVersion::V1,
-                            StakerDestinationUpdateForbidden::Yes,
-                            TokenIdGenerationVersion::V1,
                             SighashInputCommitmentVersion::V1
                         ),
                     ),
@@ -928,23 +895,6 @@ mod tests {
                     ),
                     (
                         TESTNET_FORK_HEIGHT_5_ORDERS_V1,
-                        ChainstateUpgrade::new(
-                            TokenIssuanceVersion::V1,
-                            RewardDistributionVersion::V1,
-                            TokensFeeVersion::V1,
-                            DataDepositFeeVersion::V1,
-                            ChangeTokenMetadataUriActivated::Yes,
-                            FrozenTokensValidationVersion::V1,
-                            HtlcActivated::Yes,
-                            OrdersActivated::Yes,
-                            OrdersVersion::V1,
-                            StakerDestinationUpdateForbidden::Yes,
-                            TokenIdGenerationVersion::V1,
-                            SighashInputCommitmentVersion::V0
-                        ),
-                    ),
-                    (
-                        TESTNET_FORK_HEIGHT_6_SIGHASH_INPUT_COMMITMENTS_V1,
                         ChainstateUpgrade::new(
                             TokenIssuanceVersion::V1,
                             RewardDistributionVersion::V1,
