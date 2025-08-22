@@ -124,7 +124,7 @@ async fn setup(
 
     let opts = Options {
         model: Model::NanoSP,
-        api_level: Some("22".to_string()),
+        api_level: Some("24".to_string()),
         seed: Some("abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about".to_string()), // Use a deterministic seed for tests
         display: Display::Headless,
         apdu_port: Some(1237 + offset),

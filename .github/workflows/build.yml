@@ -175,7 +175,7 @@ jobs:
         run: sudo apt-get update
 
       - name: Install build dependencies
-        run: sudo apt-get install -yqq --no-install-recommends build-essential pkg-config libssl-dev
+        run: sudo apt-get install -yqq --no-install-recommends build-essential pkg-config libssl-dev libdbus-1-dev libusb-1.0-0-dev
 
       - name: Setup Python
         uses: actions/setup-python@v6
@@ -283,9 +283,9 @@ jobs:
       - name: Run tests in the emulator
         run: nix-shell --run "
           poetry run core/emu.py
-            --headless --quiet --temporary-profile
-            --mnemonic \"abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about\"
-            --command env --chdir ../mintlayer-core
+          --headless --quiet --temporary-profile
+          --mnemonic \"abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about\"
+          --command env --chdir ../mintlayer-core
           cargo-nextest nextest run --archive-file tests.tar.zst -j1 trezor_signer
           "
         working-directory: ./mintlayer-trezor-firmware
