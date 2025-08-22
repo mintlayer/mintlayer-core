@@ -654,6 +654,13 @@ where
 
                             Ok((sig, SignatureStatus::NotSigned, status))
                         }
+                        (Some(Destination::AnyoneCanSpend), None) => {
+                            Ok((
+                                Some(InputWitness::NoSignature(None)),
+                                SignatureStatus::NotSigned,
+                                SignatureStatus::FullySigned,
+                            ))
+                        }
                         (Some(destination), None) => {
                             let standalone = match standalone_inputs.get(&(input_index as u32)).map(|x| x.as_slice()) {
                                 Some([standalone]) => standalone,
