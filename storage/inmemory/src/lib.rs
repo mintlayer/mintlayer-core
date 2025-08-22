@@ -22,7 +22,7 @@ type Map = BTreeMap<Data, Data>;
 pub struct StorageMaps(DbMapsData<Map>);
 
 impl backend::ReadOps for StorageMaps {
-    fn get(&self, map_id: DbMapId, key: &[u8]) -> storage_core::Result<Option<Cow<[u8]>>> {
+    fn get(&self, map_id: DbMapId, key: &[u8]) -> storage_core::Result<Option<Cow<'_, [u8]>>> {
         Ok(self.0[map_id].get(key).map(|p| p.into()))
     }
 

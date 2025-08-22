@@ -90,7 +90,7 @@ impl<Tx: lmdb::Transaction> DbTx<'_, Tx> {
 }
 
 impl<Tx: lmdb::Transaction> backend::ReadOps for DbTx<'_, Tx> {
-    fn get(&self, map_id: DbMapId, key: &[u8]) -> storage_core::Result<Option<Cow<[u8]>>> {
+    fn get(&self, map_id: DbMapId, key: &[u8]) -> storage_core::Result<Option<Cow<'_, [u8]>>> {
         self.tx
             .get(self.backend.dbs[map_id], &key)
             .map_or_else(error::process_with_none, |x| Ok(Some(x.into())))

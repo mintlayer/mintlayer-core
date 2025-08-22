@@ -24,7 +24,7 @@ pub use crate::{Data, DbDesc, DbMapId};
 /// Read-only database operations
 pub trait ReadOps {
     /// Get value associated with given key.
-    fn get(&self, map_id: DbMapId, key: &[u8]) -> crate::Result<Option<Cow<[u8]>>>;
+    fn get(&self, map_id: DbMapId, key: &[u8]) -> crate::Result<Option<Cow<'_, [u8]>>>;
 
     /// Get iterator over key-value pairs where the key has given prefix
     fn prefix_iter(

@@ -44,7 +44,7 @@ pub fn get<DbMap: schema::DbMap, Tx: ReadOps, K: EncodeLike<DbMap::Key>>(
     dbtx: &Tx,
     map_id: DbMapId,
     key: K,
-) -> crate::Result<Option<Encoded<Cow<[u8]>, DbMap::Value>>> {
+) -> crate::Result<Option<Encoded<Cow<'_, [u8]>, DbMap::Value>>> {
     key.using_encoded(|key| dbtx.get(map_id, key).map(|x| x.map(Encoded::from_bytes_unchecked)))
 }
 

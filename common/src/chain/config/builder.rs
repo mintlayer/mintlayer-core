@@ -88,7 +88,8 @@ const TESTNET_FORK_HEIGHT_5_ORDERS_V1: BlockHeight = BlockHeight::new(566060);
 // * txs with htlc and order outputs become valid;
 // * data deposit fee and size are changed;
 // * token metadata uri change is allowed;
-// * frozen token validation logic is changed to FrozenTokensValidationVersion::V1.
+// * frozen token validation logic is changed to FrozenTokensValidationVersion::V1;
+// * max_future_block_time_offset becomes DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET_V2.
 const MAINNET_FORK_HEIGHT_1_HTLC_AND_ORDERS: BlockHeight = BlockHeight::new(254_740);
 
 // The fork at which we:

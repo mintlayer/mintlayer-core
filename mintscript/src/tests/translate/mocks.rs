@@ -52,7 +52,7 @@ impl<'a> MockSigInfoProvider<'a> {
 }
 
 impl crate::translate::InputInfoProvider for MockSigInfoProvider<'_> {
-    fn input_info(&self) -> &InputInfo {
+    fn input_info(&self) -> &InputInfo<'_> {
         &self.input_info
     }
 

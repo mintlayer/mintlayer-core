@@ -483,7 +483,7 @@ mod collect_search_data {
         amount_to_delegate
     }
 
-    fn make_block_builder(tf: &mut TestFramework) -> PoSBlockBuilder {
+    fn make_block_builder(tf: &mut TestFramework) -> PoSBlockBuilder<'_> {
         tf.make_pos_block_builder().with_specific_staking_pool(&H256::zero().into())
     }
 }

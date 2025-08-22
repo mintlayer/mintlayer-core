@@ -59,7 +59,7 @@ pub trait SignatureContext {
     fn transaction(&self) -> &Self::Tx;
 
     /// Get the list of input commitments
-    fn input_commitments(&self) -> &[SighashInputCommitment];
+    fn input_commitments(&self) -> &[SighashInputCommitment<'_>];
 
     /// Get the input number
     fn input_num(&self) -> usize;

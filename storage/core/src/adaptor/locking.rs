@@ -31,7 +31,7 @@ use utils::{const_value::ConstValue, sync};
 pub struct TxRo<'tx, T>(sync::RwLockReadGuard<'tx, T>);
 
 impl<T: ReadOps> ReadOps for TxRo<'_, T> {
-    fn get(&self, map_id: DbMapId, key: &[u8]) -> crate::Result<Option<Cow<[u8]>>> {
+    fn get(&self, map_id: DbMapId, key: &[u8]) -> crate::Result<Option<Cow<'_, [u8]>>> {
         self.0.get(map_id, key)
     }
 
@@ -71,7 +71,7 @@ impl<T> TxRw<'_, T> {
 }
 
 impl<T: ReadOps> ReadOps for TxRw<'_, T> {
-    fn get(&self, map_id: DbMapId, key: &[u8]) -> crate::Result<Option<Cow<[u8]>>> {
+    fn get(&self, map_id: DbMapId, key: &[u8]) -> crate::Result<Option<Cow<'_, [u8]>>> {
         self.deltas[map_id].get(key).map_or_else(
             || self.db.get(map_id, key),
             |x| Ok(x.as_deref().map(|p| p.into())),

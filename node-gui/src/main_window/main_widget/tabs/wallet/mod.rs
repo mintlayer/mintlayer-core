@@ -478,7 +478,7 @@ impl Tab for WalletTab {
         TabLabel::IconText(iced_fonts::Bootstrap::Wallet.into(), text.to_owned())
     }
 
-    fn content(&self, node_state: &NodeState) -> Element<Self::Message> {
+    fn content(&self, node_state: &NodeState) -> Element<'_, Self::Message> {
         let wallet_info = match node_state.wallets.get(&self.wallet_id) {
             Some(wallet_info) => wallet_info,
             None => return Text::new("No wallet").into(),
