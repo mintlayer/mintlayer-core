@@ -86,7 +86,7 @@ pub enum InputInfo<'a> {
 }
 
 pub trait InputInfoProvider {
-    fn input_info(&self) -> &InputInfo;
+    fn input_info(&self) -> &InputInfo<'_>;
     fn witness(&self) -> &InputWitness;
 }
 

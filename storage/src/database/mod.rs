@@ -101,13 +101,13 @@ impl<B: Backend, Sch: Schema> Storage<B, Sch> {
 
 pub trait MakeMapRef<'tx, B: Backend, Sch: Schema>: TxImpl + Sized {
     /// Get key-value map immutably (key-to-single-value only for now)
-    fn get<DbMap: schema::DbMap, I>(&self) -> MapRef<Self, DbMap>
+    fn get<DbMap: schema::DbMap, I>(&self) -> MapRef<'_, Self, DbMap>
     where
         Sch: schema::HasDbMap<DbMap, I>;
 }
 
 impl<'tx, B: Backend, Sch: Schema> MakeMapRef<'tx, B, Sch> for TransactionRo<'tx, B, Sch> {
-    fn get<DbMap: schema::DbMap, I>(&self) -> MapRef<Self, DbMap>
+    fn get<DbMap: schema::DbMap, I>(&self) -> MapRef<'_, Self, DbMap>
     where
         Sch: schema::HasDbMap<DbMap, I>,
     {
@@ -116,7 +116,7 @@ impl<'tx, B: Backend, Sch: Schema> MakeMapRef<'tx, B, Sch> for TransactionRo<'tx
 }
 
 impl<'tx, B: Backend, Sch: Schema> MakeMapRef<'tx, B, Sch> for TransactionRw<'tx, B, Sch> {
-    fn get<DbMap: schema::DbMap, I>(&self) -> MapRef<Self, DbMap>
+    fn get<DbMap: schema::DbMap, I>(&self) -> MapRef<'_, Self, DbMap>
     where
         Sch: schema::HasDbMap<DbMap, I>,
     {
@@ -150,7 +150,7 @@ pub struct TransactionRw<'tx, B: Backend, Sch> {
 
 impl<B: Backend, Sch: Schema> TransactionRw<'_, B, Sch> {
     /// Get key-value map mutably (key-to-single-value only for now)
-    pub fn get_mut<DbMap: schema::DbMap, I>(&mut self) -> MapMut<Self, DbMap>
+    pub fn get_mut<DbMap: schema::DbMap, I>(&mut self) -> MapMut<'_, Self, DbMap>
     where
         Sch: schema::HasDbMap<DbMap, I>,
     {
@@ -195,7 +195,7 @@ where
     pub fn get<K: EncodeLike<DbMap::Key>>(
         &self,
         key: K,
-    ) -> crate::Result<Option<Encoded<Cow<[u8]>, DbMap::Value>>> {
+    ) -> crate::Result<Option<Encoded<Cow<'_, [u8]>, DbMap::Value>>> {
         internal::get::<DbMap, _, _>(self.dbtx, self.map_id, key)
     }
 
@@ -292,7 +292,7 @@ where
     pub fn get<K: EncodeLike<DbMap::Key>>(
         &self,
         key: K,
-    ) -> crate::Result<Option<Encoded<Cow<[u8]>, DbMap::Value>>> {
+    ) -> crate::Result<Option<Encoded<Cow<'_, [u8]>, DbMap::Value>>> {
         internal::get::<DbMap, _, _>(self.dbtx, self.map_id, key)
     }
 

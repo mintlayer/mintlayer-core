@@ -826,7 +826,7 @@ impl MainWindow {
         }
     }
 
-    pub fn view(&self) -> Element<MainWindowMessage> {
+    pub fn view(&self) -> Element<'_, MainWindowMessage> {
         let main_content = iced::widget::column![
             self.main_menu.view().map(MainWindowMessage::MenuMessage),
             self.main_widget

@@ -73,7 +73,7 @@ impl Drop for DbTx<'_> {
 }
 
 impl backend::ReadOps for DbTx<'_> {
-    fn get(&self, map_id: DbMapId, key: &[u8]) -> storage_core::Result<Option<Cow<[u8]>>> {
+    fn get(&self, map_id: DbMapId, key: &[u8]) -> storage_core::Result<Option<Cow<'_, [u8]>>> {
         let mut stmt = self
             .connection
             .prepare_cached(self.queries[map_id].get_query())

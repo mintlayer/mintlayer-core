@@ -75,7 +75,7 @@ impl<Message> Component<Message, Theme, iced::Renderer> for ConfirmBroadcast<Mes
         }
     }
 
-    fn view(&self, _state: &Self::State) -> Element<Self::Event, Theme, iced::Renderer> {
+    fn view(&self, _state: &Self::State) -> Element<'_, Self::Event, Theme, iced::Renderer> {
         let summary = self.tx.text_summary(&self.chain_config);
 
         let button = Button::new(Text::new("Confirm and broadcast").align_x(Horizontal::Center))

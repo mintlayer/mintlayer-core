@@ -231,7 +231,7 @@ where
     O: OrdersAccountingView,
     <S as utxo::UtxosStorageRead>::Error: From<U::Error>,
 {
-    pub fn derive_child(&self) -> DerivedTxVerifier<C, S, U, A, T, O> {
+    pub fn derive_child(&self) -> DerivedTxVerifier<'_, C, S, U, A, T, O> {
         TransactionVerifier {
             storage: self,
             chain_config: self.chain_config.as_ref(),

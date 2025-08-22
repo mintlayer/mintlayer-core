@@ -70,7 +70,7 @@ impl<Message> Component<Message, Theme, iced::Renderer> for WalletUnlockDialog<M
         }
     }
 
-    fn view(&self, state: &Self::State) -> Element<Self::Event, Theme, iced::Renderer> {
+    fn view(&self, state: &Self::State) -> Element<'_, Self::Event, Theme, iced::Renderer> {
         let container = match state.unlocking {
             true => container(text("Unlocking...")),
             false => {

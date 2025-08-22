@@ -222,7 +222,7 @@ impl<'a> PerInputData<'a> {
 }
 
 impl mintscript::translate::InputInfoProvider for PerInputData<'_> {
-    fn input_info(&self) -> &InputInfo {
+    fn input_info(&self) -> &InputInfo<'_> {
         &self.input
     }
 
@@ -260,7 +260,7 @@ impl<'a, AV, TV, OV> TranslationContextFull<'a, AV, TV, OV> {
 impl<AV, TV, OV> mintscript::translate::InputInfoProvider
     for TranslationContextFull<'_, AV, TV, OV>
 {
-    fn input_info(&self) -> &InputInfo {
+    fn input_info(&self) -> &InputInfo<'_> {
         self.input.input_info()
     }
 
@@ -362,11 +362,11 @@ impl<'a> CoreContext<'a> {
         Ok(Self { inputs_and_sigs })
     }
 
-    fn input_data(&self, n: usize) -> &PerInputData {
+    fn input_data(&self, n: usize) -> &PerInputData<'_> {
         &self.inputs_and_sigs[n]
     }
 
-    fn inputs_iter(&self) -> impl ExactSizeIterator<Item = (usize, &PerInputData)> {
+    fn inputs_iter(&self) -> impl ExactSizeIterator<Item = (usize, &PerInputData<'_>)> {
         self.inputs_and_sigs.iter().enumerate()
     }
 }
@@ -479,7 +479,7 @@ impl<'a, S> InputVerifyContextTimelock<'a, S> {
         Self { ctx, input_num }
     }
 
-    fn info(&self) -> &InputInfo {
+    fn info(&self) -> &InputInfo<'_> {
         self.ctx.core_ctx.input_data(self.input_num).input_info()
     }
 }
@@ -612,7 +612,7 @@ impl<T: Transactable, S> SignatureContext for InputVerifyContextFull<'_, T, S> {
         self.ctx.transaction
     }
 
-    fn input_commitments(&self) -> &[SighashInputCommitment] {
+    fn input_commitments(&self) -> &[SighashInputCommitment<'_>] {
         &self.ctx.input_commitments
     }
 

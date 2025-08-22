@@ -168,7 +168,7 @@ impl<T: backend::TxRw> backend::TxRw for TxRw<'_, T> {
 }
 
 impl<T: backend::ReadOps> backend::ReadOps for TxRw<'_, T> {
-    fn get(&self, map_id: DbMapId, key: &[u8]) -> storage_core::Result<Option<Cow<[u8]>>> {
+    fn get(&self, map_id: DbMapId, key: &[u8]) -> storage_core::Result<Option<Cow<'_, [u8]>>> {
         self.inner.get(map_id, key)
     }
 

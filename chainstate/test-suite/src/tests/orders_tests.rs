@@ -1786,7 +1786,7 @@ fn create_order_with_nft(#[case] seed: Seed, #[case] version: OrdersVersion) {
         let token_id = make_token_id(
             tf.chain_config(),
             tf.next_block_height(),
-            &[genesis_input.clone()],
+            std::slice::from_ref(&genesis_input),
         )
         .unwrap();
         let nft_issuance = random_nft_issuance(tf.chain_config(), &mut rng);
@@ -1949,7 +1949,7 @@ fn partially_fill_order_with_nft_v0(#[case] seed: Seed) {
         let token_id = make_token_id(
             tf.chain_config(),
             tf.next_block_height(),
-            &[genesis_input.clone()],
+            std::slice::from_ref(&genesis_input),
         )
         .unwrap();
         let nft_issuance = random_nft_issuance(tf.chain_config(), &mut rng);
@@ -2158,7 +2158,7 @@ fn partially_fill_order_with_nft_v1(#[case] seed: Seed) {
         let token_id = make_token_id(
             tf.chain_config(),
             tf.next_block_height(),
-            &[genesis_input.clone()],
+            std::slice::from_ref(&genesis_input),
         )
         .unwrap();
         let nft_issuance = random_nft_issuance(tf.chain_config(), &mut rng);

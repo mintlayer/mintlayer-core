@@ -594,7 +594,7 @@ impl TestFixture {
         let token_id = make_token_id(
             self.tfrm.chain_config(),
             self.tfrm.next_block_height(),
-            &[input.clone()],
+            std::slice::from_ref(&input),
         )
         .unwrap();
 

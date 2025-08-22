@@ -54,7 +54,7 @@ mod well_known {
     use common::chain::block::timestamp::BlockTimestamp;
     use crypto::kdf::KdfChallenge;
     use wallet_types::hw_data;
-    use wallet_types::{account_info::AccountVrfKeys, chain_info::ChainInfo, wallet_type};
+    use wallet_types::{chain_info::ChainInfo, wallet_type};
 
     use super::Codec;
 
@@ -81,7 +81,6 @@ mod well_known {
     declare_entry!(MedianTime: BlockTimestamp);
     declare_entry!(StoreChainInfo: ChainInfo);
     declare_entry!(LookaheadSize: u32);
-    declare_entry!(LegacyVfrPubKey: AccountVrfKeys);
     declare_entry!(WalletType: wallet_type::WalletType);
     declare_entry!(HardwareWalletData: hw_data::HardwareWalletData);
 }

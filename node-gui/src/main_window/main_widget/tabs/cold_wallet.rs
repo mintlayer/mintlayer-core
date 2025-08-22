@@ -47,7 +47,7 @@ impl Tab for ColdWalletTab {
         )
     }
 
-    fn content(&self, node_state: &NodeState) -> Element<Self::Message> {
+    fn content(&self, node_state: &NodeState) -> Element<'_, Self::Message> {
         let network_type = get_network_type_capitalized(node_state.chain_config());
 
         let msg = format!("Running in cold wallet mode on {network_type}\nOpen a wallet from the file menu to start");

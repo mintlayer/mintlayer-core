@@ -69,7 +69,7 @@ impl<Message> Component<Message, Theme, iced::Renderer> for CreateHwWalletDialog
         }
     }
 
-    fn view(&self, state: &Self::State) -> Element<Self::Event, Theme, iced::Renderer> {
+    fn view(&self, state: &Self::State) -> Element<'_, Self::Event, Theme, iced::Renderer> {
         let button = Button::new(Text::new("Select file").align_x(Horizontal::Center))
             .width(100.0)
             .on_press(ImportEvent::Ok);

@@ -2915,7 +2915,7 @@ fn issue_and_mint_same_tx(#[case] seed: Seed) {
         let token_id = make_token_id(
             tf.chain_config().as_ref(),
             tf.next_block_height(),
-            &[first_tx_input.clone()],
+            std::slice::from_ref(&first_tx_input),
         )
         .unwrap();
 

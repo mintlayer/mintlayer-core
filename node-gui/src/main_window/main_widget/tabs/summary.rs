@@ -57,7 +57,7 @@ impl Tab for SummaryTab {
         TabLabel::IconText(iced_fonts::Bootstrap::Info.into(), String::from("Summary"))
     }
 
-    fn content(&self, node_state: &NodeState) -> Element<Self::Message> {
+    fn content(&self, node_state: &NodeState) -> Element<'_, Self::Message> {
         let network_type = get_network_type_capitalized(node_state.chain_config());
         let chainstate = Grid::new()
             .push(

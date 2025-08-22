@@ -1795,7 +1795,7 @@ fn spend_from_user_specified_utxos(#[case] seed: Seed) {
         assert_eq!(err, WalletError::CannotFindUtxo(missing_utxo.clone()));
 
         let err = wallet
-            .find_used_tokens(DEFAULT_ACCOUNT_INDEX, &[missing_utxo.clone()])
+            .find_used_tokens(DEFAULT_ACCOUNT_INDEX, std::slice::from_ref(&missing_utxo))
             .unwrap_err();
 
         assert_eq!(err, WalletError::CannotFindUtxo(missing_utxo));

@@ -91,7 +91,7 @@ impl Tab for SettingsTab {
         TabLabel::IconText(iced_fonts::Bootstrap::Gear.into(), String::from("Settings"))
     }
 
-    fn content(&self, _node_state: &NodeState) -> Element<Self::Message> {
+    fn content(&self, _node_state: &NodeState) -> Element<'_, Self::Message> {
         let content: Element<SettingsMessage> = Container::new(
             Column::new().push(Text::new("Tabs position").size(20)).push(
                 TabBarPosition::ALL.iter().cloned().fold(

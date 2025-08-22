@@ -22,13 +22,13 @@ use std::fmt::Display;
 /// The trait is particularly useful for logging types like `Id`, whose `Display` representation
 /// is much more compact than `Debug`.
 pub trait DisplayableOption<T> {
-    fn as_displayable(&self) -> DisplayableOptionWrapper<T>;
+    fn as_displayable(&self) -> DisplayableOptionWrapper<'_, T>;
 }
 
 pub struct DisplayableOptionWrapper<'a, T>(Option<&'a T>);
 
 impl<T> DisplayableOption<T> for Option<T> {
-    fn as_displayable(&self) -> DisplayableOptionWrapper<T> {
+    fn as_displayable(&self) -> DisplayableOptionWrapper<'_, T> {
         DisplayableOptionWrapper(self.as_ref())
     }
 }
