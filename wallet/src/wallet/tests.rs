@@ -1022,8 +1022,8 @@ fn test_wallet_accounts<B, P>(
     assert_eq!(accounts, expected_accounts);
 }
 
-#[test]
-fn wallet_accounts_creation() {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn wallet_accounts_creation() {
     let chain_config = Arc::new(create_mainnet());
 
     let mut wallet = create_wallet(chain_config.clone());
@@ -1059,6 +1059,7 @@ fn wallet_accounts_creation() {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             TxAdditionalInfo::new(),
         )
+        .await
         .unwrap()
         .tx;
 
@@ -1183,7 +1184,8 @@ fn wallet_recover_new_account(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn locked_wallet_cant_sign_transaction(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn locked_wallet_cant_sign_transaction(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_mainnet());
 
@@ -1211,18 +1213,20 @@ fn locked_wallet_cant_sign_transaction(#[case] seed: Seed) {
     );
 
     assert_eq!(
-        wallet.create_transaction_to_addresses(
-            DEFAULT_ACCOUNT_INDEX,
-            [new_output.clone()],
-            SelectedInputs::Utxos(vec![]),
-            BTreeMap::new(),
-            FeeRate::from_amount_per_kb(Amount::ZERO),
-            FeeRate::from_amount_per_kb(Amount::ZERO),
-            TxAdditionalInfo::new(),
-        ),
-        Err(WalletError::DatabaseError(
-            wallet_storage::Error::WalletLocked
-        ))
+        wallet
+            .create_transaction_to_addresses(
+                DEFAULT_ACCOUNT_INDEX,
+                [new_output.clone()],
+                SelectedInputs::Utxos(vec![]),
+                BTreeMap::new(),
+                FeeRate::from_amount_per_kb(Amount::ZERO),
+                FeeRate::from_amount_per_kb(Amount::ZERO),
+                TxAdditionalInfo::new(),
+            )
+            .await,
+        Err(WalletError::SignerError(SignerError::KeyChainError(
+            KeyChainError::DatabaseError(wallet_storage::Error::WalletLocked)
+        )))
     );
 
     // success after unlock
@@ -1238,6 +1242,7 @@ fn locked_wallet_cant_sign_transaction(#[case] seed: Seed) {
                 FeeRate::from_amount_per_kb(Amount::ZERO),
                 TxAdditionalInfo::new(),
             )
+            .await
             .unwrap();
     } else {
         // check if we remove the password it should fail to lock
@@ -1268,6 +1273,7 @@ fn locked_wallet_cant_sign_transaction(#[case] seed: Seed) {
                 FeeRate::from_amount_per_kb(Amount::ZERO),
                 TxAdditionalInfo::new(),
             )
+            .await
             .unwrap();
     }
 }
@@ -1275,7 +1281,8 @@ fn locked_wallet_cant_sign_transaction(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn locked_wallet_standalone_keys(
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn locked_wallet_standalone_keys(
     #[case] seed: Seed,
     #[values(true, false)] insert_before_encrypt: bool,
     #[values(true, false)] change_password: bool,
@@ -1382,18 +1389,20 @@ fn locked_wallet_standalone_keys(
     );
 
     assert_eq!(
-        wallet.create_transaction_to_addresses(
-            DEFAULT_ACCOUNT_INDEX,
-            [new_output.clone()],
-            SelectedInputs::Utxos(vec![]),
-            BTreeMap::new(),
-            FeeRate::from_amount_per_kb(Amount::ZERO),
-            FeeRate::from_amount_per_kb(Amount::ZERO),
-            TxAdditionalInfo::new(),
-        ),
-        Err(WalletError::DatabaseError(
+        wallet
+            .create_transaction_to_addresses(
+                DEFAULT_ACCOUNT_INDEX,
+                [new_output.clone()],
+                SelectedInputs::Utxos(vec![]),
+                BTreeMap::new(),
+                FeeRate::from_amount_per_kb(Amount::ZERO),
+                FeeRate::from_amount_per_kb(Amount::ZERO),
+                TxAdditionalInfo::new(),
+            )
+            .await,
+        Err(WalletError::SignerError(SignerError::DatabaseError(
             wallet_storage::Error::WalletLocked
-        ))
+        )))
     );
 
     // success after unlock
@@ -1408,13 +1417,15 @@ fn locked_wallet_standalone_keys(
             FeeRate::from_amount_per_kb(Amount::ZERO),
             TxAdditionalInfo::new(),
         )
+        .await
         .unwrap();
 }
 
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn wallet_get_transaction(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn wallet_get_transaction(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_mainnet());
 
@@ -1436,6 +1447,7 @@ fn wallet_get_transaction(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             TxAdditionalInfo::new(),
         )
+        .await
         .unwrap()
         .tx;
 
@@ -1473,7 +1485,8 @@ fn wallet_get_transaction(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn wallet_list_mainchain_transactions(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn wallet_list_mainchain_transactions(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_regtest());
 
@@ -1497,6 +1510,7 @@ fn wallet_list_mainchain_transactions(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             TxAdditionalInfo::new(),
         )
+        .await
         .unwrap()
         .tx;
 
@@ -1521,6 +1535,7 @@ fn wallet_list_mainchain_transactions(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             TxAdditionalInfo::new(),
         )
+        .await
         .unwrap()
         .tx;
     let spend_from_tx_id = tx.transaction().get_id();
@@ -1553,7 +1568,8 @@ fn wallet_list_mainchain_transactions(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn wallet_transactions_with_fees(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn wallet_transactions_with_fees(#[case] seed: Seed) {
     use crate::destination_getters::{get_tx_output_destination, HtlcSpendingCondition};
 
     let mut rng = make_seedable_rng(seed);
@@ -1589,6 +1605,7 @@ fn wallet_transactions_with_fees(#[case] seed: Seed) {
                 very_big_feerate,
                 TxAdditionalInfo::new(),
             )
+            .await
             .unwrap_err();
 
         match err {
@@ -1630,6 +1647,7 @@ fn wallet_transactions_with_fees(#[case] seed: Seed) {
             feerate,
             TxAdditionalInfo::new(),
         )
+        .await
         .unwrap();
 
     let tx_size = serialization::Encode::encoded_size(&tx);
@@ -1686,6 +1704,7 @@ fn wallet_transactions_with_fees(#[case] seed: Seed) {
             feerate,
             TxAdditionalInfo::new(),
         )
+        .await
         .unwrap();
 
     let tx_size = serialization::Encode::encoded_size(&tx);
@@ -1738,7 +1757,8 @@ fn lock_wallet_fail_empty_password() {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn spend_from_user_specified_utxos(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn spend_from_user_specified_utxos(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_mainnet());
 
@@ -1791,6 +1811,7 @@ fn spend_from_user_specified_utxos(#[case] seed: Seed) {
                 FeeRate::from_amount_per_kb(Amount::ZERO),
                 TxAdditionalInfo::new(),
             )
+            .await
             .unwrap_err();
         assert_eq!(err, WalletError::CannotFindUtxo(missing_utxo.clone()));
 
@@ -1818,6 +1839,7 @@ fn spend_from_user_specified_utxos(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             TxAdditionalInfo::new(),
         )
+        .await
         .unwrap()
         .tx;
 
@@ -1857,6 +1879,7 @@ fn spend_from_user_specified_utxos(#[case] seed: Seed) {
                 FeeRate::from_amount_per_kb(Amount::ZERO),
                 TxAdditionalInfo::new(),
             )
+            .await
             .unwrap_err();
 
         assert_eq!(
@@ -1869,7 +1892,10 @@ fn spend_from_user_specified_utxos(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
+    use crypto::vrf::transcript::no_rng::VRFTranscript;
+
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_regtest());
 
@@ -1911,6 +1937,7 @@ fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
                 vrf_public_key: None,
             },
         )
+        .await
         .unwrap_err();
     assert_eq!(err, WalletError::VrfKeyMustBeProvided);
 
@@ -1928,8 +1955,10 @@ fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
                 vrf_public_key: None,
             },
         )
+        .await
         .unwrap()
         .tx;
+
     let stake_pool_transaction_id = stake_pool_transaction.transaction().get_id();
     let (addr, block2) = create_block(
         &chain_config,
@@ -2027,6 +2056,7 @@ fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
             None,
             FeeRate::from_amount_per_kb(Amount::from_atoms(0)),
         )
+        .await
         .unwrap()
         .tx;
 
@@ -2058,7 +2088,8 @@ fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn create_stake_pool_for_different_wallet_and_list_pool_ids(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn create_stake_pool_for_different_wallet_and_list_pool_ids(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_regtest());
 
@@ -2116,6 +2147,7 @@ fn create_stake_pool_for_different_wallet_and_list_pool_ids(#[case] seed: Seed) 
                 vrf_public_key: Some(staker_vrf_public_key.clone()),
             },
         )
+        .await
         .unwrap_err();
     assert_eq!(err, WalletError::StakerDestinationMustBePublicKey);
 
@@ -2139,6 +2171,7 @@ fn create_stake_pool_for_different_wallet_and_list_pool_ids(#[case] seed: Seed) 
                 vrf_public_key: Some(staker_vrf_public_key.clone()),
             },
         )
+        .await
         .unwrap()
         .tx;
     let stake_pool_transaction_id = stake_pool_transaction.transaction().get_id();
@@ -2157,6 +2190,7 @@ fn create_stake_pool_for_different_wallet_and_list_pool_ids(#[case] seed: Seed) 
                 vrf_public_key: Some(staker_vrf_public_key.clone()),
             },
         )
+        .await
         .unwrap()
         .tx;
     let stake_pool_transaction_id2 = stake_pool_transaction2.transaction().get_id();
@@ -2298,6 +2332,7 @@ fn create_stake_pool_for_different_wallet_and_list_pool_ids(#[case] seed: Seed) 
             None,
             FeeRate::from_amount_per_kb(Amount::from_atoms(0)),
         )
+        .await
         .unwrap()
         .tx;
 
@@ -2324,7 +2359,8 @@ fn create_stake_pool_for_different_wallet_and_list_pool_ids(#[case] seed: Seed) 
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn reset_keys_after_failed_transaction(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn reset_keys_after_failed_transaction(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_mainnet());
 
@@ -2347,19 +2383,21 @@ fn reset_keys_after_failed_transaction(#[case] seed: Seed) {
         .unwrap()
         .last_issued();
 
-    let result = wallet.create_stake_pool(
-        DEFAULT_ACCOUNT_INDEX,
-        FeeRate::from_amount_per_kb(Amount::ZERO),
-        FeeRate::from_amount_per_kb(Amount::ZERO),
-        StakePoolCreationArguments {
-            amount: not_enough,
-            margin_ratio_per_thousand: PerThousand::new_from_rng(&mut rng),
-            cost_per_block: Amount::ZERO,
-            decommission_key: Destination::AnyoneCanSpend,
-            staker_key: None,
-            vrf_public_key: None,
-        },
-    );
+    let result = wallet
+        .create_stake_pool(
+            DEFAULT_ACCOUNT_INDEX,
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            StakePoolCreationArguments {
+                amount: not_enough,
+                margin_ratio_per_thousand: PerThousand::new_from_rng(&mut rng),
+                cost_per_block: Amount::ZERO,
+                decommission_key: Destination::AnyoneCanSpend,
+                staker_key: None,
+                vrf_public_key: None,
+            },
+        )
+        .await;
     // check that result is an error and we last issued address is still the same
     assert!(result.is_err());
     assert_eq!(
@@ -2374,7 +2412,8 @@ fn reset_keys_after_failed_transaction(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn send_to_unknown_delegation(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn send_to_unknown_delegation(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_mainnet());
 
@@ -2439,6 +2478,7 @@ fn send_to_unknown_delegation(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .await
         .map(|(id, tx)| (id, tx.tx))
         .unwrap();
 
@@ -2473,6 +2513,7 @@ fn send_to_unknown_delegation(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             TxAdditionalInfo::new(),
         )
+        .await
         .unwrap()
         .tx;
 
@@ -2514,6 +2555,7 @@ fn send_to_unknown_delegation(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .await
         .map(|(id, tx)| (id, tx.tx))
         .unwrap();
 
@@ -2539,7 +2581,8 @@ fn send_to_unknown_delegation(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn create_spend_from_delegations(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn create_spend_from_delegations(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_mainnet());
 
@@ -2575,6 +2618,7 @@ fn create_spend_from_delegations(#[case] seed: Seed) {
                 vrf_public_key: None,
             },
         )
+        .await
         .unwrap()
         .tx;
 
@@ -2603,6 +2647,7 @@ fn create_spend_from_delegations(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .await
         .map(|(id, tx)| (id, tx.tx))
         .unwrap();
 
@@ -2633,6 +2678,7 @@ fn create_spend_from_delegations(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             TxAdditionalInfo::new(),
         )
+        .await
         .unwrap()
         .tx;
 
@@ -2653,6 +2699,7 @@ fn create_spend_from_delegations(#[case] seed: Seed) {
             Amount::from_atoms(2),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .await
         .unwrap()
         .tx;
 
@@ -2686,6 +2733,7 @@ fn create_spend_from_delegations(#[case] seed: Seed) {
             Amount::from_atoms(1),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .await
         .unwrap()
         .tx;
     wallet
@@ -2758,6 +2806,7 @@ fn create_spend_from_delegations(#[case] seed: Seed) {
             Amount::from_atoms(1),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .await
         .unwrap()
         .tx;
     wallet
@@ -2785,7 +2834,8 @@ fn create_spend_from_delegations(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn issue_and_transfer_tokens(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn issue_and_transfer_tokens(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_mainnet());
 
@@ -2859,6 +2909,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
                 FeeRate::from_amount_per_kb(Amount::ZERO),
                 FeeRate::from_amount_per_kb(Amount::ZERO),
             )
+            .await
             .map(|(id, tx)| (id, tx.tx))
             .unwrap();
 
@@ -2905,6 +2956,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
                 FeeRate::from_amount_per_kb(Amount::ZERO),
                 TxAdditionalInfo::new(),
             )
+            .await
             .unwrap()
             .tx;
         wallet
@@ -2927,6 +2979,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
                 FeeRate::from_amount_per_kb(Amount::ZERO),
                 FeeRate::from_amount_per_kb(Amount::ZERO),
             )
+            .await
             .unwrap()
             .tx;
 
@@ -2954,6 +3007,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
                 FeeRate::from_amount_per_kb(Amount::ZERO),
                 FeeRate::from_amount_per_kb(Amount::ZERO),
             )
+            .await
             .map(|(id, tx)| (id, tx.tx))
             .unwrap();
         random_issuing_wallet
@@ -2973,6 +3027,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
                 FeeRate::from_amount_per_kb(Amount::ZERO),
                 TxAdditionalInfo::new(),
             )
+            .await
             .unwrap()
             .tx;
         (issued_token_id, vec![nft_issuance_transaction, transfer_tx])
@@ -3027,6 +3082,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             additional_info.clone(),
         )
+        .await
         .unwrap()
         .tx;
     wallet
@@ -3082,6 +3138,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             additional_info,
         )
+        .await
         .unwrap_err();
 
     let remaining_tokens = (token_amount_to_issue - tokens_to_transfer).unwrap();
@@ -3104,7 +3161,8 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn check_tokens_v0_are_ignored(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn check_tokens_v0_are_ignored(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_regtest());
 
@@ -3126,25 +3184,27 @@ fn check_tokens_v0_are_ignored(#[case] seed: Seed) {
     let address2 = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1;
     let token_ticker = "XXXX".as_bytes().to_vec();
     let number_of_decimals = rng.gen_range(1..18);
-    let result = wallet.create_transaction_to_addresses(
-        DEFAULT_ACCOUNT_INDEX,
-        [TxOutput::Transfer(
-            OutputValue::TokenV0(Box::new(TokenData::TokenIssuance(Box::new(
-                TokenIssuanceV0 {
-                    token_ticker,
-                    number_of_decimals,
-                    metadata_uri: "http://uri".as_bytes().to_vec(),
-                    amount_to_issue: Amount::from_atoms(rng.gen_range(1..10000)),
-                },
-            )))),
-            address2.into_object(),
-        )],
-        SelectedInputs::Utxos(vec![]),
-        BTreeMap::new(),
-        FeeRate::from_amount_per_kb(Amount::ZERO),
-        FeeRate::from_amount_per_kb(Amount::ZERO),
-        TxAdditionalInfo::new(),
-    );
+    let result = wallet
+        .create_transaction_to_addresses(
+            DEFAULT_ACCOUNT_INDEX,
+            [TxOutput::Transfer(
+                OutputValue::TokenV0(Box::new(TokenData::TokenIssuance(Box::new(
+                    TokenIssuanceV0 {
+                        token_ticker,
+                        number_of_decimals,
+                        metadata_uri: "http://uri".as_bytes().to_vec(),
+                        amount_to_issue: Amount::from_atoms(rng.gen_range(1..10000)),
+                    },
+                )))),
+                address2.into_object(),
+            )],
+            SelectedInputs::Utxos(vec![]),
+            BTreeMap::new(),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            TxAdditionalInfo::new(),
+        )
+        .await;
 
     matches!(
         result.unwrap_err(),
@@ -3162,7 +3222,8 @@ fn check_tokens_v0_are_ignored(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_regtest());
 
@@ -3199,6 +3260,7 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .await
         .map(|(id, tx)| (id, tx.tx))
         .unwrap();
 
@@ -3238,6 +3300,7 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .await
         .unwrap()
         .tx;
 
@@ -3255,6 +3318,7 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .await
         .unwrap()
         .tx;
 
@@ -3284,6 +3348,7 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .await
         .unwrap()
         .tx;
 
@@ -3356,6 +3421,7 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .await
         .unwrap()
         .tx;
 
@@ -3383,6 +3449,7 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             additional_info,
         )
+        .await
         .unwrap()
         .tx;
 
@@ -3418,6 +3485,7 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .await
         .unwrap_err();
     assert_eq!(err, WalletError::CannotFreezeAlreadyFrozenToken);
 
@@ -3429,6 +3497,7 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .await
         .unwrap_err();
     assert_eq!(err, WalletError::CannotUnfreezeToken);
 
@@ -3467,7 +3536,8 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn change_token_supply_fixed(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn change_token_supply_fixed(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_mainnet());
 
@@ -3503,6 +3573,7 @@ fn change_token_supply_fixed(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .await
         .map(|(id, tx)| (id, tx.tx))
         .unwrap();
 
@@ -3557,6 +3628,7 @@ fn change_token_supply_fixed(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .await
         .unwrap()
         .tx;
 
@@ -3579,6 +3651,7 @@ fn change_token_supply_fixed(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .await
         .unwrap_err();
 
     assert_eq!(
@@ -3657,6 +3730,7 @@ fn change_token_supply_fixed(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .await
         .unwrap_err();
     assert_eq!(
         err,
@@ -3673,6 +3747,7 @@ fn change_token_supply_fixed(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .await
         .unwrap()
         .tx;
 
@@ -3717,6 +3792,7 @@ fn change_token_supply_fixed(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .await
         .unwrap_err();
     assert_eq!(err, WalletError::CannotLockTokenSupply("Fixed"));
 }
@@ -3724,7 +3800,8 @@ fn change_token_supply_fixed(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn change_token_supply_unlimited(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn change_token_supply_unlimited(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_mainnet());
 
@@ -3759,6 +3836,7 @@ fn change_token_supply_unlimited(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .await
         .map(|(id, tx)| (id, tx.tx))
         .unwrap();
 
@@ -3814,6 +3892,7 @@ fn change_token_supply_unlimited(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .await
         .unwrap()
         .tx;
 
@@ -3855,6 +3934,7 @@ fn change_token_supply_unlimited(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .await
         .unwrap_err();
     assert_eq!(
         err,
@@ -3871,6 +3951,7 @@ fn change_token_supply_unlimited(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .await
         .unwrap()
         .tx;
     wallet
@@ -3914,6 +3995,7 @@ fn change_token_supply_unlimited(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .await
         .unwrap_err();
     assert_eq!(err, WalletError::CannotLockTokenSupply("Unlimited"));
 }
@@ -3921,7 +4003,8 @@ fn change_token_supply_unlimited(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn change_and_lock_token_supply_lockable(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn change_and_lock_token_supply_lockable(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_mainnet());
 
@@ -3956,6 +4039,7 @@ fn change_and_lock_token_supply_lockable(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .await
         .map(|(id, tx)| (id, tx.tx))
         .unwrap();
 
@@ -4011,6 +4095,7 @@ fn change_and_lock_token_supply_lockable(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .await
         .unwrap()
         .tx;
     wallet.add_unconfirmed_tx(mint_transaction.clone(), &WalletEventsNoOp).unwrap();
@@ -4051,6 +4136,7 @@ fn change_and_lock_token_supply_lockable(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .await
         .unwrap_err();
     assert_eq!(
         err,
@@ -4067,6 +4153,7 @@ fn change_and_lock_token_supply_lockable(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .await
         .unwrap()
         .tx;
 
@@ -4108,6 +4195,7 @@ fn change_and_lock_token_supply_lockable(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .await
         .unwrap()
         .tx;
 
@@ -4148,6 +4236,7 @@ fn change_and_lock_token_supply_lockable(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .await
         .unwrap_err();
     assert_eq!(err, WalletError::CannotChangeLockedTokenSupply);
     let err = wallet
@@ -4158,6 +4247,7 @@ fn change_and_lock_token_supply_lockable(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .await
         .unwrap_err();
     assert_eq!(err, WalletError::CannotChangeLockedTokenSupply);
 
@@ -4168,6 +4258,7 @@ fn change_and_lock_token_supply_lockable(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .await
         .unwrap_err();
     assert_eq!(err, WalletError::CannotLockTokenSupply("Locked"));
 }
@@ -4175,7 +4266,8 @@ fn change_and_lock_token_supply_lockable(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn lock_then_transfer(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn lock_then_transfer(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_mainnet());
 
@@ -4245,6 +4337,7 @@ fn lock_then_transfer(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             TxAdditionalInfo::new(),
         )
+        .await
         .unwrap()
         .tx;
     wallet
@@ -4319,7 +4412,8 @@ fn lock_then_transfer(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn wallet_multiple_transactions_in_single_block(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn wallet_multiple_transactions_in_single_block(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_mainnet());
 
@@ -4367,6 +4461,7 @@ fn wallet_multiple_transactions_in_single_block(#[case] seed: Seed) {
                 FeeRate::from_amount_per_kb(Amount::ZERO),
                 TxAdditionalInfo::new(),
             )
+            .await
             .unwrap()
             .tx;
         wallet.add_unconfirmed_tx(transaction.clone(), &WalletEventsNoOp).unwrap();
@@ -4395,7 +4490,8 @@ fn wallet_multiple_transactions_in_single_block(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_mainnet());
 
@@ -4456,6 +4552,7 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
                 FeeRate::from_amount_per_kb(Amount::ZERO),
                 TxAdditionalInfo::new(),
             )
+            .await
             .unwrap()
             .tx;
 
@@ -4492,6 +4589,7 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             TxAdditionalInfo::new(),
         )
+        .await
         .unwrap()
         .tx;
     wallet.add_unconfirmed_tx(transaction.clone(), &WalletEventsNoOp).unwrap();
@@ -4532,6 +4630,7 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             TxAdditionalInfo::new(),
         )
+        .await
         .unwrap_err();
     assert_eq!(
         err,
@@ -4558,6 +4657,7 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             TxAdditionalInfo::new(),
         )
+        .await
         .unwrap()
         .tx;
     wallet.add_unconfirmed_tx(transaction.clone(), &WalletEventsNoOp).unwrap();
@@ -4581,7 +4681,8 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn wallet_abandon_transactions(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn wallet_abandon_transactions(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_mainnet());
 
@@ -4640,6 +4741,7 @@ fn wallet_abandon_transactions(#[case] seed: Seed) {
                 FeeRate::from_amount_per_kb(Amount::ZERO),
                 TxAdditionalInfo::new(),
             )
+            .await
             .unwrap()
             .tx;
         wallet
@@ -4833,7 +4935,8 @@ fn wallet_set_lookahead_size(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn decommission_pool_wrong_account(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn decommission_pool_wrong_account(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_regtest());
 
@@ -4876,6 +4979,7 @@ fn decommission_pool_wrong_account(#[case] seed: Seed) {
                 vrf_public_key: None,
             },
         )
+        .await
         .unwrap()
         .tx;
     let _ = create_block(
@@ -4891,13 +4995,15 @@ fn decommission_pool_wrong_account(#[case] seed: Seed) {
 
     // Try to decommission the pool with default account
     let pool_id = pool_ids.first().unwrap().0;
-    let decommission_cmd_res = wallet.decommission_stake_pool(
-        acc_0_index,
-        pool_id,
-        pool_amount,
-        None,
-        FeeRate::from_amount_per_kb(Amount::from_atoms(0)),
-    );
+    let decommission_cmd_res = wallet
+        .decommission_stake_pool(
+            acc_0_index,
+            pool_id,
+            pool_amount,
+            None,
+            FeeRate::from_amount_per_kb(Amount::from_atoms(0)),
+        )
+        .await;
     assert_eq!(
         decommission_cmd_res.unwrap_err(),
         WalletError::PartiallySignedTransactionInDecommissionCommand
@@ -4912,6 +5018,7 @@ fn decommission_pool_wrong_account(#[case] seed: Seed) {
             None,
             FeeRate::from_amount_per_kb(Amount::from_atoms(0)),
         )
+        .await
         .unwrap()
         .tx;
 
@@ -4930,7 +5037,8 @@ fn decommission_pool_wrong_account(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn decommission_pool_request_wrong_account(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn decommission_pool_request_wrong_account(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_mainnet());
 
@@ -4973,6 +5081,7 @@ fn decommission_pool_request_wrong_account(#[case] seed: Seed) {
                 vrf_public_key: None,
             },
         )
+        .await
         .unwrap()
         .tx;
     let _ = create_block(
@@ -4988,13 +5097,15 @@ fn decommission_pool_request_wrong_account(#[case] seed: Seed) {
 
     // Try to create decommission request from account that holds the key
     let pool_id = pool_ids.first().unwrap().0;
-    let decommission_req_res = wallet.decommission_stake_pool_request(
-        acc_1_index,
-        pool_id,
-        pool_amount,
-        None,
-        FeeRate::from_amount_per_kb(Amount::from_atoms(0)),
-    );
+    let decommission_req_res = wallet
+        .decommission_stake_pool_request(
+            acc_1_index,
+            pool_id,
+            pool_amount,
+            None,
+            FeeRate::from_amount_per_kb(Amount::from_atoms(0)),
+        )
+        .await;
     assert_eq!(
         decommission_req_res.unwrap_err(),
         WalletError::FullySignedTransactionInDecommissionReq
@@ -5008,6 +5119,7 @@ fn decommission_pool_request_wrong_account(#[case] seed: Seed) {
             None,
             FeeRate::from_amount_per_kb(Amount::from_atoms(0)),
         )
+        .await
         .unwrap();
     assert!(!decommission_partial_tx.all_signatures_available());
     matches!(
@@ -5019,7 +5131,8 @@ fn decommission_pool_request_wrong_account(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn sign_decommission_pool_request_between_accounts(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn sign_decommission_pool_request_between_accounts(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_regtest());
 
@@ -5063,6 +5176,7 @@ fn sign_decommission_pool_request_between_accounts(#[case] seed: Seed) {
                 vrf_public_key: None,
             },
         )
+        .await
         .unwrap()
         .tx;
 
@@ -5080,6 +5194,7 @@ fn sign_decommission_pool_request_between_accounts(#[case] seed: Seed) {
     .unwrap();
     let stake_pool_transaction = wallet
         .sign_raw_transaction(acc_0_index, ptx)
+        .await
         .unwrap()
         .0
         .into_signed_tx()
@@ -5107,11 +5222,13 @@ fn sign_decommission_pool_request_between_accounts(#[case] seed: Seed) {
             None,
             FeeRate::from_amount_per_kb(Amount::from_atoms(0)),
         )
+        .await
         .unwrap();
 
     // Try to sign decommission request with wrong account
     let sign_from_acc0_res = wallet
         .sign_raw_transaction(acc_0_index, decommission_partial_tx.clone())
+        .await
         .unwrap()
         .0;
     // the tx is still not fully signed
@@ -5119,6 +5236,7 @@ fn sign_decommission_pool_request_between_accounts(#[case] seed: Seed) {
 
     let signed_tx = wallet
         .sign_raw_transaction(acc_1_index, decommission_partial_tx)
+        .await
         .unwrap()
         .0
         .into_signed_tx()
@@ -5134,7 +5252,8 @@ fn sign_decommission_pool_request_between_accounts(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn sign_decommission_pool_request_cold_wallet(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn sign_decommission_pool_request_cold_wallet(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_regtest());
 
@@ -5178,6 +5297,7 @@ fn sign_decommission_pool_request_cold_wallet(#[case] seed: Seed) {
                 vrf_public_key: None,
             },
         )
+        .await
         .unwrap()
         .tx;
     let _ = create_block(
@@ -5200,11 +5320,13 @@ fn sign_decommission_pool_request_cold_wallet(#[case] seed: Seed) {
             None,
             FeeRate::from_amount_per_kb(Amount::from_atoms(0)),
         )
+        .await
         .unwrap();
 
     // sign the tx with cold wallet
     let partially_signed_transaction = cold_wallet
         .sign_raw_transaction(DEFAULT_ACCOUNT_INDEX, decommission_partial_tx)
+        .await
         .unwrap()
         .0;
     assert!(partially_signed_transaction.all_signatures_available());
@@ -5213,6 +5335,7 @@ fn sign_decommission_pool_request_cold_wallet(#[case] seed: Seed) {
     // destinations for the inputs
     let partially_signed_transaction = hot_wallet
         .sign_raw_transaction(DEFAULT_ACCOUNT_INDEX, partially_signed_transaction)
+        .await
         .unwrap()
         .0;
     assert!(partially_signed_transaction.all_signatures_available());
@@ -5234,7 +5357,8 @@ fn sign_decommission_pool_request_cold_wallet(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn filter_pools(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn filter_pools(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_regtest());
 
@@ -5276,6 +5400,7 @@ fn filter_pools(#[case] seed: Seed) {
                 vrf_public_key: None,
             },
         )
+        .await
         .unwrap()
         .tx;
     // sync for wallet1
@@ -5323,7 +5448,8 @@ fn filter_pools(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn sign_send_request_cold_wallet(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn sign_send_request_cold_wallet(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_regtest());
 
@@ -5378,6 +5504,7 @@ fn sign_send_request_cold_wallet(#[case] seed: Seed) {
     // Try to sign request with the hot wallet
     let tx = hot_wallet
         .sign_raw_transaction(DEFAULT_ACCOUNT_INDEX, send_req.clone())
+        .await
         .unwrap()
         .0;
     // the tx is not fully signed
@@ -5386,6 +5513,7 @@ fn sign_send_request_cold_wallet(#[case] seed: Seed) {
     // sign the tx with cold wallet
     let signed_tx = cold_wallet
         .sign_raw_transaction(DEFAULT_ACCOUNT_INDEX, send_req)
+        .await
         .unwrap()
         .0
         .into_signed_tx()
@@ -5434,7 +5562,8 @@ fn sign_send_request_cold_wallet(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn test_not_exhaustion_of_keys(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_not_exhaustion_of_keys(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_regtest());
 
@@ -5476,6 +5605,7 @@ fn test_not_exhaustion_of_keys(#[case] seed: Seed) {
                 FeeRate::from_amount_per_kb(Amount::ZERO),
                 TxAdditionalInfo::new(),
             )
+            .await
             .unwrap();
     }
 }
@@ -5483,7 +5613,8 @@ fn test_not_exhaustion_of_keys(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn test_add_standalone_multisig(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_add_standalone_multisig(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_regtest());
 
@@ -5566,28 +5697,32 @@ fn test_add_standalone_multisig(#[case] seed: Seed) {
     .unwrap();
 
     // sign it with wallet1
-    let (ptx, _, statuses) =
-        wallet1.sign_raw_transaction(DEFAULT_ACCOUNT_INDEX, spend_multisig_tx).unwrap();
+    let (ptx, _, statuses) = wallet1
+        .sign_raw_transaction(DEFAULT_ACCOUNT_INDEX, spend_multisig_tx)
+        .await
+        .unwrap();
 
     // check it is still not fully signed
     assert!(ptx.all_signatures_available());
     assert!(!statuses.iter().all(|s| *s == SignatureStatus::FullySigned));
 
     // try to sign it with wallet1 again
-    let (ptx, _, statuses) = wallet1.sign_raw_transaction(DEFAULT_ACCOUNT_INDEX, ptx).unwrap();
+    let (ptx, _, statuses) =
+        wallet1.sign_raw_transaction(DEFAULT_ACCOUNT_INDEX, ptx).await.unwrap();
 
     // check it is still not fully signed
     assert!(ptx.all_signatures_available());
     assert!(!statuses.iter().all(|s| *s == SignatureStatus::FullySigned));
 
     // try to sign it with wallet2 but wallet2 does not have the multisig added as standalone
-    let ptx = wallet2.sign_raw_transaction(DEFAULT_ACCOUNT_INDEX, ptx).unwrap().0;
+    let ptx = wallet2.sign_raw_transaction(DEFAULT_ACCOUNT_INDEX, ptx).await.unwrap().0;
 
     // add it to wallet2 as well
     wallet2.add_standalone_multisig(DEFAULT_ACCOUNT_INDEX, challenge, None).unwrap();
 
     // now we can sign it
-    let (ptx, _, statuses) = wallet2.sign_raw_transaction(DEFAULT_ACCOUNT_INDEX, ptx).unwrap();
+    let (ptx, _, statuses) =
+        wallet2.sign_raw_transaction(DEFAULT_ACCOUNT_INDEX, ptx).await.unwrap();
 
     // now it is fully signed
     assert!(ptx.all_signatures_available());
@@ -5597,7 +5732,8 @@ fn test_add_standalone_multisig(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn create_htlc_and_spend(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn create_htlc_and_spend(#[case] seed: Seed) {
     use common::chain::htlc::HtlcSecret;
 
     let mut rng = make_seedable_rng(seed);
@@ -5657,6 +5793,7 @@ fn create_htlc_and_spend(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             TxAdditionalInfo::new(),
         )
+        .await
         .unwrap()
         .tx;
     let create_htlc_tx_id = create_htlc_tx.transaction().get_id();
@@ -5720,7 +5857,7 @@ fn create_htlc_and_spend(#[case] seed: Seed) {
     .unwrap();
 
     let (spend_ptx, _, new_statuses) =
-        wallet2.sign_raw_transaction(DEFAULT_ACCOUNT_INDEX, spend_ptx).unwrap();
+        wallet2.sign_raw_transaction(DEFAULT_ACCOUNT_INDEX, spend_ptx).await.unwrap();
     assert_eq!(vec![SignatureStatus::FullySigned], new_statuses);
 
     let spend_tx = spend_ptx.into_signed_tx().unwrap();
@@ -5736,7 +5873,8 @@ fn create_htlc_and_spend(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn create_htlc_and_refund(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn create_htlc_and_refund(#[case] seed: Seed) {
     use common::chain::htlc::HtlcSecret;
 
     let mut rng = make_seedable_rng(seed);
@@ -5798,6 +5936,7 @@ fn create_htlc_and_refund(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             TxAdditionalInfo::new(),
         )
+        .await
         .unwrap()
         .tx;
     let create_htlc_tx_id = create_htlc_tx.transaction().get_id();
@@ -5852,7 +5991,7 @@ fn create_htlc_and_refund(#[case] seed: Seed) {
     assert_eq!(wallet2_multisig_utxos.len(), 1);
 
     let (refund_ptx, prev_statuses, new_statuses) =
-        wallet2.sign_raw_transaction(DEFAULT_ACCOUNT_INDEX, refund_ptx).unwrap();
+        wallet2.sign_raw_transaction(DEFAULT_ACCOUNT_INDEX, refund_ptx).await.unwrap();
 
     assert_eq!(vec![SignatureStatus::NotSigned], prev_statuses);
     assert_eq!(
@@ -5864,7 +6003,7 @@ fn create_htlc_and_refund(#[case] seed: Seed) {
     );
 
     let (refund_ptx, prev_statuses, new_statuses) =
-        wallet1.sign_raw_transaction(DEFAULT_ACCOUNT_INDEX, refund_ptx).unwrap();
+        wallet1.sign_raw_transaction(DEFAULT_ACCOUNT_INDEX, refund_ptx).await.unwrap();
     assert_eq!(
         vec![SignatureStatus::PartialMultisig {
             required_signatures: 2,
@@ -5893,7 +6032,8 @@ fn create_htlc_and_refund(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn create_order(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn create_order(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_unit_test_config());
 
@@ -5928,6 +6068,7 @@ fn create_order(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .await
         .map(|(id, tx)| (id, tx.tx))
         .unwrap();
 
@@ -5968,6 +6109,7 @@ fn create_order(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .await
         .unwrap()
         .tx;
 
@@ -6007,6 +6149,7 @@ fn create_order(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             additional_info,
         )
+        .await
         .map(|(id, tx)| (id, tx.tx))
         .unwrap();
 
@@ -6026,7 +6169,8 @@ fn create_order(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn create_order_and_conclude(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn create_order_and_conclude(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_unit_test_config());
 
@@ -6061,6 +6205,7 @@ fn create_order_and_conclude(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .await
         .map(|(id, tx)| (id, tx.tx))
         .unwrap();
 
@@ -6101,6 +6246,7 @@ fn create_order_and_conclude(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .await
         .unwrap()
         .tx;
 
@@ -6140,6 +6286,7 @@ fn create_order_and_conclude(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             additional_info,
         )
+        .await
         .map(|(id, tx)| (id, tx.tx))
         .unwrap();
     let order_info = RpcOrderInfo {
@@ -6195,6 +6342,7 @@ fn create_order_and_conclude(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             additional_info,
         )
+        .await
         .unwrap()
         .tx;
 
@@ -6217,7 +6365,8 @@ fn create_order_and_conclude(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn create_order_fill_completely_conclude(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn create_order_fill_completely_conclude(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_unit_test_config());
 
@@ -6254,6 +6403,7 @@ fn create_order_fill_completely_conclude(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .await
         .map(|(id, tx)| (id, tx.tx))
         .unwrap();
 
@@ -6297,6 +6447,7 @@ fn create_order_fill_completely_conclude(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .await
         .unwrap()
         .tx;
 
@@ -6347,6 +6498,7 @@ fn create_order_fill_completely_conclude(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             additional_info,
         )
+        .await
         .map(|(id, tx)| (id, tx.tx))
         .unwrap();
     let order_info = RpcOrderInfo {
@@ -6419,6 +6571,7 @@ fn create_order_fill_completely_conclude(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             additional_info,
         )
+        .await
         .unwrap()
         .tx;
 
@@ -6494,6 +6647,7 @@ fn create_order_fill_completely_conclude(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             additional_info,
         )
+        .await
         .unwrap()
         .tx;
 
@@ -6561,6 +6715,7 @@ fn create_order_fill_completely_conclude(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             additional_info,
         )
+        .await
         .unwrap()
         .tx;
 
@@ -6594,7 +6749,8 @@ fn create_order_fill_completely_conclude(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn create_order_fill_partially_conclude(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn create_order_fill_partially_conclude(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_unit_test_config());
 
@@ -6631,6 +6787,7 @@ fn create_order_fill_partially_conclude(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .await
         .map(|(id, tx)| (id, tx.tx))
         .unwrap();
 
@@ -6674,6 +6831,7 @@ fn create_order_fill_partially_conclude(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .await
         .unwrap()
         .tx;
 
@@ -6724,6 +6882,7 @@ fn create_order_fill_partially_conclude(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             additional_info,
         )
+        .await
         .map(|(id, tx)| (id, tx.tx))
         .unwrap();
     let order_info = RpcOrderInfo {
@@ -6796,6 +6955,7 @@ fn create_order_fill_partially_conclude(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             additional_info,
         )
+        .await
         .unwrap()
         .tx;
 
@@ -6870,6 +7030,7 @@ fn create_order_fill_partially_conclude(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             additional_info,
         )
+        .await
         .unwrap()
         .tx;
 
@@ -6916,7 +7077,8 @@ fn create_order_fill_partially_conclude(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn conflicting_delegation_account_nonce(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn conflicting_delegation_account_nonce(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_unit_test_config());
 
@@ -6955,6 +7117,7 @@ fn conflicting_delegation_account_nonce(#[case] seed: Seed) {
                 vrf_public_key: None,
             },
         )
+        .await
         .unwrap()
         .tx;
 
@@ -6985,6 +7148,7 @@ fn conflicting_delegation_account_nonce(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .await
         .map(|(id, tx)| (id, tx.tx))
         .unwrap();
 
@@ -7017,6 +7181,7 @@ fn conflicting_delegation_account_nonce(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             TxAdditionalInfo::new(),
         )
+        .await
         .unwrap()
         .tx;
 
@@ -7046,6 +7211,7 @@ fn conflicting_delegation_account_nonce(#[case] seed: Seed) {
             delegation_amount,
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .await
         .unwrap()
         .tx;
     let spend_from_delegation_tx_1_id = spend_from_delegation_tx_1.transaction().get_id();
@@ -7068,6 +7234,7 @@ fn conflicting_delegation_account_nonce(#[case] seed: Seed) {
             delegation_amount,
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .await
         .unwrap()
         .tx;
     let spend_from_delegation_tx_2_id = spend_from_delegation_tx_2.transaction().get_id();
@@ -7098,6 +7265,7 @@ fn conflicting_delegation_account_nonce(#[case] seed: Seed) {
             delegation_amount,
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .await
         .unwrap()
         .tx;
     let spend_from_delegation_tx_3_id = spend_from_delegation_tx_3.transaction().get_id();
@@ -7211,7 +7379,8 @@ fn conflicting_delegation_account_nonce(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn conflicting_delegation_account_nonce_same_wallet(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn conflicting_delegation_account_nonce_same_wallet(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_unit_test_config());
 
@@ -7248,6 +7417,7 @@ fn conflicting_delegation_account_nonce_same_wallet(#[case] seed: Seed) {
                 vrf_public_key: None,
             },
         )
+        .await
         .unwrap()
         .tx;
 
@@ -7277,6 +7447,7 @@ fn conflicting_delegation_account_nonce_same_wallet(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .await
         .map(|(id, tx)| (id, tx.tx))
         .unwrap();
 
@@ -7308,6 +7479,7 @@ fn conflicting_delegation_account_nonce_same_wallet(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             TxAdditionalInfo::new(),
         )
+        .await
         .unwrap()
         .tx;
 
@@ -7336,6 +7508,7 @@ fn conflicting_delegation_account_nonce_same_wallet(#[case] seed: Seed) {
             delegation_amount,
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .await
         .unwrap()
         .tx;
 
@@ -7358,6 +7531,7 @@ fn conflicting_delegation_account_nonce_same_wallet(#[case] seed: Seed) {
             delegation_amount,
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .await
         .unwrap()
         .tx;
 
@@ -7446,7 +7620,8 @@ fn conflicting_delegation_account_nonce_same_wallet(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn conflicting_order_account_nonce(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn conflicting_order_account_nonce(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = common::chain::config::create_unit_test_config_builder()
         .chainstate_upgrades(
@@ -7486,6 +7661,7 @@ fn conflicting_order_account_nonce(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .await
         .map(|(id, tx)| (id, tx.tx))
         .unwrap();
 
@@ -7530,6 +7706,7 @@ fn conflicting_order_account_nonce(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .await
         .unwrap()
         .tx;
 
@@ -7557,6 +7734,7 @@ fn conflicting_order_account_nonce(#[case] seed: Seed) {
             TxAdditionalInfo::new()
                 .with_token_info(issued_token_id, token_additional_info_for_ptx.clone()),
         )
+        .await
         .map(|(id, tx)| (id, tx.tx))
         .unwrap();
 
@@ -7616,6 +7794,7 @@ fn conflicting_order_account_nonce(#[case] seed: Seed) {
                 .with_order_info(order_id, order_additional_info_for_ptx.clone())
                 .with_token_info(issued_token_id, token_additional_info_for_ptx.clone()),
         )
+        .await
         .unwrap()
         .tx;
 
@@ -7648,6 +7827,7 @@ fn conflicting_order_account_nonce(#[case] seed: Seed) {
                 .with_order_info(order_id, order_additional_info_for_ptx)
                 .with_token_info(issued_token_id, token_additional_info_for_ptx),
         )
+        .await
         .unwrap()
         .tx;
 
@@ -7734,7 +7914,8 @@ fn conflicting_order_account_nonce(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn conflicting_delegation_account_nonce_multiple_inputs(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn conflicting_delegation_account_nonce_multiple_inputs(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_unit_test_config());
 
@@ -7773,6 +7954,7 @@ fn conflicting_delegation_account_nonce_multiple_inputs(#[case] seed: Seed) {
                 vrf_public_key: None,
             },
         )
+        .await
         .unwrap()
         .tx;
 
@@ -7803,6 +7985,7 @@ fn conflicting_delegation_account_nonce_multiple_inputs(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .await
         .map(|(id, tx)| (id, tx.tx))
         .unwrap();
 
@@ -7836,6 +8019,7 @@ fn conflicting_delegation_account_nonce_multiple_inputs(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             TxAdditionalInfo::new(),
         )
+        .await
         .unwrap()
         .tx;
 
@@ -7887,6 +8071,7 @@ fn conflicting_delegation_account_nonce_multiple_inputs(#[case] seed: Seed) {
 
     let spend_from_delegation_signed_tx = wallet
         .sign_raw_transaction(DEFAULT_ACCOUNT_INDEX, spend_from_delegation_ptx)
+        .await
         .unwrap()
         .0
         .into_signed_tx()
@@ -7919,6 +8104,7 @@ fn conflicting_delegation_account_nonce_multiple_inputs(#[case] seed: Seed) {
             delegation_amount,
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .await
         .unwrap()
         .tx;
     let spend_from_delegation_confirmed_tx_id =
@@ -8009,7 +8195,8 @@ fn conflicting_delegation_account_nonce_multiple_inputs(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn conflicting_delegation_account_with_reorg(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn conflicting_delegation_account_with_reorg(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_unit_test_config());
 
@@ -8048,6 +8235,7 @@ fn conflicting_delegation_account_with_reorg(#[case] seed: Seed) {
                 vrf_public_key: None,
             },
         )
+        .await
         .unwrap()
         .tx;
 
@@ -8078,6 +8266,7 @@ fn conflicting_delegation_account_with_reorg(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .await
         .map(|(id, tx)| (id, tx.tx))
         .unwrap();
 
@@ -8110,6 +8299,7 @@ fn conflicting_delegation_account_with_reorg(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             TxAdditionalInfo::new(),
         )
+        .await
         .unwrap()
         .tx;
 
@@ -8141,6 +8331,7 @@ fn conflicting_delegation_account_with_reorg(#[case] seed: Seed) {
             delegation_amount,
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .await
         .unwrap()
         .tx;
     let spend_from_delegation_tx_id_1 = spend_from_delegation_tx_1.transaction().get_id();
@@ -8174,6 +8365,7 @@ fn conflicting_delegation_account_with_reorg(#[case] seed: Seed) {
             delegation_amount,
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
+        .await
         .unwrap()
         .tx;
     let spend_from_delegation_tx_id_2 = spend_from_delegation_tx_2.transaction().get_id();
@@ -8241,7 +8433,8 @@ fn conflicting_delegation_account_with_reorg(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn rollback_utxos_after_abandon(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn rollback_utxos_after_abandon(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_mainnet());
 
@@ -8299,6 +8492,7 @@ fn rollback_utxos_after_abandon(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
             TxAdditionalInfo::new(),
         )
+        .await
         .unwrap()
         .tx;
     let tx_id = tx.transaction().get_id();
@@ -8353,7 +8547,8 @@ fn rollback_utxos_after_abandon(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn token_id_generation_v1_uses_first_tx_input(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn token_id_generation_v1_uses_first_tx_input(#[case] seed: Seed) {
     use common::chain::{self, TokenIdGenerationVersion};
 
     let mut rng = make_seedable_rng(seed);
@@ -8441,6 +8636,7 @@ fn token_id_generation_v1_uses_first_tx_input(#[case] seed: Seed) {
                 FeeRate::from_amount_per_kb(Amount::ZERO),
                 FeeRate::from_amount_per_kb(Amount::ZERO),
             )
+            .await
             .map(|(id, tx)| (id, tx.tx))
             .unwrap();
 
@@ -8467,6 +8663,7 @@ fn token_id_generation_v1_uses_first_tx_input(#[case] seed: Seed) {
                 FeeRate::from_amount_per_kb(Amount::ZERO),
                 FeeRate::from_amount_per_kb(Amount::ZERO),
             )
+            .await
             .map(|(id, tx)| (id, tx.tx))
             .unwrap();
 
