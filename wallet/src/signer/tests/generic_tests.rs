@@ -75,6 +75,9 @@ use crate::{
 #[derive(Debug)]
 pub enum MessageToSign {
     Random,
+
+    // We only use this in trezor tests at this moment.
+    #[allow(dead_code)]
     Predefined(Vec<u8>),
 }
 

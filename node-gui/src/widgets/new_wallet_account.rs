@@ -81,7 +81,7 @@ impl<Message> Component<Message, Theme, iced::Renderer> for NewWalletAccount<Mes
         }
     }
 
-    fn view(&self, state: &Self::State) -> Element<Self::Event, Theme, iced::Renderer> {
+    fn view(&self, state: &Self::State) -> Element<'_, Self::Event, Theme, iced::Renderer> {
         let button = Button::new(Text::new("Create").align_x(Horizontal::Center))
             .width(100.0)
             .on_press(NewAccountEvent::Ok);

@@ -69,7 +69,7 @@ impl MainWidget {
         }
     }
 
-    pub fn view(&self, node_state: &NodeState) -> Element<MainWidgetMessage> {
+    pub fn view(&self, node_state: &NodeState) -> Element<'_, MainWidgetMessage> {
         self.tabs.view(node_state).map(MainWidgetMessage::TabsMessage)
     }
 }

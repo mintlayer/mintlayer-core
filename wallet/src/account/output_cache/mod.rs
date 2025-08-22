@@ -1384,7 +1384,7 @@ impl OutputCache {
         &self,
         current_block_info: BlockInfo,
         inputs: Vec<UtxoOutPoint>,
-    ) -> WalletResult<Vec<UtxoWithTxOutput>> {
+    ) -> WalletResult<Vec<UtxoWithTxOutput<'_>>> {
         inputs
             .into_iter()
             .map(|utxo| {

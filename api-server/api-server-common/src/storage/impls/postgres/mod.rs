@@ -116,7 +116,7 @@ impl TransactionalApiServerPostgresStorage {
 
     pub async fn begin_ro_transaction(
         &self,
-    ) -> Result<ApiServerPostgresTransactionalRo, ApiServerStorageError> {
+    ) -> Result<ApiServerPostgresTransactionalRo<'_>, ApiServerStorageError> {
         let conn = self
             .pool
             .get_owned()
@@ -132,7 +132,7 @@ impl TransactionalApiServerPostgresStorage {
 
     pub async fn begin_rw_transaction(
         &self,
-    ) -> Result<ApiServerPostgresTransactionalRw, ApiServerStorageError> {
+    ) -> Result<ApiServerPostgresTransactionalRw<'_>, ApiServerStorageError> {
         let conn = self
             .pool
             .get_owned()

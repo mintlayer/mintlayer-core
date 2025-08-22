@@ -94,7 +94,7 @@ impl TabsWidget {
         TabIndex::COUNT + self.wallets.len() - 1
     }
 
-    pub fn view(&self, node_state: &NodeState) -> Element<TabsMessage> {
+    pub fn view(&self, node_state: &NodeState) -> Element<'_, TabsMessage> {
         let position = self.settings_tab.settings().tab_bar_position.unwrap_or_default();
 
         let mut tabs = Tabs::new(TabsMessage::TabSelected).icon_font(iced_fonts::BOOTSTRAP_FONT);
@@ -196,5 +196,5 @@ trait Tab {
 
     fn tab_label(&self, node_state: &NodeState) -> TabLabel;
 
-    fn content(&self, node_state: &NodeState) -> Element<Self::Message>;
+    fn content(&self, node_state: &NodeState) -> Element<'_, Self::Message>;
 }

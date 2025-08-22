@@ -106,7 +106,7 @@ impl<C: AsRef<ChainConfig>> crate::SignatureContext for MockContext<'_, C> {
         self.transaction
     }
 
-    fn input_commitments(&self) -> &[SighashInputCommitment] {
+    fn input_commitments(&self) -> &[SighashInputCommitment<'_>] {
         self.input_commitments.as_slice()
     }
 

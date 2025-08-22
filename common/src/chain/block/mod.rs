@@ -196,7 +196,7 @@ impl Block {
         }
     }
 
-    pub fn block_reward_transactable(&self) -> BlockRewardTransactable {
+    pub fn block_reward_transactable(&self) -> BlockRewardTransactable<'_> {
         match self {
             Block::V1(b) => b.block_reward_transactable(),
         }

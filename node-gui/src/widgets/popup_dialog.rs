@@ -47,7 +47,7 @@ impl<Message: Clone> Component<Message, Theme, iced::Renderer> for PopupDialog<M
         Some(self.on_close.clone())
     }
 
-    fn view(&self, _state: &Self::State) -> Element<Self::Event, Theme, iced::Renderer> {
+    fn view(&self, _state: &Self::State) -> Element<'_, Self::Event, Theme, iced::Renderer> {
         Card::new(
             Text::new(self.popup.title.clone()),
             Text::new(self.popup.message.clone()).align_x(Horizontal::Center),

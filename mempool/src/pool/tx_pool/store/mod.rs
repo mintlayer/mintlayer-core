@@ -746,6 +746,7 @@ impl TxMempoolEntry {
     }
 }
 
+#[allow(clippy::non_canonical_partial_ord_impl)]
 impl PartialOrd for TxMempoolEntry {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(other.tx_id().cmp(self.tx_id()))
