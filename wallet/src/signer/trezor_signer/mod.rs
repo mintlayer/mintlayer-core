@@ -39,13 +39,10 @@ use common::{
                     },
                     multisig_partial_signature::{self, PartiallySignedMultisigChallenge},
                 },
-                htlc::produce_uniparty_signature_for_htlc_input,
                 standard_signature::StandardInputSignature,
                 InputWitness,
             },
-            sighash::{
-                input_commitments::SighashInputCommitment, sighashtype::SigHashType, signature_hash,
-            },
+            sighash::{sighashtype::SigHashType, signature_hash},
             DestinationSigError,
         },
         timelock::OutputTimeLock,
@@ -106,6 +103,7 @@ use wallet_types::{
 
 use crate::{
     key_chain::{make_account_path, AccountKeyChainImplHardware, AccountKeyChains, FoundPubKey},
+    signer::signer_utils::{is_htlc_utxo, sign_input_with_standalone_key},
     Account, WalletError, WalletResult,
 };
 
@@ -149,6 +147,8 @@ pub enum TrezorError {
     MultipleSignaturesReturned,
     #[error("A multisig signature was returned for a single address from Device")]
     MultisigSignatureReturned,
+    #[error("The file being loaded is a ledger wallet and does not correspond to the connected hardware wallet")]
+    LedgerWalletDifferentFile,
     #[error("The file being loaded is a software wallet and does not correspond to the connected hardware wallet")]
     HardwareWalletDifferentFile,
     #[error(
@@ -584,10 +584,10 @@ impl Signer for TrezorSigner {
                     InputWitness::Standard(sig)
                 };
 
-                let sign_with_standalone_private_key = |standalone, destination| {
+                let sign_with_standalone_private_key = |standalone: &StandaloneInput, destination| {
                     sign_input_with_standalone_key(
                         secret,
-                        standalone,
+                        &standalone.private_key,
                         destination,
                         &ptx,
                         &input_commitments,
@@ -713,7 +713,7 @@ impl Signer for TrezorSigner {
 
                             let sig = sign_input_with_standalone_key(
                                 secret,
-                                standalone,
+                                &standalone.private_key,
                                 destination,
                                 &ptx,
                                 &input_commitments,
@@ -858,41 +858,6 @@ impl Signer for TrezorSigner {
             &self.chain_config,
         )?)
     }
-}
-
-fn sign_input_with_standalone_key<AuxP: SigAuxDataProvider + ?Sized>(
-    secret: &Option<common::chain::htlc::HtlcSecret>,
-    standalone: &StandaloneInput,
-    destination: &Destination,
-    ptx: &PartiallySignedTransaction,
-    input_commitments: &[SighashInputCommitment],
-    input_index: usize,
-    sig_aux_data_provider: &mut AuxP,
-) -> SignerResult<InputWitness> {
-    let sighash_type = SigHashType::all();
-    match secret {
-        Some(htlc_secret) => produce_uniparty_signature_for_htlc_input(
-            &standalone.private_key,
-            sighash_type,
-            destination.clone(),
-            ptx.tx(),
-            input_commitments,
-            input_index,
-            htlc_secret.clone(),
-            sig_aux_data_provider,
-        ),
-        None => StandardInputSignature::produce_uniparty_signature_for_input(
-            &standalone.private_key,
-            sighash_type,
-            destination.clone(),
-            ptx.tx(),
-            input_commitments,
-            input_index,
-            sig_aux_data_provider,
-        ),
-    }
-    .map(InputWitness::Standard)
-    .map_err(SignerError::SigningError)
 }
 
 fn to_trezor_input_msgs(
@@ -1680,6 +1645,10 @@ fn check_public_keys_against_key_chain(
                     .into());
                 }
             }
+            #[cfg(feature = "ledger")]
+            HardwareWalletData::Ledger(_) => {
+                return Err(TrezorError::LedgerWalletDifferentFile.into());
+            }
         }
     }
 
@@ -1903,24 +1872,6 @@ fn single_signature(
             Ok(Some(single))
         }
         _ => Err(TrezorError::MultipleSignaturesReturned),
-    }
-}
-
-fn is_htlc_utxo(utxo: &TxOutput) -> bool {
-    match utxo {
-        TxOutput::Htlc(_, _) => true,
-
-        TxOutput::Transfer(_, _)
-        | TxOutput::LockThenTransfer(_, _, _)
-        | TxOutput::Burn(_)
-        | TxOutput::CreateStakePool(_, _)
-        | TxOutput::ProduceBlockFromStake(_, _)
-        | TxOutput::CreateDelegationId(_, _)
-        | TxOutput::DelegateStaking(_, _)
-        | TxOutput::IssueFungibleToken(_)
-        | TxOutput::IssueNft(_, _, _)
-        | TxOutput::DataDeposit(_)
-        | TxOutput::CreateOrder(_) => false,
     }
 }
 
