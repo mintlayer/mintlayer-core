@@ -192,14 +192,14 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
         }
     }
 
-    pub fn create_next_account(
+    pub async fn create_next_account(
         &mut self,
         name: Option<String>,
     ) -> Result<(U31, Option<String>), WalletError> {
         match self {
-            RuntimeWallet::Software(w) => w.create_next_account(name),
+            RuntimeWallet::Software(w) => w.create_next_account(name).await,
             #[cfg(feature = "trezor")]
-            RuntimeWallet::Trezor(w) => w.create_next_account(name),
+            RuntimeWallet::Trezor(w) => w.create_next_account(name).await,
         }
     }
 

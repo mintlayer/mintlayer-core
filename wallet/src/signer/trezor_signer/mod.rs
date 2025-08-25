@@ -89,7 +89,7 @@ use trezor_client::{
 };
 use utils::ensure;
 use wallet_storage::{
-    WalletStorageReadLocked, WalletStorageReadUnlocked, WalletStorageWriteUnlocked,
+    StoreLocalReadWriteUnlocked, WalletStorageReadLocked, WalletStorageReadUnlocked,
 };
 use wallet_types::{
     account_info::DEFAULT_ACCOUNT_INDEX,
@@ -1815,6 +1815,7 @@ fn get_checked_firmware_version(client: &mut Trezor) -> Result<semver::Version, 
     Ok(version)
 }
 
+#[async_trait]
 impl SignerProvider for TrezorSignerProvider {
     type S = TrezorSigner;
     type K = AccountKeyChainImplHardware;
@@ -1823,12 +1824,12 @@ impl SignerProvider for TrezorSignerProvider {
         TrezorSigner::new(chain_config, self.client.clone(), self.session_id.clone())
     }
 
-    fn make_new_account(
+    async fn make_new_account<B: storage::Backend>(
         &mut self,
         chain_config: Arc<ChainConfig>,
         account_index: U31,
         name: Option<String>,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
+        db_tx: &mut StoreLocalReadWriteUnlocked<B>,
     ) -> WalletResult<Account<Self::K>> {
         let account_pubkey = self.fetch_extended_pub_key(&chain_config, account_index)?;
 

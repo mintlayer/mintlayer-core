@@ -358,14 +358,14 @@ where
     B: storage::Backend + 'static,
     P: SignerProvider,
 {
-    pub fn create_new_wallet<F: FnOnce(&mut StoreTxRwUnlocked<B>) -> WalletResult<P>>(
+    pub async fn create_new_wallet<F: FnOnce(&mut StoreTxRwUnlocked<B>) -> WalletResult<P>>(
         chain_config: Arc<ChainConfig>,
         db: Store<B>,
         best_block: (BlockHeight, Id<GenBlock>),
         wallet_type: WalletType,
         signer_provider: F,
     ) -> WalletResult<WalletCreation<Self>> {
-        let mut wallet = Self::new_wallet(chain_config, db, wallet_type, signer_provider)?;
+        let mut wallet = Self::new_wallet(chain_config, db, wallet_type, signer_provider).await?;
 
         if let WalletCreation::Wallet(ref mut w) = wallet {
             w.set_best_block(best_block.0, best_block.1)?;
@@ -374,56 +374,65 @@ where
         Ok(wallet)
     }
 
-    pub fn recover_wallet<F: FnOnce(&mut StoreTxRwUnlocked<B>) -> WalletResult<P>>(
+    pub async fn recover_wallet<F: FnOnce(&mut StoreTxRwUnlocked<B>) -> WalletResult<P>>(
         chain_config: Arc<ChainConfig>,
         db: Store<B>,
         wallet_type: WalletType,
         signer_provider: F,
     ) -> WalletResult<WalletCreation<Self>> {
-        Self::new_wallet(chain_config, db, wallet_type, signer_provider)
+        Self::new_wallet(chain_config, db, wallet_type, signer_provider).await
     }
 
-    fn new_wallet<F: FnOnce(&mut StoreTxRwUnlocked<B>) -> WalletResult<P>>(
+    async fn new_wallet<F: FnOnce(&mut StoreTxRwUnlocked<B>) -> WalletResult<P>>(
         chain_config: Arc<ChainConfig>,
         db: Store<B>,
         wallet_type: WalletType,
         signer_provider: F,
     ) -> WalletResult<WalletCreation<Self>> {
-        let mut db_tx = db.transaction_rw_unlocked(None)?;
+        let mut signer_provider = {
+            let mut db_tx = db.transaction_rw_unlocked(None)?;
 
-        db_tx.set_storage_version(CURRENT_WALLET_VERSION)?;
-        db_tx.set_chain_info(&ChainInfo::new(chain_config.as_ref()))?;
-        db_tx.set_lookahead_size(LOOKAHEAD_SIZE)?;
-        db_tx.set_wallet_type(wallet_type)?;
-        let mut signer_provider = match signer_provider(&mut db_tx) {
-            Ok(x) => x,
-            #[cfg(feature = "trezor")]
-            Err(WalletError::SignerError(SignerError::TrezorError(
-                TrezorError::NoUniqueDeviceFound(devices),
-            ))) => return Ok(WalletCreation::MultipleAvailableTrezorDevices(devices)),
-            Err(err) => return Err(err),
+            db_tx.set_storage_version(CURRENT_WALLET_VERSION)?;
+            db_tx.set_chain_info(&ChainInfo::new(chain_config.as_ref()))?;
+            db_tx.set_lookahead_size(LOOKAHEAD_SIZE)?;
+            db_tx.set_wallet_type(wallet_type)?;
+            let signer_provider = match signer_provider(&mut db_tx) {
+                Ok(x) => x,
+                #[cfg(feature = "trezor")]
+                Err(WalletError::SignerError(SignerError::TrezorError(
+                    TrezorError::NoUniqueDeviceFound(devices),
+                ))) => return Ok(WalletCreation::MultipleAvailableTrezorDevices(devices)),
+                Err(err) => return Err(err),
+            };
+
+            if let Some(data) = signer_provider.get_hardware_wallet_info() {
+                db_tx.set_hardware_wallet_data(data.into())?;
+            }
+            db_tx.commit()?;
+            signer_provider
         };
 
-        if let Some(info) = signer_provider.get_hardware_wallet_info() {
-            db_tx.set_hardware_wallet_data(info.into())?;
-        }
-
+        let mut local_db_tx = db.local_rw_unlocked();
         let default_account = Wallet::<B, P>::create_next_unused_account(
             U31::ZERO,
             chain_config.clone(),
-            &mut db_tx,
+            &mut local_db_tx,
             None,
             &mut signer_provider,
-        )?;
+        )
+        .await?;
 
         let next_unused_account = Wallet::<B, P>::create_next_unused_account(
             U31::ONE,
             chain_config.clone(),
-            &mut db_tx,
+            &mut local_db_tx,
             None,
             &mut signer_provider,
-        )?;
+        )
+        .await?;
 
+        let mut db_tx = db.transaction_rw(None)?;
+        local_db_tx.perform_operations(&mut db_tx)?;
         db_tx.commit()?;
 
         let latest_median_time = chain_config.genesis_block().timestamp();
@@ -442,23 +451,29 @@ where
     /// Migrate the wallet DB from version 1 to version 2
     /// * save the chain info in the DB based on the chain type specified by the user
     /// * reset transactions
-    fn migration_v2(
+    async fn migration_v2(
         db: &Store<B>,
         chain_config: Arc<ChainConfig>,
         signer_provider: &mut P,
     ) -> WalletResult<()> {
-        let mut db_tx = db.transaction_rw_unlocked(None)?;
-        // set new chain info to the one provided by the user assuming it is the correct one
-        db_tx.set_chain_info(&ChainInfo::new(chain_config.as_ref()))?;
+        {
+            let mut db_tx = db.transaction_rw(None)?;
+            // set new chain info to the one provided by the user assuming it is the correct one
+            db_tx.set_chain_info(&ChainInfo::new(chain_config.as_ref()))?;
 
-        // reset wallet transaction as now we will need to rescan the blockchain to store the
-        // correct order of the transactions to avoid bugs in loading them in the wrong order
-        Self::reset_wallet_transactions(chain_config.clone(), &mut db_tx)?;
+            // reset wallet transaction as now we will need to rescan the blockchain to store the
+            // correct order of the transactions to avoid bugs in loading them in the wrong order
+            Self::reset_wallet_transactions(chain_config.clone(), &mut db_tx)?;
+            db_tx.set_storage_version(WALLET_VERSION_V2)?;
+            db_tx.commit()?;
+        }
 
         // Create the next unused account
-        Self::migrate_next_unused_account(chain_config, &mut db_tx, signer_provider)?;
+        let mut local_db_tx = db.local_rw_unlocked();
+        Self::migrate_next_unused_account(chain_config, &mut local_db_tx, signer_provider).await?;
 
-        db_tx.set_storage_version(WALLET_VERSION_V2)?;
+        let mut db_tx = db.transaction_rw(None)?;
+        local_db_tx.perform_operations(&mut db_tx)?;
         db_tx.commit()?;
         logging::log::info!(
             "Successfully migrated wallet database to latest version {}",
@@ -595,7 +610,7 @@ where
     }
 
     /// Check the wallet DB version and perform any migrations needed
-    fn check_and_migrate_db<
+    async fn check_and_migrate_db<
         F: Fn(u32) -> Result<(), WalletError>,
         F2: FnOnce(&StoreTxRo<B>) -> WalletResult<P>,
     >(
@@ -622,7 +637,7 @@ where
                 }
                 WALLET_VERSION_V1 => {
                     pre_migration(WALLET_VERSION_V1)?;
-                    Self::migration_v2(db, chain_config.clone(), &mut signer_provider)?;
+                    Self::migration_v2(db, chain_config.clone(), &mut signer_provider).await?;
                 }
                 WALLET_VERSION_V2 => {
                     pre_migration(WALLET_VERSION_V2)?;
@@ -787,9 +802,9 @@ where
             .collect()
     }
 
-    fn migrate_next_unused_account(
+    async fn migrate_next_unused_account(
         chain_config: Arc<ChainConfig>,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
+        db_tx: &mut StoreLocalReadWriteUnlocked<B>,
         signer_provider: &mut P,
     ) -> Result<(), WalletError> {
         let accounts_info = db_tx.get_accounts_info()?;
@@ -813,11 +828,12 @@ where
             db_tx,
             None,
             signer_provider,
-        )?;
+        )
+        .await?;
         Ok(())
     }
 
-    pub fn load_wallet<
+    pub async fn load_wallet<
         F: Fn(u32) -> WalletResult<()>,
         F2: FnOnce(&StoreTxRo<B>) -> WalletResult<P>,
     >(
@@ -839,7 +855,9 @@ where
             pre_migration,
             controller_mode,
             signer_provider,
-        ) {
+        )
+        .await
+        {
             Ok(x) => x,
             #[cfg(feature = "trezor")]
             Err(WalletError::SignerError(SignerError::TrezorError(
@@ -986,10 +1004,10 @@ where
         self.signer_provider.get_hardware_wallet_info()
     }
 
-    fn create_next_unused_account(
+    async fn create_next_unused_account(
         next_account_index: U31,
         chain_config: Arc<ChainConfig>,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
+        db_tx: &mut StoreLocalReadWriteUnlocked<B>,
         name: Option<String>,
         signer_provider: &mut P,
     ) -> WalletResult<(U31, Account<P::K>)> {
@@ -998,19 +1016,16 @@ where
             WalletError::EmptyAccountName
         );
 
-        let account = signer_provider.make_new_account(
-            chain_config.clone(),
-            next_account_index,
-            name,
-            db_tx,
-        )?;
+        let account = signer_provider
+            .make_new_account(chain_config.clone(), next_account_index, name, db_tx)
+            .await?;
 
         Ok((next_account_index, account))
     }
 
     /// Promotes the unused account into the used accounts and creates a new unused account
     /// Returns the new index and optional name if provided
-    pub fn create_next_account(
+    pub async fn create_next_account(
         &mut self,
         name: Option<String>,
     ) -> WalletResult<(U31, Option<String>)> {
@@ -1032,17 +1047,18 @@ where
                 WalletError::AbsoluteMaxNumAccountsExceeded(self.next_unused_account.0)
             })?;
 
-        let mut db_tx = self.db.transaction_rw_unlocked(None)?;
+        let mut local_db_tx = self.db.local_rw_unlocked();
 
         let mut next_unused_account = Self::create_next_unused_account(
             next_account_index,
             self.chain_config.clone(),
-            &mut db_tx,
+            &mut local_db_tx,
             None,
             &mut self.signer_provider,
-        )?;
+        )
+        .await?;
 
-        self.next_unused_account.1.set_name(name.clone(), &mut db_tx)?;
+        self.next_unused_account.1.set_name(name.clone(), &mut local_db_tx)?;
         std::mem::swap(&mut self.next_unused_account, &mut next_unused_account);
         let (next_account_index, next_account) = next_unused_account;
 
@@ -1051,11 +1067,13 @@ where
         // the account indexes
         let (best_block_id, best_block_height) = next_account.best_block();
         self.next_unused_account.1.update_best_block(
-            &mut db_tx,
+            &mut local_db_tx,
             best_block_height,
             best_block_id,
         )?;
 
+        let mut db_tx = self.db.transaction_rw(None)?;
+        local_db_tx.perform_operations(&mut db_tx)?;
         db_tx.commit()?;
 
         self.accounts.insert(next_account_index, next_account);
@@ -2523,25 +2541,28 @@ where
     /// If `common_block_height` is zero, only the genesis block is considered common.
     /// If a new transaction is recognized for the unused account, it is transferred to the used
     /// accounts and a new unused account is created.
-    pub fn scan_new_blocks_unused_account(
+    pub async fn scan_new_blocks_unused_account(
         &mut self,
         common_block_height: BlockHeight,
         blocks: Vec<Block>,
         wallet_events: &impl WalletEvents,
     ) -> WalletResult<()> {
         loop {
-            let mut db_tx = self.db.transaction_rw(None)?;
-            let added_new_tx_in_unused_acc = self.next_unused_account.1.scan_new_blocks(
-                &mut db_tx,
-                wallet_events,
-                common_block_height,
-                &blocks,
-            )?;
+            let added_new_tx_in_unused_acc = {
+                let mut db_tx = self.db.transaction_rw(None)?;
+                let added_new_tx_in_unused_acc = self.next_unused_account.1.scan_new_blocks(
+                    &mut db_tx,
+                    wallet_events,
+                    common_block_height,
+                    &blocks,
+                )?;
 
-            db_tx.commit()?;
+                db_tx.commit()?;
+                added_new_tx_in_unused_acc
+            };
 
             if added_new_tx_in_unused_acc {
-                self.create_next_account(None)?;
+                self.create_next_account(None).await?;
             } else {
                 break;
             }

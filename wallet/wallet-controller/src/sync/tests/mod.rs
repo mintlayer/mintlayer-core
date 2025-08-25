@@ -31,7 +31,6 @@ use common::{
 };
 use consensus::GenerateBlockInputData;
 use crypto::ephemeral_e2e::EndToEndPublicKey;
-use futures::executor::block_on;
 use logging::log;
 use mempool::{tx_accumulator::PackingStrategy, FeeRate};
 use mempool_types::tx_options::TxOptionsOverrides;
@@ -90,6 +89,7 @@ impl MockWallet {
     }
 }
 
+#[async_trait::async_trait]
 impl SyncingWallet for MockWallet {
     fn syncing_state(&self) -> WalletSyncingState {
         WalletSyncingState {
@@ -104,7 +104,7 @@ impl SyncingWallet for MockWallet {
         }
     }
 
-    fn scan_blocks(
+    async fn scan_blocks(
         &mut self,
         account: U31,
         common_block_height: BlockHeight,
@@ -123,15 +123,13 @@ impl SyncingWallet for MockWallet {
         for block in blocks {
             assert_eq!(*block.header().prev_block_id(), self.get_best_block_id());
             self.blocks.push(block.header().block_id());
-            block_on(async {
-                self.new_tip_tx
-                    .send((
-                        AccountType::Account(DEFAULT_ACCOUNT_INDEX),
-                        block.header().block_id(),
-                    ))
-                    .await
-            })
-            .unwrap();
+            self.new_tip_tx
+                .send((
+                    AccountType::Account(DEFAULT_ACCOUNT_INDEX),
+                    block.header().block_id(),
+                ))
+                .await
+                .unwrap()
         }
 
         log::debug!(
@@ -143,7 +141,7 @@ impl SyncingWallet for MockWallet {
         Ok(())
     }
 
-    fn scan_blocks_for_unused_account(
+    async fn scan_blocks_for_unused_account(
         &mut self,
         common_block_height: BlockHeight,
         blocks: Vec<Block>,
@@ -163,12 +161,10 @@ impl SyncingWallet for MockWallet {
                 self.get_unused_acc_best_block_id()
             );
             self.next_unused_blocks.push(block.header().block_id());
-            block_on(async {
-                self.new_tip_tx
-                    .send((AccountType::UnusedAccount, block.header().block_id()))
-                    .await
-            })
-            .unwrap();
+            self.new_tip_tx
+                .send((AccountType::UnusedAccount, block.header().block_id()))
+                .await
+                .unwrap()
         }
 
         log::debug!(

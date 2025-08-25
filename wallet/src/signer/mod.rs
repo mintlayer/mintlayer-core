@@ -36,7 +36,7 @@ use common::{
 };
 use crypto::key::hdkd::{derivable::DerivationError, u31::U31};
 use wallet_storage::{
-    WalletStorageReadLocked, WalletStorageReadUnlocked, WalletStorageWriteUnlocked,
+    StoreLocalReadWriteUnlocked, WalletStorageReadLocked, WalletStorageReadUnlocked,
 };
 use wallet_types::{
     hw_data::HardwareWalletFullInfo,
@@ -110,6 +110,8 @@ pub enum SignerError {
     HtlcMultisigDestinationExpected,
     #[error("Partially signed transaction error: {0}")]
     PartiallySignedTransactionError(#[from] PartiallySignedTransactionError),
+    #[error("Wallet not initialized")]
+    WalletNotInitialized,
 }
 
 type SignerResult<T> = Result<T, SignerError>;
@@ -153,18 +155,19 @@ pub trait Signer {
     ) -> SignerResult<SignedTransactionIntent>;
 }
 
-pub trait SignerProvider {
+#[async_trait]
+pub trait SignerProvider: Send {
     type S: Signer + Send;
     type K: AccountKeyChains + Sync + Send;
 
     fn provide(&mut self, chain_config: Arc<ChainConfig>, account_index: U31) -> Self::S;
 
-    fn make_new_account(
+    async fn make_new_account<B: storage::Backend>(
         &mut self,
         chain_config: Arc<ChainConfig>,
         account_index: U31,
         name: Option<String>,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
+        db_tx: &mut StoreLocalReadWriteUnlocked<B>,
     ) -> WalletResult<Account<Self::K>>;
 
     fn load_account_from_database(
