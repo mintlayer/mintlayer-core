@@ -24,7 +24,6 @@ use tokio::{
     process::Command as TokioCommand,
     sync::oneshot::{channel, Sender},
 };
-use tracing::debug;
 
 use crate::signer::ledger_signer::speculus::{Handle, Options};
 
@@ -64,7 +63,6 @@ impl PodmanDriver {
         Ok(Self)
     }
 
-    /// Helper to run a synchronous std::process::Command in a non-blocking way.
     fn run_command(mut command: std::process::Command) -> anyhow::Result<std::process::Output> {
         let command_str = format!("{:?}", command);
         let output = command.output().unwrap();
@@ -77,7 +75,7 @@ impl PodmanDriver {
                 String::from_utf8_lossy(&output.stderr)
             );
         }
-        debug!(
+        logging::log::debug!(
             "Successfully ran podman command: {}\nSTDOUT: {}",
             command_str,
             String::from_utf8_lossy(&output.stdout)
@@ -96,7 +94,7 @@ impl Driver for PodmanDriver {
         let name = format!("speculos-{}", opts.http_port);
 
         // Ensure any previous container with the same name is removed.
-        debug!("Force removing existing container '{}'", &name);
+        logging::log::debug!("Force removing existing container '{}'", &name);
         let mut cleanup_cmd = std::process::Command::new("podman");
         cleanup_cmd.args(["rm", "-f", &name]);
         // We don't care if this fails (e.g., if the container didn't exist).
@@ -117,12 +115,11 @@ impl Driver for PodmanDriver {
         let mut speculos_cmd_args = opts.args();
         speculos_cmd_args.push(format!("/app/{}", app_file_name));
 
-        debug!("Container command: {}", speculos_cmd_args.join(" "));
+        logging::log::debug!("Container command: {}", speculos_cmd_args.join(" "));
 
         // Build the `podman run` command.
         let mut command = std::process::Command::new("podman");
         command.arg("run");
-        // command.args(["--detach", "--name", &name]);
         command.arg("--detach");
         command.arg("--name");
         command.arg(&name);
@@ -138,8 +135,7 @@ impl Driver for PodmanDriver {
             command.arg("-p").arg(format!("{}:{}", port, port));
         }
 
-        // Mount the app's directory as a volume instead of copying the file.
-        // This is simpler and more efficient than creating a tarball.
+        // Mount the app's directory as a volume
         command.arg("-v").arg(format!("{}:/app:ro", app_parent_dir));
 
         // Set image and the command to run.
@@ -147,16 +143,16 @@ impl Driver for PodmanDriver {
         command.args(&speculos_cmd_args);
 
         // Create and start the container.
-        debug!("Creating and starting container '{}'", &name);
+        logging::log::debug!("Creating and starting container '{}'", &name);
         Self::run_command(command)?;
-        debug!("Container '{}' started", &name);
+        logging::log::debug!("Container '{}' started", &name);
 
         let (exit_tx, mut exit_rx) = channel();
 
         // Spawn a task to stream container logs.
         let container_name_clone = name.clone();
         tokio::spawn(async move {
-            debug!(
+            logging::log::debug!(
                 "Starting log streaming for container '{}'",
                 container_name_clone
             );
@@ -168,7 +164,7 @@ impl Driver for PodmanDriver {
             let mut child = match cmd.spawn() {
                 Ok(child) => child,
                 Err(e) => {
-                    debug!("Failed to spawn podman logs: {}", e);
+                    logging::log::debug!("Failed to spawn podman logs: {}", e);
                     return;
                 }
             };
@@ -183,23 +179,23 @@ impl Driver for PodmanDriver {
                 tokio::select! {
                     // Check for exit signal
                     _ = &mut exit_rx => {
-                        debug!("Received exit signal for log streaming. Killing process.");
+                        logging::log::debug!("Received exit signal for log streaming. Killing process.");
                         let _ = child.kill().await;
                         break;
                     },
                     // Read from stdout
                     Ok(Some(line)) = stdout_reader.next_line() => {
-                        println!("[{}] {}", container_name_clone, line);
+                        logging::log::debug!("[{}] {}", container_name_clone, line);
                     },
                     // Read from stderr
                     Ok(Some(line)) = stderr_reader.next_line() => {
-                        eprintln!("[{}] {}", container_name_clone, line);
+                        logging::log::debug!("[{}] {}", container_name_clone, line);
                     },
                     // Break if log stream ends
                     else => break,
                 }
             }
-            debug!(
+            logging::log::debug!(
                 "Log streaming task for '{}' finished.",
                 container_name_clone
             );
@@ -214,8 +210,7 @@ impl Driver for PodmanDriver {
     }
 
     fn exit(&self, handle: Self::Handle) -> anyhow::Result<()> {
-        debug!("Stopping container {}", handle.name);
-        eprintln!("Stopping container {}", handle.name);
+        logging::log::debug!("Stopping container {}", handle.name);
 
         // Signal the log streaming task to terminate.
         let _ = handle.exit_tx.send(());
@@ -227,12 +222,12 @@ impl Driver for PodmanDriver {
         let _ = Self::run_command(stop_cmd);
 
         // Remove the container.
-        debug!("Removing container {}", handle.name);
+        logging::log::debug!("Removing container {}", handle.name);
         let mut rm_cmd = std::process::Command::new("podman");
         rm_cmd.args(["rm", "-f", &handle.name]);
         Self::run_command(rm_cmd)?;
 
-        debug!("Container {} removed", handle.name);
+        logging::log::debug!("Container {} removed", handle.name);
         Ok(())
     }
 }
