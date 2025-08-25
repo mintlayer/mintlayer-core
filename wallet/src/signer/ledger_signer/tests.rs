@@ -47,7 +47,7 @@ use wallet_types::hw_data::LedgerData;
 
 use crate::signer::{
     ledger_signer::{
-        ledger_messages::get_extended_public_key,
+        ledger_messages::{get_app_name, get_extended_public_key},
         speculus::{
             Action, Button, Display, Driver, Handle, Model, Options, PodmanDriver, PodmanHandle,
         },
@@ -145,7 +145,7 @@ async fn setup(
     sleep(Duration::from_secs(5)).await;
 
     let mut transport = TcpTransport::new().unwrap();
-    let device = transport
+    let mut device = transport
         .connect(TcpInfo {
             addr: SocketAddr::new(
                 std::net::IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
@@ -154,6 +154,20 @@ async fn setup(
         })
         .await
         .unwrap();
+
+    let mut tries = 0;
+    loop {
+        match get_app_name(&mut device).await {
+            Ok(_) => break,
+            Err(_) => {
+                tries += 1;
+                if tries > 10 {
+                    break;
+                }
+                sleep(Duration::from_millis(100)).await;
+            }
+        }
+    }
 
     let device = Arc::new(Mutex::new(device));
 
@@ -206,6 +220,7 @@ async fn test_account_extended_public_key() {
 
 #[rstest]
 #[trace]
+#[serial_test::serial]
 #[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_sign_message(
