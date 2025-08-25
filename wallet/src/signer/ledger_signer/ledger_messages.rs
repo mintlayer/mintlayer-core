@@ -124,8 +124,8 @@ fn ok_response(resp: Vec<u8>) -> SignerResult<Vec<u8>> {
 }
 
 /// send a message to the Ledger and check the respons status code is ok
-async fn exchange_message<D: Exchange>(
-    ledger: &mut D,
+async fn exchange_message<L: Exchange>(
+    ledger: &mut L,
     msg_buf: &[u8],
 ) -> Result<Vec<u8>, SignerError> {
     let resp = ledger
@@ -210,8 +210,8 @@ pub async fn check_current_app<L: Exchange>(ledger: &mut L) -> SignerResult<()> 
     Ok(())
 }
 
-pub async fn get_extended_public_key<D: Exchange>(
-    ledger: &mut D,
+pub async fn get_extended_public_key<L: Exchange>(
+    ledger: &mut L,
     chain_type: u8,
     derivation_path: DerivationPath,
 ) -> SignerResult<ExtendedPublicKey> {
