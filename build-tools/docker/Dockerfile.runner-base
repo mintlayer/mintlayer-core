@@ -1,3 +1,5 @@
+# Note: this must be consistent with the builder image's base image, see the corresponding comment
+# in Dockerfile.builder.
 FROM debian:bookworm-slim
 
 RUN apt-get update && apt-get install -y gosu && rm -rf /var/lib/apt/lists/*
