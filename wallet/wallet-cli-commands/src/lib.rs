@@ -94,6 +94,15 @@ pub enum CreateWalletSubCommand {
         #[arg(long)]
         device_id: Option<String>,
     },
+    /// Create a wallet using a connected hardware wallet. Only the public keys will be kept in
+    /// the software wallet. Cannot specify a mnemonic or passphrase here,
+    /// the former must have been entered on the hardware during the device setup
+    /// and the latter will have to be entered every time the device is connected to the host machine.
+    #[command()]
+    Ledger {
+        /// File path of the wallet file
+        wallet_path: PathBuf,
+    },
 }
 
 impl CreateWalletSubCommand {
@@ -120,6 +129,8 @@ impl CreateWalletSubCommand {
                 wallet_path,
                 device_id,
             } => (wallet_path, WalletTypeArgs::Trezor { device_id }),
+
+            Self::Ledger { wallet_path } => (wallet_path, WalletTypeArgs::Ledger),
         }
     }
 }
@@ -169,6 +180,15 @@ pub enum RecoverWalletSubCommand {
         #[arg(long)]
         device_id: Option<String>,
     },
+    /// Recover a wallet using a connected hardware wallet. Only the public keys will be kept in
+    /// the software wallet. Cannot specify a mnemonic or passphrase here,
+    /// the former must have been entered on the hardware during the device setup
+    /// and the latter will have to be entered every time the device is connected to the host machine.
+    #[command()]
+    Ledger {
+        /// File path of the wallet file
+        wallet_path: PathBuf,
+    },
 }
 
 impl RecoverWalletSubCommand {
@@ -195,6 +215,8 @@ impl RecoverWalletSubCommand {
                 wallet_path,
                 device_id,
             } => (wallet_path, WalletTypeArgs::Trezor { device_id }),
+
+            Self::Ledger { wallet_path } => (wallet_path, WalletTypeArgs::Ledger),
         }
     }
 }
@@ -226,6 +248,15 @@ pub enum OpenWalletSubCommand {
         /// If not specified and if there are multiple devices connected, a choice will be presented.
         #[arg(long)]
         device_id: Option<String>,
+    },
+
+    /// Open a wallet file that is connected to a hardware wallet.
+    #[command()]
+    Ledger {
+        /// File path of the wallet file
+        wallet_path: PathBuf,
+        /// The existing password, if the wallet is encrypted.
+        encryption_password: Option<String>,
     },
 }
 

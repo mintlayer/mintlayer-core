@@ -70,7 +70,7 @@ impl TestFramework {
                 db,
                 (BlockHeight::new(0), chain_config.genesis_block_id()),
                 WalletType::Hot,
-                |db_tx| {
+                async |db_tx| {
                     Ok(SoftwareSignerProvider::new_from_mnemonic(
                         chain_config.clone(),
                         db_tx,

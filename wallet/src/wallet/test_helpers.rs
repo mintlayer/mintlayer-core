@@ -44,7 +44,7 @@ pub async fn create_wallet_with_mnemonic(
         db,
         (BlockHeight::new(0), genesis_block_id),
         WalletType::Hot,
-        |db_tx| {
+        async |db_tx| {
             Ok(SoftwareSignerProvider::new_from_mnemonic(
                 chain_config,
                 db_tx,
