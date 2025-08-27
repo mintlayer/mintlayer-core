@@ -34,6 +34,9 @@ def build_docker_image(dockerfile_path, image_name, tags, num_jobs=None):
     if num_jobs:
         command += f" --build-arg NUM_JOBS={num_jobs}"
 
+    # Force the amd64 platform in case we're building on an arm-based one.
+    command += " --platform linux/amd64"
+
     # Note: "plain" output is more verbose, but it makes it easier to understand what went wrong
     # when a problem occurs.
     command += " --progress=plain"
@@ -127,6 +130,10 @@ def main():
     args = parser.parse_args()
 
     version = args.version if args.version else get_cargo_version("Cargo.toml")
+    # Note: the CI currently takes the version from the release tag, so it always starts with "v",
+    # but the version from Cargo.toml doesn't have this prefix.
+    version = version if version.startswith('v') else f"v{version}"
+
     tags = [version, *args.local_tags]
 
     if args.build:
