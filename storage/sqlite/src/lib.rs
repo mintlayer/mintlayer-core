@@ -21,6 +21,7 @@ mod queries;
 use rusqlite::{Connection, OpenFlags, OptionalExtension};
 use std::borrow::Cow;
 use std::cmp::max;
+use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard};
 
@@ -31,41 +32,50 @@ use utils::shallow_clone::ShallowClone;
 use utils::sync::Arc;
 
 pub struct DbTx<'m> {
-    connection: MutexGuard<'m, Connection>,
-    queries: &'m SqliteQueries,
+    connection: Arc<SqliteConnection>,
+    _marker: PhantomData<&'m ()>,
 }
 
 impl<'m> DbTx<'m> {
     fn start_transaction(sqlite: &'m SqliteImpl) -> storage_core::Result<Self> {
-        let connection = sqlite
-            .0
-            .connection
-            .lock()
-            .map_err(|e| storage_core::error::Fatal::InternalError(e.to_string()))?;
         let tx = DbTx {
-            connection,
-            queries: &sqlite.0.queries,
+            connection: Arc::clone(&sqlite.0),
+            _marker: PhantomData,
         };
-        tx.connection.execute("BEGIN TRANSACTION", ()).map_err(process_sqlite_error)?;
+        let res = tx.lock_connection()
+            .execute("BEGIN TRANSACTION", ())
+            .map_err(process_sqlite_error);
+
+        if let Err(err) = &res {
+            logging::log::error!("Error: {err:?}"); // FIXME
+        }
+
+        res?;
         Ok(tx)
     }
 
     fn commit_transaction(&self) -> storage_core::Result<()> {
         let _res = self
-            .connection
+            .lock_connection()
             .execute("COMMIT TRANSACTION", ())
             .map_err(process_sqlite_error)?;
         Ok(())
+    }
+
+    fn lock_connection(&self) -> MutexGuard<'_, Connection> {
+        self.connection.connection.lock().expect("poisoned mutex")
     }
 }
 
 impl Drop for DbTx<'_> {
     fn drop(&mut self) {
-        if self.connection.is_autocommit() {
+        let conn_lock = self.lock_connection();
+
+        if conn_lock.is_autocommit() {
             return;
         }
 
-        let res = self.connection.execute("ROLLBACK TRANSACTION", ());
+        let res = conn_lock.execute("ROLLBACK TRANSACTION", ());
         if let Err(err) = res {
             logging::log::error!("Error: transaction rollback failed: {}", err);
         }
@@ -74,9 +84,10 @@ impl Drop for DbTx<'_> {
 
 impl backend::ReadOps for DbTx<'_> {
     fn get(&self, map_id: DbMapId, key: &[u8]) -> storage_core::Result<Option<Cow<[u8]>>> {
-        let mut stmt = self
-            .connection
-            .prepare_cached(self.queries[map_id].get_query())
+        let conn_lock = self.lock_connection();
+
+        let mut stmt = conn_lock
+            .prepare_cached(self.connection.queries[map_id].get_query())
             .map_err(process_sqlite_error)?;
 
         let params = (key,);
@@ -95,9 +106,9 @@ impl backend::ReadOps for DbTx<'_> {
     ) -> storage_core::Result<impl Iterator<Item = (Data, Data)> + '_> {
         // TODO check if prefix.is_empty()
         // TODO Perform the filtering in the SQL query itself
-        let mut stmt = self
-            .connection
-            .prepare_cached(self.queries[map_id].prefix_iter_query())
+        let conn_lock = self.lock_connection();
+        let mut stmt = conn_lock
+            .prepare_cached(self.connection.queries[map_id].prefix_iter_query())
             .map_err(process_sqlite_error)?;
 
         let mut rows = stmt.query(()).map_err(process_sqlite_error)?;
@@ -119,9 +130,9 @@ impl backend::ReadOps for DbTx<'_> {
         map_id: DbMapId,
         key: Data,
     ) -> storage_core::Result<impl Iterator<Item = (Data, Data)> + '_> {
-        let mut stmt = self
-            .connection
-            .prepare_cached(&self.queries[map_id].greater_equal_iter_query(&key))
+        let conn_lock = self.lock_connection();
+        let mut stmt = conn_lock
+            .prepare_cached(&self.connection.queries[map_id].greater_equal_iter_query(&key))
             .map_err(process_sqlite_error)?;
 
         let mut rows = stmt.query(()).map_err(process_sqlite_error)?;
@@ -141,9 +152,9 @@ impl backend::ReadOps for DbTx<'_> {
 
 impl backend::WriteOps for DbTx<'_> {
     fn put(&mut self, map_id: DbMapId, key: Data, val: Data) -> storage_core::Result<()> {
-        let mut stmt = self
-            .connection
-            .prepare_cached(self.queries[map_id].put_query())
+        let conn_lock = self.lock_connection();
+        let mut stmt = conn_lock
+            .prepare_cached(self.connection.queries[map_id].put_query())
             .map_err(process_sqlite_error)?;
 
         let params = (key, val);
@@ -153,9 +164,9 @@ impl backend::WriteOps for DbTx<'_> {
     }
 
     fn del(&mut self, map_id: DbMapId, key: &[u8]) -> storage_core::Result<()> {
-        let mut stmt = self
-            .connection
-            .prepare_cached(self.queries[map_id].delete_query())
+        let conn_lock = self.lock_connection();
+        let mut stmt = conn_lock
+            .prepare_cached(self.connection.queries[map_id].delete_query())
             .map_err(process_sqlite_error)?;
 
         let params = (key,);
@@ -345,4 +356,8 @@ impl backend::Backend for Sqlite {
             queries,
         })))
     }
+}
+
+impl backend::BackendWithSendableTransactions for Sqlite {
+    type ImplHelper = SqliteImpl;
 }

@@ -72,10 +72,9 @@ use tx_verifier::{check_transaction, CheckTransactionError};
 use utils::{debug_panic_or_log, ensure};
 pub use wallet_storage::Error;
 use wallet_storage::{
-    DefaultBackend, Store, StoreLocalReadOnlyUnlocked, StoreLocalReadWriteUnlocked, StoreTxRo,
-    StoreTxRw, StoreTxRwUnlocked, TransactionRoLocked, TransactionRwLocked, TransactionRwUnlocked,
-    Transactional, WalletStorageReadLocked, WalletStorageReadUnlocked, WalletStorageWriteLocked,
-    WalletStorageWriteUnlocked,
+    DefaultBackend, Store, StoreTxRo, StoreTxRw, StoreTxRwUnlocked, TransactionRoLocked,
+    TransactionRwLocked, TransactionRwUnlocked, Transactional, WalletStorageReadLocked,
+    WalletStorageReadUnlocked, WalletStorageWriteLocked, WalletStorageWriteUnlocked,
 };
 use wallet_types::account_info::{StandaloneAddressDetails, StandaloneAddresses};
 use wallet_types::chain_info::ChainInfo;
@@ -297,7 +296,7 @@ pub enum WalletPoolsFilter {
     Stake,
 }
 
-pub struct Wallet<B: storage::Backend + 'static, P: SignerProvider> {
+pub struct Wallet<B: storage::BackendWithSendableTransactions + 'static, P: SignerProvider> {
     chain_config: Arc<ChainConfig>,
     db: Store<B>,
     accounts: BTreeMap<U31, Account<P::K>>,
@@ -355,7 +354,7 @@ impl<W> WalletCreation<W> {
 
 impl<B, P> Wallet<B, P>
 where
-    B: storage::Backend + 'static,
+    B: storage::BackendWithSendableTransactions + 'static,
     P: SignerProvider,
 {
     pub fn create_new_wallet<F: FnOnce(&mut StoreTxRwUnlocked<B>) -> WalletResult<P>>(
@@ -1131,34 +1130,25 @@ where
     async fn async_for_account_rw_unlocked<R, T>(
         &mut self,
         account_index: U31,
-        create_request: impl FnOnce(&mut Account<P::K>, &mut StoreLocalReadWriteUnlocked<B>) -> R,
+        create_request: impl FnOnce(&mut Account<P::K>, &mut StoreTxRwUnlocked<B>) -> R,
         sign_request: impl AsyncFnOnce(
                 R,
                 &P::K,
-                StoreLocalReadOnlyUnlocked<B>,
+                &mut StoreTxRwUnlocked<B>,
                 Arc<ChainConfig>,
                 <P as SignerProvider>::S,
             ) -> WalletResult<T>
             + Send,
     ) -> WalletResult<T> {
         let account = Self::get_account_mut(&mut self.accounts, account_index)?;
-        let mut local_db_tx = self.db.local_rw_unlocked();
-        let result = create_request(account, &mut local_db_tx);
+        let mut db_tx = self.db.transaction_rw_unlocked(None)?;
+        let result = create_request(account, &mut db_tx);
         let signer = self.signer_provider.provide(self.chain_config.clone(), account_index);
         let config = self.chain_config.clone();
-        let result = sign_request(
-            result,
-            account.key_chain(),
-            local_db_tx.read_only_store(),
-            config,
-            signer,
-        )
-        .await;
+        let result = sign_request(result, account.key_chain(), &mut db_tx, config, signer).await;
 
         match result {
             Ok(value) => {
-                let mut db_tx = self.db.transaction_rw(None)?;
-                local_db_tx.perform_operations(&mut db_tx)?;
                 // Abort the process if the DB transaction fails. See `for_account_rw` for more information.
                 db_tx.commit().expect("RW transaction commit failed unexpectedly");
                 Ok(value)
@@ -1179,7 +1169,7 @@ where
         account_index: U31,
         f: impl AsyncFnOnce(
                 &P::K,
-                StoreLocalReadOnlyUnlocked<B>,
+                &mut StoreTxRwUnlocked<B>,
                 Arc<ChainConfig>,
                 <P as SignerProvider>::S,
             ) -> WalletResult<T>
@@ -1201,7 +1191,7 @@ where
         additional_info: TxAdditionalInfo,
         f: impl FnOnce(
             &mut Account<P::K>,
-            &mut StoreLocalReadWriteUnlocked<B>,
+            &mut StoreTxRwUnlocked<B>,
         ) -> WalletResult<(SendRequest, AddlData)>,
         error_mapper: impl FnOnce(WalletError) -> WalletError + Send,
     ) -> WalletResult<(SignedTxWithFees, AddlData)> {
@@ -1218,7 +1208,7 @@ where
                 let ptx = request.into_partially_signed_tx(additional_info)?;
 
                 let ptx = signer
-                    .sign_tx(ptx, key_chain, &store, next_block_height)
+                    .sign_tx(ptx, key_chain, store, next_block_height)
                     .await
                     .map(|(ptx, _, _)| ptx)?;
 
@@ -1265,10 +1255,7 @@ where
         &mut self,
         account_index: U31,
         additional_info: TxAdditionalInfo,
-        f: impl FnOnce(
-            &mut Account<P::K>,
-            &mut StoreLocalReadWriteUnlocked<B>,
-        ) -> WalletResult<SendRequest>,
+        f: impl FnOnce(&mut Account<P::K>, &mut StoreTxRwUnlocked<B>) -> WalletResult<SendRequest>,
     ) -> WalletResult<SignedTxWithFees> {
         self.async_for_account_rw_unlocked_and_check_tx_custom_error(
             account_index,
@@ -1686,7 +1673,7 @@ where
                             &input_destinations,
                             &intent,
                             key_chain,
-                            &store,
+                            store,
                         )
                         .await
                         .map_err(Into::into)
@@ -2224,7 +2211,7 @@ where
                 let ptx = request?.into_partially_signed_tx(additional_info)?;
 
                 let ptx = signer
-                    .sign_tx(ptx, key_chain, &store, next_block_height)
+                    .sign_tx(ptx, key_chain, store, next_block_height)
                     .await
                     .map(|(ptx, _, _)| ptx)?;
                 let input_commitments =
@@ -2442,7 +2429,7 @@ where
             account_index,
             async move |key_chain, store, _chain_config, mut signer| {
                 signer
-                    .sign_tx(ptx, key_chain, &store, next_block_height)
+                    .sign_tx(ptx, key_chain, store, next_block_height)
                     .await
                     .map_err(Into::into)
             },
@@ -2460,7 +2447,7 @@ where
             account_index,
             async move |key_chain, store, _chain_config, mut signer| {
                 signer
-                    .sign_challenge(challenge, destination, key_chain, &store)
+                    .sign_challenge(challenge, destination, key_chain, store)
                     .await
                     .map_err(Into::into)
             },
@@ -2647,7 +2634,7 @@ fn to_token_additional_info(token_info: &UnconfirmedTokenInfo) -> TxAdditionalIn
 
 impl<B, P> Wallet<B, P>
 where
-    B: storage::Backend + 'static,
+    B: storage::BackendWithSendableTransactions + 'static,
     P: SignerProvider<K = AccountKeyChainImplSoftware>,
 {
     pub fn get_vrf_key(

@@ -31,7 +31,7 @@ use crypto::{
     symkey::SymmetricKey,
 };
 use serialization::{Codec, DecodeAll, Encode, EncodeLike};
-use storage::{schema, Backend, MakeMapRef};
+use storage::{schema, BackendWithSendableTransactions, MakeMapRef};
 use utils::{
     ensure,
     maybe_encrypted::{MaybeEncrypted, MaybeEncryptedError},
@@ -98,34 +98,34 @@ pub enum EncryptionState {
 }
 
 /// Read-only chainstate storage transaction
-pub struct StoreTxRo<'st, B: storage::Backend> {
+pub struct StoreTxRo<'st, B: storage::BackendWithSendableTransactions> {
     storage: storage::TransactionRo<'st, B, Schema>,
 }
 
 /// Read-only chainstate storage transaction unlocked
-pub struct StoreTxRoUnlocked<'st, B: storage::Backend> {
+pub struct StoreTxRoUnlocked<'st, B: storage::BackendWithSendableTransactions> {
     storage: storage::TransactionRo<'st, B, Schema>,
     encryption_key: &'st Option<SymmetricKey>,
 }
 
 /// Read-write chainstate storage transaction
-pub struct StoreTxRw<'st, B: storage::Backend> {
+pub struct StoreTxRw<'st, B: storage::BackendWithSendableTransactions> {
     storage: storage::TransactionRw<'st, B, Schema>,
 }
 
 /// Read-write chainstate storage transaction unlocked
-pub struct StoreTxRwUnlocked<'st, B: storage::Backend> {
+pub struct StoreTxRwUnlocked<'st, B: storage::BackendWithSendableTransactions> {
     storage: storage::TransactionRw<'st, B, Schema>,
     encryption_key: &'st Option<SymmetricKey>,
 }
 
-impl<'st, B: storage::Backend> StoreTxRo<'st, B> {
+impl<'st, B: storage::BackendWithSendableTransactions> StoreTxRo<'st, B> {
     pub fn new(storage: storage::TransactionRo<'st, B, Schema>) -> Self {
         Self { storage }
     }
 }
 
-impl<'st, B: storage::Backend> StoreTxRoUnlocked<'st, B> {
+impl<'st, B: storage::BackendWithSendableTransactions> StoreTxRoUnlocked<'st, B> {
     pub fn new(
         storage: storage::TransactionRo<'st, B, Schema>,
         encryption_key: &'st Option<SymmetricKey>,
@@ -137,13 +137,13 @@ impl<'st, B: storage::Backend> StoreTxRoUnlocked<'st, B> {
     }
 }
 
-impl<'st, B: storage::Backend> StoreTxRw<'st, B> {
+impl<'st, B: storage::BackendWithSendableTransactions> StoreTxRw<'st, B> {
     pub fn new(storage: storage::TransactionRw<'st, B, Schema>) -> Self {
         Self { storage }
     }
 }
 
-impl<'st, B: storage::Backend> StoreTxRwUnlocked<'st, B> {
+impl<'st, B: storage::BackendWithSendableTransactions> StoreTxRwUnlocked<'st, B> {
     pub fn new(
         storage: storage::TransactionRw<'st, B, Schema>,
         encryption_key: &'st Option<SymmetricKey>,
@@ -164,18 +164,18 @@ type TxOperation<B> = dyn FnOnce(&mut StoreTxRw<'_, B>) -> crate::Result<()> + '
 
 /// A local read/write object, stores each write operation and performs them only at the end
 /// Avoids references to avoid lifetime issues in async functions
-pub struct StoreLocalReadWriteUnlocked<B: Backend> {
+pub struct StoreLocalReadWriteUnlocked<B: BackendWithSendableTransactions> {
     operations: Vec<Box<TxOperation<B>>>,
     local_read: Store<B>,
 }
 
 /// A wrapper around the store itself that opens a new read only transaction on each read operation
 /// Can be used in async contexts
-pub struct StoreLocalReadOnlyUnlocked<B: Backend> {
+pub struct StoreLocalReadOnlyUnlocked<B: BackendWithSendableTransactions> {
     local_read: Store<B>,
 }
 
-impl<B: Backend> StoreLocalReadWriteUnlocked<B> {
+impl<B: BackendWithSendableTransactions> StoreLocalReadWriteUnlocked<B> {
     pub fn new(local_read: Store<B>) -> Self {
         Self {
             operations: vec![],
@@ -207,7 +207,7 @@ impl<B: Backend> StoreLocalReadWriteUnlocked<B> {
     }
 }
 
-impl<B: storage::Backend> WalletStorageReadLocked for StoreLocalReadWriteUnlocked<B> {
+impl<B: storage::BackendWithSendableTransactions> WalletStorageReadLocked for StoreLocalReadWriteUnlocked<B> {
     fn get_storage_version(&self) -> crate::Result<u32> {
         self.local_read.transaction_ro()?.get_storage_version()
     }
@@ -344,7 +344,7 @@ impl<B: storage::Backend> WalletStorageReadLocked for StoreLocalReadWriteUnlocke
     }
 }
 
-impl<B: storage::Backend> WalletStorageReadUnlocked for StoreLocalReadWriteUnlocked<B> {
+impl<B: storage::BackendWithSendableTransactions> WalletStorageReadUnlocked for StoreLocalReadWriteUnlocked<B> {
     fn get_root_key(&self) -> crate::Result<Option<RootKeys>> {
         self.local_read.transaction_ro_unlocked()?.get_root_key()
     }
@@ -362,7 +362,7 @@ impl<B: storage::Backend> WalletStorageReadUnlocked for StoreLocalReadWriteUnloc
     }
 }
 
-impl<B: storage::Backend> WalletStorageReadLocked for StoreLocalReadOnlyUnlocked<B> {
+impl<B: storage::BackendWithSendableTransactions> WalletStorageReadLocked for StoreLocalReadOnlyUnlocked<B> {
     fn get_storage_version(&self) -> crate::Result<u32> {
         self.local_read.transaction_ro()?.get_storage_version()
     }
@@ -499,7 +499,7 @@ impl<B: storage::Backend> WalletStorageReadLocked for StoreLocalReadOnlyUnlocked
     }
 }
 
-impl<B: storage::Backend> WalletStorageReadUnlocked for StoreLocalReadOnlyUnlocked<B> {
+impl<B: storage::BackendWithSendableTransactions> WalletStorageReadUnlocked for StoreLocalReadOnlyUnlocked<B> {
     fn get_root_key(&self) -> crate::Result<Option<RootKeys>> {
         self.local_read.transaction_ro_unlocked()?.get_root_key()
     }
@@ -517,7 +517,7 @@ impl<B: storage::Backend> WalletStorageReadUnlocked for StoreLocalReadOnlyUnlock
     }
 }
 
-impl<B: storage::Backend> WalletStorageWriteLocked for StoreLocalReadWriteUnlocked<B> {
+impl<B: storage::BackendWithSendableTransactions> WalletStorageWriteLocked for StoreLocalReadWriteUnlocked<B> {
     fn set_storage_version(&mut self, version: u32) -> crate::Result<()> {
         self.add_operation(Box::new(move |dbtx| dbtx.set_storage_version(version)));
         Ok(())
@@ -735,7 +735,7 @@ impl<B: storage::Backend> WalletStorageWriteLocked for StoreLocalReadWriteUnlock
 macro_rules! impl_read_ops {
     ($TxType:ident) => {
         /// Wallet data storage transaction
-        impl<'st, B: storage::Backend> WalletStorageReadLocked for $TxType<'st, B> {
+        impl<'st, B: storage::BackendWithSendableTransactions> WalletStorageReadLocked for $TxType<'st, B> {
             fn get_storage_version(&self) -> crate::Result<u32> {
                 self.read_value::<well_known::StoreVersion>().map(|v| v.unwrap_or_default())
             }
@@ -924,7 +924,7 @@ macro_rules! impl_read_ops {
             }
         }
 
-        impl<'st, B: storage::Backend> $TxType<'st, B> {
+        impl<'st, B: storage::BackendWithSendableTransactions> $TxType<'st, B> {
             // Read a value from the database and decode it
             fn read<DbMap, I, K>(&self, key: K) -> crate::Result<Option<DbMap::Value>>
             where
@@ -954,7 +954,139 @@ impl_read_ops!(StoreTxRw);
 impl_read_ops!(StoreTxRoUnlocked);
 impl_read_ops!(StoreTxRwUnlocked);
 
-impl<B: storage::Backend> WalletStorageEncryptionRead for StoreTxRo<'_, B> {
+impl<T> WalletStorageReadLocked for &mut T where T: WalletStorageReadLocked {
+    fn get_storage_version(&self) -> crate::Result<u32> {
+        (**self).get_storage_version()
+    }
+
+    fn get_wallet_type(&self) -> crate::Result<WalletType> {
+        (**self).get_wallet_type()
+    }
+
+    fn get_chain_info(&self) -> crate::Result<ChainInfo> {
+        (**self).get_chain_info()
+    }
+
+    fn get_transaction(&self, id: &AccountWalletTxId) -> crate::Result<Option<WalletTx>> {
+        (**self).get_transaction(id)
+    }
+
+    fn get_accounts_info(&self) -> crate::Result<BTreeMap<AccountId, AccountInfo>> {
+        (**self).get_accounts_info()
+    }
+
+    fn get_address(&self, id: &AccountDerivationPathId) -> crate::Result<Option<String>> {
+        (**self).get_address(id)
+    }
+
+    fn get_addresses(
+        &self,
+        account_id: &AccountId,
+    ) -> crate::Result<BTreeMap<AccountDerivationPathId, String>> {
+        (**self).get_addresses(account_id)
+    }
+
+    fn check_root_keys_sanity(&self) -> crate::Result<()> {
+        (**self).check_root_keys_sanity()
+    }
+
+    /// Collect and return all transactions from the storage
+    fn get_transactions(
+        &self,
+        account_id: &AccountId,
+    ) -> crate::Result<Vec<(AccountWalletTxId, WalletTx)>> {
+        (**self).get_transactions(account_id)
+    }
+
+    /// Collect and return all signed transactions from the storage
+    fn get_user_transactions(&self) -> crate::Result<Vec<SignedTransaction>> {
+        (**self).get_user_transactions()
+    }
+
+    fn get_account_unconfirmed_tx_counter(
+        &self,
+        account_id: &AccountId,
+    ) -> crate::Result<Option<u64>> {
+        (**self).get_account_unconfirmed_tx_counter(account_id)
+    }
+
+    fn get_account_vrf_public_keys(
+        &self,
+        account_id: &AccountId,
+    ) -> crate::Result<Option<AccountVrfKeys>> {
+        (**self).get_account_vrf_public_keys(account_id)
+    }
+
+    fn get_account_standalone_watch_only_keys(
+        &self,
+        account_id: &AccountId,
+    ) -> crate::Result<BTreeMap<Destination, StandaloneWatchOnlyKey>> {
+        (**self).get_account_standalone_watch_only_keys(account_id)
+    }
+
+    fn get_account_standalone_multisig_keys(
+        &self,
+        account_id: &AccountId,
+    ) -> crate::Result<BTreeMap<Destination, StandaloneMultisig>> {
+        (**self).get_account_standalone_multisig_keys(account_id)
+    }
+
+    fn get_account_standalone_private_keys(
+        &self,
+        account_id: &AccountId,
+    ) -> crate::Result<Vec<(AccountPublicKey, Option<String>)>> {
+        (**self).get_account_standalone_private_keys(account_id)
+    }
+
+    fn get_keychain_usage_state(
+        &self,
+        id: &AccountKeyPurposeId,
+    ) -> crate::Result<Option<KeychainUsageState>> {
+        (**self).get_keychain_usage_state(id)
+    }
+
+    fn get_vrf_keychain_usage_state(
+        &self,
+        id: &AccountId,
+    ) -> crate::Result<Option<KeychainUsageState>> {
+        (**self).get_vrf_keychain_usage_state(id)
+    }
+
+    fn get_keychain_usage_states(
+        &self,
+        account_id: &AccountId,
+    ) -> crate::Result<BTreeMap<AccountKeyPurposeId, KeychainUsageState>> {
+        (**self).get_keychain_usage_states(account_id)
+    }
+
+    fn get_public_key(
+        &self,
+        id: &AccountDerivationPathId,
+    ) -> crate::Result<Option<ExtendedPublicKey>> {
+        (**self).get_public_key(id)
+    }
+
+    fn get_public_keys(
+        &self,
+        account_id: &AccountId,
+    ) -> crate::Result<BTreeMap<AccountDerivationPathId, ExtendedPublicKey>> {
+        (**self).get_public_keys(account_id)
+    }
+
+    fn get_median_time(&self) -> crate::Result<Option<BlockTimestamp>> {
+        (**self).get_median_time()
+    }
+
+    fn get_lookahead_size(&self) -> crate::Result<u32> {
+        (**self).get_lookahead_size()
+    }
+
+    fn get_hardware_wallet_data(&self) -> crate::Result<Option<hw_data::HardwareWalletData>> {
+        (**self).get_hardware_wallet_data()
+    }
+}
+
+impl<B: storage::BackendWithSendableTransactions> WalletStorageEncryptionRead for StoreTxRo<'_, B> {
     fn get_encryption_key_kdf_challenge(&self) -> crate::Result<Option<KdfChallenge>> {
         self.read_value::<well_known::EncryptionKeyKdfChallenge>()
     }
@@ -982,10 +1114,11 @@ impl<B: storage::Backend> WalletStorageEncryptionRead for StoreTxRo<'_, B> {
             })?
     }
 }
+
 macro_rules! impl_read_unlocked_ops {
     ($TxType:ident) => {
         /// Wallet data storage transaction
-        impl<'st, B: storage::Backend> WalletStorageReadUnlocked for $TxType<'st, B> {
+        impl<'st, B: storage::BackendWithSendableTransactions> WalletStorageReadUnlocked for $TxType<'st, B> {
             fn get_root_key(&self) -> crate::Result<Option<RootKeys>> {
                 Ok(
                     self.read::<db::DBRootKeys, _, _>(&RootKeyConstant {})?.map(|v| {
@@ -1020,10 +1153,27 @@ macro_rules! impl_read_unlocked_ops {
 impl_read_unlocked_ops!(StoreTxRoUnlocked);
 impl_read_unlocked_ops!(StoreTxRwUnlocked);
 
+impl<T> WalletStorageReadUnlocked for &mut T where T: WalletStorageReadUnlocked {
+    fn get_root_key(&self) -> crate::Result<Option<RootKeys>> {
+        (**self).get_root_key()
+    }
+
+    fn get_seed_phrase(&self) -> crate::Result<Option<SerializableSeedPhrase>> {
+        (**self).get_seed_phrase()
+    }
+
+    fn get_account_standalone_private_key(
+        &self,
+        account_pubkey: &AccountPublicKey,
+    ) -> crate::Result<Option<PrivateKey>> {
+        (**self).get_account_standalone_private_key(account_pubkey)
+    }
+}
+
 macro_rules! impl_write_ops {
     ($TxType:ident) => {
         /// Wallet data storage transaction
-        impl<'st, B: storage::Backend> WalletStorageWriteLocked for $TxType<'st, B> {
+        impl<'st, B: storage::BackendWithSendableTransactions> WalletStorageWriteLocked for $TxType<'st, B> {
             fn set_storage_version(&mut self, version: u32) -> crate::Result<()> {
                 self.write_value::<well_known::StoreVersion>(&version)
             }
@@ -1194,7 +1344,7 @@ macro_rules! impl_write_ops {
             }
         }
 
-        impl<'st, B: storage::Backend> $TxType<'st, B> {
+        impl<'st, B: storage::BackendWithSendableTransactions> $TxType<'st, B> {
             // Encode a value and write it to the database
             fn write<DbMap, I, K, V>(&mut self, key: K, value: V) -> crate::Result<()>
             where
@@ -1217,7 +1367,7 @@ macro_rules! impl_write_ops {
 impl_write_ops!(StoreTxRw);
 impl_write_ops!(StoreTxRwUnlocked);
 
-impl<B: storage::Backend> WalletStorageEncryptionWrite for StoreTxRwUnlocked<'_, B> {
+impl<B: storage::BackendWithSendableTransactions> WalletStorageEncryptionWrite for StoreTxRwUnlocked<'_, B> {
     fn set_encryption_kdf_challenge(&mut self, salt: &KdfChallenge) -> crate::Result<()> {
         self.write_value::<well_known::EncryptionKeyKdfChallenge>(salt)
     }
@@ -1295,7 +1445,7 @@ impl<B: storage::Backend> WalletStorageEncryptionWrite for StoreTxRwUnlocked<'_,
 }
 
 /// Wallet data storage transaction
-impl<B: storage::Backend> WalletStorageWriteUnlocked for StoreTxRwUnlocked<'_, B> {
+impl<B: storage::BackendWithSendableTransactions> WalletStorageWriteUnlocked for StoreTxRwUnlocked<'_, B> {
     fn set_root_key(&mut self, tx: &RootKeys) -> crate::Result<()> {
         let value = MaybeEncrypted::new(tx, self.encryption_key);
         self.write::<db::DBRootKeys, _, _, _>(RootKeyConstant, value)
@@ -1338,19 +1488,19 @@ impl<B: storage::Backend> WalletStorageWriteUnlocked for StoreTxRwUnlocked<'_, B
     }
 }
 
-impl<B: storage::Backend> crate::TransactionRoLocked for StoreTxRo<'_, B> {
+impl<B: storage::BackendWithSendableTransactions> crate::TransactionRoLocked for StoreTxRo<'_, B> {
     fn close(self) {
         self.storage.close()
     }
 }
 
-impl<B: storage::Backend> crate::TransactionRoUnlocked for StoreTxRoUnlocked<'_, B> {
+impl<B: storage::BackendWithSendableTransactions> crate::TransactionRoUnlocked for StoreTxRoUnlocked<'_, B> {
     fn close(self) {
         self.storage.close()
     }
 }
 
-impl<B: storage::Backend> crate::TransactionRwLocked for StoreTxRw<'_, B> {
+impl<B: storage::BackendWithSendableTransactions> crate::TransactionRwLocked for StoreTxRw<'_, B> {
     fn commit(self) -> crate::Result<()> {
         self.storage.commit().map_err(Into::into)
     }
@@ -1360,7 +1510,7 @@ impl<B: storage::Backend> crate::TransactionRwLocked for StoreTxRw<'_, B> {
     }
 }
 
-impl<B: storage::Backend> crate::TransactionRwUnlocked for StoreTxRwUnlocked<'_, B> {
+impl<B: storage::BackendWithSendableTransactions> crate::TransactionRwUnlocked for StoreTxRwUnlocked<'_, B> {
     fn commit(self) -> crate::Result<()> {
         self.storage.commit().map_err(Into::into)
     }
@@ -1370,8 +1520,8 @@ impl<B: storage::Backend> crate::TransactionRwUnlocked for StoreTxRwUnlocked<'_,
     }
 }
 
-impl<B: storage::Backend> crate::IsTransaction for StoreTxRo<'_, B> {}
-impl<B: storage::Backend> crate::IsTransaction for StoreTxRw<'_, B> {}
-impl<B: storage::Backend> crate::IsTransaction for StoreTxRoUnlocked<'_, B> {}
-impl<B: storage::Backend> crate::IsTransaction for StoreTxRwUnlocked<'_, B> {}
-impl<B: storage::Backend> crate::IsTransaction for StoreLocalReadWriteUnlocked<B> {}
+impl<B: storage::BackendWithSendableTransactions> crate::IsTransaction for StoreTxRo<'_, B> {}
+impl<B: storage::BackendWithSendableTransactions> crate::IsTransaction for StoreTxRw<'_, B> {}
+impl<B: storage::BackendWithSendableTransactions> crate::IsTransaction for StoreTxRoUnlocked<'_, B> {}
+impl<B: storage::BackendWithSendableTransactions> crate::IsTransaction for StoreTxRwUnlocked<'_, B> {}
+impl<B: storage::BackendWithSendableTransactions> crate::IsTransaction for StoreLocalReadWriteUnlocked<B> {}

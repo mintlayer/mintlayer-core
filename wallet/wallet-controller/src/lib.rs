@@ -192,7 +192,7 @@ pub struct ControllerConfig {
     pub broadcast_to_mempool: bool,
 }
 
-pub struct Controller<T, W, B: storage::Backend + 'static> {
+pub struct Controller<T, W, B: storage::BackendWithSendableTransactions + 'static> {
     chain_config: Arc<ChainConfig>,
 
     rpc_client: T,
@@ -204,7 +204,7 @@ pub struct Controller<T, W, B: storage::Backend + 'static> {
     wallet_events: W,
 }
 
-impl<T, WalletEvents, B: storage::Backend> std::fmt::Debug for Controller<T, WalletEvents, B> {
+impl<T, WalletEvents, B: storage::BackendWithSendableTransactions> std::fmt::Debug for Controller<T, WalletEvents, B> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Controller").finish()
     }
@@ -219,7 +219,7 @@ impl<N, W, B> Controller<N, W, B>
 where
     N: NodeInterface + Clone + Send + Sync + 'static,
     W: WalletEvents,
-    B: storage::Backend + 'static,
+    B: storage::BackendWithSendableTransactions + 'static,
 {
     pub async fn new(
         chain_config: Arc<ChainConfig>,

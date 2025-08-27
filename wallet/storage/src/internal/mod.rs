@@ -32,12 +32,12 @@ pub use store_tx::{
 use self::store_tx::EncryptionState;
 
 /// Store for wallet data, parametrized over the backend B
-pub struct Store<B: storage::Backend> {
+pub struct Store<B: storage::BackendWithSendableTransactions> {
     storage: storage::Storage<B, Schema>,
     encryption_state: EncryptionState,
 }
 
-impl<B: storage::Backend> Store<B> {
+impl<B: storage::BackendWithSendableTransactions> Store<B> {
     /// Create a new wallet storage
     pub fn new(backend: B) -> crate::Result<Self> {
         let storage: storage::Storage<B, Schema> =
@@ -161,7 +161,7 @@ impl<B: storage::Backend> Store<B> {
     }
 }
 
-impl<B: storage::Backend> Clone for Store<B>
+impl<B: storage::BackendWithSendableTransactions> Clone for Store<B>
 where
     B::Impl: Clone,
 {
@@ -173,7 +173,7 @@ where
     }
 }
 
-impl<'tx, B: storage::Backend + 'tx> Transactional<'tx> for Store<B> {
+impl<'tx, B: storage::BackendWithSendableTransactions + 'tx> Transactional<'tx> for Store<B> {
     type TransactionRoLocked = StoreTxRo<'tx, B>;
     type TransactionRwLocked = StoreTxRw<'tx, B>;
     type TransactionRoUnlocked = StoreTxRoUnlocked<'tx, B>;

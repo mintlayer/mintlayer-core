@@ -85,7 +85,7 @@ const NETWORK_FEE: u128 = 10000;
 
 fn get_best_block<B, P>(wallet: &Wallet<B, P>) -> (Id<GenBlock>, BlockHeight)
 where
-    B: storage::Backend + 'static,
+    B: storage::BackendWithSendableTransactions + 'static,
     P: SignerProvider,
 {
     *wallet.get_best_block().first_key_value().unwrap().1
@@ -180,7 +180,7 @@ fn get_address(
 
 fn get_coin_balance_for_acc<B, P>(wallet: &Wallet<B, P>, account: U31) -> Amount
 where
-    B: storage::Backend + 'static,
+    B: storage::BackendWithSendableTransactions + 'static,
     P: SignerProvider,
 {
     let coin_balance = wallet
@@ -194,7 +194,7 @@ where
 
 fn get_coin_balance_with_inactive<B, P>(wallet: &Wallet<B, P>) -> Amount
 where
-    B: storage::Backend + 'static,
+    B: storage::BackendWithSendableTransactions + 'static,
     P: SignerProvider,
 {
     let coin_balance = wallet
@@ -227,7 +227,7 @@ fn get_balance_with(
 
 fn get_coin_balance<B, P>(wallet: &Wallet<B, P>) -> Amount
 where
-    B: storage::Backend + 'static,
+    B: storage::BackendWithSendableTransactions + 'static,
     P: SignerProvider,
 {
     get_coin_balance_for_acc(wallet, DEFAULT_ACCOUNT_INDEX)
@@ -235,7 +235,7 @@ where
 
 fn get_currency_balances<B, P>(wallet: &Wallet<B, P>) -> (Amount, Vec<(TokenId, Amount)>)
 where
-    B: storage::Backend + 'static,
+    B: storage::BackendWithSendableTransactions + 'static,
     P: SignerProvider,
 {
     let mut currency_balances = wallet
@@ -264,7 +264,7 @@ fn verify_wallet_balance<B, P>(
     wallet: &Wallet<B, P>,
     expected_balance: Amount,
 ) where
-    B: storage::Backend + 'static,
+    B: storage::BackendWithSendableTransactions + 'static,
     P: SignerProvider,
 {
     let coin_balance = get_coin_balance(wallet);
@@ -307,7 +307,7 @@ fn create_block_with_reward_address<B, P>(
     address: Destination,
 ) -> Block
 where
-    B: storage::Backend + 'static,
+    B: storage::BackendWithSendableTransactions + 'static,
     P: SignerProvider,
 {
     let block1 = Block::new(
@@ -332,7 +332,7 @@ fn create_block<B, P>(
     block_height: u64,
 ) -> (Address<Destination>, Block)
 where
-    B: storage::Backend + 'static,
+    B: storage::BackendWithSendableTransactions + 'static,
     P: SignerProvider,
 {
     let address = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1;
@@ -999,7 +999,7 @@ fn test_wallet_accounts<B, P>(
     wallet: &Wallet<B, P>,
     expected_accounts: Vec<U31>,
 ) where
-    B: storage::Backend + 'static,
+    B: storage::BackendWithSendableTransactions + 'static,
     P: SignerProvider,
 {
     let accounts = wallet.account_indexes().cloned().collect::<Vec<_>>();
@@ -1224,9 +1224,9 @@ async fn locked_wallet_cant_sign_transaction(#[case] seed: Seed) {
                 TxAdditionalInfo::new(),
             )
             .await,
-        Err(WalletError::SignerError(SignerError::KeyChainError(
-            KeyChainError::DatabaseError(wallet_storage::Error::WalletLocked)
-        )))
+        Err(WalletError::DatabaseError(
+            wallet_storage::Error::WalletLocked
+        ))
     );
 
     // success after unlock
@@ -1400,9 +1400,9 @@ async fn locked_wallet_standalone_keys(
                 TxAdditionalInfo::new(),
             )
             .await,
-        Err(WalletError::SignerError(SignerError::DatabaseError(
+        Err(WalletError::DatabaseError(
             wallet_storage::Error::WalletLocked
-        )))
+        ))
     );
 
     // success after unlock

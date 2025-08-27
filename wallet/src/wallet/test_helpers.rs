@@ -61,7 +61,7 @@ pub fn create_wallet_with_mnemonic(
 
 pub fn scan_wallet<B, P>(wallet: &mut Wallet<B, P>, height: BlockHeight, blocks: Vec<Block>)
 where
-    B: storage::Backend + 'static,
+    B: storage::BackendWithSendableTransactions + 'static,
     P: SignerProvider,
 {
     for account in wallet.get_best_block().keys() {

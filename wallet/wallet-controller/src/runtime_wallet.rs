@@ -66,13 +66,16 @@ use wallet_types::{
 use wallet::signer::trezor_signer::TrezorSignerProvider;
 
 #[allow(clippy::large_enum_variant)]
-pub enum RuntimeWallet<B: storage::Backend + 'static> {
+pub enum RuntimeWallet<B: storage::BackendWithSendableTransactions + 'static> {
     Software(Wallet<B, SoftwareSignerProvider>),
     #[cfg(feature = "trezor")]
     Trezor(Wallet<B, TrezorSignerProvider>),
 }
 
-impl<B: storage::Backend + 'static> RuntimeWallet<B> {
+impl<B> RuntimeWallet<B>
+where
+    B: storage::BackendWithSendableTransactions + 'static,
+{
     pub fn find_unspent_utxo_and_destination(
         &self,
         input: &UtxoOutPoint,

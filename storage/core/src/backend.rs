@@ -87,3 +87,38 @@ pub trait Backend {
     /// Open the database, giving an implementation-specific handle
     fn open(self, desc: DbDesc) -> crate::Result<Self::Impl>;
 }
+
+/// Using this trait as a bound will ensure that `TxRo` and `TxRw` are `Send`,
+/// to avoid using the verbose bounds on `TxRo/TxRw` themselves.
+///
+/// Note that we have to use this `Backend<Impl = Self::ImplHelper>` syntax in order to
+/// force trait bound propagation. Due to this, we can't have an umbrella implementation
+/// for this trait for any type T that implements `Backend`, because setting `ImplHelper` to
+/// `T::Impl` will lead to infinite recursion during compilation.
+pub trait BackendWithSendableTransactions:
+    Backend<Impl = <Self as BackendWithSendableTransactions>::ImplHelper>
+where
+    for<'a> <Self::ImplHelper as BackendImpl>::TxRo<'a>: Send,
+    for<'a> <Self::ImplHelper as BackendImpl>::TxRw<'a>: Send,
+{
+    type ImplHelper: BackendImpl;
+}
+
+// Note: since these tests are compile time only, there is no need to hide the module
+// under `cfg(test)`.
+mod compile_time_tests {
+    use super::*;
+
+    // Check that if `BackendWithSendableTransactions` is used as a trait bound, then
+    // the transactions are Send.
+    #[allow(unused)]
+    fn test_sendable_tx_trait_bound<T: BackendWithSendableTransactions>(t: <T as Backend>::Impl) {
+        let tx = t.transaction_ro().unwrap();
+        test_send(tx);
+
+        let tx = t.transaction_rw(None).unwrap();
+        test_send(tx);
+    }
+
+    fn test_send<T: Send>(_: T) {}
+}

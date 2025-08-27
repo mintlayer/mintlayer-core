@@ -79,7 +79,7 @@ use crate::{
     ControllerConfig, ControllerError,
 };
 
-pub struct SyncedController<'a, T, W, B: storage::Backend + 'static> {
+pub struct SyncedController<'a, T, W, B: storage::BackendWithSendableTransactions + 'static> {
     wallet: &'a mut RuntimeWallet<B>,
     rpc_client: T,
     chain_config: &'a ChainConfig,
@@ -91,7 +91,7 @@ pub struct SyncedController<'a, T, W, B: storage::Backend + 'static> {
 
 impl<'a, T, W, B> SyncedController<'a, T, W, B>
 where
-    B: storage::Backend + 'static,
+    B: storage::BackendWithSendableTransactions + 'static,
     T: NodeInterface,
     W: WalletEvents,
 {

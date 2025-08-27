@@ -114,7 +114,7 @@ pub trait Signer {
         &mut self,
         tx: PartiallySignedTransaction,
         key_chain: &(impl AccountKeyChains + Sync),
-        db_tx: &(impl WalletStorageReadUnlocked + Sync),
+        db_tx: impl WalletStorageReadUnlocked + Send,
         block_height: BlockHeight,
     ) -> SignerResult<(
         PartiallySignedTransaction,
@@ -128,7 +128,7 @@ pub trait Signer {
         message: &[u8],
         destination: &Destination,
         key_chain: &(impl AccountKeyChains + Sync),
-        db_tx: &(impl WalletStorageReadUnlocked + Sync),
+        db_tx: impl WalletStorageReadUnlocked + Send,
     ) -> SignerResult<ArbitraryMessageSignature>;
 
     /// Sign a transaction intent. The number of `input_destinations` must be the same as
@@ -140,7 +140,7 @@ pub trait Signer {
         input_destinations: &[Destination],
         intent: &str,
         key_chain: &(impl AccountKeyChains + Sync),
-        db_tx: &(impl WalletStorageReadUnlocked + Sync),
+        db_tx: impl WalletStorageReadUnlocked + Send,
     ) -> SignerResult<SignedTransactionIntent>;
 }
 
