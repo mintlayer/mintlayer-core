@@ -46,31 +46,22 @@ def build_docker_image(dockerfile_path, image_name, tags, num_jobs=None):
         # Run the command
         subprocess.check_call(command, shell=True)
         print(f"Built {image_name} successfully (the tags are: {full_tags}).")
-    except Exception as error:
-        print(f"Error occurred: {error}")
+    except subprocess.CalledProcessError as error:
+        print(f"Failed to build {image_name}: {error}")
         exit(1) # stop the build
 
 
-def push_docker_image(image_name, version, latest=False):
-    # Docker tag command
-    full_image_name = f"{image_name}:{version}"
-    if latest:
-        latest_image_name = f"{image_name}:latest"
-        tag_command = f"docker tag {full_image_name} {latest_image_name}"
-        subprocess.check_call(tag_command, shell=True)
+def push_docker_image(image_name, tags):
+    for tag in tags:
+        full_image_name = f"{image_name}:{tag}"
+        push_command = f"docker push {full_image_name}"
 
-    # Docker push command
-    push_command = f"docker push {full_image_name}"
-    subprocess.check_call(push_command, shell=True)
-
-    # if latest flag is true, push the image with 'latest' tag
-    if latest:
-        push_command_latest = f"docker push {latest_image_name}"
-        subprocess.check_call(push_command_latest, shell=True)
-
-    print(f"Pushed {full_image_name} successfully.")
-    if latest:
-        print(f"Pushed {latest_image_name} successfully.")
+        try:
+            subprocess.check_call(push_command, shell=True)
+            print(f"Pushed {full_image_name} successfully.")
+        except subprocess.CalledProcessError as error:
+            print(f"Failed to push {full_image_name}: {error}")
+            exit(1) # stop the build
 
 
 def delete_docker_image(image_name, version):
@@ -84,8 +75,9 @@ def delete_docker_image(image_name, version):
     try:
         subprocess.check_call(command, shell=True)
         print(f"Deleted {full_image_name} successfully.")
-    except subprocess.CalledProcessError:
-        print(f"Failed to delete {full_image_name}.")
+    except subprocess.CalledProcessError as error:
+        print(f"Failed to delete {full_image_name}: {error}")
+        # No need to fail the build here
 
 
 def build_instances(tags, docker_hub_user, num_jobs):
@@ -109,20 +101,20 @@ def build_instances(tags, docker_hub_user, num_jobs):
 #    delete_docker_image("mintlayer-builder", "latest")
 
 
-def push_instances(docker_hub_user, version, latest):
-    push_docker_image(f"{docker_hub_user}/node-daemon", version, latest)
-    push_docker_image(f"{docker_hub_user}/api-blockchain-scanner-daemon", version, latest)
-    push_docker_image(f"{docker_hub_user}/api-web-server", version, latest)
-    push_docker_image(f"{docker_hub_user}/wallet-cli", version, latest)
-    push_docker_image(f"{docker_hub_user}/wallet-rpc-daemon", version, latest)
-    push_docker_image(f"{docker_hub_user}/dns-server", version, latest)
+def push_instances(docker_hub_user, tags):
+    push_docker_image(f"{docker_hub_user}/node-daemon", tags)
+    push_docker_image(f"{docker_hub_user}/api-blockchain-scanner-daemon", tags)
+    push_docker_image(f"{docker_hub_user}/api-web-server", tags)
+    push_docker_image(f"{docker_hub_user}/wallet-cli", tags)
+    push_docker_image(f"{docker_hub_user}/wallet-rpc-daemon", tags)
+    push_docker_image(f"{docker_hub_user}/dns-server", tags)
 
 
 def main():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--push', action='store_true', help='Push the Docker image to Docker Hub')
     parser.add_argument('--docker-hub-user', help='Docker Hub username', default='mintlayer')
-    parser.add_argument('--latest', action='store_true', help='Tag the Docker image as latest while pushing')
+    parser.add_argument('--latest', action='store_true', help='Tag the Docker image as latest')
     parser.add_argument('--build', type=lambda x: (str(x).lower() == 'true'), default=True, help="Set to false avoid the build")
     parser.add_argument('--version', help='Override version number', default=None)
     parser.add_argument('--num_jobs', help='Number of parallel jobs', default=(os.cpu_count() or 1))
@@ -132,16 +124,21 @@ def main():
     version = args.version if args.version else get_cargo_version("Cargo.toml")
     # Note: the CI currently takes the version from the release tag, so it always starts with "v",
     # but the version from Cargo.toml doesn't have this prefix.
-    version = version if version.startswith('v') else f"v{version}"
+    version = version.removeprefix("v")
 
-    tags = [version, *args.local_tags]
+    # We want to push both "X.Y.Z" and "vX.Y.Z".
+    tags_to_push = [version, f"v{version}"]
+    if args.latest:
+        tags_to_push.append("latest")
+
+    all_tags = args.local_tags + tags_to_push
 
     if args.build:
-        build_instances(tags, args.docker_hub_user, args.num_jobs)
+        build_instances(all_tags, args.docker_hub_user, args.num_jobs)
 
     # Only push the image if the --push flag is provided
     if args.push:
-        push_instances(args.docker_hub_user, version, args.latest)
+        push_instances(args.docker_hub_user, tags_to_push)
 
 
 if __name__ == "__main__":
