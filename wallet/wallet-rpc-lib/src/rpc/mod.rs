@@ -902,6 +902,7 @@ where
                         .synced_controller(account_index, config)
                         .await?
                         .sign_challenge(&challenge, &destination)
+                        .await
                         .map_err(RpcError::Controller)
                 })
             })
