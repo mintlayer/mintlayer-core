@@ -274,6 +274,7 @@ mod tests {
             max_db_commit_attempts: Default::default(),
             max_orphan_blocks: Default::default(),
             min_max_bootstrap_import_buffer_sizes: Default::default(),
+            allow_checkpoints_mismatch: Default::default(),
         };
 
         let mempool_config = MempoolConfig::new();

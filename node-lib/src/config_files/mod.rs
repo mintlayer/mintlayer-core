@@ -152,6 +152,7 @@ fn chainstate_config(
         min_max_bootstrap_import_buffer_sizes,
         max_tip_age,
         enable_heavy_checks,
+        allow_checkpoints_mismatch,
     } = chainstate_config;
 
     let storage_backend = options.storage_backend.clone().unwrap_or(storage_backend);
@@ -159,6 +160,8 @@ fn chainstate_config(
     let max_orphan_blocks = options.max_orphan_blocks.or(max_orphan_blocks);
     let max_tip_age = options.max_tip_age.or(max_tip_age);
     let enable_heavy_checks = options.enable_chainstate_heavy_checks.or(enable_heavy_checks);
+    let allow_checkpoints_mismatch =
+        options.allow_checkpoints_mismatch.or(allow_checkpoints_mismatch);
 
     let chainstate_config = ChainstateConfigFile {
         max_db_commit_attempts,
@@ -166,6 +169,7 @@ fn chainstate_config(
         min_max_bootstrap_import_buffer_sizes,
         max_tip_age,
         enable_heavy_checks,
+        allow_checkpoints_mismatch,
     };
     ChainstateLauncherConfigFile {
         storage_backend,

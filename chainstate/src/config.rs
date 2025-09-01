@@ -38,17 +38,24 @@ make_config_setting!(MaxTipAge, Duration, Duration::from_secs(60 * 60 * 24));
 pub struct ChainstateConfig {
     /// The number of maximum attempts to process a block.
     pub max_db_commit_attempts: MaxDbCommitAttempts,
+
     /// The maximum capacity of the orphan blocks pool.
     pub max_orphan_blocks: MaxOrphanBlocks,
+
     /// When importing bootstrap file, this controls the buffer sizes (min, max)
     /// (see bootstrap import function for more information)
     pub min_max_bootstrap_import_buffer_sizes: MinMaxBootstrapImportBufferSizes,
+
     /// The initial block download is finished if the difference between the current time and the
     /// tip time is less than this value.
     pub max_tip_age: MaxTipAge,
+
     /// If true, additional computationally-expensive consistency checks will be performed by
     /// the chainstate. The default value depends on the chain type.
     pub enable_heavy_checks: Option<bool>,
+
+    /// If true, blocks and block headers will not be rejected if checkpoints mismatch is detected.
+    pub allow_checkpoints_mismatch: Option<bool>,
 }
 
 impl ChainstateConfig {
@@ -89,5 +96,9 @@ impl ChainstateConfig {
             ChainType::Mainnet | ChainType::Testnet | ChainType::Signet => false,
             ChainType::Regtest => true,
         }
+    }
+
+    pub fn checkpoints_mismatch_allowed(&self) -> bool {
+        self.allow_checkpoints_mismatch.unwrap_or(false)
     }
 }
