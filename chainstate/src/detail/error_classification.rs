@@ -169,8 +169,7 @@ impl BlockProcessingErrorClassification for CheckBlockError {
             | CheckBlockError::ParentBlockMissing { .. }
             | CheckBlockError::BlockTimeOrderInvalid(_, _)
             | CheckBlockError::InvalidBlockRewardOutputType(_)
-            | CheckBlockError::CheckpointMismatch(_, _)
-            | CheckBlockError::ParentCheckpointMismatch(_, _, _)
+            | CheckBlockError::CheckpointMismatch { .. }
             | CheckBlockError::AttemptedToAddBlockBeforeReorgLimit(_, _, _)
             | CheckBlockError::InvalidParent { .. } => BlockProcessingErrorClass::BadBlock,
 

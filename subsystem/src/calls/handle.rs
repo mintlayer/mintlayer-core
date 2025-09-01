@@ -18,6 +18,7 @@
 use futures::future::BoxFuture;
 
 use logging::log;
+use tracing::Instrument as _;
 use utils::shallow_clone::ShallowClone;
 
 use crate::{
@@ -121,10 +122,14 @@ impl<T: ?Sized + Send + Sync + 'static> Handle<T> {
         &self,
         func: impl FnOnce(&mut T) -> BoxFuture<R> + Send + 'static,
     ) -> CallResult<R> {
+        // Note: need to retrieve the tracing span in advance and then call `instrument` with it
+        // (as opposed to calling `in_current_span` on the future directly - this won't work because
+        // the current span will be different at the point of the call).
+        let current_tracing_span = tracing::Span::current();
         let (rtx, rrx) = tokio::sync::oneshot::channel::<R>();
         let result = self.0.submit_async_mut(move |subsys| {
             Box::pin(async move {
-                if rtx.send(func(subsys).await).is_err() {
+                if rtx.send(func(subsys).instrument(current_tracing_span).await).is_err() {
                     log::trace!("Subsystem call (mut) result ignored");
                 }
             })
@@ -137,10 +142,12 @@ impl<T: ?Sized + Send + Sync + 'static> Handle<T> {
         &self,
         func: impl FnOnce(&T) -> BoxFuture<R> + Send + 'static,
     ) -> CallResult<R> {
+        // Same note about the tracing span as in `call_async_mut` above.
+        let current_tracing_span = tracing::Span::current();
         let (rtx, rrx) = tokio::sync::oneshot::channel::<R>();
         let result = self.0.submit_async(move |subsys| {
             Box::pin(async move {
-                if rtx.send(func(subsys).await).is_err() {
+                if rtx.send(func(subsys).instrument(current_tracing_span).await).is_err() {
                     log::trace!("Subsystem call result ignored");
                 }
             })
@@ -153,7 +160,10 @@ impl<T: ?Sized + Send + Sync + 'static> Handle<T> {
         &self,
         func: impl FnOnce(&mut T) -> R + Send + 'static,
     ) -> CallResult<R> {
-        self.call_async_mut(|this| Box::pin(core::future::ready(func(this))))
+        // Note: originally we were creating the future via `core::future::ready` instead of using
+        // an `async` block. But `instrument`-ing the `Ready` future (which happens inside
+        // `call_async_mut`) doesn't work for some reason.
+        self.call_async_mut(|this| Box::pin(async { func(this) }))
     }
 
     /// Call a procedure to the subsystem (immutable).
@@ -161,6 +171,7 @@ impl<T: ?Sized + Send + Sync + 'static> Handle<T> {
         &self,
         func: impl FnOnce(&T) -> R + Send + 'static,
     ) -> CallResult<R> {
-        self.call_async(|this| Box::pin(core::future::ready(func(this))))
+        // Same note about the async block as in `call_mut` above.
+        self.call_async(|this| Box::pin(async { func(this) }))
     }
 }

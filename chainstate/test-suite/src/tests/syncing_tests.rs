@@ -640,6 +640,7 @@ fn initial_block_download(#[case] seed: Seed) {
                 min_max_bootstrap_import_buffer_sizes: Default::default(),
                 max_tip_age: Duration::from_secs(1).into(),
                 enable_heavy_checks: Some(true),
+                allow_checkpoints_mismatch: Default::default(),
             })
             .with_initial_time_since_genesis(2)
             .build();
@@ -798,8 +799,9 @@ fn headers_check_with_checkpoints(#[case] seed: Seed) {
                 .enumerate()
                 .map(|(idx, header)| (BlockHeight::new(idx as u64 + 2), header.block_id().into()))
                 .collect::<BTreeMap<_, _>>();
+            let bad_checkpoint_height = BlockHeight::new(5);
             let good_block_id = Id::new(Uint256::from_u64(12345).into());
-            let bad_block_id = checkpoints.insert(BlockHeight::new(5), good_block_id).unwrap();
+            let bad_block_id = checkpoints.insert(bad_checkpoint_height, good_block_id).unwrap();
 
             let mut tf = TestFramework::builder(&mut rng)
                 .with_chain_config(
@@ -814,10 +816,11 @@ fn headers_check_with_checkpoints(#[case] seed: Seed) {
             assert_eq!(
                 err,
                 ChainstateError::ProcessBlockError(chainstate::BlockError::CheckBlockFailed(
-                    CheckBlockError::CheckpointMismatch(
-                        tf.to_chain_block_id(&good_block_id),
-                        tf.to_chain_block_id(&bad_block_id)
-                    )
+                    CheckBlockError::CheckpointMismatch {
+                        height: bad_checkpoint_height,
+                        expected: good_block_id,
+                        given: bad_block_id
+                    }
                 ))
             );
         }
@@ -826,9 +829,10 @@ fn headers_check_with_checkpoints(#[case] seed: Seed) {
         {
             let good_block_id = Id::new(Uint256::from_u64(12345).into());
             let bad_block_id = block_headers[5].block_id().into();
+            let bad_checkpoint_height = BlockHeight::new(7);
             let checkpoints = [
                 (BlockHeight::new(3), block_headers[1].block_id().into()),
-                (BlockHeight::new(7), good_block_id),
+                (bad_checkpoint_height, good_block_id),
             ]
             .into_iter()
             .collect::<BTreeMap<_, _>>();
@@ -846,10 +850,11 @@ fn headers_check_with_checkpoints(#[case] seed: Seed) {
             assert_eq!(
                 err,
                 ChainstateError::ProcessBlockError(chainstate::BlockError::CheckBlockFailed(
-                    CheckBlockError::CheckpointMismatch(
-                        tf.to_chain_block_id(&good_block_id),
-                        tf.to_chain_block_id(&bad_block_id)
-                    )
+                    CheckBlockError::CheckpointMismatch {
+                        height: bad_checkpoint_height,
+                        expected: good_block_id,
+                        given: bad_block_id
+                    }
                 ))
             );
         }
