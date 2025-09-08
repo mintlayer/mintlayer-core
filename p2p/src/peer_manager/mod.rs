@@ -1816,6 +1816,9 @@ where
                 ping_min: context.ping_min.map(|time| {
                     duration_to_int(&time).expect("valid timestamp expected (ping_min)")
                 }),
+                last_tip_block_time: context
+                    .last_tip_block_time
+                    .map(|time| time.as_secs_since_epoch()),
             })
             .collect()
     }
