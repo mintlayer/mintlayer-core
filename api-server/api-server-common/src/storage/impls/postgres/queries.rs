@@ -1152,12 +1152,19 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         let timestamp = Self::block_time_to_postgres_friendly(block.block.timestamp())?;
         let compact_target = get_block_compact_target(&block.block).map(|target| target.0 as i64);
 
+        // Note: we need to update the block height on conflict, because the block may have been
+        // added as a stale one in the past, in which case its block_height hasn't been set.
+        // Regarding the rest of the columns, updating them on conflict makes no sense from the
+        // consensus point of view, because the data, if calculated correctly, can never change,
+        // provided that the block id stays the same. However, this is a low-level db call,
+        // so it'd be better if the caller decides what data can change and what can't.
+        // Also, this way it's consistent with the in-memory implementation.
         self.tx
             .execute(
                 "INSERT INTO ml.blocks (block_id, block_height, block_timestamp, block_compact_target, block_data)
                     VALUES ($1, $2, $3, $4, $5)
                     ON CONFLICT (block_id) DO UPDATE
-                    SET block_data = $5, block_height = $2;",
+                    SET block_height = $2, block_timestamp = $3, block_compact_target = $4, block_data = $5;",
                 &[&block_id.encode(), &height, &timestamp, &compact_target, &block.encode()],
             )
             .await
@@ -2781,6 +2788,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
     ) -> Result<(), ApiServerStorageError> {
         logging::log::debug!("Inserting block aux data with block_id {}", block_id);
 
+        // Note: we update the data on block id conflict, the reasons are the same as in set_mainchain_block.
         self.tx
             .execute(
                 "INSERT INTO ml.block_aux_data (block_id, aux_data) VALUES ($1, $2)
