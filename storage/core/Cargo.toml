@@ -10,6 +10,7 @@ common = { path = "../../common" }
 logging = { path = '../../logging' }
 utils = { path = '../../utils' }
 
+async-trait.workspace = true
 itertools.workspace = true
 thiserror.workspace = true
 

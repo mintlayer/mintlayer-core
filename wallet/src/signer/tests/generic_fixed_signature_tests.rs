@@ -156,8 +156,8 @@ pub async fn test_fixed_signatures_generic<MkS, S>(
             .build(),
     );
 
-    let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
-    let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
+    let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).await.unwrap());
+    let mut db_tx = db.transaction_rw_unlocked(None).await.unwrap();
 
     let master_key_chain = MasterKeyChain::new_from_mnemonic(
         chain_config.clone(),
@@ -372,16 +372,9 @@ pub async fn test_fixed_signatures_generic<MkS, S>(
         );
     let orig_ptx = req.into_partially_signed_tx(additional_info).unwrap();
 
-    db_tx.commit().unwrap();
-    let db_tx = db.local_rw_unlocked();
     let mut signer = make_signer(chain_config.clone(), account.account_index());
     let (ptx, _, _) = signer
-        .sign_tx(
-            orig_ptx,
-            account.key_chain(),
-            &db_tx.read_only_store(),
-            tx_block_height,
-        )
+        .sign_tx(orig_ptx, account.key_chain(), db_tx, tx_block_height)
         .await
         .unwrap();
     assert!(ptx.all_signatures_available());
@@ -477,8 +470,8 @@ pub async fn test_fixed_signatures_generic2<MkS, S>(
             .build(),
     );
 
-    let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
-    let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
+    let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).await.unwrap());
+    let mut db_tx = db.transaction_rw_unlocked(None).await.unwrap();
 
     let mut account1 = account_from_mnemonic(&chain_config, &mut db_tx, DEFAULT_ACCOUNT_INDEX);
     let mut account2 = account_from_mnemonic(&chain_config, &mut db_tx, U31::ONE);
@@ -918,30 +911,17 @@ pub async fn test_fixed_signatures_generic2<MkS, S>(
         .collect_vec();
 
     db_tx.commit().unwrap();
-    let db_tx = db.local_rw_unlocked();
+    let db_tx = db.transaction_ro_unlocked().await.unwrap();
     let mut signer = make_signer(chain_config.clone(), account1.account_index());
-    let (ptx, _, _) = signer
-        .sign_tx(
-            ptx,
-            account1.key_chain(),
-            &db_tx.read_only_store(),
-            tx_block_height,
-        )
-        .await
-        .unwrap();
+    let (ptx, _, _) =
+        signer.sign_tx(ptx, account1.key_chain(), db_tx, tx_block_height).await.unwrap();
     assert!(ptx.all_signatures_available());
 
     // Fully sign multisig inputs.
+    let db_tx = db.transaction_ro_unlocked().await.unwrap();
     let mut signer = make_signer(chain_config.clone(), account2.account_index());
-    let (ptx, _, _) = signer
-        .sign_tx(
-            ptx,
-            account2.key_chain(),
-            &db_tx.read_only_store(),
-            tx_block_height,
-        )
-        .await
-        .unwrap();
+    let (ptx, _, _) =
+        signer.sign_tx(ptx, account2.key_chain(), db_tx, tx_block_height).await.unwrap();
     assert!(ptx.all_signatures_available());
 
     for (i, dest) in destinations.iter().enumerate() {

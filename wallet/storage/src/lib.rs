@@ -28,10 +28,7 @@ use crypto::{
     key::{extended::ExtendedPublicKey, PrivateKey},
     symkey::SymmetricKey,
 };
-pub use internal::{
-    Store, StoreLocalReadOnlyUnlocked, StoreLocalReadWriteUnlocked, StoreTxRo, StoreTxRoUnlocked,
-    StoreTxRw, StoreTxRwUnlocked,
-};
+pub use internal::{Store, StoreTxRo, StoreTxRoUnlocked, StoreTxRw, StoreTxRwUnlocked};
 use std::collections::BTreeMap;
 
 use wallet_types::{
@@ -265,6 +262,7 @@ pub trait TransactionRwUnlocked: WalletStorageWriteUnlocked + IsTransaction {
 }
 
 /// Support for transactions over wallet storage
+#[async_trait::async_trait]
 pub trait Transactional<'t> {
     /// Associated read-only transaction type.
     type TransactionRoLocked: TransactionRoLocked + 't;
@@ -273,22 +271,25 @@ pub trait Transactional<'t> {
     type TransactionRoUnlocked: TransactionRoUnlocked + 't;
 
     /// Associated read-write transaction type.
-    type TransactionRwLocked: TransactionRwLocked + 't;
+    type TransactionRwLocked: TransactionRwLocked + Send + 't;
 
     /// Associated read-write transaction type.
     type TransactionRwUnlocked: TransactionRwUnlocked + 't;
 
     /// Start a read-only transaction.
-    fn transaction_ro<'s: 't>(&'s self) -> Result<Self::TransactionRoLocked>;
+    async fn transaction_ro<'s: 't>(&'s self) -> Result<Self::TransactionRoLocked>;
 
     /// Start a read-only transaction.
-    fn transaction_ro_unlocked<'s: 't>(&'s self) -> Result<Self::TransactionRoUnlocked>;
+    async fn transaction_ro_unlocked<'s: 't>(&'s self) -> Result<Self::TransactionRoUnlocked>;
 
     /// Start a read-write transaction.
-    fn transaction_rw<'s: 't>(&'s self, size: Option<usize>) -> Result<Self::TransactionRwLocked>;
+    async fn transaction_rw<'s: 't>(
+        &'s self,
+        size: Option<usize>,
+    ) -> Result<Self::TransactionRwLocked>;
 
     /// Start a read-write transaction.
-    fn transaction_rw_unlocked<'s: 't>(
+    async fn transaction_rw_unlocked<'s: 't>(
         &'s self,
         size: Option<usize>,
     ) -> Result<Self::TransactionRwUnlocked>;

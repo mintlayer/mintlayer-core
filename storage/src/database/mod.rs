@@ -27,7 +27,7 @@ use crate::schema::{self, Schema};
 use serialization::{encoded::Encoded, Encode, EncodeLike};
 use storage_core::{
     backend::{self, TxRw, WriteOps},
-    Backend, DbMapId,
+    AsyncBackend, Backend, BaseBackend, DbMapId,
 };
 
 /// The main storage type
@@ -99,14 +99,14 @@ impl<B: Backend, Sch: Schema> Storage<B, Sch> {
     }
 }
 
-pub trait MakeMapRef<'tx, B: Backend, Sch: Schema>: TxImpl + Sized {
+pub trait MakeMapRef<'tx, B: BaseBackend, Sch: Schema>: TxImpl + Sized {
     /// Get key-value map immutably (key-to-single-value only for now)
     fn get<DbMap: schema::DbMap, I>(&self) -> MapRef<'_, Self, DbMap>
     where
         Sch: schema::HasDbMap<DbMap, I>;
 }
 
-impl<'tx, B: Backend, Sch: Schema> MakeMapRef<'tx, B, Sch> for TransactionRo<'tx, B, Sch> {
+impl<'tx, B: BaseBackend, Sch: Schema> MakeMapRef<'tx, B, Sch> for TransactionRo<'tx, B, Sch> {
     fn get<DbMap: schema::DbMap, I>(&self) -> MapRef<'_, Self, DbMap>
     where
         Sch: schema::HasDbMap<DbMap, I>,
@@ -115,7 +115,7 @@ impl<'tx, B: Backend, Sch: Schema> MakeMapRef<'tx, B, Sch> for TransactionRo<'tx
     }
 }
 
-impl<'tx, B: Backend, Sch: Schema> MakeMapRef<'tx, B, Sch> for TransactionRw<'tx, B, Sch> {
+impl<'tx, B: BaseBackend, Sch: Schema> MakeMapRef<'tx, B, Sch> for TransactionRw<'tx, B, Sch> {
     fn get<DbMap: schema::DbMap, I>(&self) -> MapRef<'_, Self, DbMap>
     where
         Sch: schema::HasDbMap<DbMap, I>,
@@ -125,12 +125,12 @@ impl<'tx, B: Backend, Sch: Schema> MakeMapRef<'tx, B, Sch> for TransactionRw<'tx
 }
 
 /// A read-only transaction
-pub struct TransactionRo<'tx, B: Backend, Sch> {
+pub struct TransactionRo<'tx, B: BaseBackend, Sch> {
     dbtx: <Self as TxImpl>::Impl,
     _schema: core::marker::PhantomData<Sch>,
 }
 
-impl<B: Backend, Sch: Schema> TransactionRo<'_, B, Sch> {
+impl<B: BaseBackend, Sch: Schema> TransactionRo<'_, B, Sch> {
     /// Close the read-only transaction early
     pub fn close(self) {
         // Let backend tx destructor do the heavy lifting
@@ -143,12 +143,12 @@ impl<B: Backend, Sch: Schema> TransactionRo<'_, B, Sch> {
 }
 
 /// A read-write transaction
-pub struct TransactionRw<'tx, B: Backend, Sch> {
+pub struct TransactionRw<'tx, B: BaseBackend, Sch> {
     dbtx: <Self as TxImpl>::Impl,
     _schema: core::marker::PhantomData<Sch>,
 }
 
-impl<B: Backend, Sch: Schema> TransactionRw<'_, B, Sch> {
+impl<B: BaseBackend, Sch: Schema> TransactionRw<'_, B, Sch> {
     /// Get key-value map mutably (key-to-single-value only for now)
     pub fn get_mut<DbMap: schema::DbMap, I>(&mut self) -> MapMut<'_, Self, DbMap>
     where
@@ -334,3 +334,75 @@ impl<T: Encode> HasPrefix<()> for T {}
 impl<T: Encode, U: Encode> HasPrefix<(T,)> for (T, U) {}
 impl<T: Encode, U: Encode, W: Encode> HasPrefix<(T,)> for (T, U, W) {}
 impl<T: Encode, U: Encode, W: Encode> HasPrefix<(T, U)> for (T, U, W) {}
+
+/// The main storage type
+pub struct AsyncStorage<B: AsyncBackend, Sch> {
+    backend: B::Impl,
+    _schema: core::marker::PhantomData<Sch>,
+}
+
+impl<B: AsyncBackend, Sch> Clone for AsyncStorage<B, Sch>
+where
+    B::Impl: ShallowClone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            backend: self.backend.clone(),
+            _schema: Default::default(),
+        }
+    }
+}
+
+impl<B: AsyncBackend, Sch> ShallowClone for AsyncStorage<B, Sch>
+where
+    B::Impl: ShallowClone,
+{
+    fn shallow_clone(&self) -> Self {
+        Self {
+            backend: self.backend.shallow_clone(),
+            _schema: self._schema.shallow_clone(),
+        }
+    }
+}
+
+impl<B: AsyncBackend, Sch: Schema> AsyncStorage<B, Sch> {
+    /// Create new storage with given backend
+    pub fn new(backend: B) -> crate::Result<Self> {
+        let backend = backend.open(storage_core::types::construct::db_desc(Sch::desc_iter()))?;
+        let _schema = std::marker::PhantomData;
+        Ok(Self { backend, _schema })
+    }
+
+    /// Create new storage with given backend and raw dump
+    pub async fn new_from_dump(backend: B, dump: raw::StorageContents<Sch>) -> crate::Result<Self> {
+        let backend = backend.open(storage_core::types::construct::db_desc(Sch::desc_iter()))?;
+        let _schema = std::marker::PhantomData;
+        let mut dbtx = backend::AsyncBackendImpl::transaction_rw(&backend, None).await?;
+
+        for (map_id, map_values) in dump {
+            for (key, val) in map_values {
+                dbtx.put(map_id.idx(), key, val)?;
+            }
+        }
+
+        dbtx.commit()?;
+        Ok(Self { backend, _schema })
+    }
+
+    /// Start a read-only transaction
+    pub async fn transaction_ro(&self) -> crate::Result<TransactionRo<'_, B, Sch>> {
+        let dbtx = backend::AsyncBackendImpl::transaction_ro(&self.backend).await?;
+        let _schema = std::marker::PhantomData;
+        Ok(TransactionRo { dbtx, _schema })
+    }
+
+    /// Start a read-write transaction
+    pub async fn transaction_rw(
+        &self,
+        size: Option<usize>,
+    ) -> crate::Result<TransactionRw<'_, B, Sch>> {
+        let dbtx = backend::AsyncBackendImpl::transaction_rw(&self.backend, size).await?;
+        let _schema = std::marker::PhantomData;
+        Ok(TransactionRw { dbtx, _schema })
+    }
+}

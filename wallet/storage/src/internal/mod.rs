@@ -24,31 +24,28 @@ mod password;
 use password::{challenge_to_sym_key, password_to_sym_key};
 
 mod store_tx;
-pub use store_tx::{
-    StoreLocalReadOnlyUnlocked, StoreLocalReadWriteUnlocked, StoreTxRo, StoreTxRoUnlocked,
-    StoreTxRw, StoreTxRwUnlocked,
-};
+pub use store_tx::{StoreTxRo, StoreTxRoUnlocked, StoreTxRw, StoreTxRwUnlocked};
 
 use self::store_tx::EncryptionState;
 
 /// Store for wallet data, parametrized over the backend B
-pub struct Store<B: storage::Backend> {
-    storage: storage::Storage<B, Schema>,
+pub struct Store<B: storage::AsyncBackend> {
+    storage: storage::AsyncStorage<B, Schema>,
     encryption_state: EncryptionState,
 }
 
-impl<B: storage::Backend> Store<B> {
+impl<B: storage::AsyncBackend> Store<B> {
     /// Create a new wallet storage
-    pub fn new(backend: B) -> crate::Result<Self> {
-        let storage: storage::Storage<B, Schema> =
-            storage::Storage::new(backend).map_err(crate::Error::from)?;
+    pub async fn new(backend: B) -> crate::Result<Self> {
+        let storage: storage::AsyncStorage<B, Schema> =
+            storage::AsyncStorage::new(backend).map_err(crate::Error::from)?;
 
         let mut storage = Self {
             storage,
             encryption_state: EncryptionState::Locked,
         };
 
-        let challenge = storage.transaction_ro()?.get_encryption_key_kdf_challenge()?;
+        let challenge = storage.transaction_ro().await?.get_encryption_key_kdf_challenge()?;
         if challenge.is_none() {
             storage.encryption_state = EncryptionState::Unlocked(None);
         }
@@ -57,16 +54,21 @@ impl<B: storage::Backend> Store<B> {
     }
 
     /// Create a new wallet storage
-    pub fn new_from_dump(backend: B, dump: raw::StorageContents<Schema>) -> crate::Result<Self> {
-        let storage: storage::Storage<B, Schema> =
-            storage::Storage::new_from_dump(backend, dump).map_err(crate::Error::from)?;
+    pub async fn new_from_dump(
+        backend: B,
+        dump: raw::StorageContents<Schema>,
+    ) -> crate::Result<Self> {
+        let storage: storage::AsyncStorage<B, Schema> =
+            storage::AsyncStorage::new_from_dump(backend, dump)
+                .await
+                .map_err(crate::Error::from)?;
 
         let mut storage = Self {
             storage,
             encryption_state: EncryptionState::Locked,
         };
 
-        let challenge = storage.transaction_ro()?.get_encryption_key_kdf_challenge()?;
+        let challenge = storage.transaction_ro().await?.get_encryption_key_kdf_challenge()?;
         if challenge.is_none() {
             storage.encryption_state = EncryptionState::Unlocked(None);
         }
@@ -90,8 +92,11 @@ impl<B: storage::Backend> Store<B> {
 
     /// Encrypts the root keys in the DB with the provided new_password
     /// expects that the wallet is already unlocked
-    pub fn encrypt_private_keys(&mut self, new_password: &Option<String>) -> crate::Result<()> {
-        let mut tx = self.transaction_rw_unlocked(None)?;
+    pub async fn encrypt_private_keys(
+        &mut self,
+        new_password: &Option<String>,
+    ) -> crate::Result<()> {
+        let mut tx = self.transaction_rw_unlocked(None).await?;
         let sym_key = match new_password {
             None => {
                 tx.del_encryption_kdf_challenge()?;
@@ -116,17 +121,19 @@ impl<B: storage::Backend> Store<B> {
     /// Checks if the provided password can decrypt all of the stored private keys,
     /// stores the new encryption_key and updates the state to Unlocked
     /// Otherwise returns WalletInvalidPassword
-    pub fn unlock_private_keys(&mut self, password: &String) -> crate::Result<()> {
+    pub async fn unlock_private_keys(&mut self, password: &String) -> crate::Result<()> {
         if self.encryption_state != EncryptionState::Locked {
             return Err(crate::Error::WalletAlreadyUnlocked);
         }
 
-        let challenge = self.transaction_ro()?.get_encryption_key_kdf_challenge()?;
+        let db_tx = self.transaction_ro().await?;
+        let challenge = db_tx.get_encryption_key_kdf_challenge()?;
 
         match challenge {
             Some(kdf_challenge) => {
                 let sym_key = challenge_to_sym_key(password, kdf_challenge)?;
-                self.transaction_ro()?.check_can_decrypt_all_root_keys(&sym_key)?;
+                db_tx.check_can_decrypt_all_root_keys(&sym_key)?;
+                drop(db_tx);
                 self.encryption_state = EncryptionState::Unlocked(Some(sym_key));
             }
             None => {
@@ -152,16 +159,12 @@ impl<B: storage::Backend> Store<B> {
     }
 
     /// Dump raw database contents
-    pub fn dump_raw(&self) -> crate::Result<storage::raw::StorageContents<Schema>> {
-        self.storage.transaction_ro()?.dump_raw().map_err(crate::Error::from)
-    }
-
-    pub fn local_rw_unlocked(&self) -> StoreLocalReadWriteUnlocked<B> {
-        StoreLocalReadWriteUnlocked::new(self.clone())
+    pub async fn dump_raw(&self) -> crate::Result<storage::raw::StorageContents<Schema>> {
+        self.storage.transaction_ro().await?.dump_raw().map_err(crate::Error::from)
     }
 }
 
-impl<B: storage::Backend> Clone for Store<B>
+impl<B: storage::AsyncBackend> Clone for Store<B>
 where
     B::Impl: Clone,
 {
@@ -173,41 +176,47 @@ where
     }
 }
 
-impl<'tx, B: storage::Backend + 'tx> Transactional<'tx> for Store<B> {
+#[async_trait::async_trait]
+impl<'tx, B: storage::AsyncBackend + 'tx> Transactional<'tx> for Store<B> {
     type TransactionRoLocked = StoreTxRo<'tx, B>;
     type TransactionRwLocked = StoreTxRw<'tx, B>;
     type TransactionRoUnlocked = StoreTxRoUnlocked<'tx, B>;
     type TransactionRwUnlocked = StoreTxRwUnlocked<'tx, B>;
 
-    fn transaction_ro<'st: 'tx>(&'st self) -> crate::Result<Self::TransactionRoLocked> {
+    async fn transaction_ro<'st: 'tx>(&'st self) -> crate::Result<Self::TransactionRoLocked> {
         self.storage
             .transaction_ro()
+            .await
             .map_err(crate::Error::from)
             .map(|tx| StoreTxRo::new(tx))
     }
 
-    fn transaction_ro_unlocked<'st: 'tx>(&'st self) -> crate::Result<Self::TransactionRoUnlocked> {
+    async fn transaction_ro_unlocked<'st: 'tx>(
+        &'st self,
+    ) -> crate::Result<Self::TransactionRoUnlocked> {
         match self.encryption_state {
             EncryptionState::Locked => Err(crate::Error::WalletLocked),
             EncryptionState::Unlocked(ref key) => self
                 .storage
                 .transaction_ro()
+                .await
                 .map_err(crate::Error::from)
                 .map(|tx| StoreTxRoUnlocked::new(tx, key)),
         }
     }
 
-    fn transaction_rw<'st: 'tx>(
+    async fn transaction_rw<'st: 'tx>(
         &'st self,
         size: Option<usize>,
     ) -> crate::Result<Self::TransactionRwLocked> {
         self.storage
             .transaction_rw(size)
+            .await
             .map_err(crate::Error::from)
             .map(|tx| StoreTxRw::new(tx))
     }
 
-    fn transaction_rw_unlocked<'st: 'tx>(
+    async fn transaction_rw_unlocked<'st: 'tx>(
         &'st self,
         size: Option<usize>,
     ) -> crate::Result<Self::TransactionRwUnlocked> {
@@ -216,6 +225,7 @@ impl<'tx, B: storage::Backend + 'tx> Transactional<'tx> for Store<B> {
             EncryptionState::Unlocked(ref key) => self
                 .storage
                 .transaction_rw(size)
+                .await
                 .map_err(crate::Error::from)
                 .map(|tx| StoreTxRwUnlocked::new(tx, key)),
         }

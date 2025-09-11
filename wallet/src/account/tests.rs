@@ -25,11 +25,11 @@ use wallet_types::KeyPurpose::{Change, ReceiveFunds};
 const MNEMONIC: &str =
     "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
 
-#[test]
-fn account_addresses() {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn account_addresses() {
     let config = Arc::new(create_regtest());
-    let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
-    let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
+    let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).await.unwrap());
+    let mut db_tx = db.transaction_rw_unlocked(None).await.unwrap();
 
     let master_key_chain = MasterKeyChain::new_from_mnemonic(
         config.clone(),
@@ -53,18 +53,18 @@ fn account_addresses() {
         (ReceiveFunds, "rmt1q9jvqp9p8rzp2prmpa8y9vde7yrvlxgz3s54n787"),
     ];
 
-    let mut db_tx = db.transaction_rw(None).unwrap();
+    let mut db_tx = db.transaction_rw(None).await.unwrap();
     for (purpose, address_str) in test_vec {
         let address = account.get_new_address(&mut db_tx, purpose).unwrap().1;
         assert_eq!(address.as_str(), address_str);
     }
 }
 
-#[test]
-fn account_addresses_lookahead() {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn account_addresses_lookahead() {
     let config = Arc::new(create_regtest());
-    let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
-    let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
+    let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).await.unwrap());
+    let mut db_tx = db.transaction_rw_unlocked(None).await.unwrap();
 
     let master_key_chain = MasterKeyChain::new_from_mnemonic(
         config.clone(),

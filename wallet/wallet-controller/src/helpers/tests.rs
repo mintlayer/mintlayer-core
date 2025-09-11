@@ -94,10 +94,10 @@ mod tx_to_partially_signed_tx_general_test {
 
         let chain_config = Arc::new(create_regtest());
         let block_timestamp = chain_config.genesis_block().timestamp();
-        let mut wallet = create_wallet_with_mnemonic(Arc::clone(&chain_config), MNEMONIC);
+        let mut wallet = create_wallet_with_mnemonic(Arc::clone(&chain_config), MNEMONIC).await;
 
         // Transfer to a destination belonging to the wallet.
-        let token0_transfer_utxo_dest = wallet_new_dest(&mut wallet);
+        let token0_transfer_utxo_dest = wallet_new_dest(&mut wallet).await;
         let token0_transfer_utxo = TxOutput::Transfer(
             OutputValue::TokenV1(random_tokens[0].id, Amount::from_atoms(rng.gen())),
             token0_transfer_utxo_dest.clone(),
@@ -126,7 +126,7 @@ mod tx_to_partially_signed_tx_general_test {
         let lock_then_transfer_outpoint =
             UtxoOutPoint::new(Id::<Transaction>::random_using(&mut rng).into(), rng.gen());
 
-        let delegation_dest = wallet_new_dest(&mut wallet);
+        let delegation_dest = wallet_new_dest(&mut wallet).await;
         let tx_with_delegation = SignedTransaction::new(
             Transaction::new(
                 0,
@@ -149,7 +149,7 @@ mod tx_to_partially_signed_tx_general_test {
         // belongs to it.
         let known_pool_id = PoolId::random_using(&mut rng);
         let known_pool_staker_balance = Amount::from_atoms(rng.gen());
-        let known_pool_decommission_dest = wallet_new_dest(&mut wallet);
+        let known_pool_decommission_dest = wallet_new_dest(&mut wallet).await;
         let tx_with_pool_creation = tx_with_outputs(vec![TxOutput::CreateStakePool(
             known_pool_id,
             Box::new(StakePoolData::new(
@@ -182,7 +182,8 @@ mod tx_to_partially_signed_tx_general_test {
             wallet_tokens_count,
             &mut wallet,
             &mut rng,
-        );
+        )
+        .await;
         let wallet_orders = make_blocks_with_wallet_orders(
             &mut blocks,
             &chain_config,
@@ -195,7 +196,8 @@ mod tx_to_partially_signed_tx_general_test {
             ],
             &mut wallet,
             &mut rng,
-        );
+        )
+        .await;
 
         // This utxo will be cached inside the wallet because the info about the pool has been cached.
         let known_produce_block_from_stake_utxo = TxOutput::ProduceBlockFromStake(
@@ -204,7 +206,7 @@ mod tx_to_partially_signed_tx_general_test {
         );
         let pool_id_for_known_create_pool_utxo = PoolId::random_using(&mut rng);
         let pool_staker_balance_for_known_create_pool_utxo = Amount::from_atoms(rng.gen());
-        let pool_decommission_dest_for_known_create_pool_utxo = wallet_new_dest(&mut wallet);
+        let pool_decommission_dest_for_known_create_pool_utxo = wallet_new_dest(&mut wallet).await;
         // This utxo will be cached inside the wallet because the decommission destination
         // belongs to it.
         let known_create_pool_utxo = TxOutput::CreateStakePool(
@@ -236,7 +238,7 @@ mod tx_to_partially_signed_tx_general_test {
         let known_create_pool_outpoint = UtxoOutPoint::new(last_block_id.into(), 1);
 
         let last_height = blocks.len() as u64 + 1;
-        scan_wallet(&mut wallet, BlockHeight::new(0), blocks);
+        scan_wallet(&mut wallet, BlockHeight::new(0), blocks).await;
 
         let htlc_spend_key = Destination::PublicKeyHash(PublicKeyHash::random_using(&mut rng));
         let htlc_refund_key = Destination::PublicKeyHash(PublicKeyHash::random_using(&mut rng));
@@ -728,7 +730,7 @@ mod tx_to_partially_signed_tx_general_test {
     }
 
     // Make blocks with txs that issue tokens with authority destinations belonging to the wallet.
-    fn make_blocks_with_wallet_tokens(
+    async fn make_blocks_with_wallet_tokens(
         blocks: &mut Vec<Block>,
         chain_config: &ChainConfig,
         tokens_count: usize,
@@ -743,7 +745,7 @@ mod tx_to_partially_signed_tx_general_test {
                 rng.r#gen(),
             ))];
             let id = make_token_id(chain_config, BlockHeight::new(0), &tx_inputs).unwrap();
-            let authority = wallet_new_dest(wallet);
+            let authority = wallet_new_dest(wallet).await;
             let data = random_token_data_with_id_and_authority(id, authority, rng);
 
             let issuance = TokenIssuanceV1 {
@@ -784,7 +786,7 @@ mod tx_to_partially_signed_tx_general_test {
     }
 
     // Make blocks with txs that create orders with conclude keys belonging to the wallet.
-    fn make_blocks_with_wallet_orders(
+    async fn make_blocks_with_wallet_orders(
         blocks: &mut Vec<Block>,
         chain_config: &ChainConfig,
         curencies: &[OrderCurrencies],
@@ -803,7 +805,7 @@ mod tx_to_partially_signed_tx_general_test {
             let initially_given = curencies.give.into_output_value(Amount::from_atoms(rng.gen()));
             let ask_balance = Amount::from_atoms(rng.gen());
             let give_balance = Amount::from_atoms(rng.gen());
-            let conclude_key = wallet_new_dest(wallet);
+            let conclude_key = wallet_new_dest(wallet).await;
 
             result.push(TestOrderData {
                 id,
@@ -885,12 +887,12 @@ async fn tx_to_partially_signed_tx_htlc_input_with_known_utxo_test(
     let mut rng = make_seedable_rng(seed);
 
     let chain_config = Arc::new(create_regtest());
-    let mut wallet = create_wallet_with_mnemonic(Arc::clone(&chain_config), MNEMONIC);
+    let mut wallet = create_wallet_with_mnemonic(Arc::clone(&chain_config), MNEMONIC).await;
 
     let token_id = TokenId::random_using(&mut rng);
 
     let htlc_spend_key = if spend_key_belongs_to_wallet {
-        wallet_new_dest(&mut wallet)
+        wallet_new_dest(&mut wallet).await
     } else {
         Destination::PublicKeyHash(PublicKeyHash::random_using(&mut rng))
     };
@@ -903,6 +905,7 @@ async fn tx_to_partially_signed_tx_htlc_input_with_known_utxo_test(
                     .unwrap(),
                 None,
             )
+            .await
             .unwrap();
         Destination::ClassicMultisig(pkh)
     } else {
@@ -935,7 +938,8 @@ async fn tx_to_partially_signed_tx_htlc_input_with_known_utxo_test(
         Amount::from_atoms(rng.gen()),
         Destination::PublicKeyHash(PublicKeyHash::random_using(&mut rng)),
         0,
-    );
+    )
+    .await;
     let last_height = 1;
 
     let token_num_decimals = rng.gen_range(1..20);

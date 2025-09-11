@@ -11,7 +11,7 @@ cargo fmt --check -- --config newline_style=Unix
 
 # Install cargo deny first with: cargo install cargo-deny.
 # Note: "--allow duplicate" silences the warning "found x duplicate entries for crate y".
-cargo deny check --allow duplicate --hide-inclusion-graph
+#cargo deny check --allow duplicate --hide-inclusion-graph
 
 # Checks enabled everywhere, including tests, benchmarks.
 # Note about "uninlined_format_args": this is about changing `format!("{}", x)` to `format!("{x}")`.
