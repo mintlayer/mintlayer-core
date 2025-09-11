@@ -15,7 +15,7 @@
 
 use common::{
     chain::{block::timestamp::BlockTimestamp, Block, GenBlock},
-    primitives::{BlockHeight, Id},
+    primitives::{BlockHeight, Compact, Id},
 };
 use serialization::{Decode, Encode};
 
@@ -26,6 +26,7 @@ pub struct BlockAuxData {
     block_id: Id<GenBlock>,
     block_height: BlockHeight,
     block_timestamp: BlockTimestamp,
+    block_compact_target: Option<Compact>,
 }
 
 impl BlockAuxData {
@@ -33,11 +34,13 @@ impl BlockAuxData {
         block_id: Id<GenBlock>,
         block_height: BlockHeight,
         block_timestamp: BlockTimestamp,
+        block_compact_target: Option<Compact>,
     ) -> Self {
         Self {
             block_id,
             block_height,
             block_timestamp,
+            block_compact_target,
         }
     }
 
@@ -51,6 +54,10 @@ impl BlockAuxData {
 
     pub fn block_timestamp(&self) -> BlockTimestamp {
         self.block_timestamp
+    }
+
+    pub fn block_compact_target(&self) -> Option<Compact> {
+        self.block_compact_target
     }
 }
 

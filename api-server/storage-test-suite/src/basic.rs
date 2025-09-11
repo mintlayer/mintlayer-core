@@ -21,15 +21,18 @@ use crate::helpers::make_trial;
 use crate::make_test;
 use pos_accounting::PoolData;
 
-use api_server_common::storage::{
-    impls::CURRENT_STORAGE_VERSION,
-    storage_api::{
-        block_aux_data::{BlockAuxData, BlockWithExtraData},
-        ApiServerStorage, ApiServerStorageError, ApiServerStorageRead, ApiServerStorageWrite,
-        ApiServerTransactionRw, BlockInfo, CoinOrTokenStatistic, Delegation, FungibleTokenData,
-        LockedUtxo, Order, PoolDataWithExtraInfo, TransactionInfo, Transactional, TxAdditionalInfo,
-        Utxo, UtxoLock, UtxoWithExtraInfo,
+use api_server_common::{
+    storage::{
+        impls::CURRENT_STORAGE_VERSION,
+        storage_api::{
+            block_aux_data::{BlockAuxData, BlockWithExtraData},
+            ApiServerStorage, ApiServerStorageError, ApiServerStorageRead, ApiServerStorageWrite,
+            ApiServerTransactionRw, BlockInfo, CoinOrTokenStatistic, Delegation, FungibleTokenData,
+            LockedUtxo, Order, PoolDataWithExtraInfo, TransactionInfo, Transactional,
+            TxAdditionalInfo, Utxo, UtxoLock, UtxoWithExtraInfo,
+        },
     },
+    utils::get_block_compact_target,
 };
 use crypto::{
     key::{KeyKind, PrivateKey},
@@ -50,7 +53,9 @@ use common::{
         AccountNonce, Block, DelegationId, Destination, OrderId, OutPointSourceId, PoolId,
         SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{per_thousand::PerThousand, Amount, BlockHeight, CoinOrTokenId, Id, Idable, H256},
+    primitives::{
+        per_thousand::PerThousand, Amount, BlockHeight, CoinOrTokenId, Compact, Id, Idable, H256,
+    },
 };
 use futures::Future;
 use libtest_mimic::Failed;
@@ -136,7 +141,7 @@ where
         let genesis_id = chain_config.genesis_block_id();
         let num_blocks = rng.gen_range(10..20);
         test_framework
-            .create_chain_return_ids_with_advancing_time(&genesis_id, num_blocks, &mut rng)
+            .create_chain_advancing_time_return_ids(&genesis_id, num_blocks, &mut rng)
             .unwrap();
 
         let block_id1 =
@@ -221,6 +226,7 @@ where
                             block_id.into(),
                             BlockHeight::new(block_height),
                             block.timestamp(),
+                            get_block_compact_target(&block),
                         ),
                     )
                     .await
@@ -370,7 +376,7 @@ where
             let height1 = height1_u64.into();
             let random_block_timestamp = BlockTimestamp::from_int_seconds(rng.gen::<u64>());
             let aux_data1 =
-                BlockAuxData::new(owning_block1.into(), height1, random_block_timestamp);
+                BlockAuxData::new(owning_block1.into(), height1, random_block_timestamp, None);
             db_tx.set_block_aux_data(owning_block1, &aux_data1).await.unwrap();
 
             let tx_info = TransactionInfo {
@@ -421,8 +427,13 @@ where
         let existing_block_id: Id<Block> = block_id;
         let height1_u64 = rng.gen_range::<u64, _>(1..i64::MAX as u64);
         let height1 = height1_u64.into();
-        let aux_data1 =
-            BlockAuxData::new(existing_block_id.into(), height1, random_block_timestamp);
+        let compact_target1 = Compact(rng.gen());
+        let aux_data1 = BlockAuxData::new(
+            existing_block_id.into(),
+            height1,
+            random_block_timestamp,
+            Some(compact_target1),
+        );
         db_tx.set_block_aux_data(existing_block_id, &aux_data1).await.unwrap();
 
         let retrieved_aux_data = db_tx.get_block_aux_data(existing_block_id).await.unwrap();
@@ -432,8 +443,13 @@ where
         let height2_u64 = rng.gen_range::<u64, _>(1..i64::MAX as u64);
         let height2 = height2_u64.into();
         let random_block_timestamp = BlockTimestamp::from_int_seconds(rng.gen::<u64>());
-        let aux_data2 =
-            BlockAuxData::new(existing_block_id.into(), height2, random_block_timestamp);
+        let compact_target2 = Compact(rng.gen());
+        let aux_data2 = BlockAuxData::new(
+            existing_block_id.into(),
+            height2,
+            random_block_timestamp,
+            Some(compact_target2),
+        );
         db_tx.set_block_aux_data(existing_block_id, &aux_data2).await.unwrap();
 
         let retrieved_aux_data = db_tx.get_block_aux_data(existing_block_id).await.unwrap();

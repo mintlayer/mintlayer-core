@@ -15,12 +15,12 @@
 
 use std::sync::RwLock;
 
+use ::utils::atomics::SeqCstAtomicU64;
 use api_web_server::{CachedValues, TxSubmitClient};
 use common::primitives::time::get_time;
 use mempool::FeeRate;
 use node_comm::rpc_client::NodeRpcError;
 use test_utils::mock_time_getter::mocked_time_getter_seconds;
-use utils::atomics::SeqCstAtomicU64;
 
 use super::*;
 

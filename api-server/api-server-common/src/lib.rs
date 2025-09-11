@@ -14,6 +14,7 @@
 // limitations under the License.
 
 pub mod storage;
+pub mod utils;
 
 use clap::Parser;
 use common::chain::config::ChainType;

@@ -13,26 +13,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{
-    api::json_helpers::{
-        self, amount_to_json, block_header_to_json, pool_data_to_json, to_tx_json_with_block_info,
-        tx_to_json, txoutput_to_json, utxo_outpoint_to_json, TokenDecimals,
-    },
-    error::{
-        ApiServerWebServerClientError, ApiServerWebServerError, ApiServerWebServerForbiddenError,
-        ApiServerWebServerNotFoundError, ApiServerWebServerServerError,
-    },
-    TxSubmitClient,
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    ops::Sub,
+    str::FromStr,
+    sync::Arc,
+    time::Duration,
 };
-use api_server_common::storage::storage_api::{
-    block_aux_data::BlockAuxData, AmountWithDecimals, ApiServerStorage, ApiServerStorageRead,
-    BlockInfo, CoinOrTokenStatistic, Order, TransactionInfo,
-};
+
 use axum::{
     extract::{DefaultBodyLimit, Path, Query, State},
     response::IntoResponse,
     routing::{get, post},
     Json, Router,
+};
+use hex::ToHex;
+use serde::Deserialize;
+use serde_json::json;
+
+use api_server_common::storage::storage_api::{
+    block_aux_data::BlockAuxData, AmountWithDecimals, ApiServerStorage, ApiServerStorageRead,
+    BlockInfo, CoinOrTokenStatistic, Order, TransactionInfo,
 };
 use common::{
     address::Address,
@@ -43,20 +44,21 @@ use common::{
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Id, Idable, H256},
 };
-use hex::ToHex;
-use serde::Deserialize;
-use serde_json::json;
 use serialization::hex_encoded::HexEncoded;
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    ops::Sub,
-    str::FromStr,
-    sync::Arc,
-    time::Duration,
-};
 use utils::ensure;
 
-use crate::ApiServerWebServerState;
+use crate::{
+    api::json_helpers::{
+        self, amount_to_json, block_header_to_json, block_info_to_json, pool_data_to_json,
+        to_tx_json_with_block_info, tx_to_json, txoutput_to_json, utxo_outpoint_to_json,
+        TokenDecimals,
+    },
+    error::{
+        ApiServerWebServerClientError, ApiServerWebServerError, ApiServerWebServerForbiddenError,
+        ApiServerWebServerNotFoundError, ApiServerWebServerServerError,
+    },
+    ApiServerWebServerState, TxSubmitClient,
+};
 
 use super::json_helpers::{nft_with_owner_to_json, to_json_string};
 
@@ -73,6 +75,7 @@ pub fn routes<
     let router = Router::new();
 
     let router = router
+        .route("/chain", get(chain))
         .route("/chain/genesis", get(chain_genesis))
         .route("/chain/tip", get(chain_tip))
         .route("/chain/:height", get(chain_at_height));
@@ -247,6 +250,67 @@ pub async fn block_transaction_ids<T: ApiServerStorage>(
 // chain/
 //
 
+pub async fn chain<T: ApiServerStorage>(
+    Query(params): Query<BTreeMap<String, String>>,
+    State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
+) -> Result<impl IntoResponse, ApiServerWebServerError> {
+    let offset_and_items = get_offset_and_items(&params)?;
+
+    let db_tx = state.db.transaction_ro().await.map_err(|e| {
+        logging::log::error!("internal error: {e}");
+        ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+    })?;
+
+    let blocks_aux_data = {
+        let mut blocks_count = offset_and_items.items;
+        let mut starting_height = offset_and_items.offset;
+        let need_genesis = starting_height == 0 && blocks_count > 0;
+
+        if need_genesis {
+            starting_height += 1;
+            blocks_count -= 1;
+        }
+
+        let mut blocks_aux_data = if blocks_count != 0 {
+            db_tx.get_blocks_aux_data(blocks_count, starting_height).await.map_err(|e| {
+                logging::log::error!("internal error: {e}");
+                ApiServerWebServerError::ServerError(
+                    ApiServerWebServerServerError::InternalServerError,
+                )
+            })?
+        } else {
+            Vec::new()
+        };
+
+        if need_genesis {
+            let genesis = state.chain_config.genesis_block();
+
+            blocks_aux_data.insert(
+                0,
+                BlockAuxData::new(
+                    genesis.get_id().into(),
+                    BlockHeight::zero(),
+                    genesis.timestamp(),
+                    None,
+                ),
+            );
+        }
+
+        blocks_aux_data
+    };
+
+    let blocks_aux_data = blocks_aux_data
+        .iter()
+        .map(block_info_to_json)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?;
+
+    Ok(Json(serde_json::Value::Array(blocks_aux_data)))
+}
+
 #[allow(clippy::unused_async)]
 pub async fn chain_genesis<T: ApiServerStorage>(
     State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
@@ -301,10 +365,12 @@ pub async fn chain_tip<T: ApiServerStorage>(
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
     let best_block = best_block(&state).await?;
 
-    Ok(Json(json!({
-        "block_height": best_block.block_height(),
-        "block_id": best_block.block_id().to_hash().encode_hex::<String>(),
-    })))
+    let json = block_info_to_json(&best_block).map_err(|e| {
+        logging::log::error!("internal error: {e}");
+        ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+    })?;
+
+    Ok(Json(json))
 }
 
 async fn best_block<T: ApiServerStorage>(
@@ -1551,16 +1617,32 @@ struct OffsetAndItems {
     items: u32,
 }
 
+pub const OFFSET_PARAM_NAME: &str = "offset";
+pub const ITEMS_PARAM_NAME: &str = "items";
+pub const DEFAULT_NUM_ITEMS: u32 = 10;
+pub const MAX_NUM_ITEMS: u32 = 100;
+
 fn get_offset_and_items(
     params: &BTreeMap<String, String>,
 ) -> Result<OffsetAndItems, ApiServerWebServerError> {
-    const OFFSET: &str = "offset";
-    const ITEMS: &str = "items";
-    const DEFAULT_NUM_ITEMS: u32 = 10;
-    const MAX_NUM_ITEMS: u32 = 100;
+    get_offset_and_items_generic(
+        params,
+        OFFSET_PARAM_NAME,
+        ITEMS_PARAM_NAME,
+        DEFAULT_NUM_ITEMS,
+        MAX_NUM_ITEMS,
+    )
+}
 
+fn get_offset_and_items_generic(
+    params: &BTreeMap<String, String>,
+    offset_param_name: &str,
+    items_param_name: &str,
+    default_num_items: u32,
+    max_num_items: u32,
+) -> Result<OffsetAndItems, ApiServerWebServerError> {
     let offset = params
-        .get(OFFSET)
+        .get(offset_param_name)
         .map(|offset| u64::from_str(offset))
         .transpose()
         .map_err(|_| {
@@ -1569,15 +1651,15 @@ fn get_offset_and_items(
         .unwrap_or_default();
 
     let items = params
-        .get(ITEMS)
+        .get(items_param_name)
         .map(|items| u32::from_str(items))
         .transpose()
         .map_err(|_| {
             ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidNumItems)
         })?
-        .unwrap_or(DEFAULT_NUM_ITEMS);
+        .unwrap_or(default_num_items);
     ensure!(
-        items <= MAX_NUM_ITEMS,
+        items <= max_num_items,
         ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidNumItems)
     );
 

@@ -70,6 +70,10 @@ pub enum ApiServerStorageError {
     TimestampTooHigh(BlockTimestamp),
     #[error("Id creation error: {0}")]
     IdCreationError(#[from] IdCreationError),
+    #[error("Unexpected compact target {0:?} stored in the db")]
+    UnexpectedCompactTargetInDb(i64),
+    #[error("Aux data missing for mainchain block {0:x}")]
+    AuxDataMissingForMainchainBlock(Id<Block>),
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
@@ -610,6 +614,12 @@ pub trait ApiServerStorageRead: Sync {
         &self,
         block_id: Id<Block>,
     ) -> Result<Option<BlockAuxData>, ApiServerStorageError>;
+
+    async fn get_blocks_aux_data(
+        &self,
+        blocks_count: u32,
+        starting_height: u64,
+    ) -> Result<Vec<BlockAuxData>, ApiServerStorageError>;
 
     async fn get_block_range_from_time_range(
         &self,

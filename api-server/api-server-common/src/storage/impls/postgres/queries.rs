@@ -29,18 +29,22 @@ use common::{
         AccountNonce, Block, ChainConfig, DelegationId, Destination, GenBlock, OrderId, PoolId,
         Transaction, UtxoOutPoint,
     },
-    primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
+    primitives::{compact, Amount, BlockHeight, CoinOrTokenId, Compact, Id},
 };
 use tokio_postgres::NoTls;
 
-use crate::storage::{
-    impls::CURRENT_STORAGE_VERSION,
-    storage_api::{
-        block_aux_data::{BlockAuxData, BlockWithExtraData},
-        AmountWithDecimals, ApiServerStorageError, BlockInfo, CoinOrTokenStatistic, Delegation,
-        FungibleTokenData, LockedUtxo, NftWithOwner, Order, PoolBlockStats, PoolDataWithExtraInfo,
-        TransactionInfo, TransactionWithBlockInfo, Utxo, UtxoWithExtraInfo,
+use crate::{
+    storage::{
+        impls::CURRENT_STORAGE_VERSION,
+        storage_api::{
+            block_aux_data::{BlockAuxData, BlockWithExtraData},
+            AmountWithDecimals, ApiServerStorageError, BlockInfo, CoinOrTokenStatistic, Delegation,
+            FungibleTokenData, LockedUtxo, NftWithOwner, Order, PoolBlockStats,
+            PoolDataWithExtraInfo, TransactionInfo, TransactionWithBlockInfo, Utxo,
+            UtxoWithExtraInfo,
+        },
     },
+    utils::get_block_compact_target,
 };
 
 const VERSION_STR: &str = "version";
@@ -588,7 +592,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .query_one(
                 r#"
                 (
-                    SELECT block_height, block_id, block_timestamp
+                    SELECT block_height, block_id, block_timestamp, block_compact_target
                     FROM ml.blocks
                     WHERE block_height IS NOT NULL
                     ORDER BY block_height DESC
@@ -596,7 +600,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 )
                 UNION ALL
                 (
-                    SELECT block_height, block_id, block_timestamp
+                    SELECT block_height, block_id, block_timestamp, null
                     FROM ml.genesis
                     LIMIT 1
                 )
@@ -611,6 +615,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         let block_height: i64 = row.get(0);
         let block_id: Vec<u8> = row.get(1);
         let block_timestamp: i64 = row.get(2);
+        let block_compact_target: Option<i64> = row.get(3);
 
         let block_height = BlockHeight::new(block_height as u64);
         let block_timestamp = BlockTimestamp::from_int_seconds(block_timestamp as u64);
@@ -620,8 +625,19 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 e
             ))
         })?;
+        let block_compact_target: Option<compact::InnerType> = block_compact_target
+            .map(|val| {
+                val.try_into()
+                    .map_err(|_| ApiServerStorageError::UnexpectedCompactTargetInDb(val))
+            })
+            .transpose()?;
 
-        Ok(BlockAuxData::new(block_id, block_height, block_timestamp))
+        Ok(BlockAuxData::new(
+            block_id,
+            block_height,
+            block_timestamp,
+            block_compact_target.map(Compact),
+        ))
     }
 
     async fn just_execute(&mut self, query: &str) -> Result<(), ApiServerStorageError> {
@@ -661,6 +677,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 block_id bytea PRIMARY KEY,
                 block_height bigint,
                 block_timestamp bigint NOT NULL,
+                block_compact_target bigint,
                 block_data bytea NOT NULL
             );",
         )
@@ -1133,13 +1150,15 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         logging::log::debug!("Inserting block with id: {:?}", block_id);
         let height = Self::block_height_to_postgres_friendly(block_height);
         let timestamp = Self::block_time_to_postgres_friendly(block.block.timestamp())?;
+        let compact_target = get_block_compact_target(&block.block).map(|target| target.0 as i64);
 
         self.tx
             .execute(
-                "INSERT INTO ml.blocks (block_id, block_height, block_timestamp, block_data) VALUES ($1, $2, $3, $4)
+                "INSERT INTO ml.blocks (block_id, block_height, block_timestamp, block_compact_target, block_data)
+                    VALUES ($1, $2, $3, $4, $5)
                     ON CONFLICT (block_id) DO UPDATE
-                    SET block_data = $4, block_height = $2;",
-                &[&block_id.encode(), &height, &timestamp, &block.encode()],
+                    SET block_data = $5, block_height = $2;",
+                &[&block_id.encode(), &height, &timestamp, &compact_target, &block.encode()],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
@@ -2696,6 +2715,63 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             })?;
 
         Ok(Some(block_aux_data))
+    }
+
+    pub async fn get_blocks_aux_data(
+        &mut self,
+        blocks_count: u32,
+        starting_height: u64,
+    ) -> Result<Vec<BlockAuxData>, ApiServerStorageError> {
+        let blocks_count = blocks_count as i64;
+        let starting_height = starting_height as i64;
+        let rows = self
+            .tx
+            .query(
+                // Note: using OFFSET becomes really slow when the offset value is large,
+                // this is why we use a starting height instead.
+                r#"
+                SELECT block_height, block_id, block_timestamp, block_compact_target
+                FROM ml.blocks
+                WHERE block_height IS NOT NULL AND block_height >= $1
+                ORDER BY block_height
+                LIMIT $2;
+                "#,
+                &[&starting_height, &blocks_count],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        rows.into_iter()
+            .map(|row| {
+                let block_height: i64 = row.get(0);
+                let block_id: Vec<u8> = row.get(1);
+                let block_timestamp: i64 = row.get(2);
+                let block_compact_target: Option<i64> = row.get(3);
+
+                let block_height = BlockHeight::new(block_height as u64);
+                let block_timestamp = BlockTimestamp::from_int_seconds(block_timestamp as u64);
+                let block_id =
+                    Id::<GenBlock>::decode_all(&mut block_id.as_slice()).map_err(|e| {
+                        ApiServerStorageError::InvalidInitializedState(format!(
+                            "BlockId deserialization failed: {}",
+                            e
+                        ))
+                    })?;
+                let block_compact_target: Option<compact::InnerType> = block_compact_target
+                    .map(|val| {
+                        val.try_into()
+                            .map_err(|_| ApiServerStorageError::UnexpectedCompactTargetInDb(val))
+                    })
+                    .transpose()?;
+
+                Ok(BlockAuxData::new(
+                    block_id,
+                    block_height,
+                    block_timestamp,
+                    block_compact_target.map(Compact),
+                ))
+            })
+            .collect()
     }
 
     pub async fn set_block_aux_data(

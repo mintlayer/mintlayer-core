@@ -13,14 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::helpers::block_index_handle_impl::TestBlockIndexHandle;
+use rstest::rstest;
 
 use chainstate::BlockSource;
 use chainstate_storage::Transactional;
-use chainstate_test_framework::TestFramework;
+use chainstate_test_framework::{TestBlockIndexHandle, TestFramework};
 use chainstate_types::BlockIndexHistoryIterator;
 use common::primitives::{Id, Idable, H256};
-use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 
 #[rstest]

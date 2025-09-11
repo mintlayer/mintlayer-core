@@ -15,11 +15,14 @@
 
 pub mod transactional;
 
-use crate::storage::storage_api::{
-    block_aux_data::{BlockAuxData, BlockWithExtraData},
-    AmountWithDecimals, ApiServerStorageError, BlockInfo, CoinOrTokenStatistic, Delegation,
-    FungibleTokenData, LockedUtxo, NftWithOwner, Order, PoolBlockStats, PoolDataWithExtraInfo,
-    TransactionInfo, TransactionWithBlockInfo, Utxo, UtxoLock, UtxoWithExtraInfo,
+use crate::{
+    storage::storage_api::{
+        block_aux_data::{BlockAuxData, BlockWithExtraData},
+        AmountWithDecimals, ApiServerStorageError, BlockInfo, CoinOrTokenStatistic, Delegation,
+        FungibleTokenData, LockedUtxo, NftWithOwner, Order, PoolBlockStats, PoolDataWithExtraInfo,
+        TransactionInfo, TransactionWithBlockInfo, Utxo, UtxoLock, UtxoWithExtraInfo,
+    },
+    utils::get_block_compact_target,
 };
 use common::{
     address::Address,
@@ -93,6 +96,7 @@ impl ApiServerInMemoryStorage {
                 chain_config.genesis_block_id(),
                 0.into(),
                 chain_config.genesis_block().timestamp(),
+                None,
             ),
             number_of_coin_decimals: chain_config.coin_decimals(),
             storage_version: super::CURRENT_STORAGE_VERSION,
@@ -325,6 +329,23 @@ impl ApiServerInMemoryStorage {
             None => return Ok(None),
         };
         Ok(Some(*block_aux_data))
+    }
+
+    fn get_blocks_aux_data(
+        &self,
+        blocks_count: u32,
+        starting_height: u64,
+    ) -> Result<Vec<BlockAuxData>, ApiServerStorageError> {
+        let start = BlockHeight::new(starting_height);
+        let end = BlockHeight::new(starting_height + blocks_count as u64);
+        self.main_chain_blocks_table
+            .range(start..end)
+            .map(|(_, block_id)| {
+                Ok(*self.block_aux_data_table.get(block_id).ok_or(
+                    ApiServerStorageError::AuxDataMissingForMainchainBlock(*block_id),
+                )?)
+            })
+            .collect()
     }
 
     fn get_block_range_from_time_range(
@@ -971,13 +992,16 @@ impl ApiServerInMemoryStorage {
         block_height: BlockHeight,
         block: &BlockWithExtraData,
     ) -> Result<(), ApiServerStorageError> {
-        self.block_table.insert(block_id, block.clone());
-        self.block_aux_data_table.insert(
-            block_id,
-            BlockAuxData::new(block_id.into(), block_height, block.block.timestamp()),
+        let data = BlockAuxData::new(
+            block_id.into(),
+            block_height,
+            block.block.timestamp(),
+            get_block_compact_target(&block.block),
         );
+        self.block_table.insert(block_id, block.clone());
+        self.block_aux_data_table.insert(block_id, data);
         self.main_chain_blocks_table.insert(block_height, block_id);
-        self.best_block = BlockAuxData::new(block_id.into(), block_height, block.block.timestamp());
+        self.best_block = data;
         Ok(())
     }
 

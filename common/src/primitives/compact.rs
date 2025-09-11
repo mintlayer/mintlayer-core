@@ -17,8 +17,10 @@ use crate::uint::Uint256;
 use serialization::{Decode, Encode};
 use std::ops::Shl;
 
+pub type InnerType = u32;
+
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Encode, Decode, serde::Serialize)]
-pub struct Compact(pub u32);
+pub struct Compact(pub InnerType);
 
 impl std::fmt::Debug for Compact {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

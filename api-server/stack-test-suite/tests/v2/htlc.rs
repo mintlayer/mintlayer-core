@@ -15,6 +15,7 @@
 
 use std::borrow::Cow;
 
+use ::utils::const_nz_u8;
 use common::chain::{
     classic_multisig::ClassicMultisigChallenge,
     htlc::HtlcSecret,
@@ -44,7 +45,7 @@ fn create_htlc(
 ) -> (HashedTimelockContract, ClassicMultisigChallenge) {
     let refund_challenge = ClassicMultisigChallenge::new(
         chain_config,
-        utils::const_nz_u8!(2),
+        const_nz_u8!(2),
         vec![alice_pk.clone(), bob_pk.clone()],
     )
     .unwrap();
