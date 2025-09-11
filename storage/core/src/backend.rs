@@ -19,6 +19,8 @@ use std::borrow::Cow;
 
 use utils::shallow_clone::ShallowClone;
 
+use async_trait::async_trait;
+
 pub use crate::{Data, DbDesc, DbMapId};
 
 /// Read-only database operations
@@ -65,13 +67,7 @@ pub trait TxRw: ReadOps + WriteOps {
 }
 
 /// Storage backend internal implementation type
-pub trait BackendImpl: Send + Sync + ShallowClone + 'static {
-    /// Read-only transaction internal type
-    type TxRo<'a>: TxRo + 'a;
-
-    /// Start a read-write transaction
-    type TxRw<'a>: TxRw + 'a;
-
+pub trait BackendImpl: Send + Sync + ShallowClone + 'static + BaseBackendImpl {
     /// Start a read-only transaction
     fn transaction_ro(&self) -> crate::Result<Self::TxRo<'_>>;
 
@@ -79,11 +75,38 @@ pub trait BackendImpl: Send + Sync + ShallowClone + 'static {
     fn transaction_rw(&self, size: Option<usize>) -> crate::Result<Self::TxRw<'_>>;
 }
 
-/// Storage backend type. Used to set up storage.
-pub trait Backend {
-    /// Implementation type corresponding to this backend
-    type Impl: BackendImpl;
+pub trait BaseBackendImpl: Send + Sync + ShallowClone + 'static {
+    /// Read-only transaction internal type
+    type TxRo<'a>: TxRo + 'a;
 
+    /// Start a read-write transaction
+    type TxRw<'a>: TxRw + 'a;
+}
+
+pub trait BaseBackend {
+    type Impl: BaseBackendImpl;
+}
+
+/// Storage backend type. Used to set up storage.
+pub trait Backend: BaseBackend<Impl: BackendImpl> {
+    /// Open the database, giving an implementation-specific handle
+    fn open(self, desc: DbDesc) -> crate::Result<Self::Impl>;
+}
+
+/// Async storage backend internal implementation type
+#[async_trait]
+pub trait AsyncBackendImpl:
+    Send + Sync + ShallowClone + 'static + for<'a> BaseBackendImpl<TxRo<'a>: Send, TxRw<'a>: Send>
+{
+    /// Start a read-only transaction
+    async fn transaction_ro(&self) -> crate::Result<Self::TxRo<'_>>;
+
+    /// Start a read-write transaction
+    async fn transaction_rw(&self, size: Option<usize>) -> crate::Result<Self::TxRw<'_>>;
+}
+
+/// Storage backend type. Used to set up storage.
+pub trait AsyncBackend: BaseBackend<Impl: AsyncBackendImpl> {
     /// Open the database, giving an implementation-specific handle
     fn open(self, desc: DbDesc) -> crate::Result<Self::Impl>;
 }

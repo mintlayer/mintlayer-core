@@ -51,10 +51,11 @@ impl<B: Default> Default for Failing<B> {
         Self::reliable(B::default())
     }
 }
+impl<B: backend::Backend> backend::BaseBackend for Failing<B> {
+    type Impl = FailingImpl<B::Impl>;
+}
 
 impl<B: backend::Backend> backend::Backend for Failing<B> {
-    type Impl = FailingImpl<B::Impl>;
-
     fn open(self, desc: storage_core::DbDesc) -> storage_core::Result<Self::Impl> {
         let Self {
             inner,
@@ -114,11 +115,13 @@ impl<T: ShallowClone> ShallowClone for FailingImpl<T> {
     }
 }
 
-impl<T: backend::BackendImpl> backend::BackendImpl for FailingImpl<T> {
+impl<T: backend::BackendImpl> backend::BaseBackendImpl for FailingImpl<T> {
     type TxRo<'a> = T::TxRo<'a>;
 
     type TxRw<'a> = TxRw<'a, T::TxRw<'a>>;
+}
 
+impl<T: backend::BackendImpl> backend::BackendImpl for FailingImpl<T> {
     fn transaction_ro(&self) -> storage_core::Result<Self::TxRo<'_>> {
         self.inner.transaction_ro()
     }

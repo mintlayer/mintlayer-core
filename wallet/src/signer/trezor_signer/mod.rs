@@ -486,6 +486,103 @@ impl TrezorSigner {
             },
         )
     }
+
+    fn sign_challenge_impl(
+        &mut self,
+        message: &[u8],
+        destination: &Destination,
+        key_chain: &impl AccountKeyChains,
+        db_tx: &impl WalletStorageReadUnlocked,
+    ) -> SignerResult<ArbitraryMessageSignature> {
+        let data = match key_chain.find_public_key(destination) {
+            Some(FoundPubKey::Hierarchy(xpub)) => {
+                let address_n: Vec<_> = xpub
+                    .get_derivation_path()
+                    .as_slice()
+                    .iter()
+                    .map(|c| c.into_encoded_index())
+                    .collect();
+
+                let addr_type = match destination {
+                    Destination::PublicKey(_) => MintlayerAddressType::PUBLIC_KEY,
+                    Destination::PublicKeyHash(_) => MintlayerAddressType::PUBLIC_KEY_HASH,
+                    Destination::AnyoneCanSpend => {
+                        return Err(SignerError::SigningError(
+                            DestinationSigError::AttemptedToProduceSignatureForAnyoneCanSpend,
+                        ))
+                    }
+                    Destination::ClassicMultisig(_) => {
+                        return Err(SignerError::SigningError(
+                            DestinationSigError::AttemptedToProduceClassicalMultisigSignatureInUnipartySignatureCode,
+                        ))
+                    }
+                    Destination::ScriptHash(_) => {
+                        return Err(SignerError::SigningError(
+                            DestinationSigError::Unsupported,
+                        ))
+                    }
+                };
+
+                let chain_type = to_trezor_chain_type(&self.chain_config);
+
+                let sig = self.perform_trezor_operation(
+                    move |client| {
+                        client.mintlayer_sign_message(
+                            chain_type,
+                            address_n.clone(),
+                            addr_type,
+                            message.to_vec(),
+                        )
+                    },
+                    db_tx,
+                    key_chain,
+                )?;
+
+                let signature = Signature::from_raw_data(&sig, SignatureKind::Secp256k1Schnorr)
+                    .map_err(TrezorError::SignatureError)?;
+
+                match &destination {
+                    Destination::PublicKey(_) => AuthorizedPublicKeySpend::new(signature).encode(),
+                    Destination::PublicKeyHash(_) => {
+                        AuthorizedPublicKeyHashSpend::new(xpub.into_public_key(), signature)
+                            .encode()
+                    }
+                    Destination::AnyoneCanSpend => {
+                        return Err(SignerError::SigningError(
+                            DestinationSigError::AttemptedToProduceSignatureForAnyoneCanSpend,
+                        ))
+                    }
+                    Destination::ClassicMultisig(_) => {
+                        return Err(SignerError::SigningError(
+                            DestinationSigError::AttemptedToProduceClassicalMultisigSignatureInUnipartySignatureCode,
+                        ))
+                    }
+                    Destination::ScriptHash(_) => {
+                        return Err(SignerError::SigningError(
+                            DestinationSigError::Unsupported,
+                        ))
+                    }
+                }
+            }
+            Some(FoundPubKey::Standalone(acc_public_key)) => {
+                let standalone_pk = &db_tx
+                    .get_account_standalone_private_key(&acc_public_key)?
+                    .ok_or(SignerError::DestinationNotFromThisWallet)?;
+
+                let sig = ArbitraryMessageSignature::produce_uniparty_signature(
+                    standalone_pk,
+                    destination,
+                    message,
+                    self.sig_aux_data_provider.lock().expect("poisoned mutex").as_mut(),
+                )?;
+                return Ok(sig);
+            }
+            None => return Err(SignerError::DestinationNotFromThisWallet),
+        };
+
+        let sig = ArbitraryMessageSignature::from_data(data);
+        Ok(sig)
+    }
 }
 
 fn find_trezor_device_from_db(
@@ -517,7 +614,7 @@ impl Signer for TrezorSigner {
         ptx: PartiallySignedTransaction,
         tokens_additional_info: &TokensAdditionalInfo,
         key_chain: &(impl AccountKeyChains + Sync),
-        db_tx: &(impl WalletStorageReadUnlocked + Sync),
+        db_tx: impl WalletStorageReadUnlocked + Send,
         block_height: BlockHeight,
     ) -> SignerResult<(
         PartiallySignedTransaction,
@@ -529,7 +626,7 @@ impl Signer for TrezorSigner {
             tokens_additional_info,
             key_chain,
             &self.chain_config,
-            db_tx,
+            &db_tx,
         )?;
         let outputs = self.to_trezor_output_msgs(&ptx, tokens_additional_info)?;
         let utxos = to_trezor_utxo_msgs(&ptx, tokens_additional_info, &self.chain_config)?;
@@ -560,7 +657,7 @@ impl Signer for TrezorSigner {
                     input_commitment_version,
                 )
             },
-            db_tx,
+            &db_tx,
             key_chain,
         )?;
 
@@ -755,96 +852,9 @@ impl Signer for TrezorSigner {
         message: &[u8],
         destination: &Destination,
         key_chain: &(impl AccountKeyChains + Sync),
-        db_tx: &(impl WalletStorageReadUnlocked + Sync),
+        db_tx: impl WalletStorageReadUnlocked + Send,
     ) -> SignerResult<ArbitraryMessageSignature> {
-        let data = match key_chain.find_public_key(destination) {
-            Some(FoundPubKey::Hierarchy(xpub)) => {
-                let address_n: Vec<_> = xpub
-                    .get_derivation_path()
-                    .as_slice()
-                    .iter()
-                    .map(|c| c.into_encoded_index())
-                    .collect();
-
-                let addr_type = match destination {
-                    Destination::PublicKey(_) => MintlayerAddressType::PUBLIC_KEY,
-                    Destination::PublicKeyHash(_) => MintlayerAddressType::PUBLIC_KEY_HASH,
-                    Destination::AnyoneCanSpend => {
-                        return Err(SignerError::SigningError(
-                            DestinationSigError::AttemptedToProduceSignatureForAnyoneCanSpend,
-                        ))
-                    }
-                    Destination::ClassicMultisig(_) => {
-                        return Err(SignerError::SigningError(
-                            DestinationSigError::AttemptedToProduceClassicalMultisigSignatureInUnipartySignatureCode,
-                        ))
-                    }
-                    Destination::ScriptHash(_) => {
-                        return Err(SignerError::SigningError(
-                            DestinationSigError::Unsupported,
-                        ))
-                    }
-                };
-
-                let chain_type = to_trezor_chain_type(&self.chain_config);
-
-                let sig = self.perform_trezor_operation(
-                    move |client| {
-                        client.mintlayer_sign_message(
-                            chain_type,
-                            address_n.clone(),
-                            addr_type,
-                            message.to_vec(),
-                        )
-                    },
-                    db_tx,
-                    key_chain,
-                )?;
-
-                let signature = Signature::from_raw_data(&sig, SignatureKind::Secp256k1Schnorr)
-                    .map_err(TrezorError::SignatureError)?;
-
-                match &destination {
-                    Destination::PublicKey(_) => AuthorizedPublicKeySpend::new(signature).encode(),
-                    Destination::PublicKeyHash(_) => {
-                        AuthorizedPublicKeyHashSpend::new(xpub.into_public_key(), signature)
-                            .encode()
-                    }
-                    Destination::AnyoneCanSpend => {
-                        return Err(SignerError::SigningError(
-                            DestinationSigError::AttemptedToProduceSignatureForAnyoneCanSpend,
-                        ))
-                    }
-                    Destination::ClassicMultisig(_) => {
-                        return Err(SignerError::SigningError(
-                            DestinationSigError::AttemptedToProduceClassicalMultisigSignatureInUnipartySignatureCode,
-                        ))
-                    }
-                    Destination::ScriptHash(_) => {
-                        return Err(SignerError::SigningError(
-                            DestinationSigError::Unsupported,
-                        ))
-                    }
-                }
-            }
-            Some(FoundPubKey::Standalone(acc_public_key)) => {
-                let standalone_pk = db_tx
-                    .get_account_standalone_private_key(&acc_public_key)?
-                    .ok_or(SignerError::DestinationNotFromThisWallet)?;
-
-                let sig = ArbitraryMessageSignature::produce_uniparty_signature(
-                    &standalone_pk,
-                    destination,
-                    message,
-                    self.sig_aux_data_provider.lock().expect("poisoned mutex").as_mut(),
-                )?;
-                return Ok(sig);
-            }
-            None => return Err(SignerError::DestinationNotFromThisWallet),
-        };
-
-        let sig = ArbitraryMessageSignature::from_data(data);
-        Ok(sig)
+        self.sign_challenge_impl(message, destination, key_chain, &db_tx)
     }
 
     async fn sign_transaction_intent(
@@ -853,7 +863,7 @@ impl Signer for TrezorSigner {
         input_destinations: &[Destination],
         intent: &str,
         key_chain: &(impl AccountKeyChains + Sync),
-        db_tx: &(impl WalletStorageReadUnlocked + Sync),
+        db_tx: impl WalletStorageReadUnlocked + Send,
     ) -> SignerResult<SignedTransactionIntent> {
         let tx_id = transaction.get_id();
         let message_to_sign = SignedTransactionIntent::get_message_to_sign(intent, &tx_id);
@@ -862,7 +872,7 @@ impl Signer for TrezorSigner {
         for dest in input_destinations {
             let dest = SignedTransactionIntent::normalize_destination(dest);
             let sig =
-                self.sign_challenge(message_to_sign.as_bytes(), &dest, key_chain, db_tx).await?;
+                self.sign_challenge_impl(message_to_sign.as_bytes(), &dest, key_chain, &db_tx)?;
             signatures.push(sig.into_raw());
         }
 

@@ -7835,6 +7835,7 @@ dependencies = [
 name = "storage-core"
 version = "1.1.0"
 dependencies = [
+ "async-trait",
  "common",
  "itertools 0.14.0",
  "logging",
@@ -7883,12 +7884,14 @@ dependencies = [
 name = "storage-sqlite"
 version = "1.1.0"
 dependencies = [
+ "async-trait",
  "hex",
  "logging",
  "rusqlite",
  "storage-backend-test-suite",
  "storage-core",
  "test-utils",
+ "tokio",
  "utils",
 ]
 
@@ -9364,6 +9367,7 @@ dependencies = [
 name = "wallet-storage"
 version = "1.1.0"
 dependencies = [
+ "async-trait",
  "bip39",
  "common",
  "crypto",
@@ -9374,6 +9378,7 @@ dependencies = [
  "storage-sqlite",
  "test-utils",
  "thiserror 1.0.69",
+ "tokio",
  "utils",
  "utxo",
  "wallet-types",

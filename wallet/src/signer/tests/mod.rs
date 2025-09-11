@@ -37,7 +37,7 @@ fn init() {
     logging::init_logging();
 }
 
-fn account_from_mnemonic<B: storage::Backend>(
+fn account_from_mnemonic<B: storage::AsyncBackend>(
     chain_config: &Arc<ChainConfig>,
     db_tx: &mut StoreTxRwUnlocked<B>,
     account_index: U31,

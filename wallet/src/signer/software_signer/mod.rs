@@ -296,7 +296,7 @@ impl Signer for SoftwareSigner {
         ptx: PartiallySignedTransaction,
         _tokens_additional_info: &TokensAdditionalInfo,
         key_chain: &(impl AccountKeyChains + Sync),
-        db_tx: &(impl WalletStorageReadUnlocked + Sync),
+        db_tx: impl WalletStorageReadUnlocked + Send,
         block_height: BlockHeight,
     ) -> SignerResult<(
         PartiallySignedTransaction,
@@ -353,7 +353,7 @@ impl Signer for SoftwareSigner {
                                             &input_commitments,
                                             sig_components,
                                             key_chain,
-                                            db_tx,
+                                            &db_tx,
                                         )?;
 
                                     let signature =
@@ -389,7 +389,7 @@ impl Signer for SoftwareSigner {
                                 &input_commitments,
                                 key_chain,
                                 htlc_secret,
-                                db_tx,
+                                &db_tx,
                             )?;
                             Ok((sig, SignatureStatus::NotSigned, status))
                         }
@@ -409,10 +409,10 @@ impl Signer for SoftwareSigner {
         message: &[u8],
         destination: &Destination,
         key_chain: &(impl AccountKeyChains + Sync),
-        db_tx: &(impl WalletStorageReadUnlocked + Sync),
+        db_tx: impl WalletStorageReadUnlocked + Send,
     ) -> SignerResult<ArbitraryMessageSignature> {
         let private_key = self
-            .get_private_key_for_destination(destination, key_chain, db_tx)?
+            .get_private_key_for_destination(destination, key_chain, &db_tx)?
             .ok_or(SignerError::DestinationNotFromThisWallet)?;
 
         let sig = ArbitraryMessageSignature::produce_uniparty_signature(
@@ -431,14 +431,14 @@ impl Signer for SoftwareSigner {
         input_destinations: &[Destination],
         intent: &str,
         key_chain: &(impl AccountKeyChains + Sync),
-        db_tx: &(impl WalletStorageReadUnlocked + Sync),
+        db_tx: impl WalletStorageReadUnlocked + Send,
     ) -> SignerResult<SignedTransactionIntent> {
         SignedTransactionIntent::produce_from_transaction(
             transaction,
             input_destinations,
             intent,
             |dest| {
-                self.get_private_key_for_destination(dest, key_chain, db_tx)?
+                self.get_private_key_for_destination(dest, key_chain, &db_tx)?
                     .ok_or(SignerError::DestinationNotFromThisWallet)
             },
             self.sig_aux_data_provider.lock().expect("poisoned mutex").as_mut(),
@@ -466,7 +466,7 @@ pub struct SoftwareSignerProvider {
 }
 
 impl SoftwareSignerProvider {
-    pub fn new_from_mnemonic<B: storage::Backend>(
+    pub fn new_from_mnemonic<B: storage::AsyncBackend>(
         chain_config: Arc<ChainConfig>,
         db_tx: &mut StoreTxRwUnlocked<B>,
         mnemonic_str: &str,

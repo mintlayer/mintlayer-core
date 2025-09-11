@@ -59,7 +59,7 @@ impl MasterKeyChain {
         ))
     }
 
-    pub fn new_from_mnemonic<B: storage::Backend>(
+    pub fn new_from_mnemonic<B: storage::AsyncBackend>(
         chain_config: Arc<ChainConfig>,
         db_tx: &mut StoreTxRwUnlocked<B>,
         mnemonic_str: &str,
@@ -80,7 +80,7 @@ impl MasterKeyChain {
         )
     }
 
-    fn new_from_root_key<B: storage::Backend>(
+    fn new_from_root_key<B: storage::AsyncBackend>(
         chain_config: Arc<ChainConfig>,
         db_tx: &mut StoreTxRwUnlocked<B>,
         root_key: ExtendedPrivateKey,

@@ -68,13 +68,13 @@ use wallet_types::{
 use wallet::signer::trezor_signer::TrezorSignerProvider;
 
 #[allow(clippy::large_enum_variant)]
-pub enum RuntimeWallet<B: storage::Backend + 'static> {
+pub enum RuntimeWallet<B: storage::AsyncBackend + 'static> {
     Software(Wallet<B, SoftwareSignerProvider>),
     #[cfg(feature = "trezor")]
     Trezor(Wallet<B, TrezorSignerProvider>),
 }
 
-impl<B: storage::Backend + 'static> RuntimeWallet<B> {
+impl<B: storage::AsyncBackend + 'static> RuntimeWallet<B> {
     pub fn find_unspent_utxo_and_destination(
         &self,
         input: &UtxoOutPoint,
@@ -118,43 +118,43 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
         }
     }
 
-    pub fn seed_phrase(&self) -> Result<Option<SerializableSeedPhrase>, WalletError> {
+    pub async fn seed_phrase(&self) -> Result<Option<SerializableSeedPhrase>, WalletError> {
         match self {
-            RuntimeWallet::Software(w) => w.seed_phrase(),
+            RuntimeWallet::Software(w) => w.seed_phrase().await,
             #[cfg(feature = "trezor")]
-            RuntimeWallet::Trezor(w) => w.seed_phrase(),
+            RuntimeWallet::Trezor(w) => w.seed_phrase().await,
         }
     }
 
-    pub fn delete_seed_phrase(&self) -> Result<Option<SerializableSeedPhrase>, WalletError> {
+    pub async fn delete_seed_phrase(&self) -> Result<Option<SerializableSeedPhrase>, WalletError> {
         match self {
-            RuntimeWallet::Software(w) => w.delete_seed_phrase(),
+            RuntimeWallet::Software(w) => w.delete_seed_phrase().await,
             #[cfg(feature = "trezor")]
-            RuntimeWallet::Trezor(w) => w.delete_seed_phrase(),
+            RuntimeWallet::Trezor(w) => w.delete_seed_phrase().await,
         }
     }
 
-    pub fn reset_wallet_to_genesis(&mut self) -> Result<(), WalletError> {
+    pub async fn reset_wallet_to_genesis(&mut self) -> Result<(), WalletError> {
         match self {
-            RuntimeWallet::Software(w) => w.reset_wallet_to_genesis(),
+            RuntimeWallet::Software(w) => w.reset_wallet_to_genesis().await,
             #[cfg(feature = "trezor")]
-            RuntimeWallet::Trezor(w) => w.reset_wallet_to_genesis(),
+            RuntimeWallet::Trezor(w) => w.reset_wallet_to_genesis().await,
         }
     }
 
-    pub fn encrypt_wallet(&mut self, password: &Option<String>) -> Result<(), WalletError> {
+    pub async fn encrypt_wallet(&mut self, password: &Option<String>) -> Result<(), WalletError> {
         match self {
-            RuntimeWallet::Software(w) => w.encrypt_wallet(password),
+            RuntimeWallet::Software(w) => w.encrypt_wallet(password).await,
             #[cfg(feature = "trezor")]
-            RuntimeWallet::Trezor(w) => w.encrypt_wallet(password),
+            RuntimeWallet::Trezor(w) => w.encrypt_wallet(password).await,
         }
     }
 
-    pub fn unlock_wallet(&mut self, password: &String) -> Result<(), WalletError> {
+    pub async fn unlock_wallet(&mut self, password: &String) -> Result<(), WalletError> {
         match self {
-            RuntimeWallet::Software(w) => w.unlock_wallet(password),
+            RuntimeWallet::Software(w) => w.unlock_wallet(password).await,
             #[cfg(feature = "trezor")]
-            RuntimeWallet::Trezor(w) => w.unlock_wallet(password),
+            RuntimeWallet::Trezor(w) => w.unlock_wallet(password).await,
         }
     }
 
@@ -166,15 +166,15 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
         }
     }
 
-    pub fn set_lookahead_size(
+    pub async fn set_lookahead_size(
         &mut self,
         lookahead_size: u32,
         force_reduce: bool,
     ) -> Result<(), WalletError> {
         match self {
-            RuntimeWallet::Software(w) => w.set_lookahead_size(lookahead_size, force_reduce),
+            RuntimeWallet::Software(w) => w.set_lookahead_size(lookahead_size, force_reduce).await,
             #[cfg(feature = "trezor")]
-            RuntimeWallet::Trezor(w) => w.set_lookahead_size(lookahead_size, force_reduce),
+            RuntimeWallet::Trezor(w) => w.set_lookahead_size(lookahead_size, force_reduce).await,
         }
     }
 
@@ -194,47 +194,47 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
         }
     }
 
-    pub fn create_next_account(
+    pub async fn create_next_account(
         &mut self,
         name: Option<String>,
     ) -> Result<(U31, Option<String>), WalletError> {
         match self {
-            RuntimeWallet::Software(w) => w.create_next_account(name),
+            RuntimeWallet::Software(w) => w.create_next_account(name).await,
             #[cfg(feature = "trezor")]
-            RuntimeWallet::Trezor(w) => w.create_next_account(name),
+            RuntimeWallet::Trezor(w) => w.create_next_account(name).await,
         }
     }
 
-    pub fn set_account_name(
+    pub async fn set_account_name(
         &mut self,
         account_index: U31,
         name: Option<String>,
     ) -> Result<(U31, Option<String>), WalletError> {
         match self {
-            RuntimeWallet::Software(w) => w.set_account_name(account_index, name),
+            RuntimeWallet::Software(w) => w.set_account_name(account_index, name).await,
             #[cfg(feature = "trezor")]
-            RuntimeWallet::Trezor(w) => w.set_account_name(account_index, name),
+            RuntimeWallet::Trezor(w) => w.set_account_name(account_index, name).await,
         }
     }
 
-    pub fn get_pos_gen_block_data(
+    pub async fn get_pos_gen_block_data(
         &self,
         account_index: U31,
         pool_id: PoolId,
     ) -> Result<consensus::PoSGenerateBlockInputData, WalletError> {
         match self {
-            RuntimeWallet::Software(w) => w.get_pos_gen_block_data(account_index, pool_id),
+            RuntimeWallet::Software(w) => w.get_pos_gen_block_data(account_index, pool_id).await,
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(_) => Err(WalletError::UnsupportedHardwareWalletOperation),
         }
     }
 
-    pub fn get_pos_gen_block_data_by_pool_id(
+    pub async fn get_pos_gen_block_data_by_pool_id(
         &self,
         pool_id: PoolId,
     ) -> Result<consensus::PoSGenerateBlockInputData, WalletError> {
         match self {
-            RuntimeWallet::Software(w) => w.get_pos_gen_block_data_by_pool_id(pool_id),
+            RuntimeWallet::Software(w) => w.get_pos_gen_block_data_by_pool_id(pool_id).await,
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(_) => Err(WalletError::UnsupportedHardwareWalletOperation),
         }
@@ -297,13 +297,13 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
         }
     }
 
-    pub fn get_transactions_to_be_broadcast(
+    pub async fn get_transactions_to_be_broadcast(
         &mut self,
     ) -> Result<Vec<SignedTransaction>, WalletError> {
         match self {
-            RuntimeWallet::Software(w) => w.get_transactions_to_be_broadcast(),
+            RuntimeWallet::Software(w) => w.get_transactions_to_be_broadcast().await,
             #[cfg(feature = "trezor")]
-            RuntimeWallet::Trezor(w) => w.get_transactions_to_be_broadcast(),
+            RuntimeWallet::Trezor(w) => w.get_transactions_to_be_broadcast().await,
         }
     }
 
@@ -520,19 +520,19 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
         }
     }
 
-    pub fn abandon_transaction(
+    pub async fn abandon_transaction(
         &mut self,
         account_index: U31,
         tx_id: Id<Transaction>,
     ) -> WalletResult<()> {
         match self {
-            RuntimeWallet::Software(w) => w.abandon_transaction(account_index, tx_id),
+            RuntimeWallet::Software(w) => w.abandon_transaction(account_index, tx_id).await,
             #[cfg(feature = "trezor")]
-            RuntimeWallet::Trezor(w) => w.abandon_transaction(account_index, tx_id),
+            RuntimeWallet::Trezor(w) => w.abandon_transaction(account_index, tx_id).await,
         }
     }
 
-    pub fn standalone_address_label_rename(
+    pub async fn standalone_address_label_rename(
         &mut self,
         account_index: U31,
         address: Destination,
@@ -540,29 +540,33 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
     ) -> WalletResult<()> {
         match self {
             RuntimeWallet::Software(w) => {
-                w.standalone_address_label_rename(account_index, address, label)
+                w.standalone_address_label_rename(account_index, address, label).await
             }
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => {
-                w.standalone_address_label_rename(account_index, address, label)
+                w.standalone_address_label_rename(account_index, address, label).await
             }
         }
     }
 
-    pub fn add_standalone_address(
+    pub async fn add_standalone_address(
         &mut self,
         account_index: U31,
         address: PublicKeyHash,
         label: Option<String>,
     ) -> WalletResult<()> {
         match self {
-            RuntimeWallet::Software(w) => w.add_standalone_address(account_index, address, label),
+            RuntimeWallet::Software(w) => {
+                w.add_standalone_address(account_index, address, label).await
+            }
             #[cfg(feature = "trezor")]
-            RuntimeWallet::Trezor(w) => w.add_standalone_address(account_index, address, label),
+            RuntimeWallet::Trezor(w) => {
+                w.add_standalone_address(account_index, address, label).await
+            }
         }
     }
 
-    pub fn add_standalone_private_key(
+    pub async fn add_standalone_private_key(
         &mut self,
         account_index: U31,
         private_key: PrivateKey,
@@ -570,16 +574,16 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
     ) -> WalletResult<()> {
         match self {
             RuntimeWallet::Software(w) => {
-                w.add_standalone_private_key(account_index, private_key, label)
+                w.add_standalone_private_key(account_index, private_key, label).await
             }
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => {
-                w.add_standalone_private_key(account_index, private_key, label)
+                w.add_standalone_private_key(account_index, private_key, label).await
             }
         }
     }
 
-    pub fn add_standalone_multisig(
+    pub async fn add_standalone_multisig(
         &mut self,
         account_index: U31,
         challenge: ClassicMultisigChallenge,
@@ -587,21 +591,23 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
     ) -> WalletResult<PublicKeyHash> {
         match self {
             RuntimeWallet::Software(w) => {
-                w.add_standalone_multisig(account_index, challenge, label)
+                w.add_standalone_multisig(account_index, challenge, label).await
             }
             #[cfg(feature = "trezor")]
-            RuntimeWallet::Trezor(w) => w.add_standalone_multisig(account_index, challenge, label),
+            RuntimeWallet::Trezor(w) => {
+                w.add_standalone_multisig(account_index, challenge, label).await
+            }
         }
     }
 
-    pub fn get_new_address(
+    pub async fn get_new_address(
         &mut self,
         account_index: U31,
     ) -> WalletResult<(ChildNumber, Address<Destination>)> {
         match self {
-            RuntimeWallet::Software(w) => w.get_new_address(account_index),
+            RuntimeWallet::Software(w) => w.get_new_address(account_index).await,
             #[cfg(feature = "trezor")]
-            RuntimeWallet::Trezor(w) => w.get_new_address(account_index),
+            RuntimeWallet::Trezor(w) => w.get_new_address(account_index).await,
         }
     }
 
@@ -628,12 +634,12 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
         }
     }
 
-    pub fn get_vrf_key(
+    pub async fn get_vrf_key(
         &mut self,
         account_index: U31,
     ) -> WalletResult<(ChildNumber, Address<VRFPublicKey>)> {
         match self {
-            RuntimeWallet::Software(w) => w.get_vrf_key(account_index),
+            RuntimeWallet::Software(w) => w.get_vrf_key(account_index).await,
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(_) => Err(WalletError::UnsupportedHardwareWalletOperation),
         }
@@ -1049,7 +1055,7 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn create_unsigned_transaction_to_addresses(
+    pub async fn create_unsigned_transaction_to_addresses(
         &mut self,
         account_index: U31,
         outputs: impl IntoIterator<Item = TxOutput>,
@@ -1061,27 +1067,33 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
         ptx_additional_info: PtxAdditionalInfo,
     ) -> WalletResult<(PartiallySignedTransaction, BTreeMap<Currency, Amount>)> {
         match self {
-            RuntimeWallet::Software(w) => w.create_unsigned_transaction_to_addresses(
-                account_index,
-                outputs,
-                selected_inputs,
-                selection_algo,
-                change_addresses,
-                current_fee_rate,
-                consolidate_fee_rate,
-                ptx_additional_info,
-            ),
+            RuntimeWallet::Software(w) => {
+                w.create_unsigned_transaction_to_addresses(
+                    account_index,
+                    outputs,
+                    selected_inputs,
+                    selection_algo,
+                    change_addresses,
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                    ptx_additional_info,
+                )
+                .await
+            }
             #[cfg(feature = "trezor")]
-            RuntimeWallet::Trezor(w) => w.create_unsigned_transaction_to_addresses(
-                account_index,
-                outputs,
-                selected_inputs,
-                selection_algo,
-                change_addresses,
-                current_fee_rate,
-                consolidate_fee_rate,
-                ptx_additional_info,
-            ),
+            RuntimeWallet::Trezor(w) => {
+                w.create_unsigned_transaction_to_addresses(
+                    account_index,
+                    outputs,
+                    selected_inputs,
+                    selection_algo,
+                    change_addresses,
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                    ptx_additional_info,
+                )
+                .await
+            }
         }
     }
 
@@ -1523,19 +1535,19 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
         }
     }
 
-    pub fn add_unconfirmed_tx(
+    pub async fn add_unconfirmed_tx(
         &mut self,
         tx: SignedTransaction,
         wallet_events: &impl WalletEvents,
     ) -> WalletResult<()> {
         match self {
-            RuntimeWallet::Software(w) => w.add_unconfirmed_tx(tx, wallet_events),
+            RuntimeWallet::Software(w) => w.add_unconfirmed_tx(tx, wallet_events).await,
             #[cfg(feature = "trezor")]
-            RuntimeWallet::Trezor(w) => w.add_unconfirmed_tx(tx, wallet_events),
+            RuntimeWallet::Trezor(w) => w.add_unconfirmed_tx(tx, wallet_events).await,
         }
     }
 
-    pub fn add_account_unconfirmed_tx(
+    pub async fn add_account_unconfirmed_tx(
         &mut self,
         account_index: U31,
         tx: &SignedTransaction,
@@ -1543,11 +1555,11 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
     ) -> WalletResult<()> {
         match self {
             RuntimeWallet::Software(w) => {
-                w.add_account_unconfirmed_tx(account_index, tx.clone(), wallet_events)
+                w.add_account_unconfirmed_tx(account_index, tx.clone(), wallet_events).await
             }
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => {
-                w.add_account_unconfirmed_tx(account_index, tx.clone(), wallet_events)
+                w.add_account_unconfirmed_tx(account_index, tx.clone(), wallet_events).await
             }
         }
     }

@@ -50,7 +50,7 @@ use crate::{
     ControllerError,
 };
 
-pub struct ReadOnlyController<'a, T, B: storage::Backend + 'static> {
+pub struct ReadOnlyController<'a, T, B: storage::AsyncBackend + 'static> {
     wallet: &'a RuntimeWallet<B>,
     rpc_client: T,
     chain_config: &'a ChainConfig,
@@ -71,7 +71,7 @@ pub struct AddressInfo {
 impl<'a, T, B> ReadOnlyController<'a, T, B>
 where
     T: NodeInterface,
-    B: storage::Backend + 'static,
+    B: storage::AsyncBackend + 'static,
 {
     pub fn new(
         wallet: &'a RuntimeWallet<B>,

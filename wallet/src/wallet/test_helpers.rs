@@ -33,11 +33,11 @@ use crate::{
     DefaultWallet, Wallet,
 };
 
-pub fn create_wallet_with_mnemonic(
+pub async fn create_wallet_with_mnemonic(
     chain_config: Arc<ChainConfig>,
     mnemonic: &str,
 ) -> DefaultWallet {
-    let db = create_wallet_in_memory().unwrap();
+    let db = create_wallet_in_memory().await.unwrap();
     let genesis_block_id = chain_config.genesis_block_id();
     Wallet::create_new_wallet(
         chain_config.clone(),
@@ -54,23 +54,26 @@ pub fn create_wallet_with_mnemonic(
             )?)
         },
     )
+    .await
     .unwrap()
     .wallet()
     .unwrap()
 }
 
-pub fn scan_wallet<B, P>(wallet: &mut Wallet<B, P>, height: BlockHeight, blocks: Vec<Block>)
+pub async fn scan_wallet<B, P>(wallet: &mut Wallet<B, P>, height: BlockHeight, blocks: Vec<Block>)
 where
-    B: storage::Backend + 'static,
+    B: storage::AsyncBackend + 'static,
     P: SignerProvider,
 {
     for account in wallet.get_best_block().keys() {
         wallet
             .scan_new_blocks(*account, height, blocks.clone(), &WalletEventsNoOp)
+            .await
             .unwrap();
     }
 
     wallet
         .scan_new_blocks_unused_account(height, blocks, &WalletEventsNoOp)
+        .await
         .unwrap();
 }

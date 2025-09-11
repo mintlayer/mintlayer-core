@@ -196,20 +196,28 @@ where
         force_reduce: bool,
     ) -> WRpcResult<(), N> {
         self.wallet
-            .call(move |w| w.set_lookahead_size(lookahead_size, force_reduce))
+            .call_async(move |w| {
+                Box::pin(async move { w.set_lookahead_size(lookahead_size, force_reduce).await })
+            })
             .await?
     }
 
     pub async fn encrypt_private_keys(&self, password: String) -> WRpcResult<(), N> {
-        self.wallet.call(|w| w.encrypt_wallet(&Some(password))).await?
+        self.wallet
+            .call_async(move |w| Box::pin(async move { w.encrypt_wallet(&Some(password)).await }))
+            .await?
     }
 
     pub async fn remove_private_key_encryption(&self) -> WRpcResult<(), N> {
-        self.wallet.call(|w| w.encrypt_wallet(&None)).await?
+        self.wallet
+            .call_async(move |w| Box::pin(async move { w.encrypt_wallet(&None).await }))
+            .await?
     }
 
     pub async fn unlock_private_keys(&self, password: String) -> WRpcResult<(), N> {
-        self.wallet.call(move |w| w.unlock_wallet(&password)).await?
+        self.wallet
+            .call_async(move |w| Box::pin(async move { w.unlock_wallet(&password).await }))
+            .await?
     }
 
     pub async fn lock_private_keys(&self) -> WRpcResult<(), N> {
@@ -277,7 +285,10 @@ where
     }
 
     pub async fn create_account(&self, name: Option<String>) -> WRpcResult<NewAccountInfo, N> {
-        let (num, name) = self.wallet.call(|w| w.create_account(name)).await??;
+        let (num, name) = self
+            .wallet
+            .call_async(move |w| Box::pin(async move { w.create_account(name).await }))
+            .await??;
         Ok(NewAccountInfo::new(num, name))
     }
 
@@ -286,8 +297,12 @@ where
         account_index: U31,
         name: Option<String>,
     ) -> WRpcResult<NewAccountInfo, N> {
-        let (num, name) =
-            self.wallet.call(move |w| w.update_account_name(account_index, name)).await??;
+        let (num, name) = self
+            .wallet
+            .call_async(move |w| {
+                Box::pin(async move { w.update_account_name(account_index, name).await })
+            })
+            .await??;
         Ok(NewAccountInfo::new(num, name))
     }
 
@@ -310,6 +325,7 @@ where
                     w.synced_controller(account_index, config)
                         .await?
                         .standalone_address_label_rename(dest, label)
+                        .await
                 })
             })
             .await??;
@@ -344,10 +360,11 @@ where
                     let res = w
                         .synced_controller(account_index, config)
                         .await?
-                        .add_standalone_address(pkh, label);
+                        .add_standalone_address(pkh, label)
+                        .await;
 
                     if !no_rescan {
-                        w.reset_wallet_to_genesis()?;
+                        w.reset_wallet_to_genesis().await?;
                     }
 
                     res
@@ -374,10 +391,11 @@ where
                     let res = w
                         .synced_controller(account_index, config)
                         .await?
-                        .add_standalone_private_key(private_key, label);
+                        .add_standalone_private_key(private_key, label)
+                        .await;
 
                     if !no_rescan {
-                        w.reset_wallet_to_genesis()?;
+                        w.reset_wallet_to_genesis().await?;
                     }
 
                     res
@@ -433,10 +451,11 @@ where
                     let res = w
                         .synced_controller(account_index, config)
                         .await?
-                        .add_standalone_multisig(challenge, label);
+                        .add_standalone_multisig(challenge, label)
+                        .await;
 
                     if !no_rescan {
-                        w.reset_wallet_to_genesis()?;
+                        w.reset_wallet_to_genesis().await?;
                     }
 
                     res
@@ -460,9 +479,9 @@ where
         let (child_number, destination) = self
             .wallet
             .call_async(move |w| {
-                Box::pin(
-                    async move { w.synced_controller(account_index, config).await?.new_address() },
-                )
+                Box::pin(async move {
+                    w.synced_controller(account_index, config).await?.new_address().await
+                })
             })
             .await??;
         Ok(AddressInfo::new(child_number, destination))
@@ -529,9 +548,9 @@ where
         }; // irrelevant for issuing addresses
         self.wallet
             .call_async(move |w| {
-                Box::pin(
-                    async move { w.synced_controller(account_index, config).await?.new_vrf_key() },
-                )
+                Box::pin(async move {
+                    w.synced_controller(account_index, config).await?.new_vrf_key().await
+                })
             })
             .await?
             .map(|(child_number, vrf_key)| VrfPublicKeyInfo::new(vrf_key, child_number, false))
@@ -834,6 +853,7 @@ where
                             .synced_controller(DEFAULT_ACCOUNT_INDEX, config)
                             .await?
                             .add_unconfirmed_tx(tx)
+                            .await
                             .map_err(RpcError::Controller)
                     })
                 })
@@ -1738,6 +1758,7 @@ where
                     w.synced_controller(account_index, config)
                         .await?
                         .abandon_transaction(transaction_id)
+                        .await
                 })
             })
             .await?
@@ -2040,7 +2061,7 @@ where
         self.wallet
             .call_async(move |controller| {
                 Box::pin(async move {
-                    controller.reset_wallet_to_genesis()?;
+                    controller.reset_wallet_to_genesis().await?;
                     controller.sync_once().await
                 })
             })
@@ -2125,11 +2146,15 @@ where
     }
 
     pub async fn get_seed_phrase(&self) -> WRpcResult<Option<SeedWithPassPhrase>, N> {
-        self.wallet.call(move |controller| controller.seed_phrase()).await?
+        self.wallet
+            .call_async(move |w| Box::pin(async move { w.seed_phrase().await }))
+            .await?
     }
 
     pub async fn purge_seed_phrase(&self) -> WRpcResult<Option<SeedWithPassPhrase>, N> {
-        self.wallet.call(move |controller| controller.delete_seed_phrase()).await?
+        self.wallet
+            .call_async(move |w| Box::pin(async move { w.delete_seed_phrase().await }))
+            .await?
     }
 
     pub async fn wallet_info(&self) -> WRpcResult<WalletInfo, N> {

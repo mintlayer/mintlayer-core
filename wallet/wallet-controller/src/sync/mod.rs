@@ -32,57 +32,60 @@ use crate::ControllerError;
 
 const MAX_FETCH_BLOCK_COUNT: usize = 100;
 
+#[async_trait::async_trait]
 pub trait SyncingWallet {
     fn syncing_state(&self) -> WalletSyncingState;
 
-    fn scan_blocks(
+    async fn scan_blocks(
         &mut self,
         account: U31,
         common_block_height: BlockHeight,
         blocks: Vec<Block>,
-        wallet_events: &impl WalletEvents,
+        wallet_events: &(impl WalletEvents + Send + Sync),
     ) -> WalletResult<()>;
 
-    fn scan_blocks_for_unused_account(
+    async fn scan_blocks_for_unused_account(
         &mut self,
         common_block_height: BlockHeight,
         blocks: Vec<Block>,
-        wallet_events: &impl WalletEvents,
+        wallet_events: &(impl WalletEvents + Send + Sync),
     ) -> WalletResult<()>;
 
-    fn update_median_time(&mut self, median_time: BlockTimestamp) -> WalletResult<()>;
+    async fn update_median_time(&mut self, median_time: BlockTimestamp) -> WalletResult<()>;
 }
 
+#[async_trait::async_trait]
 impl<B, P> SyncingWallet for Wallet<B, P>
 where
-    B: storage::Backend + 'static,
-    P: SignerProvider,
+    B: storage::AsyncBackend + 'static,
+    P: SignerProvider + Send,
 {
     fn syncing_state(&self) -> WalletSyncingState {
         self.get_syncing_state()
     }
 
-    fn scan_blocks(
+    async fn scan_blocks(
         &mut self,
         account: U31,
         common_block_height: BlockHeight,
         blocks: Vec<Block>,
-        wallet_events: &impl WalletEvents,
+        wallet_events: &(impl WalletEvents + Send + Sync),
     ) -> WalletResult<()> {
-        self.scan_new_blocks(account, common_block_height, blocks, wallet_events)
+        self.scan_new_blocks(account, common_block_height, blocks, wallet_events).await
     }
 
-    fn scan_blocks_for_unused_account(
+    async fn scan_blocks_for_unused_account(
         &mut self,
         common_block_height: BlockHeight,
         blocks: Vec<Block>,
-        wallet_events: &impl WalletEvents,
+        wallet_events: &(impl WalletEvents + Send + Sync),
     ) -> WalletResult<()> {
         self.scan_new_blocks_unused_account(common_block_height, blocks, wallet_events)
+            .await
     }
 
-    fn update_median_time(&mut self, median_time: BlockTimestamp) -> WalletResult<()> {
-        self.set_median_time(median_time)
+    async fn update_median_time(&mut self, median_time: BlockTimestamp) -> WalletResult<()> {
+        self.set_median_time(median_time).await
     }
 }
 
@@ -122,7 +125,7 @@ pub async fn sync_once<T: NodeInterface>(
     chain_config: &ChainConfig,
     rpc_client: &T,
     wallet: &mut impl SyncingWallet,
-    wallet_events: &impl WalletEvents,
+    wallet_events: &(impl WalletEvents + Sync + Send + 'static),
 ) -> Result<InSync, ControllerError<T>> {
     let mut print_flag = SetFlag::new();
     let mut _log_on_exit = None;
@@ -156,6 +159,7 @@ pub async fn sync_once<T: NodeInterface>(
 
         wallet
             .update_median_time(chain_info.median_time)
+            .await
             .map_err(ControllerError::WalletError)?;
 
         // Group accounts in the same state
@@ -224,7 +228,7 @@ async fn fetch_and_sync_to_next_group<T: NodeInterface>(
     mut next_group_accounts: Vec<AccountType>,
     rpc_client: &T,
     wallet: &mut impl SyncingWallet,
-    wallet_events: &impl WalletEvents,
+    wallet_events: &(impl WalletEvents + Send + Sync + 'static),
 ) -> Result<(NextBlockInfo, Vec<AccountType>), ControllerError<T>> {
     let block_to_fetch = (next_group_block_info.common_block_height - current.0.common_block_height)
         .expect("already sorted")
@@ -241,7 +245,7 @@ async fn fetch_and_sync<T: NodeInterface>(
     block_to_fetch: usize,
     rpc_client: &T,
     wallet: &mut impl SyncingWallet,
-    wallet_events: &impl WalletEvents,
+    wallet_events: &(impl WalletEvents + Sync + Send + 'static),
 ) -> Result<(), ControllerError<T>> {
     let FetchedBlocks {
         blocks,
@@ -260,20 +264,21 @@ async fn fetch_and_sync<T: NodeInterface>(
             common_block_height,
             blocks.clone(),
             wallet_events,
-        )?;
+        )
+        .await?;
     }
 
     Ok(())
 }
 
-fn scan_new_blocks<T: NodeInterface>(
+async fn scan_new_blocks<T: NodeInterface>(
     acc: &AccountType,
     new_height: u64,
     block_id: Id<Block>,
     wallet: &mut impl SyncingWallet,
     common_block_height: BlockHeight,
     blocks: Vec<Block>,
-    wallet_events: &impl WalletEvents,
+    wallet_events: &(impl WalletEvents + Sync + Send + 'static),
 ) -> Result<(), ControllerError<T>> {
     match acc {
         AccountType::Account(account) => {
@@ -285,6 +290,7 @@ fn scan_new_blocks<T: NodeInterface>(
             );
             wallet
                 .scan_blocks(*account, common_block_height, blocks, wallet_events)
+                .await
                 .map_err(ControllerError::WalletError)?;
         }
         AccountType::UnusedAccount => {
@@ -296,6 +302,7 @@ fn scan_new_blocks<T: NodeInterface>(
 
             wallet
                 .scan_blocks_for_unused_account(common_block_height, blocks, wallet_events)
+                .await
                 .map_err(ControllerError::WalletError)?;
         }
     }

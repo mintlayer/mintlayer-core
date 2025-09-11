@@ -63,7 +63,7 @@ impl TestFramework {
         // Create the wallet database
         let wallet_path = {
             let wallet_path = test_root.fresh_test_dir("wallet").as_ref().join("wallet.sqlite");
-            let db = wallet::wallet::open_or_create_wallet_file(&wallet_path).unwrap();
+            let db = wallet::wallet::open_or_create_wallet_file(&wallet_path).await.unwrap();
 
             let _wallet = wallet::Wallet::create_new_wallet(
                 Arc::clone(&chain_config),
@@ -80,6 +80,7 @@ impl TestFramework {
                     )?)
                 },
             )
+            .await
             .unwrap();
 
             wallet_path

@@ -146,8 +146,8 @@ pub fn random_nft_issuance(rng: &mut (impl Rng + CryptoRng)) -> NftIssuance {
     })
 }
 
-pub fn wallet_new_dest(wallet: &mut DefaultWallet) -> Destination {
-    wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1.into_object()
+pub async fn wallet_new_dest(wallet: &mut DefaultWallet) -> Destination {
+    wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).await.unwrap().1.into_object()
 }
 
 pub fn random_pub_key(rng: &mut (impl Rng + CryptoRng)) -> PublicKey {
@@ -162,7 +162,7 @@ pub fn tx_with_outputs(outputs: Vec<TxOutput>) -> SignedTransaction {
     SignedTransaction::new(Transaction::new(0, vec![], outputs).unwrap(), Vec::new()).unwrap()
 }
 
-pub fn create_block_scan_wallet<B, P>(
+pub async fn create_block_scan_wallet<B, P>(
     chain_config: &ChainConfig,
     wallet: &mut Wallet<B, P>,
     transactions: Vec<SignedTransaction>,
@@ -171,7 +171,7 @@ pub fn create_block_scan_wallet<B, P>(
     block_height: u64,
 ) -> Block
 where
-    B: storage::Backend + 'static,
+    B: storage::AsyncBackend + 'static,
     P: SignerProvider,
 {
     let block = Block::new(
@@ -186,7 +186,7 @@ where
     )
     .unwrap();
 
-    scan_wallet(wallet, BlockHeight::new(block_height), vec![block.clone()]);
+    scan_wallet(wallet, BlockHeight::new(block_height), vec![block.clone()]).await;
     block
 }
 

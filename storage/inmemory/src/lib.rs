@@ -66,9 +66,11 @@ impl adaptor::Construct for StorageMaps {
 #[derive(Clone)]
 pub struct InMemory(adaptor::Locking<StorageMaps>);
 
-impl backend::Backend for InMemory {
-    type Impl = <adaptor::Locking<StorageMaps> as backend::Backend>::Impl;
+impl backend::BaseBackend for InMemory {
+    type Impl = <adaptor::Locking<StorageMaps> as backend::BaseBackend>::Impl;
+}
 
+impl backend::Backend for InMemory {
     fn open(self, desc: DbDesc) -> storage_core::Result<Self::Impl> {
         self.0.open(desc)
     }

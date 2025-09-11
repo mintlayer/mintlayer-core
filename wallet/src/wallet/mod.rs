@@ -72,10 +72,9 @@ use tx_verifier::{check_transaction, CheckTransactionError};
 use utils::{debug_panic_or_log, ensure};
 pub use wallet_storage::Error;
 use wallet_storage::{
-    DefaultBackend, Store, StoreLocalReadOnlyUnlocked, StoreLocalReadWriteUnlocked, StoreTxRo,
-    StoreTxRw, StoreTxRwUnlocked, TransactionRoLocked, TransactionRwLocked, TransactionRwUnlocked,
-    Transactional, WalletStorageReadLocked, WalletStorageReadUnlocked, WalletStorageWriteLocked,
-    WalletStorageWriteUnlocked,
+    DefaultBackend, Store, StoreTxRo, StoreTxRw, StoreTxRwUnlocked, TransactionRoLocked,
+    TransactionRwLocked, TransactionRwUnlocked, Transactional, WalletStorageReadLocked,
+    WalletStorageReadUnlocked, WalletStorageWriteLocked, WalletStorageWriteUnlocked,
 };
 use wallet_types::account_info::{StandaloneAddressDetails, StandaloneAddresses};
 use wallet_types::chain_info::ChainInfo;
@@ -297,7 +296,7 @@ pub enum WalletPoolsFilter {
     Stake,
 }
 
-pub struct Wallet<B: storage::Backend + 'static, P: SignerProvider> {
+pub struct Wallet<B: storage::AsyncBackend + 'static, P: SignerProvider> {
     chain_config: Arc<ChainConfig>,
     db: Store<B>,
     accounts: BTreeMap<U31, Account<P::K>>,
@@ -312,12 +311,14 @@ pub struct WalletSyncingState {
     pub unused_account_best_block: (Id<GenBlock>, BlockHeight),
 }
 
-pub fn open_or_create_wallet_file<P: AsRef<Path>>(path: P) -> WalletResult<Store<DefaultBackend>> {
-    Ok(Store::new(DefaultBackend::new(path))?)
+pub async fn open_or_create_wallet_file<P: AsRef<Path>>(
+    path: P,
+) -> WalletResult<Store<DefaultBackend>> {
+    Ok(Store::new(DefaultBackend::new(path)).await?)
 }
 
-pub fn create_wallet_in_memory() -> WalletResult<Store<DefaultBackend>> {
-    Ok(Store::new(DefaultBackend::new_in_memory())?)
+pub async fn create_wallet_in_memory() -> WalletResult<Store<DefaultBackend>> {
+    Ok(Store::new(DefaultBackend::new_in_memory()).await?)
 }
 
 pub enum WalletCreation<W> {
@@ -355,41 +356,41 @@ impl<W> WalletCreation<W> {
 
 impl<B, P> Wallet<B, P>
 where
-    B: storage::Backend + 'static,
+    B: storage::AsyncBackend + 'static,
     P: SignerProvider,
 {
-    pub fn create_new_wallet<F: FnOnce(&mut StoreTxRwUnlocked<B>) -> WalletResult<P>>(
+    pub async fn create_new_wallet<F: FnOnce(&mut StoreTxRwUnlocked<B>) -> WalletResult<P>>(
         chain_config: Arc<ChainConfig>,
         db: Store<B>,
         best_block: (BlockHeight, Id<GenBlock>),
         wallet_type: WalletType,
         signer_provider: F,
     ) -> WalletResult<WalletCreation<Self>> {
-        let mut wallet = Self::new_wallet(chain_config, db, wallet_type, signer_provider)?;
+        let mut wallet = Self::new_wallet(chain_config, db, wallet_type, signer_provider).await?;
 
         if let WalletCreation::Wallet(ref mut w) = wallet {
-            w.set_best_block(best_block.0, best_block.1)?;
+            w.set_best_block(best_block.0, best_block.1).await?;
         }
 
         Ok(wallet)
     }
 
-    pub fn recover_wallet<F: FnOnce(&mut StoreTxRwUnlocked<B>) -> WalletResult<P>>(
+    pub async fn recover_wallet<F: FnOnce(&mut StoreTxRwUnlocked<B>) -> WalletResult<P>>(
         chain_config: Arc<ChainConfig>,
         db: Store<B>,
         wallet_type: WalletType,
         signer_provider: F,
     ) -> WalletResult<WalletCreation<Self>> {
-        Self::new_wallet(chain_config, db, wallet_type, signer_provider)
+        Self::new_wallet(chain_config, db, wallet_type, signer_provider).await
     }
 
-    fn new_wallet<F: FnOnce(&mut StoreTxRwUnlocked<B>) -> WalletResult<P>>(
+    async fn new_wallet<F: FnOnce(&mut StoreTxRwUnlocked<B>) -> WalletResult<P>>(
         chain_config: Arc<ChainConfig>,
         db: Store<B>,
         wallet_type: WalletType,
         signer_provider: F,
     ) -> WalletResult<WalletCreation<Self>> {
-        let mut db_tx = db.transaction_rw_unlocked(None)?;
+        let mut db_tx = db.transaction_rw_unlocked(None).await?;
 
         db_tx.set_storage_version(CURRENT_WALLET_VERSION)?;
         db_tx.set_chain_info(&ChainInfo::new(chain_config.as_ref()))?;
@@ -442,12 +443,12 @@ where
     /// Migrate the wallet DB from version 1 to version 2
     /// * save the chain info in the DB based on the chain type specified by the user
     /// * reset transactions
-    fn migration_v2(
+    async fn migration_v2(
         db: &Store<B>,
         chain_config: Arc<ChainConfig>,
         signer_provider: &mut P,
     ) -> WalletResult<()> {
-        let mut db_tx = db.transaction_rw_unlocked(None)?;
+        let mut db_tx = db.transaction_rw_unlocked(None).await?;
         // set new chain info to the one provided by the user assuming it is the correct one
         db_tx.set_chain_info(&ChainInfo::new(chain_config.as_ref()))?;
 
@@ -470,8 +471,8 @@ where
 
     /// Migrate the wallet DB from version 2 to version 3
     /// * reset transactions as now we store SignedTransaction instead of Transaction in WalletTx
-    fn migration_v3(db: &Store<B>, chain_config: Arc<ChainConfig>) -> WalletResult<()> {
-        let mut db_tx = db.transaction_rw_unlocked(None)?;
+    async fn migration_v3(db: &Store<B>, chain_config: Arc<ChainConfig>) -> WalletResult<()> {
+        let mut db_tx = db.transaction_rw_unlocked(None).await?;
         // reset wallet transaction as now we will need to rescan the blockchain to store the
         // correct order of the transactions to avoid bugs in loading them in the wrong order
         Self::reset_wallet_transactions(chain_config.clone(), &mut db_tx)?;
@@ -488,8 +489,8 @@ where
 
     /// Migrate the wallet DB from version 3 to version 4
     /// * set lookahead_size in the DB
-    fn migration_v4(db: &Store<B>) -> WalletResult<()> {
-        let mut db_tx = db.transaction_rw_unlocked(None)?;
+    async fn migration_v4(db: &Store<B>) -> WalletResult<()> {
+        let mut db_tx = db.transaction_rw_unlocked(None).await?;
 
         db_tx.set_lookahead_size(LOOKAHEAD_SIZE)?;
         db_tx.set_storage_version(WALLET_VERSION_V4)?;
@@ -504,12 +505,12 @@ where
 
     /// Migrate the wallet DB from version 4 to version 5
     /// * set vrf key_chain usage
-    fn migration_v5(
+    async fn migration_v5(
         db: &Store<B>,
         chain_config: Arc<ChainConfig>,
         signer_provider: &P,
     ) -> WalletResult<()> {
-        let mut db_tx = db.transaction_rw_unlocked(None)?;
+        let mut db_tx = db.transaction_rw_unlocked(None).await?;
 
         for (id, info) in db_tx.get_accounts_info()? {
             let root_vrf_key = MasterKeyChain::load_root_vrf_key(&db_tx)?;
@@ -553,8 +554,8 @@ where
         Ok(())
     }
 
-    fn migration_v6(db: &Store<B>, _chain_config: Arc<ChainConfig>) -> WalletResult<()> {
-        let mut db_tx = db.transaction_rw(None)?;
+    async fn migration_v6(db: &Store<B>, _chain_config: Arc<ChainConfig>) -> WalletResult<()> {
+        let mut db_tx = db.transaction_rw(None).await?;
         // nothing to do the seed phrase na passphrase are backwards compatible
         db_tx.set_storage_version(WALLET_VERSION_V6)?;
         db_tx.commit()?;
@@ -566,12 +567,12 @@ where
         Ok(())
     }
 
-    fn migration_v7(
+    async fn migration_v7(
         db: &Store<B>,
         chain_config: Arc<ChainConfig>,
         controller_mode: WalletControllerMode,
     ) -> WalletResult<()> {
-        let mut db_tx = db.transaction_rw(None)?;
+        let mut db_tx = db.transaction_rw(None).await?;
         let accs = db_tx.get_accounts_info()?;
         // if all accounts are still on genesis this is a cold wallet
         let cold_wallet =
@@ -595,7 +596,7 @@ where
     }
 
     /// Check the wallet DB version and perform any migrations needed
-    fn check_and_migrate_db<
+    async fn check_and_migrate_db<
         F: Fn(u32) -> Result<(), WalletError>,
         F2: FnOnce(&StoreTxRo<B>) -> WalletResult<P>,
     >(
@@ -605,15 +606,15 @@ where
         controller_mode: WalletControllerMode,
         signer_provider: F2,
     ) -> WalletResult<P> {
-        let version = db.transaction_ro()?.get_storage_version()?;
+        let version = db.transaction_ro().await?.get_storage_version()?;
         ensure!(
             version != WALLET_VERSION_UNINITIALIZED,
             WalletError::WalletNotInitialized
         );
-        let mut signer_provider = signer_provider(&db.transaction_ro()?)?;
+        let mut signer_provider = signer_provider(&db.transaction_ro().await?)?;
 
         loop {
-            let version = db.transaction_ro()?.get_storage_version()?;
+            let version = db.transaction_ro().await?.get_storage_version()?;
 
             match version {
                 WALLET_VERSION_UNINITIALIZED => {
@@ -622,27 +623,27 @@ where
                 }
                 WALLET_VERSION_V1 => {
                     pre_migration(WALLET_VERSION_V1)?;
-                    Self::migration_v2(db, chain_config.clone(), &mut signer_provider)?;
+                    Self::migration_v2(db, chain_config.clone(), &mut signer_provider).await?;
                 }
                 WALLET_VERSION_V2 => {
                     pre_migration(WALLET_VERSION_V2)?;
-                    Self::migration_v3(db, chain_config.clone())?;
+                    Self::migration_v3(db, chain_config.clone()).await?;
                 }
                 WALLET_VERSION_V3 => {
                     pre_migration(WALLET_VERSION_V3)?;
-                    Self::migration_v4(db)?;
+                    Self::migration_v4(db).await?;
                 }
                 WALLET_VERSION_V4 => {
                     pre_migration(WALLET_VERSION_V4)?;
-                    Self::migration_v5(db, chain_config.clone(), &signer_provider)?;
+                    Self::migration_v5(db, chain_config.clone(), &signer_provider).await?;
                 }
                 WALLET_VERSION_V5 => {
                     pre_migration(WALLET_VERSION_V5)?;
-                    Self::migration_v6(db, chain_config.clone())?;
+                    Self::migration_v6(db, chain_config.clone()).await?;
                 }
                 WALLET_VERSION_V6 => {
                     pre_migration(WALLET_VERSION_V6)?;
-                    Self::migration_v7(db, chain_config.clone(), controller_mode)?;
+                    Self::migration_v7(db, chain_config.clone(), controller_mode).await?;
                 }
                 CURRENT_WALLET_VERSION => return Ok(signer_provider),
                 unsupported_version => {
@@ -672,36 +673,36 @@ where
         Ok(())
     }
 
-    fn migrate_cold_to_hot_wallet(db: &Store<B>) -> WalletResult<()> {
-        let mut db_tx = db.transaction_rw(None)?;
+    async fn migrate_cold_to_hot_wallet(db: &Store<B>) -> WalletResult<()> {
+        let mut db_tx = db.transaction_rw(None).await?;
         db_tx.set_wallet_type(WalletType::Hot)?;
         db_tx.commit()?;
         Ok(())
     }
 
-    fn migrate_hot_to_cold_wallet(
+    async fn migrate_hot_to_cold_wallet(
         db: &Store<B>,
         chain_config: Arc<ChainConfig>,
         signer_provider: &P,
     ) -> WalletResult<()> {
-        let mut db_tx = db.transaction_rw(None)?;
+        let mut db_tx = db.transaction_rw(None).await?;
         db_tx.set_wallet_type(WalletType::Cold)?;
         Self::reset_wallet_transactions_and_load(chain_config, &mut db_tx, signer_provider)?;
         db_tx.commit()?;
         Ok(())
     }
 
-    fn force_migrate_wallet_type(
+    async fn force_migrate_wallet_type(
         wallet_type: WalletType,
         db: &Store<B>,
         chain_config: Arc<ChainConfig>,
         signer_provider: &P,
     ) -> Result<(), WalletError> {
-        let current_wallet_type = db.transaction_ro()?.get_wallet_type()?;
+        let current_wallet_type = db.transaction_ro().await?.get_wallet_type()?;
         match (current_wallet_type, wallet_type) {
-            (WalletType::Cold, WalletType::Hot) => Self::migrate_cold_to_hot_wallet(db)?,
+            (WalletType::Cold, WalletType::Hot) => Self::migrate_cold_to_hot_wallet(db).await?,
             (WalletType::Hot, WalletType::Cold) => {
-                Self::migrate_hot_to_cold_wallet(db, chain_config, signer_provider)?
+                Self::migrate_hot_to_cold_wallet(db, chain_config, signer_provider).await?
             }
             #[cfg(feature = "trezor")]
             (WalletType::Cold | WalletType::Hot, WalletType::Trezor)
@@ -718,11 +719,11 @@ where
 
     /// Reset all scanned transactions and revert all accounts to the genesis block
     /// this will cause the wallet to rescan the blockchain
-    pub fn reset_wallet_to_genesis(&mut self) -> WalletResult<()> {
+    pub async fn reset_wallet_to_genesis(&mut self) -> WalletResult<()> {
         logging::log::info!(
             "Resetting the wallet to genesis and starting to rescan the blockchain"
         );
-        let mut db_tx = self.db.transaction_rw(None)?;
+        let mut db_tx = self.db.transaction_rw(None).await?;
         let mut accounts = Self::reset_wallet_transactions_and_load(
             self.chain_config.clone(),
             &mut db_tx,
@@ -817,7 +818,7 @@ where
         Ok(())
     }
 
-    pub fn load_wallet<
+    pub async fn load_wallet<
         F: Fn(u32) -> WalletResult<()>,
         F2: FnOnce(&StoreTxRo<B>) -> WalletResult<P>,
     >(
@@ -830,7 +831,7 @@ where
         signer_provider: F2,
     ) -> WalletResult<WalletCreation<Self>> {
         if let Some(password) = password {
-            db.unlock_private_keys(&password)?;
+            db.unlock_private_keys(&password).await?;
         }
 
         let signer_provider = match Self::check_and_migrate_db(
@@ -839,7 +840,9 @@ where
             pre_migration,
             controller_mode,
             signer_provider,
-        ) {
+        )
+        .await
+        {
             Ok(x) => x,
             #[cfg(feature = "trezor")]
             Err(WalletError::SignerError(SignerError::TrezorError(
@@ -854,21 +857,22 @@ where
                 &db,
                 chain_config.clone(),
                 &signer_provider,
-            )?;
+            )
+            .await?;
         }
 
         // The device id stored in the db may not match the actual device id;
         // this may happen if the user has reset the device after the wallet file was created.
         // So we overwrite the hardware wallet data to update the id.
         if let Some(info) = signer_provider.get_hardware_wallet_info() {
-            let mut db_tx = db.transaction_rw(None)?;
+            let mut db_tx = db.transaction_rw(None).await?;
             db_tx.set_hardware_wallet_data(info.into())?;
             db_tx.commit()?;
         }
 
         // Please continue to use read-only transaction here.
         // Some unit tests expect that loading the wallet does not change the DB.
-        let db_tx = db.transaction_ro()?;
+        let db_tx = db.transaction_ro().await?;
 
         Self::validate_chain_info(chain_config.as_ref(), &db_tx, controller_mode)?;
 
@@ -905,12 +909,16 @@ where
         }))
     }
 
-    pub fn seed_phrase(&self) -> WalletResult<Option<SerializableSeedPhrase>> {
-        self.db.transaction_ro_unlocked()?.get_seed_phrase().map_err(WalletError::from)
+    pub async fn seed_phrase(&self) -> WalletResult<Option<SerializableSeedPhrase>> {
+        self.db
+            .transaction_ro_unlocked()
+            .await?
+            .get_seed_phrase()
+            .map_err(WalletError::from)
     }
 
-    pub fn delete_seed_phrase(&self) -> WalletResult<Option<SerializableSeedPhrase>> {
-        let mut tx = self.db.transaction_rw_unlocked(None)?;
+    pub async fn delete_seed_phrase(&self) -> WalletResult<Option<SerializableSeedPhrase>> {
+        let mut tx = self.db.transaction_rw_unlocked(None).await?;
         let seed_phrase = tx.del_seed_phrase().map_err(WalletError::from)?;
         tx.commit()?;
 
@@ -925,19 +933,19 @@ where
         self.db.is_locked()
     }
 
-    pub fn encrypt_wallet(&mut self, password: &Option<String>) -> WalletResult<()> {
-        self.db.encrypt_private_keys(password).map_err(WalletError::from)
+    pub async fn encrypt_wallet(&mut self, password: &Option<String>) -> WalletResult<()> {
+        self.db.encrypt_private_keys(password).await.map_err(WalletError::from)
     }
 
     pub fn lock_wallet(&mut self) -> WalletResult<()> {
         self.db.lock_private_keys().map_err(WalletError::from)
     }
 
-    pub fn unlock_wallet(&mut self, password: &String) -> WalletResult<()> {
-        self.db.unlock_private_keys(password).map_err(WalletError::from)
+    pub async fn unlock_wallet(&mut self, password: &String) -> WalletResult<()> {
+        self.db.unlock_private_keys(password).await.map_err(WalletError::from)
     }
 
-    pub fn set_lookahead_size(
+    pub async fn set_lookahead_size(
         &mut self,
         lookahead_size: u32,
         force_reduce: bool,
@@ -954,7 +962,7 @@ where
             );
         }
 
-        let mut db_tx = self.db.transaction_rw(None)?;
+        let mut db_tx = self.db.transaction_rw(None).await?;
         db_tx.set_lookahead_size(lookahead_size)?;
         let mut accounts = Self::reset_wallet_transactions_and_load(
             self.chain_config.clone(),
@@ -1010,7 +1018,7 @@ where
 
     /// Promotes the unused account into the used accounts and creates a new unused account
     /// Returns the new index and optional name if provided
-    pub fn create_next_account(
+    pub async fn create_next_account(
         &mut self,
         name: Option<String>,
     ) -> WalletResult<(U31, Option<String>)> {
@@ -1032,7 +1040,7 @@ where
                 WalletError::AbsoluteMaxNumAccountsExceeded(self.next_unused_account.0)
             })?;
 
-        let mut db_tx = self.db.transaction_rw_unlocked(None)?;
+        let mut db_tx = self.db.transaction_rw_unlocked(None).await?;
 
         let mut next_unused_account = Self::create_next_unused_account(
             next_account_index,
@@ -1063,7 +1071,7 @@ where
         Ok((next_account_index, name))
     }
 
-    pub fn set_account_name(
+    pub async fn set_account_name(
         &mut self,
         account_index: U31,
         name: Option<String>,
@@ -1071,18 +1079,19 @@ where
         self.for_account_rw(account_index, |acc, db_tx| {
             acc.set_name(name, db_tx).map(|()| (acc.account_index(), acc.name().clone()))
         })
+        .await
     }
 
     pub fn database(&self) -> &Store<B> {
         &self.db
     }
 
-    fn for_account_rw<T>(
+    async fn for_account_rw<T>(
         &mut self,
         account_index: U31,
         f: impl FnOnce(&mut Account<P::K>, &mut StoreTxRw<B>) -> WalletResult<T>,
     ) -> WalletResult<T> {
-        let mut db_tx = self.db.transaction_rw(None)?;
+        let mut db_tx = self.db.transaction_rw(None).await?;
         let account = Self::get_account_mut(&mut self.accounts, account_index)?;
         let value = f(account, &mut db_tx)?;
         // The in-memory wallet state has already changed, so rolling back
@@ -1093,7 +1102,7 @@ where
         Ok(value)
     }
 
-    fn for_account_rw_unlocked<T>(
+    async fn for_account_rw_unlocked<T>(
         &mut self,
         account_index: U31,
         f: impl FnOnce(
@@ -1103,7 +1112,7 @@ where
             &mut P,
         ) -> WalletResult<T>,
     ) -> WalletResult<T> {
-        let mut db_tx = self.db.transaction_rw_unlocked(None)?;
+        let mut db_tx = self.db.transaction_rw_unlocked(None).await?;
         let account = Self::get_account_mut(&mut self.accounts, account_index)?;
         match f(
             account,
@@ -1121,7 +1130,7 @@ where
                 // In case of an error we should reload the keys, in the case that the operation has issued new ones keys
                 // we do this to prevent exhausting the keys from many failed operations, and to
                 // keep the cache in sync with the DB, as the DB transaction will roll back.
-                let db_tx = self.db.transaction_ro()?;
+                let db_tx = self.db.transaction_ro().await?;
                 account.reload_keys(&db_tx)?;
                 Err(err)
             }
@@ -1131,43 +1140,37 @@ where
     async fn async_for_account_rw_unlocked<R, T>(
         &mut self,
         account_index: U31,
-        create_request: impl FnOnce(&mut Account<P::K>, &mut StoreLocalReadWriteUnlocked<B>) -> R,
+        create_request: impl FnOnce(&mut Account<P::K>, &mut StoreTxRwUnlocked<B>) -> R,
         sign_request: impl AsyncFnOnce(
                 R,
                 &P::K,
-                StoreLocalReadOnlyUnlocked<B>,
+                StoreTxRwUnlocked<B>,
                 Arc<ChainConfig>,
                 <P as SignerProvider>::S,
             ) -> WalletResult<T>
             + Send,
     ) -> WalletResult<T> {
         let account = Self::get_account_mut(&mut self.accounts, account_index)?;
-        let mut local_db_tx = self.db.local_rw_unlocked();
+        let mut local_db_tx = self.db.transaction_rw_unlocked(None).await?;
         let result = create_request(account, &mut local_db_tx);
         let signer = self.signer_provider.provide(self.chain_config.clone(), account_index);
         let config = self.chain_config.clone();
-        let result = sign_request(
-            result,
-            account.key_chain(),
-            local_db_tx.read_only_store(),
-            config,
-            signer,
-        )
-        .await;
+        let result = sign_request(result, account.key_chain(), local_db_tx, config, signer).await;
 
         match result {
             Ok(value) => {
-                let mut db_tx = self.db.transaction_rw(None)?;
-                local_db_tx.perform_operations(&mut db_tx)?;
-                // Abort the process if the DB transaction fails. See `for_account_rw` for more information.
-                db_tx.commit().expect("RW transaction commit failed unexpectedly");
+                // local_db_tx.commit().expect("RW transaction commit failed unexpectedly");
+                // let mut db_tx = self.db.transaction_rw(None).await?;
+                // local_db_tx.perform_operations(&mut db_tx)?;
+                // // Abort the process if the DB transaction fails. See `for_account_rw` for more information.
+                // db_tx.commit().expect("RW transaction commit failed unexpectedly");
                 Ok(value)
             }
             Err(err) => {
                 // In case of an error we should reload the keys, in the case that the operation has issued new ones keys
                 // we do this to prevent exhausting the keys from many failed operations, and to
                 // keep the cache in sync with the DB, as the DB transaction will roll back.
-                let db_tx = self.db.transaction_ro()?;
+                let db_tx = self.db.transaction_ro().await?;
                 account.reload_keys(&db_tx)?;
                 Err(err)
             }
@@ -1179,7 +1182,7 @@ where
         account_index: U31,
         f: impl AsyncFnOnce(
                 &P::K,
-                StoreLocalReadOnlyUnlocked<B>,
+                StoreTxRwUnlocked<B>,
                 Arc<ChainConfig>,
                 <P as SignerProvider>::S,
             ) -> WalletResult<T>
@@ -1201,7 +1204,7 @@ where
         additional_info: TxAdditionalInfo,
         f: impl FnOnce(
             &mut Account<P::K>,
-            &mut StoreLocalReadWriteUnlocked<B>,
+            &mut StoreTxRwUnlocked<B>,
         ) -> WalletResult<(SendRequest, AddlData)>,
         error_mapper: impl FnOnce(WalletError) -> WalletError + Send,
     ) -> WalletResult<(SignedTxWithFees, AddlData)> {
@@ -1222,7 +1225,7 @@ where
                         ptx,
                         &additional_info.tokens_additional_info,
                         key_chain,
-                        &store,
+                        store,
                         next_block_height,
                     )
                     .await
@@ -1271,10 +1274,7 @@ where
         &mut self,
         account_index: U31,
         additional_info: TxAdditionalInfo,
-        f: impl FnOnce(
-            &mut Account<P::K>,
-            &mut StoreLocalReadWriteUnlocked<B>,
-        ) -> WalletResult<SendRequest>,
+        f: impl FnOnce(&mut Account<P::K>, &mut StoreTxRwUnlocked<B>) -> WalletResult<SendRequest>,
     ) -> WalletResult<SignedTxWithFees> {
         self.async_for_account_rw_unlocked_and_check_tx_custom_error(
             account_index,
@@ -1423,7 +1423,7 @@ where
         Ok(transactions)
     }
 
-    pub fn abandon_transaction(
+    pub async fn abandon_transaction(
         &mut self,
         account_index: U31,
         tx_id: Id<Transaction>,
@@ -1431,6 +1431,7 @@ where
         self.for_account_rw(account_index, |account, db_tx| {
             account.abandon_transaction(tx_id, db_tx)
         })
+        .await
     }
 
     pub fn get_pool_ids(
@@ -1466,7 +1467,7 @@ where
         Ok(block_ids)
     }
 
-    pub fn standalone_address_label_rename(
+    pub async fn standalone_address_label_rename(
         &mut self,
         account_index: U31,
         address: Destination,
@@ -1475,9 +1476,10 @@ where
         self.for_account_rw(account_index, |account, db_tx| {
             account.standalone_address_label_rename(db_tx, address, label)
         })
+        .await
     }
 
-    pub fn add_standalone_address(
+    pub async fn add_standalone_address(
         &mut self,
         account_index: U31,
         public_key_hash: PublicKeyHash,
@@ -1486,9 +1488,10 @@ where
         self.for_account_rw(account_index, |account, db_tx| {
             account.add_standalone_address(db_tx, public_key_hash, label)
         })
+        .await
     }
 
-    pub fn add_standalone_private_key(
+    pub async fn add_standalone_private_key(
         &mut self,
         account_index: U31,
         private_key: PrivateKey,
@@ -1497,9 +1500,10 @@ where
         self.for_account_rw_unlocked(account_index, |account, db_tx, _, _| {
             account.add_standalone_private_key(db_tx, private_key, label)
         })
+        .await
     }
 
-    pub fn add_standalone_multisig(
+    pub async fn add_standalone_multisig(
         &mut self,
         account_index: U31,
         challenge: ClassicMultisigChallenge,
@@ -1508,15 +1512,17 @@ where
         self.for_account_rw(account_index, |account, db_tx| {
             account.add_standalone_multisig(db_tx, challenge, label)
         })
+        .await
     }
 
-    pub fn get_new_address(
+    pub async fn get_new_address(
         &mut self,
         account_index: U31,
     ) -> WalletResult<(ChildNumber, Address<Destination>)> {
         self.for_account_rw(account_index, |account, db_tx| {
             account.get_new_address(db_tx, KeyPurpose::ReceiveFunds)
         })
+        .await
     }
 
     pub fn find_public_key(
@@ -1560,9 +1566,10 @@ where
         account.get_transaction(transaction_id)
     }
 
-    pub fn get_transactions_to_be_broadcast(&self) -> WalletResult<Vec<SignedTransaction>> {
+    pub async fn get_transactions_to_be_broadcast(&self) -> WalletResult<Vec<SignedTransaction>> {
         self.db
-            .transaction_ro()?
+            .transaction_ro()
+            .await?
             .get_user_transactions()
             .map_err(WalletError::DatabaseError)
     }
@@ -1692,7 +1699,7 @@ where
                             &input_destinations,
                             &intent,
                             key_chain,
-                            &store,
+                            store,
                         )
                         .await
                         .map_err(Into::into)
@@ -1742,7 +1749,7 @@ where
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn create_unsigned_transaction_to_addresses(
+    pub async fn create_unsigned_transaction_to_addresses(
         &mut self,
         account_index: U31,
         outputs: impl IntoIterator<Item = TxOutput>,
@@ -1770,6 +1777,7 @@ where
                 ptx_additional_info,
             )
         })
+        .await
     }
 
     pub async fn create_sweep_transaction(
@@ -2234,7 +2242,7 @@ where
                         ptx,
                         &TokensAdditionalInfo::new(),
                         key_chain,
-                        &store,
+                        store,
                         next_block_height,
                     )
                     .await
@@ -2459,7 +2467,7 @@ where
                         ptx,
                         tokens_additional_info,
                         key_chain,
-                        &store,
+                        store,
                         next_block_height,
                     )
                     .await
@@ -2479,7 +2487,7 @@ where
             account_index,
             async move |key_chain, store, _chain_config, mut signer| {
                 signer
-                    .sign_challenge(challenge, destination, key_chain, &store)
+                    .sign_challenge(challenge, destination, key_chain, store)
                     .await
                     .map_err(Into::into)
             },
@@ -2520,7 +2528,7 @@ where
     ///
     /// `common_block_height` is the height of the shared blocks that are still in sync after reorgs.
     /// If `common_block_height` is zero, only the genesis block is considered common.
-    pub fn scan_new_blocks(
+    pub async fn scan_new_blocks(
         &mut self,
         account_index: U31,
         common_block_height: BlockHeight,
@@ -2529,7 +2537,8 @@ where
     ) -> WalletResult<()> {
         self.for_account_rw(account_index, |acc, db_tx| {
             acc.scan_new_blocks(db_tx, wallet_events, common_block_height, &blocks)
-        })?;
+        })
+        .await?;
 
         wallet_events.new_block();
         Ok(())
@@ -2542,14 +2551,14 @@ where
     /// If `common_block_height` is zero, only the genesis block is considered common.
     /// If a new transaction is recognized for the unused account, it is transferred to the used
     /// accounts and a new unused account is created.
-    pub fn scan_new_blocks_unused_account(
+    pub async fn scan_new_blocks_unused_account(
         &mut self,
         common_block_height: BlockHeight,
         blocks: Vec<Block>,
         wallet_events: &impl WalletEvents,
     ) -> WalletResult<()> {
         loop {
-            let mut db_tx = self.db.transaction_rw(None)?;
+            let mut db_tx = self.db.transaction_rw(None).await?;
             let added_new_tx_in_unused_acc = self.next_unused_account.1.scan_new_blocks(
                 &mut db_tx,
                 wallet_events,
@@ -2560,7 +2569,7 @@ where
             db_tx.commit()?;
 
             if added_new_tx_in_unused_acc {
-                self.create_next_account(None)?;
+                self.create_next_account(None).await?;
             } else {
                 break;
             }
@@ -2572,12 +2581,12 @@ where
 
     /// Sets the best block for all accounts
     /// Should be called after creating a new wallet
-    fn set_best_block(
+    async fn set_best_block(
         &mut self,
         best_block_height: BlockHeight,
         best_block_id: Id<GenBlock>,
     ) -> WalletResult<()> {
-        let mut db_tx = self.db.transaction_rw(None)?;
+        let mut db_tx = self.db.transaction_rw(None).await?;
 
         for account in self.accounts.values_mut() {
             account.update_best_block(&mut db_tx, best_block_height, best_block_id)?;
@@ -2597,12 +2606,12 @@ where
     /// Rescan mempool for unconfirmed transactions and UTXOs
     /// TODO: Currently we don't sync with the mempool
     #[cfg(test)]
-    pub fn scan_mempool(
+    pub async fn scan_mempool(
         &mut self,
         transactions: &[SignedTransaction],
         wallet_events: &impl WalletEvents,
     ) -> WalletResult<()> {
-        let mut db_tx = self.db.transaction_rw(None)?;
+        let mut db_tx = self.db.transaction_rw(None).await?;
 
         for account in self.accounts.values_mut() {
             account.scan_new_inmempool_transactions(transactions, &mut db_tx, wallet_events)?;
@@ -2615,12 +2624,12 @@ where
 
     /// Save an unconfirmed transaction in case we need to rebroadcast it later
     /// and mark it as Inactive for now
-    pub fn add_unconfirmed_tx(
+    pub async fn add_unconfirmed_tx(
         &mut self,
         transaction: SignedTransaction,
         wallet_events: &impl WalletEvents,
     ) -> WalletResult<()> {
-        let mut db_tx = self.db.transaction_rw(None)?;
+        let mut db_tx = self.db.transaction_rw(None).await?;
 
         let txs = [transaction];
         for account in self.accounts.values_mut() {
@@ -2634,7 +2643,7 @@ where
 
     /// Save an unconfirmed transaction for a specific account in case we need to rebroadcast it later
     /// and mark it as Inactive for now
-    pub fn add_account_unconfirmed_tx(
+    pub async fn add_account_unconfirmed_tx(
         &mut self,
         account_index: U31,
         transaction: SignedTransaction,
@@ -2643,11 +2652,12 @@ where
         self.for_account_rw(account_index, |acc, db_tx| {
             acc.scan_new_inactive_transactions(&[transaction], db_tx, wallet_events)
         })
+        .await
     }
 
-    pub fn set_median_time(&mut self, median_time: BlockTimestamp) -> WalletResult<()> {
+    pub async fn set_median_time(&mut self, median_time: BlockTimestamp) -> WalletResult<()> {
         self.latest_median_time = median_time;
-        let mut db_tx = self.db.transaction_rw(None)?;
+        let mut db_tx = self.db.transaction_rw(None).await?;
         db_tx.set_median_time(median_time)?;
         db_tx.commit()?;
         Ok(())
@@ -2666,16 +2676,17 @@ fn to_token_additional_info(token_info: &UnconfirmedTokenInfo) -> TxAdditionalIn
 
 impl<B, P> Wallet<B, P>
 where
-    B: storage::Backend + 'static,
+    B: storage::AsyncBackend + 'static,
     P: SignerProvider<K = AccountKeyChainImplSoftware>,
 {
-    pub fn get_vrf_key(
+    pub async fn get_vrf_key(
         &mut self,
         account_index: U31,
     ) -> WalletResult<(ChildNumber, Address<VRFPublicKey>)> {
         self.for_account_rw(account_index, |account, db_tx| {
             account.get_new_vrf_key(db_tx)
         })
+        .await
     }
 
     pub fn get_all_issued_vrf_public_keys(
@@ -2720,20 +2731,20 @@ where
         .await
     }
 
-    pub fn get_pos_gen_block_data(
+    pub async fn get_pos_gen_block_data(
         &self,
         account_index: U31,
         pool_id: PoolId,
     ) -> WalletResult<PoSGenerateBlockInputData> {
-        let db_tx = self.db.transaction_ro_unlocked()?;
+        let db_tx = self.db.transaction_ro_unlocked().await?;
         self.get_account(account_index)?.get_pos_gen_block_data(&db_tx, pool_id)
     }
 
-    pub fn get_pos_gen_block_data_by_pool_id(
+    pub async fn get_pos_gen_block_data_by_pool_id(
         &self,
         pool_id: PoolId,
     ) -> WalletResult<PoSGenerateBlockInputData> {
-        let db_tx = self.db.transaction_ro_unlocked()?;
+        let db_tx = self.db.transaction_ro_unlocked().await?;
 
         for acc in self.accounts.values() {
             if acc.pool_exists(pool_id) {

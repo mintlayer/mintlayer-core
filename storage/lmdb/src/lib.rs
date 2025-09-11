@@ -220,11 +220,14 @@ impl utils::shallow_clone::ShallowClone for LmdbImpl {
         }
     }
 }
-impl backend::BackendImpl for LmdbImpl {
+
+impl backend::BaseBackendImpl for LmdbImpl {
     type TxRo<'a> = DbTxRo<'a>;
 
     type TxRw<'a> = DbTxRw<'a>;
+}
 
+impl backend::BackendImpl for LmdbImpl {
     fn transaction_ro(&self) -> storage_core::Result<Self::TxRo<'_>> {
         self.start_transaction(lmdb::Environment::begin_ro_txn)
     }
@@ -276,9 +279,11 @@ impl Lmdb {
     }
 }
 
-impl backend::Backend for Lmdb {
+impl backend::BaseBackend for Lmdb {
     type Impl = LmdbImpl;
+}
 
+impl backend::Backend for Lmdb {
     fn open(self, desc: DbDesc) -> storage_core::Result<Self::Impl> {
         // Attempt to create the storage directory
         std::fs::create_dir_all(&self.path).map_err(error::process_io_error)?;

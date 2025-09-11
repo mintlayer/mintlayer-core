@@ -94,8 +94,8 @@ pub async fn test_sign_message_generic<MkS1, MkS2, S1, S2>(
     S2: Signer,
 {
     let chain_config = Arc::new(create_regtest());
-    let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
-    let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
+    let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).await.unwrap());
+    let mut db_tx = db.transaction_rw_unlocked(None).await.unwrap();
 
     let mut account = account_from_mnemonic(&chain_config, &mut db_tx, DEFAULT_ACCOUNT_INDEX);
 
@@ -135,15 +135,15 @@ pub async fn test_sign_message_generic<MkS1, MkS2, S1, S2>(
     let standalone_pk_destination = Destination::PublicKey(standalone_pk);
 
     db_tx.commit().unwrap();
-    let db_tx = db.local_rw_unlocked().read_only_store();
 
     for destination in [pkh_destination, pk_destination, standalone_pk_destination] {
         let message = make_message();
         let message_challenge = produce_message_challenge(&message);
 
         let mut signer = make_signer(chain_config.clone(), account.account_index());
+        let db_tx = db.transaction_ro_unlocked().await.unwrap();
         let res = signer
-            .sign_challenge(&message, &destination, account.key_chain(), &db_tx)
+            .sign_challenge(&message, &destination, account.key_chain(), db_tx)
             .await
             .unwrap();
         res.verify_signature(&chain_config, &destination, &message_challenge).unwrap();
@@ -152,8 +152,9 @@ pub async fn test_sign_message_generic<MkS1, MkS2, S1, S2>(
             let mut another_signer =
                 make_another_signer(chain_config.clone(), account.account_index());
 
+            let db_tx = db.transaction_ro_unlocked().await.unwrap();
             let another_res = another_signer
-                .sign_challenge(&message, &destination, account.key_chain(), &db_tx)
+                .sign_challenge(&message, &destination, account.key_chain(), db_tx)
                 .await
                 .unwrap();
             another_res
@@ -171,13 +172,9 @@ pub async fn test_sign_message_generic<MkS1, MkS2, S1, S2>(
     let mut signer = make_signer(chain_config.clone(), account.account_index());
 
     let message = make_message();
+    let db_tx = db.transaction_ro_unlocked().await.unwrap();
     let err = signer
-        .sign_challenge(
-            &message,
-            &random_pk_destination,
-            account.key_chain(),
-            &db_tx,
-        )
+        .sign_challenge(&message, &random_pk_destination, account.key_chain(), db_tx)
         .await
         .unwrap_err();
 
@@ -195,8 +192,8 @@ pub async fn test_sign_transaction_intent_generic<MkS1, MkS2, S1, S2>(
     S2: Signer,
 {
     let chain_config = Arc::new(create_regtest());
-    let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
-    let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
+    let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).await.unwrap());
+    let mut db_tx = db.transaction_rw_unlocked(None).await.unwrap();
 
     let mut account = account_from_mnemonic(&chain_config, &mut db_tx, DEFAULT_ACCOUNT_INDEX);
 
@@ -251,21 +248,20 @@ pub async fn test_sign_transaction_intent_generic<MkS1, MkS2, S1, S2>(
     .unwrap();
 
     db_tx.commit().unwrap();
-    let db_tx = db.local_rw_unlocked().read_only_store();
-
     let intent: String = [rng.gen::<char>(), rng.gen::<char>(), rng.gen::<char>()].iter().collect();
     log::debug!("Generated intent: `{intent}`");
     let expected_signed_message =
         SignedTransactionIntent::get_message_to_sign(&intent, &tx.get_id());
 
     let mut signer = make_signer(chain_config.clone(), account.account_index());
+    let db_tx = db.transaction_ro_unlocked().await.unwrap();
     let res = signer
         .sign_transaction_intent(
             &tx,
             &input_destinations,
             &intent,
             account.key_chain(),
-            &db_tx,
+            db_tx,
         )
         .await
         .unwrap();
@@ -274,13 +270,14 @@ pub async fn test_sign_transaction_intent_generic<MkS1, MkS2, S1, S2>(
 
     if let Some(make_another_signer) = &make_another_signer {
         let mut another_signer = make_another_signer(chain_config.clone(), account.account_index());
+        let db_tx = db.transaction_ro_unlocked().await.unwrap();
         let another_res = another_signer
             .sign_transaction_intent(
                 &tx,
                 &input_destinations,
                 &intent,
                 account.key_chain(),
-                &db_tx,
+                db_tx,
             )
             .await
             .unwrap();
@@ -296,13 +293,14 @@ pub async fn test_sign_transaction_intent_generic<MkS1, MkS2, S1, S2>(
     let random_pk_destination = Destination::PublicKey(random_pk);
     input_destinations[rng.gen_range(0..num_inputs)] = random_pk_destination;
 
+    let db_tx = db.transaction_ro_unlocked().await.unwrap();
     let err = signer
         .sign_transaction_intent(
             &tx,
             &input_destinations,
             &intent,
             account.key_chain(),
-            &db_tx,
+            db_tx,
         )
         .await
         .unwrap_err();
@@ -355,8 +353,8 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
             .build(),
     );
 
-    let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
-    let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
+    let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).await.unwrap());
+    let mut db_tx = db.transaction_rw_unlocked(None).await.unwrap();
 
     let mut account = account_from_mnemonic(&chain_config, &mut db_tx, DEFAULT_ACCOUNT_INDEX);
     let mut account2 = account_from_mnemonic(&chain_config, &mut db_tx, U31::ONE);
@@ -735,7 +733,7 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
     let orig_ptx = req.into_partially_signed_tx(ptx_additional_info).unwrap();
 
     db_tx.commit().unwrap();
-    let db_tx = db.local_rw_unlocked().read_only_store();
+    let db_tx = db.transaction_ro_unlocked().await.unwrap();
 
     let mut signer = make_signer(chain_config.clone(), account.account_index());
     let (ptx, _, _) = signer
@@ -743,7 +741,7 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
             orig_ptx.clone(),
             &tokens_additional_info,
             account.key_chain(),
-            &db_tx,
+            db_tx,
             tx_block_height,
         )
         .await
@@ -753,12 +751,13 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
 
     if let Some(make_another_signer) = &make_another_signer {
         let mut another_signer = make_another_signer(chain_config.clone(), account.account_index());
+        let db_tx = db.transaction_ro_unlocked().await.unwrap();
         let (another_ptx, _, _) = another_signer
             .sign_tx(
                 orig_ptx,
                 &tokens_additional_info,
                 account.key_chain(),
-                &db_tx,
+                db_tx,
                 tx_block_height,
             )
             .await
@@ -819,12 +818,13 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
     let orig_ptx = ptx;
     // fully sign the remaining key in the multisig address
     let mut signer = make_signer(chain_config.clone(), account2.account_index());
+    let db_tx = db.transaction_ro_unlocked().await.unwrap();
     let (ptx, _, _) = signer
         .sign_tx(
             orig_ptx.clone(),
             &tokens_additional_info,
             account2.key_chain(),
-            &db_tx,
+            db_tx,
             tx_block_height,
         )
         .await
@@ -834,12 +834,13 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
     if let Some(make_another_signer) = &make_another_signer {
         let mut another_signer =
             make_another_signer(chain_config.clone(), account2.account_index());
+        let db_tx = db.transaction_ro_unlocked().await.unwrap();
         let (another_ptx, _, _) = another_signer
             .sign_tx(
                 orig_ptx,
                 &tokens_additional_info,
                 account2.key_chain(),
-                &db_tx,
+                db_tx,
                 tx_block_height,
             )
             .await

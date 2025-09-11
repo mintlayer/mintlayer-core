@@ -10,8 +10,10 @@ logging = { path = '../../logging' }
 storage-core = { path = '../core' }
 utils = { path = '../../utils' }
 
+async-trait.workspace = true
 hex.workspace = true
 rusqlite = { workspace = true, features = ["bundled"] }
+tokio.workspace = true
 
 [dev-dependencies]
 storage-backend-test-suite = { path = "../backend-test-suite" }

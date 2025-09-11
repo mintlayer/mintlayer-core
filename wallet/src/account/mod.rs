@@ -2011,7 +2011,7 @@ impl<K: AccountKeyChains + Sync> Account<K> {
         self.output_cache.get_transaction(transaction_id)
     }
 
-    pub fn reset_to_height<B: storage::Backend>(
+    pub fn reset_to_height<B: storage::AsyncBackend>(
         &mut self,
         db_tx: &mut StoreTxRw<B>,
         wallet_events: &impl WalletEvents,
@@ -2119,7 +2119,7 @@ impl<K: AccountKeyChains + Sync> Account<K> {
 
     /// Scan the new blocks for relevant transactions and updates the state
     /// Returns true if a new transaction was added else false
-    pub fn scan_new_blocks<B: storage::Backend>(
+    pub fn scan_new_blocks<B: storage::AsyncBackend>(
         &mut self,
         db_tx: &mut StoreTxRw<B>,
         wallet_events: &impl WalletEvents,
@@ -2181,7 +2181,7 @@ impl<K: AccountKeyChains + Sync> Account<K> {
     }
 
     /// Check for any conflicting txs and update the new state in the DB
-    fn update_conflicting_txs<B: storage::Backend>(
+    fn update_conflicting_txs<B: storage::AsyncBackend>(
         &mut self,
         confirmed_tx: &Transaction,
         block: &Block,

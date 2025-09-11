@@ -81,7 +81,7 @@ use crate::{
     ControllerConfig, ControllerError,
 };
 
-pub struct SyncedController<'a, T, W, B: storage::Backend + 'static> {
+pub struct SyncedController<'a, T, W, B: storage::AsyncBackend + 'static> {
     wallet: &'a mut RuntimeWallet<B>,
     rpc_client: T,
     chain_config: &'a ChainConfig,
@@ -93,7 +93,7 @@ pub struct SyncedController<'a, T, W, B: storage::Backend + 'static> {
 
 impl<'a, T, W, B> SyncedController<'a, T, W, B>
 where
-    B: storage::Backend + 'static,
+    B: storage::AsyncBackend + 'static,
     T: NodeInterface,
     W: WalletEvents,
 {
@@ -213,60 +213,66 @@ where
         Ok((result, additional_info))
     }
 
-    pub fn abandon_transaction(
+    pub async fn abandon_transaction(
         &mut self,
         tx_id: Id<Transaction>,
     ) -> Result<(), ControllerError<T>> {
         self.wallet
             .abandon_transaction(self.account_index, tx_id)
+            .await
             .map_err(ControllerError::WalletError)
     }
 
-    pub fn standalone_address_label_rename(
+    pub async fn standalone_address_label_rename(
         &mut self,
         address: Destination,
         label: Option<String>,
     ) -> Result<(), ControllerError<T>> {
         self.wallet
             .standalone_address_label_rename(self.account_index, address, label)
+            .await
             .map_err(ControllerError::WalletError)
     }
 
-    pub fn add_standalone_address(
+    pub async fn add_standalone_address(
         &mut self,
         address: PublicKeyHash,
         label: Option<String>,
     ) -> Result<(), ControllerError<T>> {
         self.wallet
             .add_standalone_address(self.account_index, address, label)
+            .await
             .map_err(ControllerError::WalletError)
     }
 
-    pub fn add_standalone_private_key(
+    pub async fn add_standalone_private_key(
         &mut self,
         private_key: PrivateKey,
         label: Option<String>,
     ) -> Result<(), ControllerError<T>> {
         self.wallet
             .add_standalone_private_key(self.account_index, private_key, label)
+            .await
             .map_err(ControllerError::WalletError)
     }
 
-    pub fn add_standalone_multisig(
+    pub async fn add_standalone_multisig(
         &mut self,
         challenge: ClassicMultisigChallenge,
         label: Option<String>,
     ) -> Result<PublicKeyHash, ControllerError<T>> {
         self.wallet
             .add_standalone_multisig(self.account_index, challenge, label)
+            .await
             .map_err(ControllerError::WalletError)
     }
 
-    pub fn new_address(
+    pub async fn new_address(
         &mut self,
     ) -> Result<(ChildNumber, Address<Destination>), ControllerError<T>> {
         self.wallet
             .get_new_address(self.account_index)
+            .await
             .map_err(ControllerError::WalletError)
     }
 
@@ -279,11 +285,12 @@ where
             .map_err(ControllerError::WalletError)
     }
 
-    pub fn new_vrf_key(
+    pub async fn new_vrf_key(
         &mut self,
     ) -> Result<(ChildNumber, Address<VRFPublicKey>), ControllerError<T>> {
         self.wallet
             .get_vrf_key(self.account_index)
+            .await
             .map_err(ControllerError::WalletError)
     }
 
@@ -742,6 +749,7 @@ where
                 consolidate_fee_rate,
                 PtxAdditionalInfo::new(),
             )
+            .await
             .map_err(ControllerError::WalletError)?;
 
         let fees = into_balances(&self.rpc_client, self.chain_config, fees).await?;
@@ -876,16 +884,19 @@ where
         let (current_fee_rate, consolidate_fee_rate) =
             self.get_current_and_consolidation_fee_rate().await?;
 
-        let (tx, fees) = self.wallet.create_unsigned_transaction_to_addresses(
-            self.account_index,
-            outputs,
-            selected_inputs,
-            Some(CoinSelectionAlgo::Randomize),
-            change_addresses,
-            current_fee_rate,
-            consolidate_fee_rate,
-            PtxAdditionalInfo::new(),
-        )?;
+        let (tx, fees) = self
+            .wallet
+            .create_unsigned_transaction_to_addresses(
+                self.account_index,
+                outputs,
+                selected_inputs,
+                Some(CoinSelectionAlgo::Randomize),
+                change_addresses,
+                current_fee_rate,
+                consolidate_fee_rate,
+                PtxAdditionalInfo::new(),
+            )
+            .await?;
 
         let fees = into_balances(&self.rpc_client, self.chain_config, fees).await?;
 
@@ -1472,9 +1483,13 @@ where
             .map_err(ControllerError::WalletError)
     }
 
-    pub fn add_unconfirmed_tx(&mut self, tx: SignedTransaction) -> Result<(), ControllerError<T>> {
+    pub async fn add_unconfirmed_tx(
+        &mut self,
+        tx: SignedTransaction,
+    ) -> Result<(), ControllerError<T>> {
         self.wallet
             .add_unconfirmed_tx(tx, self.wallet_events)
+            .await
             .map_err(ControllerError::WalletError)
     }
 
@@ -1508,6 +1523,7 @@ where
 
         self.wallet
             .add_account_unconfirmed_tx(self.account_index, &tx, self.wallet_events)
+            .await
             .map_err(ControllerError::WalletError)?;
 
         Ok(tx)
