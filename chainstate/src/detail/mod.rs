@@ -261,15 +261,13 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         Ok(())
     }
 
-    fn broadcast_new_tip_event(&mut self, new_block_index: &Option<BlockIndex>) {
-        if let Some(new_block_index) = new_block_index {
-            let new_height = new_block_index.block_height();
-            let new_id = *new_block_index.block_id();
-            let event = ChainstateEvent::NewTip(new_id, new_height);
+    fn broadcast_new_tip_event(&mut self, new_block_index: &BlockIndex) {
+        let new_height = new_block_index.block_height();
+        let new_id = *new_block_index.block_id();
+        let event = ChainstateEvent::NewTip(new_id, new_height);
 
-            self.rpc_events.broadcast(&event);
-            self.subsystem_events.broadcast(event);
-        }
+        self.rpc_events.broadcast(&event);
+        self.subsystem_events.broadcast(event);
     }
 
     /// Create a read-write transaction, call `main_action` on it and commit.
@@ -609,7 +607,11 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             None => result,
         };
 
-        self.broadcast_new_tip_event(&result);
+        if let Some(new_block_index) = &result {
+            self.broadcast_new_tip_event(new_block_index);
+        } else {
+            log::debug!("Stale block received: {block_id:x}");
+        }
 
         if let Some(ref bi) = result {
             let compact_target = match bi.block_header().consensus_data() {

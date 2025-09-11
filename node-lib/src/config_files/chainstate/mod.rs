@@ -24,18 +24,25 @@ use chainstate::ChainstateConfig;
 pub struct ChainstateConfigFile {
     /// The number of maximum attempts to process a block.
     pub max_db_commit_attempts: Option<usize>,
+
     /// The maximum capacity of the orphan blocks pool.
     pub max_orphan_blocks: Option<usize>,
+
     /// When importing bootstrap file, this controls the buffer sizes (min, max)
     /// (see bootstrap import function for more information)
     pub min_max_bootstrap_import_buffer_sizes: Option<(usize, usize)>,
+
     /// A maximum tip age in seconds.
     ///
     /// The initial block download is finished if the difference between the current time and the
     /// tip time is less than this value.
     pub max_tip_age: Option<u64>,
+
     /// If true, additional computationally-expensive consistency checks will be performed by the chainstate.
     pub enable_heavy_checks: Option<bool>,
+
+    /// If true, blocks and block headers will not be rejected if checkpoints mismatch is detected.
+    pub allow_checkpoints_mismatch: Option<bool>,
 }
 
 impl From<ChainstateConfigFile> for ChainstateConfig {
@@ -46,6 +53,7 @@ impl From<ChainstateConfigFile> for ChainstateConfig {
             min_max_bootstrap_import_buffer_sizes,
             max_tip_age,
             enable_heavy_checks,
+            allow_checkpoints_mismatch,
         } = config_file;
 
         ChainstateConfig {
@@ -54,6 +62,7 @@ impl From<ChainstateConfigFile> for ChainstateConfig {
             min_max_bootstrap_import_buffer_sizes: min_max_bootstrap_import_buffer_sizes.into(),
             max_tip_age: max_tip_age.map(Duration::from_secs).into(),
             enable_heavy_checks,
+            allow_checkpoints_mismatch,
         }
     }
 }

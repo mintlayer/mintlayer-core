@@ -28,6 +28,7 @@ use crate::{
 ///
 /// Note: we derive `thiserror::Error` here just for the convenience of implementing `Display`.
 /// But conceptually this enum is not an error and it's not supposed to be used with `Result`.
+// TODO: use `derive_more::Display` instead of `thiserror::Error`.
 #[derive(Error, Debug, Clone, PartialEq, Eq)]
 pub enum DisconnectionReason {
     #[error("Your address is banned")]
@@ -57,7 +58,7 @@ pub enum DisconnectionReason {
         remote_time: Time,
         accepted_peer_time: std::ops::RangeInclusive<Time>,
     },
-    #[error("Wrong network; out network is '{our_network}'")]
+    #[error("Wrong network; our network is '{our_network}'")]
     DifferentNetwork { our_network: MagicBytes },
     #[error("No common services")]
     NoCommonServices,

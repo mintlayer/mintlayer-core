@@ -343,6 +343,10 @@ pub struct RunOptions {
     /// Defaults to true for regtest and false in other cases.
     #[clap(long, value_name = "VAL")]
     pub enable_chainstate_heavy_checks: Option<bool>,
+
+    /// If true, blocks and block headers will not be rejected if checkpoints mismatch is detected.
+    #[clap(long, action = clap::ArgAction::SetTrue, hide = true)]
+    pub allow_checkpoints_mismatch: Option<bool>,
 }
 
 pub fn default_data_dir(chain_type: ChainType) -> PathBuf {
