@@ -319,10 +319,11 @@ impl BanScore for CheckBlockError {
             CheckBlockError::PropertyQueryError(_) => 100,
             CheckBlockError::CheckpointMismatch { .. } => 100,
             CheckBlockError::GetAncestorError(_) => 100,
-            CheckBlockError::AttemptedToAddBlockBeforeReorgLimit(_, _, _) => 100,
+            CheckBlockError::AttemptedToAddBlockBeforeReorgLimit { .. } => 100,
             CheckBlockError::EpochSealError(err) => err.ban_score(),
             CheckBlockError::InvalidParent { .. } => 100,
             CheckBlockError::InMemoryReorgFailed(err) => err.ban_score(),
+            CheckBlockError::InvalidBlockAlreadyProcessed(_) => 100,
         }
     }
 }

@@ -583,11 +583,11 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         if common_ancestor_height < min_allowed_height {
             let tip_block_height = self.get_best_block_index()?.block_height();
 
-            return Err(CheckBlockError::AttemptedToAddBlockBeforeReorgLimit(
+            return Err(CheckBlockError::AttemptedToAddBlockBeforeReorgLimit {
                 common_ancestor_height,
                 tip_block_height,
                 min_allowed_height,
-            ));
+            });
         }
 
         Ok(())
@@ -618,8 +618,45 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(parent_block_index)
     }
 
+    /// This function is intended to be used in check_block and check_block_header.
+    ///
+    /// Return true if the block already exists in the chainstate and has an "ok" status
+    /// with the validation stage CheckBlockOk or later.
+    /// If it has a non-"ok" status, return an error.
+    /// If the block is new, or if its validation stage is below CheckBlockOk (i.e. it's Unchecked),
+    /// return false.
+    fn skip_check_block_because_block_exists_and_is_checked(
+        &self,
+        block_id: &Id<Block>,
+    ) -> Result<bool, CheckBlockError> {
+        if let Some(block_index) = self.get_block_index(block_id)? {
+            let status = block_index.status();
+
+            if status.is_ok() {
+                let checked = status.last_valid_stage() >= BlockValidationStage::CheckBlockOk;
+                Ok(checked)
+            } else {
+                Err(CheckBlockError::InvalidBlockAlreadyProcessed(*block_id))
+            }
+        } else {
+            Ok(false)
+        }
+    }
+
     #[log_error]
     pub fn check_block_header(&self, header: &SignedBlockHeader) -> Result<(), CheckBlockError> {
+        let header = WithId::new(header);
+        if self.skip_check_block_because_block_exists_and_is_checked(&WithId::id(&header))? {
+            return Ok(());
+        }
+
+        self.check_block_header_impl(&header)
+    }
+
+    fn check_block_header_impl(
+        &self,
+        header: &WithId<&SignedBlockHeader>,
+    ) -> Result<(), CheckBlockError> {
         let parent_block_index = self.check_block_parent(header)?;
         self.check_header_size(header)?;
         self.enforce_checkpoints(header)?;
@@ -681,7 +718,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         ensure!(
             block_timestamp.as_duration_since_epoch() <= current_time_as_secs + max_future_offset,
             CheckBlockError::BlockFromTheFuture {
-                block_id: header.block_id(),
+                block_id: WithId::id(header),
                 block_timestamp,
                 current_time
             },
@@ -852,7 +889,14 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
 
     #[log_error]
     pub fn check_block(&self, block: &WithId<Block>) -> Result<(), CheckBlockError> {
-        self.check_block_header(block.header())?;
+        let header_with_id = WithId::as_sub_obj(block);
+        if self
+            .skip_check_block_because_block_exists_and_is_checked(&WithId::id(&header_with_id))?
+        {
+            return Ok(());
+        }
+
+        self.check_block_header_impl(&header_with_id)?;
 
         self.check_block_size(block).map_err(CheckBlockError::BlockSizeError)?;
 

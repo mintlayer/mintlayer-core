@@ -167,8 +167,17 @@ pub enum CheckBlockError {
     },
     #[error("CRITICAL: Failed to retrieve ancestor of submitted block: {0}")]
     GetAncestorError(#[from] GetAncestorError),
-    #[error("Attempted to add a block before reorg limit (attempted at height: {0} while current height is: {1} and min allowed is: {2})")]
-    AttemptedToAddBlockBeforeReorgLimit(BlockHeight, BlockHeight, BlockHeight),
+    #[error(
+        "Attempted to add a block before reorg limit (attempted at height: {} while current height is: {} and min allowed is: {})",
+        common_ancestor_height,
+        tip_block_height,
+        min_allowed_height
+    )]
+    AttemptedToAddBlockBeforeReorgLimit {
+        common_ancestor_height: BlockHeight,
+        tip_block_height: BlockHeight,
+        min_allowed_height: BlockHeight,
+    },
     #[error("TransactionVerifier error: {0}")]
     TransactionVerifierError(#[from] TransactionVerifierStorageError),
     #[error("Error during sealing an epoch: {0}")]
@@ -180,6 +189,8 @@ pub enum CheckBlockError {
     },
     #[error("In-memory reorg failed: {0}")]
     InMemoryReorgFailed(#[from] InMemoryReorgError),
+    #[error("Block {0} has already been processed and marked as invalid")]
+    InvalidBlockAlreadyProcessed(Id<Block>),
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
