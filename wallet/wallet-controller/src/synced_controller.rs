@@ -95,7 +95,7 @@ impl<'a, T, W, B> SyncedController<'a, T, W, B>
 where
     B: storage::AsyncBackend + 'static,
     T: NodeInterface,
-    W: WalletEvents,
+    W: WalletEvents + Sync,
 {
     pub fn new(
         wallet: &'a mut RuntimeWallet<B>,

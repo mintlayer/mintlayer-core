@@ -112,39 +112,42 @@ type SignerResult<T> = Result<T, SignerError>;
 #[async_trait]
 pub trait Signer {
     /// Sign a partially signed transaction and return the before and after signature statuses.
-    async fn sign_tx(
+    async fn sign_tx<T: WalletStorageReadUnlocked + Send>(
         &mut self,
         tx: PartiallySignedTransaction,
         tokens_additional_info: &TokensAdditionalInfo,
         key_chain: &(impl AccountKeyChains + Sync),
-        db_tx: impl WalletStorageReadUnlocked + Send,
+        db_tx: T,
         block_height: BlockHeight,
-    ) -> SignerResult<(
-        PartiallySignedTransaction,
-        Vec<SignatureStatus>,
-        Vec<SignatureStatus>,
-    )>;
+    ) -> (
+        T,
+        SignerResult<(
+            PartiallySignedTransaction,
+            Vec<SignatureStatus>,
+            Vec<SignatureStatus>,
+        )>,
+    );
 
     /// Sign an arbitrary message for a destination known to this key chain.
-    async fn sign_challenge(
+    async fn sign_challenge<T: WalletStorageReadUnlocked + Send>(
         &mut self,
         message: &[u8],
         destination: &Destination,
         key_chain: &(impl AccountKeyChains + Sync),
-        db_tx: impl WalletStorageReadUnlocked + Send,
-    ) -> SignerResult<ArbitraryMessageSignature>;
+        db_tx: T,
+    ) -> (T, SignerResult<ArbitraryMessageSignature>);
 
     /// Sign a transaction intent. The number of `input_destinations` must be the same as
     /// the number of inputs in the transaction; all of the destinations must be known
     /// to this key chain.
-    async fn sign_transaction_intent(
+    async fn sign_transaction_intent<T: WalletStorageReadUnlocked + Send>(
         &mut self,
         transaction: &Transaction,
         input_destinations: &[Destination],
         intent: &str,
         key_chain: &(impl AccountKeyChains + Sync),
-        db_tx: impl WalletStorageReadUnlocked + Send,
-    ) -> SignerResult<SignedTransactionIntent>;
+        db_tx: T,
+    ) -> (T, SignerResult<SignedTransactionIntent>);
 }
 
 pub trait SignerProvider {

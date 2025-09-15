@@ -1137,36 +1137,38 @@ where
         }
     }
 
-    async fn async_for_account_rw_unlocked<R, T>(
+    async fn async_for_account_rw_unlocked<R, T, F>(
         &mut self,
         account_index: U31,
         create_request: impl FnOnce(&mut Account<P::K>, &mut StoreTxRwUnlocked<B>) -> R,
-        sign_request: impl AsyncFnOnce(
+        sign_request: F,
+    ) -> WalletResult<T>
+    where
+        F: for<'x> AsyncFnOnce(
                 R,
                 &P::K,
-                StoreTxRwUnlocked<B>,
+                StoreTxRwUnlocked<'x, B>,
                 Arc<ChainConfig>,
                 <P as SignerProvider>::S,
-            ) -> WalletResult<T>
+            ) -> (StoreTxRwUnlocked<'x, B>, WalletResult<T>)
             + Send,
-    ) -> WalletResult<T> {
+    {
         let account = Self::get_account_mut(&mut self.accounts, account_index)?;
         let mut local_db_tx = self.db.transaction_rw_unlocked(None).await?;
         let result = create_request(account, &mut local_db_tx);
         let signer = self.signer_provider.provide(self.chain_config.clone(), account_index);
         let config = self.chain_config.clone();
-        let result = sign_request(result, account.key_chain(), local_db_tx, config, signer).await;
+        let (db_tx, result) =
+            sign_request(result, account.key_chain(), local_db_tx, config, signer).await;
 
         match result {
             Ok(value) => {
-                // local_db_tx.commit().expect("RW transaction commit failed unexpectedly");
-                // let mut db_tx = self.db.transaction_rw(None).await?;
-                // local_db_tx.perform_operations(&mut db_tx)?;
                 // // Abort the process if the DB transaction fails. See `for_account_rw` for more information.
-                // db_tx.commit().expect("RW transaction commit failed unexpectedly");
+                db_tx.commit().expect("RW transaction commit failed unexpectedly");
                 Ok(value)
             }
             Err(err) => {
+                db_tx.abort();
                 // In case of an error we should reload the keys, in the case that the operation has issued new ones keys
                 // we do this to prevent exhausting the keys from many failed operations, and to
                 // keep the cache in sync with the DB, as the DB transaction will roll back.
@@ -1177,17 +1179,20 @@ where
         }
     }
 
-    async fn async_for_account_key_chain_rw_unlocked<T>(
+    async fn async_for_account_key_chain_rw_unlocked<T, F>(
         &mut self,
         account_index: U31,
-        f: impl AsyncFnOnce(
+        f: F,
+    ) -> WalletResult<T>
+    where
+        F: for<'x> AsyncFnOnce(
                 &P::K,
-                StoreTxRwUnlocked<B>,
+                StoreTxRwUnlocked<'x, B>,
                 Arc<ChainConfig>,
                 <P as SignerProvider>::S,
-            ) -> WalletResult<T>
+            ) -> (StoreTxRwUnlocked<'x, B>, WalletResult<T>)
             + Send,
-    ) -> WalletResult<T> {
+    {
         self.async_for_account_rw_unlocked(
             account_index,
             |_, _| (),
@@ -1211,16 +1216,65 @@ where
         let (_, best_block_height) = self.get_best_block_for_account(account_index)?;
         let next_block_height = best_block_height.next_height();
 
+        let into_signed_tx = |ptx: PartiallySignedTransaction,
+                              fees: BTreeMap<Currency, Amount>,
+                              chain_config: &ChainConfig| {
+            let input_commitments =
+                ptx.make_sighash_input_commitments_at_height(chain_config, next_block_height)?;
+
+            let is_fully_signed = ptx.destinations().iter().enumerate().zip(ptx.witnesses()).all(
+                |((i, destination), witness)| match (witness, destination) {
+                    (None | Some(_), None) | (None, Some(_)) => false,
+                    (Some(_), Some(destination)) => {
+                        let input_utxo = ptx.input_utxos()[i].clone();
+
+                        tx_verifier::input_check::signature_only_check::verify_tx_signature(
+                            chain_config,
+                            destination,
+                            &ptx,
+                            &input_commitments,
+                            i,
+                            input_utxo,
+                        )
+                        .is_ok()
+                    }
+                },
+            );
+
+            if !is_fully_signed {
+                return Err(error_mapper(WalletError::FailedToConvertPartiallySignedTx(
+                    Box::new(ptx),
+                )));
+            }
+
+            let tx = ptx.into_signed_tx().map_err(|e| error_mapper(e.into()))?;
+
+            check_transaction(chain_config, next_block_height, &tx)?;
+            let tx = SignedTxWithFees { tx, fees };
+            Ok(tx)
+        };
+
         self.async_for_account_rw_unlocked(
             account_index,
             f,
             async move |request, key_chain, store, chain_config, mut signer| {
-                let (mut request, additional_data) = request?;
+                let (mut request, additional_data) = match request {
+                    Ok(x) => x,
+                    Err(e) => {
+                        return (store, Err(e));
+                    }
+                };
 
                 let fees = request.get_fees();
-                let ptx = request.into_partially_signed_tx(additional_info.ptx_additional_info)?;
+                let ptx =
+                    match request.into_partially_signed_tx(additional_info.ptx_additional_info) {
+                        Ok(x) => x,
+                        Err(e) => {
+                            return (store, Err(e));
+                        }
+                    };
 
-                let ptx = signer
+                let (db_tx, res) = signer
                     .sign_tx(
                         ptx,
                         &additional_info.tokens_additional_info,
@@ -1228,43 +1282,17 @@ where
                         store,
                         next_block_height,
                     )
-                    .await
-                    .map(|(ptx, _, _)| ptx)?;
-
-                let input_commitments =
-                    ptx.make_sighash_input_commitments_at_height(&chain_config, next_block_height)?;
-
-                let is_fully_signed =
-                    ptx.destinations().iter().enumerate().zip(ptx.witnesses()).all(
-                        |((i, destination), witness)| match (witness, destination) {
-                            (None | Some(_), None) | (None, Some(_)) => false,
-                            (Some(_), Some(destination)) => {
-                                let input_utxo = ptx.input_utxos()[i].clone();
-
-                                tx_verifier::input_check::signature_only_check::verify_tx_signature(
-                                    &chain_config,
-                                    destination,
-                                    &ptx,
-                                    &input_commitments,
-                                    i,
-                                    input_utxo,
-                                )
-                                .is_ok()
-                            }
-                        },
-                    );
-
-                if !is_fully_signed {
-                    return Err(error_mapper(WalletError::FailedToConvertPartiallySignedTx(
-                        Box::new(ptx),
-                    )));
+                    .await;
+                let ptx = match res {
+                    Ok(x) => x.0,
+                    Err(e) => {
+                        return (db_tx, Err(e.into()));
+                    }
+                };
+                match into_signed_tx(ptx, fees, &chain_config) {
+                    Ok(tx) => (db_tx, Ok((tx, additional_data))),
+                    Err(e) => (db_tx, Err(e)),
                 }
-
-                let tx = ptx.into_signed_tx().map_err(|e| error_mapper(e.into()))?;
-
-                check_transaction(&chain_config, next_block_height, &tx)?;
-                let tx = SignedTxWithFees { tx, fees };
-                Ok((tx, additional_data))
             },
         )
         .await
@@ -1693,7 +1721,7 @@ where
             .async_for_account_key_chain_rw_unlocked(
                 account_index,
                 async move |key_chain, store, _chain_config, mut signer| {
-                    signer
+                    let (db_tx, res) = signer
                         .sign_transaction_intent(
                             transaction,
                             &input_destinations,
@@ -1701,8 +1729,8 @@ where
                             key_chain,
                             store,
                         )
-                        .await
-                        .map_err(Into::into)
+                        .await;
+                    (db_tx, res.map_err(Into::into))
                 },
             )
             .await?;
@@ -2235,9 +2263,20 @@ where
                 )
             },
             async move |request, key_chain, store, chain_config, mut signer| {
-                let ptx = request?.into_partially_signed_tx(ptx_additional_info)?;
+                let req = match request {
+                    Ok(x) => x,
+                    Err(e) => {
+                        return (store, Err(e));
+                    }
+                };
+                let ptx = match req.into_partially_signed_tx(ptx_additional_info) {
+                    Ok(x) => x,
+                    Err(e) => {
+                        return (store, Err(e));
+                    }
+                };
 
-                let ptx = signer
+                let (db_tx, res) = signer
                     .sign_tx(
                         ptx,
                         &TokensAdditionalInfo::new(),
@@ -2245,10 +2284,23 @@ where
                         store,
                         next_block_height,
                     )
-                    .await
-                    .map(|(ptx, _, _)| ptx)?;
-                let input_commitments =
-                    ptx.make_sighash_input_commitments_at_height(&chain_config, next_block_height)?;
+                    .await;
+                let ptx = match res {
+                    Ok(x) => x.0,
+                    Err(e) => {
+                        return (db_tx, Err(e.into()));
+                    }
+                };
+
+                let input_commitments = match ptx
+                    .make_sighash_input_commitments_at_height(&chain_config, next_block_height)
+                {
+                    Ok(x) => x,
+                    Err(e) => {
+                        return (db_tx, Err(e.into()));
+                    }
+                };
+
                 let is_fully_signed =
                     ptx.destinations().iter().enumerate().zip(ptx.witnesses()).all(
                         |((i, destination), witness)| match (witness, destination) {
@@ -2270,10 +2322,13 @@ where
                     );
 
                 if is_fully_signed {
-                    return Err(WalletError::FullySignedTransactionInDecommissionReq);
+                    (
+                        db_tx,
+                        Err(WalletError::FullySignedTransactionInDecommissionReq),
+                    )
+                } else {
+                    (db_tx, Ok(ptx))
                 }
-
-                Ok(ptx)
             },
         )
         .await
@@ -2462,7 +2517,7 @@ where
         self.async_for_account_key_chain_rw_unlocked(
             account_index,
             async move |key_chain, store, _chain_config, mut signer| {
-                signer
+                let (db_tx, res) = signer
                     .sign_tx(
                         ptx,
                         tokens_additional_info,
@@ -2470,8 +2525,8 @@ where
                         store,
                         next_block_height,
                     )
-                    .await
-                    .map_err(Into::into)
+                    .await;
+                (db_tx, res.map_err(Into::into))
             },
         )
         .await
@@ -2486,10 +2541,9 @@ where
         self.async_for_account_key_chain_rw_unlocked(
             account_index,
             async move |key_chain, store, _chain_config, mut signer| {
-                signer
-                    .sign_challenge(challenge, destination, key_chain, store)
-                    .await
-                    .map_err(Into::into)
+                let (db_tx, res) =
+                    signer.sign_challenge(challenge, destination, key_chain, store).await;
+                (db_tx, res.map_err(Into::into))
             },
         )
         .await

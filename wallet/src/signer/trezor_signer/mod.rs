@@ -583,38 +583,13 @@ impl TrezorSigner {
         let sig = ArbitraryMessageSignature::from_data(data);
         Ok(sig)
     }
-}
 
-fn find_trezor_device_from_db(
-    db_tx: &impl WalletStorageReadLocked,
-    selected_device_id: Option<String>,
-) -> SignerResult<(Trezor, TrezorFullInfo, Vec<u8>)> {
-    if let Some(device_id) = selected_device_id {
-        return find_trezor_device(Some(SelectedDevice { device_id }))
-            .map_err(SignerError::TrezorError);
-    }
-
-    if let Some(HardwareWalletData::Trezor(data)) = db_tx.get_hardware_wallet_data()? {
-        let selected = SelectedDevice {
-            device_id: data.device_id,
-        };
-
-        find_trezor_device(Some(selected)).map_err(SignerError::TrezorError)
-    } else {
-        Err(SignerError::TrezorError(
-            TrezorError::MissingHardwareWalletData,
-        ))
-    }
-}
-
-#[async_trait]
-impl Signer for TrezorSigner {
-    async fn sign_tx(
+    fn sign_tx_impl<T: WalletStorageReadUnlocked + Send>(
         &mut self,
         ptx: PartiallySignedTransaction,
         tokens_additional_info: &TokensAdditionalInfo,
         key_chain: &(impl AccountKeyChains + Sync),
-        db_tx: impl WalletStorageReadUnlocked + Send,
+        db_tx: &T,
         block_height: BlockHeight,
     ) -> SignerResult<(
         PartiallySignedTransaction,
@@ -626,7 +601,7 @@ impl Signer for TrezorSigner {
             tokens_additional_info,
             key_chain,
             &self.chain_config,
-            &db_tx,
+            db_tx,
         )?;
         let outputs = self.to_trezor_output_msgs(&ptx, tokens_additional_info)?;
         let utxos = to_trezor_utxo_msgs(&ptx, tokens_additional_info, &self.chain_config)?;
@@ -657,7 +632,7 @@ impl Signer for TrezorSigner {
                     input_commitment_version,
                 )
             },
-            &db_tx,
+            db_tx,
             key_chain,
         )?;
 
@@ -846,42 +821,95 @@ impl Signer for TrezorSigner {
 
         Ok((ptx.with_witnesses(witnesses)?, prev_statuses, new_statuses))
     }
+}
 
-    async fn sign_challenge(
+fn find_trezor_device_from_db(
+    db_tx: &impl WalletStorageReadLocked,
+    selected_device_id: Option<String>,
+) -> SignerResult<(Trezor, TrezorFullInfo, Vec<u8>)> {
+    if let Some(device_id) = selected_device_id {
+        return find_trezor_device(Some(SelectedDevice { device_id }))
+            .map_err(SignerError::TrezorError);
+    }
+
+    if let Some(HardwareWalletData::Trezor(data)) = db_tx.get_hardware_wallet_data()? {
+        let selected = SelectedDevice {
+            device_id: data.device_id,
+        };
+
+        find_trezor_device(Some(selected)).map_err(SignerError::TrezorError)
+    } else {
+        Err(SignerError::TrezorError(
+            TrezorError::MissingHardwareWalletData,
+        ))
+    }
+}
+
+#[async_trait]
+impl Signer for TrezorSigner {
+    async fn sign_tx<T: WalletStorageReadUnlocked + Send>(
+        &mut self,
+        ptx: PartiallySignedTransaction,
+        tokens_additional_info: &TokensAdditionalInfo,
+        key_chain: &(impl AccountKeyChains + Sync),
+        db_tx: T,
+        block_height: BlockHeight,
+    ) -> (
+        T,
+        SignerResult<(
+            PartiallySignedTransaction,
+            Vec<SignatureStatus>,
+            Vec<SignatureStatus>,
+        )>,
+    ) {
+        let res = self.sign_tx_impl(ptx, tokens_additional_info, key_chain, &db_tx, block_height);
+        (db_tx, res)
+    }
+
+    async fn sign_challenge<T: WalletStorageReadUnlocked + Send>(
         &mut self,
         message: &[u8],
         destination: &Destination,
         key_chain: &(impl AccountKeyChains + Sync),
-        db_tx: impl WalletStorageReadUnlocked + Send,
-    ) -> SignerResult<ArbitraryMessageSignature> {
-        self.sign_challenge_impl(message, destination, key_chain, &db_tx)
+        db_tx: T,
+    ) -> (T, SignerResult<ArbitraryMessageSignature>) {
+        let res = self.sign_challenge_impl(message, destination, key_chain, &db_tx);
+        (db_tx, res)
     }
 
-    async fn sign_transaction_intent(
+    async fn sign_transaction_intent<T: WalletStorageReadUnlocked + Send>(
         &mut self,
         transaction: &Transaction,
         input_destinations: &[Destination],
         intent: &str,
         key_chain: &(impl AccountKeyChains + Sync),
-        db_tx: impl WalletStorageReadUnlocked + Send,
-    ) -> SignerResult<SignedTransactionIntent> {
+        db_tx: T,
+    ) -> (T, SignerResult<SignedTransactionIntent>) {
         let tx_id = transaction.get_id();
         let message_to_sign = SignedTransactionIntent::get_message_to_sign(intent, &tx_id);
 
         let mut signatures = Vec::with_capacity(input_destinations.len());
         for dest in input_destinations {
             let dest = SignedTransactionIntent::normalize_destination(dest);
-            let sig =
-                self.sign_challenge_impl(message_to_sign.as_bytes(), &dest, key_chain, &db_tx)?;
+            let res =
+                self.sign_challenge_impl(message_to_sign.as_bytes(), &dest, key_chain, &db_tx);
+            let sig = match res {
+                Ok(sig) => sig,
+                Err(e) => return (db_tx, Err(e)),
+            };
             signatures.push(sig.into_raw());
         }
 
-        Ok(SignedTransactionIntent::from_components(
-            message_to_sign,
-            signatures,
-            input_destinations,
-            &self.chain_config,
-        )?)
+        (
+            db_tx,
+            SignedTransactionIntent::from_components(
+                message_to_sign,
+                signatures,
+                input_destinations,
+                &self.chain_config,
+            )
+            .map_err(Into::into),
+        )
     }
 }
 
