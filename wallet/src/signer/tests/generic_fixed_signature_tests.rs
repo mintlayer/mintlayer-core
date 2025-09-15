@@ -373,10 +373,9 @@ pub async fn test_fixed_signatures_generic<MkS, S>(
     let orig_ptx = req.into_partially_signed_tx(additional_info).unwrap();
 
     let mut signer = make_signer(chain_config.clone(), account.account_index());
-    let (ptx, _, _) = signer
-        .sign_tx(orig_ptx, account.key_chain(), db_tx, tx_block_height)
-        .await
-        .unwrap();
+    let (db_tx, res) = signer.sign_tx(orig_ptx, account.key_chain(), db_tx, tx_block_height).await;
+    let (ptx, _, _) = res.unwrap();
+    db_tx.commit().unwrap();
     assert!(ptx.all_signatures_available());
 
     let input_commitments = ptx
@@ -910,18 +909,16 @@ pub async fn test_fixed_signatures_generic2<MkS, S>(
         .map(|comm| comm.deep_clone())
         .collect_vec();
 
-    db_tx.commit().unwrap();
-    let db_tx = db.transaction_ro_unlocked().await.unwrap();
     let mut signer = make_signer(chain_config.clone(), account1.account_index());
-    let (ptx, _, _) =
-        signer.sign_tx(ptx, account1.key_chain(), db_tx, tx_block_height).await.unwrap();
+    let (db_tx, res) = signer.sign_tx(ptx, account1.key_chain(), db_tx, tx_block_height).await;
+    let (ptx, _, _) = res.unwrap();
     assert!(ptx.all_signatures_available());
 
     // Fully sign multisig inputs.
-    let db_tx = db.transaction_ro_unlocked().await.unwrap();
     let mut signer = make_signer(chain_config.clone(), account2.account_index());
-    let (ptx, _, _) =
-        signer.sign_tx(ptx, account2.key_chain(), db_tx, tx_block_height).await.unwrap();
+    let (db_tx, res) = signer.sign_tx(ptx, account2.key_chain(), db_tx, tx_block_height).await;
+    let (ptx, _, _) = res.unwrap();
+    db_tx.commit().unwrap();
     assert!(ptx.all_signatures_available());
 
     for (i, dest) in destinations.iter().enumerate() {

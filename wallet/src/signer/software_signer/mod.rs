@@ -284,15 +284,12 @@ impl SoftwareSigner {
 
         Ok((current_signatures, previous_status, final_status))
     }
-}
 
-#[async_trait]
-impl Signer for SoftwareSigner {
-    async fn sign_tx(
+    fn sign_tx_impl<T: WalletStorageReadUnlocked + Send>(
         &mut self,
         ptx: PartiallySignedTransaction,
         key_chain: &(impl AccountKeyChains + Sync),
-        db_tx: impl WalletStorageReadUnlocked + Send,
+        db_tx: &T,
         block_height: BlockHeight,
     ) -> SignerResult<(
         PartiallySignedTransaction,
@@ -349,7 +346,7 @@ impl Signer for SoftwareSigner {
                                             &input_commitments,
                                             sig_components,
                                             key_chain,
-                                            &db_tx,
+                                            db_tx,
                                         )?;
 
                                     let signature =
@@ -385,7 +382,7 @@ impl Signer for SoftwareSigner {
                                 &input_commitments,
                                 key_chain,
                                 htlc_secret,
-                                &db_tx,
+                                db_tx,
                             )?;
                             Ok((sig, SignatureStatus::NotSigned, status))
                         }
@@ -399,37 +396,65 @@ impl Signer for SoftwareSigner {
 
         Ok((ptx.with_witnesses(witnesses)?, prev_statuses, new_statuses))
     }
+}
 
-    async fn sign_challenge(
+#[async_trait]
+impl Signer for SoftwareSigner {
+    async fn sign_tx<T: WalletStorageReadUnlocked + Send>(
+        &mut self,
+        ptx: PartiallySignedTransaction,
+        key_chain: &(impl AccountKeyChains + Sync),
+        db_tx: T,
+        block_height: BlockHeight,
+    ) -> (
+        T,
+        SignerResult<(
+            PartiallySignedTransaction,
+            Vec<SignatureStatus>,
+            Vec<SignatureStatus>,
+        )>,
+    ) {
+        let res = self.sign_tx_impl(ptx, key_chain, &db_tx, block_height);
+        (db_tx, res)
+    }
+
+    async fn sign_challenge<T: WalletStorageReadUnlocked + Send>(
         &mut self,
         message: &[u8],
         destination: &Destination,
         key_chain: &(impl AccountKeyChains + Sync),
-        db_tx: impl WalletStorageReadUnlocked + Send,
-    ) -> SignerResult<ArbitraryMessageSignature> {
-        let private_key = self
-            .get_private_key_for_destination(destination, key_chain, &db_tx)?
-            .ok_or(SignerError::DestinationNotFromThisWallet)?;
+        db_tx: T,
+    ) -> (T, SignerResult<ArbitraryMessageSignature>) {
+        let private_key = match self.get_private_key_for_destination(destination, key_chain, &db_tx)
+        {
+            Ok(pk) => pk,
+            Err(e) => return (db_tx, Err(e)),
+        };
+
+        let private_key = match private_key.ok_or(SignerError::DestinationNotFromThisWallet) {
+            Ok(pk) => pk,
+            Err(e) => return (db_tx, Err(e)),
+        };
 
         let sig = ArbitraryMessageSignature::produce_uniparty_signature(
             &private_key,
             destination,
             message,
             self.sig_aux_data_provider.lock().expect("poisoned mutex").as_mut(),
-        )?;
+        );
 
-        Ok(sig)
+        (db_tx, sig.map_err(Into::into))
     }
 
-    async fn sign_transaction_intent(
+    async fn sign_transaction_intent<T: WalletStorageReadUnlocked + Send>(
         &mut self,
         transaction: &Transaction,
         input_destinations: &[Destination],
         intent: &str,
         key_chain: &(impl AccountKeyChains + Sync),
-        db_tx: impl WalletStorageReadUnlocked + Send,
-    ) -> SignerResult<SignedTransactionIntent> {
-        SignedTransactionIntent::produce_from_transaction(
+        db_tx: T,
+    ) -> (T, SignerResult<SignedTransactionIntent>) {
+        let res = SignedTransactionIntent::produce_from_transaction(
             transaction,
             input_destinations,
             intent,
@@ -438,7 +463,9 @@ impl Signer for SoftwareSigner {
                     .ok_or(SignerError::DestinationNotFromThisWallet)
             },
             self.sig_aux_data_provider.lock().expect("poisoned mutex").as_mut(),
-        )
+        );
+
+        (db_tx, res)
     }
 }
 
