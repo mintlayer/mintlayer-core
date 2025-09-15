@@ -30,10 +30,10 @@ fn gen_random_password(rng: &mut (impl Rng + CryptoRng)) -> String {
     (0..rng.gen_range(1..100)).map(|_| rng.gen::<char>()).collect()
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn storage_get_default_version_in_tx() {
+#[test]
+fn storage_get_default_version_in_tx() {
     utils::concurrency::model(|| {
-        tokio::runtime::Handle::current().block_on(async {
+        tokio_test::block_on(async {
             let store = Store::new(DefaultBackend::new_in_memory()).await.unwrap();
 
             let mut db_tx = store.transaction_rw(None).await.unwrap();
@@ -49,10 +49,9 @@ async fn storage_get_default_version_in_tx() {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn compare_encrypt_and_decrypt_root_key(#[case] seed: Seed) {
+fn compare_encrypt_and_decrypt_root_key(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        tokio::runtime::Handle::current().block_on(async {
+        tokio_test::block_on(async {
             let mut rng = make_seedable_rng(seed);
             let mut store = Store::new(DefaultBackend::new_in_memory()).await.unwrap();
             let (xpriv_key, _xpub_key) =

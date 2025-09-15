@@ -78,6 +78,12 @@ impl Model {
         Self::from_tx(&dbtx, map_id)
     }
 
+    /// New model obtained by dumping a database
+    pub async fn from_async_db<B: backend::AsyncBackendImpl>(storage: &B, map_id: DbMapId) -> Self {
+        let dbtx = storage.transaction_ro().await.unwrap();
+        Self::from_tx(&dbtx, map_id)
+    }
+
     /// New model obtained by dumping a database in a transaction. May contain uncommitted changes.
     pub fn from_tx<Tx: backend::ReadOps>(tx: &Tx, map_id: DbMapId) -> Self {
         Model(backend::ReadOps::prefix_iter(tx, map_id, Data::new()).unwrap().collect())

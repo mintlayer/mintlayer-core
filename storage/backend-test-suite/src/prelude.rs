@@ -16,7 +16,10 @@
 // Re-export a bunch of often used items
 pub use crate::model::{ApplyActions, Model, WriteAction};
 pub use storage_core::{
-    backend::{Backend, BackendImpl, Data, ReadOps, TxRo, TxRw, WriteOps},
+    backend::{
+        AsyncBackend, AsyncBackendImpl, Backend, BackendImpl, BaseBackend, Data, ReadOps, TxRo,
+        TxRw, WriteOps,
+    },
     DbDesc, DbMapCount, DbMapDesc, DbMapId, DbMapsData,
 };
 pub use utils::{sync, thread};
@@ -24,8 +27,8 @@ pub use utils::{sync, thread};
 pub use std::{mem::drop, sync::Arc};
 
 /// A function to construct a backend
-pub trait BackendFn<B: Backend>: Fn() -> B + Send + Sync + 'static {}
-impl<B: Backend, F: Fn() -> B + Send + Sync + 'static> BackendFn<B> for F {}
+pub trait BackendFn<B>: Fn() -> B + Send + Sync + 'static {}
+impl<B, F: Fn() -> B + Send + Sync + 'static> BackendFn<B> for F {}
 
 /// A couple of DB map ID constants
 pub const MAPID: (DbMapId, DbMapId) = (DbMapId::new(0), DbMapId::new(1));
@@ -36,7 +39,7 @@ pub fn desc(n: usize) -> DbDesc {
 }
 
 /// Run tests with backend using proptest
-pub fn using_proptest<B: Backend, F: BackendFn<B>, S: proptest::prelude::Strategy>(
+pub fn using_proptest<B: BaseBackend, F: BackendFn<B>, S: proptest::prelude::Strategy>(
     source_file: &'static str,
     backend_fn: impl std::ops::Deref<Target = F>,
     strategy: S,
@@ -75,6 +78,20 @@ pub mod support {
             Trial::test(name, test_fn)
         })
     }
+
+    pub fn async_create_tests<B: AsyncBackend + 'static, F: BackendFn<B>>(
+        backend_fn: Arc<F>,
+        tests: impl IntoIterator<Item = (&'static str, fn(Arc<F>))>,
+    ) -> impl Iterator<Item = Trial> {
+        tests.into_iter().map(move |(name, test)| {
+            let backend_fn = Arc::clone(&backend_fn);
+            let test_fn = move || {
+                utils::concurrency::model(move || test(backend_fn.clone()));
+                Ok(())
+            };
+            Trial::test(name, test_fn)
+        })
+    }
 }
 
 macro_rules! tests {
@@ -83,6 +100,18 @@ macro_rules! tests {
             backend_fn: Arc<F>,
         ) -> impl std::iter::Iterator<Item = libtest_mimic::Trial> {
             $crate::prelude::support::create_tests(backend_fn, [
+                $((concat!(module_path!(), "::", stringify!($name)), $name as fn(Arc<F>)),)*
+            ])
+        }
+    }
+}
+
+macro_rules! async_tests {
+    ($($name:path),* $(,)?) => {
+        pub fn async_tests<B: $crate::prelude::AsyncBackend + 'static, F: $crate::prelude::BackendFn<B>>(
+            backend_fn: Arc<F>,
+        ) -> impl std::iter::Iterator<Item = libtest_mimic::Trial> {
+            $crate::prelude::support::async_create_tests(backend_fn, [
                 $((concat!(module_path!(), "::", stringify!($name)), $name as fn(Arc<F>)),)*
             ])
         }
