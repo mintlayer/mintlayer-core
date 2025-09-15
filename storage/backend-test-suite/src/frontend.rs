@@ -22,7 +22,7 @@ use test_utils::random::{gen_random_bytes, make_seedable_rng, Rng};
 
 mod iter_sort_preserving_numbers {
     use serialization::{Decode, Encode};
-    use storage::{decl_schema, MakeMapRef, OrderPreservingValue, Storage};
+    use storage::{decl_schema, AsyncStorage, MakeMapRef, OrderPreservingValue, Storage};
     use utils::sorted::Sorted;
 
     use crate::with_rng_seed;
@@ -98,6 +98,60 @@ mod iter_sort_preserving_numbers {
         });
     }
 
+    pub fn async_test1<B: AsyncBackend, F: BackendFn<B>>(backend_fn: Arc<F>) {
+        use test_schema1::{Schema, TestMap};
+        let storage = AsyncStorage::<_, Schema>::new(backend_fn()).unwrap();
+
+        with_rng_seed(move |seed| {
+            tokio_test::block_on(async move {
+                let mut rng = make_seedable_rng(seed);
+
+                let test_values = (0..100)
+                    .map(|_| CompoundKey1 {
+                        main_part: OrderPreservingValue::new(rng.gen::<u64>()),
+                        aux_part: gen_random_bytes(&mut rng, 1, 100),
+                    })
+                    .collect::<Vec<_>>();
+
+                let mut dbtx = storage.transaction_rw(None).await.unwrap();
+                let mut map = dbtx.get_mut::<TestMap, _>();
+                for val in &test_values {
+                    map.put(val, ()).unwrap();
+                }
+                dbtx.commit().unwrap();
+
+                let sorted_test_values = test_values.clone().sorted_by(|v1, v2| {
+                    // Note: we explicitly sort by "inner".
+                    v1.main_part.inner().cmp(&v2.main_part.inner())
+                });
+
+                let i = rng.gen_range(0..test_values.len() - 1);
+
+                let item = &sorted_test_values[i];
+                let expected_ge_items = &sorted_test_values[i..];
+                let dbtx = storage.transaction_ro().await.unwrap();
+                let ge_items = dbtx
+                    .get::<TestMap, _>()
+                    .greater_equal_iter_keys(item)
+                    .unwrap()
+                    .collect::<Vec<_>>();
+                assert_eq!(ge_items, expected_ge_items);
+
+                // Do the same search, but now with zeroed aux_part.
+                let item_with_zeroed_aux_part = CompoundKey1 {
+                    main_part: item.main_part,
+                    aux_part: vec![0; item.aux_part.len()],
+                };
+                let ge_items = dbtx
+                    .get::<TestMap, _>()
+                    .greater_equal_iter_keys(&item_with_zeroed_aux_part)
+                    .unwrap()
+                    .collect::<Vec<_>>();
+                assert_eq!(ge_items, expected_ge_items);
+            })
+        });
+    }
+
     // test2 is the same as test1 but here we use a tuple instead of a custom struct.
     type CompoundKey2 = (OrderPreservingValue<u64>, Vec<u8>);
 
@@ -162,6 +216,64 @@ mod iter_sort_preserving_numbers {
             assert_eq!(ge_items, expected_ge_items);
         });
     }
+
+    pub fn async_test2<B: AsyncBackend, F: BackendFn<B>>(backend_fn: Arc<F>) {
+        use test_schema2::{Schema, TestMap};
+
+        let storage = AsyncStorage::<_, Schema>::new(backend_fn()).unwrap();
+
+        with_rng_seed(move |seed| {
+            tokio_test::block_on(async move {
+                let mut rng = make_seedable_rng(seed);
+
+                let test_values = (0..100)
+                    .map(|_| {
+                        (
+                            OrderPreservingValue::new(rng.gen::<u64>()),
+                            gen_random_bytes(&mut rng, 1, 100),
+                        )
+                    })
+                    .collect::<Vec<_>>();
+
+                let mut dbtx = storage.transaction_rw(None).await.unwrap();
+                let mut map = dbtx.get_mut::<TestMap, _>();
+                for val in &test_values {
+                    map.put(val, ()).unwrap();
+                }
+                dbtx.commit().unwrap();
+
+                let sorted_test_values = test_values.clone().sorted_by(|v1, v2| {
+                    // Note: we explicitly sort by "inner".
+                    v1.0.inner().cmp(&v2.0.inner())
+                });
+
+                let i = rng.gen_range(0..test_values.len() - 1);
+
+                let item = &sorted_test_values[i];
+                let expected_ge_items = &sorted_test_values[i..];
+                let dbtx = storage.transaction_ro().await.unwrap();
+                let ge_items = dbtx
+                    .get::<TestMap, _>()
+                    .greater_equal_iter_keys(item)
+                    .unwrap()
+                    .collect::<Vec<_>>();
+                assert_eq!(ge_items, expected_ge_items);
+
+                // Do the same search, but now with zeroed aux_part.
+                let item_with_zeroed_aux_part = (item.0, vec![0; item.1.len()]);
+                let ge_items = dbtx
+                    .get::<TestMap, _>()
+                    .greater_equal_iter_keys(&item_with_zeroed_aux_part)
+                    .unwrap()
+                    .collect::<Vec<_>>();
+                assert_eq!(ge_items, expected_ge_items);
+            })
+        });
+    }
 }
 
 tests![iter_sort_preserving_numbers::test1, iter_sort_preserving_numbers::test2];
+async_tests![
+    iter_sort_preserving_numbers::async_test1,
+    iter_sort_preserving_numbers::async_test2
+];

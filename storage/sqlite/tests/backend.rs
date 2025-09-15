@@ -33,17 +33,15 @@ fn main() {
             })
         }
     };
-    drop(create_backend);
 
     // Now run the tests
-    // FIXME: add async tests
-    // let result = storage_backend_test_suite::main(create_backend);
-    //
-    // // Remove the test directory unless there was a failure.
-    // // In case of failure, it is kept to give us the opportunity to inspect database contents.
-    // if !result.has_failed() {
-    //     test_root.delete();
-    // }
-    //
-    // result.exit()
+    let result = storage_backend_test_suite::async_main(create_backend);
+
+    // Remove the test directory unless there was a failure.
+    // In case of failure, it is kept to give us the opportunity to inspect database contents.
+    if !result.has_failed() {
+        test_root.delete();
+    }
+
+    result.exit()
 }

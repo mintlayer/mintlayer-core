@@ -20,7 +20,6 @@ utils = { path = "../../utils" }
 
 async-trait.workspace = true
 thiserror.workspace = true
-tokio.workspace = true
 bip39 = { workspace = true, default-features = false, features = [
   "std",
   "zeroize",
@@ -30,6 +29,7 @@ bip39 = { workspace = true, default-features = false, features = [
 test-utils = { path = "../../test-utils" }
 
 rstest.workspace = true
+tokio-test.workspace = true
 
 [features]
 trezor = ["wallet-types/trezor"]

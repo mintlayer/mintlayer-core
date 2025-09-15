@@ -242,6 +242,7 @@ tokio = { version = "1.27", default-features = false }
 tokio-socks = "0.5"
 tokio-stream = "0.1"
 tokio-util = { version = "0.7", default-features = false }
+tokio-test = "0.4"
 toml = "0.8"
 tower = "0.4"
 tower-http-axum = { package = "tower-http", version = "0.5" }
