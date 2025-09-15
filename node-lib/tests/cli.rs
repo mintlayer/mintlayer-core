@@ -163,6 +163,9 @@ fn read_config_override_values() {
         force_allow_run_as_root_outer: Default::default(),
         enable_chainstate_heavy_checks: Some(enable_chainstate_heavy_checks),
         allow_checkpoints_mismatch: Some(allow_checkpoints_mismatch),
+        // Note: there is no correspondence to this option inside NodeConfigFile;
+        // the contents of the csv file will become part of ChainConfig.
+        custom_checkpoints_csv_file: Some("foo.csv".to_owned().into()),
     };
     let config = NodeConfigFile::read(&chain_config, &config_path, &options).unwrap();
 

@@ -15,6 +15,7 @@
 
 //! Top-level node runner as a library
 
+mod checkpoints_from_file;
 mod config_files;
 mod mock_time;
 pub mod node_controller;
@@ -42,4 +43,12 @@ pub fn default_rpc_config(chain_config: &ChainConfig) -> RpcConfigFile {
 
 pub fn init_logging(_opts: &Options) {
     logging::init_logging()
+}
+
+#[cfg(test)]
+mod tests {
+    #[ctor::ctor]
+    fn init() {
+        logging::init_logging();
+    }
 }

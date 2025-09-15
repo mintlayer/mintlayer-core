@@ -24,17 +24,21 @@ utils-networking = { path = "../utils/networking" }
 
 anyhow.workspace = true
 clap = { workspace = true, features = ["derive"] }
-file-rotate.workspace = true
-jsonrpsee = { workspace = true, features = ["macros"] }
-tokio = { workspace = true, default-features = false }
-serde = { workspace = true, features = ["derive"] }
-toml.workspace = true
+csv.workspace = true
 directories.workspace = true
-paste.workspace = true
+file-rotate.workspace = true
 fs4.workspace = true
+jsonrpsee = { workspace = true, features = ["macros"] }
+paste.workspace = true
+serde = { workspace = true, features = ["derive"] }
+thiserror.workspace = true
+tokio = { workspace = true, default-features = false }
+toml.workspace = true
 
 [dev-dependencies]
 crypto = { path = "../crypto" }
 randomness = { path = "../randomness" }
 
+ctor.workspace = true
+rstest.workspace = true
 tempfile.workspace = true
