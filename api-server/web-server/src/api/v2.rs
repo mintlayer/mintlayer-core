@@ -39,7 +39,8 @@ use common::{
     chain::{
         block::timestamp::BlockTimestamp,
         tokens::{IsTokenFreezable, IsTokenFrozen, IsTokenUnfreezable, TokenId},
-        Block, ChainConfig, Destination, SignedTransaction, Transaction,
+        Block, ChainConfig, Destination, OutPointSourceId, SignedTransaction, Transaction,
+        UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Id, Idable, H256},
 };
@@ -97,7 +98,8 @@ pub fn routes<
     let router = router
         .route("/transaction", get(transactions))
         .route("/transaction/:id", get(transaction))
-        .route("/transaction/:id/merkle-path", get(transaction_merkle_path));
+        .route("/transaction/:id/merkle-path", get(transaction_merkle_path))
+        .route("/transaction/:id/output/:idx", get(transaction_output));
 
     let router = router
         .route("/address/:address", get(address))
@@ -556,6 +558,48 @@ pub async fn transaction<T: ApiServerStorage>(
         "confirmations".into(),
         confirmations.map_or("".to_string(), |c| c.to_string()).into(),
     );
+
+    Ok(Json(json))
+}
+
+pub async fn transaction_output<T: ApiServerStorage>(
+    Path((transaction_id, output_idx)): Path<(String, u32)>,
+    State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
+) -> Result<impl IntoResponse, ApiServerWebServerError> {
+    let transaction_id: Id<Transaction> = H256::from_str(&transaction_id)
+        .map_err(|_| {
+            ApiServerWebServerError::ClientError(
+                ApiServerWebServerClientError::InvalidTransactionId,
+            )
+        })?
+        .into();
+
+    let outpoint = UtxoOutPoint::new(OutPointSourceId::Transaction(transaction_id), output_idx);
+
+    let db_tx = state.db.transaction_ro().await.map_err(|e| {
+        logging::log::error!("internal error: {e}");
+        ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+    })?;
+
+    let utxo = db_tx
+        .get_utxo(outpoint)
+        .await
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?
+        .ok_or(ApiServerWebServerError::NotFound(
+            ApiServerWebServerNotFoundError::TransactionOutputNotFound,
+        ))?;
+
+    let mut json = txoutput_to_json(
+        utxo.output(),
+        &state.chain_config,
+        &TokenDecimals::Single(utxo.utxo_with_extra_info().token_decimals),
+    );
+    let obj = json.as_object_mut().expect("object");
+
+    obj.insert("spent".into(), utxo.spent().into());
 
     Ok(Json(json))
 }
