@@ -63,6 +63,7 @@ pub type SighashInputCommitmentCreationError =
         std::convert::Infallible,
     >;
 
+// FIXME move? Or have a separate one for ptx?
 pub struct TxInputsAdditionalInfo {
     pub pool_info: BTreeMap<PoolId, sighash::input_commitments::PoolInfo>,
     pub order_info: BTreeMap<OrderId, sighash::input_commitments::OrderInfo>,

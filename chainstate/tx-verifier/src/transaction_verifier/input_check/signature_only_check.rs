@@ -16,12 +16,10 @@
 use std::convert::Infallible;
 
 use common::chain::{
-    signature::{
+    partially_signed_transaction::PartiallySignedTransaction, signature::{
         inputsig::InputWitness, sighash::input_commitments::SighashInputCommitment,
         DestinationSigError, Transactable,
-    },
-    tokens::TokenId,
-    ChainConfig, DelegationId, Destination, PoolId, SignedTransaction, TxInput, TxOutput,
+    }, tokens::TokenId, ChainConfig, DelegationId, Destination, PoolId, SignedTransaction, TxInput, TxOutput
 };
 use mintscript::{
     script::ScriptError, translate::InputInfoProvider, InputInfo, SignatureContext, TranslateInput,
@@ -104,6 +102,7 @@ impl<T: Transactable> InputInfoProvider for InputVerifyContextSignature<'_, T> {
 // Prevent BlockRewardTransactable from being used here
 pub trait SignatureOnlyVerifiable {}
 impl SignatureOnlyVerifiable for SignedTransaction {}
+impl SignatureOnlyVerifiable for PartiallySignedTransaction {}
 
 // Note: the passed `outpoint_destination` value is only used in a limited number of scenarios
 // (see `impl SignatureInfoProvider for InputVerifyContextSignature` above). In all other cases

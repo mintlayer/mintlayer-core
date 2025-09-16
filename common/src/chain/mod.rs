@@ -20,6 +20,7 @@ pub mod gen_block;
 pub mod genesis;
 pub mod tokens;
 pub mod transaction;
+pub mod partially_signed_transaction;
 
 mod coin_unit;
 mod make_id;

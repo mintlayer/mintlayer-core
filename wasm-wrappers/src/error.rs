@@ -18,8 +18,7 @@ use wasm_bindgen::JsValue;
 use common::{
     address::AddressError,
     chain::{
-        classic_multisig::ClassicMultisigChallengeError,
-        signature::{
+        classic_multisig::ClassicMultisigChallengeError, partially_signed_transaction::PartiallySignedTransactionError, signature::{
             inputsig::{
                 arbitrary_message::SignArbitraryMessageError,
                 authorize_hashed_timelock_contract_spend::AuthorizedHashedTimelockContractSpendTag,
@@ -27,8 +26,7 @@ use common::{
                 InputWitnessTag,
             },
             DestinationSigError,
-        },
-        IdCreationError, SignedTransactionIntentError, TransactionCreationError,
+        }, IdCreationError, SignedTransactionIntentError, TransactionCreationError
     },
     size_estimation::SizeEstimationError,
 };
@@ -65,6 +63,9 @@ pub enum Error {
 
     #[error("Invalid transaction input utxo encoding: {0}")]
     InvalidInputUtxoEncoding(serialization::Error),
+
+    #[error("Invalid destination encoding: {0}")]
+    InvalidDestinationEncoding(serialization::Error),
 
     #[error("Invalid transaction witness encoding: {0}")]
     InvalidWitnessEncoding(serialization::Error),
@@ -167,6 +168,9 @@ pub enum Error {
 
     #[error("Transaction creation error: {0}")]
     TransactionCreationError(TransactionCreationError),
+
+    #[error("Partially signed transaction creation error: {0}")]
+    PartiallySignedTransactionCreationError(PartiallySignedTransactionError),
 
     #[error("Sighash calculation error: {0}")]
     SighashCalculationError(DestinationSigError),

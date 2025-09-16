@@ -55,7 +55,7 @@ use wallet_types::{
     account_info::DEFAULT_ACCOUNT_INDEX,
     partially_signed_transaction::{
         OrderAdditionalInfo, PartiallySignedTransaction, PartiallySignedTransactionError,
-        TxAdditionalInfo,
+        PartiallySignedTransactionWalletExt as _, TxAdditionalInfo,
     },
     seed_phrase::{PassPhrase, StoreSeedPhrase},
     utxo_types::{UtxoState, UtxoType},
@@ -5069,7 +5069,7 @@ fn sign_decommission_pool_request_between_accounts(#[case] seed: Seed) {
     // remove the signatures and try to sign it again
     let tx = stake_pool_transaction.transaction().clone();
     let inps = tx.inputs().len();
-    let ptx = PartiallySignedTransaction::new(
+    let ptx = PartiallySignedTransaction::new_for_wallet(
         tx,
         vec![None; inps],
         vec![Some(utxo)],
@@ -5555,7 +5555,7 @@ fn test_add_standalone_multisig(#[case] seed: Seed) {
         )],
     )
     .unwrap();
-    let spend_multisig_tx = PartiallySignedTransaction::new(
+    let spend_multisig_tx = PartiallySignedTransaction::new_for_wallet(
         spend_multisig_tx,
         vec![None; 1],
         vec![Some(tx.outputs()[0].clone())],
@@ -5709,7 +5709,7 @@ fn create_htlc_and_spend(#[case] seed: Seed) {
     )
     .unwrap();
     let spend_utxos = vec![create_htlc_tx.transaction().outputs().first().cloned()];
-    let spend_ptx = PartiallySignedTransaction::new(
+    let spend_ptx = PartiallySignedTransaction::new_for_wallet(
         spend_tx,
         vec![None],
         spend_utxos,
@@ -5809,7 +5809,7 @@ fn create_htlc_and_refund(#[case] seed: Seed) {
     )
     .unwrap();
     let refund_utxos = vec![create_htlc_tx.transaction().outputs().first().cloned()];
-    let refund_ptx = PartiallySignedTransaction::new(
+    let refund_ptx = PartiallySignedTransaction::new_for_wallet(
         refund_tx,
         vec![None],
         refund_utxos,
@@ -7875,7 +7875,7 @@ fn conflicting_delegation_account_nonce_multiple_inputs(#[case] seed: Seed) {
     )
     .unwrap();
 
-    let spend_from_delegation_ptx = PartiallySignedTransaction::new(
+    let spend_from_delegation_ptx = PartiallySignedTransaction::new_for_wallet(
         spend_from_delegation_tx,
         vec![None; 3],
         vec![None; 3],

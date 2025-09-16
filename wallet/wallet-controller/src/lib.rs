@@ -110,8 +110,7 @@ pub use wallet_types::{
 use wallet_types::{
     hw_data::HardwareWalletFullInfo,
     partially_signed_transaction::{
-        make_sighash_input_commitments, PartiallySignedTransaction,
-        PartiallySignedTransactionError, SighashInputCommitmentCreationError, TxAdditionalInfo,
+        make_sighash_input_commitments, PartiallySignedTransaction, PartiallySignedTransactionError, PartiallySignedTransactionWalletExt as _, SighashInputCommitmentCreationError, TxAdditionalInfo
     },
     signature_status::SignatureStatus,
     wallet_type::{WalletControllerMode, WalletType},
@@ -1210,7 +1209,7 @@ where
                 .await?
                 .into_iter()
                 .fold(additional_infos, |acc, (_, info)| acc.join(info));
-            let tx = PartiallySignedTransaction::new(
+            let tx = PartiallySignedTransaction::new_for_wallet(
                 tx,
                 vec![None; num_inputs],
                 input_utxos.into_iter().map(Option::Some).collect(),

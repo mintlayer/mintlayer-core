@@ -43,6 +43,7 @@ use common::{
         config::{Builder, BIP44_PATH},
         htlc::HtlcSecret,
         make_delegation_id, make_order_id, make_pool_id, make_token_id,
+        partially_signed_transaction::{self, PartiallySignedTransaction, PartiallySignedTransactionConsistencyCheck},
         signature::{
             inputsig::{
                 arbitrary_message::{produce_message_challenge, ArbitraryMessageSignature},
@@ -986,6 +987,111 @@ pub fn encode_signed_transaction(transaction: &[u8], signatures: &[u8]) -> Resul
 
     let tx = SignedTransaction::new(tx, signatures).map_err(Error::TransactionCreationError)?;
     Ok(tx.encode())
+}
+
+/// Return a PartiallySignedTransaction object as bytes.
+///
+/// `transaction` is an encoded `Transaction` (which can be produced via `encode_transaction`).
+/// 
+/// `signatures`, `input_utxos`, `input_destinations` and `htlc_secrets` are encoded lists of
+/// optional objects of the corresponding type. To produce such a list, iterate over your
+/// original list of optional objects and then:
+/// 1) emit byte 0 if the current object is `None`;
+/// 2) otherwise emit 1 followed by the object in its encoded form.
+/// 
+/// Each individual object in each of the lists corresponds to the transaction input with the same
+/// index and its meaning is as follows:
+///   1) `signatures` - the signature for the input;
+///   2) `input_utxos`- the utxo for the input (if it's utxo-based);
+///   3) `input_destinations` - the destination (address) corresponding to the input, this determines
+///      the key(s) with which the input has to be signed. Note that for utxo-based inputs the
+///      corresponding destination can usually be extracted from the utxo itself (the exception
+///      being the `ProduceBlockFromStake` utxo, which doesn't contain the pool's decommission key).
+///      However, PartiallySignedTransaction requires that *all* input destinations are provided
+///      explicitly anyway.
+///   4) `htlc_secrets` - if the input is an HTLC one and if the transaction is spending the HTLC,
+///      this should be the HTLC secret. Otherwise it should be `None`.
+/// 
+///   The number of items in each list must be equal to the number of transaction inputs.
+/// 
+/// `additional_info` has the same meaning as in `encode_witness`.
+#[wasm_bindgen]
+pub fn encode_partially_signed_transaction(
+    transaction: &[u8],
+    signatures: &[u8],
+    input_utxos: &[u8],
+    input_destinations: &[u8],
+    htlc_secrets: &[u8],
+    additional_info: TxAdditionalInfo,
+    network: Network,
+) -> Result<Vec<u8>, Error> {
+    let chain_config = Builder::new(network.into()).build();
+
+    let signatures = decode_raw_array::<Option<InputWitness>>(signatures)
+        .map_err(Error::InvalidWitnessEncoding)?;
+
+    let tx = Transaction::decode_all(&mut &transaction[..])
+        .map_err(Error::InvalidTransactionEncoding)?;
+
+    let input_utxos = decode_raw_array::<Option<TxOutput>>(input_utxos)
+        .map_err(Error::InvalidInputUtxoEncoding)?;
+
+    let input_destinations = decode_raw_array::<Option<Destination>>(input_destinations)
+        .map_err(Error::InvalidDestinationEncoding)?;
+
+    let htlc_secrets = decode_raw_array::<Option<HtlcSecret>>(htlc_secrets)
+        .map_err(Error::InvalidHtlcSecretEncoding)?;
+
+    let additional_info =
+        TxInputsAdditionalInfo::from_tx_additional_info(&chain_config, &additional_info)?;
+
+    let ptx_additional_info = {
+        let mut ptx_additional_info = partially_signed_transaction::TxAdditionalInfo::new();
+
+        for (order_id, order_info) in additional_info.order_info {
+            ptx_additional_info.add_order_info(
+                order_id,
+                partially_signed_transaction::OrderAdditionalInfo {
+                    initially_asked: order_info.initially_asked,
+                    initially_given: order_info.initially_given,
+                    ask_balance: order_info.ask_balance,
+                    give_balance: order_info.give_balance,
+                },
+            );
+        }
+
+        for (pool_id, pool_info) in additional_info.pool_info {
+            ptx_additional_info.add_pool_info(
+                pool_id,
+                partially_signed_transaction::PoolAdditionalInfo {
+                    staker_balance: pool_info.staker_balance,
+                },
+            );
+        }
+
+        ptx_additional_info
+    };
+
+    let tx = PartiallySignedTransaction::new(
+        tx,
+        signatures,
+        input_utxos,
+        input_destinations,
+        Some(htlc_secrets),
+        ptx_additional_info,
+        PartiallySignedTransactionConsistencyCheck::AdditionalInfoWithoutTokenInfos,
+    )
+    .map_err(Error::PartiallySignedTransactionCreationError)?;
+    Ok(tx.encode())
+}
+
+/// Convert the specified string address into a Destination object, encoded as bytes.
+#[wasm_bindgen]
+pub fn encode_destination(address: &str, network: Network) -> Result<Vec<u8>, Error> {
+    let chain_config = Builder::new(network.into()).build();
+    let destination = parse_addressable::<Destination>(&chain_config, address)?;
+
+    Ok(destination.encode())
 }
 
 /// Given a `Transaction` encoded in bytes (not a signed transaction, but a signed transaction is tolerated by ignoring the extra bytes, by choice)

@@ -41,8 +41,7 @@ use wallet::{
 };
 use wallet_types::{
     partially_signed_transaction::{
-        OrderAdditionalInfo, PartiallySignedTransaction, PoolAdditionalInfo, TokenAdditionalInfo,
-        TxAdditionalInfo,
+        OrderAdditionalInfo, PartiallySignedTransaction, PartiallySignedTransactionWalletExt as _, PoolAdditionalInfo, TokenAdditionalInfo, TxAdditionalInfo
     },
     Currency,
 };
@@ -311,7 +310,7 @@ pub async fn tx_to_partially_signed_tx<T: NodeInterface, B: storage::Backend>(
         .into_iter()
         .fold(additional_infos, |acc, (_, info)| acc.join(info));
 
-    let ptx = PartiallySignedTransaction::new(
+    let ptx = PartiallySignedTransaction::new_for_wallet(
         tx,
         vec![None; num_inputs],
         input_utxos,
