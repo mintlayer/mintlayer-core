@@ -39,7 +39,9 @@ use wallet_storage::{
 };
 use wallet_types::{
     hw_data::HardwareWalletFullInfo,
-    partially_signed_transaction::{PartiallySignedTransaction, PartiallySignedTransactionError},
+    partially_signed_transaction::{
+        PartiallySignedTransaction, PartiallySignedTransactionError, TokensAdditionalInfo,
+    },
     signature_status::SignatureStatus,
     AccountId,
 };
@@ -111,6 +113,7 @@ pub trait Signer {
     fn sign_tx(
         &mut self,
         tx: PartiallySignedTransaction,
+        tokens_additional_info: &TokensAdditionalInfo,
         key_chain: &impl AccountKeyChains,
         db_tx: &impl WalletStorageReadUnlocked,
         block_height: BlockHeight,

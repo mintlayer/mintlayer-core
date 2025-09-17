@@ -5075,11 +5075,11 @@ fn sign_decommission_pool_request_between_accounts(#[case] seed: Seed) {
         vec![Some(utxo)],
         vec![Some(addr.into_object())],
         None,
-        TxAdditionalInfo::new(),
+        PtxAdditionalInfo::new(),
     )
     .unwrap();
     let stake_pool_transaction = wallet
-        .sign_raw_transaction(acc_0_index, ptx)
+        .sign_raw_transaction(acc_0_index, ptx, &TokensAdditionalInfo::new())
         .unwrap()
         .0
         .into_signed_tx()
@@ -5108,17 +5108,26 @@ fn sign_decommission_pool_request_between_accounts(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::from_atoms(0)),
         )
         .unwrap();
+    let tokens_additional_info = TokensAdditionalInfo::new();
 
     // Try to sign decommission request with wrong account
     let sign_from_acc0_res = wallet
-        .sign_raw_transaction(acc_0_index, decommission_partial_tx.clone())
+        .sign_raw_transaction(
+            acc_0_index,
+            decommission_partial_tx.clone(),
+            &tokens_additional_info,
+        )
         .unwrap()
         .0;
     // the tx is still not fully signed
     assert!(!sign_from_acc0_res.all_signatures_available());
 
     let signed_tx = wallet
-        .sign_raw_transaction(acc_1_index, decommission_partial_tx)
+        .sign_raw_transaction(
+            acc_1_index,
+            decommission_partial_tx,
+            &tokens_additional_info,
+        )
         .unwrap()
         .0
         .into_signed_tx()
@@ -5201,10 +5210,15 @@ fn sign_decommission_pool_request_cold_wallet(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::from_atoms(0)),
         )
         .unwrap();
+    let tokens_additional_info = TokensAdditionalInfo::new();
 
     // sign the tx with cold wallet
     let partially_signed_transaction = cold_wallet
-        .sign_raw_transaction(DEFAULT_ACCOUNT_INDEX, decommission_partial_tx)
+        .sign_raw_transaction(
+            DEFAULT_ACCOUNT_INDEX,
+            decommission_partial_tx,
+            &tokens_additional_info,
+        )
         .unwrap()
         .0;
     assert!(partially_signed_transaction.all_signatures_available());
@@ -5212,7 +5226,11 @@ fn sign_decommission_pool_request_cold_wallet(#[case] seed: Seed) {
     // sign it with the hot wallet should leave the signatures in place even if it can't find the
     // destinations for the inputs
     let partially_signed_transaction = hot_wallet
-        .sign_raw_transaction(DEFAULT_ACCOUNT_INDEX, partially_signed_transaction)
+        .sign_raw_transaction(
+            DEFAULT_ACCOUNT_INDEX,
+            partially_signed_transaction,
+            &tokens_additional_info,
+        )
         .unwrap()
         .0;
     assert!(partially_signed_transaction.all_signatures_available());
@@ -5371,13 +5389,18 @@ fn sign_send_request_cold_wallet(#[case] seed: Seed) {
             [(Currency::Coin, cold_wallet_address.clone())].into(),
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
-            TxAdditionalInfo::new(),
+            PtxAdditionalInfo::new(),
         )
         .unwrap();
+    let tokens_additional_info = TokensAdditionalInfo::new();
 
     // Try to sign request with the hot wallet
     let tx = hot_wallet
-        .sign_raw_transaction(DEFAULT_ACCOUNT_INDEX, send_req.clone())
+        .sign_raw_transaction(
+            DEFAULT_ACCOUNT_INDEX,
+            send_req.clone(),
+            &tokens_additional_info,
+        )
         .unwrap()
         .0;
     // the tx is not fully signed
@@ -5385,7 +5408,7 @@ fn sign_send_request_cold_wallet(#[case] seed: Seed) {
 
     // sign the tx with cold wallet
     let signed_tx = cold_wallet
-        .sign_raw_transaction(DEFAULT_ACCOUNT_INDEX, send_req)
+        .sign_raw_transaction(DEFAULT_ACCOUNT_INDEX, send_req, &tokens_additional_info)
         .unwrap()
         .0
         .into_signed_tx()
@@ -5561,33 +5584,46 @@ fn test_add_standalone_multisig(#[case] seed: Seed) {
         vec![Some(tx.outputs()[0].clone())],
         vec![Some(multisig_address.as_object().clone())],
         None,
-        TxAdditionalInfo::new(),
+        PtxAdditionalInfo::new(),
     )
     .unwrap();
+    let tokens_additional_info = TokensAdditionalInfo::new();
 
     // sign it with wallet1
-    let (ptx, _, statuses) =
-        wallet1.sign_raw_transaction(DEFAULT_ACCOUNT_INDEX, spend_multisig_tx).unwrap();
+    let (ptx, _, statuses) = wallet1
+        .sign_raw_transaction(
+            DEFAULT_ACCOUNT_INDEX,
+            spend_multisig_tx,
+            &tokens_additional_info,
+        )
+        .unwrap();
 
     // check it is still not fully signed
     assert!(ptx.all_signatures_available());
     assert!(!statuses.iter().all(|s| *s == SignatureStatus::FullySigned));
 
     // try to sign it with wallet1 again
-    let (ptx, _, statuses) = wallet1.sign_raw_transaction(DEFAULT_ACCOUNT_INDEX, ptx).unwrap();
+    let (ptx, _, statuses) = wallet1
+        .sign_raw_transaction(DEFAULT_ACCOUNT_INDEX, ptx, &tokens_additional_info)
+        .unwrap();
 
     // check it is still not fully signed
     assert!(ptx.all_signatures_available());
     assert!(!statuses.iter().all(|s| *s == SignatureStatus::FullySigned));
 
     // try to sign it with wallet2 but wallet2 does not have the multisig added as standalone
-    let ptx = wallet2.sign_raw_transaction(DEFAULT_ACCOUNT_INDEX, ptx).unwrap().0;
+    let ptx = wallet2
+        .sign_raw_transaction(DEFAULT_ACCOUNT_INDEX, ptx, &tokens_additional_info)
+        .unwrap()
+        .0;
 
     // add it to wallet2 as well
     wallet2.add_standalone_multisig(DEFAULT_ACCOUNT_INDEX, challenge, None).unwrap();
 
     // now we can sign it
-    let (ptx, _, statuses) = wallet2.sign_raw_transaction(DEFAULT_ACCOUNT_INDEX, ptx).unwrap();
+    let (ptx, _, statuses) = wallet2
+        .sign_raw_transaction(DEFAULT_ACCOUNT_INDEX, ptx, &tokens_additional_info)
+        .unwrap();
 
     // now it is fully signed
     assert!(ptx.all_signatures_available());
@@ -5715,12 +5751,14 @@ fn create_htlc_and_spend(#[case] seed: Seed) {
         spend_utxos,
         vec![Some(spend_key.into_object())],
         Some(vec![Some(secret)]),
-        TxAdditionalInfo::new(),
+        PtxAdditionalInfo::new(),
     )
     .unwrap();
+    let tokens_additional_info = TokensAdditionalInfo::new();
 
-    let (spend_ptx, _, new_statuses) =
-        wallet2.sign_raw_transaction(DEFAULT_ACCOUNT_INDEX, spend_ptx).unwrap();
+    let (spend_ptx, _, new_statuses) = wallet2
+        .sign_raw_transaction(DEFAULT_ACCOUNT_INDEX, spend_ptx, &tokens_additional_info)
+        .unwrap();
     assert_eq!(vec![SignatureStatus::FullySigned], new_statuses);
 
     let spend_tx = spend_ptx.into_signed_tx().unwrap();
@@ -5815,7 +5853,7 @@ fn create_htlc_and_refund(#[case] seed: Seed) {
         refund_utxos,
         vec![Some(refund_key)],
         None,
-        TxAdditionalInfo::new(),
+        PtxAdditionalInfo::new(),
     )
     .unwrap();
 
@@ -5851,8 +5889,11 @@ fn create_htlc_and_refund(#[case] seed: Seed) {
         .unwrap();
     assert_eq!(wallet2_multisig_utxos.len(), 1);
 
-    let (refund_ptx, prev_statuses, new_statuses) =
-        wallet2.sign_raw_transaction(DEFAULT_ACCOUNT_INDEX, refund_ptx).unwrap();
+    let tokens_additional_info = TokensAdditionalInfo::new();
+
+    let (refund_ptx, prev_statuses, new_statuses) = wallet2
+        .sign_raw_transaction(DEFAULT_ACCOUNT_INDEX, refund_ptx, &tokens_additional_info)
+        .unwrap();
 
     assert_eq!(vec![SignatureStatus::NotSigned], prev_statuses);
     assert_eq!(
@@ -5863,8 +5904,9 @@ fn create_htlc_and_refund(#[case] seed: Seed) {
         new_statuses
     );
 
-    let (refund_ptx, prev_statuses, new_statuses) =
-        wallet1.sign_raw_transaction(DEFAULT_ACCOUNT_INDEX, refund_ptx).unwrap();
+    let (refund_ptx, prev_statuses, new_statuses) = wallet1
+        .sign_raw_transaction(DEFAULT_ACCOUNT_INDEX, refund_ptx, &tokens_additional_info)
+        .unwrap();
     assert_eq!(
         vec![SignatureStatus::PartialMultisig {
             required_signatures: 2,
@@ -7881,12 +7923,17 @@ fn conflicting_delegation_account_nonce_multiple_inputs(#[case] seed: Seed) {
         vec![None; 3],
         vec![Some(spend_destination); 3],
         None,
-        TxAdditionalInfo::new(),
+        PtxAdditionalInfo::new(),
     )
     .unwrap();
+    let tokens_additional_info = TokensAdditionalInfo::new();
 
     let spend_from_delegation_signed_tx = wallet
-        .sign_raw_transaction(DEFAULT_ACCOUNT_INDEX, spend_from_delegation_ptx)
+        .sign_raw_transaction(
+            DEFAULT_ACCOUNT_INDEX,
+            spend_from_delegation_ptx,
+            &tokens_additional_info,
+        )
         .unwrap()
         .0
         .into_signed_tx()

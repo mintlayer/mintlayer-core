@@ -43,7 +43,9 @@ use common::{
         config::{Builder, BIP44_PATH},
         htlc::HtlcSecret,
         make_delegation_id, make_order_id, make_pool_id, make_token_id,
-        partially_signed_transaction::{self, PartiallySignedTransaction, PartiallySignedTransactionConsistencyCheck},
+        partially_signed_transaction::{
+            self, PartiallySignedTransaction, PartiallySignedTransactionConsistencyCheck,
+        },
         signature::{
             inputsig::{
                 arbitrary_message::{produce_message_challenge, ArbitraryMessageSignature},
@@ -992,13 +994,13 @@ pub fn encode_signed_transaction(transaction: &[u8], signatures: &[u8]) -> Resul
 /// Return a PartiallySignedTransaction object as bytes.
 ///
 /// `transaction` is an encoded `Transaction` (which can be produced via `encode_transaction`).
-/// 
+///
 /// `signatures`, `input_utxos`, `input_destinations` and `htlc_secrets` are encoded lists of
 /// optional objects of the corresponding type. To produce such a list, iterate over your
 /// original list of optional objects and then:
 /// 1) emit byte 0 if the current object is `None`;
 /// 2) otherwise emit 1 followed by the object in its encoded form.
-/// 
+///
 /// Each individual object in each of the lists corresponds to the transaction input with the same
 /// index and its meaning is as follows:
 ///   1) `signatures` - the signature for the input;
@@ -1011,9 +1013,9 @@ pub fn encode_signed_transaction(transaction: &[u8], signatures: &[u8]) -> Resul
 ///      explicitly anyway.
 ///   4) `htlc_secrets` - if the input is an HTLC one and if the transaction is spending the HTLC,
 ///      this should be the HTLC secret. Otherwise it should be `None`.
-/// 
+///
 ///   The number of items in each list must be equal to the number of transaction inputs.
-/// 
+///
 /// `additional_info` has the same meaning as in `encode_witness`.
 #[wasm_bindgen]
 pub fn encode_partially_signed_transaction(
@@ -1079,7 +1081,7 @@ pub fn encode_partially_signed_transaction(
         input_destinations,
         Some(htlc_secrets),
         ptx_additional_info,
-        PartiallySignedTransactionConsistencyCheck::AdditionalInfoWithoutTokenInfos,
+        PartiallySignedTransactionConsistencyCheck::WithAdditionalInfo,
     )
     .map_err(Error::PartiallySignedTransactionCreationError)?;
     Ok(tx.encode())

@@ -43,39 +43,23 @@ use crate::{
 
 mod additional_info;
 
-pub use additional_info::{
-    OrderAdditionalInfo, PoolAdditionalInfo, TokenAdditionalInfo, TxAdditionalInfo,
-};
+pub use additional_info::{OrderAdditionalInfo, PoolAdditionalInfo, TxAdditionalInfo};
 
 /// This determines what should be checked when a PartiallySignedTransaction is constructed.
 pub enum PartiallySignedTransactionConsistencyCheck {
     /// Only do the cheap basic checks.
     Basic,
 
-    /// Also check consistency of additional info, but don't check token infos.
-    ///
-    /// This assumes that this PartiallySignedTransaction is not intended to be passed to
-    /// a hardware wallet.
-    AdditionalInfoWithoutTokenInfos,
-
-    /// Check consistency of additional info, including the presence of  token infos.
-    AdditionalInfoWithTokenInfos,
+    /// Also check consistency of additional info.
+    WithAdditionalInfo,
 }
 
 /// A partially signed transaction, which contains the transaction itself, some of the signatures
-/// and certain additional info.
-/// 
-/// Note:
-/// 1) The additional info can be divided in two parts:
-///    a) the info needed to produce signatures (input_utxos, destinations, htlc_secrets,
-///       TxAdditionalInfo except for the tokens info part);
-///    b) the info that is only needed when PartiallySignedTransaction is passed to a hardware
-///       wallet, so that it can be shown to the user (the token infos part of TxAdditionalInfo).
-///    The latter is legacy of the past, when PartiallySignedTransaction was part of the wallet.
-///    TODO: get rid of it.
-/// 2) Currently PartiallySignedTransaction's consistency checks require that the info is present
-///    even if the inputs that need it are already signed.
-/// 
+/// and certain additional info, which is required to produce signatures.
+///
+/// Note: currently PartiallySignedTransaction's consistency checks require that the additional info
+/// is present even if the inputs that need it are already signed.
+///
 /// Regarding the ability to refactor it, making non-backward-compatible changes.
 /// Currently PartiallySignedTransaction is used:
 /// 1) By the wallet. In this case the encoded transaction is supposed to be short-lived,
@@ -171,11 +155,8 @@ impl PartiallySignedTransaction {
 
         match cosnsitency_check {
             PartiallySignedTransactionConsistencyCheck::Basic => {}
-            PartiallySignedTransactionConsistencyCheck::AdditionalInfoWithoutTokenInfos => {
-                self.ensure_additional_info_completeness(false)?
-            }
-            PartiallySignedTransactionConsistencyCheck::AdditionalInfoWithTokenInfos => {
-                self.ensure_additional_info_completeness(true)?
+            PartiallySignedTransactionConsistencyCheck::WithAdditionalInfo => {
+                self.ensure_additional_info_completeness()?;
             }
         }
 
@@ -183,26 +164,13 @@ impl PartiallySignedTransaction {
     }
 
     // FIXME tests
-    fn ensure_additional_info_completeness(
-        &self,
-        check_token_infos: bool,
-    ) -> Result<(), PartiallySignedTransactionError> {
+    fn ensure_additional_info_completeness(&self) -> Result<(), PartiallySignedTransactionError> {
         let ensure_order_info_present =
             |order_id: &OrderId| -> Result<_, PartiallySignedTransactionError> {
                 ensure!(
                     self.additional_info.get_order_info(order_id).is_some(),
                     PartiallySignedTransactionError::OrderAdditionalInfoMissing(*order_id)
                 );
-                Ok(())
-            };
-        let ensure_token_info_present =
-            |token_id: &TokenId| -> Result<_, PartiallySignedTransactionError> {
-                if check_token_infos {
-                    ensure!(
-                        self.additional_info.get_token_info(token_id).is_some(),
-                        PartiallySignedTransactionError::TokenAdditionalInfoMissing(*token_id)
-                    );
-                }
                 Ok(())
             };
 
@@ -216,30 +184,20 @@ impl PartiallySignedTransaction {
             Ok(())
         };
 
-        let check_tx_output = |output: &TxOutput,
-                               is_input_utxo: bool|
-         -> Result<(), PartiallySignedTransactionError> {
+        let check_utxo = |output: &TxOutput| -> Result<(), PartiallySignedTransactionError> {
             match output {
-                TxOutput::Transfer(output_value, _)
-                | TxOutput::LockThenTransfer(output_value, _, _)
-                | TxOutput::Burn(output_value)
-                | TxOutput::Htlc(output_value, _) => {
-                    output_value.token_v1_id().map(ensure_token_info_present).transpose()?;
-                }
-                TxOutput::CreateOrder(order_data) => {
-                    order_data.ask().token_v1_id().map(ensure_token_info_present).transpose()?;
-                    order_data.give().token_v1_id().map(ensure_token_info_present).transpose()?;
-                }
                 TxOutput::ProduceBlockFromStake(_, pool_id) => {
-                    if is_input_utxo {
-                        ensure!(
-                            self.additional_info.get_pool_info(pool_id).is_some(),
-                            PartiallySignedTransactionError::PoolAdditionalInfoMissing(*pool_id)
-                        );
-                    }
+                    ensure!(
+                        self.additional_info.get_pool_info(pool_id).is_some(),
+                        PartiallySignedTransactionError::PoolAdditionalInfoMissing(*pool_id)
+                    );
                 }
-
-                TxOutput::CreateDelegationId(_, _)
+                TxOutput::Transfer(_, _)
+                | TxOutput::LockThenTransfer(_, _, _)
+                | TxOutput::Burn(_)
+                | TxOutput::Htlc(_, _)
+                | TxOutput::CreateOrder(_)
+                | TxOutput::CreateDelegationId(_, _)
                 | TxOutput::DelegateStaking(_, _)
                 | TxOutput::IssueFungibleToken(_)
                 | TxOutput::CreateStakePool(_, _)
@@ -257,7 +215,7 @@ impl PartiallySignedTransaction {
                     let input_utxo = input_utxo.as_ref().ok_or(
                         PartiallySignedTransactionError::MissingUtxoForUtxoInput { input_index },
                     )?;
-                    check_tx_output(input_utxo, true)?;
+                    check_utxo(input_utxo)?;
                 }
                 TxInput::Account(_) => ensure_no_utxo(input_index, input_utxo)?,
                 TxInput::AccountCommand(_, command) => {
@@ -285,27 +243,6 @@ impl PartiallySignedTransaction {
                         OrderAccountCommand::FreezeOrder(_) => {}
                     };
                 }
-            }
-        }
-
-        if check_token_infos {
-            // Note: in the "is_input_utxo = false" case, `check_tx_output` only checks the
-            // token infos, this is why the loop is inside "if check_token_infos".
-            for output in self.tx.outputs() {
-                check_tx_output(output, false)?;
-            }
-
-            for (_, order_info) in self.additional_info.order_info_iter() {
-                order_info
-                    .initially_asked
-                    .token_v1_id()
-                    .map(ensure_token_info_present)
-                    .transpose()?;
-                order_info
-                    .initially_given
-                    .token_v1_id()
-                    .map(ensure_token_info_present)
-                    .transpose()?;
             }
         }
 

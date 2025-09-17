@@ -81,7 +81,7 @@ use wallet_types::chain_info::ChainInfo;
 use wallet_types::hw_data::HardwareWalletFullInfo;
 use wallet_types::partially_signed_transaction::{
     PartiallySignedTransaction, PartiallySignedTransactionError, PoolAdditionalInfo,
-    TokenAdditionalInfo, TxAdditionalInfo,
+    PtxAdditionalInfo, TokenAdditionalInfo, TokensAdditionalInfo, TxAdditionalInfo,
 };
 use wallet_types::seed_phrase::SerializableSeedPhrase;
 use wallet_types::signature_status::SignatureStatus;
@@ -1144,12 +1144,18 @@ where
             |account, db_tx, chain_config, signer_provider| {
                 let (mut request, additional_data) = f(account, db_tx)?;
                 let fees = request.get_fees();
-                let ptx = request.into_partially_signed_tx(additional_info)?;
+                let ptx = request.into_partially_signed_tx(additional_info.ptx_additional_info)?;
 
                 let mut signer =
                     signer_provider.provide(Arc::new(chain_config.clone()), account_index);
                 let ptx = signer
-                    .sign_tx(ptx, account.key_chain(), db_tx, next_block_height)
+                    .sign_tx(
+                        ptx,
+                        &additional_info.tokens_additional_info,
+                        account.key_chain(),
+                        db_tx,
+                        next_block_height,
+                    )
                     .map(|(ptx, _, _)| ptx)?;
 
                 let input_commitments =
@@ -1664,7 +1670,7 @@ where
         change_addresses: BTreeMap<Currency, Address<Destination>>,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
-        additional_info: TxAdditionalInfo,
+        ptx_additional_info: PtxAdditionalInfo,
     ) -> WalletResult<(PartiallySignedTransaction, BTreeMap<Currency, Amount>)> {
         let request = SendRequest::new().with_outputs(outputs);
         let latest_median_time = self.latest_median_time;
@@ -1680,7 +1686,7 @@ where
                     current_fee_rate,
                     consolidate_fee_rate,
                 },
-                additional_info,
+                ptx_additional_info,
             )
         })
     }
@@ -2110,8 +2116,8 @@ where
         let (_, best_block_height) = self.get_best_block_for_account(account_index)?;
         let next_block_height = best_block_height.next_height();
 
-        let additional_info =
-            TxAdditionalInfo::new().with_pool_info(pool_id, PoolAdditionalInfo { staker_balance });
+        let ptx_additional_info =
+            PtxAdditionalInfo::new().with_pool_info(pool_id, PoolAdditionalInfo { staker_balance });
         self.for_account_rw_unlocked(
             account_index,
             |account, db_tx, chain_config, signer_provider| {
@@ -2123,12 +2129,18 @@ where
                     current_fee_rate,
                 )?;
 
-                let ptx = request.into_partially_signed_tx(additional_info)?;
+                let ptx = request.into_partially_signed_tx(ptx_additional_info)?;
 
                 let mut signer =
                     signer_provider.provide(Arc::new(chain_config.clone()), account_index);
                 let ptx = signer
-                    .sign_tx(ptx, account.key_chain(), db_tx, next_block_height)
+                    .sign_tx(
+                        ptx,
+                        &TokensAdditionalInfo::new(),
+                        account.key_chain(),
+                        db_tx,
+                        next_block_height,
+                    )
                     .map(|(ptx, _, _)| ptx)?;
 
                 if ptx.all_signatures_available() {
@@ -2304,6 +2316,7 @@ where
         &mut self,
         account_index: U31,
         ptx: PartiallySignedTransaction,
+        tokens_additional_info: &TokensAdditionalInfo,
     ) -> WalletResult<(
         PartiallySignedTransaction,
         Vec<SignatureStatus>,
@@ -2318,7 +2331,13 @@ where
                 let mut signer =
                     signer_provider.provide(Arc::new(chain_config.clone()), account_index);
 
-                let res = signer.sign_tx(ptx, account.key_chain(), db_tx, next_block_height)?;
+                let res = signer.sign_tx(
+                    ptx,
+                    tokens_additional_info,
+                    account.key_chain(),
+                    db_tx,
+                    next_block_height,
+                )?;
                 Ok(res)
             },
         )

@@ -30,7 +30,9 @@ use common::primitives::{Amount, BlockHeight};
 use crypto::vrf::VRFPublicKey;
 use utils::ensure;
 use wallet_types::currency::Currency;
-use wallet_types::partially_signed_transaction::{PartiallySignedTransaction, PartiallySignedTransactionWalletExt as _, TxAdditionalInfo};
+use wallet_types::partially_signed_transaction::{
+    PartiallySignedTransaction, PartiallySignedTransactionWalletExt as _, PtxAdditionalInfo,
+};
 
 use crate::account::PoolData;
 use crate::destination_getters::{get_tx_output_destination, HtlcSpendingCondition};
@@ -313,7 +315,7 @@ impl SendRequest {
 
     pub fn into_partially_signed_tx(
         self,
-        additional_info: TxAdditionalInfo,
+        additional_info: PtxAdditionalInfo,
     ) -> WalletResult<PartiallySignedTransaction> {
         let num_inputs = self.inputs.len();
         let destinations = self.destinations.into_iter().map(Some).collect();

@@ -21,24 +21,10 @@ use crate::{
     chain::{
         output_value::OutputValue,
         signature::sighash::{self},
-        tokens::TokenId,
         OrderId, PoolId,
     },
     primitives::Amount,
 };
-
-// TODO: get rid of TokenAdditionalInfo here. Currently it's only used when
-// PartiallySignedTransaction is passed to a hardware wallet and it provides
-// the wallet with the token info to show to the user during signing.
-// The problem is that this info should not be trusted by the hardware wallet
-// anyway. A hardware wallet should only trust external token infos that are
-// signed by a predefined key, but such signed infos should not be part of
-// PartiallySignedTransaction anyway.
-#[derive(Debug, Eq, PartialEq, Clone, Encode, Decode)]
-pub struct TokenAdditionalInfo {
-    pub num_decimals: u8,
-    pub ticker: Vec<u8>,
-}
 
 /// Pool additional info, which must be present for each ProduceBlockFromStake UTXO consumed by
 /// the transaction. Transaction's signature commits to this info since SighashInputCommitments::V1.
@@ -51,7 +37,7 @@ pub struct PoolAdditionalInfo {
 
 /// Order additional info, which must be present for each FillOrder and ConcludeOrder input consumed
 /// by the transaction. Transaction's signature commits to this info since SighashInputCommitments::V1.
-/// 
+///
 /// Note though that only ConcludeOrder commitments include both initial and current balances,
 /// while FillOrder commitments only include the initial ones. So this info representation
 /// is not ideal, as it forces the caller to provide additional info that will not actually
@@ -67,9 +53,10 @@ pub struct OrderAdditionalInfo {
     pub give_balance: Amount,
 }
 
+// FIXME: Rename to PtxAdditionalInfo ?
 #[derive(Debug, Eq, PartialEq, Clone, Encode, Decode)]
 pub struct TxAdditionalInfo {
-    token_info: BTreeMap<TokenId, TokenAdditionalInfo>,
+    // token_info: BTreeMap<TokenId, TokenAdditionalInfo>,
     pool_info: BTreeMap<PoolId, PoolAdditionalInfo>,
     order_info: BTreeMap<OrderId, OrderAdditionalInfo>,
 }
@@ -77,15 +64,10 @@ pub struct TxAdditionalInfo {
 impl TxAdditionalInfo {
     pub fn new() -> Self {
         Self {
-            token_info: BTreeMap::new(),
+            // token_info: BTreeMap::new(),
             pool_info: BTreeMap::new(),
             order_info: BTreeMap::new(),
         }
-    }
-
-    pub fn with_token_info(mut self, token_id: TokenId, info: TokenAdditionalInfo) -> Self {
-        self.token_info.insert(token_id, info);
-        self
     }
 
     pub fn with_pool_info(mut self, pool_id: PoolId, info: PoolAdditionalInfo) -> Self {
@@ -98,10 +80,6 @@ impl TxAdditionalInfo {
         self
     }
 
-    pub fn add_token_info(&mut self, token_id: TokenId, info: TokenAdditionalInfo) {
-        self.token_info.insert(token_id, info);
-    }
-
     pub fn add_pool_info(&mut self, pool_id: PoolId, info: PoolAdditionalInfo) {
         self.pool_info.insert(pool_id, info);
     }
@@ -111,18 +89,14 @@ impl TxAdditionalInfo {
     }
 
     pub fn join(mut self, other: Self) -> Self {
-        self.token_info.extend(other.token_info);
+        // self.token_info.extend(other.token_info);
         self.pool_info.extend(other.pool_info);
         self.order_info.extend(other.order_info);
         Self {
-            token_info: self.token_info,
+            // token_info: self.token_info,
             pool_info: self.pool_info,
             order_info: self.order_info,
         }
-    }
-
-    pub fn get_token_info(&self, token_id: &TokenId) -> Option<&TokenAdditionalInfo> {
-        self.token_info.get(token_id)
     }
 
     pub fn get_pool_info(&self, pool_id: &PoolId) -> Option<&PoolAdditionalInfo> {
@@ -131,10 +105,6 @@ impl TxAdditionalInfo {
 
     pub fn get_order_info(&self, order_id: &OrderId) -> Option<&OrderAdditionalInfo> {
         self.order_info.get(order_id)
-    }
-
-    pub fn token_info_iter(&self) -> impl Iterator<Item = (&'_ TokenId, &'_ TokenAdditionalInfo)> {
-        self.token_info.iter()
     }
 
     pub fn pool_info_iter(&self) -> impl Iterator<Item = (&'_ PoolId, &'_ PoolAdditionalInfo)> {

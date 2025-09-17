@@ -110,7 +110,9 @@ pub use wallet_types::{
 use wallet_types::{
     hw_data::HardwareWalletFullInfo,
     partially_signed_transaction::{
-        make_sighash_input_commitments, PartiallySignedTransaction, PartiallySignedTransactionError, PartiallySignedTransactionWalletExt as _, SighashInputCommitmentCreationError, TxAdditionalInfo
+        make_sighash_input_commitments, PartiallySignedTransaction,
+        PartiallySignedTransactionError, PartiallySignedTransactionWalletExt as _,
+        PtxAdditionalInfo, SighashInputCommitmentCreationError,
     },
     signature_status::SignatureStatus,
     wallet_type::{WalletControllerMode, WalletType},
@@ -1195,27 +1197,27 @@ where
                 .collect::<Result<Vec<_>, WalletError>>()
                 .map_err(ControllerError::WalletError)?;
 
-            let (input_utxos, additional_infos) =
+            let (input_utxos, ptx_additional_info) =
                 self.fetch_utxos_extra_info(input_utxos).await?.into_iter().fold(
-                    (Vec::new(), TxAdditionalInfo::new()),
+                    (Vec::new(), PtxAdditionalInfo::new()),
                     |(mut input_utxos, additional_info), (x, y)| {
                         input_utxos.push(x);
                         (input_utxos, additional_info.join(y))
                     },
                 );
 
-            let additional_infos = self
+            let ptx_additional_info = self
                 .fetch_utxos_extra_info(tx.outputs().to_vec())
                 .await?
                 .into_iter()
-                .fold(additional_infos, |acc, (_, info)| acc.join(info));
+                .fold(ptx_additional_info, |acc, (_, info)| acc.join(info));
             let tx = PartiallySignedTransaction::new_for_wallet(
                 tx,
                 vec![None; num_inputs],
                 input_utxos.into_iter().map(Option::Some).collect(),
                 destinations.into_iter().map(Option::Some).collect(),
                 htlc_secrets,
-                additional_infos,
+                ptx_additional_info,
             )?;
 
             TransactionToSign::Partial(tx)
@@ -1302,7 +1304,7 @@ where
     async fn fetch_utxos_extra_info(
         &self,
         inputs: Vec<TxOutput>,
-    ) -> Result<Vec<(TxOutput, TxAdditionalInfo)>, ControllerError<N>> {
+    ) -> Result<Vec<(TxOutput, PtxAdditionalInfo)>, ControllerError<N>> {
         let tasks: FuturesOrdered<_> = inputs
             .into_iter()
             .map(|input| fetch_utxo_extra_info(&self.rpc_client, input))
