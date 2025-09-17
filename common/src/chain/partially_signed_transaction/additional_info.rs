@@ -26,11 +26,18 @@ use crate::{
     primitives::Amount,
 };
 
+// Note: PoolAdditionalInfo and OrderAdditionalInfo below are identical to the corresponding
+// structs in `input_commitments/info_providers.rs` (except that those don't derive Encode/Decode)
+// and basically serve the same purpose.
+// We keep them separate because:
+// 1) Technically we may want to have even more info inside partially signed transaction in
+// the future, which may not be needed by the input commitments.
+// 2) We want to be able to refactor input commitments structs without worrying about breaking
+// PartiallySignedTransaction's backward compatibility.
+
 /// Pool additional info, which must be present for each ProduceBlockFromStake UTXO consumed by
 /// the transaction. Transaction's signature commits to this info since SighashInputCommitments::V1.
-// TODO: rename to DecommissionedPoolAdditionalInfo? (or even DecommissionedPoolCommitmentInfo,
-// to suggest that it's related to commitments and isn't some arbitrary info about the pool).
-#[derive(Debug, Eq, PartialEq, Clone, Encode, Decode)]
+#[derive(Debug, Eq, PartialEq, Clone, Encode, Decode, serde::Serialize)]
 pub struct PoolAdditionalInfo {
     pub staker_balance: Amount,
 }
@@ -42,10 +49,7 @@ pub struct PoolAdditionalInfo {
 /// while FillOrder commitments only include the initial ones. So this info representation
 /// is not ideal, as it forces the caller to provide additional info that will not actually
 /// be used.
-// TODO: perhaps it's better to split the struct and the corresponding map into two -
-// for the initial and current balances. Also, perhaps the naming should suggest that it
-// contains commitments for signing and not just arbitrary info.
-#[derive(Debug, Eq, PartialEq, Clone, Encode, Decode)]
+#[derive(Debug, Eq, PartialEq, Clone, Encode, Decode, serde::Serialize)]
 pub struct OrderAdditionalInfo {
     pub initially_asked: OutputValue,
     pub initially_given: OutputValue,
@@ -53,10 +57,8 @@ pub struct OrderAdditionalInfo {
     pub give_balance: Amount,
 }
 
-// FIXME: Rename to PtxAdditionalInfo ?
-#[derive(Debug, Eq, PartialEq, Clone, Encode, Decode)]
+#[derive(Debug, Eq, PartialEq, Clone, Encode, Decode, serde::Serialize)]
 pub struct TxAdditionalInfo {
-    // token_info: BTreeMap<TokenId, TokenAdditionalInfo>,
     pool_info: BTreeMap<PoolId, PoolAdditionalInfo>,
     order_info: BTreeMap<OrderId, OrderAdditionalInfo>,
 }
@@ -64,7 +66,6 @@ pub struct TxAdditionalInfo {
 impl TxAdditionalInfo {
     pub fn new() -> Self {
         Self {
-            // token_info: BTreeMap::new(),
             pool_info: BTreeMap::new(),
             order_info: BTreeMap::new(),
         }
@@ -89,11 +90,9 @@ impl TxAdditionalInfo {
     }
 
     pub fn join(mut self, other: Self) -> Self {
-        // self.token_info.extend(other.token_info);
         self.pool_info.extend(other.pool_info);
         self.order_info.extend(other.order_info);
         Self {
-            // token_info: self.token_info,
             pool_info: self.pool_info,
             order_info: self.order_info,
         }

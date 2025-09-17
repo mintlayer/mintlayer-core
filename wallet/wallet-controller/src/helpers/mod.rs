@@ -315,6 +315,7 @@ pub async fn fetch_input_infos<T: NodeInterface, B: storage::Backend>(
 
     Ok((input_utxos, ptx_additional_info, destinations))
 }
+
 async fn into_utxo_and_destination<T: NodeInterface, B: storage::Backend>(
     rpc_client: &T,
     wallet: &RuntimeWallet<B>,
@@ -402,10 +403,8 @@ fn collect_referenced_token_ids_from_ptx(
     ptx: &PartiallySignedTransaction,
     dest: &mut BTreeSet<TokenId>,
 ) {
-    for input_utxo in ptx.input_utxos() {
-        if let Some(tx_output) = input_utxo {
-            collect_referenced_token_ids_from_tx_output(tx_output, dest);
-        }
+    for input_utxo in ptx.input_utxos().iter().flatten() {
+        collect_referenced_token_ids_from_tx_output(input_utxo, dest);
     }
 
     for tx_output in ptx.tx().outputs() {

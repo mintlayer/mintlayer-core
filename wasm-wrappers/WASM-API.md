@@ -271,6 +271,43 @@ and a network type (mainnet, testnet, etc), this function returns a witness to b
 
 Given an unsigned transaction and signatures, this function returns a SignedTransaction object as bytes.
 
+### Function: `encode_partially_signed_transaction`
+
+Return a PartiallySignedTransaction object as bytes.
+
+`transaction` is an encoded `Transaction` (which can be produced via `encode_transaction`).
+
+`signatures`, `input_utxos`, `input_destinations` and `htlc_secrets` are encoded lists of
+optional objects of the corresponding type. To produce such a list, iterate over your
+original list of optional objects and then:
+1) emit byte 0 if the current object is null;
+2) otherwise emit byte 1 followed by the object in its encoded form.
+
+Each individual object in each of the lists corresponds to the transaction input with the same
+index and its meaning is as follows:
+  1) `signatures` - the signature for the input;
+  2) `input_utxos`- the utxo for the input (if it's utxo-based);
+  3) `input_destinations` - the destination (address) corresponding to the input; this determines
+     the key(s) with which the input has to be signed. Note that for utxo-based inputs the
+     corresponding destination can usually be extracted from the utxo itself (the exception
+     being the `ProduceBlockFromStake` utxo, which doesn't contain the pool's decommission key).
+     However, PartiallySignedTransaction requires that *all* input destinations are provided
+     explicitly anyway.
+  4) `htlc_secrets` - if the input is an HTLC one and if the transaction is spending the HTLC,
+     this should be the HTLC secret. Otherwise it should be null.
+
+  The number of items in each list must be equal to the number of transaction inputs.
+
+`additional_info` has the same meaning as in `encode_witness`.
+
+### Function: `decode_partially_signed_transaction_to_js`
+
+Decodes a partially signed transaction from its binary encoding into a JavaScript object.
+
+### Function: `encode_destination`
+
+Convert the specified string address into a Destination object, encoded as bytes.
+
 ### Function: `get_transaction_id`
 
 Given a `Transaction` encoded in bytes (not a signed transaction, but a signed transaction is tolerated by ignoring the extra bytes, by choice)
@@ -338,6 +375,7 @@ Note:
    instead of `encode_witness`).
    Note that in orders v0 FillOrder inputs can technically have a signature, it's just not checked.
    But in orders V1 we actually require that those inputs don't have signatures.
+   Also, in orders V1 the provided destination is always ignored.
 
 ### Function: `encode_input_for_freeze_order`
 

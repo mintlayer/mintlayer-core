@@ -19,7 +19,9 @@ use common::{
     address::AddressError,
     chain::{
         classic_multisig::ClassicMultisigChallengeError,
-        partially_signed_transaction::PartiallySignedTransactionError,
+        partially_signed_transaction::{
+            PartiallySignedTransactionError, SighashInputCommitmentCreationError,
+        },
         signature::{
             inputsig::{
                 arbitrary_message::SignArbitraryMessageError,
@@ -34,8 +36,6 @@ use common::{
     size_estimation::SizeEstimationError,
 };
 use consensus::EffectivePoolBalanceError;
-
-use crate::sighash_input_commitments::SighashInputCommitmentCreationError;
 
 #[allow(clippy::enum_variant_names)]
 #[derive(thiserror::Error, Debug, Clone)]

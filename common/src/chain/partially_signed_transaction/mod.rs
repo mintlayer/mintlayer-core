@@ -73,7 +73,7 @@ pub enum PartiallySignedTransactionConsistencyCheck {
 ///    via the wasm call `encode_partially_signed_transaction` and the latter pass it to
 ///    wallet-rpc-daemon. The transaction is treated as a black box, so a breaking change is
 ///    technically possible, though it'll require synchronization between multiple teams.
-#[derive(Debug, Eq, PartialEq, Clone, Encode, Decode)]
+#[derive(Debug, Eq, PartialEq, Clone, Encode, Decode, serde::Serialize)]
 pub struct PartiallySignedTransaction {
     tx: Transaction,
     witnesses: Vec<Option<InputWitness>>,
@@ -163,8 +163,9 @@ impl PartiallySignedTransaction {
         Ok(())
     }
 
-    // FIXME tests
     fn ensure_additional_info_completeness(&self) -> Result<(), PartiallySignedTransactionError> {
+        // TODO: try to re-use the input commitments machinery here instead of doing custom checks.
+
         let ensure_order_info_present =
             |order_id: &OrderId| -> Result<_, PartiallySignedTransactionError> {
                 ensure!(
@@ -235,7 +236,6 @@ impl PartiallySignedTransaction {
                     }
                 }
                 TxInput::OrderAccountCommand(command) => {
-                    // FIXME somehow re-use input commitment machinery?
                     match command {
                         OrderAccountCommand::FillOrder(id, _)
                         | OrderAccountCommand::ConcludeOrder(id) => ensure_order_info_present(id)?,
