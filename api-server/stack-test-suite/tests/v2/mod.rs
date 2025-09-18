@@ -38,6 +38,7 @@ mod token_ids;
 mod token_ticker;
 mod transaction;
 mod transaction_merkle_path;
+mod transaction_output;
 mod transaction_submit;
 mod transactions;
 
