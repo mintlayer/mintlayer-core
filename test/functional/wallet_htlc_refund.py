@@ -157,16 +157,6 @@ class WalletHtlcRefund(BitcoinTestFramework):
             assert_in("Coins amount: 0", balance)
             assert_in(f"Token: {token_id} amount: {amount_to_mint}", balance)
 
-            token_additional_info_for_ptx = [
-                (
-                    token_id_dec_array,
-                    {
-                        'num_decimals': token_number_of_decimals,
-                        'ticker': token_ticker.encode('utf-8')
-                    }
-                )
-            ]
-
             ########################################################################################
             # Setup Alice's htlc
             alice_secret = bytes([random.randint(0, 255) for _ in range(32)])
@@ -197,7 +187,7 @@ class WalletHtlcRefund(BitcoinTestFramework):
                 'input_utxos': alice_htlc_outputs,
                 'destinations': [refund_dest_obj, alice_htlc_change_dest],
                 'htlc_secrets': [None, None],
-                'additional_info': {'token_info': token_additional_info_for_ptx, 'pool_info': [], 'order_info': []}
+                'additional_info': {'pool_info': [], 'order_info': []}
             }
             alice_refund_tx_hex = scalecodec.base.RuntimeConfiguration().create_scale_object('PartiallySignedTransaction').encode(alice_refund_ptx).to_hex()[2:]
 
@@ -226,7 +216,7 @@ class WalletHtlcRefund(BitcoinTestFramework):
                 'input_utxos': bob_htlc_outputs,
                 'destinations': [refund_dest_obj, bob_htlc_change_dest],
                 'htlc_secrets': [None, None],
-                'additional_info': {'token_info': token_additional_info_for_ptx, 'pool_info': [], 'order_info': []}
+                'additional_info': {'pool_info': [], 'order_info': []}
             }
             bob_refund_tx_hex = scalecodec.base.RuntimeConfiguration().create_scale_object('PartiallySignedTransaction').encode(bob_refund_ptx).to_hex()[2:]
 

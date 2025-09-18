@@ -226,7 +226,6 @@ def init_mintlayer_types():
             "TxAdditionalInfo": {
                 "type": "struct",
                 "type_mapping": [
-                    ["token_info", "BTreeMap<H256, TokenAdditionalInfo>"],
                     ["pool_info", "BTreeMap<H256, PoolAdditionalInfo>"],
                     ["order_info", "BTreeMap<H256, OrderAdditionalInfo>"],
                 ],

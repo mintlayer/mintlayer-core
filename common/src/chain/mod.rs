@@ -18,6 +18,7 @@ pub mod chaintrust;
 pub mod config;
 pub mod gen_block;
 pub mod genesis;
+pub mod partially_signed_transaction;
 pub mod tokens;
 pub mod transaction;
 

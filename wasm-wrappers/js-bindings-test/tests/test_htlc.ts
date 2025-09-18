@@ -54,11 +54,11 @@ import {
 } from "./test_encode_other_outputs.js";
 
 export function test_htlc() {
-  const account_pubkey = make_default_account_privkey(
+  const account_privkey = make_default_account_privkey(
     MNEMONIC,
     Network.Testnet
   );
-  const receiving_privkey = make_receiving_address(account_pubkey, 0);
+  const receiving_privkey = make_receiving_address(account_privkey, 0);
 
   const htlc_coins_output = encode_output_htlc(
     Amount.from_atoms("40000"),

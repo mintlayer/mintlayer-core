@@ -20,6 +20,7 @@ use wasm_bindgen::prelude::*;
 use common::{
     chain::{
         config::Builder,
+        partially_signed_transaction::make_sighash_input_commitments_at_height,
         signature::{
             inputsig::{
                 authorize_hashed_timelock_contract_spend::AuthorizedHashedTimelockContractSpend,
@@ -36,9 +37,8 @@ use utils::ensure;
 
 use crate::{
     error::Error,
-    sighash_input_commitments::{make_sighash_input_commitments, TxInputsAdditionalInfo},
     types::{Network, SignatureHashType, TxAdditionalInfo},
-    utils::{decode_raw_array, extract_htlc_spend, parse_addressable},
+    utils::{decode_raw_array, extract_htlc_spend, parse_addressable, to_ptx_additional_info},
 };
 
 /// Verify a witness produced by one of the `encode_witness` functions.
@@ -71,13 +71,12 @@ pub fn internal_verify_witness(
     let input_utxos = decode_raw_array::<Option<TxOutput>>(input_utxos)
         .map_err(Error::InvalidInputUtxoEncoding)?;
 
-    let input_infos =
-        TxInputsAdditionalInfo::from_tx_additional_info(&chain_config, &additional_info)?;
+    let ptx_additional_info = to_ptx_additional_info(&chain_config, &additional_info)?;
 
-    let input_commitments = make_sighash_input_commitments(
+    let input_commitments = make_sighash_input_commitments_at_height(
         tx.inputs(),
         &input_utxos,
-        &input_infos,
+        &ptx_additional_info,
         &chain_config,
         BlockHeight::new(current_block_height),
     )?;

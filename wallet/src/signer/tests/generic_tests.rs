@@ -60,7 +60,8 @@ use wallet_storage::{DefaultBackend, Store, TransactionRwUnlocked, Transactional
 use wallet_types::{
     account_info::DEFAULT_ACCOUNT_INDEX,
     partially_signed_transaction::{
-        OrderAdditionalInfo, PoolAdditionalInfo, TokenAdditionalInfo, TxAdditionalInfo,
+        OrderAdditionalInfo, PoolAdditionalInfo, PtxAdditionalInfo, TokenAdditionalInfo,
+        TokensAdditionalInfo,
     },
     BlockInfo, Currency, KeyPurpose,
 };
@@ -670,14 +671,7 @@ pub fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
         .with_outputs(outputs);
     let destinations = req.destinations().to_vec();
 
-    let additional_info = TxAdditionalInfo::new()
-        .with_token_info(
-            token_id,
-            TokenAdditionalInfo {
-                num_decimals: rng.gen_range(5..10),
-                ticker: random_ascii_alphanumeric_string(rng, 5..10).into_bytes(),
-            },
-        )
+    let ptx_additional_info = PtxAdditionalInfo::new()
         .with_order_info(filled_order1_id, filled_order1_info)
         .with_order_info(filled_order2_id, filled_order2_info)
         .with_order_info(
@@ -719,12 +713,20 @@ pub fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
                 staker_balance: decommissioned_pool_balance,
             },
         );
-    let orig_ptx = req.into_partially_signed_tx(additional_info).unwrap();
+    let tokens_additional_info = TokensAdditionalInfo::new().with_info(
+        token_id,
+        TokenAdditionalInfo {
+            num_decimals: rng.gen_range(5..10),
+            ticker: random_ascii_alphanumeric_string(rng, 5..10).into_bytes(),
+        },
+    );
+    let orig_ptx = req.into_partially_signed_tx(ptx_additional_info).unwrap();
 
     let mut signer = make_signer(chain_config.clone(), account.account_index());
     let (ptx, _, _) = signer
         .sign_tx(
             orig_ptx.clone(),
+            &tokens_additional_info,
             account.key_chain(),
             &db_tx,
             tx_block_height,
@@ -735,7 +737,13 @@ pub fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
     if let Some(make_another_signer) = &make_another_signer {
         let mut another_signer = make_another_signer(chain_config.clone(), account.account_index());
         let (another_ptx, _, _) = another_signer
-            .sign_tx(orig_ptx, account.key_chain(), &db_tx, tx_block_height)
+            .sign_tx(
+                orig_ptx,
+                &tokens_additional_info,
+                account.key_chain(),
+                &db_tx,
+                tx_block_height,
+            )
             .unwrap();
         assert!(another_ptx.all_signatures_available());
 
@@ -796,6 +804,7 @@ pub fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
     let (ptx, _, _) = signer
         .sign_tx(
             orig_ptx.clone(),
+            &tokens_additional_info,
             account2.key_chain(),
             &db_tx,
             tx_block_height,
@@ -807,7 +816,13 @@ pub fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
         let mut another_signer =
             make_another_signer(chain_config.clone(), account2.account_index());
         let (another_ptx, _, _) = another_signer
-            .sign_tx(orig_ptx, account2.key_chain(), &db_tx, tx_block_height)
+            .sign_tx(
+                orig_ptx,
+                &tokens_additional_info,
+                account2.key_chain(),
+                &db_tx,
+                tx_block_height,
+            )
             .unwrap();
         assert!(another_ptx.all_signatures_available());
 

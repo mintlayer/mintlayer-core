@@ -65,7 +65,8 @@ use wallet_storage::{DefaultBackend, Store, TransactionRwUnlocked, Transactional
 use wallet_types::{
     account_info::DEFAULT_ACCOUNT_INDEX,
     partially_signed_transaction::{
-        OrderAdditionalInfo, PoolAdditionalInfo, TokenAdditionalInfo, TxAdditionalInfo,
+        OrderAdditionalInfo, PoolAdditionalInfo, PtxAdditionalInfo, TokenAdditionalInfo,
+        TokensAdditionalInfo,
     },
     seed_phrase::StoreSeedPhrase,
     BlockInfo, KeyPurpose,
@@ -345,34 +346,40 @@ where
         .with_inputs_and_destinations(acc_inputs.into_iter().zip(acc_dests.clone()))
         .with_outputs(outputs);
     let destinations = req.destinations().to_vec();
-    let additional_info = TxAdditionalInfo::new()
-        .with_token_info(
-            token_id,
-            // Note: this info doesn't influence the signature and can be random.
-            TokenAdditionalInfo {
-                num_decimals: rng.gen_range(1..10),
-                ticker: random_ascii_alphanumeric_string(rng, 5..10).into_bytes(),
-            },
-        )
-        .with_order_info(
-            order_id,
-            OrderAdditionalInfo {
-                ask_balance: Amount::from_atoms(10),
-                give_balance: Amount::from_atoms(100),
-                initially_asked: OutputValue::Coin(Amount::from_atoms(20)),
-                // Note: initially_given's amount isn't used by the signers in orders v0, only its
-                // currency matters.
-                initially_given: OutputValue::TokenV1(
-                    token_id,
-                    Amount::from_atoms(rng.gen_range(100..200)),
-                ),
-            },
-        );
-    let orig_ptx = req.into_partially_signed_tx(additional_info).unwrap();
+    let ptx_additional_info = PtxAdditionalInfo::new().with_order_info(
+        order_id,
+        OrderAdditionalInfo {
+            ask_balance: Amount::from_atoms(10),
+            give_balance: Amount::from_atoms(100),
+            initially_asked: OutputValue::Coin(Amount::from_atoms(20)),
+            // Note: initially_given's amount isn't used by the signers in orders v0, only its
+            // currency matters.
+            initially_given: OutputValue::TokenV1(
+                token_id,
+                Amount::from_atoms(rng.gen_range(100..200)),
+            ),
+        },
+    );
+    let tokens_additional_info = TokensAdditionalInfo::new().with_info(
+        token_id,
+        // Note: this info doesn't influence the signature and can be random.
+        TokenAdditionalInfo {
+            num_decimals: rng.gen_range(1..10),
+            ticker: random_ascii_alphanumeric_string(rng, 5..10).into_bytes(),
+        },
+    );
+    let orig_ptx = req.into_partially_signed_tx(ptx_additional_info).unwrap();
 
     let mut signer = make_signer(chain_config.clone(), account.account_index());
-    let (ptx, _, _) =
-        signer.sign_tx(orig_ptx, account.key_chain(), &db_tx, tx_block_height).unwrap();
+    let (ptx, _, _) = signer
+        .sign_tx(
+            orig_ptx,
+            &tokens_additional_info,
+            account.key_chain(),
+            &db_tx,
+            tx_block_height,
+        )
+        .unwrap();
     assert!(ptx.all_signatures_available());
 
     let input_commitments = ptx
@@ -877,15 +884,7 @@ pub fn test_fixed_signatures_generic2<MkS, S>(
         .chain(acc_dests.iter().map(|_| None))
         .collect::<Vec<_>>();
 
-    let additional_info = TxAdditionalInfo::new()
-        .with_token_info(
-            token_id,
-            // Note: token info doesn't influence the signature and can be random.
-            TokenAdditionalInfo {
-                num_decimals: rng.gen_range(1..10),
-                ticker: random_ascii_alphanumeric_string(rng, 5..10).into_bytes(),
-            },
-        )
+    let ptx_additional_info = PtxAdditionalInfo::new()
         .with_order_info(filled_order_v0_id, filled_order_v0_info)
         .with_order_info(filled_order_v1_id, filled_order_v1_info)
         .with_order_info(concluded_order_v0_id, concluded_order_v0_info)
@@ -897,7 +896,15 @@ pub fn test_fixed_signatures_generic2<MkS, S>(
                 staker_balance: decommissioned_pool_balance,
             },
         );
-    let ptx = req.into_partially_signed_tx(additional_info).unwrap();
+    let tokens_additional_info = TokensAdditionalInfo::new().with_info(
+        token_id,
+        // Note: token info doesn't influence the signature and can be random.
+        TokenAdditionalInfo {
+            num_decimals: rng.gen_range(1..10),
+            ticker: random_ascii_alphanumeric_string(rng, 5..10).into_bytes(),
+        },
+    );
+    let ptx = req.into_partially_signed_tx(ptx_additional_info).unwrap();
 
     let input_commitments = ptx
         .make_sighash_input_commitments_at_height(&chain_config, tx_block_height)
@@ -907,12 +914,28 @@ pub fn test_fixed_signatures_generic2<MkS, S>(
         .collect_vec();
 
     let mut signer = make_signer(chain_config.clone(), account1.account_index());
-    let (ptx, _, _) = signer.sign_tx(ptx, account1.key_chain(), &db_tx, tx_block_height).unwrap();
+    let (ptx, _, _) = signer
+        .sign_tx(
+            ptx,
+            &tokens_additional_info,
+            account1.key_chain(),
+            &db_tx,
+            tx_block_height,
+        )
+        .unwrap();
     assert!(ptx.all_signatures_available());
 
     // Fully sign multisig inputs.
     let mut signer = make_signer(chain_config.clone(), account2.account_index());
-    let (ptx, _, _) = signer.sign_tx(ptx, account2.key_chain(), &db_tx, tx_block_height).unwrap();
+    let (ptx, _, _) = signer
+        .sign_tx(
+            ptx,
+            &tokens_additional_info,
+            account2.key_chain(),
+            &db_tx,
+            tx_block_height,
+        )
+        .unwrap();
     assert!(ptx.all_signatures_available());
 
     for (i, dest) in destinations.iter().enumerate() {

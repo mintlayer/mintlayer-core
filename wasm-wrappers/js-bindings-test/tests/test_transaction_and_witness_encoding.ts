@@ -43,11 +43,11 @@ import {
 } from "./test_encode_other_outputs.js";
 
 export function test_transaction_and_witness_encoding() {
-  const account_pubkey = make_default_account_privkey(
+  const account_privkey = make_default_account_privkey(
     MNEMONIC,
     Network.Testnet,
   );
-  const receiving_privkey = make_receiving_address(account_pubkey, 0);
+  const receiving_privkey = make_receiving_address(account_privkey, 0);
 
   try {
     const invalid_inputs = TEXT_ENCODER.encode("invalid inputs");

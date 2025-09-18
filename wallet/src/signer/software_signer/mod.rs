@@ -55,8 +55,11 @@ use wallet_storage::{
     WalletStorageWriteUnlocked,
 };
 use wallet_types::{
-    hw_data::HardwareWalletFullInfo, partially_signed_transaction::PartiallySignedTransaction,
-    seed_phrase::StoreSeedPhrase, signature_status::SignatureStatus, AccountId,
+    hw_data::HardwareWalletFullInfo,
+    partially_signed_transaction::{PartiallySignedTransaction, TokensAdditionalInfo},
+    seed_phrase::StoreSeedPhrase,
+    signature_status::SignatureStatus,
+    AccountId,
 };
 
 use crate::{
@@ -289,6 +292,7 @@ impl Signer for SoftwareSigner {
     fn sign_tx(
         &mut self,
         ptx: PartiallySignedTransaction,
+        _tokens_additional_info: &TokensAdditionalInfo,
         key_chain: &impl AccountKeyChains,
         db_tx: &impl WalletStorageReadUnlocked,
         block_height: BlockHeight,

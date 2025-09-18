@@ -53,7 +53,9 @@ use wallet::{
 use wallet_types::{
     account_info::{StandaloneAddressDetails, StandaloneAddresses},
     hw_data::HardwareWalletFullInfo,
-    partially_signed_transaction::{PartiallySignedTransaction, TxAdditionalInfo},
+    partially_signed_transaction::{
+        PartiallySignedTransaction, PtxAdditionalInfo, TokensAdditionalInfo, TxAdditionalInfo,
+    },
     seed_phrase::SerializableSeedPhrase,
     signature_status::SignatureStatus,
     utxo_types::{UtxoState, UtxoStates, UtxoTypes},
@@ -984,7 +986,7 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
         change_addresses: BTreeMap<Currency, Address<Destination>>,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
-        additional_info: TxAdditionalInfo,
+        ptx_additional_info: PtxAdditionalInfo,
     ) -> WalletResult<(PartiallySignedTransaction, BTreeMap<Currency, Amount>)> {
         match self {
             RuntimeWallet::Software(w) => w.create_unsigned_transaction_to_addresses(
@@ -995,7 +997,7 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
                 change_addresses,
                 current_fee_rate,
                 consolidate_fee_rate,
-                additional_info,
+                ptx_additional_info,
             ),
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => w.create_unsigned_transaction_to_addresses(
@@ -1006,7 +1008,7 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
                 change_addresses,
                 current_fee_rate,
                 consolidate_fee_rate,
-                additional_info,
+                ptx_additional_info,
             ),
         }
     }
@@ -1312,15 +1314,20 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
         &mut self,
         account_index: U31,
         ptx: PartiallySignedTransaction,
+        tokens_additional_info: &TokensAdditionalInfo,
     ) -> WalletResult<(
         PartiallySignedTransaction,
         Vec<SignatureStatus>,
         Vec<SignatureStatus>,
     )> {
         match self {
-            RuntimeWallet::Software(w) => w.sign_raw_transaction(account_index, ptx),
+            RuntimeWallet::Software(w) => {
+                w.sign_raw_transaction(account_index, ptx, tokens_additional_info)
+            }
             #[cfg(feature = "trezor")]
-            RuntimeWallet::Trezor(w) => w.sign_raw_transaction(account_index, ptx),
+            RuntimeWallet::Trezor(w) => {
+                w.sign_raw_transaction(account_index, ptx, tokens_additional_info)
+            }
         }
     }
 

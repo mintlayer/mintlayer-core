@@ -59,7 +59,8 @@ use wallet::{
 };
 use wallet_types::{
     partially_signed_transaction::{
-        OrderAdditionalInfo, PartiallySignedTransaction, TokenAdditionalInfo, TxAdditionalInfo,
+        OrderAdditionalInfo, PartiallySignedTransaction, PtxAdditionalInfo, TokenAdditionalInfo,
+        TokensAdditionalInfo, TxAdditionalInfo,
     },
     signature_status::SignatureStatus,
     utxo_types::{UtxoState, UtxoType},
@@ -69,8 +70,9 @@ use wallet_types::{
 
 use crate::{
     helpers::{
-        fetch_order_info, fetch_token_info, fetch_token_infos_into_tx_info, fetch_utxo,
-        into_balances, tx_to_partially_signed_tx,
+        fetch_order_info, fetch_token_info, fetch_token_infos, fetch_token_infos_into, fetch_utxo,
+        get_referenced_token_ids_from_partially_signed_transaction, into_balances,
+        tx_to_partially_signed_tx,
     },
     runtime_wallet::RuntimeWallet,
     types::{
@@ -164,9 +166,9 @@ where
     async fn filter_out_utxos_with_frozen_tokens(
         &self,
         input_utxos: Vec<(UtxoOutPoint, TxOutput)>,
-    ) -> Result<(Vec<(UtxoOutPoint, TxOutput)>, TxAdditionalInfo), ControllerError<T>> {
+    ) -> Result<(Vec<(UtxoOutPoint, TxOutput)>, TokensAdditionalInfo), ControllerError<T>> {
         let mut result = vec![];
-        let mut additional_info = TxAdditionalInfo::new();
+        let mut additional_info = TokensAdditionalInfo::new();
         for utxo in input_utxos {
             let token_ids = get_referenced_token_ids_ignore_issuance(&utxo.1);
             if token_ids.is_empty() {
@@ -196,7 +198,7 @@ where
                 if ok_to_use {
                     result.push(utxo);
                     for token_info in token_infos {
-                        additional_info.add_token_info(
+                        additional_info.add_info(
                             token_info.token_id(),
                             TokenAdditionalInfo {
                                 num_decimals: token_info.token_number_of_decimals(),
@@ -590,7 +592,7 @@ where
             WithLocked::Unlocked,
         )?;
 
-        let (inputs, additional_info) =
+        let (inputs, tokens_additional_info) =
             self.filter_out_utxos_with_frozen_tokens(selected_utxos).await?;
 
         let filtered_inputs = inputs
@@ -611,7 +613,10 @@ where
                     destination_address,
                     filtered_inputs,
                     current_fee_rate,
-                    additional_info,
+                    TxAdditionalInfo {
+                        ptx_additional_info: PtxAdditionalInfo::new(),
+                        tokens_additional_info,
+                    },
                 )
             },
         )
@@ -700,7 +705,7 @@ where
                 [(Currency::Coin, change_address)].into(),
                 current_fee_rate,
                 consolidate_fee_rate,
-                TxAdditionalInfo::new(),
+                PtxAdditionalInfo::new(),
             )
             .map_err(ControllerError::WalletError)?;
 
@@ -744,19 +749,11 @@ where
             ControllerError::<T>::ExpectingNonEmptyOutputs
         );
 
-        let (outputs, additional_info) = {
+        let outputs = {
             let mut result = Vec::new();
-            let mut additional_info = TxAdditionalInfo::new();
 
             for (token_id, outputs_vec) in outputs {
                 let token_info = fetch_token_info(&self.rpc_client, token_id).await?;
-                additional_info.add_token_info(
-                    token_id,
-                    TokenAdditionalInfo {
-                        num_decimals: token_info.token_number_of_decimals(),
-                        ticker: token_info.token_ticker().to_vec(),
-                    },
-                );
 
                 match &token_info {
                     RPCTokenInfo::FungibleToken(token_info) => {
@@ -774,7 +771,7 @@ where
                 .map_err(ControllerError::InvalidTxOutput)?;
             }
 
-            (result, additional_info)
+            result
         };
 
         let (inputs, change_addresses) = {
@@ -852,7 +849,7 @@ where
             change_addresses,
             current_fee_rate,
             consolidate_fee_rate,
-            additional_info,
+            PtxAdditionalInfo::new(),
         )?;
 
         let fees = into_balances(&self.rpc_client, self.chain_config, fees).await?;
@@ -1128,8 +1125,13 @@ where
         htlc: HashedTimelockContract,
     ) -> Result<PreparedTransaction, ControllerError<T>> {
         let mut tx_additional_info = TxAdditionalInfo::new();
-        let output_value =
-            self.convert_rpc_amount_in(amount, token_id, &mut tx_additional_info).await?;
+        let output_value = self
+            .convert_rpc_amount_in(
+                amount,
+                token_id,
+                &mut tx_additional_info.tokens_additional_info,
+            )
+            .await?;
 
         let (current_fee_rate, consolidate_fee_rate) =
             self.get_current_and_consolidation_fee_rate().await?;
@@ -1165,7 +1167,12 @@ where
                     (amount, Some(token_id))
                 }
             };
-            self.convert_rpc_amount_in(amount, token_id, &mut tx_additional_info).await
+            self.convert_rpc_amount_in(
+                amount,
+                token_id,
+                &mut tx_additional_info.tokens_additional_info,
+            )
+            .await
         };
 
         let ask_value = convert_value(ask_value).await?;
@@ -1292,7 +1299,7 @@ where
         &self,
         amount: RpcAmountIn,
         token_id: Option<TokenId>,
-        tx_additional_info: &mut TxAdditionalInfo,
+        tokens_additional_info: &mut TokensAdditionalInfo,
     ) -> Result<OutputValue, ControllerError<T>> {
         let output_value = match token_id {
             Some(token_id) => {
@@ -1300,7 +1307,7 @@ where
                 let amount = amount
                     .to_amount(token_info.token_number_of_decimals())
                     .ok_or(ControllerError::InvalidCoinAmount)?;
-                tx_additional_info.add_token_info(
+                tokens_additional_info.add_info(
                     token_id,
                     TokenAdditionalInfo {
                         num_decimals: token_info.token_number_of_decimals(),
@@ -1338,10 +1345,10 @@ where
         let token1_id = order_info.initially_asked.token_id().cloned();
         let token2_id = order_info.initially_given.token_id().cloned();
 
-        fetch_token_infos_into_tx_info(
+        fetch_token_infos_into(
             &self.rpc_client,
-            token1_id.into_iter().chain(token2_id.into_iter()),
-            &mut tx_info,
+            &token1_id.into_iter().chain(token2_id.into_iter()).collect(),
+            &mut tx_info.tokens_additional_info,
         )
         .await?;
 
@@ -1383,8 +1390,12 @@ where
             }
         };
 
+        let referenced_token_ids = get_referenced_token_ids_from_partially_signed_transaction(&ptx);
+        let tokens_additional_info =
+            fetch_token_infos(&self.rpc_client, &referenced_token_ids).await?;
+
         self.wallet
-            .sign_raw_transaction(self.account_index, ptx)
+            .sign_raw_transaction(self.account_index, ptx, &tokens_additional_info)
             .map_err(ControllerError::WalletError)
     }
 

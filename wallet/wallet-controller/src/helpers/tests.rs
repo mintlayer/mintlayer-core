@@ -13,7 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeMap, num::NonZeroU8, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    num::NonZeroU8,
+    sync::Arc,
+};
 
 use itertools::Itertools as _;
 use rstest::rstest;
@@ -51,20 +55,23 @@ use wallet::{
 use wallet_types::{
     account_info::DEFAULT_ACCOUNT_INDEX,
     partially_signed_transaction::{
-        OrderAdditionalInfo, PoolAdditionalInfo, TokenAdditionalInfo, TxAdditionalInfo,
+        OrderAdditionalInfo, PoolAdditionalInfo, PtxAdditionalInfo, TokenAdditionalInfo,
+        TokensAdditionalInfo,
     },
 };
 
 use crate::{
     tests::test_utils::{
         create_block_scan_wallet, random_is_token_unfreezable, random_nft_issuance,
-        random_order_currencies_with_token, random_pub_key,
-        random_rpc_ft_info_with_id_ticker_decimals, random_rpc_is_token_frozen,
+        random_order_currencies_with_token, random_pub_key, random_rpc_is_token_frozen,
         random_token_data_with_id_and_authority, random_vrf_pub_key, tx_with_outputs,
         wallet_new_dest, OrderCurrencies, TestOrderData, TestTokenData, MNEMONIC,
     },
     {
-        helpers::{fetch_utxo, tx_to_partially_signed_tx},
+        helpers::{
+            fetch_token_infos, fetch_utxo,
+            get_referenced_token_ids_from_partially_signed_transaction, tx_to_partially_signed_tx,
+        },
         runtime_wallet::RuntimeWallet,
     },
 };
@@ -79,17 +86,9 @@ mod tx_to_partially_signed_tx_general_test {
     async fn test(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
 
-        let random_tokens_count = 15;
-        let random_tokens = (0..random_tokens_count)
-            .map(|_| {
-                use crate::tests::test_utils::random_token_data_with_id_and_authority;
-
-                random_token_data_with_id_and_authority(
-                    TokenId::random_using(&mut rng),
-                    Destination::PublicKeyHash(PublicKeyHash::random_using(&mut rng)),
-                    &mut rng,
-                )
-            })
+        let random_token_ids_count = 15;
+        let random_token_ids = (0..random_token_ids_count)
+            .map(|_| TokenId::random_using(&mut rng))
             .collect_vec();
 
         let chain_config = Arc::new(create_regtest());
@@ -99,7 +98,7 @@ mod tx_to_partially_signed_tx_general_test {
         // Transfer to a destination belonging to the wallet.
         let token0_transfer_utxo_dest = wallet_new_dest(&mut wallet);
         let token0_transfer_utxo = TxOutput::Transfer(
-            OutputValue::TokenV1(random_tokens[0].id, Amount::from_atoms(rng.gen())),
+            OutputValue::TokenV1(random_token_ids[0], Amount::from_atoms(rng.gen())),
             token0_transfer_utxo_dest.clone(),
         );
         let tx_with_token0_transfer = tx_with_outputs(vec![token0_transfer_utxo.clone()]);
@@ -110,7 +109,7 @@ mod tx_to_partially_signed_tx_general_test {
         let token1_transfer_utxo_dest =
             Destination::PublicKeyHash(PublicKeyHash::random_using(&mut rng));
         let token1_transfer_utxo = TxOutput::Transfer(
-            OutputValue::TokenV1(random_tokens[1].id, Amount::from_atoms(rng.gen())),
+            OutputValue::TokenV1(random_token_ids[1], Amount::from_atoms(rng.gen())),
             token1_transfer_utxo_dest.clone(),
         );
         let token1_transfer_outpoint =
@@ -119,7 +118,7 @@ mod tx_to_partially_signed_tx_general_test {
         let lock_then_transfer_utxo_dest =
             Destination::PublicKeyHash(PublicKeyHash::random_using(&mut rng));
         let lock_then_transfer_utxo = TxOutput::LockThenTransfer(
-            OutputValue::TokenV1(random_tokens[2].id, Amount::from_atoms(rng.gen())),
+            OutputValue::TokenV1(random_token_ids[2], Amount::from_atoms(rng.gen())),
             lock_then_transfer_utxo_dest.clone(),
             OutputTimeLock::ForBlockCount(rng.gen()),
         );
@@ -187,11 +186,11 @@ mod tx_to_partially_signed_tx_general_test {
             &mut blocks,
             &chain_config,
             &[
-                random_order_currencies_with_token(&mut rng, random_tokens[3].id),
-                random_order_currencies_with_token(&mut rng, random_tokens[4].id),
-                random_order_currencies_with_token(&mut rng, random_tokens[5].id),
-                random_order_currencies_with_token(&mut rng, random_tokens[6].id),
-                random_order_currencies_with_token(&mut rng, random_tokens[7].id),
+                random_order_currencies_with_token(&mut rng, random_token_ids[3]),
+                random_order_currencies_with_token(&mut rng, random_token_ids[4]),
+                random_order_currencies_with_token(&mut rng, random_token_ids[5]),
+                random_order_currencies_with_token(&mut rng, random_token_ids[6]),
+                random_order_currencies_with_token(&mut rng, random_token_ids[7]),
             ],
             &mut wallet,
             &mut rng,
@@ -243,7 +242,7 @@ mod tx_to_partially_signed_tx_general_test {
         // Note: the wallet doesn't check that the secret and the secret hash are consistent.
         let htlc_secret = HtlcSecret::new_from_rng(&mut rng);
         let create_htlc_utxo = TxOutput::Htlc(
-            OutputValue::TokenV1(random_tokens[8].id, Amount::from_atoms(rng.gen())),
+            OutputValue::TokenV1(random_token_ids[8], Amount::from_atoms(rng.gen())),
             Box::new(HashedTimelockContract {
                 secret_hash: HtlcSecretHash::random_using(&mut rng),
                 spend_key: htlc_spend_key.clone(),
@@ -506,16 +505,16 @@ mod tx_to_partially_signed_tx_general_test {
 
         let outputs = vec![
             TxOutput::Transfer(
-                OutputValue::TokenV1(random_tokens[9].id, Amount::from_atoms(rng.r#gen())),
+                OutputValue::TokenV1(random_token_ids[9], Amount::from_atoms(rng.r#gen())),
                 Destination::PublicKeyHash(PublicKeyHash::random_using(&mut rng)),
             ),
             TxOutput::LockThenTransfer(
-                OutputValue::TokenV1(random_tokens[10].id, Amount::from_atoms(rng.r#gen())),
+                OutputValue::TokenV1(random_token_ids[10], Amount::from_atoms(rng.r#gen())),
                 Destination::PublicKeyHash(PublicKeyHash::random_using(&mut rng)),
                 OutputTimeLock::ForBlockCount(rng.r#gen()),
             ),
             TxOutput::Burn(OutputValue::TokenV1(
-                random_tokens[11].id,
+                random_token_ids[11],
                 Amount::from_atoms(rng.r#gen()),
             )),
             TxOutput::CreateStakePool(
@@ -552,7 +551,7 @@ mod tx_to_partially_signed_tx_general_test {
             ),
             TxOutput::DataDeposit(gen_random_bytes(&mut rng, 10, 20)),
             TxOutput::Htlc(
-                OutputValue::TokenV1(random_tokens[12].id, Amount::from_atoms(rng.r#gen())),
+                OutputValue::TokenV1(random_token_ids[12], Amount::from_atoms(rng.r#gen())),
                 Box::new(HashedTimelockContract {
                     secret_hash: HtlcSecretHash::random_using(&mut rng),
                     spend_key: Destination::PublicKeyHash(PublicKeyHash::random_using(&mut rng)),
@@ -562,8 +561,8 @@ mod tx_to_partially_signed_tx_general_test {
             ),
             TxOutput::CreateOrder(Box::new(OrderData::new(
                 Destination::PublicKeyHash(PublicKeyHash::random_using(&mut rng)),
-                OutputValue::TokenV1(random_tokens[13].id, Amount::from_atoms(rng.r#gen())),
-                OutputValue::TokenV1(random_tokens[14].id, Amount::from_atoms(rng.r#gen())),
+                OutputValue::TokenV1(random_token_ids[13], Amount::from_atoms(rng.r#gen())),
+                OutputValue::TokenV1(random_token_ids[14], Amount::from_atoms(rng.r#gen())),
             ))),
         ];
 
@@ -587,14 +586,6 @@ mod tx_to_partially_signed_tx_general_test {
                     unknown_produce_block_from_stake_utxo.clone(),
                 ),
             ]);
-
-            // Note: the "wallet" token infos won't be queried, because those tokens
-            // are only used by token-related AccountCommand's, for which we don't collect
-            // TokenAdditionalInfo's currently.
-            let token_infos_to_return = random_tokens
-                .iter()
-                .map(|token_data| (token_data.id, make_rpc_token_info(token_data, &mut rng)))
-                .collect::<BTreeMap<_, _>>();
 
             let order_infos_to_return = wallet_orders
                 .iter()
@@ -642,10 +633,6 @@ mod tx_to_partially_signed_tx_general_test {
                 Ok(Some(utxos_to_return.get(&outpoint).unwrap().clone()))
             });
 
-            node_mock.expect_get_token_info().returning(move |token_id| {
-                Ok(Some(token_infos_to_return.get(&token_id).unwrap().clone()))
-            });
-
             node_mock.expect_get_order_info().returning(move |token_id| {
                 Ok(Some(order_infos_to_return.get(&token_id).unwrap().clone()))
             });
@@ -681,20 +668,8 @@ mod tx_to_partially_signed_tx_general_test {
         assert_eq!(ptx.destinations(), &expected_inputs_destinations);
         assert_eq!(ptx.htlc_secrets(), &htlc_secrets);
 
-        let expected_tx_additional_info = {
-            let mut info = TxAdditionalInfo::new();
-
-            // Note: the "wallet" tokens are only used by token-related AccountCommand's, for which
-            // we don't collect TokenAdditionalInfo's currently. So we don't append them here.
-            for token in random_tokens {
-                info = info.with_token_info(
-                    token.id,
-                    TokenAdditionalInfo {
-                        num_decimals: token.num_decimals,
-                        ticker: token.ticker.into_bytes(),
-                    },
-                )
-            }
+        let expected_ptx_additional_info = {
+            let mut info = PtxAdditionalInfo::new();
 
             for order in wallet_orders {
                 info = info.with_order_info(
@@ -724,7 +699,14 @@ mod tx_to_partially_signed_tx_general_test {
                 },
             )
         };
-        assert_eq!(ptx.additional_info(), &expected_tx_additional_info);
+
+        assert_eq!(ptx.additional_info(), &expected_ptx_additional_info);
+
+        // Note: the "wallet" tokens are only used by token-related AccountCommand's, for which
+        // we don't collect token ids currently. So we don't append them here.
+        let expected_token_ids = random_token_ids.into_iter().collect::<BTreeSet<_>>();
+        let actual_token_ids = get_referenced_token_ids_from_partially_signed_transaction(&ptx);
+        assert_eq!(actual_token_ids, expected_token_ids);
     }
 
     // Make blocks with txs that issue tokens with authority destinations belonging to the wallet.
@@ -844,20 +826,6 @@ mod tx_to_partially_signed_tx_general_test {
         result
     }
 
-    fn make_rpc_token_info(data: &TestTokenData, rng: &mut impl Rng) -> RPCTokenInfo {
-        RPCTokenInfo::FungibleToken(RPCFungibleTokenInfo {
-            token_id: data.id,
-            token_ticker: data.ticker.clone().into(),
-            number_of_decimals: data.num_decimals,
-            metadata_uri: data.metadata_uri.clone().into(),
-            circulating_supply: Amount::from_atoms(rng.gen()),
-            total_supply: data.total_supply.into(),
-            is_locked: rng.gen(),
-            frozen: random_rpc_is_token_frozen(rng),
-            authority: data.authority.clone(),
-        })
-    }
-
     fn make_rpc_order_info(data: &TestOrderData, rng: &mut impl Rng) -> RpcOrderInfo {
         RpcOrderInfo {
             conclude_key: data.conclude_key.clone(),
@@ -938,9 +906,6 @@ async fn tx_to_partially_signed_tx_htlc_input_with_known_utxo_test(
     );
     let last_height = 1;
 
-    let token_num_decimals = rng.gen_range(1..20);
-    let token_ticker = gen_random_alnum_string(&mut rng, 5, 10);
-
     let node_mock = {
         let mut node_mock = MockNodeInterface::new();
 
@@ -955,16 +920,6 @@ async fn tx_to_partially_signed_tx_htlc_input_with_known_utxo_test(
             BTreeMap::from([(create_htlc_outpoint.clone(), create_htlc_output.clone())])
         };
 
-        let token_infos_to_return = BTreeMap::from([(
-            token_id,
-            RPCTokenInfo::FungibleToken(random_rpc_ft_info_with_id_ticker_decimals(
-                token_id,
-                token_ticker.clone(),
-                token_num_decimals,
-                &mut rng,
-            )),
-        )]);
-
         let chain_info_to_return = ChainInfo {
             best_block_height: BlockHeight::new(last_height),
             best_block_id: last_block.get_id().into(),
@@ -976,10 +931,6 @@ async fn tx_to_partially_signed_tx_htlc_input_with_known_utxo_test(
         node_mock
             .expect_get_utxo()
             .returning(move |outpoint| Ok(Some(utxos_to_return.get(&outpoint).unwrap().clone())));
-
-        node_mock.expect_get_token_info().returning(move |token_id| {
-            Ok(Some(token_infos_to_return.get(&token_id).unwrap().clone()))
-        });
 
         node_mock
             .expect_chainstate_info()
@@ -1016,19 +967,80 @@ async fn tx_to_partially_signed_tx_htlc_input_with_known_utxo_test(
     assert_eq!(ptx.input_utxos(), &expected_inputs_utxos);
     assert_eq!(ptx.destinations(), &expected_inputs_destinations);
     assert_eq!(ptx.htlc_secrets(), &htlc_secrets);
-    assert_eq!(
-        ptx.additional_info(),
-        &TxAdditionalInfo::new().with_token_info(
-            token_id,
-            TokenAdditionalInfo {
-                num_decimals: token_num_decimals,
-                ticker: token_ticker.clone().into_bytes()
-            }
-        )
-    );
+    assert_eq!(*ptx.additional_info(), PtxAdditionalInfo::new());
+
+    let expected_token_ids = BTreeSet::from([token_id]);
+    let actual_token_ids = get_referenced_token_ids_from_partially_signed_transaction(&ptx);
+    assert_eq!(actual_token_ids, expected_token_ids);
 
     // Also call fetch_utxo for the same outpoint; the expectations are exactly the same:
     // if the wallet has cached the utxo, node interface should not be queried.
     let fetched_utxo = fetch_utxo(&node_mock, &wallet, &create_htlc_outpoint).await.unwrap();
     assert_eq!(fetched_utxo, create_htlc_output);
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[trace]
+#[tokio::test]
+async fn fetch_token_infos_test(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let tokens_count = rng.gen_range(10..20);
+    let tokens_data = (0..tokens_count)
+        .map(|_| {
+            use crate::tests::test_utils::random_token_data_with_id_and_authority;
+
+            random_token_data_with_id_and_authority(
+                TokenId::random_using(&mut rng),
+                Destination::PublicKeyHash(PublicKeyHash::random_using(&mut rng)),
+                &mut rng,
+            )
+        })
+        .collect_vec();
+    let token_ids = tokens_data.iter().map(|token| token.id).collect::<BTreeSet<_>>();
+
+    let mut node_mock = MockNodeInterface::new();
+
+    let token_infos_to_return = tokens_data
+        .iter()
+        .map(|token_data| (token_data.id, make_rpc_token_info(token_data, &mut rng)))
+        .collect::<BTreeMap<_, _>>();
+
+    node_mock
+        .expect_get_token_info()
+        .returning(move |token_id| Ok(Some(token_infos_to_return.get(&token_id).unwrap().clone())));
+
+    let expected_tokens_info = {
+        let mut info = TokensAdditionalInfo::new();
+
+        for token in tokens_data {
+            info = info.with_info(
+                token.id,
+                TokenAdditionalInfo {
+                    num_decimals: token.num_decimals,
+                    ticker: token.ticker.into_bytes(),
+                },
+            )
+        }
+
+        info
+    };
+    let actual_token_infos = fetch_token_infos(&node_mock, &token_ids).await.unwrap();
+    assert_eq!(actual_token_infos, expected_tokens_info);
+}
+
+fn make_rpc_token_info(data: &TestTokenData, rng: &mut impl Rng) -> RPCTokenInfo {
+    RPCTokenInfo::FungibleToken(RPCFungibleTokenInfo {
+        token_id: data.id,
+        token_ticker: data.ticker.clone().into(),
+        number_of_decimals: data.num_decimals,
+        metadata_uri: data.metadata_uri.clone().into(),
+        circulating_supply: Amount::from_atoms(rng.gen()),
+        total_supply: data.total_supply.into(),
+        is_locked: rng.gen(),
+        frozen: random_rpc_is_token_frozen(rng),
+        authority: data.authority.clone(),
+    })
 }

@@ -97,7 +97,8 @@ use wallet_types::{
     account_info::DEFAULT_ACCOUNT_INDEX,
     hw_data::{HardwareWalletData, HardwareWalletFullInfo, TrezorFullInfo},
     partially_signed_transaction::{
-        OrderAdditionalInfo, PartiallySignedTransaction, TokenAdditionalInfo, TxAdditionalInfo,
+        OrderAdditionalInfo, PartiallySignedTransaction, PtxAdditionalInfo, TokenAdditionalInfo,
+        TokensAdditionalInfo,
     },
     signature_status::SignatureStatus,
     AccountId,
@@ -372,12 +373,20 @@ impl TrezorSigner {
     fn to_trezor_output_msgs(
         &self,
         ptx: &PartiallySignedTransaction,
+        tokens_additional_info: &TokensAdditionalInfo,
     ) -> SignerResult<Vec<MintlayerTxOutput>> {
         let outputs = ptx
             .tx()
             .outputs()
             .iter()
-            .map(|out| to_trezor_output_msg(&self.chain_config, out, ptx.additional_info()))
+            .map(|out| {
+                to_trezor_output_msg(
+                    &self.chain_config,
+                    out,
+                    ptx.additional_info(),
+                    tokens_additional_info,
+                )
+            })
             .collect();
         outputs
     }
@@ -504,6 +513,7 @@ impl Signer for TrezorSigner {
     fn sign_tx(
         &mut self,
         ptx: PartiallySignedTransaction,
+        tokens_additional_info: &TokensAdditionalInfo,
         key_chain: &impl AccountKeyChains,
         db_tx: &impl WalletStorageReadUnlocked,
         block_height: BlockHeight,
@@ -512,10 +522,15 @@ impl Signer for TrezorSigner {
         Vec<SignatureStatus>,
         Vec<SignatureStatus>,
     )> {
-        let (inputs, standalone_inputs) =
-            to_trezor_input_msgs(&ptx, key_chain, &self.chain_config, db_tx)?;
-        let outputs = self.to_trezor_output_msgs(&ptx)?;
-        let utxos = to_trezor_utxo_msgs(&ptx, &self.chain_config)?;
+        let (inputs, standalone_inputs) = to_trezor_input_msgs(
+            &ptx,
+            tokens_additional_info,
+            key_chain,
+            &self.chain_config,
+            db_tx,
+        )?;
+        let outputs = self.to_trezor_output_msgs(&ptx, tokens_additional_info)?;
+        let utxos = to_trezor_utxo_msgs(&ptx, tokens_additional_info, &self.chain_config)?;
         let chain_type = to_trezor_chain_type(&self.chain_config);
 
         let input_commitment_version = self
@@ -894,6 +909,7 @@ fn sign_input_with_standalone_key<AuxP: SigAuxDataProvider + ?Sized>(
 
 fn to_trezor_input_msgs(
     ptx: &PartiallySignedTransaction,
+    tokens_additional_info: &TokensAdditionalInfo,
     key_chain: &impl AccountKeyChains,
     chain_config: &ChainConfig,
     db_tx: &impl WalletStorageReadUnlocked,
@@ -917,12 +933,14 @@ fn to_trezor_input_msgs(
                         nonce,
                         command,
                         ptx.additional_info(),
+                        tokens_additional_info,
                     ),
                     TxInput::OrderAccountCommand(command) => to_trezor_order_command_input(
                         chain_config,
                         address_paths,
                         command,
                         ptx.additional_info(),
+                        tokens_additional_info,
                     ),
                 }?;
 
@@ -940,7 +958,8 @@ fn to_trezor_account_command_input(
     address_paths: Vec<MintlayerAddressPath>,
     nonce: &common::chain::AccountNonce,
     command: &AccountCommand,
-    additional_info: &TxAdditionalInfo,
+    ptx_additional_info: &PtxAdditionalInfo,
+    tokens_additional_info: &TokensAdditionalInfo,
 ) -> SignerResult<MintlayerTxInput> {
     let mut inp_req = MintlayerAccountCommandTxInput::new();
     inp_req.addresses = address_paths;
@@ -1001,19 +1020,19 @@ fn to_trezor_account_command_input(
                 initially_given,
                 ask_balance,
                 give_balance,
-            } = additional_info
+            } = ptx_additional_info
                 .get_order_info(order_id)
                 .ok_or(SignerError::MissingTxExtraInfo)?;
 
             req.initially_asked = Some(to_trezor_output_value(
                 initially_asked,
-                additional_info,
+                tokens_additional_info,
                 chain_config,
             )?)
             .into();
             req.initially_given = Some(to_trezor_output_value(
                 initially_given,
-                additional_info,
+                tokens_additional_info,
                 chain_config,
             )?)
             .into();
@@ -1033,19 +1052,19 @@ fn to_trezor_account_command_input(
                 initially_given,
                 ask_balance,
                 give_balance,
-            } = additional_info
+            } = ptx_additional_info
                 .get_order_info(order_id)
                 .ok_or(SignerError::MissingTxExtraInfo)?;
 
             req.initially_asked = Some(to_trezor_output_value(
                 initially_asked,
-                additional_info,
+                tokens_additional_info,
                 chain_config,
             )?)
             .into();
             req.initially_given = Some(to_trezor_output_value(
                 initially_given,
-                additional_info,
+                tokens_additional_info,
                 chain_config,
             )?)
             .into();
@@ -1064,7 +1083,8 @@ fn to_trezor_order_command_input(
     chain_config: &ChainConfig,
     address_paths: Vec<MintlayerAddressPath>,
     command: &OrderAccountCommand,
-    additional_info: &TxAdditionalInfo,
+    ptx_additional_info: &PtxAdditionalInfo,
+    tokens_additional_info: &TokensAdditionalInfo,
 ) -> SignerResult<MintlayerTxInput> {
     let mut inp_req = MintlayerOrderCommandTxInput::new();
     inp_req.addresses = address_paths;
@@ -1084,19 +1104,19 @@ fn to_trezor_order_command_input(
                 initially_given,
                 ask_balance,
                 give_balance,
-            } = additional_info
+            } = ptx_additional_info
                 .get_order_info(order_id)
                 .ok_or(SignerError::MissingTxExtraInfo)?;
 
             req.initially_asked = Some(to_trezor_output_value(
                 initially_asked,
-                additional_info,
+                tokens_additional_info,
                 chain_config,
             )?)
             .into();
             req.initially_given = Some(to_trezor_output_value(
                 initially_given,
-                additional_info,
+                tokens_additional_info,
                 chain_config,
             )?)
             .into();
@@ -1115,20 +1135,20 @@ fn to_trezor_order_command_input(
                 initially_given,
                 ask_balance: _,
                 give_balance: _,
-            } = additional_info
+            } = ptx_additional_info
                 .get_order_info(order_id)
                 .ok_or(SignerError::MissingTxExtraInfo)?;
 
             req.initially_asked = Some(to_trezor_output_value(
                 initially_asked,
-                additional_info,
+                tokens_additional_info,
                 chain_config,
             )?)
             .into();
 
             req.initially_given = Some(to_trezor_output_value(
                 initially_given,
-                additional_info,
+                tokens_additional_info,
                 chain_config,
             )?)
             .into();
@@ -1265,18 +1285,19 @@ fn destination_to_address_paths_impl(
 
 fn to_trezor_output_value(
     output_value: &OutputValue,
-    additional_info: &TxAdditionalInfo,
+    tokens_additional_info: &TokensAdditionalInfo,
     chain_config: &ChainConfig,
 ) -> SignerResult<MintlayerOutputValue> {
     to_trezor_output_value_with_token_info(
         output_value,
-        |token_id| additional_info.get_token_info(&token_id),
+        |token_id| tokens_additional_info.get_info(&token_id),
         chain_config,
     )
 }
 
 fn to_trezor_utxo_msgs(
     ptx: &PartiallySignedTransaction,
+    tokens_additional_info: &TokensAdditionalInfo,
     chain_config: &ChainConfig,
 ) -> SignerResult<BTreeMap<TransactionId, BTreeMap<u32, MintlayerTxOutput>>> {
     let mut utxos: BTreeMap<TransactionId, BTreeMap<u32, MintlayerTxOutput>> = BTreeMap::new();
@@ -1289,7 +1310,12 @@ fn to_trezor_utxo_msgs(
                     OutPointSourceId::Transaction(id) => id.to_hash().0,
                     OutPointSourceId::BlockReward(id) => id.to_hash().0,
                 };
-                let out = to_trezor_output_msg(chain_config, utxo, ptx.additional_info())?;
+                let out = to_trezor_output_msg(
+                    chain_config,
+                    utxo,
+                    ptx.additional_info(),
+                    tokens_additional_info,
+                )?;
                 utxos.entry(id).or_default().insert(outpoint.output_index(), out);
             }
             TxInput::Account(_)
@@ -1304,14 +1330,15 @@ fn to_trezor_utxo_msgs(
 fn to_trezor_output_msg(
     chain_config: &ChainConfig,
     out: &TxOutput,
-    additional_info: &TxAdditionalInfo,
+    ptx_additional_info: &PtxAdditionalInfo,
+    tokens_additional_info: &TokensAdditionalInfo,
 ) -> SignerResult<MintlayerTxOutput> {
     let res = match out {
         TxOutput::Transfer(value, dest) => {
             let mut out_req = MintlayerTransferTxOutput::new();
             out_req.value = Some(to_trezor_output_value(
                 value,
-                additional_info,
+                tokens_additional_info,
                 chain_config,
             )?)
             .into();
@@ -1325,7 +1352,7 @@ fn to_trezor_output_msg(
             let mut out_req = MintlayerLockThenTransferTxOutput::new();
             out_req.value = Some(to_trezor_output_value(
                 value,
-                additional_info,
+                tokens_additional_info,
                 chain_config,
             )?)
             .into();
@@ -1341,7 +1368,7 @@ fn to_trezor_output_msg(
             let mut out_req = MintlayerBurnTxOutput::new();
             out_req.value = Some(to_trezor_output_value(
                 value,
-                additional_info,
+                tokens_additional_info,
                 chain_config,
             )?)
             .into();
@@ -1393,7 +1420,7 @@ fn to_trezor_output_msg(
             let mut out_req = MintlayerProduceBlockFromStakeTxOutput::new();
             out_req.set_pool_id(Address::new(chain_config, *pool_id)?.into_string());
             out_req.set_destination(Address::new(chain_config, dest.clone())?.into_string());
-            let staker_balance = additional_info
+            let staker_balance = ptx_additional_info
                 .get_pool_info(pool_id)
                 .ok_or(SignerError::MissingTxExtraInfo)?
                 .staker_balance;
@@ -1486,7 +1513,7 @@ fn to_trezor_output_msg(
             let mut out_req = MintlayerHtlcTxOutput::new();
             out_req.value = Some(to_trezor_output_value(
                 value,
-                additional_info,
+                tokens_additional_info,
                 chain_config,
             )?)
             .into();
@@ -1512,13 +1539,13 @@ fn to_trezor_output_msg(
 
             out_req.ask = Some(to_trezor_output_value(
                 data.ask(),
-                additional_info,
+                tokens_additional_info,
                 chain_config,
             )?)
             .into();
             out_req.give = Some(to_trezor_output_value(
                 data.give(),
-                additional_info,
+                tokens_additional_info,
                 chain_config,
             )?)
             .into();
