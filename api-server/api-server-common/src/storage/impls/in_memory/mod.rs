@@ -15,11 +15,14 @@
 
 pub mod transactional;
 
-use crate::storage::storage_api::{
-    block_aux_data::{BlockAuxData, BlockWithExtraData},
-    AmountWithDecimals, ApiServerStorageError, BlockInfo, CoinOrTokenStatistic, Delegation,
-    FungibleTokenData, LockedUtxo, NftWithOwner, Order, PoolBlockStats, PoolDataWithExtraInfo,
-    TransactionInfo, TransactionWithBlockInfo, Utxo, UtxoLock, UtxoWithExtraInfo,
+use crate::{
+    storage::storage_api::{
+        block_aux_data::{BlockAuxData, BlockWithExtraData},
+        AmountWithDecimals, ApiServerStorageError, BlockInfo, CoinOrTokenStatistic, Delegation,
+        FungibleTokenData, LockedUtxo, NftWithOwner, Order, PoolBlockStats, PoolDataWithExtraInfo,
+        TransactionInfo, TransactionWithBlockInfo, Utxo, UtxoLock, UtxoWithExtraInfo,
+    },
+    utils::get_block_compact_target,
 };
 use common::{
     address::Address,
@@ -69,7 +72,7 @@ struct ApiServerInMemoryStorage {
 
 impl ApiServerInMemoryStorage {
     pub fn new(chain_config: &ChainConfig) -> Self {
-        let mut result = Self {
+        Self {
             block_table: BTreeMap::new(),
             block_aux_data_table: BTreeMap::new(),
             address_balance_table: BTreeMap::new(),
@@ -93,14 +96,11 @@ impl ApiServerInMemoryStorage {
                 chain_config.genesis_block_id(),
                 0.into(),
                 chain_config.genesis_block().timestamp(),
+                None,
             ),
             number_of_coin_decimals: chain_config.coin_decimals(),
-            storage_version: super::CURRENT_STORAGE_VERSION,
-        };
-        result
-            .initialize_storage(chain_config)
-            .expect("In-memory initialization must succeed");
-        result
+            storage_version: CURRENT_STORAGE_VERSION,
+        }
     }
 
     fn is_initialized(&self) -> Result<bool, ApiServerStorageError> {
@@ -325,6 +325,23 @@ impl ApiServerInMemoryStorage {
             None => return Ok(None),
         };
         Ok(Some(*block_aux_data))
+    }
+
+    fn get_blocks_aux_data(
+        &self,
+        blocks_count: u32,
+        starting_height: u64,
+    ) -> Result<Vec<BlockAuxData>, ApiServerStorageError> {
+        let start = BlockHeight::new(starting_height);
+        let end = BlockHeight::new(starting_height + blocks_count as u64);
+        self.main_chain_blocks_table
+            .range(start..end)
+            .map(|(_, block_id)| {
+                Ok(*self.block_aux_data_table.get(block_id).ok_or(
+                    ApiServerStorageError::AuxDataMissingForMainchainBlock(*block_id),
+                )?)
+            })
+            .collect()
     }
 
     fn get_block_range_from_time_range(
@@ -798,35 +815,13 @@ impl ApiServerInMemoryStorage {
 }
 
 impl ApiServerInMemoryStorage {
-    fn initialize_storage(
-        &mut self,
-        _chain_config: &ChainConfig,
-    ) -> Result<(), ApiServerStorageError> {
-        self.storage_version = CURRENT_STORAGE_VERSION;
-
-        Ok(())
-    }
-
     fn reinitialize_storage(
         &mut self,
         chain_config: &ChainConfig,
     ) -> Result<(), ApiServerStorageError> {
-        self.block_table.clear();
-        self.block_aux_data_table.clear();
-        self.address_balance_table.clear();
-        self.address_locked_balance_table.clear();
-        self.address_transactions_table.clear();
-        self.delegation_table.clear();
-        self.main_chain_blocks_table.clear();
-        self.pool_data_table.clear();
-        self.transaction_table.clear();
-        self.utxo_table.clear();
-        self.address_utxos.clear();
-        self.fungible_token_data.clear();
-        self.nft_token_issuances.clear();
-        self.orders_table.clear();
-
-        self.initialize_storage(chain_config)
+        let mut new_storage = Self::new(chain_config);
+        std::mem::swap(self, &mut new_storage);
+        Ok(())
     }
 
     fn del_address_balance_above_height(
@@ -971,13 +966,37 @@ impl ApiServerInMemoryStorage {
         block_height: BlockHeight,
         block: &BlockWithExtraData,
     ) -> Result<(), ApiServerStorageError> {
-        self.block_table.insert(block_id, block.clone());
-        self.block_aux_data_table.insert(
-            block_id,
-            BlockAuxData::new(block_id.into(), block_height, block.block.timestamp()),
+        let previously_stored_height =
+            self.block_aux_data_table.get(&block_id).map(|data| data.block_height());
+
+        let aux_data = BlockAuxData::new(
+            block_id.into(),
+            block_height,
+            block.block.timestamp(),
+            get_block_compact_target(&block.block),
         );
+        self.block_table.insert(block_id, block.clone());
+        self.block_aux_data_table.insert(block_id, aux_data);
         self.main_chain_blocks_table.insert(block_height, block_id);
-        self.best_block = BlockAuxData::new(block_id.into(), block_height, block.block.timestamp());
+
+        // Handle a degenerate case when the block is stored several times using different heights
+        // (to be consistent with the postgres implementation).
+        if let Some(previously_stored_height) = previously_stored_height {
+            if previously_stored_height != block_height {
+                self.main_chain_blocks_table.remove(&previously_stored_height);
+            }
+        }
+
+        if *self
+            .main_chain_blocks_table
+            .last_key_value()
+            .expect("the map is known to be non-empty")
+            .0
+            == block_height
+        {
+            self.best_block = aux_data;
+        }
+
         Ok(())
     }
 

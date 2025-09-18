@@ -65,6 +65,7 @@ services:
       - node-daemon
     environment:
       <<: *ml-common-env
+      ML_API_SCANNER_DAEMON_NETWORK: mainnet
       ML_API_SCANNER_DAEMON_POSTGRES_HOST: api-postgres-db
       ML_API_SCANNER_DAEMON_POSTGRES_USER: $API_SERVER_POSTGRES_USER
       ML_API_SCANNER_DAEMON_POSTGRES_PASSWORD: $API_SERVER_POSTGRES_PASSWORD
@@ -83,6 +84,7 @@ services:
       - node-daemon
     environment:
       <<: *ml-common-env
+      ML_API_WEB_SRV_NETWORK: mainnet
       ML_API_WEB_SRV_BIND_ADDRESS: 0.0.0.0:3000
       ML_API_WEB_SRV_POSTGRES_HOST: api-postgres-db
       ML_API_WEB_SRV_POSTGRES_USER: $API_SERVER_POSTGRES_USER

@@ -16,9 +16,10 @@
 use std::sync::RwLock;
 
 use api_web_server::CachedValues;
+use chainstate_test_framework::get_pos_target;
 use common::primitives::time::get_time;
 
-use crate::DummyRPC;
+use crate::{v2::utils::create_chain, DummyRPC};
 
 use super::*;
 
@@ -37,10 +38,13 @@ async fn at_genesis() {
                 let chain_config = Arc::new(create_unit_test_config());
                 let binding = Arc::clone(&chain_config);
                 let expected_genesis_id = binding.genesis_block().get_id();
+                let expected_genesis_timestamp = binding.genesis_block().timestamp();
 
                 _ = tx.send(json!({
                     "block_height": 0,
                     "block_id": expected_genesis_id.to_hash().encode_hex::<String>(),
+                    "target": null,
+                    "timestamp": expected_genesis_timestamp.as_int_seconds()
                 }));
 
                 let storage = TransactionalApiServerInMemoryStorage::new(&chain_config);
@@ -83,7 +87,7 @@ async fn at_genesis() {
 #[trace]
 #[case(Seed::from_entropy())]
 #[tokio::test]
-async fn height_n(#[case] seed: Seed) {
+async fn height_n(#[case] seed: Seed, #[values(false, true)] use_pos: bool) {
     let url = "/api/v2/chain/tip";
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -97,30 +101,21 @@ async fn height_n(#[case] seed: Seed) {
             let n_blocks = rng.gen_range(1..100);
 
             let web_server_state = {
-                let chain_config = create_unit_test_config();
+                let (chain_config, chainstate_blocks) = create_chain(n_blocks, use_pos, &mut rng);
 
-                let chainstate_blocks = {
-                    let mut tf = TestFramework::builder(&mut rng)
-                        .with_chain_config(chain_config.clone())
-                        .build();
+                // Need the "- 1" to account for the genesis block not in the vec
+                let expected_block = &chainstate_blocks[n_blocks - 1];
+                let expected_target = use_pos.then(|| {
+                    let target = get_pos_target(expected_block).unwrap();
+                    format!("0x{target:x}")
+                });
 
-                    let chainstate_block_ids = tf
-                        .create_chain_return_ids(&tf.genesis().get_id().into(), n_blocks, &mut rng)
-                        .unwrap();
-
-                    // Need the "- 1" to account for the genesis block not in the vec
-                    let expected_block_id = chainstate_block_ids[n_blocks - 1];
-
-                    _ = tx.send(json!({
+                _ = tx.send(json!({
                     "block_height": n_blocks,
-                    "block_id": expected_block_id,
-                    }));
-
-                    chainstate_block_ids
-                        .iter()
-                        .map(|id| tf.block(tf.to_chain_block_id(id)))
-                        .collect::<Vec<_>>()
-                };
+                    "block_id": expected_block.get_id(),
+                    "target": expected_target,
+                    "timestamp": expected_block.timestamp().as_int_seconds()
+                }));
 
                 let storage = {
                     let mut storage = TransactionalApiServerInMemoryStorage::new(&chain_config);

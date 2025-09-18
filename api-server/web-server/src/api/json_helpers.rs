@@ -15,8 +15,11 @@
 
 use std::{collections::BTreeMap, ops::Sub};
 
-use api_server_common::storage::storage_api::{
-    block_aux_data::BlockAuxData, NftWithOwner, Order, TransactionInfo, TxAdditionalInfo,
+use api_server_common::{
+    storage::storage_api::{
+        block_aux_data::BlockAuxData, NftWithOwner, Order, TransactionInfo, TxAdditionalInfo,
+    },
+    utils::{unpack_block_compact_target, BlockCompactTargetUnpackingError},
 };
 use common::{
     address::Address,
@@ -609,4 +612,22 @@ pub fn pool_data_to_json(
         "vrf_public_key": vrf_key.as_str(),
         "delegations_balance": amount_to_json(pool_data.delegations_balance, chain_config.coin_decimals()),
     })
+}
+
+// Json to return via endpoints such as "/chain" and "/chain/tip".
+pub fn block_info_to_json(
+    aux_data: &BlockAuxData,
+) -> Result<serde_json::Value, BlockCompactTargetUnpackingError> {
+    let target = aux_data
+        .block_compact_target()
+        .map(unpack_block_compact_target)
+        .transpose()?
+        .map(|target| format!("0x{target:x}"));
+
+    Ok(json!({
+        "block_id": aux_data.block_id(),
+        "block_height": aux_data.block_height(),
+        "timestamp": aux_data.block_timestamp().as_int_seconds(),
+        "target": target
+    }))
 }

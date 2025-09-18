@@ -21,15 +21,18 @@ use crate::helpers::make_trial;
 use crate::make_test;
 use pos_accounting::PoolData;
 
-use api_server_common::storage::{
-    impls::CURRENT_STORAGE_VERSION,
-    storage_api::{
-        block_aux_data::{BlockAuxData, BlockWithExtraData},
-        ApiServerStorage, ApiServerStorageError, ApiServerStorageRead, ApiServerStorageWrite,
-        ApiServerTransactionRw, BlockInfo, CoinOrTokenStatistic, Delegation, FungibleTokenData,
-        LockedUtxo, Order, PoolDataWithExtraInfo, TransactionInfo, Transactional, TxAdditionalInfo,
-        Utxo, UtxoLock, UtxoWithExtraInfo,
+use api_server_common::{
+    storage::{
+        impls::CURRENT_STORAGE_VERSION,
+        storage_api::{
+            block_aux_data::{BlockAuxData, BlockWithExtraData},
+            ApiServerStorage, ApiServerStorageError, ApiServerStorageRead, ApiServerStorageWrite,
+            ApiServerTransactionRw, BlockInfo, CoinOrTokenStatistic, Delegation, FungibleTokenData,
+            LockedUtxo, Order, PoolDataWithExtraInfo, TransactionInfo, Transactional,
+            TxAdditionalInfo, Utxo, UtxoLock, UtxoWithExtraInfo,
+        },
     },
+    utils::get_block_compact_target,
 };
 use crypto::{
     key::{KeyKind, PrivateKey},
@@ -50,7 +53,9 @@ use common::{
         AccountNonce, Block, DelegationId, Destination, OrderId, OutPointSourceId, PoolId,
         SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{per_thousand::PerThousand, Amount, BlockHeight, CoinOrTokenId, Id, Idable, H256},
+    primitives::{
+        per_thousand::PerThousand, Amount, BlockHeight, CoinOrTokenId, Compact, Id, Idable, H256,
+    },
 };
 use futures::Future;
 use libtest_mimic::Failed;
@@ -92,7 +97,16 @@ where
 
     let mut storage = storage_maker().await;
     let mut tx = storage.transaction_rw().await.unwrap();
-    let chain_config = create_unit_test_config();
+
+    // Note: we'll be creating a PoS chain so that PoS targets of blocks are not None.
+    let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+    let (staker_sk, staker_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+    let (chain_config_builder, genesis_pool_id) =
+        chainstate_test_framework::create_chain_config_with_default_staking_pool(
+            &mut rng, staker_pk, vrf_pk,
+        );
+    let chain_config = chain_config_builder.build();
+
     tx.reinitialize_storage(&chain_config).await.unwrap();
     tx.commit().await.unwrap();
 
@@ -110,18 +124,20 @@ where
 
     // Test setting/getting blocks
     let block_id = {
-        let mut test_framework = TestFramework::builder(&mut rng).build();
-        let chain_config = test_framework.chain_config().clone();
+        let mut test_framework =
+            TestFramework::builder(&mut rng).with_chain_config(chain_config.clone()).build();
+
         let mut db_tx = storage.transaction_rw().await.unwrap();
 
-        // should return genesis block id
-        let block_aux = db_tx.get_best_block().await.unwrap();
-        assert_eq!(block_aux.block_height(), BlockHeight::new(0));
-        assert_eq!(block_aux.block_id(), chain_config.genesis_block_id());
-        assert_eq!(
-            block_aux.block_timestamp(),
-            chain_config.genesis_block().timestamp()
+        // should return genesis block data
+        let best_block_aux_data = db_tx.get_best_block().await.unwrap();
+        let expected_best_block_aux_data = BlockAuxData::new(
+            chain_config.genesis_block_id(),
+            BlockHeight::new(0),
+            chain_config.genesis_block().timestamp(),
+            None,
         );
+        assert_eq!(best_block_aux_data, expected_best_block_aux_data);
 
         let timestamps = db_tx.get_latest_blocktimestamps().await.unwrap();
         assert_eq!(timestamps, vec![chain_config.genesis_block().timestamp()]);
@@ -131,66 +147,179 @@ where
             let block = db_tx.get_block(random_block_id).await.unwrap();
             assert!(block.is_none());
         }
-        // Create a test framework and blocks
 
+        // Create test blocks
         let genesis_id = chain_config.genesis_block_id();
         let num_blocks = rng.gen_range(10..20);
+        let target_block_time = chain_config.target_block_spacing();
         test_framework
-            .create_chain_return_ids_with_advancing_time(&genesis_id, num_blocks, &mut rng)
+            .progress_time_seconds_since_epoch(rng.gen_range(1..target_block_time.as_secs() * 2));
+        test_framework
+            .create_chain_pos_randomizing_time(
+                &mut rng,
+                &genesis_id,
+                num_blocks,
+                genesis_pool_id,
+                &staker_sk,
+                &vrf_sk,
+            )
             .unwrap();
 
-        let block_id1 =
-            test_framework.block_id(1).classify(&chain_config).chain_block_id().unwrap();
-        let block1 = test_framework.block(block_id1);
-        let block_height = BlockHeight::new(1);
-        let block_info1 = BlockInfo {
-            block: BlockWithExtraData {
-                block: block1.clone(),
-                tx_additional_infos: vec![],
-            },
-            height: Some(block_height),
+        let block1_height = BlockHeight::new(1);
+        let block1_id = test_framework
+            .block_id(block1_height.into_int())
+            .classify(&chain_config)
+            .chain_block_id()
+            .unwrap();
+        let block1 = test_framework.block(block1_id);
+        let block1_timestamp = block1.timestamp();
+        let block1_compact_target = get_block_compact_target(&block1);
+        let block1_with_extras = BlockWithExtraData {
+            block: block1.clone(),
+            tx_additional_infos: vec![],
         };
 
         {
-            let block_id = db_tx.get_block(block_id1).await.unwrap();
-            assert!(block_id.is_none());
+            let block1_aux_data = BlockAuxData::new(
+                block1_id.into(),
+                block1_height,
+                block1_timestamp,
+                block1_compact_target,
+            );
 
-            let block_id = db_tx.get_main_chain_block_id(block_height).await.unwrap();
-            assert!(block_id.is_none());
-
-            let block_with_extras = BlockWithExtraData {
-                block: block1.clone(),
+            // Use a relatively big height distance so that the targets have the chance of being different.
+            let block2_height = BlockHeight::new(10);
+            let block2_id = test_framework
+                .block_id(block2_height.into_int())
+                .classify(&chain_config)
+                .chain_block_id()
+                .unwrap();
+            let block2 = test_framework.block(block2_id);
+            let block2_timestamp = block2.timestamp();
+            let block2_compact_target = get_block_compact_target(&block2);
+            let block2_with_extras = BlockWithExtraData {
+                block: block2.clone(),
                 tx_additional_infos: vec![],
             };
+
+            let block2_aux_data = BlockAuxData::new(
+                block2_id.into(),
+                block2_height,
+                block2_timestamp,
+                block2_compact_target,
+            );
+
+            let block_info = db_tx.get_block(block1_id).await.unwrap();
+            assert!(block_info.is_none());
+            let block_info = db_tx.get_block(block2_id).await.unwrap();
+            assert!(block_info.is_none());
+
+            let block_id = db_tx.get_main_chain_block_id(block1_height).await.unwrap();
+            assert!(block_id.is_none());
+            let block_id = db_tx.get_main_chain_block_id(block2_height).await.unwrap();
+            assert!(block_id.is_none());
+
             db_tx
-                .set_mainchain_block(block_id1, block_height, &block_with_extras)
+                .set_mainchain_block(block1_id, block1_height, &block1_with_extras)
                 .await
                 .unwrap();
 
-            let block = db_tx.get_block(block_id1).await.unwrap();
-            assert_eq!(block.unwrap(), block_info1);
+            let block_info = db_tx.get_block(block1_id).await.unwrap();
+            let expected_block_info = BlockInfo {
+                block: block1_with_extras.clone(),
+                height: Some(block1_height),
+            };
+            assert_eq!(block_info.unwrap(), expected_block_info);
 
-            let block_id = db_tx.get_main_chain_block_id(block_height).await.unwrap();
-            assert_eq!(block_id.unwrap(), block_id1);
+            let block_id = db_tx.get_main_chain_block_id(block1_height).await.unwrap();
+            assert_eq!(block_id.unwrap(), block1_id);
+
+            // set_mainchain_block should have updated block's "aux data" too.
+            let aux_data = db_tx.get_blocks_aux_data(100, block1_height.into_int()).await.unwrap();
+            assert_eq!(aux_data.len(), 1);
+            assert_eq!(aux_data[0], block1_aux_data);
+
+            // The same is returned by get_best_block
+            let best_block_aux_data = db_tx.get_best_block().await.unwrap();
+            assert_eq!(best_block_aux_data, block1_aux_data);
+
+            // Call set_mainchain_block again using the same block id, but different data.
+            // The call should not try being smart and instead update the data as requested.
+            db_tx
+                .set_mainchain_block(block1_id, block2_height, &block2_with_extras)
+                .await
+                .unwrap();
+
+            let block_info = db_tx.get_block(block1_id).await.unwrap();
+            let expected_block_info = BlockInfo {
+                block: block2_with_extras.clone(),
+                height: Some(block2_height),
+            };
+            assert_eq!(block_info.unwrap(), expected_block_info);
+
+            // No main chain block on block1_height
+            let block_id = db_tx.get_main_chain_block_id(block1_height).await.unwrap();
+            assert!(block_id.is_none());
+
+            // But there is one at block2_height, referring to block1_id.
+            let block_id = db_tx.get_main_chain_block_id(block2_height).await.unwrap();
+            assert_eq!(block_id.unwrap(), block1_id);
+
+            // The aux data should be updated as well
+            let aux_data = db_tx.get_blocks_aux_data(100, block1_height.into_int()).await.unwrap();
+            let expected_aux_data2 = BlockAuxData::new(
+                block1_id.into(),
+                block2_height,
+                block2_timestamp,
+                block2_compact_target,
+            );
+            assert_eq!(aux_data.len(), 1);
+            assert_eq!(aux_data[0], expected_aux_data2);
+
+            // The same is returned by get_best_block
+            let best_block_aux_data = db_tx.get_best_block().await.unwrap();
+            assert_eq!(best_block_aux_data, expected_aux_data2);
 
             // delete the main chain block
             db_tx
-                .del_main_chain_blocks_above_height(block_height.prev_height().unwrap())
+                .del_main_chain_blocks_above_height(block2_height.prev_height().unwrap())
                 .await
                 .unwrap();
             // no main chain block on that height
-            let block_id = db_tx.get_main_chain_block_id(block_height).await.unwrap();
+            let block_id = db_tx.get_main_chain_block_id(block2_height).await.unwrap();
             assert!(block_id.is_none());
+            // the mainchain aux data is no longer returned
+            let aux_data = db_tx.get_blocks_aux_data(100, block1_height.into_int()).await.unwrap();
+            assert_eq!(aux_data.len(), 0);
             // but the block is still there just not on main chain
-            let block_info1 = BlockInfo {
-                block: BlockWithExtraData {
-                    block: block1.clone(),
-                    tx_additional_infos: vec![],
-                },
+            let block_info = db_tx.get_block(block1_id).await.unwrap();
+            let expected_block_info = BlockInfo {
+                block: block2_with_extras.clone(),
                 height: None,
             };
-            let block = db_tx.get_block(block_id1).await.unwrap();
-            assert_eq!(block.unwrap(), block_info1);
+            assert_eq!(block_info.unwrap(), expected_block_info);
+
+            // Set block1 and block2 as mainchain blocks, using the correct info, but in the
+            // reverse order - first block2, then block1. Check that block2 is the best block.
+            db_tx
+                .set_mainchain_block(block2_id, block2_height, &block2_with_extras)
+                .await
+                .unwrap();
+            let best_block_aux_data = db_tx.get_best_block().await.unwrap();
+            assert_eq!(best_block_aux_data, block2_aux_data);
+
+            db_tx
+                .set_mainchain_block(block1_id, block1_height, &block1_with_extras)
+                .await
+                .unwrap();
+            let best_block_aux_data = db_tx.get_best_block().await.unwrap();
+            assert_eq!(best_block_aux_data, block2_aux_data);
+
+            // Delete the mainchain blocks again.
+            db_tx
+                .del_main_chain_blocks_above_height(block1_height.prev_height().unwrap())
+                .await
+                .unwrap();
         }
 
         {
@@ -221,6 +350,7 @@ where
                             block_id.into(),
                             BlockHeight::new(block_height),
                             block.timestamp(),
+                            get_block_compact_target(&block),
                         ),
                     )
                     .await
@@ -255,7 +385,7 @@ where
 
             // delete the main chain block
             db_tx
-                .del_main_chain_blocks_above_height(block_height.prev_height().unwrap())
+                .del_main_chain_blocks_above_height(block1_height.prev_height().unwrap())
                 .await
                 .unwrap();
         }
@@ -265,7 +395,7 @@ where
         {
             // with read only tx reconfirm everything is the same after the commit
             let db_tx = storage.transaction_ro().await.unwrap();
-            let block_id = db_tx.get_main_chain_block_id(block_height).await.unwrap();
+            let block_id = db_tx.get_main_chain_block_id(block1_height).await.unwrap();
             assert!(block_id.is_none());
 
             let block_info1 = BlockInfo {
@@ -275,11 +405,11 @@ where
                 },
                 height: None,
             };
-            let block = db_tx.get_block(block_id1).await.unwrap();
+            let block = db_tx.get_block(block1_id).await.unwrap();
             assert_eq!(block.unwrap(), block_info1);
         }
 
-        block_id1
+        block1_id
     };
 
     // Test setting/getting transactions
@@ -370,7 +500,7 @@ where
             let height1 = height1_u64.into();
             let random_block_timestamp = BlockTimestamp::from_int_seconds(rng.gen::<u64>());
             let aux_data1 =
-                BlockAuxData::new(owning_block1.into(), height1, random_block_timestamp);
+                BlockAuxData::new(owning_block1.into(), height1, random_block_timestamp, None);
             db_tx.set_block_aux_data(owning_block1, &aux_data1).await.unwrap();
 
             let tx_info = TransactionInfo {
@@ -421,8 +551,13 @@ where
         let existing_block_id: Id<Block> = block_id;
         let height1_u64 = rng.gen_range::<u64, _>(1..i64::MAX as u64);
         let height1 = height1_u64.into();
-        let aux_data1 =
-            BlockAuxData::new(existing_block_id.into(), height1, random_block_timestamp);
+        let compact_target1 = Compact(rng.gen());
+        let aux_data1 = BlockAuxData::new(
+            existing_block_id.into(),
+            height1,
+            random_block_timestamp,
+            Some(compact_target1),
+        );
         db_tx.set_block_aux_data(existing_block_id, &aux_data1).await.unwrap();
 
         let retrieved_aux_data = db_tx.get_block_aux_data(existing_block_id).await.unwrap();
@@ -432,8 +567,13 @@ where
         let height2_u64 = rng.gen_range::<u64, _>(1..i64::MAX as u64);
         let height2 = height2_u64.into();
         let random_block_timestamp = BlockTimestamp::from_int_seconds(rng.gen::<u64>());
-        let aux_data2 =
-            BlockAuxData::new(existing_block_id.into(), height2, random_block_timestamp);
+        let compact_target2 = Compact(rng.gen());
+        let aux_data2 = BlockAuxData::new(
+            existing_block_id.into(),
+            height2,
+            random_block_timestamp,
+            Some(compact_target2),
+        );
         db_tx.set_block_aux_data(existing_block_id, &aux_data2).await.unwrap();
 
         let retrieved_aux_data = db_tx.get_block_aux_data(existing_block_id).await.unwrap();
@@ -445,8 +585,6 @@ where
     // Test setting/getting address spendable utxos
     {
         let db_tx = storage.transaction_ro().await.unwrap();
-        let test_framework = TestFramework::builder(&mut rng).build();
-        let chain_config = test_framework.chain_config().clone();
 
         let (_bob_sk, bob_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
 

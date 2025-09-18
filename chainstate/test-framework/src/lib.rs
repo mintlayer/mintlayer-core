@@ -25,6 +25,7 @@ mod random_tx_maker;
 mod signature_destination_getter;
 mod staking_pools;
 pub mod storage;
+mod test_block_index_handle;
 mod transaction_builder;
 mod tx_verification_strategy;
 mod utils;
@@ -38,15 +39,17 @@ pub type TestChainstate = Box<dyn chainstate::chainstate_interface::ChainstateIn
 
 pub use {
     crate::utils::{
-        anyonecanspend_address, create_chain_config_with_default_staking_pool,
-        create_chain_config_with_staking_pool, create_custom_genesis_with_stake_pool,
-        create_stake_pool_data_with_all_reward_to_staker, empty_witness, get_output_value,
-        output_value_amount, pos_mine, produce_kernel_signature,
+        anyonecanspend_address, calculate_new_pos_compact_target,
+        create_chain_config_with_default_staking_pool, create_chain_config_with_staking_pool,
+        create_custom_genesis_with_stake_pool, create_stake_pool_data_with_all_reward_to_staker,
+        empty_witness, get_output_value, get_pos_target, output_value_amount, pos_mine,
+        produce_kernel_signature,
     },
     block_builder::BlockBuilder,
     framework::TestFramework,
     framework_builder::{OrphanErrorHandler, TestFrameworkBuilder, TxVerificationStrategy},
     pos_block_builder::PoSBlockBuilder,
+    test_block_index_handle::TestBlockIndexHandle,
     transaction_builder::TransactionBuilder,
     utxo_for_spending::UtxoForSpending,
 };

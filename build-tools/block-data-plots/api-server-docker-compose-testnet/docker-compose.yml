@@ -1,0 +1,72 @@
+# Same as api-server-docker-compose-mainnet, but for the testnet.
+
+x-common-env: &ml-common-env
+  RUST_LOG:
+  ML_USER_ID:
+  ML_GROUP_ID:
+
+services:
+  node-daemon:
+    image: $ML_DOCKERHUB_USERNAME/node-daemon:$ML_DOCKER_IMAGE_TAG
+    command: node-daemon testnet
+    environment:
+      <<: *ml-common-env
+      ML_TESTNET_NODE_RPC_BIND_ADDRESS: 0.0.0.0:13030
+      ML_TESTNET_NODE_RPC_USERNAME: $NODE_RPC_USERNAME
+      ML_TESTNET_NODE_RPC_PASSWORD: $NODE_RPC_PASSWORD
+    volumes:
+      - node_data:/home/mintlayer
+
+  api-postgres-db:
+    image: postgres:$API_SERVER_POSTGRES_DOCKER_IMAGE_TAG
+    restart: always
+    environment:
+      POSTGRES_USER: $API_SERVER_POSTGRES_USER
+      POSTGRES_PASSWORD: $API_SERVER_POSTGRES_PASSWORD
+      POSTGRES_DB: $API_SERVER_POSTGRES_DB
+    ports:
+      - "127.0.0.1:$API_SERVER_POSTGRES_HOST_PORT:5432"
+    volumes:
+       - api_postgres_db:/var/lib/postgresql/data
+
+  api-blockchain-scanner-daemon:
+    image: $ML_DOCKERHUB_USERNAME/api-blockchain-scanner-daemon:$ML_DOCKER_IMAGE_TAG
+    command: api-blockchain-scanner-daemon
+    depends_on:
+      - api-postgres-db
+      - node-daemon
+    environment:
+      <<: *ml-common-env
+      ML_API_SCANNER_DAEMON_NETWORK: testnet
+      ML_API_SCANNER_DAEMON_POSTGRES_HOST: api-postgres-db
+      ML_API_SCANNER_DAEMON_POSTGRES_USER: $API_SERVER_POSTGRES_USER
+      ML_API_SCANNER_DAEMON_POSTGRES_PASSWORD: $API_SERVER_POSTGRES_PASSWORD
+      ML_API_SCANNER_DAEMON_POSTGRES_DATABASE: $API_SERVER_POSTGRES_DB
+      ML_API_SCANNER_DAEMON_NODE_RPC_ADDRESS: node-daemon:13030
+      ML_API_SCANNER_DAEMON_NODE_RPC_USERNAME: $NODE_RPC_USERNAME
+      ML_API_SCANNER_DAEMON_NODE_RPC_PASSWORD: $NODE_RPC_PASSWORD
+
+  api-web-server:
+    image: $ML_DOCKERHUB_USERNAME/api-web-server:$ML_DOCKER_IMAGE_TAG
+    command: api-web-server
+    depends_on:
+      - api-postgres-db
+      - api-blockchain-scanner-daemon
+      - node-daemon
+    environment:
+      <<: *ml-common-env
+      ML_API_WEB_SRV_NETWORK: testnet
+      ML_API_WEB_SRV_BIND_ADDRESS: 0.0.0.0:3000
+      ML_API_WEB_SRV_POSTGRES_HOST: api-postgres-db
+      ML_API_WEB_SRV_POSTGRES_USER: $API_SERVER_POSTGRES_USER
+      ML_API_WEB_SRV_POSTGRES_PASSWORD: $API_SERVER_POSTGRES_PASSWORD
+      ML_API_WEB_SRV_POSTGRES_DATABASE: $API_SERVER_POSTGRES_DB
+      ML_API_WEB_SRV_NODE_RPC_ADDRESS: node-daemon:13030
+      ML_API_WEB_SRV_NODE_RPC_USERNAME: $NODE_RPC_USERNAME
+      ML_API_WEB_SRV_NODE_RPC_PASSWORD: $NODE_RPC_PASSWORD
+    ports:
+      - "$API_SERVER_HOST_PORT:3000"
+
+volumes:
+  api_postgres_db:
+  node_data:

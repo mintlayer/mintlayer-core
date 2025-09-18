@@ -355,6 +355,14 @@ impl ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRw<'_> {
         self.transaction.get_block_aux_data(block_id)
     }
 
+    async fn get_blocks_aux_data(
+        &self,
+        blocks_count: u32,
+        starting_height: u64,
+    ) -> Result<Vec<BlockAuxData>, ApiServerStorageError> {
+        self.transaction.get_blocks_aux_data(blocks_count, starting_height)
+    }
+
     async fn get_block_range_from_time_range(
         &self,
         time_range: (BlockTimestamp, BlockTimestamp),

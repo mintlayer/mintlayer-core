@@ -22,6 +22,7 @@ mod block;
 mod block_header;
 mod block_reward;
 mod block_transaction_ids;
+mod chain;
 mod chain_at_height;
 mod chain_tip;
 mod feerate;
@@ -41,6 +42,7 @@ mod transaction_merkle_path;
 mod transaction_output;
 mod transaction_submit;
 mod transactions;
+mod utils;
 
 use crate::{spawn_webserver, DummyRPC};
 use api_blockchain_scanner_lib::{
@@ -82,6 +84,11 @@ use std::{
     sync::{Arc, RwLock},
 };
 use test_utils::random::{make_seedable_rng, Rng, Seed};
+
+#[ctor::ctor]
+fn init() {
+    logging::init_logging();
+}
 
 #[tokio::test]
 async fn chain_genesis() {

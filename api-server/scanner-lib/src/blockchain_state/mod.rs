@@ -14,11 +14,14 @@
 // limitations under the License.
 
 use crate::sync::local_state::LocalBlockchainState;
-use api_server_common::storage::storage_api::{
-    block_aux_data::{BlockAuxData, BlockWithExtraData},
-    ApiServerStorage, ApiServerStorageError, ApiServerStorageRead, ApiServerStorageWrite,
-    ApiServerTransactionRw, CoinOrTokenStatistic, Delegation, FungibleTokenData, LockedUtxo, Order,
-    PoolDataWithExtraInfo, TransactionInfo, TxAdditionalInfo, Utxo, UtxoLock,
+use api_server_common::{
+    storage::storage_api::{
+        block_aux_data::{BlockAuxData, BlockWithExtraData},
+        ApiServerStorage, ApiServerStorageError, ApiServerStorageRead, ApiServerStorageWrite,
+        ApiServerTransactionRw, CoinOrTokenStatistic, Delegation, FungibleTokenData, LockedUtxo,
+        Order, PoolDataWithExtraInfo, TransactionInfo, TxAdditionalInfo, Utxo, UtxoLock,
+    },
+    utils::get_block_compact_target,
 };
 use chainstate::{
     calculate_median_time_past_from_blocktimestamps,
@@ -208,7 +211,12 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
             db_tx
                 .set_block_aux_data(
                     block_id,
-                    &BlockAuxData::new(block_id.into(), block_height, block_timestamp),
+                    &BlockAuxData::new(
+                        block_id.into(),
+                        block_height,
+                        block_timestamp,
+                        get_block_compact_target(&block),
+                    ),
                 )
                 .await
                 .expect("Unable to set block aux data");

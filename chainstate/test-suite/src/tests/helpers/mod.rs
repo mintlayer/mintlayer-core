@@ -26,7 +26,6 @@ use crypto::key::{KeyKind, PrivateKey};
 use randomness::{CryptoRng, Rng};
 
 pub mod block_creation_helpers;
-pub mod block_index_handle_impl;
 pub mod block_status_helpers;
 pub mod in_memory_storage_wrapper;
 pub mod pos;
