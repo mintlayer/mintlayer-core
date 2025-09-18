@@ -165,7 +165,7 @@ mockall::mock! {
         fn export_bootstrap_stream<'a>(
             &'a self,
             writer: std::io::BufWriter<Box<dyn std::io::Write + Send + 'a>>,
-            include_orphans: bool,
+            include_stale_blocks: bool,
         ) -> Result<(), ChainstateError>;
         fn utxo(&self, outpoint: &UtxoOutPoint) -> Result<Option<Utxo>, ChainstateError>;
         fn is_initial_block_download(&self) -> bool;

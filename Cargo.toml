@@ -20,6 +20,7 @@ members = [
   "api-server/web-server",              # API server, for light-wallets and block explorers: web-server.
   "blockprod",                          # Block production with whatever consensus algorithm.
   "chainstate",                         # Code on chainstate of blocks and transactions.
+  "chainstate/db-dumper",               # A tool for dumping the contents of the chainstate db.
   "chainstate/test-suite",              # Tests for the chainstate, separated to make use of the chainstate test framework.
   "common",                             # Everything else, until it's moved to another crate.
   "consensus",                          # Consensus related logic.
@@ -86,6 +87,7 @@ default-members = [
   "api-server/scanner-daemon",
   "api-server/web-server",
   "chainstate",
+  "chainstate/db-dumper",
   "common",
   "crypto",
   "dns-server",

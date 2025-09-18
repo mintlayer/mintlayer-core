@@ -625,14 +625,14 @@ where
     fn export_bootstrap_stream<'a>(
         &self,
         writer: std::io::BufWriter<Box<dyn std::io::Write + Send + 'a>>,
-        include_orphans: bool,
+        include_stale_blocks: bool,
     ) -> Result<(), ChainstateError> {
         let magic_bytes = self.chainstate.chain_config().magic_bytes();
         let mut writer = writer;
         export_bootstrap_stream(
             &magic_bytes.bytes(),
             &mut writer,
-            include_orphans,
+            include_stale_blocks,
             &self.chainstate.query().map_err(ChainstateError::from)?,
         )?;
         Ok(())
