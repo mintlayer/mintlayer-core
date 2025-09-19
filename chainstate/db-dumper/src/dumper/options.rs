@@ -69,7 +69,7 @@ pub struct Options {
     pub mainchain_only: bool,
 
     /// Block height to start from
-    #[clap(long = "from_height", default_value_t = 0)]
+    #[clap(long = "from-height", default_value_t = 0)]
     pub from_height: u64,
 
     /// This help string
