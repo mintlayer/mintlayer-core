@@ -41,12 +41,19 @@ impl From<TrezorFullInfo> for TrezorData {
     }
 }
 
+#[cfg(feature = "ledger")]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+pub struct LedgerData {}
+
 /// This is the data that will be stored in the wallet db.
 #[derive(Debug, Clone, Encode, Decode)]
 pub enum HardwareWalletData {
     #[cfg(feature = "trezor")]
     #[codec(index = 0)]
     Trezor(TrezorData),
+    #[cfg(feature = "ledger")]
+    #[codec(index = 1)]
+    Ledger(LedgerData),
 }
 
 /// All the info we may want to know about a hardware wallet.
