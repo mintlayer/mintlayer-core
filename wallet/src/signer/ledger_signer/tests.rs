@@ -107,6 +107,7 @@ impl LProvider for DummyProvider {
     async fn find_ledger_device_from_db<T: WalletStorageReadLocked + Send>(
         &self,
         db_tx: T,
+        _chain_config: Arc<ChainConfig>,
     ) -> (T, SignerResult<(Self::L, LedgerData)>) {
         (
             db_tx,
