@@ -716,13 +716,13 @@ where
             self.peer_activity.set_expecting_blocks_since(Some(self.time_getter.get_time()));
         }
 
-        let block = self.chainstate_handle.call(|c| Ok(c.preliminary_block_check(block)?)).await?;
-
         // Process the block and also determine the new value for peers_best_block_that_we_have.
         let old_peers_best_block_that_we_have = self.incoming.peers_best_block_that_we_have;
         let (best_block, new_tip_received) = self
             .chainstate_handle
             .call_mut(move |c| {
+                let block = c.preliminary_block_check(block)?;
+
                 // If the block already exists in the block tree, skip it.
                 let new_tip_received =
                     if c.get_block_index_for_persisted_block(&block.get_id())?.is_some() {

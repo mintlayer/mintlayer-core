@@ -220,7 +220,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         &mut self,
         evt: ChainstateEvent,
     ) -> Result<(), ChainstateEventError> {
-        log::debug!("mempool: Processing chainstate event {evt:?}");
+        log::debug!("Processing chainstate event {evt:?}");
         match evt {
             ChainstateEvent::NewTip(block_id, height) => self.on_new_tip(block_id, height)?,
         };
@@ -228,7 +228,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
     }
 
     fn on_new_tip(&mut self, block_id: Id<Block>, height: BlockHeight) -> Result<(), ReorgError> {
-        log::info!("New block tip: {block_id:?} at height {height}");
+        log::debug!("New block tip: {block_id:x} at height {height}");
 
         let mut finalizer = TxFinalizer::new(
             &mut self.orphans,
