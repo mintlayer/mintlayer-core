@@ -611,6 +611,11 @@ pub trait ApiServerStorageRead: Sync {
         block_id: Id<Block>,
     ) -> Result<Option<BlockAuxData>, ApiServerStorageError>;
 
+    // Note:
+    // 1) The input time range is inclusive on both ends.
+    // 2) The returned heights won't include the genesis height normally.
+    // However, if there are no blocks on the mainchain in the specified time range (except genesis),
+    // the function will return (0, 0).
     async fn get_block_range_from_time_range(
         &self,
         time_range: (BlockTimestamp, BlockTimestamp),

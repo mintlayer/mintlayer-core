@@ -13,6 +13,7 @@ chainstate = { path = "../../chainstate" }
 chainstate-test-framework = { path = "../../chainstate/test-framework" }
 common = { path = "../../common" }
 crypto = { path = "../../crypto" }
+logging = { path = "../../logging" }
 randomness = { path = "../../randomness" }
 serialization = { path = "../../serialization" }
 test-utils = { path = "../../test-utils" }
@@ -23,10 +24,11 @@ mempool = { path = "../../mempool" }
 
 async-trait.workspace = true
 axum.workspace = true
+ctor.workspace = true
 hex.workspace = true
 libtest-mimic.workspace = true
 reqwest = "0.11"
+rstest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tokio = { workspace = true, features = ["full"] }
-rstest.workspace = true

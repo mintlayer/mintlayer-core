@@ -83,6 +83,11 @@ use std::{
 };
 use test_utils::random::{make_seedable_rng, Rng, Seed};
 
+#[ctor::ctor]
+fn init() {
+    logging::init_logging();
+}
+
 #[tokio::test]
 async fn chain_genesis() {
     let url = "/api/v2/chain/genesis";

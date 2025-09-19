@@ -112,19 +112,19 @@ where
     let block_id = {
         let mut test_framework = TestFramework::builder(&mut rng).build();
         let chain_config = test_framework.chain_config().clone();
+        let genesis_timestamp = chain_config.genesis_block().timestamp();
+        let genesis_id = chain_config.genesis_block_id();
+
         let mut db_tx = storage.transaction_rw().await.unwrap();
 
-        // should return genesis block id
-        let block_aux = db_tx.get_best_block().await.unwrap();
-        assert_eq!(block_aux.block_height(), BlockHeight::new(0));
-        assert_eq!(block_aux.block_id(), chain_config.genesis_block_id());
-        assert_eq!(
-            block_aux.block_timestamp(),
-            chain_config.genesis_block().timestamp()
-        );
+        // should return genesis block data
+        let best_block_data = db_tx.get_best_block().await.unwrap();
+        let expected_best_block_data =
+            BlockAuxData::new(genesis_id, BlockHeight::new(0), genesis_timestamp);
+        assert_eq!(best_block_data, expected_best_block_data);
 
         let timestamps = db_tx.get_latest_blocktimestamps().await.unwrap();
-        assert_eq!(timestamps, vec![chain_config.genesis_block().timestamp()]);
+        assert_eq!(timestamps, &[genesis_timestamp]);
 
         {
             let random_block_id: Id<Block> = Id::<Block>::new(H256::random_using(&mut rng));
@@ -139,58 +139,248 @@ where
             .create_chain_advancing_time_return_ids(&genesis_id, num_blocks, &mut rng)
             .unwrap();
 
-        let block_id1 =
-            test_framework.block_id(1).classify(&chain_config).chain_block_id().unwrap();
-        let block1 = test_framework.block(block_id1);
-        let block_height = BlockHeight::new(1);
-        let block_info1 = BlockInfo {
-            block: BlockWithExtraData {
-                block: block1.clone(),
-                tx_additional_infos: vec![],
-            },
-            height: Some(block_height),
-        };
+        let block1_height = BlockHeight::new(1);
+        let block1_id = test_framework
+            .block_id(block1_height.into_int())
+            .classify(&chain_config)
+            .chain_block_id()
+            .unwrap();
+        let block1 = test_framework.block(block1_id);
 
         {
-            let block_id = db_tx.get_block(block_id1).await.unwrap();
-            assert!(block_id.is_none());
+            let block1_timestamp = block1.timestamp();
 
-            let block_id = db_tx.get_main_chain_block_id(block_height).await.unwrap();
-            assert!(block_id.is_none());
+            let block2_height = BlockHeight::new(2);
+            let block2_id = test_framework
+                .block_id(block2_height.into_int())
+                .classify(&chain_config)
+                .chain_block_id()
+                .unwrap();
+            let block2 = test_framework.block(block2_id);
 
-            let block_with_extras = BlockWithExtraData {
-                block: block1.clone(),
-                tx_additional_infos: vec![],
-            };
+            let block2_timestamp = block2.timestamp();
+
+            // Sanity checks
+            {
+                assert!(block1_timestamp < block2_timestamp);
+
+                let block_info = db_tx.get_block(block1_id).await.unwrap();
+                assert!(block_info.is_none());
+                let block_info = db_tx.get_block(block2_id).await.unwrap();
+                assert!(block_info.is_none());
+
+                let block_id = db_tx.get_main_chain_block_id(block1_height).await.unwrap();
+                assert!(block_id.is_none());
+                let block_id = db_tx.get_main_chain_block_id(block2_height).await.unwrap();
+                assert!(block_id.is_none());
+
+                // The returned (0, 0) means that there are no blocks on the mainchain.
+                let heights_for_ts_range = db_tx
+                    .get_block_range_from_time_range((
+                        BlockTimestamp::from_int_seconds(0),
+                        BlockTimestamp::from_int_seconds(u32::MAX.into()),
+                    ))
+                    .await
+                    .unwrap();
+                assert_eq!(
+                    heights_for_ts_range,
+                    (BlockHeight::zero(), BlockHeight::zero())
+                );
+            }
+
+            // Set block1 as mainchain block
             db_tx
-                .set_mainchain_block(block_id1, block_height, &block_with_extras)
+                .set_mainchain_block(
+                    block1_id,
+                    block1_height,
+                    &BlockWithExtraData {
+                        block: block1.clone(),
+                        tx_additional_infos: vec![],
+                    },
+                )
                 .await
                 .unwrap();
 
-            let block = db_tx.get_block(block_id1).await.unwrap();
-            assert_eq!(block.unwrap(), block_info1);
+            // Do the checks
+            {
+                let block_info = db_tx.get_block(block1_id).await.unwrap();
+                let expected_block_info = BlockInfo {
+                    block: BlockWithExtraData {
+                        block: block1.clone(),
+                        tx_additional_infos: vec![],
+                    },
+                    height: Some(block1_height),
+                };
+                assert_eq!(block_info.unwrap(), expected_block_info);
 
-            let block_id = db_tx.get_main_chain_block_id(block_height).await.unwrap();
-            assert_eq!(block_id.unwrap(), block_id1);
+                let block_id = db_tx.get_main_chain_block_id(block1_height).await.unwrap();
+                assert_eq!(block_id.unwrap(), block1_id);
 
-            // delete the main chain block
+                let best_block_data = db_tx.get_best_block().await.unwrap();
+                let expected_best_block_data =
+                    BlockAuxData::new(block1_id.into(), block1_height, block1_timestamp);
+                assert_eq!(best_block_data, expected_best_block_data);
+
+                let latest_timestamps = db_tx.get_latest_blocktimestamps().await.unwrap();
+                assert_eq!(latest_timestamps, &[block1_timestamp, genesis_timestamp]);
+
+                let heights_for_ts_range = db_tx
+                    .get_block_range_from_time_range((genesis_timestamp, block1_timestamp))
+                    .await
+                    .unwrap();
+                assert_eq!(heights_for_ts_range, (block1_height, block1_height));
+            }
+
+            // Call set_mainchain_block again using the same block id, but different data.
+            // The call should not try being smart and instead update the data as requested.
             db_tx
-                .del_main_chain_blocks_above_height(block_height.prev_height().unwrap())
+                .set_mainchain_block(
+                    block1_id,
+                    block2_height,
+                    &BlockWithExtraData {
+                        block: block2.clone(),
+                        tx_additional_infos: vec![],
+                    },
+                )
                 .await
                 .unwrap();
-            // no main chain block on that height
-            let block_id = db_tx.get_main_chain_block_id(block_height).await.unwrap();
-            assert!(block_id.is_none());
-            // but the block is still there just not on main chain
-            let block_info1 = BlockInfo {
-                block: BlockWithExtraData {
-                    block: block1.clone(),
-                    tx_additional_infos: vec![],
-                },
-                height: None,
-            };
-            let block = db_tx.get_block(block_id1).await.unwrap();
-            assert_eq!(block.unwrap(), block_info1);
+
+            // Do the checks
+            {
+                let block_info = db_tx.get_block(block1_id).await.unwrap();
+                let expected_block_info = BlockInfo {
+                    block: BlockWithExtraData {
+                        block: block2.clone(),
+                        tx_additional_infos: vec![],
+                    },
+                    height: Some(block2_height),
+                };
+                assert_eq!(block_info.unwrap(), expected_block_info);
+
+                // No main chain block on block1_height
+                let block_id = db_tx.get_main_chain_block_id(block1_height).await.unwrap();
+                assert!(block_id.is_none());
+
+                // But there is one at block2_height, referring to block1_id.
+                let block_id = db_tx.get_main_chain_block_id(block2_height).await.unwrap();
+                assert_eq!(block_id.unwrap(), block1_id);
+
+                let best_block_data = db_tx.get_best_block().await.unwrap();
+                let expected_best_block_data =
+                    BlockAuxData::new(block1_id.into(), block2_height, block2_timestamp);
+                assert_eq!(best_block_data, expected_best_block_data);
+
+                let latest_timestamps = db_tx.get_latest_blocktimestamps().await.unwrap();
+                assert_eq!(latest_timestamps, &[block2_timestamp, genesis_timestamp]);
+
+                // When block1_timestamp is passed, (0, 0) is returned, meaning that no blocks
+                // were found in that range.
+                let heights_for_ts_range = db_tx
+                    .get_block_range_from_time_range((genesis_timestamp, block1_timestamp))
+                    .await
+                    .unwrap();
+                assert_eq!(
+                    heights_for_ts_range,
+                    (BlockHeight::zero(), BlockHeight::zero())
+                );
+
+                // When block2_timestamp is passed, this returns the non-genesis block height,
+                // which we've set to block2_height.
+                let heights_for_ts_range = db_tx
+                    .get_block_range_from_time_range((genesis_timestamp, block2_timestamp))
+                    .await
+                    .unwrap();
+                assert_eq!(heights_for_ts_range, (block2_height, block2_height));
+            }
+
+            // Delete the main chain block
+            db_tx
+                .del_main_chain_blocks_above_height(block1_height.prev_height().unwrap())
+                .await
+                .unwrap();
+
+            // Do the checks
+            {
+                // No main chain block on those heights
+                let block_id = db_tx.get_main_chain_block_id(block1_height).await.unwrap();
+                assert!(block_id.is_none());
+                let block_id = db_tx.get_main_chain_block_id(block2_height).await.unwrap();
+                assert!(block_id.is_none());
+
+                // But the block is still there just not on main chain
+                let block_info = db_tx.get_block(block1_id).await.unwrap();
+                let expected_block_info = BlockInfo {
+                    block: BlockWithExtraData {
+                        block: block2.clone(),
+                        tx_additional_infos: vec![],
+                    },
+                    height: None,
+                };
+                assert_eq!(block_info.unwrap(), expected_block_info);
+
+                // Genesis is now the best block
+                let best_block_data = db_tx.get_best_block().await.unwrap();
+                let expected_best_block_data =
+                    BlockAuxData::new(genesis_id, BlockHeight::new(0), genesis_timestamp);
+                assert_eq!(best_block_data, expected_best_block_data);
+
+                // Latest block timestamps only contain the genesis
+                let latest_timestamps = db_tx.get_latest_blocktimestamps().await.unwrap();
+                assert_eq!(latest_timestamps, &[genesis_timestamp]);
+
+                // No mainchain blocks are found by get_block_range_from_time_range either.
+                let heights_for_ts_range = db_tx
+                    .get_block_range_from_time_range((
+                        BlockTimestamp::from_int_seconds(0),
+                        BlockTimestamp::from_int_seconds(u32::MAX.into()),
+                    ))
+                    .await
+                    .unwrap();
+                assert_eq!(
+                    heights_for_ts_range,
+                    (BlockHeight::zero(), BlockHeight::zero())
+                );
+            }
+
+            // Now set block1 and block2 as mainchain blocks using the correct info, but in the
+            // reverse order - first block2, then block1. Check that block2 is the best block.
+            db_tx
+                .set_mainchain_block(
+                    block2_id,
+                    block2_height,
+                    &BlockWithExtraData {
+                        block: block2.clone(),
+                        tx_additional_infos: vec![],
+                    },
+                )
+                .await
+                .unwrap();
+
+            let expected_best_block_data =
+                BlockAuxData::new(block2_id.into(), block2_height, block2_timestamp);
+
+            let best_block_data = db_tx.get_best_block().await.unwrap();
+            assert_eq!(best_block_data, expected_best_block_data);
+
+            db_tx
+                .set_mainchain_block(
+                    block1_id,
+                    block1_height,
+                    &BlockWithExtraData {
+                        block: block1.clone(),
+                        tx_additional_infos: vec![],
+                    },
+                )
+                .await
+                .unwrap();
+            let best_block_aux_data = db_tx.get_best_block().await.unwrap();
+            assert_eq!(best_block_aux_data, expected_best_block_data);
+
+            // Delete the mainchain blocks again.
+            db_tx
+                .del_main_chain_blocks_above_height(block1_height.prev_height().unwrap())
+                .await
+                .unwrap();
         }
 
         {
@@ -255,7 +445,7 @@ where
 
             // delete the main chain block
             db_tx
-                .del_main_chain_blocks_above_height(block_height.prev_height().unwrap())
+                .del_main_chain_blocks_above_height(block1_height.prev_height().unwrap())
                 .await
                 .unwrap();
         }
@@ -265,7 +455,7 @@ where
         {
             // with read only tx reconfirm everything is the same after the commit
             let db_tx = storage.transaction_ro().await.unwrap();
-            let block_id = db_tx.get_main_chain_block_id(block_height).await.unwrap();
+            let block_id = db_tx.get_main_chain_block_id(block1_height).await.unwrap();
             assert!(block_id.is_none());
 
             let block_info1 = BlockInfo {
@@ -275,11 +465,11 @@ where
                 },
                 height: None,
             };
-            let block = db_tx.get_block(block_id1).await.unwrap();
+            let block = db_tx.get_block(block1_id).await.unwrap();
             assert_eq!(block.unwrap(), block_info1);
         }
 
-        block_id1
+        block1_id
     };
 
     // Test setting/getting transactions
