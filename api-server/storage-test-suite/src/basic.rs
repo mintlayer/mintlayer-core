@@ -136,7 +136,7 @@ where
         let genesis_id = chain_config.genesis_block_id();
         let num_blocks = rng.gen_range(10..20);
         test_framework
-            .create_chain_return_ids_with_advancing_time(&genesis_id, num_blocks, &mut rng)
+            .create_chain_advancing_time_return_ids(&genesis_id, num_blocks, &mut rng)
             .unwrap();
 
         let block_id1 =
