@@ -1,7 +1,12 @@
-import toml
-import os
-import subprocess
 import argparse
+import os
+import pathlib
+import subprocess
+import toml
+
+
+ROOT_DIR = pathlib.Path(__file__).resolve().parent.parent.parent
+ROOT_CARGO_TOML = ROOT_DIR.joinpath("Cargo.toml")
 
 
 def get_cargo_version(cargo_toml_path):
@@ -44,7 +49,7 @@ def build_docker_image(dockerfile_path, image_name, tags, num_jobs=None):
 
     try:
         # Run the command
-        subprocess.check_call(command, shell=True)
+        subprocess.check_call(command, shell=True, cwd=ROOT_DIR)
         print(f"Built {image_name} successfully (the tags are: {full_tags}).")
     except subprocess.CalledProcessError as error:
         print(f"Failed to build {image_name}: {error}")
@@ -121,7 +126,7 @@ def main():
     parser.add_argument('--local_tags', nargs='*', help='Additional tags to apply (these won\'t be pushed)', default=[])
     args = parser.parse_args()
 
-    version = args.version if args.version else get_cargo_version("Cargo.toml")
+    version = args.version if args.version else get_cargo_version(ROOT_CARGO_TOML)
     # Note: the CI currently takes the version from the release tag, so it always starts with "v",
     # but the version from Cargo.toml doesn't have this prefix.
     version = version.removeprefix("v")

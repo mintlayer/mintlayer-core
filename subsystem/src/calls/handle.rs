@@ -16,9 +16,9 @@
 //! Subsystem handle definitions (non-blocking versions)
 
 use futures::future::BoxFuture;
+use tracing::Instrument as _;
 
 use logging::log;
-use tracing::Instrument as _;
 use utils::shallow_clone::ShallowClone;
 
 use crate::{

@@ -135,11 +135,11 @@ function test_impl(is_v1: boolean) {
     height = SIGHASH_INPUT_COMMITMENTS_V0_HEIGHT;
   };
 
-  const account_pubkey = make_default_account_privkey(
+  const account_privkey = make_default_account_privkey(
     MNEMONIC,
     Network.Testnet
   );
-  const receiving_privkey = make_receiving_address(account_pubkey, 0);
+  const receiving_privkey = make_receiving_address(account_privkey, 0);
 
   const produce_block_from_stake_output = encode_output_produce_block_from_stake(
     POOL_ID,
