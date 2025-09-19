@@ -17,11 +17,8 @@
 #exclude python env
 env/
 
-#exclude env
-.env
-
-# Test Python cache
-test/**/__pycache__
+# Python cache
+**/__pycache__
 
 # Files generated for the testing system
 test/config.ini
@@ -50,3 +47,6 @@ wasm-wrappers/js-bindings-test/dist/
 build-tools/docker/example-mainnet/mintlayer-data/*
 # Same for example-mainnet-dns-server.
 build-tools/docker/example-mainnet-dns-server/mintlayer-data/*
+
+# This directory will contain some generated files.
+build-tools/block-data-plots/output
