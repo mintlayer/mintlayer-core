@@ -976,8 +976,13 @@ where
         self.peer_connectivity_handle.accept(peer_id)?;
 
         log::info!(
-            "New peer accepted, peer_id: {peer_id}, address: {peer_address:?}, role: {peer_role:?}, protocol_version: {:?}",
-            info.protocol_version
+            "New peer accepted, peer_id: {}, address: {:?}, role: {:?}, protocol_version: {:?}, user agent: {} v{}",
+            peer_id,
+            peer_address,
+            peer_role,
+            info.protocol_version,
+            info.user_agent,
+            info.software_version
         );
 
         if info.common_services.has_service(Service::PeerAddresses) {
@@ -1816,6 +1821,9 @@ where
                 ping_min: context.ping_min.map(|time| {
                     duration_to_int(&time).expect("valid timestamp expected (ping_min)")
                 }),
+                last_tip_block_time: context
+                    .last_tip_block_time
+                    .map(|time| time.as_secs_since_epoch()),
             })
             .collect()
     }
