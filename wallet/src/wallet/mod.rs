@@ -359,7 +359,9 @@ where
     B: storage::AsyncBackend + 'static,
     P: SignerProvider,
 {
-    pub async fn create_new_wallet<F: FnOnce(&mut StoreTxRwUnlocked<B>) -> WalletResult<P>>(
+    pub async fn create_new_wallet<
+        F: AsyncFnOnce(StoreTxRwUnlocked<B>) -> (StoreTxRwUnlocked<B>, WalletResult<P>),
+    >(
         chain_config: Arc<ChainConfig>,
         db: Store<B>,
         best_block: (BlockHeight, Id<GenBlock>),
@@ -375,7 +377,9 @@ where
         Ok(wallet)
     }
 
-    pub async fn recover_wallet<F: FnOnce(&mut StoreTxRwUnlocked<B>) -> WalletResult<P>>(
+    pub async fn recover_wallet<
+        F: AsyncFnOnce(StoreTxRwUnlocked<B>) -> (StoreTxRwUnlocked<B>, WalletResult<P>),
+    >(
         chain_config: Arc<ChainConfig>,
         db: Store<B>,
         wallet_type: WalletType,
@@ -384,7 +388,9 @@ where
         Self::new_wallet(chain_config, db, wallet_type, signer_provider).await
     }
 
-    async fn new_wallet<F: FnOnce(&mut StoreTxRwUnlocked<B>) -> WalletResult<P>>(
+    async fn new_wallet<
+        F: AsyncFnOnce(StoreTxRwUnlocked<B>) -> (StoreTxRwUnlocked<B>, WalletResult<P>),
+    >(
         chain_config: Arc<ChainConfig>,
         db: Store<B>,
         wallet_type: WalletType,
@@ -397,7 +403,9 @@ where
             db_tx.set_chain_info(&ChainInfo::new(chain_config.as_ref()))?;
             db_tx.set_lookahead_size(LOOKAHEAD_SIZE)?;
             db_tx.set_wallet_type(wallet_type)?;
-            let signer_provider = match signer_provider(&mut db_tx) {
+            let res = signer_provider(db_tx).await;
+            db_tx = res.0;
+            let signer_provider = match res.1 {
                 Ok(x) => x,
                 #[cfg(feature = "trezor")]
                 Err(WalletError::SignerError(SignerError::TrezorError(
@@ -409,11 +417,10 @@ where
             if let Some(data) = signer_provider.get_hardware_wallet_info() {
                 db_tx.set_hardware_wallet_data(data.into())?;
             }
-            db_tx.commit()?;
+
             signer_provider
         };
 
-        let db_tx = db.transaction_rw_unlocked(None).await?;
         let (db_tx, res) = Wallet::<B, P>::create_next_unused_account(
             U31::ZERO,
             chain_config.clone(),
@@ -609,7 +616,7 @@ where
     /// Check the wallet DB version and perform any migrations needed
     async fn check_and_migrate_db<
         F: Fn(u32) -> Result<(), WalletError>,
-        F2: FnOnce(&StoreTxRo<B>) -> WalletResult<P>,
+        F2: AsyncFnOnce(StoreTxRo<B>) -> WalletResult<P>,
     >(
         db: &Store<B>,
         chain_config: Arc<ChainConfig>,
@@ -622,7 +629,7 @@ where
             version != WALLET_VERSION_UNINITIALIZED,
             WalletError::WalletNotInitialized
         );
-        let mut signer_provider = signer_provider(&db.transaction_ro().await?)?;
+        let mut signer_provider = signer_provider(db.transaction_ro().await?).await?;
 
         loop {
             let version = db.transaction_ro().await?.get_storage_version()?;
@@ -720,10 +727,25 @@ where
             | (WalletType::Trezor, WalletType::Hot | WalletType::Cold) => {
                 return Err(WalletError::CannotChangeTrezorWalletType)
             }
+            #[cfg(all(feature = "trezor", feature = "ledger"))]
+            (WalletType::Ledger, WalletType::Trezor) => {
+                return Err(WalletError::CannotChangeTrezorWalletType)
+            }
+            #[cfg(feature = "ledger")]
+            (WalletType::Cold | WalletType::Hot, WalletType::Ledger)
+            | (WalletType::Ledger, WalletType::Hot | WalletType::Cold) => {
+                return Err(WalletError::CannotChangeTrezorWalletType)
+            }
+            #[cfg(all(feature = "trezor", feature = "ledger"))]
+            (WalletType::Trezor, WalletType::Ledger) => {
+                return Err(WalletError::CannotChangeTrezorWalletType)
+            }
             (WalletType::Cold, WalletType::Cold) => {}
             (WalletType::Hot, WalletType::Hot) => {}
             #[cfg(feature = "trezor")]
             (WalletType::Trezor, WalletType::Trezor) => {}
+            #[cfg(feature = "trezor")]
+            (WalletType::Ledger, WalletType::Ledger) => {}
         }
         Ok(())
     }
@@ -843,7 +865,7 @@ where
 
     pub async fn load_wallet<
         F: Fn(u32) -> WalletResult<()>,
-        F2: FnOnce(&StoreTxRo<B>) -> WalletResult<P>,
+        F2: AsyncFnOnce(StoreTxRo<B>) -> WalletResult<P>,
     >(
         chain_config: Arc<ChainConfig>,
         mut db: Store<B>,
@@ -1175,12 +1197,12 @@ where
             + Send,
     {
         let account = Self::get_account_mut(&mut self.accounts, account_index)?;
-        let mut local_db_tx = self.db.transaction_rw_unlocked(None).await?;
-        let result = create_request(account, &mut local_db_tx);
+        let mut db_tx = self.db.transaction_rw_unlocked(None).await?;
+        let result = create_request(account, &mut db_tx);
         let signer = self.signer_provider.provide(self.chain_config.clone(), account_index);
         let config = self.chain_config.clone();
         let (db_tx, result) =
-            sign_request(result, account.key_chain(), local_db_tx, config, signer).await;
+            sign_request(result, account.key_chain(), db_tx, config, signer).await;
 
         match result {
             Ok(value) => {

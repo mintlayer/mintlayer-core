@@ -57,7 +57,7 @@ pub async fn fetch_token_info<T: NodeInterface>(
         .get_token_info(token_id)
         .await
         .map_err(ControllerError::NodeCallError)?
-        .ok_or(ControllerError::WalletError(WalletError::UnknownTokenId(
+        .ok_or(ControllerError::wallet_error(WalletError::UnknownTokenId(
             token_id,
         )))
 }
@@ -95,7 +95,7 @@ pub async fn fetch_order_info<T: NodeInterface>(
         .get_order_info(order_id)
         .await
         .map_err(ControllerError::NodeCallError)?
-        .ok_or(ControllerError::WalletError(WalletError::UnknownOrderId(
+        .ok_or(ControllerError::wallet_error(WalletError::UnknownOrderId(
             order_id,
         )))
 }
@@ -121,7 +121,7 @@ pub async fn fetch_utxo<T: NodeInterface, B: storage::AsyncBackend>(
         .get_utxo(input.clone())
         .await
         .map_err(ControllerError::NodeCallError)?
-        .ok_or(ControllerError::WalletError(WalletError::CannotFindUtxo(
+        .ok_or(ControllerError::wallet_error(WalletError::CannotFindUtxo(
             input.clone(),
         )))
 }
@@ -142,7 +142,7 @@ async fn fetch_utxo_and_destination<T: NodeInterface, B: storage::AsyncBackend>(
         .get_utxo(input.clone())
         .await
         .map_err(ControllerError::NodeCallError)?
-        .ok_or(ControllerError::WalletError(WalletError::CannotFindUtxo(
+        .ok_or(ControllerError::wallet_error(WalletError::CannotFindUtxo(
             input.clone(),
         )))?;
 
@@ -155,7 +155,7 @@ async fn fetch_utxo_and_destination<T: NodeInterface, B: storage::AsyncBackend>(
     } else {
         get_tx_output_destination(&utxo, &|_| None, htlc_spending_condition)
     }
-    .ok_or(ControllerError::WalletError(WalletError::CannotFindUtxo(
+    .ok_or(ControllerError::wallet_error(WalletError::CannotFindUtxo(
         input.clone(),
     )))?;
 
@@ -414,9 +414,9 @@ async fn fetch_order_additional_info<T: NodeInterface>(
         .get_order_info(order_id)
         .await
         .map_err(ControllerError::NodeCallError)?
-        .ok_or(ControllerError::WalletError(WalletError::OrderInfoMissing(
-            order_id,
-        )))?;
+        .ok_or(ControllerError::wallet_error(
+            WalletError::OrderInfoMissing(order_id),
+        ))?;
 
     let ask_token_info = fetch_token_extra_info(
         rpc_client,

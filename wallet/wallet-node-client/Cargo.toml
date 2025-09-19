@@ -29,7 +29,13 @@ base64.workspace = true
 mockall.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
-tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "sync"] }
+tokio = { workspace = true, default-features = false, features = [
+  "io-util",
+  "macros",
+  "net",
+  "rt",
+  "sync",
+] }
 tower.workspace = true
 
 [dev-dependencies]
@@ -37,4 +43,5 @@ chainstate-storage = { path = "../../chainstate/storage" }
 
 [features]
 trezor = ["wallet-types/trezor"]
-default = ["trezor"]
+ledger = ["wallet-types/ledger"]
+default = ["trezor", "ledger"]

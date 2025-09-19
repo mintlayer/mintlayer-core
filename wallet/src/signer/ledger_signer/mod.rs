@@ -1243,9 +1243,8 @@ impl LedgerSignerProvider {
     pub async fn load_from_database<T: WalletStorageReadLocked + Send>(
         chain_config: Arc<ChainConfig>,
         db_tx: T,
-        _device_id: Option<String>,
+        // _device_id: Option<String>,
     ) -> (T, WalletResult<Self>) {
-        //let (client, data) = find_trezor_device_from_db(db_tx, device_id)?;
         let (mut client, data) = match find_ledger_device().await {
             Ok(x) => x,
             Err(e) => return (db_tx, Err(e.into())),

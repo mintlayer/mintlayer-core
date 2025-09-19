@@ -292,7 +292,7 @@ async fn scan_new_blocks<T: NodeInterface>(
             wallet
                 .scan_blocks(*account, common_block_height, blocks, wallet_events)
                 .await
-                .map_err(ControllerError::WalletError)?;
+                .map_err(ControllerError::wallet_error)?;
         }
         AccountType::UnusedAccount => {
             log::debug!(
@@ -304,7 +304,7 @@ async fn scan_new_blocks<T: NodeInterface>(
             wallet
                 .scan_blocks_for_unused_account(common_block_height, blocks, wallet_events)
                 .await
-                .map_err(ControllerError::WalletError)?;
+                .map_err(ControllerError::wallet_error)?;
         }
     }
 
