@@ -14,11 +14,21 @@
 // limitations under the License.
 
 mod ledger_messages;
+
 use std::{borrow::Cow, collections::BTreeMap, sync::Arc};
 
-use async_trait::async_trait;
-use itertools::{izip, Itertools};
-
+use crate::{
+    key_chain::{make_account_path, AccountKeyChains, FoundPubKey},
+    signer::{
+        ledger_signer::ledger_messages::{
+            check_current_app, get_app_name, get_extended_public_key, sign_challenge, sign_tx,
+            LedgerAddrType, LedgerBip32Path, LedgerInputAddressPath, LedgerSignature,
+            LedgerTxInput, LedgerTxInputCommitment, LedgerTxOutput,
+        },
+        utils::{is_htlc_utxo, produce_uniparty_signature_for_input},
+        Signer, SignerError, SignerResult,
+    },
+};
 use common::{
     chain::{
         config::ChainType,
@@ -54,10 +64,7 @@ use crypto::key::{
     signature::SignatureKind,
     PrivateKey, SigAuxDataProvider, Signature, SignatureError,
 };
-use ledger_lib::{Exchange, Filters, LedgerHandle, LedgerProvider, Transport};
-use randomness::make_true_rng;
 use serialization::Encode;
-use tokio::sync::Mutex;
 use utils::ensure;
 use wallet_storage::{WalletStorageReadLocked, WalletStorageReadUnlocked};
 use wallet_types::{
@@ -66,25 +73,18 @@ use wallet_types::{
     signature_status::SignatureStatus,
 };
 
-use crate::{
-    key_chain::{make_account_path, AccountKeyChains, FoundPubKey},
-    signer::{
-        ledger_signer::ledger_messages::{
-            check_current_app, get_app_name, get_extended_public_key, sign_challenge, sign_tx,
-            LedgerAddrType, LedgerBip32Path, LedgerInputAddressPath, LedgerSignature,
-            LedgerTxInput, LedgerTxInputCommitment, LedgerTxOutput,
-        },
-        utils::{is_htlc_utxo, produce_uniparty_signature_for_input},
-        Signer, SignerError, SignerResult,
-    },
-};
+use async_trait::async_trait;
+use itertools::{izip, Itertools};
+use ledger_lib::{Exchange, Filters, LedgerHandle, LedgerProvider, Transport};
+use randomness::make_true_rng;
+use tokio::sync::Mutex;
 
 /// Signer errors
 #[derive(thiserror::Error, Debug, Eq, PartialEq)]
 pub enum LedgerError {
     #[error("No connected Ledger device found")]
     NoDeviceFound,
-    #[error("Different active app: \"{0}\", opened on the Ledger. Please open the Mintlayer app.")]
+    #[error("A different app is currently open on your Ledger device: \"{0}\". Please close it and open the Mintlayer app instead.")]
     DifferentActiveApp(String),
     #[error("Received an invalid response from the Ledger device")]
     InvalidResponse,
@@ -94,7 +94,7 @@ pub enum LedgerError {
     DeviceError(String),
     #[error("Missing hardware wallet data in database")]
     MissingHardwareWalletData,
-    #[error("Derivation path is to long to send to Ledger")]
+    #[error("Derivation path is too long to send to Ledger")]
     PathToLong,
     #[error("Invalid public key returned from Ledger")]
     InvalidKey,
@@ -106,7 +106,7 @@ pub enum LedgerError {
     MultipleSignaturesReturned,
     #[error("Missing multisig index for signature returned from Device")]
     MissingMultisigIndexForSignature,
-    #[error("Invalid Signature error: {0}")]
+    #[error("Signature error: {0}")]
     SignatureError(#[from] SignatureError),
 }
 
@@ -118,13 +118,13 @@ struct StandaloneInput {
 type StandaloneInputs = BTreeMap</*input index*/ u32, Vec<StandaloneInput>>;
 
 #[async_trait]
-pub trait LProvider {
-    type L;
+pub trait LedgerFinder {
+    type Ledger;
 
     async fn find_ledger_device_from_db<T: WalletStorageReadLocked + Send>(
         &self,
         db_tx: &mut T,
-    ) -> SignerResult<(Self::L, LedgerData)>;
+    ) -> SignerResult<(Self::Ledger, LedgerData)>;
 }
 
 pub struct LedgerSigner<L, P> {
@@ -137,7 +137,7 @@ pub struct LedgerSigner<L, P> {
 impl<L, P> LedgerSigner<L, P>
 where
     L: Exchange + Send,
-    P: LProvider<L = L>,
+    P: LedgerFinder<Ledger = L>,
 {
     pub fn new(chain_config: Arc<ChainConfig>, client: Arc<Mutex<L>>, provider: P) -> Self {
         Self::new_with_sig_aux_data_provider(
@@ -179,7 +179,7 @@ where
                 Err(ledger_lib::Error::Timeout) => {
                     continue;
                 }
-                // In case of a USB error try to reconnect, and try again
+                // In case of a communication error try to reconnect, and try again
                 Err(
                     ledger_lib::Error::Hid(_)
                     | ledger_lib::Error::Tcp(_)
@@ -231,7 +231,7 @@ where
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn make_signature<'a, 'b, F, F2>(
+    fn make_signature<'a, 'b, MakeWitnessFn, StandaloneSignerFn>(
         &self,
         signatures: &[LedgerSignature],
         standalone_inputs: &'a [StandaloneInput],
@@ -239,12 +239,12 @@ where
         sighash_type: SigHashType,
         sighash: H256,
         key_chain: &impl AccountKeyChains,
-        make_witness: F,
-        sign_with_standalone_private_key: F2,
+        make_witness: MakeWitnessFn,
+        sign_with_standalone_private_key: StandaloneSignerFn,
     ) -> SignerResult<(Option<InputWitness>, SignatureStatus)>
     where
-        F: Fn(StandardInputSignature) -> InputWitness,
-        F2: Fn(&'a StandaloneInput, &'b Destination) -> SignerResult<InputWitness>,
+        MakeWitnessFn: Fn(StandardInputSignature) -> InputWitness,
+        StandaloneSignerFn: Fn(&'a StandaloneInput, &'b Destination) -> SignerResult<InputWitness>,
     {
         match destination {
             Destination::AnyoneCanSpend => Ok((
@@ -345,7 +345,7 @@ where
             .collect()
     }
 
-    fn check_signature_status(
+    fn check_multisig_signature_status(
         &self,
         sighash: H256,
         current_signatures: &AuthorizedClassicalMultisigSpend,
@@ -387,7 +387,7 @@ where
             current_signatures.add_signature(idx as u8, sig);
         }
 
-        let status = self.check_signature_status(sighash, &current_signatures)?;
+        let status = self.check_multisig_signature_status(sighash, &current_signatures)?;
 
         Ok((current_signatures, status))
     }
@@ -445,7 +445,7 @@ where
 impl<L, P> Signer for LedgerSigner<L, P>
 where
     L: Exchange + Send,
-    P: Send + Sync + LProvider<L = L>,
+    P: Send + Sync + LedgerFinder<Ledger = L>,
 {
     async fn sign_tx(
         &mut self,
@@ -470,27 +470,17 @@ where
             .version_at_height(block_height)
             .1
             .sighash_input_commitment_version();
-        let _input_commitment_version = match input_commitment_version {
-            common::chain::SighashInputCommitmentVersion::V0 => {
-                trezor_client::client::SighashInputCommitmentsVersion::V0
-            }
-            common::chain::SighashInputCommitmentVersion::V1 => {
-                trezor_client::client::SighashInputCommitmentsVersion::V1
-            }
-        };
+        // input_commitments V0 is not implemented as it will likely not be needed by the time
+        // Ledger support is released
+        ensure!(
+            input_commitment_version == common::chain::SighashInputCommitmentVersion::V1,
+            LedgerError::MultisigSignatureReturned
+        );
 
         let new_signatures = self
             .perform_ledger_operation(
                 async move |client| {
-                    sign_tx(
-                        client,
-                        chain_type,
-                        &inputs,
-                        &input_commitments,
-                        &outputs,
-                        // input_commitment_version,
-                    )
-                    .await
+                    sign_tx(client, chain_type, &inputs, &input_commitments, &outputs).await
                 },
                 &mut db_tx,
                 key_chain,
@@ -1055,7 +1045,8 @@ async fn check_public_keys_against_key_chain<L: Exchange, T: WalletStorageReadLo
     }
 
     if let Ok(Some(_data)) = db_tx.get_hardware_wallet_data() {
-        //
+        // Data is empty there is nothing to compare
+        return Ok(());
     }
 
     Err(LedgerError::HardwareWalletDifferentFile.into())
@@ -1096,4 +1087,4 @@ mod tests;
 
 #[cfg(feature = "enable-ledger-device-tests")]
 #[cfg(test)]
-mod speculus;
+mod speculos;

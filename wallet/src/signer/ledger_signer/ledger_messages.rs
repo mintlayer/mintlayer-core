@@ -13,8 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeMap, time::Duration};
+use std::{
+    collections::BTreeMap,
+    mem::{size_of, size_of_val},
+    time::Duration,
+};
 
+use crate::signer::{ledger_signer::LedgerError, SignerError, SignerResult};
 use crypto::key::{
     extended::ExtendedPublicKey,
     hdkd::{
@@ -23,11 +28,10 @@ use crypto::key::{
     },
     secp256k1::{extended_keys::Secp256k1ExtendedPublicKey, Secp256k1PublicKey},
 };
-use ledger_lib::Exchange;
 use serialization::{Decode, DecodeAll, Encode};
 use utils::ensure;
 
-use crate::signer::{ledger_signer::LedgerError, SignerError, SignerResult};
+use ledger_lib::Exchange;
 
 const MAX_MSG_SIZE: usize = (u8::MAX - 5) as usize; // 4 bytes for the header + 1 for len
 const TIMEOUT_DUR: Duration = Duration::from_secs(100);
@@ -111,8 +115,8 @@ struct SignatureResult {
 }
 
 /// Check that the response ends with the OK status code and return the rest of the response back
-fn ok_response(resp: Vec<u8>) -> SignerResult<Vec<u8>> {
-    let (resp, status_code) = resp.split_last_chunk().ok_or(LedgerError::InvalidResponse)?;
+fn ok_response(mut resp: Vec<u8>) -> SignerResult<Vec<u8>> {
+    let (_, status_code) = resp.split_last_chunk().ok_or(LedgerError::InvalidResponse)?;
     let response_status = u16::from_be_bytes(*status_code);
 
     ensure!(
@@ -120,10 +124,11 @@ fn ok_response(resp: Vec<u8>) -> SignerResult<Vec<u8>> {
         LedgerError::ErrorResponse(response_status)
     );
 
-    Ok(resp.to_vec())
+    resp.truncate(resp.len() - size_of_val(&response_status));
+    Ok(resp)
 }
 
-/// send a message to the Ledger and check the respons status code is ok
+/// Send a message to the Ledger and check the response status code is ok
 async fn exchange_message<L: Exchange>(
     ledger: &mut L,
     msg_buf: &[u8],
@@ -258,7 +263,9 @@ pub async fn sign_tx<L: Exchange>(
     let mut msg_buf = Vec::with_capacity(15);
 
     msg_buf.extend([CLA, Ins::SIGN_TX, P1::TX_META, P2::MORE]);
-    msg_buf.push(1 + 1 + 4 + 4); // data len coin + version + 2 u32 lens
+    let data_len =
+        (size_of_val(&chain_type) + size_of_val(&TX_VERSION) + size_of::<u32>() * 2) as u8;
+    msg_buf.push(data_len);
     msg_buf.push(chain_type);
     msg_buf.push(TX_VERSION);
     msg_buf.extend((inputs.len() as u32).to_be_bytes());
