@@ -70,14 +70,16 @@ impl TestFramework {
                 db,
                 (BlockHeight::new(0), chain_config.genesis_block_id()),
                 WalletType::Hot,
-                |db_tx| {
-                    Ok(SoftwareSignerProvider::new_from_mnemonic(
+                async |mut db_tx| {
+                    let res = SoftwareSignerProvider::new_from_mnemonic(
                         chain_config.clone(),
-                        db_tx,
+                        &mut db_tx,
                         wallet_test_node::MNEMONIC,
                         None,
                         StoreSeedPhrase::DoNotStore,
-                    )?)
+                    )
+                    .map_err(Into::into);
+                    (db_tx, res)
                 },
             )
             .await
