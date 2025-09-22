@@ -14,18 +14,35 @@
 // limitations under the License.
 
 use std::{
-    net::{Ipv4Addr, SocketAddr},
+    net::{IpAddr, Ipv4Addr, SocketAddr},
     str::FromStr,
     sync::Arc,
     time::Duration,
 };
 
-use async_trait::async_trait;
+use crate::signer::{
+    ledger_signer::{
+        ledger_messages::{get_app_name, get_extended_public_key},
+        speculos::{Action, Button, Handle, PodmanHandle},
+        LedgerError, LedgerFinder, LedgerSigner,
+    },
+    tests::{
+        generic_tests::{
+            test_sign_transaction_generic, test_sign_transaction_intent_generic, MessageToSign,
+        },
+        no_another_signer,
+    },
+    SignerError, SignerResult,
+};
 use common::chain::{config::create_mainnet, ChainConfig, SighashInputCommitmentVersion};
 use crypto::key::{
     hdkd::{derivation_path::DerivationPath, u31::U31},
     PredefinedSigAuxDataProvider, SigAuxDataProvider,
 };
+use wallet_storage::WalletStorageReadLocked;
+use wallet_types::hw_data::LedgerData;
+
+use async_trait::async_trait;
 use ledger_lib::{
     transport::{TcpDevice, TcpInfo, TcpTransport},
     Transport,
@@ -42,39 +59,17 @@ use tokio::{
     },
     time::sleep,
 };
-use wallet_storage::WalletStorageReadLocked;
-use wallet_types::hw_data::LedgerData;
-
-use crate::signer::{
-    ledger_signer::{
-        ledger_messages::{get_app_name, get_extended_public_key},
-        speculus::{
-            Action, Button, Display, Driver, Handle, Model, Options, PodmanDriver, PodmanHandle,
-        },
-        LProvider, LedgerError, LedgerSigner,
-    },
-    tests::{
-        generic_tests::{
-            test_sign_transaction_generic, test_sign_transaction_intent_generic, MessageToSign,
-        },
-        no_another_signer,
-    },
-    SignerError, SignerResult,
-};
 
 #[derive(Debug)]
 enum ControlMessage {
     Finish,
 }
 
-async fn auto_confirmer(
-    mut finish_rx: mpsc::Receiver<ControlMessage>,
-    handle: PodmanHandle,
-    driver: PodmanDriver,
-) {
+async fn auto_confirmer(mut finish_rx: mpsc::Receiver<ControlMessage>, handle: PodmanHandle) {
     loop {
         tokio::select! {
             _ = sleep(Duration::from_millis(100)) => {
+                // As we don't know how many screens will be shown just go 1 right and try to confirm
                 handle.button(Button::Right, Action::PressAndRelease).await.unwrap();
                 handle.button(Button::Both, Action::PressAndRelease).await.unwrap();
             }
@@ -82,8 +77,6 @@ async fn auto_confirmer(
                 match msg {
                     Some(ControlMessage::Finish) => {
                         eprintln!("Received finish signal.");
-                        // perform exit action
-                        driver.exit(handle).unwrap();
                         break;
                     }
                     None => {
@@ -101,13 +94,13 @@ async fn auto_confirmer(
 struct DummyProvider;
 
 #[async_trait]
-impl LProvider for DummyProvider {
-    type L = TcpDevice;
+impl LedgerFinder for DummyProvider {
+    type Ledger = TcpDevice;
 
     async fn find_ledger_device_from_db<T: WalletStorageReadLocked + Send>(
         &self,
         db_tx: T,
-    ) -> (T, SignerResult<(Self::L, LedgerData)>) {
+    ) -> (T, SignerResult<(Self::Ledger, LedgerData)>) {
         (
             db_tx,
             Err(SignerError::LedgerError(LedgerError::NoDeviceFound)),
@@ -116,44 +109,19 @@ impl LProvider for DummyProvider {
 }
 
 async fn setup(
-    offset: u16,
     deterministic_aux: bool,
 ) -> (
     tokio::task::JoinHandle<()>,
     Sender<ControlMessage>,
     impl Fn(Arc<ChainConfig>, U31) -> LedgerSigner<TcpDevice, DummyProvider>,
 ) {
-    let driver = PodmanDriver::new().unwrap();
-
-    let opts = Options {
-        model: Model::NanoSP,
-        api_level: Some("24".to_string()),
-        seed: Some("abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about".to_string()), // Use a deterministic seed for tests
-        display: Display::Headless,
-        apdu_port: Some(1237 + offset),
-        http_port: 5001 + offset,
-        ..Default::default()
-    };
-
-    let app_path = format!(
-        "{}/../../ledger-mintlayer/target/nanosplus/release/mintlayer-app",
-        env!("CARGO_MANIFEST_DIR")
-    );
-    let handle = driver.run(&app_path, opts.clone()).unwrap();
-
-    println!("Emulator is running...");
-
-    // TODO: instead of sleeping try to connect and wait for a successfull connection to the
-    // docker
-    sleep(Duration::from_secs(5)).await;
+    let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 5001);
+    let handle = PodmanHandle::new(addr);
 
     let mut transport = TcpTransport::new().unwrap();
     let mut device = transport
         .connect(TcpInfo {
-            addr: SocketAddr::new(
-                std::net::IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
-                1237 + offset,
-            ),
+            addr: SocketAddr::new(std::net::IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 9999),
         })
         .await
         .unwrap();
@@ -175,7 +143,7 @@ async fn setup(
     let device = Arc::new(Mutex::new(device));
 
     let (finish_tx, finish_rx) = mpsc::channel(1);
-    let auto_clicker = tokio::spawn(auto_confirmer(finish_rx, handle, driver));
+    let auto_clicker = tokio::spawn(auto_confirmer(finish_rx, handle));
 
     (auto_clicker, finish_tx, move |chain_config, _| {
         let aux_provider: Box<dyn SigAuxDataProvider + Send> = if deterministic_aux {
@@ -195,9 +163,10 @@ async fn setup(
 
 #[rstest]
 #[trace]
+#[serial_test::serial]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_account_extended_public_key() {
-    let (auto_clicker, finish_tx, make_ledger_signer) = setup(1, false).await;
+    let (auto_clicker, finish_tx, make_ledger_signer) = setup(false).await;
 
     let signer = make_ledger_signer(Arc::new(create_mainnet()), U31::ZERO);
 
@@ -242,7 +211,7 @@ async fn test_sign_message(
 
     let mut rng = make_seedable_rng(seed);
 
-    let (auto_clicker, finish_tx, make_ledger_signer) = setup(2, false).await;
+    let (auto_clicker, finish_tx, make_ledger_signer) = setup(false).await;
 
     test_sign_message_generic(
         &mut rng,
@@ -258,12 +227,13 @@ async fn test_sign_message(
 
 #[rstest]
 #[trace]
+#[serial_test::serial]
 #[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_sign_transaction_intent(#[case] seed: Seed) {
     log::debug!("test_sign_transaction_intent, seed = {seed:?}");
 
-    let (auto_clicker, finish_tx, make_ledger_signer) = setup(3, false).await;
+    let (auto_clicker, finish_tx, make_ledger_signer) = setup(false).await;
 
     let mut rng = make_seedable_rng(seed);
 
@@ -275,6 +245,7 @@ async fn test_sign_transaction_intent(#[case] seed: Seed) {
 
 #[rstest]
 #[trace]
+#[serial_test::serial]
 #[case(Seed::from_entropy(), SighashInputCommitmentVersion::V1)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_sign_transaction(
@@ -283,7 +254,7 @@ async fn test_sign_transaction(
 ) {
     log::debug!("test_sign_transaction, seed = {seed:?}, input_commitments_version = {input_commitments_version:?}");
 
-    let (auto_clicker, finish_tx, make_ledger_signer) = setup(4, false).await;
+    let (auto_clicker, finish_tx, make_ledger_signer) = setup(false).await;
 
     let mut rng = make_seedable_rng(seed);
 
@@ -301,6 +272,7 @@ async fn test_sign_transaction(
 
 #[rstest]
 #[trace]
+#[serial_test::serial]
 #[case(Seed::from_entropy(), SighashInputCommitmentVersion::V1)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_fixed_signatures2(
@@ -311,7 +283,7 @@ async fn test_fixed_signatures2(
 
     log::debug!("test_fixed_signatures2, seed = {seed:?}, input_commitments_version = {input_commitments_version:?}");
 
-    let (auto_clicker, finish_tx, make_ledger_signer) = setup(6, true).await;
+    let (auto_clicker, finish_tx, make_ledger_signer) = setup(true).await;
 
     let mut rng = make_seedable_rng(seed);
 
@@ -323,6 +295,7 @@ async fn test_fixed_signatures2(
 
 #[rstest]
 #[trace]
+#[serial_test::serial]
 #[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_sign_message_sig_consistency(#[case] seed: Seed) {
@@ -332,7 +305,7 @@ async fn test_sign_message_sig_consistency(#[case] seed: Seed) {
 
     log::debug!("test_sign_message_sig_consistency, seed = {seed:?}");
 
-    let (auto_clicker, finish_tx, make_ledger_signer) = setup(7, true).await;
+    let (auto_clicker, finish_tx, make_ledger_signer) = setup(true).await;
 
     let mut rng = make_seedable_rng(seed);
 
@@ -350,6 +323,7 @@ async fn test_sign_message_sig_consistency(#[case] seed: Seed) {
 
 #[rstest]
 #[trace]
+#[serial_test::serial]
 #[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_sign_transaction_intent_sig_consistency(#[case] seed: Seed) {
@@ -357,7 +331,7 @@ async fn test_sign_transaction_intent_sig_consistency(#[case] seed: Seed) {
 
     log::debug!("test_sign_transaction_intent_sig_consistency, seed = {seed:?}");
 
-    let (auto_clicker, finish_tx, make_ledger_signer) = setup(8, true).await;
+    let (auto_clicker, finish_tx, make_ledger_signer) = setup(true).await;
 
     let mut rng = make_seedable_rng(seed);
 
@@ -374,6 +348,7 @@ async fn test_sign_transaction_intent_sig_consistency(#[case] seed: Seed) {
 
 #[rstest]
 #[trace]
+#[serial_test::serial]
 #[case(Seed::from_entropy(), SighashInputCommitmentVersion::V1)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_sign_transaction_sig_consistency(
@@ -384,7 +359,7 @@ async fn test_sign_transaction_sig_consistency(
 
     log::debug!("test_sign_transaction_sig_consistency, seed = {seed:?}, input_commitments_version = {input_commitments_version:?}");
 
-    let (auto_clicker, finish_tx, make_ledger_signer) = setup(9, true).await;
+    let (auto_clicker, finish_tx, make_ledger_signer) = setup(true).await;
 
     let mut rng = make_seedable_rng(seed);
 

@@ -14,11 +14,21 @@
 // limitations under the License.
 
 mod ledger_messages;
+
 use std::{borrow::Cow, collections::BTreeMap, sync::Arc};
 
-use async_trait::async_trait;
-use itertools::{izip, Itertools};
-
+use crate::{
+    key_chain::{make_account_path, AccountKeyChains, FoundPubKey},
+    signer::{
+        ledger_signer::ledger_messages::{
+            check_current_app, get_app_name, get_extended_public_key, sign_challenge, sign_tx,
+            LedgerBip32Path, LedgerInputAddressPath, LedgerSignature, LedgerTxInput,
+            LedgerTxInputCommitment, LedgerTxOutput,
+        },
+        signer_utils::{is_htlc_utxo, sign_input_with_standalone_key},
+        Signer, SignerError, SignerResult,
+    },
+};
 use common::{
     chain::{
         config::ChainType,
@@ -54,10 +64,7 @@ use crypto::key::{
     signature::SignatureKind,
     PrivateKey, SigAuxDataProvider, Signature, SignatureError,
 };
-use ledger_lib::{Exchange, Filters, LedgerHandle, LedgerProvider, Transport};
-use randomness::make_true_rng;
 use serialization::Encode;
-use tokio::sync::Mutex;
 use utils::ensure;
 use wallet_storage::{WalletStorageReadLocked, WalletStorageReadUnlocked};
 use wallet_types::{
@@ -65,25 +72,18 @@ use wallet_types::{
     signature_status::SignatureStatus,
 };
 
-use crate::{
-    key_chain::{make_account_path, AccountKeyChains, FoundPubKey},
-    signer::{
-        ledger_signer::ledger_messages::{
-            check_current_app, get_app_name, get_extended_public_key, sign_challenge, sign_tx,
-            LedgerBip32Path, LedgerInputAddressPath, LedgerSignature, LedgerTxInput,
-            LedgerTxInputCommitment, LedgerTxOutput,
-        },
-        signer_utils::{is_htlc_utxo, sign_input_with_standalone_key},
-        Signer, SignerError, SignerResult,
-    },
-};
+use async_trait::async_trait;
+use itertools::{izip, Itertools};
+use ledger_lib::{Exchange, Filters, LedgerHandle, LedgerProvider, Transport};
+use randomness::make_true_rng;
+use tokio::sync::Mutex;
 
 /// Signer errors
 #[derive(thiserror::Error, Debug, Eq, PartialEq)]
 pub enum LedgerError {
     #[error("No connected Ledger device found")]
     NoDeviceFound,
-    #[error("Different active app: \"{0}\", opened on the Ledger. Please open the Mintlayer app.")]
+    #[error("A different app is currently open on your Ledger device: \"{0}\". Please close it and open the Mintlayer app instead.")]
     DifferentActiveApp(String),
     #[error("Received an invalid response from the Ledger device")]
     InvalidResponse,
@@ -93,7 +93,7 @@ pub enum LedgerError {
     DeviceError(String),
     #[error("Missing hardware wallet data in database")]
     MissingHardwareWalletData,
-    #[error("Derivation path is to long to send to Ledger")]
+    #[error("Derivation path is too long to send to Ledger")]
     PathToLong,
     #[error("Invalid public key returned from Ledger")]
     InvalidKey,
@@ -105,7 +105,7 @@ pub enum LedgerError {
     MultipleSignaturesReturned,
     #[error("Missing multisig index for signature returned from Device")]
     MissingMultisigIndexForSignature,
-    #[error("Invalid Signature error: {0}")]
+    #[error("Signature error: {0}")]
     SignatureError(#[from] SignatureError),
 }
 
@@ -117,13 +117,13 @@ struct StandaloneInput {
 type StandaloneInputs = BTreeMap</*input index*/ u32, Vec<StandaloneInput>>;
 
 #[async_trait]
-pub trait LProvider {
-    type L;
+pub trait LedgerFinder {
+    type Ledger;
 
     async fn find_ledger_device_from_db<T: WalletStorageReadLocked + Send>(
         &self,
         db_tx: T,
-    ) -> (T, SignerResult<(Self::L, LedgerData)>);
+    ) -> (T, SignerResult<(Self::Ledger, LedgerData)>);
 }
 
 pub struct LedgerSigner<L, P> {
@@ -136,7 +136,7 @@ pub struct LedgerSigner<L, P> {
 impl<L, P> LedgerSigner<L, P>
 where
     L: Exchange + Send,
-    P: LProvider<L = L>,
+    P: LedgerFinder<Ledger = L>,
 {
     pub fn new(chain_config: Arc<ChainConfig>, client: Arc<Mutex<L>>, provider: P) -> Self {
         Self::new_with_sig_aux_data_provider(
@@ -245,7 +245,7 @@ where
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn make_signature<'a, 'b, F, F2>(
+    fn make_signature<'a, 'b, MakeWitnessFn, StandaloneSignerFn>(
         &self,
         signatures: &[LedgerSignature],
         standalone_inputs: &'a [StandaloneInput],
@@ -253,12 +253,12 @@ where
         sighash_type: SigHashType,
         sighash: H256,
         key_chain: &impl AccountKeyChains,
-        make_witness: F,
-        sign_with_standalone_private_key: F2,
+        make_witness: MakeWitnessFn,
+        sign_with_standalone_private_key: StandaloneSignerFn,
     ) -> SignerResult<(Option<InputWitness>, SignatureStatus)>
     where
-        F: Fn(StandardInputSignature) -> InputWitness,
-        F2: Fn(&'a StandaloneInput, &'b Destination) -> SignerResult<InputWitness>,
+        MakeWitnessFn: Fn(StandardInputSignature) -> InputWitness,
+        StandaloneSignerFn: Fn(&'a StandaloneInput, &'b Destination) -> SignerResult<InputWitness>,
     {
         match destination {
             Destination::AnyoneCanSpend => Ok((
@@ -359,7 +359,7 @@ where
             .collect()
     }
 
-    fn check_signature_status(
+    fn check_multisig_signature_status(
         &self,
         sighash: H256,
         current_signatures: &AuthorizedClassicalMultisigSpend,
@@ -401,7 +401,7 @@ where
             current_signatures.add_signature(idx as u8, sig);
         }
 
-        let status = self.check_signature_status(sighash, &current_signatures)?;
+        let status = self.check_multisig_signature_status(sighash, &current_signatures)?;
 
         Ok((current_signatures, status))
     }
@@ -459,7 +459,7 @@ where
 impl<L, P> Signer for LedgerSigner<L, P>
 where
     L: Exchange + Send,
-    P: Send + Sync + LProvider<L = L>,
+    P: Send + Sync + LedgerFinder<Ledger = L>,
 {
     async fn sign_tx<T: WalletStorageReadUnlocked + Send>(
         &mut self,
@@ -1162,4 +1162,4 @@ mod tests;
 
 #[cfg(feature = "enable-ledger-device-tests")]
 #[cfg(test)]
-mod speculus;
+mod speculos;
