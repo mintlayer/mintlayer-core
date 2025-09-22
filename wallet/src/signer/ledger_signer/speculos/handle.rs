@@ -14,14 +14,15 @@
 // limitations under the License.
 
 //! Speculos runtime handle, provides out-of-band interaction with a simulator instance
-//! via the [HTTP API](https://petstore.swagger.io/?url=https://raw.githubusercontent.com/LedgerHQ/speculos/master/speculos/api/static/swagger/swagger.json) to allow button pushes and screenshots when executing integration tests.
+//! via the
+//! [HTTP API](https://petstore.swagger.io/?url=https://raw.githubusercontent.com/LedgerHQ/speculos/master/speculos/api/static/swagger/swagger.json)
+//! to allow button pushes and screenshots when executing integration tests.
 //!
 //!
 
 use std::net::SocketAddr;
 
 use async_trait::async_trait;
-// use image::{io::Reader as ImageReader, DynamicImage};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use strum::Display;
@@ -45,7 +46,7 @@ pub enum Action {
     PressAndRelease,
 }
 
-/// Button action object for serialisation and use with the HTTP API
+/// Button action object for serialization and use with the HTTP API
 #[derive(Clone, Copy, PartialEq, Debug, Serialize, Deserialize)]
 struct ButtonAction {
     pub action: Action,
@@ -72,20 +73,6 @@ pub trait Handle {
 
         Ok(())
     }
-
-    // /// Fetch a screenshot from the simulator
-    // async fn screenshot(&self) -> anyhow::Result<DynamicImage> {
-    //     // Fetch screenshot from HTTP API
-    //     let r = reqwest::get(format!("http://{}/screenshot", self.addr())).await?;
-    //
-    //     // Read image bytes
-    //     let b = r.bytes().await?;
-    //
-    //     // Parse image object
-    //     let i = ImageReader::new(Cursor::new(b)).with_guessed_format()?.decode()?;
-    //
-    //     Ok(i)
-    // }
 }
 
 #[cfg(test)]
