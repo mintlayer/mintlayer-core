@@ -22,7 +22,10 @@ use chainstate::{
     ConnectTransactionError,
 };
 use chainstate_test_framework::{
-    helpers::{calculate_fill_order, issue_and_mint_random_token_from_best_block},
+    helpers::{
+        calculate_fill_order, issue_and_mint_random_token_from_best_block,
+        order_min_non_zero_fill_amount,
+    },
     output_value_amount, TestFramework, TransactionBuilder,
 };
 use common::{
@@ -669,7 +672,10 @@ fn fill_order_check_storage(#[case] seed: Seed, #[case] version: OrdersVersion) 
         tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
         // Fill the order partially
-        let fill_amount = Amount::from_atoms(rng.gen_range(1..ask_amount.into_atoms()));
+        let min_fill_amount = order_min_non_zero_fill_amount(&tf, &order_id, version);
+        let fill_amount = Amount::from_atoms(
+            rng.gen_range(min_fill_amount.into_atoms()..=ask_amount.into_atoms()),
+        );
         let filled_amount = calculate_fill_order(&tf, &order_id, fill_amount, version);
         let left_to_fill = (ask_amount - fill_amount).unwrap();
 
@@ -799,7 +805,10 @@ fn fill_partially_then_conclude(#[case] seed: Seed, #[case] version: OrdersVersi
         tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
         // Fill the order partially
-        let fill_amount = Amount::from_atoms(rng.gen_range(1..=ask_amount.into_atoms()));
+        let min_fill_amount = order_min_non_zero_fill_amount(&tf, &order_id, version);
+        let fill_amount = Amount::from_atoms(
+            rng.gen_range(min_fill_amount.into_atoms()..=ask_amount.into_atoms()),
+        );
         let filled_amount = calculate_fill_order(&tf, &order_id, fill_amount, version);
 
         let fill_input = match version {
@@ -1475,7 +1484,10 @@ fn reorg_before_create(#[case] seed: Seed, #[case] version: OrdersVersion) {
             .unwrap();
 
         // Fill the order partially
-        let fill_amount = Amount::from_atoms(rng.gen_range(1..ask_amount.into_atoms()));
+        let min_fill_amount = order_min_non_zero_fill_amount(&tf, &order_id, version);
+        let fill_amount = Amount::from_atoms(
+            rng.gen_range(min_fill_amount.into_atoms()..ask_amount.into_atoms()),
+        );
         let filled_amount = calculate_fill_order(&tf, &order_id, fill_amount, version);
         let left_to_fill = (ask_amount - fill_amount).unwrap();
 
@@ -1594,7 +1606,10 @@ fn reorg_after_create(#[case] seed: Seed, #[case] version: OrdersVersion) {
         let reorg_common_ancestor = tf.best_block_id();
 
         // Fill the order partially
-        let fill_amount = Amount::from_atoms(rng.gen_range(1..ask_amount.into_atoms()));
+        let min_fill_amount = order_min_non_zero_fill_amount(&tf, &order_id, version);
+        let fill_amount = Amount::from_atoms(
+            rng.gen_range(min_fill_amount.into_atoms()..ask_amount.into_atoms()),
+        );
         let filled_amount = calculate_fill_order(&tf, &order_id, fill_amount, version);
         let left_to_fill = (ask_amount - fill_amount).unwrap();
 
@@ -2626,7 +2641,7 @@ fn orders_v1_activation(#[case] seed: Seed) {
             .build_and_process(&mut rng)
             .unwrap();
 
-        // Try to fill order before activation, check an error
+        // Try to fill order before activation, expect an error
         {
             let tx = TransactionBuilder::new()
                 .add_input(
@@ -2654,7 +2669,7 @@ fn orders_v1_activation(#[case] seed: Seed) {
             );
         }
 
-        // Try to conclude order before activation, check an error
+        // Try to conclude order before activation, expect an error
         {
             let tx = TransactionBuilder::new()
                 .add_input(
@@ -2682,7 +2697,7 @@ fn orders_v1_activation(#[case] seed: Seed) {
         // produce an empty block and activate fork
         tf.make_block_builder().build_and_process(&mut rng).unwrap();
 
-        // Try to fill order with deprecated command, check an error
+        // Try to fill order with deprecated command, expect an error
         {
             let tx = TransactionBuilder::new()
                 .add_input(
@@ -2714,7 +2729,7 @@ fn orders_v1_activation(#[case] seed: Seed) {
             );
         }
 
-        // Try to conclude order before activation, check an error
+        // Try to conclude order with deprecated command, expect an error
         {
             let tx = TransactionBuilder::new()
                 .add_input(
@@ -3175,7 +3190,10 @@ fn fill_freeze_conclude_order(#[case] seed: Seed) {
         tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
         // Fill order partially
-        let fill_amount = Amount::from_atoms(rng.gen_range(1..=ask_amount.into_atoms()));
+        let min_fill_amount = order_min_non_zero_fill_amount(&tf, &order_id, OrdersVersion::V1);
+        let fill_amount = Amount::from_atoms(
+            rng.gen_range(min_fill_amount.into_atoms()..=ask_amount.into_atoms()),
+        );
         let filled_amount = calculate_fill_order(&tf, &order_id, fill_amount, OrdersVersion::V1);
         let left_to_fill = (ask_amount - fill_amount).unwrap();
         let fill_tx = TransactionBuilder::new()
@@ -3260,7 +3278,7 @@ fn fill_freeze_conclude_order(#[case] seed: Seed) {
             }
         }
 
-        //Try freezing the order once more
+        // Try freezing the order once more
         {
             let result = tf
                 .make_block_builder()
@@ -3644,10 +3662,9 @@ fn fill_order_v1_must_not_be_signed(#[case] seed: Seed) {
         let (sk, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         let output_destination = Destination::PublicKey(pk);
 
-        let min_fill_amount =
-            initial_ask_amount.into_atoms().div_ceil(initial_give_amount.into_atoms());
+        let min_fill_amount = order_min_non_zero_fill_amount(&tf, &order_id, OrdersVersion::V1);
         let fill_amount = Amount::from_atoms(
-            rng.gen_range(min_fill_amount..initial_ask_amount.into_atoms() / 10),
+            rng.gen_range(min_fill_amount.into_atoms()..initial_ask_amount.into_atoms() / 10),
         );
         let filled_amount = calculate_fill_order(&tf, &order_id, fill_amount, OrdersVersion::V1);
         let fill_order_input =
@@ -3778,6 +3795,7 @@ fn fill_order_v1_must_not_be_signed(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy(), OrdersVersion::V0)]
+#[trace]
 #[case(Seed::from_entropy(), OrdersVersion::V1)]
 fn fill_order_twice_in_same_block(
     #[case] seed: Seed,
@@ -3810,15 +3828,18 @@ fn fill_order_twice_in_same_block(
         let (_, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         let output_destination = Destination::PublicKey(pk);
 
-        let fill_amount1 =
-            Amount::from_atoms(rng.gen_range(1..initial_ask_amount.into_atoms() / 3));
+        let min_fill_amount = order_min_non_zero_fill_amount(&tf, &order_id, version);
+        let fill_amount1 = Amount::from_atoms(
+            rng.gen_range(min_fill_amount.into_atoms()..initial_ask_amount.into_atoms() / 3),
+        );
         let fill_amount2 = if use_same_amount {
             fill_amount1
         } else {
             (|| {
                 for _ in 0..1000 {
-                    let new_amount =
-                        Amount::from_atoms(rng.gen_range(1..initial_ask_amount.into_atoms() / 3));
+                    let new_amount = Amount::from_atoms(rng.gen_range(
+                        min_fill_amount.into_atoms()..initial_ask_amount.into_atoms() / 3,
+                    ));
                     if new_amount != fill_amount1 {
                         return new_amount;
                     }
