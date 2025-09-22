@@ -234,6 +234,7 @@ rfd = { version = "0.15", default-features = false }
 ripemd = "0.1"
 rlimit = "0.10"
 rstest = "0.24"
+rstest_reuse = "0.7"
 rusqlite = "0.33"
 schnorrkel = "0.11"
 secp256k1 = { version = "0.29", default-features = false }
@@ -286,11 +287,11 @@ package = "mintlayer-core-primitives"
 
 [workspace.dependencies.ledger-lib]
 git = "https://github.com/ledger-community/rust-ledger.git"
-rev = "4be10b810bb6500b7d8bc0b67e64fef24257e0e8"
+rev = "510bb3ca30639af4bdb12a918b6bbbdb75fa5f52"
 
 [workspace.dependencies.ledger-proto]
 git = "https://github.com/ledger-community/rust-ledger.git"
-rev = "4be10b810bb6500b7d8bc0b67e64fef24257e0e8"
+rev = "510bb3ca30639af4bdb12a918b6bbbdb75fa5f52"
 
 [workspace.dependencies.trezor-client]
 git = "https://github.com/mintlayer/mintlayer-trezor-firmware"
@@ -350,4 +351,5 @@ fontconfig-parser = { git = "https://github.com/Riey/fontconfig-parser", rev = "
 # subsystem (reproducible on a slow machine during initial sync with 30+ connected peers).
 # The PR was merged after 1.49, so it should probably be part of 1.50 when it comes out.
 tokio = { git = "https://github.com/tokio-rs/tokio", rev = "0d6c7af3e43457350bdc03a6dbcafa276fab7352" }
-ledger-proto = { git = "https://github.com/ledger-community/rust-ledger.git", rev = "4be10b810bb6500b7d8bc0b67e64fef24257e0e8" }
+# The patch is needed because there is now release of the library. We use the same hash for all Ledger libs
+ledger-proto = { git = "https://github.com/ledger-community/rust-ledger.git", rev = "510bb3ca30639af4bdb12a918b6bbbdb75fa5f52" }

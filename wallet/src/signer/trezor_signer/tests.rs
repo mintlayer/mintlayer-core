@@ -30,7 +30,7 @@ use crate::signer::{
             test_fixed_signatures_generic_htlc_refunding,
         },
         generic_tests::{
-            test_sign_message_generic, test_sign_transaction_generic,
+            sign_message_test_params, test_sign_message_generic, test_sign_transaction_generic,
             test_sign_transaction_intent_generic, MessageToSign,
         },
         make_deterministic_software_signer, no_another_signer,
@@ -72,21 +72,13 @@ pub fn make_deterministic_trezor_signer(
 // the rng seed that caused the panic won't be printed. So, in these tests we log the seed
 // manually at the start of each test.
 
+#[rstest_reuse::apply(sign_message_test_params)]
 #[rstest]
 #[trace]
 #[serial]
 #[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_sign_message(
-    #[case] seed: Seed,
-    #[values(
-        MessageToSign::Random,
-        // Special case: an "overlong" utf-8 string (basically, the letter 'K' encoded with 2 bytes
-        // instead of 1). The firmware used to have troubles with this.
-        MessageToSign::Predefined(vec![193, 139])
-    )]
-    message_to_sign: MessageToSign,
-) {
+async fn test_sign_message(#[case] seed: Seed, message_to_sign: MessageToSign) {
     log::debug!("test_sign_message, seed = {seed:?}");
 
     let _join_guard = maybe_spawn_auto_confirmer();

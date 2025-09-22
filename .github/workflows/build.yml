@@ -283,9 +283,9 @@ jobs:
       - name: Run tests in the emulator
         run: nix-shell --run "
           poetry run core/emu.py
-          --headless --quiet --temporary-profile
-          --mnemonic \"abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about\"
-          --command env --chdir ../mintlayer-core
+            --headless --quiet --temporary-profile
+            --mnemonic \"abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about\"
+            --command env --chdir ../mintlayer-core
           cargo-nextest nextest run --archive-file tests.tar.zst -j1 trezor_signer
           "
         working-directory: ./mintlayer-trezor-firmware

@@ -85,6 +85,18 @@ pub enum MessageToSign {
     Predefined(Vec<u8>),
 }
 
+#[rstest_reuse::template]
+pub fn sign_message_test_params(
+    #[values(
+        MessageToSign::Random,
+        // Special case: an "overlong" utf-8 string (basically, the letter 'K' encoded with 2 bytes
+        // instead of 1). Trezor firmware used to have troubles with this.
+        MessageToSign::Predefined(vec![193, 139])
+    )]
+    message_to_sign: MessageToSign,
+) {
+}
+
 pub async fn test_sign_message_generic<MkS1, MkS2, S1, S2>(
     rng: &mut (impl Rng + CryptoRng),
     message_to_sign: MessageToSign,
