@@ -88,8 +88,9 @@ async fn spend(#[case] seed: Seed) {
                     .build();
 
                 // Issue and mint some tokens to lock in htlc
+                let tokens_amount = Amount::from_atoms(100);
                 let issue_and_mint_result =
-                    helpers::issue_and_mint_tokens_from_genesis(&mut rng, &mut tf);
+                    helpers::issue_and_mint_tokens_from_genesis(tokens_amount, &mut rng, &mut tf);
 
                 // Create htlc
                 let (htlc, _) = create_htlc(&chain_config, &alice_pk, &bob_pk, secret.hash());
@@ -99,10 +100,7 @@ async fn spend(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Htlc(
-                        OutputValue::TokenV1(
-                            issue_and_mint_result.token_id,
-                            Amount::from_atoms(100),
-                        ),
+                        OutputValue::TokenV1(issue_and_mint_result.token_id, tokens_amount),
                         Box::new(htlc),
                     ))
                     .build();
@@ -118,10 +116,7 @@ async fn spend(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
-                        OutputValue::TokenV1(
-                            issue_and_mint_result.token_id,
-                            Amount::from_atoms(100),
-                        ),
+                        OutputValue::TokenV1(issue_and_mint_result.token_id, tokens_amount),
                         Destination::AnyoneCanSpend,
                     ))
                     .build()
