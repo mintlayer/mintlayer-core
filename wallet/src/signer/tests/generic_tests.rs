@@ -141,22 +141,23 @@ pub async fn test_sign_message_generic<MkS1, MkS2, S1, S2>(
         let message_challenge = produce_message_challenge(&message);
 
         let mut signer = make_signer(chain_config.clone(), account.account_index());
-        let db_tx = db.transaction_ro_unlocked().await.unwrap();
-        let (db_tx, res) =
-            signer.sign_challenge(&message, &destination, account.key_chain(), db_tx).await;
+        let mut db_tx = db.transaction_ro_unlocked().await.unwrap();
+        let res = signer
+            .sign_challenge(&message, &destination, account.key_chain(), &mut db_tx)
+            .await
+            .unwrap();
 
-        let res = res.unwrap();
         res.verify_signature(&chain_config, &destination, &message_challenge).unwrap();
 
         if let Some(make_another_signer) = &make_another_signer {
             let mut another_signer =
                 make_another_signer(chain_config.clone(), account.account_index());
 
-            let (_db_tx, another_res) = another_signer
-                .sign_challenge(&message, &destination, account.key_chain(), db_tx)
-                .await;
+            let another_res = another_signer
+                .sign_challenge(&message, &destination, account.key_chain(), &mut db_tx)
+                .await
+                .unwrap();
 
-            let another_res = another_res.unwrap();
             another_res
                 .verify_signature(&chain_config, &destination, &message_challenge)
                 .unwrap();
@@ -172,9 +173,14 @@ pub async fn test_sign_message_generic<MkS1, MkS2, S1, S2>(
     let mut signer = make_signer(chain_config.clone(), account.account_index());
 
     let message = make_message();
-    let db_tx = db.transaction_ro_unlocked().await.unwrap();
-    let (_db_tx, err) = signer
-        .sign_challenge(&message, &random_pk_destination, account.key_chain(), db_tx)
+    let mut db_tx = db.transaction_ro_unlocked().await.unwrap();
+    let err = signer
+        .sign_challenge(
+            &message,
+            &random_pk_destination,
+            account.key_chain(),
+            &mut db_tx,
+        )
         .await;
 
     assert_eq!(err.unwrap_err(), SignerError::DestinationNotFromThisWallet);
@@ -252,33 +258,32 @@ pub async fn test_sign_transaction_intent_generic<MkS1, MkS2, S1, S2>(
         SignedTransactionIntent::get_message_to_sign(&intent, &tx.get_id());
 
     let mut signer = make_signer(chain_config.clone(), account.account_index());
-    let (mut db_tx, res) = signer
+    let res = signer
         .sign_transaction_intent(
             &tx,
             &input_destinations,
             &intent,
             account.key_chain(),
-            db_tx,
+            &mut db_tx,
         )
-        .await;
-    let res = res.unwrap();
+        .await
+        .unwrap();
     res.verify(&chain_config, &input_destinations, &expected_signed_message)
         .unwrap();
 
     if let Some(make_another_signer) = &make_another_signer {
         let mut another_signer = make_another_signer(chain_config.clone(), account.account_index());
-        let (db_tx2, another_res) = another_signer
+        let another_res = another_signer
             .sign_transaction_intent(
                 &tx,
                 &input_destinations,
                 &intent,
                 account.key_chain(),
-                db_tx,
+                &mut db_tx,
             )
-            .await;
-        db_tx = db_tx2;
+            .await
+            .unwrap();
 
-        let another_res = another_res.unwrap();
         another_res
             .verify(&chain_config, &input_destinations, &expected_signed_message)
             .unwrap();
@@ -291,13 +296,13 @@ pub async fn test_sign_transaction_intent_generic<MkS1, MkS2, S1, S2>(
     let random_pk_destination = Destination::PublicKey(random_pk);
     input_destinations[rng.gen_range(0..num_inputs)] = random_pk_destination;
 
-    let (_db_tx, err) = signer
+    let err = signer
         .sign_transaction_intent(
             &tx,
             &input_destinations,
             &intent,
             account.key_chain(),
-            db_tx,
+            &mut db_tx,
         )
         .await;
 
@@ -729,32 +734,31 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
     let orig_ptx = req.into_partially_signed_tx(ptx_additional_info).unwrap();
 
     let mut signer = make_signer(chain_config.clone(), account.account_index());
-    let (mut db_tx, res) = signer
+    let (ptx, _, _) = signer
         .sign_tx(
             orig_ptx.clone(),
             &tokens_additional_info,
             account.key_chain(),
-            db_tx,
+            &mut db_tx,
             tx_block_height,
         )
-        .await;
-    let (ptx, _, _) = res.unwrap();
+        .await
+        .unwrap();
 
     assert!(ptx.all_signatures_available());
 
     if let Some(make_another_signer) = &make_another_signer {
         let mut another_signer = make_another_signer(chain_config.clone(), account.account_index());
-        let (db_tx2, res) = another_signer
+        let (another_ptx, _, _) = another_signer
             .sign_tx(
                 orig_ptx,
                 &tokens_additional_info,
                 account.key_chain(),
-                db_tx,
+                &mut db_tx,
                 tx_block_height,
             )
-            .await;
-        db_tx = db_tx2;
-        let (another_ptx, _, _) = res.unwrap();
+            .await
+            .unwrap();
         assert!(another_ptx.all_signatures_available());
 
         assert_eq!(ptx, another_ptx);
@@ -811,32 +815,31 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
     let orig_ptx = ptx;
     // fully sign the remaining key in the multisig address
     let mut signer = make_signer(chain_config.clone(), account2.account_index());
-    let (mut db_tx, res) = signer
+    let (ptx, _, _) = signer
         .sign_tx(
             orig_ptx.clone(),
             &tokens_additional_info,
             account2.key_chain(),
-            db_tx,
+            &mut db_tx,
             tx_block_height,
         )
-        .await;
-    let (ptx, _, _) = res.unwrap();
+        .await
+        .unwrap();
     assert!(ptx.all_signatures_available());
 
     if let Some(make_another_signer) = &make_another_signer {
         let mut another_signer =
             make_another_signer(chain_config.clone(), account2.account_index());
-        let (db_tx2, res) = another_signer
+        let (another_ptx, _, _) = another_signer
             .sign_tx(
                 orig_ptx,
                 &tokens_additional_info,
                 account2.key_chain(),
-                db_tx,
+                &mut db_tx,
                 tx_block_height,
             )
-            .await;
-        db_tx = db_tx2;
-        let (another_ptx, _, _) = res.unwrap();
+            .await
+            .unwrap();
         assert!(another_ptx.all_signatures_available());
 
         assert_eq!(ptx, another_ptx);

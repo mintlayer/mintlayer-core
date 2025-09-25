@@ -408,18 +408,14 @@ impl Signer for SoftwareSigner {
         ptx: PartiallySignedTransaction,
         _tokens_additional_info: &TokensAdditionalInfo,
         key_chain: &(impl AccountKeyChains + Sync),
-        db_tx: T,
+        db_tx: &mut T,
         block_height: BlockHeight,
-    ) -> (
-        T,
-        SignerResult<(
-            PartiallySignedTransaction,
-            Vec<SignatureStatus>,
-            Vec<SignatureStatus>,
-        )>,
-    ) {
-        let res = self.sign_tx_impl(ptx, key_chain, &db_tx, block_height);
-        (db_tx, res)
+    ) -> SignerResult<(
+        PartiallySignedTransaction,
+        Vec<SignatureStatus>,
+        Vec<SignatureStatus>,
+    )> {
+        self.sign_tx_impl(ptx, key_chain, db_tx, block_height)
     }
 
     async fn sign_challenge<T: WalletStorageReadUnlocked + Send>(
@@ -427,27 +423,19 @@ impl Signer for SoftwareSigner {
         message: &[u8],
         destination: &Destination,
         key_chain: &(impl AccountKeyChains + Sync),
-        db_tx: T,
-    ) -> (T, SignerResult<ArbitraryMessageSignature>) {
-        let private_key = match self.get_private_key_for_destination(destination, key_chain, &db_tx)
-        {
-            Ok(pk) => pk,
-            Err(e) => return (db_tx, Err(e)),
-        };
+        db_tx: &mut T,
+    ) -> SignerResult<ArbitraryMessageSignature> {
+        let private_key = self
+            .get_private_key_for_destination(destination, key_chain, db_tx)?
+            .ok_or(SignerError::DestinationNotFromThisWallet)?;
 
-        let private_key = match private_key.ok_or(SignerError::DestinationNotFromThisWallet) {
-            Ok(pk) => pk,
-            Err(e) => return (db_tx, Err(e)),
-        };
-
-        let sig = ArbitraryMessageSignature::produce_uniparty_signature(
+        ArbitraryMessageSignature::produce_uniparty_signature(
             &private_key,
             destination,
             message,
             self.sig_aux_data_provider.lock().expect("poisoned mutex").as_mut(),
-        );
-
-        (db_tx, sig.map_err(Into::into))
+        )
+        .map_err(Into::into)
     }
 
     async fn sign_transaction_intent<T: WalletStorageReadUnlocked + Send>(
@@ -456,20 +444,18 @@ impl Signer for SoftwareSigner {
         input_destinations: &[Destination],
         intent: &str,
         key_chain: &(impl AccountKeyChains + Sync),
-        db_tx: T,
-    ) -> (T, SignerResult<SignedTransactionIntent>) {
-        let res = SignedTransactionIntent::produce_from_transaction(
+        db_tx: &mut T,
+    ) -> SignerResult<SignedTransactionIntent> {
+        SignedTransactionIntent::produce_from_transaction(
             transaction,
             input_destinations,
             intent,
             |dest| {
-                self.get_private_key_for_destination(dest, key_chain, &db_tx)?
+                self.get_private_key_for_destination(dest, key_chain, db_tx)?
                     .ok_or(SignerError::DestinationNotFromThisWallet)
             },
             self.sig_aux_data_provider.lock().expect("poisoned mutex").as_mut(),
-        );
-
-        (db_tx, res)
+        )
     }
 }
 

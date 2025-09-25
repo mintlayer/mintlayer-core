@@ -852,18 +852,14 @@ impl Signer for TrezorSigner {
         ptx: PartiallySignedTransaction,
         tokens_additional_info: &TokensAdditionalInfo,
         key_chain: &(impl AccountKeyChains + Sync),
-        db_tx: T,
+        db_tx: &mut T,
         block_height: BlockHeight,
-    ) -> (
-        T,
-        SignerResult<(
-            PartiallySignedTransaction,
-            Vec<SignatureStatus>,
-            Vec<SignatureStatus>,
-        )>,
-    ) {
-        let res = self.sign_tx_impl(ptx, tokens_additional_info, key_chain, &db_tx, block_height);
-        (db_tx, res)
+    ) -> SignerResult<(
+        PartiallySignedTransaction,
+        Vec<SignatureStatus>,
+        Vec<SignatureStatus>,
+    )> {
+        self.sign_tx_impl(ptx, tokens_additional_info, key_chain, db_tx, block_height)
     }
 
     async fn sign_challenge<T: WalletStorageReadUnlocked + Send>(
@@ -871,10 +867,9 @@ impl Signer for TrezorSigner {
         message: &[u8],
         destination: &Destination,
         key_chain: &(impl AccountKeyChains + Sync),
-        db_tx: T,
-    ) -> (T, SignerResult<ArbitraryMessageSignature>) {
-        let res = self.sign_challenge_impl(message, destination, key_chain, &db_tx);
-        (db_tx, res)
+        db_tx: &mut T,
+    ) -> SignerResult<ArbitraryMessageSignature> {
+        self.sign_challenge_impl(message, destination, key_chain, db_tx)
     }
 
     async fn sign_transaction_intent<T: WalletStorageReadUnlocked + Send>(
@@ -883,33 +878,26 @@ impl Signer for TrezorSigner {
         input_destinations: &[Destination],
         intent: &str,
         key_chain: &(impl AccountKeyChains + Sync),
-        db_tx: T,
-    ) -> (T, SignerResult<SignedTransactionIntent>) {
+        db_tx: &mut T,
+    ) -> SignerResult<SignedTransactionIntent> {
         let tx_id = transaction.get_id();
         let message_to_sign = SignedTransactionIntent::get_message_to_sign(intent, &tx_id);
 
         let mut signatures = Vec::with_capacity(input_destinations.len());
         for dest in input_destinations {
             let dest = SignedTransactionIntent::normalize_destination(dest);
-            let res =
-                self.sign_challenge_impl(message_to_sign.as_bytes(), &dest, key_chain, &db_tx);
-            let sig = match res {
-                Ok(sig) => sig,
-                Err(e) => return (db_tx, Err(e)),
-            };
+            let sig =
+                self.sign_challenge_impl(message_to_sign.as_bytes(), &dest, key_chain, db_tx)?;
             signatures.push(sig.into_raw());
         }
 
-        (
-            db_tx,
-            SignedTransactionIntent::from_components(
-                message_to_sign,
-                signatures,
-                input_destinations,
-                &self.chain_config,
-            )
-            .map_err(Into::into),
+        SignedTransactionIntent::from_components(
+            message_to_sign,
+            signatures,
+            input_destinations,
+            &self.chain_config,
         )
+        .map_err(Into::into)
     }
 }
 

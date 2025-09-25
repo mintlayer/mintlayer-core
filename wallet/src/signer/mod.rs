@@ -117,16 +117,13 @@ pub trait Signer {
         tx: PartiallySignedTransaction,
         tokens_additional_info: &TokensAdditionalInfo,
         key_chain: &(impl AccountKeyChains + Sync),
-        db_tx: T,
+        db_tx: &mut T,
         block_height: BlockHeight,
-    ) -> (
-        T,
-        SignerResult<(
-            PartiallySignedTransaction,
-            Vec<SignatureStatus>,
-            Vec<SignatureStatus>,
-        )>,
-    );
+    ) -> SignerResult<(
+        PartiallySignedTransaction,
+        Vec<SignatureStatus>,
+        Vec<SignatureStatus>,
+    )>;
 
     /// Sign an arbitrary message for a destination known to this key chain.
     async fn sign_challenge<T: WalletStorageReadUnlocked + Send>(
@@ -134,8 +131,8 @@ pub trait Signer {
         message: &[u8],
         destination: &Destination,
         key_chain: &(impl AccountKeyChains + Sync),
-        db_tx: T,
-    ) -> (T, SignerResult<ArbitraryMessageSignature>);
+        db_tx: &mut T,
+    ) -> SignerResult<ArbitraryMessageSignature>;
 
     /// Sign a transaction intent. The number of `input_destinations` must be the same as
     /// the number of inputs in the transaction; all of the destinations must be known
@@ -146,8 +143,8 @@ pub trait Signer {
         input_destinations: &[Destination],
         intent: &str,
         key_chain: &(impl AccountKeyChains + Sync),
-        db_tx: T,
-    ) -> (T, SignerResult<SignedTransactionIntent>);
+        db_tx: &mut T,
+    ) -> SignerResult<SignedTransactionIntent>;
 }
 
 pub trait SignerProvider {
