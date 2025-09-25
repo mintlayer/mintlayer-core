@@ -154,6 +154,7 @@ where
         *self.id
     }
 
+    #[tracing::instrument(skip_all, name = "", fields(peer_id = %self.id()))]
     pub async fn run(&mut self) {
         match self.main_loop().await {
             // The unexpected "channel closed" error will be handled by the sync manager.
@@ -167,7 +168,7 @@ where
         let last_sync_status = self.get_sync_status();
 
         if self.common_services.has_service(Service::Blocks) {
-            log::debug!("[peer id = {}] Asking for headers initially", self.id());
+            log::debug!("Asking for headers initially");
             self.request_headers().await?;
         }
 
@@ -243,11 +244,10 @@ where
 
         log::debug!(
             concat!(
-                "[peer id = {}] In handle_new_tip: have_sent_all_headers = {}, ",
+                "In handle_new_tip: have_sent_all_headers = {}, ",
                 "best_sent_block_header = {:?}, best_sent_block = {:?}, ",
                 "peers_best_block_that_we_have = {:?}"
             ),
-            self.id(),
             self.have_sent_all_headers,
             self.outgoing.best_sent_block_header,
             best_sent_block_id,
@@ -289,8 +289,7 @@ where
 
                 if headers.is_empty() {
                     log::debug!(
-                        "[peer id = {}] Got new tip event with block id {}, but there is nothing to send",
-                        self.id(),
+                        "Got new tip event with block id {}, but there is nothing to send",
                         new_tip_id,
                     );
                 } else if best_block_id != new_tip_id {
@@ -298,27 +297,19 @@ where
                     // so we may ignore this one (and it makes sense to ignore it to avoid sending
                     // the same header list multiple times).
                     log::debug!(
-                        "[peer id = {}] Got new tip event with block id {}, but the tip has changed since then to {}",
-                        self.id(),
+                        "Got new tip event with block id {}, but the tip has changed since then to {}",
                         new_tip_id,
                         best_block_id
                     );
                 } else {
-                    log::debug!(
-                        "[peer id = {}] Sending header list of length {}",
-                        self.id(),
-                        headers.len()
-                    );
+                    log::debug!("Sending header list of length {}", headers.len());
                     return self.send_headers(HeaderList::new(headers));
                 }
             } else {
                 // Note: if we got here, then we haven't received a single header request or
                 // response from the peer yet (otherwise peers_best_block_that_we_have would be
                 // set at least to the genesis). There is no point in doing anything specific here.
-                log::warn!(
-                    "[peer id = {}] Ignoring new tip event, because we don't know what to send",
-                    self.id()
-                );
+                log::warn!("Ignoring new tip event, because we don't know what to send");
             }
         }
 
@@ -326,10 +317,7 @@ where
     }
 
     async fn handle_local_event(&mut self, event: LocalEvent) -> Result<()> {
-        log::debug!(
-            "[peer id = {}] Handling local peer mgr event: {event:?}",
-            self.id()
-        );
+        log::debug!("Handling local peer mgr event: {event:?}");
 
         match event {
             LocalEvent::ChainstateNewTip(new_tip_id) => self.handle_new_tip(&new_tip_id).await,
@@ -341,14 +329,13 @@ where
         let locator = self.chainstate_handle.call(|this| Ok(this.get_locator()?)).await?;
         if locator.len() > *self.p2p_config.protocol_config.msg_max_locator_count {
             log::warn!(
-                "[peer id = {}] Sending locator of the length {}, which exceeds the maximum length {:?}",
-                self.id(),
+                "Sending locator of the length {}, which exceeds the maximum length {:?}",
                 locator.len(),
                 self.p2p_config.protocol_config.msg_max_locator_count
             );
         }
 
-        log::debug!("[peer id = {}] Sending header list request", self.id());
+        log::debug!("Sending header list request");
         self.send_message(BlockSyncMessage::HeaderListRequest(HeaderListRequest::new(
             locator,
         )))?;
@@ -360,10 +347,7 @@ where
     }
 
     async fn handle_message(&mut self, message: BlockSyncMessage) -> Result<()> {
-        log::trace!(
-            "[peer id = {}] Handling block sync message from the peer: {message:?}",
-            self.id()
-        );
+        log::trace!("Handling block sync message from the peer: {message:?}");
 
         let res = match message {
             BlockSyncMessage::HeaderListRequest(r) => {
@@ -385,7 +369,7 @@ where
 
     /// Processes a header request by sending requested data to the peer.
     async fn handle_header_request(&mut self, locator: Locator) -> Result<()> {
-        log::debug!("[peer id = {}] Handling header request", self.id());
+        log::debug!("Handling header request");
 
         if locator.len() > *self.p2p_config.protocol_config.msg_max_locator_count {
             return Err(P2pError::ProtocolError(ProtocolError::LocatorSizeExceeded(
@@ -395,7 +379,9 @@ where
         }
 
         if self.chainstate_handle.is_initial_block_download().await? {
-            log::debug!("[peer id = {}] Responding with empty headers list because the node is in initial block download", self.id());
+            log::debug!(
+                "Responding with empty headers list because the node is in initial block download"
+            );
             // Respond with an empty list to avoid being marked as stalled.
             // Note: sending actual headers when in IBD is in general not a good idea, because
             // we may not be on the correct chain. E.g. the current best block might be below
@@ -449,8 +435,7 @@ where
         );
 
         log::debug!(
-            "[peer id = {}] Handling block request: {}-{} ({})",
-            self.id(),
+            "Handling block request: {}-{} ({})",
             block_ids.first().expect("block_ids is not empty"),
             block_ids.last().expect("block_ids is not empty"),
             block_ids.len(),
@@ -462,8 +447,7 @@ where
             // be able to ask it for blocks.
             // TODO: return an error with a non-zero ban score instead?
             log::warn!(
-                "[peer id = {}] The node is in initial block download, but the peer is asking us for blocks",
-                self.id()
+                "The node is in initial block download, but the peer is asking us for blocks"
             );
             return Ok(());
         }
@@ -574,8 +558,7 @@ where
 
             let sleep_time = std::cmp::min(clock_diff, self.p2p_config.effective_max_clock_diff());
             log::debug!(
-                "[peer id = {}] Block timestamp from the future ({} seconds)",
-                self.id(),
+                "Block timestamp from the future ({} seconds)",
                 sleep_time.as_secs()
             );
             tokio::time::sleep(sleep_time).await;
@@ -583,7 +566,7 @@ where
     }
 
     async fn handle_header_list(&mut self, headers: Vec<SignedBlockHeader>) -> Result<()> {
-        log::debug!("[peer id = {}] Handling header list", self.id());
+        log::debug!("Handling header list");
 
         self.peer_activity.set_expecting_headers_since(None);
 
@@ -701,11 +684,7 @@ where
 
     async fn handle_block_response(&mut self, block: Block) -> Result<()> {
         let block_id = block.get_id();
-        log::debug!(
-            "[peer id = {}] Handling block response, block id = {}",
-            self.id(),
-            block_id
-        );
+        log::debug!("Handling block response, block id = {block_id}");
 
         if self.incoming.requested_blocks.front() != Some(&block.get_id()) {
             let idx = self.incoming.requested_blocks.iter().position(|id| id == &block.get_id());
@@ -737,22 +716,17 @@ where
             self.peer_activity.set_expecting_blocks_since(Some(self.time_getter.get_time()));
         }
 
-        let block = self.chainstate_handle.call(|c| Ok(c.preliminary_block_check(block)?)).await?;
-
         // Process the block and also determine the new value for peers_best_block_that_we_have.
-        let peer_id = self.id();
         let old_peers_best_block_that_we_have = self.incoming.peers_best_block_that_we_have;
         let (best_block, new_tip_received) = self
             .chainstate_handle
             .call_mut(move |c| {
+                let block = c.preliminary_block_check(block)?;
+
                 // If the block already exists in the block tree, skip it.
                 let new_tip_received =
                     if c.get_block_index_for_persisted_block(&block.get_id())?.is_some() {
-                        log::debug!(
-                            "[peer id = {}] The peer sent a block that already exists ({})",
-                            peer_id,
-                            block_id
-                        );
+                        log::debug!("The peer sent a block that already exists ({block_id})");
                         false
                     } else {
                         let block_index = c.process_block(block, BlockSource::Peer)?;
@@ -820,8 +794,7 @@ where
 
         let block_ids: Vec<_> = headers.into_iter().map(|h| h.get_id()).collect();
         log::debug!(
-            "[peer id = {}] Requesting blocks from the peer: {}-{} ({})",
-            self.id(),
+            "Requesting blocks from the peer: {}-{} ({})",
             block_ids.first().expect("block_ids is not empty"),
             block_ids.last().expect("block_ids is not empty"),
             block_ids.len(),
@@ -869,11 +842,7 @@ where
             self.outgoing.best_sent_block = Some(block_index);
         }
 
-        log::debug!(
-            "[peer id = {}] Sending block with id = {} to the peer",
-            self.id(),
-            block.get_id()
-        );
+        log::debug!("Sending block with id = {} to the peer", block.get_id());
         self.send_message(BlockSyncMessage::BlockResponse(BlockResponse::new(block)))
     }
 
@@ -894,8 +863,8 @@ where
         // Nodes can disconnect each other if all of them are in the initial block download state,
         // but this should never occur in a normal network and can be worked around in the tests.
         let (sender, receiver) = oneshot_nofail::channel();
-        log::warn!("[peer id = {}] Disconnecting the peer for ignoring requests, headers_req_stalling = {}, blocks_req_stalling = {}",
-            self.id(), headers_req_stalling, blocks_req_stalling);
+        log::warn!("Disconnecting the peer for ignoring requests, headers_req_stalling = {}, blocks_req_stalling = {}",
+            headers_req_stalling, blocks_req_stalling);
         self.peer_mgr_event_sender.send(PeerManagerEvent::Disconnect(
             self.id(),
             PeerDisconnectionDbAction::Keep,
@@ -911,11 +880,7 @@ where
     async fn handle_stalling_interval(&mut self) {
         let result = self.disconnect_if_stalling().await;
         if let Err(err) = result {
-            log::warn!(
-                "[peer id = {}] Disconnecting peer failed: {}",
-                self.id(),
-                err
-            );
+            log::warn!("Disconnecting peer failed: {err}");
         }
     }
 }

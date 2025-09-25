@@ -15,8 +15,9 @@
 
 //! ID caching mechanism
 
-use super::{Id, Idable};
 use serialization::{WrapperTypeDecode, WrapperTypeEncode};
+
+use super::{HasSubObjWithSameId, Id, Idable};
 
 /// An object together with its pre-calculated ID.
 ///
@@ -42,6 +43,18 @@ impl<T: Idable> WithId<T> {
     /// Take ownership of the underlying object
     pub fn take(this: Self) -> T {
         this.object
+    }
+
+    /// Convert this `WithId` into a `WithId` for a sub-object, without recalculating the id.
+    pub fn as_sub_obj<SubObj>(this: &Self) -> WithId<&SubObj>
+    where
+        T: HasSubObjWithSameId<SubObj>,
+        SubObj: Idable<Tag = <T as Idable>::Tag>,
+    {
+        WithId::<&SubObj> {
+            id: this.id,
+            object: this.object.get_sub_obj(),
+        }
     }
 }
 

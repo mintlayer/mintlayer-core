@@ -480,6 +480,7 @@ mod tests {
                 min_max_bootstrap_import_buffer_sizes: Default::default(),
                 max_tip_age: Default::default(),
                 enable_heavy_checks: Some(true),
+                allow_checkpoints_mismatch: Default::default(),
             };
             let chainstate_storage = Store::new_empty().unwrap();
 

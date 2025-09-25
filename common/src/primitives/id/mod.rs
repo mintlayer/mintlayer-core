@@ -253,6 +253,18 @@ impl<T: Idable> Idable for &T {
     }
 }
 
+/// Implementing this trait for some type `T` means that:
+/// 1) `T` has a sub-object of type `SubObj`.
+/// 2) Id of `SubObj` is the same as id of `T`.
+///
+/// Example: `Block` contains `SignedHeader` and the block id is the same as its header's.
+pub trait HasSubObjWithSameId<SubObj>: Idable
+where
+    SubObj: Idable<Tag = <Self as Idable>::Tag>,
+{
+    fn get_sub_obj(&self) -> &SubObj;
+}
+
 // we use a cropping stream (64 => 32) because
 // we want a hash result to H256 and a byte array
 // of the hash to be identical, while benefiting

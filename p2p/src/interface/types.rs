@@ -13,8 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use p2p_types::socket_address::SocketAddress;
 use serde::{Deserialize, Serialize};
+
+use p2p_types::socket_address::SocketAddress;
 
 use crate::{net::types::PeerRole, types::peer_id::PeerId};
 
@@ -43,4 +44,7 @@ pub struct ConnectedPeer {
 
     /// Min time for a ping roundtrip, in milliseconds
     pub ping_min: Option<u64>,
+
+    /// Last time the peer has sent us a block that became our tip, in seconds since UNIX epoch
+    pub last_tip_block_time: Option<u64>,
 }

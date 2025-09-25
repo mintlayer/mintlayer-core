@@ -2777,6 +2777,9 @@ Returns:
     "ping_min": EITHER OF
          1) number
          2) null,
+    "last_tip_block_time": EITHER OF
+         1) number
+         2) null,
 }, .. ]
 ```
 

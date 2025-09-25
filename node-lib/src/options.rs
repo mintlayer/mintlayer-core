@@ -19,22 +19,28 @@ use std::{
     ffi::OsString,
     net::{IpAddr, SocketAddr},
     num::NonZeroU64,
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 
 use clap::{Args, Parser, Subcommand};
 
 use chainstate_launcher::ChainConfig;
-use common::chain::config::{
-    regtest_options::{regtest_chain_config, ChainConfigOptions},
-    ChainType,
+use common::chain::{
+    self,
+    config::{
+        regtest_options::{regtest_chain_config_builder, ChainConfigOptions},
+        ChainType,
+    },
 };
 use utils::{
     clap_utils, default_data_dir::default_data_dir_common, root_user::ForceRunAsRootOptions,
 };
 use utils_networking::IpOrSocketAddress;
 
-use crate::config_files::{NodeTypeConfigFile, StorageBackendConfigFile};
+use crate::{
+    checkpoints_from_file::read_checkpoints_from_csv_file,
+    config_files::{NodeTypeConfigFile, StorageBackendConfigFile},
+};
 
 const CONFIG_NAME: &str = "config.toml";
 
@@ -147,15 +153,25 @@ impl Command {
     }
 
     pub fn create_chain_config(&self) -> anyhow::Result<ChainConfig> {
-        let chain_config = match self {
-            Command::Mainnet(_) => common::chain::config::create_mainnet(),
-            Command::Testnet(_) => common::chain::config::create_testnet(),
-            Command::Regtest(regtest_options) => {
-                regtest_chain_config(&regtest_options.chain_config)?
+        let (mut chain_config_builder, run_options) = match self {
+            Command::Mainnet(run_options) => {
+                (chain::config::Builder::new(ChainType::Mainnet), run_options)
             }
+            Command::Testnet(run_options) => {
+                (chain::config::Builder::new(ChainType::Testnet), run_options)
+            }
+            Command::Regtest(regtest_options) => (
+                regtest_chain_config_builder(&regtest_options.chain_config)?,
+                &regtest_options.run_options,
+            ),
         };
 
-        Ok(chain_config)
+        if let Some(csv_file) = &run_options.custom_checkpoints_csv_file {
+            let checkpoints = read_checkpoints_from_csv_file(Path::new(csv_file))?;
+            chain_config_builder = chain_config_builder.checkpoints(checkpoints);
+        }
+
+        Ok(chain_config_builder.build())
     }
 
     pub fn chain_type(&self) -> ChainType {
@@ -343,8 +359,140 @@ pub struct RunOptions {
     /// Defaults to true for regtest and false in other cases.
     #[clap(long, value_name = "VAL")]
     pub enable_chainstate_heavy_checks: Option<bool>,
+
+    /// If true, blocks and block headers will not be rejected if checkpoints mismatch is detected.
+    #[clap(long, action = clap::ArgAction::SetTrue, hide = true)]
+    pub allow_checkpoints_mismatch: Option<bool>,
+
+    /// Path to a CSV file with custom checkpoints that must be used instead of the predefined ones.
+    #[clap(long, hide = true)]
+    pub custom_checkpoints_csv_file: Option<PathBuf>,
 }
 
 pub fn default_data_dir(chain_type: ChainType) -> PathBuf {
     default_data_dir_common().join(chain_type.name())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{collections::BTreeMap, str::FromStr as _};
+
+    use rstest::rstest;
+
+    use common::{
+        chain::config::Checkpoints,
+        primitives::{BlockHeight, Id, Idable as _, H256},
+    };
+    use utils::concatln;
+
+    use super::*;
+
+    #[rstest]
+    fn checkpoints_from_csv(
+        #[values(ChainType::Mainnet, ChainType::Testnet, ChainType::Regtest)] chain_type: ChainType,
+    ) {
+        let (genesis_id, default_checkpoints) = {
+            let default_chain_config = chain::config::Builder::new(chain_type).build();
+
+            (
+                default_chain_config.genesis_block().get_id(),
+                default_chain_config.height_checkpoints().clone(),
+            )
+        };
+
+        let make_run_options = |custom_checkpoints_csv_file: Option<PathBuf>| RunOptions {
+            clean_data: Default::default(),
+            blockprod_min_peers_to_produce_blocks: Default::default(),
+            blockprod_skip_ibd_check: Default::default(),
+            blockprod_use_current_time_if_non_pos: Default::default(),
+            storage_backend: Default::default(),
+            node_type: Default::default(),
+            mock_time: Default::default(),
+            max_db_commit_attempts: Default::default(),
+            max_orphan_blocks: Default::default(),
+            p2p_networking_enabled: Default::default(),
+            p2p_bind_addresses: Default::default(),
+            p2p_socks5_proxy: Default::default(),
+            p2p_disable_noise: Default::default(),
+            p2p_boot_nodes: Default::default(),
+            p2p_reserved_nodes: Default::default(),
+            p2p_whitelist_addr: Default::default(),
+            p2p_max_inbound_connections: Default::default(),
+            p2p_discouragement_threshold: Default::default(),
+            p2p_discouragement_duration: Default::default(),
+            p2p_outbound_connection_timeout: Default::default(),
+            p2p_ping_check_period: Default::default(),
+            p2p_ping_timeout: Default::default(),
+            p2p_sync_stalling_timeout: Default::default(),
+            p2p_max_clock_diff: Default::default(),
+            p2p_force_dns_query_if_no_global_addresses_known: Default::default(),
+            max_tip_age: Default::default(),
+            rpc_bind_address: Default::default(),
+            rpc_enabled: Default::default(),
+            rpc_username: Default::default(),
+            rpc_password: Default::default(),
+            rpc_cookie_file: Default::default(),
+            min_tx_relay_fee_rate: Default::default(),
+            force_allow_run_as_root_outer: Default::default(),
+            enable_chainstate_heavy_checks: Default::default(),
+            allow_checkpoints_mismatch: Default::default(),
+            custom_checkpoints_csv_file,
+        };
+        let make_cmd = |run_options| match chain_type {
+            ChainType::Mainnet => Command::Mainnet(run_options),
+            ChainType::Testnet => Command::Testnet(run_options),
+            ChainType::Regtest => Command::Regtest(Box::new(RegtestOptions {
+                run_options,
+                chain_config: Default::default(),
+            })),
+            ChainType::Signet => panic!("Signet is not among possible chain types for this test"),
+        };
+
+        // Loaded checkpoints
+        {
+            let mk_id = |id_str| Id::new(H256::from_str(id_str).unwrap());
+            let data = concatln!(
+                "111, AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                "222, BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+                "333, CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC"
+            );
+
+            let expected_loaded_checkpoints = Checkpoints::new(
+                BTreeMap::from([
+                    (
+                        BlockHeight::new(111),
+                        mk_id("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"),
+                    ),
+                    (
+                        BlockHeight::new(222),
+                        mk_id("BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"),
+                    ),
+                    (
+                        BlockHeight::new(333),
+                        mk_id("CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC"),
+                    ),
+                ]),
+                genesis_id,
+            )
+            .unwrap();
+
+            let temp_file = tempfile::NamedTempFile::new().unwrap();
+            std::fs::write(temp_file.path(), data.as_bytes()).unwrap();
+
+            let run_options = make_run_options(Some(temp_file.path().to_path_buf()));
+            let cmd = make_cmd(run_options);
+            let chain_config = cmd.create_chain_config().unwrap();
+            assert_eq!(
+                chain_config.height_checkpoints(),
+                &expected_loaded_checkpoints
+            );
+        }
+
+        // Default checkpoints
+        {
+            let cmd = make_cmd(make_run_options(None));
+            let chain_config = cmd.create_chain_config().unwrap();
+            assert_eq!(chain_config.height_checkpoints(), &default_checkpoints);
+        }
+    }
 }

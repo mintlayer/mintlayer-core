@@ -23,7 +23,7 @@ use crate::{
         bootstrap::{export_bootstrap_stream, import_bootstrap_stream},
         calculate_median_time_past,
         tx_verification_strategy::TransactionVerificationStrategy,
-        BlockSource, OrphanBlocksRef,
+        BlockSource, OrphanBlocksRef, CHAINSTATE_TRACING_TARGET_VERBOSE_BLOCK_IDS,
     },
     ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent, ChainstateInterface, Locator,
     NonZeroPoolBalances,
@@ -71,7 +71,20 @@ where
         self.chainstate.subscribe_to_event_broadcast()
     }
 
-    #[tracing::instrument(skip_all, fields(block_id = %block.get_id()))]
+    // Note: in this and some other functions below (in particular, in those that are called from
+    // p2p when processing blocks coming from peers) we add an additional DEBUG span that prints
+    // the block via `format!("{:x}")`. This is because the other span prints the id via Display
+    // (due to the '%' sigil), in which case it is shortened, e.g. "778b…b100".
+    // Always printing the full id would clutter the log, so we don't want to do that.
+    // So we add an additional span for the cases when the full id is needed.
+    // Also note that we add the extra span first, but in the output it will be printed after
+    // the normal one.
+    #[tracing::instrument(
+        skip_all, level = tracing::Level::DEBUG, name = "",
+        fields(id = format!("{:x}", block.get_id())),
+        target = CHAINSTATE_TRACING_TARGET_VERBOSE_BLOCK_IDS
+    )]
+    #[tracing::instrument(skip_all, fields(id = %block.get_id()))]
     fn process_block(
         &mut self,
         block: Block,
@@ -82,14 +95,14 @@ where
             .map_err(ChainstateError::ProcessBlockError)
     }
 
-    #[tracing::instrument(skip_all, fields(block_id = %block_id))]
+    #[tracing::instrument(skip_all, fields(id = %block_id))]
     fn invalidate_block(&mut self, block_id: &Id<Block>) -> Result<(), ChainstateError> {
         self.chainstate
             .invalidate_block(block_id)
             .map_err(ChainstateError::BlockInvalidatorError)
     }
 
-    #[tracing::instrument(skip_all, fields(block_id = %block_id))]
+    #[tracing::instrument(skip_all, fields(id = %block_id))]
     fn reset_block_failure_flags(&mut self, block_id: &Id<Block>) -> Result<(), ChainstateError> {
         BlockInvalidator::new(&mut self.chainstate)
             .reset_block_failure_flags(block_id)
@@ -97,8 +110,19 @@ where
     }
 
     #[tracing::instrument(
+        skip_all, level = tracing::Level::DEBUG, name = "",
+        fields(first_id =
+            if let Some(first_header) = headers.first() {
+                format!("{:x}", first_header.get_id())
+            } else {
+                "None".to_owned()
+            }
+        ),
+        target = CHAINSTATE_TRACING_TARGET_VERBOSE_BLOCK_IDS
+    )]
+    #[tracing::instrument(
         skip_all,
-        fields(first_block_id = %headers.first().map(|header| header.get_id()).as_displayable())
+        fields(first_id = %headers.first().map(|header| header.get_id()).as_displayable())
     )]
     fn preliminary_headers_check(
         &self,
@@ -109,7 +133,12 @@ where
             .map_err(ChainstateError::ProcessBlockError)
     }
 
-    #[tracing::instrument(skip_all, fields(block_id = %block.get_id()))]
+    #[tracing::instrument(
+        skip_all, level = tracing::Level::DEBUG, name = "",
+        fields(id = format!("{:x}", block.get_id())),
+        target = CHAINSTATE_TRACING_TARGET_VERBOSE_BLOCK_IDS
+    )]
+    #[tracing::instrument(skip_all, fields(id = %block.get_id()))]
     fn preliminary_block_check(&self, block: Block) -> Result<Block, ChainstateError> {
         let block = BlockChecker::new(&self.chainstate)
             .preliminary_block_check(block.into())
@@ -126,7 +155,7 @@ where
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
-    #[tracing::instrument(skip_all, fields(block_id = %block_id))]
+    #[tracing::instrument(skip_all, fields(id = %block_id))]
     fn is_block_in_main_chain(&self, block_id: &Id<GenBlock>) -> Result<bool, ChainstateError> {
         self.chainstate
             .query()
@@ -144,7 +173,7 @@ where
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
-    #[tracing::instrument(skip_all, fields(block_id = %block_id))]
+    #[tracing::instrument(skip_all, fields(id = %block_id))]
     fn get_block_height_in_main_chain(
         &self,
         block_id: &Id<GenBlock>,
@@ -168,7 +197,7 @@ where
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
-    #[tracing::instrument(skip_all, fields(block_id = %block_id))]
+    #[tracing::instrument(skip_all, fields(id = %block_id))]
     fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, ChainstateError> {
         self.chainstate
             .query()
@@ -190,7 +219,7 @@ where
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
-    #[tracing::instrument(skip_all, fields(block_id = %block_id))]
+    #[tracing::instrument(skip_all, fields(id = %block_id))]
     fn get_block_header(
         &self,
         block_id: Id<Block>,
@@ -311,7 +340,7 @@ where
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
-    #[tracing::instrument(skip_all, fields(block_id = %block_id))]
+    #[tracing::instrument(skip_all, fields(id = %block_id))]
     fn get_block_index_for_persisted_block(
         &self,
         block_id: &Id<Block>,
@@ -323,7 +352,7 @@ where
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
-    #[tracing::instrument(skip_all, fields(block_id = %block_id))]
+    #[tracing::instrument(skip_all, fields(id = %block_id))]
     fn get_block_index_for_any_block(
         &self,
         block_id: &Id<Block>,
@@ -389,7 +418,7 @@ where
         Ok(calculate_median_time_past(&dbtx, starting_block))
     }
 
-    #[tracing::instrument(skip_all, fields(block_id = %block_id))]
+    #[tracing::instrument(skip_all, fields(id = %block_id))]
     fn is_already_an_orphan(&self, block_id: &Id<Block>) -> bool {
         self.chainstate.orphan_blocks_pool().is_already_an_orphan(block_id)
     }
@@ -401,7 +430,7 @@ where
 
     #[tracing::instrument(
         skip_all,
-        fields(block_id = %block_index.block_id(), ancestor_height = %ancestor_height)
+        fields(id = %block_index.block_id(), ancestor_height = %ancestor_height)
     )]
     fn get_ancestor(
         &self,
@@ -420,8 +449,8 @@ where
     #[tracing::instrument(
         skip_all,
         fields(
-            first_block_id = %first_block_index.block_id(),
-            second_block_id = %second_block_index.block_id()
+            first_id = %first_block_index.block_id(),
+            second_id = %second_block_index.block_id()
         )
     )]
     fn last_common_ancestor(
@@ -461,7 +490,7 @@ where
         }
     }
 
-    #[tracing::instrument(skip_all, fields(block_id = %block_index.block_id()))]
+    #[tracing::instrument(skip_all, fields(id = %block_index.block_id()))]
     fn get_block_reward(
         &self,
         block_index: &BlockIndex,
