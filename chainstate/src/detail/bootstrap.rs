@@ -109,12 +109,12 @@ fn fill_buffer<S: std::io::Read>(
 pub fn export_bootstrap_stream<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy>(
     magic_bytes: &[u8],
     writer: &mut std::io::BufWriter<Box<dyn Write + Send + 'a>>,
-    include_orphans: bool,
+    include_stale_blocks: bool,
     query_interface: &ChainstateQuery<'a, S, V>,
 ) -> Result<(), BootstrapError>
 where
 {
-    let blocks_list = if include_orphans {
+    let blocks_list = if include_stale_blocks {
         query_interface.get_block_id_tree_as_list()?
     } else {
         query_interface.get_mainchain_blocks_list()?

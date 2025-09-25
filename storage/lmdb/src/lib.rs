@@ -269,10 +269,30 @@ impl Lmdb {
         self
     }
 
-    fn open_db(env: &lmdb::Environment, desc: &DbMapDesc) -> storage_core::Result<lmdb::Database> {
+    /// Open the db only for reading.
+    pub fn make_read_only(mut self) -> Self {
+        self.flags |= lmdb::EnvironmentFlags::READ_ONLY;
+        self
+    }
+
+    fn is_read_only(&self) -> bool {
+        !(self.flags & lmdb::EnvironmentFlags::READ_ONLY).is_empty()
+    }
+
+    fn open_or_create_db(
+        env: &lmdb::Environment,
+        desc: &DbMapDesc,
+        open_only: bool,
+    ) -> storage_core::Result<lmdb::Database> {
         let name = Some(desc.name());
-        let flags = lmdb::DatabaseFlags::default();
-        env.create_db(name, flags).or_else(error::process_with_err)
+
+        if open_only {
+            env.open_db(name)
+        } else {
+            let flags = lmdb::DatabaseFlags::default();
+            env.create_db(name, flags)
+        }
+        .or_else(error::process_with_err)
     }
 }
 
@@ -280,8 +300,11 @@ impl backend::Backend for Lmdb {
     type Impl = LmdbImpl;
 
     fn open(self, desc: DbDesc) -> storage_core::Result<Self::Impl> {
-        // Attempt to create the storage directory
-        std::fs::create_dir_all(&self.path).map_err(error::process_io_error)?;
+        let read_only = self.is_read_only();
+        if !read_only {
+            // Attempt to create the storage directory
+            std::fs::create_dir_all(&self.path).map_err(error::process_io_error)?;
+        }
 
         let initial_map_size = self
             .initial_map_size
@@ -304,7 +327,9 @@ impl backend::Backend for Lmdb {
         .or_else(error::process_with_err)?;
 
         // Set up all the databases
-        let dbs = desc.db_maps().try_transform(|desc| Self::open_db(&environment, desc))?;
+        let dbs = desc
+            .db_maps()
+            .try_transform(|desc| Self::open_or_create_db(&environment, desc, read_only))?;
         let dbs = dbs.into();
 
         Ok(LmdbImpl {

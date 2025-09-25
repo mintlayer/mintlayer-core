@@ -554,7 +554,7 @@ Parameters:
 ```
 {
     "file_path": string,
-    "include_orphans": bool,
+    "include_stale_blocks": bool,
 }
 ```
 

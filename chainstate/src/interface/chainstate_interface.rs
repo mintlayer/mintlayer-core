@@ -242,7 +242,8 @@ pub trait ChainstateInterface: Send + Sync {
     /// Returns a list of all block ids in mainchain in order (starting from block of height 1, hence the result length is best_height - 1).
     fn get_mainchain_blocks_list(&self) -> Result<Vec<Id<Block>>, ChainstateError>;
 
-    /// Returns a list of all blocks in the block tree, including orphans. The length cannot be predicted before the call.
+    /// Returns a list of all blocks in the block tree, including stale blocks, ordered by block height.
+    /// The length cannot be predicted before the call.
     fn get_block_id_tree_as_list(&self) -> Result<Vec<Id<Block>>, ChainstateError>;
 
     /// Imports a bootstrap file exported with `export_bootstrap_stream`.
@@ -253,12 +254,10 @@ pub trait ChainstateInterface: Send + Sync {
 
     /// Writes the blocks of the blockchain into a stream that's meant to go to a file.
     /// The blocks in the stream can be used to resync the blockchain in another node.
-    /// NOTE: `include_orphans` here means "include all blocks that are not on mainchain", rather than just
-    /// "blocks without a parent".
     fn export_bootstrap_stream<'a>(
         &self,
         writer: std::io::BufWriter<Box<dyn std::io::Write + Send + 'a>>,
-        include_orphans: bool,
+        include_stale_blocks: bool,
     ) -> Result<(), ChainstateError>;
 
     /// Returns the UTXO for a specified OutPoint.

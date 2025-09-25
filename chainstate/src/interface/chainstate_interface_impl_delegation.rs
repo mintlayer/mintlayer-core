@@ -315,9 +315,9 @@ where
     fn export_bootstrap_stream<'a>(
         &self,
         writer: std::io::BufWriter<Box<dyn std::io::Write + Send + 'a>>,
-        include_orphans: bool,
+        include_stale_blocks: bool,
     ) -> Result<(), ChainstateError> {
-        self.deref().export_bootstrap_stream(writer, include_orphans)
+        self.deref().export_bootstrap_stream(writer, include_stale_blocks)
     }
 
     fn utxo(&self, outpoint: &UtxoOutPoint) -> Result<Option<Utxo>, ChainstateError> {

@@ -33,7 +33,7 @@ use common::chain::{
     },
 };
 use utils::{
-    clap_utils, default_data_dir::default_data_dir_common, root_user::ForceRunAsRootOptions,
+    clap_utils, default_data_dir::default_data_dir_for_chain, root_user::ForceRunAsRootOptions,
 };
 use utils_networking::IpOrSocketAddress;
 
@@ -370,7 +370,7 @@ pub struct RunOptions {
 }
 
 pub fn default_data_dir(chain_type: ChainType) -> PathBuf {
-    default_data_dir_common().join(chain_type.name())
+    default_data_dir_for_chain(chain_type.name())
 }
 
 #[cfg(test)]
