@@ -17,14 +17,17 @@ use std::borrow::Cow;
 
 use crate::{
     framework::BlockOutputs, key_manager::KeyManager,
-    signature_destination_getter::SignatureDestinationGetter, TestFramework,
+    signature_destination_getter::SignatureDestinationGetter, TestBlockIndexHandle, TestFramework,
 };
 use chainstate::{BlockIndex, GenBlockIndex};
-use chainstate_storage::BlockchainStorageRead;
+use chainstate_storage::{BlockchainStorageRead, Transactional as _};
 use chainstate_types::{pos_randomness::PoSRandomness, TipStorageTag};
 use common::{
     chain::{
-        block::{consensus_data::PoSData, timestamp::BlockTimestamp, BlockRewardTransactable},
+        block::{
+            consensus_data::PoSData, timestamp::BlockTimestamp, BlockRewardTransactable,
+            ConsensusData,
+        },
         config::{create_unit_test_config, Builder as ConfigBuilder, ChainType, EpochIndex},
         output_value::OutputValue,
         signature::{
@@ -40,13 +43,13 @@ use common::{
         },
         stakelock::StakePoolData,
         Block, ChainConfig, CoinUnit, ConsensusUpgrade, Destination, GenBlock, Genesis,
-        NetUpgrades, OrderId, OutPointSourceId, PoSChainConfig, PoSChainConfigBuilder, PoolId,
-        TxInput, TxOutput, UtxoOutPoint,
+        NetUpgrades, OrderId, OutPointSourceId, PoSChainConfig, PoSChainConfigBuilder, PoSStatus,
+        PoolId, RequiredConsensus, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Compact, Id, Idable, H256},
     Uint256,
 };
-use consensus::find_timestamp_for_staking;
+use consensus::{find_timestamp_for_staking, ConsensusPoSError};
 use crypto::{
     key::{KeyKind, PrivateKey, PublicKey},
     vrf::{VRFPrivateKey, VRFPublicKey},
@@ -554,5 +557,45 @@ where
                 give_balance,
             }
         }))
+    }
+}
+
+pub fn get_pos_status(tf: &TestFramework, block_height: BlockHeight) -> PoSStatus {
+    match tf
+        .chainstate
+        .get_chain_config()
+        .consensus_upgrades()
+        .consensus_status(block_height)
+    {
+        RequiredConsensus::PoS(status) => status,
+        RequiredConsensus::PoW(_) | RequiredConsensus::IgnoreConsensus => {
+            panic!("Invalid consensus")
+        }
+    }
+}
+
+pub fn calculate_new_pos_compact_target(
+    tf: &TestFramework,
+    block_height: BlockHeight,
+    parent_block_id: &Id<GenBlock>,
+) -> Result<Compact, ConsensusPoSError> {
+    let pos_status = get_pos_status(tf, block_height);
+
+    let db_tx = tf.storage.transaction_ro().unwrap();
+    let block_index_handle =
+        TestBlockIndexHandle::new(db_tx, tf.chainstate.get_chain_config().as_ref());
+
+    consensus::calculate_target_required(
+        tf.chainstate.get_chain_config().as_ref(),
+        &pos_status,
+        *parent_block_id,
+        &block_index_handle,
+    )
+}
+
+pub fn get_pos_target(block: &Block) -> Option<Uint256> {
+    match block.consensus_data() {
+        ConsensusData::None | ConsensusData::PoW(_) => None,
+        ConsensusData::PoS(data) => Some(data.compact_target().try_into().unwrap()),
     }
 }

@@ -18,7 +18,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::{
     random_tx_maker::StakingPoolsObserver,
     signature_destination_getter::SignatureDestinationGetter,
-    utils::{find_create_pool_tx_in_genesis, pos_mine, produce_kernel_signature, sign_witnesses},
+    utils::{
+        calculate_new_pos_compact_target, find_create_pool_tx_in_genesis, get_pos_status, pos_mine,
+        produce_kernel_signature, sign_witnesses,
+    },
     TestFramework,
 };
 use chainstate::{BlockSource, ChainstateError};
@@ -35,8 +38,8 @@ use common::{
         },
         signature::inputsig::InputWitness,
         signed_transaction::SignedTransaction,
-        AccountNonce, AccountType, Block, Destination, GenBlock, PoolId, RequiredConsensus,
-        TxInput, TxOutput, UtxoOutPoint,
+        AccountNonce, AccountType, Block, Destination, GenBlock, PoolId, TxInput, TxOutput,
+        UtxoOutPoint,
     },
     primitives::{Id, Idable},
 };
@@ -73,6 +76,8 @@ pub struct PoSBlockBuilder<'f> {
     tokens_accounting_store: InMemoryTokensAccounting,
     pos_accounting_store: InMemoryPoSAccounting,
     orders_accounting_store: InMemoryOrdersAccounting,
+
+    randomize_timediffs: bool,
 }
 
 impl<'f> PoSBlockBuilder<'f> {
@@ -130,6 +135,7 @@ impl<'f> PoSBlockBuilder<'f> {
             tokens_accounting_store,
             pos_accounting_store,
             orders_accounting_store,
+            randomize_timediffs: false,
         }
     }
 
@@ -219,6 +225,11 @@ impl<'f> PoSBlockBuilder<'f> {
             .with_kernel_input(kernel_input_outpoint)
     }
 
+    pub fn with_randomized_timediffs(mut self, randomize: bool) -> Self {
+        self.randomize_timediffs = randomize;
+        self
+    }
+
     fn build_impl(self, rng: &mut (impl Rng + CryptoRng)) -> (Block, &'f mut TestFramework) {
         let (consensus_data, block_timestamp) = match self.consensus_data {
             Some(data) => (data, self.timestamp),
@@ -259,7 +270,12 @@ impl<'f> PoSBlockBuilder<'f> {
         };
 
         let target_block_time = self.framework.chainstate.get_chain_config().target_block_spacing();
-        self.framework.progress_time_seconds_since_epoch(target_block_time.as_secs());
+        let time_advancement = if self.randomize_timediffs {
+            rng.gen_range(1..target_block_time.as_secs() * 2)
+        } else {
+            target_block_time.as_secs()
+        };
+        self.framework.progress_time_seconds_since_epoch(time_advancement);
 
         let block = Block::new_from_header(signed_header, block_body).unwrap();
 
@@ -327,19 +343,13 @@ impl<'f> PoSBlockBuilder<'f> {
         );
 
         let new_block_height = parent_block_index.block_height().next_height();
-        let pos_status = match self
-            .framework
-            .chainstate
-            .get_chain_config()
-            .consensus_upgrades()
-            .consensus_status(new_block_height)
-        {
-            RequiredConsensus::PoS(status) => status,
-            RequiredConsensus::PoW(_) | RequiredConsensus::IgnoreConsensus => {
-                panic!("Invalid consensus")
-            }
-        };
-        let current_difficulty = pos_status.get_chain_config().target_limit();
+        let pos_status = get_pos_status(self.framework, new_block_height);
+        let target = calculate_new_pos_compact_target(
+            self.framework,
+            new_block_height,
+            &self.prev_block_hash,
+        )
+        .unwrap();
         let chain_config = self.framework.chainstate.get_chain_config().as_ref();
         let epoch_index = chain_config.epoch_index_from_height(&new_block_height);
 
@@ -359,7 +369,7 @@ impl<'f> PoSBlockBuilder<'f> {
             self.staking_pool.unwrap(),
             chain_config.final_supply().unwrap(),
             epoch_index,
-            current_difficulty.into(),
+            target,
         )
         .unwrap()
     }
