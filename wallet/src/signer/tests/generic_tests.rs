@@ -82,7 +82,7 @@ pub enum MessageToSign {
     Predefined(Vec<u8>),
 }
 
-pub fn test_sign_message_generic<MkS1, MkS2, S1, S2>(
+pub async fn test_sign_message_generic<MkS1, MkS2, S1, S2>(
     rng: &mut (impl Rng + CryptoRng),
     message_to_sign: MessageToSign,
     make_signer: MkS1,
@@ -94,8 +94,8 @@ pub fn test_sign_message_generic<MkS1, MkS2, S1, S2>(
     S2: Signer,
 {
     let chain_config = Arc::new(create_regtest());
-    let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
-    let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
+    let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).await.unwrap());
+    let mut db_tx = db.transaction_rw_unlocked(None).await.unwrap();
 
     let mut account = account_from_mnemonic(&chain_config, &mut db_tx, DEFAULT_ACCOUNT_INDEX);
 
@@ -134,14 +134,19 @@ pub fn test_sign_message_generic<MkS1, MkS2, S1, S2>(
         .unwrap();
     let standalone_pk_destination = Destination::PublicKey(standalone_pk);
 
+    db_tx.commit().unwrap();
+
     for destination in [pkh_destination, pk_destination, standalone_pk_destination] {
         let message = make_message();
         let message_challenge = produce_message_challenge(&message);
 
         let mut signer = make_signer(chain_config.clone(), account.account_index());
+        let mut db_tx = db.transaction_ro_unlocked().await.unwrap();
         let res = signer
-            .sign_challenge(&message, &destination, account.key_chain(), &db_tx)
+            .sign_challenge(&message, &destination, account.key_chain(), &mut db_tx)
+            .await
             .unwrap();
+
         res.verify_signature(&chain_config, &destination, &message_challenge).unwrap();
 
         if let Some(make_another_signer) = &make_another_signer {
@@ -149,8 +154,10 @@ pub fn test_sign_message_generic<MkS1, MkS2, S1, S2>(
                 make_another_signer(chain_config.clone(), account.account_index());
 
             let another_res = another_signer
-                .sign_challenge(&message, &destination, account.key_chain(), &db_tx)
+                .sign_challenge(&message, &destination, account.key_chain(), &mut db_tx)
+                .await
                 .unwrap();
+
             another_res
                 .verify_signature(&chain_config, &destination, &message_challenge)
                 .unwrap();
@@ -166,19 +173,20 @@ pub fn test_sign_message_generic<MkS1, MkS2, S1, S2>(
     let mut signer = make_signer(chain_config.clone(), account.account_index());
 
     let message = make_message();
+    let mut db_tx = db.transaction_ro_unlocked().await.unwrap();
     let err = signer
         .sign_challenge(
             &message,
             &random_pk_destination,
             account.key_chain(),
-            &db_tx,
+            &mut db_tx,
         )
-        .unwrap_err();
+        .await;
 
-    assert_eq!(err, SignerError::DestinationNotFromThisWallet);
+    assert_eq!(err.unwrap_err(), SignerError::DestinationNotFromThisWallet);
 }
 
-pub fn test_sign_transaction_intent_generic<MkS1, MkS2, S1, S2>(
+pub async fn test_sign_transaction_intent_generic<MkS1, MkS2, S1, S2>(
     rng: &mut (impl Rng + CryptoRng),
     make_signer: MkS1,
     make_another_signer: Option<MkS2>,
@@ -189,8 +197,8 @@ pub fn test_sign_transaction_intent_generic<MkS1, MkS2, S1, S2>(
     S2: Signer,
 {
     let chain_config = Arc::new(create_regtest());
-    let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
-    let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
+    let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).await.unwrap());
+    let mut db_tx = db.transaction_rw_unlocked(None).await.unwrap();
 
     let mut account = account_from_mnemonic(&chain_config, &mut db_tx, DEFAULT_ACCOUNT_INDEX);
 
@@ -256,8 +264,9 @@ pub fn test_sign_transaction_intent_generic<MkS1, MkS2, S1, S2>(
             &input_destinations,
             &intent,
             account.key_chain(),
-            &db_tx,
+            &mut db_tx,
         )
+        .await
         .unwrap();
     res.verify(&chain_config, &input_destinations, &expected_signed_message)
         .unwrap();
@@ -270,9 +279,11 @@ pub fn test_sign_transaction_intent_generic<MkS1, MkS2, S1, S2>(
                 &input_destinations,
                 &intent,
                 account.key_chain(),
-                &db_tx,
+                &mut db_tx,
             )
+            .await
             .unwrap();
+
         another_res
             .verify(&chain_config, &input_destinations, &expected_signed_message)
             .unwrap();
@@ -291,14 +302,14 @@ pub fn test_sign_transaction_intent_generic<MkS1, MkS2, S1, S2>(
             &input_destinations,
             &intent,
             account.key_chain(),
-            &db_tx,
+            &mut db_tx,
         )
-        .unwrap_err();
+        .await;
 
-    assert_eq!(err, SignerError::DestinationNotFromThisWallet);
+    assert_eq!(err.unwrap_err(), SignerError::DestinationNotFromThisWallet);
 }
 
-pub fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
+pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
     rng: &mut (impl Rng + CryptoRng),
     input_commitments_version: SighashInputCommitmentVersion,
     make_signer: MkS1,
@@ -343,8 +354,8 @@ pub fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
             .build(),
     );
 
-    let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
-    let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
+    let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).await.unwrap());
+    let mut db_tx = db.transaction_rw_unlocked(None).await.unwrap();
 
     let mut account = account_from_mnemonic(&chain_config, &mut db_tx, DEFAULT_ACCOUNT_INDEX);
     let mut account2 = account_from_mnemonic(&chain_config, &mut db_tx, U31::ONE);
@@ -728,10 +739,12 @@ pub fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
             orig_ptx.clone(),
             &tokens_additional_info,
             account.key_chain(),
-            &db_tx,
+            &mut db_tx,
             tx_block_height,
         )
+        .await
         .unwrap();
+
     assert!(ptx.all_signatures_available());
 
     if let Some(make_another_signer) = &make_another_signer {
@@ -741,9 +754,10 @@ pub fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
                 orig_ptx,
                 &tokens_additional_info,
                 account.key_chain(),
-                &db_tx,
+                &mut db_tx,
                 tx_block_height,
             )
+            .await
             .unwrap();
         assert!(another_ptx.all_signatures_available());
 
@@ -806,9 +820,10 @@ pub fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
             orig_ptx.clone(),
             &tokens_additional_info,
             account2.key_chain(),
-            &db_tx,
+            &mut db_tx,
             tx_block_height,
         )
+        .await
         .unwrap();
     assert!(ptx.all_signatures_available());
 
@@ -820,14 +835,16 @@ pub fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
                 orig_ptx,
                 &tokens_additional_info,
                 account2.key_chain(),
-                &db_tx,
+                &mut db_tx,
                 tx_block_height,
             )
+            .await
             .unwrap();
         assert!(another_ptx.all_signatures_available());
 
         assert_eq!(ptx, another_ptx);
     }
+    db_tx.commit().unwrap();
 
     for (i, dest) in destinations.iter().enumerate() {
         tx_verifier::input_check::signature_only_check::verify_tx_signature(
@@ -868,7 +885,7 @@ fn random_destination(rng: &mut (impl Rng + CryptoRng)) -> Destination {
     Destination::PublicKey(pk)
 }
 
-fn destination_from_account<K: AccountKeyChains>(
+fn destination_from_account<K: AccountKeyChains + Sync>(
     account: &mut Account<K>,
     db_tx: &mut impl TransactionRwUnlocked,
     rng: &mut impl Rng,

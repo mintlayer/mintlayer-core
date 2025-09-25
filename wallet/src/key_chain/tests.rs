@@ -59,7 +59,8 @@ const MNEMONIC: &str =
     "030d1d07a8e45110d14f4e2c8623e8db556c11a90c0aac6be9a88f2464e446ee95",
     "7ed12073a4cc61d8a79f3dc0dfc5ca1a23d9ce1fe3c1e92d3b6939cd5848a390"
 )]
-fn key_chain_creation(
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn key_chain_creation(
     #[case] purpose: KeyPurpose,
     #[case] path_str: &str,
     #[case] path_encoded_str: &str,
@@ -68,8 +69,8 @@ fn key_chain_creation(
     #[case] chaincode: &str,
 ) {
     let chain_config = Arc::new(create_mainnet());
-    let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
-    let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
+    let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).await.unwrap());
+    let mut db_tx = db.transaction_rw_unlocked(None).await.unwrap();
     let master_key_chain = MasterKeyChain::new_from_mnemonic(
         chain_config,
         &mut db_tx,
@@ -95,7 +96,7 @@ fn key_chain_creation(
     let pkh = PublicKeyHash::zero();
     assert!(!key_chain.is_public_key_hash_mine(&pkh));
 
-    let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
+    let mut db_tx = db.transaction_rw_unlocked(None).await.unwrap();
     let path = DerivationPath::from_str(path_str).unwrap();
     // Derive expected key
     let pk = {
@@ -129,10 +130,11 @@ fn key_chain_creation(
 #[rstest]
 #[case(KeyPurpose::ReceiveFunds)]
 #[case(KeyPurpose::Change)]
-fn key_lookahead(#[case] purpose: KeyPurpose) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn key_lookahead(#[case] purpose: KeyPurpose) {
     let chain_config = Arc::new(create_unit_test_config());
-    let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
-    let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
+    let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).await.unwrap());
+    let mut db_tx = db.transaction_rw_unlocked(None).await.unwrap();
     let master_key_chain = MasterKeyChain::new_from_mnemonic(
         chain_config.clone(),
         &mut db_tx,
@@ -148,7 +150,7 @@ fn key_lookahead(#[case] purpose: KeyPurpose) {
 
     let id = key_chain.get_account_id();
 
-    let mut db_tx = db.transaction_rw(None).unwrap();
+    let mut db_tx = db.transaction_rw(None).await.unwrap();
     assert_eq!(key_chain.lookahead_size(), LOOKAHEAD_SIZE);
 
     // Issue new addresses until the lookahead size is reached
@@ -174,7 +176,7 @@ fn key_lookahead(#[case] purpose: KeyPurpose) {
 
     let mut key_chain = AccountKeyChainImplSoftware::load_from_database(
         Arc::clone(&chain_config),
-        &db.transaction_ro().unwrap(),
+        &db.transaction_ro().await.unwrap(),
         &id,
         &account_info,
     )
@@ -186,7 +188,7 @@ fn key_lookahead(#[case] purpose: KeyPurpose) {
         Some(U31::from_u32_with_msb(LOOKAHEAD_SIZE - 1).0)
     );
 
-    let mut db_tx = db.transaction_rw(None).unwrap();
+    let mut db_tx = db.transaction_rw(None).await.unwrap();
 
     assert_eq!(
         key_chain.issue_address(&mut db_tx, purpose),
@@ -212,10 +214,11 @@ fn key_lookahead(#[case] purpose: KeyPurpose) {
 #[rstest]
 #[case(KeyPurpose::ReceiveFunds)]
 #[case(KeyPurpose::Change)]
-fn top_up_and_lookahead(#[case] purpose: KeyPurpose) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn top_up_and_lookahead(#[case] purpose: KeyPurpose) {
     let chain_config = Arc::new(create_unit_test_config());
-    let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
-    let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
+    let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).await.unwrap());
+    let mut db_tx = db.transaction_rw_unlocked(None).await.unwrap();
     let master_key_chain = MasterKeyChain::new_from_mnemonic(
         chain_config.clone(),
         &mut db_tx,
@@ -242,7 +245,7 @@ fn top_up_and_lookahead(#[case] purpose: KeyPurpose) {
 
     let mut key_chain = AccountKeyChainImplSoftware::load_from_database(
         chain_config,
-        &db.transaction_ro().unwrap(),
+        &db.transaction_ro().await.unwrap(),
         &id,
         &account_info,
     )
@@ -256,7 +259,7 @@ fn top_up_and_lookahead(#[case] purpose: KeyPurpose) {
         assert_eq!(leaf_keys.usage_state().last_used(), None);
     }
 
-    let mut db_tx = db.transaction_rw(None).unwrap();
+    let mut db_tx = db.transaction_rw(None).await.unwrap();
 
     let mut issued_key = key_chain.issue_key(&mut db_tx, purpose).unwrap();
 

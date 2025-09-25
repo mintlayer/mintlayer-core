@@ -167,11 +167,13 @@ impl<T> utils::shallow_clone::ShallowClone for TransactionLockImpl<T> {
     }
 }
 
-impl<T: CoreOps + Sync + Send + 'static> backend::BackendImpl for TransactionLockImpl<T> {
+impl<T: CoreOps + Sync + Send + 'static> backend::BaseBackendImpl for TransactionLockImpl<T> {
     type TxRo<'a> = TxRo<'a, T>;
 
     type TxRw<'a> = TxRw<'a, T>;
+}
 
+impl<T: CoreOps + Sync + Send + 'static> backend::BackendImpl for TransactionLockImpl<T> {
     fn transaction_ro(&self) -> crate::Result<Self::TxRo<'_>> {
         Ok(TxRo(self.db.read().expect("lock to be alive")))
     }
@@ -199,13 +201,17 @@ where
         Self(self.0.clone())
     }
 }
+impl<T: CoreOps + Sync + Send + 'static> backend::BaseBackend for Locking<T>
+where
+    T::From: Clone,
+{
+    type Impl = TransactionLockImpl<T>;
+}
 
 impl<T: CoreOps + Sync + Send + 'static> backend::Backend for Locking<T>
 where
     T::From: Clone,
 {
-    type Impl = TransactionLockImpl<T>;
-
     fn open(self, desc: DbDesc) -> crate::Result<Self::Impl> {
         let num_maps = desc.db_map_count().into();
         let db = sync::Arc::new(sync::RwLock::new(T::construct(self.0, desc)?));

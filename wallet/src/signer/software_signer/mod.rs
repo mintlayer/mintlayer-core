@@ -17,6 +17,7 @@ use std::sync::{Arc, Mutex};
 
 use itertools::Itertools;
 
+use async_trait::async_trait;
 use common::{
     chain::{
         config::ChainType,
@@ -75,7 +76,7 @@ use super::{Signer, SignerError, SignerProvider, SignerResult};
 pub struct SoftwareSigner {
     chain_config: Arc<ChainConfig>,
     account_index: U31,
-    sig_aux_data_provider: Mutex<Box<dyn SigAuxDataProvider>>,
+    sig_aux_data_provider: Mutex<Box<dyn SigAuxDataProvider + Send>>,
 }
 
 impl SoftwareSigner {
@@ -101,7 +102,7 @@ impl SoftwareSigner {
     pub fn new_with_sig_aux_data_provider(
         chain_config: Arc<ChainConfig>,
         account_index: U31,
-        sig_aux_data_provider: Box<dyn SigAuxDataProvider>,
+        sig_aux_data_provider: Box<dyn SigAuxDataProvider + Send>,
     ) -> Self {
         Self {
             chain_config,
@@ -286,15 +287,12 @@ impl SoftwareSigner {
 
         Ok((current_signatures, previous_status, final_status))
     }
-}
 
-impl Signer for SoftwareSigner {
-    fn sign_tx(
+    fn sign_tx_impl<T: WalletStorageReadUnlocked + Send>(
         &mut self,
         ptx: PartiallySignedTransaction,
-        _tokens_additional_info: &TokensAdditionalInfo,
-        key_chain: &impl AccountKeyChains,
-        db_tx: &impl WalletStorageReadUnlocked,
+        key_chain: &(impl AccountKeyChains + Sync),
+        db_tx: &T,
         block_height: BlockHeight,
     ) -> SignerResult<(
         PartiallySignedTransaction,
@@ -401,35 +399,52 @@ impl Signer for SoftwareSigner {
 
         Ok((ptx.with_witnesses(witnesses)?, prev_statuses, new_statuses))
     }
+}
 
-    fn sign_challenge(
+#[async_trait]
+impl Signer for SoftwareSigner {
+    async fn sign_tx<T: WalletStorageReadUnlocked + Send>(
+        &mut self,
+        ptx: PartiallySignedTransaction,
+        _tokens_additional_info: &TokensAdditionalInfo,
+        key_chain: &(impl AccountKeyChains + Sync),
+        db_tx: &mut T,
+        block_height: BlockHeight,
+    ) -> SignerResult<(
+        PartiallySignedTransaction,
+        Vec<SignatureStatus>,
+        Vec<SignatureStatus>,
+    )> {
+        self.sign_tx_impl(ptx, key_chain, db_tx, block_height)
+    }
+
+    async fn sign_challenge<T: WalletStorageReadUnlocked + Send>(
         &mut self,
         message: &[u8],
         destination: &Destination,
-        key_chain: &impl AccountKeyChains,
-        db_tx: &impl WalletStorageReadUnlocked,
+        key_chain: &(impl AccountKeyChains + Sync),
+        db_tx: &mut T,
     ) -> SignerResult<ArbitraryMessageSignature> {
         let private_key = self
             .get_private_key_for_destination(destination, key_chain, db_tx)?
             .ok_or(SignerError::DestinationNotFromThisWallet)?;
 
-        let sig = ArbitraryMessageSignature::produce_uniparty_signature(
+        ArbitraryMessageSignature::produce_uniparty_signature(
             &private_key,
             destination,
             message,
             self.sig_aux_data_provider.lock().expect("poisoned mutex").as_mut(),
-        )?;
-
-        Ok(sig)
+        )
+        .map_err(Into::into)
     }
 
-    fn sign_transaction_intent(
+    async fn sign_transaction_intent<T: WalletStorageReadUnlocked + Send>(
         &mut self,
         transaction: &Transaction,
         input_destinations: &[Destination],
         intent: &str,
-        key_chain: &impl AccountKeyChains,
-        db_tx: &impl WalletStorageReadUnlocked,
+        key_chain: &(impl AccountKeyChains + Sync),
+        db_tx: &mut T,
     ) -> SignerResult<SignedTransactionIntent> {
         SignedTransactionIntent::produce_from_transaction(
             transaction,
@@ -464,7 +479,7 @@ pub struct SoftwareSignerProvider {
 }
 
 impl SoftwareSignerProvider {
-    pub fn new_from_mnemonic<B: storage::Backend>(
+    pub fn new_from_mnemonic<B: storage::AsyncBackend>(
         chain_config: Arc<ChainConfig>,
         db_tx: &mut StoreTxRwUnlocked<B>,
         mnemonic_str: &str,

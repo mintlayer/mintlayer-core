@@ -35,6 +35,9 @@ mod property {
     pub fn tests<F>(_backend_fn: F) -> impl Iterator<Item = libtest_mimic::Trial> {
         std::iter::empty()
     }
+    pub fn async_tests<F>(_backend_fn: F) -> impl Iterator<Item = libtest_mimic::Trial> {
+        std::iter::empty()
+    }
 }
 
 use prelude::*;
@@ -51,12 +54,34 @@ fn tests<B: Backend + 'static, F: BackendFn<B>>(backend_fn: F) -> Vec<libtest_mi
         .collect()
 }
 
+fn async_tests<B: AsyncBackend + 'static, F: BackendFn<B>>(
+    backend_fn: F,
+) -> Vec<libtest_mimic::Trial> {
+    let backend_fn = Arc::new(backend_fn);
+    std::iter::empty()
+        .chain(basic::async_tests(Arc::clone(&backend_fn)))
+        .chain(concurrent::async_tests(Arc::clone(&backend_fn)))
+        .chain(frontend::async_tests(Arc::clone(&backend_fn)))
+        .chain(property::async_tests(backend_fn))
+        .collect()
+}
+
 /// Main test suite entry point
 #[must_use = "Test outcome ignored, add a call to .exit()"]
 pub fn main<B: Backend + 'static, F: BackendFn<B>>(backend_fn: F) -> libtest_mimic::Conclusion {
     logging::init_logging();
     let args = libtest_mimic::Arguments::from_args();
     libtest_mimic::run(&args, tests(backend_fn))
+}
+
+/// Main test suite entry point
+#[must_use = "Test outcome ignored, add a call to .exit()"]
+pub fn async_main<B: AsyncBackend + 'static, F: BackendFn<B>>(
+    backend_fn: F,
+) -> libtest_mimic::Conclusion {
+    logging::init_logging();
+    let args = libtest_mimic::Arguments::from_args();
+    libtest_mimic::run(&args, async_tests(backend_fn))
 }
 
 /// Generate a seed and pass it to the specified function. If the function panics, print

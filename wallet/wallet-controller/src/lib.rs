@@ -193,7 +193,7 @@ pub struct ControllerConfig {
     pub broadcast_to_mempool: bool,
 }
 
-pub struct Controller<T, W, B: storage::Backend + 'static> {
+pub struct Controller<T, W, B: storage::AsyncBackend + 'static> {
     chain_config: Arc<ChainConfig>,
 
     rpc_client: T,
@@ -205,7 +205,7 @@ pub struct Controller<T, W, B: storage::Backend + 'static> {
     wallet_events: W,
 }
 
-impl<T, WalletEvents, B: storage::Backend> std::fmt::Debug for Controller<T, WalletEvents, B> {
+impl<T, WalletEvents, B: storage::AsyncBackend> std::fmt::Debug for Controller<T, WalletEvents, B> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Controller").finish()
     }
@@ -219,8 +219,8 @@ pub type ColdController<WalletEvents> = Controller<ColdWalletClient, WalletEvent
 impl<N, W, B> Controller<N, W, B>
 where
     N: NodeInterface + Clone + Send + Sync + 'static,
-    W: WalletEvents,
-    B: storage::Backend + 'static,
+    W: WalletEvents + Send + Sync + 'static,
+    B: storage::AsyncBackend + 'static,
 {
     pub async fn new(
         chain_config: Arc<ChainConfig>,
@@ -257,7 +257,7 @@ where
         }
     }
 
-    pub fn create_wallet(
+    pub async fn create_wallet(
         chain_config: Arc<ChainConfig>,
         file_path: impl AsRef<Path>,
         args: WalletTypeArgsComputed,
@@ -274,6 +274,7 @@ where
         );
 
         let db = wallet::wallet::open_or_create_wallet_file(file_path.as_ref())
+            .await
             .map_err(ControllerError::WalletError)?;
         let res = match args {
             WalletTypeArgsComputed::Software {
@@ -298,6 +299,7 @@ where
                         )?)
                     },
                 )
+                .await
                 .map_err(ControllerError::WalletError)
                 .map(|w| w.map_wallet(RuntimeWallet::Software))
             }
@@ -314,6 +316,7 @@ where
                     .map_err(SignerError::TrezorError)?)
                 },
             )
+            .await
             .map_err(ControllerError::WalletError)
             .map(|w| w.map_wallet(RuntimeWallet::Trezor)),
         };
@@ -322,7 +325,7 @@ where
         res
     }
 
-    pub fn recover_wallet(
+    pub async fn recover_wallet(
         chain_config: Arc<ChainConfig>,
         file_path: impl AsRef<Path>,
         args: WalletTypeArgsComputed,
@@ -337,6 +340,7 @@ where
         );
 
         let db = wallet::wallet::open_or_create_wallet_file(file_path.as_ref())
+            .await
             .map_err(ControllerError::WalletError)?;
 
         let res = match args {
@@ -361,6 +365,7 @@ where
                         )?)
                     },
                 )
+                .await
                 .map_err(ControllerError::WalletError)?;
                 Ok(wallet.map_wallet(RuntimeWallet::Software))
             }
@@ -377,6 +382,7 @@ where
                         .map_err(SignerError::TrezorError)?)
                     },
                 )
+                .await
                 .map_err(ControllerError::WalletError)?;
                 Ok(wallet.map_wallet(RuntimeWallet::Trezor))
             }
@@ -435,7 +441,7 @@ where
         Ok(())
     }
 
-    pub fn open_wallet(
+    pub async fn open_wallet(
         chain_config: Arc<ChainConfig>,
         file_path: impl AsRef<Path>,
         password: Option<String>,
@@ -453,6 +459,7 @@ where
         );
 
         let db = wallet::wallet::open_or_create_wallet_file(&file_path)
+            .await
             .map_err(ControllerError::WalletError)?;
 
         match open_as_wallet_type {
@@ -466,6 +473,7 @@ where
                     force_change_wallet_type,
                     |db_tx| SoftwareSignerProvider::load_from_database(chain_config.clone(), db_tx),
                 )
+                .await
                 .map_err(ControllerError::WalletError)?;
                 Ok(wallet.map_wallet(RuntimeWallet::Software))
             }
@@ -486,31 +494,39 @@ where
                         )
                     },
                 )
+                .await
                 .map_err(ControllerError::WalletError)?;
                 Ok(wallet.map_wallet(RuntimeWallet::Trezor))
             }
         }
     }
 
-    pub fn seed_phrase(&self) -> Result<Option<SeedWithPassPhrase>, ControllerError<N>> {
+    pub async fn seed_phrase(&self) -> Result<Option<SeedWithPassPhrase>, ControllerError<N>> {
         self.wallet
             .seed_phrase()
+            .await
             .map(|opt| opt.map(SeedWithPassPhrase::from_serializable_seed_phrase))
             .map_err(ControllerError::WalletError)
     }
 
     /// Delete the seed phrase if stored in the database
-    pub fn delete_seed_phrase(&self) -> Result<Option<SeedWithPassPhrase>, ControllerError<N>> {
+    pub async fn delete_seed_phrase(
+        &self,
+    ) -> Result<Option<SeedWithPassPhrase>, ControllerError<N>> {
         self.wallet
             .delete_seed_phrase()
+            .await
             .map(|opt| opt.map(SeedWithPassPhrase::from_serializable_seed_phrase))
             .map_err(ControllerError::WalletError)
     }
 
     /// Rescan the blockchain
     /// Resets the wallet to the genesis block
-    pub fn reset_wallet_to_genesis(&mut self) -> Result<(), ControllerError<N>> {
-        self.wallet.reset_wallet_to_genesis().map_err(ControllerError::WalletError)
+    pub async fn reset_wallet_to_genesis(&mut self) -> Result<(), ControllerError<N>> {
+        self.wallet
+            .reset_wallet_to_genesis()
+            .await
+            .map_err(ControllerError::WalletError)
     }
 
     /// Encrypts the wallet using the specified `password`, or removes the existing encryption if `password` is `None`.
@@ -522,8 +538,11 @@ where
     /// # Returns
     ///
     /// This method returns an error if the wallet is locked
-    pub fn encrypt_wallet(&mut self, password: &Option<String>) -> Result<(), ControllerError<N>> {
-        self.wallet.encrypt_wallet(password).map_err(ControllerError::WalletError)
+    pub async fn encrypt_wallet(
+        &mut self,
+        password: &Option<String>,
+    ) -> Result<(), ControllerError<N>> {
+        self.wallet.encrypt_wallet(password).await.map_err(ControllerError::WalletError)
     }
 
     /// Unlocks the wallet using the specified password.
@@ -535,8 +554,8 @@ where
     /// # Returns
     ///
     /// This method returns an error if the password is incorrect
-    pub fn unlock_wallet(&mut self, password: &String) -> Result<(), ControllerError<N>> {
-        self.wallet.unlock_wallet(password).map_err(ControllerError::WalletError)
+    pub async fn unlock_wallet(&mut self, password: &String) -> Result<(), ControllerError<N>> {
+        self.wallet.unlock_wallet(password).await.map_err(ControllerError::WalletError)
     }
 
     /// Locks the wallet by making the encrypted private keys inaccessible.
@@ -557,7 +576,7 @@ where
     /// # Returns
     ///
     /// This method returns an error if you try to set lookahead size to 0
-    pub fn set_lookahead_size(
+    pub async fn set_lookahead_size(
         &mut self,
         lookahead_size: u32,
         force_reduce: bool,
@@ -566,6 +585,7 @@ where
 
         self.wallet
             .set_lookahead_size(lookahead_size, force_reduce)
+            .await
             .map_err(ControllerError::WalletError)
     }
 
@@ -616,6 +636,7 @@ where
         let pos_data = self
             .wallet
             .get_pos_gen_block_data(account_index, pool_id)
+            .await
             .map_err(ControllerError::WalletError)?;
 
         let public_key = self
@@ -725,6 +746,7 @@ where
         let pos_data = self
             .wallet
             .get_pos_gen_block_data_by_pool_id(pool_id)
+            .await
             .map_err(ControllerError::WalletError)?;
 
         let input_data =
@@ -747,20 +769,24 @@ where
             .map_err(|err| ControllerError::SearchForTimestampsFailed(err))
     }
 
-    pub fn create_account(
+    pub async fn create_account(
         &mut self,
         name: Option<String>,
     ) -> Result<(U31, Option<String>), ControllerError<N>> {
-        self.wallet.create_next_account(name).map_err(ControllerError::WalletError)
+        self.wallet
+            .create_next_account(name)
+            .await
+            .map_err(ControllerError::WalletError)
     }
 
-    pub fn update_account_name(
+    pub async fn update_account_name(
         &mut self,
         account_index: U31,
         name: Option<String>,
     ) -> Result<(U31, Option<String>), ControllerError<N>> {
         self.wallet
             .set_account_name(account_index, name)
+            .await
             .map_err(ControllerError::WalletError)
     }
 
@@ -1362,7 +1388,7 @@ where
     /// Rebroadcast not confirmed transactions
     async fn rebroadcast_txs(&mut self, rebroadcast_txs_again_at: &mut Time) {
         if get_time() >= *rebroadcast_txs_again_at {
-            let txs = self.wallet.get_transactions_to_be_broadcast();
+            let txs = self.wallet.get_transactions_to_be_broadcast().await;
             match txs {
                 Err(error) => {
                     log::error!("Fetching transactions for rebroadcasting failed: {error}");

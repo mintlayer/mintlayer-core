@@ -16,6 +16,12 @@ utils = { path = "../../utils" }
 libtest-mimic.workspace = true
 parity-scale-codec.workspace = true
 proptest.workspace = true
+tokio = { workspace = true, default-features = false, features = [
+  "macros",
+  "rt",
+  "rt-multi-thread",
+] }
+tokio-test.workspace = true
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(loom)'] }

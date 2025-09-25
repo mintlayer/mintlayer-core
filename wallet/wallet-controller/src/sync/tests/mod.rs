@@ -90,6 +90,7 @@ impl MockWallet {
     }
 }
 
+#[async_trait::async_trait]
 impl SyncingWallet for MockWallet {
     fn syncing_state(&self) -> WalletSyncingState {
         WalletSyncingState {
@@ -104,12 +105,12 @@ impl SyncingWallet for MockWallet {
         }
     }
 
-    fn scan_blocks(
+    async fn scan_blocks(
         &mut self,
         account: U31,
         common_block_height: BlockHeight,
         blocks: Vec<Block>,
-        _wallet_events: &impl WalletEvents,
+        _wallet_events: &(impl WalletEvents + Send + Sync),
     ) -> WalletResult<()> {
         assert!(account == DEFAULT_ACCOUNT_INDEX);
         assert!(!blocks.is_empty());
@@ -143,11 +144,11 @@ impl SyncingWallet for MockWallet {
         Ok(())
     }
 
-    fn scan_blocks_for_unused_account(
+    async fn scan_blocks_for_unused_account(
         &mut self,
         common_block_height: BlockHeight,
         blocks: Vec<Block>,
-        _wallet_events: &impl WalletEvents,
+        _wallet_events: &(impl WalletEvents + Send + Sync),
     ) -> WalletResult<()> {
         assert!(!blocks.is_empty());
         assert!(
@@ -180,7 +181,7 @@ impl SyncingWallet for MockWallet {
         Ok(())
     }
 
-    fn update_median_time(&mut self, median_time: BlockTimestamp) -> WalletResult<()> {
+    async fn update_median_time(&mut self, median_time: BlockTimestamp) -> WalletResult<()> {
         self.latest_median_time = median_time;
         Ok(())
     }

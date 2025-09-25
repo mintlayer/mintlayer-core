@@ -21,7 +21,7 @@ use crate::schema;
 use serialization::{encoded::Encoded, EncodeLike};
 use storage_core::{
     backend::{self, ReadOps},
-    Backend, DbMapId,
+    BaseBackend, DbMapId,
 };
 
 /// Map high-level transaction type to the backend-specific implementation type
@@ -30,12 +30,12 @@ pub trait TxImpl {
     type Impl;
 }
 
-impl<'tx, B: Backend, Sch> TxImpl for super::TransactionRo<'tx, B, Sch> {
-    type Impl = <B::Impl as backend::BackendImpl>::TxRo<'tx>;
+impl<'tx, B: BaseBackend, Sch> TxImpl for super::TransactionRo<'tx, B, Sch> {
+    type Impl = <B::Impl as backend::BaseBackendImpl>::TxRo<'tx>;
 }
 
-impl<'tx, B: Backend, Sch> TxImpl for super::TransactionRw<'tx, B, Sch> {
-    type Impl = <B::Impl as backend::BackendImpl>::TxRw<'tx>;
+impl<'tx, B: BaseBackend, Sch> TxImpl for super::TransactionRw<'tx, B, Sch> {
+    type Impl = <B::Impl as backend::BaseBackendImpl>::TxRw<'tx>;
 }
 
 /// Get a value from the database backend as a SCALE-encoded object

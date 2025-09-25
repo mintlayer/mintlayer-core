@@ -17,7 +17,7 @@
 
 use crate::{
     schema::{self, HasDbMap, Schema},
-    Backend, TransactionRo,
+    BaseBackend, TransactionRo,
 };
 use std::collections::BTreeMap;
 use storage_core::backend::ReadOps;
@@ -128,7 +128,7 @@ pub type MapContents = BTreeMap<Data, Data>;
 pub type StorageContents<Sch> = BTreeMap<DbMapId<Sch>, MapContents>;
 
 /// Get raw database by dumping database data
-pub fn dump_storage<B: Backend, Sch: Schema>(
+pub fn dump_storage<B: BaseBackend, Sch: Schema>(
     dbtx: &TransactionRo<'_, B, Sch>,
 ) -> crate::Result<StorageContents<Sch>> {
     Sch::desc_iter()

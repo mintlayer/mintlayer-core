@@ -30,18 +30,16 @@ use storage_core::{backend, Data, DbDesc, DbMapId};
 use utils::shallow_clone::ShallowClone;
 use utils::sync::Arc;
 
+use async_trait::async_trait;
+
 pub struct DbTx<'m> {
-    connection: MutexGuard<'m, Connection>,
+    connection: tokio::sync::MutexGuard<'m, Connection>,
     queries: &'m SqliteQueries,
 }
 
 impl<'m> DbTx<'m> {
-    fn start_transaction(sqlite: &'m SqliteImpl) -> storage_core::Result<Self> {
-        let connection = sqlite
-            .0
-            .connection
-            .lock()
-            .map_err(|e| storage_core::error::Fatal::InternalError(e.to_string()))?;
+    async fn start_transaction(sqlite: &'m SqliteImpl) -> storage_core::Result<Self> {
+        let connection = sqlite.0.connection.lock().await;
         let tx = DbTx {
             connection,
             queries: &sqlite.0.queries,
@@ -173,8 +171,151 @@ impl backend::TxRw for DbTx<'_> {
     }
 }
 
+pub struct OldDbTx<'m> {
+    connection: MutexGuard<'m, Connection>,
+    queries: &'m SqliteQueries,
+}
+
+impl<'m> OldDbTx<'m> {
+    fn old_start_transaction(sqlite: &'m OldSqliteImpl) -> storage_core::Result<Self> {
+        let connection = sqlite
+            .0
+            .connection
+            .lock()
+            .map_err(|e| storage_core::error::Fatal::InternalError(e.to_string()))?;
+        let tx = OldDbTx {
+            connection,
+            queries: &sqlite.0.queries,
+        };
+        tx.connection.execute("BEGIN TRANSACTION", ()).map_err(process_sqlite_error)?;
+        Ok(tx)
+    }
+
+    fn commit_transaction(&self) -> storage_core::Result<()> {
+        let _res = self
+            .connection
+            .execute("COMMIT TRANSACTION", ())
+            .map_err(process_sqlite_error)?;
+        Ok(())
+    }
+}
+
+impl Drop for OldDbTx<'_> {
+    fn drop(&mut self) {
+        if self.connection.is_autocommit() {
+            return;
+        }
+
+        let res = self.connection.execute("ROLLBACK TRANSACTION", ());
+        if let Err(err) = res {
+            logging::log::error!("Error: transaction rollback failed: {}", err);
+        }
+    }
+}
+
+impl backend::ReadOps for OldDbTx<'_> {
+    fn get(&self, map_id: DbMapId, key: &[u8]) -> storage_core::Result<Option<Cow<[u8]>>> {
+        let mut stmt = self
+            .connection
+            .prepare_cached(self.queries[map_id].get_query())
+            .map_err(process_sqlite_error)?;
+
+        let params = (key,);
+        let res = stmt
+            .query_row(params, |row| row.get::<usize, Vec<u8>>(0))
+            .optional()
+            .map_err(process_sqlite_error)?;
+        let res = res.map(|v| v.into());
+        Ok(res)
+    }
+
+    fn prefix_iter(
+        &self,
+        map_id: DbMapId,
+        prefix: Data,
+    ) -> storage_core::Result<impl Iterator<Item = (Data, Data)> + '_> {
+        // TODO check if prefix.is_empty()
+        // TODO Perform the filtering in the SQL query itself
+        let mut stmt = self
+            .connection
+            .prepare_cached(self.queries[map_id].prefix_iter_query())
+            .map_err(process_sqlite_error)?;
+
+        let mut rows = stmt.query(()).map_err(process_sqlite_error)?;
+
+        // TODO Move the statement/rows inside the iterator (will require a self-referential struct)
+        let mut kv = Vec::new();
+        while let Some(row) = rows.next().map_err(process_sqlite_error)? {
+            let key = row.get::<usize, Vec<u8>>(0).map_err(process_sqlite_error)?;
+            if key.starts_with(&prefix) {
+                let value = row.get::<usize, Vec<u8>>(1).map_err(process_sqlite_error)?;
+                kv.push((key, value));
+            }
+        }
+        Ok(kv.into_iter())
+    }
+
+    fn greater_equal_iter(
+        &self,
+        map_id: DbMapId,
+        key: Data,
+    ) -> storage_core::Result<impl Iterator<Item = (Data, Data)> + '_> {
+        let mut stmt = self
+            .connection
+            .prepare_cached(&self.queries[map_id].greater_equal_iter_query(&key))
+            .map_err(process_sqlite_error)?;
+
+        let mut rows = stmt.query(()).map_err(process_sqlite_error)?;
+
+        // TODO Move the statement/rows inside the iterator (will require a self-referential struct)
+
+        let mut kv = Vec::new();
+        while let Some(row) = rows.next().map_err(process_sqlite_error)? {
+            let key = row.get::<usize, Vec<u8>>(0).map_err(process_sqlite_error)?;
+
+            let value = row.get::<usize, Vec<u8>>(1).map_err(process_sqlite_error)?;
+            kv.push((key, value));
+        }
+        Ok(kv.into_iter())
+    }
+}
+
+impl backend::WriteOps for OldDbTx<'_> {
+    fn put(&mut self, map_id: DbMapId, key: Data, val: Data) -> storage_core::Result<()> {
+        let mut stmt = self
+            .connection
+            .prepare_cached(self.queries[map_id].put_query())
+            .map_err(process_sqlite_error)?;
+
+        let params = (key, val);
+        let _res = stmt.execute(params).map_err(process_sqlite_error)?;
+
+        Ok(())
+    }
+
+    fn del(&mut self, map_id: DbMapId, key: &[u8]) -> storage_core::Result<()> {
+        let mut stmt = self
+            .connection
+            .prepare_cached(self.queries[map_id].delete_query())
+            .map_err(process_sqlite_error)?;
+
+        let params = (key,);
+        let _res = stmt.execute(params).map_err(process_sqlite_error)?;
+
+        Ok(())
+    }
+}
+
+impl backend::TxRo for OldDbTx<'_> {}
+
+impl backend::TxRw for OldDbTx<'_> {
+    fn commit(self) -> storage_core::Result<()> {
+        self.commit_transaction()
+    }
+}
+
 /// Struct that holds the details for an Sqlite connection
-pub struct SqliteConnection {
+pub struct OldSqliteConnection {
     /// Handle to an Sqlite database connection
     connection: Mutex<Connection>,
 
@@ -182,13 +323,54 @@ pub struct SqliteConnection {
     queries: SqliteQueries,
 }
 
+/// Struct that holds the details for an Sqlite connection
+pub struct SqliteConnection {
+    /// Handle to an Sqlite database connection
+    connection: tokio::sync::Mutex<Connection>,
+
+    /// List of sql queries
+    queries: SqliteQueries,
+}
+
+#[derive(Clone)]
+pub struct OldSqliteImpl(Arc<OldSqliteConnection>);
+
+impl OldSqliteImpl {
+    /// Start a transaction using the low-level method provided
+    fn start_transaction(&self) -> storage_core::Result<OldDbTx<'_>> {
+        OldDbTx::old_start_transaction(self)
+    }
+}
+
+impl ShallowClone for OldSqliteImpl {
+    fn shallow_clone(&self) -> Self {
+        Self(self.0.shallow_clone())
+    }
+}
+
+impl backend::BaseBackendImpl for OldSqliteImpl {
+    type TxRo<'a> = OldDbTx<'a>;
+
+    type TxRw<'a> = OldDbTx<'a>;
+}
+
+impl backend::BackendImpl for OldSqliteImpl {
+    fn transaction_ro(&self) -> storage_core::Result<Self::TxRo<'_>> {
+        self.start_transaction()
+    }
+
+    fn transaction_rw(&self, _size: Option<usize>) -> storage_core::Result<Self::TxRw<'_>> {
+        self.start_transaction()
+    }
+}
+
 #[derive(Clone)]
 pub struct SqliteImpl(Arc<SqliteConnection>);
 
 impl SqliteImpl {
     /// Start a transaction using the low-level method provided
-    fn start_transaction(&self) -> storage_core::Result<DbTx<'_>> {
-        DbTx::start_transaction(self)
+    async fn start_transaction(&self) -> storage_core::Result<DbTx<'_>> {
+        DbTx::start_transaction(self).await
     }
 }
 
@@ -198,17 +380,20 @@ impl ShallowClone for SqliteImpl {
     }
 }
 
-impl backend::BackendImpl for SqliteImpl {
+impl backend::BaseBackendImpl for SqliteImpl {
     type TxRo<'a> = DbTx<'a>;
 
     type TxRw<'a> = DbTx<'a>;
+}
 
-    fn transaction_ro(&self) -> storage_core::Result<Self::TxRo<'_>> {
-        self.start_transaction()
+#[async_trait]
+impl backend::AsyncBackendImpl for SqliteImpl {
+    async fn transaction_ro(&self) -> storage_core::Result<Self::TxRo<'_>> {
+        self.start_transaction().await
     }
 
-    fn transaction_rw(&self, _size: Option<usize>) -> storage_core::Result<Self::TxRw<'_>> {
-        self.start_transaction()
+    async fn transaction_rw(&self, _size: Option<usize>) -> storage_core::Result<Self::TxRw<'_>> {
+        self.start_transaction().await
     }
 }
 
@@ -318,9 +503,38 @@ impl Sqlite {
     }
 }
 
-impl backend::Backend for Sqlite {
+impl backend::BaseBackend for Sqlite {
     type Impl = SqliteImpl;
+}
 
+// impl backend::Backend for Sqlite {
+//     fn open(self, desc: DbDesc) -> storage_core::Result<Self::Impl> {
+//         // Attempt to create the parent storage directory if using a file
+//
+//         if let SqliteStorageMode::File(ref path) = self.backend {
+//             if let Some(parent) = path.parent() {
+//                 std::fs::create_dir_all(parent).map_err(error::process_io_error)?;
+//             } else {
+//                 return Err(storage_core::error::Fatal::Io(
+//                     std::io::ErrorKind::NotFound,
+//                     "Cannot find the parent directory".to_string(),
+//                 )
+//                 .into());
+//             }
+//         }
+//
+//         let queries = desc.db_maps().transform(queries::SqliteQuery::from_desc);
+//
+//         let connection = self.open_db(desc).map_err(process_sqlite_error)?;
+//
+//         Ok(OldSqliteImpl(Arc::new(OldSqliteConnection {
+//             connection: Mutex::new(connection),
+//             queries,
+//         })))
+//     }
+// }
+
+impl backend::AsyncBackend for Sqlite {
     fn open(self, desc: DbDesc) -> storage_core::Result<Self::Impl> {
         // Attempt to create the parent storage directory if using a file
 
@@ -341,7 +555,7 @@ impl backend::Backend for Sqlite {
         let connection = self.open_db(desc).map_err(process_sqlite_error)?;
 
         Ok(SqliteImpl(Arc::new(SqliteConnection {
-            connection: Mutex::new(connection),
+            connection: tokio::sync::Mutex::new(connection),
             queries,
         })))
     }

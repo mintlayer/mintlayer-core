@@ -27,6 +27,16 @@ fn setup<B: Backend>(backend: B, init: Vec<u8>) -> B::Impl {
     store
 }
 
+async fn async_setup<B: AsyncBackend>(backend: B, init: Vec<u8>) -> B::Impl {
+    let store = backend.open(desc(1)).expect("db open to succeed");
+
+    let mut dbtx = store.transaction_rw(None).await.unwrap();
+    dbtx.put(MAPID.0, TEST_KEY.to_vec(), init).unwrap();
+    dbtx.commit().unwrap();
+
+    store
+}
+
 fn read_initialize_race<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
     let store = backend_fn().open(desc(1)).expect("db open to succeed");
 
@@ -45,6 +55,30 @@ fn read_initialize_race<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
     drop(dbtx);
 
     thr0.join().unwrap();
+}
+
+fn async_read_initialize_race<B: AsyncBackend, F: BackendFn<B>>(backend_fn: Arc<F>) {
+    tokio::runtime::Runtime::new().unwrap().block_on(async move {
+        let store = backend_fn().open(desc(1)).expect("db open to succeed");
+
+        let thr0 = tokio::spawn({
+            let store = store.clone();
+            async move {
+                let mut dbtx = store.transaction_rw(None).await.unwrap();
+                dbtx.put(MAPID.0, TEST_KEY.to_vec(), vec![2]).unwrap();
+                dbtx.commit().unwrap();
+            }
+        });
+
+        let dbtx = store.transaction_ro().await.unwrap();
+        let expected = [None, Some([2].as_ref())];
+        assert!(
+            expected.contains(&dbtx.get(MAPID.0, TEST_KEY).unwrap().as_ref().map(|v| v.as_ref()))
+        );
+        drop(dbtx);
+
+        thr0.await.unwrap();
+    })
 }
 
 fn read_write_race<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
@@ -66,6 +100,29 @@ fn read_write_race<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
     drop(dbtx);
 
     thr0.join().unwrap();
+}
+
+fn async_read_write_race<B: AsyncBackend, F: BackendFn<B>>(backend_fn: Arc<F>) {
+    tokio::runtime::Runtime::new().unwrap().block_on(async move {
+        let store = async_setup(backend_fn(), vec![0]).await;
+
+        let thr0 = tokio::spawn({
+            let store = store.clone();
+            async move {
+                let mut dbtx = store.transaction_rw(None).await.unwrap();
+                dbtx.put(MAPID.0, TEST_KEY.to_vec(), vec![2]).unwrap();
+                dbtx.commit().unwrap();
+            }
+        });
+
+        let dbtx = store.transaction_ro().await.unwrap();
+        let expected = [[0u8].as_ref(), [2].as_ref()];
+        assert!(expected
+            .contains(&dbtx.get(MAPID.0, TEST_KEY).unwrap().as_ref().map(|v| v.as_ref()).unwrap()));
+        drop(dbtx);
+
+        thr0.await.unwrap();
+    })
 }
 
 fn commutative_read_modify_write<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
@@ -102,6 +159,44 @@ fn commutative_read_modify_write<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>
     );
 }
 
+fn async_commutative_read_modify_write<B: AsyncBackend, F: BackendFn<B>>(backend_fn: Arc<F>) {
+    tokio::runtime::Runtime::new().unwrap().block_on(async move {
+        let store = async_setup(backend_fn(), vec![0]).await;
+
+        let thr0 = tokio::spawn({
+            let store = store.clone();
+            async move {
+                let mut dbtx = store.transaction_rw(None).await.unwrap();
+                let v = dbtx.get(MAPID.0, TEST_KEY).unwrap().unwrap();
+                let b = v.first().unwrap();
+                dbtx.put(MAPID.0, TEST_KEY.to_vec(), vec![b + 5]).unwrap();
+                dbtx.commit().unwrap();
+            }
+        });
+
+        let thr1 = tokio::spawn({
+            let store = store.clone();
+            async move {
+                let mut dbtx = store.transaction_rw(None).await.unwrap();
+                let v = dbtx.get(MAPID.0, TEST_KEY).unwrap().unwrap();
+                let b = v.first().unwrap();
+                dbtx.put(MAPID.0, TEST_KEY.to_vec(), vec![b + 3]).unwrap();
+                dbtx.commit().unwrap();
+            }
+        });
+
+        let (r0, r1) = tokio::join!(thr0, thr1);
+        r0.unwrap();
+        r1.unwrap();
+
+        let dbtx = store.transaction_ro().await.unwrap();
+        assert_eq!(
+            dbtx.get(MAPID.0, TEST_KEY).unwrap().as_ref().map(|v| v.as_ref()).unwrap(),
+            [8].as_ref()
+        );
+    })
+}
+
 fn threaded_reads_consistent<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
     let val = [0x77, 0x88, 0x99].as_ref();
     let store = setup(backend_fn(), val.to_vec());
@@ -136,6 +231,44 @@ fn threaded_reads_consistent<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
     assert_eq!(thr1.join().unwrap(), val);
 }
 
+fn async_threaded_reads_consistent<B: AsyncBackend, F: BackendFn<B>>(backend_fn: Arc<F>) {
+    tokio::runtime::Runtime::new().unwrap().block_on(async move {
+        let val = [0x77, 0x88, 0x99].as_ref();
+        let store = async_setup(backend_fn(), val.to_vec()).await;
+
+        let thr0 = tokio::spawn({
+            let store = store.clone();
+            async move {
+                store
+                    .transaction_ro()
+                    .await
+                    .unwrap()
+                    .get(MAPID.0, TEST_KEY)
+                    .unwrap()
+                    .unwrap()
+                    .as_ref()
+                    .to_owned()
+            }
+        });
+        let thr1 = tokio::spawn({
+            async move {
+                store
+                    .transaction_ro()
+                    .await
+                    .unwrap()
+                    .get(MAPID.0, TEST_KEY)
+                    .unwrap()
+                    .unwrap()
+                    .as_ref()
+                    .to_owned()
+            }
+        });
+
+        assert_eq!(thr0.await.unwrap(), val);
+        assert_eq!(thr1.await.unwrap(), val);
+    })
+}
+
 fn write_different_keys_and_iterate<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
     let store = backend_fn().open(desc(1)).expect("db open to succeed");
 
@@ -165,10 +298,49 @@ fn write_different_keys_and_iterate<B: Backend, F: BackendFn<B>>(backend_fn: Arc
     assert!(contents.eq(expected));
 }
 
+fn async_write_different_keys_and_iterate<B: AsyncBackend, F: BackendFn<B>>(backend_fn: Arc<F>) {
+    tokio::runtime::Runtime::new().unwrap().block_on(async move {
+        let store = backend_fn().open(desc(1)).expect("db open to succeed");
+
+        let thr0 = tokio::spawn({
+            let store = store.clone();
+            async move {
+                let mut dbtx = store.transaction_rw(None).await.unwrap();
+                dbtx.put(MAPID.0, vec![0x01], vec![0xf1]).unwrap();
+                dbtx.commit().unwrap();
+            }
+        });
+        let thr1 = tokio::spawn({
+            let store = store.clone();
+            async move {
+                let mut dbtx = store.transaction_rw(None).await.unwrap();
+                dbtx.put(MAPID.0, vec![0x02], vec![0xf2]).unwrap();
+                dbtx.commit().unwrap();
+            }
+        });
+
+        thr0.await.unwrap();
+        thr1.await.unwrap();
+
+        let dbtx = store.transaction_ro().await.unwrap();
+        let contents = dbtx.prefix_iter(MAPID.0, vec![]).unwrap();
+        let expected = [(vec![0x01], vec![0xf1]), (vec![0x02], vec![0xf2])];
+        assert!(contents.eq(expected));
+    })
+}
+
 tests![
     commutative_read_modify_write,
     read_initialize_race,
     read_write_race,
     threaded_reads_consistent,
     write_different_keys_and_iterate,
+];
+
+async_tests![
+    async_commutative_read_modify_write,
+    async_read_initialize_race,
+    async_read_write_race,
+    async_threaded_reads_consistent,
+    async_write_different_keys_and_iterate,
 ];

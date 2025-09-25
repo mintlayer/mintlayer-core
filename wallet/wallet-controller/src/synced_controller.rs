@@ -81,7 +81,7 @@ use crate::{
     ControllerConfig, ControllerError,
 };
 
-pub struct SyncedController<'a, T, W, B: storage::Backend + 'static> {
+pub struct SyncedController<'a, T, W, B: storage::AsyncBackend + 'static> {
     wallet: &'a mut RuntimeWallet<B>,
     rpc_client: T,
     chain_config: &'a ChainConfig,
@@ -93,9 +93,9 @@ pub struct SyncedController<'a, T, W, B: storage::Backend + 'static> {
 
 impl<'a, T, W, B> SyncedController<'a, T, W, B>
 where
-    B: storage::Backend + 'static,
+    B: storage::AsyncBackend + 'static,
     T: NodeInterface,
-    W: WalletEvents,
+    W: WalletEvents + Sync,
 {
     pub fn new(
         wallet: &'a mut RuntimeWallet<B>,
@@ -213,60 +213,66 @@ where
         Ok((result, additional_info))
     }
 
-    pub fn abandon_transaction(
+    pub async fn abandon_transaction(
         &mut self,
         tx_id: Id<Transaction>,
     ) -> Result<(), ControllerError<T>> {
         self.wallet
             .abandon_transaction(self.account_index, tx_id)
+            .await
             .map_err(ControllerError::WalletError)
     }
 
-    pub fn standalone_address_label_rename(
+    pub async fn standalone_address_label_rename(
         &mut self,
         address: Destination,
         label: Option<String>,
     ) -> Result<(), ControllerError<T>> {
         self.wallet
             .standalone_address_label_rename(self.account_index, address, label)
+            .await
             .map_err(ControllerError::WalletError)
     }
 
-    pub fn add_standalone_address(
+    pub async fn add_standalone_address(
         &mut self,
         address: PublicKeyHash,
         label: Option<String>,
     ) -> Result<(), ControllerError<T>> {
         self.wallet
             .add_standalone_address(self.account_index, address, label)
+            .await
             .map_err(ControllerError::WalletError)
     }
 
-    pub fn add_standalone_private_key(
+    pub async fn add_standalone_private_key(
         &mut self,
         private_key: PrivateKey,
         label: Option<String>,
     ) -> Result<(), ControllerError<T>> {
         self.wallet
             .add_standalone_private_key(self.account_index, private_key, label)
+            .await
             .map_err(ControllerError::WalletError)
     }
 
-    pub fn add_standalone_multisig(
+    pub async fn add_standalone_multisig(
         &mut self,
         challenge: ClassicMultisigChallenge,
         label: Option<String>,
     ) -> Result<PublicKeyHash, ControllerError<T>> {
         self.wallet
             .add_standalone_multisig(self.account_index, challenge, label)
+            .await
             .map_err(ControllerError::WalletError)
     }
 
-    pub fn new_address(
+    pub async fn new_address(
         &mut self,
     ) -> Result<(ChildNumber, Address<Destination>), ControllerError<T>> {
         self.wallet
             .get_new_address(self.account_index)
+            .await
             .map_err(ControllerError::WalletError)
     }
 
@@ -279,11 +285,12 @@ where
             .map_err(ControllerError::WalletError)
     }
 
-    pub fn new_vrf_key(
+    pub async fn new_vrf_key(
         &mut self,
     ) -> Result<(ChildNumber, Address<VRFPublicKey>), ControllerError<T>> {
         self.wallet
             .get_vrf_key(self.account_index)
+            .await
             .map_err(ControllerError::WalletError)
     }
 
@@ -297,23 +304,25 @@ where
         is_freezable: IsTokenFreezable,
     ) -> Result<(NewTransaction, TokenId), ControllerError<T>> {
         self.create_and_send_tx_with_id(
-            move |current_fee_rate: FeeRate,
-                  consolidate_fee_rate: FeeRate,
-                  wallet: &mut RuntimeWallet<B>,
-                  account_index: U31| {
-                wallet.issue_new_token(
-                    account_index,
-                    TokenIssuance::V1(TokenIssuanceV1 {
-                        token_ticker,
-                        number_of_decimals,
-                        metadata_uri,
-                        total_supply: token_total_supply,
-                        authority: address.into_object(),
-                        is_freezable,
-                    }),
-                    current_fee_rate,
-                    consolidate_fee_rate,
-                )
+            async move |current_fee_rate: FeeRate,
+                        consolidate_fee_rate: FeeRate,
+                        wallet: &mut RuntimeWallet<B>,
+                        account_index: U31| {
+                wallet
+                    .issue_new_token(
+                        account_index,
+                        TokenIssuance::V1(TokenIssuanceV1 {
+                            token_ticker,
+                            number_of_decimals,
+                            metadata_uri,
+                            total_supply: token_total_supply,
+                            authority: address.into_object(),
+                            is_freezable,
+                        }),
+                        current_fee_rate,
+                        consolidate_fee_rate,
+                    )
+                    .await
             },
         )
         .await
@@ -325,17 +334,19 @@ where
         metadata: Metadata,
     ) -> Result<(NewTransaction, TokenId), ControllerError<T>> {
         self.create_and_send_tx_with_id(
-            move |current_fee_rate: FeeRate,
-                  consolidate_fee_rate: FeeRate,
-                  wallet: &mut RuntimeWallet<B>,
-                  account_index: U31| {
-                wallet.issue_new_nft(
-                    account_index,
-                    address,
-                    metadata,
-                    current_fee_rate,
-                    consolidate_fee_rate,
-                )
+            async move |current_fee_rate: FeeRate,
+                        consolidate_fee_rate: FeeRate,
+                        wallet: &mut RuntimeWallet<B>,
+                        account_index: U31| {
+                wallet
+                    .issue_new_nft(
+                        account_index,
+                        address,
+                        metadata,
+                        current_fee_rate,
+                        consolidate_fee_rate,
+                    )
+                    .await
             },
         )
         .await
@@ -349,20 +360,23 @@ where
     ) -> Result<NewTransaction, ControllerError<T>> {
         self.create_and_send_token_tx(
             token_info,
-            move |current_fee_rate: FeeRate,
-                  consolidate_fee_rate: FeeRate,
-                  wallet: &mut RuntimeWallet<B>,
-                  account_index: U31,
-                  token_info: &UnconfirmedTokenInfo| {
+            async move |current_fee_rate: FeeRate,
+                        consolidate_fee_rate: FeeRate,
+                        wallet: &mut RuntimeWallet<B>,
+                        account_index: U31,
+                        token_info: UnconfirmedTokenInfo| {
                 token_info.check_can_be_used()?;
-                wallet.mint_tokens(
-                    account_index,
-                    token_info,
-                    amount,
-                    address,
-                    current_fee_rate,
-                    consolidate_fee_rate,
-                )
+
+                wallet
+                    .mint_tokens(
+                        account_index,
+                        token_info,
+                        amount,
+                        address,
+                        current_fee_rate,
+                        consolidate_fee_rate,
+                    )
+                    .await
             },
         )
         .await
@@ -374,19 +388,22 @@ where
     ) -> Result<NewTransaction, ControllerError<T>> {
         self.create_and_send_token_tx(
             token_info,
-            move |current_fee_rate: FeeRate,
-                  consolidate_fee_rate: FeeRate,
-                  wallet: &mut RuntimeWallet<B>,
-                  account_index: U31,
-                  token_info: &UnconfirmedTokenInfo| {
+            async move |current_fee_rate: FeeRate,
+                        consolidate_fee_rate: FeeRate,
+                        wallet: &mut RuntimeWallet<B>,
+                        account_index: U31,
+                        token_info: UnconfirmedTokenInfo| {
                 token_info.check_can_be_used()?;
-                wallet.unmint_tokens(
-                    account_index,
-                    token_info,
-                    amount,
-                    current_fee_rate,
-                    consolidate_fee_rate,
-                )
+
+                wallet
+                    .unmint_tokens(
+                        account_index,
+                        token_info,
+                        amount,
+                        current_fee_rate,
+                        consolidate_fee_rate,
+                    )
+                    .await
             },
         )
         .await
@@ -398,18 +415,21 @@ where
     ) -> Result<NewTransaction, ControllerError<T>> {
         self.create_and_send_token_tx(
             token_info,
-            move |current_fee_rate: FeeRate,
-                  consolidate_fee_rate: FeeRate,
-                  wallet: &mut RuntimeWallet<B>,
-                  account_index: U31,
-                  token_info: &UnconfirmedTokenInfo| {
+            async move |current_fee_rate: FeeRate,
+                        consolidate_fee_rate: FeeRate,
+                        wallet: &mut RuntimeWallet<B>,
+                        account_index: U31,
+                        token_info: UnconfirmedTokenInfo| {
                 token_info.check_can_be_used()?;
-                wallet.lock_token_supply(
-                    account_index,
-                    token_info,
-                    current_fee_rate,
-                    consolidate_fee_rate,
-                )
+
+                wallet
+                    .lock_token_supply(
+                        account_index,
+                        token_info,
+                        current_fee_rate,
+                        consolidate_fee_rate,
+                    )
+                    .await
             },
         )
         .await
@@ -424,18 +444,22 @@ where
     ) -> Result<NewTransaction, ControllerError<T>> {
         self.create_and_send_token_tx(
             token_info,
-            move |current_fee_rate: FeeRate,
-                  consolidate_fee_rate: FeeRate,
-                  wallet: &mut RuntimeWallet<B>,
-                  account_index: U31,
-                  token_info: &UnconfirmedTokenInfo| {
-                wallet.freeze_token(
-                    account_index,
-                    token_info,
-                    is_token_unfreezable,
-                    current_fee_rate,
-                    consolidate_fee_rate,
-                )
+            async move |current_fee_rate: FeeRate,
+                        consolidate_fee_rate: FeeRate,
+                        wallet: &mut RuntimeWallet<B>,
+                        account_index: U31,
+                        token_info: UnconfirmedTokenInfo| {
+                token_info.check_can_be_used()?;
+
+                wallet
+                    .freeze_token(
+                        account_index,
+                        token_info,
+                        is_token_unfreezable,
+                        current_fee_rate,
+                        consolidate_fee_rate,
+                    )
+                    .await
             },
         )
         .await
@@ -448,17 +472,19 @@ where
     ) -> Result<NewTransaction, ControllerError<T>> {
         self.create_and_send_token_tx(
             token_info,
-            move |current_fee_rate: FeeRate,
-                  consolidate_fee_rate: FeeRate,
-                  wallet: &mut RuntimeWallet<B>,
-                  account_index: U31,
-                  token_info: &UnconfirmedTokenInfo| {
-                wallet.unfreeze_token(
-                    account_index,
-                    token_info,
-                    current_fee_rate,
-                    consolidate_fee_rate,
-                )
+            async move |current_fee_rate: FeeRate,
+                        consolidate_fee_rate: FeeRate,
+                        wallet: &mut RuntimeWallet<B>,
+                        account_index: U31,
+                        token_info: UnconfirmedTokenInfo| {
+                wallet
+                    .unfreeze_token(
+                        account_index,
+                        token_info,
+                        current_fee_rate,
+                        consolidate_fee_rate,
+                    )
+                    .await
             },
         )
         .await
@@ -473,18 +499,22 @@ where
     ) -> Result<NewTransaction, ControllerError<T>> {
         self.create_and_send_token_tx(
             token_info,
-            move |current_fee_rate: FeeRate,
-                  consolidate_fee_rate: FeeRate,
-                  wallet: &mut RuntimeWallet<B>,
-                  account_index: U31,
-                  token_info: &UnconfirmedTokenInfo| {
-                wallet.change_token_authority(
-                    account_index,
-                    token_info,
-                    address,
-                    current_fee_rate,
-                    consolidate_fee_rate,
-                )
+            async move |current_fee_rate: FeeRate,
+                        consolidate_fee_rate: FeeRate,
+                        wallet: &mut RuntimeWallet<B>,
+                        account_index: U31,
+                        token_info: UnconfirmedTokenInfo| {
+                token_info.check_can_be_used()?;
+
+                wallet
+                    .change_token_authority(
+                        account_index,
+                        token_info,
+                        address,
+                        current_fee_rate,
+                        consolidate_fee_rate,
+                    )
+                    .await
             },
         )
         .await
@@ -497,18 +527,22 @@ where
     ) -> Result<NewTransaction, ControllerError<T>> {
         self.create_and_send_token_tx(
             token_info,
-            move |current_fee_rate: FeeRate,
-                  consolidate_fee_rate: FeeRate,
-                  wallet: &mut RuntimeWallet<B>,
-                  account_index: U31,
-                  token_info: &UnconfirmedTokenInfo| {
-                wallet.change_token_metadata_uri(
-                    account_index,
-                    token_info,
-                    metadata_uri,
-                    current_fee_rate,
-                    consolidate_fee_rate,
-                )
+            async move |current_fee_rate: FeeRate,
+                        consolidate_fee_rate: FeeRate,
+                        wallet: &mut RuntimeWallet<B>,
+                        account_index: U31,
+                        token_info: UnconfirmedTokenInfo| {
+                token_info.check_can_be_used()?;
+
+                wallet
+                    .change_token_metadata_uri(
+                        account_index,
+                        token_info,
+                        metadata_uri,
+                        current_fee_rate,
+                        consolidate_fee_rate,
+                    )
+                    .await
             },
         )
         .await
@@ -522,19 +556,21 @@ where
         let outputs = make_data_deposit_output(self.chain_config, data, best_block_height)?;
 
         self.create_and_send_tx(
-            move |current_fee_rate: FeeRate,
-                  consolidate_fee_rate: FeeRate,
-                  wallet: &mut RuntimeWallet<B>,
-                  account_index: U31| {
-                wallet.create_transaction_to_addresses(
-                    account_index,
-                    outputs,
-                    SelectedInputs::Utxos(vec![]),
-                    BTreeMap::new(),
-                    current_fee_rate,
-                    consolidate_fee_rate,
-                    TxAdditionalInfo::new(),
-                )
+            async move |current_fee_rate: FeeRate,
+                        consolidate_fee_rate: FeeRate,
+                        wallet: &mut RuntimeWallet<B>,
+                        account_index: U31| {
+                wallet
+                    .create_transaction_to_addresses(
+                        account_index,
+                        outputs,
+                        SelectedInputs::Utxos(vec![]),
+                        BTreeMap::new(),
+                        current_fee_rate,
+                        consolidate_fee_rate,
+                        TxAdditionalInfo::new(),
+                    )
+                    .await
             },
         )
         .await
@@ -560,19 +596,21 @@ where
 
         let output = make_address_output(address.into_object(), amount);
         self.create_and_send_tx(
-            move |current_fee_rate: FeeRate,
-                  consolidate_fee_rate: FeeRate,
-                  wallet: &mut RuntimeWallet<B>,
-                  account_index: U31| {
-                wallet.create_transaction_to_addresses(
-                    account_index,
-                    [output],
-                    SelectedInputs::Utxos(selected_utxos),
-                    BTreeMap::new(),
-                    current_fee_rate,
-                    consolidate_fee_rate,
-                    TxAdditionalInfo::new(),
-                )
+            async move |current_fee_rate: FeeRate,
+                        consolidate_fee_rate: FeeRate,
+                        wallet: &mut RuntimeWallet<B>,
+                        account_index: U31| {
+                wallet
+                    .create_transaction_to_addresses(
+                        account_index,
+                        [output],
+                        SelectedInputs::Utxos(selected_utxos),
+                        BTreeMap::new(),
+                        current_fee_rate,
+                        consolidate_fee_rate,
+                        TxAdditionalInfo::new(),
+                    )
+                    .await
             },
         )
         .await
@@ -604,20 +642,22 @@ where
             .collect::<Vec<_>>();
 
         self.create_and_send_tx(
-            move |current_fee_rate: FeeRate,
-                  _consolidate_fee_rate: FeeRate,
-                  wallet: &mut RuntimeWallet<B>,
-                  account_index: U31| {
-                wallet.create_sweep_transaction(
-                    account_index,
-                    destination_address,
-                    filtered_inputs,
-                    current_fee_rate,
-                    TxAdditionalInfo {
-                        ptx_additional_info: PtxAdditionalInfo::new(),
-                        tokens_additional_info,
-                    },
-                )
+            async move |current_fee_rate: FeeRate,
+                        _consolidate_fee_rate: FeeRate,
+                        wallet: &mut RuntimeWallet<B>,
+                        account_index: U31| {
+                wallet
+                    .create_sweep_transaction(
+                        account_index,
+                        destination_address,
+                        filtered_inputs,
+                        current_fee_rate,
+                        TxAdditionalInfo {
+                            ptx_additional_info: PtxAdditionalInfo::new(),
+                            tokens_additional_info,
+                        },
+                    )
+                    .await
             },
         )
         .await
@@ -646,17 +686,19 @@ where
             ))?;
 
         self.create_and_send_tx(
-            move |current_fee_rate: FeeRate,
-                  _consolidate_fee_rate: FeeRate,
-                  wallet: &mut RuntimeWallet<B>,
-                  account_index: U31| {
-                wallet.create_sweep_from_delegation_transaction(
-                    account_index,
-                    destination_address,
-                    delegation_id,
-                    delegation_share,
-                    current_fee_rate,
-                )
+            async move |current_fee_rate: FeeRate,
+                        _consolidate_fee_rate: FeeRate,
+                        wallet: &mut RuntimeWallet<B>,
+                        account_index: U31| {
+                wallet
+                    .create_sweep_from_delegation_transaction(
+                        account_index,
+                        destination_address,
+                        delegation_id,
+                        delegation_share,
+                        current_fee_rate,
+                    )
+                    .await
             },
         )
         .await
@@ -707,6 +749,7 @@ where
                 consolidate_fee_rate,
                 PtxAdditionalInfo::new(),
             )
+            .await
             .map_err(ControllerError::WalletError)?;
 
         let fees = into_balances(&self.rpc_client, self.chain_config, fees).await?;
@@ -841,16 +884,19 @@ where
         let (current_fee_rate, consolidate_fee_rate) =
             self.get_current_and_consolidation_fee_rate().await?;
 
-        let (tx, fees) = self.wallet.create_unsigned_transaction_to_addresses(
-            self.account_index,
-            outputs,
-            selected_inputs,
-            Some(CoinSelectionAlgo::Randomize),
-            change_addresses,
-            current_fee_rate,
-            consolidate_fee_rate,
-            PtxAdditionalInfo::new(),
-        )?;
+        let (tx, fees) = self
+            .wallet
+            .create_unsigned_transaction_to_addresses(
+                self.account_index,
+                outputs,
+                selected_inputs,
+                Some(CoinSelectionAlgo::Randomize),
+                change_addresses,
+                current_fee_rate,
+                consolidate_fee_rate,
+                PtxAdditionalInfo::new(),
+            )
+            .await?;
 
         let fees = into_balances(&self.rpc_client, self.chain_config, fees).await?;
 
@@ -867,16 +913,18 @@ where
     ) -> Result<(NewTransaction, DelegationId), ControllerError<T>> {
         let output = make_create_delegation_output(address, pool_id);
         self.create_and_send_tx_with_id(
-            move |current_fee_rate: FeeRate,
-                  consolidate_fee_rate: FeeRate,
-                  wallet: &mut RuntimeWallet<B>,
-                  account_index: U31| {
-                wallet.create_delegation(
-                    account_index,
-                    output,
-                    current_fee_rate,
-                    consolidate_fee_rate,
-                )
+            async move |current_fee_rate: FeeRate,
+                        consolidate_fee_rate: FeeRate,
+                        wallet: &mut RuntimeWallet<B>,
+                        account_index: U31| {
+                wallet
+                    .create_delegation(
+                        account_index,
+                        output,
+                        current_fee_rate,
+                        consolidate_fee_rate,
+                    )
+                    .await
             },
         )
         .await
@@ -891,19 +939,21 @@ where
     ) -> Result<NewTransaction, ControllerError<T>> {
         let output = TxOutput::DelegateStaking(amount, delegation_id);
         self.create_and_send_tx(
-            move |current_fee_rate: FeeRate,
-                  consolidate_fee_rate: FeeRate,
-                  wallet: &mut RuntimeWallet<B>,
-                  account_index: U31| {
-                wallet.create_transaction_to_addresses(
-                    account_index,
-                    [output],
-                    SelectedInputs::Utxos(vec![]),
-                    BTreeMap::new(),
-                    current_fee_rate,
-                    consolidate_fee_rate,
-                    TxAdditionalInfo::new(),
-                )
+            async move |current_fee_rate: FeeRate,
+                        consolidate_fee_rate: FeeRate,
+                        wallet: &mut RuntimeWallet<B>,
+                        account_index: U31| {
+                wallet
+                    .create_transaction_to_addresses(
+                        account_index,
+                        [output],
+                        SelectedInputs::Utxos(vec![]),
+                        BTreeMap::new(),
+                        current_fee_rate,
+                        consolidate_fee_rate,
+                        TxAdditionalInfo::new(),
+                    )
+                    .await
             },
         )
         .await
@@ -929,18 +979,20 @@ where
             ))?;
 
         self.create_and_send_tx(
-            move |current_fee_rate: FeeRate,
-                  _consolidate_fee_rate: FeeRate,
-                  wallet: &mut RuntimeWallet<B>,
-                  account_index: U31| {
-                wallet.create_transaction_to_addresses_from_delegation(
-                    account_index,
-                    address,
-                    amount,
-                    delegation_id,
-                    delegation_share,
-                    current_fee_rate,
-                )
+            async move |current_fee_rate: FeeRate,
+                        _consolidate_fee_rate: FeeRate,
+                        wallet: &mut RuntimeWallet<B>,
+                        account_index: U31| {
+                wallet
+                    .create_transaction_to_addresses_from_delegation(
+                        account_index,
+                        address,
+                        amount,
+                        delegation_id,
+                        delegation_share,
+                        current_fee_rate,
+                    )
+                    .await
             },
         )
         .await
@@ -958,11 +1010,11 @@ where
             make_address_output_token(address.into_object(), amount, token_info.token_id());
         self.create_and_send_token_tx(
             token_info,
-            move |current_fee_rate: FeeRate,
-                  consolidate_fee_rate: FeeRate,
-                  wallet: &mut RuntimeWallet<B>,
-                  account_index: U31,
-                  token_info: &UnconfirmedTokenInfo| {
+            async move |current_fee_rate: FeeRate,
+                        consolidate_fee_rate: FeeRate,
+                        wallet: &mut RuntimeWallet<B>,
+                        account_index: U31,
+                        token_info: UnconfirmedTokenInfo| {
                 token_info.check_can_be_used()?;
                 let additional_info = TxAdditionalInfo::new().with_token_info(
                     token_info.token_id(),
@@ -971,15 +1023,17 @@ where
                         ticker: token_info.token_ticker().to_vec(),
                     },
                 );
-                wallet.create_transaction_to_addresses(
-                    account_index,
-                    [output],
-                    SelectedInputs::Utxos(vec![]),
-                    BTreeMap::new(),
-                    current_fee_rate,
-                    consolidate_fee_rate,
-                    additional_info,
-                )
+                wallet
+                    .create_transaction_to_addresses(
+                        account_index,
+                        [output],
+                        SelectedInputs::Utxos(vec![]),
+                        BTreeMap::new(),
+                        current_fee_rate,
+                        consolidate_fee_rate,
+                        additional_info,
+                    )
+                    .await
             },
         )
         .await
@@ -997,11 +1051,11 @@ where
             make_address_output_token(address.into_object(), amount, token_info.token_id());
         self.create_token_tx(
             token_info,
-            move |current_fee_rate: FeeRate,
-                  consolidate_fee_rate: FeeRate,
-                  wallet: &mut RuntimeWallet<B>,
-                  account_index: U31,
-                  token_info: &UnconfirmedTokenInfo| {
+            async move |current_fee_rate: FeeRate,
+                        consolidate_fee_rate: FeeRate,
+                        wallet: &mut RuntimeWallet<B>,
+                        account_index: U31,
+                        token_info: UnconfirmedTokenInfo| {
                 token_info.check_can_be_used()?;
                 let additional_info = TxAdditionalInfo::new().with_token_info(
                     token_info.token_id(),
@@ -1010,16 +1064,18 @@ where
                         ticker: token_info.token_ticker().to_vec(),
                     },
                 );
-                wallet.create_transaction_to_addresses_with_intent(
-                    account_index,
-                    [output],
-                    SelectedInputs::Utxos(vec![]),
-                    BTreeMap::new(),
-                    intent,
-                    current_fee_rate,
-                    consolidate_fee_rate,
-                    additional_info,
-                )
+                wallet
+                    .create_transaction_to_addresses_with_intent(
+                        account_index,
+                        [output],
+                        SelectedInputs::Utxos(vec![]),
+                        BTreeMap::new(),
+                        intent,
+                        current_fee_rate,
+                        consolidate_fee_rate,
+                        additional_info,
+                    )
+                    .await
             },
         )
         .await
@@ -1036,23 +1092,25 @@ where
         vrf_public_key: Option<VRFPublicKey>,
     ) -> Result<NewTransaction, ControllerError<T>> {
         self.create_and_send_tx(
-            move |current_fee_rate: FeeRate,
-                  consolidate_fee_rate: FeeRate,
-                  wallet: &mut RuntimeWallet<B>,
-                  account_index: U31| {
-                wallet.create_stake_pool(
-                    account_index,
-                    current_fee_rate,
-                    consolidate_fee_rate,
-                    StakePoolCreationArguments {
-                        amount,
-                        margin_ratio_per_thousand,
-                        cost_per_block,
-                        decommission_key,
-                        staker_key,
-                        vrf_public_key,
-                    },
-                )
+            async move |current_fee_rate: FeeRate,
+                        consolidate_fee_rate: FeeRate,
+                        wallet: &mut RuntimeWallet<B>,
+                        account_index: U31| {
+                wallet
+                    .create_stake_pool(
+                        account_index,
+                        current_fee_rate,
+                        consolidate_fee_rate,
+                        StakePoolCreationArguments {
+                            amount,
+                            margin_ratio_per_thousand,
+                            cost_per_block,
+                            decommission_key,
+                            staker_key,
+                            vrf_public_key,
+                        },
+                    )
+                    .await
             },
         )
         .await
@@ -1074,17 +1132,19 @@ where
             )))?;
 
         self.create_and_send_tx(
-            move |current_fee_rate: FeeRate,
-                  _consolidate_fee_rate: FeeRate,
-                  wallet: &mut RuntimeWallet<B>,
-                  account_index: U31| {
-                wallet.decommission_stake_pool(
-                    account_index,
-                    pool_id,
-                    staker_balance,
-                    output_address,
-                    current_fee_rate,
-                )
+            async move |current_fee_rate: FeeRate,
+                        _consolidate_fee_rate: FeeRate,
+                        wallet: &mut RuntimeWallet<B>,
+                        account_index: U31| {
+                wallet
+                    .decommission_stake_pool(
+                        account_index,
+                        pool_id,
+                        staker_balance,
+                        output_address,
+                        current_fee_rate,
+                    )
+                    .await
             },
         )
         .await
@@ -1115,6 +1175,7 @@ where
                 output_address,
                 current_fee_rate,
             )
+            .await
             .map_err(ControllerError::WalletError)
     }
 
@@ -1136,14 +1197,17 @@ where
         let (current_fee_rate, consolidate_fee_rate) =
             self.get_current_and_consolidation_fee_rate().await?;
 
-        let SignedTxWithFees { tx, fees } = self.wallet.create_htlc_tx(
-            self.account_index,
-            output_value,
-            htlc,
-            current_fee_rate,
-            consolidate_fee_rate,
-            tx_additional_info,
-        )?;
+        let SignedTxWithFees { tx, fees } = self
+            .wallet
+            .create_htlc_tx(
+                self.account_index,
+                output_value,
+                htlc,
+                current_fee_rate,
+                consolidate_fee_rate,
+                tx_additional_info,
+            )
+            .await?;
 
         let fees = into_balances(&self.rpc_client, self.chain_config, fees).await?;
 
@@ -1179,19 +1243,21 @@ where
         let give_value = convert_value(give_value).await?;
 
         self.create_and_send_tx_with_id(
-            move |current_fee_rate: FeeRate,
-                  consolidate_fee_rate: FeeRate,
-                  wallet: &mut RuntimeWallet<B>,
-                  account_index: U31| {
-                wallet.create_order_tx(
-                    account_index,
-                    ask_value,
-                    give_value,
-                    conclude_key,
-                    current_fee_rate,
-                    consolidate_fee_rate,
-                    tx_additional_info,
-                )
+            async move |current_fee_rate: FeeRate,
+                        consolidate_fee_rate: FeeRate,
+                        wallet: &mut RuntimeWallet<B>,
+                        account_index: U31| {
+                wallet
+                    .create_order_tx(
+                        account_index,
+                        ask_value,
+                        give_value,
+                        conclude_key,
+                        current_fee_rate,
+                        consolidate_fee_rate,
+                        tx_additional_info,
+                    )
+                    .await
             },
         )
         .await
@@ -1207,19 +1273,21 @@ where
             self.additional_info_for_order_update_tx(order_id, &order_info).await?;
 
         self.create_and_send_tx(
-            move |current_fee_rate: FeeRate,
-                  consolidate_fee_rate: FeeRate,
-                  wallet: &mut RuntimeWallet<B>,
-                  account_index: U31| {
-                wallet.create_conclude_order_tx(
-                    account_index,
-                    order_id,
-                    order_info,
-                    output_address,
-                    current_fee_rate,
-                    consolidate_fee_rate,
-                    tx_additional_info,
-                )
+            async move |current_fee_rate: FeeRate,
+                        consolidate_fee_rate: FeeRate,
+                        wallet: &mut RuntimeWallet<B>,
+                        account_index: U31| {
+                wallet
+                    .create_conclude_order_tx(
+                        account_index,
+                        order_id,
+                        order_info,
+                        output_address,
+                        current_fee_rate,
+                        consolidate_fee_rate,
+                        tx_additional_info,
+                    )
+                    .await
             },
         )
         .await
@@ -1250,20 +1318,22 @@ where
             .ok_or(ControllerError::InvalidCoinAmount)?;
 
         self.create_and_send_tx(
-            move |current_fee_rate: FeeRate,
-                  consolidate_fee_rate: FeeRate,
-                  wallet: &mut RuntimeWallet<B>,
-                  account_index: U31| {
-                wallet.create_fill_order_tx(
-                    account_index,
-                    order_id,
-                    order_info,
-                    fill_amount_in_ask_currency,
-                    output_address,
-                    current_fee_rate,
-                    consolidate_fee_rate,
-                    tx_additional_info,
-                )
+            async move |current_fee_rate: FeeRate,
+                        consolidate_fee_rate: FeeRate,
+                        wallet: &mut RuntimeWallet<B>,
+                        account_index: U31| {
+                wallet
+                    .create_fill_order_tx(
+                        account_index,
+                        order_id,
+                        order_info,
+                        fill_amount_in_ask_currency,
+                        output_address,
+                        current_fee_rate,
+                        consolidate_fee_rate,
+                        tx_additional_info,
+                    )
+                    .await
             },
         )
         .await
@@ -1278,18 +1348,20 @@ where
             self.additional_info_for_order_update_tx(order_id, &order_info).await?;
 
         self.create_and_send_tx(
-            move |current_fee_rate: FeeRate,
-                  consolidate_fee_rate: FeeRate,
-                  wallet: &mut RuntimeWallet<B>,
-                  account_index: U31| {
-                wallet.create_freeze_order_tx(
-                    account_index,
-                    order_id,
-                    order_info,
-                    current_fee_rate,
-                    consolidate_fee_rate,
-                    tx_additional_info,
-                )
+            async move |current_fee_rate: FeeRate,
+                        consolidate_fee_rate: FeeRate,
+                        wallet: &mut RuntimeWallet<B>,
+                        account_index: U31| {
+                wallet
+                    .create_freeze_order_tx(
+                        account_index,
+                        order_id,
+                        order_info,
+                        current_fee_rate,
+                        consolidate_fee_rate,
+                        tx_additional_info,
+                    )
+                    .await
             },
         )
         .await
@@ -1396,22 +1468,28 @@ where
 
         self.wallet
             .sign_raw_transaction(self.account_index, ptx, &tokens_additional_info)
+            .await
             .map_err(ControllerError::WalletError)
     }
 
-    pub fn sign_challenge(
+    pub async fn sign_challenge(
         &mut self,
         challenge: &[u8],
         destination: &Destination,
     ) -> Result<ArbitraryMessageSignature, ControllerError<T>> {
         self.wallet
             .sign_challenge(self.account_index, challenge, destination)
+            .await
             .map_err(ControllerError::WalletError)
     }
 
-    pub fn add_unconfirmed_tx(&mut self, tx: SignedTransaction) -> Result<(), ControllerError<T>> {
+    pub async fn add_unconfirmed_tx(
+        &mut self,
+        tx: SignedTransaction,
+    ) -> Result<(), ControllerError<T>> {
         self.wallet
             .add_unconfirmed_tx(tx, self.wallet_events)
+            .await
             .map_err(ControllerError::WalletError)
     }
 
@@ -1445,6 +1523,7 @@ where
 
         self.wallet
             .add_account_unconfirmed_tx(self.account_index, &tx, self.wallet_events)
+            .await
             .map_err(ControllerError::WalletError)?;
 
         Ok(tx)
@@ -1464,12 +1543,17 @@ where
     }
 
     /// Create a transaction and broadcast it if needed
-    async fn create_and_send_tx<E, F>(
+    async fn create_and_send_tx<E, Fun>(
         &mut self,
-        tx_maker: F,
+        tx_maker: Fun,
     ) -> Result<NewTransaction, ControllerError<T>>
     where
-        F: FnOnce(FeeRate, FeeRate, &mut RuntimeWallet<B>, U31) -> Result<SignedTxWithFees, E>,
+        Fun: AsyncFnOnce(
+            FeeRate,
+            FeeRate,
+            &mut RuntimeWallet<B>,
+            U31,
+        ) -> Result<SignedTxWithFees, E>,
         ControllerError<T>: From<E>,
     {
         let (current_fee_rate, consolidate_fee_rate) =
@@ -1480,7 +1564,8 @@ where
             consolidate_fee_rate,
             self.wallet,
             self.account_index,
-        )?;
+        )
+        .await?;
 
         let (tx, broadcasted) = self.broadcast_to_mempool_if_needed(tx).await?;
         let fees = into_balances(&self.rpc_client, self.chain_config, fees).await?;
@@ -1499,12 +1584,12 @@ where
         tx_maker: F,
     ) -> Result<R, ControllerError<T>>
     where
-        F: FnOnce(
+        F: AsyncFnOnce(
             FeeRate,
             FeeRate,
             &mut RuntimeWallet<B>,
             U31,
-            &UnconfirmedTokenInfo,
+            UnconfirmedTokenInfo,
         ) -> WalletResult<R>,
     {
         let token_freezable_info = self.unconfirmed_token_info(token_info)?;
@@ -1517,8 +1602,9 @@ where
             consolidate_fee_rate,
             self.wallet,
             self.account_index,
-            &token_freezable_info,
+            token_freezable_info,
         )
+        .await
         .map_err(ControllerError::WalletError)?;
 
         Ok(tx)
@@ -1526,19 +1612,20 @@ where
 
     /// Create and broadcast a transaction that uses a token,
     /// check if that token can be used i.e. not frozen.
-    async fn create_and_send_token_tx<
-        F: FnOnce(
+    async fn create_and_send_token_tx<F>(
+        &mut self,
+        token_info: RPCTokenInfo,
+        tx_maker: F,
+    ) -> Result<NewTransaction, ControllerError<T>>
+    where
+        F: AsyncFnOnce(
             FeeRate,
             FeeRate,
             &mut RuntimeWallet<B>,
             U31,
-            &UnconfirmedTokenInfo,
+            UnconfirmedTokenInfo,
         ) -> WalletResult<SignedTxWithFees>,
-    >(
-        &mut self,
-        token_info: RPCTokenInfo,
-        tx_maker: F,
-    ) -> Result<NewTransaction, ControllerError<T>> {
+    {
         let SignedTxWithFees { tx, fees } = self.create_token_tx(token_info, tx_maker).await?;
         let (tx, broadcasted) = self.broadcast_to_mempool_if_needed(tx).await?;
         let fees = into_balances(&self.rpc_client, self.chain_config, fees).await?;
@@ -1569,7 +1656,7 @@ where
     /// e.g. newly issued token, nft or delegation id
     async fn create_and_send_tx_with_id<
         ID,
-        F: FnOnce(
+        F: AsyncFnOnce(
             FeeRate,
             FeeRate,
             &mut RuntimeWallet<B>,
@@ -1588,6 +1675,7 @@ where
             self.wallet,
             self.account_index,
         )
+        .await
         .map_err(ControllerError::WalletError)?;
 
         let (tx, broadcasted) = self.broadcast_to_mempool_if_needed(tx).await?;
