@@ -26,7 +26,7 @@ use common::{
     },
     primitives::{Amount, BlockHeight, Id, Idable},
 };
-use orders_accounting::OrdersAccountingDB;
+use orders_accounting::{OrdersAccountingDB, OrdersAccountingView as _};
 use randomness::{CryptoRng, Rng, SliceRandom as _};
 use test_utils::random_ascii_alphanumeric_string;
 
@@ -201,6 +201,30 @@ pub fn calculate_fill_order(
         orders_version,
     )
     .unwrap()
+}
+
+pub fn order_min_non_zero_fill_amount(
+    tf: &TestFramework,
+    order_id: &OrderId,
+    orders_version: OrdersVersion,
+) -> Amount {
+    match orders_version {
+        // Note: in orders v0 even direct zero fills are allowed.
+        // However, this function is supposed to only return non-zero amounts.
+        OrdersVersion::V0 => Amount::from_atoms(1),
+
+        // In orders v1, the fill amount must be big enough so that the filled amount is non-zero.
+        OrdersVersion::V1 => {
+            let db_tx = tf.storage.transaction_ro().unwrap();
+            let orders_db = OrdersAccountingDB::new(&db_tx);
+
+            let order_data = orders_db.get_order_data(order_id).unwrap().unwrap();
+            let original_ask = order_data.ask().amount().into_atoms();
+            let original_give = order_data.give().amount().into_atoms();
+
+            Amount::from_atoms(original_ask.div_ceil(original_give))
+        }
+    }
 }
 
 /// Split an u128 value into the specified number of "randomish" parts (the min part size is half
