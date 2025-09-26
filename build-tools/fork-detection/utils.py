@@ -1,11 +1,14 @@
 import json
 import logging
 import os
+import platform
 import queue
 import requests
+import smtplib
 import sys
 import time
 from collections import namedtuple
+from email.mime.text import MIMEText
 from pathlib import Path
 from queue import Queue
 from threading import Lock
@@ -395,3 +398,22 @@ def show_cursor():
     if sys.stderr.isatty():
         sys.stderr.write(esc_seq)
 
+
+# Sends notification emails to the specified address if it's not None, otherwise does nothing.
+class EmailSender:
+    # to_addr - the address to send emails to; if None, nothing will be sent.
+    # from_addr - the 'from' address for the emails; if None, to_addr will be used.
+    def __init__(self, to_addr: str | None, from_addr: str | None):
+        self.to_addr = to_addr
+        self.from_addr = from_addr or to_addr
+
+    def send(self, msg_subj, msg_body):
+        if self.to_addr is not None:
+            msg = MIMEText(msg_body)
+            msg["Subject"] = msg_subj
+            msg["From"] = f"Fork detection script at {platform.node()} <{self.from_addr}>"
+            msg["To"] = self.to_addr
+
+            s = smtplib.SMTP('localhost')
+            s.sendmail(self.from_addr, [self.to_addr], msg.as_string())
+            s.quit()

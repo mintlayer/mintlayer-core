@@ -17,7 +17,7 @@ from utils import (
     colored, dir_missing_or_empty, exhaustive_stream_line_reader, hide_cursor, show_cursor,
     init_logger, pretty_print_banned_peers,
     CONSOLE_PRINTER, LOGGER as log, NODE_OUTPUT_PREFIX_COLOR, NODE_RPC_USER, NODE_RPC_PWD,
-    Error, APIServerClient, NodeRPCClient,
+    Error, APIServerClient, BannedPeer, EmailSender, NodeRPCClient,
 )
 
 
@@ -73,21 +73,26 @@ NODE_OUTPUT_LINE_TO_PRINT_REGEX = re.compile(r"^\S+\s+(WARN|ERROR)\b")
 # when the node starts and immediately exists due to the p2p port being unavailable.
 NODE_STARTUP_OUTPUT_LINE_REGEX = re.compile(r"p2p.*Starting SyncManager")
 
-BAN_DURATION_SECS = 6 * 3600 # 6h
+DEFAULT_BAN_DURATION_HOURS = 12
 
 # We use Queue.shutdown which is only available since Python v3.13
 MIN_PYTHON_VERSION_MAJOR = 3
 MIN_PYTHON_VERSION_MINOR = 13
 
+PERMABANNED_PEERS_FILE = "permabanned_peers.txt"
+PERMABAN_DURATION_DAYS = 30
+PERMABAN_DURATION_SECS = 3600 * 24 * PERMABAN_DURATION_DAYS
+
 
 class Handler():
-    def __init__(self, args):
+    def __init__(self, args, email_sender):
         CONSOLE_PRINTER.set_status("Initializing")
 
-        self.entire_output_dir = Path(args.output_dir).resolve()
-        os.makedirs(self.entire_output_dir, exist_ok=True)
+        self.email_sender = email_sender
+        self.working_dir = Path(args.working_dir).resolve()
+        os.makedirs(self.working_dir, exist_ok=True)
 
-        init_logger(self.entire_output_dir.joinpath("log.txt"))
+        init_logger(self.working_dir.joinpath("log.txt"))
         log.info("Initializing")
 
         self.node_cmd = shlex.split(args.node_cmd)
@@ -95,13 +100,15 @@ class Handler():
         self.node_rpc_client = NodeRPCClient(args.node_rpc_bind_address)
         self.api_server_client = APIServerClient(args.api_server_url)
 
-        self.saved_attempts_dir = self.entire_output_dir.joinpath(SAVED_ATTEMPTS_SUBDIR)
+        self.saved_attempts_dir = self.working_dir.joinpath(SAVED_ATTEMPTS_SUBDIR)
 
-        self.saved_peer_dbs_dir = self.entire_output_dir.joinpath(SAVED_PEER_DBS_SUBDIR)
+        self.saved_peer_dbs_dir = self.working_dir.joinpath(SAVED_PEER_DBS_SUBDIR)
         self.latest_peer_db_dir = self.saved_peer_dbs_dir.joinpath(LATEST_PEER_DB_SUBDIR)
         self.prev_peer_db_dir = self.saved_peer_dbs_dir.joinpath(PREV_PEER_DB_SUBDIR)
 
-        self.cur_attempt_dir = self.entire_output_dir.joinpath(CUR_ATTEMPT_SUBDIR)
+        self.permabanned_peers_file = self.working_dir.joinpath(PERMABANNED_PEERS_FILE)
+
+        self.cur_attempt_dir = self.working_dir.joinpath(CUR_ATTEMPT_SUBDIR)
         if os.path.exists(self.cur_attempt_dir) and not args.can_continue:
             raise Error(
                 (f"The directory {self.cur_attempt_dir} already exists. "
@@ -113,6 +120,7 @@ class Handler():
         self.cur_attempt_logs_file = self.cur_attempt_dir.joinpath("node_log.txt")
 
         self.unban_all = args.unban_all
+        self.ban_duration_secs = args.ban_duration_hours * 3600
 
         self.node_cmd += [
             "--datadir", self.cur_attempt_node_data_dir,
@@ -163,6 +171,8 @@ class Handler():
             args=(node_proc.stdout, node_proc_stdout_queue, self.cur_attempt_logs_file)
         ).start()
 
+        # Handle a node's output line, return True if the current attempt should continue
+        # and False otherwise.
         def handle_node_output_line(line: str):
             nonlocal actual_tip_height, last_block_arrival_time, last_handled_height
 
@@ -227,6 +237,15 @@ class Handler():
         def on_node_started():
             self.node_rpc_client.ensure_rpc_started()
 
+            perma_banned_peers = self.load_perma_banned_peers()
+            log.debug(f"Banning the following addresses for {PERMABAN_DURATION_DAYS} days: {perma_banned_peers}")
+
+            for addr in perma_banned_peers:
+                self.node_rpc_client.ban_peer(addr, PERMABAN_DURATION_SECS)
+
+            def filter_out_perma_banned_peers(peer_list: list[BannedPeer]) -> list[BannedPeer]:
+                return [peer for peer in peer_list if peer.ip not in perma_banned_peers]
+
             banned_peers = self.node_rpc_client.get_banned_peers()
             banned_peers_str = pretty_print_banned_peers(banned_peers)
 
@@ -234,16 +253,19 @@ class Handler():
 
             if self.unban_all:
                 self.unban_all = False
-                if len(banned_peers) > 0:
-                    log.info("Unbanning currently banned peers due to the command line option")
+                peers_to_unban = filter_out_perma_banned_peers(banned_peers)
+                if len(peers_to_unban) > 0:
+                    log.info("Unbanning currently (non-permanently) banned peers due to the command line option")
 
-                    for peer in banned_peers:
+                    for peer in peers_to_unban:
                         self.node_rpc_client.unban_peer(peer.ip)
 
                     banned_peers_after_unban = self.node_rpc_client.get_banned_peers()
-                    if len(banned_peers_after_unban) > 0:
-                        banned_peers_after_unban_str = pretty_print_banned_peers(banned_peers_after_unban)
-                        log.warning(f"Some peers are still banned after unban: {banned_peers_after_unban_str}")
+                    unexpected_banned_peers = filter_out_perma_banned_peers(banned_peers_after_unban)
+
+                    if len(unexpected_banned_peers) > 0:
+                        unexpected_banned_peers_str = pretty_print_banned_peers(unexpected_banned_peers)
+                        log.warning(f"Some peers are still banned after unban: {unexpected_banned_peers_str}")
 
         def on_attempt_completion():
             # When a syncing attempt has been finished, but before the node has been stopped,
@@ -263,7 +285,7 @@ class Handler():
 
             for ip_addr in peer_ips_to_ban:
                 log.debug(f"Banning {ip_addr}")
-                self.node_rpc_client.ban_peer(ip_addr, BAN_DURATION_SECS)
+                self.node_rpc_client.ban_peer(ip_addr, self.ban_duration_secs)
 
         try:
             node_started = False
@@ -331,12 +353,14 @@ class Handler():
             backup_dir_name = datetime.today().strftime("%Y-%m-%d_%H-%M-%S")
             backup_dir = self.saved_attempts_dir.joinpath(backup_dir_name)
 
-            log.warning(
-                f"Sync iteration ended with some issues, backing up the output dir to {backup_dir}"
-            )
+            warning_msg = ("Sync iteration ended with some issues, "
+                           f"backing up the the attempt's dir to {backup_dir}")
+            log.warning(warning_msg)
+            self.email_sender.send("Warning", warning_msg)
+
             os.rename(self.cur_attempt_dir, backup_dir)
         else:
-            log.info("Sync iteration ended without issues, removing output dir")
+            log.info("Sync iteration ended without issues, removing the attempt's dir")
             shutil.rmtree(self.cur_attempt_dir)
 
     # Return the list of ip addresses we want to ban and the end of a sync attempt,
@@ -391,6 +415,24 @@ class Handler():
 
         log.warning(f"Flag created: {flag}")
 
+    def load_perma_banned_peers(self) -> set[str]:
+        def trim_line(line):
+            # Allow the file to have comments
+            return line.split("#", 1)[0].strip()
+
+        log.debug(f"Checking {self.permabanned_peers_file} for the list of permabanned peer addresses")
+
+        try:
+            with open(self.permabanned_peers_file, "r") as file:
+                lines = file.readlines()
+                lines = [
+                    trimmed_line for line in lines
+                    if len(trimmed_line := trim_line(line)) > 0
+                ]
+                return set(lines)
+        except FileNotFoundError:
+            return set()
+
 
 def set_status_and_debug_log(status):
     log.debug(status)
@@ -407,33 +449,59 @@ def main():
     try:
         parser = argparse.ArgumentParser(
             formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-        parser.add_argument("--node-cmd",
+        parser.add_argument(
+            "--node-cmd",
             help="Command to run the node",
             default=DEFAULT_NODE_CMD)
-        parser.add_argument("--node-rpc-bind-address",
+        parser.add_argument(
+            "--node-rpc-bind-address",
             help="Node PRC bind address",
             default=DEFAULT_NODE_RPC_BIND_ADDR)
         parser.add_argument(
-            '--api-server-url',
+            "--api-server-url",
             help='API server URL', required=True)
-        parser.add_argument("--chain-type",
+        parser.add_argument(
+            "--chain-type",
             help="Chain type",
             choices=CHAIN_TYPE_CHOICES,
             default=DEFAULT_CHAIN_TYPE)
-        parser.add_argument("--output-dir",
-            help="Output directory",
+        parser.add_argument(
+            "--working-dir",
+            help="Working directory, where all the output will be put",
             required=True)
-        parser.add_argument(f"--{CONTINUE_OPTION_NAME}",
+        parser.add_argument(
+            f"--{CONTINUE_OPTION_NAME}",
             help=(f"Proceed even if the '{CUR_ATTEMPT_SUBDIR}' subdirectory "
-                   "already exists in the output dir"),
+                   "already exists in the working dir"),
             action="store_true",
             dest="can_continue")
-        parser.add_argument(f"--unban-all",
-            help=("Unban all node's peers on start"),
+        parser.add_argument(
+            "--ban-duration",
+            help="Ban duration, in hours",
+            dest="ban_duration_hours",
+            default=DEFAULT_BAN_DURATION_HOURS)
+        parser.add_argument(
+            "--unban-all",
+            help="Unban all node's peers on start",
             action="store_true")
+        parser.add_argument(
+            "--notification-email",
+            help="Send notifications to this email using the local SMTP server",
+            default=None)
+        parser.add_argument(
+            "--notification-email-from",
+            help=("The from address for the notification email. "
+                  "If None, the --notification-email value will be used"),
+            default=None)
         args = parser.parse_args()
 
-        Handler(args).run()
+        email_sender = EmailSender(args.notification_email, args.notification_email_from)
+
+        try:
+            Handler(args, email_sender).run()
+        except Exception as e:
+            email_sender.send("Error", f"Script terminated due to exception: {e}")
+            raise
     except Error as e:
         print(f"Error: {e}")
         sys.exit(1)
