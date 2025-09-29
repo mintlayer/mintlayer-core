@@ -237,6 +237,7 @@ def exhaustive_stream_line_reader(stream: TextIO, queue_obj: Queue, log_file: Pa
 
 BlockInfo = namedtuple("BlockInfo", ["id", "height"])
 BannedPeer = namedtuple("BannedPeer", ["ip", "banned_until_as_secs_since_epoch"])
+ChainstateInfo = namedtuple("ChainstateInfo", ["best_block_height", "best_block_id", "best_block_timestamp"])
 
 
 class APIServerClient:
@@ -332,6 +333,16 @@ class NodeRPCClient:
 
     def unban_peer(self, peer_addr: str):
         self._post("p2p_unban", [peer_addr])
+
+    def get_chainstate_info(self) -> ChainstateInfo:
+        info = self._post("chainstate_info", [])
+        bb_height = int(info["best_block_height"])
+        bb_timestamp = int(info["best_block_timestamp"]["timestamp"])
+        bb_id = info["best_block_id"]
+
+        return ChainstateInfo(
+            best_block_height=bb_height, best_block_id=bb_id, best_block_timestamp=bb_timestamp
+        )
 
     # Assuming that the node has already been started, wait until it is reachable via rpc.
     def ensure_rpc_started(self):

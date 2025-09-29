@@ -636,10 +636,20 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             self.update_initial_block_download_flag()
                 .map_err(BlockError::BestBlockIdQueryError)?;
         } else {
-            tracing::debug!(
-                target: CHAINSTATE_TRACING_TARGET_VERBOSE_BLOCK_IDS,
-                "Stale block received: {block_id}"
-            );
+            if tracing::event_enabled!(tracing::Level::DEBUG, CHAINSTATE_TRACING_TARGET_VERBOSE_BLOCK_IDS) {
+                // FIXME: return custom enum from attempt_to_process_block
+                let chainstate_ref = self.make_db_tx_ro().map_err(BlockError::from)?;
+                let bi = get_existing_block_index(&chainstate_ref, &block_id)?;
+
+                tracing::debug!(
+                    target: CHAINSTATE_TRACING_TARGET_VERBOSE_BLOCK_IDS,
+                    "Received stale block {:x} with height {}, timestamp: {} ({})",
+                    bi.block_id(),
+                    bi.block_height(),
+                    bi.block_timestamp(),
+                    bi.block_timestamp().into_time(),
+                )
+            }
         }
 
         Ok(result)

@@ -11,6 +11,7 @@ from datetime import datetime
 from pathlib import Path
 from queue import Queue
 from threading import Thread
+from typing import Optional
 from urllib.parse import urlparse
 
 from utils import (
@@ -40,24 +41,32 @@ PREV_PEER_DB_SUBDIR = "previous"
 # Note: this is defined by the node and cannot be changed.
 PEER_DB_SUBDIR_IN_NODE_DATA = "peerdb-lmdb"
 
-# The mapping from node's output to the name of the flag that must be created as a result.
+# If the height difference between the current tip and a stale block is bigger than or equal to
+# this value, a reorg to the stale block is no longer possible.
+MAX_REORG_DEPTH = 1000
+
+# The mapping from node's output to the name of the flag that must be automatically created
+# as a result.
 NODE_OUTPUT_LINE_REGEX_TO_FLAG_MAPPING = [
     (re.compile(r"\bCRITICAL\b"), "critical_error"),
     (re.compile(r"Checkpoint mismatch"), "checkpoint_mismatch"),
     (re.compile(r"\bERROR\b.+\bprocess_block\b"), "process_block_failure"),
     (re.compile(r"\bERROR\b.+\bpreliminary_block_check\b"), "preliminary_block_check_failure"),
     (re.compile(r"\bERROR\b.+\bpreliminary_headers_check\b"), "preliminary_headers_check_failure"),
-    (re.compile(r"Stale block received"), "stale_block_received"),
 ]
 
-# The "flag" that will be created if the node's mainchain block differs from the API server's.
-# Note: technically this is not a flag, because it will contain additional data.
-POTENTIAL_REORGS_FLAG_NAME = "potential_reorgs"
+ENDED_UP_ON_A_FORK_FLAG_NAME = "ended_up_on_a_fork"
+STALE_BLOCK_BELOW_REORG_LIMIT_FLAG_NAME = "stale_block_below_reorg_limit"
+NO_INCOMING_BLOCKS_WHILE_ON_STALE_CHAIN_FLAG_NAME = "no_incoming_blocks_while_on_stale_chain"
 
 NODE_OUTPUT_LINE_NEW_TIP_REGEX = re.compile(
     r"NEW TIP in chainstate (?P<block_id>[0-9A-Fa-f]+) with height (?P<height>\d+), timestamp: (?P<timestamp>\d+)"
 )
-# The regex by which we determine that node's output line should be printed to the console
+NODE_OUTPUT_LINE_STALE_BLOCK_RECEIVED_REGEX = re.compile(
+    r"Received stale block (?P<block_id>[0-9A-Fa-f]+) with height (?P<height>\d+), timestamp: (?P<timestamp>\d+)"
+)
+
+# The regex used to decide whether a node's output line should be printed to the console
 # (we want to avoid debug and info lines since they're both too noisy during sync and put extra
 # strain on the console app).
 # Note that this is not 100% reliable, because a log record can technically span multiple lines,
@@ -66,6 +75,7 @@ NODE_OUTPUT_LINE_NEW_TIP_REGEX = re.compile(
 # But even if we did, this approach is "good enough" anyway, since you can always look into the log
 # file for the missing details.
 NODE_OUTPUT_LINE_TO_PRINT_REGEX = re.compile(r"^\S+\s+(WARN|ERROR)\b")
+
 # The regex by which we determine that the node is actually being started; this is mainly needed
 # because by default we invoke cargo, which may have to do a lengthy compilation first.
 # Also note that we use a log line indicating that p2p has already been started (instead of, say,
@@ -149,7 +159,7 @@ class Handler():
         self.restore_peer_db()
 
         node_proc_env = os.environ.copy()
-        # Note: "chainstate_verbose_block_ids=debug" allows to catch the "Stale block received" line
+        # Note: "chainstate_verbose_block_ids=debug" allows to catch the "Received stale block" line
         # and also forces certain block-processing functions in chainstate to print full block ids.
         # We avoid using the "normal" debug log, because it's too noisy, e.g. even
         # "info,chainstate=debug" produces hundreds of megabytes of logs during the full sync.
@@ -162,8 +172,8 @@ class Handler():
             stderr=subprocess.STDOUT,
             env=node_proc_env)
 
-        last_block_arrival_time = None
-        last_handled_height = None
+        last_tip_arrival_time = None
+        last_tip_height = None
 
         node_proc_stdout_queue = Queue()
         Thread(
@@ -171,65 +181,105 @@ class Handler():
             args=(node_proc.stdout, node_proc_stdout_queue, self.cur_attempt_logs_file)
         ).start()
 
-        # Handle a node's output line, return True if the current attempt should continue
-        # and False otherwise.
-        def handle_node_output_line(line: str):
-            nonlocal actual_tip_height, last_block_arrival_time, last_handled_height
+        # This is called for each node's output line and on a timeout when reading the line
+        # from a queue.
+        # Returns True if the current attempt should continue and False otherwise.
+        def on_node_output_line_or_timeout(line: Optional[str]):
+            nonlocal actual_tip_height, last_tip_arrival_time, last_tip_height
+
+            line = line if line is not None else ""
 
             for line_re, flag in NODE_OUTPUT_LINE_REGEX_TO_FLAG_MAPPING:
                 if line_re.search(line) is not None:
                     self.touch_flag(flag)
 
-            new_tip_match = NODE_OUTPUT_LINE_NEW_TIP_REGEX.search(line)
-            if new_tip_match is not None:
-                cur_seconds_since_epoch = time.time()
-                seconds_without_blocks = (
-                    cur_seconds_since_epoch - last_block_arrival_time
-                    if last_block_arrival_time is not None else 0
-                )
-                last_block_arrival_time = cur_seconds_since_epoch
+            cur_seconds_since_epoch = time.time()
 
+            if (new_tip_match := NODE_OUTPUT_LINE_NEW_TIP_REGEX.search(line)) is not None:
                 block_id = new_tip_match.group("block_id")
                 height = int(new_tip_match.group("height"))
-                last_handled_height = height
                 timestamp = int(new_tip_match.group("timestamp"))
+
+                last_tip_arrival_time = cur_seconds_since_epoch
+                last_tip_height = height
 
                 if height % 10 == 0:
                     CONSOLE_PRINTER.set_status(f"Synced to height {height}")
 
                 # Update actual_tip_height if we've reached it.
-                # Note: >= is used to make sure that the check "height == actual_tip_height"
-                # below uses the updated height.
                 if height >= actual_tip_height:
                     actual_tip_height = self.api_server_client.get_tip().height
 
-                if height > actual_tip_height:
-                    log_func = log.info if height == actual_tip_height + 1 else log.warning;
-                    log_func(
-                        f"Tip reached, height = {height} (the API server is {height-actual_tip_height} block(s) behind)"
+                fresh_block_reached = timestamp >= cur_seconds_since_epoch - 120
+                actual_tip_height_reached = height >= actual_tip_height
+
+                # Note: we can't query the API server on every block, because it's a costly operation
+                # (unless the API server is being run on the same machine). So we only query it every
+                # few hundred blocks or if we're near the end of the sync.
+                # Note: 500 was chosen because it's also the distance between our checkpoints,
+                # but the precise value is not essential.
+                if height % 500 == 0 or fresh_block_reached or actual_tip_height_reached:
+                    actual_block_id = self.api_server_client.get_block_id(height)
+                    if block_id.lower() != actual_block_id.lower():
+                        if actual_tip_height - height >= MAX_REORG_DEPTH:
+                            self.touch_flag(ENDED_UP_ON_A_FORK_FLAG_NAME)
+
+                        if fresh_block_reached:
+                            log.info(f"Fresh block on a stale chain reached (height = {height})")
+                            return False
+
+                if actual_tip_height_reached:
+                    log_func = log.info if height <= actual_tip_height + 1 else log.warning
+                    extra = (
+                        "" if height == actual_tip_height
+                        else f" (the API server is {height-actual_tip_height} block(s) behind)"
                     )
+                    log_func(f"Tip reached, height = {height}{extra}")
                     return False
 
-                actual_block_id = self.api_server_client.get_block_id(height)
-                if block_id.lower() != actual_block_id.lower():
+            elif (stale_block_received_match := NODE_OUTPUT_LINE_STALE_BLOCK_RECEIVED_REGEX.search(line)) is not None:
+                block_id = stale_block_received_match.group("block_id")
+                height = int(stale_block_received_match.group("height"))
+
+                log.warn(f"Stale block received at height {height}: {block_id}")
+
+                if actual_tip_height - height >= MAX_REORG_DEPTH:
+                    # Note: this may mean 2 things:
+                    # a) If we're on the proper chain, then we've found a peer who is on
+                    #    a fork, in which case we definitely want to create this flag.
+                    # b) If we're on a fork, then the stale block may be from the proper
+                    #    chain, in which case the flag creation is redundant, because the code
+                    #    above or below should catch this situation; but it's not harmful either.
                     self.touch_flag(
-                        POTENTIAL_REORGS_FLAG_NAME,
-                        f"height={height}, node block id={block_id}, api srv block id={actual_block_id}"
+                        STALE_BLOCK_BELOW_REORG_LIMIT_FLAG_NAME,
+                        f"height={height}, block id={block_id}"
                     )
+            else:
+                seconds_since_last_tip = (
+                    cur_seconds_since_epoch - last_tip_arrival_time
+                    if last_tip_arrival_time is not None else 0
+                )
 
-                    # Check if the block is fresh enough
-                    if timestamp >= cur_seconds_since_epoch - 120:
-                        log.info(f"Fresh block on a stale chain reached (height = {height})")
+                # Note: the reason for not receiving any blocks may be that we've already banned
+                # all or most of the potential peers. But if we're on a stale chain, then we may
+                # not receive any more blocks, so we have to stop.
+                # We'll also stop if some flags have already been created.
+
+                if seconds_since_last_tip >= 120:
+                    chainstate_info = self.node_rpc_client.get_chainstate_info()
+                    tip_id = chainstate_info.best_block_id
+                    tip_height = chainstate_info.best_block_height
+
+                    if tip_height != 0:
+                        actual_block_id = self.api_server_client.get_block_id(tip_height)
+
+                        if tip_id.lower() != actual_block_id.lower():
+                            self.touch_flag(NO_INCOMING_BLOCKS_WHILE_ON_STALE_CHAIN_FLAG_NAME)
+                            return False
+
+                    if self.have_flags():
+                        log.info("Exiting because we haven't received any blocks in a while, but some flags already exist")
                         return False
-
-                    # Check if we haven't seen a block in awhile
-                    if seconds_without_blocks >= 120:
-                        log.info(f"No incoming blocks while on stale chain (height = {height})")
-                        return False
-
-                if height == actual_tip_height:
-                    log.info(f"Tip reached, height = {height}")
-                    return False
 
             return True
 
@@ -293,18 +343,21 @@ class Handler():
 
             while True:
                 try:
-                    line = node_proc_stdout_queue.get()
+                    try:
+                        line = node_proc_stdout_queue.get(timeout=10)
 
-                    if NODE_OUTPUT_LINE_TO_PRINT_REGEX.search(line) is not None:
-                        stdout_prefix = colored("node> ", NODE_OUTPUT_PREFIX_COLOR)
-                        CONSOLE_PRINTER.print_to_stderr(f"{stdout_prefix} {line}", end="")
+                        if NODE_OUTPUT_LINE_TO_PRINT_REGEX.search(line) is not None:
+                            stdout_prefix = colored("node> ", NODE_OUTPUT_PREFIX_COLOR)
+                            CONSOLE_PRINTER.print_to_stderr(f"{stdout_prefix} {line}", end="")
 
-                    if not node_started and NODE_STARTUP_OUTPUT_LINE_REGEX.search(line) is not None:
-                        node_started = True
-                        set_status_and_debug_log("Node started")
-                        on_node_started()
+                        if not node_started and NODE_STARTUP_OUTPUT_LINE_REGEX.search(line) is not None:
+                            node_started = True
+                            set_status_and_debug_log("Node started")
+                            on_node_started()
+                    except queue.Empty:
+                        line = None
 
-                    if not handle_node_output_line(line):
+                    if not on_node_output_line_or_timeout(line):
                         break
                 except queue.ShutDown:
                     # This means that the node has exited prematurely. But we check for this
@@ -321,8 +374,8 @@ class Handler():
             on_attempt_completion()
 
         finally:
-            if last_handled_height is not None:
-                log.debug(f"Last handled height: {last_handled_height}")
+            if last_tip_height is not None:
+                log.debug(f"Last handled tip height: {last_tip_height}")
 
             set_status_and_debug_log("Terminating the node")
 
@@ -347,7 +400,7 @@ class Handler():
         self.save_peer_db()
 
         # If the script has created some flags, save the directory
-        if len(os.listdir(self.cur_attempt_flags_dir)) > 0:
+        if self.have_flags():
             os.makedirs(self.saved_attempts_dir, exist_ok=True)
 
             backup_dir_name = datetime.today().strftime("%Y-%m-%d_%H-%M-%S")
@@ -362,6 +415,9 @@ class Handler():
         else:
             log.info("Sync iteration ended without issues, removing the attempt's dir")
             shutil.rmtree(self.cur_attempt_dir)
+
+    def have_flags(self):
+        return len(os.listdir(self.cur_attempt_flags_dir)) > 0
 
     # Return the list of ip addresses we want to ban and the end of a sync attempt,
     # to prevent syncing with the same peers again and again.
