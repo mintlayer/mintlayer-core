@@ -56,7 +56,7 @@ use common::{
                 classical_multisig::authorize_classical_multisig::{
                     sign_classical_multisig_spending, AuthorizedClassicalMultisigSpend,
                 },
-                htlc::produce_uniparty_signature_for_htlc_input,
+                htlc::produce_uniparty_signature_for_htlc_spending,
                 standard_signature::StandardInputSignature,
                 InputWitness,
             },
@@ -826,7 +826,7 @@ pub fn encode_witness_htlc_secret(
     let secret =
         HtlcSecret::decode_all(&mut &secret[..]).map_err(Error::InvalidHtlcSecretEncoding)?;
 
-    let witness = produce_uniparty_signature_for_htlc_input(
+    let witness = produce_uniparty_signature_for_htlc_spending(
         &private_key,
         sighashtype.into(),
         destination,

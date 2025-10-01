@@ -31,7 +31,7 @@ use common::{
                     },
                     encode_decode_multisig_spend::{decode_multisig_spend, encode_multisig_spend},
                 },
-                htlc::produce_uniparty_signature_for_htlc_input,
+                htlc::produce_uniparty_signature_for_htlc_spending,
                 standard_signature::StandardInputSignature,
                 InputWitness,
             },
@@ -162,7 +162,7 @@ impl SoftwareSigner {
                     .map(|private_key| {
                         let sighash_type = SigHashType::all();
                         match htlc_secret {
-                            Some(htlc_secret) => produce_uniparty_signature_for_htlc_input(
+                            Some(htlc_secret) => produce_uniparty_signature_for_htlc_spending(
                                 &private_key,
                                 sighash_type,
                                 destination.clone(),

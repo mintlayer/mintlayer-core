@@ -23,7 +23,7 @@ use common::{
         signature::{
             inputsig::{
                 classical_multisig::authorize_classical_multisig::AuthorizedClassicalMultisigSpend,
-                htlc::produce_classical_multisig_signature_for_htlc_input,
+                htlc::produce_classical_multisig_signature_for_htlc_refunding,
             },
             sighash::{
                 input_commitments::SighashInputCommitment, sighashtype::SigHashType, signature_hash,
@@ -564,7 +564,7 @@ async fn timelocked_htlc_refund(
         authorization
     };
 
-    let input_sign = produce_classical_multisig_signature_for_htlc_input(
+    let input_sign = produce_classical_multisig_signature_for_htlc_refunding(
         &chain_config,
         &authorization,
         SigHashType::all(),

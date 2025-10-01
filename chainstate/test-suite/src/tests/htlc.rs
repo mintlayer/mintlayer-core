@@ -29,8 +29,9 @@ use common::{
                 authorize_hashed_timelock_contract_spend::AuthorizedHashedTimelockContractSpend,
                 classical_multisig::authorize_classical_multisig::AuthorizedClassicalMultisigSpend,
                 htlc::{
-                    produce_classical_multisig_signature_for_htlc_input,
-                    produce_uniparty_signature_for_htlc_input,
+                    produce_classical_multisig_signature_for_htlc_refunding,
+                    produce_uniparty_signature_for_htlc_refunding,
+                    produce_uniparty_signature_for_htlc_spending,
                 },
                 standard_signature::StandardInputSignature,
             },
@@ -52,7 +53,7 @@ use randomness::CryptoRng;
 use serialization::Encode;
 use test_utils::token_utils::{random_token_issuance, random_token_issuance_v1};
 use tx_verifier::{
-    error::{InputCheckError, TranslationError},
+    error::{InputCheckError, TimelockError, TranslationError},
     input_check::HashlockError,
 };
 
@@ -78,7 +79,7 @@ impl TestFixture {
         }
     }
 
-    fn create_htlc(
+    fn create_htlc_with_multisig_refund_key(
         &self,
         chain_config: &ChainConfig,
     ) -> (HashedTimelockContract, ClassicMultisigChallenge) {
@@ -101,6 +102,18 @@ impl TestFixture {
         };
         (htlc, refund_challenge)
     }
+
+    fn create_htlc_with_single_sig_refund_key(&self) -> HashedTimelockContract {
+        let alice_pk = PublicKey::from_private_key(&self.alice_sk);
+        let bob_pk = PublicKey::from_private_key(&self.bob_sk);
+
+        HashedTimelockContract {
+            secret_hash: self.secret.hash(),
+            spend_key: Destination::PublicKeyHash((&bob_pk).into()),
+            refund_timelock: OutputTimeLock::ForSeconds(200),
+            refund_key: Destination::PublicKeyHash((&alice_pk).into()),
+        }
+    }
 }
 
 #[rstest]
@@ -114,7 +127,7 @@ fn spend_htlc_with_secret(#[case] seed: Seed) {
 
         let test_fixture = TestFixture::new(&mut rng);
 
-        let (htlc, _) = test_fixture.create_htlc(&chain_config);
+        let (htlc, _) = test_fixture.create_htlc_with_multisig_refund_key(&chain_config);
         let tx_1 = TransactionBuilder::new()
             .add_input(
                 TxInput::from_utxo(chain_config.genesis_block_id().into(), 0),
@@ -146,7 +159,7 @@ fn spend_htlc_with_secret(#[case] seed: Seed) {
                 .build()
                 .take_transaction();
 
-            let input_sign = produce_uniparty_signature_for_htlc_input(
+            let input_sign = produce_uniparty_signature_for_htlc_spending(
                 &test_fixture.alice_sk,
                 SigHashType::all(),
                 Destination::PublicKeyHash(
@@ -241,7 +254,7 @@ fn spend_htlc_with_secret(#[case] seed: Seed) {
 
             let random_secret = HtlcSecret::new_from_rng(&mut rng);
 
-            let input_sign = produce_uniparty_signature_for_htlc_input(
+            let input_sign = produce_uniparty_signature_for_htlc_spending(
                 &test_fixture.bob_sk,
                 SigHashType::all(),
                 Destination::PublicKeyHash(
@@ -285,7 +298,7 @@ fn spend_htlc_with_secret(#[case] seed: Seed) {
             .build()
             .take_transaction();
 
-        let input_sign = produce_uniparty_signature_for_htlc_input(
+        let input_sign = produce_uniparty_signature_for_htlc_spending(
             &test_fixture.bob_sk,
             SigHashType::all(),
             Destination::PublicKeyHash((&PublicKey::from_private_key(&test_fixture.bob_sk)).into()),
@@ -309,9 +322,7 @@ fn spend_htlc_with_secret(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn refund_htlc(#[case] seed: Seed) {
-    use tx_verifier::error::TimelockError;
-
+fn refund_htlc_multisig(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = test_utils::random::make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
@@ -319,7 +330,8 @@ fn refund_htlc(#[case] seed: Seed) {
 
         let test_fixture = TestFixture::new(&mut rng);
 
-        let (htlc, refund_challenge) = test_fixture.create_htlc(&chain_config);
+        let (htlc, refund_challenge) =
+            test_fixture.create_htlc_with_multisig_refund_key(&chain_config);
         let tx_1 = TransactionBuilder::new()
             .add_input(
                 TxInput::from_utxo(chain_config.genesis_block_id().into(), 0),
@@ -374,7 +386,7 @@ fn refund_htlc(#[case] seed: Seed) {
                 authorization
             };
 
-            let input_sign = produce_classical_multisig_signature_for_htlc_input(
+            let input_sign = produce_classical_multisig_signature_for_htlc_refunding(
                 &chain_config,
                 &authorization,
                 SigHashType::all(),
@@ -557,7 +569,7 @@ fn refund_htlc(#[case] seed: Seed) {
             authorization
         };
 
-        let input_sign = produce_classical_multisig_signature_for_htlc_input(
+        let input_sign = produce_classical_multisig_signature_for_htlc_refunding(
             &chain_config,
             &authorization,
             SigHashType::all(),
@@ -570,6 +582,168 @@ fn refund_htlc(#[case] seed: Seed) {
         tf.make_block_builder()
             .add_transaction(
                 SignedTransaction::new(tx, vec![InputWitness::Standard(input_sign)]).unwrap(),
+            )
+            .build_and_process(&mut rng)
+            .unwrap();
+    });
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn refund_htlc_single_sig(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = test_utils::random::make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+        let chain_config = tf.chainstate.get_chain_config().clone();
+
+        let test_fixture = TestFixture::new(&mut rng);
+
+        let htlc = test_fixture.create_htlc_with_single_sig_refund_key();
+        let tx_1 = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_utxo(chain_config.genesis_block_id().into(), 0),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Htlc(
+                OutputValue::Coin(Amount::from_atoms(100)),
+                Box::new(htlc),
+            ))
+            .build();
+        let tx_1_id = tx_1.transaction().get_id();
+
+        tf.make_block_builder()
+            .add_transaction(tx_1.clone())
+            .build_and_process(&mut rng)
+            .unwrap();
+
+        // Refund can't be spent until timelock is passed
+        {
+            let tx = TransactionBuilder::new()
+                .add_input(
+                    TxInput::from_utxo(tx_1_id.into(), 0),
+                    InputWitness::NoSignature(None),
+                )
+                .add_output(TxOutput::Transfer(
+                    OutputValue::Coin(Amount::from_atoms(100)),
+                    Destination::AnyoneCanSpend,
+                ))
+                .build()
+                .take_transaction();
+
+            let input_sig = produce_uniparty_signature_for_htlc_refunding(
+                &test_fixture.alice_sk,
+                SigHashType::all(),
+                Destination::PublicKeyHash(
+                    (&PublicKey::from_private_key(&test_fixture.alice_sk)).into(),
+                ),
+                &tx,
+                &[SighashInputCommitment::Utxo(Cow::Borrowed(&tx_1.transaction().outputs()[0]))],
+                0,
+                &mut rng,
+            )
+            .unwrap();
+
+            let result = tf
+                .make_block_builder()
+                .add_transaction(
+                    SignedTransaction::new(tx, vec![InputWitness::Standard(input_sig)]).unwrap(),
+                )
+                .build_and_process(&mut rng);
+            let best_block_timestamp = tf.best_block_index().block_timestamp();
+            assert_eq!(
+                result.unwrap_err(),
+                ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                    ConnectTransactionError::InputCheck(InputCheckError::new(
+                        0,
+                        tx_verifier::error::ScriptError::Timelock(TimelockError::TimestampLocked(
+                            best_block_timestamp,
+                            best_block_timestamp.add_int_seconds(200).unwrap(),
+                        ))
+                    ))
+                ))
+            );
+        }
+
+        tf.progress_time_seconds_since_epoch(200);
+        tf.make_block_builder().build_and_process(&mut rng).unwrap();
+        tf.make_block_builder().build_and_process(&mut rng).unwrap();
+
+        // Bob can't spend the output via refund even after the timelock has passed
+        {
+            let tx = TransactionBuilder::new()
+                .add_input(
+                    TxInput::from_utxo(tx_1_id.into(), 0),
+                    InputWitness::NoSignature(None),
+                )
+                .add_output(TxOutput::Transfer(
+                    OutputValue::Coin(Amount::from_atoms(100)),
+                    Destination::AnyoneCanSpend,
+                ))
+                .build()
+                .take_transaction();
+
+            let input_sig = produce_uniparty_signature_for_htlc_refunding(
+                &test_fixture.bob_sk,
+                SigHashType::all(),
+                Destination::PublicKeyHash(
+                    (&PublicKey::from_private_key(&test_fixture.bob_sk)).into(),
+                ),
+                &tx,
+                &[SighashInputCommitment::Utxo(Cow::Borrowed(&tx_1.transaction().outputs()[0]))],
+                0,
+                &mut rng,
+            )
+            .unwrap();
+
+            let result = tf
+                .make_block_builder()
+                .add_transaction(
+                    SignedTransaction::new(tx, vec![InputWitness::Standard(input_sig)]).unwrap(),
+                )
+                .build_and_process(&mut rng);
+            assert_eq!(
+                result.unwrap_err(),
+                ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                    ConnectTransactionError::InputCheck(InputCheckError::new(
+                        0,
+                        tx_verifier::error::ScriptError::Signature(
+                            DestinationSigError::PublicKeyToHashMismatch
+                        )
+                    ))
+                ))
+            );
+        }
+
+        // Success case
+        let tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_utxo(tx_1_id.into(), 0),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin(Amount::from_atoms(100)),
+                Destination::AnyoneCanSpend,
+            ))
+            .build()
+            .take_transaction();
+
+        let input_sig = produce_uniparty_signature_for_htlc_refunding(
+            &test_fixture.alice_sk,
+            SigHashType::all(),
+            Destination::PublicKeyHash(
+                (&PublicKey::from_private_key(&test_fixture.alice_sk)).into(),
+            ),
+            &tx,
+            &[SighashInputCommitment::Utxo(Cow::Borrowed(&tx_1.transaction().outputs()[0]))],
+            0,
+            &mut rng,
+        )
+        .unwrap();
+
+        tf.make_block_builder()
+            .add_transaction(
+                SignedTransaction::new(tx, vec![InputWitness::Standard(input_sig)]).unwrap(),
             )
             .build_and_process(&mut rng)
             .unwrap();
@@ -704,7 +878,7 @@ fn spend_tokens(#[case] seed: Seed) {
             tf.chainstate.get_chain_config().token_supply_change_fee(BlockHeight::new(0));
 
         let test_fixture = TestFixture::new(&mut rng);
-        let (htlc, _) = test_fixture.create_htlc(&chain_config);
+        let (htlc, _) = test_fixture.create_htlc_with_multisig_refund_key(&chain_config);
 
         // issue token v0
         let token_v0_issuance_tx = TransactionBuilder::new()
@@ -829,7 +1003,7 @@ fn spend_tokens(#[case] seed: Seed) {
             .build()
             .take_transaction();
 
-        let input_sign = produce_uniparty_signature_for_htlc_input(
+        let input_sign = produce_uniparty_signature_for_htlc_spending(
             &test_fixture.bob_sk,
             SigHashType::all(),
             Destination::PublicKeyHash((&PublicKey::from_private_key(&test_fixture.bob_sk)).into()),

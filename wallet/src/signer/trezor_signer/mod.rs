@@ -38,7 +38,7 @@ use common::{
                     },
                     multisig_partial_signature::{self, PartiallySignedMultisigChallenge},
                 },
-                htlc::produce_uniparty_signature_for_htlc_input,
+                htlc::produce_uniparty_signature_for_htlc_spending,
                 standard_signature::StandardInputSignature,
                 InputWitness,
             },
@@ -883,7 +883,7 @@ fn sign_input_with_standalone_key<AuxP: SigAuxDataProvider + ?Sized>(
 ) -> SignerResult<InputWitness> {
     let sighash_type = SigHashType::all();
     match secret {
-        Some(htlc_secret) => produce_uniparty_signature_for_htlc_input(
+        Some(htlc_secret) => produce_uniparty_signature_for_htlc_spending(
             &standalone.private_key,
             sighash_type,
             destination.clone(),

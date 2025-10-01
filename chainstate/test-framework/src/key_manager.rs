@@ -26,7 +26,7 @@ use common::{
                     sign_classical_multisig_spending, AuthorizedClassicalMultisigSpend,
                     ClassicalMultisigCompletionStatus,
                 },
-                htlc::produce_classical_multisig_signature_for_htlc_input,
+                htlc::produce_classical_multisig_signature_for_htlc_refunding,
                 standard_signature::StandardInputSignature,
                 InputWitness,
             },
@@ -217,7 +217,7 @@ impl KeyManager {
                     match res {
                         ClassicalMultisigCompletionStatus::Complete(sigs) => {
                             let sig = if input_utxo.is_some_and(is_htlc_output) {
-                                produce_classical_multisig_signature_for_htlc_input(
+                                produce_classical_multisig_signature_for_htlc_refunding(
                                     chain_config,
                                     &sigs,
                                     sighash_type,
