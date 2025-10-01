@@ -56,7 +56,10 @@ use common::{
                 classical_multisig::authorize_classical_multisig::{
                     sign_classical_multisig_spending, AuthorizedClassicalMultisigSpend,
                 },
-                htlc::{produce_uniparty_signature_for_htlc_refunding, produce_uniparty_signature_for_htlc_spending},
+                htlc::{
+                    produce_uniparty_signature_for_htlc_refunding,
+                    produce_uniparty_signature_for_htlc_spending,
+                },
                 standard_signature::StandardInputSignature,
                 InputWitness,
             },
@@ -783,7 +786,7 @@ pub fn encode_witness(
 }
 
 /// Sign the specified HTLC input of the transaction and encode the signature as InputWitness.
-/// 
+///
 /// This function must be used for HTLC spending.
 ///
 /// `input_utxos` and `additional_info` have the same format and requirements as in `encode_witness`.
@@ -888,7 +891,7 @@ pub fn multisig_challenge_to_address(
 /// Sign the specified HTLC input of the transaction and encode the signature as InputWitness.
 ///
 /// This function must be used for HTLC refunding when the refund address is a multisig one.
-/// 
+///
 /// `key_index` parameter is an index of the public key in the multisig challenge corresponding to
 /// the specified private key.
 /// `input_witness` parameter can be either empty or a result of previous calls to this function.

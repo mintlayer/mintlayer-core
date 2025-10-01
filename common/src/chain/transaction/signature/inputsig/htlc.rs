@@ -31,7 +31,10 @@ use super::{
 };
 
 #[allow(clippy::too_many_arguments)]
-pub fn produce_uniparty_signature_for_htlc_spending<T: Signable, AuxP: SigAuxDataProvider + ?Sized>(
+pub fn produce_uniparty_signature_for_htlc_spending<
+    T: Signable,
+    AuxP: SigAuxDataProvider + ?Sized,
+>(
     private_key: &crypto::key::PrivateKey,
     sighash_type: SigHashType,
     outpoint_destination: Destination,
@@ -87,7 +90,10 @@ pub fn produce_classical_multisig_signature_for_htlc_refunding(
     ))
 }
 
-pub fn produce_uniparty_signature_for_htlc_refunding<T: Signable, AuxP: SigAuxDataProvider + ?Sized>(
+pub fn produce_uniparty_signature_for_htlc_refunding<
+    T: Signable,
+    AuxP: SigAuxDataProvider + ?Sized,
+>(
     private_key: &crypto::key::PrivateKey,
     sighash_type: SigHashType,
     outpoint_destination: Destination,

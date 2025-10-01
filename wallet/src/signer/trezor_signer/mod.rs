@@ -38,19 +38,17 @@ use common::{
                     },
                     multisig_partial_signature::{self, PartiallySignedMultisigChallenge},
                 },
-                htlc::produce_uniparty_signature_for_htlc_spending,
                 standard_signature::StandardInputSignature,
                 InputWitness,
             },
-            sighash::{
-                input_commitments::SighashInputCommitment, sighashtype::SigHashType, signature_hash,
-            },
+            sighash::{sighashtype::SigHashType, signature_hash},
             DestinationSigError,
         },
         timelock::OutputTimeLock,
         tokens::{NftIssuance, TokenId, TokenIssuance, TokenTotalSupply},
-        AccountCommand, AccountSpending, ChainConfig, Destination, OrderAccountCommand,
-        OutPointSourceId, SignedTransactionIntent, Transaction, TxInput, TxOutput,
+        AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, ChainConfig, Destination,
+        OrderAccountCommand, OutPointSourceId, SighashInputCommitmentVersion,
+        SignedTransactionIntent, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{BlockHeight, Idable, H256},
 };
@@ -106,10 +104,11 @@ use wallet_types::{
 
 use crate::{
     key_chain::{make_account_path, AccountKeyChainImplHardware, AccountKeyChains, FoundPubKey},
+    signer::utils::produce_uniparty_signature_for_input,
     Account, WalletError, WalletResult,
 };
 
-use super::{Signer, SignerError, SignerProvider, SignerResult};
+use super::{utils::is_htlc_utxo, Signer, SignerError, SignerProvider, SignerResult};
 
 const REQUIRED_FIRMWARE_MAJOR_VERSION: u32 = 1;
 
@@ -540,10 +539,10 @@ impl Signer for TrezorSigner {
             .1
             .sighash_input_commitment_version();
         let input_commitment_version = match input_commitment_version {
-            common::chain::SighashInputCommitmentVersion::V0 => {
+            SighashInputCommitmentVersion::V0 => {
                 trezor_client::client::SighashInputCommitmentsVersion::V0
             }
-            common::chain::SighashInputCommitmentVersion::V1 => {
+            SighashInputCommitmentVersion::V1 => {
                 trezor_client::client::SighashInputCommitmentsVersion::V1
             }
         };
@@ -573,12 +572,12 @@ impl Signer for TrezorSigner {
                 ptx.htlc_secrets()
             )
             .enumerate()
-            .map(|(input_index, (witness, input_utxo, destination, secret))| -> SignerResult<_> {
+            .map(|(input_index, (witness, input_utxo, destination, htlc_secret))| -> SignerResult<_> {
                 let is_htlc_input = input_utxo.as_ref().is_some_and(is_htlc_utxo);
                 let make_witness = |sig: StandardInputSignature| {
                     let sig = if is_htlc_input {
                         let sighash_type = sig.sighash_type();
-                        let spend = if let Some(htlc_secret) = secret {
+                        let spend = if let Some(htlc_secret) = htlc_secret {
                             AuthorizedHashedTimelockContractSpend::Secret(
                                 htlc_secret.clone(),
                                 sig.into_raw_signature(),
@@ -597,12 +596,13 @@ impl Signer for TrezorSigner {
                     InputWitness::Standard(sig)
                 };
 
-                let sign_with_standalone_private_key = |standalone, destination| {
-                    sign_input_with_standalone_key(
-                        secret,
-                        standalone,
-                        destination,
-                        &ptx,
+                let sign_with_standalone_private_key = |standalone: &StandaloneInput, destination: &Destination| {
+                    produce_uniparty_signature_for_input(
+                        is_htlc_input,
+                        htlc_secret.clone(),
+                        &standalone.private_key,
+                        destination.clone(),
+                        ptx.tx(),
                         &input_commitments,
                         input_index,
                         self.sig_aux_data_provider.lock().expect("poisoned mutex").as_mut()
@@ -724,11 +724,12 @@ impl Signer for TrezorSigner {
                                 None => return Ok((None, SignatureStatus::NotSigned, SignatureStatus::NotSigned))
                             };
 
-                            let sig = sign_input_with_standalone_key(
-                                secret,
-                                standalone,
-                                destination,
-                                &ptx,
+                            let sig = produce_uniparty_signature_for_input(
+                                is_htlc_input,
+                                htlc_secret.clone(),
+                                &standalone.private_key,
+                                destination.clone(),
+                                ptx.tx(),
                                 &input_commitments,
                                 input_index,
                                 self.sig_aux_data_provider.lock().expect("poisoned mutex").as_mut()
@@ -872,41 +873,6 @@ impl Signer for TrezorSigner {
     }
 }
 
-fn sign_input_with_standalone_key<AuxP: SigAuxDataProvider + ?Sized>(
-    secret: &Option<common::chain::htlc::HtlcSecret>,
-    standalone: &StandaloneInput,
-    destination: &Destination,
-    ptx: &PartiallySignedTransaction,
-    input_commitments: &[SighashInputCommitment],
-    input_index: usize,
-    sig_aux_data_provider: &mut AuxP,
-) -> SignerResult<InputWitness> {
-    let sighash_type = SigHashType::all();
-    match secret {
-        Some(htlc_secret) => produce_uniparty_signature_for_htlc_spending(
-            &standalone.private_key,
-            sighash_type,
-            destination.clone(),
-            ptx.tx(),
-            input_commitments,
-            input_index,
-            htlc_secret.clone(),
-            sig_aux_data_provider,
-        ),
-        None => StandardInputSignature::produce_uniparty_signature_for_input(
-            &standalone.private_key,
-            sighash_type,
-            destination.clone(),
-            ptx.tx(),
-            input_commitments,
-            input_index,
-            sig_aux_data_provider,
-        ),
-    }
-    .map(InputWitness::Standard)
-    .map_err(SignerError::SigningError)
-}
-
 fn to_trezor_input_msgs(
     ptx: &PartiallySignedTransaction,
     tokens_additional_info: &TokensAdditionalInfo,
@@ -956,7 +922,7 @@ fn to_trezor_input_msgs(
 fn to_trezor_account_command_input(
     chain_config: &ChainConfig,
     address_paths: Vec<MintlayerAddressPath>,
-    nonce: &common::chain::AccountNonce,
+    nonce: &AccountNonce,
     command: &AccountCommand,
     ptx_additional_info: &PtxAdditionalInfo,
     tokens_additional_info: &TokensAdditionalInfo,
@@ -1164,7 +1130,7 @@ fn to_trezor_order_command_input(
 fn to_trezor_account_input(
     chain_config: &ChainConfig,
     address_paths: Vec<MintlayerAddressPath>,
-    outpoint: &common::chain::AccountOutPoint,
+    outpoint: &AccountOutPoint,
 ) -> SignerResult<MintlayerTxInput> {
     let mut inp_req = MintlayerAccountTxInput::new();
     inp_req.addresses = address_paths;
@@ -1184,7 +1150,7 @@ fn to_trezor_account_input(
 }
 
 fn to_trezor_utxo_input(
-    outpoint: &common::chain::UtxoOutPoint,
+    outpoint: &UtxoOutPoint,
     address_paths: Vec<MintlayerAddressPath>,
 ) -> SignerResult<MintlayerTxInput> {
     let mut inp_req = MintlayerUtxoTxInput::new();
@@ -1316,7 +1282,18 @@ fn to_trezor_utxo_msgs(
                     ptx.additional_info(),
                     tokens_additional_info,
                 )?;
-                utxos.entry(id).or_default().insert(outpoint.output_index(), out);
+
+                let entry_replaced =
+                    utxos.entry(id).or_default().insert(outpoint.output_index(), out).is_some();
+                // Note: technically this check is redundant, because the tx will be invalid anyway.
+                // But when this happens, it may be rather hard to understand why the trezor signer
+                // produces a different signature compared to the software signer, especially in
+                // tests, where the tx validity is not always fully checked. So it's better to
+                // fail early in such a case.
+                ensure!(
+                    !entry_replaced,
+                    SignerError::DuplicateUtxoInput(outpoint.clone())
+                );
             }
             TxInput::Account(_)
             | TxInput::AccountCommand(_, _)
@@ -1927,24 +1904,6 @@ fn single_signature(
             Ok(Some(single))
         }
         _ => Err(TrezorError::MultipleSignaturesReturned),
-    }
-}
-
-fn is_htlc_utxo(utxo: &TxOutput) -> bool {
-    match utxo {
-        TxOutput::Htlc(_, _) => true,
-
-        TxOutput::Transfer(_, _)
-        | TxOutput::LockThenTransfer(_, _, _)
-        | TxOutput::Burn(_)
-        | TxOutput::CreateStakePool(_, _)
-        | TxOutput::ProduceBlockFromStake(_, _)
-        | TxOutput::CreateDelegationId(_, _)
-        | TxOutput::DelegateStaking(_, _)
-        | TxOutput::IssueFungibleToken(_)
-        | TxOutput::IssueNft(_, _, _)
-        | TxOutput::DataDeposit(_)
-        | TxOutput::CreateOrder(_) => false,
     }
 }
 

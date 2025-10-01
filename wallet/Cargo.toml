@@ -47,6 +47,7 @@ test-utils = { path = "../test-utils" }
 ctor.workspace = true
 lazy_static.workspace = true
 rstest.workspace = true
+secp256k1 = { workspace = true, default-features = false }
 serde_json.workspace = true
 serial_test.workspace = true
 tempfile.workspace = true

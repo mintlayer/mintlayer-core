@@ -21,6 +21,7 @@ use crate::chain::{htlc::HtlcSecret, signature::DestinationSigError};
 
 #[derive(Debug, Encode, Decode, PartialEq, Eq, EnumDiscriminants)]
 #[strum_discriminants(name(AuthorizedHashedTimelockContractSpendTag))]
+// FIXME rename (also search after rename for comments etc)
 pub enum AuthorizedHashedTimelockContractSpend {
     Secret(HtlcSecret, Vec<u8>),
     Multisig(Vec<u8>),

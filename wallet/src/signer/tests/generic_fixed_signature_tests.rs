@@ -17,7 +17,9 @@ use std::{num::NonZeroU8, sync::Arc};
 
 use itertools::{izip, Itertools as _};
 
+use ::secp256k1::schnorr;
 use common::{
+    address::pubkeyhash::PublicKeyHash,
     chain::{
         self,
         block::timestamp::BlockTimestamp,
@@ -956,17 +958,17 @@ pub fn test_fixed_signatures_generic2<MkS, S>(
         SighashInputCommitmentVersion::V0 => {
             let htlc_multisig = {
                 let sigs_hex = [
-                (0, "0ff63e871249f4b6d8de07216617054c71a4b341e11afd405712cc108cb8e315f4b577444a29a81126aab9b7ad426594c2b39e5bc2e11169b1c64e62524620fe"),
-                (1, "cd190e9a746aefb9ccec04a178017db55154f6370993139819ab270e988ff2c510b5bbcd95da31dff124f22b323bc3547ec15045e92552f7a951433c064d07f0"),
-            ];
-                make_htlc_multisig_spend_sig(htlc_multisig_challenge, sigs_hex)
+                    (0, "0ff63e871249f4b6d8de07216617054c71a4b341e11afd405712cc108cb8e315f4b577444a29a81126aab9b7ad426594c2b39e5bc2e11169b1c64e62524620fe"),
+                    (1, "cd190e9a746aefb9ccec04a178017db55154f6370993139819ab270e988ff2c510b5bbcd95da31dff124f22b323bc3547ec15045e92552f7a951433c064d07f0"),
+                ];
+                make_htlc_multisig_refund_sig(htlc_multisig_challenge, sigs_hex)
             };
             let multisig = {
                 let sigs_hex = [
-                (1, "e94989eddcbb19eb87a02935a6b9e09e0cb0537d5aadf2d8bb37872949176820970c6d69320712be192805ad4609020237e46e461c0aeb42712f5feaceee5fd8"),
-                (2, "90da875f04bc2db203e5a4c322514bb17d01870a34f40bba5922439580db156c4d9b455ce2b2ceb8e070541fb7a503752dfbc670ac32c858c462044e1ac8e421"),
-                (3, "1ae75282887fcdca2f9cccbca269db14d368fd29658b92e32af98c9488ab6745cfd54dacafc91fcf63dbce69d196716345fd0d9cbcff25ef251286ab1bea025e")
-            ];
+                    (1, "e94989eddcbb19eb87a02935a6b9e09e0cb0537d5aadf2d8bb37872949176820970c6d69320712be192805ad4609020237e46e461c0aeb42712f5feaceee5fd8"),
+                    (2, "90da875f04bc2db203e5a4c322514bb17d01870a34f40bba5922439580db156c4d9b455ce2b2ceb8e070541fb7a503752dfbc670ac32c858c462044e1ac8e421"),
+                    (3, "1ae75282887fcdca2f9cccbca269db14d368fd29658b92e32af98c9488ab6745cfd54dacafc91fcf63dbce69d196716345fd0d9cbcff25ef251286ab1bea025e")
+                ];
                 make_multisig_spend_sig(multisig_challenge, sigs_hex)
             };
 
@@ -982,9 +984,9 @@ pub fn test_fixed_signatures_generic2<MkS, S>(
                     find_pub_key_for_pkh_dest(&decommission_dest, &account1),
                     "60ded17d5efd92ae32a8020bd0fe74aab43e095cb429a86e8b36e91fffa3fc04624e6c57663ab343da3ba6cc3853c4c8e26c0cf36b2b3fd96ba8b9afd6330260",
                 ))),
-                Some(InputWitness::Standard(make_htlc_secret_spend_sig(
+                Some(InputWitness::Standard(make_htlc_pub_key_spend_sig(
                     htlc_secret,
-                    "00765a0a326c9b0e7a4a7f890f6548df021163d25b034d568dbc5354eb11c40b567d0fa9bee9111eb6895d45fe4dec9e96f7bc8da5388a747ed1354b7425780abf",
+                    "765a0a326c9b0e7a4a7f890f6548df021163d25b034d568dbc5354eb11c40b567d0fa9bee9111eb6895d45fe4dec9e96f7bc8da5388a747ed1354b7425780abf",
                 ))),
                 Some(InputWitness::Standard(htlc_multisig)),
                 Some(InputWitness::Standard(multisig)),
@@ -1042,17 +1044,17 @@ pub fn test_fixed_signatures_generic2<MkS, S>(
         SighashInputCommitmentVersion::V1 => {
             let htlc_multisig = {
                 let sigs_hex = [
-                (0, "dbc526968f2506a1682cff368c2bb805f426dffbf85bcfc175b67f97444c0cb7285d1d80f582ae8192f7c329d895182a454735ffa9debbfbdf8517f9f3b5ddfc"),
-                (1, "2a9dabb9953ba0b7fb66b0cad67a569f8df8947b07e41a46b640a0addc19b0131b6b2f46d3d784a5ba66d991b3e3af9ac7d6720c7d80cc6040892226a7b41669"),
-            ];
-                make_htlc_multisig_spend_sig(htlc_multisig_challenge, sigs_hex)
+                    (0, "dbc526968f2506a1682cff368c2bb805f426dffbf85bcfc175b67f97444c0cb7285d1d80f582ae8192f7c329d895182a454735ffa9debbfbdf8517f9f3b5ddfc"),
+                    (1, "2a9dabb9953ba0b7fb66b0cad67a569f8df8947b07e41a46b640a0addc19b0131b6b2f46d3d784a5ba66d991b3e3af9ac7d6720c7d80cc6040892226a7b41669"),
+                ];
+                make_htlc_multisig_refund_sig(htlc_multisig_challenge, sigs_hex)
             };
             let multisig = {
                 let sigs_hex = [
-                (1, "8aacc97858a80bb779b000f18bf82c984977ca2a4d8560ae72421c9cd9cb7b513d35a62123553e0d24c0249eb2e04d2f99fe38eb41505a1081cd2d684a8a45d2"),
-                (2, "c13c5bb22e719b5c7966aa9b58c2ae8e6bf3f848e62df19d38c4d41c7acd9d48eda1e13f18a25c9524904c4866143a95fd963606b5a77979a6dfc04cdebc979d"),
-                (3, "93b5538c13a981dc8d6978361f13627603464de82d45f966de78b829a87eab642087b5bbc5b3aed5a888b8387491fe7fcd27f3e69bf7a70e5d12f004691da173")
-            ];
+                    (1, "8aacc97858a80bb779b000f18bf82c984977ca2a4d8560ae72421c9cd9cb7b513d35a62123553e0d24c0249eb2e04d2f99fe38eb41505a1081cd2d684a8a45d2"),
+                    (2, "c13c5bb22e719b5c7966aa9b58c2ae8e6bf3f848e62df19d38c4d41c7acd9d48eda1e13f18a25c9524904c4866143a95fd963606b5a77979a6dfc04cdebc979d"),
+                    (3, "93b5538c13a981dc8d6978361f13627603464de82d45f966de78b829a87eab642087b5bbc5b3aed5a888b8387491fe7fcd27f3e69bf7a70e5d12f004691da173")
+                ];
                 make_multisig_spend_sig(multisig_challenge, sigs_hex)
             };
 
@@ -1068,9 +1070,9 @@ pub fn test_fixed_signatures_generic2<MkS, S>(
                     find_pub_key_for_pkh_dest(&decommission_dest, &account1),
                     "fb6ca8eb23d55a76284878e59f51c937bcccdbfc17074c248c4b4a39fac50084e072c6b643c297a38c2eb497c6a6b45f455be62cc7ff5d72dcfd75bc6d3f3643",
                 ))),
-                Some(InputWitness::Standard(make_htlc_secret_spend_sig(
+                Some(InputWitness::Standard(make_htlc_pub_key_spend_sig(
                     htlc_secret,
-                    "004f3a9f36d2e54da540e6a5d5500649ef38abd9d89bcecb8a5558fe5316fcdd5efa867f26dd99595004453dd92647b11f487769478eb8b62b2826d17b29a24dde",
+                    "4f3a9f36d2e54da540e6a5d5500649ef38abd9d89bcecb8a5558fe5316fcdd5efa867f26dd99595004453dd92647b11f487769478eb8b62b2826d17b29a24dde",
                 ))),
                 Some(InputWitness::Standard(htlc_multisig)),
                 Some(InputWitness::Standard(multisig)),
@@ -1135,66 +1137,477 @@ pub fn test_fixed_signatures_generic2<MkS, S>(
     }
 }
 
+// A fixed signature test checking various kinds on htlc refunds:
+// 1) single sig pub key or pub key hash, the key owned by the wallet or standalone;
+// 2) multisig (which is also tested in test_fixed_signatures_generic2, so here it's mostly
+// for completeness).
+// We also add one non-htlc input (pool decommissioning), so that signatures differ for different
+// input commitment versions.
+pub fn test_fixed_signatures_generic_htlc_refunding<MkS, S>(
+    rng: &mut (impl Rng + CryptoRng),
+    input_commitments_version: SighashInputCommitmentVersion,
+    make_signer: MkS,
+) where
+    MkS: Fn(Arc<ChainConfig>, U31) -> S,
+    S: Signer,
+{
+    // The actual heights don't matter as long as tx block height is at the correct side of the fork.
+    let (sighash_input_commitment_version_fork_height, tx_block_height) = {
+        let fork_height = rng.gen_range(1000..2000);
+        let tx_block_height = match input_commitments_version {
+            SighashInputCommitmentVersion::V0 => rng.gen_range(1..fork_height),
+            SighashInputCommitmentVersion::V1 => rng.gen_range(fork_height..fork_height * 2),
+        };
+        (
+            BlockHeight::new(fork_height),
+            BlockHeight::new(tx_block_height),
+        )
+    };
+
+    let chain_config = Arc::new(
+        chain::config::Builder::new(ChainType::Regtest)
+            .chainstate_upgrades(
+                NetUpgrades::initialize(vec![
+                    (
+                        BlockHeight::zero(),
+                        ChainstateUpgradeBuilder::latest()
+                            .sighash_input_commitment_version(SighashInputCommitmentVersion::V0)
+                            .build(),
+                    ),
+                    (
+                        sighash_input_commitment_version_fork_height,
+                        ChainstateUpgradeBuilder::latest()
+                            .sighash_input_commitment_version(SighashInputCommitmentVersion::V1)
+                            .build(),
+                    ),
+                ])
+                .unwrap(),
+            )
+            .build(),
+    );
+
+    let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
+    let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
+
+    let mut account1 = account_from_mnemonic(&chain_config, &mut db_tx, DEFAULT_ACCOUNT_INDEX);
+    let mut account2 = account_from_mnemonic(&chain_config, &mut db_tx, U31::ONE);
+
+    let standalone_sk = PRV_KEY_A.clone();
+    let standalone_pk = PUB_KEY_A.clone();
+    let standalone_pk_dest = Destination::PublicKey(standalone_pk.clone());
+    let standalone_pkh_dest = Destination::PublicKeyHash(PublicKeyHash::from(&standalone_pk));
+
+    account1.add_standalone_private_key(&mut db_tx, standalone_sk, None).unwrap();
+
+    let decommissioned_pool_id = PoolId::new(hash_encoded(&"some pool 1"));
+    let decommissioned_pool_balance = Amount::from_atoms(100);
+    let decommission_dest =
+        new_dest_from_account(&mut account1, &mut db_tx, KeyPurpose::ReceiveFunds);
+    let decommissioned_pool_data = PoolData {
+        utxo_outpoint: UtxoOutPoint::new(
+            Id::<Transaction>::new(hash_encoded(&"some tx")).into(),
+            1,
+        ),
+        creation_block: BlockInfo {
+            height: BlockHeight::new(123),
+            timestamp: BlockTimestamp::from_int_seconds(234),
+        },
+        decommission_key: decommission_dest.clone(),
+        stake_destination: bogus_destination("bogus destination 1"),
+        vrf_public_key: bogus_vrf_pub_key("bogus vrf key 1"),
+        margin_ratio_per_thousand: PerThousand::new(11).unwrap(),
+        cost_per_block: Amount::from_atoms(111),
+    };
+
+    let account1_pkh_dest = new_dest_from_account(&mut account1, &mut db_tx, KeyPurpose::Change);
+    let account1_pk = find_pub_key_for_pkh_dest(&account1_pkh_dest, &account1).clone();
+    let account1_pk_dest = Destination::PublicKey(account1_pk.clone());
+
+    let account2_pkh_dest = new_dest_from_account(&mut account2, &mut db_tx, KeyPurpose::Change);
+    let account2_pk = find_pub_key_for_pkh_dest(&account2_pkh_dest, &account2).clone();
+
+    let utxos = [TxOutput::ProduceBlockFromStake(
+        bogus_destination("bogus destination 2"),
+        decommissioned_pool_id,
+    )];
+
+    let inputs: Vec<TxInput> = (0..utxos.len())
+        .map(|i| {
+            let source_id = Id::<Transaction>::new(hash_encoded(&format!("input tx {i}"))).into();
+            TxInput::from_utxo(source_id, i as u32)
+        })
+        .collect();
+
+    let source_id: OutPointSourceId =
+        Id::<Transaction>::new(hash_encoded(&"another input tx")).into();
+
+    let (htlc_multisig_dest, htlc_multisig_challenge) = {
+        let challenge = ClassicMultisigChallenge::new(
+            &chain_config,
+            NonZeroU8::new(2).unwrap(),
+            vec![account1_pk.clone(), account2_pk],
+        )
+        .unwrap();
+        let multisig_hash2 =
+            account1.add_standalone_multisig(&mut db_tx, challenge.clone(), None).unwrap();
+        let multisig_hash1 =
+            account2.add_standalone_multisig(&mut db_tx, challenge.clone(), None).unwrap();
+        assert_eq!(multisig_hash1, multisig_hash2);
+
+        (Destination::ClassicMultisig(multisig_hash1), challenge)
+    };
+
+    let htlc_secret = HtlcSecret::new(hash_encoded(&"secret").to_fixed_bytes());
+
+    let htlc1 = HashedTimelockContract {
+        secret_hash: htlc_secret.hash(),
+        spend_key: Destination::PublicKey(SOME_PUB_KEY_1.clone()),
+        refund_timelock: OutputTimeLock::UntilHeight(BlockHeight::new(111)),
+        refund_key: standalone_pk_dest,
+    };
+    let htlc2 = HashedTimelockContract {
+        secret_hash: htlc_secret.hash(),
+        spend_key: Destination::PublicKey(SOME_PUB_KEY_1.clone()),
+        refund_timelock: OutputTimeLock::UntilHeight(BlockHeight::new(222)),
+        refund_key: standalone_pkh_dest,
+    };
+    let htlc3 = HashedTimelockContract {
+        secret_hash: htlc_secret.hash(),
+        spend_key: Destination::PublicKey(SOME_PUB_KEY_1.clone()),
+        refund_timelock: OutputTimeLock::UntilHeight(BlockHeight::new(333)),
+        refund_key: account1_pk_dest,
+    };
+    let htlc4 = HashedTimelockContract {
+        secret_hash: htlc_secret.hash(),
+        spend_key: Destination::PublicKey(SOME_PUB_KEY_1.clone()),
+        refund_timelock: OutputTimeLock::UntilHeight(BlockHeight::new(444)),
+        refund_key: account1_pkh_dest,
+    };
+    let htlc5 = HashedTimelockContract {
+        secret_hash: htlc_secret.hash(),
+        spend_key: Destination::PublicKey(SOME_PUB_KEY_1.clone()),
+        refund_timelock: OutputTimeLock::UntilHeight(BlockHeight::new(555)),
+        refund_key: htlc_multisig_dest,
+    };
+
+    let htlc1_input = TxInput::from_utxo(source_id.clone(), 11);
+    let htlc2_input = TxInput::from_utxo(source_id.clone(), 12);
+    let htlc3_input = TxInput::from_utxo(source_id.clone(), 13);
+    let htlc4_input = TxInput::from_utxo(source_id.clone(), 14);
+    let htlc5_input = TxInput::from_utxo(source_id.clone(), 15);
+    let htlc1_utxo = TxOutput::Htlc(
+        OutputValue::Coin(Amount::from_atoms(100)),
+        Box::new(htlc1.clone()),
+    );
+    let htlc2_utxo = TxOutput::Htlc(
+        OutputValue::Coin(Amount::from_atoms(200)),
+        Box::new(htlc2.clone()),
+    );
+    let htlc3_utxo = TxOutput::Htlc(
+        OutputValue::Coin(Amount::from_atoms(300)),
+        Box::new(htlc3.clone()),
+    );
+    let htlc4_utxo = TxOutput::Htlc(
+        OutputValue::Coin(Amount::from_atoms(400)),
+        Box::new(htlc4.clone()),
+    );
+    let htlc5_utxo = TxOutput::Htlc(
+        OutputValue::Coin(Amount::from_atoms(500)),
+        Box::new(htlc5.clone()),
+    );
+
+    let outputs = vec![TxOutput::Transfer(
+        OutputValue::Coin(Amount::from_atoms(100)),
+        bogus_destination("bogus destination 5"),
+    )];
+
+    let req = SendRequest::new()
+        .with_inputs(
+            izip!(
+                inputs.iter().cloned(),
+                utxos.iter().cloned(),
+                std::iter::repeat(None)
+            ),
+            &|pool_id| {
+                assert_eq!(*pool_id, decommissioned_pool_id);
+                Some(&decommissioned_pool_data)
+            },
+        )
+        .unwrap()
+        .with_inputs(
+            [
+                (htlc1_input.clone(), htlc1_utxo.clone(), None),
+                (htlc2_input.clone(), htlc2_utxo.clone(), None),
+                (htlc3_input.clone(), htlc3_utxo.clone(), None),
+                (htlc4_input.clone(), htlc4_utxo.clone(), None),
+                (htlc5_input.clone(), htlc5_utxo.clone(), None),
+            ],
+            &|_| None,
+        )
+        .unwrap()
+        .with_outputs(outputs.clone());
+    let destinations = req.destinations().to_vec();
+    let all_utxos = utxos
+        .iter()
+        .map(Some)
+        .chain([
+            Some(&htlc1_utxo),
+            Some(&htlc2_utxo),
+            Some(&htlc3_utxo),
+            Some(&htlc4_utxo),
+            Some(&htlc5_utxo),
+        ])
+        .collect::<Vec<_>>();
+
+    let ptx_additional_info = PtxAdditionalInfo::new().with_pool_info(
+        decommissioned_pool_id,
+        PoolAdditionalInfo {
+            staker_balance: decommissioned_pool_balance,
+        },
+    );
+    let ptx = req.into_partially_signed_tx(ptx_additional_info).unwrap();
+
+    let input_commitments = ptx
+        .make_sighash_input_commitments_at_height(&chain_config, tx_block_height)
+        .unwrap()
+        .into_iter()
+        .map(|comm| comm.deep_clone())
+        .collect_vec();
+
+    let mut signer = make_signer(chain_config.clone(), account1.account_index());
+    let (ptx, _, _) = signer
+        .sign_tx(
+            ptx,
+            &TokensAdditionalInfo::new(),
+            account1.key_chain(),
+            &db_tx,
+            tx_block_height,
+        )
+        .unwrap();
+    assert!(ptx.all_signatures_available());
+
+    // Fully sign multisig inputs.
+    // Note that this also checks for a bug where the signer would remove correct signatures
+    // obtained on the previous step, because it failed to validate them.
+    let mut signer = make_signer(chain_config.clone(), account2.account_index());
+    let (ptx, _, _) = signer
+        .sign_tx(
+            ptx,
+            &TokensAdditionalInfo::new(),
+            account2.key_chain(),
+            &db_tx,
+            tx_block_height,
+        )
+        .unwrap();
+    assert!(ptx.all_signatures_available());
+
+    for (i, dest) in destinations.iter().enumerate() {
+        log_witness(i, ptx.witnesses()[i].as_ref().unwrap());
+
+        tx_verifier::input_check::signature_only_check::verify_tx_signature(
+            &chain_config,
+            dest,
+            &ptx,
+            &input_commitments,
+            i,
+            all_utxos[i].cloned(),
+        )
+        .unwrap();
+    }
+
+    let expected_sigs = match input_commitments_version {
+        SighashInputCommitmentVersion::V0 => {
+            vec![
+                Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
+                    find_pub_key_for_pkh_dest(&decommission_dest, &account1),
+                    "3ed693bc5fcec032ea40453dd0542a696b9765728cbc279ae73dee69bfec9538ad62a99fe3bf52315c06186e0d60a1a315f5c0856ac0280acc4365e6558ba452",
+                ))),
+                Some(InputWitness::Standard(make_htlc_uniparty_pub_key_refund_sig(
+                    "d929e839b1e219039d5b9bfd59b70e18e4da37c4341d137b8c316ed8449a0c7a725f911066524014db257a7d92d2f629f14c71d16a9c577add4a43c9778cbb5e",
+                ))),
+                Some(InputWitness::Standard(make_htlc_uniparty_pub_key_hash_refund_sig(
+                    standalone_pk,
+                    "d929e839b1e219039d5b9bfd59b70e18e4da37c4341d137b8c316ed8449a0c7a725f911066524014db257a7d92d2f629f14c71d16a9c577add4a43c9778cbb5e",
+                ))),
+                Some(InputWitness::Standard(make_htlc_uniparty_pub_key_refund_sig(
+                    "da9982cf034cb550961077a4647d2d6d0398d93cfbce12a223487e7314a5c94b1b8d8f1aca6a071ee4581602621467512e1e98a4160e0a66b67554459641a0ae",
+                ))),
+                Some(InputWitness::Standard(make_htlc_uniparty_pub_key_hash_refund_sig(
+                    account1_pk,
+                    "da9982cf034cb550961077a4647d2d6d0398d93cfbce12a223487e7314a5c94b1b8d8f1aca6a071ee4581602621467512e1e98a4160e0a66b67554459641a0ae",
+                ))),
+                Some(InputWitness::Standard({
+                    let sigs_hex = [
+                        (0, "da9982cf034cb550961077a4647d2d6d0398d93cfbce12a223487e7314a5c94b1b8d8f1aca6a071ee4581602621467512e1e98a4160e0a66b67554459641a0ae"),
+                        (1, "23f110161a7c9097127812a98b024c599248a53578d35ee3bfac3e723d56011577ccef5be3a7151bb56381b3efc31e72bc9a83f755456f15eb3a044100d14b9b"),
+                    ];
+                    make_htlc_multisig_refund_sig(htlc_multisig_challenge, sigs_hex)
+                })),
+            ]
+        }
+        SighashInputCommitmentVersion::V1 => {
+            vec![
+                Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
+                    find_pub_key_for_pkh_dest(&decommission_dest, &account1),
+                    "da5f561569793b95558e8cdbcd62717223bfc338ef6b638b04cd3bf9143f356a4f8dd511fd3d297d629d58956046e13d9425e1122c14b3966743145a9baf29a0",
+                ))),
+                Some(InputWitness::Standard(make_htlc_uniparty_pub_key_refund_sig(
+                    "37c991c15d447d1c9918f3a61c55a8b3231b94e2087ac799f08651ec2f69c940638a0e77c20f479913c2d7059e424089672d20b6d586f27be78598c723eaf999",
+                ))),
+                Some(InputWitness::Standard(make_htlc_uniparty_pub_key_hash_refund_sig(
+                    standalone_pk,
+                    "37c991c15d447d1c9918f3a61c55a8b3231b94e2087ac799f08651ec2f69c940638a0e77c20f479913c2d7059e424089672d20b6d586f27be78598c723eaf999",
+                ))),
+                Some(InputWitness::Standard(make_htlc_uniparty_pub_key_refund_sig(
+                    "1a7017dc145b67099b7fc51b45982a2a8388a366e0c3760471ce5cfe3a02821e2fc8438b41d631fcafb0b1bf0a1a709489064ca166113e648c14b09e214fc9e3",
+                ))),
+                Some(InputWitness::Standard(make_htlc_uniparty_pub_key_hash_refund_sig(
+                    account1_pk,
+                    "1a7017dc145b67099b7fc51b45982a2a8388a366e0c3760471ce5cfe3a02821e2fc8438b41d631fcafb0b1bf0a1a709489064ca166113e648c14b09e214fc9e3",
+                ))),
+                Some(InputWitness::Standard({
+                    let sigs_hex = [
+                        (0, "1a7017dc145b67099b7fc51b45982a2a8388a366e0c3760471ce5cfe3a02821e2fc8438b41d631fcafb0b1bf0a1a709489064ca166113e648c14b09e214fc9e3"),
+                        (1, "f0794522d14c73ae2cba145afac92df27c279b915ff3f6a0709064b23defdb73d8b8a621c96ce6fd045439a1bbb7a85926471537da8590fac35311560eada405"),
+                    ];
+                    make_htlc_multisig_refund_sig(htlc_multisig_challenge, sigs_hex)
+                })),
+            ]
+        }
+    };
+
+    assert_eq!(ptx.witnesses().len(), expected_sigs.len());
+    for (idx, (actual_sig, expected_sig)) in
+        ptx.witnesses().iter().zip(expected_sigs.iter()).enumerate()
+    {
+        assert_eq!(actual_sig, expected_sig, "checking sig #{idx}");
+    }
+}
+
 fn log_witness(index: usize, witness: &InputWitness) {
     match witness {
         InputWitness::NoSignature(_) => {
             log::debug!("sig #{index} is NoSignature");
         }
         InputWitness::Standard(sig) => {
-            let raw_sig = sig.raw_signature();
-
-            if let Ok(spend) = AuthorizedPublicKeyHashSpend::from_data(raw_sig) {
-                let sig = assert_matches_return_val!(
-                    spend.signature(),
-                    Signature::Secp256k1Schnorr(sig),
-                    sig
-                );
-                log::debug!("sig #{index} is AuthorizedPublicKeyHashSpend, sig = {sig:x}");
-            } else if let Ok(spend) = AuthorizedPublicKeySpend::from_data(raw_sig) {
-                let sig = assert_matches_return_val!(
-                    spend.signature(),
-                    Signature::Secp256k1Schnorr(sig),
-                    sig
-                );
-                log::debug!("sig #{index} is AuthorizedPublicKeySpend, sig = {sig:x}");
-            } else if let Ok(spend) = AuthorizedClassicalMultisigSpend::from_data(raw_sig) {
-                log::debug!("sig #{index} is AuthorizedClassicalMultisigSpend");
-
-                for (i, sig) in spend.signatures() {
-                    let sig =
-                        assert_matches_return_val!(sig, Signature::Secp256k1Schnorr(sig), sig);
-                    log::debug!("   sig #{i} = {sig:x}");
+            let spend = decode_sig(sig.raw_signature())
+                .unwrap_or_else(|| panic!("Cannot decode sig #{index}"));
+            match spend {
+                PossibleSpend::PubKeyHash(spend) => {
+                    let sig = extract_schnorr_sig(spend.signature());
+                    log::debug!("sig #{index} is AuthorizedPublicKeyHashSpend, sig = {sig:x}");
                 }
-            } else if let Ok(spend) = AuthorizedHashedTimelockContractSpend::from_data(raw_sig) {
-                match spend {
-                    AuthorizedHashedTimelockContractSpend::Secret(_, sig) => {
-                        let sig = hex::encode(&sig);
-                        log::debug!(
-                    "sig #{index} is AuthorizedHashedTimelockContractSpend::Secret, sig = {sig}"
-                );
+                PossibleSpend::PubKey(spend) => {
+                    let sig = extract_schnorr_sig(spend.signature());
+                    log::debug!("sig #{index} is AuthorizedPublicKeySpend, sig = {sig:x}");
+                }
+                PossibleSpend::Multisig(spend) => {
+                    log::debug!("sig #{index} is AuthorizedClassicalMultisigSpend");
+
+                    for (i, sig) in spend.signatures() {
+                        let sig =
+                            assert_matches_return_val!(sig, Signature::Secp256k1Schnorr(sig), sig);
+                        log::debug!("   sig #{i} = {sig:x}");
                     }
-                    AuthorizedHashedTimelockContractSpend::Multisig(inner_raw_sig) => {
-                        let inner_spend =
-                            AuthorizedClassicalMultisigSpend::from_data(&inner_raw_sig).unwrap();
+                }
+                PossibleSpend::Htlc(spend) => match spend {
+                    AuthorizedHashedTimelockContractSpend::Secret(_, inner_sig) => {
+                        let sig_hex = hex::encode(&inner_sig);
+                        log::debug!(
+                            "sig #{index} is AuthorizedHashedTimelockContractSpend::Secret, entire sig = {sig_hex}"
+                        );
+
+                        let inner_spend = decode_sig(&inner_sig).unwrap_or_else(|| {
+                            panic!("Cannot decode inner htlc spend for sig #{index}")
+                        });
+                        match inner_spend {
+                            PossibleSpend::PubKeyHash(inner_spend) => {
+                                let sig = extract_schnorr_sig(inner_spend.signature());
+                                log::debug!(
+                                    "   inner sig is AuthorizedPublicKeyHashSpend, sig = {sig:x}"
+                                );
+                            }
+                            PossibleSpend::PubKey(inner_spend) => {
+                                let sig = extract_schnorr_sig(inner_spend.signature());
+                                log::debug!(
+                                    "   inner sig is AuthorizedPublicKeySpend, sig = {sig:x}"
+                                );
+                            }
+                            PossibleSpend::Multisig(_) => {
+                                panic!("sig #{index} is htlc spend with multisig");
+                            }
+                            PossibleSpend::Htlc(_) => {
+                                panic!("sig #{index} is htlc inside htlc");
+                            }
+                        }
+                    }
+                    AuthorizedHashedTimelockContractSpend::Multisig(inner_sig) => {
                         log::debug!(
                             "sig #{index} is AuthorizedHashedTimelockContractSpend::Multisig"
                         );
 
-                        for (i, sig) in inner_spend.signatures() {
-                            let sig = assert_matches_return_val!(
-                                sig,
-                                Signature::Secp256k1Schnorr(sig),
-                                sig
-                            );
-                            log::debug!("   sig #{i} = {sig:x}");
+                        let inner_spend = decode_sig(&inner_sig).unwrap_or_else(|| {
+                            panic!("Cannot decode inner htlc refund for sig #{index}")
+                        });
+
+                        match inner_spend {
+                            PossibleSpend::PubKeyHash(inner_spend) => {
+                                let sig = extract_schnorr_sig(inner_spend.signature());
+                                log::debug!(
+                                    "   inner sig is AuthorizedPublicKeyHashSpend, sig = {sig:x}"
+                                );
+                            }
+                            PossibleSpend::PubKey(inner_spend) => {
+                                let sig = extract_schnorr_sig(inner_spend.signature());
+                                log::debug!(
+                                    "   inner sig is AuthorizedPublicKeySpend, sig = {sig:x}"
+                                );
+                            }
+                            PossibleSpend::Multisig(inner_spend) => {
+                                log::debug!("   inner sig is AuthorizedClassicalMultisigSpend");
+                                for (i, sig) in inner_spend.signatures() {
+                                    let sig = assert_matches_return_val!(
+                                        sig,
+                                        Signature::Secp256k1Schnorr(sig),
+                                        sig
+                                    );
+                                    log::debug!("      sig #{i} = {sig:x}");
+                                }
+                            }
+                            PossibleSpend::Htlc(_) => {
+                                panic!("sig #{index} is htlc inside htlc");
+                            }
                         }
                     }
-                }
-            } else {
-                panic!("Cannot decode sig #{index}");
+                },
             }
         }
     }
+}
+
+enum PossibleSpend {
+    PubKeyHash(AuthorizedPublicKeyHashSpend),
+    PubKey(AuthorizedPublicKeySpend),
+    Multisig(AuthorizedClassicalMultisigSpend),
+    Htlc(AuthorizedHashedTimelockContractSpend),
+}
+
+fn decode_sig(raw_sig: &[u8]) -> Option<PossibleSpend> {
+    if let Ok(spend) = AuthorizedPublicKeyHashSpend::from_data(raw_sig) {
+        Some(PossibleSpend::PubKeyHash(spend))
+    } else if let Ok(spend) = AuthorizedPublicKeySpend::from_data(raw_sig) {
+        Some(PossibleSpend::PubKey(spend))
+    } else if let Ok(spend) = AuthorizedClassicalMultisigSpend::from_data(raw_sig) {
+        Some(PossibleSpend::Multisig(spend))
+    } else if let Ok(spend) = AuthorizedHashedTimelockContractSpend::from_data(raw_sig) {
+        Some(PossibleSpend::Htlc(spend))
+    } else {
+        None
+    }
+}
+
+fn extract_schnorr_sig(sig: &Signature) -> &schnorr::Signature {
+    assert_matches_return_val!(sig, Signature::Secp256k1Schnorr(sig), sig)
 }
 
 fn make_pub_key_spend_sig(sig_hex: &str) -> StandardInputSignature {
@@ -1227,13 +1640,16 @@ fn make_multisig_spend_sig<'a>(
     StandardInputSignature::new(sighash_type, spend.encode())
 }
 
-fn make_htlc_secret_spend_sig(secret: HtlcSecret, sig_hex: &str) -> StandardInputSignature {
+fn make_htlc_pub_key_spend_sig(secret: HtlcSecret, sig_hex: &str) -> StandardInputSignature {
     let sig_bytes = hex::decode(sig_hex).unwrap();
-    let spend = AuthorizedHashedTimelockContractSpend::Secret(secret, sig_bytes);
+    let sig = Signature::from_raw_data(&sig_bytes, SignatureKind::Secp256k1Schnorr).unwrap();
+    let inner_spend = AuthorizedPublicKeySpend::new(sig);
+
+    let spend = AuthorizedHashedTimelockContractSpend::Secret(secret, inner_spend.encode());
     StandardInputSignature::new(SigHashType::ALL.try_into().unwrap(), spend.encode())
 }
 
-fn make_htlc_multisig_spend_sig<'a>(
+fn make_htlc_multisig_refund_sig<'a>(
     challenge: ClassicMultisigChallenge,
     sigs_hex: impl IntoIterator<Item = (u32, &'a str)>,
 ) -> StandardInputSignature {
@@ -1248,6 +1664,27 @@ fn make_htlc_multisig_spend_sig<'a>(
     let spend = AuthorizedHashedTimelockContractSpend::Multisig(multisig_spend.encode());
     let sighash_type: SigHashType = SigHashType::ALL.try_into().unwrap();
     StandardInputSignature::new(sighash_type, spend.encode())
+}
+
+fn make_htlc_uniparty_pub_key_refund_sig(sig_hex: &str) -> StandardInputSignature {
+    let sig_bytes = hex::decode(sig_hex).unwrap();
+    let sig = Signature::from_raw_data(&sig_bytes, SignatureKind::Secp256k1Schnorr).unwrap();
+    let inner_spend = AuthorizedPublicKeySpend::new(sig);
+
+    let spend = AuthorizedHashedTimelockContractSpend::Multisig(inner_spend.encode());
+    StandardInputSignature::new(SigHashType::ALL.try_into().unwrap(), spend.encode())
+}
+
+fn make_htlc_uniparty_pub_key_hash_refund_sig(
+    pub_key: PublicKey,
+    sig_hex: &str,
+) -> StandardInputSignature {
+    let sig_bytes = hex::decode(sig_hex).unwrap();
+    let sig = Signature::from_raw_data(&sig_bytes, SignatureKind::Secp256k1Schnorr).unwrap();
+    let inner_spend = AuthorizedPublicKeyHashSpend::new(pub_key, sig);
+
+    let spend = AuthorizedHashedTimelockContractSpend::Multisig(inner_spend.encode());
+    StandardInputSignature::new(SigHashType::ALL.try_into().unwrap(), spend.encode())
 }
 
 fn new_dest_from_account<K: AccountKeyChains>(

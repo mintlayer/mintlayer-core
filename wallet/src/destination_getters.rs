@@ -17,6 +17,7 @@ use common::chain::{htlc::HtlcSecret, Destination, PoolId, TxOutput};
 
 use crate::account::PoolData;
 
+// FIXME rename
 #[derive(Clone, Copy, Debug)]
 pub enum HtlcSpendingCondition {
     WithSecret,

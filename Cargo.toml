@@ -135,6 +135,7 @@ license = "MIT"
 [workspace.dependencies]
 addr = "0.15"
 anyhow = "1.0"
+argon2 = "0.5"
 arraytools = "0.1"
 assert_cmd = "2.0"
 async-trait = "0.1"
@@ -175,6 +176,8 @@ generic-array = "0.14"
 heck = "0.5"
 hex = "0.4"
 hex-literal = "0.4"
+hickory-client = "0.24"
+hickory-server = "0.24"
 hmac = "0.12"
 iced = "0.13"
 # Note: we need this fix - https://github.com/iced-rs/iced_aw/pull/329
@@ -189,6 +192,7 @@ libtest-mimic = "0.8"
 log = "0.4"
 loom = "0.7"
 merkletree-mintlayer = "0.1"
+merlin = { version = "3.0", default-features = false }
 mockall = "0.13"
 num = "0.4"
 num-derive = "0.4"
@@ -216,6 +220,7 @@ rlimit = "0.10"
 rstest = "0.24"
 rusqlite = "0.33"
 schnorrkel = "0.11"
+secp256k1 = { version = "0.29", default-features = false }
 semver = "1.0"
 serde = "1.0"
 serde_json = "1.0"
@@ -248,8 +253,7 @@ tokio-util = { version = "0.7", default-features = false }
 toml = "0.8"
 tower = "0.4"
 tower-http-axum = { package = "tower-http", version = "0.5" }
-hickory-client = "0.24"
-hickory-server = "0.24"
+x25519-dalek = "2.0"
 zeroize = "1.5"
 
 [workspace.dependencies.trezor-client]

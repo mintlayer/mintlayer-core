@@ -15,22 +15,22 @@
 
 use std::borrow::Cow;
 
-use common::{
-    address::pubkeyhash::PublicKeyHash,
-    chain::{
-        classic_multisig::ClassicMultisigChallenge,
-        htlc::{HashedTimelockContract, HtlcSecret},
-        signature::{
-            inputsig::{
-                classical_multisig::authorize_classical_multisig::AuthorizedClassicalMultisigSpend,
-                htlc::produce_classical_multisig_signature_for_htlc_refunding,
-            },
-            sighash::{
-                input_commitments::SighashInputCommitment, sighashtype::SigHashType, signature_hash,
+use common::chain::{
+    classic_multisig::ClassicMultisigChallenge,
+    htlc::{HashedTimelockContract, HtlcSecret},
+    signature::{
+        inputsig::{
+            classical_multisig::authorize_classical_multisig::AuthorizedClassicalMultisigSpend,
+            htlc::{
+                produce_classical_multisig_signature_for_htlc_refunding,
+                produce_uniparty_signature_for_htlc_refunding,
             },
         },
-        timelock::OutputTimeLock,
+        sighash::{
+            input_commitments::SighashInputCommitment, sighashtype::SigHashType, signature_hash,
+        },
     },
+    timelock::OutputTimeLock,
 };
 use crypto::key::{KeyKind, PrivateKey};
 use serialization::Compact;
@@ -476,6 +476,7 @@ async fn timelocked_htlc_refund(
     #[case] seed: Seed,
     #[case] timelock: OutputTimeLock,
     #[case] expected: u32,
+    #[values(false, true)] use_multisig: bool,
 ) {
     // Unpack expected results:
     let in_mempool_at0 = (expected & 0b1000) != 0;
@@ -494,21 +495,27 @@ async fn timelocked_htlc_refund(
 
     // Setup tx with htlc
     let (alice_sk, alice_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+    let alice_dest = Destination::PublicKeyHash((&alice_pk).into());
     let (bob_sk, bob_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
     let secret = HtlcSecret::new_from_rng(&mut rng);
-    let refund_challenge = ClassicMultisigChallenge::new(
+    let refund_multisig_challenge = ClassicMultisigChallenge::new(
         &chain_config,
         ::utils::const_nz_u8!(2),
         vec![alice_pk.clone(), bob_pk.clone()],
     )
     .unwrap();
-    let destination_multisig: PublicKeyHash = (&refund_challenge).into();
+
+    let refund_key = if use_multisig {
+        Destination::ClassicMultisig((&refund_multisig_challenge).into())
+    } else {
+        alice_dest.clone()
+    };
 
     let htlc = HashedTimelockContract {
         secret_hash: secret.hash(),
         spend_key: Destination::PublicKeyHash((&bob_pk).into()),
         refund_timelock: timelock,
-        refund_key: Destination::ClassicMultisig(destination_multisig),
+        refund_key,
     };
 
     let tx0 = {
@@ -544,36 +551,50 @@ async fn timelocked_htlc_refund(
         .build()
         .take_transaction();
 
-    let authorization = {
-        let mut authorization = AuthorizedClassicalMultisigSpend::new_empty(refund_challenge);
+    let input_signature = if use_multisig {
+        let authorization = {
+            let mut authorization =
+                AuthorizedClassicalMultisigSpend::new_empty(refund_multisig_challenge);
 
-        let sighash = signature_hash(
+            let sighash = signature_hash(
+                SigHashType::all(),
+                &tx,
+                &[SighashInputCommitment::Utxo(Cow::Borrowed(&tx0.transaction().outputs()[0]))],
+                0,
+            )
+            .unwrap();
+            let sighash = sighash.encode();
+
+            let signature = alice_sk.sign_message(&sighash, &mut rng).unwrap();
+            authorization.add_signature(0, signature);
+            let signature = bob_sk.sign_message(&sighash, &mut rng).unwrap();
+            authorization.add_signature(1, signature);
+
+            authorization
+        };
+
+        produce_classical_multisig_signature_for_htlc_refunding(
+            &chain_config,
+            &authorization,
             SigHashType::all(),
             &tx,
             &[SighashInputCommitment::Utxo(Cow::Borrowed(&tx0.transaction().outputs()[0]))],
             0,
         )
-        .unwrap();
-        let sighash = sighash.encode();
-
-        let signature = alice_sk.sign_message(&sighash, &mut rng).unwrap();
-        authorization.add_signature(0, signature);
-        let signature = bob_sk.sign_message(&sighash, &mut rng).unwrap();
-        authorization.add_signature(1, signature);
-
-        authorization
+        .unwrap()
+    } else {
+        produce_uniparty_signature_for_htlc_refunding(
+            &alice_sk,
+            SigHashType::all(),
+            alice_dest,
+            &tx,
+            &[SighashInputCommitment::Utxo(Cow::Borrowed(&tx0.transaction().outputs()[0]))],
+            0,
+            &mut rng,
+        )
+        .unwrap()
     };
-
-    let input_sign = produce_classical_multisig_signature_for_htlc_refunding(
-        &chain_config,
-        &authorization,
-        SigHashType::all(),
-        &tx,
-        &[SighashInputCommitment::Utxo(Cow::Borrowed(&tx0.transaction().outputs()[0]))],
-        0,
-    )
-    .unwrap();
-    let tx1 = SignedTransaction::new(tx, vec![InputWitness::Standard(input_sign)]).unwrap();
+    let tx1 = SignedTransaction::new(tx, vec![InputWitness::Standard(input_signature)]).unwrap();
     let tx1_id = tx1.transaction().get_id();
 
     let res = mempool.add_transaction_test(tx1.clone());
