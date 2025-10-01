@@ -13,7 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use api_web_server::api::json_helpers::tx_input_to_json;
+use chainstate_test_framework::empty_witness;
+use common::chain::UtxoOutPoint;
 
 use super::*;
 
@@ -65,9 +66,6 @@ async fn ok(#[case] seed: Seed) {
     let task = tokio::spawn(async move {
         let web_server_state = {
             let mut rng = make_seedable_rng(seed);
-            let block_height = rng.gen_range(2..50);
-            let n_blocks = rng.gen_range(block_height..100);
-
             let chain_config = create_unit_test_config();
 
             let chainstate_blocks = {
@@ -75,57 +73,41 @@ async fn ok(#[case] seed: Seed) {
                     .with_chain_config(chain_config.clone())
                     .build();
 
-                let chainstate_block_ids = tf
-                    .create_chain_return_ids(&tf.genesis().get_id().into(), n_blocks, &mut rng)
-                    .unwrap();
+                let genesis_outpoint = UtxoOutPoint::new(tf.best_block_id().into(), 0);
 
-                // Need the "- 1" to account for the genesis block not in the vec
-                let block_id = chainstate_block_ids[block_height - 1];
-                let block = tf.block(tf.to_chain_block_id(&block_id));
-                let prev_block =
-                    tf.block(tf.to_chain_block_id(&chainstate_block_ids[block_height - 2]));
-                let prev_tx = &prev_block.transactions()[0];
+                // Transfer 1
+                let tx1 = TransactionBuilder::new()
+                    .add_input(genesis_outpoint.into(), empty_witness(&mut rng))
+                    .add_output(TxOutput::Transfer(
+                        OutputValue::Coin(Amount::from_atoms(1)),
+                        Destination::AnyoneCanSpend,
+                    ))
+                    .add_output(TxOutput::Transfer(
+                        OutputValue::Coin(Amount::from_atoms(2)),
+                        Destination::AnyoneCanSpend,
+                    ))
+                    .build();
+                let tx1_id = tx1.transaction().get_id();
+                let block1 = tf.make_block_builder().add_transaction(tx1).build(&mut rng);
 
-                let transaction_index = rng.gen_range(0..block.transactions().len());
-                let transaction = block.transactions()[transaction_index].transaction();
-                let transaction_id = transaction.get_id();
+                tf.process_block(block1.clone(), chainstate::BlockSource::Local).unwrap();
 
-                let utxos = transaction.inputs().iter().map(|inp| match inp {
-                    TxInput::Utxo(outpoint) => {
-                        Some(prev_tx.outputs()[outpoint.output_index() as usize].clone())
-                    }
-                    TxInput::Account(_)
-                    | TxInput::AccountCommand(_, _)
-                    | TxInput::OrderAccountCommand(_) => None,
-                });
+                // Spend one of the outputs
+                let tx2 = TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_utxo(tx1_id.into(), 0),
+                        empty_witness(&mut rng),
+                    )
+                    .add_output(TxOutput::Burn(OutputValue::Coin(Amount::from_atoms(1))))
+                    .build();
 
-                let expected_transaction = json!({
-                "block_id": block_id.to_hash().encode_hex::<String>(),
-                "timestamp": block.timestamp().to_string(),
-                "confirmations": BlockHeight::new((n_blocks - block_height) as u64).to_string(),
-                "version_byte": transaction.version_byte(),
-                "is_replaceable": transaction.is_replaceable(),
-                "flags": transaction.flags(),
-                "inputs": transaction.inputs().iter().zip(utxos).map(|(inp, utxo)| json!({
-                    "input": tx_input_to_json(inp, &TokenDecimals::Single(None), &chain_config),
-                    "utxo": utxo.as_ref().map(|txo| txoutput_to_json(txo, &chain_config, &TokenDecimals::Single(None))),
-                    })).collect::<Vec<_>>(),
-                "outputs": transaction.outputs()
-                            .iter()
-                            .map(|out| txoutput_to_json(out, &chain_config, &TokenDecimals::Single(None)))
-                            .collect::<Vec<_>>(),
-                });
+                let block2 = tf.make_block_builder().add_transaction(tx2).build(&mut rng);
 
-                _ = tx.send((
-                    block_id.to_hash().encode_hex::<String>(),
-                    transaction_id.to_hash().encode_hex::<String>(),
-                    expected_transaction,
-                ));
+                tf.process_block(block2.clone(), chainstate::BlockSource::Local).unwrap();
 
-                chainstate_block_ids
-                    .iter()
-                    .map(|id| tf.block(tf.to_chain_block_id(id)))
-                    .collect::<Vec<_>>()
+                _ = tx.send(tx1_id.to_hash().encode_hex::<String>());
+
+                vec![block1, block2]
             };
 
             let storage = {
@@ -157,12 +139,9 @@ async fn ok(#[case] seed: Seed) {
         web_server(listener, web_server_state, true).await
     });
 
-    let (block_id, transaction_id, expected_transaction) = rx.await.unwrap();
-    let url = format!("/api/v2/transaction/{transaction_id}");
+    let transaction_id = rx.await.unwrap();
+    let url = format!("/api/v2/transaction/{transaction_id}/output/0");
 
-    // Given that the listener port is open, this will block until a
-    // response is made (by the web server, which takes the listener
-    // over)
     let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
         .await
         .unwrap();
@@ -172,30 +151,38 @@ async fn ok(#[case] seed: Seed) {
     let body = response.text().await.unwrap();
     let body: serde_json::Value = serde_json::from_str(&body).unwrap();
     let body = body.as_object().unwrap();
+    let chain_config = create_unit_test_config();
 
-    assert_eq!(body.get("block_id").unwrap(), &block_id);
+    assert_eq!(body.get("type").unwrap().as_str().unwrap(), "Transfer");
     assert_eq!(
-        body.get("version_byte").unwrap(),
-        &expected_transaction["version_byte"]
+        body.get("destination").unwrap().as_str().unwrap(),
+        Address::new(&chain_config, Destination::AnyoneCanSpend).unwrap().as_str()
     );
     assert_eq!(
-        body.get("is_replaceable").unwrap(),
-        &expected_transaction["is_replaceable"]
+        body.get("spent_at_block_height").unwrap().as_number().unwrap(),
+        &(2.into())
     );
-    assert_eq!(body.get("flags").unwrap(), &expected_transaction["flags"]);
-    assert_eq!(body.get("inputs").unwrap(), &expected_transaction["inputs"]);
+
+    // Test the second output is not spent
+    let url = format!("/api/v2/transaction/{transaction_id}/output/1");
+
+    let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), 200);
+
+    let body = response.text().await.unwrap();
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let body = body.as_object().unwrap();
+    let chain_config = create_unit_test_config();
+
+    assert_eq!(body.get("type").unwrap().as_str().unwrap(), "Transfer");
     assert_eq!(
-        body.get("outputs").unwrap(),
-        &expected_transaction["outputs"]
+        body.get("destination").unwrap().as_str().unwrap(),
+        Address::new(&chain_config, Destination::AnyoneCanSpend).unwrap().as_str()
     );
-    assert_eq!(
-        body.get("timestamp").unwrap(),
-        &expected_transaction["timestamp"]
-    );
-    assert_eq!(
-        body.get("confirmations").unwrap(),
-        &expected_transaction["confirmations"]
-    );
+    assert!(body.get("spent_at_block_height").unwrap().is_null());
 
     task.abort();
 }

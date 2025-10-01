@@ -661,7 +661,7 @@ where
             bob_destination.clone(),
         );
 
-        let utxo = Utxo::new(output.clone(), None, false);
+        let utxo = Utxo::new(output.clone(), None, None);
         let block_height = BlockHeight::new(rng.gen_range(1..100));
 
         // set one and get it
@@ -795,7 +795,7 @@ where
                 .unwrap();
 
             // set it as unlocked at next block height
-            let utxo = Utxo::new(output.clone(), None, false);
+            let utxo = Utxo::new(output.clone(), None, None);
             db_tx
                 .set_utxo_at_height(
                     outpoint.clone(),
@@ -807,13 +807,14 @@ where
                 .unwrap();
 
             // and set it as spent on the next block height
-            let spent_utxo = Utxo::new(output.clone(), None, true);
+            let next_block_height = block_height.next_height().next_height();
+            let spent_utxo = Utxo::new(output.clone(), None, Some(next_block_height));
             db_tx
                 .set_utxo_at_height(
                     outpoint.clone(),
                     spent_utxo,
                     bob_address.as_str(),
-                    block_height.next_height().next_height(),
+                    next_block_height,
                 )
                 .await
                 .unwrap();
@@ -885,7 +886,7 @@ where
                 bob_destination,
             );
 
-            let utxo = Utxo::new(output2.clone(), None, false);
+            let utxo = Utxo::new(output2.clone(), None, None);
             let block_height = BlockHeight::new(rng.gen_range(1..100));
             db_tx
                 .set_utxo_at_height(
@@ -913,7 +914,7 @@ where
             }
 
             // set the new one to spent in the same block
-            let utxo = Utxo::new(output2.clone(), None, true);
+            let utxo = Utxo::new(output2.clone(), None, Some(block_height));
             expected_utxos.remove(&outpoint2);
             db_tx
                 .set_utxo_at_height(outpoint2, utxo, bob_address.as_str(), block_height)
