@@ -35,6 +35,12 @@ mod property {
     pub fn common_tests<F>(_backend_factory: F) -> impl Iterator<Item = libtest_mimic::Trial> {
         std::iter::empty()
     }
+
+    pub fn common_tests_for_shared_backend<F>(
+        _backend_factory: F,
+    ) -> impl Iterator<Item = libtest_mimic::Trial> {
+        std::iter::empty()
+    }
 }
 
 use prelude::*;

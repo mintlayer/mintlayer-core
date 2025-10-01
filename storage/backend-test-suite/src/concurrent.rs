@@ -103,6 +103,8 @@ fn commutative_read_modify_write<B: SharedBackend, F: BackendFactory<B>>(backend
 }
 
 // Test parallel reading through a normal Backend. A reference to BackendImpl is shared between threads.
+// Note that it's disabled for loom, where thread::scope is not available.
+#[cfg(not(loom))]
 fn threaded_reads_consistent_for_ordinary_backend<B: Backend, F: BackendFactory<B>>(
     backend_factory: Arc<F>,
 ) {
@@ -134,6 +136,13 @@ fn threaded_reads_consistent_for_ordinary_backend<B: Backend, F: BackendFactory<
     });
 }
 
+// A stub for loom
+#[cfg(loom)]
+fn threaded_reads_consistent_for_ordinary_backend<B: Backend, F: BackendFactory<B>>(
+    _backend_factory: Arc<F>,
+) {
+}
+
 // Test parallel reading through a SharedBackend. A copy of SharedBackendImpl is shared between threads.
 fn threaded_reads_consistent_for_shared_backend<B: SharedBackend, F: BackendFactory<B>>(
     backend_factory: Arc<F>,
@@ -141,10 +150,17 @@ fn threaded_reads_consistent_for_shared_backend<B: SharedBackend, F: BackendFact
     let val = [0x77, 0x88, 0x99].as_ref();
     let store = setup(backend_factory.create(), val.to_vec());
 
+    #[cfg(not(loom))]
+    let iter_count = 100;
+    // Note: under loom, with only 10 iterations the test takes more than 3 minutes to complete.
+    // With 5 iterations, the time is under 2 seconds.
+    #[cfg(loom)]
+    let iter_count = 5;
+
     let thr0 = thread::spawn({
         let store = store.clone();
         move || {
-            for _ in 0..100 {
+            for _ in 0..iter_count {
                 let tx = store.transaction_ro().unwrap();
                 let obtained_val = tx.get(MAPID.0, TEST_KEY).unwrap().unwrap();
                 assert_eq!(obtained_val, val);
@@ -153,7 +169,7 @@ fn threaded_reads_consistent_for_shared_backend<B: SharedBackend, F: BackendFact
     });
     let thr1 = thread::spawn({
         move || {
-            for _ in 0..100 {
+            for _ in 0..iter_count {
                 let tx = store.transaction_ro().unwrap();
                 let obtained_val = tx.get(MAPID.0, TEST_KEY).unwrap().unwrap();
                 assert_eq!(obtained_val, val);

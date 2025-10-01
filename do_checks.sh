@@ -13,6 +13,18 @@ cargo fmt --check -- --config newline_style=Unix
 # Note: "--allow duplicate" silences the warning "found x duplicate entries for crate y".
 cargo deny check --allow duplicate --hide-inclusion-graph
 
+CLIPPY_VERSION_RESPONSE=$(cargo clippy --version)
+# Note: clippy version starts from 0, e.g. '0.1.90'
+if [[ "$CLIPPY_VERSION_RESPONSE" =~ clippy[[:space:]]+0\.([0-9]+)\.([0-9]+) ]]; then
+    CLIPPY_VERSION_MAJOR="${BASH_REMATCH[1]}"
+    CLIPPY_VERSION_MINOR="${BASH_REMATCH[2]}"
+    # Note: for 1.90 CLIPPY_VERSION will be 1090
+    CLIPPY_VERSION=$(($CLIPPY_VERSION_MAJOR * 1000 + $CLIPPY_VERSION_MINOR))
+else
+    echo "Unable to determine the version of Clippy"
+    exit 1
+fi
+
 # Checks enabled everywhere, including tests, benchmarks.
 # Note:
 # 1) "uninlined_format_args" is about changing `format!("{}", x)` to `format!("{x}")`.
@@ -23,12 +35,15 @@ cargo deny check --allow duplicate --hide-inclusion-graph
 #   So we disable it for now.
 # 2) "manual_is_multiple_of" - starting from v1.90 clippy insists that `x % 2 == 0` should be
 #   replaced with `x.is_multiple_of(2)`, which is a questionable improvement.
+EXTRA_ARGS=()
+if [[ $CLIPPY_VERSION -ge 1090 ]]; then
+    EXTRA_ARGS+=(-A clippy::manual_is_multiple_of)
+fi
 cargo clippy --all-features --workspace --all-targets -- \
     -D warnings \
     -A clippy::unnecessary_literal_unwrap \
     -A clippy::new_without_default \
     -A clippy::uninlined_format_args \
-    -A clippy::manual_is_multiple_of \
     -D clippy::implicit_saturating_sub \
     -D clippy::implicit_clone \
     -D clippy::map_unwrap_or \
@@ -36,7 +51,8 @@ cargo clippy --all-features --workspace --all-targets -- \
     -D clippy::manual_assert \
     -D clippy::unused_async \
     -D clippy::mut_mut \
-    -D clippy::todo
+    -D clippy::todo \
+    "${EXTRA_ARGS[@]}"
 
 # Checks that only apply to production code
 cargo clippy --all-features --workspace --lib --bins --examples -- \
