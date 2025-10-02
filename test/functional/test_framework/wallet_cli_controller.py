@@ -249,15 +249,17 @@ class WalletCliController(WalletCliControllerBase):
         i_know_what_i_am_doing = "i-know-what-i-am-doing" if force_reduce else ""
         return await self._write_command(f"wallet-set-lookahead-size {size} {i_know_what_i_am_doing}\n")
 
-    async def new_public_key(self, address: Optional[str] = None) -> bytes:
+    async def new_public_key(self, address: Optional[str] = None, strip_encoded_enum_prefix: bool = True) -> bytes:
         if address is None:
             address = await self.new_address()
         public_key = await self._write_command(f"address-reveal-public-key-as-hex {address}\n")
-
         self.log.info(f'pub key output: {public_key}')
-        # remove the pub key enum value, the first one byte
-        pub_key_bytes = bytes.fromhex(public_key)[1:]
-        return pub_key_bytes
+
+        if strip_encoded_enum_prefix:
+            # Remove the first byte, which encodes the variant of PublicKeyHolder enum.
+            return bytes.fromhex(public_key)[1:]
+        else:
+            return bytes.fromhex(public_key)
 
     async def reveal_public_key_as_address(self, address: str) -> str:
         return await self._write_command(f"address-reveal-public-key-as-address {address}\n")
