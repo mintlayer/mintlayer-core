@@ -24,13 +24,15 @@ import {
   encode_output_produce_block_from_stake,
   encode_transaction,
   encode_witness,
-  encode_witness_htlc_multisig,
-  encode_witness_htlc_secret,
+  encode_witness_htlc_refund_multisig,
+  encode_witness_htlc_refund_single_sig,
+  encode_witness_htlc_spend,
   internal_verify_witness,
   make_default_account_privkey,
   make_receiving_address,
   multisig_challenge_to_address,
   Network,
+  pubkey_to_pubkeyhash_address,
   public_key_from_private_key,
   SignatureHashType,
   TxAdditionalInfo,
@@ -170,10 +172,11 @@ function test_impl(is_v1: boolean) {
   const alice_pk = public_key_from_private_key(alice_sk);
   const bob_sk = generate_prv_key("bob_sk");
   const bob_pk = public_key_from_private_key(bob_sk);
+  const bob_addr = pubkey_to_pubkeyhash_address(bob_pk, Network.Testnet);
   const htlc_challenge = encode_multisig_challenge(Uint8Array.from([...alice_pk, ...bob_pk]), 2, Network.Testnet);
   const htlc_multisig_destination = multisig_challenge_to_address(htlc_challenge, Network.Testnet);
 
-  const htlc_output = encode_output_htlc(
+  const htlc_output1 = encode_output_htlc(
     Amount.from_atoms("40000"),
     undefined,
     HTLC_SECRET_HASH,
@@ -182,11 +185,22 @@ function test_impl(is_v1: boolean) {
     encode_lock_until_height(BigInt(100)),
     Network.Testnet
   );
-  const htlc_input = encode_input_for_utxo(tx_outpoint, 1);
+  const htlc_output2 = encode_output_htlc(
+    Amount.from_atoms("40000"),
+    undefined,
+    HTLC_SECRET_HASH,
+    ADDRESS,
+    bob_addr,
+    encode_lock_until_height(BigInt(100)),
+    Network.Testnet
+  );
+  const htlc_input1 = encode_input_for_utxo(tx_outpoint, 1);
+  const htlc_input2 = encode_input_for_utxo(tx_outpoint, 2);
 
-  const inputs = [...produce_block_from_stake_input, ...fill_order_input, ...conclude_order_input, ...htlc_input];
-  const input_opt_utxos = [1, ...produce_block_from_stake_output, 0, 0, 1, ...htlc_output];
-  const htlc_input_index = 3;
+  const inputs = [...produce_block_from_stake_input, ...fill_order_input, ...conclude_order_input, ...htlc_input1, ...htlc_input2];
+  const input_opt_utxos = [1, ...produce_block_from_stake_output, 0, 0, 1, ...htlc_output1, 1, ...htlc_output2];
+  const htlc_input1_index = 3;
+  const htlc_input2_index = 4;
 
   const tx = encode_transaction(Uint8Array.from(inputs), Uint8Array.from(OUTPUTS), BigInt(0));
 
@@ -195,7 +209,7 @@ function test_impl(is_v1: boolean) {
     input_index: number,
     input_destination: string | null,
     additional_info: TxAdditionalInfo) {
-    return internal_verify_witness(
+    internal_verify_witness(
       SignatureHashType.ALL,
       input_destination,
       witness,
@@ -324,15 +338,15 @@ function test_impl(is_v1: boolean) {
   );
 
   do_test(
-    "encode_witness_htlc_secret",
+    "encode_witness_htlc_spend",
     (additional_info: TxAdditionalInfo) => {
-      return encode_witness_htlc_secret(
+      return encode_witness_htlc_spend(
         SignatureHashType.ALL,
         receiving_privkey,
         ADDRESS,
         tx,
         Uint8Array.from(input_opt_utxos),
-        htlc_input_index,
+        htlc_input1_index,
         Uint8Array.from(HTLC_SECRET),
         additional_info,
         BigInt(height),
@@ -340,15 +354,15 @@ function test_impl(is_v1: boolean) {
       );
     },
     (witness: Uint8Array, additional_info: TxAdditionalInfo) => {
-      do_verify_witness(witness, htlc_input_index, null, additional_info);
+      do_verify_witness(witness, htlc_input1_index, null, additional_info);
     },
     "Signature verification failed"
   );
 
   do_test(
-    "encode_witness_htlc_multisig",
+    "encode_witness_htlc_refund_multisig",
     (additional_info: TxAdditionalInfo) => {
-      const partial_witness = encode_witness_htlc_multisig(
+      const partial_witness = encode_witness_htlc_refund_multisig(
         SignatureHashType.ALL,
         alice_sk,
         0,
@@ -356,13 +370,13 @@ function test_impl(is_v1: boolean) {
         htlc_challenge,
         tx,
         Uint8Array.from(input_opt_utxos),
-        htlc_input_index,
+        htlc_input1_index,
         additional_info,
         BigInt(height),
         Network.Testnet
       );
 
-      return encode_witness_htlc_multisig(
+      return encode_witness_htlc_refund_multisig(
         SignatureHashType.ALL,
         bob_sk,
         1,
@@ -370,15 +384,36 @@ function test_impl(is_v1: boolean) {
         htlc_challenge,
         tx,
         Uint8Array.from(input_opt_utxos),
-        htlc_input_index,
+        htlc_input1_index,
         additional_info,
         BigInt(height),
         Network.Testnet
       );
     },
     (witness: Uint8Array, additional_info: TxAdditionalInfo) => {
-      do_verify_witness(witness, htlc_input_index, null, additional_info);
+      do_verify_witness(witness, htlc_input1_index, null, additional_info);
     },
     "Invalid classical multisig signature(s)"
+  );
+
+  do_test(
+    "encode_witness_htlc_refund_single_sig",
+    (additional_info: TxAdditionalInfo) => {
+      return encode_witness_htlc_refund_single_sig(
+        SignatureHashType.ALL,
+        bob_sk,
+        bob_addr,
+        tx,
+        Uint8Array.from(input_opt_utxos),
+        htlc_input2_index,
+        additional_info,
+        BigInt(height),
+        Network.Testnet
+      );
+    },
+    (witness: Uint8Array, additional_info: TxAdditionalInfo) => {
+      do_verify_witness(witness, htlc_input2_index, null, additional_info);
+    },
+    "Signature verification failed"
   );
 }

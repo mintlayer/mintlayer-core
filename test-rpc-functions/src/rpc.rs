@@ -528,10 +528,10 @@ impl RpcTestFunctionsRpcServer for super::RpcTestFunctionsHandle {
                     let htlc_spend: AuthorizedHashedTimelockContractSpend =
                         rpc::handle_result(htlc_spend_result)?;
                     match htlc_spend {
-                        AuthorizedHashedTimelockContractSpend::Secret(secret, _) => {
+                        AuthorizedHashedTimelockContractSpend::Spend(secret, _) => {
                             Ok(Some(secret.hex_encode()))
                         }
-                        AuthorizedHashedTimelockContractSpend::Multisig(_) => Ok(None),
+                        AuthorizedHashedTimelockContractSpend::Refund(_) => Ok(None),
                     }
                 }
             },

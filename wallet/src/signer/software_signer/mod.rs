@@ -31,8 +31,6 @@ use common::{
                     },
                     encode_decode_multisig_spend::{decode_multisig_spend, encode_multisig_spend},
                 },
-                htlc::produce_uniparty_signature_for_htlc_input,
-                standard_signature::StandardInputSignature,
                 InputWitness,
             },
             sighash::{
@@ -67,10 +65,11 @@ use crate::{
         make_account_path, AccountKeyChainImplSoftware, AccountKeyChains, FoundPubKey,
         MasterKeyChain,
     },
+    signer::utils::produce_uniparty_signature_for_input,
     Account, WalletResult,
 };
 
-use super::{Signer, SignerError, SignerProvider, SignerResult};
+use super::{utils::is_htlc_utxo, Signer, SignerError, SignerProvider, SignerResult};
 
 pub struct SoftwareSigner {
     chain_config: Arc<ChainConfig>,
@@ -160,32 +159,18 @@ impl SoftwareSigner {
                 let sig = self
                     .get_private_key_for_destination(destination, key_chain, db_tx)?
                     .map(|private_key| {
-                        let sighash_type = SigHashType::all();
-                        match htlc_secret {
-                            Some(htlc_secret) => produce_uniparty_signature_for_htlc_input(
-                                &private_key,
-                                sighash_type,
-                                destination.clone(),
-                                tx,
-                                input_commitments,
-                                input_index,
-                                htlc_secret.clone(),
-                                self.sig_aux_data_provider.lock().expect("poisoned mutex").as_mut(),
-                            )
-                            .map(InputWitness::Standard)
-                            .map_err(SignerError::SigningError),
-                            None => StandardInputSignature::produce_uniparty_signature_for_input(
-                                &private_key,
-                                sighash_type,
-                                destination.clone(),
-                                tx,
-                                input_commitments,
-                                input_index,
-                                self.sig_aux_data_provider.lock().expect("poisoned mutex").as_mut(),
-                            )
-                            .map(InputWitness::Standard)
-                            .map_err(SignerError::SigningError),
-                        }
+                        let is_htlc_input = input_utxo.is_some_and(is_htlc_utxo);
+
+                        produce_uniparty_signature_for_input(
+                            is_htlc_input,
+                            htlc_secret.clone(),
+                            &private_key,
+                            destination.clone(),
+                            tx,
+                            input_commitments,
+                            input_index,
+                            self.sig_aux_data_provider.lock().expect("poisoned mutex").as_mut(),
+                        )
                     })
                     .transpose()?;
 
@@ -209,6 +194,8 @@ impl SoftwareSigner {
                         db_tx,
                     )?;
 
+                    // Note: this will check whether the utxo is an htlc one and produce
+                    // AuthorizedHashedTimelockContractSpend if it is.
                     let signature = encode_multisig_spend(&sig, input_utxo);
 
                     return Ok((Some(InputWitness::Standard(signature)), status));
@@ -323,15 +310,15 @@ impl Signer for SoftwareSigner {
                         InputWitness::Standard(sig) => match destination {
                             Some(destination) => {
                                 let sig_verified =
-                                tx_verifier::input_check::signature_only_check::verify_tx_signature(
-                                    &self.chain_config,
-                                    destination,
-                                    &ptx,
-                                    &input_commitments,
-                                    i,
-                                    input_utxo.clone()
-                                )
-                                .is_ok();
+                                    tx_verifier::input_check::signature_only_check::verify_tx_signature(
+                                        &self.chain_config,
+                                        destination,
+                                        &ptx,
+                                        &input_commitments,
+                                        i,
+                                        input_utxo.clone()
+                                    )
+                                    .is_ok();
 
                                 if sig_verified {
                                     Ok((

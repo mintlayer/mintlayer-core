@@ -23,8 +23,8 @@ use common::chain::{
         inputsig::{
             classical_multisig::authorize_classical_multisig::AuthorizedClassicalMultisigSpend,
             htlc::{
-                produce_classical_multisig_signature_for_htlc_input,
-                produce_uniparty_signature_for_htlc_input,
+                produce_classical_multisig_signature_for_htlc_refunding,
+                produce_uniparty_signature_for_htlc_spending,
             },
         },
         sighash::signature_hash,
@@ -123,7 +123,7 @@ async fn spend(#[case] seed: Seed) {
                     .take_transaction();
                 let tx_2_id = tx2.get_id();
 
-                let input_sign = produce_uniparty_signature_for_htlc_input(
+                let input_sign = produce_uniparty_signature_for_htlc_spending(
                     &bob_sk,
                     SigHashType::all(),
                     Destination::PublicKeyHash((&PublicKey::from_private_key(&bob_sk)).into()),
@@ -305,7 +305,7 @@ async fn refund(#[case] seed: Seed) {
                     authorization
                 };
 
-                let input_sign = produce_classical_multisig_signature_for_htlc_input(
+                let input_sign = produce_classical_multisig_signature_for_htlc_refunding(
                     &chain_config,
                     &authorization,
                     SigHashType::all(),

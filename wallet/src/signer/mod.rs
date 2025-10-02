@@ -29,7 +29,7 @@ use common::{
             DestinationSigError,
         },
         ChainConfig, Destination, SignedTransactionIntent, SignedTransactionIntentError,
-        Transaction,
+        Transaction, UtxoOutPoint,
     },
     primitives::BlockHeight,
 };
@@ -54,6 +54,7 @@ use crate::{
 pub mod software_signer;
 #[cfg(feature = "trezor")]
 pub mod trezor_signer;
+pub mod utils;
 
 #[cfg(feature = "trezor")]
 use self::trezor_signer::TrezorError;
@@ -98,12 +99,13 @@ pub enum SignerError {
     AddressError(#[from] AddressError),
     #[error("Order was filled more than the available balance")]
     OrderFillUnderflow,
-    #[error("Multisig HTLC destination expected")]
-    HtlcMultisigDestinationExpected,
+    #[error("HTLC refund expected for a multisig destination")]
+    HtlcRefundExpectedForMultisig,
     #[error("Partially signed transaction error: {0}")]
     PartiallySignedTransactionError(#[from] PartiallySignedTransactionError),
+    #[error("Duplicate UTXO input: {0:?}")]
+    DuplicateUtxoInput(UtxoOutPoint),
 }
-
 type SignerResult<T> = Result<T, SignerError>;
 
 /// Signer trait responsible for signing transactions or challenges using a software or hardware

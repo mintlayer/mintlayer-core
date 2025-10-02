@@ -279,8 +279,8 @@ impl SendRequest {
         for (outpoint, txo, secret) in utxos {
             self.inputs.push(outpoint);
             let htlc_spending_condition = match &secret {
-                Some(_) => HtlcSpendingCondition::WithSecret,
-                None => HtlcSpendingCondition::WithMultisig,
+                Some(_) => HtlcSpendingCondition::WithSpend,
+                None => HtlcSpendingCondition::WithRefund,
             };
 
             self.destinations.push(

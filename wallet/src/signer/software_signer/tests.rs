@@ -21,6 +21,7 @@ use test_utils::random::{make_seedable_rng, Seed};
 use crate::signer::tests::{
     generic_fixed_signature_tests::{
         test_fixed_signatures_generic, test_fixed_signatures_generic2,
+        test_fixed_signatures_generic_htlc_refunding,
     },
     generic_tests::{
         test_sign_message_generic, test_sign_transaction_generic,
@@ -92,6 +93,24 @@ fn test_fixed_signatures2(
     let mut rng = make_seedable_rng(seed);
 
     test_fixed_signatures_generic2(
+        &mut rng,
+        input_commitments_version,
+        make_deterministic_software_signer,
+    );
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy(), SighashInputCommitmentVersion::V0)]
+#[trace]
+#[case(Seed::from_entropy(), SighashInputCommitmentVersion::V1)]
+fn test_fixed_signatures_htlc_refunding(
+    #[case] seed: Seed,
+    #[case] input_commitments_version: SighashInputCommitmentVersion,
+) {
+    let mut rng = make_seedable_rng(seed);
+
+    test_fixed_signatures_generic_htlc_refunding(
         &mut rng,
         input_commitments_version,
         make_deterministic_software_signer,

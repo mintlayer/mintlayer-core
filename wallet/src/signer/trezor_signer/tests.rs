@@ -27,6 +27,7 @@ use crate::signer::{
     tests::{
         generic_fixed_signature_tests::{
             test_fixed_signatures_generic, test_fixed_signatures_generic2,
+            test_fixed_signatures_generic_htlc_refunding,
         },
         generic_tests::{
             test_sign_message_generic, test_sign_transaction_generic,
@@ -170,6 +171,30 @@ fn test_fixed_signatures2(
     let mut rng = make_seedable_rng(seed);
 
     test_fixed_signatures_generic2(
+        &mut rng,
+        input_commitments_version,
+        make_deterministic_trezor_signer,
+    );
+}
+
+#[rstest]
+#[trace]
+#[serial]
+#[case(Seed::from_entropy(), SighashInputCommitmentVersion::V0)]
+#[trace]
+#[serial]
+#[case(Seed::from_entropy(), SighashInputCommitmentVersion::V1)]
+fn test_fixed_signatures_htlc_refunding(
+    #[case] seed: Seed,
+    #[case] input_commitments_version: SighashInputCommitmentVersion,
+) {
+    log::debug!("test_fixed_signatures_htlc_refunding, seed = {seed:?}, input_commitments_version = {input_commitments_version:?}");
+
+    let _join_guard = maybe_spawn_auto_confirmer();
+
+    let mut rng = make_seedable_rng(seed);
+
+    test_fixed_signatures_generic_htlc_refunding(
         &mut rng,
         input_commitments_version,
         make_deterministic_trezor_signer,

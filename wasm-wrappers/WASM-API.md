@@ -241,10 +241,11 @@ Note:
   so if you only have `FillOrder` inputs, you can technically pass bogus values for the current balances and
   the resulting signature will still be valid; though it's better to avoid doing this).
 
-### Function: `encode_witness_htlc_secret`
+### Function: `encode_witness_htlc_spend`
 
-Given a private key, inputs and an input number to sign, and the destination that owns that output (through the utxo),
-and a network type (mainnet, testnet, etc), and an htlc secret this function returns a witness to be used in a signed transaction, as bytes.
+Sign the specified HTLC input of the transaction and encode the signature as InputWitness.
+
+This function must be used for HTLC spending.
 
 `input_utxos` and `additional_info` have the same format and requirements as in `encode_witness`.
 
@@ -257,13 +258,23 @@ the multisig challenge, as bytes.
 
 Produce a multisig address given a multisig challenge.
 
-### Function: `encode_witness_htlc_multisig`
+### Function: `encode_witness_htlc_refund_multisig`
 
-Given a private key, inputs and an input number to sign, and multisig challenge,
-and a network type (mainnet, testnet, etc), this function returns a witness to be used in a signed transaction, as bytes.
+Sign the specified HTLC input of the transaction and encode the signature as InputWitness.
 
-`key_index` parameter is an index of the public key in the challenge corresponding to the specified private key.
+This function must be used for HTLC refunding when the refund address is a multisig one.
+
+`key_index` parameter is an index of the public key in the multisig challenge corresponding to
+the specified private key.
 `input_witness` parameter can be either empty or a result of previous calls to this function.
+
+`input_utxos` and `additional_info` have the same format and requirements as in `encode_witness`.
+
+### Function: `encode_witness_htlc_refund_single_sig`
+
+Sign the specified HTLC input of the transaction and encode the signature as InputWitness.
+
+This function must be used for HTLC refunding when the refund address is a single-sig one.
 
 `input_utxos` and `additional_info` have the same format and requirements as in `encode_witness`.
 

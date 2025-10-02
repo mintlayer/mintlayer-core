@@ -29,7 +29,10 @@ use common::{
         config::{create_regtest, ChainType},
         htlc::{HashedTimelockContract, HtlcSecret},
         output_value::OutputValue,
-        signature::{inputsig::arbitrary_message::produce_message_challenge, DestinationSigError},
+        signature::{
+            inputsig::arbitrary_message::produce_message_challenge, DestinationSigError,
+            Transactable,
+        },
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
         tokens::{
@@ -407,15 +410,15 @@ pub fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
         })
         .collect();
 
-    let (_, pub_key1) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
-    let pub_key2 = if let Destination::PublicKeyHash(pkh) =
+    let (_, unknown_pub_key) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
+    let pub_key1 = if let Destination::PublicKeyHash(pkh) =
         account.get_new_address(&mut db_tx, KeyPurpose::Change).unwrap().1.into_object()
     {
         account.find_corresponding_pub_key(&pkh).unwrap()
     } else {
         panic!("not a public key hash")
     };
-    let pub_key3 = if let Destination::PublicKeyHash(pkh) = account2
+    let pub_key2 = if let Destination::PublicKeyHash(pkh) = account2
         .get_new_address(&mut db_tx, KeyPurpose::Change)
         .unwrap()
         .1
@@ -427,19 +430,21 @@ pub fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
     };
 
     let min_required_signatures = 3;
-    // The first account can sign the pub_key2 and the standalone key,
+    // The first account can sign the pub_key1 and the standalone key,
     // but it will not be fully signed, so we will need to sign it with the account2 which
-    // can complete the signing with the pub_key3.
+    // can complete the signing with the pub_key2.
     let challenge = ClassicMultisigChallenge::new(
         &chain_config,
         NonZeroU8::new(min_required_signatures).unwrap(),
-        vec![pub_key1.clone(), pub_key2.clone(), standalone_pk, pub_key3.clone()],
+        vec![unknown_pub_key.clone(), pub_key1.clone(), standalone_pk, pub_key2.clone()],
     )
     .unwrap();
-    account.add_standalone_multisig(&mut db_tx, challenge.clone(), None).unwrap();
-    let multisig_hash = account2.add_standalone_multisig(&mut db_tx, challenge, None).unwrap();
+    let multisig_hash1 =
+        account.add_standalone_multisig(&mut db_tx, challenge.clone(), None).unwrap();
+    let multisig_hash2 = account2.add_standalone_multisig(&mut db_tx, challenge, None).unwrap();
+    assert_eq!(multisig_hash1, multisig_hash2);
 
-    let multisig_dest = Destination::ClassicMultisig(multisig_hash);
+    let multisig_dest = Destination::ClassicMultisig(multisig_hash1);
 
     let source_id: OutPointSourceId = if rng.gen_bool(0.5) {
         Id::<Transaction>::new(H256::random_using(rng)).into()
@@ -452,18 +457,75 @@ pub fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
         multisig_dest.clone(),
     );
 
-    let secret = HtlcSecret::new_from_rng(rng);
-    let hash_lock = HashedTimelockContract {
-        secret_hash: secret.hash(),
-        spend_key: Destination::PublicKey(pub_key2.clone()),
+    let pub_key1_or_2 = if rng.gen_bool(0.5) {
+        log::debug!("pub_key1_or_2 is pub_key1");
+        pub_key1.clone()
+    } else {
+        log::debug!("pub_key1_or_2 is pub_key2");
+        pub_key2.clone()
+    };
+    let pub_key1_or_2_is_key1 = pub_key1_or_2 == pub_key1;
+    let dest1_or_2 = if rng.gen_bool(0.5) {
+        log::debug!("dest1_or_2 is pub key");
+        Destination::PublicKey(pub_key1_or_2)
+    } else {
+        log::debug!("dest1_or_2 is pub key hash");
+        Destination::PublicKeyHash((&pub_key1_or_2).into())
+    };
+
+    let spend_htlc = rng.gen_bool(0.5);
+    let htlc_secret = HtlcSecret::new_from_rng(rng);
+
+    // Note: in "first_account_can_sign_htlc", "sign" actually means "at least partially sign".
+    let (htlc_spend_dest, htlc_refund_dest, first_account_can_sign_htlc) = if spend_htlc {
+        log::debug!("htlc will be spent");
+
+        (
+            dest1_or_2,
+            Destination::PublicKey(unknown_pub_key),
+            pub_key1_or_2_is_key1,
+        )
+    } else {
+        let (refund_dest, first_account_can_sign_htlc) = if rng.gen_bool(0.5) {
+            log::debug!("htlc will be refunded, single sig");
+
+            (dest1_or_2, pub_key1_or_2_is_key1)
+        } else {
+            log::debug!("htlc will be refunded, multisig");
+
+            let challenge = ClassicMultisigChallenge::new(
+                &chain_config,
+                NonZeroU8::new(2).unwrap(),
+                vec![pub_key1, pub_key2],
+            )
+            .unwrap();
+            let multisig_hash1 =
+                account.add_standalone_multisig(&mut db_tx, challenge.clone(), None).unwrap();
+            let multisig_hash2 =
+                account2.add_standalone_multisig(&mut db_tx, challenge, None).unwrap();
+            assert_eq!(multisig_hash1, multisig_hash2);
+
+            (Destination::ClassicMultisig(multisig_hash1), true)
+        };
+
+        (
+            Destination::PublicKey(unknown_pub_key),
+            refund_dest,
+            first_account_can_sign_htlc,
+        )
+    };
+
+    let htlc = HashedTimelockContract {
+        secret_hash: htlc_secret.hash(),
+        spend_key: htlc_spend_dest,
         refund_timelock: OutputTimeLock::UntilHeight(BlockHeight::new(rng.gen_range(100..200))),
-        refund_key: Destination::PublicKey(pub_key1),
+        refund_key: htlc_refund_dest,
     };
 
     let htlc_input = TxInput::from_utxo(source_id, rng.next_u32());
     let htlc_utxo = TxOutput::Htlc(
         OutputValue::Coin(Amount::from_atoms(rng.gen::<u32>() as u128)),
-        Box::new(hash_lock.clone()),
+        Box::new(htlc.clone()),
     );
 
     let token_id = TokenId::new(H256::random_using(rng));
@@ -644,7 +706,7 @@ pub fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
             Destination::AnyoneCanSpend,
         ),
         TxOutput::DataDeposit(gen_random_bytes(rng, 10, 20)),
-        TxOutput::Htlc(OutputValue::Coin(htlc_transfer_amount), Box::new(hash_lock)),
+        TxOutput::Htlc(OutputValue::Coin(htlc_transfer_amount), Box::new(htlc)),
         TxOutput::CreateOrder(Box::new(created_order_data)),
     ];
 
@@ -658,17 +720,21 @@ pub fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
         )
         .unwrap()
         .with_inputs(
-            [(htlc_input.clone(), htlc_utxo.clone(), Some(secret))],
-            &|_| None,
-        )
-        .unwrap()
-        .with_inputs(
-            [(multisig_input.clone(), multisig_utxo.clone(), None)],
+            [
+                (
+                    htlc_input.clone(),
+                    htlc_utxo.clone(),
+                    spend_htlc.then_some(htlc_secret),
+                ),
+                (multisig_input.clone(), multisig_utxo.clone(), None),
+            ],
             &|_| None,
         )
         .unwrap()
         .with_inputs_and_destinations(acc_inputs.into_iter().zip(acc_dests.clone()))
         .with_outputs(outputs);
+    let htlc_input_index = inputs.len();
+    let multisig_input_index = htlc_input_index + 1;
     let destinations = req.destinations().to_vec();
 
     let ptx_additional_info = PtxAdditionalInfo::new()
@@ -732,7 +798,9 @@ pub fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
             tx_block_height,
         )
         .unwrap();
-    assert!(ptx.all_signatures_available());
+    if first_account_can_sign_htlc {
+        assert!(ptx.all_signatures_available());
+    }
 
     if let Some(make_another_signer) = &make_another_signer {
         let mut another_signer = make_another_signer(chain_config.clone(), account.account_index());
@@ -745,7 +813,9 @@ pub fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
                 tx_block_height,
             )
             .unwrap();
-        assert!(another_ptx.all_signatures_available());
+        if first_account_can_sign_htlc {
+            assert!(another_ptx.all_signatures_available());
+        }
 
         assert_eq!(ptx, another_ptx);
     }
@@ -765,9 +835,8 @@ pub fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
         .collect::<Vec<_>>();
 
     for (i, dest) in destinations.iter().enumerate() {
-        // the multisig will not be fully signed
-        if dest == &multisig_dest {
-            let err = tx_verifier::input_check::signature_only_check::verify_tx_signature(
+        let verify = || {
+            tx_verifier::input_check::signature_only_check::verify_tx_signature(
                 &chain_config,
                 dest,
                 &ptx,
@@ -775,7 +844,10 @@ pub fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
                 i,
                 all_utxos[i].cloned(),
             )
-            .unwrap_err();
+        };
+        if i == multisig_input_index {
+            // The multisig will not be fully signed.
+            let err = verify().unwrap_err();
             assert_eq!(
                 err.error(),
                 &InputCheckErrorPayload::Verification(ScriptError::Signature(
@@ -785,16 +857,23 @@ pub fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
                     )
                 )),
             )
+        } else if i == htlc_input_index {
+            if !first_account_can_sign_htlc {
+                assert!(ptx.signatures()[i].is_none());
+            } else if matches!(dest, Destination::ClassicMultisig(_)) {
+                // The multisig will not be fully signed.
+                let err = verify().unwrap_err();
+                assert_eq!(
+                    err.error(),
+                    &InputCheckErrorPayload::Verification(ScriptError::Signature(
+                        DestinationSigError::IncompleteClassicalMultisigSignature(2, 1)
+                    )),
+                )
+            } else {
+                verify().unwrap();
+            }
         } else {
-            tx_verifier::input_check::signature_only_check::verify_tx_signature(
-                &chain_config,
-                dest,
-                &ptx,
-                &input_commitments,
-                i,
-                all_utxos[i].cloned(),
-            )
-            .unwrap();
+            verify().unwrap();
         }
     }
 

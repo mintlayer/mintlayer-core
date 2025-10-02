@@ -56,7 +56,10 @@ use common::{
                 classical_multisig::authorize_classical_multisig::{
                     sign_classical_multisig_spending, AuthorizedClassicalMultisigSpend,
                 },
-                htlc::produce_uniparty_signature_for_htlc_input,
+                htlc::{
+                    produce_uniparty_signature_for_htlc_refunding,
+                    produce_uniparty_signature_for_htlc_spending,
+                },
                 standard_signature::StandardInputSignature,
                 InputWitness,
             },
@@ -637,9 +640,9 @@ pub fn extract_htlc_secret(
         extract_htlc_spend(tx.signatures().get(htlc_position).ok_or(Error::InvalidWitnessCount)?)?;
 
     match htlc_spend {
-        AuthorizedHashedTimelockContractSpend::Secret(secret, _) => Ok(secret.encode()),
-        AuthorizedHashedTimelockContractSpend::Multisig(_) => Err(Error::UnexpectedHtlcSpendType(
-            AuthorizedHashedTimelockContractSpendTag::Multisig,
+        AuthorizedHashedTimelockContractSpend::Spend(secret, _) => Ok(secret.encode()),
+        AuthorizedHashedTimelockContractSpend::Refund(_) => Err(Error::UnexpectedHtlcSpendType(
+            AuthorizedHashedTimelockContractSpendTag::Refund,
         )),
     }
 }
@@ -782,13 +785,14 @@ pub fn encode_witness(
     Ok(witness.encode())
 }
 
-/// Given a private key, inputs and an input number to sign, and the destination that owns that output (through the utxo),
-/// and a network type (mainnet, testnet, etc), and an htlc secret this function returns a witness to be used in a signed transaction, as bytes.
+/// Sign the specified HTLC input of the transaction and encode the signature as InputWitness.
+///
+/// This function must be used for HTLC spending.
 ///
 /// `input_utxos` and `additional_info` have the same format and requirements as in `encode_witness`.
 #[allow(clippy::too_many_arguments)]
 #[wasm_bindgen]
-pub fn encode_witness_htlc_secret(
+pub fn encode_witness_htlc_spend(
     sighashtype: SignatureHashType,
     private_key: &[u8],
     input_owner_destination: &str,
@@ -826,7 +830,7 @@ pub fn encode_witness_htlc_secret(
     let secret =
         HtlcSecret::decode_all(&mut &secret[..]).map_err(Error::InvalidHtlcSecretEncoding)?;
 
-    let witness = produce_uniparty_signature_for_htlc_input(
+    let witness = produce_uniparty_signature_for_htlc_spending(
         &private_key,
         sighashtype.into(),
         destination,
@@ -884,16 +888,18 @@ pub fn multisig_challenge_to_address(
     Ok(address)
 }
 
-/// Given a private key, inputs and an input number to sign, and multisig challenge,
-/// and a network type (mainnet, testnet, etc), this function returns a witness to be used in a signed transaction, as bytes.
+/// Sign the specified HTLC input of the transaction and encode the signature as InputWitness.
 ///
-/// `key_index` parameter is an index of the public key in the challenge corresponding to the specified private key.
+/// This function must be used for HTLC refunding when the refund address is a multisig one.
+///
+/// `key_index` parameter is an index of the public key in the multisig challenge corresponding to
+/// the specified private key.
 /// `input_witness` parameter can be either empty or a result of previous calls to this function.
 ///
 /// `input_utxos` and `additional_info` have the same format and requirements as in `encode_witness`.
 #[allow(clippy::too_many_arguments)]
 #[wasm_bindgen]
-pub fn encode_witness_htlc_multisig(
+pub fn encode_witness_htlc_refund_multisig(
     sighashtype: SignatureHashType,
     private_key: &[u8],
     key_index: u8,
@@ -940,12 +946,12 @@ pub fn encode_witness_htlc_multisig(
         let (htlc_spend, _) = extract_htlc_spend(&input_witness)?;
 
         match htlc_spend {
-            AuthorizedHashedTimelockContractSpend::Secret(_, _) => {
+            AuthorizedHashedTimelockContractSpend::Spend(_, _) => {
                 return Err(Error::UnexpectedHtlcSpendType(
-                    AuthorizedHashedTimelockContractSpendTag::Secret,
+                    AuthorizedHashedTimelockContractSpendTag::Spend,
                 ));
             }
-            AuthorizedHashedTimelockContractSpend::Multisig(raw_signature) => {
+            AuthorizedHashedTimelockContractSpend::Refund(raw_signature) => {
                 AuthorizedClassicalMultisigSpend::from_data(&raw_signature)
                     .map_err(Error::MultisigSpendCreationError)?
             }
@@ -967,8 +973,64 @@ pub fn encode_witness_htlc_multisig(
     .take();
 
     let raw_signature =
-        AuthorizedHashedTimelockContractSpend::Multisig(authorization.encode()).encode();
+        AuthorizedHashedTimelockContractSpend::Refund(authorization.encode()).encode();
     let witness = InputWitness::Standard(StandardInputSignature::new(sighashtype, raw_signature));
+
+    Ok(witness.encode())
+}
+
+/// Sign the specified HTLC input of the transaction and encode the signature as InputWitness.
+///
+/// This function must be used for HTLC refunding when the refund address is a single-sig one.
+///
+/// `input_utxos` and `additional_info` have the same format and requirements as in `encode_witness`.
+#[allow(clippy::too_many_arguments)]
+#[wasm_bindgen]
+pub fn encode_witness_htlc_refund_single_sig(
+    sighashtype: SignatureHashType,
+    private_key: &[u8],
+    input_owner_destination: &str,
+    transaction: &[u8],
+    input_utxos: &[u8],
+    input_index: u32,
+    additional_info: TxAdditionalInfo,
+    current_block_height: u64,
+    network: Network,
+) -> Result<Vec<u8>, Error> {
+    let chain_config = Builder::new(network.into()).build();
+
+    let private_key =
+        PrivateKey::decode_all(&mut &private_key[..]).map_err(Error::InvalidPrivateKeyEncoding)?;
+
+    let destination = parse_addressable(&chain_config, input_owner_destination)?;
+
+    let tx = Transaction::decode_all(&mut &transaction[..])
+        .map_err(Error::InvalidTransactionEncoding)?;
+
+    let input_utxos = decode_raw_array::<Option<TxOutput>>(input_utxos)
+        .map_err(Error::InvalidInputUtxoEncoding)?;
+
+    let ptx_additional_info = to_ptx_additional_info(&chain_config, &additional_info)?;
+
+    let input_commitments = make_sighash_input_commitments_at_height(
+        tx.inputs(),
+        &input_utxos,
+        &ptx_additional_info,
+        &chain_config,
+        BlockHeight::new(current_block_height),
+    )?;
+
+    let witness = produce_uniparty_signature_for_htlc_refunding(
+        &private_key,
+        sighashtype.into(),
+        destination,
+        &tx,
+        &input_commitments,
+        input_index as usize,
+        &mut randomness::make_true_rng(),
+    )
+    .map(InputWitness::Standard)
+    .map_err(Error::InputSigningError)?;
 
     Ok(witness.encode())
 }

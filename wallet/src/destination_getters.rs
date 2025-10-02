@@ -19,8 +19,8 @@ use crate::account::PoolData;
 
 #[derive(Clone, Copy, Debug)]
 pub enum HtlcSpendingCondition {
-    WithSecret,
-    WithMultisig,
+    WithSpend,
+    WithRefund,
     Skip,
 }
 
@@ -33,7 +33,7 @@ impl HtlcSpendingCondition {
             secrets
                 .get(index)
                 .and_then(Option::as_ref)
-                .map_or(Self::WithMultisig, |_: &HtlcSecret| Self::WithSecret)
+                .map_or(Self::WithRefund, |_: &HtlcSecret| Self::WithSpend)
         })
     }
 }
@@ -61,8 +61,8 @@ where
         | TxOutput::DataDeposit(_)
         | TxOutput::CreateOrder(_) => None,
         TxOutput::Htlc(_, htlc) => match htlc_spending {
-            HtlcSpendingCondition::WithSecret => Some(htlc.spend_key.clone()),
-            HtlcSpendingCondition::WithMultisig => Some(htlc.refund_key.clone()),
+            HtlcSpendingCondition::WithSpend => Some(htlc.spend_key.clone()),
+            HtlcSpendingCondition::WithRefund => Some(htlc.refund_key.clone()),
             HtlcSpendingCondition::Skip => None,
         },
     }

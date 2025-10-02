@@ -51,8 +51,9 @@ export const INPUTS = [
   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4,
 ];
 
-// OutpointSourceId used in INPUTS.
-export const TX_OUTPOINT = new Uint8Array(33).fill(0)
+// OutpointSourceId and index used in INPUTS.
+export const TX_OUTPOINT_SOURCE_ID = new Uint8Array(33).fill(0);
+export const TX_OUTPOINT_INDEX = 1;
 
 export function test_encode_other_inputs() {
   run_one_test(predefined_inputs_test);
@@ -60,7 +61,7 @@ export function test_encode_other_inputs() {
 }
 
 function predefined_inputs_test() {
-  const tx_input = encode_input_for_utxo(TX_OUTPOINT, 1);
+  const tx_input = encode_input_for_utxo(TX_OUTPOINT_SOURCE_ID, TX_OUTPOINT_INDEX);
   const deleg_id =
     "mdelg1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqut3aj8";
   const tx_input2 = encode_input_for_withdraw_from_delegation(
