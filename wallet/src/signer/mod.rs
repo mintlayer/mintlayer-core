@@ -99,8 +99,8 @@ pub enum SignerError {
     AddressError(#[from] AddressError),
     #[error("Order was filled more than the available balance")]
     OrderFillUnderflow,
-    #[error("Multisig HTLC destination expected")]
-    HtlcMultisigDestinationExpected, // FIXME rename?
+    #[error("HTLC refund expected for a multisig destination")]
+    HtlcRefundExpectedForMultisig,
     #[error("Partially signed transaction error: {0}")]
     PartiallySignedTransactionError(#[from] PartiallySignedTransactionError),
     #[error("Duplicate UTXO input: {0:?}")]

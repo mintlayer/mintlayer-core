@@ -122,10 +122,10 @@ pub fn internal_verify_witness(
         let (htlc_spend, sighash_type) = extract_htlc_spend(&witness)?;
 
         let (raw_sig, dest) = match htlc_spend {
-            AuthorizedHashedTimelockContractSpend::Secret(_, raw_sig) => {
+            AuthorizedHashedTimelockContractSpend::Spend(_, raw_sig) => {
                 (raw_sig, htlc.spend_key.clone())
             }
-            AuthorizedHashedTimelockContractSpend::Multisig(raw_sig) => {
+            AuthorizedHashedTimelockContractSpend::Refund(raw_sig) => {
                 (raw_sig, htlc.refund_key.clone())
             }
         };

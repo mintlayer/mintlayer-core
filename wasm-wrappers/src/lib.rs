@@ -640,9 +640,9 @@ pub fn extract_htlc_secret(
         extract_htlc_spend(tx.signatures().get(htlc_position).ok_or(Error::InvalidWitnessCount)?)?;
 
     match htlc_spend {
-        AuthorizedHashedTimelockContractSpend::Secret(secret, _) => Ok(secret.encode()),
-        AuthorizedHashedTimelockContractSpend::Multisig(_) => Err(Error::UnexpectedHtlcSpendType(
-            AuthorizedHashedTimelockContractSpendTag::Multisig,
+        AuthorizedHashedTimelockContractSpend::Spend(secret, _) => Ok(secret.encode()),
+        AuthorizedHashedTimelockContractSpend::Refund(_) => Err(Error::UnexpectedHtlcSpendType(
+            AuthorizedHashedTimelockContractSpendTag::Refund,
         )),
     }
 }
@@ -946,12 +946,12 @@ pub fn encode_witness_htlc_refund_multisig(
         let (htlc_spend, _) = extract_htlc_spend(&input_witness)?;
 
         match htlc_spend {
-            AuthorizedHashedTimelockContractSpend::Secret(_, _) => {
+            AuthorizedHashedTimelockContractSpend::Spend(_, _) => {
                 return Err(Error::UnexpectedHtlcSpendType(
-                    AuthorizedHashedTimelockContractSpendTag::Secret,
+                    AuthorizedHashedTimelockContractSpendTag::Spend,
                 ));
             }
-            AuthorizedHashedTimelockContractSpend::Multisig(raw_signature) => {
+            AuthorizedHashedTimelockContractSpend::Refund(raw_signature) => {
                 AuthorizedClassicalMultisigSpend::from_data(&raw_signature)
                     .map_err(Error::MultisigSpendCreationError)?
             }
@@ -973,7 +973,7 @@ pub fn encode_witness_htlc_refund_multisig(
     .take();
 
     let raw_signature =
-        AuthorizedHashedTimelockContractSpend::Multisig(authorization.encode()).encode();
+        AuthorizedHashedTimelockContractSpend::Refund(authorization.encode()).encode();
     let witness = InputWitness::Standard(StandardInputSignature::new(sighashtype, raw_signature));
 
     Ok(witness.encode())

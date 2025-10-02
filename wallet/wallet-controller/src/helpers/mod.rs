@@ -114,7 +114,7 @@ pub async fn fetch_utxo<T: NodeInterface, B: storage::Backend>(
     // TODO: perhaps find_unspent_utxo_and_destination should return Option<Destination> for the cases when it's
     // not actually needed.
     if let Some(out) =
-        wallet.find_unspent_utxo_and_destination(input, HtlcSpendingCondition::WithMultisig)
+        wallet.find_unspent_utxo_and_destination(input, HtlcSpendingCondition::WithRefund)
     {
         return Ok(out.0);
     }

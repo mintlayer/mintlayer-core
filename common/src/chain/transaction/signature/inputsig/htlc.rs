@@ -55,7 +55,7 @@ pub fn produce_uniparty_signature_for_htlc_spending<
     )?;
 
     let sig_with_secret =
-        AuthorizedHashedTimelockContractSpend::Secret(htlc_secret, sig.raw_signature().to_owned());
+        AuthorizedHashedTimelockContractSpend::Spend(htlc_secret, sig.raw_signature().to_owned());
     let serialized_sig = sig_with_secret.encode();
 
     Ok(StandardInputSignature::new(
@@ -82,7 +82,7 @@ pub fn produce_classical_multisig_signature_for_htlc_refunding(
     )?;
 
     let raw_signature =
-        AuthorizedHashedTimelockContractSpend::Multisig(sig.raw_signature().to_owned()).encode();
+        AuthorizedHashedTimelockContractSpend::Refund(sig.raw_signature().to_owned()).encode();
 
     Ok(StandardInputSignature::new(
         sig.sighash_type(),
@@ -113,7 +113,7 @@ pub fn produce_uniparty_signature_for_htlc_refunding<
     )?;
 
     let sig_with_secret =
-        AuthorizedHashedTimelockContractSpend::Multisig(sig.raw_signature().to_owned());
+        AuthorizedHashedTimelockContractSpend::Refund(sig.raw_signature().to_owned());
     let serialized_sig = sig_with_secret.encode();
 
     Ok(StandardInputSignature::new(

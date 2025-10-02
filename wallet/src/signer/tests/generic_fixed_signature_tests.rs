@@ -1511,10 +1511,10 @@ fn log_witness(index: usize, witness: &InputWitness) {
                     }
                 }
                 PossibleSpend::Htlc(spend) => match spend {
-                    AuthorizedHashedTimelockContractSpend::Secret(_, inner_sig) => {
+                    AuthorizedHashedTimelockContractSpend::Spend(_, inner_sig) => {
                         let sig_hex = hex::encode(&inner_sig);
                         log::debug!(
-                            "sig #{index} is AuthorizedHashedTimelockContractSpend::Secret, entire sig = {sig_hex}"
+                            "sig #{index} is AuthorizedHashedTimelockContractSpend::Spend, entire sig = {sig_hex}"
                         );
 
                         let inner_spend = decode_sig(&inner_sig).unwrap_or_else(|| {
@@ -1541,9 +1541,9 @@ fn log_witness(index: usize, witness: &InputWitness) {
                             }
                         }
                     }
-                    AuthorizedHashedTimelockContractSpend::Multisig(inner_sig) => {
+                    AuthorizedHashedTimelockContractSpend::Refund(inner_sig) => {
                         log::debug!(
-                            "sig #{index} is AuthorizedHashedTimelockContractSpend::Multisig"
+                            "sig #{index} is AuthorizedHashedTimelockContractSpend::Refund"
                         );
 
                         let inner_spend = decode_sig(&inner_sig).unwrap_or_else(|| {
@@ -1645,7 +1645,7 @@ fn make_htlc_pub_key_spend_sig(secret: HtlcSecret, sig_hex: &str) -> StandardInp
     let sig = Signature::from_raw_data(&sig_bytes, SignatureKind::Secp256k1Schnorr).unwrap();
     let inner_spend = AuthorizedPublicKeySpend::new(sig);
 
-    let spend = AuthorizedHashedTimelockContractSpend::Secret(secret, inner_spend.encode());
+    let spend = AuthorizedHashedTimelockContractSpend::Spend(secret, inner_spend.encode());
     StandardInputSignature::new(SigHashType::ALL.try_into().unwrap(), spend.encode())
 }
 
@@ -1661,7 +1661,7 @@ fn make_htlc_multisig_refund_sig<'a>(
         multisig_spend.add_signature(idx as u8, sig);
     }
 
-    let spend = AuthorizedHashedTimelockContractSpend::Multisig(multisig_spend.encode());
+    let spend = AuthorizedHashedTimelockContractSpend::Refund(multisig_spend.encode());
     let sighash_type: SigHashType = SigHashType::ALL.try_into().unwrap();
     StandardInputSignature::new(sighash_type, spend.encode())
 }
@@ -1671,7 +1671,7 @@ fn make_htlc_uniparty_pub_key_refund_sig(sig_hex: &str) -> StandardInputSignatur
     let sig = Signature::from_raw_data(&sig_bytes, SignatureKind::Secp256k1Schnorr).unwrap();
     let inner_spend = AuthorizedPublicKeySpend::new(sig);
 
-    let spend = AuthorizedHashedTimelockContractSpend::Multisig(inner_spend.encode());
+    let spend = AuthorizedHashedTimelockContractSpend::Refund(inner_spend.encode());
     StandardInputSignature::new(SigHashType::ALL.try_into().unwrap(), spend.encode())
 }
 
@@ -1683,7 +1683,7 @@ fn make_htlc_uniparty_pub_key_hash_refund_sig(
     let sig = Signature::from_raw_data(&sig_bytes, SignatureKind::Secp256k1Schnorr).unwrap();
     let inner_spend = AuthorizedPublicKeyHashSpend::new(pub_key, sig);
 
-    let spend = AuthorizedHashedTimelockContractSpend::Multisig(inner_spend.encode());
+    let spend = AuthorizedHashedTimelockContractSpend::Refund(inner_spend.encode());
     StandardInputSignature::new(SigHashType::ALL.try_into().unwrap(), spend.encode())
 }
 

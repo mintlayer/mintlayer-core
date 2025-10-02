@@ -191,7 +191,7 @@ fn htlc_spend_sig(byte: u8) -> InputWitness {
     let sht = SigHashType::default();
     let raw_sig = vec![byte; 2];
     let secret = HtlcSecret::new([6; 32]);
-    let sig_with_secret = AuthorizedHashedTimelockContractSpend::Secret(secret, raw_sig);
+    let sig_with_secret = AuthorizedHashedTimelockContractSpend::Spend(secret, raw_sig);
     let serialized_sig = sig_with_secret.encode();
 
     InputWitness::Standard(StandardInputSignature::new(sht, serialized_sig))
@@ -200,7 +200,7 @@ fn htlc_spend_sig(byte: u8) -> InputWitness {
 fn htlc_refund_sig(byte: u8) -> InputWitness {
     let sht = SigHashType::default();
     let raw_sig = vec![byte; 2];
-    let sig_with_secret = AuthorizedHashedTimelockContractSpend::Multisig(raw_sig);
+    let sig_with_secret = AuthorizedHashedTimelockContractSpend::Refund(raw_sig);
     let serialized_sig = sig_with_secret.encode();
 
     InputWitness::Standard(StandardInputSignature::new(sht, serialized_sig))

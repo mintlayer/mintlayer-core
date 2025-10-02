@@ -578,12 +578,12 @@ impl Signer for TrezorSigner {
                     let sig = if is_htlc_input {
                         let sighash_type = sig.sighash_type();
                         let spend = if let Some(htlc_secret) = htlc_secret {
-                            AuthorizedHashedTimelockContractSpend::Secret(
+                            AuthorizedHashedTimelockContractSpend::Spend(
                                 htlc_secret.clone(),
                                 sig.into_raw_signature(),
                             )
                         } else {
-                            AuthorizedHashedTimelockContractSpend::Multisig(sig.into_raw_signature())
+                            AuthorizedHashedTimelockContractSpend::Refund(sig.into_raw_signature())
                         };
 
                         let serialized_spend = spend.encode();
@@ -646,10 +646,10 @@ impl Signer for TrezorSigner {
                                     let current_signatures = if is_htlc_input {
                                         let htlc_spend = AuthorizedHashedTimelockContractSpend::from_data(sig.raw_signature())?;
                                         match htlc_spend {
-                                            AuthorizedHashedTimelockContractSpend::Secret(_, _) => {
-                                                return Err(SignerError::HtlcMultisigDestinationExpected);
+                                            AuthorizedHashedTimelockContractSpend::Spend(_, _) => {
+                                                return Err(SignerError::HtlcRefundExpectedForMultisig);
                                             },
-                                            AuthorizedHashedTimelockContractSpend::Multisig(raw_sig) => {
+                                            AuthorizedHashedTimelockContractSpend::Refund(raw_sig) => {
                                                 AuthorizedClassicalMultisigSpend::from_data(&raw_sig)?
                                             },
                                         }

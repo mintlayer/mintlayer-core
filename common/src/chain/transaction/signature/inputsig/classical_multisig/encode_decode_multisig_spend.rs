@@ -36,7 +36,7 @@ pub fn encode_multisig_spend(
     let raw_signature = match utxo {
         Some(utxo) => {
             if is_htlc_output(utxo) {
-                AuthorizedHashedTimelockContractSpend::Multisig(sig_component.encode()).encode()
+                AuthorizedHashedTimelockContractSpend::Refund(sig_component.encode()).encode()
             } else {
                 sig_component.encode()
             }
@@ -58,10 +58,10 @@ pub fn decode_multisig_spend(
                 let htlc_spend =
                     AuthorizedHashedTimelockContractSpend::from_data(sig.raw_signature())?;
                 match htlc_spend {
-                    AuthorizedHashedTimelockContractSpend::Secret(_, _) => {
+                    AuthorizedHashedTimelockContractSpend::Spend(_, _) => {
                         return Err(DestinationSigError::InvalidClassicalMultisigAuthorization);
                     }
-                    AuthorizedHashedTimelockContractSpend::Multisig(raw_signature) => {
+                    AuthorizedHashedTimelockContractSpend::Refund(raw_signature) => {
                         AuthorizedClassicalMultisigSpend::from_data(&raw_signature)?
                     }
                 }

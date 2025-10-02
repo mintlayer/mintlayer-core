@@ -454,7 +454,7 @@ fn refund_htlc_multisig(#[case] seed: Seed) {
                 let signature = test_fixture.alice_sk.sign_message(&sighash, &mut rng).unwrap();
                 authorization.add_signature(0, signature);
 
-                AuthorizedHashedTimelockContractSpend::Multisig(authorization.encode())
+                AuthorizedHashedTimelockContractSpend::Refund(authorization.encode())
             };
 
             let input_sign =
@@ -511,7 +511,7 @@ fn refund_htlc_multisig(#[case] seed: Seed) {
                 let signature = test_fixture.bob_sk.sign_message(&sighash, &mut rng).unwrap();
                 authorization.add_signature(1, signature);
 
-                AuthorizedHashedTimelockContractSpend::Multisig(authorization.encode())
+                AuthorizedHashedTimelockContractSpend::Refund(authorization.encode())
             };
 
             let input_sign =
