@@ -813,7 +813,9 @@ pub fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
                 tx_block_height,
             )
             .unwrap();
-        assert!(another_ptx.all_signatures_available());
+        if first_account_can_sign_htlc {
+            assert!(another_ptx.all_signatures_available());
+        }
 
         assert_eq!(ptx, another_ptx);
     }
