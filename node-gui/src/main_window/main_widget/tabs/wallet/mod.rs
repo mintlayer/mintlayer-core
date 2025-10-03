@@ -471,6 +471,7 @@ impl Tab for WalletTab {
             Some(wallet_info) => match wallet_info.extra_info {
                 wallet_controller::types::WalletExtraInfo::SoftwareWallet => "Software wallet",
                 wallet_controller::types::WalletExtraInfo::TrezorWallet { .. } => "Trezor wallet",
+                wallet_controller::types::WalletExtraInfo::LedgerWallet { .. } => "Ledger wallet",
             },
             None => "No wallet",
         };

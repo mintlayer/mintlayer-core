@@ -405,8 +405,8 @@ where
             Err(err) => return Err(err),
         };
 
-        if let Some(info) = signer_provider.get_hardware_wallet_info() {
-            db_tx.set_hardware_wallet_data(info.into())?;
+        if let Some(data) = signer_provider.get_hardware_wallet_info() {
+            db_tx.set_hardware_wallet_data(data.into())?;
         }
 
         let default_account = Wallet::<B, P>::create_next_unused_account(
@@ -415,7 +415,8 @@ where
             &mut db_tx,
             None,
             &mut signer_provider,
-        )?;
+        )
+        .await?;
 
         let next_unused_account = Wallet::<B, P>::create_next_unused_account(
             U31::ONE,
@@ -423,7 +424,8 @@ where
             &mut db_tx,
             None,
             &mut signer_provider,
-        )?;
+        )
+        .await?;
 
         db_tx.commit()?;
 
@@ -457,7 +459,7 @@ where
         Self::reset_wallet_transactions(chain_config.clone(), &mut db_tx)?;
 
         // Create the next unused account
-        Self::migrate_next_unused_account(chain_config, &mut db_tx, signer_provider)?;
+        Self::migrate_next_unused_account(chain_config, &mut db_tx, signer_provider).await?;
 
         db_tx.set_storage_version(WALLET_VERSION_V2)?;
         db_tx.commit()?;
@@ -788,11 +790,11 @@ where
             .collect()
     }
 
-    fn migrate_next_unused_account(
+    async fn migrate_next_unused_account<T: WalletStorageWriteUnlocked + Send>(
         chain_config: Arc<ChainConfig>,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
+        db_tx: &mut T,
         signer_provider: &mut P,
-    ) -> Result<(), WalletError> {
+    ) -> WalletResult<()> {
         let accounts_info = db_tx.get_accounts_info()?;
         let mut accounts: BTreeMap<U31, Account<P::K>> = accounts_info
             .keys()
@@ -804,17 +806,21 @@ where
             .map(|account| (account.account_index(), account))
             .collect();
         let last_account = accounts.pop_last().ok_or(WalletError::WalletNotInitialized)?;
+
         let next_account_index = last_account
             .0
             .plus_one()
             .map_err(|_| WalletError::AbsoluteMaxNumAccountsExceeded(last_account.0))?;
+
         Wallet::<B, P>::create_next_unused_account(
             next_account_index,
             chain_config.clone(),
             db_tx,
             None,
             signer_provider,
-        )?;
+        )
+        .await?;
+
         Ok(())
     }
 
@@ -994,10 +1000,10 @@ where
         self.signer_provider.get_hardware_wallet_info()
     }
 
-    fn create_next_unused_account(
+    async fn create_next_unused_account<T: WalletStorageWriteUnlocked + Send>(
         next_account_index: U31,
         chain_config: Arc<ChainConfig>,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
+        db_tx: &mut T,
         name: Option<String>,
         signer_provider: &mut P,
     ) -> WalletResult<(U31, Account<P::K>)> {
@@ -1006,12 +1012,9 @@ where
             WalletError::EmptyAccountName
         );
 
-        let account = signer_provider.make_new_account(
-            chain_config.clone(),
-            next_account_index,
-            name,
-            db_tx,
-        )?;
+        let account = signer_provider
+            .make_new_account(chain_config.clone(), next_account_index, name, db_tx)
+            .await?;
 
         Ok((next_account_index, account))
     }
@@ -1048,7 +1051,8 @@ where
             &mut db_tx,
             None,
             &mut self.signer_provider,
-        )?;
+        )
+        .await?;
 
         self.next_unused_account.1.set_name(name.clone(), &mut db_tx)?;
         std::mem::swap(&mut self.next_unused_account, &mut next_unused_account);
