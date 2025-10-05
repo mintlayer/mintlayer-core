@@ -419,21 +419,31 @@ impl LockedUtxo {
 #[derive(Debug, Clone, Encode, Decode)]
 pub struct Utxo {
     utxo: UtxoWithExtraInfo,
-    spent: bool,
+    spent_at_block_height: Option<BlockHeight>,
 }
 
 impl Utxo {
-    pub fn new_with_info(utxo: UtxoWithExtraInfo, spent: bool) -> Self {
-        Self { utxo, spent }
+    pub fn new_with_info(
+        utxo: UtxoWithExtraInfo,
+        spent_at_block_height: Option<BlockHeight>,
+    ) -> Self {
+        Self {
+            utxo,
+            spent_at_block_height,
+        }
     }
 
-    pub fn new(output: TxOutput, token_decimals: Option<u8>, spent: bool) -> Self {
+    pub fn new(
+        output: TxOutput,
+        token_decimals: Option<u8>,
+        spent_at_block_height: Option<BlockHeight>,
+    ) -> Self {
         Self {
             utxo: UtxoWithExtraInfo {
                 output,
                 token_decimals,
             },
-            spent,
+            spent_at_block_height,
         }
     }
 
@@ -449,8 +459,12 @@ impl Utxo {
         self.utxo.output
     }
 
+    pub fn spent_at_block_height(&self) -> Option<BlockHeight> {
+        self.spent_at_block_height
+    }
+
     pub fn spent(&self) -> bool {
-        self.spent
+        self.spent_at_block_height.is_some()
     }
 }
 

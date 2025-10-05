@@ -1959,7 +1959,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         let row = self
             .tx
             .query_opt(
-                "SELECT utxo, spent FROM ml.utxo WHERE outpoint = $1 ORDER BY block_height DESC LIMIT 1;",
+                "SELECT utxo, spent, block_height FROM ml.utxo WHERE outpoint = $1 ORDER BY block_height DESC LIMIT 1;",
                 &[&outpoint.encode()],
             )
             .await
@@ -1972,6 +1972,8 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
 
         let serialized_data: Vec<u8> = row.get(0);
         let spent: bool = row.get(1);
+        let block_height: i64 = row.get(2);
+        let spent_at_block_height = spent.then_some(BlockHeight::new(block_height as u64));
 
         let output =
             UtxoWithExtraInfo::decode_all(&mut serialized_data.as_slice()).map_err(|e| {
@@ -1981,7 +1983,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 ))
             })?;
 
-        Ok(Some(Utxo::new_with_info(output, spent)))
+        Ok(Some(Utxo::new_with_info(output, spent_at_block_height)))
     }
 
     pub async fn get_address_available_utxos(

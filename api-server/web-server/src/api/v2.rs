@@ -599,7 +599,10 @@ pub async fn transaction_output<T: ApiServerStorage>(
     );
     let obj = json.as_object_mut().expect("object");
 
-    obj.insert("spent".into(), utxo.spent().into());
+    obj.insert(
+        "spent_at_block_height".into(),
+        utxo.spent_at_block_height().map(BlockHeight::into_int).into(),
+    );
 
     Ok(Json(json))
 }

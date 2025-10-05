@@ -298,7 +298,7 @@ async fn update_locked_amounts_for_current_block<T: ApiServerStorageWrite>(
         if let Some(destination) = get_tx_output_destination(&locked_utxo.output) {
             let address = Address::<Destination>::new(chain_config, destination.clone())
                 .expect("Unable to encode destination");
-            let utxo = Utxo::new_with_info(locked_utxo, false);
+            let utxo = Utxo::new_with_info(locked_utxo, None);
             db_tx.set_utxo_at_height(outpoint, utxo, address.as_str(), block_height).await?;
         }
     }
@@ -1768,7 +1768,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
 
                 let outpoint =
                     UtxoOutPoint::new(OutPointSourceId::Transaction(transaction_id), idx as u32);
-                let utxo = Utxo::new(output.clone(), token_decimals, false);
+                let utxo = Utxo::new(output.clone(), token_decimals, None);
                 db_tx
                     .set_utxo_at_height(outpoint, utxo, address.as_str(), block_height)
                     .await
@@ -1841,7 +1841,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                 };
 
                 if already_unlocked {
-                    let utxo = Utxo::new(output.clone(), token_decimals, false);
+                    let utxo = Utxo::new(output.clone(), token_decimals, None);
                     db_tx
                         .set_utxo_at_height(outpoint, utxo, address.as_str(), block_height)
                         .await
@@ -1870,7 +1870,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
 
                 let outpoint =
                     UtxoOutPoint::new(OutPointSourceId::Transaction(transaction_id), idx as u32);
-                let utxo = Utxo::new(output.clone(), token_decimals, false);
+                let utxo = Utxo::new(output.clone(), token_decimals, None);
                 db_tx
                     .set_utxo_at_height(outpoint, utxo, address.as_str(), block_height)
                     .await
@@ -2071,7 +2071,11 @@ async fn set_utxo<T: ApiServerStorageWrite>(
     spent: bool,
     chain_config: &ChainConfig,
 ) {
-    let utxo = Utxo::new(output.clone(), token_decimals, spent);
+    let utxo = Utxo::new(
+        output.clone(),
+        token_decimals,
+        spent.then_some(block_height),
+    );
     if let Some(destination) = get_tx_output_destination(output) {
         let address = Address::<Destination>::new(chain_config, destination.clone())
             .expect("Unable to encode destination");
