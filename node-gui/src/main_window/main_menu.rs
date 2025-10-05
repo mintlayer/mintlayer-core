@@ -146,6 +146,28 @@ fn make_menu_file<'a>(wallet_mode: WalletMode) -> Item<'a, MenuMessage, Theme, i
                         },
                     ));
                 }
+                #[cfg(feature = "ledger")]
+                {
+                    menu.push(menu_item(
+                        "(Beta) Create new Ledger wallet",
+                        MenuMessage::CreateNewWallet {
+                            wallet_type: WalletType::Ledger,
+                        },
+                    ));
+                    menu.push(menu_item(
+                        "(Beta) Recover from Ledger wallet",
+                        MenuMessage::RecoverWallet {
+                            wallet_type: WalletType::Ledger,
+                        },
+                    ));
+                    menu.push(menu_item(
+                        "(Beta) Open Ledger wallet",
+                        MenuMessage::OpenWallet {
+                            wallet_type: WalletType::Ledger,
+                        },
+                    ));
+                }
+
                 // TODO: enable setting when needed
                 // menu.push(menu_item("Settings", MenuMessage::NoOp));
                 menu.push(menu_item("Exit", MenuMessage::Exit));

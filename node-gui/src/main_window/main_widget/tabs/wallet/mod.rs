@@ -183,6 +183,8 @@ impl WalletTab {
             WalletType::Cold => SelectedPanel::Addresses,
             #[cfg(feature = "trezor")]
             WalletType::Trezor => SelectedPanel::Transactions,
+            #[cfg(feature = "ledger")]
+            WalletType::Ledger => SelectedPanel::Transactions,
         };
 
         WalletTab {
@@ -494,6 +496,10 @@ impl Tab for WalletTab {
             WalletType::Cold => false,
             #[cfg(feature = "trezor")]
             WalletType::Trezor => {
+                wallet_info.best_block.1.next_height() < node_state.chain_info.best_block_height
+            }
+            #[cfg(feature = "ledger")]
+            WalletType::Ledger => {
                 wallet_info.best_block.1.next_height() < node_state.chain_info.best_block_height
             }
             WalletType::Hot => {

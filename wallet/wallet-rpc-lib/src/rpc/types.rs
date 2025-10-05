@@ -1048,6 +1048,8 @@ pub enum RpcCurrency {
 pub enum HardwareWalletType {
     #[cfg(feature = "trezor")]
     Trezor { device_id: Option<String> },
+    #[cfg(feature = "ledger")]
+    Ledger,
 }
 
 impl HardwareWalletType {
@@ -1091,6 +1093,8 @@ impl HardwareWalletType {
                     HardwareWalletType::Trezor { device_id } => {
                         Ok(WalletTypeArgs::Trezor { device_id })
                     }
+                    #[cfg(feature = "ledger")]
+                    HardwareWalletType::Ledger => Ok(WalletTypeArgs::Ledger),
                 }
             }
         }
