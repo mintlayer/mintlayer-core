@@ -14,13 +14,15 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
-"""Wallet htlc refund test
+"""Wallet htlc refund test.
 
-* Create 2 wallets for Alice and Bob
-* Alice mints some tokens and creates an output that locks that tokens in htlc
-* Bob creates an output that locks coins in htlc
-*
-* Check resulting balances
+The refund address is multisig (the same refund address is used in both HTLCs for simplicity).
+
+* Create 2 wallets for Alice and Bob.
+* Alice mints some tokens and creates an output that locks them in htlc.
+* Bob creates an output that locks coins in htlc.
+* Both refund their htlcs.
+* Check resulting balances.
 """
 
 from scalecodec.base import ScaleBytes
