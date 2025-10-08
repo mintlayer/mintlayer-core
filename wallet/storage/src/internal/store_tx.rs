@@ -379,6 +379,12 @@ impl_read_ops!(StoreTxRw);
 impl_read_ops!(StoreTxRoUnlocked);
 impl_read_ops!(StoreTxRwUnlocked);
 
+// Note: the reasons for having this impl are:
+// 1) Unlike `&T`, `&mut T` can be `Send` without requiring `T` to be `Sync`, so in async code `&mut db_tx`
+// can be passed across an await point but `&db_tx` can't.
+// 2) Accepting `&mut impl WalletStorageReadXXX` in a generic async function would look weird, because
+// the Read traits themselves don't require mutability. So this impl allows a generic function to accept
+// `impl WalletStorageReadXXX` by value, while the caller may pass a `&mut db_tx` to it if needed.
 impl<T> WalletStorageReadLocked for &mut T
 where
     T: WalletStorageReadLocked,
@@ -581,6 +587,7 @@ macro_rules! impl_read_unlocked_ops {
 impl_read_unlocked_ops!(StoreTxRoUnlocked);
 impl_read_unlocked_ops!(StoreTxRwUnlocked);
 
+// Same note as for `impl<T> WalletStorageReadLocked for &mut T`.
 impl<T> WalletStorageReadUnlocked for &mut T
 where
     T: WalletStorageReadUnlocked,

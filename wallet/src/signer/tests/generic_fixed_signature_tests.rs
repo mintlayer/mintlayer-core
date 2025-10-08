@@ -1148,7 +1148,7 @@ pub async fn test_fixed_signatures_generic2<MkS, S>(
 // for completeness).
 // We also add one non-htlc input (pool decommissioning), so that signatures differ for different
 // input commitment versions.
-pub fn test_fixed_signatures_generic_htlc_refunding<MkS, S>(
+pub async fn test_fixed_signatures_generic_htlc_refunding<MkS, S>(
     rng: &mut (impl Rng + CryptoRng),
     input_commitments_version: SighashInputCommitmentVersion,
     make_signer: MkS,
@@ -1191,7 +1191,7 @@ pub fn test_fixed_signatures_generic_htlc_refunding<MkS, S>(
             .build(),
     );
 
-    let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
+    let mut db = Store::new(DefaultBackend::new_in_memory()).unwrap();
     let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
 
     let mut account1 = account_from_mnemonic(&chain_config, &mut db_tx, DEFAULT_ACCOUNT_INDEX);
@@ -1385,9 +1385,10 @@ pub fn test_fixed_signatures_generic_htlc_refunding<MkS, S>(
             ptx,
             &TokensAdditionalInfo::new(),
             account1.key_chain(),
-            &db_tx,
+            &mut db_tx,
             tx_block_height,
         )
+        .await
         .unwrap();
     assert!(ptx.all_signatures_available());
 
@@ -1400,9 +1401,10 @@ pub fn test_fixed_signatures_generic_htlc_refunding<MkS, S>(
             ptx,
             &TokensAdditionalInfo::new(),
             account2.key_chain(),
-            &db_tx,
+            &mut db_tx,
             tx_block_height,
         )
+        .await
         .unwrap();
     assert!(ptx.all_signatures_available());
 

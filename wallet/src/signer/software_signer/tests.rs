@@ -103,7 +103,8 @@ async fn test_fixed_signatures2(
         &mut rng,
         input_commitments_version,
         make_deterministic_software_signer,
-    );
+    )
+    .await;
 }
 
 #[rstest]
@@ -111,7 +112,8 @@ async fn test_fixed_signatures2(
 #[case(Seed::from_entropy(), SighashInputCommitmentVersion::V0)]
 #[trace]
 #[case(Seed::from_entropy(), SighashInputCommitmentVersion::V1)]
-fn test_fixed_signatures_htlc_refunding(
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_fixed_signatures_htlc_refunding(
     #[case] seed: Seed,
     #[case] input_commitments_version: SighashInputCommitmentVersion,
 ) {
