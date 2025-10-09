@@ -18,7 +18,7 @@ use crate::prelude::*;
 const TEST_KEY: &[u8] = b"foo";
 
 fn setup<B: Backend>(backend: B, init: Vec<u8>) -> B::Impl {
-    let store = backend.open(desc(1)).expect("db open to succeed");
+    let mut store = backend.open(desc(1)).expect("db open to succeed");
 
     let mut dbtx = store.transaction_rw(None).unwrap();
     dbtx.put(MAPID.0, TEST_KEY.to_vec(), init).unwrap();
@@ -27,8 +27,8 @@ fn setup<B: Backend>(backend: B, init: Vec<u8>) -> B::Impl {
     store
 }
 
-fn read_initialize_race<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
-    let store = backend_fn().open(desc(1)).expect("db open to succeed");
+fn read_initialize_race<B: SharedBackend, F: BackendFactory<B>>(backend_factory: Arc<F>) {
+    let store = backend_factory.create().open(desc(1)).expect("db open to succeed");
 
     let thr0 = thread::spawn({
         let store = store.clone();
@@ -47,8 +47,8 @@ fn read_initialize_race<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
     thr0.join().unwrap();
 }
 
-fn read_write_race<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
-    let store = setup(backend_fn(), vec![0]);
+fn read_write_race<B: SharedBackend, F: BackendFactory<B>>(backend_factory: Arc<F>) {
+    let store = setup(backend_factory.create(), vec![0]);
 
     let thr0 = thread::spawn({
         let store = store.clone();
@@ -68,8 +68,8 @@ fn read_write_race<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
     thr0.join().unwrap();
 }
 
-fn commutative_read_modify_write<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
-    let store = setup(backend_fn(), vec![0]);
+fn commutative_read_modify_write<B: SharedBackend, F: BackendFactory<B>>(backend_factory: Arc<F>) {
+    let store = setup(backend_factory.create(), vec![0]);
 
     let thr0 = thread::spawn({
         let store = store.clone();
@@ -102,42 +102,89 @@ fn commutative_read_modify_write<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>
     );
 }
 
-fn threaded_reads_consistent<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
+// Test parallel reading through a normal Backend. A reference to BackendImpl is shared between threads.
+// Note that it's disabled for loom, where thread::scope is not available.
+#[cfg(not(loom))]
+fn threaded_reads_consistent_for_ordinary_backend<B: Backend, F: BackendFactory<B>>(
+    backend_factory: Arc<F>,
+) {
     let val = [0x77, 0x88, 0x99].as_ref();
-    let store = setup(backend_fn(), val.to_vec());
+    let store = setup(backend_factory.create(), val.to_vec());
+
+    thread::scope(|s| {
+        let thr0 = s.spawn({
+            || {
+                for _ in 0..100 {
+                    let tx = store.transaction_ro().unwrap();
+                    let obtained_val = tx.get(MAPID.0, TEST_KEY).unwrap().unwrap();
+                    assert_eq!(obtained_val, val);
+                }
+            }
+        });
+        let thr1 = s.spawn({
+            || {
+                for _ in 0..100 {
+                    let tx = store.transaction_ro().unwrap();
+                    let obtained_val = tx.get(MAPID.0, TEST_KEY).unwrap().unwrap();
+                    assert_eq!(obtained_val, val);
+                }
+            }
+        });
+
+        thr0.join().unwrap();
+        thr1.join().unwrap();
+    });
+}
+
+// A stub for loom
+#[cfg(loom)]
+fn threaded_reads_consistent_for_ordinary_backend<B: Backend, F: BackendFactory<B>>(
+    _backend_factory: Arc<F>,
+) {
+}
+
+// Test parallel reading through a SharedBackend. A copy of SharedBackendImpl is shared between threads.
+fn threaded_reads_consistent_for_shared_backend<B: SharedBackend, F: BackendFactory<B>>(
+    backend_factory: Arc<F>,
+) {
+    let val = [0x77, 0x88, 0x99].as_ref();
+    let store = setup(backend_factory.create(), val.to_vec());
+
+    #[cfg(not(loom))]
+    let iter_count = 100;
+    // Note: under loom, with only 10 iterations the test takes more than 3 minutes to complete.
+    // With 5 iterations, the time is under 2 seconds.
+    #[cfg(loom)]
+    let iter_count = 5;
 
     let thr0 = thread::spawn({
         let store = store.clone();
         move || {
-            store
-                .transaction_ro()
-                .unwrap()
-                .get(MAPID.0, TEST_KEY)
-                .unwrap()
-                .unwrap()
-                .as_ref()
-                .to_owned()
+            for _ in 0..iter_count {
+                let tx = store.transaction_ro().unwrap();
+                let obtained_val = tx.get(MAPID.0, TEST_KEY).unwrap().unwrap();
+                assert_eq!(obtained_val, val);
+            }
         }
     });
     let thr1 = thread::spawn({
         move || {
-            store
-                .transaction_ro()
-                .unwrap()
-                .get(MAPID.0, TEST_KEY)
-                .unwrap()
-                .unwrap()
-                .as_ref()
-                .to_owned()
+            for _ in 0..iter_count {
+                let tx = store.transaction_ro().unwrap();
+                let obtained_val = tx.get(MAPID.0, TEST_KEY).unwrap().unwrap();
+                assert_eq!(obtained_val, val);
+            }
         }
     });
 
-    assert_eq!(thr0.join().unwrap(), val);
-    assert_eq!(thr1.join().unwrap(), val);
+    thr0.join().unwrap();
+    thr1.join().unwrap();
 }
 
-fn write_different_keys_and_iterate<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
-    let store = backend_fn().open(desc(1)).expect("db open to succeed");
+fn write_different_keys_and_iterate<B: SharedBackend, F: BackendFactory<B>>(
+    backend_factory: Arc<F>,
+) {
+    let store = backend_factory.create().open(desc(1)).expect("db open to succeed");
 
     let thr0 = thread::spawn({
         let store = store.clone();
@@ -165,10 +212,12 @@ fn write_different_keys_and_iterate<B: Backend, F: BackendFn<B>>(backend_fn: Arc
     assert!(contents.eq(expected));
 }
 
-tests![
+shared_backend_tests![
     commutative_read_modify_write,
     read_initialize_race,
     read_write_race,
-    threaded_reads_consistent,
+    threaded_reads_consistent_for_shared_backend,
     write_different_keys_and_iterate,
 ];
+
+common_tests![threaded_reads_consistent_for_ordinary_backend];

@@ -76,7 +76,8 @@ pub fn make_deterministic_trezor_signer(
 #[trace]
 #[serial]
 #[case(Seed::from_entropy())]
-fn test_sign_message(
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_sign_message(
     #[case] seed: Seed,
     #[values(
         MessageToSign::Random,
@@ -97,21 +98,23 @@ fn test_sign_message(
         message_to_sign,
         make_trezor_signer,
         no_another_signer(),
-    );
+    )
+    .await;
 }
 
 #[rstest]
 #[trace]
 #[serial]
 #[case(Seed::from_entropy())]
-fn test_sign_transaction_intent(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_sign_transaction_intent(#[case] seed: Seed) {
     log::debug!("test_sign_transaction_intent, seed = {seed:?}");
 
     let _join_guard = maybe_spawn_auto_confirmer();
 
     let mut rng = make_seedable_rng(seed);
 
-    test_sign_transaction_intent_generic(&mut rng, make_trezor_signer, no_another_signer());
+    test_sign_transaction_intent_generic(&mut rng, make_trezor_signer, no_another_signer()).await;
 }
 
 #[rstest]
@@ -121,7 +124,8 @@ fn test_sign_transaction_intent(#[case] seed: Seed) {
 #[trace]
 #[serial]
 #[case(Seed::from_entropy(), SighashInputCommitmentVersion::V1)]
-fn test_sign_transaction(
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_sign_transaction(
     #[case] seed: Seed,
     #[case] input_commitments_version: SighashInputCommitmentVersion,
 ) {
@@ -136,21 +140,23 @@ fn test_sign_transaction(
         input_commitments_version,
         make_trezor_signer,
         no_another_signer(),
-    );
+    )
+    .await;
 }
 
 #[rstest]
 #[trace]
 #[serial]
 #[case(Seed::from_entropy())]
-fn test_fixed_signatures(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_fixed_signatures(#[case] seed: Seed) {
     log::debug!("test_fixed_signatures, seed = {seed:?}");
 
     let _join_guard = maybe_spawn_auto_confirmer();
 
     let mut rng = make_seedable_rng(seed);
 
-    test_fixed_signatures_generic(&mut rng, make_deterministic_trezor_signer);
+    test_fixed_signatures_generic(&mut rng, make_deterministic_trezor_signer).await;
 }
 
 #[rstest]
@@ -160,7 +166,8 @@ fn test_fixed_signatures(#[case] seed: Seed) {
 #[trace]
 #[serial]
 #[case(Seed::from_entropy(), SighashInputCommitmentVersion::V1)]
-fn test_fixed_signatures2(
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_fixed_signatures2(
     #[case] seed: Seed,
     #[case] input_commitments_version: SighashInputCommitmentVersion,
 ) {
@@ -174,7 +181,8 @@ fn test_fixed_signatures2(
         &mut rng,
         input_commitments_version,
         make_deterministic_trezor_signer,
-    );
+    )
+    .await;
 }
 
 #[rstest]
@@ -184,7 +192,8 @@ fn test_fixed_signatures2(
 #[trace]
 #[serial]
 #[case(Seed::from_entropy(), SighashInputCommitmentVersion::V1)]
-fn test_fixed_signatures_htlc_refunding(
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_fixed_signatures_htlc_refunding(
     #[case] seed: Seed,
     #[case] input_commitments_version: SighashInputCommitmentVersion,
 ) {
@@ -198,14 +207,16 @@ fn test_fixed_signatures_htlc_refunding(
         &mut rng,
         input_commitments_version,
         make_deterministic_trezor_signer,
-    );
+    )
+    .await;
 }
 
 #[rstest]
 #[trace]
 #[serial]
 #[case(Seed::from_entropy())]
-fn test_sign_message_sig_consistency(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_sign_message_sig_consistency(#[case] seed: Seed) {
     log::debug!("test_sign_message_sig_consistency, seed = {seed:?}");
 
     let _join_guard = maybe_spawn_auto_confirmer();
@@ -217,14 +228,16 @@ fn test_sign_message_sig_consistency(#[case] seed: Seed) {
         MessageToSign::Random,
         make_deterministic_trezor_signer,
         Some(make_deterministic_software_signer),
-    );
+    )
+    .await;
 }
 
 #[rstest]
 #[trace]
 #[serial]
 #[case(Seed::from_entropy())]
-fn test_sign_transaction_intent_sig_consistency(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_sign_transaction_intent_sig_consistency(#[case] seed: Seed) {
     log::debug!("test_sign_transaction_intent_sig_consistency, seed = {seed:?}");
 
     let _join_guard = maybe_spawn_auto_confirmer();
@@ -235,7 +248,8 @@ fn test_sign_transaction_intent_sig_consistency(#[case] seed: Seed) {
         &mut rng,
         make_deterministic_trezor_signer,
         Some(make_deterministic_software_signer),
-    );
+    )
+    .await;
 }
 
 #[rstest]
@@ -245,7 +259,8 @@ fn test_sign_transaction_intent_sig_consistency(#[case] seed: Seed) {
 #[trace]
 #[serial]
 #[case(Seed::from_entropy(), SighashInputCommitmentVersion::V1)]
-fn test_sign_transaction_sig_consistency(
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_sign_transaction_sig_consistency(
     #[case] seed: Seed,
     #[case] input_commitments_version: SighashInputCommitmentVersion,
 ) {
@@ -260,5 +275,6 @@ fn test_sign_transaction_sig_consistency(
         input_commitments_version,
         make_deterministic_trezor_signer,
         Some(make_deterministic_software_signer),
-    );
+    )
+    .await;
 }

@@ -15,6 +15,7 @@
 
 use std::sync::{Arc, Mutex};
 
+use async_trait::async_trait;
 use itertools::Itertools;
 
 use common::{
@@ -74,7 +75,7 @@ use super::{utils::is_htlc_utxo, Signer, SignerError, SignerProvider, SignerResu
 pub struct SoftwareSigner {
     chain_config: Arc<ChainConfig>,
     account_index: U31,
-    sig_aux_data_provider: Mutex<Box<dyn SigAuxDataProvider>>,
+    sig_aux_data_provider: Mutex<Box<dyn SigAuxDataProvider + Send>>,
 }
 
 impl SoftwareSigner {
@@ -100,7 +101,7 @@ impl SoftwareSigner {
     pub fn new_with_sig_aux_data_provider(
         chain_config: Arc<ChainConfig>,
         account_index: U31,
-        sig_aux_data_provider: Box<dyn SigAuxDataProvider>,
+        sig_aux_data_provider: Box<dyn SigAuxDataProvider + Send>,
     ) -> Self {
         Self {
             chain_config,
@@ -275,13 +276,14 @@ impl SoftwareSigner {
     }
 }
 
+#[async_trait]
 impl Signer for SoftwareSigner {
-    fn sign_tx(
+    async fn sign_tx(
         &mut self,
         ptx: PartiallySignedTransaction,
         _tokens_additional_info: &TokensAdditionalInfo,
-        key_chain: &impl AccountKeyChains,
-        db_tx: &impl WalletStorageReadUnlocked,
+        key_chain: &(impl AccountKeyChains + Sync),
+        db_tx: impl WalletStorageReadUnlocked + Send,
         block_height: BlockHeight,
     ) -> SignerResult<(
         PartiallySignedTransaction,
@@ -338,7 +340,7 @@ impl Signer for SoftwareSigner {
                                             &input_commitments,
                                             sig_components,
                                             key_chain,
-                                            db_tx,
+                                            &db_tx,
                                         )?;
 
                                     let signature =
@@ -374,7 +376,7 @@ impl Signer for SoftwareSigner {
                                 &input_commitments,
                                 key_chain,
                                 htlc_secret,
-                                db_tx,
+                                &db_tx,
                             )?;
                             Ok((sig, SignatureStatus::NotSigned, status))
                         }
@@ -389,15 +391,15 @@ impl Signer for SoftwareSigner {
         Ok((ptx.with_witnesses(witnesses)?, prev_statuses, new_statuses))
     }
 
-    fn sign_challenge(
+    async fn sign_challenge(
         &mut self,
         message: &[u8],
         destination: &Destination,
-        key_chain: &impl AccountKeyChains,
-        db_tx: &impl WalletStorageReadUnlocked,
+        key_chain: &(impl AccountKeyChains + Sync),
+        db_tx: impl WalletStorageReadUnlocked + Send,
     ) -> SignerResult<ArbitraryMessageSignature> {
         let private_key = self
-            .get_private_key_for_destination(destination, key_chain, db_tx)?
+            .get_private_key_for_destination(destination, key_chain, &db_tx)?
             .ok_or(SignerError::DestinationNotFromThisWallet)?;
 
         let sig = ArbitraryMessageSignature::produce_uniparty_signature(
@@ -410,20 +412,20 @@ impl Signer for SoftwareSigner {
         Ok(sig)
     }
 
-    fn sign_transaction_intent(
+    async fn sign_transaction_intent(
         &mut self,
         transaction: &Transaction,
         input_destinations: &[Destination],
         intent: &str,
-        key_chain: &impl AccountKeyChains,
-        db_tx: &impl WalletStorageReadUnlocked,
+        key_chain: &(impl AccountKeyChains + Sync),
+        db_tx: impl WalletStorageReadUnlocked + Send,
     ) -> SignerResult<SignedTransactionIntent> {
         SignedTransactionIntent::produce_from_transaction(
             transaction,
             input_destinations,
             intent,
             |dest| {
-                self.get_private_key_for_destination(dest, key_chain, db_tx)?
+                self.get_private_key_for_destination(dest, key_chain, &db_tx)?
                     .ok_or(SignerError::DestinationNotFromThisWallet)
             },
             self.sig_aux_data_provider.lock().expect("poisoned mutex").as_mut(),

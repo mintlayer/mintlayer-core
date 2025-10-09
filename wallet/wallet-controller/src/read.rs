@@ -71,7 +71,7 @@ pub struct AddressInfo {
 impl<'a, T, B> ReadOnlyController<'a, T, B>
 where
     T: NodeInterface,
-    B: storage::Backend + 'static,
+    B: storage::BackendWithSendableTransactions + 'static,
 {
     pub fn new(
         wallet: &'a RuntimeWallet<B>,

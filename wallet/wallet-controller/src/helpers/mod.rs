@@ -103,7 +103,7 @@ pub async fn fetch_order_info<T: NodeInterface>(
         )))
 }
 
-pub async fn fetch_utxo<T: NodeInterface, B: storage::Backend>(
+pub async fn fetch_utxo<T: NodeInterface, B: storage::BackendWithSendableTransactions>(
     rpc_client: &T,
     wallet: &RuntimeWallet<B>,
     input: &UtxoOutPoint,
@@ -129,7 +129,10 @@ pub async fn fetch_utxo<T: NodeInterface, B: storage::Backend>(
         )))
 }
 
-async fn fetch_utxo_and_destination<T: NodeInterface, B: storage::Backend>(
+async fn fetch_utxo_and_destination<
+    T: NodeInterface,
+    B: storage::BackendWithSendableTransactions,
+>(
     rpc_client: &T,
     wallet: &RuntimeWallet<B>,
     input: &UtxoOutPoint,
@@ -246,7 +249,10 @@ pub async fn into_balances<T: NodeInterface>(
 }
 
 // TODO: optimize RPC calls to the Node
-pub async fn tx_to_partially_signed_tx<T: NodeInterface, B: storage::Backend>(
+pub async fn tx_to_partially_signed_tx<
+    T: NodeInterface,
+    B: storage::BackendWithSendableTransactions,
+>(
     rpc_client: &T,
     wallet: &RuntimeWallet<B>,
     tx: Transaction,
@@ -284,7 +290,7 @@ pub async fn tx_to_partially_signed_tx<T: NodeInterface, B: storage::Backend>(
     Ok(ptx)
 }
 
-pub async fn fetch_input_infos<T: NodeInterface, B: storage::Backend>(
+pub async fn fetch_input_infos<T: NodeInterface, B: storage::BackendWithSendableTransactions>(
     rpc_client: &T,
     wallet: &RuntimeWallet<B>,
     inputs: impl IntoIterator<Item = (&TxInput, HtlcSpendingCondition)>,
@@ -316,7 +322,10 @@ pub async fn fetch_input_infos<T: NodeInterface, B: storage::Backend>(
     Ok((input_utxos, ptx_additional_info, destinations))
 }
 
-async fn into_utxo_and_destination<T: NodeInterface, B: storage::Backend>(
+async fn into_utxo_and_destination<
+    T: NodeInterface,
+    B: storage::BackendWithSendableTransactions,
+>(
     rpc_client: &T,
     wallet: &RuntimeWallet<B>,
     tx_inp: &TxInput,

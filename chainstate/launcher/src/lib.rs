@@ -37,7 +37,7 @@ pub const SUBDIRECTORY_LMDB: &str = "chainstate-lmdb";
 
 pub use storage_compatibility::check_storage_compatibility;
 
-fn make_chainstate_and_storage_impl<B: storage::Backend + 'static>(
+fn make_chainstate_and_storage_impl<B: storage::SharedBackend + 'static>(
     storage_backend: B,
     chain_config: Arc<ChainConfig>,
     chainstate_config: ChainstateConfig,

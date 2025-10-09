@@ -220,6 +220,7 @@ impl utils::shallow_clone::ShallowClone for LmdbImpl {
         }
     }
 }
+
 impl backend::BackendImpl for LmdbImpl {
     type TxRo<'a> = DbTxRo<'a>;
 
@@ -229,6 +230,12 @@ impl backend::BackendImpl for LmdbImpl {
         self.start_transaction(lmdb::Environment::begin_ro_txn)
     }
 
+    fn transaction_rw(&mut self, size: Option<usize>) -> storage_core::Result<Self::TxRw<'_>> {
+        <Self as backend::SharedBackendImpl>::transaction_rw(self, size)
+    }
+}
+
+impl backend::SharedBackendImpl for LmdbImpl {
     fn transaction_rw(&self, size: Option<usize>) -> storage_core::Result<Self::TxRw<'_>> {
         self.resize_if_resize_scheduled();
         self.start_transaction(|env| lmdb::Environment::begin_rw_txn(env, size))
@@ -338,6 +345,10 @@ impl backend::Backend for Lmdb {
             map_resize_scheduled: Arc::new(AtomicBool::new(false)),
         })
     }
+}
+
+impl backend::SharedBackend for Lmdb {
+    type ImplHelper = LmdbImpl;
 }
 
 #[cfg(test)]

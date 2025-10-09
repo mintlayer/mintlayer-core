@@ -57,17 +57,19 @@ mod well_known {
 }
 
 /// Read-only chainstate storage transaction
-pub struct StoreTxRo<'st, B: storage::Backend>(pub(super) storage::TransactionRo<'st, B, Schema>);
+pub struct StoreTxRo<'st, B: storage::SharedBackend>(
+    pub(super) storage::TransactionRo<'st, B, Schema>,
+);
 
 /// Read-write chainstate storage transaction
 ///
 /// It tracks if an error was encountered during the execution of the transaction. If so, it will
 /// be recorded here and returned by all subsequent operations.
-pub struct StoreTxRw<'st, B: storage::Backend> {
+pub struct StoreTxRw<'st, B: storage::SharedBackend> {
     db_tx: crate::Result<storage::TransactionRw<'st, B, Schema>>,
 }
 
-impl<B: storage::Backend> StoreTxRo<'_, B> {
+impl<B: storage::SharedBackend> StoreTxRo<'_, B> {
     // Read a value from the database and decode it
     fn read<DbMap, I, K>(&self, key: K) -> crate::Result<Option<DbMap::Value>>
     where
@@ -101,7 +103,7 @@ impl<B: storage::Backend> StoreTxRo<'_, B> {
     }
 }
 
-impl<'st, B: storage::Backend> StoreTxRw<'st, B> {
+impl<'st, B: storage::SharedBackend> StoreTxRw<'st, B> {
     pub(super) fn new(db_tx: storage::TransactionRw<'st, B, Schema>) -> Self {
         let db_tx = Ok(db_tx);
         Self { db_tx }
@@ -208,13 +210,13 @@ impl<'st, B: storage::Backend> StoreTxRw<'st, B> {
     }
 }
 
-impl<B: storage::Backend> crate::TransactionRo for StoreTxRo<'_, B> {
+impl<B: storage::SharedBackend> crate::TransactionRo for StoreTxRo<'_, B> {
     fn close(self) {
         self.0.close()
     }
 }
 
-impl<B: storage::Backend> crate::TransactionRw for StoreTxRw<'_, B> {
+impl<B: storage::SharedBackend> crate::TransactionRw for StoreTxRw<'_, B> {
     fn commit(self) -> crate::Result<()> {
         Ok(self.db_tx?.commit()?)
     }

@@ -32,7 +32,13 @@ mod property;
 #[cfg(loom)]
 mod property {
     // No property tests with loom for now
-    pub fn tests<F>(_backend_fn: F) -> impl Iterator<Item = libtest_mimic::Trial> {
+    pub fn common_tests<F>(_backend_factory: F) -> impl Iterator<Item = libtest_mimic::Trial> {
+        std::iter::empty()
+    }
+
+    pub fn common_tests_for_shared_backend<F>(
+        _backend_factory: F,
+    ) -> impl Iterator<Item = libtest_mimic::Trial> {
         std::iter::empty()
     }
 }
@@ -40,23 +46,76 @@ mod property {
 use prelude::*;
 use test_utils::random::Seed;
 
-/// Get all tests
-fn tests<B: Backend + 'static, F: BackendFn<B>>(backend_fn: F) -> Vec<libtest_mimic::Trial> {
-    let backend_fn = Arc::new(backend_fn);
+/// Get all general tests for a Backend
+fn common_tests<B: Backend + 'static, F: BackendFactory<B>>(
+    backend_factory: Arc<F>,
+) -> Vec<libtest_mimic::Trial> {
     std::iter::empty()
-        .chain(basic::tests(Arc::clone(&backend_fn)))
-        .chain(concurrent::tests(Arc::clone(&backend_fn)))
-        .chain(frontend::tests(Arc::clone(&backend_fn)))
-        .chain(property::tests(backend_fn))
+        .chain(basic::common_tests(Arc::clone(&backend_factory)))
+        .chain(concurrent::common_tests(Arc::clone(&backend_factory)))
+        .chain(frontend::common_tests(Arc::clone(&backend_factory)))
+        .chain(property::common_tests(backend_factory))
         .collect()
 }
 
-/// Main test suite entry point
+/// Get all general tests for a SharedBackend
+fn common_tests_for_shared_backend<B: SharedBackend + 'static, F: BackendFactory<B>>(
+    backend_factory: Arc<F>,
+) -> Vec<libtest_mimic::Trial> {
+    std::iter::empty()
+        .chain(basic::common_tests_for_shared_backend(Arc::clone(
+            &backend_factory,
+        )))
+        .chain(concurrent::common_tests_for_shared_backend(Arc::clone(
+            &backend_factory,
+        )))
+        .chain(frontend::common_tests_for_shared_backend(Arc::clone(
+            &backend_factory,
+        )))
+        .chain(property::common_tests_for_shared_backend(backend_factory))
+        .collect()
+}
+
+/// Get all tests specific for shared backends
+fn shared_backend_tests<B: SharedBackend + 'static, F: BackendFactory<B>>(
+    backend_factory: F,
+) -> Vec<libtest_mimic::Trial> {
+    let backend_factory = Arc::new(backend_factory);
+    std::iter::empty()
+        .chain(concurrent::tests(Arc::clone(&backend_factory)))
+        .collect()
+}
+
+/// Main test suite entry point.
+///
+/// Both `backend_factory` and `shared_backend_factory` are supposed to create the same type
+/// of backend, but the latter will only be used for backends that implement SharedBackend.
 #[must_use = "Test outcome ignored, add a call to .exit()"]
-pub fn main<B: Backend + 'static, F: BackendFn<B>>(backend_fn: F) -> libtest_mimic::Conclusion {
+pub fn main<B, F, SB, SF>(
+    backend_factory: F,
+    shared_backend_factory: Option<SF>,
+) -> libtest_mimic::Conclusion
+where
+    B: Backend + 'static,
+    F: BackendFactory<B>,
+    SB: SharedBackend + 'static,
+    SF: BackendFactory<SB>,
+{
     logging::init_logging();
     let args = libtest_mimic::Arguments::from_args();
-    libtest_mimic::run(&args, tests(backend_fn))
+    let backend_factory = Arc::new(backend_factory);
+    let mut tests = common_tests(backend_factory);
+
+    if let Some(shared_backend_factory) = shared_backend_factory {
+        let shared_backend_factory = Arc::new(shared_backend_factory);
+
+        tests.extend(common_tests_for_shared_backend(Arc::clone(
+            &shared_backend_factory,
+        )));
+        tests.extend(shared_backend_tests(shared_backend_factory));
+    }
+
+    libtest_mimic::run(&args, tests)
 }
 
 /// Generate a seed and pass it to the specified function. If the function panics, print

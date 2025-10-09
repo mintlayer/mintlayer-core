@@ -16,8 +16,8 @@
 /// Prevent more types from implementing [crate::TransactionRo] and [crate::TransactionRw]
 pub trait Seal {}
 
-impl<B: storage::Backend> Seal for crate::internal::StoreTxRo<'_, B> {}
-impl<B: storage::Backend> Seal for crate::internal::StoreTxRw<'_, B> {}
+impl<B: storage::SharedBackend> Seal for crate::internal::StoreTxRo<'_, B> {}
+impl<B: storage::SharedBackend> Seal for crate::internal::StoreTxRw<'_, B> {}
 
 #[cfg(any(test, feature = "mock"))]
 impl Seal for crate::mock::MockStoreTxRo {}
