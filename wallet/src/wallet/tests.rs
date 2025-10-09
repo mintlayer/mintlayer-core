@@ -1602,8 +1602,15 @@ fn wallet_transactions_with_fees(#[case] seed: Seed) {
     let feerate = FeeRate::from_amount_per_kb(Amount::from_atoms(rng.gen_range(1..1000)));
 
     let num_outputs = rng.gen_range(1..1000);
-    // 41 bytes as max for LockThenTransfer outputs
-    let reserve_for_fee = feerate.compute_fee(41 * num_outputs * 2).unwrap();
+    let (_, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+    // Max LockThenTransfer size
+    let max_output = TxOutput::LockThenTransfer(
+        OutputValue::Coin(Amount::MAX),
+        Destination::PublicKey(pk),
+        OutputTimeLock::ForBlockCount(u64::MAX),
+    );
+    let max_output_size = serialization::Encode::encoded_size(&max_output);
+    let reserve_for_fee = feerate.compute_fee(max_output_size * num_outputs * 2).unwrap();
     let amount_to_transfer_per_output = Amount::from_atoms(rng.gen_range(
         NETWORK_FEE
             ..=((block1_amount.into_atoms() - NETWORK_FEE - reserve_for_fee.into_atoms())
@@ -1619,7 +1626,7 @@ fn wallet_transactions_with_fees(#[case] seed: Seed) {
                 address.clone(),
             )
         })
-        // also add some random outputs to test out different TxOutput types
+        // also add some random LockThenTransfer outputs to test out different sized outputs
         .chain(
             (0..num_outputs).map(|_| gen_random_transfer(&mut rng, amount_to_transfer_per_output)),
         )
