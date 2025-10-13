@@ -551,7 +551,9 @@ def main():
             default=None)
         args = parser.parse_args()
 
-        email_sender = EmailSender(args.notification_email, args.notification_email_from)
+        email_sender = EmailSender(
+            args.chain_type, args.notification_email, args.notification_email_from
+        )
 
         try:
             Handler(args, email_sender).run()

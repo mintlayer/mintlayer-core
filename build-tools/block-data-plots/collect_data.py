@@ -28,7 +28,7 @@ def collect_data(args):
         "--output-file", output_file,
         "--mainchain-only=true",
         "--fields=height,timestamp,target",
-        "--from_height=0"
+        "--from-height=0"
     ]
 
     if args.node_data_dir is not None:

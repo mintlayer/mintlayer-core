@@ -414,7 +414,8 @@ def show_cursor():
 class EmailSender:
     # to_addr - the address to send emails to; if None, nothing will be sent.
     # from_addr - the 'from' address for the emails; if None, to_addr will be used.
-    def __init__(self, to_addr: str | None, from_addr: str | None):
+    def __init__(self, chain_type: str, to_addr: str | None, from_addr: str | None):
+        self.chain_type = chain_type
         self.to_addr = to_addr
         self.from_addr = from_addr or to_addr
 
@@ -422,7 +423,7 @@ class EmailSender:
         if self.to_addr is not None:
             msg = MIMEText(msg_body)
             msg["Subject"] = msg_subj
-            msg["From"] = f"Fork detection script at {platform.node()} <{self.from_addr}>"
+            msg["From"] = f"Fork detection script at {platform.node()} ({self.chain_type}) <{self.from_addr}>"
             msg["To"] = self.to_addr
 
             s = smtplib.SMTP('localhost')
