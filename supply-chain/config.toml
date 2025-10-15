@@ -35,10 +35,10 @@ audit-as-crates-io = true
 audit-as-crates-io = true
 
 [policy.lmdb-rkv-sys]
-audit-as-crates-io = true
+audit-as-crates-io = false
 
 [policy.trezor-client]
-audit-as-crates-io = true
+audit-as-crates-io = false
 
 [[exemptions.ab_glyph]]
 version = "0.2.32"
@@ -928,10 +928,6 @@ criteria = "safe-to-deploy"
 version = "0.7.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.lmdb-rkv-sys]]
-version = "0.11.3@git:fb33e56a76697dd6f484c6d21f89a99ef9145e93"
-criteria = "safe-to-deploy"
-
 [[exemptions.lru]]
 version = "0.12.5"
 criteria = "safe-to-deploy"
@@ -1742,10 +1738,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.tracing-serde]]
 version = "0.2.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.trezor-client]]
-version = "0.1.5@git:8154c7a3bc65d27d64186f1b733750e029f8cad0"
 criteria = "safe-to-deploy"
 
 [[exemptions.tsify]]
