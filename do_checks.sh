@@ -30,15 +30,24 @@ fi
 
 # Checks enabled everywhere, including tests, benchmarks.
 # Note:
-# 1) "uninlined_format_args" is about changing `format!("{}", x)` to `format!("{x}")`.
+# * "uninlined_format_args" is about changing `format!("{}", x)` to `format!("{x}")`.
 #   Most of the time this makes the code look better, but:
 #     * there are way too many places like this;
 #     * in some cases it may lead to uglier code; in particular, when the format string is already
 #       quite long.
 #   So we disable it for now.
-# 2) "manual_is_multiple_of" - starting from v1.90 clippy insists that `x % 2 == 0` should be
+# * "infallible_try_from" - starting from v1.89 (note that the documentation states that it was
+#   added in 1.88, but this doesn't seem to be true), clippy insists that the `Error` type inside
+#   `impl TryFrom` shouldn't be `std::convert::Infallible`. However, this is actually useful,
+#   e.g. if it's a conversion from an enum with a single variant to that variant's inner type
+#   (in such a case, implementing `From` can be seen as conceptually wrong, while using a "real"
+#   error type instead of `Infallible` can be seen as redundant).
+# * "manual_is_multiple_of" - starting from v1.90 clippy insists that `x % 2 == 0` should be
 #   replaced with `x.is_multiple_of(2)`, which is a questionable improvement.
 EXTRA_ARGS=()
+if [[ $CLIPPY_VERSION -ge 1089 ]]; then
+    EXTRA_ARGS+=(-A clippy::infallible_try_from)
+fi
 if [[ $CLIPPY_VERSION -ge 1090 ]]; then
     EXTRA_ARGS+=(-A clippy::manual_is_multiple_of)
 fi

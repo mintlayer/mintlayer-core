@@ -30,8 +30,10 @@ use crate::{chain::block::timestamp::BlockTimestamp, primitives::BlockHeight};
     serde::Serialize,
     serde::Deserialize,
     rpc_description::HasValueHint,
+    strum::EnumDiscriminants,
 )]
 #[serde(tag = "type", content = "content")]
+#[strum_discriminants(name(OutputTimeLockTag), derive(strum::EnumIter))]
 pub enum OutputTimeLock {
     #[codec(index = 0)]
     UntilHeight(BlockHeight),

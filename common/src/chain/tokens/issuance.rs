@@ -54,6 +54,7 @@ pub enum TokenTotalSupply {
     Decode,
     serde::Serialize,
     serde::Deserialize,
+    strum::EnumIter,
 )]
 pub enum IsTokenFreezable {
     #[codec(index = 0)]
@@ -84,6 +85,7 @@ impl IsTokenFreezable {
     Decode,
     serde::Serialize,
     serde::Deserialize,
+    strum::EnumIter,
 )]
 pub enum IsTokenUnfreezable {
     #[codec(index = 0)]
@@ -135,7 +137,9 @@ pub enum IsTokenFrozen {
     Decode,
     serde::Serialize,
     serde::Deserialize,
+    strum::EnumDiscriminants,
 )]
+#[strum_discriminants(name(TokenIssuanceTag), derive(strum::EnumIter))]
 pub enum TokenIssuance {
     #[codec(index = 1)]
     V1(TokenIssuanceV1),

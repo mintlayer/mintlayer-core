@@ -1450,7 +1450,6 @@ fn to_trezor_output_msg(
             out_req.set_destination(Address::new(chain_config, dest.clone())?.into_string());
             match nft_data.as_ref() {
                 NftIssuance::V0(data) => {
-                    //
                     out_req.set_name(data.metadata.name.clone());
                     out_req.set_ticker(data.metadata.ticker().clone());
                     out_req.set_icon_uri(

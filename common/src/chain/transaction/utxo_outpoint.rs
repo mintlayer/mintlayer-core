@@ -28,7 +28,9 @@ use serialization::{Decode, Encode};
     PartialOrd,
     serde::Serialize,
     serde::Deserialize,
+    strum::EnumDiscriminants,
 )]
+#[strum_discriminants(name(OutPointSourceIdTag), derive(strum::EnumIter))]
 pub enum OutPointSourceId {
     #[codec(index = 0)]
     Transaction(Id<Transaction>),

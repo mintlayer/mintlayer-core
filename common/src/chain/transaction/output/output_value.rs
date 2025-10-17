@@ -31,7 +31,9 @@ use crate::{
     Decode,
     serde::Serialize,
     serde::Deserialize,
+    strum::EnumDiscriminants,
 )]
+#[strum_discriminants(name(OutputValueTag), derive(strum::EnumIter))]
 pub enum OutputValue {
     #[codec(index = 0)]
     Coin(Amount),
