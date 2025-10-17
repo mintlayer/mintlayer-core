@@ -85,7 +85,9 @@ impl From<OrderAccountCommand> for AccountType {
     Decode,
     serde::Serialize,
     serde::Deserialize,
+    strum::EnumDiscriminants,
 )]
+#[strum_discriminants(name(AccountSpendingTag), derive(strum::EnumIter))]
 pub enum AccountSpending {
     #[codec(index = 0)]
     DelegationBalance(DelegationId, Amount),
@@ -104,7 +106,9 @@ pub enum AccountSpending {
     Decode,
     serde::Serialize,
     serde::Deserialize,
+    strum::EnumDiscriminants,
 )]
+#[strum_discriminants(name(AccountCommandTag), derive(strum::EnumIter))]
 pub enum AccountCommand {
     // Create certain amount of tokens and add them to circulating supply
     #[codec(index = 0)]
@@ -203,7 +207,9 @@ impl AccountOutPoint {
     Decode,
     serde::Serialize,
     serde::Deserialize,
+    strum::EnumDiscriminants,
 )]
+#[strum_discriminants(name(OrderAccountCommandTag), derive(strum::EnumIter))]
 pub enum OrderAccountCommand {
     // Satisfy an order completely or partially.
     // The second element is the fill amount in the order's "ask" currency.
