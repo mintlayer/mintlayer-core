@@ -23,13 +23,13 @@
 use std::net::SocketAddr;
 
 use async_trait::async_trait;
+use logging::log;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use strum::Display;
-use tracing::debug;
+use strum::{Display, EnumIter};
 
 /// Button enumeration
-#[derive(Clone, Copy, PartialEq, Debug, Display)]
+#[derive(Clone, Copy, PartialEq, Debug, Display, EnumIter)]
 #[strum(serialize_all = "kebab-case")]
 pub enum Button {
     Left,
@@ -38,7 +38,7 @@ pub enum Button {
 }
 
 /// Button actions
-#[derive(Clone, Copy, PartialEq, Debug, Serialize, Deserialize, Display)]
+#[derive(Clone, Copy, PartialEq, Debug, Serialize, Deserialize, Display, EnumIter)]
 #[serde(rename_all = "kebab-case")]
 pub enum Action {
     Press,
@@ -49,7 +49,7 @@ pub enum Action {
 /// Button action object for serialization and use with the HTTP API
 #[derive(Clone, Copy, PartialEq, Debug, Serialize, Deserialize)]
 struct ButtonAction {
-    pub action: Action,
+    action: Action,
 }
 
 /// [Handle] trait for interacting with speculos
@@ -60,7 +60,7 @@ pub trait Handle {
 
     /// Send a button action to the simulator
     async fn button(&self, button: Button, action: Action) -> anyhow::Result<()> {
-        debug!("Sending button request: {}:{}", button, action);
+        log::debug!("Sending button request: {}:{}", button, action);
 
         // Post action to HTTP API
         let r = Client::new()
@@ -69,52 +69,62 @@ pub trait Handle {
             .send()
             .await?;
 
-        debug!("Button request complete: {}", r.status());
+        log::debug!("Button request complete: {}", r.status());
 
         Ok(())
+    }
+}
+
+/// Handle to a Speculos instance running under Podman
+#[derive(Debug)]
+pub struct PodmanHandle {
+    addr: SocketAddr,
+}
+
+impl PodmanHandle {
+    pub fn new(addr: SocketAddr) -> Self {
+        Self { addr }
+    }
+}
+
+#[async_trait]
+impl Handle for PodmanHandle {
+    fn addr(&self) -> SocketAddr {
+        self.addr
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use strum::IntoEnumIterator;
 
     /// Check button string encoding
     #[test]
     fn button_encoding() {
-        let tests = &[(Button::Left, "left"), (Button::Right, "right"), (Button::Both, "both")];
-
-        for (v, s) in tests {
-            assert_eq!(&v.to_string(), s);
+        for button in Button::iter() {
+            let expected = match button {
+                Button::Left => "left",
+                Button::Right => "right",
+                Button::Both => "both",
+            };
+            assert_eq!(&button.to_string(), expected);
         }
     }
 
     /// Check button action encoding
     #[test]
     fn action_encoding() {
-        let tests = &[
-            (
-                ButtonAction {
-                    action: Action::Press,
-                },
-                r#"{"action":"press"}"#,
-            ),
-            (
-                ButtonAction {
-                    action: Action::Release,
-                },
-                r#"{"action":"release"}"#,
-            ),
-            (
-                ButtonAction {
-                    action: Action::PressAndRelease,
-                },
-                r#"{"action":"press-and-release"}"#,
-            ),
-        ];
-
-        for (v, s) in tests {
-            assert_eq!(&serde_json::to_string(v).unwrap(), s);
+        for action in Action::iter() {
+            let expected = match action {
+                Action::Press => r#"{"action":"press"}"#,
+                Action::Release => r#"{"action":"release"}"#,
+                Action::PressAndRelease => r#"{"action":"press-and-release"}"#,
+            };
+            assert_eq!(
+                &serde_json::to_string(&ButtonAction { action }).unwrap(),
+                expected
+            );
         }
     }
 }

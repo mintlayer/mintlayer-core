@@ -152,7 +152,7 @@ pub enum TrezorError {
     #[error("The file being loaded is a ledger wallet and does not correspond to the connected hardware wallet")]
     LedgerWalletDifferentFile,
     #[error("The file being loaded is a software wallet and does not correspond to the connected hardware wallet")]
-    HardwareWalletDifferentFile,
+    WalletFileIsSoftwareWallet,
     #[error(
         "Public keys mismatch - wrong device or passphrase.\n\
          Last used device id: \"{file_device_id}\", connected device id: \"{connected_device_id}\".\n\
@@ -1694,7 +1694,7 @@ fn check_public_keys_against_key_chain(
         }
     }
 
-    Err(TrezorError::HardwareWalletDifferentFile)?
+    Err(TrezorError::WalletFileIsSoftwareWallet)?
 }
 
 fn fetch_extended_pub_key(

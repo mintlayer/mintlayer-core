@@ -46,7 +46,7 @@ tokio = { workspace = true, default-features = false, features = [
 ] }
 trezor-client = { workspace = true, optional = true }
 ledger-lib = { workspace = true, optional = true }
-ledger-proto = { workspace = true, optional = true }
+mintlayer-ledger-messages = { workspace = true, optional = true }
 zeroize.workspace = true
 
 [dev-dependencies]
@@ -82,5 +82,9 @@ enable-ledger-device-tests = []
 # allow it for regtest. TODO: it's better to have some regtest-specific options for the wallet,
 # similar to what we have for the node.
 use-deterministic-signatures-in-software-signer-for-regtest = []
-ledger = ["dep:ledger-lib", "dep:ledger-proto", "wallet-types/ledger"]
+ledger = [
+  "dep:ledger-lib",
+  "dep:mintlayer-ledger-messages",
+  "wallet-types/ledger",
+]
 default = ["trezor", "ledger"]
