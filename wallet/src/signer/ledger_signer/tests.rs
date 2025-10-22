@@ -20,9 +20,27 @@ use std::{
     time::Duration,
 };
 
+use async_trait::async_trait;
+use ledger_lib::{
+    transport::{TcpDevice, TcpInfo, TcpTransport},
+    Device, Transport,
+};
+use mintlayer_ledger_messages::CoinType;
+use randomness::make_true_rng;
+use rstest::rstest;
+use serialization::hex::HexEncode;
+use test_utils::random::{make_seedable_rng, Seed};
+use tokio::{
+    sync::{
+        mpsc::{self, Sender},
+        Mutex,
+    },
+    time::sleep,
+};
+
 use crate::signer::{
     ledger_signer::{
-        ledger_messages::{get_app_name, get_extended_public_key},
+        ledger_messages::{get_app_name, get_extended_public_key, ok_response},
         speculos::{Action, Button, Handle, PodmanHandle},
         LedgerError, LedgerFinder, LedgerSigner,
     },
@@ -40,26 +58,9 @@ use crypto::key::{
     hdkd::{derivation_path::DerivationPath, u31::U31},
     PredefinedSigAuxDataProvider, SigAuxDataProvider,
 };
+use logging::log;
 use wallet_storage::WalletStorageReadLocked;
 use wallet_types::hw_data::LedgerData;
-
-use async_trait::async_trait;
-use ledger_lib::{
-    transport::{TcpDevice, TcpInfo, TcpTransport},
-    Transport,
-};
-use logging::log;
-use randomness::make_true_rng;
-use rstest::rstest;
-use serialization::hex::HexEncode;
-use test_utils::random::{make_seedable_rng, Seed};
-use tokio::{
-    sync::{
-        mpsc::{self, Sender},
-        Mutex,
-    },
-    time::sleep,
-};
 
 #[derive(Debug)]
 enum ControlMessage {
@@ -72,6 +73,7 @@ async fn auto_confirmer(mut control_msg_rx: mpsc::Receiver<ControlMessage>, hand
             _ = sleep(Duration::from_millis(100)) => {
                 // As we don't know how many screens will be shown just go 1 right and try to confirm
                 handle.button(Button::Right, Action::PressAndRelease).await.unwrap();
+                handle.button(Button::Both, Action::PressAndRelease).await.unwrap();
                 handle.button(Button::Both, Action::PressAndRelease).await.unwrap();
             }
             msg = control_msg_rx.recv() => {
@@ -163,17 +165,59 @@ async fn setup(
 #[trace]
 #[serial_test::serial]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_app_name() {
+    let mut transport = TcpTransport::new().unwrap();
+    let mut device = transport
+        .connect(TcpInfo {
+            addr: SocketAddr::new(std::net::IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 9999),
+        })
+        .await
+        .unwrap();
+
+    let mut tries = 0;
+    loop {
+        match get_app_name(&mut device).await {
+            Ok(_) => break,
+            Err(_) => {
+                tries += 1;
+                if tries > 10 {
+                    break;
+                }
+                sleep(Duration::from_millis(100)).await;
+            }
+        }
+    }
+
+    let resp = get_app_name(&mut device).await.unwrap();
+    let resp = ok_response(resp).unwrap();
+    let name = String::from_utf8(resp).unwrap();
+
+    assert_eq!(name, "mintlayer-app");
+
+    let info = device.app_info(Duration::from_millis(100)).await.unwrap();
+    eprintln!("info: {info:?}");
+
+    // assert_eq!(info.name, "mintlayer-app");
+}
+
+#[rstest]
+#[trace]
+#[serial_test::serial]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_account_extended_public_key() {
     let (auto_clicker, control_msg_tx, make_ledger_signer) = setup(false).await;
 
     let signer = make_ledger_signer(Arc::new(create_mainnet()), U31::ZERO);
 
     let derivation_path = DerivationPath::from_str("m/44h/19788h/0h").unwrap();
-    let (public_key, chain_code) =
-        get_extended_public_key(&mut *signer.client.lock().await, 0, derivation_path)
-            .await
-            .unwrap()
-            .into_public_key_and_chain_code();
+    let (public_key, chain_code) = get_extended_public_key(
+        &mut *signer.client.lock().await,
+        CoinType::Mainnet,
+        derivation_path,
+    )
+    .await
+    .unwrap()
+    .into_public_key_and_chain_code();
 
     let expected_pk = "029103888be8638b733d54eba6c5a96ae12583881dfab4b9585366548b54e3f8fd";
     assert_eq!(

@@ -16,8 +16,5 @@
 //! Rust wrapper for executing Speculos via podman,
 //! provided to simplify CI/CD with ledger applications.
 
-mod drivers;
-pub use drivers::*;
-
 mod handle;
 pub use handle::*;
