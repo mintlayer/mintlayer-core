@@ -289,9 +289,11 @@ package = "mintlayer-core-primitives"
 git = "https://github.com/ledger-community/rust-ledger.git"
 rev = "510bb3ca30639af4bdb12a918b6bbbdb75fa5f52"
 
-[workspace.dependencies.ledger-proto]
-git = "https://github.com/ledger-community/rust-ledger.git"
-rev = "510bb3ca30639af4bdb12a918b6bbbdb75fa5f52"
+[workspace.dependencies.mintlayer-ledger-messages]
+git = "https://github.com/mintlayer/mintlayer-ledger-app"
+# The commit "Fix comments"
+rev = "2fa1c33e536f94ba3cac94b97054902674580686"
+package = "messages"
 
 [workspace.dependencies.trezor-client]
 git = "https://github.com/mintlayer/mintlayer-trezor-firmware"
@@ -351,5 +353,7 @@ fontconfig-parser = { git = "https://github.com/Riey/fontconfig-parser", rev = "
 # subsystem (reproducible on a slow machine during initial sync with 30+ connected peers).
 # The PR was merged after 1.49, so it should probably be part of 1.50 when it comes out.
 tokio = { git = "https://github.com/tokio-rs/tokio", rev = "0d6c7af3e43457350bdc03a6dbcafa276fab7352" }
-# The patch is needed because there is now release of the library. We use the same hash for all Ledger libs
+
+# This patch is needed because there is no release of the library and because ledger-lib depends on ledger-proto, so this is the only way to make the former find the latter.
+# Note that the revision specified here must be the same as the one used in the workspace.dependencies section
 ledger-proto = { git = "https://github.com/ledger-community/rust-ledger.git", rev = "510bb3ca30639af4bdb12a918b6bbbdb75fa5f52" }
