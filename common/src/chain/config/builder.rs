@@ -97,7 +97,7 @@ const MAINNET_FORK_HEIGHT_1_HTLC_AND_ORDERS: BlockHeight = BlockHeight::new(254_
 // * switch to sighash input commitments v1;
 // * enable token id generation v1;
 // * prohibit updating the staker destination in ProduceBlockFromStake.
-const MAINNET_FORK_HEIGHT_2_ORDERS_V1: BlockHeight = BlockHeight::new(999_999_999);
+const MAINNET_FORK_HEIGHT_2_ORDERS_V1: BlockHeight = BlockHeight::new(517_700);
 
 impl ChainType {
     fn default_genesis_init(&self) -> GenesisBlockInit {
