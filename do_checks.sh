@@ -3,7 +3,13 @@
 set -e
 
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
-PYTHON=$(which python || which python3)
+
+# Note: on GitHub's CI's "macos-latest", `which python` returns
+# `/Library/Frameworks/Python.framework/Versions/Current/bin/python`,
+# while `which python3` returns `/opt/homebrew/bin/python3` (as of October 2025).
+# Since we use `python3` in GitHub Actions to install packages (such as `toml`),
+# we have to try `python3` first here as well.
+PYTHON=$(which python3 || which python)
 
 cd "$SCRIPT_DIR"
 
