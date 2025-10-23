@@ -1678,11 +1678,24 @@ async fn wallet_transactions_with_fees(#[case] seed: Seed) {
 
     // make a transaction with multiple outputs to the same address so we can later sweep them all
     // again
+    let feerate = FeeRate::from_amount_per_kb(Amount::from_atoms(rng.gen_range(1..1000)));
+
     let num_outputs = rng.gen_range(1..1000);
-    let amount_to_transfer_per_output = Amount::from_atoms(
-        rng.gen_range(NETWORK_FEE..=((block1_amount.into_atoms() - NETWORK_FEE) / num_outputs / 2)),
+    let (_, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+    // Max LockThenTransfer size
+    let max_output = TxOutput::LockThenTransfer(
+        OutputValue::Coin(Amount::MAX),
+        Destination::PublicKey(pk),
+        OutputTimeLock::ForBlockCount(u64::MAX),
     );
-    let amount_to_transfer = (amount_to_transfer_per_output * num_outputs).unwrap();
+    let max_output_size = serialization::Encode::encoded_size(&max_output);
+    let reserve_for_fee = feerate.compute_fee(max_output_size * num_outputs * 2).unwrap();
+    let amount_to_transfer_per_output = Amount::from_atoms(rng.gen_range(
+        NETWORK_FEE
+            ..=((block1_amount.into_atoms() - NETWORK_FEE - reserve_for_fee.into_atoms())
+                / (num_outputs * 2) as u128),
+    ));
+    let amount_to_transfer = (amount_to_transfer_per_output * num_outputs as u128).unwrap();
 
     let address = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1.into_object();
     let outputs: Vec<TxOutput> = (0..num_outputs)
@@ -1692,13 +1705,12 @@ async fn wallet_transactions_with_fees(#[case] seed: Seed) {
                 address.clone(),
             )
         })
-        // also add some random outputs to test out different TxOutput types
+        // also add some random LockThenTransfer outputs to test out different sized outputs
         .chain(
             (0..num_outputs).map(|_| gen_random_transfer(&mut rng, amount_to_transfer_per_output)),
         )
         .collect();
 
-    let feerate = FeeRate::from_amount_per_kb(Amount::from_atoms(rng.gen_range(1..1000)));
     let SignedTxWithFees { tx, fees } = wallet
         .create_transaction_to_addresses(
             DEFAULT_ACCOUNT_INDEX,
