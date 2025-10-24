@@ -169,8 +169,7 @@ def internal_check_dependency_versions(root_node, dependencies_name: str, file_p
 
     # list of crates, whose version may not have a minor version or may have a patch version
     exempted_crates = [
-        # left here as an example, remove if you ever add one crate that is exempt
-        # 'ctor'
+        "generic-array"
     ]
 
     # Names with dots actually represent paths inside the tree of nodes.
