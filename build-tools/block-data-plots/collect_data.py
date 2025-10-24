@@ -1,4 +1,5 @@
 import argparse
+import os
 import subprocess
 from pathlib import Path
 
@@ -14,6 +15,7 @@ CHAIN_TYPE_CHOICES = ["mainnet", "testnet"]
 
 def collect_data(args):
     if args.output_file is None:
+        os.makedirs(DEFAULT_OUTPUT_DIR, exist_ok=True)
         output_file = DEFAULT_OUTPUT_DIR.joinpath(
             DEFAULT_OUTPUT_FILE_NAME_FMT.format(chain_type=args.chain_type)
         )
@@ -26,7 +28,7 @@ def collect_data(args):
         "--output-file", output_file,
         "--mainchain-only=true",
         "--fields=height,timestamp,target",
-        "--from_height=0"
+        "--from-height=0"
     ]
 
     if args.node_data_dir is not None:
