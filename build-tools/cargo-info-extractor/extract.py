@@ -16,7 +16,6 @@ ROOT_CARGO_TOML = ROOT_DIR.joinpath("Cargo.toml")
 def get_rust_version(workspace_settings):
     version = workspace_settings["package"]["rust-version"]
 
-    # Unfortunately, rust-init doesn't support completing the version on its own, so we just pad with whatever works
     if len(version.split('.')) == 2:
         version = version + '.0'
 

@@ -14,8 +14,10 @@
 // limitations under the License.
 
 use hmac::{Hmac, Mac};
-use serialization::{hex_encoded::HexEncoded, Decode, Encode};
 use sha2::Sha512;
+
+use randomness::{make_true_rng, CryptoRng, Rng};
+use serialization::{hex_encoded::HexEncoded, Decode, Encode};
 
 use crate::{
     key::hdkd::{
@@ -26,10 +28,11 @@ use crate::{
     },
     util::{self, new_hmac_sha_512},
 };
-use randomness::{make_true_rng, CryptoRng, Rng};
+
+use self::transcript::traits::SignableTranscript;
 
 pub use self::primitives::VRFReturn;
-use self::transcript::traits::SignableTranscript;
+pub use self::schnorrkel::{SchnorrkelPrivateKey, SchnorrkelPublicKey};
 
 #[derive(thiserror::Error, Debug, PartialEq, Eq, Clone)]
 pub enum VRFError {
@@ -46,9 +49,8 @@ mod schnorrkel;
 
 pub mod transcript;
 
-#[derive(Debug, PartialEq, Eq, Clone, Decode, Encode)]
+#[derive(Debug, PartialEq, Eq, Clone, strum::EnumIter)]
 pub enum VRFKeyKind {
-    #[codec(index = 0)]
     Schnorrkel,
 }
 
@@ -61,7 +63,7 @@ pub struct VRFPrivateKey {
 #[derive(Debug, PartialEq, Eq, Clone, Decode, Encode)]
 pub(crate) enum VRFPrivateKeyHolder {
     #[codec(index = 0)]
-    Schnorrkel(schnorrkel::SchnorrkelPrivateKey),
+    Schnorrkel(SchnorrkelPrivateKey),
 }
 
 #[must_use]
@@ -85,10 +87,20 @@ impl<'d> serde::Deserialize<'d> for VRFPublicKey {
     }
 }
 
+impl TryFrom<VRFPublicKey> for SchnorrkelPublicKey {
+    type Error = std::convert::Infallible;
+
+    fn try_from(value: VRFPublicKey) -> Result<Self, Self::Error> {
+        match value.pub_key {
+            VRFPublicKeyHolder::Schnorrkel(pub_key) => Ok(pub_key),
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Decode, Encode)]
 pub(crate) enum VRFPublicKeyHolder {
     #[codec(index = 0)]
-    Schnorrkel(schnorrkel::SchnorrkelPublicKey),
+    Schnorrkel(SchnorrkelPublicKey),
 }
 
 impl VRFPrivateKey {
@@ -102,7 +114,7 @@ impl VRFPrivateKey {
     ) -> (VRFPrivateKey, VRFPublicKey) {
         match key_kind {
             VRFKeyKind::Schnorrkel => {
-                let k = schnorrkel::SchnorrkelPrivateKey::new(rng);
+                let k = SchnorrkelPrivateKey::new(rng);
                 (
                     VRFPrivateKey {
                         key: VRFPrivateKeyHolder::Schnorrkel(k.0),
@@ -123,7 +135,7 @@ impl VRFPrivateKey {
     ) -> Result<(VRFPrivateKey, VRFPublicKey), VRFError> {
         match key_kind {
             VRFKeyKind::Schnorrkel => {
-                let k = schnorrkel::SchnorrkelPrivateKey::new_using_random_bytes(bytes)?;
+                let k = SchnorrkelPrivateKey::new_using_random_bytes(bytes)?;
                 Ok((
                     VRFPrivateKey {
                         key: VRFPrivateKeyHolder::Schnorrkel(k.0),
@@ -161,9 +173,7 @@ impl VRFPublicKey {
     pub fn from_private_key(private_key: &VRFPrivateKey) -> Self {
         match private_key.internal_key() {
             VRFPrivateKeyHolder::Schnorrkel(ref k) => VRFPublicKey {
-                pub_key: VRFPublicKeyHolder::Schnorrkel(
-                    schnorrkel::SchnorrkelPublicKey::from_private_key(k),
-                ),
+                pub_key: VRFPublicKeyHolder::Schnorrkel(SchnorrkelPublicKey::from_private_key(k)),
             },
         }
     }
@@ -177,6 +187,12 @@ impl VRFPublicKey {
             VRFPublicKeyHolder::Schnorrkel(pub_key) => {
                 pub_key.verify_generic_vrf_data(message, vrf_data)
             }
+        }
+    }
+
+    pub fn kind(&self) -> VRFKeyKind {
+        match self.pub_key {
+            VRFPublicKeyHolder::Schnorrkel(_) => VRFKeyKind::Schnorrkel,
         }
     }
 }
