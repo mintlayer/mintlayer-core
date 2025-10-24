@@ -56,14 +56,10 @@ NODE_OUTPUT_LINE_REGEX_TO_FLAG_MAPPING = [
 ]
 
 ENDED_UP_ON_A_FORK_FLAG_NAME = "ended_up_on_a_fork"
-STALE_BLOCK_BELOW_REORG_LIMIT_FLAG_NAME = "stale_block_below_reorg_limit"
 NO_INCOMING_BLOCKS_WHILE_ON_STALE_CHAIN_FLAG_NAME = "no_incoming_blocks_while_on_stale_chain"
 
 NODE_OUTPUT_LINE_NEW_TIP_REGEX = re.compile(
     r"NEW TIP in chainstate (?P<block_id>[0-9A-Fa-f]+) with height (?P<height>\d+), timestamp: (?P<timestamp>\d+)"
-)
-NODE_OUTPUT_LINE_STALE_BLOCK_RECEIVED_REGEX = re.compile(
-    r"Received stale block (?P<block_id>[0-9A-Fa-f]+) with height (?P<height>\d+), timestamp: (?P<timestamp>\d+)"
 )
 
 # The regex used to decide whether a node's output line should be printed to the console
@@ -159,10 +155,10 @@ class Handler():
         self.restore_peer_db()
 
         node_proc_env = os.environ.copy()
-        # Note: "chainstate_verbose_block_ids=debug" allows to catch the "Received stale block" line
-        # and also forces certain block-processing functions in chainstate to print full block ids.
-        # We avoid using the "normal" debug log, because it's too noisy, e.g. even
-        # "info,chainstate=debug" produces hundreds of megabytes of logs during the full sync.
+        # Note: "chainstate_verbose_block_ids=debug" forces certain block-processing functions
+        # in chainstate to print full block ids. We avoid using the "normal" debug log, because
+        # it's too noisy, e.g. even "info,chainstate=debug" produces hundreds of megabytes of
+        # logs during the full sync.
         node_proc_env["RUST_LOG"] = "info,chainstate_verbose_block_ids=debug"
 
         node_proc = subprocess.Popen(
@@ -236,24 +232,6 @@ class Handler():
                     )
                     log_func(f"Tip reached, height = {height}{extra}")
                     return False
-
-            elif (stale_block_received_match := NODE_OUTPUT_LINE_STALE_BLOCK_RECEIVED_REGEX.search(line)) is not None:
-                block_id = stale_block_received_match.group("block_id")
-                height = int(stale_block_received_match.group("height"))
-
-                log.warn(f"Stale block received at height {height}: {block_id}")
-
-                if actual_tip_height - height >= MAX_REORG_DEPTH:
-                    # Note: this may mean 2 things:
-                    # a) If we're on the proper chain, then we've found a peer who is on
-                    #    a fork, in which case we definitely want to create this flag.
-                    # b) If we're on a fork, then the stale block may be from the proper
-                    #    chain, in which case the flag creation is redundant, because the code
-                    #    above or below should catch this situation; but it's not harmful either.
-                    self.touch_flag(
-                        STALE_BLOCK_BELOW_REORG_LIMIT_FLAG_NAME,
-                        f"height={height}, block id={block_id}"
-                    )
             else:
                 seconds_since_last_tip = (
                     cur_seconds_since_epoch - last_tip_arrival_time
