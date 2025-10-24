@@ -50,7 +50,7 @@ impl Tab for NetworkingTab {
         )
     }
 
-    fn content(&self, node_state: &NodeState) -> Element<Self::Message> {
+    fn content(&self, node_state: &NodeState) -> Element<'_, Self::Message> {
         let header = |text: &'static str| container(Text::new(text)).padding(5);
         let field = |text: String| container(Text::new(text)).padding(5);
         let peers = Grid::new().push(

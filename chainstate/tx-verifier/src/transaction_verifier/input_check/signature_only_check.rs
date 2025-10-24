@@ -50,7 +50,7 @@ impl<T: Transactable> SignatureContext for InputVerifyContextSignature<'_, T> {
         self.tx
     }
 
-    fn input_commitments(&self) -> &[SighashInputCommitment] {
+    fn input_commitments(&self) -> &[SighashInputCommitment<'_>] {
         self.input_commitments
     }
 
@@ -92,7 +92,7 @@ impl<T: Transactable> mintscript::translate::SignatureInfoProvider
 }
 
 impl<T: Transactable> InputInfoProvider for InputVerifyContextSignature<'_, T> {
-    fn input_info(&self) -> &InputInfo {
+    fn input_info(&self) -> &InputInfo<'_> {
         self.input_data.input_info()
     }
 

@@ -75,7 +75,7 @@ impl<Message> Component<Message, Theme, iced::Renderer> for WalletUnlockDialog<M
         }
     }
 
-    fn view(&self, state: &Self::State) -> Element<Self::Event, Theme, iced::Renderer> {
+    fn view(&self, state: &Self::State) -> Element<'_, Self::Event, Theme, iced::Renderer> {
         let button_enabled = !state.password1.is_empty();
         let button = Button::new(Text::new("Encrypt wallet").align_x(Horizontal::Center));
         let button = if button_enabled {

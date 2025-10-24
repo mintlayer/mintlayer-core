@@ -30,7 +30,7 @@ impl crate::SignatureContext for EmptyContext {
         unreachable!()
     }
 
-    fn input_commitments(&self) -> &[SighashInputCommitment] {
+    fn input_commitments(&self) -> &[SighashInputCommitment<'_>] {
         unreachable!()
     }
 

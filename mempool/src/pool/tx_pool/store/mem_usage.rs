@@ -164,17 +164,20 @@ pub struct NoOpDropPolicy;
 impl DropPolicy for NoOpDropPolicy {}
 
 /// Drop policy that asserts if the object has not been properly released
+#[cfg(test)]
 #[derive(Eq, PartialEq, PartialOrd, Ord, Debug, Default)]
 pub struct AssertDropPolicy {
     released: bool,
 }
 
+#[cfg(test)]
 impl DropPolicy for AssertDropPolicy {
     fn on_release(&mut self) {
         self.released = true;
     }
 }
 
+#[cfg(test)]
 impl Drop for AssertDropPolicy {
     fn drop(&mut self) {
         if !self.released {

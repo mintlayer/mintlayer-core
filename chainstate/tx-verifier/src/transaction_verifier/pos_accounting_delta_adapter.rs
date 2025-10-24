@@ -79,7 +79,10 @@ impl<P: PoSAccountingView> PoSAccountingDeltaAdapter<P> {
         )
     }
 
-    pub fn operations(&mut self, tx_source: TransactionSource) -> PoSAccountingOperationImpl<P> {
+    pub fn operations(
+        &mut self,
+        tx_source: TransactionSource,
+    ) -> PoSAccountingOperationImpl<'_, P> {
         PoSAccountingOperationImpl::new(self, tx_source)
     }
 

@@ -403,7 +403,7 @@ fn update(state: &mut GuiState, message: Message) -> Task<Message> {
     }
 }
 
-fn view(state: &GuiState) -> Element<Message> {
+fn view(state: &GuiState) -> Element<'_, Message> {
     match state {
         GuiState::Initial { .. } => {
             iced::widget::text("Loading fonts...".to_string()).size(32).into()

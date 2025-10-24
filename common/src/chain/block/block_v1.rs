@@ -86,7 +86,7 @@ impl BlockV1 {
         &self.body.reward
     }
 
-    pub fn block_reward_transactable(&self) -> BlockRewardTransactable {
+    pub fn block_reward_transactable(&self) -> BlockRewardTransactable<'_> {
         let inputs = match &self.header.header().consensus_data {
             ConsensusData::None | ConsensusData::PoW(_) => None,
             ConsensusData::PoS(data) => Some(data.kernel_inputs()),

@@ -20,7 +20,7 @@ checksum = "c71b1793ee61086797f5c80b6efa2b8ffa6d5dd703f118545808a7f2e27f7046"
 
 [[package]]
 name = "accounting"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "common",
  "parity-scale-codec",
@@ -242,7 +242,7 @@ checksum = "e16d2d3311acee920a9eb8d33b8cbc1787ce4a264e85f964c2404b969bdcd487"
 
 [[package]]
 name = "api-blockchain-scanner-daemon"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "api-blockchain-scanner-lib",
  "api-server-common",
@@ -260,7 +260,7 @@ dependencies = [
 
 [[package]]
 name = "api-blockchain-scanner-lib"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "api-server-common",
  "async-trait",
@@ -290,7 +290,7 @@ dependencies = [
 
 [[package]]
 name = "api-server-backend-test-suite"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "api-server-common",
  "async-trait",
@@ -313,7 +313,7 @@ dependencies = [
 
 [[package]]
 name = "api-server-common"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "async-trait",
  "bb8-postgres",
@@ -338,7 +338,7 @@ dependencies = [
 
 [[package]]
 name = "api-server-stack-test-suite"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "api-blockchain-scanner-lib",
  "api-server-common",
@@ -367,7 +367,7 @@ dependencies = [
 
 [[package]]
 name = "api-web-server"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "api-server-common",
  "async-trait",
@@ -1001,7 +1001,7 @@ dependencies = [
 
 [[package]]
 name = "blockprod"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "async-trait",
  "chainstate",
@@ -1068,7 +1068,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "234113d19d0d7d613b40e86fb654acf958910802bcceab913a4f9e7cda03b1a4"
 dependencies = [
  "memchr",
- "regex-automata 0.4.9",
+ "regex-automata",
  "serde",
 ]
 
@@ -1248,7 +1248,7 @@ dependencies = [
 
 [[package]]
 name = "chainstate"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "accounting",
  "async-trait",
@@ -1293,7 +1293,7 @@ dependencies = [
 
 [[package]]
 name = "chainstate-launcher"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "chainstate",
  "chainstate-storage",
@@ -1308,7 +1308,7 @@ dependencies = [
 
 [[package]]
 name = "chainstate-storage"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "accounting",
  "chainstate-types",
@@ -1334,7 +1334,7 @@ dependencies = [
 
 [[package]]
 name = "chainstate-test-framework"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "chainstate",
  "chainstate-storage",
@@ -1363,7 +1363,7 @@ dependencies = [
 
 [[package]]
 name = "chainstate-test-suite"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "accounting",
  "chainstate",
@@ -1395,7 +1395,7 @@ dependencies = [
 
 [[package]]
 name = "chainstate-types"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "common",
  "crypto",
@@ -1604,7 +1604,7 @@ dependencies = [
 
 [[package]]
 name = "common"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "anyhow",
  "bech32 0.11.0",
@@ -1660,7 +1660,7 @@ dependencies = [
 
 [[package]]
 name = "consensus"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "chainstate-types",
  "common",
@@ -1701,7 +1701,7 @@ dependencies = [
 
 [[package]]
 name = "constraints-value-accumulator"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "accounting",
  "common",
@@ -1967,7 +1967,7 @@ checksum = "43da5946c66ffcc7745f48db692ffbb10a83bfe0afd96235c5c2a4fb23994929"
 
 [[package]]
 name = "crypto"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "argon2",
  "bip39",
@@ -2351,7 +2351,7 @@ checksum = "0688c2a7f92e427f44895cd63841bff7b29f8d7a1648b9e7e07a4a365b2e1257"
 
 [[package]]
 name = "dns-server"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4385,7 +4385,7 @@ checksum = "13dc2df351e3202783a1fe0d44375f7295ffb4049267b0f3018346dc122a1d94"
 
 [[package]]
 name = "log_error"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "derive_more",
  "logging",
@@ -4398,7 +4398,7 @@ dependencies = [
 
 [[package]]
 name = "logging"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "log",
  "thiserror 1.0.69",
@@ -4489,11 +4489,11 @@ dependencies = [
 
 [[package]]
 name = "matchers"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8263075bb86c5a1b1427b5ae862e8889656f126e9f77c484496e8b47cf5c5558"
+checksum = "d1525a2a28c7f4fa0fc98bb91ae755d1e2d1505079e05539e35bc876b5d65ae9"
 dependencies = [
- "regex-automata 0.1.10",
+ "regex-automata",
 ]
 
 [[package]]
@@ -4538,7 +4538,7 @@ dependencies = [
 
 [[package]]
 name = "mempool"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "accounting",
  "anyhow",
@@ -4582,7 +4582,7 @@ dependencies = [
 
 [[package]]
 name = "mempool-types"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "p2p-types",
  "rpc-description",
@@ -4645,7 +4645,7 @@ dependencies = [
 
 [[package]]
 name = "mintlayer-core"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "chainstate",
  "chainstate-storage",
@@ -4664,7 +4664,7 @@ dependencies = [
 
 [[package]]
 name = "mintlayer-test"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "clap",
  "libtest-mimic",
@@ -4680,7 +4680,7 @@ dependencies = [
 
 [[package]]
 name = "mintscript"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "common",
  "crypto",
@@ -4742,7 +4742,7 @@ dependencies = [
 
 [[package]]
 name = "mocks"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "async-trait",
  "chainstate",
@@ -4839,7 +4839,7 @@ dependencies = [
 
 [[package]]
 name = "networking"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "async-trait",
  "bytes",
@@ -4899,7 +4899,7 @@ dependencies = [
 
 [[package]]
 name = "node-comm"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4928,7 +4928,7 @@ dependencies = [
 
 [[package]]
 name = "node-daemon"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -4942,7 +4942,7 @@ dependencies = [
 
 [[package]]
 name = "node-gui"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "anyhow",
  "chainstate",
@@ -4975,7 +4975,7 @@ dependencies = [
 
 [[package]]
 name = "node-gui-backend"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "anyhow",
  "chainstate",
@@ -5010,7 +5010,7 @@ dependencies = [
 
 [[package]]
 name = "node-lib"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "anyhow",
  "blockprod",
@@ -5038,16 +5038,6 @@ dependencies = [
  "toml 0.8.22",
  "utils",
  "utils-networking",
-]
-
-[[package]]
-name = "nu-ansi-term"
-version = "0.46.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "77a8165726e8236064dbb45459242600304b42a5ea24ee2948e18e023bf7ba84"
-dependencies = [
- "overload",
- "winapi",
 ]
 
 [[package]]
@@ -5576,7 +5566,7 @@ dependencies = [
 
 [[package]]
 name = "orders-accounting"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "accounting",
  "common",
@@ -5617,12 +5607,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "overload"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b15813163c1d831bf4a13c3610c05c0d03b39feb07f7e09fa234dac9b15aaf39"
-
-[[package]]
 name = "owned_ttf_parser"
 version = "0.25.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5633,7 +5617,7 @@ dependencies = [
 
 [[package]]
 name = "p2p"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "async-trait",
  "chainstate",
@@ -5687,7 +5671,7 @@ dependencies = [
 
 [[package]]
 name = "p2p-backend-test-suite"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "chainstate",
  "common",
@@ -5707,7 +5691,7 @@ dependencies = [
 
 [[package]]
 name = "p2p-test-utils"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "chainstate",
  "chainstate-storage",
@@ -5727,7 +5711,7 @@ dependencies = [
 
 [[package]]
 name = "p2p-types"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "common",
  "parity-scale-codec",
@@ -6043,7 +6027,7 @@ dependencies = [
 
 [[package]]
 name = "pos-accounting"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "accounting",
  "common",
@@ -6223,7 +6207,7 @@ dependencies = [
  "rand 0.8.5",
  "rand_chacha 0.3.1",
  "rand_xorshift 0.3.0",
- "regex-syntax 0.8.5",
+ "regex-syntax",
  "rusty-fork",
  "tempfile",
  "unarray",
@@ -6456,7 +6440,7 @@ dependencies = [
 
 [[package]]
 name = "randomness"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "rand 0.8.5",
 ]
@@ -6558,7 +6542,7 @@ dependencies = [
  "crossterm",
  "fd-lock",
  "itertools 0.12.1",
- "nu-ansi-term 0.50.1",
+ "nu-ansi-term",
  "serde",
  "strip-ansi-escapes",
  "strum",
@@ -6596,17 +6580,8 @@ checksum = "b544ef1b4eac5dc2db33ea63606ae9ffcfac26c1416a2806ae0bf5f56b201191"
 dependencies = [
  "aho-corasick",
  "memchr",
- "regex-automata 0.4.9",
- "regex-syntax 0.8.5",
-]
-
-[[package]]
-name = "regex-automata"
-version = "0.1.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6c230d73fb8d8c1b9c0b3135c5142a8acee3a0558fb8db5cf1cb65f8d7862132"
-dependencies = [
- "regex-syntax 0.6.29",
+ "regex-automata",
+ "regex-syntax",
 ]
 
 [[package]]
@@ -6617,14 +6592,8 @@ checksum = "809e8dc61f6de73b46c85f4c96486310fe304c434cfa43669d7b40f711150908"
 dependencies = [
  "aho-corasick",
  "memchr",
- "regex-syntax 0.8.5",
+ "regex-syntax",
 ]
-
-[[package]]
-name = "regex-syntax"
-version = "0.6.29"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f162c6dd7b008981e4d40210aca20b4bd0f9b60ca9271061b07f78537722f2e1"
 
 [[package]]
 name = "regex-syntax"
@@ -6792,7 +6761,7 @@ checksum = "6c20b6793b5c2fa6553b250154b78d6d0db37e72700ae35fad9387a46f487c97"
 
 [[package]]
 name = "rpc"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6822,7 +6791,7 @@ dependencies = [
 
 [[package]]
 name = "rpc-description"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "rpc-description-macro",
  "serde_json",
@@ -6830,7 +6799,7 @@ dependencies = [
 
 [[package]]
 name = "rpc-description-macro"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -6839,7 +6808,7 @@ dependencies = [
 
 [[package]]
 name = "rpc-types"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "hex",
  "rpc-description",
@@ -7189,7 +7158,7 @@ checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
 
 [[package]]
 name = "script"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "crypto",
  "flate2",
@@ -7467,7 +7436,7 @@ dependencies = [
 
 [[package]]
 name = "serialization"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "hex",
  "rpc-description",
@@ -7480,7 +7449,7 @@ dependencies = [
 
 [[package]]
 name = "serialization-core"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "arraytools",
  "hex-literal",
@@ -7490,7 +7459,7 @@ dependencies = [
 
 [[package]]
 name = "serialization-tagged"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "parity-scale-codec",
  "proptest",
@@ -7502,7 +7471,7 @@ dependencies = [
 
 [[package]]
 name = "serialization-tagged-derive"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "itertools 0.14.0",
  "proc-macro2",
@@ -7836,7 +7805,7 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
 name = "storage"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "common",
  "rstest",
@@ -7849,7 +7818,7 @@ dependencies = [
 
 [[package]]
 name = "storage-backend-test-suite"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "libtest-mimic",
  "logging",
@@ -7864,7 +7833,7 @@ dependencies = [
 
 [[package]]
 name = "storage-core"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "common",
  "itertools 0.14.0",
@@ -7877,7 +7846,7 @@ dependencies = [
 
 [[package]]
 name = "storage-failing"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "enumflags2",
  "storage",
@@ -7889,7 +7858,7 @@ dependencies = [
 
 [[package]]
 name = "storage-inmemory"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "storage-backend-test-suite",
  "storage-core",
@@ -7898,7 +7867,7 @@ dependencies = [
 
 [[package]]
 name = "storage-lmdb"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "lmdb-mintlayer",
  "logging",
@@ -7912,7 +7881,7 @@ dependencies = [
 
 [[package]]
 name = "storage-sqlite"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "hex",
  "logging",
@@ -7979,7 +7948,7 @@ dependencies = [
 
 [[package]]
 name = "subsystem"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "async-trait",
  "cfg-if",
@@ -8139,7 +8108,7 @@ checksum = "8f50febec83f5ee1df3015341d8bd429f2d1cc62bcba7ea2076759d315084683"
 
 [[package]]
 name = "test-rpc-functions"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "async-trait",
  "chainstate",
@@ -8162,7 +8131,7 @@ dependencies = [
 
 [[package]]
 name = "test-utils"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "common",
  "crypto",
@@ -8345,7 +8314,7 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
 name = "tokens-accounting"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "accounting",
  "chainstate-types",
@@ -8672,14 +8641,14 @@ dependencies = [
 
 [[package]]
 name = "tracing-subscriber"
-version = "0.3.19"
+version = "0.3.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e8189decb5ac0fa7bc8b96b7cb9b2701d60d48805aca84a238004d665fcc4008"
+checksum = "2054a14f5307d601f88daf0553e1cbf472acc4f2c51afab632431cdcd72124d5"
 dependencies = [
  "matchers",
- "nu-ansi-term 0.46.0",
+ "nu-ansi-term",
  "once_cell",
- "regex",
+ "regex-automata",
  "serde",
  "serde_json",
  "sharded-slab",
@@ -8708,7 +8677,7 @@ dependencies = [
 
 [[package]]
 name = "trezor-common"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "common",
  "crypto",
@@ -8773,7 +8742,7 @@ checksum = "d2df906b07856748fa3f6e0ad0cbaa047052d4a7dd609e231c4f72cee8c36f31"
 
 [[package]]
 name = "tx-verifier"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "accounting",
  "chainstate-storage",
@@ -8802,14 +8771,14 @@ dependencies = [
 
 [[package]]
 name = "typename"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "typename-derive",
 ]
 
 [[package]]
 name = "typename-derive"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "itertools 0.14.0",
  "quote",
@@ -8962,7 +8931,7 @@ checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
 
 [[package]]
 name = "utils"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -8994,7 +8963,7 @@ dependencies = [
 
 [[package]]
 name = "utils-networking"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "addr",
  "itertools 0.14.0",
@@ -9008,7 +8977,7 @@ dependencies = [
 
 [[package]]
 name = "utxo"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "chainstate-types",
  "common",
@@ -9081,7 +9050,7 @@ dependencies = [
 
 [[package]]
 name = "wallet"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "bip39",
  "chainstate",
@@ -9122,7 +9091,7 @@ dependencies = [
 
 [[package]]
 name = "wallet-address-generator"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "clap",
  "common",
@@ -9137,7 +9106,7 @@ dependencies = [
 
 [[package]]
 name = "wallet-address-generator-lib"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "clap",
  "common",
@@ -9151,7 +9120,7 @@ dependencies = [
 
 [[package]]
 name = "wallet-cli"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "clap",
  "tokio",
@@ -9161,7 +9130,7 @@ dependencies = [
 
 [[package]]
 name = "wallet-cli-commands"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "async-trait",
  "blockprod",
@@ -9214,7 +9183,7 @@ dependencies = [
 
 [[package]]
 name = "wallet-cli-lib"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "async-trait",
  "blockprod",
@@ -9262,7 +9231,7 @@ dependencies = [
 
 [[package]]
 name = "wallet-controller"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -9303,7 +9272,7 @@ dependencies = [
 
 [[package]]
 name = "wallet-rpc-client"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -9334,7 +9303,7 @@ dependencies = [
 
 [[package]]
 name = "wallet-rpc-daemon"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "clap",
  "common",
@@ -9350,7 +9319,7 @@ dependencies = [
 
 [[package]]
 name = "wallet-rpc-lib"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -9391,7 +9360,7 @@ dependencies = [
 
 [[package]]
 name = "wallet-storage"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "bip39",
  "common",
@@ -9410,7 +9379,7 @@ dependencies = [
 
 [[package]]
 name = "wallet-test-node"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "blockprod",
  "chainstate",
@@ -9431,7 +9400,7 @@ dependencies = [
 
 [[package]]
 name = "wallet-types"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "bip39",
  "common",
@@ -9563,7 +9532,7 @@ dependencies = [
 
 [[package]]
 name = "wasm-doc-gen"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -9587,7 +9556,7 @@ dependencies = [
 
 [[package]]
 name = "wasm-wrappers"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "bip39",
  "common",

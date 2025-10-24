@@ -41,7 +41,7 @@ impl MainMenu {
         Self { wallet_mode }
     }
 
-    pub fn view(&self) -> Element<MenuMessage> {
+    pub fn view(&self) -> Element<'_, MenuMessage> {
         let file_menu = make_menu_file(self.wallet_mode);
 
         let menu_bar = MenuBar::new(vec![file_menu]).spacing(4.0).check_bounds_width(30.0);

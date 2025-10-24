@@ -140,7 +140,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
     #[log_error]
     pub(crate) fn make_db_tx_ro(
         &self,
-    ) -> chainstate_storage::Result<ChainstateRef<TxRo<'_, S>, V>> {
+    ) -> chainstate_storage::Result<ChainstateRef<'_, TxRo<'_, S>, V>> {
         let db_tx = self.chainstate_storage.transaction_ro()?;
         Ok(chainstateref::ChainstateRef::new_ro(
             &self.chain_config,
@@ -152,7 +152,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
     }
 
     #[log_error]
-    pub fn query(&self) -> Result<ChainstateQuery<TxRo<'_, S>, V>, PropertyQueryError> {
+    pub fn query(&self) -> Result<ChainstateQuery<'_, TxRo<'_, S>, V>, PropertyQueryError> {
         self.make_db_tx_ro().map(ChainstateQuery::new).map_err(PropertyQueryError::from)
     }
 

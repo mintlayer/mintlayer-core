@@ -623,8 +623,9 @@ fn select_coins_bnb(
                 .last()
                 // Empty or
                 .is_none_or(
-                // The previous index is included and therefore not relevant for exclusion shortcut
-                    |idx| (utxo_pool_index - 1 == *idx))
+                    // The previous index is included and therefore not relevant for exclusion shortcut
+                    |idx| utxo_pool_index - 1 == *idx
+                )
                 // Avoid searching a branch if the previous UTXO has the same value and same waste and was excluded.
                 // Since the ratio of fee to long term fee is the same, we only need to check if one of those values match in order to know that the waste is the same.
                 || utxo.get_effective_value(pay_fees)

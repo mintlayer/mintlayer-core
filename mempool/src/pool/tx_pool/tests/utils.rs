@@ -126,24 +126,6 @@ impl TxStatusExt for TxStatus {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct ValuedOutPoint {
-    pub outpoint: UtxoOutPoint,
-    pub value: Amount,
-}
-
-impl PartialOrd for ValuedOutPoint {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for ValuedOutPoint {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        other.value.cmp(&self.value)
-    }
-}
-
 fn dummy_witness() -> InputWitness {
     let witness = DUMMY_WITNESS_MSG.to_vec();
     InputWitness::NoSignature(Some(witness))

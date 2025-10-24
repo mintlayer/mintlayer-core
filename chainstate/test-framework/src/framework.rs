@@ -98,11 +98,11 @@ impl TestFramework {
     }
 
     /// Returns a block builder instance that can be used for block construction and processing.
-    pub fn make_block_builder(&mut self) -> BlockBuilder {
+    pub fn make_block_builder(&mut self) -> BlockBuilder<'_> {
         BlockBuilder::new(self)
     }
 
-    pub fn make_pos_block_builder(&mut self) -> PoSBlockBuilder {
+    pub fn make_pos_block_builder(&mut self) -> PoSBlockBuilder<'_> {
         PoSBlockBuilder::new(self)
     }
 

@@ -129,7 +129,7 @@ impl<'st, B: storage::Backend> StoreTxRw<'st, B> {
     // Get a key-value map
     fn get_map<DbMap, I>(
         &self,
-    ) -> crate::Result<storage::MapRef<storage::TransactionRw<'st, B, Schema>, DbMap>>
+    ) -> crate::Result<storage::MapRef<'_, storage::TransactionRw<'st, B, Schema>, DbMap>>
     where
         DbMap: schema::DbMap,
         Schema: schema::HasDbMap<DbMap, I>,
