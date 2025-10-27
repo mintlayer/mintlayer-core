@@ -62,17 +62,16 @@ pub enum PartiallySignedTransactionConsistencyCheck {
 ///
 /// Regarding the ability to refactor it, making non-backward-compatible changes.
 /// Currently PartiallySignedTransaction is used:
-/// 1) By the wallet. In this case the encoded transaction is supposed to be short-lived,
+/// 1) By the core wallets. In this case the encoded transaction is supposed to be short-lived,
 ///    so breaking compatibility should be tolerable.
 /// 2) By the bridge, whose e2m master agent puts a PartiallySignedTransaction in the db
 ///    to be read by the cosigner; once the cosigner handles the transaction, it is replaced
 ///    by the normal SignedTransaction in the db. I.e. breaking the compatibility is possible
 ///    provided that there are no partially signed e2m withdrawal transactions in the bridge db
 ///    during the update of wallet-rpc-daemon that is used by the bridge.
-/// 3) By the Mojito and RioSwap teams, where the former construct a PartiallySignedTransaction
-///    via the wasm call `encode_partially_signed_transaction` and the latter pass it to
-///    wallet-rpc-daemon. The transaction is treated as a black box, so a breaking change is
-///    technically possible, though it'll require synchronization between multiple teams.
+/// 3) Also, the construction of PartiallySignedTransaction is exposed in wasm-bindings via
+///    the `encode_partially_signed_transaction` function. Thought at the moment of writing
+///    this it is not used, it will be used by Mojito eventually.
 #[derive(Debug, Eq, PartialEq, Clone, Encode, Decode, serde::Serialize)]
 pub struct PartiallySignedTransaction {
     tx: Transaction,
