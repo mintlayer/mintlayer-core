@@ -19,6 +19,10 @@ use common::{
     address::{traits::Addressable, Address},
     chain::{
         output_value::OutputValue,
+        partially_signed_transaction::{
+            OrderAdditionalInfo as PtxOrderAdditionalInfo,
+            PoolAdditionalInfo as PtxPoolAdditionalInfo, TxAdditionalInfo as PtxAdditionalInfo,
+        },
         signature::{
             inputsig::{
                 authorize_hashed_timelock_contract_spend::AuthorizedHashedTimelockContractSpend,
@@ -27,15 +31,15 @@ use common::{
             sighash::sighashtype::SigHashType,
         },
         tokens::TokenId,
-        ChainConfig,
+        ChainConfig, OrderId, PoolId,
     },
-    primitives,
+    primitives::{self},
 };
 use serialization::Decode;
 
 use crate::{
     error::Error,
-    types::{SimpleAmount, SimpleCurrencyAmount},
+    types::{SimpleAmount, SimpleCurrencyAmount, TxAdditionalInfo},
 };
 
 pub fn decode_raw_array<T: Decode>(mut array: &[u8]) -> Result<Vec<T>, serialization::Error> {
@@ -107,4 +111,53 @@ pub fn extract_htlc_spend(
             sig.sighash_type(),
         )),
     }
+}
+
+pub fn to_ptx_additional_info(
+    chain_config: &ChainConfig,
+    info: &TxAdditionalInfo,
+) -> Result<PtxAdditionalInfo, Error> {
+    let mut ptx_info = PtxAdditionalInfo::new();
+
+    for (pool_id_str, pool_info) in &info.pool_info {
+        let pool_id = parse_addressable::<PoolId>(chain_config, pool_id_str)?;
+        let ptx_pool_info = convert_pool_info(pool_info)?;
+        ptx_info.add_pool_info(pool_id, ptx_pool_info);
+    }
+
+    for (order_id_str, order_info) in &info.order_info {
+        let order_id = parse_addressable::<OrderId>(chain_config, order_id_str)?;
+        let ptx_order_info = convert_order_info(chain_config, order_info)?;
+        ptx_info.add_order_info(order_id, ptx_order_info);
+    }
+
+    Ok(ptx_info)
+}
+
+fn convert_pool_info(
+    info: &crate::types::PoolAdditionalInfo,
+) -> Result<PtxPoolAdditionalInfo, Error> {
+    let staker_balance = internal_amount_from_simple_amount(&info.staker_balance)?;
+
+    Ok(PtxPoolAdditionalInfo { staker_balance })
+}
+
+fn convert_order_info(
+    chain_config: &ChainConfig,
+    info: &crate::types::OrderAdditionalInfo,
+) -> Result<PtxOrderAdditionalInfo, Error> {
+    let initially_asked =
+        output_value_from_simple_currency_amount(chain_config, &info.initially_asked)?;
+    let initially_given =
+        output_value_from_simple_currency_amount(chain_config, &info.initially_given)?;
+
+    let ask_balance = internal_amount_from_simple_amount(&info.ask_balance)?;
+    let give_balance = internal_amount_from_simple_amount(&info.give_balance)?;
+
+    Ok(PtxOrderAdditionalInfo {
+        initially_asked,
+        initially_given,
+        ask_balance,
+        give_balance,
+    })
 }

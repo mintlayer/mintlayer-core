@@ -175,7 +175,7 @@ trait ChainstateRpc {
     async fn export_bootstrap_file(
         &self,
         file_path: &std::path::Path,
-        include_orphans: bool,
+        include_stale_blocks: bool,
     ) -> RpcResult<()>;
 
     /// Imports a bootstrap file's blocks to this node
@@ -428,7 +428,7 @@ impl ChainstateRpcServer for super::ChainstateHandle {
     async fn export_bootstrap_file(
         &self,
         file_path: &std::path::Path,
-        include_orphans: bool,
+        include_stale_blocks: bool,
     ) -> RpcResult<()> {
         // TODO: test this function in functional tests
         let file_obj: std::fs::File = rpc::handle_result(std::fs::File::create(file_path))?;
@@ -436,7 +436,7 @@ impl ChainstateRpcServer for super::ChainstateHandle {
             std::io::BufWriter::new(Box::new(file_obj));
 
         rpc::handle_result(
-            self.call(move |this| this.export_bootstrap_stream(writer, include_orphans))
+            self.call(move |this| this.export_bootstrap_stream(writer, include_stale_blocks))
                 .await,
         )
     }

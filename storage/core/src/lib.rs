@@ -91,7 +91,7 @@ pub mod types;
 pub mod util;
 
 // Re-export some commonly used items
-pub use backend::Backend;
+pub use backend::{Backend, BackendWithSendableTransactions, SharedBackend};
 pub use error::Error;
 pub use types::{DbDesc, DbMapCount, DbMapDesc, DbMapId, DbMapsData};
 

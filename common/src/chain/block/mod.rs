@@ -38,7 +38,10 @@ use utils::ensure;
 
 use crate::{
     chain::block::{block_size::BlockSize, block_v1::BlockV1, timestamp::BlockTimestamp},
-    primitives::{id::WithId, Id, Idable, VersionTag, H256},
+    primitives::{
+        id::{HasSubObjWithSameId, WithId},
+        Id, Idable, VersionTag, H256,
+    },
 };
 
 use self::{
@@ -209,6 +212,12 @@ impl Idable for Block {
         // Block ID is just the hash of its header. The transaction list is committed to by the
         // inclusion of transaction Merkle root in the header. We also include the version number.
         self.header().header().get_id()
+    }
+}
+
+impl HasSubObjWithSameId<SignedBlockHeader> for Block {
+    fn get_sub_obj(&self) -> &SignedBlockHeader {
+        self.header()
     }
 }
 

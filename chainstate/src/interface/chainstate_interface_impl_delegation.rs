@@ -315,9 +315,9 @@ where
     fn export_bootstrap_stream<'a>(
         &self,
         writer: std::io::BufWriter<Box<dyn std::io::Write + Send + 'a>>,
-        include_orphans: bool,
+        include_stale_blocks: bool,
     ) -> Result<(), ChainstateError> {
-        self.deref().export_bootstrap_stream(writer, include_orphans)
+        self.deref().export_bootstrap_stream(writer, include_stale_blocks)
     }
 
     fn utxo(&self, outpoint: &UtxoOutPoint) -> Result<Option<Utxo>, ChainstateError> {
@@ -480,6 +480,7 @@ mod tests {
                 min_max_bootstrap_import_buffer_sizes: Default::default(),
                 max_tip_age: Default::default(),
                 enable_heavy_checks: Some(true),
+                allow_checkpoints_mismatch: Default::default(),
             };
             let chainstate_storage = Store::new_empty().unwrap();
 

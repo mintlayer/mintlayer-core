@@ -33,7 +33,7 @@ fn gen_random_password(rng: &mut (impl Rng + CryptoRng)) -> String {
 #[test]
 fn storage_get_default_version_in_tx() {
     utils::concurrency::model(|| {
-        let store = Store::new(DefaultBackend::new_in_memory()).unwrap();
+        let mut store = Store::new(DefaultBackend::new_in_memory()).unwrap();
 
         let mut db_tx = store.transaction_rw(None).unwrap();
         db_tx.set_storage_version(1).unwrap();

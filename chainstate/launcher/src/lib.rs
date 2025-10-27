@@ -35,7 +35,9 @@ pub use config::{ChainstateLauncherConfig, StorageBackendConfig};
 /// Subdirectory under `datadir` where LMDB chainstate database is placed
 pub const SUBDIRECTORY_LMDB: &str = "chainstate-lmdb";
 
-fn make_chainstate_and_storage_impl<B: storage::Backend + 'static>(
+pub use storage_compatibility::check_storage_compatibility;
+
+fn make_chainstate_and_storage_impl<B: storage::SharedBackend + 'static>(
     storage_backend: B,
     chain_config: Arc<ChainConfig>,
     chainstate_config: ChainstateConfig,
@@ -47,7 +49,7 @@ fn make_chainstate_and_storage_impl<B: storage::Backend + 'static>(
         .transaction_ro()
         .map_err(|e| Error::FailedToInitializeChainstate(e.into()))?;
 
-    storage_compatibility::check_storage_compatibility(&db_tx, chain_config.as_ref())
+    check_storage_compatibility(&db_tx, chain_config.as_ref())
         .map_err(InitializationError::StorageCompatibilityCheckError)?;
     drop(db_tx);
 

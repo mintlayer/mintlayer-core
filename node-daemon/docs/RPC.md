@@ -554,7 +554,7 @@ Parameters:
 ```
 {
     "file_path": string,
-    "include_orphans": bool,
+    "include_stale_blocks": bool,
 }
 ```
 
@@ -1087,6 +1087,9 @@ Returns:
          1) number
          2) null,
     "ping_min": EITHER OF
+         1) number
+         2) null,
+    "last_tip_block_time": EITHER OF
          1) number
          2) null,
 }, .. ]

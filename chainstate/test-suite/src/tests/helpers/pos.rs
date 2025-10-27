@@ -13,43 +13,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chainstate_storage::Transactional;
-use chainstate_test_framework::TestFramework;
+use chainstate_test_framework::{calculate_new_pos_compact_target, TestFramework};
 use common::{
-    chain::{CoinUnit, Genesis, RequiredConsensus},
+    chain::{CoinUnit, Genesis},
     primitives::{BlockHeight, Compact},
 };
 use consensus::ConsensusPoSError;
 use crypto::{key::PublicKey, vrf::VRFPublicKey};
 
-use super::block_index_handle_impl::TestBlockIndexHandle;
-
 pub fn calculate_new_target(
     tf: &TestFramework,
     block_height: BlockHeight,
 ) -> Result<Compact, ConsensusPoSError> {
-    let pos_status = match tf
-        .chainstate
-        .get_chain_config()
-        .consensus_upgrades()
-        .consensus_status(block_height)
-    {
-        RequiredConsensus::PoS(status) => status,
-        RequiredConsensus::PoW(_) | RequiredConsensus::IgnoreConsensus => {
-            panic!("Invalid consensus")
-        }
-    };
-
-    let db_tx = tf.storage.transaction_ro().unwrap();
-    let block_index_handle =
-        TestBlockIndexHandle::new(db_tx, tf.chainstate.get_chain_config().as_ref());
-
-    consensus::calculate_target_required(
-        tf.chainstate.get_chain_config().as_ref(),
-        &pos_status,
-        tf.best_block_id(),
-        &block_index_handle,
-    )
+    calculate_new_pos_compact_target(tf, block_height, &tf.best_block_id())
 }
 
 pub fn create_custom_genesis_with_stake_pool(

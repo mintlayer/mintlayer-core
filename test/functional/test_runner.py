@@ -180,7 +180,8 @@ BASE_SCRIPTS = [
     'mempool_feerate_points.py',
     'wallet_high_fee.py',
     'wallet_htlc_spend.py',
-    'wallet_htlc_refund.py',
+    'wallet_htlc_refund_multisig.py',
+    'wallet_htlc_refund_single_sig.py',
 
     # Don't append tests at the end to avoid merge conflicts
     # Put them in a random line within the section that fits their approximate run-time

@@ -124,6 +124,7 @@ where
         *self.id
     }
 
+    #[tracing::instrument(skip_all, name = "", fields(peer_id = %self.id()))]
     pub async fn run(&mut self) {
         match self.main_loop().await {
             // The unexpected "channel closed" error will be handled by the sync manager.
@@ -175,10 +176,7 @@ where
     }
 
     fn handle_local_event(&mut self, event: LocalEvent) -> Result<()> {
-        log::debug!(
-            "[peer id = {}] Handling local peer mgr event: {event:?}",
-            self.id()
-        );
+        log::debug!("Handling local peer mgr event: {event:?}");
 
         match event {
             LocalEvent::ChainstateNewTip(_) => Ok(()),
@@ -200,10 +198,7 @@ where
     }
 
     async fn handle_message(&mut self, message: TransactionSyncMessage) -> Result<()> {
-        log::trace!(
-            "[peer id = {}] Handling tx sync message from the peer: {message:?}",
-            self.id()
-        );
+        log::trace!("Handling tx sync message from the peer: {message:?}");
 
         let res = match message {
             TransactionSyncMessage::NewTransaction(id) => {
@@ -268,11 +263,7 @@ where
             // because we purge "requested_transactions" from time to time. So it's technically
             // possible for such a response to be "solicited" but forgotten later.
             // So we just ignore the response.
-            log::warn!(
-                "[peer id = {}] Ignoring unsolicited TransactionResponse for tx {}",
-                self.id,
-                id
-            );
+            log::warn!("Ignoring unsolicited TransactionResponse for tx {id}");
             return Ok(());
         }
 
@@ -307,16 +298,13 @@ where
     }
 
     async fn handle_transaction_announcement(&mut self, tx: Id<Transaction>) -> Result<()> {
-        log::debug!(
-            "[peer id = {}] Handling transaction announcement: {tx}",
-            self.id()
-        );
+        log::debug!("Handling transaction announcement: {tx}");
 
         self.add_known_transaction(tx);
 
         if self.chainstate_handle.is_initial_block_download().await? {
             log::debug!(
-                "[peer id = {}] Ignoring transaction announcement because the node is in initial block download", self.id()
+                "Ignoring transaction announcement because the node is in initial block download"
             );
             return Ok(());
         }
@@ -346,11 +334,7 @@ where
             // But still, it doesn't make sense to request an already requested tx again.
             // Also, we don't punish the peer, mainly for consistency with other places, where
             // we handle requested_transactions-related mischiefs leniently.
-            log::warn!(
-                "[peer id = {}] Ignoring duplicate announcement for tx {}",
-                self.id,
-                tx
-            );
+            log::warn!("Ignoring duplicate announcement for tx {tx}");
             return Ok(());
         }
 
@@ -366,8 +350,7 @@ where
             // in such a situation. Note that after certain time, older requests will be purged
             // from requested_transactions, after which we'll start to handle peer's tx
             // announcements again.
-            log::warn!("[peer id = {}] Ignoring announcement for tx {} because requested_transactions is over the limit",
-                self.id, tx);
+            log::warn!("Ignoring announcement for tx {tx} because requested_transactions is over the limit");
             return Ok(());
         }
 

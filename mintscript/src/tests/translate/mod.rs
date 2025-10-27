@@ -187,20 +187,20 @@ fn stdsig(byte: u8) -> InputWitness {
     InputWitness::Standard(StandardInputSignature::new(sht, vec![byte; 2]))
 }
 
-fn htlc_stdsig(byte: u8) -> InputWitness {
+fn htlc_spend_sig(byte: u8) -> InputWitness {
     let sht = SigHashType::default();
     let raw_sig = vec![byte; 2];
     let secret = HtlcSecret::new([6; 32]);
-    let sig_with_secret = AuthorizedHashedTimelockContractSpend::Secret(secret, raw_sig);
+    let sig_with_secret = AuthorizedHashedTimelockContractSpend::Spend(secret, raw_sig);
     let serialized_sig = sig_with_secret.encode();
 
     InputWitness::Standard(StandardInputSignature::new(sht, serialized_sig))
 }
 
-fn htlc_multisig(byte: u8) -> InputWitness {
+fn htlc_refund_sig(byte: u8) -> InputWitness {
     let sht = SigHashType::default();
     let raw_sig = vec![byte; 2];
-    let sig_with_secret = AuthorizedHashedTimelockContractSpend::Multisig(raw_sig);
+    let sig_with_secret = AuthorizedHashedTimelockContractSpend::Refund(raw_sig);
     let serialized_sig = sig_with_secret.encode();
 
     InputWitness::Standard(StandardInputSignature::new(sht, serialized_sig))
@@ -505,7 +505,7 @@ enum Mode {
     (Mode::TxTimelockOnly, "true"),
     (Mode::TxFull, "signature(0x020003745607a08b12634e402eec525ddaaaaab73cc3951cd232cb88ad934f4be717f6, 0x0000)"),
 ])]
-#[case(htlc(11, 12, tl_until_height(999_999)), htlc_stdsig(0x54), &[
+#[case(htlc(11, 12, tl_until_height(999_999)), htlc_spend_sig(0x54), &[
     (Mode::Reward, "ERROR: Illegal output spend"),
     (Mode::TxSigOnly, "signature(0x020003574c6b846c9a4c555ea75d771d5a40564b9ef37419682da12573e1d8ac27d71e, 0x0101085454)"),
     (Mode::TxTimelockOnly, "true"),
@@ -516,7 +516,7 @@ enum Mode {
         "])"
     )),
 ])]
-#[case(htlc(13, 14, tl_for_secs(1111)), htlc_stdsig(0x58), &[
+#[case(htlc(13, 14, tl_for_secs(1111)), htlc_spend_sig(0x58), &[
     (Mode::Reward, "ERROR: Illegal output spend"),
     (Mode::TxSigOnly, "signature(0x020002a3fe239606e407ea161143e42c7c3ef0059573466950a910b28289df247df7a3, 0x0101085858)"),
     (Mode::TxTimelockOnly, "true"),
@@ -527,7 +527,7 @@ enum Mode {
         "])"
     )),
 ])]
-#[case(htlc(15, 16, tl_until_time(99)), htlc_stdsig(0x53), &[
+#[case(htlc(15, 16, tl_until_time(99)), htlc_spend_sig(0x53), &[
     (Mode::Reward, "ERROR: Illegal output spend"),
     (Mode::TxSigOnly, "signature(0x0200039315c9da756f584d5a7fff618d230bf13115a43d63e7c7d464bb513ab6be7bbc, 0x0101085353)"),
     (Mode::TxTimelockOnly, "true"),
@@ -538,7 +538,7 @@ enum Mode {
         "])"
     )),
 ])]
-#[case(htlc(17, 18, tl_for_secs(124)), htlc_multisig(0x54), &[
+#[case(htlc(17, 18, tl_for_secs(124)), htlc_refund_sig(0x54), &[
     (Mode::Reward, "ERROR: Illegal output spend"),
     (Mode::TxSigOnly, "signature(0x041c9bb73a209c49363022813e7197ac80c761d80b, 0x0101085454)"),
     (Mode::TxTimelockOnly, "after_seconds(124)"),
@@ -549,7 +549,7 @@ enum Mode {
         "])"
     )),
 ])]
-#[case(htlc(19, 20, tl_for_blocks(1000)), htlc_multisig(0x55), &[
+#[case(htlc(19, 20, tl_for_blocks(1000)), htlc_refund_sig(0x55), &[
     (Mode::Reward, "ERROR: Illegal output spend"),
     (Mode::TxSigOnly, "signature(0x04d55789fd7dd4b58f8bdb889a0d31cac70e67df92, 0x0101085555)"),
     (Mode::TxTimelockOnly, "after_blocks(1000)"),

@@ -994,8 +994,12 @@ pub enum WalletCommand {
         /// The starting height; normally, this will be the last height mentioned in
         /// the corresponding CHECKPOINTS_DATA array.
         start_height: BlockHeight,
-        /// The end (exclusive) height; normally, this will be some large number, which
-        /// is definitely bigger than the current best block height, e.g. a million.
+        /// The end (exclusive) height. For simplicity, you can set it to some large number
+        /// that is bigger than the current best block height, e.g. a million, in which case
+        /// the command will print checkpoints until the maximum possible height.
+        /// Note however that the last checkpoint that you put into CHECKPOINTS_DATA should
+        /// be at least 1000 below the current tip, to ensure that reorgs below that checkpoint
+        /// are no longer possible.
         end_height: BlockHeight,
         /// The step; in our current CHECKPOINTS_DATA arrays we use 500 as the step.
         step: NonZeroUsize,

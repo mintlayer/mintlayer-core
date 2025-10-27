@@ -901,6 +901,7 @@ impl TestFixture {
             .build()
     }
 
+    // Note: here it doesn't matter what kind of refund key the htlc has - multi or single sig.
     fn make_htlc(&mut self) -> (HashedTimelockContract, ClassicMultisigChallenge) {
         let secret = HtlcSecret::new_from_rng(&mut self.rng);
 

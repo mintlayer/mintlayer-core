@@ -18,6 +18,8 @@ mod tests;
 
 use std::sync::Arc;
 
+use async_trait::async_trait;
+
 use common::{
     address::AddressError,
     chain::{
@@ -29,7 +31,7 @@ use common::{
             DestinationSigError,
         },
         ChainConfig, Destination, SignedTransactionIntent, SignedTransactionIntentError,
-        Transaction,
+        Transaction, UtxoOutPoint,
     },
     primitives::BlockHeight,
 };
@@ -39,7 +41,9 @@ use wallet_storage::{
 };
 use wallet_types::{
     hw_data::HardwareWalletFullInfo,
-    partially_signed_transaction::{PartiallySignedTransaction, PartiallySignedTransactionError},
+    partially_signed_transaction::{
+        PartiallySignedTransaction, PartiallySignedTransactionError, TokensAdditionalInfo,
+    },
     signature_status::SignatureStatus,
     AccountId,
 };
@@ -52,6 +56,7 @@ use crate::{
 pub mod software_signer;
 #[cfg(feature = "trezor")]
 pub mod trezor_signer;
+pub mod utils;
 
 #[cfg(feature = "trezor")]
 use self::trezor_signer::TrezorError;
@@ -96,23 +101,26 @@ pub enum SignerError {
     AddressError(#[from] AddressError),
     #[error("Order was filled more than the available balance")]
     OrderFillUnderflow,
-    #[error("Multisig HTLC destination expected")]
-    HtlcMultisigDestinationExpected,
+    #[error("HTLC refund expected for a multisig destination")]
+    HtlcRefundExpectedForMultisig,
     #[error("Partially signed transaction error: {0}")]
     PartiallySignedTransactionError(#[from] PartiallySignedTransactionError),
+    #[error("Duplicate UTXO input: {0:?}")]
+    DuplicateUtxoInput(UtxoOutPoint),
 }
-
 type SignerResult<T> = Result<T, SignerError>;
 
 /// Signer trait responsible for signing transactions or challenges using a software or hardware
 /// wallet
+#[async_trait]
 pub trait Signer {
     /// Sign a partially signed transaction and return the before and after signature statuses.
-    fn sign_tx(
+    async fn sign_tx(
         &mut self,
         tx: PartiallySignedTransaction,
-        key_chain: &impl AccountKeyChains,
-        db_tx: &impl WalletStorageReadUnlocked,
+        tokens_additional_info: &TokensAdditionalInfo,
+        key_chain: &(impl AccountKeyChains + Sync),
+        db_tx: impl WalletStorageReadUnlocked + Send,
         block_height: BlockHeight,
     ) -> SignerResult<(
         PartiallySignedTransaction,
@@ -121,30 +129,30 @@ pub trait Signer {
     )>;
 
     /// Sign an arbitrary message for a destination known to this key chain.
-    fn sign_challenge(
+    async fn sign_challenge(
         &mut self,
         message: &[u8],
         destination: &Destination,
-        key_chain: &impl AccountKeyChains,
-        db_tx: &impl WalletStorageReadUnlocked,
+        key_chain: &(impl AccountKeyChains + Sync),
+        db_tx: impl WalletStorageReadUnlocked + Send,
     ) -> SignerResult<ArbitraryMessageSignature>;
 
     /// Sign a transaction intent. The number of `input_destinations` must be the same as
     /// the number of inputs in the transaction; all of the destinations must be known
     /// to this key chain.
-    fn sign_transaction_intent(
+    async fn sign_transaction_intent(
         &mut self,
         transaction: &Transaction,
         input_destinations: &[Destination],
         intent: &str,
-        key_chain: &impl AccountKeyChains,
-        db_tx: &impl WalletStorageReadUnlocked,
+        key_chain: &(impl AccountKeyChains + Sync),
+        db_tx: impl WalletStorageReadUnlocked + Send,
     ) -> SignerResult<SignedTransactionIntent>;
 }
 
 pub trait SignerProvider {
-    type S: Signer;
-    type K: AccountKeyChains;
+    type S: Signer + Send;
+    type K: AccountKeyChains + Sync + Send;
 
     fn provide(&mut self, chain_config: Arc<ChainConfig>, account_index: U31) -> Self::S;
 

@@ -73,6 +73,7 @@ pub struct PeerContext {
     /// Can be set for outbound connections only.
     pub discovered_own_address: Option<SocketAddress>,
 
+    /// Last time the peer has sent us a block that became our tip.
     pub last_tip_block_time: Option<Time>,
 
     pub last_tx_time: Option<Time>,

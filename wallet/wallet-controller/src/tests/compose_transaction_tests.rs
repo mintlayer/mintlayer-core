@@ -13,7 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
 
 use itertools::Itertools as _;
 use rstest::rstest;
@@ -42,9 +45,10 @@ use wallet::{
     account::TransactionToSign, wallet::test_helpers::create_wallet_with_mnemonic,
     wallet_events::WalletEventsNoOp,
 };
-use wallet_types::partially_signed_transaction::{TokenAdditionalInfo, TxAdditionalInfo};
+use wallet_types::partially_signed_transaction::PtxAdditionalInfo;
 
 use crate::{
+    helpers::get_referenced_token_ids_from_partially_signed_transaction,
     runtime_wallet::RuntimeWallet,
     tests::test_utils::{
         assert_fees, create_block_scan_wallet, random_rpc_ft_info_with_id_ticker_decimals,
@@ -101,12 +105,6 @@ async fn general_test(#[case] seed: Seed, #[case] use_htlc_secret: bool) {
     let token2_outpoint =
         UtxoOutPoint::new(Id::<Transaction>::random_using(&mut rng).into(), rng.gen());
 
-    let token1_num_decimals = rng.gen_range(1..20);
-    let token1_ticker = gen_random_alnum_string(&mut rng, 5, 10);
-    let token2_num_decimals = rng.gen_range(1..20);
-    let token2_ticker = gen_random_alnum_string(&mut rng, 5, 10);
-    let token3_num_decimals = rng.gen_range(1..20);
-    let token3_ticker = gen_random_alnum_string(&mut rng, 5, 10);
     let token4_num_decimals = rng.gen_range(1..20);
     let token4_ticker = gen_random_alnum_string(&mut rng, 5, 10);
 
@@ -154,44 +152,15 @@ async fn general_test(#[case] seed: Seed, #[case] use_htlc_secret: bool) {
             (create_htlc_outpoint.clone(), create_htlc_output.clone()),
         ]);
 
-        let token_infos_to_return = BTreeMap::from([
-            (
-                token1_id,
-                RPCTokenInfo::FungibleToken(random_rpc_ft_info_with_id_ticker_decimals(
-                    token1_id,
-                    token1_ticker.clone(),
-                    token1_num_decimals,
-                    &mut rng,
-                )),
-            ),
-            (
-                token2_id,
-                RPCTokenInfo::FungibleToken(random_rpc_ft_info_with_id_ticker_decimals(
-                    token2_id,
-                    token2_ticker.clone(),
-                    token2_num_decimals,
-                    &mut rng,
-                )),
-            ),
-            (
-                token3_id,
-                RPCTokenInfo::FungibleToken(random_rpc_ft_info_with_id_ticker_decimals(
-                    token3_id,
-                    token3_ticker.clone(),
-                    token3_num_decimals,
-                    &mut rng,
-                )),
-            ),
-            (
+        let token_infos_to_return = BTreeMap::from([(
+            token4_id,
+            RPCTokenInfo::FungibleToken(random_rpc_ft_info_with_id_ticker_decimals(
                 token4_id,
-                RPCTokenInfo::FungibleToken(random_rpc_ft_info_with_id_ticker_decimals(
-                    token4_id,
-                    token4_ticker.clone(),
-                    token4_num_decimals,
-                    &mut rng,
-                )),
-            ),
-        ]);
+                token4_ticker.clone(),
+                token4_num_decimals,
+                &mut rng,
+            )),
+        )]);
 
         let chain_info_to_return = ChainInfo {
             best_block_height: BlockHeight::new(last_height),
@@ -286,36 +255,9 @@ async fn general_test(#[case] seed: Seed, #[case] use_htlc_secret: bool) {
     );
     assert_eq!(composed_tx.destinations(), &expected_inputs_destinations);
     assert_eq!(composed_tx.htlc_secrets(), &htlc_secrets);
-    assert_eq!(
-        composed_tx.additional_info(),
-        &TxAdditionalInfo::new()
-            .with_token_info(
-                token1_id,
-                TokenAdditionalInfo {
-                    num_decimals: token1_num_decimals,
-                    ticker: token1_ticker.into_bytes()
-                }
-            )
-            .with_token_info(
-                token2_id,
-                TokenAdditionalInfo {
-                    num_decimals: token2_num_decimals,
-                    ticker: token2_ticker.into_bytes()
-                }
-            )
-            .with_token_info(
-                token3_id,
-                TokenAdditionalInfo {
-                    num_decimals: token3_num_decimals,
-                    ticker: token3_ticker.into_bytes()
-                }
-            )
-            .with_token_info(
-                token4_id,
-                TokenAdditionalInfo {
-                    num_decimals: token4_num_decimals,
-                    ticker: token4_ticker.into_bytes()
-                }
-            )
-    );
+    assert_eq!(composed_tx.additional_info(), &PtxAdditionalInfo::new());
+
+    let expected_token_ids = BTreeSet::from([token1_id, token2_id, token3_id, token4_id]);
+    let actual_token_ids = get_referenced_token_ids_from_partially_signed_transaction(&composed_tx);
+    assert_eq!(actual_token_ids, expected_token_ids);
 }

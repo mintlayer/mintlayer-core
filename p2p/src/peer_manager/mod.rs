@@ -678,7 +678,7 @@ where
                 assert!(old_value.is_none());
             }
             Err(e) => {
-                log::debug!("outbound connection to {address:?} failed: {e}");
+                log::debug!("Outbound connection to {address:?} failed: {e}");
                 match outbound_connect_type {
                     OutboundConnectType::Automatic {
                         block_relay_only: _,
@@ -728,7 +728,7 @@ where
         reason: Option<DisconnectionReason>,
         response_sender: Option<oneshot_nofail::Sender<crate::Result<()>>>,
     ) {
-        log::debug!("disconnect peer {peer_id}");
+        log::debug!("Disconnect peer {peer_id}");
         let res = self.try_disconnect(peer_id, reason);
 
         match res {
@@ -743,7 +743,7 @@ where
                 assert!(old_value.is_none());
             }
             Err(e) => {
-                log::debug!("disconnecting new peer {peer_id} failed: {e}");
+                log::warn!("Disconnecting peer {peer_id} failed: {e}");
                 if let Some(response_sender) = response_sender {
                     response_sender.send(Err(e));
                 }
@@ -883,7 +883,7 @@ where
             &self.p2p_config.peer_manager_config,
             &mut make_pseudo_rng(),
         ) {
-            log::info!("inbound peer {peer_id} is selected for eviction");
+            log::info!("Inbound peer {peer_id} is selected for eviction");
             self.disconnect(
                 peer_id,
                 PeerDisconnectionDbAction::Keep,
@@ -904,7 +904,7 @@ where
             self.time_getter.get_time(),
             &mut make_pseudo_rng(),
         ) {
-            log::info!("block relay peer {peer_id} is selected for eviction");
+            log::info!("Block relay peer {peer_id} is selected for eviction");
             self.disconnect(
                 peer_id,
                 PeerDisconnectionDbAction::Keep,
@@ -922,7 +922,7 @@ where
             self.time_getter.get_time(),
             &mut make_pseudo_rng(),
         ) {
-            log::info!("full relay peer {peer_id} is selected for eviction");
+            log::info!("Full relay peer {peer_id} is selected for eviction");
             self.disconnect(
                 peer_id,
                 PeerDisconnectionDbAction::Keep,
@@ -976,8 +976,13 @@ where
         self.peer_connectivity_handle.accept(peer_id)?;
 
         log::info!(
-            "new peer accepted, peer_id: {peer_id}, address: {peer_address:?}, role: {peer_role:?}, protocol_version: {:?}",
-            info.protocol_version
+            "New peer accepted, peer_id: {}, address: {:?}, role: {:?}, protocol_version: {:?}, user agent: {} v{}",
+            peer_id,
+            peer_address,
+            peer_role,
+            info.protocol_version,
+            info.user_agent,
+            info.software_version
         );
 
         if info.common_services.has_service(Service::PeerAddresses) {
@@ -1108,7 +1113,7 @@ where
         );
 
         if let Err(accept_err) = &accept_res {
-            log::debug!("connection rejected for peer {peer_id}: {accept_err}");
+            log::debug!("Connection rejected for peer {peer_id}: {accept_err}");
 
             let disconnection_reason = DisconnectionReason::from_error(accept_err);
 
@@ -1125,7 +1130,7 @@ where
             let disconnect_result =
                 self.peer_connectivity_handle.disconnect(peer_id, disconnection_reason);
             if let Err(err) = disconnect_result {
-                log::error!("disconnect failed unexpectedly: {err:?}");
+                log::error!("Disconnect failed unexpectedly: {err:?}");
             }
 
             if peer_role.is_outbound() {
@@ -1181,7 +1186,7 @@ where
         // The peer will not be in `peers` for rejected connections
         if let Some(peer) = self.peers.remove(&peer_id) {
             log::info!(
-                "peer disconnected, peer_id: {}, address: {:?}",
+                "Peer disconnected, peer_id: {}, address: {:?}",
                 peer.info.peer_id,
                 peer.peer_address
             );
@@ -1464,7 +1469,7 @@ where
                 .get_mut(&peer_id)
                 .expect("peer sending AnnounceAddrRequest must be known");
             if !peer.address_rate_limiter.accept(self.time_getter.get_time()) {
-                log::debug!("address announcement is rate limited from peer {peer_id}");
+                log::debug!("Address announcement is rate limited from peer {peer_id}");
                 return;
             }
 
@@ -1602,14 +1607,14 @@ where
                     peer.ping_min = Some(ping_time_min);
                 } else {
                     log::debug!(
-                        "wrong nonce in ping response from peer {}, received: {}, expected: {}",
+                        "Wrong nonce in ping response from peer {}, received: {}, expected: {}",
                         peer_id,
                         nonce,
                         sent_ping.nonce,
                     );
                 }
             } else {
-                log::debug!("unexpected ping response received from peer {}", peer_id);
+                log::debug!("Unexpected ping response received from peer {}", peer_id);
             }
         }
     }
@@ -1648,17 +1653,17 @@ where
             }
             PeerManagerEvent::NewTipReceived { peer_id, block_id } => {
                 if let Some(peer) = self.peers.get_mut(&peer_id) {
-                    log::debug!("new tip {block_id} received from peer {peer_id}");
+                    log::debug!("New tip {block_id} received from peer {peer_id}");
                     peer.last_tip_block_time = Some(self.time_getter.get_time());
                 }
             }
             PeerManagerEvent::NewChainstateTip(block_id) => {
-                log::debug!("new tip {block_id} added to chainstate");
+                log::debug!("New tip {block_id} added to chainstate");
                 self.last_chainstate_tip_block_time = Some(self.time_getter.get_time());
             }
             PeerManagerEvent::NewValidTransactionReceived { peer_id, txid } => {
                 if let Some(peer) = self.peers.get_mut(&peer_id) {
-                    log::debug!("new transaction {txid} received from peer {peer_id}");
+                    log::debug!("New transaction {txid} received from peer {peer_id}");
                     peer.last_tx_time = Some(self.time_getter.get_time());
                 }
             }
@@ -1816,6 +1821,9 @@ where
                 ping_min: context.ping_min.map(|time| {
                     duration_to_int(&time).expect("valid timestamp expected (ping_min)")
                 }),
+                last_tip_block_time: context
+                    .last_tip_block_time
+                    .map(|time| time.as_secs_since_epoch()),
             })
             .collect()
     }
@@ -1963,10 +1971,10 @@ where
                     let timeout_time = (sent_ping.timestamp + *self.p2p_config.ping_timeout)
                         .expect("Both times are local, so this can't happen");
                     if now >= timeout_time {
-                        log::info!("ping check: dead peer detected: {peer_id}");
+                        log::info!("Ping check: dead peer detected: {peer_id}");
                         dead_peers.push(*peer_id);
                     } else {
-                        log::debug!("ping check: slow peer detected: {peer_id}");
+                        log::debug!("Ping check: slow peer detected: {peer_id}");
                     }
                 }
                 None => {
@@ -2153,7 +2161,7 @@ where
                 // Skip heartbeat to give the stored anchor peers more time to connect to prevent churn!
                 // The stored anchor peers should be the first connected block relay peers.
                 for anchor_address in anchor_peers {
-                    log::debug!("try to connect to anchor peer {anchor_address}");
+                    log::debug!("Try to connect to anchor peer {anchor_address}");
                     // The first peers should become anchor peers
                     self.connect(
                         anchor_address,

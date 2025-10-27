@@ -63,12 +63,10 @@ use super::{
     TokensFeeVersion,
 };
 
-use self::{
-    checkpoints::Checkpoints,
-    emission_schedule::{CoinUnit, DEFAULT_INITIAL_MINT},
-};
+use self::emission_schedule::{CoinUnit, DEFAULT_INITIAL_MINT};
 
 pub use builder::Builder;
+pub use checkpoints::Checkpoints;
 pub use emission_schedule::{EmissionSchedule, EmissionScheduleFn, EmissionScheduleTabular};
 
 const DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET_V1: Duration = Duration::from_secs(120);

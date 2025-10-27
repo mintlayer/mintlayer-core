@@ -28,7 +28,7 @@ const MNEMONIC: &str =
 #[test]
 fn account_addresses() {
     let config = Arc::new(create_regtest());
-    let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
+    let mut db = Store::new(DefaultBackend::new_in_memory()).unwrap();
     let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
 
     let master_key_chain = MasterKeyChain::new_from_mnemonic(
@@ -63,7 +63,7 @@ fn account_addresses() {
 #[test]
 fn account_addresses_lookahead() {
     let config = Arc::new(create_regtest());
-    let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
+    let mut db = Store::new(DefaultBackend::new_in_memory()).unwrap();
     let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
 
     let master_key_chain = MasterKeyChain::new_from_mnemonic(

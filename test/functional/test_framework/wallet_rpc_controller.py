@@ -28,11 +28,16 @@ from operator import itemgetter
 from typing import Optional, List, Union, TypedDict
 
 from test_framework.util import assert_in, rpc_port
-from test_framework.wallet_controller_common import PartialSigInfo, TokenTxOutput, UtxoOutpoint, WalletCliControllerBase
+from test_framework.wallet_controller_common import (
+    PartialSigInfo, TokenTxOutput, UtxoOutpoint, WalletCliControllerBase,
+    pub_key_hex_to_hexified_dest, to_json
+)
+
 
 ONE_MB = 2**20
 READ_TIMEOUT_SEC = 30
 DEFAULT_ACCOUNT_INDEX = 0
+
 
 @dataclass
 class TransferTxOutput:
@@ -40,16 +45,25 @@ class TransferTxOutput:
     pub_key_hex: str
     token_id: Optional[str]
 
+    # This produces a serialized TxOutput::Transfer, which is usable e.g. with compose_transaction.
     def to_json(self):
         if self.token_id:
-            return {'Transfer': [ { 'TokenV1': [f"0x{self.token_id}", {"atoms": str(self.atoms)}] }, f"HexifiedDestination{{0x02{self.pub_key_hex}}}" ]}
+            return {'Transfer': [
+                { 'TokenV1': [f"0x{self.token_id}", {"atoms": str(self.atoms)}] },
+                pub_key_hex_to_hexified_dest(self.pub_key_hex)
+            ]}
         else:
-            return {'Transfer': [ { 'Coin': {"atoms": str(self.atoms)} }, f"HexifiedDestination{{0x02{self.pub_key_hex}}}" ]}
+            return {'Transfer': [
+                { 'Coin': {"atoms": str(self.atoms)} },
+                pub_key_hex_to_hexified_dest(self.pub_key_hex)
+            ]}
+
 
 @dataclass
 class Balances:
     coins: str
     tokens: dict
+
 
 class NewTxResult(TypedDict):
     tx_id: str
@@ -57,16 +71,19 @@ class NewTxResult(TypedDict):
     fees: Balances
     broadcasted: bool
 
+
 @dataclass
 class PoolData:
     pool_id: str
     pledge: str
     balance: str
 
+
 @dataclass
 class DelegationData:
     delegation_id: str
     balance: str
+
 
 @dataclass
 class CreatedBlockInfo:
@@ -74,10 +91,12 @@ class CreatedBlockInfo:
     block_height: str
     pool_id: str
 
+
 @dataclass
 class AccountInfo:
     index: int
     name: Optional[str]
+
 
 class WalletRpcController(WalletCliControllerBase):
     def __init__(self, node, config, log, wallet_args: List[str] = [], chain_config_args: List[str] = []):
@@ -232,14 +251,16 @@ class WalletRpcController(WalletCliControllerBase):
         result = self._write_command("standalone_add_multisig", [self.account, min_required_signatures, pub_keys, label, no_rescan])
         return result['result']
 
-    async def new_public_key(self, address: Optional[str] = None) -> bytes:
+    async def new_public_key(self, address: Optional[str] = None, strip_encoded_enum_prefix: bool = True) -> bytes:
         if address is None:
             address = await self.new_address()
         public_key = self._write_command("address_reveal_public_key", [self.account, address])['result']['public_key_hex']
 
-        # remove the pub key enum value, the first one byte
-        pub_key_bytes = bytes.fromhex(public_key)[1:]
-        return pub_key_bytes
+        if strip_encoded_enum_prefix:
+            # Remove the first byte, which encodes the variant of PublicKeyHolder enum.
+            return bytes.fromhex(public_key)[1:]
+        else:
+            return bytes.fromhex(public_key)
 
     async def reveal_public_key_as_address(self, address: Optional[str] = None) -> str:
         return self._write_command("address_reveal_public_key", [self.account, address])['result']['public_key_address']
@@ -513,7 +534,7 @@ class WalletRpcController(WalletCliControllerBase):
             return result['error']['message']
 
     async def create_from_cold_address(self, address: str, amount: int, selected_utxo: UtxoOutpoint, change_address: Optional[str] = None) -> str:
-        utxo = selected_utxo.to_json()
+        utxo = to_json(selected_utxo)
         result = self._write_command("transaction_create_from_cold_input", [self.account, address, {'decimal': str(amount)}, utxo, change_address, {'in_top_x_mb': 5}])
         if 'result' in result:
             return f"Send transaction created\n\n{result['result']['hex']}"
@@ -569,9 +590,10 @@ class WalletRpcController(WalletCliControllerBase):
                                   selected_utxos: List[UtxoOutpoint],
                                   htlc_secrets: Optional[List[Optional[str]]] = None,
                                   only_transaction: bool = False) -> str:
-        utxos = [utxo.to_json() for utxo in selected_utxos]
-        outputs = [output.to_json() for output in outputs]
-        print(outputs)
+        utxos = [to_json(utxo) for utxo in selected_utxos]
+        outputs = [to_json(output) for output in outputs]
+        print(f"outputs = {outputs}")
+        print(f"selected_utxos = {selected_utxos}")
         result = self._write_command('transaction_compose', [utxos, outputs, htlc_secrets, only_transaction])
         return result
 

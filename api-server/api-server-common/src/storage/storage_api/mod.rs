@@ -419,21 +419,31 @@ impl LockedUtxo {
 #[derive(Debug, Clone, Encode, Decode)]
 pub struct Utxo {
     utxo: UtxoWithExtraInfo,
-    spent: bool,
+    spent_at_block_height: Option<BlockHeight>,
 }
 
 impl Utxo {
-    pub fn new_with_info(utxo: UtxoWithExtraInfo, spent: bool) -> Self {
-        Self { utxo, spent }
+    pub fn new_with_info(
+        utxo: UtxoWithExtraInfo,
+        spent_at_block_height: Option<BlockHeight>,
+    ) -> Self {
+        Self {
+            utxo,
+            spent_at_block_height,
+        }
     }
 
-    pub fn new(output: TxOutput, token_decimals: Option<u8>, spent: bool) -> Self {
+    pub fn new(
+        output: TxOutput,
+        token_decimals: Option<u8>,
+        spent_at_block_height: Option<BlockHeight>,
+    ) -> Self {
         Self {
             utxo: UtxoWithExtraInfo {
                 output,
                 token_decimals,
             },
-            spent,
+            spent_at_block_height,
         }
     }
 
@@ -449,8 +459,12 @@ impl Utxo {
         self.utxo.output
     }
 
+    pub fn spent_at_block_height(&self) -> Option<BlockHeight> {
+        self.spent_at_block_height
+    }
+
     pub fn spent(&self) -> bool {
-        self.spent
+        self.spent_at_block_height.is_some()
     }
 }
 
@@ -611,6 +625,11 @@ pub trait ApiServerStorageRead: Sync {
         block_id: Id<Block>,
     ) -> Result<Option<BlockAuxData>, ApiServerStorageError>;
 
+    // Note:
+    // 1) The input time range is inclusive on both ends.
+    // 2) The returned heights won't include the genesis height normally.
+    // However, if there are no blocks on the mainchain in the specified time range (except genesis),
+    // the function will return (0, 0).
     async fn get_block_range_from_time_range(
         &self,
         time_range: (BlockTimestamp, BlockTimestamp),

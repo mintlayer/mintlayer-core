@@ -13,13 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chainstate_test_framework::empty_witness;
-use chainstate_test_framework::{TestFramework, TransactionBuilder};
-use common::chain::make_delegation_id;
+use chainstate_test_framework::{empty_witness, TestFramework, TransactionBuilder};
 use common::{
     address::pubkeyhash::PublicKeyHash,
     chain::{
-        make_token_id,
+        make_delegation_id, make_token_id,
         output_value::OutputValue,
         stakelock::StakePoolData,
         tokens::{TokenId, TokenIssuance, TokenTotalSupply},
@@ -154,20 +152,25 @@ pub struct IssueAndMintTokensResult {
 }
 
 pub fn issue_and_mint_tokens_from_genesis(
+    min_mint_amount: Amount,
     rng: &mut (impl Rng + CryptoRng),
     tf: &mut TestFramework,
 ) -> IssueAndMintTokensResult {
     let token_issuance_fee = tf.chainstate.get_chain_config().fungible_token_issuance_fee();
 
-    let issuance = test_utils::token_utils::random_token_issuance_v1(
+    let min_mint_amount_atoms = min_mint_amount.into_atoms();
+    let issuance = test_utils::token_utils::random_token_issuance_v1_with_min_supply(
         tf.chain_config(),
         Destination::AnyoneCanSpend,
+        min_mint_amount_atoms,
         rng,
     );
     let amount_to_mint = match issuance.total_supply {
-        TokenTotalSupply::Fixed(limit) => Amount::from_atoms(rng.gen_range(1..=limit.into_atoms())),
+        TokenTotalSupply::Fixed(limit) => {
+            Amount::from_atoms(rng.gen_range(min_mint_amount_atoms..=limit.into_atoms()))
+        }
         TokenTotalSupply::Lockable | TokenTotalSupply::Unlimited => {
-            Amount::from_atoms(rng.gen_range(100..1000))
+            Amount::from_atoms(rng.gen_range(min_mint_amount_atoms..min_mint_amount_atoms * 10))
         }
     };
 

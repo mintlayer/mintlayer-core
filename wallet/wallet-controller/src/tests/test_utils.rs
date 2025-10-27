@@ -171,7 +171,7 @@ pub fn create_block_scan_wallet<B, P>(
     block_height: u64,
 ) -> Block
 where
-    B: storage::Backend + 'static,
+    B: storage::BackendWithSendableTransactions + 'static,
     P: SignerProvider,
 {
     let block = Block::new(
