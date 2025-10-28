@@ -61,8 +61,6 @@ class WalletTokensTransferFromMultisigAddr(BitcoinTestFramework):
         assert_in("Success", await wallet.sync())
 
     def run_test(self):
-        if 'win32' in sys.platform:
-            asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
         asyncio.run(self.async_test())
 
     # Create 2 tokens called foo and bar and mint the specified amount of each.

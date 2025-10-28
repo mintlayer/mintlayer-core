@@ -70,8 +70,6 @@ class WalletConflictTransaction(BitcoinTestFramework):
         return block_id
 
     def run_test(self):
-        if 'win32' in sys.platform:
-            asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
         asyncio.run(self.async_test())
 
     async def async_test(self):

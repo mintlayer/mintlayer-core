@@ -70,9 +70,6 @@ class WalletTxIntent(BitcoinTestFramework):
         assert_in("Success", await wallet.sync())
 
     def run_test(self):
-        if 'win32' in sys.platform:
-            asyncio.set_event_loop_policy(
-                asyncio.WindowsProactorEventLoopPolicy())
         asyncio.run(self.async_test())
 
     # Create a token and mint the specified amount of it spread across several utxos.
