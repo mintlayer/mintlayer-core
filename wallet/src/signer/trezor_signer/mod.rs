@@ -149,8 +149,10 @@ pub enum TrezorError {
     MultipleSignaturesReturned,
     #[error("A multisig signature was returned for a single address from Device")]
     MultisigSignatureReturned,
+    #[error("The file being loaded is a ledger wallet and does not correspond to the connected hardware wallet")]
+    LedgerWalletDifferentFile,
     #[error("The file being loaded is a software wallet and does not correspond to the connected hardware wallet")]
-    HardwareWalletDifferentFile,
+    WalletFileIsSoftwareWallet,
     #[error(
         "Public keys mismatch - wrong device or passphrase.\n\
          Last used device id: \"{file_device_id}\", connected device id: \"{connected_device_id}\".\n\
@@ -1685,10 +1687,14 @@ fn check_public_keys_against_key_chain(
                     .into());
                 }
             }
+            #[cfg(feature = "ledger")]
+            HardwareWalletData::Ledger(_) => {
+                return Err(TrezorError::LedgerWalletDifferentFile.into());
+            }
         }
     }
 
-    Err(TrezorError::HardwareWalletDifferentFile)?
+    Err(TrezorError::WalletFileIsSoftwareWallet)?
 }
 
 fn fetch_extended_pub_key(
