@@ -599,7 +599,10 @@ class NetworkThread(threading.Thread):
 
         NetworkThread.listeners = {}
         NetworkThread.protos = {}
-        NetworkThread.network_event_loop = asyncio.new_event_loop()
+        # Use SelectorEventLoop both on Unix (where it's the default) and on Windows
+        # (where ProactorEventLoop is the default). Without this, the tests may fail
+        # spuriously on Windows with the error "RuntimeError: Event loop is closed".
+        NetworkThread.network_event_loop = asyncio.SelectorEventLoop()
 
     def run(self):
         """Start the network thread."""
