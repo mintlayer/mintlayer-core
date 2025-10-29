@@ -671,7 +671,7 @@ fn fill_order_check_storage(#[case] seed: Seed, #[case] version: OrdersVersion) 
         let order_id = make_order_id(tx.inputs()).unwrap();
         tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
-        // Fill the order partially
+        // Fill the order partially or completely
         let min_fill_amount = order_min_non_zero_fill_amount(&tf, &order_id, version);
         let fill_amount = Amount::from_atoms(
             rng.gen_range(min_fill_amount.into_atoms()..=ask_amount.into_atoms()),
@@ -708,66 +708,70 @@ fn fill_order_check_storage(#[case] seed: Seed, #[case] version: OrdersVersion) 
             tf.chainstate.get_order_data(&order_id).unwrap()
         );
         assert_eq!(
-            Some(left_to_fill),
+            left_to_fill.as_non_zero(),
             tf.chainstate.get_order_ask_balance(&order_id).unwrap()
         );
         assert_eq!(
-            Some((give_amount - filled_amount).unwrap()),
+            (give_amount - filled_amount).unwrap().as_non_zero(),
             tf.chainstate.get_order_give_balance(&order_id).unwrap()
         );
 
-        // Fill the rest of the order
-        let filled_amount = calculate_fill_order(&tf, &order_id, left_to_fill, version);
+        if left_to_fill >= min_fill_amount || version == OrdersVersion::V0 {
+            // Fill the rest of the order
+            let filled_amount = calculate_fill_order(&tf, &order_id, left_to_fill, version);
 
-        let fill_order_input = match version {
-            OrdersVersion::V0 => TxInput::AccountCommand(
-                AccountNonce::new(1),
-                AccountCommand::FillOrder(order_id, left_to_fill, Destination::AnyoneCanSpend),
-            ),
-            OrdersVersion::V1 => {
-                TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(order_id, left_to_fill))
-            }
-        };
+            let fill_order_input = match version {
+                OrdersVersion::V0 => TxInput::AccountCommand(
+                    AccountNonce::new(1),
+                    AccountCommand::FillOrder(order_id, left_to_fill, Destination::AnyoneCanSpend),
+                ),
+                OrdersVersion::V1 => TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(
+                    order_id,
+                    left_to_fill,
+                )),
+            };
 
-        let tx = TransactionBuilder::new()
-            .add_input(
-                UtxoOutPoint::new(partial_fill_tx_id.into(), 1).into(),
-                InputWitness::NoSignature(None),
-            )
-            .add_input(fill_order_input, InputWitness::NoSignature(None))
-            .add_output(TxOutput::Transfer(
-                OutputValue::TokenV1(token_id, filled_amount),
-                Destination::AnyoneCanSpend,
-            ))
-            .build();
-        tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
+            let tx = TransactionBuilder::new()
+                .add_input(
+                    UtxoOutPoint::new(partial_fill_tx_id.into(), 1).into(),
+                    InputWitness::NoSignature(None),
+                )
+                .add_input(fill_order_input, InputWitness::NoSignature(None))
+                .add_output(TxOutput::Transfer(
+                    OutputValue::TokenV1(token_id, filled_amount),
+                    Destination::AnyoneCanSpend,
+                ))
+                .build();
+            tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
-        assert_eq!(
-            Some(order_data.into()),
-            tf.chainstate.get_order_data(&order_id).unwrap()
-        );
-        assert_eq!(
-            None,
-            tf.chainstate.get_order_ask_balance(&order_id).unwrap()
-        );
-        match version {
-            OrdersVersion::V0 => {
-                assert_eq!(
-                    None,
-                    tf.chainstate.get_order_give_balance(&order_id).unwrap()
-                );
-            }
-            OrdersVersion::V1 => {
-                let filled1 =
-                    (give_amount.into_atoms() * fill_amount.into_atoms()) / ask_amount.into_atoms();
-                let filled2 = (give_amount.into_atoms() * left_to_fill.into_atoms())
-                    / ask_amount.into_atoms();
-                let remainder = (give_amount - Amount::from_atoms(filled1 + filled2))
-                    .filter(|v| *v != Amount::ZERO);
-                assert_eq!(
-                    remainder,
-                    tf.chainstate.get_order_give_balance(&order_id).unwrap()
-                );
+            assert_eq!(
+                Some(order_data.into()),
+                tf.chainstate.get_order_data(&order_id).unwrap()
+            );
+            assert_eq!(
+                None,
+                tf.chainstate.get_order_ask_balance(&order_id).unwrap()
+            );
+            match version {
+                OrdersVersion::V0 => {
+                    assert_eq!(
+                        None,
+                        tf.chainstate.get_order_give_balance(&order_id).unwrap()
+                    );
+                }
+                OrdersVersion::V1 => {
+                    let filled1 = (give_amount.into_atoms() * fill_amount.into_atoms())
+                        / ask_amount.into_atoms();
+                    let filled2 = (give_amount.into_atoms() * left_to_fill.into_atoms())
+                        / ask_amount.into_atoms();
+                    let remainder = (give_amount - Amount::from_atoms(filled1 + filled2))
+                        .unwrap()
+                        .as_non_zero();
+                    assert_eq!(
+                        remainder,
+                        tf.chainstate.get_order_give_balance(&order_id).unwrap()
+                    );
+                }
             }
         }
     });
@@ -778,7 +782,7 @@ fn fill_order_check_storage(#[case] seed: Seed, #[case] version: OrdersVersion) 
 #[case(Seed::from_entropy(), OrdersVersion::V0)]
 #[trace]
 #[case(Seed::from_entropy(), OrdersVersion::V1)]
-fn fill_partially_then_conclude(#[case] seed: Seed, #[case] version: OrdersVersion) {
+fn fill_then_conclude(#[case] seed: Seed, #[case] version: OrdersVersion) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = create_test_framework_with_orders(&mut rng, version);
@@ -804,7 +808,7 @@ fn fill_partially_then_conclude(#[case] seed: Seed, #[case] version: OrdersVersi
         let order_id = make_order_id(tx.inputs()).unwrap();
         tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
-        // Fill the order partially
+        // Fill the order partially or completely
         let min_fill_amount = order_min_non_zero_fill_amount(&tf, &order_id, version);
         let fill_amount = Amount::from_atoms(
             rng.gen_range(min_fill_amount.into_atoms()..=ask_amount.into_atoms()),
@@ -1483,7 +1487,8 @@ fn reorg_before_create(#[case] seed: Seed, #[case] version: OrdersVersion) {
             .build_and_process(&mut rng)
             .unwrap();
 
-        // Fill the order partially
+        // Fill the order partially, leaving at least one atom unfilled (so that the expected
+        // remaining ask/give amounts are always Some).
         let min_fill_amount = order_min_non_zero_fill_amount(&tf, &order_id, version);
         let fill_amount = Amount::from_atoms(
             rng.gen_range(min_fill_amount.into_atoms()..ask_amount.into_atoms()),
@@ -1566,7 +1571,7 @@ fn reorg_before_create(#[case] seed: Seed, #[case] version: OrdersVersion) {
     });
 }
 
-// Create a chain with an order which is filled partially and then concluded.
+// Create a chain with an order which is filled partially or completely and then concluded.
 // Reorg from a point after the order was created, so that after reorg storage has original information on the order
 #[rstest]
 #[trace]
@@ -1605,10 +1610,10 @@ fn reorg_after_create(#[case] seed: Seed, #[case] version: OrdersVersion) {
         tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
         let reorg_common_ancestor = tf.best_block_id();
 
-        // Fill the order partially
+        // Fill the order partially or completely
         let min_fill_amount = order_min_non_zero_fill_amount(&tf, &order_id, version);
         let fill_amount = Amount::from_atoms(
-            rng.gen_range(min_fill_amount.into_atoms()..ask_amount.into_atoms()),
+            rng.gen_range(min_fill_amount.into_atoms()..=ask_amount.into_atoms()),
         );
         let filled_amount = calculate_fill_order(&tf, &order_id, fill_amount, version);
         let left_to_fill = (ask_amount - fill_amount).unwrap();
@@ -3189,7 +3194,7 @@ fn fill_freeze_conclude_order(#[case] seed: Seed) {
         let order_id = make_order_id(tx.inputs()).unwrap();
         tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
-        // Fill order partially
+        // Fill the order partially or completely
         let min_fill_amount = order_min_non_zero_fill_amount(&tf, &order_id, OrdersVersion::V1);
         let fill_amount = Amount::from_atoms(
             rng.gen_range(min_fill_amount.into_atoms()..=ask_amount.into_atoms()),

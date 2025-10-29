@@ -96,6 +96,10 @@ impl Amount {
             (other - self).expect("cannot be negative")
         }
     }
+
+    pub fn as_non_zero(self) -> Option<Amount> {
+        (self != Self::ZERO).then_some(self)
+    }
 }
 
 impl std::ops::Add for Amount {
