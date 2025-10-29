@@ -93,7 +93,7 @@ mod tx_to_partially_signed_tx_general_test {
 
         let chain_config = Arc::new(create_regtest());
         let block_timestamp = chain_config.genesis_block().timestamp();
-        let mut wallet = create_wallet_with_mnemonic(Arc::clone(&chain_config), MNEMONIC);
+        let mut wallet = create_wallet_with_mnemonic(Arc::clone(&chain_config), MNEMONIC).await;
 
         // Transfer to a destination belonging to the wallet.
         let token0_transfer_utxo_dest = wallet_new_dest(&mut wallet);
@@ -235,7 +235,7 @@ mod tx_to_partially_signed_tx_general_test {
         let known_create_pool_outpoint = UtxoOutPoint::new(last_block_id.into(), 1);
 
         let last_height = blocks.len() as u64 + 1;
-        scan_wallet(&mut wallet, BlockHeight::new(0), blocks);
+        scan_wallet(&mut wallet, BlockHeight::new(0), blocks).await;
 
         let htlc_spend_key = Destination::PublicKeyHash(PublicKeyHash::random_using(&mut rng));
         let htlc_refund_key = Destination::PublicKeyHash(PublicKeyHash::random_using(&mut rng));
@@ -853,7 +853,7 @@ async fn tx_to_partially_signed_tx_htlc_input_with_known_utxo_test(
     let mut rng = make_seedable_rng(seed);
 
     let chain_config = Arc::new(create_regtest());
-    let mut wallet = create_wallet_with_mnemonic(Arc::clone(&chain_config), MNEMONIC);
+    let mut wallet = create_wallet_with_mnemonic(Arc::clone(&chain_config), MNEMONIC).await;
 
     let token_id = TokenId::random_using(&mut rng);
 
@@ -903,7 +903,8 @@ async fn tx_to_partially_signed_tx_htlc_input_with_known_utxo_test(
         Amount::from_atoms(rng.gen()),
         Destination::PublicKeyHash(PublicKeyHash::random_using(&mut rng)),
         0,
-    );
+    )
+    .await;
     let last_height = 1;
 
     let node_mock = {

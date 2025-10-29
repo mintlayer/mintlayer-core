@@ -32,6 +32,7 @@ bip39 = { workspace = true, default-features = false, features = [
   "std",
   "zeroize",
 ] }
+derive_more.workspace = true
 hex.workspace = true
 itertools.workspace = true
 parity-scale-codec.workspace = true

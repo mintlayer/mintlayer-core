@@ -120,7 +120,7 @@ use wallet_types::{
     Currency,
 };
 
-#[cfg(feature = "trezor")]
+#[cfg(any(feature = "trezor", feature = "ledger"))]
 use crate::types::WalletExtraInfo;
 
 // Note: the standard `Debug` macro is not smart enough and requires N to implement the `Debug`
@@ -219,7 +219,7 @@ pub type ColdController<WalletEvents> = Controller<ColdWalletClient, WalletEvent
 impl<N, W, B> Controller<N, W, B>
 where
     N: NodeInterface + Clone + Send + Sync + 'static,
-    W: WalletEvents,
+    W: WalletEvents + Send + 'static,
     B: storage::BackendWithSendableTransactions + 'static,
 {
     pub async fn new(
@@ -257,7 +257,7 @@ where
         }
     }
 
-    pub fn create_wallet(
+    pub async fn create_wallet(
         chain_config: Arc<ChainConfig>,
         file_path: impl AsRef<Path>,
         args: WalletTypeArgsComputed,
@@ -298,6 +298,7 @@ where
                         )?)
                     },
                 )
+                .await
                 .map_err(ControllerError::WalletError)
                 .map(|w| w.map_wallet(RuntimeWallet::Software))
             }
@@ -314,6 +315,7 @@ where
                     .map_err(SignerError::TrezorError)?)
                 },
             )
+            .await
             .map_err(ControllerError::WalletError)
             .map(|w| w.map_wallet(RuntimeWallet::Trezor)),
         };
@@ -322,7 +324,7 @@ where
         res
     }
 
-    pub fn recover_wallet(
+    pub async fn recover_wallet(
         chain_config: Arc<ChainConfig>,
         file_path: impl AsRef<Path>,
         args: WalletTypeArgsComputed,
@@ -361,6 +363,7 @@ where
                         )?)
                     },
                 )
+                .await
                 .map_err(ControllerError::WalletError)?;
                 Ok(wallet.map_wallet(RuntimeWallet::Software))
             }
@@ -377,6 +380,7 @@ where
                         .map_err(SignerError::TrezorError)?)
                     },
                 )
+                .await
                 .map_err(ControllerError::WalletError)?;
                 Ok(wallet.map_wallet(RuntimeWallet::Trezor))
             }
@@ -435,7 +439,7 @@ where
         Ok(())
     }
 
-    pub fn open_wallet(
+    pub async fn open_wallet(
         chain_config: Arc<ChainConfig>,
         file_path: impl AsRef<Path>,
         password: Option<String>,
@@ -466,6 +470,7 @@ where
                     force_change_wallet_type,
                     |db_tx| SoftwareSignerProvider::load_from_database(chain_config.clone(), db_tx),
                 )
+                .await
                 .map_err(ControllerError::WalletError)?;
                 Ok(wallet.map_wallet(RuntimeWallet::Software))
             }
@@ -486,6 +491,7 @@ where
                         )
                     },
                 )
+                .await
                 .map_err(ControllerError::WalletError)?;
                 Ok(wallet.map_wallet(RuntimeWallet::Trezor))
             }
@@ -579,6 +585,10 @@ where
                     device_name: trezor_info.device_name,
                     device_id: trezor_info.device_id,
                     firmware_version: trezor_info.firmware_version.to_string(),
+                },
+                #[cfg(feature = "ledger")]
+                HardwareWalletFullInfo::Ledger(ledger_data) => WalletExtraInfo::LedgerWallet {
+                    app_version: ledger_data.app_version.to_string(),
                 },
             },
             None => WalletExtraInfo::SoftwareWallet,
@@ -747,11 +757,14 @@ where
             .map_err(|err| ControllerError::SearchForTimestampsFailed(err))
     }
 
-    pub fn create_account(
+    pub async fn create_account(
         &mut self,
         name: Option<String>,
     ) -> Result<(U31, Option<String>), ControllerError<N>> {
-        self.wallet.create_next_account(name).map_err(ControllerError::WalletError)
+        self.wallet
+            .create_next_account(name)
+            .await
+            .map_err(ControllerError::WalletError)
     }
 
     pub fn update_account_name(

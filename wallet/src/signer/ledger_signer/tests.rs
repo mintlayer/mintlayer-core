@@ -40,7 +40,7 @@ use tokio::{
 
 use crate::signer::{
     ledger_signer::{
-        ledger_messages::{get_app_name, get_extended_public_key, ok_response},
+        ledger_messages::{check_current_app, get_app_name, get_extended_public_key, ok_response},
         speculos::{Action, Button, Handle, PodmanHandle},
         LedgerError, LedgerFinder, LedgerSigner,
     },
@@ -103,6 +103,7 @@ impl LedgerFinder for DummyProvider {
     async fn find_ledger_device_from_db<T: WalletStorageReadLocked + Send>(
         &self,
         _db_tx: &mut T,
+        _chain_config: Arc<ChainConfig>,
     ) -> SignerResult<(Self::Ledger, LedgerData)> {
         Err(SignerError::LedgerError(LedgerError::NoDeviceFound))
     }
@@ -197,7 +198,10 @@ async fn test_app_name() {
     let info = device.app_info(Duration::from_millis(100)).await.unwrap();
     eprintln!("info: {info:?}");
 
-    // assert_eq!(info.name, "mintlayer-app");
+    let info = check_current_app(&mut device).await.unwrap();
+    eprintln!("info: {info:?}");
+
+    assert_eq!(info.app_version.to_string(), "0.1.0");
 }
 
 #[rstest]
