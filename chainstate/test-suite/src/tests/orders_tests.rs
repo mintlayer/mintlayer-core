@@ -672,9 +672,9 @@ fn fill_order_check_storage(#[case] seed: Seed, #[case] version: OrdersVersion) 
         tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
         // Fill the order partially or completely
-        let min_fill_amount = order_min_non_zero_fill_amount(&tf, &order_id, version);
+        let min_non_zero_fill_amount = order_min_non_zero_fill_amount(&tf, &order_id, version);
         let fill_amount = Amount::from_atoms(
-            rng.gen_range(min_fill_amount.into_atoms()..=ask_amount.into_atoms()),
+            rng.gen_range(min_non_zero_fill_amount.into_atoms()..=ask_amount.into_atoms()),
         );
         let filled_amount = calculate_fill_order(&tf, &order_id, fill_amount, version);
         let left_to_fill = (ask_amount - fill_amount).unwrap();
@@ -716,7 +716,11 @@ fn fill_order_check_storage(#[case] seed: Seed, #[case] version: OrdersVersion) 
             tf.chainstate.get_order_give_balance(&order_id).unwrap()
         );
 
-        if left_to_fill >= min_fill_amount || version == OrdersVersion::V0 {
+        // Note: even though zero fills are allowed in orders V0 in general, we can't do a zero
+        // fill when the remaining ask balance is zero. So we skip the 2nd fill for orders V0
+        // as well when the remaining balance is less than min_non_zero_fill_amount (which is 1
+        // in the orders V0 case).
+        if left_to_fill >= min_non_zero_fill_amount {
             // Fill the rest of the order
             let filled_amount = calculate_fill_order(&tf, &order_id, left_to_fill, version);
 

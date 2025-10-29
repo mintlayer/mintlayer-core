@@ -669,3 +669,17 @@ fn serde_serialization_randomized(#[case] seed: Seed) {
         amount.into_atoms().to_string()
     );
 }
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn as_non_zero(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    assert_eq!(Amount::from_atoms(0).as_non_zero(), None);
+
+    for _ in 0..100 {
+        let amount = Amount::from_atoms(rng.gen_range(1..=UnsignedIntType::MAX));
+        assert_eq!(amount.as_non_zero(), Some(amount));
+    }
+}
