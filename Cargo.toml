@@ -172,7 +172,12 @@ fixed-hash = "0.8"
 flate2 = "1.0"
 fs4 = "0.12"
 futures = { version = "0.3", default-features = false }
-generic-array = "0.14"
+# Note: we want to use v0.14.7 here, because the later 0.x versions produce tons of warnings
+# "use of deprecated xxx ... please upgrade to generic-array 1.x".
+# Also note that we can't trivially upgrade to 1.x, because some of the cryprtography-related dependencies
+# still use the 0.x version, so by upgrading to 1.x we'll end up using both versions of GenericArray
+# and will have to perform convertions between them.
+generic-array = "=0.14.7"
 heck = "0.5"
 hex = "0.4"
 hex-literal = "0.4"
@@ -182,7 +187,7 @@ hmac = "0.12"
 iced = "0.13"
 # Note: we need this fix - https://github.com/iced-rs/iced_aw/pull/329
 # TODO: switch back to a released version of iced_aw once the fix is released (need version > 0.12)
-iced_aw = { git = "https://github.com/iced-rs/iced_aw", branch = "main" }
+iced_aw = { git = "https://github.com/iced-rs/iced_aw", rev = "def1db9aac1e58a47e0c3127d4d4e95d724ca8ad" }
 iced_fonts = "0.1"
 indoc = "2.0"
 itertools = "0.14"
@@ -204,7 +209,10 @@ parking_lot = "0.12"
 paste = "1.0"
 probabilistic-collections = "0.7"
 proc-macro2 = "1.0"
-proptest = "1.0"
+# Note: proptest v1.7+ uses rand 0.9, which is incompatible with rand 0.8 that we currently use.
+# But we can't easily switch to rand 0.9 because many of our other dependencies use earlier versions
+# of rand.
+proptest = "~1.6"
 qrcodegen = "1.8"
 quote = "1.0"
 rand = "0.8"
