@@ -253,6 +253,15 @@ where
                             false,
                             Some(HardwareWalletType::Trezor { device_id }),
                         ),
+                        OpenWalletSubCommand::Ledger {
+                            wallet_path,
+                            encryption_password,
+                        } => (
+                            wallet_path,
+                            encryption_password,
+                            false,
+                            Some(HardwareWalletType::Ledger),
+                        ),
                     };
 
                 let response = self

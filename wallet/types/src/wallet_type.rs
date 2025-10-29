@@ -25,6 +25,9 @@ pub enum WalletType {
     #[cfg(feature = "trezor")]
     #[codec(index = 2)]
     Trezor,
+    #[cfg(feature = "ledger")]
+    #[codec(index = 3)]
+    Ledger,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -56,6 +59,10 @@ impl WalletType {
             (Self::Trezor, WalletControllerMode::Hot) => true,
             #[cfg(feature = "trezor")]
             (Self::Trezor, WalletControllerMode::Cold) => false,
+            #[cfg(feature = "ledger")]
+            (Self::Ledger, WalletControllerMode::Hot) => true,
+            #[cfg(feature = "ledger")]
+            (Self::Ledger, WalletControllerMode::Cold) => false,
         }
     }
 }
@@ -76,6 +83,8 @@ impl Display for WalletType {
             Self::Cold => write!(f, "Cold"),
             #[cfg(feature = "trezor")]
             Self::Trezor => write!(f, "Trezor"),
+            #[cfg(feature = "ledger")]
+            Self::Ledger => write!(f, "Ledger"),
         }
     }
 }

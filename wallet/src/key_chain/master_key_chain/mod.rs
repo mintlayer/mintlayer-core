@@ -21,8 +21,8 @@ use crypto::key::hdkd::u31::U31;
 use crypto::vrf::ExtendedVRFPrivateKey;
 use std::sync::Arc;
 use wallet_storage::{
-    StoreTxRwUnlocked, WalletStorageReadLocked, WalletStorageReadUnlocked,
-    WalletStorageWriteLocked, WalletStorageWriteUnlocked,
+    WalletStorageReadLocked, WalletStorageReadUnlocked, WalletStorageWriteLocked,
+    WalletStorageWriteUnlocked,
 };
 use wallet_types::seed_phrase::{SerializableSeedPhrase, StoreSeedPhrase};
 
@@ -59,9 +59,9 @@ impl MasterKeyChain {
         ))
     }
 
-    pub fn new_from_mnemonic<B: storage::Backend>(
+    pub fn new_from_mnemonic(
         chain_config: Arc<ChainConfig>,
-        db_tx: &mut StoreTxRwUnlocked<B>,
+        db_tx: &mut impl WalletStorageWriteUnlocked,
         mnemonic_str: &str,
         passphrase: Option<&str>,
         save_seed_phrase: StoreSeedPhrase,
@@ -80,9 +80,9 @@ impl MasterKeyChain {
         )
     }
 
-    fn new_from_root_key<B: storage::Backend>(
+    fn new_from_root_key(
         chain_config: Arc<ChainConfig>,
-        db_tx: &mut StoreTxRwUnlocked<B>,
+        db_tx: &mut impl WalletStorageWriteUnlocked,
         root_key: ExtendedPrivateKey,
         root_vrf_key: ExtendedVRFPrivateKey,
         seed_phrase: Option<SerializableSeedPhrase>,

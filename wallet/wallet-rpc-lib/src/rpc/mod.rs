@@ -89,7 +89,7 @@ use wallet_types::{
 
 use crate::{WalletHandle, WalletRpcConfig};
 
-#[cfg(feature = "trezor")]
+#[cfg(any(feature = "trezor", feature = "ledger"))]
 use wallet_types::wallet_type::WalletType;
 
 pub use self::types::RpcError;
@@ -160,6 +160,8 @@ where
                 match hw {
                     #[cfg(feature = "trezor")]
                     HardwareWalletType::Trezor { device_id } => (WalletType::Trezor, device_id),
+                    #[cfg(feature = "ledger")]
+                    HardwareWalletType::Ledger => (WalletType::Ledger, None),
                 }
             });
         Ok(self
