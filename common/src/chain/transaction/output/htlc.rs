@@ -24,11 +24,11 @@ use super::{timelock::OutputTimeLock, Destination};
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serde::Serialize, serde::Deserialize)]
 pub struct HashedTimelockContract {
-    // can be spent either by a specific address that knows the secret
+    /// Can be spent either via `spend_key` by someone who knows the secret.
     pub secret_hash: HtlcSecretHash,
     pub spend_key: Destination,
 
-    // or by a multisig after timelock expires making it possible to refund
+    /// Or via `refund_key` after the timelock expires.
     pub refund_timelock: OutputTimeLock,
     pub refund_key: Destination,
 }

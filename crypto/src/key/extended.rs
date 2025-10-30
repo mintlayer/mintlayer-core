@@ -27,9 +27,8 @@ use randomness::{make_true_rng, CryptoRng, Rng};
 
 use super::hdkd::chain_code::ChainCode;
 
-#[derive(Debug, PartialEq, Eq, Clone, Decode, Encode)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum ExtendedKeyKind {
-    #[codec(index = 0)]
     Secp256k1Schnorr,
 }
 
