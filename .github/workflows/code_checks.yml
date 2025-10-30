@@ -3,10 +3,12 @@ name: Static code checks
 on:
   push:
     branches:
-      - "**" # target all branches
+      - master
   pull_request:
     branches:
-      - master
+      - "**" # target all branches
+  schedule:
+    - cron: '15 0 * * *'  # every day at 00:15 UTC
 
 env:
   CARGO_TERM_COLOR: always
@@ -17,24 +19,36 @@ jobs:
   static_checks_ubuntu:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository and submodules
-        uses: actions/checkout@v2
+      - name: Checkout the repository
+        uses: actions/checkout@v5
         with:
           submodules: recursive
 
-      - name: Update local dependency repositories
+      - name: Update the list of available system packages
         run: sudo apt-get update
-      - name: Install dependencies
-        run: sudo apt-get install -yqq --no-install-recommends build-essential python3 python3-toml
 
-      - name: Install rust
-        run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain $(python3 ./build-tools/cargo-info-extractor/extract.py --rust-version)
-      - name: Install rust clippy
+      - name: Install build dependencies
+        run: sudo apt-get install -yqq --no-install-recommends build-essential
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version-file: './build-tools/.python-version'
+
+      - name: Install Rust
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
+            --default-toolchain $(python ./build-tools/cargo-info-extractor/extract.py --rust-version)
+
+      - name: Install Clippy
         run: rustup component add clippy
+
       - name: Install cargo-deny
         run: cargo install cargo-deny --locked
+
       - name: Install cargo-vet
         run: cargo install cargo-vet --locked
+
       - name: Run checks
         run: ./do_checks.sh
 
@@ -47,21 +61,32 @@ jobs:
           git config --global core.autocrlf false
           git config --global core.eol lf
 
-      - name: Checkout repository and submodules
-        uses: actions/checkout@v2
+      - name: Checkout the repository
+        uses: actions/checkout@v5
         with:
           submodules: recursive
 
-      - name: Install python toml package
-        run: python3 -m pip install toml
-      - name: Install rust
-        run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain $(python3 ./build-tools/cargo-info-extractor/extract.py --rust-version)
-      - name: Install rust clippy
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version-file: './build-tools/.python-version'
+
+      - name: Install Rust
+        # Use bash to be able to escape the newline via '\'.
+        shell: bash
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
+            --default-toolchain $(python ./build-tools/cargo-info-extractor/extract.py --rust-version)
+
+      - name: Install Clippy
         run: rustup component add clippy
+
       - name: Install cargo-deny
         run: cargo install cargo-deny --locked
+
       - name: Install cargo-vet
         run: cargo install cargo-vet --locked
+
       - name: Run checks
         shell: bash
         run: ./do_checks.sh
@@ -69,20 +94,29 @@ jobs:
   static_checks_macos:
     runs-on: macos-latest
     steps:
-      - name: Checkout repository and submodules
-        uses: actions/checkout@v2
+      - name: Checkout the repository
+        uses: actions/checkout@v5
         with:
           submodules: recursive
 
-      - name: Install python toml package
-        run: python3 -m pip install toml --break-system-packages --user
-      - name: Install rust
-        run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain $(python3 ./build-tools/cargo-info-extractor/extract.py --rust-version)
-      - name: Install rust clippy
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version-file: './build-tools/.python-version'
+
+      - name: Install Rust
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
+            --default-toolchain $(python ./build-tools/cargo-info-extractor/extract.py --rust-version)
+
+      - name: Install Clippy
         run: rustup component add clippy
+
       - name: Install cargo-deny
         run: cargo install cargo-deny --locked
+
       - name: Install cargo-vet
         run: cargo install cargo-vet --locked
+
       - name: Run checks
         run: bash ./do_checks.sh

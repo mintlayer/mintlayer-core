@@ -4,12 +4,7 @@ set -e
 
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 
-# Note: on GitHub's CI's "macos-latest", `which python` returns
-# `/Library/Frameworks/Python.framework/Versions/Current/bin/python`,
-# while `which python3` returns `/opt/homebrew/bin/python3` (as of October 2025).
-# Since we use `python3` in GitHub Actions to install packages (such as `toml`),
-# we have to try `python3` first here as well.
-PYTHON=$(which python3 || which python)
+PYTHON=$(which python || which python3)
 
 cd "$SCRIPT_DIR"
 
@@ -72,7 +67,6 @@ cargo clippy --all-features --workspace --lib --bins --examples -- \
     -D clippy::fallible_impl_from \
     -D clippy::string_slice
 
-# Install requirements with: pip install -r ./build-tools/codecheck/requirements.txt
 "$PYTHON" "build-tools/codecheck/codecheck.py"
 
 # Ensure that wasm documentation is up-to-date

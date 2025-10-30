@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 # Some simple custom code lints, mostly implemented by means of grepping code
 
+import fnmatch
+import itertools
 import os
 import re
 import sys
-import toml
-import itertools
-import fnmatch
+import tomllib
 
 SCALECODEC_RE = r'\bparity_scale_codec(_derive)?::'
 JSONRPSEE_RE = r'\bjsonrpsee[_a-z0-9]*::'
@@ -115,7 +115,8 @@ def disallow(pat, exclude = []):
 
 # Check we depend on only one version of given crate
 def check_crate_version_unique(crate_name):
-    packages = toml.load('Cargo.lock')['package']
+    with open('Cargo.lock', "rb") as file:
+        packages = tomllib.load(file)['package']
     versions = [ p['version'] for p in packages if p['name'] == crate_name ]
 
     if len(versions) == 0:
@@ -129,7 +130,8 @@ def check_crate_version_unique(crate_name):
 # Ensure that the versions in the workspace's Cargo.toml are consistent
 def check_workspace_and_package_versions_equal():
     print("==== Ensuring workspace and package versions are equal in the workspace's Cargo.toml")
-    root = toml.load('Cargo.toml')
+    with open('Cargo.toml', "rb") as file:
+        root = tomllib.load(file)
 
     workspace_version = root['package']['version']
     package_version = root['workspace']['package']['version']
@@ -220,7 +222,8 @@ def check_dependency_versions_patch_version():
             continue
 
         # load the file
-        root = toml.load(path)
+        with open(path, "rb") as file:
+            root = tomllib.load(file)
 
         # check dependencies
         intermediary_result = internal_check_dependency_versions(root, 'dependencies', path)

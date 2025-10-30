@@ -3,10 +3,10 @@ name: Wasm build and test
 on:
   push:
     branches:
-      - "**" # target all branches
+      - master
   pull_request:
     branches:
-      - master
+      - "**" # target all branches
   schedule:
     - cron: '15 0 * * *'  # every day at 00:15 UTC
 
@@ -24,32 +24,50 @@ jobs:
         node-version: [18.x]
 
     steps:
-      - name: Update local dependency repositories
+      - name: Checkout the repository
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - name: Update the list of available system packages
         run: sudo apt-get update
-      - name: Install dependencies
-        run: sudo apt-get install -yqq --no-install-recommends build-essential python3 python3-toml podman build-essential pkg-config libssl-dev
-      - name: Install rust deps
-        run: sudo apt-get install -yqq build-essential pkg-config libssl-dev
-      - uses: actions/checkout@v3
-      - name: Install rust
-        run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain $(python3 ./build-tools/cargo-info-extractor/extract.py --rust-version)
+
+      - name: Install build dependencies
+        run: sudo apt-get install -yqq --no-install-recommends build-essential pkg-config libssl-dev
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version-file: './build-tools/.python-version'
+
+      - name: Install Rust
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
+            --default-toolchain $(python ./build-tools/cargo-info-extractor/extract.py --rust-version)
+
       - name: Use Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v3
         with:
           node-version: ${{ matrix.node-version }}
+
       - name: Install TypeScript & Knip
         run: npm install typescript knip
+
       - name: Install wasm-pack
         run: cargo install wasm-pack
+
       - name: Build the wasm module
         working-directory: ./wasm-wrappers
         run: wasm-pack build --target nodejs
+
       - name: Compile the tests
         working-directory: ./wasm-wrappers
         run: tsc --project js-bindings-test/tsconfig.json
+
       - name: Run the tests
         working-directory: ./wasm-wrappers
         run: node --enable-source-maps js-bindings-test/node-entry.js
+
       - name: Run Knip
         working-directory: ./wasm-wrappers/js-bindings-test
         run: npx knip
@@ -57,36 +75,49 @@ jobs:
   wasm_artifacts:
     runs-on: ubuntu-latest
     steps:
-      - name: Update local dependency repositories
+      - name: Checkout the repository
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - name: Update the list of available system packages
         run: sudo apt-get update
-      - name: Install dependencies
-        run: sudo apt-get install -yqq --no-install-recommends build-essential python3 python3-toml podman build-essential pkg-config libssl-dev
-      - name: Install rust deps
-        run: sudo apt-get install -yqq build-essential pkg-config libssl-dev
-      - uses: actions/checkout@v3
-      - name: Install rust
-        run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain $(python3 ./build-tools/cargo-info-extractor/extract.py --rust-version)
+
+      - name: Install build dependencies
+        run: sudo apt-get install -yqq --no-install-recommends build-essential pkg-config libssl-dev
+
+      - name: Install Rust
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
+            --default-toolchain $(python ./build-tools/cargo-info-extractor/extract.py --rust-version)
+
       - name: Install wasm-pack
         run: cargo install wasm-pack
 
       - name: Build the wasm module for nodejs - release
         working-directory: ./wasm-wrappers
-        run: wasm-pack build --target nodejs  --out-dir wasm-wrappers-builds/nodejs/release  --release
+        run: wasm-pack build --target nodejs --out-dir wasm-wrappers-builds/nodejs/release --release
+
       - name: Build the wasm module for nodejs - debug
         working-directory: ./wasm-wrappers
-        run: wasm-pack build --target nodejs  --out-dir wasm-wrappers-builds/nodejs/debug    --debug
+        run: wasm-pack build --target nodejs --out-dir wasm-wrappers-builds/nodejs/debug --debug
+
       - name: Build the wasm module for web - release
         working-directory: ./wasm-wrappers
-        run: wasm-pack build --target web     --out-dir wasm-wrappers-builds/web/release     --release
+        run: wasm-pack build --target web --out-dir wasm-wrappers-builds/web/release --release
+
       - name: Build the wasm module for web - debug
         working-directory: ./wasm-wrappers
-        run: wasm-pack build --target web     --out-dir wasm-wrappers-builds/web/debug       --debug
+        run: wasm-pack build --target web --out-dir wasm-wrappers-builds/web/debug --debug
+
       - name: Build the wasm module for bundler - release
         working-directory: ./wasm-wrappers
         run: wasm-pack build --target bundler --out-dir wasm-wrappers-builds/bundler/release --release
+
       - name: Build the wasm module for bundler - debug
         working-directory: ./wasm-wrappers
-        run: wasm-pack build --target bundler --out-dir wasm-wrappers-builds/bundler/debug   --debug
+        run: wasm-pack build --target bundler --out-dir wasm-wrappers-builds/bundler/debug --debug
+
       - name: Copy readme file into the package
         working-directory: ./wasm-wrappers
         run: cp README.md wasm-wrappers-builds/ && cp WASM-API.md wasm-wrappers-builds/

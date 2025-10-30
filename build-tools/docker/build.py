@@ -2,7 +2,7 @@ import argparse
 import os
 import pathlib
 import subprocess
-import toml
+import tomllib
 
 
 ROOT_DIR = pathlib.Path(__file__).resolve().parent.parent.parent
@@ -14,7 +14,8 @@ def get_cargo_version(cargo_toml_path):
         raise ValueError(f"No such file: {cargo_toml_path}")
 
     # Read the Cargo.toml file
-    config = toml.load(cargo_toml_path)
+    with open(cargo_toml_path, "rb") as file:
+        config = tomllib.load(file)
 
     # Get the version
     version = config.get('package', {}).get('version')
