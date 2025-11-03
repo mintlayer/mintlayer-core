@@ -830,7 +830,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             "CREATE TABLE ml.fungible_token (
                     token_id bytea NOT NULL,
                     block_height bigint NOT NULL,
-                    ticker bytea NOT NULL,
+                    ticker TEXT NOT NULL,
                     authority TEXT NOT NULL,
                     issuance bytea NOT NULL,
                     PRIMARY KEY (token_id, block_height)
@@ -840,7 +840,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
 
         // index when searching for token tickers
         self.just_execute(
-            "CREATE INDEX fungible_token_ticker_index ON ml.fungible_token USING HASH (ticker);",
+            "CREATE INDEX fungible_token_ticker_case_insensitive_idx ON ml.fungible_token (ticker text_pattern_ops);"
         )
         .await?;
 
@@ -854,7 +854,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             "CREATE TABLE ml.nft_issuance (
                     nft_id bytea NOT NULL,
                     block_height bigint NOT NULL,
-                    ticker bytea NOT NULL,
+                    ticker TEXT NOT NULL,
                     issuance bytea NOT NULL,
                     owner bytea,
                     PRIMARY KEY (nft_id, block_height)
@@ -864,7 +864,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
 
         // index when searching for token tickers
         self.just_execute(
-            "CREATE INDEX nft_token_ticker_index ON ml.nft_issuance USING HASH (ticker);",
+            "CREATE INDEX nft_token_ticker_case_insensitive_idx ON ml.nft_issuance (ticker text_pattern_ops);"
         )
         .await?;
 
@@ -2215,7 +2215,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     &token_id.encode(),
                     &height,
                     &issuance.encode(),
-                    &issuance.token_ticker,
+                    &String::from_utf8(issuance.token_ticker).expect("Ticker is valid UTF-8 string"),
                     &authority.into_string(),
                 ],
             )
@@ -2254,7 +2254,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     &token_id.encode(),
                     &height,
                     &issuance.encode(),
-                    &issuance.token_ticker,
+                    &String::from_utf8(issuance.token_ticker).expect("Ticker is valid UTF-8 string"),
                     &authority.into_string(),
                 ],
             )
@@ -2397,26 +2397,27 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         &self,
         len: u32,
         offset: u64,
-        ticker: &[u8],
+        ticker: &str,
     ) -> Result<Vec<TokenId>, ApiServerStorageError> {
         let len = len as i64;
         let offset = offset as i64;
+        let ticker_patern = format!("%{ticker}%");
         self.tx
             .query(
                 r#"
                 WITH count_tokens AS (
-                    SELECT count(token_id) FROM ml.fungible_token WHERE ticker = $3
+                    SELECT count(token_id) FROM ml.fungible_token WHERE ticker ILIKE $3
                 )
                 (SELECT token_id
                  FROM ml.fungible_token
-                 WHERE ticker = $3
+                 WHERE ticker ILIKE $3
                  ORDER BY token_id
                  OFFSET $1
                  LIMIT $2)
                 UNION ALL
                 (SELECT nft_id
                  FROM ml.nft_issuance
-                 WHERE ticker = $3
+                 WHERE ticker ILIKE $3
                  ORDER BY nft_id
                  OFFSET GREATEST($1 - (SELECT * FROM count_tokens), 0)
                  LIMIT CASE
@@ -2424,7 +2425,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                            THEN ($2 + $1 - (SELECT * FROM count_tokens))
                        ELSE 0 END);
             "#,
-                &[&offset, &len, &ticker],
+                &[&offset, &len, &ticker_patern],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?
@@ -2626,7 +2627,13 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         self.tx
             .execute(
                 "INSERT INTO ml.nft_issuance (nft_id, block_height, issuance, ticker, owner) VALUES ($1, $2, $3, $4, $5);",
-                &[&token_id.encode(), &height, &issuance.encode(), ticker, &owner.encode()],
+                &[
+                    &token_id.encode(),
+                    &height,
+                    &issuance.encode(),
+                    &String::from_utf8(ticker.clone()).expect("Ticker is valid UTF-8 string"),
+                    &owner.encode()
+                ],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
