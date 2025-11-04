@@ -1233,7 +1233,7 @@ dependencies = [
  "consensus",
  "constraints-value-accumulator",
  "crypto",
- "derive_more",
+ "derive_more 1.0.0",
  "hex",
  "itertools 0.14.0",
  "jsonrpsee",
@@ -1285,7 +1285,7 @@ dependencies = [
  "mocks",
  "rstest",
  "storage-lmdb",
- "strum",
+ "strum 0.26.3",
  "test-utils",
  "thiserror 1.0.69",
  "utils",
@@ -1353,7 +1353,7 @@ dependencies = [
  "serialization",
  "storage-failing",
  "storage-inmemory",
- "strum",
+ "strum 0.26.3",
  "test-utils",
  "tokens-accounting",
  "tx-verifier",
@@ -1399,7 +1399,7 @@ version = "1.2.0"
 dependencies = [
  "common",
  "crypto",
- "derive_more",
+ "derive_more 1.0.0",
  "enum-iterator",
  "generic-array",
  "logging",
@@ -1621,7 +1621,9 @@ dependencies = [
  "lazy_static",
  "logging",
  "merkletree-mintlayer",
+ "mintlayer-core-primitives",
  "num",
+ "num-traits",
  "once_cell",
  "parity-scale-codec",
  "paste",
@@ -1641,9 +1643,10 @@ dependencies = [
  "serialization",
  "smallvec",
  "static_assertions",
- "strum",
+ "strum 0.26.3",
  "test-utils",
  "thiserror 1.0.69",
+ "trezor-client",
  "typename",
  "utils",
 ]
@@ -1992,6 +1995,7 @@ dependencies = [
  "sha-1 0.10.1",
  "sha2",
  "sha3",
+ "strum 0.26.3",
  "test-utils",
  "thiserror 1.0.69",
  "x25519-dalek",
@@ -2178,7 +2182,16 @@ version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4a9b99b9cbbe49445b21764dc0625032a89b145a2642e67603e1c936f5458d05"
 dependencies = [
- "derive_more-impl",
+ "derive_more-impl 1.0.0",
+]
+
+[[package]]
+name = "derive_more"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "093242cf7570c207c83073cf82f79706fe7b8317e98620a47d5be7c3d8497678"
+dependencies = [
+ "derive_more-impl 2.0.1",
 ]
 
 [[package]]
@@ -2188,6 +2201,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cb7330aeadfbe296029522e6c40f315320aba36fc43a5b3632f3795348f3bd22"
 dependencies = [
  "convert_case",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.106",
+ "unicode-xid",
+]
+
+[[package]]
+name = "derive_more-impl"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bda628edc44c4bb645fbe0f758797143e4e07926f7ebf4e9bdfbd3d2ce621df3"
+dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.106",
@@ -4385,7 +4410,7 @@ checksum = "34080505efa8e45a4b816c349525ebe327ceaa8559756f0356cba97ef3bf7432"
 name = "log_error"
 version = "1.2.0"
 dependencies = [
- "derive_more",
+ "derive_more 1.0.0",
  "logging",
  "proc-macro2",
  "quote",
@@ -4661,6 +4686,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "mintlayer-core-primitives"
+version = "1.0.0"
+source = "git+https://github.com/mintlayer/mintlayer-core-primitives?rev=4e21bf85e7fdca1577a49df7599b2b39ec913287#4e21bf85e7fdca1577a49df7599b2b39ec913287"
+dependencies = [
+ "derive_more 2.0.1",
+ "fixed-hash",
+ "parity-scale-codec",
+ "strum 0.27.2",
+]
+
+[[package]]
+name = "mintlayer-firmware-deps"
+version = "0.0.0"
+source = "git+https://github.com/mintlayer/mintlayer-trezor-firmware?rev=342b0f77c4d7041c31dd00392bdb116c84002388#342b0f77c4d7041c31dd00392bdb116c84002388"
+dependencies = [
+ "mintlayer-core-primitives",
+]
+
+[[package]]
 name = "mintlayer-test"
 version = "1.2.0"
 dependencies = [
@@ -4683,7 +4727,7 @@ dependencies = [
  "common",
  "crypto",
  "ctor",
- "derive_more",
+ "derive_more 1.0.0",
  "expect-test",
  "hex",
  "logging",
@@ -4692,7 +4736,7 @@ dependencies = [
  "rstest",
  "serialization",
  "static_assertions",
- "strum",
+ "strum 0.26.3",
  "test-utils",
  "thiserror 1.0.69",
  "tokens-accounting",
@@ -4959,7 +5003,7 @@ dependencies = [
  "rfd",
  "serialization",
  "storage",
- "strum",
+ "strum 0.26.3",
  "thiserror 1.0.69",
  "tokio",
  "utils",
@@ -5570,7 +5614,7 @@ dependencies = [
  "randomness",
  "rstest",
  "serialization",
- "strum",
+ "strum 0.26.3",
  "test-utils",
  "thiserror 1.0.69",
  "utils",
@@ -5622,7 +5666,7 @@ dependencies = [
  "criterion",
  "crypto",
  "ctor",
- "derive_more",
+ "derive_more 1.0.0",
  "dyn-clone",
  "enum-iterator",
  "futures",
@@ -6048,7 +6092,7 @@ dependencies = [
  "randomness",
  "rstest",
  "serialization",
- "strum",
+ "strum 0.26.3",
  "test-utils",
  "thiserror 1.0.69",
  "typename",
@@ -6557,8 +6601,8 @@ dependencies = [
  "nu-ansi-term",
  "serde",
  "strip-ansi-escapes",
- "strum",
- "strum_macros",
+ "strum 0.26.3",
+ "strum_macros 0.26.4",
  "thiserror 1.0.69",
  "unicode-segmentation",
  "unicode-width",
@@ -7984,7 +8028,16 @@ version = "0.26.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8fec0f0aef304996cf250b31b5a10dee7980c85da9d759361292b8bca5a18f06"
 dependencies = [
- "strum_macros",
+ "strum_macros 0.26.4",
+]
+
+[[package]]
+name = "strum"
+version = "0.27.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "af23d6f6c1a224baef9d3f61e287d2761385a5b88fdab4eb4c6f11aeb54c4bcf"
+dependencies = [
+ "strum_macros 0.27.2",
 ]
 
 [[package]]
@@ -7997,6 +8050,18 @@ dependencies = [
  "proc-macro2",
  "quote",
  "rustversion",
+ "syn 2.0.106",
+]
+
+[[package]]
+name = "strum_macros"
+version = "0.27.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7695ce3845ea4b33927c055a39dc438a45b059f7c1b3d91d38d10355fb8cbca7"
+dependencies = [
+ "heck 0.5.0",
+ "proc-macro2",
+ "quote",
  "syn 2.0.106",
 ]
 
@@ -8197,7 +8262,7 @@ dependencies = [
  "regex",
  "rstest",
  "serialization",
- "strum",
+ "strum 0.26.3",
  "utils",
 ]
 
@@ -8377,7 +8442,7 @@ dependencies = [
  "randomness",
  "rstest",
  "serialization",
- "strum",
+ "strum 0.26.3",
  "test-utils",
  "thiserror 1.0.69",
  "utils",
@@ -8744,32 +8809,17 @@ dependencies = [
 [[package]]
 name = "trezor-client"
 version = "0.1.5"
-source = "git+https://github.com/mintlayer/mintlayer-trezor-firmware?rev=8154c7a3bc65d27d64186f1b733750e029f8cad0#8154c7a3bc65d27d64186f1b733750e029f8cad0"
+source = "git+https://github.com/mintlayer/mintlayer-trezor-firmware?rev=342b0f77c4d7041c31dd00392bdb116c84002388#342b0f77c4d7041c31dd00392bdb116c84002388"
 dependencies = [
  "bitcoin",
  "byteorder",
  "hex",
+ "mintlayer-firmware-deps",
  "protobuf",
  "rusb",
  "thiserror 2.0.17",
  "tracing",
  "unicode-normalization",
-]
-
-[[package]]
-name = "trezor-common"
-version = "1.2.0"
-dependencies = [
- "common",
- "crypto",
- "num-derive",
- "num-traits",
- "parity-scale-codec",
- "rstest",
- "serialization",
- "strum",
- "test-utils",
- "trezor-client",
 ]
 
 [[package]]
@@ -9225,7 +9275,7 @@ dependencies = [
  "consensus",
  "crossterm",
  "crypto",
- "derive_more",
+ "derive_more 1.0.0",
  "directories",
  "dyn-clone",
  "futures",
@@ -9278,7 +9328,7 @@ dependencies = [
  "consensus",
  "crossterm",
  "crypto",
- "derive_more",
+ "derive_more 1.0.0",
  "directories",
  "futures",
  "hex",
@@ -9327,7 +9377,7 @@ dependencies = [
  "consensus",
  "crypto",
  "ctor",
- "derive_more",
+ "derive_more 1.0.0",
  "futures",
  "itertools 0.14.0",
  "logging",
@@ -9342,7 +9392,7 @@ dependencies = [
  "serde",
  "serialization",
  "storage",
- "strum",
+ "strum 0.26.3",
  "test-utils",
  "thiserror 1.0.69",
  "tokio",
@@ -9364,7 +9414,7 @@ dependencies = [
  "chainstate-storage",
  "common",
  "crypto",
- "derive_more",
+ "derive_more 1.0.0",
  "hex",
  "logging",
  "node-comm",
@@ -9412,7 +9462,7 @@ dependencies = [
  "common",
  "consensus",
  "crypto",
- "derive_more",
+ "derive_more 1.0.0",
  "enum-iterator",
  "futures",
  "hex",

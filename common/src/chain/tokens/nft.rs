@@ -16,7 +16,18 @@
 use crypto::key::PublicKey;
 use serialization::{extras::non_empty_vec::DataOrNoVec, Decode, Encode};
 
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Encode,
+    Decode,
+    serde::Serialize,
+    serde::Deserialize,
+    strum::EnumDiscriminants,
+)]
+#[strum_discriminants(name(NftIssuanceTag), derive(strum::EnumIter))]
 pub enum NftIssuance {
     #[codec(index = 0)]
     V0(NftIssuanceV0),

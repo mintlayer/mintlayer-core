@@ -36,8 +36,8 @@ use common::{
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
         tokens::{
-            IsTokenUnfreezable, Metadata, NftIssuance, NftIssuanceV0, TokenId, TokenIssuance,
-            TokenIssuanceV1,
+            IsTokenFreezable, IsTokenUnfreezable, Metadata, NftIssuance, NftIssuanceV0, TokenId,
+            TokenIssuance, TokenIssuanceV1, TokenTotalSupply,
         },
         AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, ChainConfig,
         ChainstateUpgradeBuilder, DelegationId, Destination, GenBlock, NetUpgrades,
@@ -656,12 +656,16 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
         token_ticker: random_ascii_alphanumeric_string(rng, 2..10).into_bytes(),
         number_of_decimals: rng.gen_range(1..18),
         metadata_uri: random_ascii_alphanumeric_string(rng, 10..20).into_bytes(),
-        total_supply: common::chain::tokens::TokenTotalSupply::Unlimited,
+        total_supply: TokenTotalSupply::Unlimited,
         authority: Destination::PublicKey(dest_pub.clone()),
-        is_freezable: common::chain::tokens::IsTokenFreezable::No,
+        is_freezable: if rng.gen_bool(0.5) {
+            IsTokenFreezable::Yes
+        } else {
+            IsTokenFreezable::No
+        },
     });
 
-    let nft_issuance = NftIssuance::V0(NftIssuanceV0 {
+    let nft1_issuance = NftIssuance::V0(NftIssuanceV0 {
         metadata: Metadata {
             creator: None,
             name: random_ascii_alphanumeric_string(rng, 10..20).into_bytes(),
@@ -673,7 +677,21 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
             media_hash: gen_random_bytes(rng, 4, 20),
         },
     });
-    let nft_id = TokenId::new(H256::random_using(rng));
+    let nft1_id = TokenId::new(H256::random_using(rng));
+    // Similar to the above, but the creator is also set
+    let nft2_issuance = NftIssuance::V0(NftIssuanceV0 {
+        metadata: Metadata {
+            creator: Some(PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr).1.into()),
+            name: random_ascii_alphanumeric_string(rng, 10..20).into_bytes(),
+            description: random_ascii_alphanumeric_string(rng, 10..20).into_bytes(),
+            ticker: random_ascii_alphanumeric_string(rng, 2..10).into_bytes(),
+            icon_uri: DataOrNoVec::from(None),
+            additional_metadata_uri: DataOrNoVec::from(None),
+            media_uri: DataOrNoVec::from(None),
+            media_hash: gen_random_bytes(rng, 4, 20),
+        },
+    });
+    let nft2_id = TokenId::new(H256::random_using(rng));
 
     let created_order_data = OrderData::new(
         Destination::PublicKey(dest_pub.clone()),
@@ -707,8 +725,13 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
         TxOutput::DelegateStaking(delegate_staking_amount, delegation_id),
         TxOutput::IssueFungibleToken(Box::new(token_issuance)),
         TxOutput::IssueNft(
-            nft_id,
-            Box::new(nft_issuance.clone()),
+            nft1_id,
+            Box::new(nft1_issuance.clone()),
+            Destination::AnyoneCanSpend,
+        ),
+        TxOutput::IssueNft(
+            nft2_id,
+            Box::new(nft2_issuance.clone()),
             Destination::AnyoneCanSpend,
         ),
         TxOutput::DataDeposit(gen_random_bytes(rng, 10, 20)),

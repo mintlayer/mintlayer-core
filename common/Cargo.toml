@@ -49,10 +49,13 @@ bitcoin-bech32.workspace = true
 ctor.workspace = true
 expect-test.workspace = true
 indoc.workspace = true
+ml_primitives.workspace = true
+num-traits.workspace = true
 proptest.workspace = true
 rstest.workspace = true
 serde_test.workspace = true
 serial_test.workspace = true
+trezor-client.workspace = true
 
 [features]
 expensive-verification = []

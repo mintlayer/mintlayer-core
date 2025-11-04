@@ -33,7 +33,9 @@ use super::{
     Decode,
     serde::Serialize,
     serde::Deserialize,
+    strum::EnumDiscriminants,
 )]
+#[strum_discriminants(name(TxInputTag), derive(strum::EnumIter))]
 pub enum TxInput {
     #[codec(index = 0)]
     Utxo(UtxoOutPoint),

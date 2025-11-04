@@ -42,9 +42,8 @@ pub enum SignatureError {
 }
 
 #[must_use]
-#[derive(Debug, PartialEq, Eq, Clone, Decode, Encode)]
+#[derive(Debug, PartialEq, Eq, Clone, strum::EnumIter)]
 pub enum KeyKind {
-    #[codec(index = 0)]
     Secp256k1Schnorr,
 }
 
@@ -163,6 +162,16 @@ impl From<Secp256k1PublicKey> for PublicKey {
     fn from(pk: Secp256k1PublicKey) -> Self {
         Self {
             pub_key: PublicKeyHolder::Secp256k1Schnorr(pk),
+        }
+    }
+}
+
+impl TryFrom<PublicKey> for Secp256k1PublicKey {
+    type Error = std::convert::Infallible;
+
+    fn try_from(value: PublicKey) -> Result<Self, Self::Error> {
+        match value.pub_key {
+            PublicKeyHolder::Secp256k1Schnorr(pub_key) => Ok(pub_key),
         }
     }
 }

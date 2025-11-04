@@ -13,20 +13,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use schnorrkel::{derive::Derivation, Keypair};
+
+use randomness::{CryptoRng, Rng};
+use serialization::{Decode, Encode};
+
 use crate::key::hdkd::{
     chain_code::ChainCode, child_number::ChildNumber, derivable::DerivationError,
 };
-use randomness::{CryptoRng, Rng};
-use schnorrkel::{derive::Derivation, Keypair};
-use serialization::{Decode, Encode};
+
+use super::{primitives::VRFReturn, transcript::traits::SignableTranscript, VRFError};
 
 use self::data::SchnorrkelVRFReturn;
 
-use super::{primitives::VRFReturn, transcript::traits::SignableTranscript, VRFError};
-const PUBKEY_LEN: usize = 32;
-const PRIVKEY_LEN: usize = 64; // scalar + nonce
-
 pub mod data;
+
+const PUBKEY_LEN: usize = schnorrkel::PUBLIC_KEY_LENGTH;
+const PRIVKEY_LEN: usize = schnorrkel::SECRET_KEY_LENGTH;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 #[must_use]
@@ -79,6 +82,10 @@ impl SchnorrkelPublicKey {
 
             Ok((Self { key: secret_key }, new_chain_code.0.into()))
         }
+    }
+
+    pub fn as_bytes(&self) -> [u8; PUBKEY_LEN] {
+        self.key.to_bytes()
     }
 }
 
