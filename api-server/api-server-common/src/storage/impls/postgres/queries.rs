@@ -2401,7 +2401,8 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
     ) -> Result<Vec<TokenId>, ApiServerStorageError> {
         let len = len as i64;
         let offset = offset as i64;
-        let ticker_patern = format!("%{ticker}%");
+        let escaped_ticker = escape_for_like(ticker);
+        let ticker_patern = format!("%{escaped_ticker}%");
         self.tx
             .query(
                 r#"
@@ -2983,4 +2984,21 @@ fn amount_to_str(amount: Amount) -> String {
         amount_str = zeros + &amount_str;
     }
     amount_str
+}
+
+// Escapes a string for use in a SQL LIKE clause
+fn escape_for_like(input: &str) -> String {
+    let mut escaped = String::with_capacity(input.len());
+    for c in input.chars() {
+        match c {
+            '%' | '_' | '\\' => {
+                escaped.push('\\');
+                escaped.push(c);
+            }
+            _ => {
+                escaped.push(c);
+            }
+        }
+    }
+    escaped
 }
