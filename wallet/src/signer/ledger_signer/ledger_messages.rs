@@ -22,35 +22,27 @@ use common::{
 };
 use crypto::key::{
     extended::ExtendedPublicKey,
-    hdkd::{
-        chain_code::{ChainCode, CHAINCODE_LENGTH},
-        derivation_path::DerivationPath,
-    },
+    hdkd::{chain_code::ChainCode, derivation_path::DerivationPath},
     secp256k1::{extended_keys::Secp256k1ExtendedPublicKey, Secp256k1PublicKey},
 };
-use serialization::{Decode, DecodeAll, Encode};
+use serialization::Encode;
 use utils::ensure;
 use wallet_types::hw_data::LedgerFullInfo;
 
 use ledger_lib::Exchange;
 use mintlayer_ledger_messages::{
     decode_all as ledger_decode_all, encode as ledger_encode, AddrType, Amount as LAmount,
-    Bip32Path as LedgerBip32Path, CoinType, InputAdditionalInfoReq, Ins,
-    OutputValue as LOutputValue, P1SignTx, PubKeyP1, PublicKeyReq, SignMessageReq, SignTxReq,
-    TxInput as LTxInput, TxInputReq, TxMetadataReq, TxOutput as LTxOutput, TxOutputReq, APDU_CLASS,
-    H256 as LH256, P1_APP_NAME, P1_GET_VERSION, P1_SIGN_NEXT, P1_SIGN_START, P2_DONE, P2_SIGN_MORE,
+    Bip32Path as LedgerBip32Path, CoinType, GetPublicKeyRespones, GetVersionRespones,
+    InputAdditionalInfoReq, Ins, MsgSignature, OutputValue as LOutputValue, P1SignTx, PubKeyP1,
+    PublicKeyReq, SignMessageReq, SignTxReq, Signature as LedgerSignature, TxInput as LTxInput,
+    TxInputReq, TxMetadataReq, TxOutput as LTxOutput, TxOutputReq, APDU_CLASS, H256 as LH256,
+    P1_APP_NAME, P1_GET_VERSION, P1_SIGN_NEXT, P1_SIGN_START, P2_DONE, P2_SIGN_MORE,
 };
 
 const MAX_ADPU_LEN: usize = (u8::MAX - 5) as usize; // 4 bytes for the header + 1 for len
 const TIMEOUT_DUR: Duration = Duration::from_secs(100);
 const OK_RESPONSE: u16 = 0x9000;
 const TX_VERSION: u8 = 1;
-
-#[derive(Decode)]
-pub struct LedgerSignature {
-    pub signature: [u8; 64],
-    pub multisig_idx: Option<u32>,
-}
 
 struct SignatureResult {
     sig: LedgerSignature,
@@ -129,10 +121,9 @@ pub async fn sign_challenge<L: Exchange>(
 
     let resp = send_chunked(ledger, Ins::SIGN_MSG, P1_SIGN_NEXT, message).await?;
 
-    let sig_len = *resp.first().ok_or(LedgerError::InvalidResponse)? as usize;
-    let sig = resp.as_slice().get(1..1 + sig_len).ok_or(LedgerError::InvalidResponse)?;
+    let sig: MsgSignature = ledger_decode_all(&resp).ok_or(LedgerError::InvalidResponse)?;
 
-    Ok(sig.to_vec())
+    Ok(sig.signature.to_vec())
 }
 
 pub async fn get_app_name<L: Exchange>(ledger: &mut L) -> Result<Vec<u8>, ledger_lib::Error> {
@@ -161,13 +152,12 @@ pub async fn check_current_app<L: Exchange>(ledger: &mut L) -> SignerResult<Ledg
         .await
         .map_err(|err| LedgerError::DeviceError(err.to_string()))?;
     let ver = ok_response(resp)?;
-    let app_version = match ver.as_slice() {
-        [major, minor, patch] => common::primitives::semver::SemVer {
-            major: *major,
-            minor: *minor,
-            patch: *patch as u16,
-        },
-        _ => return Err(SignerError::LedgerError(LedgerError::InvalidResponse)),
+    let app_version_resp: GetVersionRespones =
+        ledger_decode_all(&ver).ok_or(LedgerError::InvalidResponse)?;
+    let app_version = common::primitives::semver::SemVer {
+        major: app_version_resp.major,
+        minor: app_version_resp.minor,
+        patch: app_version_resp.patch as u16,
     };
 
     Ok(LedgerFullInfo { app_version })
@@ -191,20 +181,13 @@ pub async fn get_extended_public_key<L: Exchange>(
     )
     .await?;
 
-    let pk_len = *resp.first().ok_or(LedgerError::InvalidResponse)? as usize;
-    let public_key = resp.as_slice().get(1..1 + pk_len).ok_or(LedgerError::InvalidResponse)?;
-    let chain_code_len = *resp.get(1 + pk_len).ok_or(LedgerError::InvalidResponse)? as usize;
-    let chain_code: [_; CHAINCODE_LENGTH] = resp
-        .as_slice()
-        .get(2 + pk_len..2 + pk_len + chain_code_len)
-        .ok_or(LedgerError::InvalidResponse)?
-        .try_into()
-        .map_err(|_| LedgerError::InvalidKey)?;
+    let resp: GetPublicKeyRespones =
+        ledger_decode_all(&resp).ok_or(LedgerError::InvalidResponse)?;
 
     let extended_public_key = Secp256k1ExtendedPublicKey::new_unchecked(
         derivation_path,
-        ChainCode::from(chain_code),
-        Secp256k1PublicKey::from_bytes(public_key).map_err(|_| LedgerError::InvalidKey)?,
+        ChainCode::from(resp.chain_code),
+        Secp256k1PublicKey::from_bytes(&resp.public_key).map_err(|_| LedgerError::InvalidKey)?,
     );
 
     Ok(ExtendedPublicKey::new(extended_public_key))
@@ -286,8 +269,8 @@ fn decode_signature_response(resp: &[u8]) -> Result<SignatureResult, LedgerError
     let input_idx = *resp.first().ok_or(LedgerError::InvalidResponse)? as usize;
     let has_more_signatures = *resp.last().ok_or(LedgerError::InvalidResponse)? == P2_SIGN_MORE;
 
-    let sig = LedgerSignature::decode_all(&mut &resp[..resp.len() - 1][1..])
-        .map_err(|_| LedgerError::InvalidResponse)?;
+    let sig: LedgerSignature =
+        ledger_decode_all(&resp[..resp.len() - 1][1..]).ok_or(LedgerError::InvalidResponse)?;
 
     Ok(SignatureResult {
         sig,
