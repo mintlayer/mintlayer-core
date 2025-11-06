@@ -4971,7 +4971,7 @@ dependencies = [
 [[package]]
 name = "messages"
 version = "0.1.0"
-source = "git+https://github.com/mintlayer/mintlayer-ledger-app?rev=2fa1c33e536f94ba3cac94b97054902674580686#2fa1c33e536f94ba3cac94b97054902674580686"
+source = "git+https://github.com/mintlayer/mintlayer-ledger-app?rev=78bd2e2514be3a6db83e7493eaaa03c40acc5409#78bd2e2514be3a6db83e7493eaaa03c40acc5409"
 dependencies = [
  "num_enum",
  "parity-scale-codec 3.7.5 (git+https://github.com/OBorce/parity-scale-codec.git?branch=fix%2Fmissing-target-atomic-ptr)",

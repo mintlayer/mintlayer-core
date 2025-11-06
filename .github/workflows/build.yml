@@ -37,17 +37,17 @@ jobs:
             --default-toolchain $(python ./build-tools/cargo-info-extractor/extract.py --rust-version)
 
       - name: Build
-        run: cargo build --release --locked --features trezor
+        run: cargo build --release --locked --features trezor,ledger
 
       - name: Run tests
-        run: cargo test --release --workspace --features trezor
+        run: cargo test --release --workspace --features trezor,ledger
 
       - name: Run doc tests
-        run: cargo test --release --doc --features trezor
+        run: cargo test --release --doc --features trezor,ledger
 
       # This test is ignored, so it needs to run separately.
       - name: Run mixed_sighash_types test
-        run: cargo test --release mixed_sighash_types --features trezor
+        run: cargo test --release mixed_sighash_types --features trezor,ledger
 
       # This test is ignored, so it needs to run separately.
       - name: Run test_4opc_sequences test
@@ -89,17 +89,17 @@ jobs:
             --default-toolchain $(python ./build-tools/cargo-info-extractor/extract.py --rust-version)
 
       - name: Build
-        run: cargo build --release --locked --features trezor
+        run: cargo build --release --locked --features trezor,ledger
 
       - name: Run tests
-        run: cargo test --release --workspace --features trezor
+        run: cargo test --release --workspace --features trezor,ledger
 
       - name: Run doc tests
-        run: cargo test --release --doc --features trezor
+        run: cargo test --release --doc --features trezor,ledger
 
       # This test is ignored, so it needs to run separately.
       - name: Run mixed_sighash_types test
-        run: cargo test --release mixed_sighash_types --features trezor
+        run: cargo test --release mixed_sighash_types --features trezor,ledger
 
       # This test is ignored, so it needs to run separately.
       - name: Run test_4opc_sequences test
@@ -133,17 +133,17 @@ jobs:
             --default-toolchain $(python ./build-tools/cargo-info-extractor/extract.py --rust-version)
 
       - name: Build
-        run: cargo build --release --locked --features trezor
+        run: cargo build --release --locked --features trezor,ledger
 
       - name: Run tests
-        run: cargo test --release --workspace --features trezor
+        run: cargo test --release --workspace --features trezor,ledger
 
       - name: Run doc tests
-        run: cargo test --release --doc --features trezor
+        run: cargo test --release --doc --features trezor,ledger
 
       # This test is ignored, so it needs to run separately.
       - name: Run mixed_sighash_types test
-        run: cargo test --release mixed_sighash_types --features trezor
+        run: cargo test --release mixed_sighash_types --features trezor,ledger
 
       # This test is ignored, so it needs to run separately.
       - name: Run test_4opc_sequences test
@@ -283,10 +283,89 @@ jobs:
       - name: Run tests in the emulator
         run: nix-shell --run "
           poetry run core/emu.py
-            --headless --quiet --temporary-profile
-            --mnemonic \"abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about\"
-            --command env --chdir ../mintlayer-core
+          --headless --quiet --temporary-profile
+          --mnemonic \"abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about\"
+          --command env --chdir ../mintlayer-core
           cargo-nextest nextest run --archive-file tests.tar.zst -j1 trezor_signer
           "
         working-directory: ./mintlayer-trezor-firmware
         timeout-minutes: 10
+
+  # Build Ledger-specific tests and archive them
+  run_tests_on_ledger_preparation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the core repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          path: ./mintlayer-core
+      - name: Update local dependency repositories
+        run: sudo apt-get update
+      - name: Install build dependencies
+        run: sudo apt-get install -yqq --no-install-recommends build-essential pkg-config libdbus-1-dev libusb-1.0-0-dev
+      - name: Install rust
+        run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@nextest
+      - name: Build and archive the tests
+        run: cargo nextest archive --release --locked -p wallet --features enable-ledger-device-tests --archive-file ledger-tests.tar.zst
+        working-directory: ./mintlayer-core
+      - name: Upload archived tests
+        uses: actions/upload-artifact@v4
+        with:
+          name: archived-ledger-tests
+          path: ./mintlayer-core/ledger-tests.tar.zst
+          retention-days: 1
+
+  # Run Ledger-specific tests on an emulator
+  run_tests_on_ledger:
+    needs: run_tests_on_ledger_preparation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the core repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          path: ./mintlayer-core
+      - name: Checkout mintlayer-ledger-app repository
+        uses: actions/checkout@v4
+        with:
+          repository: mintlayer/mintlayer-ledger-app
+          ref: feature/mintlayer-app
+          path: ./mintlayer-ledger-app
+      - name: Download archived tests
+        uses: actions/download-artifact@v4
+        with:
+          name: archived-ledger-tests
+          path: ./mintlayer-core
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@nextest
+      - name: Build Ledger app in container
+        run: |
+          sudo docker run --rm \
+            -v "$(realpath ./mintlayer-ledger-app):/app" \
+            ghcr.io/ledgerhq/ledger-app-builder/ledger-app-dev-tools:latest \
+            sh -c 'cd /app && cargo ledger build nanosplus'
+      - name: Run Ledger emulator and execute tests
+        run: |
+          set -e
+
+          sudo docker run -d --rm --name ledger-emulator \
+            -v "$(realpath ./mintlayer-ledger-app):/app" \
+            --publish 5001:5001 --publish 9999:9999 \
+            ghcr.io/ledgerhq/ledger-app-builder/ledger-app-dev-tools:latest \
+            sh -c 'cd /app && speculos --apdu-port 9999 --api-port 5001 --display headless --model nanosp -s "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"  target/nanosplus/release/mintlayer-app'
+
+          echo "--- Waiting for emulator to initialize ---"
+          sleep 15
+
+          # Set up a trap to ensure the container is stopped even if tests fail or the job is cancelled
+          trap "echo '--- Dumping Ledger emulator logs ---'; sudo docker logs ledger-emulator; echo '--- Stopping Ledger emulator ---'; sudo docker stop ledger-emulator" EXIT
+
+          echo "--- Running Ledger device tests on the host ---"
+          cd ./mintlayer-core
+          cargo-nextest nextest run --archive-file ledger-tests.tar.zst -j1 ledger_signer || test_exit_code=$?
+
+          exit $test_exit_code
+        timeout-minutes: 15

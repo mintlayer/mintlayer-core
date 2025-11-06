@@ -292,7 +292,7 @@ rev = "510bb3ca30639af4bdb12a918b6bbbdb75fa5f52"
 [workspace.dependencies.mintlayer-ledger-messages]
 git = "https://github.com/mintlayer/mintlayer-ledger-app"
 # The commit "Fix comments"
-rev = "2fa1c33e536f94ba3cac94b97054902674580686"
+rev = "78bd2e2514be3a6db83e7493eaaa03c40acc5409"
 package = "messages"
 
 [workspace.dependencies.trezor-client]
