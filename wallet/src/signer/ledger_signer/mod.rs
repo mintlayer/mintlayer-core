@@ -23,7 +23,6 @@ use crate::{
         ledger_signer::ledger_messages::{
             check_current_app, get_app_name, get_extended_public_key, sign_challenge, sign_tx,
             to_ledger_amount, to_ledger_output_value, to_ledger_tx_input, to_ledger_tx_output,
-            LedgerSignature,
         },
         utils::{is_htlc_utxo, produce_uniparty_signature_for_input},
         Signer, SignerError, SignerProvider, SignerResult,
@@ -81,7 +80,8 @@ use itertools::{izip, Itertools};
 use ledger_lib::{Exchange, Filters, LedgerHandle, LedgerProvider, Transport};
 use mintlayer_ledger_messages::{
     AddrType, Bip32Path as LedgerBip32Path, CoinType, InputAdditionalInfoReq,
-    InputAddressPath as LedgerInputAddressPath, TxInputReq, TxOutputReq,
+    InputAddressPath as LedgerInputAddressPath, Signature as LedgerSignature, TxInputReq,
+    TxOutputReq,
 };
 use randomness::make_true_rng;
 use tokio::sync::Mutex;
@@ -669,8 +669,8 @@ where
                         (Some(destination), None) => {
                             let standalone = match standalone_inputs.get(&(input_index as u32)).map(|x| x.as_slice()) {
                                 Some([standalone]) => standalone,
+                                Some([]) | None => return Ok((None, SignatureStatus::NotSigned, SignatureStatus::NotSigned)),
                                 Some(_) => return Err(LedgerError::MultisigSignatureReturned.into()),
-                                None => return Ok((None, SignatureStatus::NotSigned, SignatureStatus::NotSigned))
                             };
 
                             let sig = produce_uniparty_signature_for_input(
