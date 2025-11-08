@@ -1383,11 +1383,7 @@ pub async fn token_ids_by_ticker<T: ApiServerStorage>(
             logging::log::error!("internal error: {e}");
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?
-        .get_token_ids_by_ticker(
-            offset_and_items.items,
-            offset_and_items.offset,
-            ticker.as_bytes(),
-        )
+        .get_token_ids_by_ticker(offset_and_items.items, offset_and_items.offset, &ticker)
         .await
         .map_err(|e| {
             logging::log::error!("internal error: {e}");

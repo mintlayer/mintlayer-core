@@ -1565,9 +1565,9 @@ where
         let (_, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         let random_destination = Destination::PublicKeyHash(PublicKeyHash::from(&pk));
 
-        let token_ticker = "XXXX".as_bytes().to_vec();
+        let token_ticker = String::from("AB\\CD");
         let token_data = FungibleTokenData {
-            token_ticker: token_ticker.clone(),
+            token_ticker: token_ticker.as_bytes().to_vec().clone(),
             number_of_decimals: rng.gen_range(1..18),
             metadata_uri: "http://uri".as_bytes().to_vec(),
             circulating_supply: Amount::ZERO,
@@ -1602,7 +1602,7 @@ where
                 creator: None,
                 name: "Name".as_bytes().to_vec(),
                 description: "SomeNFT".as_bytes().to_vec(),
-                ticker: token_ticker.clone(),
+                ticker: token_ticker.as_bytes().to_vec().clone(),
                 icon_uri: DataOrNoVec::from(None),
                 additional_metadata_uri: DataOrNoVec::from(None),
                 media_uri: DataOrNoVec::from(None),
@@ -1629,24 +1629,20 @@ where
             .unwrap();
 
         // will return all token and nft ids
-        let ids = db_tx.get_token_ids(6, 0).await.unwrap();
-        assert!(ids.contains(&random_token_id1));
-        assert!(ids.contains(&random_token_id2));
-        assert!(ids.contains(&random_token_id3));
+        let all_ids = db_tx.get_token_ids(6, 0).await.unwrap();
+        assert!(all_ids.contains(&random_token_id1));
+        assert!(all_ids.contains(&random_token_id2));
+        assert!(all_ids.contains(&random_token_id3));
 
-        assert!(ids.contains(&random_token_id4));
-        assert!(ids.contains(&random_token_id5));
-        assert!(ids.contains(&random_token_id6));
+        assert!(all_ids.contains(&random_token_id4));
+        assert!(all_ids.contains(&random_token_id5));
+        assert!(all_ids.contains(&random_token_id6));
 
         // will return all token and nft ids
         let ids = db_tx.get_token_ids_by_ticker(6, 0, &token_ticker).await.unwrap();
-        assert!(ids.contains(&random_token_id1));
-        assert!(ids.contains(&random_token_id2));
-        assert!(ids.contains(&random_token_id3));
-
-        assert!(ids.contains(&random_token_id4));
-        assert!(ids.contains(&random_token_id5));
-        assert!(ids.contains(&random_token_id6));
+        for id in &all_ids {
+            assert!(ids.contains(id));
+        }
 
         // will return the tokens first
         let ids = db_tx.get_token_ids(3, 0).await.unwrap();
@@ -1672,8 +1668,34 @@ where
         assert!(ids.contains(&random_token_id5));
         assert!(ids.contains(&random_token_id6));
 
-        let ids = db_tx.get_token_ids_by_ticker(0, 6, "NOT_FOUND".as_bytes()).await.unwrap();
+        let ids = db_tx.get_token_ids_by_ticker(0, 6, "NOT_FOUND").await.unwrap();
         assert!(ids.is_empty());
+
+        // will return all token and nft ids for partial match
+        for partial_ticker in get_all_substrings(&token_ticker) {
+            let ids = db_tx.get_token_ids_by_ticker(6, 0, partial_ticker).await.unwrap();
+            for id in &all_ids {
+                assert!(ids.contains(id));
+            }
+
+            // check lowercase as well
+            let lowercase_partial_ticker = partial_ticker.to_ascii_lowercase();
+            let ids2 =
+                db_tx.get_token_ids_by_ticker(6, 0, &lowercase_partial_ticker).await.unwrap();
+            assert_eq!(ids, ids2);
+        }
+
+        // Try out patterns inside the ticker string, they should be escaped and not work
+        let ids = db_tx.get_token_ids_by_ticker(6, 0, "A%D").await.unwrap();
+        assert!(ids.is_empty());
+
+        let ids = db_tx.get_token_ids_by_ticker(6, 0, "A_").await.unwrap();
+        assert!(ids.is_empty());
+
+        for c in ['*', '+', '?'] {
+            let ids = db_tx.get_token_ids_by_ticker(6, 0, &format!("A{c}")).await.unwrap();
+            assert!(ids.is_empty());
+        }
     }
 
     // test coin and token statistics
@@ -2005,4 +2027,14 @@ where
         make_test!(set_get, storage_maker),
     ]
     .into_iter()
+}
+
+fn get_all_substrings(s: &str) -> Vec<&str> {
+    let mut substrings = Vec::new();
+    for i in 0..s.len() {
+        for j in i..s.len() {
+            substrings.push(s.get(i..=j).unwrap());
+        }
+    }
+    substrings
 }

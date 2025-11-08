@@ -754,7 +754,7 @@ pub trait ApiServerStorageRead: Sync {
         &self,
         len: u32,
         offset: u64,
-        ticker: &[u8],
+        ticker: &str,
     ) -> Result<Vec<TokenId>, ApiServerStorageError>;
 
     async fn get_statistic(

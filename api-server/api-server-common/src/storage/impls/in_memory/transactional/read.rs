@@ -268,7 +268,7 @@ impl ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'_> {
         &self,
         len: u32,
         offset: u64,
-        ticker: &[u8],
+        ticker: &str,
     ) -> Result<Vec<TokenId>, ApiServerStorageError> {
         self.transaction.get_token_ids_by_ticker(len, offset, ticker)
     }

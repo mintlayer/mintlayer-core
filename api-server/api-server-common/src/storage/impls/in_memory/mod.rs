@@ -714,19 +714,26 @@ impl ApiServerInMemoryStorage {
         &self,
         len: u32,
         offset: u64,
-        ticker: &[u8],
+        ticker: &str,
     ) -> Result<Vec<TokenId>, ApiServerStorageError> {
+        let lowercased_ticker = ticker.to_ascii_lowercase();
+
         Ok(self
             .fungible_token_data
             .iter()
             .filter_map(|(key, value)| {
-                (value.values().last().expect("not empty").token_ticker == ticker).then_some(key)
+                let token_ticker = &value.values().last().expect("not empty").token_ticker;
+                let lowercased_token_ticker =
+                    String::from_utf8_lossy(token_ticker).to_ascii_lowercase();
+                (lowercased_token_ticker.contains(&lowercased_ticker)).then_some(key)
             })
             .chain(self.nft_token_issuances.iter().filter_map(|(key, value)| {
                 let value_ticker = match &value.values().last().expect("not empty").nft {
                     NftIssuance::V0(data) => data.metadata.ticker(),
                 };
-                (value_ticker == ticker).then_some(key)
+                let lowercased_value_ticker =
+                    String::from_utf8_lossy(value_ticker).to_ascii_lowercase();
+                (lowercased_value_ticker.contains(&lowercased_ticker)).then_some(key)
             }))
             .skip(offset as usize)
             .take(len as usize)
