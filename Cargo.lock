@@ -3560,6 +3560,9 @@ name = "hex"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "hex-conservative"
@@ -4580,7 +4583,9 @@ dependencies = [
  "bitflags 2.10.0",
  "displaydoc",
  "encdec",
+ "hex",
  "num_enum",
+ "serde",
  "thiserror 2.0.18",
 ]
 
@@ -4971,7 +4976,7 @@ dependencies = [
 [[package]]
 name = "messages"
 version = "0.1.0"
-source = "git+https://github.com/mintlayer/mintlayer-ledger-app?rev=78bd2e2514be3a6db83e7493eaaa03c40acc5409#78bd2e2514be3a6db83e7493eaaa03c40acc5409"
+source = "git+https://github.com/mintlayer/mintlayer-ledger-app?rev=d65b5200a4499c5ebdcf95903cc3a5579f611c6f#d65b5200a4499c5ebdcf95903cc3a5579f611c6f"
 dependencies = [
  "num_enum",
  "parity-scale-codec 3.7.5 (git+https://github.com/OBorce/parity-scale-codec.git?branch=fix%2Fmissing-target-atomic-ptr)",
@@ -9714,6 +9719,7 @@ dependencies = [
  "itertools 0.14.0",
  "lazy_static",
  "ledger-lib",
+ "ledger-proto",
  "logging",
  "mempool",
  "messages",

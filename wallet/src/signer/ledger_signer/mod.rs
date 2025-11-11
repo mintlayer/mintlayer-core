@@ -21,8 +21,9 @@ use crate::{
     key_chain::{make_account_path, AccountKeyChainImplHardware, AccountKeyChains, FoundPubKey},
     signer::{
         ledger_signer::ledger_messages::{
-            check_current_app, get_app_name, get_extended_public_key, sign_challenge, sign_tx,
-            to_ledger_amount, to_ledger_output_value, to_ledger_tx_input, to_ledger_tx_output,
+            check_current_app, get_extended_public_key, get_extended_public_key_raw,
+            sign_challenge, sign_tx, to_ledger_amount, to_ledger_output_value, to_ledger_tx_input,
+            to_ledger_tx_output,
         },
         utils::{is_htlc_utxo, produce_uniparty_signature_for_input},
         Signer, SignerError, SignerProvider, SignerResult,
@@ -93,12 +94,14 @@ pub enum LedgerError {
     NoDeviceFound,
     #[error("Connected to an unknown Ledger device model")]
     UnknownModel,
+    #[error("Device timeout")]
+    DeviceTimeout,
     #[error("A different app is currently open on your Ledger device: \"{0}\". Please close it and open the Mintlayer app instead.")]
     DifferentActiveApp(String),
     #[error("Received an invalid response from the Ledger device")]
     InvalidResponse,
     #[error("Received an error response from the Ledger device: {0}")]
-    ErrorResponse(u16),
+    ErrorResponse(String),
     #[error("Device error: {0}")]
     DeviceError(String),
     #[error("Missing hardware wallet data in database")]
@@ -119,6 +122,12 @@ pub enum LedgerError {
     MissingMultisigIndexForSignature,
     #[error("Signature error: {0}")]
     SignatureError(#[from] SignatureError),
+}
+
+impl From<ledger_lib::Error> for LedgerError {
+    fn from(value: ledger_lib::Error) -> Self {
+        Self::DeviceError(value.to_string())
+    }
 }
 
 struct StandaloneInput {
@@ -174,7 +183,8 @@ where
         }
     }
 
-    /// Calls initialize on the device with the current session_id.
+    /// Tries to confirm the running app name is still matching Mintlayer app
+    /// Also waits after a signing operation for the device to start listening to new instructions
     ///
     /// If the operation fails due to an USB error (which may indicate a lost connection to the device),
     /// the function will attempt to reconnect to the Ledger device once before returning an error.
@@ -184,12 +194,31 @@ where
         key_chain: &impl AccountKeyChains,
     ) -> SignerResult<()> {
         let mut client = self.client.lock().await;
-
+        let mut num_tries = 10;
+        let derivation_path = make_account_path(&self.chain_config, DEFAULT_ACCOUNT_INDEX);
+        let coin_type = to_ledger_chain_type(&self.chain_config);
         loop {
-            match get_app_name(&mut *client).await {
-                Ok(_) => return Ok(()),
+            match get_extended_public_key_raw(&mut *client, coin_type, &derivation_path).await {
+                Ok(_) => {
+                    check_public_keys_against_key_chain(
+                        db_tx,
+                        &mut *client,
+                        key_chain,
+                        &self.chain_config,
+                    )
+                    .await?;
+                    return Ok(());
+                }
+                // After finishing a signing operation the device shows a status success/failed
+                // At those times any command sent is not handles so waiting for a response will
+                // just timeout
                 Err(ledger_lib::Error::Timeout) => {
-                    continue;
+                    num_tries -= 1;
+                    if num_tries > 0 {
+                        continue;
+                    } else {
+                        return Err(SignerError::LedgerError(LedgerError::DeviceTimeout));
+                    }
                 }
                 // In case of a communication error try to reconnect, and try again
                 Err(
@@ -213,11 +242,7 @@ where
                     *client = new_client;
                     return Ok(());
                 }
-                Err(err) => {
-                    return Err(SignerError::LedgerError(LedgerError::DeviceError(
-                        err.to_string(),
-                    )))
-                }
+                Err(err) => return Err(SignerError::LedgerError(err.into())),
             }
         }
     }
@@ -238,9 +263,7 @@ where
         self.check_session(db_tx, key_chain).await?;
 
         let mut client = self.client.lock().await;
-        operation(&mut client)
-            .await
-            .map_err(|e| LedgerError::DeviceError(e.to_string()).into())
+        operation(&mut client).await
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1092,13 +1115,11 @@ async fn fetch_extended_pub_key<L: Exchange>(
     client: &mut L,
     chain_config: &ChainConfig,
     account_index: U31,
-) -> Result<ExtendedPublicKey, LedgerError> {
+) -> SignerResult<ExtendedPublicKey> {
     let derivation_path = make_account_path(chain_config, account_index);
     let coin_type = to_ledger_chain_type(chain_config);
 
-    get_extended_public_key(client, coin_type, derivation_path)
-        .await
-        .map_err(|e| LedgerError::DeviceError(e.to_string()))
+    get_extended_public_key(client, coin_type, derivation_path).await
 }
 
 fn single_signature(
@@ -1170,9 +1191,7 @@ impl LedgerSignerProvider {
         chain_config: &Arc<ChainConfig>,
         account_index: U31,
     ) -> SignerResult<ExtendedPublicKey> {
-        fetch_extended_pub_key(&mut *self.client.lock().await, chain_config, account_index)
-            .await
-            .map_err(SignerError::LedgerError)
+        fetch_extended_pub_key(&mut *self.client.lock().await, chain_config, account_index).await
     }
 }
 

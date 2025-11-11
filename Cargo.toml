@@ -289,10 +289,14 @@ package = "mintlayer-core-primitives"
 git = "https://github.com/ledger-community/rust-ledger.git"
 rev = "510bb3ca30639af4bdb12a918b6bbbdb75fa5f52"
 
+[workspace.dependencies.ledger-proto]
+git = "https://github.com/ledger-community/rust-ledger.git"
+rev = "510bb3ca30639af4bdb12a918b6bbbdb75fa5f52"
+
 [workspace.dependencies.mintlayer-ledger-messages]
 git = "https://github.com/mintlayer/mintlayer-ledger-app"
-# The commit "Fix comments"
-rev = "78bd2e2514be3a6db83e7493eaaa03c40acc5409"
+# The commit "Remove App name and version instructions"
+rev = "d65b5200a4499c5ebdcf95903cc3a5579f611c6f"
 package = "messages"
 
 [workspace.dependencies.trezor-client]

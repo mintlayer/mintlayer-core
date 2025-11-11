@@ -13,7 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::primitives::semver::SemVer;
 use serialization::{Decode, Encode};
 
 /// This is the data that will be stored in the wallet db.
@@ -52,7 +51,7 @@ pub struct LedgerData {}
 #[cfg(feature = "ledger")]
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub struct LedgerFullInfo {
-    pub app_version: SemVer,
+    pub app_version: String,
 }
 
 #[cfg(feature = "ledger")]
