@@ -40,8 +40,8 @@ use tokio::{
 
 use crate::signer::{
     ledger_signer::{
-        ledger_messages::{check_current_app, get_app_name, get_extended_public_key, ok_response},
-        speculos::{Action, Button, Handle, PodmanHandle},
+        ledger_messages::{check_current_app, get_extended_public_key},
+        speculos::{Action, Button, Handle},
         LedgerError, LedgerFinder, LedgerSigner,
     },
     tests::{
@@ -59,6 +59,7 @@ use crypto::key::{
     PredefinedSigAuxDataProvider, SigAuxDataProvider,
 };
 use logging::log;
+use utils::env_utils::{bool_from_env, get_from_env};
 use wallet_storage::WalletStorageReadLocked;
 use wallet_types::hw_data::LedgerData;
 
@@ -67,7 +68,23 @@ enum ControlMessage {
     Finish,
 }
 
-async fn auto_confirmer(mut control_msg_rx: mpsc::Receiver<ControlMessage>, handle: PodmanHandle) {
+fn emulator_api_port() -> u16 {
+    get_from_env("LEDGER_TESTS_EMU_API_PORT")
+        .unwrap()
+        .map_or(5000, |s| s.parse().unwrap())
+}
+
+fn emulator_apdu_port() -> u16 {
+    get_from_env("LEDGER_TESTS_EMU_APDU_PORT")
+        .unwrap()
+        .map_or(9999, |s| s.parse().unwrap())
+}
+
+fn should_auto_confirm() -> bool {
+    bool_from_env("LEDGER_TESTS_AUTO_CONFIRM").unwrap().unwrap_or(false)
+}
+
+async fn auto_confirmer(mut control_msg_rx: mpsc::Receiver<ControlMessage>, handle: Handle) {
     loop {
         tokio::select! {
             _ = sleep(Duration::from_millis(100)) => {
@@ -110,26 +127,21 @@ impl LedgerFinder for DummyProvider {
 }
 
 async fn setup(
-    deterministic_aux: bool,
+    deterministic_signing: bool,
 ) -> (
-    tokio::task::JoinHandle<()>,
+    Option<tokio::task::JoinHandle<()>>,
     Sender<ControlMessage>,
     impl Fn(Arc<ChainConfig>, U31) -> LedgerSigner<TcpDevice, DummyProvider>,
 ) {
-    let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 5001);
-    let handle = PodmanHandle::new(addr);
+    let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), emulator_api_port());
+    let handle = Handle::new(addr);
 
-    let mut transport = TcpTransport::new().unwrap();
-    let mut device = transport
-        .connect(TcpInfo {
-            addr: SocketAddr::new(std::net::IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 9999),
-        })
-        .await
-        .unwrap();
+    let mut device = create_device_connection().await;
 
     let mut tries = 0;
     loop {
-        match get_app_name(&mut device).await {
+        let derivation_path = DerivationPath::from_str("m/44h/19788h/0h").unwrap();
+        match get_extended_public_key(&mut device, CoinType::Mainnet, derivation_path).await {
             Ok(_) => break,
             Err(_) => {
                 tries += 1;
@@ -144,22 +156,30 @@ async fn setup(
     let device = Arc::new(Mutex::new(device));
 
     let (control_msg_tx, control_msg_rx) = mpsc::channel(1);
-    let auto_clicker = tokio::spawn(auto_confirmer(control_msg_rx, handle));
+    let auto_confirmer_handle = if should_auto_confirm() {
+        None
+    } else {
+        Some(tokio::spawn(auto_confirmer(control_msg_rx, handle)))
+    };
 
-    (auto_clicker, control_msg_tx, move |chain_config, _| {
-        let aux_provider: Box<dyn SigAuxDataProvider + Send> = if deterministic_aux {
-            Box::new(PredefinedSigAuxDataProvider)
-        } else {
-            Box::new(make_true_rng())
-        };
+    (
+        auto_confirmer_handle,
+        control_msg_tx,
+        move |chain_config, _| {
+            let aux_provider: Box<dyn SigAuxDataProvider + Send> = if deterministic_signing {
+                Box::new(PredefinedSigAuxDataProvider)
+            } else {
+                Box::new(make_true_rng())
+            };
 
-        LedgerSigner::new_with_sig_aux_data_provider(
-            chain_config,
-            device.clone(),
-            aux_provider,
-            DummyProvider {},
-        )
-    })
+            LedgerSigner::new_with_sig_aux_data_provider(
+                chain_config,
+                device.clone(),
+                aux_provider,
+                DummyProvider {},
+            )
+        },
+    )
 }
 
 #[rstest]
@@ -167,17 +187,12 @@ async fn setup(
 #[serial_test::serial]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_app_name() {
-    let mut transport = TcpTransport::new().unwrap();
-    let mut device = transport
-        .connect(TcpInfo {
-            addr: SocketAddr::new(std::net::IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 9999),
-        })
-        .await
-        .unwrap();
+    let mut device = create_device_connection().await;
 
     let mut tries = 0;
     loop {
-        match get_app_name(&mut device).await {
+        let derivation_path = DerivationPath::from_str("m/44h/19788h/0h").unwrap();
+        match get_extended_public_key(&mut device, CoinType::Mainnet, derivation_path).await {
             Ok(_) => break,
             Err(_) => {
                 tries += 1;
@@ -189,19 +204,14 @@ async fn test_app_name() {
         }
     }
 
-    let resp = get_app_name(&mut device).await.unwrap();
-    let resp = ok_response(resp).unwrap();
-    let name = String::from_utf8(resp).unwrap();
-
-    assert_eq!(name, "mintlayer-app");
-
     let info = device.app_info(Duration::from_millis(100)).await.unwrap();
-    eprintln!("info: {info:?}");
 
-    let info = check_current_app(&mut device).await.unwrap();
-    eprintln!("info: {info:?}");
-
-    assert_eq!(info.app_version.to_string(), "0.1.0");
+    let err = check_current_app(&mut device).await.unwrap_err();
+    eprintln!("info: {err:?}");
+    assert_eq!(
+        err,
+        SignerError::LedgerError(LedgerError::DifferentActiveApp(info.name))
+    )
 }
 
 #[rstest]
@@ -209,7 +219,7 @@ async fn test_app_name() {
 #[serial_test::serial]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_account_extended_public_key() {
-    let (auto_clicker, control_msg_tx, make_ledger_signer) = setup(false).await;
+    let (auto_confirmer_handle, control_msg_tx, make_ledger_signer) = setup(false).await;
 
     let signer = make_ledger_signer(Arc::new(create_mainnet()), U31::ZERO);
 
@@ -233,7 +243,9 @@ async fn test_account_extended_public_key() {
     assert_eq!(expected_chain_code, chain_code.hex_encode());
 
     control_msg_tx.send(ControlMessage::Finish).await.unwrap();
-    auto_clicker.await.unwrap();
+    if let Some(auto_confirmer_handle) = auto_confirmer_handle {
+        auto_confirmer_handle.await.unwrap();
+    }
 }
 
 #[rstest_reuse::apply(sign_message_test_params)]
@@ -249,7 +261,7 @@ async fn test_sign_message(#[case] seed: Seed, message_to_sign: MessageToSign) {
 
     let mut rng = make_seedable_rng(seed);
 
-    let (auto_clicker, control_msg_tx, make_ledger_signer) = setup(false).await;
+    let (auto_confirmer_handle, control_msg_tx, make_ledger_signer) = setup(false).await;
 
     test_sign_message_generic(
         &mut rng,
@@ -260,7 +272,9 @@ async fn test_sign_message(#[case] seed: Seed, message_to_sign: MessageToSign) {
     .await;
 
     control_msg_tx.send(ControlMessage::Finish).await.unwrap();
-    auto_clicker.await.unwrap();
+    if let Some(auto_confirmer_handle) = auto_confirmer_handle {
+        auto_confirmer_handle.await.unwrap();
+    }
 }
 
 #[rstest]
@@ -271,14 +285,16 @@ async fn test_sign_message(#[case] seed: Seed, message_to_sign: MessageToSign) {
 async fn test_sign_transaction_intent(#[case] seed: Seed) {
     log::debug!("test_sign_transaction_intent, seed = {seed:?}");
 
-    let (auto_clicker, control_msg_tx, make_ledger_signer) = setup(false).await;
+    let (auto_confirmer_handle, control_msg_tx, make_ledger_signer) = setup(false).await;
 
     let mut rng = make_seedable_rng(seed);
 
     test_sign_transaction_intent_generic(&mut rng, make_ledger_signer, no_another_signer()).await;
 
     control_msg_tx.send(ControlMessage::Finish).await.unwrap();
-    auto_clicker.await.unwrap();
+    if let Some(auto_confirmer_handle) = auto_confirmer_handle {
+        auto_confirmer_handle.await.unwrap();
+    }
 }
 
 #[rstest]
@@ -292,7 +308,7 @@ async fn test_sign_transaction(
 ) {
     log::debug!("test_sign_transaction, seed = {seed:?}, input_commitments_version = {input_commitments_version:?}");
 
-    let (auto_clicker, control_msg_tx, make_ledger_signer) = setup(false).await;
+    let (auto_confirmer_handle, control_msg_tx, make_ledger_signer) = setup(false).await;
 
     let mut rng = make_seedable_rng(seed);
 
@@ -305,7 +321,9 @@ async fn test_sign_transaction(
     .await;
 
     control_msg_tx.send(ControlMessage::Finish).await.unwrap();
-    auto_clicker.await.unwrap();
+    if let Some(auto_confirmer_handle) = auto_confirmer_handle {
+        auto_confirmer_handle.await.unwrap();
+    }
 }
 
 #[rstest]
@@ -321,14 +339,16 @@ async fn test_fixed_signatures2(
 
     log::debug!("test_fixed_signatures2, seed = {seed:?}, input_commitments_version = {input_commitments_version:?}");
 
-    let (auto_clicker, control_msg_tx, make_ledger_signer) = setup(true).await;
+    let (auto_confirmer_handle, control_msg_tx, make_ledger_signer) = setup(true).await;
 
     let mut rng = make_seedable_rng(seed);
 
     test_fixed_signatures_generic2(&mut rng, input_commitments_version, make_ledger_signer).await;
 
     control_msg_tx.send(ControlMessage::Finish).await.unwrap();
-    auto_clicker.await.unwrap();
+    if let Some(auto_confirmer_handle) = auto_confirmer_handle {
+        auto_confirmer_handle.await.unwrap();
+    }
 }
 
 #[rstest]
@@ -343,7 +363,7 @@ async fn test_sign_message_sig_consistency(#[case] seed: Seed) {
 
     log::debug!("test_sign_message_sig_consistency, seed = {seed:?}");
 
-    let (auto_clicker, control_msg_tx, make_ledger_signer) = setup(true).await;
+    let (auto_confirmer_handle, control_msg_tx, make_ledger_signer) = setup(true).await;
 
     let mut rng = make_seedable_rng(seed);
 
@@ -356,7 +376,9 @@ async fn test_sign_message_sig_consistency(#[case] seed: Seed) {
     .await;
 
     control_msg_tx.send(ControlMessage::Finish).await.unwrap();
-    auto_clicker.await.unwrap();
+    if let Some(auto_confirmer_handle) = auto_confirmer_handle {
+        auto_confirmer_handle.await.unwrap();
+    }
 }
 
 #[rstest]
@@ -369,7 +391,7 @@ async fn test_sign_transaction_intent_sig_consistency(#[case] seed: Seed) {
 
     log::debug!("test_sign_transaction_intent_sig_consistency, seed = {seed:?}");
 
-    let (auto_clicker, control_msg_tx, make_ledger_signer) = setup(true).await;
+    let (auto_confirmer_handle, control_msg_tx, make_ledger_signer) = setup(true).await;
 
     let mut rng = make_seedable_rng(seed);
 
@@ -381,7 +403,9 @@ async fn test_sign_transaction_intent_sig_consistency(#[case] seed: Seed) {
     .await;
 
     control_msg_tx.send(ControlMessage::Finish).await.unwrap();
-    auto_clicker.await.unwrap();
+    if let Some(auto_confirmer_handle) = auto_confirmer_handle {
+        auto_confirmer_handle.await.unwrap();
+    }
 }
 
 #[rstest]
@@ -397,7 +421,7 @@ async fn test_sign_transaction_sig_consistency(
 
     log::debug!("test_sign_transaction_sig_consistency, seed = {seed:?}, input_commitments_version = {input_commitments_version:?}");
 
-    let (auto_clicker, control_msg_tx, make_ledger_signer) = setup(true).await;
+    let (auto_confirmer_handle, control_msg_tx, make_ledger_signer) = setup(true).await;
 
     let mut rng = make_seedable_rng(seed);
 
@@ -410,5 +434,20 @@ async fn test_sign_transaction_sig_consistency(
     .await;
 
     control_msg_tx.send(ControlMessage::Finish).await.unwrap();
-    auto_clicker.await.unwrap();
+    if let Some(auto_confirmer_handle) = auto_confirmer_handle {
+        auto_confirmer_handle.await.unwrap();
+    }
+}
+
+async fn create_device_connection() -> TcpDevice {
+    let mut transport = TcpTransport::new().unwrap();
+    transport
+        .connect(TcpInfo {
+            addr: SocketAddr::new(
+                std::net::IpAddr::V4(Ipv4Addr::LOCALHOST),
+                emulator_apdu_port(),
+            ),
+        })
+        .await
+        .unwrap()
 }
