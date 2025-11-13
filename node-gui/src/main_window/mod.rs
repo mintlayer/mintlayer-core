@@ -40,6 +40,8 @@ use wallet_types::{seed_phrase::StoreSeedPhrase, wallet_type::WalletType, Import
 
 #[cfg(any(feature = "trezor", feature = "ledger"))]
 use crate::widgets::create_hw_wallet::hw_wallet_create_dialog;
+#[cfg(any(feature = "trezor", feature = "ledger"))]
+use crate::widgets::create_hw_wallet::HardwareWalletType;
 use crate::{
     main_window::{main_menu::MenuMessage, main_widget::MainWidgetMessage},
     widgets::{
@@ -870,6 +872,7 @@ impl MainWindow {
                             }),
                             Box::new(|| MainWindowMessage::CloseDialog),
                             ImportOrCreate::Create,
+                            HardwareWalletType::Trezor,
                         )
                         .into(),
                         #[cfg(feature = "ledger")]
@@ -880,6 +883,7 @@ impl MainWindow {
                             }),
                             Box::new(|| MainWindowMessage::CloseDialog),
                             ImportOrCreate::Create,
+                            HardwareWalletType::Ledger,
                         )
                         .into(),
                     },
@@ -904,6 +908,7 @@ impl MainWindow {
                                 }),
                                 Box::new(|| MainWindowMessage::CloseDialog),
                                 ImportOrCreate::Import,
+                                HardwareWalletType::Trezor,
                             )
                             .into(),
                             #[cfg(feature = "ledger")]
@@ -914,6 +919,7 @@ impl MainWindow {
                                 }),
                                 Box::new(|| MainWindowMessage::CloseDialog),
                                 ImportOrCreate::Import,
+                                HardwareWalletType::Ledger,
                             )
                             .into(),
                         }

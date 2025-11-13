@@ -70,7 +70,7 @@ use wallet_storage::{
 };
 use wallet_types::{
     account_info::DEFAULT_ACCOUNT_INDEX,
-    hw_data::{HardwareWalletFullInfo, LedgerData, LedgerFullInfo},
+    hw_data::{HardwareWalletFullInfo, LedgerData, LedgerFullInfo, LedgerModel},
     partially_signed_transaction::{PartiallySignedTransaction, TokensAdditionalInfo},
     signature_status::SignatureStatus,
     AccountId,
@@ -78,7 +78,7 @@ use wallet_types::{
 
 use async_trait::async_trait;
 use itertools::{izip, Itertools};
-use ledger_lib::{Exchange, Filters, LedgerHandle, LedgerProvider, Transport};
+use ledger_lib::{info::Model, Exchange, Filters, LedgerHandle, LedgerProvider, Transport};
 use mintlayer_ledger_messages::{
     AddrType, Bip32Path as LedgerBip32Path, CoinType, InputAdditionalInfoReq,
     InputAddressPath as LedgerInputAddressPath, Signature as LedgerSignature, TxInputReq,
@@ -1052,15 +1052,16 @@ async fn find_ledger_device() -> SignerResult<(LedgerHandle, LedgerFullInfo)> {
         .map_err(|err| LedgerError::DeviceError(err.to_string()))?;
 
     let device = devices.pop().ok_or(LedgerError::NoDeviceFound)?;
+    let model = to_ledger_model(&device.model);
 
     let mut handle = provider
         .connect(device)
         .await
         .map_err(|err| LedgerError::DeviceError(err.to_string()))?;
 
-    let full_info = check_current_app(&mut handle).await?;
+    let app_version = check_current_app(&mut handle).await?;
 
-    Ok((handle, full_info))
+    Ok((handle, LedgerFullInfo { app_version, model }))
 }
 
 /// Check that the public keys in the provided key chain are the same as the ones from the
@@ -1237,6 +1238,16 @@ impl SignerProvider for LedgerSignerProvider {
 
     fn get_hardware_wallet_info(&self) -> Option<HardwareWalletFullInfo> {
         Some(HardwareWalletFullInfo::Ledger(self.info.clone()))
+    }
+}
+
+fn to_ledger_model(model: &Model) -> LedgerModel {
+    match model {
+        Model::NanoS => LedgerModel::NanoS,
+        Model::NanoSPlus => LedgerModel::NanoSPlus,
+        Model::NanoX => LedgerModel::NanoX,
+        Model::Stax => LedgerModel::Stax,
+        Model::Unknown(m) => LedgerModel::Unknown(*m),
     }
 }
 

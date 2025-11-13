@@ -68,9 +68,13 @@ pub fn view_status_bar(wallet_info: &WalletExtraInfo) -> Option<Element<'static,
             ]
         }
         #[cfg(feature = "ledger")]
-        WalletExtraInfo::LedgerWallet { app_version } => {
-            row![rich_text([span("App version: ").font(bold_font), span(app_version.clone())])
-                .size(TEXT_SIZE),]
+        WalletExtraInfo::LedgerWallet { app_version, model } => {
+            row![
+                rich_text([span("Model name: ").font(bold_font), span(model.clone())])
+                    .size(TEXT_SIZE),
+                rich_text([span("App version: ").font(bold_font), span(app_version.clone())])
+                    .size(TEXT_SIZE),
+            ]
         }
     };
 
