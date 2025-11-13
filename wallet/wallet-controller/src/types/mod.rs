@@ -75,6 +75,7 @@ pub enum WalletExtraInfo {
     #[cfg(feature = "ledger")]
     LedgerWallet {
         app_version: String,
+        model: String,
     },
 }
 

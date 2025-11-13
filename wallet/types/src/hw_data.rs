@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use core::fmt;
+
 use serialization::{Decode, Encode};
 
 /// This is the data that will be stored in the wallet db.
@@ -42,6 +44,28 @@ impl From<TrezorFullInfo> for TrezorData {
     }
 }
 
+#[cfg(feature = "ledger")]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+pub enum LedgerModel {
+    NanoS,
+    NanoSPlus,
+    NanoX,
+    Stax,
+    Unknown(u16),
+}
+
+impl fmt::Display for LedgerModel {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            LedgerModel::NanoS => write!(f, "Nano S"),
+            LedgerModel::NanoSPlus => write!(f, "Nano S Plus"),
+            LedgerModel::NanoX => write!(f, "Nano X"),
+            LedgerModel::Stax => write!(f, "Stax"),
+            LedgerModel::Unknown(id) => write!(f, "Unknown({})", id),
+        }
+    }
+}
+
 /// This is the data that will be stored in the wallet db.
 #[cfg(feature = "ledger")]
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
@@ -52,6 +76,7 @@ pub struct LedgerData {}
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub struct LedgerFullInfo {
     pub app_version: String,
+    pub model: LedgerModel,
 }
 
 #[cfg(feature = "ledger")]

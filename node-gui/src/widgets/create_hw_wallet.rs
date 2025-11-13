@@ -25,21 +25,43 @@ use iced_aw::Card;
 
 use wallet_types::ImportOrCreate;
 
+#[derive(Debug, Clone, Copy)]
+pub enum HardwareWalletType {
+    #[cfg(feature = "trezor")]
+    Trezor,
+    #[cfg(feature = "ledger")]
+    Ledger,
+}
+
+impl HardwareWalletType {
+    fn name(self) -> &'static str {
+        match self {
+            #[cfg(feature = "trezor")]
+            Self::Trezor => "Trezor",
+            #[cfg(feature = "ledger")]
+            Self::Ledger => "Ledger",
+        }
+    }
+}
+
 pub struct CreateHwWalletDialog<Message> {
     on_import: Box<dyn Fn() -> Message>,
     on_close: Box<dyn Fn() -> Message>,
     mode: ImportOrCreate,
+    hw_wallet_type: HardwareWalletType,
 }
 
 pub fn hw_wallet_create_dialog<Message>(
     on_import: Box<dyn Fn() -> Message>,
     on_close: Box<dyn Fn() -> Message>,
     mode: ImportOrCreate,
+    hw_wallet_type: HardwareWalletType,
 ) -> CreateHwWalletDialog<Message> {
     CreateHwWalletDialog {
         on_import,
         on_close,
         mode,
+        hw_wallet_type,
     }
 }
 
@@ -74,14 +96,20 @@ impl<Message> Component<Message, Theme, iced::Renderer> for CreateHwWalletDialog
             .width(100.0)
             .on_press(ImportEvent::Ok);
 
+        let hw_wallet_name = self.hw_wallet_type.name();
+
         let card = match self.mode {
             ImportOrCreate::Create => Card::new(
                 Text::new("Create new Wallet"),
-                Text::new("Create a new Trezor wallet using the connected Trezor device"),
+                Text::new(format!(
+                    "Create a new {hw_wallet_name} wallet using the connected {hw_wallet_name} device"
+                )),
             ),
             ImportOrCreate::Import => Card::new(
                 Text::new("Recover new Wallet"),
-                Text::new("Recover a new wallet using the connected Trezor device"),
+                Text::new(format!(
+                    "Recover a new wallet using the connected {hw_wallet_name} device"
+                )),
             ),
         };
         if state.importing {

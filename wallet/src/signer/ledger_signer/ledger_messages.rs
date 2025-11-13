@@ -27,7 +27,6 @@ use crypto::key::{
 };
 use serialization::Encode;
 use utils::ensure;
-use wallet_types::hw_data::LedgerFullInfo;
 
 use ledger_lib::{Device, Exchange};
 use ledger_proto::StatusCode;
@@ -140,7 +139,7 @@ pub async fn sign_challenge<L: Exchange>(
 
 pub async fn check_current_app<L: Exchange + Device + Send>(
     ledger: &mut L,
-) -> SignerResult<LedgerFullInfo> {
+) -> SignerResult<String> {
     let info = ledger
         .app_info(TIMEOUT_DUR)
         .await
@@ -153,7 +152,7 @@ pub async fn check_current_app<L: Exchange + Device + Send>(
         LedgerError::DifferentActiveApp(name)
     );
 
-    Ok(LedgerFullInfo { app_version })
+    Ok(app_version)
 }
 
 pub async fn get_extended_public_key_raw<L: Exchange>(
@@ -177,7 +176,7 @@ pub async fn get_extended_public_key_raw<L: Exchange>(
     let mut msg_buf = Vec::with_capacity(apdu.bytes_count());
     apdu.write_bytes(&mut msg_buf);
 
-    ledger.exchange(&msg_buf, TIMEOUT_DUR).await
+    ledger.exchange(&msg_buf, Duration::from_millis(100)).await
 }
 
 pub async fn get_extended_public_key<L: Exchange>(

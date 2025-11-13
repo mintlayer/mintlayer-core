@@ -322,6 +322,9 @@ jobs:
   run_tests_on_ledger:
     needs: run_tests_on_ledger_preparation
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        model: [nanox, nanosplus] #, flex, stax]
     steps:
       - name: Checkout the core repository
         uses: actions/checkout@v4
@@ -346,7 +349,7 @@ jobs:
           sudo docker run --rm \
             -v "$(realpath ./mintlayer-ledger-app):/app" \
             ghcr.io/ledgerhq/ledger-app-builder/ledger-app-dev-tools:latest \
-            sh -c 'cd /app && cargo ledger build nanosplus'
+            sh -c 'cargo ledger build ${{ matrix.model }}'
       - name: Run Ledger emulator and execute tests
         run: |
           set -e
@@ -355,7 +358,7 @@ jobs:
             -v "$(realpath ./mintlayer-ledger-app):/app" \
             --publish 5001:5001 --publish 9999:9999 \
             ghcr.io/ledgerhq/ledger-app-builder/ledger-app-dev-tools:latest \
-            sh -c 'cd /app && speculos --apdu-port 9999 --api-port 5001 --display headless --model nanosp -s "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"  target/nanosplus/release/mintlayer-app'
+            sh -c 'speculos --apdu-port 9999 --api-port 5000 --display headless -s "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"  target/${{ matrix.model }}/release/mintlayer-app'
 
           echo "--- Waiting for emulator to initialize ---"
           sleep 15
