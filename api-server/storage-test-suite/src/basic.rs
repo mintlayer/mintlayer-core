@@ -27,8 +27,8 @@ use api_server_common::storage::{
         block_aux_data::{BlockAuxData, BlockWithExtraData},
         ApiServerStorage, ApiServerStorageError, ApiServerStorageRead, ApiServerStorageWrite,
         ApiServerTransactionRw, BlockInfo, CoinOrTokenStatistic, Delegation, FungibleTokenData,
-        LockedUtxo, Order, PoolDataWithExtraInfo, TransactionInfo, Transactional, TxAdditionalInfo,
-        Utxo, UtxoLock, UtxoWithExtraInfo,
+        LockedUtxo, Order, PoolDataWithExtraInfo, TokenTransaction, TransactionInfo, Transactional,
+        TxAdditionalInfo, Utxo, UtxoLock, UtxoWithExtraInfo,
     },
 };
 use crypto::{
@@ -931,6 +931,46 @@ where
         }
 
         db_tx.commit().await.unwrap();
+    }
+
+    // Test token transactions
+    {
+        let mut db_tx = storage.transaction_rw().await.unwrap();
+        let random_token_id = TokenId::new(H256::random_using(&mut rng));
+        let token_transactions: Vec<_> = (0..10)
+            .map(|idx| {
+                let random_tx_id = Id::<Transaction>::new(H256::random_using(&mut rng));
+                let block_height = BlockHeight::new(idx);
+                (idx, random_tx_id, block_height)
+            })
+            .collect();
+
+        for (_, tx_id, block_height) in &token_transactions {
+            db_tx
+                .set_token_transactions_at_height(random_token_id, [*tx_id].into(), *block_height)
+                .await
+                .unwrap();
+        }
+
+        let len = rng.gen_range(0..5);
+        let global_idx = rng.gen_range(5..=10);
+        let token_txs =
+            db_tx.get_token_transactions(random_token_id, len, global_idx).await.unwrap();
+        eprintln!("getting len: {len} < idx {global_idx}");
+        let expected_token_txs: Vec<_> = token_transactions
+            .iter()
+            .rev()
+            .filter_map(|(idx, tx_id, _)| {
+                let idx = *idx as i64 + 1;
+                ((idx) < global_idx).then_some(TokenTransaction {
+                    global_tx_index: idx,
+                    tx_id: *tx_id,
+                })
+            })
+            .take(len as usize)
+            .collect();
+
+        assert_eq!(token_txs, expected_token_txs);
     }
 
     // Test setting/getting pool data

@@ -39,7 +39,7 @@ use crate::storage::{
         block_aux_data::{BlockAuxData, BlockWithExtraData},
         AmountWithDecimals, ApiServerStorageError, BlockInfo, CoinOrTokenStatistic, Delegation,
         FungibleTokenData, LockedUtxo, NftWithOwner, Order, PoolBlockStats, PoolDataWithExtraInfo,
-        TransactionInfo, TransactionWithBlockInfo, Utxo, UtxoWithExtraInfo,
+        TokenTransaction, TransactionInfo, TransactionWithBlockInfo, Utxo, UtxoWithExtraInfo,
     },
 };
 
@@ -495,6 +495,49 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         Ok(transaction_ids)
     }
 
+    pub async fn get_token_transactions(
+        &self,
+        token_id: TokenId,
+        len: u32,
+        global_tx_index: i64,
+    ) -> Result<Vec<TokenTransaction>, ApiServerStorageError> {
+        let len = len as i64;
+        let rows = self
+            .tx
+            .query(
+                r#"
+                    SELECT global_tx_index, transaction_id
+                    FROM ml.token_transactions
+                    WHERE token_id = $1 AND global_tx_index < $2
+                    ORDER BY global_tx_index DESC
+                    LIMIT $3;
+                "#,
+                &[&token_id.encode(), &global_tx_index, &len],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        let mut transactions = Vec::with_capacity(rows.len());
+
+        for row in &rows {
+            let global_tx_index: i64 = row.get(0);
+            let tx_id: Vec<u8> = row.get(1);
+            let tx_id = Id::<Transaction>::decode_all(&mut tx_id.as_slice()).map_err(|e| {
+                ApiServerStorageError::DeserializationError(format!(
+                    "Transaction id deserialization failed: {}",
+                    e
+                ))
+            })?;
+
+            transactions.push(TokenTransaction {
+                global_tx_index,
+                tx_id,
+            });
+        }
+
+        Ok(transactions)
+    }
+
     pub async fn del_address_transactions_above_height(
         &mut self,
         block_height: BlockHeight,
@@ -504,6 +547,23 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         self.tx
             .execute(
                 "DELETE FROM ml.address_transactions WHERE block_height > $1;",
+                &[&height],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        Ok(())
+    }
+
+    pub async fn del_token_transactions_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        let height = Self::block_height_to_postgres_friendly(block_height);
+
+        self.tx
+            .execute(
+                "DELETE FROM ml.token_transactions WHERE block_height > $1;",
                 &[&height],
             )
             .await
@@ -530,6 +590,32 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                         DO NOTHING;
                     "#,
                     &[&address.to_string(), &height, &transaction_id.encode()],
+                )
+                .await
+                .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+        }
+
+        Ok(())
+    }
+
+    pub async fn set_token_transactions_at_height(
+        &mut self,
+        token_id: TokenId,
+        transaction_ids: BTreeSet<Id<Transaction>>,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        let height = Self::block_height_to_postgres_friendly(block_height);
+
+        for transaction_id in transaction_ids {
+            self.tx
+                .execute(
+                    r#"
+                        INSERT INTO ml.token_transactions (token_id, block_height, transaction_id)
+                        VALUES ($1, $2, $3)
+                        ON CONFLICT (token_id, block_height, transaction_id)
+                        DO NOTHING;
+                    "#,
+                    &[&token_id.encode(), &height, &transaction_id.encode()],
                 )
                 .await
                 .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
@@ -731,6 +817,20 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 );",
         )
         .await?;
+
+        self.just_execute(
+            "CREATE TABLE ml.token_transactions (
+                    global_tx_index bigint PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+                    token_id bytea NOT NULL,
+                    block_height bigint NOT NULL,
+                    transaction_id bytea NOT NULL,
+                    UNIQUE (token_id, block_height, transaction_id)
+                );",
+        )
+        .await?;
+
+        self.just_execute("CREATE INDEX token_transactions_global_tx_index ON ml.token_transactions (token_id, global_tx_index DESC);")
+            .await?;
 
         self.just_execute(
             "CREATE TABLE ml.utxo (
