@@ -19,7 +19,7 @@ use crate::storage::storage_api::{
     block_aux_data::{BlockAuxData, BlockWithExtraData},
     AmountWithDecimals, ApiServerStorageError, BlockInfo, CoinOrTokenStatistic, Delegation,
     FungibleTokenData, LockedUtxo, NftWithOwner, Order, PoolBlockStats, PoolDataWithExtraInfo,
-    TransactionInfo, TransactionWithBlockInfo, Utxo, UtxoLock, UtxoWithExtraInfo,
+    TokenTransaction, TransactionInfo, TransactionWithBlockInfo, Utxo, UtxoLock, UtxoWithExtraInfo,
 };
 use common::{
     address::Address,
@@ -48,6 +48,7 @@ struct ApiServerInMemoryStorage {
     address_balance_table: BTreeMap<String, BTreeMap<CoinOrTokenId, BTreeMap<BlockHeight, Amount>>>,
     address_locked_balance_table: BTreeMap<String, BTreeMap<(CoinOrTokenId, BlockHeight), Amount>>,
     address_transactions_table: BTreeMap<String, BTreeMap<BlockHeight, Vec<Id<Transaction>>>>,
+    token_transactions_table: BTreeMap<TokenId, BTreeMap<BlockHeight, Vec<TokenTransaction>>>,
     delegation_table: BTreeMap<DelegationId, BTreeMap<BlockHeight, Delegation>>,
     main_chain_blocks_table: BTreeMap<BlockHeight, Id<Block>>,
     pool_data_table: BTreeMap<PoolId, BTreeMap<BlockHeight, PoolDataWithExtraInfo>>,
@@ -75,6 +76,7 @@ impl ApiServerInMemoryStorage {
             address_balance_table: BTreeMap::new(),
             address_locked_balance_table: BTreeMap::new(),
             address_transactions_table: BTreeMap::new(),
+            token_transactions_table: BTreeMap::new(),
             delegation_table: BTreeMap::new(),
             main_chain_blocks_table: BTreeMap::new(),
             pool_data_table: BTreeMap::new(),
@@ -170,6 +172,27 @@ impl ApiServerInMemoryStorage {
             .get(address)
             .map_or_else(Vec::new, |transactions| {
                 transactions.iter().flat_map(|(_, txs)| txs.iter()).cloned().collect()
+            }))
+    }
+
+    fn get_token_transactions(
+        &self,
+        token_id: TokenId,
+        len: u32,
+        global_tx_index: i64,
+    ) -> Result<Vec<TokenTransaction>, ApiServerStorageError> {
+        Ok(self
+            .token_transactions_table
+            .get(&token_id)
+            .map_or_else(Vec::new, |transactions| {
+                transactions
+                    .iter()
+                    .rev()
+                    .flat_map(|(_, txs)| txs.iter())
+                    .cloned()
+                    .flat_map(|tx| (tx.global_tx_index < global_tx_index).then_some(tx))
+                    .take(len as usize)
+                    .collect()
             }))
     }
 
@@ -864,6 +887,20 @@ impl ApiServerInMemoryStorage {
         Ok(())
     }
 
+    fn del_token_transactions_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        // Inefficient, but acceptable for testing with InMemoryStorage
+
+        self.token_transactions_table.retain(|_, v| {
+            v.retain(|k, _| k <= &block_height);
+            !v.is_empty()
+        });
+
+        Ok(())
+    }
+
     fn set_address_balance_at_height(
         &mut self,
         address: &Address<Destination>,
@@ -938,6 +975,36 @@ impl ApiServerInMemoryStorage {
             .entry(address.to_string())
             .or_default()
             .insert(block_height, transaction_ids.into_iter().collect());
+
+        Ok(())
+    }
+
+    fn set_token_transactions_at_height(
+        &mut self,
+        token_id: TokenId,
+        transaction_ids: BTreeSet<Id<Transaction>>,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        let next_tx_idx = self.token_transactions_table.get(&token_id).map_or(1, |tx| {
+            tx.values()
+                .last()
+                .expect("not empty")
+                .last()
+                .expect("not empty")
+                .global_tx_index
+                + 1
+        });
+        self.token_transactions_table.entry(token_id).or_default().insert(
+            block_height,
+            transaction_ids
+                .into_iter()
+                .enumerate()
+                .map(|(idx, tx_id)| TokenTransaction {
+                    global_tx_index: next_tx_idx + idx as i64,
+                    tx_id,
+                })
+                .collect(),
+        );
 
         Ok(())
     }

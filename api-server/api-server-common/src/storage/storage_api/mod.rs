@@ -581,6 +581,12 @@ pub struct AmountWithDecimals {
     pub decimals: u8,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TokenTransaction {
+    pub global_tx_index: i64,
+    pub tx_id: Id<Transaction>,
+}
+
 #[async_trait::async_trait]
 pub trait ApiServerStorageRead: Sync {
     async fn is_initialized(&self) -> Result<bool, ApiServerStorageError>;
@@ -608,6 +614,13 @@ pub trait ApiServerStorageRead: Sync {
         &self,
         address: &str,
     ) -> Result<Vec<Id<Transaction>>, ApiServerStorageError>;
+
+    async fn get_token_transactions(
+        &self,
+        token_id: TokenId,
+        len: u32,
+        global_tx_index: i64,
+    ) -> Result<Vec<TokenTransaction>, ApiServerStorageError>;
 
     async fn get_best_block(&self) -> Result<BlockAuxData, ApiServerStorageError>;
 
@@ -806,6 +819,11 @@ pub trait ApiServerStorageWrite: ApiServerStorageRead {
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError>;
 
+    async fn del_token_transactions_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError>;
+
     async fn set_address_balance_at_height(
         &mut self,
         address: &Address<Destination>,
@@ -825,6 +843,13 @@ pub trait ApiServerStorageWrite: ApiServerStorageRead {
     async fn set_address_transactions_at_height(
         &mut self,
         address: &str,
+        transaction_ids: BTreeSet<Id<Transaction>>,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError>;
+
+    async fn set_token_transactions_at_height(
+        &mut self,
+        token_id: TokenId,
         transaction_ids: BTreeSet<Id<Transaction>>,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError>;
