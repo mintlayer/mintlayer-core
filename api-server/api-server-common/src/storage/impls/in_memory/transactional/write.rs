@@ -19,8 +19,8 @@ use crate::storage::storage_api::{
     block_aux_data::{BlockAuxData, BlockWithExtraData},
     AmountWithDecimals, ApiServerStorageError, ApiServerStorageRead, ApiServerStorageWrite,
     BlockInfo, CoinOrTokenStatistic, Delegation, FungibleTokenData, LockedUtxo, NftWithOwner,
-    Order, PoolBlockStats, PoolDataWithExtraInfo, TransactionInfo, TransactionWithBlockInfo, Utxo,
-    UtxoWithExtraInfo,
+    Order, PoolBlockStats, PoolDataWithExtraInfo, TokenTransaction, TransactionInfo,
+    TransactionWithBlockInfo, Utxo, UtxoWithExtraInfo,
 };
 use common::{
     address::Address,
@@ -64,6 +64,13 @@ impl ApiServerStorageWrite for ApiServerInMemoryStorageTransactionalRw<'_> {
         self.transaction.del_address_transactions_above_height(block_height)
     }
 
+    async fn del_token_transactions_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        self.transaction.del_token_transactions_above_height(block_height)
+    }
+
     async fn set_address_balance_at_height(
         &mut self,
         address: &Address<Destination>,
@@ -102,6 +109,16 @@ impl ApiServerStorageWrite for ApiServerInMemoryStorageTransactionalRw<'_> {
     ) -> Result<(), ApiServerStorageError> {
         self.transaction
             .set_address_transactions_at_height(address, transactions, block_height)
+    }
+
+    async fn set_token_transactions_at_height(
+        &mut self,
+        token_id: TokenId,
+        transactions: BTreeSet<Id<Transaction>>,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        self.transaction
+            .set_token_transactions_at_height(token_id, transactions, block_height)
     }
 
     async fn set_mainchain_block(
@@ -329,6 +346,15 @@ impl ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRw<'_> {
         address: &str,
     ) -> Result<Vec<Id<Transaction>>, ApiServerStorageError> {
         self.transaction.get_address_transactions(address)
+    }
+
+    async fn get_token_transactions(
+        &self,
+        token_id: TokenId,
+        len: u32,
+        global_tx_index: i64,
+    ) -> Result<Vec<TokenTransaction>, ApiServerStorageError> {
+        self.transaction.get_token_transactions(token_id, len, global_tx_index)
     }
 
     async fn get_latest_blocktimestamps(
