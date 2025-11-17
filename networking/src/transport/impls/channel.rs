@@ -101,6 +101,13 @@ impl TransportSocket for MpscChannelTransport {
     type Stream = ChannelStream;
 
     async fn bind(&self, mut addresses: Vec<SocketAddr>) -> Result<Self::Listener> {
+        if addresses.is_empty() {
+            return Ok(Self::Listener {
+                addresses,
+                receiver: None,
+            });
+        }
+
         let mut connections = CONNECTIONS.lock().expect("Connections mutex is poisoned");
 
         for address in addresses.iter_mut() {
@@ -134,7 +141,7 @@ impl TransportSocket for MpscChannelTransport {
 
         Ok(Self::Listener {
             addresses,
-            receiver,
+            receiver: Some(receiver),
         })
     }
 
@@ -178,7 +185,7 @@ impl TransportSocket for MpscChannelTransport {
 
 pub struct ChannelListener {
     addresses: Vec<SocketAddr>,
-    receiver: UnboundedReceiver<IncomingConnection>,
+    receiver: Option<UnboundedReceiver<IncomingConnection>>,
 }
 
 #[async_trait]
@@ -186,11 +193,15 @@ impl TransportListener for ChannelListener {
     type Stream = ChannelStream;
 
     async fn accept(&mut self) -> Result<(ChannelStream, SocketAddr)> {
+        let Some(receiver) = &mut self.receiver else {
+            return std::future::pending().await;
+        };
+
         let IncomingConnection {
             from: remote_address,
             to: local_address,
             stream_sender: client_stream_sender,
-        } = self.receiver.recv().await.ok_or_else(|| {
+        } = receiver.recv().await.ok_or_else(|| {
             MpscChannelTransportError::UnknownConnectorDroppedUnexpectedly {
                 listening_addresses: self.addresses.clone(),
             }
