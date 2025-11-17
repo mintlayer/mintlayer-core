@@ -43,14 +43,14 @@ use crate::{
         config::PeerManagerConfig,
         peerdb::{config::PeerDbConfig, storage_impl::PeerDbStorageImpl},
     },
-    protocol::{ProtocolVersion, SupportedProtocolVersion},
+    protocol::{ProtocolConfig, ProtocolVersion, SupportedProtocolVersion},
     types::socket_address::SocketAddress,
 };
 
 /// A protocol version for use in tests that just need some valid value for it.
 // TODO: ideally, tests that use this constant should call for_each_protocol_version instead
 // and thus check all available versions.
-pub const TEST_PROTOCOL_VERSION: SupportedProtocolVersion = SupportedProtocolVersion::V2;
+pub const TEST_PROTOCOL_VERSION: SupportedProtocolVersion = SupportedProtocolVersion::V3;
 
 /// Create a new MpscChannelTransport with a local address in the specified "group", which is
 /// represented by an integer.
@@ -197,6 +197,30 @@ pub fn test_p2p_config() -> P2pConfig {
         sync_stalling_timeout: Default::default(),
         peer_manager_config: Default::default(),
         protocol_config: Default::default(),
+    }
+}
+
+pub fn test_p2p_config_with_protocol_config(protocol_config: ProtocolConfig) -> P2pConfig {
+    P2pConfig {
+        protocol_config,
+
+        bind_addresses: Default::default(),
+        socks5_proxy: Default::default(),
+        disable_noise: Default::default(),
+        boot_nodes: Default::default(),
+        reserved_nodes: Default::default(),
+        whitelisted_addresses: Default::default(),
+        ban_config: Default::default(),
+        outbound_connection_timeout: Default::default(),
+        ping_check_period: Default::default(),
+        ping_timeout: Default::default(),
+        peer_handshake_timeout: Default::default(),
+        max_clock_diff: Default::default(),
+        node_type: Default::default(),
+        allow_discover_private_ips: Default::default(),
+        user_agent: mintlayer_core_user_agent(),
+        sync_stalling_timeout: Default::default(),
+        peer_manager_config: Default::default(),
     }
 }
 

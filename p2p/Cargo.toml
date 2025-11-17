@@ -58,6 +58,7 @@ p2p-test-utils = { path = "test-utils" }
 test-utils = { path = "../test-utils" }
 tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time", "test-util"] }
 
+bytes.workspace = true
 criterion.workspace = true
 ctor.workspace = true
 num.workspace = true
