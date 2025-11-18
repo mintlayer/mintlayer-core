@@ -7,11 +7,9 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 ## [Unreleased]
 
 ### Added
-
 - New endpoint was added: `/v2/transaction/{id}/output/{idx}`.
 
 ### Changed
-
 - `/v2/token/ticker/{ticker}` will now return all tokens whose ticker has the specified `{ticker}`
   as a substring (previously only exact matches were returned).
 
@@ -24,11 +22,9 @@ No changes
 ## [1.1.0] - 2025-08-21
 
 ### Added
-
 - New endpoint was added: `/v2/address/{address}/token-authority`
 
 ### Changed
-
 - Transactions returned by `/v2/transaction` now have a fixed global order; it is defined by the order of blocks and the
   order of transactions in each particular block.
 
@@ -56,35 +52,28 @@ No changes
 - `CURRENT_STORAGE_VERSION` was increased, full resync is required.
 
 ### Fixed
-
 - Fixed the issue of `Burn` outputs being incorrectly reported as `LockThenTransfer`.
 
 - Fixed the issue of the `MintTokens`'s `amount` being calculated using coin's decimals instead of the token's.
 
 ### Removed
-
 - In endpoints that return transaction info (such as `transaction/{id}`), the returned info about a `FillOrder` input
   no longer includes `destination`.
-
-### Changed
 
 ## [1.0.2] - 2025-01-19
 
 ### Added
-
 - New endpoints were added:
   - `/v2/order`
   - `/v2/order/{id}`
   - `/v2/order/pair/{asset1}_{asset2}`
 
 ### Changed
-
 - The `/v2/nft/{id}` endpoint now also returns the owner of the NFT.
 - The `/v2/order/{id}` endpoint now also returns the current nonce of the order.
 - `CURRENT_STORAGE_VERSION` was increased, full resync is required.
 
 ### Fixed
-
 - Fixed a crash in the `/v2/transaction/{id}` endpoint due to token info missing in the db after an order fill transaction
   has been processed.
 
