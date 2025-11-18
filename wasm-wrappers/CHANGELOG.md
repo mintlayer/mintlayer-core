@@ -8,10 +8,10 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ### Added
 - New functions:
-  - `encode_witness_htlc_refund_single_sig`
+  - `encode_destination`
   - `encode_partially_signed_transaction`
   - `decode_partially_signed_transaction_to_js`
-  - `encode_destination`
+  - `encode_witness_htlc_refund_single_sig`
 
 ### Changed
 - `encode_witness_htlc_secret` was renamed to `encode_witness_htlc_spend`.
@@ -49,7 +49,7 @@ No changes
 ### Changed
 - Functions `encode_input_for_conclude_order`, `encode_input_for_fill_order`, `get_token_id`.
 
-  These functions gained an additional parameter - `current_block_height`. Same as for some previously existing functions,
+  These functions gained an additional parameter - `current_block_height`. Same as for certain previously existing functions,
 `current_block_height` must be the height of the block into which the corresponding transaction has been, or is supposed to be, included.
   It's needed in cases when the result of the function depends on whether a certain hard fork has already happened.
 

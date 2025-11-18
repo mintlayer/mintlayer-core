@@ -11,8 +11,6 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
-TODO
-
 ## [1.2.0] - 2025-10-27
 
 ### Changed
@@ -28,6 +26,38 @@ TODO
     See the changelog for v1.1.0 below for extra details.
 
 ## [1.1.0] - 2025-08-21
+
+### Added
+
+  - Wallet:
+    - Added a command to undiscourage a previously discouraged peer - `node-undiscourage-peer-address` in
+      `wallet-cli`, `node_undiscourage_peer_address` in the wallet rpc.
+
+    - Added a command to return the account's extended public key - `account-extended-public-key-as-hex` in
+      `wallet-cli`, `account_extended_public_key` in the wallet rpc.
+
+    - `staking-create-pool` now accepts two optional additional parameters - the staker address and the VRF public key.
+      This allows to create a pool from a wallet other than the one that will be used for staking.
+
+    - Added new option `--no-qr` to `wallet-cli`, which disables QR code output for wallet commands.
+
+    - `wallet-cli` commands `transaction-list-by-address` and `transaction-list-pending` now print their output
+      in the paginated mode.
+
+    - `wallet-cli` command `address-show` now has the option `--include-change`, which makes it include the change
+      addresses in the output.
+
+    - `wallet-cli` command `address-sweep-spendable` now has the option `--all`, which makes it sweep all addresses
+      of the selected account.
+
+    - Added new `wallet-cli` command `config-broadcast`. When `config-broadcast no` is called, it prevents all
+      commands that create transactions from automatically broadcasting them to the network.
+
+    - Added support for Trezor hardware wallets (beta).
+
+  - `node-gui` and `node-daemon` now can store info-level logs to the data directory, regardless of what is
+    printed to the console. This is controlled by the `--log-to-file` option, which is enabled by default
+    for `node-gui`.
 
 ### Changed
 
@@ -56,7 +86,28 @@ TODO
 
   - `ChainstateStorageVersion` was increased, full node resync is required.
 
-TODO: document changes not related to consensus
+### Fixed
+
+  - Fixed issues in the wallet related to a transaction with an outdated nonce not being marked as conflicted.
+
+  - `node-gui` no longer ignores the network type (i.e. "mainnet" ot "testnet") passed via the command line.
+
+  - Fixed an issue where `node-gui` would appear stuck when opening a wallet that wasn't synced in a long time.
+
+  - Fixed an issue in the wallet where a text summary for a token-issuing transaction would show its "is freezable"
+    status incorrectly.
+
+  - Fixed issues with transaction fee calculation in the wallet.
+
+  - Fixes related to standalone private keys in the wallet:
+    - Fixed encryption of standalone private keys when a new password is set or the existing one is changed.
+    - Fixed watching/scanning for relevant public key destinations belonging to standalone private keys
+      (only public key hash destinations used to work before).
+    - Fixed wallet balance to show spendable UTXOs belonging to standalone private keys.
+
+  - Various minor visual fixes in `node-gui`.
+
+  - `wallet-cli` help output was prettified.
 
 ## [1.0.2] - 2025-01-19
 

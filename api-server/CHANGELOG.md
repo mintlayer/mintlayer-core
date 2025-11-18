@@ -6,7 +6,16 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
-TODO
+### Added
+
+- New endpoint was added: `/v2/transaction/{id}/output/{idx}`.
+
+### Changed
+
+- `/v2/token/ticker/{ticker}` will now return all tokens whose ticker has the specified `{ticker}`
+  as a substring (previously only exact matches were returned).
+
+- `CURRENT_STORAGE_VERSION` was increased, full resync is required.
 
 ## [1.2.0] - 2025-10-27
 
@@ -26,19 +35,23 @@ No changes
   Also, the endpoint gained an additional parameter - `offset_mode`, which alters the meaning of the `offset` parameter.\
   The possible values are:
   - `legacy` (default); this is the original behavior, where `offset` is relative to the end of the overall transaction list.\
-    I.e. `v2/transaction?offset=0&items=10` will return the 10 latest transactions.
+    I.e. `/v2/transaction?offset=0&items=10` will return the 10 latest transactions.
 
   - `absolute`; here `offset` is just an index in the overall transaction list.\
     Similarly to the legacy mode, `items` specifies the number of transactions *before* the specified position in the global
-    transaction list. I.e. `v2/transaction?offset_mode=absolute&offset=0&items=10` will return an empty list and
-    `v2/transaction?offset_mode=absolute&offset=1000&items=10` will return transactions with indices in the range [990, 999].
+    transaction list. I.e. `/v2/transaction?offset_mode=absolute&offset=0&items=10` will return an empty list and
+    `/v2/transaction?offset_mode=absolute&offset=1000&items=10` will return transactions with indices in the range [990, 999].
 
 - `/v2/address/{address}` now also returns token balances for the address.
 
-- In endpoints that return transaction info (such as `/transaction/{id}`), the returned info about a spent HTLC UTXO now
+- In endpoints that return transaction info (such as `transaction/{id}`), the returned info about a spent HTLC UTXO now
   includes the HTLC secret.
 
-- `/v2/pool` and `/pool/{id}` now also return the total delegations balance.
+- `/v2/pool` and `/v2/pool/{id}` now also return the total delegations balance.
+
+- `/v2/token/{id}` now also returns the token's next nonce.
+
+- Optimized database queries for the retrieval of the latest delegation states.
 
 - `CURRENT_STORAGE_VERSION` was increased, full resync is required.
 
@@ -50,7 +63,7 @@ No changes
 
 ### Removed
 
-- In endpoints that return transaction info (such as `/transaction/{id}`), the returned info about a `FillOrder` input
+- In endpoints that return transaction info (such as `transaction/{id}`), the returned info about a `FillOrder` input
   no longer includes `destination`.
 
 ### Changed
