@@ -3390,7 +3390,16 @@ Returns:
     "account_names": [ EITHER OF
          1) string
          2) null, .. ],
-    "extra_info": object,
+    "extra_info": EITHER OF
+         1) { "type": "SoftwareWallet" }
+         2) {
+                "type": "TrezorWallet",
+                "content": {
+                    "device_name": string,
+                    "device_id": string,
+                    "firmware_version": string,
+                },
+            },
 }
 ```
 
