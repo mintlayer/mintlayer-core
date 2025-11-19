@@ -21,13 +21,32 @@
 //!
 
 use std::net::SocketAddr;
+use std::time::Duration;
 
 use logging::log;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use strum::{Display, EnumIter};
+use tokio::time::sleep;
 
-/// Button enumeration
+/// Device types supported by the emulator
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum Device {
+    NanoS,
+    NanoSPlus,
+    NanoX,
+    Stax,
+    Flex,
+}
+
+impl Device {
+    /// Returns true if the device has a touch screen
+    pub fn is_touch(&self) -> bool {
+        matches!(self, Device::Stax | Device::Flex)
+    }
+}
+
+/// Button enumeration (Physical buttons)
 #[derive(Clone, Copy, PartialEq, Debug, Display, EnumIter)]
 #[strum(serialize_all = "kebab-case")]
 pub enum Button {
@@ -36,50 +55,144 @@ pub enum Button {
     Both,
 }
 
-/// Button actions
+/// Physical Button actions
 #[derive(Clone, Copy, PartialEq, Debug, Serialize, Deserialize, Display, EnumIter)]
 #[serde(rename_all = "kebab-case")]
-pub enum Action {
+pub enum ButtonAction {
     Press,
     Release,
     PressAndRelease,
 }
 
-/// Button action object for serialization and use with the HTTP API
+/// Payload for button endpoint
 #[derive(Clone, Copy, PartialEq, Debug, Serialize, Deserialize)]
-struct ButtonAction {
-    action: Action,
+struct ButtonPayload {
+    action: ButtonAction,
 }
 
+// -----------------------------------------------------------------
+// TOUCH SCREEN LOGIC
+// -----------------------------------------------------------------
+
+/// Payload for the /finger endpoint
+#[derive(Clone, Copy, PartialEq, Debug, Serialize, Deserialize)]
+pub struct FingerPayload {
+    pub x: u32,
+    pub y: u32,
+    pub action: ButtonAction,
+    // delay is optional in speculos, usually 0
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub delay: Option<u32>,
+}
+
+/// Semantic elements on the screen to avoid hardcoding X/Y in tests.
+/// Mapped from the "UseCase" python dictionary.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum ScreenElement {
+    ReviewTap,     // Used to go to next page (lower right)
+    ReviewConfirm, // Above lower right
+}
+
+impl ScreenElement {
+    /// Returns the (x, y) coordinates for the specific device
+    pub fn position(&self, device: Device) -> (u32, u32) {
+        // Device resolutions
+        // Stax: 400 x 672
+        // Flex: 480 x 600
+        match (self, device) {
+            // --- UseCaseReview ---
+            (ScreenElement::ReviewTap, Device::Stax) => (335, 606),
+            (ScreenElement::ReviewTap, Device::Flex) => (430, 530),
+
+            (ScreenElement::ReviewConfirm, Device::Stax) => (335, 515),
+            (ScreenElement::ReviewConfirm, Device::Flex) => (240, 435),
+
+            // Fallback or unimplemented combinations
+            _ => panic!("Coordinate not mapped for {:?} on {:?}", self, device),
+        }
+    }
+}
+
+// -----------------------------------------------------------------
+// RUNTIME HANDLE
+// -----------------------------------------------------------------
+
 /// Handle for interacting with a Speculos instance
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Handle {
     addr: SocketAddr,
+    device: Device,
 }
 
 impl Handle {
-    pub fn new(addr: SocketAddr) -> Self {
-        Self { addr }
+    pub fn new(addr: SocketAddr, device: Device) -> Self {
+        Self { addr, device }
     }
 
-    /// Get speculos HTTP address
     pub fn addr(&self) -> SocketAddr {
         self.addr
     }
 
-    /// Send a button action to the simulator
-    pub async fn button(&self, button: Button, action: Action) -> anyhow::Result<()> {
+    pub fn device(&self) -> Device {
+        self.device
+    }
+
+    /// Send a physical button action
+    pub async fn button(&self, button: Button, action: ButtonAction) -> anyhow::Result<()> {
+        if self.device.is_touch() {
+            log::warn!("Sending physical button command to a touch device (Stax/Flex). This might be intended (Power button) but usually incorrect for UI navigation.");
+        }
+
         log::debug!("Sending button request: {}:{}", button, action);
 
-        // Post action to HTTP API
         let r = Client::new()
             .post(format!("http://{}/button/{}", self.addr(), button))
-            .json(&ButtonAction { action })
+            .json(&ButtonPayload { action })
             .send()
             .await?;
 
-        log::debug!("Button request complete: {}", r.status());
+        if !r.status().is_success() {
+            anyhow::bail!("Button request failed: {}", r.status());
+        }
 
+        Ok(())
+    }
+
+    /// Send a raw finger action to the screen
+    pub async fn finger(&self, x: u32, y: u32, action: ButtonAction) -> anyhow::Result<()> {
+        log::debug!("Sending finger request: x={} y={} action={}", x, y, action);
+
+        let payload = FingerPayload {
+            x,
+            y,
+            action,
+            delay: None,
+        };
+
+        let r = Client::new()
+            .post(format!("http://{}/finger", self.addr()))
+            .json(&payload)
+            .send()
+            .await?;
+
+        if !r.status().is_success() {
+            anyhow::bail!("Finger request failed: {}", r.status());
+        }
+
+        Ok(())
+    }
+
+    pub async fn hold(&self, element: ScreenElement) -> anyhow::Result<()> {
+        let (x, y) = element.position(self.device);
+        self.finger(x, y, ButtonAction::Press).await?;
+        sleep(Duration::from_millis(1800)).await;
+        self.finger(x, y, ButtonAction::Release).await?;
+        Ok(())
+    }
+
+    pub async fn tap(&self, element: ScreenElement) -> anyhow::Result<()> {
+        let (x, y) = element.position(self.device);
+        self.finger(x, y, ButtonAction::PressAndRelease).await?;
         Ok(())
     }
 }
@@ -105,14 +218,14 @@ mod tests {
     /// Check button action encoding
     #[test]
     fn action_encoding() {
-        for action in Action::iter() {
+        for action in ButtonAction::iter() {
             let expected = match action {
-                Action::Press => r#"{"action":"press"}"#,
-                Action::Release => r#"{"action":"release"}"#,
-                Action::PressAndRelease => r#"{"action":"press-and-release"}"#,
+                ButtonAction::Press => r#"{"action":"press"}"#,
+                ButtonAction::Release => r#"{"action":"release"}"#,
+                ButtonAction::PressAndRelease => r#"{"action":"press-and-release"}"#,
             };
             assert_eq!(
-                &serde_json::to_string(&ButtonAction { action }).unwrap(),
+                &serde_json::to_string(&ButtonPayload { action }).unwrap(),
                 expected
             );
         }

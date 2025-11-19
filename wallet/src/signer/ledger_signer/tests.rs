@@ -23,7 +23,7 @@ use std::{
 use async_trait::async_trait;
 use ledger_lib::{
     transport::{TcpDevice, TcpInfo, TcpTransport},
-    Device, Transport,
+    Device as _, Transport,
 };
 use mintlayer_ledger_messages::CoinType;
 use randomness::make_true_rng;
@@ -40,8 +40,10 @@ use tokio::{
 
 use crate::signer::{
     ledger_signer::{
-        ledger_messages::{check_current_app, get_extended_public_key},
-        speculos::{Action, Button, Handle},
+        ledger_messages::{
+            check_current_app, get_extended_public_key, get_extended_public_key_raw,
+        },
+        speculos::{Button, ButtonAction, Device, Handle, ScreenElement},
         LedgerError, LedgerFinder, LedgerSigner,
     },
     tests::{
@@ -85,13 +87,35 @@ fn should_auto_confirm() -> bool {
 }
 
 async fn auto_confirmer(mut control_msg_rx: mpsc::Receiver<ControlMessage>, handle: Handle) {
+    println!("Starting auto-confirmer for device: {:?}", handle.device());
+
     loop {
         tokio::select! {
-            _ = sleep(Duration::from_millis(100)) => {
-                // As we don't know how many screens will be shown just go 1 right and try to confirm
-                handle.button(Button::Right, Action::PressAndRelease).await.unwrap();
-                handle.button(Button::Both, Action::PressAndRelease).await.unwrap();
-                handle.button(Button::Both, Action::PressAndRelease).await.unwrap();
+            _ = sleep(Duration::from_millis(500)) => {
+                // Logic depends on whether we are using a touch screen or buttons
+                if handle.device().is_touch() {
+                    // TOUCH DEVICE STRATEGY (Stax/Flex)
+                    // On Speculos, blindly tapping coordinates is safe.
+                    // 1. Try to go to the next page (Tap the "Next/Tap" zone)
+                    // 2. Try to confirm (Tap the "Confirm" zone)
+
+                    // Attempt to advance review
+                    let _ = handle.tap(ScreenElement::ReviewTap).await;
+                    sleep(Duration::from_millis(100)).await;
+
+                    // Attempt to confirm review
+                    let _ = handle.hold(ScreenElement::ReviewConfirm).await;
+                    sleep(Duration::from_millis(100)).await;
+                } else {
+                    // BUTTON DEVICE STRATEGY (Nano S/S+/X)
+                    // 1. Press Right to scroll
+                    // 2. Press Both to confirm
+                    let _ = handle.button(Button::Right, ButtonAction::PressAndRelease).await;
+                    sleep(Duration::from_millis(100)).await;
+                    let _ = handle.button(Button::Both, ButtonAction::PressAndRelease).await;
+                    sleep(Duration::from_millis(100)).await;
+                    let _ = handle.button(Button::Both, ButtonAction::PressAndRelease).await;
+                }
             }
             msg = control_msg_rx.recv() => {
                 match msg {
@@ -134,14 +158,28 @@ async fn setup(
     impl Fn(Arc<ChainConfig>, U31) -> LedgerSigner<TcpDevice, DummyProvider>,
 ) {
     let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), emulator_api_port());
-    let handle = Handle::new(addr);
+
+    let device_model_env: String = get_from_env("LEDGER_TESTS_DEVICE_MODEL")
+        .expect("Failed to read env var LEDGER_TESTS_DEVICE_MODEL")
+        .unwrap_or_else(|| "nanosplus".to_string());
+
+    let device_type = match device_model_env.as_str() {
+        "nanos" => Device::NanoS,
+        "nanosplus" | "nanosp" => Device::NanoSPlus,
+        "nanox" => Device::NanoX,
+        "stax" => Device::Stax,
+        "flex" => Device::Flex,
+        _ => panic!("Unknown ledger device model in env: {}", device_model_env),
+    };
+
+    let handle = Handle::new(addr, device_type);
 
     let mut device = create_device_connection().await;
 
     let mut tries = 0;
+    let derivation_path = DerivationPath::from_str("m/44h/19788h/0h").unwrap();
     loop {
-        let derivation_path = DerivationPath::from_str("m/44h/19788h/0h").unwrap();
-        match get_extended_public_key(&mut device, CoinType::Mainnet, derivation_path).await {
+        match get_extended_public_key_raw(&mut device, CoinType::Mainnet, &derivation_path).await {
             Ok(_) => break,
             Err(_) => {
                 tries += 1;
@@ -189,10 +227,10 @@ async fn setup(
 async fn test_app_name() {
     let mut device = create_device_connection().await;
 
+    let derivation_path = DerivationPath::from_str("m/44h/19788h/0h").unwrap();
     let mut tries = 0;
     loop {
-        let derivation_path = DerivationPath::from_str("m/44h/19788h/0h").unwrap();
-        match get_extended_public_key(&mut device, CoinType::Mainnet, derivation_path).await {
+        match get_extended_public_key_raw(&mut device, CoinType::Mainnet, &derivation_path).await {
             Ok(_) => break,
             Err(_) => {
                 tries += 1;
@@ -204,7 +242,7 @@ async fn test_app_name() {
         }
     }
 
-    let info = device.app_info(Duration::from_millis(100)).await.unwrap();
+    let info = device.app_info(Duration::from_millis(500)).await.unwrap();
 
     let err = check_current_app(&mut device).await.unwrap_err();
     eprintln!("info: {err:?}");
