@@ -324,7 +324,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        model: [nanox, nanosplus] #, flex, stax]
+        model: [flex, stax, nanox, nanosplus]
     steps:
       - name: Checkout the core repository
         uses: actions/checkout@v4
@@ -356,7 +356,7 @@ jobs:
 
           sudo docker run -d --rm --name ledger-emulator \
             -v "$(realpath ./mintlayer-ledger-app):/app" \
-            --publish 5001:5001 --publish 9999:9999 \
+            --publish 5000:5000 --publish 9999:9999 \
             ghcr.io/ledgerhq/ledger-app-builder/ledger-app-dev-tools:latest \
             sh -c 'speculos --apdu-port 9999 --api-port 5000 --display headless -s "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"  target/${{ matrix.model }}/release/mintlayer-app'
 
@@ -368,6 +368,10 @@ jobs:
 
           echo "--- Running Ledger device tests on the host ---"
           cd ./mintlayer-core
+
+          # Export the device model from the matrix so the Rust test can pick it up
+          export LEDGER_TESTS_DEVICE_MODEL=${{ matrix.model }}
+
           cargo-nextest nextest run --archive-file ledger-tests.tar.zst -j1 ledger_signer || test_exit_code=$?
 
           exit $test_exit_code
