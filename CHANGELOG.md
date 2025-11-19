@@ -15,6 +15,11 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
   - Wallet RPC:
     `wallet_info`: the structure of the returned field `extra_info` was changed.
 
+### Fixed
+  - p2p: when a peer sends a message that can't be decoded, it will now be discouraged (which is what
+    is normally done for misbehaving peers) and the node won't try connecting to it again.\
+    Also, the peer will be sent an appropriate `WillDisconnect` message prior to disconnection.
+
 ## [1.2.0] - 2025-10-27
 
 ### Changed

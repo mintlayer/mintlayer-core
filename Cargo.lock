@@ -5658,6 +5658,7 @@ name = "p2p"
 version = "1.2.0"
 dependencies = [
  "async-trait",
+ "bytes",
  "chainstate",
  "chainstate-storage",
  "chainstate-test-framework",

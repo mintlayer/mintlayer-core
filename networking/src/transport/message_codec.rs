@@ -65,7 +65,7 @@ impl<Msg: DecodeAll> Decoder for MessageCodec<Msg> {
             return Ok(None);
         }
 
-        let (header, remaining_bytes) = src.split_at_mut(size_of::<MsgLenHeader>());
+        let (header, remaining_bytes) = src.split_at(size_of::<MsgLenHeader>());
 
         // Unwrap is safe here because the header size is exactly size_of::<Header>().
         let length = MsgLenHeader::from_le_bytes(header.try_into().expect("valid size")) as usize;
@@ -77,7 +77,7 @@ impl<Msg: DecodeAll> Decoder for MessageCodec<Msg> {
             return Ok(None);
         }
 
-        let (body, _extra_bytes) = remaining_bytes.split_at_mut(length);
+        let (body, _) = remaining_bytes.split_at(length);
 
         let decode_res = Msg::decode_all(&mut &body[..]);
 
