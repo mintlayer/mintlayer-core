@@ -194,8 +194,9 @@ where
         key_chain: &impl AccountKeyChains,
     ) -> SignerResult<()> {
         let mut client = self.client.lock().await;
-        let mut num_tries = 10;
-        let derivation_path = make_account_path(&self.chain_config, DEFAULT_ACCOUNT_INDEX);
+        // Try and wait around 5sec 50 * 100ms for the screen to clear after a signing operation ends
+        let mut num_tries = 50;
+        let derivation_path = make_account_path(&self.chain_config, key_chain.account_index());
         let coin_type = to_ledger_chain_type(&self.chain_config);
         loop {
             match get_extended_public_key_raw(&mut *client, coin_type, &derivation_path).await {

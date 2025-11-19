@@ -176,7 +176,7 @@ pub async fn get_extended_public_key_raw<L: Exchange>(
     let mut msg_buf = Vec::with_capacity(apdu.bytes_count());
     apdu.write_bytes(&mut msg_buf);
 
-    ledger.exchange(&msg_buf, Duration::from_millis(100)).await
+    ledger.exchange(&msg_buf, Duration::from_millis(200)).await
 }
 
 pub async fn get_extended_public_key<L: Exchange>(
