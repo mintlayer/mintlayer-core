@@ -280,6 +280,12 @@ class RuntimeConfigurationObject:
 
             self.type_registry['types'][type_string.lower()] = decoder_class
 
+    # Note: this wasn't in the original implementation of the scalecodec library.
+    # Also note that the class being registered is a codec, not just decoder, but we follow
+    # the original terminology.
+    def register_custom_decoder_class(self, type_string: str, decoder_class: 'ScaleType'):
+        self.type_registry['types'][type_string.lower()] = decoder_class
+
     def update_type_registry(self, type_registry):
 
         # Set runtime ID if set

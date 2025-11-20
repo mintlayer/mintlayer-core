@@ -421,7 +421,7 @@ pub async fn test_fixed_signatures_generic<MkS, S>(
         let sig = "7a99714dc6cc917faa2afded8028159a5048caf6f8382f67e6b61623fbe62c60423f8f7983f88f40c6f42924594f3de492a232e9e703b241c3b17b130f8daa59";
         let sig = make_pub_key_hash_spend_sig(wallet_pk0.clone(), sig);
 
-        let mut sigs = vec![Some(InputWitness::Standard(sig)); ptx.count_inputs()];
+        let mut sigs = vec![Some(InputWitness::Standard(sig)); ptx.inputs_count()];
         sigs[1] = Some(InputWitness::Standard(multisig));
         sigs
     };
