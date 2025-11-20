@@ -29,25 +29,6 @@ use std::{
 use chainstate::{
     rpc::RpcOutputValueIn, tx_verifier::check_transaction, ChainInfo, TokenIssuanceError,
 };
-use crypto::{
-    key::{hdkd::u31::U31, PrivateKey, PublicKey},
-    vrf::VRFPublicKey,
-};
-use mempool::tx_accumulator::PackingStrategy;
-use mempool_types::tx_options::TxOptionsOverrides;
-use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
-use serialization::{hex_encoded::HexEncoded, Decode, DecodeAll};
-use types::{
-    AccountExtendedPublicKey, NewOrderTransaction, NewSubmittedTransaction, NewTokenTransaction,
-    RpcHashedTimelockContract, RpcNewTransaction, RpcPreparedTransaction,
-};
-use utils::{ensure, shallow_clone::ShallowClone};
-use utils_networking::IpOrSocketAddress;
-use wallet::{
-    account::{transaction_list::TransactionList, PoolData, TransactionToSign, TxInfo},
-    WalletError,
-};
-
 use common::{
     address::Address,
     chain::{
@@ -66,11 +47,24 @@ use common::{
         id::WithId, per_thousand::PerThousand, time::Time, Amount, BlockHeight, Id, Idable,
     },
 };
-pub use interface::{
-    ColdWalletRpcClient, ColdWalletRpcDescription, ColdWalletRpcServer, WalletEventsRpcServer,
-    WalletRpcClient, WalletRpcDescription, WalletRpcServer,
+use crypto::{
+    key::{hdkd::u31::U31, PrivateKey, PublicKey},
+    vrf::VRFPublicKey,
 };
-pub use rpc::{rpc_creds::RpcCreds, Rpc};
+use mempool::tx_accumulator::PackingStrategy;
+use mempool_types::tx_options::TxOptionsOverrides;
+use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
+use serialization::{hex_encoded::HexEncoded, DecodeAll};
+use types::{
+    AccountExtendedPublicKey, NewOrderTransaction, NewSubmittedTransaction, NewTokenTransaction,
+    RpcHashedTimelockContract, RpcNewTransaction, RpcPreparedTransaction,
+};
+use utils::{ensure, shallow_clone::ShallowClone};
+use utils_networking::IpOrSocketAddress;
+use wallet::{
+    account::{transaction_list::TransactionList, PoolData, TransactionToSign, TxInfo},
+    WalletError,
+};
 use wallet_controller::{
     types::{
         Balances, BlockInfo, CreatedBlockInfo, CreatedWallet, GenericTokenTransfer,
@@ -80,8 +74,10 @@ use wallet_controller::{
     ConnectedPeer, ControllerConfig, ControllerError, NodeInterface, UtxoState, UtxoStates,
     UtxoType, UtxoTypes, DEFAULT_ACCOUNT_INDEX,
 };
+#[cfg(feature = "trezor")]
+use wallet_types::wallet_type::WalletType;
 use wallet_types::{
-    account_info::StandaloneAddressDetails,
+    account_info::StandaloneAddressDetails, generic_transaction::GenericTransaction,
     partially_signed_transaction::PartiallySignedTransaction, scan_blockchain::ScanBlockchain,
     signature_status::SignatureStatus, wallet_tx::TxData, with_locked::WithLocked, Currency,
     SignedTxWithFees,
@@ -89,10 +85,6 @@ use wallet_types::{
 
 use crate::{WalletHandle, WalletRpcConfig};
 
-#[cfg(feature = "trezor")]
-use wallet_types::wallet_type::WalletType;
-
-pub use self::types::RpcError;
 use self::types::{
     AddressInfo, AddressWithUsageInfo, DelegationInfo, HardwareWalletType, LegacyVrfPublicKeyInfo,
     NewAccountInfo, PoolInfo, PublicKeyInfo, RpcAddress, RpcAmountIn, RpcHexString,
@@ -100,6 +92,14 @@ use self::types::{
     RpcStandalonePrivateKeyAddress, RpcUtxoOutpoint, StakingStatus, StandaloneAddressWithDetails,
     VrfPublicKeyInfo,
 };
+
+pub use interface::{
+    ColdWalletRpcClient, ColdWalletRpcDescription, ColdWalletRpcServer, WalletEventsRpcServer,
+    WalletRpcClient, WalletRpcDescription, WalletRpcServer,
+};
+pub use rpc::{rpc_creds::RpcCreds, Rpc};
+
+pub use self::types::RpcError;
 
 #[derive(Clone)]
 pub struct WalletRpc<N: Clone> {
@@ -856,15 +856,14 @@ where
         ),
         N,
     > {
-        let mut bytes = raw_tx.as_ref();
-        let tx = Transaction::decode(&mut bytes).map_err(|_| RpcError::InvalidRawTransaction)?;
-        let tx_to_sign = if bytes.is_empty() {
-            TransactionToSign::Tx(tx)
-        } else {
-            let mut bytes = raw_tx.as_ref();
-            let ptx = PartiallySignedTransaction::decode_all(&mut bytes)
-                .map_err(|_| RpcError::InvalidPartialTransaction)?;
-            TransactionToSign::Partial(ptx)
+        let tx = GenericTransaction::decode_from_untagged_bytes(raw_tx.as_bytes())
+            .map_err(|_| RpcError::InvalidRawTransaction)?;
+        let tx_to_sign = match tx {
+            GenericTransaction::Tx(tx) => TransactionToSign::Tx(tx),
+            GenericTransaction::Partial(tx) => TransactionToSign::Partial(tx),
+            GenericTransaction::Signed(_) => {
+                return Err(RpcError::UnexpectedFullySignedTransaction)
+            }
         };
 
         self.wallet
@@ -1062,27 +1061,21 @@ where
         &self,
         raw_tx: RpcHexString,
     ) -> WRpcResult<InspectTransaction, N> {
-        let hex_bytes = raw_tx.into_bytes();
-        let mut bytes = hex_bytes.as_slice();
-        let tx = Transaction::decode(&mut bytes).map_err(|_| RpcError::InvalidRawTransaction)?;
-        let tx: TransactionToInspect = if bytes.is_empty() {
-            TransactionToInspect::Tx(tx)
-        } else {
-            let mut bytes = hex_bytes.as_slice();
-            if let Ok(ptx) = PartiallySignedTransaction::decode_all(&mut bytes) {
-                TransactionToInspect::Partial(ptx)
-            } else {
-                let mut bytes = hex_bytes.as_slice();
-                let stx = SignedTransaction::decode_all(&mut bytes)
-                    .map_err(|_| RpcError::InvalidPartialTransaction)?;
-                TransactionToInspect::Signed(stx)
-            }
+        let tx = GenericTransaction::decode_from_untagged_bytes(raw_tx.as_bytes())
+            .map_err(|_| RpcError::InvalidRawTransaction)?;
+        let tx_to_inspect = match tx {
+            GenericTransaction::Tx(tx) => TransactionToInspect::Tx(tx),
+            GenericTransaction::Partial(tx) => TransactionToInspect::Partial(tx),
+            GenericTransaction::Signed(tx) => TransactionToInspect::Signed(tx),
         };
 
         self.wallet
             .call_async(move |controller| {
                 Box::pin(async move {
-                    controller.inspect_transaction(tx).await.map_err(RpcError::Controller)
+                    controller
+                        .inspect_transaction(tx_to_inspect)
+                        .await
+                        .map_err(RpcError::Controller)
                 })
             })
             .await?

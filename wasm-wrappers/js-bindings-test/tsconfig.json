@@ -1,6 +1,10 @@
 {
   "compilerOptions": {
     "target": "es2022",
+    // Note: at some point, wasm-bindgen started to emit "Symbol.dispose](): void;" into
+    // the generated ts classes and "es2022" is not enough to compile this.
+    // (Note that we also need "dom" to be able to use `console.log`.)
+    "lib": ["es2022", "dom", "esnext.disposable"],
     "module": "nodenext",
     "sourceMap": true,
     "outDir": "./dist",

@@ -13,7 +13,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-import scalecodec
+from scalecodec.base import RuntimeConfiguration, ScaleBytes, ScaleType
 
 def init_mintlayer_types():
     custom_types = {
@@ -247,7 +247,7 @@ def init_mintlayer_types():
                 ]
             },
 
-            "PartiallySignedTransaction": {
+            "PartiallySignedTransactionV1": {
                 "type": "struct",
                 "type_mapping": [
                     ["tx", "TransactionV1"],
@@ -572,6 +572,47 @@ def init_mintlayer_types():
         }
     }
 
-    scalecodec.base.RuntimeConfiguration().update_type_registry(custom_types)
+    runtime_config = RuntimeConfiguration()
+
+    runtime_config.update_type_registry(custom_types)
+    register_partially_signed_transaction(runtime_config)
+
+
+PARTIALLY_SIGNED_TRANSACTION_V1_DISCRIMINANT = 64
+
+
+# Note: PartiallySignedTransaction has a non-default enum disctiminant value and there doesn't
+# seem to be a way of specifying this in scalecodec. So we define a custom codec class and
+# prepend/strip the discriminant byte manually. This also allows us to continue working with
+# PartiallySignedTransaction as if it still were a struct.
+def register_partially_signed_transaction(runtime_config: RuntimeConfiguration):
+    class Ptx(ScaleType):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+
+            self.v1_codec = self.runtime_config.create_scale_object('PartiallySignedTransactionV1')
+
+        def process_encode(self, value) -> ScaleBytes:
+            v1_bytes: ScaleBytes = self.v1_codec.encode(value)
+            return ScaleBytes(bytes([PARTIALLY_SIGNED_TRANSACTION_V1_DISCRIMINANT]) + bytes(v1_bytes.data))
+
+        # Note: despite the weird name, this function implements decoding.
+        def process(self):
+            # self.data is ScaleBytes, self.data.data is bytearray
+            data = self.data.data
+
+            if data[0] != PARTIALLY_SIGNED_TRANSACTION_V1_DISCRIMINANT:
+                raise ValueError("Invalid PartiallySignedTransaction encoding")
+
+            result = self.v1_codec.decode(ScaleBytes(data[1:]))
+
+            # This will advance the offset field in self.data to the end.
+            # Without this, `decode` will raise `RemainingScaleBytesNotEmptyException`.
+            self.data.get_remaining_bytes()
+
+            return result
+
+    runtime_config.register_custom_decoder_class('PartiallySignedTransaction', Ptx)
+
 
 init_mintlayer_types()
