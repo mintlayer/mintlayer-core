@@ -203,6 +203,7 @@ export function test_partially_signed_transaction_encoding() {
 
   const ptx_json = decode_partially_signed_transaction_to_js(ptx, Network.Testnet);
   const expected_ptx_json = {
+    "type":"V1",
     "tx":{
         "V1":{
           "version":1,
@@ -331,9 +332,7 @@ export function test_partially_signed_transaction_encoding() {
         null,
         null,
         null,
-        {
-          "secret": HTLC_SECRET
-        }
+        "00e5e9486e16402445bcee3382a8b9f1493078978c2d2e2732cf1232f31e735d"
     ],
     "additional_info":{
         "pool_info":{

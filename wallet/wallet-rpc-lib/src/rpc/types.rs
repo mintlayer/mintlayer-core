@@ -123,8 +123,10 @@ pub enum RpcError<N: NodeInterface> {
     #[error("Invalid hex encoded transaction")]
     InvalidRawTransaction,
 
-    #[error("Invalid hex encoded partially signed transaction")]
-    InvalidPartialTransaction,
+    #[error(
+        "Expecting an unsigned or partially signed transaction, but a fully signed one was passed"
+    )]
+    UnexpectedFullySignedTransaction,
 
     #[error("{0}")]
     DestinationSigError(#[from] DestinationSigError),
