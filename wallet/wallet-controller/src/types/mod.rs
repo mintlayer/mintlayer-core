@@ -58,7 +58,8 @@ pub struct WalletInfo {
     pub extra_info: WalletExtraInfo,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, rpc_description::HasValueHint)]
+#[serde(tag = "type", content = "content")]
 pub enum WalletExtraInfo {
     SoftwareWallet,
     #[cfg(feature = "trezor")]
@@ -68,10 +69,6 @@ pub enum WalletExtraInfo {
         // Note: semver::Version is not serializable, so we can't use it here.
         firmware_version: String,
     },
-}
-
-impl rpc_description::HasValueHint for WalletExtraInfo {
-    const HINT_SER: rpc_description::ValueHint = rpc_description::ValueHint::GENERIC_OBJECT;
 }
 
 // A struct that represents sending a particular amount of unspecified currency.
