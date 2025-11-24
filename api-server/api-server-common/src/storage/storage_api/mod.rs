@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use std::{
+    cmp::Ordering,
     collections::{BTreeMap, BTreeSet},
     fmt::Display,
     str::FromStr,
@@ -68,6 +69,8 @@ pub enum ApiServerStorageError {
     AddressableError,
     #[error("Block timestamp too high: {0}")]
     TimestampTooHigh(BlockTimestamp),
+    #[error("Tx global index to hight: {0}")]
+    TxGlobalIndexTooHigh(u64),
     #[error("Id creation error: {0}")]
     IdCreationError(#[from] IdCreationError),
 }
@@ -562,7 +565,7 @@ pub struct TransactionInfo {
 pub struct TransactionWithBlockInfo {
     pub tx_info: TransactionInfo,
     pub block_aux: BlockAuxData,
-    pub global_tx_index: u64,
+    pub tx_global_index: u64,
 }
 
 pub struct PoolBlockStats {
@@ -583,8 +586,20 @@ pub struct AmountWithDecimals {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TokenTransaction {
-    pub global_tx_index: i64,
+    pub tx_global_index: u64,
     pub tx_id: Id<Transaction>,
+}
+
+impl PartialOrd for TokenTransaction {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for TokenTransaction {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.tx_id.cmp(&other.tx_id)
+    }
 }
 
 #[async_trait::async_trait]
@@ -615,11 +630,15 @@ pub trait ApiServerStorageRead: Sync {
         address: &str,
     ) -> Result<Vec<Id<Transaction>>, ApiServerStorageError>;
 
+    /// Return a page of TX IDs that reference this token_id, with a limit of len and older
+    /// tx_global_index than the specified.
+    /// The tx_global_index is only ordered by block height and are not continuous for a specific
+    /// token_id.
     async fn get_token_transactions(
         &self,
         token_id: TokenId,
         len: u32,
-        global_tx_index: i64,
+        tx_global_index: u64,
     ) -> Result<Vec<TokenTransaction>, ApiServerStorageError>;
 
     async fn get_best_block(&self) -> Result<BlockAuxData, ApiServerStorageError>;
@@ -847,6 +866,7 @@ pub trait ApiServerStorageWrite: ApiServerStorageRead {
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError>;
 
+    /// Append new token transactions with increasing tx_global_index at this block height
     async fn set_token_transactions_at_height(
         &mut self,
         token_id: TokenId,

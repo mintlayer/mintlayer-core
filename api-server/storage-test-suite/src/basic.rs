@@ -592,7 +592,7 @@ where
                 .unwrap();
             assert_eq!(txs.len() as u64, take_txs);
             for (i, tx) in txs.iter().enumerate() {
-                assert_eq!(tx.global_tx_index, expected_last_tx_global_index - i as u64);
+                assert_eq!(tx.tx_global_index, expected_last_tx_global_index - i as u64);
             }
         }
 
@@ -961,9 +961,9 @@ where
             .iter()
             .rev()
             .filter_map(|(idx, tx_id, _)| {
-                let idx = *idx as i64 + 1;
+                let idx = *idx;
                 ((idx) < global_idx).then_some(TokenTransaction {
-                    global_tx_index: idx,
+                    tx_global_index: idx,
                     tx_id: *tx_id,
                 })
             })

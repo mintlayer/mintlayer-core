@@ -55,8 +55,8 @@ use common::{
         },
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
-        CoinUnit, Destination, OrderId, OutPointSourceId, PoolId, SignedTransaction, TxInput,
-        TxOutput, UtxoOutPoint,
+        AccountCommand, AccountNonce, CoinUnit, Destination, OrderId, OutPointSourceId, PoolId,
+        SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, CoinOrTokenId, Idable, H256},
 };
@@ -1256,4 +1256,667 @@ async fn check_all_destinations_are_tracked(#[case] seed: Seed) {
         // check we have 2 utxos one locked and one unlocked
         assert_eq!(utxos.len(), 2);
     }
+}
+
+#[rstest]
+#[trace]
+#[case(test_utils::random::Seed::from_entropy())]
+#[tokio::test]
+async fn token_transactions_storage_check(#[case] seed: Seed) {
+    use common::chain::{
+        make_order_id, make_token_id,
+        tokens::{IsTokenUnfreezable, TokenIssuance},
+        AccountCommand, AccountNonce, OrderAccountCommand, OrderData,
+    };
+
+    let mut rng = make_seedable_rng(seed);
+
+    let mut tf = TestFramework::builder(&mut rng).build();
+    let chain_config = Arc::clone(tf.chainstate.get_chain_config());
+
+    let storage = {
+        let mut storage = TransactionalApiServerInMemoryStorage::new(&chain_config);
+        let mut db_tx = storage.transaction_rw().await.unwrap();
+        db_tx.reinitialize_storage(&chain_config).await.unwrap();
+        db_tx.commit().await.unwrap();
+        storage
+    };
+    let mut local_state = BlockchainState::new(chain_config.clone(), storage);
+    local_state.scan_genesis(chain_config.genesis_block().as_ref()).await.unwrap();
+
+    let target_block_time = chain_config.target_block_spacing();
+    let genesis_id = chain_config.genesis_block_id();
+    let mut coins_amount = Amount::from_atoms(100_000_000_000_000);
+
+    // ------------------------------------------------------------------------
+    // 1. Setup: Issue a Token and Mint it
+    // ------------------------------------------------------------------------
+    // 1a. Issue Token
+    let tx_issue = TransactionBuilder::new()
+        .add_input(
+            TxInput::from_utxo(OutPointSourceId::BlockReward(genesis_id), 0),
+            InputWitness::NoSignature(None),
+        )
+        .add_output(TxOutput::IssueFungibleToken(Box::new(TokenIssuance::V1(
+            common::chain::tokens::TokenIssuanceV1 {
+                token_ticker: "TEST".as_bytes().to_vec(),
+                number_of_decimals: 2,
+                metadata_uri: "http://uri".as_bytes().to_vec(),
+                total_supply: common::chain::tokens::TokenTotalSupply::Unlimited,
+                authority: Destination::AnyoneCanSpend,
+                is_freezable: common::chain::tokens::IsTokenFreezable::Yes,
+            },
+        ))))
+        .add_output(TxOutput::Transfer(
+            OutputValue::Coin(coins_amount),
+            Destination::AnyoneCanSpend,
+        ))
+        .build();
+
+    let token_id = make_token_id(&chain_config, BlockHeight::one(), tx_issue.inputs()).unwrap();
+    let tx_issue_id = tx_issue.transaction().get_id();
+
+    let block1 = tf
+        .make_block_builder()
+        .with_parent(genesis_id)
+        .with_transactions(vec![tx_issue.clone()])
+        .build(&mut rng);
+    tf.process_block(block1.clone(), BlockSource::Local).unwrap();
+    local_state.scan_blocks(BlockHeight::new(1), vec![block1]).await.unwrap();
+
+    // 1b. Mint Token (Account Command)
+    // We mint to an address we control so we can spend it later as an input
+    let nonce = AccountNonce::new(0);
+    let mint_amount = Amount::from_atoms(1000);
+
+    // Construct Mint Tx
+    let token_supply_change_fee = chain_config.token_supply_change_fee(BlockHeight::one());
+    eprintln!("amounts: {coins_amount:?} {token_supply_change_fee:?}");
+    coins_amount = (coins_amount - token_supply_change_fee).unwrap();
+    let tx_mint = TransactionBuilder::new()
+        .add_input(
+            TxInput::from_utxo(OutPointSourceId::Transaction(tx_issue_id), 1),
+            InputWitness::NoSignature(None),
+        )
+        .add_input(
+            TxInput::AccountCommand(nonce, AccountCommand::MintTokens(token_id, mint_amount)),
+            InputWitness::NoSignature(None),
+        )
+        .add_output(TxOutput::Transfer(
+            OutputValue::Coin(coins_amount),
+            Destination::AnyoneCanSpend,
+        ))
+        .add_output(TxOutput::Transfer(
+            OutputValue::TokenV1(token_id, mint_amount),
+            Destination::AnyoneCanSpend,
+        ))
+        .build();
+
+    let tx_mint_id = tx_mint.transaction().get_id();
+
+    let best_block_id = tf.best_block_id();
+    let block2 = tf
+        .make_block_builder()
+        .with_parent(best_block_id)
+        .with_transactions(vec![tx_mint])
+        .build(&mut rng);
+    tf.process_block(block2.clone(), BlockSource::Local).unwrap();
+    local_state.scan_blocks(BlockHeight::new(2), vec![block2]).await.unwrap();
+
+    // Check count: Issue(1) + Mint(1) = 2
+    let db_tx = local_state.storage().transaction_ro().await.unwrap();
+    let txs = db_tx.get_token_transactions(token_id, 100, u64::MAX).await.unwrap();
+    assert_eq!(txs.len(), 2);
+    drop(db_tx);
+    assert!(txs.iter().any(|t| t.tx_id == tx_issue_id));
+    assert!(txs.iter().any(|t| t.tx_id == tx_mint_id));
+
+    // ------------------------------------------------------------------------
+    // 2. Token Authority Management Commands
+    // ------------------------------------------------------------------------
+
+    // Helper to create simple command txs
+
+    let mut current_nonce = nonce.increment().unwrap();
+
+    // 2a. Freeze Token
+    let token_freeze_fee = chain_config.token_freeze_fee(BlockHeight::one());
+    coins_amount = (coins_amount - token_freeze_fee).unwrap();
+    let tx_freeze = create_command_tx(
+        current_nonce,
+        AccountCommand::FreezeToken(token_id, IsTokenUnfreezable::Yes),
+        tx_mint_id,
+        coins_amount,
+    );
+    let tx_freeze_id = tx_freeze.transaction().get_id();
+    current_nonce = current_nonce.increment().unwrap();
+
+    // 2b. Unfreeze Token
+    coins_amount = (coins_amount - token_freeze_fee).unwrap();
+    let tx_unfreeze = create_command_tx(
+        current_nonce,
+        AccountCommand::UnfreezeToken(token_id),
+        tx_freeze_id,
+        coins_amount,
+    );
+    let tx_unfreeze_id = tx_unfreeze.transaction().get_id();
+    current_nonce = current_nonce.increment().unwrap();
+
+    // 2c. Change Metadata
+    let token_change_metadata_uri_fee = chain_config.token_change_metadata_uri_fee();
+    coins_amount = (coins_amount - token_change_metadata_uri_fee).unwrap();
+    let tx_metadata = create_command_tx(
+        current_nonce,
+        AccountCommand::ChangeTokenMetadataUri(token_id, "http://new-uri".as_bytes().to_vec()),
+        tx_unfreeze_id,
+        coins_amount,
+    );
+    let tx_metadata_id = tx_metadata.transaction().get_id();
+    current_nonce = current_nonce.increment().unwrap();
+
+    // 2d. Change Authority
+    let token_change_authority_fee = chain_config.token_change_authority_fee(BlockHeight::new(3));
+    coins_amount = (coins_amount - token_change_authority_fee).unwrap();
+    let (_new_auth_sk, new_auth_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+    let new_auth_dest = Destination::PublicKey(new_auth_pk);
+    let tx_authority = create_command_tx(
+        current_nonce,
+        AccountCommand::ChangeTokenAuthority(token_id, new_auth_dest),
+        tx_metadata_id,
+        coins_amount,
+    );
+    let tx_authority_id = tx_authority.transaction().get_id();
+
+    eprintln!("{tx_mint_id:?}, {tx_freeze_id:?}, {tx_unfreeze_id:?}, {tx_metadata_id:?}, {tx_authority_id}");
+    // Process Block 3 with all management commands
+    tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
+    let best_block_id = tf.best_block_id();
+    let block3 = tf
+        .make_block_builder()
+        .with_parent(best_block_id)
+        .with_transactions(vec![
+            tx_freeze.clone(),
+            tx_unfreeze.clone(),
+            tx_metadata.clone(),
+            tx_authority.clone(),
+        ])
+        .build(&mut rng);
+    tf.process_block(block3.clone(), BlockSource::Local).unwrap();
+    local_state.scan_blocks(BlockHeight::new(3), vec![block3]).await.unwrap();
+
+    // Verify Storage: 2 previous + 4 new = 6 transactions
+    let db_tx = local_state.storage().transaction_ro().await.unwrap();
+    let txs = db_tx.get_token_transactions(token_id, 100, u64::MAX).await.unwrap();
+    assert_eq!(txs.len(), 6);
+    let ids: Vec<_> = txs.iter().map(|t| t.tx_id).collect();
+    assert!(ids.contains(&tx_freeze_id));
+    assert!(ids.contains(&tx_unfreeze_id));
+    assert!(ids.contains(&tx_metadata_id));
+    assert!(ids.contains(&tx_authority_id));
+    drop(db_tx);
+
+    // ------------------------------------------------------------------------
+    // 3. Input Spending (Using Token as Input)
+    // ------------------------------------------------------------------------
+
+    // We spend the output from Block 2 (Mint) which holds tokens.
+    let tx_spend = TransactionBuilder::new()
+        .add_input(
+            TxInput::from_utxo(OutPointSourceId::Transaction(tx_mint_id), 1),
+            InputWitness::NoSignature(None),
+        )
+        .add_output(TxOutput::Transfer(
+            OutputValue::TokenV1(token_id, mint_amount),
+            Destination::AnyoneCanSpend,
+        ))
+        .build();
+    let tx_spend_id = tx_spend.transaction().get_id();
+
+    // Process Block 4
+    tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
+    let best_block_id = tf.best_block_id();
+    let block4 = tf
+        .make_block_builder()
+        .with_parent(best_block_id)
+        .with_transactions(vec![tx_spend.clone()])
+        .build(&mut rng);
+    tf.process_block(block4.clone(), BlockSource::Local).unwrap();
+    local_state.scan_blocks(BlockHeight::new(4), vec![block4]).await.unwrap();
+
+    // Verify Storage: 6 previous + 1 spend = 7
+    let db_tx = local_state.storage().transaction_ro().await.unwrap();
+    let txs = db_tx.get_token_transactions(token_id, 100, u64::MAX).await.unwrap();
+    assert_eq!(txs.len(), 7);
+    assert!(txs.iter().any(|t| t.tx_id == tx_spend_id));
+    drop(db_tx);
+
+    // ------------------------------------------------------------------------
+    // 4. Orders (Create, Fill, Conclude)
+    // ------------------------------------------------------------------------
+
+    // 4a. Create Order
+    // We want to sell our Tokens (Ask Coin, Give Token).
+
+    // Order: Give 500 Token, Ask 500 Coins.
+    let give_amount = Amount::from_atoms(500);
+    let ask_amount = Amount::from_atoms(500);
+
+    let order_data = OrderData::new(
+        Destination::AnyoneCanSpend,
+        OutputValue::Coin(ask_amount),
+        OutputValue::TokenV1(token_id, give_amount),
+    );
+
+    // Note: The input has 1000 tokens. We give 500 to order, keep 500 change.
+    let tx_create_order = TransactionBuilder::new()
+        .add_input(
+            TxInput::from_utxo(OutPointSourceId::Transaction(tx_spend_id), 0),
+            InputWitness::NoSignature(None),
+        )
+        .add_output(TxOutput::CreateOrder(Box::new(order_data)))
+        .add_output(TxOutput::Transfer(
+            OutputValue::TokenV1(token_id, Amount::from_atoms(500)),
+            Destination::AnyoneCanSpend,
+        ))
+        .build();
+    let tx_create_order_id = tx_create_order.transaction().get_id();
+    let order_id = make_order_id(tx_create_order.inputs()).unwrap();
+
+    // Process Block 5
+    tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
+    let best_block_id = tf.best_block_id();
+    let block5 = tf
+        .make_block_builder()
+        .with_parent(best_block_id)
+        .with_transactions(vec![tx_create_order.clone()])
+        .build(&mut rng);
+    tf.process_block(block5.clone(), BlockSource::Local).unwrap();
+    local_state.scan_blocks(BlockHeight::new(5), vec![block5]).await.unwrap();
+
+    // Verify Storage: Order creation involves the token (in 'Give'), so it should be indexed.
+    let db_tx = local_state.storage().transaction_ro().await.unwrap();
+    let txs = db_tx.get_token_transactions(token_id, 100, u64::MAX).await.unwrap();
+    // 7 prev + 1 creation = 8
+    assert_eq!(txs.len(), 8);
+    assert!(txs.iter().any(|t| t.tx_id == tx_create_order_id));
+    drop(db_tx);
+
+    // 4b. Fill Order
+    // Someone fills the order by paying Coins (Ask).
+    // For the Token ID index, this transaction is relevant because the Order involves the Token.
+    // The code `calculate_tx_fee_and_collect_token_info` and `update_tables_from_transaction_inputs`
+    // checks `OrderAccountCommand::FillOrder`, loads the order, checks currencies, and adds the tx.
+
+    let fill_amount = Amount::from_atoms(100); // Partial fill
+
+    coins_amount = (coins_amount - fill_amount).unwrap();
+    let tx_fill = TransactionBuilder::new()
+        .add_input(
+            TxInput::from_utxo(OutPointSourceId::Transaction(tx_authority_id), 0),
+            InputWitness::NoSignature(None),
+        )
+        .add_input(
+            TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(order_id, fill_amount)),
+            InputWitness::NoSignature(None),
+        )
+        .add_output(TxOutput::Transfer(
+            OutputValue::Coin(coins_amount),
+            Destination::AnyoneCanSpend,
+        ))
+        .build();
+    let tx_fill_id = tx_fill.transaction().get_id();
+
+    // Process Block 6
+    tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
+    let best_block_id = tf.best_block_id();
+    let block6 = tf
+        .make_block_builder()
+        .with_parent(best_block_id)
+        .with_transactions(vec![tx_fill.clone()])
+        .build(&mut rng);
+    tf.process_block(block6.clone(), BlockSource::Local).unwrap();
+    local_state.scan_blocks(BlockHeight::new(6), vec![block6]).await.unwrap();
+
+    // Verify Storage: Fill Order should be indexed for the token
+    let db_tx = local_state.storage().transaction_ro().await.unwrap();
+    let txs = db_tx.get_token_transactions(token_id, 100, u64::MAX).await.unwrap();
+    // 8 prev + 1 fill = 9
+    assert_eq!(txs.len(), 9);
+    assert!(txs.iter().any(|t| t.tx_id == tx_fill_id));
+    drop(db_tx);
+
+    // 4c. Conclude Order
+    let tx_conclude = TransactionBuilder::new()
+        .add_input(
+            TxInput::from_utxo(OutPointSourceId::Transaction(tx_fill_id), 0),
+            InputWitness::NoSignature(None),
+        )
+        .add_input(
+            TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder(order_id)),
+            InputWitness::NoSignature(None),
+        )
+        .add_output(TxOutput::Transfer(
+            OutputValue::Coin(Amount::from_atoms(80000)),
+            Destination::AnyoneCanSpend,
+        ))
+        .build();
+    let tx_conclude_id = tx_conclude.transaction().get_id();
+
+    // Process Block 7
+    tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
+    let best_block_id = tf.best_block_id();
+    let block7 = tf
+        .make_block_builder()
+        .with_parent(best_block_id)
+        .with_transactions(vec![tx_conclude.clone()])
+        .build(&mut rng);
+    tf.process_block(block7.clone(), BlockSource::Local).unwrap();
+    local_state.scan_blocks(BlockHeight::new(7), vec![block7]).await.unwrap();
+
+    // Verify Storage: Conclude Order should be indexed for the token
+    let db_tx = local_state.storage().transaction_ro().await.unwrap();
+    let txs = db_tx.get_token_transactions(token_id, 100, u64::MAX).await.unwrap();
+    // 9 prev + 1 conclude = 10
+    assert_eq!(txs.len(), 10);
+    assert!(txs.iter().any(|t| t.tx_id == tx_conclude_id));
+    drop(db_tx);
+}
+
+#[rstest]
+#[trace]
+#[case(test_utils::random::Seed::from_entropy())]
+#[tokio::test]
+async fn htlc_addresses_storage_check(#[case] seed: Seed) {
+    use common::chain::{
+        htlc::{HashedTimelockContract, HtlcSecret},
+        signature::inputsig::authorize_hashed_timelock_contract_spend::AuthorizedHashedTimelockContractSpend,
+    };
+
+    let mut rng = make_seedable_rng(seed);
+
+    let mut tf = TestFramework::builder(&mut rng).build();
+    let chain_config = Arc::clone(tf.chainstate.get_chain_config());
+
+    // Initialize Storage and BlockchainState
+    let storage = {
+        let mut storage = TransactionalApiServerInMemoryStorage::new(&chain_config);
+        let mut db_tx = storage.transaction_rw().await.unwrap();
+        db_tx.reinitialize_storage(&chain_config).await.unwrap();
+        db_tx.commit().await.unwrap();
+        storage
+    };
+    let mut local_state = BlockchainState::new(chain_config.clone(), storage);
+    local_state.scan_genesis(chain_config.genesis_block().as_ref()).await.unwrap();
+
+    let target_block_time = chain_config.target_block_spacing();
+    let genesis_id = chain_config.genesis_block_id();
+
+    // Create Spend and Refund destinations
+    let (spend_sk, spend_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+    let spend_dest = Destination::PublicKey(spend_pk.clone());
+
+    let (refund_sk, refund_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+    let refund_dest = Destination::PublicKey(refund_pk.clone());
+
+    // Construct HTLC Data
+    let secret = HtlcSecret::new_from_rng(&mut rng);
+    let secret_hash = secret.hash();
+
+    let htlc_data = HashedTimelockContract {
+        secret_hash,
+        spend_key: spend_dest.clone(),
+        refund_key: refund_dest.clone(),
+        refund_timelock: OutputTimeLock::ForBlockCount(1),
+    };
+
+    // Create Transaction with 2 HTLC outputs
+    let tx_fund = TransactionBuilder::new()
+        .add_input(
+            TxInput::from_utxo(OutPointSourceId::BlockReward(genesis_id), 0),
+            InputWitness::NoSignature(None),
+        )
+        .add_output(TxOutput::Htlc(
+            OutputValue::Coin(Amount::from_atoms(1000)),
+            Box::new(htlc_data.clone()),
+        ))
+        .add_output(TxOutput::Htlc(
+            OutputValue::Coin(Amount::from_atoms(1000)),
+            Box::new(htlc_data),
+        ))
+        .build();
+
+    let tx_fund_id = tx_fund.transaction().get_id();
+
+    // Create and Process Block
+    tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
+    let block = tf
+        .make_block_builder()
+        .with_parent(genesis_id)
+        .with_transactions(vec![tx_fund.clone()])
+        .build(&mut rng);
+
+    tf.process_block(block.clone(), BlockSource::Local).unwrap();
+    local_state.scan_blocks(BlockHeight::new(1), vec![block]).await.unwrap();
+
+    // Verify Storage
+    let db_tx = local_state.storage().transaction_ro().await.unwrap();
+
+    // Check Spend Address Transactions
+    let spend_address = Address::new(&chain_config, spend_dest).unwrap();
+    let spend_txs = db_tx.get_address_transactions(spend_address.as_str()).await.unwrap();
+    assert!(
+        spend_txs.contains(&tx_fund_id),
+        "Spend address should track the transaction"
+    );
+
+    // Check Refund Address Transactions
+    let refund_address = Address::new(&chain_config, refund_dest).unwrap();
+    let refund_txs = db_tx.get_address_transactions(refund_address.as_str()).await.unwrap();
+    assert!(
+        refund_txs.contains(&tx_fund_id),
+        "Refund address should track the transaction"
+    );
+
+    let utxos = db_tx.get_address_available_utxos(spend_address.as_str()).await.unwrap();
+    assert_eq!(utxos.len(), 2);
+    assert!(utxos.iter().map(|(outpoint, _)| outpoint).any(
+        |outpoint| *outpoint == UtxoOutPoint::new(OutPointSourceId::Transaction(tx_fund_id), 0)
+    ));
+    assert!(utxos.iter().map(|(outpoint, _)| outpoint).any(
+        |outpoint| *outpoint == UtxoOutPoint::new(OutPointSourceId::Transaction(tx_fund_id), 1)
+    ));
+    drop(db_tx);
+
+    // ------------------------------------------------------------------------
+    // Block 2: Spend HTLC 1 (Using Secret)
+    // ------------------------------------------------------------------------
+    let input_htlc1 = TxInput::from_utxo(OutPointSourceId::Transaction(tx_fund_id), 0);
+
+    let tx_spend_unsigned = Transaction::new(
+        0,
+        vec![input_htlc1.clone()],
+        vec![TxOutput::Transfer(
+            OutputValue::Coin(Amount::from_atoms(900)),
+            Destination::AnyoneCanSpend,
+        )],
+    )
+    .unwrap();
+
+    // Construct Spend Witness
+    // 1. Sign the tx
+    let utxo1 = local_state
+        .storage()
+        .transaction_ro()
+        .await
+        .unwrap()
+        .get_utxo(UtxoOutPoint::new(
+            OutPointSourceId::Transaction(tx_fund_id),
+            0,
+        ))
+        .await
+        .unwrap()
+        .unwrap();
+
+    let sighash = signature_hash(
+        SigHashType::try_from(SigHashType::ALL).unwrap(),
+        &tx_spend_unsigned,
+        &[SighashInputCommitment::Utxo(Cow::Owned(utxo1.output().clone()))],
+        0,
+    )
+    .unwrap();
+    let sig = sign_public_key_spending(&spend_sk, &spend_pk, &sighash, &mut rng).unwrap();
+
+    let auth_spend = AuthorizedHashedTimelockContractSpend::Spend(secret, sig.encode());
+    let witness = InputWitness::Standard(StandardInputSignature::new(
+        SigHashType::try_from(SigHashType::ALL).unwrap(),
+        auth_spend.encode(),
+    ));
+
+    let tx_spend = SignedTransaction::new(tx_spend_unsigned, vec![witness]).unwrap();
+    let tx_spend_id = tx_spend.transaction().get_id();
+
+    tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
+    let best_block_id = tf.best_block_id();
+    let block2 = tf
+        .make_block_builder()
+        .with_parent(best_block_id)
+        .with_transactions(vec![tx_spend.clone()])
+        .build(&mut rng);
+
+    tf.process_block(block2.clone(), BlockSource::Local).unwrap();
+    local_state.scan_blocks(BlockHeight::new(2), vec![block2]).await.unwrap();
+
+    // ------------------------------------------------------------------------
+    // Block 3 & 4: Refund HTLC 2 (Using Timeout)
+    // ------------------------------------------------------------------------
+    // Refund requires blocks to pass. Timeout is 1 block count.
+    // Input created at Block 1.
+    tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
+    let best_block_id = tf.best_block_id();
+    let block3 = tf.make_block_builder().with_parent(best_block_id).build(&mut rng);
+    tf.process_block(block3.clone(), BlockSource::Local).unwrap();
+    local_state.scan_blocks(BlockHeight::new(3), vec![block3]).await.unwrap();
+
+    // Now construct Refund Tx
+    let input_htlc2 = TxInput::from_utxo(OutPointSourceId::Transaction(tx_fund_id), 1);
+
+    let tx_refund_unsigned = Transaction::new(
+        0,
+        vec![input_htlc2],
+        vec![TxOutput::Transfer(
+            OutputValue::Coin(Amount::from_atoms(900)),
+            Destination::AnyoneCanSpend,
+        )],
+    )
+    .unwrap();
+
+    let utxo2 = local_state
+        .storage()
+        .transaction_ro()
+        .await
+        .unwrap()
+        .get_utxo(UtxoOutPoint::new(
+            OutPointSourceId::Transaction(tx_fund_id),
+            1,
+        ))
+        .await
+        .unwrap()
+        .unwrap();
+
+    let sighash = signature_hash(
+        SigHashType::try_from(SigHashType::ALL).unwrap(),
+        &tx_refund_unsigned,
+        &[SighashInputCommitment::Utxo(Cow::Owned(utxo2.output().clone()))],
+        0,
+    )
+    .unwrap();
+    let sig = sign_public_key_spending(&refund_sk, &refund_pk, &sighash, &mut rng).unwrap();
+
+    let auth_refund = AuthorizedHashedTimelockContractSpend::Refund(sig.encode());
+    let witness = InputWitness::Standard(StandardInputSignature::new(
+        SigHashType::try_from(SigHashType::ALL).unwrap(),
+        auth_refund.encode(),
+    ));
+
+    let tx_refund = SignedTransaction::new(tx_refund_unsigned, vec![witness]).unwrap();
+    let tx_refund_id = tx_refund.transaction().get_id();
+
+    tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
+    let best_block_id = tf.best_block_id();
+    let block4 = tf
+        .make_block_builder()
+        .with_parent(best_block_id)
+        .with_transactions(vec![tx_refund.clone()])
+        .build(&mut rng);
+
+    tf.process_block(block4.clone(), BlockSource::Local).unwrap();
+    local_state.scan_blocks(BlockHeight::new(4), vec![block4]).await.unwrap();
+
+    // ------------------------------------------------------------------------
+    // Verify Storage
+    // ------------------------------------------------------------------------
+    let db_tx = local_state.storage().transaction_ro().await.unwrap();
+
+    // A. Check Spend Address Transactions
+    // Should see Fund Tx (because it's the spend authority in the outputs)
+    // Should see Spend Tx (because it spent the input using the key)
+    let spend_txs = db_tx.get_address_transactions(spend_address.as_str()).await.unwrap();
+    assert!(
+        spend_txs.contains(&tx_fund_id),
+        "Spend address missing funding tx"
+    );
+    assert!(
+        spend_txs.contains(&tx_spend_id),
+        "Spend address missing spend tx"
+    );
+    // Should NOT contain refund tx
+    assert!(
+        !spend_txs.contains(&tx_refund_id),
+        "Spend address has refund tx"
+    );
+
+    // B. Check Refund Address Transactions
+    // Should see Fund Tx (because it's the refund authority in the outputs)
+    // Should see Refund Tx (because it refunded the input using the key)
+    let refund_txs = db_tx.get_address_transactions(refund_address.as_str()).await.unwrap();
+    assert!(
+        refund_txs.contains(&tx_fund_id),
+        "Refund address missing funding tx"
+    );
+    assert!(
+        refund_txs.contains(&tx_refund_id),
+        "Refund address missing refund tx"
+    );
+    // Should NOT contain spend tx
+    assert!(
+        !refund_txs.contains(&tx_spend_id),
+        "Refund address has spend tx"
+    );
+
+    let utxos = db_tx.get_address_available_utxos(spend_address.as_str()).await.unwrap();
+    assert!(utxos.is_empty());
+    let utxos = db_tx.get_address_available_utxos(refund_address.as_str()).await.unwrap();
+    assert!(utxos.is_empty());
+}
+
+fn create_command_tx(
+    nonce: AccountNonce,
+    command: AccountCommand,
+    last_tx_id: Id<Transaction>,
+    coins_amount: Amount,
+) -> SignedTransaction {
+    TransactionBuilder::new()
+        .add_input(
+            TxInput::from_utxo(OutPointSourceId::Transaction(last_tx_id), 0),
+            InputWitness::NoSignature(None),
+        )
+        .add_input(
+            TxInput::AccountCommand(nonce, command),
+            InputWitness::NoSignature(None),
+        )
+        .add_output(TxOutput::Transfer(
+            OutputValue::Coin(coins_amount),
+            Destination::AnyoneCanSpend,
+        ))
+        .build()
 }

@@ -337,6 +337,7 @@ async fn ok(#[case] seed: Seed) {
     let arr_body = body.as_array().unwrap();
 
     assert_eq!(arr_body.len(), num_tx);
+    eprintln!("{expected_transactions:?}");
     for (tx_id, body) in expected_transactions.iter().rev().zip(arr_body) {
         compare_body(
             body,

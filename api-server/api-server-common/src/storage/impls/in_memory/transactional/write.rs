@@ -352,9 +352,9 @@ impl ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRw<'_> {
         &self,
         token_id: TokenId,
         len: u32,
-        global_tx_index: i64,
+        tx_global_index: u64,
     ) -> Result<Vec<TokenTransaction>, ApiServerStorageError> {
-        self.transaction.get_token_transactions(token_id, len, global_tx_index)
+        self.transaction.get_token_transactions(token_id, len, tx_global_index)
     }
 
     async fn get_latest_blocktimestamps(
