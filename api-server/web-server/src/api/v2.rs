@@ -510,7 +510,7 @@ pub async fn transactions<T: ApiServerStorage>(
                 &state.chain_config,
                 tip_height,
                 tx.block_aux,
-                tx.global_tx_index,
+                tx.tx_global_index,
             )
         })
         .collect();
@@ -1419,11 +1419,7 @@ pub async fn token_transactions<T: ApiServerStorage>(
     })?;
 
     let txs = db_tx
-        .get_token_transactions(
-            token_id,
-            offset_and_items.items,
-            offset_and_items.offset as i64,
-        )
+        .get_token_transactions(token_id, offset_and_items.items, offset_and_items.offset)
         .await
         .map_err(|e| {
             logging::log::error!("internal error: {e}");
@@ -1434,7 +1430,7 @@ pub async fn token_transactions<T: ApiServerStorage>(
         .into_iter()
         .map(|tx| {
             json!({
-                "tx_global_index": tx.global_tx_index,
+                "tx_global_index": tx.tx_global_index,
                 "tx_id": tx.tx_id,
             })
         })

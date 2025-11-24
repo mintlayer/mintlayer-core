@@ -19,7 +19,8 @@ use std::{
     sync::Arc,
 };
 
-use crate::sync::local_state::LocalBlockchainState;
+use futures::{stream::FuturesOrdered, TryStreamExt};
+
 use api_server_common::storage::storage_api::{
     block_aux_data::{BlockAuxData, BlockWithExtraData},
     ApiServerStorage, ApiServerStorageError, ApiServerStorageRead, ApiServerStorageWrite,
@@ -51,13 +52,13 @@ use common::{
 };
 use orders_accounting::OrderData;
 use pos_accounting::{PoSAccountingView, PoolData};
+use serialization::DecodeAll;
 use tokens_accounting::TokensAccountingView;
 use tx_verifier::transaction_verifier::{
     calculate_tokens_burned_in_outputs, distribute_pos_reward,
 };
 
-use futures::{stream::FuturesOrdered, TryStreamExt};
-use serialization::DecodeAll;
+use crate::sync::local_state::LocalBlockchainState;
 
 mod pos_adapter;
 
@@ -1552,7 +1553,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
             .await
             .map_err(|_| {
                 ApiServerStorageError::LowLevelStorageError(
-                    "Unable to set address transactions".to_string(),
+                    "Unable to set token transactions".to_string(),
                 )
             })?;
     }
@@ -2019,7 +2020,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
             .await
             .map_err(|_| {
                 ApiServerStorageError::LowLevelStorageError(
-                    "Unable to set address transactions".to_string(),
+                    "Unable to set token transactions".to_string(),
                 )
             })?;
     }

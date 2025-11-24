@@ -48,7 +48,7 @@ struct ApiServerInMemoryStorage {
     address_balance_table: BTreeMap<String, BTreeMap<CoinOrTokenId, BTreeMap<BlockHeight, Amount>>>,
     address_locked_balance_table: BTreeMap<String, BTreeMap<(CoinOrTokenId, BlockHeight), Amount>>,
     address_transactions_table: BTreeMap<String, BTreeMap<BlockHeight, Vec<Id<Transaction>>>>,
-    token_transactions_table: BTreeMap<TokenId, BTreeMap<BlockHeight, Vec<TokenTransaction>>>,
+    token_transactions_table: BTreeMap<TokenId, BTreeMap<BlockHeight, BTreeSet<TokenTransaction>>>,
     delegation_table: BTreeMap<DelegationId, BTreeMap<BlockHeight, Delegation>>,
     main_chain_blocks_table: BTreeMap<BlockHeight, Id<Block>>,
     pool_data_table: BTreeMap<PoolId, BTreeMap<BlockHeight, PoolDataWithExtraInfo>>,
@@ -179,7 +179,7 @@ impl ApiServerInMemoryStorage {
         &self,
         token_id: TokenId,
         len: u32,
-        global_tx_index: i64,
+        tx_global_index: u64,
     ) -> Result<Vec<TokenTransaction>, ApiServerStorageError> {
         Ok(self
             .token_transactions_table
@@ -190,7 +190,7 @@ impl ApiServerInMemoryStorage {
                     .rev()
                     .flat_map(|(_, txs)| txs.iter())
                     .cloned()
-                    .flat_map(|tx| (tx.global_tx_index < global_tx_index).then_some(tx))
+                    .flat_map(|tx| (tx.tx_global_index < tx_global_index).then_some(tx))
                     .take(len as usize)
                     .collect()
             }))
@@ -237,7 +237,7 @@ impl ApiServerInMemoryStorage {
                                 additional_info: additinal_data.clone(),
                             },
                             block_aux: *block_aux,
-                            global_tx_index: *tx_global_index,
+                            tx_global_index: *tx_global_index,
                         }
                     },
                 )
@@ -263,7 +263,7 @@ impl ApiServerInMemoryStorage {
                 TransactionWithBlockInfo {
                     tx_info: tx_info.clone(),
                     block_aux: *block_aux,
-                    global_tx_index: *tx_global_index,
+                    tx_global_index: *tx_global_index,
                 }
             })
             .collect())
@@ -985,26 +985,30 @@ impl ApiServerInMemoryStorage {
         transaction_ids: BTreeSet<Id<Transaction>>,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
-        let next_tx_idx = self.token_transactions_table.get(&token_id).map_or(1, |tx| {
-            tx.values()
-                .last()
-                .expect("not empty")
-                .last()
-                .expect("not empty")
-                .global_tx_index
-                + 1
-        });
-        self.token_transactions_table.entry(token_id).or_default().insert(
-            block_height,
-            transaction_ids
-                .into_iter()
-                .enumerate()
-                .map(|(idx, tx_id)| TokenTransaction {
-                    global_tx_index: next_tx_idx + idx as i64,
+        if transaction_ids.is_empty() {
+            return Ok(());
+        }
+
+        let next_tx_idx = self
+            .token_transactions_table
+            .values()
+            .flat_map(|by_height| by_height.values())
+            .flat_map(|tx_set| tx_set.iter())
+            .map(|tx| tx.tx_global_index + 1)
+            .max()
+            .unwrap_or(0);
+
+        self.token_transactions_table
+            .entry(token_id)
+            .or_default()
+            .entry(block_height)
+            .or_default()
+            .extend(
+                transaction_ids.into_iter().enumerate().map(|(idx, tx_id)| TokenTransaction {
+                    tx_global_index: next_tx_idx + idx as u64,
                     tx_id,
-                })
-                .collect(),
-        );
+                }),
+            );
 
         Ok(())
     }
