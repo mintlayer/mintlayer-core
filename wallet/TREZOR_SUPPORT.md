@@ -52,6 +52,13 @@ Instead, you'll have to build it from `mintlayer-master`.
 
 If you are interested in a particular release, you may just go to [the firmware releases page](https://github.com/mintlayer/mintlayer-trezor-firmware/releases),
 download the `.bin` file corresponding to your device model and install it via Trezor Suite:
+- If you are installing the Mintlayer firmware over the official one, enter the bootloader mode on the device first,
+  otherwise Trezor Suite may refuse to install it, complaining about "different firmware vendor". To do so,
+  hold down both buttons while connecting a Safe 3, or swipe across the screen while connecting a Safe 5
+  or Model T. After that, select the "Install firmware" option (it can be named differently depending on
+  the device, e.g. it's called "INSTALL FW" on Safe 3).\
+  Note that if you're installing the Mintlayer firmware over another custom firmware (Mintlayer or not), this step is optional,
+  because Trezor Suite will automatically restart the device and put it in the bootloader mode on the next step.
 - Inside Trezor Suite go to "Settings" -> "Device" -> "Danger area" -> "Install custom firmware" and click "Install".
 - Follow the instructions that will appear on your screen.
 
