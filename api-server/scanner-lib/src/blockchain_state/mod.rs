@@ -307,7 +307,9 @@ async fn update_locked_amounts_for_current_block<T: ApiServerStorageWrite>(
             let address = Address::<Destination>::new(chain_config, destination.clone())
                 .expect("Unable to encode destination");
             let utxo = Utxo::new_with_info(locked_utxo, None);
-            db_tx.set_utxo_at_height(outpoint, utxo, address.as_str(), block_height).await?;
+            db_tx
+                .set_utxo_at_height(outpoint, utxo, &[address.as_str()], block_height)
+                .await?;
         }
     }
 
@@ -1853,7 +1855,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                     UtxoOutPoint::new(OutPointSourceId::Transaction(transaction_id), idx as u32);
                 let utxo = Utxo::new(output.clone(), token_decimals, None);
                 db_tx
-                    .set_utxo_at_height(outpoint, utxo, address.as_str(), block_height)
+                    .set_utxo_at_height(outpoint, utxo, &[address.as_str()], block_height)
                     .await
                     .expect("Unable to set utxo");
             }
@@ -1927,30 +1929,41 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                 if already_unlocked {
                     let utxo = Utxo::new(output.clone(), token_decimals, None);
                     db_tx
-                        .set_utxo_at_height(outpoint, utxo, address.as_str(), block_height)
+                        .set_utxo_at_height(outpoint, utxo, &[address.as_str()], block_height)
                         .await
                         .expect("Unable to set utxo");
                 } else {
                     let lock = UtxoLock::from_output_lock(*lock, block_timestamp, block_height);
                     let utxo = LockedUtxo::new(output.clone(), token_decimals, lock);
                     db_tx
-                        .set_locked_utxo_at_height(outpoint, utxo, address.as_str(), block_height)
+                        .set_locked_utxo_at_height(
+                            outpoint,
+                            utxo,
+                            &[address.as_str()],
+                            block_height,
+                        )
                         .await
                         .expect("Unable to set locked utxo");
                 }
             }
             TxOutput::Htlc(output_value, htlc) => {
-                let address = Address::<Destination>::new(&chain_config, htlc.spend_key.clone())
-                    .expect("Unable to encode destination");
+                let spend_address =
+                    Address::<Destination>::new(&chain_config, htlc.spend_key.clone())
+                        .expect("Unable to encode destination");
 
-                address_transactions.entry(address.clone()).or_default().insert(transaction_id);
-                {
-                    let address =
-                        Address::<Destination>::new(&chain_config, htlc.refund_key.clone())
-                            .expect("Unable to encode destination");
+                address_transactions
+                    .entry(spend_address.clone())
+                    .or_default()
+                    .insert(transaction_id);
 
-                    address_transactions.entry(address.clone()).or_default().insert(transaction_id);
-                }
+                let refund_address =
+                    Address::<Destination>::new(&chain_config, htlc.refund_key.clone())
+                        .expect("Unable to encode destination");
+
+                address_transactions
+                    .entry(refund_address.clone())
+                    .or_default()
+                    .insert(transaction_id);
 
                 let token_decimals = match output_value {
                     OutputValue::Coin(_) | OutputValue::TokenV0(_) => None,
@@ -1964,7 +1977,12 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                     UtxoOutPoint::new(OutPointSourceId::Transaction(transaction_id), idx as u32);
                 let utxo = Utxo::new(output.clone(), token_decimals, None);
                 db_tx
-                    .set_utxo_at_height(outpoint, utxo, address.as_str(), block_height)
+                    .set_utxo_at_height(
+                        outpoint,
+                        utxo,
+                        &[spend_address.as_str(), refund_address.as_str()],
+                        block_height,
+                    )
                     .await
                     .expect("Unable to set utxo");
             }
@@ -2182,7 +2200,7 @@ async fn set_utxo<T: ApiServerStorageWrite>(
         let address = Address::<Destination>::new(chain_config, destination.clone())
             .expect("Unable to encode destination");
         db_tx
-            .set_utxo_at_height(outpoint, utxo, address.as_str(), block_height)
+            .set_utxo_at_height(outpoint, utxo, &[address.as_str()], block_height)
             .await
             .expect("Unable to set utxo");
     }

@@ -1725,6 +1725,14 @@ async fn htlc_addresses_storage_check(#[case] seed: Seed) {
     assert!(utxos.iter().map(|(outpoint, _)| outpoint).any(
         |outpoint| *outpoint == UtxoOutPoint::new(OutPointSourceId::Transaction(tx_fund_id), 1)
     ));
+    let utxos = db_tx.get_address_available_utxos(refund_address.as_str()).await.unwrap();
+    assert_eq!(utxos.len(), 2);
+    assert!(utxos.iter().map(|(outpoint, _)| outpoint).any(
+        |outpoint| *outpoint == UtxoOutPoint::new(OutPointSourceId::Transaction(tx_fund_id), 0)
+    ));
+    assert!(utxos.iter().map(|(outpoint, _)| outpoint).any(
+        |outpoint| *outpoint == UtxoOutPoint::new(OutPointSourceId::Transaction(tx_fund_id), 1)
+    ));
     drop(db_tx);
 
     // ------------------------------------------------------------------------

@@ -928,7 +928,7 @@ pub trait ApiServerStorageWrite: ApiServerStorageRead {
         &mut self,
         outpoint: UtxoOutPoint,
         utxo: Utxo,
-        address: &str,
+        addresses: &[&str],
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError>;
 
@@ -936,7 +936,7 @@ pub trait ApiServerStorageWrite: ApiServerStorageRead {
         &mut self,
         outpoint: UtxoOutPoint,
         utxo: LockedUtxo,
-        address: &str,
+        addresses: &[&str],
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError>;
 

@@ -241,11 +241,11 @@ impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'_> {
         &mut self,
         outpoint: UtxoOutPoint,
         utxo: Utxo,
-        address: &str,
+        addresses: &[&str],
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
-        conn.set_utxo_at_height(outpoint, utxo, address, block_height).await?;
+        conn.set_utxo_at_height(outpoint, utxo, addresses, block_height).await?;
 
         Ok(())
     }
@@ -254,11 +254,11 @@ impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'_> {
         &mut self,
         outpoint: UtxoOutPoint,
         utxo: LockedUtxo,
-        address: &str,
+        addresses: &[&str],
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
-        conn.set_locked_utxo_at_height(outpoint, utxo, address, block_height).await?;
+        conn.set_locked_utxo_at_height(outpoint, utxo, addresses, block_height).await?;
 
         Ok(())
     }

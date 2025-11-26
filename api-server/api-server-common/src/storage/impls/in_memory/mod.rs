@@ -1158,11 +1158,16 @@ impl ApiServerInMemoryStorage {
         &mut self,
         outpoint: UtxoOutPoint,
         utxo: Utxo,
-        address: &str,
+        addresses: &[&str],
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
         self.utxo_table.entry(outpoint.clone()).or_default().insert(block_height, utxo);
-        self.address_utxos.entry(address.into()).or_default().insert(outpoint);
+        for address in addresses {
+            self.address_utxos
+                .entry((*address).into())
+                .or_default()
+                .insert(outpoint.clone());
+        }
         Ok(())
     }
 
@@ -1170,14 +1175,19 @@ impl ApiServerInMemoryStorage {
         &mut self,
         outpoint: UtxoOutPoint,
         utxo: LockedUtxo,
-        address: &str,
+        addresses: &[&str],
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
         self.locked_utxo_table
             .entry(outpoint.clone())
             .or_default()
             .insert(block_height, utxo);
-        self.address_locked_utxos.entry(address.into()).or_default().insert(outpoint);
+        for address in addresses {
+            self.address_locked_utxos
+                .entry((*address).into())
+                .or_default()
+                .insert(outpoint.clone());
+        }
         Ok(())
     }
 

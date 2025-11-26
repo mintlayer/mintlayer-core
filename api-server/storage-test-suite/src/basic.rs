@@ -675,7 +675,7 @@ where
                 .set_locked_utxo_at_height(
                     outpoint.clone(),
                     locked_utxo,
-                    bob_address.as_str(),
+                    &[bob_address.as_str()],
                     block_height,
                 )
                 .await
@@ -718,7 +718,7 @@ where
                 .set_locked_utxo_at_height(
                     outpoint.clone(),
                     locked_utxo,
-                    bob_address.as_str(),
+                    &[bob_address.as_str()],
                     block_height,
                 )
                 .await
@@ -788,7 +788,7 @@ where
                 .set_locked_utxo_at_height(
                     outpoint.clone(),
                     locked_utxo,
-                    bob_address.as_str(),
+                    &[bob_address.as_str()],
                     block_height,
                 )
                 .await
@@ -800,7 +800,7 @@ where
                 .set_utxo_at_height(
                     outpoint.clone(),
                     utxo,
-                    bob_address.as_str(),
+                    &[bob_address.as_str()],
                     block_height.next_height(),
                 )
                 .await
@@ -813,7 +813,7 @@ where
                 .set_utxo_at_height(
                     outpoint.clone(),
                     spent_utxo,
-                    bob_address.as_str(),
+                    &[bob_address.as_str()],
                     next_block_height,
                 )
                 .await
@@ -840,7 +840,7 @@ where
                 .set_locked_utxo_at_height(
                     locked_outpoint.clone(),
                     locked_utxo,
-                    bob_address.as_str(),
+                    &[bob_address.as_str()],
                     block_height,
                 )
                 .await
@@ -859,7 +859,12 @@ where
         // set one and get it
         {
             db_tx
-                .set_utxo_at_height(outpoint.clone(), utxo, bob_address.as_str(), block_height)
+                .set_utxo_at_height(
+                    outpoint.clone(),
+                    utxo,
+                    &[bob_address.as_str()],
+                    block_height,
+                )
                 .await
                 .unwrap();
 
@@ -892,7 +897,7 @@ where
                 .set_utxo_at_height(
                     outpoint2.clone(),
                     utxo.clone(),
-                    bob_address.as_str(),
+                    &[bob_address.as_str()],
                     block_height,
                 )
                 .await
@@ -917,7 +922,7 @@ where
             let utxo = Utxo::new(output2.clone(), None, Some(block_height));
             expected_utxos.remove(&outpoint2);
             db_tx
-                .set_utxo_at_height(outpoint2, utxo, bob_address.as_str(), block_height)
+                .set_utxo_at_height(outpoint2, utxo, &[bob_address.as_str()], block_height)
                 .await
                 .unwrap();
 
