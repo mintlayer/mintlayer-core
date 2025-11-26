@@ -840,7 +840,6 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     outpoint bytea NOT NULL,
                     block_height bigint,
                     spent BOOLEAN NOT NULL,
-                    address TEXT NOT NULL,
                     utxo bytea NOT NULL,
                     PRIMARY KEY (outpoint, block_height)
                 );",
@@ -855,12 +854,30 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             "CREATE TABLE ml.locked_utxo (
                     outpoint bytea NOT NULL,
                     block_height bigint,
-                    address TEXT NOT NULL,
                     utxo bytea NOT NULL,
                     lock_until_block bigint,
                     lock_until_timestamp bigint,
                     PRIMARY KEY (outpoint)
                 );",
+        )
+        .await?;
+
+        self.just_execute(
+            "CREATE TABLE ml.utxo_addresses (
+                    outpoint bytea NOT NULL,
+                    block_height bigint NOT NULL,
+                    address TEXT NOT NULL,
+                    PRIMARY KEY (outpoint, address)
+                );",
+        )
+        .await?;
+
+        self.just_execute("CREATE INDEX utxo_addresses_index ON ml.utxo_addresses (address);")
+            .await?;
+
+        // index for reorgs
+        self.just_execute(
+            "CREATE INDEX utxo_addresses_block_height_index ON ml.utxo_addresses (block_height DESC);",
         )
         .await?;
 
@@ -2096,13 +2113,16 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         let rows = self
             .tx
             .query(
-                r#"SELECT outpoint, utxo
-                FROM (
-                    SELECT outpoint, utxo, spent, ROW_NUMBER() OVER(PARTITION BY outpoint ORDER BY block_height DESC) as newest
+                r#"SELECT ua.outpoint, u.utxo
+                FROM ml.utxo_addresses ua
+                CROSS JOIN LATERAL (
+                    SELECT utxo, spent
                     FROM ml.utxo
-                    WHERE address = $1
-                ) AS sub
-                WHERE newest = 1 AND spent = false;"#,
+                    WHERE outpoint = ua.outpoint
+                    ORDER BY block_height DESC
+                    LIMIT 1
+                ) u
+                WHERE ua.address = $1 AND u.spent = false;"#,
                 &[&address],
             )
             .await
@@ -2138,17 +2158,21 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         let rows = self
             .tx
             .query(
-                r#"SELECT outpoint, utxo
-                FROM (
-                    SELECT outpoint, utxo, spent, ROW_NUMBER() OVER(PARTITION BY outpoint ORDER BY block_height DESC) as newest
+                r#"SELECT ua.outpoint, u.utxo
+                FROM ml.utxo_addresses ua
+                CROSS JOIN LATERAL (
+                    SELECT utxo, spent
                     FROM ml.utxo
-                    WHERE address = $1
-                ) AS sub
-                WHERE newest = 1 AND spent = false
+                    WHERE outpoint = ua.outpoint
+                    ORDER BY block_height DESC
+                    LIMIT 1
+                ) u
+                WHERE ua.address = $1 AND u.spent = false
                 UNION ALL
-                SELECT outpoint, utxo
-                FROM ml.locked_utxo AS locked
-                WHERE locked.address = $1 AND NOT EXISTS (SELECT 1 FROM ml.utxo WHERE outpoint = locked.outpoint)
+                SELECT l.outpoint, l.utxo
+                FROM ml.locked_utxo AS l
+                INNER JOIN ml.utxo_addresses ua ON l.outpoint = ua.outpoint
+                WHERE ua.address = $1 AND NOT EXISTS (SELECT 1 FROM ml.utxo WHERE outpoint = l.outpoint)
                 ;"#,
                 &[&address],
             )
@@ -2223,7 +2247,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         &mut self,
         outpoint: UtxoOutPoint,
         utxo: Utxo,
-        address: &str,
+        addresses: &[&str],
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
         logging::log::debug!("Inserting utxo {:?} for outpoint {:?}", utxo, outpoint);
@@ -2232,13 +2256,24 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
 
         self.tx
             .execute(
-                "INSERT INTO ml.utxo (outpoint, utxo, spent, address, block_height) VALUES ($1, $2, $3, $4, $5)
+                "INSERT INTO ml.utxo (outpoint, utxo, spent, block_height) VALUES ($1, $2, $3, $4)
                     ON CONFLICT (outpoint, block_height) DO UPDATE
                     SET utxo = $2, spent = $3;",
-                &[&outpoint.encode(), &utxo.utxo_with_extra_info().encode(), &spent, &address, &height],
+                &[&outpoint.encode(), &utxo.utxo_with_extra_info().encode(), &spent, &height],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        for address in addresses {
+            self.tx
+                .execute(
+                    "INSERT INTO ml.utxo_addresses (outpoint, block_height, address) VALUES ($1, $2, $3)
+                     ON CONFLICT (outpoint, address) DO NOTHING;",
+                    &[&outpoint.encode(), &height, &address],
+                )
+                .await
+                .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+        }
 
         Ok(())
     }
@@ -2247,7 +2282,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         &mut self,
         outpoint: UtxoOutPoint,
         utxo: LockedUtxo,
-        address: &str,
+        addresses: &[&str],
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
         logging::log::debug!("Inserting utxo {:?} for outpoint {:?}", utxo, outpoint);
@@ -2258,12 +2293,23 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
 
         self.tx
             .execute(
-                "INSERT INTO ml.locked_utxo (outpoint, utxo, lock_until_timestamp, lock_until_block, address, block_height)
-                    VALUES ($1, $2, $3, $4, $5, $6);",
-                &[&outpoint.encode(), &utxo.utxo_with_extra_info().encode(), &lock_time, &lock_height, &address, &height],
+                "INSERT INTO ml.locked_utxo (outpoint, utxo, lock_until_timestamp, lock_until_block, block_height)
+                    VALUES ($1, $2, $3, $4, $5);",
+                &[&outpoint.encode(), &utxo.utxo_with_extra_info().encode(), &lock_time, &lock_height, &height],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        for address in addresses {
+            self.tx
+                .execute(
+                    "INSERT INTO ml.utxo_addresses (outpoint, block_height, address) VALUES ($1, $2, $3)
+                     ON CONFLICT (outpoint, address) DO NOTHING;",
+                    &[&outpoint.encode(), &height, &address],
+                )
+                .await
+                .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+        }
 
         Ok(())
     }
@@ -2279,6 +2325,14 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
 
+        self.tx
+            .execute(
+                "DELETE FROM ml.utxo_addresses WHERE block_height > $1;",
+                &[&height],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
         Ok(())
     }
 
@@ -2291,6 +2345,14 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         self.tx
             .execute(
                 "DELETE FROM ml.locked_utxo WHERE block_height > $1;",
+                &[&height],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        self.tx
+            .execute(
+                "DELETE FROM ml.utxo_addresses WHERE block_height > $1;",
                 &[&height],
             )
             .await

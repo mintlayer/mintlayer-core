@@ -193,21 +193,21 @@ impl ApiServerStorageWrite for ApiServerInMemoryStorageTransactionalRw<'_> {
         &mut self,
         outpoint: UtxoOutPoint,
         utxo: Utxo,
-        address: &str,
+        addresses: &[&str],
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
-        self.transaction.set_utxo_at_height(outpoint, utxo, address, block_height)
+        self.transaction.set_utxo_at_height(outpoint, utxo, addresses, block_height)
     }
 
     async fn set_locked_utxo_at_height(
         &mut self,
         outpoint: UtxoOutPoint,
         utxo: LockedUtxo,
-        address: &str,
+        addresses: &[&str],
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
         self.transaction
-            .set_locked_utxo_at_height(outpoint, utxo, address, block_height)
+            .set_locked_utxo_at_height(outpoint, utxo, addresses, block_height)
     }
 
     async fn del_utxo_above_height(
