@@ -1071,7 +1071,7 @@ where
                 (None, _) => SignatureStatus::NotSigned,
             })
             .collect();
-        let num_inputs = ptx.count_inputs();
+        let num_inputs = ptx.inputs_count();
         let total_signatures = signature_statuses
             .iter()
             .copied()

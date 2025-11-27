@@ -15,6 +15,8 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
   - Wallet RPC:
     `wallet_info`: the structure of the returned field `extra_info` was changed.
 
+  - The format of `PartiallySignedTransaction was changed again.
+
 ### Fixed
   - p2p: when a peer sends a message that can't be decoded, it will now be discouraged (which is what
     is normally done for misbehaving peers) and the node won't try connecting to it again.\
@@ -140,6 +142,11 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
       Also, the result of the call now contains additional info - the purpose of each address ("Receive" or "Change")
       and its coins balance.
+
+  - The format of `PartiallySignedTransaction was changed.
+
+    Note that `PartiallySignedTransaction` is returned or accepted in the hex-encoded form by certain `wallet-cli`
+    commands and their wallet RPC counterparts, such as `transaction-compose` or `account-sign-raw-transaction`.
 
 ### Fixed
   - Fixed issues in the wallet related to a transaction with an outdated nonce not being marked as conflicted.

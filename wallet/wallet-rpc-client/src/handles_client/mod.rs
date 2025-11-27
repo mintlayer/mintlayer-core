@@ -1408,7 +1408,7 @@ where
                     && cur_signatures.iter().all(|s| *s == SignatureStatus::FullySigned);
 
                 let tx = if is_fully_signed {
-                    PartialOrSignedTx::Signed(ptx.into_signed_tx().expect("already checked2"))
+                    PartialOrSignedTx::Signed(ptx.into_signed_tx().expect("already checked"))
                 } else {
                     PartialOrSignedTx::Partial(ptx)
                 };

@@ -182,6 +182,7 @@ BASE_SCRIPTS = [
     'wallet_htlc_spend.py',
     'wallet_htlc_refund_multisig.py',
     'wallet_htlc_refund_single_sig.py',
+    'framework_tests.py',
 
     # Don't append tests at the end to avoid merge conflicts
     # Put them in a random line within the section that fits their approximate run-time
@@ -587,7 +588,7 @@ class TestResult():
 def check_script_prefixes():
     """Check that test scripts start with one of the allowed name prefixes."""
 
-    good_prefixes_re = re.compile("^(blockprod|example|feature|interface|mempool|p2p|rpc|wallet|tool)_")
+    good_prefixes_re = re.compile("^(blockprod|example|feature|framework|interface|mempool|p2p|rpc|wallet|tool)_")
     bad_script_names = [script for script in ALL_SCRIPTS if good_prefixes_re.match(script) is None]
 
     if bad_script_names:
