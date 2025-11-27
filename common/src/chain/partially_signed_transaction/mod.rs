@@ -83,7 +83,7 @@ pub enum PartiallySignedTransactionConsistencyCheck {
 #[serde(tag = "type")]
 pub enum PartiallySignedTransaction {
     // Note: in some places (in particular, in the wallet), we want to be able, given a byte
-    // array, interpret it as either Transaction, SignedTransaction or PartiallySignedTransaction.
+    // array, to interpret it as either Transaction, SignedTransaction or PartiallySignedTransaction.
     // Since SignedTransaction starts with Transaction, we can distinguish one from another
     // simply by the fact that the former will have more bytes. PartiallySignedTransaction,
     // on the other hand, starts with its enum discriminant byte. If it happens to be the same
