@@ -271,8 +271,8 @@ package = "mintlayer-core-primitives"
 
 [workspace.dependencies.trezor-client]
 git = "https://github.com/mintlayer/mintlayer-trezor-firmware"
-# The commit "Merge pull request #19 from mintlayer/remove_mintlayer_core_dependency"
-rev = "342b0f77c4d7041c31dd00392bdb116c84002388"
+# The commit "Merge pull request #22 from mintlayer/specify_license_for_ml_reexports"
+rev = "35716c865086f017f308c949c041f99d343057c0"
 features = ["bitcoin", "mintlayer"]
 
 [workspace.metadata.dist.dependencies.apt]
