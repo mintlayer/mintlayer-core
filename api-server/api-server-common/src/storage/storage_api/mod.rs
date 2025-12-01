@@ -14,7 +14,6 @@
 // limitations under the License.
 
 use std::{
-    cmp::Ordering,
     collections::{BTreeMap, BTreeSet},
     fmt::Display,
     str::FromStr,
@@ -69,7 +68,7 @@ pub enum ApiServerStorageError {
     AddressableError,
     #[error("Block timestamp too high: {0}")]
     TimestampTooHigh(BlockTimestamp),
-    #[error("Tx global index to hight: {0}")]
+    #[error("Tx global index too hight: {0}")]
     TxGlobalIndexTooHigh(u64),
     #[error("Id creation error: {0}")]
     IdCreationError(#[from] IdCreationError),
@@ -590,18 +589,6 @@ pub struct TokenTransaction {
     pub tx_id: Id<Transaction>,
 }
 
-impl PartialOrd for TokenTransaction {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for TokenTransaction {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.tx_id.cmp(&other.tx_id)
-    }
-}
-
 #[async_trait::async_trait]
 pub trait ApiServerStorageRead: Sync {
     async fn is_initialized(&self) -> Result<bool, ApiServerStorageError>;
@@ -630,10 +617,9 @@ pub trait ApiServerStorageRead: Sync {
         address: &str,
     ) -> Result<Vec<Id<Transaction>>, ApiServerStorageError>;
 
-    /// Return a page of TX IDs that reference this token_id, with a limit of len and older
-    /// tx_global_index than the specified.
-    /// The tx_global_index is only ordered by block height and are not continuous for a specific
-    /// token_id.
+    /// Returns a page of transaction IDs that reference this `token_id`, limited to `len` entries
+    /// and with a `tx_global_index` older than the specified value.
+    /// The `tx_global_index` and is not continuous for a specific `token_id`.
     async fn get_token_transactions(
         &self,
         token_id: TokenId,
@@ -866,12 +852,15 @@ pub trait ApiServerStorageWrite: ApiServerStorageRead {
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError>;
 
-    /// Append new token transactions with increasing tx_global_index at this block height
-    async fn set_token_transactions_at_height(
+    /// Sets the `token_id`–`transaction_id` pair at the specified `block_height` along with the
+    /// `tx_global_index`.
+    /// If the pair already exists at that `block_height`, the `tx_global_index` is updated.
+    async fn set_token_transaction_at_height(
         &mut self,
         token_id: TokenId,
-        transaction_ids: BTreeSet<Id<Transaction>>,
+        transaction_id: Id<Transaction>,
         block_height: BlockHeight,
+        tx_global_index: u64,
     ) -> Result<(), ApiServerStorageError>;
 
     async fn set_mainchain_block(

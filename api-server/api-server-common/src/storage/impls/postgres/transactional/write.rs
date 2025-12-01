@@ -131,15 +131,21 @@ impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'_> {
         Ok(())
     }
 
-    async fn set_token_transactions_at_height(
+    async fn set_token_transaction_at_height(
         &mut self,
         token_id: TokenId,
-        transaction_ids: BTreeSet<Id<Transaction>>,
+        transaction_id: Id<Transaction>,
         block_height: BlockHeight,
+        tx_global_index: u64,
     ) -> Result<(), ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
-        conn.set_token_transactions_at_height(token_id, transaction_ids, block_height)
-            .await?;
+        conn.set_token_transactions_at_height(
+            token_id,
+            transaction_id,
+            block_height,
+            tx_global_index,
+        )
+        .await?;
 
         Ok(())
     }

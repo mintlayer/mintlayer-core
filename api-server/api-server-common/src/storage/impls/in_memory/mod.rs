@@ -15,12 +15,13 @@
 
 pub mod transactional;
 
-use crate::storage::storage_api::{
-    block_aux_data::{BlockAuxData, BlockWithExtraData},
-    AmountWithDecimals, ApiServerStorageError, BlockInfo, CoinOrTokenStatistic, Delegation,
-    FungibleTokenData, LockedUtxo, NftWithOwner, Order, PoolBlockStats, PoolDataWithExtraInfo,
-    TokenTransaction, TransactionInfo, TransactionWithBlockInfo, Utxo, UtxoLock, UtxoWithExtraInfo,
+use std::{
+    cmp::{Ordering, Reverse},
+    collections::{BTreeMap, BTreeSet},
+    ops::Bound::{Excluded, Unbounded},
+    sync::Arc,
 };
+
 use common::{
     address::Address,
     chain::{
@@ -31,15 +32,32 @@ use common::{
     },
     primitives::{id::WithId, Amount, BlockHeight, CoinOrTokenId, Id, Idable},
 };
-use itertools::Itertools as _;
-use std::{
-    cmp::Reverse,
-    collections::{BTreeMap, BTreeSet},
-    ops::Bound::{Excluded, Unbounded},
-    sync::Arc,
+
+use crate::storage::storage_api::{
+    block_aux_data::{BlockAuxData, BlockWithExtraData},
+    AmountWithDecimals, ApiServerStorageError, BlockInfo, CoinOrTokenStatistic, Delegation,
+    FungibleTokenData, LockedUtxo, NftWithOwner, Order, PoolBlockStats, PoolDataWithExtraInfo,
+    TokenTransaction, TransactionInfo, TransactionWithBlockInfo, Utxo, UtxoLock, UtxoWithExtraInfo,
 };
 
+use itertools::Itertools as _;
+
 use super::CURRENT_STORAGE_VERSION;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct TokenTransactionOrderedByTxId(TokenTransaction);
+
+impl PartialOrd for TokenTransactionOrderedByTxId {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for TokenTransactionOrderedByTxId {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.0.tx_id.cmp(&other.0.tx_id)
+    }
+}
 
 #[derive(Debug, Clone)]
 struct ApiServerInMemoryStorage {
@@ -48,7 +66,8 @@ struct ApiServerInMemoryStorage {
     address_balance_table: BTreeMap<String, BTreeMap<CoinOrTokenId, BTreeMap<BlockHeight, Amount>>>,
     address_locked_balance_table: BTreeMap<String, BTreeMap<(CoinOrTokenId, BlockHeight), Amount>>,
     address_transactions_table: BTreeMap<String, BTreeMap<BlockHeight, Vec<Id<Transaction>>>>,
-    token_transactions_table: BTreeMap<TokenId, BTreeMap<BlockHeight, BTreeSet<TokenTransaction>>>,
+    token_transactions_table:
+        BTreeMap<TokenId, BTreeMap<BlockHeight, BTreeSet<TokenTransactionOrderedByTxId>>>,
     delegation_table: BTreeMap<DelegationId, BTreeMap<BlockHeight, Delegation>>,
     main_chain_blocks_table: BTreeMap<BlockHeight, Id<Block>>,
     pool_data_table: BTreeMap<PoolId, BTreeMap<BlockHeight, PoolDataWithExtraInfo>>,
@@ -188,9 +207,9 @@ impl ApiServerInMemoryStorage {
                 transactions
                     .iter()
                     .rev()
-                    .flat_map(|(_, txs)| txs.iter())
-                    .cloned()
+                    .flat_map(|(_, txs)| txs.iter().map(|tx| &tx.0))
                     .flat_map(|tx| (tx.tx_global_index < tx_global_index).then_some(tx))
+                    .cloned()
                     .take(len as usize)
                     .collect()
             }))
@@ -979,36 +998,22 @@ impl ApiServerInMemoryStorage {
         Ok(())
     }
 
-    fn set_token_transactions_at_height(
+    fn set_token_transaction_at_height(
         &mut self,
         token_id: TokenId,
-        transaction_ids: BTreeSet<Id<Transaction>>,
+        tx_id: Id<Transaction>,
         block_height: BlockHeight,
+        tx_global_index: u64,
     ) -> Result<(), ApiServerStorageError> {
-        if transaction_ids.is_empty() {
-            return Ok(());
-        }
-
-        let next_tx_idx = self
-            .token_transactions_table
-            .values()
-            .flat_map(|by_height| by_height.values())
-            .flat_map(|tx_set| tx_set.iter())
-            .map(|tx| tx.tx_global_index + 1)
-            .max()
-            .unwrap_or(0);
-
         self.token_transactions_table
             .entry(token_id)
             .or_default()
             .entry(block_height)
             .or_default()
-            .extend(
-                transaction_ids.into_iter().enumerate().map(|(idx, tx_id)| TokenTransaction {
-                    tx_global_index: next_tx_idx + idx as u64,
-                    tx_id,
-                }),
-            );
+            .replace(TokenTransactionOrderedByTxId(TokenTransaction {
+                tx_global_index,
+                tx_id,
+            }));
 
         Ok(())
     }

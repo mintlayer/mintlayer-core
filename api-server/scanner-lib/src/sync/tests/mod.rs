@@ -37,8 +37,10 @@ use chainstate_test_framework::{TestFramework, TransactionBuilder};
 use common::{
     address::Address,
     chain::{
-        make_delegation_id,
+        htlc::{HashedTimelockContract, HtlcSecret},
+        make_delegation_id, make_order_id, make_token_id,
         output_value::OutputValue,
+        signature::inputsig::authorize_hashed_timelock_contract_spend::AuthorizedHashedTimelockContractSpend,
         signature::{
             inputsig::{
                 authorize_pubkey_spend::sign_public_key_spending,
@@ -55,8 +57,10 @@ use common::{
         },
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
-        AccountCommand, AccountNonce, CoinUnit, Destination, OrderId, OutPointSourceId, PoolId,
-        SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
+        tokens::{IsTokenUnfreezable, TokenIssuance},
+        AccountCommand, AccountNonce, CoinUnit, Destination, OrderAccountCommand, OrderData,
+        OrderId, OutPointSourceId, PoolId, SignedTransaction, Transaction, TxInput, TxOutput,
+        UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, CoinOrTokenId, Idable, H256},
 };
@@ -1263,12 +1267,6 @@ async fn check_all_destinations_are_tracked(#[case] seed: Seed) {
 #[case(test_utils::random::Seed::from_entropy())]
 #[tokio::test]
 async fn token_transactions_storage_check(#[case] seed: Seed) {
-    use common::chain::{
-        make_order_id, make_token_id,
-        tokens::{IsTokenUnfreezable, TokenIssuance},
-        AccountCommand, AccountNonce, OrderAccountCommand, OrderData,
-    };
-
     let mut rng = make_seedable_rng(seed);
 
     let mut tf = TestFramework::builder(&mut rng).build();
@@ -1627,11 +1625,6 @@ async fn token_transactions_storage_check(#[case] seed: Seed) {
 #[case(test_utils::random::Seed::from_entropy())]
 #[tokio::test]
 async fn htlc_addresses_storage_check(#[case] seed: Seed) {
-    use common::chain::{
-        htlc::{HashedTimelockContract, HtlcSecret},
-        signature::inputsig::authorize_hashed_timelock_contract_spend::AuthorizedHashedTimelockContractSpend,
-    };
-
     let mut rng = make_seedable_rng(seed);
 
     let mut tf = TestFramework::builder(&mut rng).build();

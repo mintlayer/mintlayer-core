@@ -111,14 +111,19 @@ impl ApiServerStorageWrite for ApiServerInMemoryStorageTransactionalRw<'_> {
             .set_address_transactions_at_height(address, transactions, block_height)
     }
 
-    async fn set_token_transactions_at_height(
+    async fn set_token_transaction_at_height(
         &mut self,
         token_id: TokenId,
-        transactions: BTreeSet<Id<Transaction>>,
+        tx_id: Id<Transaction>,
         block_height: BlockHeight,
+        tx_global_index: u64,
     ) -> Result<(), ApiServerStorageError> {
-        self.transaction
-            .set_token_transactions_at_height(token_id, transactions, block_height)
+        self.transaction.set_token_transaction_at_height(
+            token_id,
+            tx_id,
+            block_height,
+            tx_global_index,
+        )
     }
 
     async fn set_mainchain_block(

@@ -950,9 +950,9 @@ where
             })
             .collect();
 
-        for (_, tx_id, block_height) in &token_transactions {
+        for (idx, tx_id, block_height) in &token_transactions {
             db_tx
-                .set_token_transactions_at_height(random_token_id, [*tx_id].into(), *block_height)
+                .set_token_transaction_at_height(random_token_id, *tx_id, *block_height, *idx)
                 .await
                 .unwrap();
         }

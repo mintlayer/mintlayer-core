@@ -604,25 +604,25 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
     pub async fn set_token_transactions_at_height(
         &mut self,
         token_id: TokenId,
-        transaction_ids: BTreeSet<Id<Transaction>>,
+        transaction_id: Id<Transaction>,
         block_height: BlockHeight,
+        tx_global_index: u64,
     ) -> Result<(), ApiServerStorageError> {
         let height = Self::block_height_to_postgres_friendly(block_height);
+        let tx_global_index = Self::tx_global_index_to_postgres_friendly(tx_global_index)?;
 
-        for transaction_id in transaction_ids {
-            self.tx
-                .execute(
-                    r#"
-                        INSERT INTO ml.token_transactions (token_id, block_height, transaction_id)
-                        VALUES ($1, $2, $3)
-                        ON CONFLICT (token_id, block_height, transaction_id)
-                        DO NOTHING;
-                    "#,
-                    &[&token_id.encode(), &height, &transaction_id.encode()],
-                )
-                .await
-                .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
-        }
+        self.tx
+            .execute(
+                r#"
+                    INSERT INTO ml.token_transactions (token_id, block_height, transaction_id, tx_global_index)
+                    VALUES ($1, $2, $3, $4)
+                    ON CONFLICT (token_id, transaction_id, block_height)
+                    DO NOTHING;
+                "#,
+                &[&token_id.encode(), &height, &transaction_id.encode(), &tx_global_index],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
 
         Ok(())
     }
@@ -823,11 +823,11 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
 
         self.just_execute(
             "CREATE TABLE ml.token_transactions (
-                    tx_global_index bigint PRIMARY KEY GENERATED ALWAYS AS IDENTITY (START WITH 0 MINVALUE 0),
+                    tx_global_index bigint PRIMARY KEY,
                     token_id bytea NOT NULL,
                     block_height bigint NOT NULL,
                     transaction_id bytea NOT NULL,
-                    UNIQUE (token_id, block_height, transaction_id)
+                    UNIQUE (token_id, transaction_id, block_height)
                 );",
         )
         .await?;
