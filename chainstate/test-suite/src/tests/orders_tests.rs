@@ -39,9 +39,9 @@ use common::{
             verify_signature, DestinationSigError, EvaluatedInputWitness,
         },
         tokens::{IsTokenFreezable, TokenId, TokenTotalSupply},
-        AccountCommand, AccountNonce, ChainstateUpgradeBuilder, Destination, OrderAccountCommand,
-        OrderData, OrderId, OrdersVersion, SignedTransaction, Transaction, TxInput, TxOutput,
-        UtxoOutPoint,
+        AccountCommand, AccountNonce, ChainstateUpgradeBuilder, Destination, IdCreationError,
+        OrderAccountCommand, OrderData, OrderId, OrdersVersion, SignedTransaction, Transaction,
+        TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Idable, H256},
 };
@@ -3955,6 +3955,373 @@ fn fill_order_twice_in_same_block(
         assert_eq!(
             tf.chainstate.get_order_give_balance(&order_id).unwrap(),
             Some(expected_give_balance),
+        );
+    });
+}
+
+// Create and (optionally) partially fill an order.
+// Then conclude it, while creating another order in the same tx, with balances equal to the
+// remaining balances of the original order.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn conclude_and_recreate_in_same_tx_with_same_balances(
+    #[case] seed: Seed,
+    #[values(false, true)] fill_after_creation: bool,
+) {
+    utils::concurrency::model(move || {
+        let version = OrdersVersion::V1;
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = create_test_framework_with_orders(&mut rng, version);
+
+        let tokens_amount = Amount::from_atoms(rng.gen_range(1000..1_000_000));
+        let (token_id, tokens_outpoint, coins_outpoint) =
+            issue_and_mint_token_amount_from_genesis(&mut rng, &mut tf, tokens_amount);
+        let coins_amount = tf.coin_amount_from_utxo(&coins_outpoint);
+
+        let orig_ask_amount = Amount::from_atoms(rng.gen_range(10u128..10_000));
+        let orig_give_amount =
+            Amount::from_atoms(rng.gen_range(10u128..=tokens_amount.into_atoms() / 2));
+        let tokens_amount_after_order_creation = (tokens_amount - orig_give_amount).unwrap();
+
+        let orig_order_data = OrderData::new(
+            Destination::AnyoneCanSpend,
+            OutputValue::Coin(orig_ask_amount),
+            OutputValue::TokenV1(token_id, orig_give_amount),
+        );
+        let (orig_order_id, orig_order_creation_tx_id) = {
+            let tx = TransactionBuilder::new()
+                .add_input(tokens_outpoint.into(), InputWitness::NoSignature(None))
+                .add_output(TxOutput::CreateOrder(Box::new(orig_order_data.clone())))
+                .add_output(TxOutput::Transfer(
+                    OutputValue::TokenV1(token_id, tokens_amount_after_order_creation),
+                    Destination::AnyoneCanSpend,
+                ))
+                .build();
+            let order_id = make_order_id(tx.inputs()).unwrap();
+            let tx_id = tx.transaction().get_id();
+            tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
+
+            (order_id, tx_id)
+        };
+        let tokens_outpoint = UtxoOutPoint::new(orig_order_creation_tx_id.into(), 1);
+        let tokens_amount = tokens_amount_after_order_creation;
+
+        let (fill_amount, filled_amount, coins_outpoint, coins_amount) = if fill_after_creation {
+            // Fill the order partially.
+            let min_fill_amount = order_min_non_zero_fill_amount(&tf, &orig_order_id, version);
+            let fill_amount = Amount::from_atoms(
+                rng.gen_range(min_fill_amount.into_atoms()..orig_ask_amount.into_atoms()),
+            );
+            let filled_amount = calculate_fill_order(&tf, &orig_order_id, fill_amount, version);
+            let coins_amount_after_fill = (coins_amount - fill_amount).unwrap();
+
+            let tx = TransactionBuilder::new()
+                .add_input(coins_outpoint.into(), InputWitness::NoSignature(None))
+                .add_input(
+                    TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(
+                        orig_order_id,
+                        fill_amount,
+                    )),
+                    InputWitness::NoSignature(None),
+                )
+                .add_output(TxOutput::Transfer(
+                    OutputValue::TokenV1(token_id, filled_amount),
+                    Destination::AnyoneCanSpend,
+                ))
+                .add_output(TxOutput::Transfer(
+                    OutputValue::Coin(coins_amount_after_fill),
+                    Destination::AnyoneCanSpend,
+                ))
+                .build();
+            let tx_id = tx.transaction().get_id();
+            tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
+
+            let coins_outpoint = UtxoOutPoint::new(tx_id.into(), 1);
+            let coins_amount = coins_amount_after_fill;
+
+            (fill_amount, filled_amount, coins_outpoint, coins_amount)
+        } else {
+            (Amount::ZERO, Amount::ZERO, coins_outpoint, coins_amount)
+        };
+
+        let remaining_tokens_amount_to_trade = (orig_give_amount - filled_amount).unwrap();
+        let remaining_coins_amount_to_trade = (orig_ask_amount - fill_amount).unwrap();
+
+        let new_order_data = OrderData::new(
+            Destination::AnyoneCanSpend,
+            OutputValue::Coin(remaining_coins_amount_to_trade),
+            OutputValue::TokenV1(token_id, remaining_tokens_amount_to_trade),
+        );
+
+        // Try concluding the order and creating a new one, using only the conclusion account
+        // command as an input.
+        // This will fail, because order creation needs at least one UTXO input.
+        {
+            let tx = TransactionBuilder::new()
+                .add_input(
+                    TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder(orig_order_id)),
+                    InputWitness::NoSignature(None),
+                )
+                .add_output(TxOutput::Transfer(
+                    OutputValue::Coin(fill_amount),
+                    Destination::AnyoneCanSpend,
+                ))
+                .add_output(TxOutput::CreateOrder(Box::new(new_order_data.clone())))
+                .build();
+            let err = tf
+                .make_block_builder()
+                .add_transaction(tx)
+                .build_and_process(&mut rng)
+                .unwrap_err();
+            assert_eq!(
+                err,
+                ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                    ConnectTransactionError::IdCreationError(
+                        IdCreationError::NoUtxoInputsForOrderIdCreation
+                    )
+                ))
+            );
+        }
+
+        // Check the original order data - it's still there
+        assert_eq!(
+            tf.chainstate.get_order_data(&orig_order_id).unwrap(),
+            Some(orig_order_data.clone().into()),
+        );
+        assert_eq!(
+            tf.chainstate.get_order_ask_balance(&orig_order_id).unwrap(),
+            Some(remaining_coins_amount_to_trade),
+        );
+        assert_eq!(
+            tf.chainstate.get_order_give_balance(&orig_order_id).unwrap(),
+            Some(remaining_tokens_amount_to_trade),
+        );
+
+        let new_order_id = {
+            let tx_builder = TransactionBuilder::new()
+                .add_input(
+                    TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder(orig_order_id)),
+                    InputWitness::NoSignature(None),
+                )
+                .add_output(TxOutput::Transfer(
+                    OutputValue::Coin(fill_amount),
+                    Destination::AnyoneCanSpend,
+                ))
+                .add_output(TxOutput::CreateOrder(Box::new(new_order_data.clone())));
+            // Add coins or tokens to inputs and transfer the same amount in outputs.
+            let tx_builder = if rng.gen_bool(0.5) {
+                tx_builder
+                    .add_input(tokens_outpoint.into(), InputWitness::NoSignature(None))
+                    .add_output(TxOutput::Transfer(
+                        OutputValue::TokenV1(token_id, tokens_amount),
+                        Destination::AnyoneCanSpend,
+                    ))
+            } else {
+                tx_builder
+                    .add_input(coins_outpoint.into(), InputWitness::NoSignature(None))
+                    .add_output(TxOutput::Transfer(
+                        OutputValue::Coin(coins_amount),
+                        Destination::AnyoneCanSpend,
+                    ))
+            };
+            let tx = tx_builder.build();
+            let order_id = make_order_id(tx.inputs()).unwrap();
+            tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
+            order_id
+        };
+
+        // The original order is no longer there
+        assert_eq!(None, tf.chainstate.get_order_data(&orig_order_id).unwrap());
+        assert_eq!(
+            None,
+            tf.chainstate.get_order_ask_balance(&orig_order_id).unwrap()
+        );
+        assert_eq!(
+            None,
+            tf.chainstate.get_order_give_balance(&orig_order_id).unwrap()
+        );
+
+        // The new order exists and has the same balances as the original one before the conclusion.
+        assert_eq!(
+            tf.chainstate.get_order_data(&new_order_id).unwrap(),
+            Some(new_order_data.into()),
+        );
+        assert_eq!(
+            tf.chainstate.get_order_ask_balance(&new_order_id).unwrap(),
+            Some(remaining_coins_amount_to_trade),
+        );
+        assert_eq!(
+            tf.chainstate.get_order_give_balance(&new_order_id).unwrap(),
+            Some(remaining_tokens_amount_to_trade),
+        );
+    });
+}
+
+// Create and (optionally) fill an order; the fill may be a complete fill if the give balance
+// is supposed to be increased on the next step, otherwise it'll always be a partial fill.
+// Then conclude the order, while creating another one in the same tx, with balances different
+// from the remaining balances of the original order.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn conclude_and_recreate_in_same_tx_with_different_balances(
+    #[case] seed: Seed,
+    #[values(false, true)] fill_after_creation: bool,
+    #[values(false, true)] increase_give_balance: bool,
+) {
+    utils::concurrency::model(move || {
+        let version = OrdersVersion::V1;
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = create_test_framework_with_orders(&mut rng, version);
+
+        let tokens_amount = Amount::from_atoms(rng.gen_range(1000..1_000_000));
+        let (token_id, tokens_outpoint, coins_outpoint) =
+            issue_and_mint_token_amount_from_genesis(&mut rng, &mut tf, tokens_amount);
+        let coins_amount = tf.coin_amount_from_utxo(&coins_outpoint);
+
+        let orig_ask_amount = Amount::from_atoms(rng.gen_range(10u128..10_000));
+        let orig_give_amount =
+            Amount::from_atoms(rng.gen_range(10u128..=tokens_amount.into_atoms() / 2));
+        let tokens_amount_after_order_creation = (tokens_amount - orig_give_amount).unwrap();
+
+        let orig_order_data = OrderData::new(
+            Destination::AnyoneCanSpend,
+            OutputValue::Coin(orig_ask_amount),
+            OutputValue::TokenV1(token_id, orig_give_amount),
+        );
+        let (orig_order_id, orig_order_creation_tx_id) = {
+            let tx = TransactionBuilder::new()
+                .add_input(tokens_outpoint.into(), InputWitness::NoSignature(None))
+                .add_output(TxOutput::CreateOrder(Box::new(orig_order_data.clone())))
+                .add_output(TxOutput::Transfer(
+                    OutputValue::TokenV1(token_id, tokens_amount_after_order_creation),
+                    Destination::AnyoneCanSpend,
+                ))
+                .build();
+            let order_id = make_order_id(tx.inputs()).unwrap();
+            let tx_id = tx.transaction().get_id();
+            tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
+
+            (order_id, tx_id)
+        };
+        let tokens_outpoint = UtxoOutPoint::new(orig_order_creation_tx_id.into(), 1);
+        let tokens_amount = tokens_amount_after_order_creation;
+
+        let (fill_amount, filled_amount) = if fill_after_creation {
+            let fill_amount = if increase_give_balance && rng.gen_bool(0.5) {
+                // Fill the order completely.
+                orig_ask_amount
+            } else {
+                // Fill the order partially.
+                let min_fill_amount = order_min_non_zero_fill_amount(&tf, &orig_order_id, version);
+                Amount::from_atoms(
+                    rng.gen_range(min_fill_amount.into_atoms()..orig_ask_amount.into_atoms()),
+                )
+            };
+            let filled_amount = calculate_fill_order(&tf, &orig_order_id, fill_amount, version);
+            let coins_amount_after_fill = (coins_amount - fill_amount).unwrap();
+
+            let tx = TransactionBuilder::new()
+                .add_input(coins_outpoint.into(), InputWitness::NoSignature(None))
+                .add_input(
+                    TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(
+                        orig_order_id,
+                        fill_amount,
+                    )),
+                    InputWitness::NoSignature(None),
+                )
+                .add_output(TxOutput::Transfer(
+                    OutputValue::TokenV1(token_id, filled_amount),
+                    Destination::AnyoneCanSpend,
+                ))
+                .add_output(TxOutput::Transfer(
+                    OutputValue::Coin(coins_amount_after_fill),
+                    Destination::AnyoneCanSpend,
+                ))
+                .build();
+            tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
+
+            (fill_amount, filled_amount)
+        } else {
+            (Amount::ZERO, Amount::ZERO)
+        };
+
+        let remaining_tokens_amount_to_trade = (orig_give_amount - filled_amount).unwrap();
+        let remaining_coins_amount_to_trade = (orig_ask_amount - fill_amount).unwrap();
+
+        let new_tokens_amount_to_trade = if increase_give_balance {
+            (remaining_tokens_amount_to_trade
+                + Amount::from_atoms(rng.gen_range(1u128..tokens_amount.into_atoms())))
+            .unwrap()
+        } else {
+            Amount::from_atoms(rng.gen_range(1..=remaining_tokens_amount_to_trade.into_atoms()))
+        };
+
+        let new_coins_amount_to_trade = Amount::from_atoms(
+            rng.gen_range(1..=remaining_coins_amount_to_trade.into_atoms() * 2 + 100),
+        );
+
+        let new_order_data = OrderData::new(
+            Destination::AnyoneCanSpend,
+            OutputValue::Coin(new_coins_amount_to_trade),
+            OutputValue::TokenV1(token_id, new_tokens_amount_to_trade),
+        );
+
+        let new_order_id = {
+            let tokens_atoms_change = new_tokens_amount_to_trade.into_atoms() as i128
+                - remaining_tokens_amount_to_trade.into_atoms() as i128;
+
+            let tx = TransactionBuilder::new()
+                .add_input(tokens_outpoint.into(), InputWitness::NoSignature(None))
+                .add_input(
+                    TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder(orig_order_id)),
+                    InputWitness::NoSignature(None),
+                )
+                .add_output(TxOutput::Transfer(
+                    OutputValue::Coin(fill_amount),
+                    Destination::AnyoneCanSpend,
+                ))
+                .add_output(TxOutput::CreateOrder(Box::new(new_order_data.clone())))
+                .add_output(TxOutput::Transfer(
+                    OutputValue::TokenV1(
+                        token_id,
+                        Amount::from_atoms(
+                            (tokens_amount.into_atoms() as i128 - tokens_atoms_change) as u128,
+                        ),
+                    ),
+                    Destination::AnyoneCanSpend,
+                ))
+                .build();
+
+            let order_id = make_order_id(tx.inputs()).unwrap();
+            tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
+            order_id
+        };
+
+        // The original order is no longer there
+        assert_eq!(None, tf.chainstate.get_order_data(&orig_order_id).unwrap());
+        assert_eq!(
+            None,
+            tf.chainstate.get_order_ask_balance(&orig_order_id).unwrap()
+        );
+        assert_eq!(
+            None,
+            tf.chainstate.get_order_give_balance(&orig_order_id).unwrap()
+        );
+
+        // The new order exists with the correct balances.
+        assert_eq!(
+            tf.chainstate.get_order_data(&new_order_id).unwrap(),
+            Some(new_order_data.into()),
+        );
+        assert_eq!(
+            tf.chainstate.get_order_ask_balance(&new_order_id).unwrap(),
+            Some(new_coins_amount_to_trade),
+        );
+        assert_eq!(
+            tf.chainstate.get_order_give_balance(&new_order_id).unwrap(),
+            Some(new_tokens_amount_to_trade),
         );
     });
 }
