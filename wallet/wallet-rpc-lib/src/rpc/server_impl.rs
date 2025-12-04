@@ -20,6 +20,7 @@ use common::{
     address::dehexify::dehexify_all_addresses,
     chain::{
         block::timestamp::BlockTimestamp,
+        output_values_holder::collect_token_v1_ids_from_output_values_holders,
         tokens::{IsTokenUnfreezable, TokenId},
         Block, DelegationId, Destination, GenBlock, OrderId, PoolId, SignedTransaction,
         SignedTransactionIntent, Transaction, TxOutput,
@@ -492,10 +493,15 @@ where
             )
             .await?;
 
+        let token_ids =
+            collect_token_v1_ids_from_output_values_holders(utxos.iter().map(|(_, output)| output));
+        let token_decimals = self.get_tokens_decimals(token_ids).await?;
+
         let result = utxos
             .into_iter()
             .map(|(utxo_outpoint, tx_ouput)| {
-                let result = UtxoInfo::new(utxo_outpoint, tx_ouput, &self.chain_config);
+                let result =
+                    UtxoInfo::new(utxo_outpoint, tx_ouput, &self.chain_config, &token_decimals);
                 rpc::handle_result(result)
             })
             .collect::<Result<Vec<_>, _>>();
@@ -513,10 +519,15 @@ where
             )
             .await?;
 
+        let token_ids =
+            collect_token_v1_ids_from_output_values_holders(utxos.iter().map(|(_, output)| output));
+        let token_decimals = self.get_tokens_decimals(token_ids).await?;
+
         let result = utxos
             .into_iter()
             .map(|(utxo_outpoint, tx_ouput)| {
-                let result = UtxoInfo::new(utxo_outpoint, tx_ouput, &self.chain_config);
+                let result =
+                    UtxoInfo::new(utxo_outpoint, tx_ouput, &self.chain_config, &token_decimals);
                 rpc::handle_result(result)
             })
             .collect::<Result<Vec<_>, _>>();

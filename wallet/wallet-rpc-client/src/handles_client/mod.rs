@@ -17,10 +17,12 @@ use std::{collections::BTreeMap, fmt::Debug, num::NonZeroUsize, path::PathBuf, s
 
 use chainstate::{rpc::RpcOutputValueIn, ChainInfo};
 use common::{
-    address::{dehexify::dehexify_all_addresses, AddressError},
+    address::dehexify::dehexify_all_addresses,
     chain::{
-        block::timestamp::BlockTimestamp, tokens::IsTokenUnfreezable, Block, GenBlock,
-        SignedTransaction, SignedTransactionIntent, Transaction, TxOutput, UtxoOutPoint,
+        block::timestamp::BlockTimestamp,
+        output_values_holder::collect_token_v1_ids_from_output_values_holders,
+        tokens::IsTokenUnfreezable, Block, GenBlock, SignedTransaction, SignedTransactionIntent,
+        Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{BlockHeight, DecimalAmount, Id, Idable, H256},
 };
@@ -78,7 +80,7 @@ pub enum WalletRpcHandlesClientError<N: NodeInterface> {
     HexEncodingError(#[from] hex::FromHexError),
 
     #[error(transparent)]
-    AddressError(#[from] AddressError),
+    ChainstateRpcTypeError(#[from] chainstate::rpc::RpcTypeError),
 }
 
 impl<N> WalletRpcHandlesClient<N>
@@ -422,13 +424,21 @@ where
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)?;
 
-        utxos
+        let token_ids =
+            collect_token_v1_ids_from_output_values_holders(utxos.iter().map(|(_, output)| output));
+        let token_decimals = self.wallet_rpc.get_tokens_decimals(token_ids).await?;
+
+        Ok(utxos
             .into_iter()
             .map(|(utxo_outpoint, tx_ouput)| {
-                UtxoInfo::new(utxo_outpoint, tx_ouput, self.wallet_rpc.chain_config())
+                UtxoInfo::new(
+                    utxo_outpoint,
+                    tx_ouput,
+                    self.wallet_rpc.chain_config(),
+                    &token_decimals,
+                )
             })
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(WalletRpcHandlesClientError::AddressError)
+            .collect::<Result<Vec<_>, _>>()?)
     }
 
     async fn get_utxos(
@@ -449,13 +459,21 @@ where
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)?;
 
-        utxos
+        let token_ids =
+            collect_token_v1_ids_from_output_values_holders(utxos.iter().map(|(_, output)| output));
+        let token_decimals = self.wallet_rpc.get_tokens_decimals(token_ids).await?;
+
+        Ok(utxos
             .into_iter()
             .map(|(utxo_outpoint, tx_ouput)| {
-                UtxoInfo::new(utxo_outpoint, tx_ouput, self.wallet_rpc.chain_config())
+                UtxoInfo::new(
+                    utxo_outpoint,
+                    tx_ouput,
+                    self.wallet_rpc.chain_config(),
+                    &token_decimals,
+                )
             })
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(WalletRpcHandlesClientError::AddressError)
+            .collect::<Result<Vec<_>, _>>()?)
     }
 
     async fn submit_raw_transaction(

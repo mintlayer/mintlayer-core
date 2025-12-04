@@ -14,12 +14,14 @@
 // limitations under the License.
 
 use common::{
-    address::AddressError,
     chain::{ChainConfig, GenBlock, OutPointSourceId, Transaction, TxInput, UtxoOutPoint},
     primitives::Id,
 };
 
-use super::account::{RpcAccountCommand, RpcAccountSpending, RpcOrderAccountCommand};
+use super::{
+    account::{RpcAccountCommand, RpcAccountSpending, RpcOrderAccountCommand},
+    RpcTypeError,
+};
 
 #[derive(Debug, Clone, serde::Serialize, rpc_description::HasValueHint)]
 #[serde(tag = "type", content = "content")]
@@ -42,7 +44,7 @@ pub enum RpcTxInput {
 }
 
 impl RpcTxInput {
-    pub fn new(chain_config: &ChainConfig, input: &TxInput) -> Result<Self, AddressError> {
+    pub fn new(chain_config: &ChainConfig, input: &TxInput) -> Result<Self, RpcTypeError> {
         let result = match input {
             TxInput::Utxo(outpoint) => match outpoint.source_id() {
                 OutPointSourceId::Transaction(id) => RpcTxInput::Utxo {

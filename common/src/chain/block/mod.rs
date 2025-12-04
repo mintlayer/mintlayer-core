@@ -37,7 +37,11 @@ use typename::TypeName;
 use utils::ensure;
 
 use crate::{
-    chain::block::{block_size::BlockSize, block_v1::BlockV1, timestamp::BlockTimestamp},
+    chain::{
+        block::{block_size::BlockSize, block_v1::BlockV1, timestamp::BlockTimestamp},
+        output_value::OutputValue,
+        output_values_holder::OutputValuesHolder,
+    },
     primitives::{
         id::{HasSubObjWithSameId, WithId},
         Id, Idable, VersionTag, H256,
@@ -240,6 +244,13 @@ impl<'de> serde::Deserialize<'de> for Id<Block> {
 }
 
 impl Eq for WithId<Block> {}
+
+impl OutputValuesHolder for Block {
+    fn output_values_iter(&self) -> impl Iterator<Item = &OutputValue> {
+        // Note: there are no OutputValue's in the header
+        self.body().output_values_iter()
+    }
+}
 
 #[cfg(test)]
 mod tests {
