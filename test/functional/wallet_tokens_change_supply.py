@@ -29,13 +29,12 @@ Check that:
 """
 
 from test_framework.test_framework import BitcoinTestFramework
-from test_framework.mintlayer import (make_tx, reward_input, tx_input, ATOMS_PER_COIN)
+from test_framework.mintlayer import (make_tx, reward_input, ATOMS_PER_COIN)
 from test_framework.util import assert_in, assert_equal, assert_not_in
-from test_framework.mintlayer import mintlayer_hash, block_input_data_obj
-from test_framework.wallet_cli_controller import DEFAULT_ACCOUNT_INDEX, WalletCliController
+from test_framework.mintlayer import block_input_data_obj
+from test_framework.wallet_cli_controller import WalletCliController
 
 import asyncio
-import sys
 import random
 
 class WalletTokens(BitcoinTestFramework):

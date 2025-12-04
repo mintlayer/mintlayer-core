@@ -36,15 +36,6 @@ class WalletCreatePoolForAnotherWalletCLI(WalletPOSTestBase):
         super().set_test_params()
         self.wallet_controller = WalletCliController
 
-    async def coin_balance(self, wallet, with_locked) -> Decimal:
-        balance_response = await wallet.get_balance(with_locked=with_locked)
-        match = re.search(r'Coins amount: (\d+(\.\d+)?)', balance_response)
-        assert match is not None
-
-        balance = Decimal(match.group(1))
-        self.log.info(f"wallet balance = {balance}")
-        return balance
-
     # Assert that the wallet's coin balance equals the specified value minus some portion of a coin
     # (which is assumed to have been spent on fees).
     def assert_approximate_balance(self, balance, expected_balance_without_fee):
@@ -92,7 +83,7 @@ class WalletCreatePoolForAnotherWalletCLI(WalletPOSTestBase):
             best_block_height = await wallet.get_best_block_height()
             assert_in(best_block_height, '1')
 
-            balance = await self.coin_balance(wallet, 'any')
+            balance = await wallet.get_coins_balance('any')
             assert_equal(balance, initial_balance)
 
             result = await wallet.create_stake_pool(pool_pledge, 0, 0.5, decommission_address, staker_pub_key_address, staker_vrf_pub_key)
@@ -101,7 +92,7 @@ class WalletCreatePoolForAnotherWalletCLI(WalletPOSTestBase):
             self.gen_pos_block(node.mempool_transactions(), 2)
             assert_in("Success", await wallet.sync())
 
-            balance = await self.coin_balance(wallet, 'any')
+            balance = await wallet.get_coins_balance('any')
             self.assert_approximate_balance(balance, initial_balance - pool_pledge)
 
             # No pools in the creating wallet.
@@ -157,13 +148,13 @@ class WalletCreatePoolForAnotherWalletCLI(WalletPOSTestBase):
             self.gen_pos_block(node.mempool_transactions(), tip_height + 1, self.hex_to_dec_array(tip_id_with_genesis_pool))
             assert_in("Success", await wallet.sync())
 
-            unlocked_balance = await self.coin_balance(wallet, 'unlocked')
+            unlocked_balance = await wallet.get_coins_balance('unlocked')
             self.assert_approximate_balance(unlocked_balance, initial_balance - pool_pledge)
 
-            locked_balance = await self.coin_balance(wallet, 'locked')
+            locked_balance = await wallet.get_coins_balance('locked')
             self.assert_approximate_balance(locked_balance, pool_pledge + total_staking_reward)
 
-            total_balance = await self.coin_balance(wallet, 'any')
+            total_balance = await wallet.get_coins_balance('any')
             self.assert_approximate_balance(total_balance, initial_balance + total_staking_reward)
 
 

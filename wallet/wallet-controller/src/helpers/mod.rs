@@ -249,8 +249,7 @@ pub async fn into_balances<T: NodeInterface>(
     Ok(Balances::new(coins, tasks.try_collect().await?))
 }
 
-// TODO: optimize RPC calls to the Node.
-// Also see the TODO in `get_tokens_decimals` in `wallet/wallet-controller/src/read.rs`.
+// TODO: optimize RPC calls to the Node
 pub async fn tx_to_partially_signed_tx<
     T: NodeInterface,
     B: storage::BackendWithSendableTransactions,
