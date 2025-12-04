@@ -39,7 +39,6 @@ from test_framework.util import assert_equal, assert_greater_than_or_equal, asse
 from test_framework.wallet_cli_controller import UtxoOutpoint, WalletCliController
 
 import asyncio
-import sys
 
 def get_destination(dest):
     if 'Address' in dest:

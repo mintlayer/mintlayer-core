@@ -245,6 +245,8 @@ impl ChainstateRpcServer for super::ChainstateHandle {
             let token_ids = collect_token_v1_ids_from_output_values_holder(&block);
             let mut token_decimals = BTreeMap::new();
 
+            // TODO replace this loop with a single ChainstateInterface function call obtaining
+            // all infos at once (when the function is implemented).
             for token_id in token_ids {
                 let token_info: RPCTokenInfo = rpc::handle_result(
                     self.call(move |this| get_existing_token_info_for_rpc(this, token_id)).await,

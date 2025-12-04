@@ -182,6 +182,8 @@ BASE_SCRIPTS = [
     'wallet_htlc_spend.py',
     'wallet_htlc_refund_multisig.py',
     'wallet_htlc_refund_single_sig.py',
+    'wallet_list_utxos.py',
+    'wallet_list_utxos_rpc.py',
     'framework_tests.py',
 
     # Don't append tests at the end to avoid merge conflicts

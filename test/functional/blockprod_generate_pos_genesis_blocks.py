@@ -14,13 +14,10 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from hashlib import blake2b
 from scalecodec.base import ScaleBytes, ScaleDecoder
 from test_framework.authproxy import JSONRPCException
 from test_framework.mintlayer import (
-    base_tx_obj,
     block_input_data_obj,
-    mintlayer_hash,
     ATOMS_PER_COIN,
 )
 from test_framework.test_framework import BitcoinTestFramework

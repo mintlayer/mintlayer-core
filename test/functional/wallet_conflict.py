@@ -27,17 +27,13 @@ Check that:
 * put the freeze tx in a block, the transfer should be rejected and conflicting in the wallet
 """
 
-import json
-from scalecodec.base import ScaleBytes
 from test_framework.test_framework import BitcoinTestFramework
-from test_framework.mintlayer import (make_tx, reward_input, ATOMS_PER_COIN, signed_tx_obj)
+from test_framework.mintlayer import (make_tx, reward_input, ATOMS_PER_COIN)
 from test_framework.util import assert_in, assert_equal
-from test_framework.mintlayer import mintlayer_hash, block_input_data_obj
+from test_framework.mintlayer import block_input_data_obj
 from test_framework.wallet_cli_controller import WalletCliController, DEFAULT_ACCOUNT_INDEX
 
 import asyncio
-import sys
-import random
 
 
 class WalletConflictTransaction(BitcoinTestFramework):
