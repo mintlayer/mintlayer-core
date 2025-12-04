@@ -18,7 +18,10 @@ use super::{
     Transaction, TransactionSize, TxOutput,
 };
 use crate::{
-    chain::{TransactionCreationError, TxInput},
+    chain::{
+        output_value::OutputValue, output_values_holder::OutputValuesHolder,
+        TransactionCreationError, TxInput,
+    },
     primitives::id::{self, H256},
 };
 use serialization::{Decode, Encode};
@@ -134,6 +137,12 @@ impl Decode for SignedTransaction {
             transaction,
             signatures: witness,
         })
+    }
+}
+
+impl OutputValuesHolder for SignedTransaction {
+    fn output_values_iter(&self) -> impl Iterator<Item = &OutputValue> {
+        self.transaction.output_values_iter()
     }
 }
 

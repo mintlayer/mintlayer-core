@@ -14,13 +14,15 @@
 // limitations under the License.
 
 use common::{
-    address::AddressError,
     chain::{ChainConfig, SignedTransaction, Transaction},
     primitives::{Id, Idable},
 };
 use serialization::hex_encoded::HexEncoded;
 
-use super::{input::RpcTxInput, output::RpcTxOutput};
+use super::{
+    input::RpcTxInput, output::RpcTxOutput, token_decimals_provider::TokenDecimalsProvider,
+    RpcTypeError,
+};
 
 #[derive(Debug, Clone, serde::Serialize, rpc_description::HasValueHint)]
 pub struct RpcSignedTransaction {
@@ -34,7 +36,11 @@ pub struct RpcSignedTransaction {
 }
 
 impl RpcSignedTransaction {
-    pub fn new(chain_config: &ChainConfig, tx: SignedTransaction) -> Result<Self, AddressError> {
+    pub fn new(
+        chain_config: &ChainConfig,
+        token_decimals_provider: &impl TokenDecimalsProvider,
+        tx: SignedTransaction,
+    ) -> Result<Self, RpcTypeError> {
         let rpc_tx_inputs = tx
             .transaction()
             .inputs()
@@ -46,7 +52,7 @@ impl RpcSignedTransaction {
             .transaction()
             .outputs()
             .iter()
-            .map(|output| RpcTxOutput::new(chain_config, output.clone()))
+            .map(|output| RpcTxOutput::new(chain_config, token_decimals_provider, output.clone()))
             .collect::<Result<Vec<_>, _>>()?;
 
         let rpc_tx = Self {

@@ -20,6 +20,8 @@ use serialization::{Decode, Encode};
 use crate::{
     chain::{
         htlc::HtlcSecret,
+        output_value::OutputValue,
+        output_values_holder::OutputValuesHolder,
         partially_signed_transaction::v1::PartiallySignedTransactionV1,
         signature::{
             inputsig::InputWitness,
@@ -221,6 +223,18 @@ impl PartiallySignedTransaction {
             chain_config,
             block_height,
         )?)
+    }
+}
+
+impl OutputValuesHolder for PartiallySignedTransaction {
+    fn output_values_iter(&self) -> impl Iterator<Item = &OutputValue> {
+        let tx_values_iter = self.tx().output_values_iter();
+        let input_utxos_values_iter = self.input_utxos().iter().flat_map(|opt_output| {
+            opt_output.iter().flat_map(|output| output.output_values_iter())
+        });
+        let additional_info_values_iter = self.additional_info().output_values_iter();
+
+        tx_values_iter.chain(input_utxos_values_iter).chain(additional_info_values_iter)
     }
 }
 

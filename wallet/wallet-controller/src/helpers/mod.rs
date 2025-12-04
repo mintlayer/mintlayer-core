@@ -26,6 +26,7 @@ use common::{
     address::RpcAddress,
     chain::{
         htlc::HtlcSecret,
+        output_values_holder::collect_token_v1_ids_from_output_values_holder,
         tokens::{RPCTokenInfo, TokenId},
         AccountCommand, ChainConfig, Destination, OrderAccountCommand, OrderId, PoolId,
         RpcOrderInfo, Transaction, TxInput, TxOutput, UtxoOutPoint,
@@ -248,7 +249,8 @@ pub async fn into_balances<T: NodeInterface>(
     Ok(Balances::new(coins, tasks.try_collect().await?))
 }
 
-// TODO: optimize RPC calls to the Node
+// TODO: optimize RPC calls to the Node.
+// Also see the TODO in `get_tokens_decimals` in `wallet/wallet-controller/src/read.rs`.
 pub async fn tx_to_partially_signed_tx<
     T: NodeInterface,
     B: storage::BackendWithSendableTransactions,
@@ -403,61 +405,8 @@ async fn fetch_order_additional_info<T: NodeInterface>(
 pub fn get_referenced_token_ids_from_partially_signed_transaction(
     ptx: &PartiallySignedTransaction,
 ) -> BTreeSet<TokenId> {
-    let mut result = BTreeSet::new();
-    collect_referenced_token_ids_from_ptx(ptx, &mut result);
-    result
-}
-
-fn collect_referenced_token_ids_from_ptx(
-    ptx: &PartiallySignedTransaction,
-    dest: &mut BTreeSet<TokenId>,
-) {
-    for input_utxo in ptx.input_utxos().iter().flatten() {
-        collect_referenced_token_ids_from_tx_output(input_utxo, dest);
-    }
-
-    for tx_output in ptx.tx().outputs() {
-        collect_referenced_token_ids_from_tx_output(tx_output, dest);
-    }
-
-    for (_, order_info) in ptx.additional_info().order_info_iter() {
-        if let Some(token_id) = order_info.initially_asked.token_v1_id() {
-            dest.insert(*token_id);
-        }
-
-        if let Some(token_id) = order_info.initially_given.token_v1_id() {
-            dest.insert(*token_id);
-        }
-    }
-}
-
-fn collect_referenced_token_ids_from_tx_output(utxo: &TxOutput, dest: &mut BTreeSet<TokenId>) {
-    match utxo {
-        TxOutput::Burn(value)
-        | TxOutput::Transfer(value, _)
-        | TxOutput::LockThenTransfer(value, _, _)
-        | TxOutput::Htlc(value, _) => {
-            if let Some(token_id) = value.token_v1_id() {
-                dest.insert(*token_id);
-            }
-        }
-        TxOutput::CreateOrder(order) => {
-            if let Some(token_id) = order.ask().token_v1_id() {
-                dest.insert(*token_id);
-            }
-
-            if let Some(token_id) = order.give().token_v1_id() {
-                dest.insert(*token_id);
-            }
-        }
-        TxOutput::ProduceBlockFromStake(_, _)
-        | TxOutput::IssueNft(_, _, _)
-        | TxOutput::IssueFungibleToken(_)
-        | TxOutput::CreateStakePool(_, _)
-        | TxOutput::DelegateStaking(_, _)
-        | TxOutput::CreateDelegationId(_, _)
-        | TxOutput::DataDeposit(_) => {}
-    }
+    // Note: currently a token can only be referenced via an OutputValue.
+    collect_token_v1_ids_from_output_values_holder(ptx)
 }
 
 #[cfg(test)]
