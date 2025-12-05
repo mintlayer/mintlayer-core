@@ -19,6 +19,7 @@ use strum::IntoEnumIterator as _;
 use common::{
     chain::{
         block::timestamp::BlockTimestamp,
+        config::{Builder, ChainType},
         output_value::OutputValueTag,
         signature::sighash::input_commitments::SighashInputCommitmentTag,
         timelock::OutputTimeLockTag,
@@ -33,7 +34,7 @@ use common::{
 };
 use crypto::{key::KeyKind, vrf::VRFKeyKind};
 use randomness::Rng as _;
-use serialization::{DecodeAll, Encode};
+use serialization::Encode;
 use test_utils::random::{make_seedable_rng, Seed};
 
 use crate::utils::{
@@ -66,12 +67,13 @@ fn test_amount_encoding(#[case] seed: Seed) {
         let test_obj = ml_primitives::Amount::from_atoms(val);
 
         let encoded_ref_obj = ref_obj.encode();
-        let encoded_test_obj = test_obj.encode();
+        let encoded_test_obj = ml_primitives::encode(&test_obj);
 
         assert_eq!(encoded_test_obj, encoded_ref_obj);
 
         let decoded_test_obj =
-            ml_primitives::Amount::decode_all(&mut encoded_test_obj.as_slice()).unwrap();
+            ml_primitives::decode_all::<ml_primitives::Amount>(encoded_test_obj.as_slice())
+                .unwrap();
         assert_eq!(decoded_test_obj, test_obj);
     }
 }
@@ -87,12 +89,13 @@ fn test_block_height_encoding(#[case] seed: Seed) {
         let test_obj = ml_primitives::BlockHeight(val);
 
         let encoded_ref_obj = ref_obj.encode();
-        let encoded_test_obj = test_obj.encode();
+        let encoded_test_obj = ml_primitives::encode(&test_obj);
 
         assert_eq!(encoded_test_obj, encoded_ref_obj);
 
         let decoded_test_obj =
-            ml_primitives::BlockHeight::decode_all(&mut encoded_test_obj.as_slice()).unwrap();
+            ml_primitives::decode_all::<ml_primitives::BlockHeight>(encoded_test_obj.as_slice())
+                .unwrap();
         assert_eq!(decoded_test_obj, test_obj);
     }
 }
@@ -108,12 +111,13 @@ fn test_block_timestamp_encoding(#[case] seed: Seed) {
         let test_obj = ml_primitives::BlockTimestamp(ml_primitives::SecondsCount(val));
 
         let encoded_ref_obj = ref_obj.encode();
-        let encoded_test_obj = test_obj.encode();
+        let encoded_test_obj = ml_primitives::encode(&test_obj);
 
         assert_eq!(encoded_test_obj, encoded_ref_obj);
 
         let decoded_test_obj =
-            ml_primitives::BlockTimestamp::decode_all(&mut encoded_test_obj.as_slice()).unwrap();
+            ml_primitives::decode_all::<ml_primitives::BlockTimestamp>(encoded_test_obj.as_slice())
+                .unwrap();
         assert_eq!(decoded_test_obj, test_obj);
     }
 }
@@ -129,12 +133,13 @@ fn test_account_nonce_encoding(#[case] seed: Seed) {
         let test_obj = ml_primitives::AccountNonce(val);
 
         let encoded_ref_obj = ref_obj.encode();
-        let encoded_test_obj = test_obj.encode();
+        let encoded_test_obj = ml_primitives::encode(&test_obj);
 
         assert_eq!(encoded_test_obj, encoded_ref_obj);
 
         let decoded_test_obj =
-            ml_primitives::AccountNonce::decode_all(&mut encoded_test_obj.as_slice()).unwrap();
+            ml_primitives::decode_all::<ml_primitives::AccountNonce>(encoded_test_obj.as_slice())
+                .unwrap();
         assert_eq!(decoded_test_obj, test_obj);
     }
 }
@@ -151,13 +156,14 @@ fn test_account_spending_encoding(#[case] seed: Seed) {
             let test_obj: ml_primitives::AccountSpending = ref_obj.clone().convert_into();
 
             let encoded_ref_obj = ref_obj.encode();
-            let encoded_test_obj = test_obj.encode();
+            let encoded_test_obj = ml_primitives::encode(&test_obj);
 
             assert_eq!(encoded_test_obj, encoded_ref_obj);
 
-            let decoded_test_obj =
-                ml_primitives::AccountSpending::decode_all(&mut encoded_test_obj.as_slice())
-                    .unwrap();
+            let decoded_test_obj = ml_primitives::decode_all::<ml_primitives::AccountSpending>(
+                encoded_test_obj.as_slice(),
+            )
+            .unwrap();
             assert_eq!(decoded_test_obj, test_obj);
         }
     }
@@ -182,12 +188,14 @@ fn test_account_outpoint_encoding(#[case] seed: Seed) {
         let test_obj: ml_primitives::AccountOutPoint = ref_obj.clone().convert_into();
 
         let encoded_ref_obj = ref_obj.encode();
-        let encoded_test_obj = test_obj.encode();
+        let encoded_test_obj = ml_primitives::encode(&test_obj);
 
         assert_eq!(encoded_test_obj, encoded_ref_obj);
 
-        let decoded_test_obj =
-            ml_primitives::AccountOutPoint::decode_all(&mut encoded_test_obj.as_slice()).unwrap();
+        let decoded_test_obj = ml_primitives::decode_all::<ml_primitives::AccountOutPoint>(
+            encoded_test_obj.as_slice(),
+        )
+        .unwrap();
         assert_eq!(decoded_test_obj, test_obj);
     }
 }
@@ -204,13 +212,14 @@ fn test_account_command_encoding(#[case] seed: Seed) {
             let test_obj: ml_primitives::AccountCommand = ref_obj.clone().convert_into();
 
             let encoded_ref_obj = ref_obj.encode();
-            let encoded_test_obj = test_obj.encode();
+            let encoded_test_obj = ml_primitives::encode(&test_obj);
 
             assert_eq!(encoded_test_obj, encoded_ref_obj);
 
-            let decoded_test_obj =
-                ml_primitives::AccountCommand::decode_all(&mut encoded_test_obj.as_slice())
-                    .unwrap();
+            let decoded_test_obj = ml_primitives::decode_all::<ml_primitives::AccountCommand>(
+                encoded_test_obj.as_slice(),
+            )
+            .unwrap();
             assert_eq!(decoded_test_obj, test_obj);
         }
     }
@@ -246,13 +255,14 @@ fn test_order_account_command_encoding(#[case] seed: Seed) {
             let test_obj: ml_primitives::OrderAccountCommand = ref_obj.clone().convert_into();
 
             let encoded_ref_obj = ref_obj.encode();
-            let encoded_test_obj = test_obj.encode();
+            let encoded_test_obj = ml_primitives::encode(&test_obj);
 
             assert_eq!(encoded_test_obj, encoded_ref_obj);
 
-            let decoded_test_obj =
-                ml_primitives::OrderAccountCommand::decode_all(&mut encoded_test_obj.as_slice())
-                    .unwrap();
+            let decoded_test_obj = ml_primitives::decode_all::<ml_primitives::OrderAccountCommand>(
+                encoded_test_obj.as_slice(),
+            )
+            .unwrap();
             assert_eq!(decoded_test_obj, test_obj);
         }
     }
@@ -279,12 +289,13 @@ fn test_public_key_hash_encoding(#[case] seed: Seed) {
         let test_obj: ml_primitives::PublicKeyHash = ref_obj.convert_into();
 
         let encoded_ref_obj = ref_obj.encode();
-        let encoded_test_obj = test_obj.encode();
+        let encoded_test_obj = ml_primitives::encode(&test_obj);
 
         assert_eq!(encoded_test_obj, encoded_ref_obj);
 
         let decoded_test_obj =
-            ml_primitives::PublicKeyHash::decode_all(&mut encoded_test_obj.as_slice()).unwrap();
+            ml_primitives::decode_all::<ml_primitives::PublicKeyHash>(encoded_test_obj.as_slice())
+                .unwrap();
         assert_eq!(decoded_test_obj, test_obj);
     }
 }
@@ -301,12 +312,13 @@ fn test_public_key_encoding(#[case] seed: Seed) {
             let test_obj: ml_primitives::PublicKey = ref_obj.clone().convert_into();
 
             let encoded_ref_obj = ref_obj.encode();
-            let encoded_test_obj = test_obj.encode();
+            let encoded_test_obj = ml_primitives::encode(&test_obj);
 
             assert_eq!(encoded_test_obj, encoded_ref_obj);
 
             let decoded_test_obj =
-                ml_primitives::PublicKey::decode_all(&mut encoded_test_obj.as_slice()).unwrap();
+                ml_primitives::decode_all::<ml_primitives::PublicKey>(encoded_test_obj.as_slice())
+                    .unwrap();
             assert_eq!(decoded_test_obj, test_obj);
         }
     }
@@ -330,12 +342,14 @@ fn test_vrf_public_key_encoding(#[case] seed: Seed) {
             let test_obj: ml_primitives::VrfPublicKey = ref_obj.clone().convert_into();
 
             let encoded_ref_obj = ref_obj.encode();
-            let encoded_test_obj = test_obj.encode();
+            let encoded_test_obj = ml_primitives::encode(&test_obj);
 
             assert_eq!(encoded_test_obj, encoded_ref_obj);
 
-            let decoded_test_obj =
-                ml_primitives::VrfPublicKey::decode_all(&mut encoded_test_obj.as_slice()).unwrap();
+            let decoded_test_obj = ml_primitives::decode_all::<ml_primitives::VrfPublicKey>(
+                encoded_test_obj.as_slice(),
+            )
+            .unwrap();
             assert_eq!(decoded_test_obj, test_obj);
         }
     }
@@ -359,12 +373,14 @@ fn test_destination_encoding(#[case] seed: Seed) {
             let test_obj: ml_primitives::Destination = ref_obj.clone().convert_into();
 
             let encoded_ref_obj = ref_obj.encode();
-            let encoded_test_obj = test_obj.encode();
+            let encoded_test_obj = ml_primitives::encode(&test_obj);
 
             assert_eq!(encoded_test_obj, encoded_ref_obj);
 
-            let decoded_test_obj =
-                ml_primitives::Destination::decode_all(&mut encoded_test_obj.as_slice()).unwrap();
+            let decoded_test_obj = ml_primitives::decode_all::<ml_primitives::Destination>(
+                encoded_test_obj.as_slice(),
+            )
+            .unwrap();
             assert_eq!(decoded_test_obj, test_obj);
         }
     }
@@ -396,11 +412,12 @@ fn test_id_encoding(#[case] seed: Seed) {
         let test_obj = TestCustomId::new(ref_obj.to_hash().convert_into());
 
         let encoded_ref_obj = ref_obj.encode();
-        let encoded_test_obj = test_obj.encode();
+        let encoded_test_obj = ml_primitives::encode(&test_obj);
 
         assert_eq!(encoded_test_obj, encoded_ref_obj);
 
-        let decoded_test_obj = TestCustomId::decode_all(&mut encoded_test_obj.as_slice()).unwrap();
+        let decoded_test_obj =
+            ml_primitives::decode_all::<TestCustomId>(encoded_test_obj.as_slice()).unwrap();
         assert_eq!(decoded_test_obj, test_obj);
     }
 }
@@ -416,12 +433,13 @@ fn test_per_thousand_encoding(#[case] seed: Seed) {
         let test_obj: ml_primitives::PerThousand = ref_obj.convert_into();
 
         let encoded_ref_obj = ref_obj.encode();
-        let encoded_test_obj = test_obj.encode();
+        let encoded_test_obj = ml_primitives::encode(&test_obj);
 
         assert_eq!(encoded_test_obj, encoded_ref_obj);
 
         let decoded_test_obj =
-            ml_primitives::PerThousand::decode_all(&mut encoded_test_obj.as_slice()).unwrap();
+            ml_primitives::decode_all::<ml_primitives::PerThousand>(encoded_test_obj.as_slice())
+                .unwrap();
         assert_eq!(decoded_test_obj, test_obj);
     }
 }
@@ -438,13 +456,15 @@ fn test_sighash_input_commitment_encoding(#[case] seed: Seed) {
             let test_obj: ml_primitives::SighashInputCommitment = ref_obj.clone().convert_into();
 
             let encoded_ref_obj = ref_obj.encode();
-            let encoded_test_obj = test_obj.encode();
+            let encoded_test_obj = ml_primitives::encode(&test_obj);
 
             assert_eq!(encoded_test_obj, encoded_ref_obj);
 
             let decoded_test_obj =
-                ml_primitives::SighashInputCommitment::decode_all(&mut encoded_test_obj.as_slice())
-                    .unwrap();
+                ml_primitives::decode_all::<ml_primitives::SighashInputCommitment>(
+                    encoded_test_obj.as_slice(),
+                )
+                .unwrap();
             assert_eq!(decoded_test_obj, test_obj);
         }
     }
@@ -478,12 +498,14 @@ fn test_token_issuance_encoding(#[case] seed: Seed) {
             let test_obj: ml_primitives::TokenIssuance = ref_obj.clone().convert_into();
 
             let encoded_ref_obj = ref_obj.encode();
-            let encoded_test_obj = test_obj.encode();
+            let encoded_test_obj = ml_primitives::encode(&test_obj);
 
             assert_eq!(encoded_test_obj, encoded_ref_obj);
 
-            let decoded_test_obj =
-                ml_primitives::TokenIssuance::decode_all(&mut encoded_test_obj.as_slice()).unwrap();
+            let decoded_test_obj = ml_primitives::decode_all::<ml_primitives::TokenIssuance>(
+                encoded_test_obj.as_slice(),
+            )
+            .unwrap();
             assert_eq!(decoded_test_obj, test_obj);
         }
     }
@@ -501,12 +523,14 @@ fn test_is_token_freezable_encoding() {
         let test_obj: ml_primitives::IsTokenFreezable = ref_obj.convert_into();
 
         let encoded_ref_obj = ref_obj.encode();
-        let encoded_test_obj = test_obj.encode();
+        let encoded_test_obj = ml_primitives::encode(&test_obj);
 
         assert_eq!(encoded_test_obj, encoded_ref_obj);
 
-        let decoded_test_obj =
-            ml_primitives::IsTokenFreezable::decode_all(&mut encoded_test_obj.as_slice()).unwrap();
+        let decoded_test_obj = ml_primitives::decode_all::<ml_primitives::IsTokenFreezable>(
+            encoded_test_obj.as_slice(),
+        )
+        .unwrap();
         assert_eq!(decoded_test_obj, test_obj);
     }
 
@@ -524,13 +548,14 @@ fn test_is_token_unfreezable_encoding() {
         let test_obj: ml_primitives::IsTokenUnfreezable = ref_obj.convert_into();
 
         let encoded_ref_obj = ref_obj.encode();
-        let encoded_test_obj = test_obj.encode();
+        let encoded_test_obj = ml_primitives::encode(&test_obj);
 
         assert_eq!(encoded_test_obj, encoded_ref_obj);
 
-        let decoded_test_obj =
-            ml_primitives::IsTokenUnfreezable::decode_all(&mut encoded_test_obj.as_slice())
-                .unwrap();
+        let decoded_test_obj = ml_primitives::decode_all::<ml_primitives::IsTokenUnfreezable>(
+            encoded_test_obj.as_slice(),
+        )
+        .unwrap();
         assert_eq!(decoded_test_obj, test_obj);
     }
 
@@ -554,13 +579,14 @@ fn test_token_total_supply_encoding(#[case] seed: Seed) {
             let test_obj: ml_primitives::TokenTotalSupply = ref_obj.convert_into();
 
             let encoded_ref_obj = ref_obj.encode();
-            let encoded_test_obj = test_obj.encode();
+            let encoded_test_obj = ml_primitives::encode(&test_obj);
 
             assert_eq!(encoded_test_obj, encoded_ref_obj);
 
-            let decoded_test_obj =
-                ml_primitives::TokenTotalSupply::decode_all(&mut encoded_test_obj.as_slice())
-                    .unwrap();
+            let decoded_test_obj = ml_primitives::decode_all::<ml_primitives::TokenTotalSupply>(
+                encoded_test_obj.as_slice(),
+            )
+            .unwrap();
             assert_eq!(decoded_test_obj, test_obj);
         }
     }
@@ -586,12 +612,14 @@ fn test_nft_issuance_encoding(#[case] seed: Seed) {
             let test_obj: ml_primitives::NftIssuance = ref_obj.clone().convert_into();
 
             let encoded_ref_obj = ref_obj.encode();
-            let encoded_test_obj = test_obj.encode();
+            let encoded_test_obj = ml_primitives::encode(&test_obj);
 
             assert_eq!(encoded_test_obj, encoded_ref_obj);
 
-            let decoded_test_obj =
-                ml_primitives::NftIssuance::decode_all(&mut encoded_test_obj.as_slice()).unwrap();
+            let decoded_test_obj = ml_primitives::decode_all::<ml_primitives::NftIssuance>(
+                encoded_test_obj.as_slice(),
+            )
+            .unwrap();
             assert_eq!(decoded_test_obj, test_obj);
         }
     }
@@ -615,12 +643,14 @@ fn test_output_value_encoding(#[case] seed: Seed) {
             let test_obj: ml_primitives::OutputValue = ref_obj.clone().convert_into();
 
             let encoded_ref_obj = ref_obj.encode();
-            let encoded_test_obj = test_obj.encode();
+            let encoded_test_obj = ml_primitives::encode(&test_obj);
 
             assert_eq!(encoded_test_obj, encoded_ref_obj);
 
-            let decoded_test_obj =
-                ml_primitives::OutputValue::decode_all(&mut encoded_test_obj.as_slice()).unwrap();
+            let decoded_test_obj = ml_primitives::decode_all::<ml_primitives::OutputValue>(
+                encoded_test_obj.as_slice(),
+            )
+            .unwrap();
             assert_eq!(decoded_test_obj, test_obj);
         }
     }
@@ -645,13 +675,14 @@ fn test_output_time_lock_encoding(#[case] seed: Seed) {
             let test_obj: ml_primitives::OutputTimeLock = ref_obj.convert_into();
 
             let encoded_ref_obj = ref_obj.encode();
-            let encoded_test_obj = test_obj.encode();
+            let encoded_test_obj = ml_primitives::encode(&test_obj);
 
             assert_eq!(encoded_test_obj, encoded_ref_obj);
 
-            let decoded_test_obj =
-                ml_primitives::OutputTimeLock::decode_all(&mut encoded_test_obj.as_slice())
-                    .unwrap();
+            let decoded_test_obj = ml_primitives::decode_all::<ml_primitives::OutputTimeLock>(
+                encoded_test_obj.as_slice(),
+            )
+            .unwrap();
             assert_eq!(decoded_test_obj, test_obj);
         }
     }
@@ -678,13 +709,14 @@ fn test_outpoint_source_id_encoding(#[case] seed: Seed) {
             let test_obj: ml_primitives::OutPointSourceId = ref_obj.clone().convert_into();
 
             let encoded_ref_obj = ref_obj.encode();
-            let encoded_test_obj = test_obj.encode();
+            let encoded_test_obj = ml_primitives::encode(&test_obj);
 
             assert_eq!(encoded_test_obj, encoded_ref_obj);
 
-            let decoded_test_obj =
-                ml_primitives::OutPointSourceId::decode_all(&mut encoded_test_obj.as_slice())
-                    .unwrap();
+            let decoded_test_obj = ml_primitives::decode_all::<ml_primitives::OutPointSourceId>(
+                encoded_test_obj.as_slice(),
+            )
+            .unwrap();
             assert_eq!(decoded_test_obj, test_obj);
         }
     }
@@ -708,12 +740,13 @@ fn test_utxo_outpoint_encoding(#[case] seed: Seed) {
         let test_obj: ml_primitives::UtxoOutPoint = ref_obj.clone().convert_into();
 
         let encoded_ref_obj = ref_obj.encode();
-        let encoded_test_obj = test_obj.encode();
+        let encoded_test_obj = ml_primitives::encode(&test_obj);
 
         assert_eq!(encoded_test_obj, encoded_ref_obj);
 
         let decoded_test_obj =
-            ml_primitives::UtxoOutPoint::decode_all(&mut encoded_test_obj.as_slice()).unwrap();
+            ml_primitives::decode_all::<ml_primitives::UtxoOutPoint>(encoded_test_obj.as_slice())
+                .unwrap();
         assert_eq!(decoded_test_obj, test_obj);
     }
 }
@@ -729,12 +762,13 @@ fn test_stake_pool_data_encoding(#[case] seed: Seed) {
         let test_obj: ml_primitives::StakePoolData = ref_obj.clone().convert_into();
 
         let encoded_ref_obj = ref_obj.encode();
-        let encoded_test_obj = test_obj.encode();
+        let encoded_test_obj = ml_primitives::encode(&test_obj);
 
         assert_eq!(encoded_test_obj, encoded_ref_obj);
 
         let decoded_test_obj =
-            ml_primitives::StakePoolData::decode_all(&mut encoded_test_obj.as_slice()).unwrap();
+            ml_primitives::decode_all::<ml_primitives::StakePoolData>(encoded_test_obj.as_slice())
+                .unwrap();
         assert_eq!(decoded_test_obj, test_obj);
     }
 }
@@ -750,12 +784,13 @@ fn test_order_data_encoding(#[case] seed: Seed) {
         let test_obj: ml_primitives::OrderData = ref_obj.clone().convert_into();
 
         let encoded_ref_obj = ref_obj.encode();
-        let encoded_test_obj = test_obj.encode();
+        let encoded_test_obj = ml_primitives::encode(&test_obj);
 
         assert_eq!(encoded_test_obj, encoded_ref_obj);
 
         let decoded_test_obj =
-            ml_primitives::OrderData::decode_all(&mut encoded_test_obj.as_slice()).unwrap();
+            ml_primitives::decode_all::<ml_primitives::OrderData>(encoded_test_obj.as_slice())
+                .unwrap();
         assert_eq!(decoded_test_obj, test_obj);
     }
 }
@@ -771,13 +806,14 @@ fn test_htlc_encoding(#[case] seed: Seed) {
         let test_obj: ml_primitives::HashedTimelockContract = ref_obj.clone().convert_into();
 
         let encoded_ref_obj = ref_obj.encode();
-        let encoded_test_obj = test_obj.encode();
+        let encoded_test_obj = ml_primitives::encode(&test_obj);
 
         assert_eq!(encoded_test_obj, encoded_ref_obj);
 
-        let decoded_test_obj =
-            ml_primitives::HashedTimelockContract::decode_all(&mut encoded_test_obj.as_slice())
-                .unwrap();
+        let decoded_test_obj = ml_primitives::decode_all::<ml_primitives::HashedTimelockContract>(
+            encoded_test_obj.as_slice(),
+        )
+        .unwrap();
         assert_eq!(decoded_test_obj, test_obj);
     }
 }
@@ -794,12 +830,13 @@ fn test_tx_input_encoding(#[case] seed: Seed) {
             let test_obj: ml_primitives::TxInput = ref_obj.clone().convert_into();
 
             let encoded_ref_obj = ref_obj.encode();
-            let encoded_test_obj = test_obj.encode();
+            let encoded_test_obj = ml_primitives::encode(&test_obj);
 
             assert_eq!(encoded_test_obj, encoded_ref_obj);
 
             let decoded_test_obj =
-                ml_primitives::TxInput::decode_all(&mut encoded_test_obj.as_slice()).unwrap();
+                ml_primitives::decode_all::<ml_primitives::TxInput>(encoded_test_obj.as_slice())
+                    .unwrap();
             assert_eq!(decoded_test_obj, test_obj);
         }
     }
@@ -826,12 +863,13 @@ fn test_tx_output_encoding(#[case] seed: Seed) {
             let test_obj: ml_primitives::TxOutput = ref_obj.clone().convert_into();
 
             let encoded_ref_obj = ref_obj.encode();
-            let encoded_test_obj = test_obj.encode();
+            let encoded_test_obj = ml_primitives::encode(&test_obj);
 
             assert_eq!(encoded_test_obj, encoded_ref_obj);
 
             let decoded_test_obj =
-                ml_primitives::TxOutput::decode_all(&mut encoded_test_obj.as_slice()).unwrap();
+                ml_primitives::decode_all::<ml_primitives::TxOutput>(encoded_test_obj.as_slice())
+                    .unwrap();
             assert_eq!(decoded_test_obj, test_obj);
         }
     }
@@ -863,4 +901,111 @@ fn ensure_trezor_firmware_uses_same_ml_primitives() {
     // If `ml_primitives` and `trezor_client::client::ml_primitives` refer to different
     // versions (i.e. repo revisions) of the crate, this will not compile.
     test(trezor_client::client::ml_primitives::Amount::from_atoms(1));
+}
+
+#[test]
+fn test_coin_type_consistency_settings() {
+    for chain_type in ChainType::iter() {
+        let config = Builder::new(chain_type).build();
+
+        let coin_type = to_coin_type(chain_type);
+
+        // Check Ticker consistency
+        assert_eq!(
+            config.coin_ticker(),
+            coin_type.coin_ticker(),
+            "Coin ticker mismatch for {:?}",
+            chain_type
+        );
+
+        // Check Decimals consistency
+        assert_eq!(
+            config.coin_decimals(),
+            coin_type.coin_decimals(),
+            "Coin decimals mismatch for {:?}",
+            chain_type
+        );
+
+        // Check BIP44 Coin Type consistency
+        let config_bip44: u32 = config.bip44_coin_type().into_encoded_index();
+        assert_eq!(
+            config_bip44,
+            coin_type.bip44_coin_type(),
+            "BIP44 coin type mismatch for {:?}",
+            chain_type
+        );
+
+        // Check Bech32 Prefixes for specific entity IDs
+        assert_eq!(
+            config.pool_id_address_prefix(),
+            coin_type.pool_id_address_prefix(),
+            "Pool ID address prefix mismatch for {:?}",
+            chain_type
+        );
+
+        assert_eq!(
+            config.delegation_id_address_prefix(),
+            coin_type.delegation_id_address_prefix(),
+            "Delegation ID address prefix mismatch for {:?}",
+            chain_type
+        );
+
+        assert_eq!(
+            config.token_id_address_prefix(),
+            coin_type.token_id_address_prefix(),
+            "Token ID address prefix mismatch for {:?}",
+            chain_type
+        );
+
+        assert_eq!(
+            config.order_id_address_prefix(),
+            coin_type.order_id_address_prefix(),
+            "Order ID address prefix mismatch for {:?}",
+            chain_type
+        );
+
+        assert_eq!(
+            config.vrf_public_key_address_prefix(),
+            coin_type.vrf_public_key_address_prefix(),
+            "VRF public key address prefix mismatch for {:?}",
+            chain_type
+        );
+    }
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn test_coin_type_destination_address_prefixes(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    for chain_type in ChainType::iter() {
+        let config = Builder::new(chain_type).build();
+
+        let coin_type = to_coin_type(chain_type);
+
+        for tag in DestinationTag::iter() {
+            // Create a random valid destination in the `common` format
+            let common_dest = make_random_destination_for_tag(&mut rng, tag);
+
+            let primitive_dest: ml_primitives::Destination = common_dest.clone().convert_into();
+            let expected_prefix = config.destination_address_prefix(tag);
+            let actual_prefix = coin_type.address_prefix(&primitive_dest);
+
+            assert_eq!(
+                expected_prefix, actual_prefix,
+                "Address prefix mismatch for Chain: {:?}, Destination: {:?}",
+                chain_type, tag
+            );
+        }
+    }
+}
+
+fn to_coin_type(chain_type: ChainType) -> ml_primitives::CoinType {
+    match chain_type {
+        ChainType::Mainnet => ml_primitives::CoinType::Mainnet,
+        ChainType::Testnet => ml_primitives::CoinType::Testnet,
+        ChainType::Regtest => ml_primitives::CoinType::Regtest,
+        ChainType::Signet => ml_primitives::CoinType::Signet,
+    }
 }
