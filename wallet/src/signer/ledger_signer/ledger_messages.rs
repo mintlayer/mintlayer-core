@@ -19,6 +19,7 @@ use crate::signer::{ledger_signer::LedgerError, SignerError, SignerResult};
 use common::{
     chain::{self},
     primitives,
+    primitives_converters::TryConvertInto as _,
 };
 use crypto::key::{
     extended::ExtendedPublicKey,
@@ -35,11 +36,10 @@ use mintlayer_ledger_messages::{
     AccountNonce as LAccountNonce, AccountOutPoint as LAccountOutPoint, AdditionalOrderInfo,
     AddrType, Amount as LAmount, Apdu, Bip32Path as LedgerBip32Path, CoinType,
     GetPublicKeyRespones, Id as LId, Ins, MsgSignature,
-    OrderAccountCommand as LOrderAccountCommand, OutputValue as LOutputValue, P1SignTx, PubKeyP1,
-    PublicKeyReq, SighashInputCommitment as LSighashInputCommitment, SignMessageReq, SignTxReq,
-    Signature as LedgerSignature, TxInputReq, TxMetadataReq, TxOutput as LTxOutput, TxOutputReq,
-    UtxoOutPoint as LUtxoOutPoint, APDU_CLASS, H256 as LH256, P1_SIGN_NEXT, P1_SIGN_START, P2_DONE,
-    P2_MORE,
+    OrderAccountCommand as LOrderAccountCommand, OutputValue as LOutputValue, PubKeyP1,
+    PublicKeyReq, SighashInputCommitment as LSighashInputCommitment, SignMessageReq, SignP1,
+    SignTxReq, Signature as LedgerSignature, TxInputReq, TxMetadataReq, TxOutput as LTxOutput,
+    TxOutputReq, UtxoOutPoint as LUtxoOutPoint, APDU_CLASS, H256 as LH256, P2_DONE, P2_MORE,
 };
 use wallet_types::partially_signed_transaction::OrderAdditionalInfo;
 
@@ -129,12 +129,12 @@ pub async fn sign_challenge<L: Exchange>(
     send_chunked_expect_empty_ok_response(
         ledger,
         Ins::SIGN_MSG,
-        P1_SIGN_START,
+        SignP1::Start.into(),
         &ledger_encode(req),
     )
     .await?;
 
-    let resp = send_chunked(ledger, Ins::SIGN_MSG, P1_SIGN_NEXT, message).await?;
+    let resp = send_chunked(ledger, Ins::SIGN_MSG, SignP1::Next.into(), message).await?;
 
     let sig: MsgSignature = ledger_decode_all(&resp).ok_or(LedgerError::InvalidResponse)?;
 
@@ -226,19 +226,14 @@ pub async fn sign_tx<L: Exchange>(
         num_inputs: inputs.len() as u32,
         num_outputs: outputs.len() as u32,
     });
-    send_chunked_expect_empty_ok_response(
-        ledger,
-        Ins::SIGN_TX,
-        P1SignTx::Metadata.into(),
-        &metadata,
-    )
-    .await?;
+    send_chunked_expect_empty_ok_response(ledger, Ins::SIGN_TX, SignP1::Start.into(), &metadata)
+        .await?;
 
     for inp in inputs {
         send_chunked_expect_empty_ok_response(
             ledger,
             Ins::SIGN_TX,
-            P1SignTx::Input.into(),
+            SignP1::Next.into(),
             &ledger_encode(SignTxReq::Input(inp)),
         )
         .await?;
@@ -248,7 +243,7 @@ pub async fn sign_tx<L: Exchange>(
         send_chunked_expect_empty_ok_response(
             ledger,
             Ins::SIGN_TX,
-            P1SignTx::InputCommitment.into(),
+            SignP1::Next.into(),
             &ledger_encode(SignTxReq::InputCommitment(commitment)),
         )
         .await?;
@@ -261,7 +256,7 @@ pub async fn sign_tx<L: Exchange>(
             send_chunked_expect_empty_ok_response(
                 ledger,
                 Ins::SIGN_TX,
-                P1SignTx::Output.into(),
+                SignP1::Next.into(),
                 &ledger_encode(SignTxReq::Output(o)),
             )
             .await?;
@@ -270,7 +265,7 @@ pub async fn sign_tx<L: Exchange>(
             resp = send_chunked(
                 ledger,
                 Ins::SIGN_TX,
-                P1SignTx::Output.into(),
+                SignP1::Next.into(),
                 &ledger_encode(SignTxReq::Output(o)),
             )
             .await?;
@@ -280,7 +275,7 @@ pub async fn sign_tx<L: Exchange>(
     let mut signatures: BTreeMap<_, Vec<_>> = BTreeMap::new();
 
     let next_sig = ledger_encode(SignTxReq::NextSignature);
-    let mut msg_buf = vec![APDU_CLASS, Ins::SIGN_TX, P1SignTx::NextSignature.into(), P2_DONE];
+    let mut msg_buf = vec![APDU_CLASS, Ins::SIGN_TX, SignP1::Next.into(), P2_DONE];
     msg_buf.push(next_sig.len() as u8);
     msg_buf.extend(next_sig);
     loop {
@@ -350,7 +345,7 @@ pub fn to_ledger_additional_order_info(
     Ok(AdditionalOrderInfo {
         initially_asked: to_ledger_output_value(&info.initially_asked)?,
         initially_given: to_ledger_output_value(&info.initially_given)?,
-        ask_balance: to_ledger_amount(&info.ask_balance),
+        ask_balance: info.ask_balance.try_convert_into()?,
         give_balance: to_ledger_amount(&info.give_balance),
     })
 }

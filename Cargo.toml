@@ -281,8 +281,8 @@ zeroize = "1.5"
 
 [workspace.dependencies.ml_primitives]
 git = "https://github.com/mintlayer/mintlayer-core-primitives"
-# The commit "Merge pull request #1 from mintlayer/initial_implementation".
-rev = "4e21bf85e7fdca1577a49df7599b2b39ec913287"
+# The commit "Add CoinType used for Ledger and encode/decode utils".
+rev = "32d9e3c50ce3c9b2e08920c2f3300f11fdad4c03"
 package = "mintlayer-core-primitives"
 
 [workspace.dependencies.ledger-lib]
@@ -295,14 +295,14 @@ rev = "510bb3ca30639af4bdb12a918b6bbbdb75fa5f52"
 
 [workspace.dependencies.mintlayer-ledger-messages]
 git = "https://github.com/mintlayer/mintlayer-ledger-app"
-# The commit "fix tests"
-rev = "b87b78a330a7e2a80d30154e11c5065562ee9d0f"
+# The commit "bump deps and toolchain"
+rev = "bf565b1b6e2fdd6ae0f21035b184737d834f4e33"
 package = "messages"
 
 [workspace.dependencies.trezor-client]
 git = "https://github.com/mintlayer/mintlayer-trezor-firmware"
-# The commit "Merge pull request #22 from mintlayer/specify_license_for_ml_reexports"
-rev = "35716c865086f017f308c949c041f99d343057c0"
+# The commit "Bump ml_primitives and parity scale codec deps"
+rev = "a37e325b059c3e0958b82a402a2ad5e57b54f1d7"
 features = ["bitcoin", "mintlayer"]
 
 [workspace.metadata.dist.dependencies.apt]
