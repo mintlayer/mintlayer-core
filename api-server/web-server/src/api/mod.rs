@@ -27,7 +27,7 @@ use axum::{http::Method, response::IntoResponse, routing::get, Json, Router};
 use serde_json::json;
 use std::sync::Arc;
 use tokio::net::TcpListener;
-use tower_http_axum::cors::{AllowMethods, Any, CorsLayer};
+use tower_http::cors::{AllowMethods, Any, CorsLayer};
 
 #[allow(clippy::unused_async)]
 async fn bad_request() -> Result<(), ApiServerWebServerError> {

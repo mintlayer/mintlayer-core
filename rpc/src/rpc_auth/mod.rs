@@ -18,7 +18,8 @@ use crypto::{
     kdf::{argon2::Argon2Config, hash_password, verify_password, KdfConfig, KdfResult},
     util::eq::SliceEqualityCheckMethod,
 };
-use hyper::{Body, Request, Response};
+use hyper::{Request, Response};
+use jsonrpsee::server::HttpBody;
 use logging::log;
 use randomness::make_true_rng;
 use tower_http::validate_request::ValidateRequest;
@@ -102,7 +103,7 @@ impl RpcAuth {
 }
 
 impl<B> ValidateRequest<B> for RpcAuth {
-    type ResponseBody = Body;
+    type ResponseBody = HttpBody;
 
     fn validate(&mut self, request: &mut Request<B>) -> Result<(), Response<Self::ResponseBody>> {
         use jsonrpsee::types;
