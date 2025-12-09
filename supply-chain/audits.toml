@@ -153,6 +153,18 @@ user-id = 267 # Tony Arcieri (tarcieri)
 start = "2021-01-21"
 end = "2026-10-15"
 
+[[trusted.bb8]]
+criteria = "safe-to-deploy"
+user-id = 4556 # Dirkjan Ochtman (djc)
+start = "2020-01-17"
+end = "2026-12-08"
+
+[[trusted.bb8-postgres]]
+criteria = "safe-to-deploy"
+user-id = 4556 # Dirkjan Ochtman (djc)
+start = "2020-01-17"
+end = "2026-12-08"
+
 [[trusted.bech32]]
 criteria = "safe-to-deploy"
 user-id = 1588 # Andrew Poelstra (apoelstra)
@@ -284,6 +296,12 @@ criteria = "safe-to-deploy"
 user-id = 267 # Tony Arcieri (tarcieri)
 start = "2019-08-30"
 end = "2026-10-15"
+
+[[trusted.chrono]]
+criteria = "safe-to-deploy"
+user-id = 4556 # Dirkjan Ochtman (djc)
+start = "2022-07-25"
+end = "2026-12-08"
 
 [[trusted.clap]]
 criteria = "safe-to-deploy"
@@ -561,6 +579,12 @@ user-id = 2915 # Amanieu d'Antras (Amanieu)
 start = "2019-04-02"
 end = "2026-10-15"
 
+[[trusted.hashlink]]
+criteria = "safe-to-deploy"
+user-id = 4556 # Dirkjan Ochtman (djc)
+start = "2025-10-26"
+end = "2026-12-08"
+
 [[trusted.hex-conservative]]
 criteria = "safe-to-deploy"
 user-id = 1588 # Andrew Poelstra (apoelstra)
@@ -615,11 +639,23 @@ user-id = 359 # Sean McArthur (seanmonstar)
 start = "2019-07-03"
 end = "2026-10-15"
 
+[[trusted.humantime]]
+criteria = "safe-to-deploy"
+user-id = 4556 # Dirkjan Ochtman (djc)
+start = "2025-03-12"
+end = "2026-12-08"
+
 [[trusted.hyper]]
 criteria = "safe-to-deploy"
 user-id = 359 # Sean McArthur (seanmonstar)
 start = "2019-03-01"
 end = "2026-10-15"
+
+[[trusted.hyper-rustls]]
+criteria = "safe-to-deploy"
+user-id = 4556 # Dirkjan Ochtman (djc)
+start = "2022-11-15"
+end = "2026-12-08"
 
 [[trusted.hyper-tls]]
 criteria = "safe-to-deploy"
@@ -1107,6 +1143,12 @@ user-id = 359 # Sean McArthur (seanmonstar)
 start = "2019-03-04"
 end = "2026-10-15"
 
+[[trusted.ring]]
+criteria = "safe-to-deploy"
+user-id = 2751 # Joe Birr-Pixton (ctz)
+start = "2025-02-22"
+end = "2026-12-08"
+
 [[trusted.ripemd]]
 criteria = "safe-to-deploy"
 user-id = 267 # Tony Arcieri (tarcieri)
@@ -1136,6 +1178,54 @@ criteria = "safe-to-deploy"
 user-id = 6825 # Dan Gohman (sunfishcode)
 start = "2021-10-29"
 end = "2026-10-15"
+
+[[trusted.rustls]]
+criteria = "safe-to-deploy"
+user-id = 4556 # Dirkjan Ochtman (djc)
+start = "2022-05-18"
+end = "2026-12-08"
+
+[[trusted.rustls-native-certs]]
+criteria = "safe-to-deploy"
+user-id = 4556 # Dirkjan Ochtman (djc)
+start = "2023-06-14"
+end = "2026-12-08"
+
+[[trusted.rustls-pki-types]]
+criteria = "safe-to-deploy"
+user-id = 4556 # Dirkjan Ochtman (djc)
+start = "2023-08-31"
+end = "2026-12-08"
+
+[[trusted.rustls-platform-verifier]]
+criteria = "safe-to-deploy"
+user-id = 4556 # Dirkjan Ochtman (djc)
+start = "2024-12-18"
+end = "2026-12-08"
+
+[[trusted.rustls-platform-verifier-android]]
+criteria = "safe-to-deploy"
+user-id = 209038 # Daniel McCarney (cpu)
+start = "2024-07-29"
+end = "2026-12-08"
+
+[[trusted.rustls-webpki]]
+criteria = "safe-to-deploy"
+user-id = 2751 # Joe Birr-Pixton (ctz)
+start = "2023-01-09"
+end = "2026-12-08"
+
+[[trusted.rustls-webpki]]
+criteria = "safe-to-deploy"
+user-id = 4556 # Dirkjan Ochtman (djc)
+start = "2023-09-01"
+end = "2026-12-08"
+
+[[trusted.rustls-webpki]]
+criteria = "safe-to-deploy"
+user-id = 209038 # Daniel McCarney (cpu)
+start = "2023-07-04"
+end = "2026-12-08"
 
 [[trusted.rustversion]]
 criteria = "safe-to-deploy"
@@ -1365,6 +1455,12 @@ user-id = 55015 # Paolo Barbolini (paolobarbolini)
 start = "2025-09-25"
 end = "2026-10-15"
 
+[[trusted.tokio-rustls]]
+criteria = "safe-to-deploy"
+user-id = 4556 # Dirkjan Ochtman (djc)
+start = "2023-06-09"
+end = "2026-12-08"
+
 [[trusted.tokio-util]]
 criteria = "safe-to-deploy"
 user-id = 10
@@ -1527,6 +1623,24 @@ user-id = 1 # Alex Crichton (alexcrichton)
 start = "2019-03-04"
 end = "2026-10-15"
 
+[[trusted.webpki-root-certs]]
+criteria = "safe-to-deploy"
+user-id = 2751 # Joe Birr-Pixton (ctz)
+start = "2024-11-21"
+end = "2026-12-08"
+
+[[trusted.webpki-root-certs]]
+criteria = "safe-to-deploy"
+user-id = 4556 # Dirkjan Ochtman (djc)
+start = "2025-10-07"
+end = "2026-12-08"
+
+[[trusted.webpki-root-certs]]
+criteria = "safe-to-deploy"
+user-id = 209038 # Daniel McCarney (cpu)
+start = "2024-08-07"
+end = "2026-12-08"
+
 [[trusted.winapi-util]]
 criteria = "safe-to-deploy"
 user-id = 189 # Andrew Gallant (BurntSushi)
@@ -1586,6 +1700,12 @@ criteria = "safe-to-deploy"
 user-id = 64539 # Kenny Kerr (kennykerr)
 start = "2023-05-15"
 end = "2026-10-15"
+
+[[trusted.windows-registry]]
+criteria = "safe-to-deploy"
+user-id = 64539 # Kenny Kerr (kennykerr)
+start = "2024-02-15"
+end = "2026-12-08"
 
 [[trusted.windows-result]]
 criteria = "safe-to-deploy"

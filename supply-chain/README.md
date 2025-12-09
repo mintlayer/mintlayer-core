@@ -100,6 +100,9 @@ will be automatically removed by `cargo vet`, while `cargo vet --locked` will co
     | Lukas Kalbertodt | LukasKalbertodt | Maintainer of `libtest-mimic`. Former member of Rust library team. |
     | Jacob Pratt | jhpratt | Maintainer of the `time` crate. Regular contributor to the Rust standard library. |
     | Timon Post| TimonPost | Maintainer of the widely-used `crossterm` crate. |
+    | Joe Birr-Pixton | ctz | The creator and lead maintainer of the widely used `rustls` crate. |
+    | Dirkjan Ochtman | djc | One of the maintainers of `rustls`. |
+    | Daniel McCarney | cpu | One of the maintainers of `rustls`. He's also a member of `Go`. |
 
 - We also trust the crates that we've forked.
 

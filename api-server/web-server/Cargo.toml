@@ -29,4 +29,4 @@ serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true }
-tower-http-axum = { workspace = true, features = ["cors"] }
+tower-http = { workspace = true, features = ["cors"] }

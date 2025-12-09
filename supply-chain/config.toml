@@ -112,14 +112,6 @@ criteria = "safe-to-deploy"
 version = "0.4.5"
 criteria = "safe-to-deploy"
 
-[[exemptions.bb8]]
-version = "0.8.6"
-criteria = "safe-to-deploy"
-
-[[exemptions.bb8-postgres]]
-version = "0.8.1"
-criteria = "safe-to-deploy"
-
 [[exemptions.bincode]]
 version = "1.3.3"
 criteria = "safe-to-deploy"
@@ -178,10 +170,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.cesu8]]
 version = "1.1.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.chrono]]
-version = "0.4.42"
 criteria = "safe-to-deploy"
 
 [[exemptions.clipboard-win]]
@@ -544,14 +532,6 @@ criteria = "safe-to-deploy"
 version = "0.2.1"
 criteria = "safe-to-deploy"
 
-[[exemptions.humantime]]
-version = "2.3.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.hyper-rustls]]
-version = "0.24.2"
-criteria = "safe-to-deploy"
-
 [[exemptions.iced_aw]]
 version = "0.12.2@git:def1db9aac1e58a47e0c3127d4d4e95d724ca8ad"
 criteria = "safe-to-deploy"
@@ -572,6 +552,10 @@ criteria = "safe-to-deploy"
 version = "2.11.0"
 criteria = "safe-to-deploy"
 
+[[exemptions.iri-string]]
+version = "0.7.9"
+criteria = "safe-to-deploy"
+
 [[exemptions.jni-sys]]
 version = "0.3.0"
 criteria = "safe-to-deploy"
@@ -581,35 +565,35 @@ version = "0.3.81"
 criteria = "safe-to-deploy"
 
 [[exemptions.jsonrpsee]]
-version = "0.22.5"
+version = "0.26.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.jsonrpsee-client-transport]]
-version = "0.22.5"
+version = "0.26.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.jsonrpsee-core]]
-version = "0.22.5"
+version = "0.26.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.jsonrpsee-http-client]]
-version = "0.22.5"
+version = "0.26.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.jsonrpsee-proc-macros]]
-version = "0.22.5"
+version = "0.26.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.jsonrpsee-server]]
-version = "0.22.5"
+version = "0.26.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.jsonrpsee-types]]
-version = "0.22.5"
+version = "0.26.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.jsonrpsee-ws-client]]
-version = "0.22.5"
+version = "0.26.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.khronos-egl]]
@@ -1080,40 +1064,12 @@ criteria = "safe-to-deploy"
 version = "2.1.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.rustls]]
-version = "0.21.12"
-criteria = "safe-to-deploy"
-
-[[exemptions.rustls]]
-version = "0.22.4"
-criteria = "safe-to-deploy"
-
-[[exemptions.rustls-native-certs]]
-version = "0.6.3"
-criteria = "safe-to-deploy"
-
-[[exemptions.rustls-native-certs]]
-version = "0.7.3"
-criteria = "safe-to-deploy"
-
 [[exemptions.rustls-pemfile]]
 version = "1.0.4"
 criteria = "safe-to-deploy"
 
 [[exemptions.rustls-pemfile]]
 version = "2.2.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.rustls-pki-types]]
-version = "1.12.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.rustls-webpki]]
-version = "0.101.7"
-criteria = "safe-to-deploy"
-
-[[exemptions.rustls-webpki]]
-version = "0.102.8"
 criteria = "safe-to-deploy"
 
 [[exemptions.rusty-fork]]
@@ -1162,6 +1118,10 @@ criteria = "safe-to-deploy"
 
 [[exemptions.security-framework]]
 version = "2.11.1"
+criteria = "safe-to-deploy"
+
+[[exemptions.security-framework]]
+version = "3.5.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.security-framework-sys]]
@@ -1249,7 +1209,7 @@ version = "0.4.6"
 criteria = "safe-to-deploy"
 
 [[exemptions.soketto]]
-version = "0.7.1"
+version = "0.8.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.spirv]]
@@ -1289,12 +1249,12 @@ version = "0.3.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.system-configuration]]
-version = "0.5.1"
-criteria = "safe-to-run"
+version = "0.6.1"
+criteria = "safe-to-deploy"
 
 [[exemptions.system-configuration-sys]]
-version = "0.5.0"
-criteria = "safe-to-run"
+version = "0.6.0"
+criteria = "safe-to-deploy"
 
 [[exemptions.tempfile]]
 version = "3.23.0"
@@ -1318,14 +1278,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.tinyvec]]
 version = "1.10.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.tokio-rustls]]
-version = "0.24.1"
-criteria = "safe-to-deploy"
-
-[[exemptions.tokio-rustls]]
-version = "0.25.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.tokio-socks]]
