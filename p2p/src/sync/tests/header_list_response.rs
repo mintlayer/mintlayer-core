@@ -231,6 +231,7 @@ async fn disconnect() {
             user_agent: "test".try_into().unwrap(),
             peer_manager_config: Default::default(),
             protocol_config: Default::default(),
+            custom_disconnection_reason_for_banning: Default::default(),
         });
         let mut node = TestNode::builder(protocol_version)
             .with_p2p_config(Arc::clone(&p2p_config))

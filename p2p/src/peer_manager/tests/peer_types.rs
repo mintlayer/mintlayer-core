@@ -62,6 +62,7 @@ fn validate_services() {
             sync_stalling_timeout: Default::default(),
             peer_manager_config: Default::default(),
             protocol_config: Default::default(),
+            custom_disconnection_reason_for_banning: Default::default(),
         });
 
         let (cmd_sender, _cmd_receiver) = tokio::sync::mpsc::unbounded_channel();

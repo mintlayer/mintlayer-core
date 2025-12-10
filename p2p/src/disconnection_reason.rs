@@ -19,6 +19,7 @@ use networking::error::{MessageCodecError, NetworkingError};
 use p2p_types::services::Services;
 
 use crate::{
+    config::P2pConfig,
     error::{ConnectionValidationError, P2pError},
     protocol::MIN_SUPPORTED_PROTOCOL_VERSION,
 };
@@ -107,13 +108,24 @@ pub enum DisconnectionReason {
     // Another possible reason for message decoding failure.
     #[display("Your message size {actual_size} exceeded the maximum size {max_size}")]
     MessageTooLarge { actual_size: usize, max_size: usize },
+
+    #[display("{_0}")]
+    CustomMessage(String),
 }
 
 impl DisconnectionReason {
-    pub fn from_result<T>(res: &crate::Result<T>) -> Option<Self> {
+    pub fn from_result<T>(res: &crate::Result<T>, p2p_config: &P2pConfig) -> Option<Self> {
         match res {
             Ok(_) => None,
-            Err(err) => Self::from_error(err),
+            Err(err) => Self::from_error(err, p2p_config),
+        }
+    }
+
+    pub fn ban_reason(p2p_config: &P2pConfig) -> Self {
+        if let Some(custom_reason) = p2p_config.custom_disconnection_reason_for_banning.as_ref() {
+            Self::CustomMessage(custom_reason.clone())
+        } else {
+            Self::AddressBanned
         }
     }
 
@@ -163,7 +175,7 @@ impl DisconnectionReason {
         }
     }
 
-    pub fn from_error(err: &P2pError) -> Option<Self> {
+    pub fn from_error(err: &P2pError, p2p_config: &P2pConfig) -> Option<Self> {
         match err {
             P2pError::NetworkingError(err) => Self::from_networking_error(err),
             P2pError::ProtocolError(_)
@@ -203,7 +215,7 @@ impl DisconnectionReason {
                     Some(Self::TooManyInboundPeersAndCannotEvictAnyone)
                 }
                 ConnectionValidationError::AddressBanned { address: _ } => {
-                    Some(Self::AddressBanned)
+                    Some(Self::ban_reason(p2p_config))
                 }
                 ConnectionValidationError::AddressDiscouraged { address: _ } => {
                     Some(Self::AddressDiscouraged)

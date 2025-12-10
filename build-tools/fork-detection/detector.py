@@ -81,6 +81,14 @@ NODE_STARTUP_OUTPUT_LINE_REGEX = re.compile(r"p2p.*Starting SyncManager")
 
 DEFAULT_BAN_DURATION_HOURS = 12
 
+# Custom disconnection reason to send to peers when banning them. We don't want the default
+# "Your address is banned" to be sent, because it sounds like the peer's node is faulty.
+# We also don't want to be too specific, e.g. the peer doesn't need to know thar something
+# called "fork detector" is running somewhere. So we choose a reason that is somewhat vague.
+# Also note that since we ban peers when networking is already disabled, the peer can only
+# get this message when attempting an outbound connectiion to the detector's node.
+BAN_REASON_STRING = "Cannot accept connections at this moment"
+
 # We use Queue.shutdown which is only available since Python v3.13
 MIN_PYTHON_VERSION_MAJOR = 3
 MIN_PYTHON_VERSION_MINOR = 13
@@ -88,7 +96,6 @@ MIN_PYTHON_VERSION_MINOR = 13
 PERMABANNED_PEERS_FILE = "permabanned_peers.txt"
 PERMABAN_DURATION_DAYS = 30
 PERMABAN_DURATION_SECS = 3600 * 24 * PERMABAN_DURATION_DAYS
-
 
 class Handler():
     def __init__(self, args, email_sender):
@@ -135,6 +142,7 @@ class Handler():
             "--rpc-bind-address", args.node_rpc_bind_address,
             "--rpc-username", NODE_RPC_USER,
             "--rpc-password", NODE_RPC_PWD,
+            "--p2p-custom-disconnection-reason-for-banning", BAN_REASON_STRING
         ]
         log.info(f"Node run command: {self.node_cmd}")
 
@@ -315,10 +323,8 @@ class Handler():
 
             peer_ips_to_ban = self.get_node_peer_ip_addrs_to_ban()
 
-            # Before banning, force the disconnection of all peers by disabling networking,
-            # to avoid sending them the "scary" disconnection reason "Your address is banned"
-            # (though nodes may still see this reason if they try connecting to our node
-            # during the next attempt).
+            # Before banning, disable networking; this will disconnect all peers and prevent them
+            # from reconnecting again.
             self.node_rpc_client.enable_networking(False)
             # Give the node some time to actually disconnect all peers.
             time.sleep(2)

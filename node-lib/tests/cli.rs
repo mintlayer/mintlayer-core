@@ -114,6 +114,7 @@ fn read_config_override_values() {
     let p2p_sync_stalling_timeout = NonZeroU64::new(37).unwrap();
     let p2p_max_clock_diff = 15;
     let p2p_force_dns_query_if_no_global_addresses_known = true;
+    let p2p_custom_disconnection_reason_for_banning = "foo".to_owned();
     let rpc_bind_address = "127.0.0.1:5432".parse().unwrap();
     let backend_type = StorageBackendConfigFile::InMemory;
     let node_type = NodeTypeConfigFile::FullNode;
@@ -152,6 +153,9 @@ fn read_config_override_values() {
         p2p_force_dns_query_if_no_global_addresses_known: Some(
             p2p_force_dns_query_if_no_global_addresses_known,
         ),
+        p2p_custom_disconnection_reason_for_banning: (Some(
+            p2p_custom_disconnection_reason_for_banning.clone(),
+        )),
         max_tip_age: Some(max_tip_age),
         rpc_bind_address: Some(rpc_bind_address),
         rpc_enabled: Some(true),
@@ -272,6 +276,10 @@ fn read_config_override_values() {
     assert_eq!(
         config.p2p.as_ref().unwrap().force_dns_query_if_no_global_addresses_known,
         Some(p2p_force_dns_query_if_no_global_addresses_known)
+    );
+    assert_eq!(
+        config.p2p.as_ref().unwrap().custom_disconnection_reason_for_banning,
+        Some(p2p_custom_disconnection_reason_for_banning)
     );
 
     assert_eq!(
