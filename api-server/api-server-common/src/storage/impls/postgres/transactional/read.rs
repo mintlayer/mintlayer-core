@@ -26,8 +26,8 @@ use crate::storage::{
     storage_api::{
         block_aux_data::BlockAuxData, AmountWithDecimals, ApiServerStorageError,
         ApiServerStorageRead, BlockInfo, CoinOrTokenStatistic, Delegation, FungibleTokenData,
-        NftWithOwner, Order, PoolBlockStats, PoolDataWithExtraInfo, TransactionInfo,
-        TransactionWithBlockInfo, Utxo, UtxoWithExtraInfo,
+        NftWithOwner, Order, PoolBlockStats, PoolDataWithExtraInfo, TokenTransaction,
+        TransactionInfo, TransactionWithBlockInfo, Utxo, UtxoWithExtraInfo,
     },
 };
 use std::collections::BTreeMap;
@@ -90,6 +90,18 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRo<'_> {
     ) -> Result<Vec<Id<common::chain::Transaction>>, ApiServerStorageError> {
         let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_address_transactions(address).await?;
+
+        Ok(res)
+    }
+
+    async fn get_token_transactions(
+        &self,
+        token_id: TokenId,
+        len: u32,
+        tx_global_index: u64,
+    ) -> Result<Vec<TokenTransaction>, ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_token_transactions(token_id, len, tx_global_index).await?;
 
         Ok(res)
     }

@@ -39,7 +39,7 @@ use crate::storage::{
         block_aux_data::{BlockAuxData, BlockWithExtraData},
         AmountWithDecimals, ApiServerStorageError, BlockInfo, CoinOrTokenStatistic, Delegation,
         FungibleTokenData, LockedUtxo, NftWithOwner, Order, PoolBlockStats, PoolDataWithExtraInfo,
-        TransactionInfo, TransactionWithBlockInfo, Utxo, UtxoWithExtraInfo,
+        TokenTransaction, TransactionInfo, TransactionWithBlockInfo, Utxo, UtxoWithExtraInfo,
     },
 };
 
@@ -83,11 +83,13 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .map_err(|_| ApiServerStorageError::TimestampTooHigh(block_timestamp))
     }
 
-    fn tx_global_index_to_postgres_friendly(tx_global_index: u64) -> i64 {
+    fn tx_global_index_to_postgres_friendly(
+        tx_global_index: u64,
+    ) -> Result<i64, ApiServerStorageError> {
         // Postgres doesn't like u64, so we have to convert it to i64
         tx_global_index
             .try_into()
-            .unwrap_or_else(|e| panic!("Invalid tx global index: {e}"))
+            .map_err(|_| ApiServerStorageError::TxGlobalIndexTooHigh(tx_global_index))
     }
 
     pub async fn is_initialized(&mut self) -> Result<bool, ApiServerStorageError> {
@@ -495,6 +497,50 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         Ok(transaction_ids)
     }
 
+    pub async fn get_token_transactions(
+        &self,
+        token_id: TokenId,
+        len: u32,
+        tx_global_index: u64,
+    ) -> Result<Vec<TokenTransaction>, ApiServerStorageError> {
+        let tx_global_index = Self::tx_global_index_to_postgres_friendly(tx_global_index)?;
+        let len = len as i64;
+        let rows = self
+            .tx
+            .query(
+                r#"
+                    SELECT tx_global_index, transaction_id
+                    FROM ml.token_transactions
+                    WHERE token_id = $1 AND tx_global_index < $2
+                    ORDER BY tx_global_index DESC
+                    LIMIT $3;
+                "#,
+                &[&token_id.encode(), &tx_global_index, &len],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        let mut transactions = Vec::with_capacity(rows.len());
+
+        for row in &rows {
+            let tx_global_index: i64 = row.get(0);
+            let tx_id: Vec<u8> = row.get(1);
+            let tx_id = Id::<Transaction>::decode_all(&mut tx_id.as_slice()).map_err(|e| {
+                ApiServerStorageError::DeserializationError(format!(
+                    "Transaction id deserialization failed: {}",
+                    e
+                ))
+            })?;
+
+            transactions.push(TokenTransaction {
+                tx_global_index: tx_global_index as u64,
+                tx_id,
+            });
+        }
+
+        Ok(transactions)
+    }
+
     pub async fn del_address_transactions_above_height(
         &mut self,
         block_height: BlockHeight,
@@ -504,6 +550,23 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         self.tx
             .execute(
                 "DELETE FROM ml.address_transactions WHERE block_height > $1;",
+                &[&height],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        Ok(())
+    }
+
+    pub async fn del_token_transactions_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        let height = Self::block_height_to_postgres_friendly(block_height);
+
+        self.tx
+            .execute(
+                "DELETE FROM ml.token_transactions WHERE block_height > $1;",
                 &[&height],
             )
             .await
@@ -534,6 +597,32 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 .await
                 .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
         }
+
+        Ok(())
+    }
+
+    pub async fn set_token_transactions_at_height(
+        &mut self,
+        token_id: TokenId,
+        transaction_id: Id<Transaction>,
+        block_height: BlockHeight,
+        tx_global_index: u64,
+    ) -> Result<(), ApiServerStorageError> {
+        let height = Self::block_height_to_postgres_friendly(block_height);
+        let tx_global_index = Self::tx_global_index_to_postgres_friendly(tx_global_index)?;
+
+        self.tx
+            .execute(
+                r#"
+                    INSERT INTO ml.token_transactions (token_id, block_height, transaction_id, tx_global_index)
+                    VALUES ($1, $2, $3, $4)
+                    ON CONFLICT (token_id, transaction_id, block_height) DO UPDATE
+                    SET tx_global_index = $4;
+                "#,
+                &[&token_id.encode(), &height, &transaction_id.encode(), &tx_global_index],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
 
         Ok(())
     }
@@ -677,7 +766,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         self.just_execute(
             "CREATE TABLE ml.transactions (
                     transaction_id bytea PRIMARY KEY,
-                    global_tx_index bigint NOT NULL,
+                    tx_global_index bigint NOT NULL,
                     owning_block_id bytea NOT NULL REFERENCES ml.blocks(block_id),
                     transaction_data bytea NOT NULL
                 );", // block_id can be null if the transaction is not in the main chain
@@ -733,11 +822,24 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         .await?;
 
         self.just_execute(
+            "CREATE TABLE ml.token_transactions (
+                    tx_global_index bigint PRIMARY KEY,
+                    token_id bytea NOT NULL,
+                    block_height bigint NOT NULL,
+                    transaction_id bytea NOT NULL,
+                    UNIQUE (token_id, transaction_id, block_height)
+                );",
+        )
+        .await?;
+
+        self.just_execute("CREATE INDEX token_transactions_global_tx_index ON ml.token_transactions (token_id, tx_global_index DESC);")
+            .await?;
+
+        self.just_execute(
             "CREATE TABLE ml.utxo (
                     outpoint bytea NOT NULL,
                     block_height bigint,
                     spent BOOLEAN NOT NULL,
-                    address TEXT NOT NULL,
                     utxo bytea NOT NULL,
                     PRIMARY KEY (outpoint, block_height)
                 );",
@@ -752,12 +854,30 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             "CREATE TABLE ml.locked_utxo (
                     outpoint bytea NOT NULL,
                     block_height bigint,
-                    address TEXT NOT NULL,
                     utxo bytea NOT NULL,
                     lock_until_block bigint,
                     lock_until_timestamp bigint,
                     PRIMARY KEY (outpoint)
                 );",
+        )
+        .await?;
+
+        self.just_execute(
+            "CREATE TABLE ml.utxo_addresses (
+                    outpoint bytea NOT NULL,
+                    block_height bigint NOT NULL,
+                    address TEXT NOT NULL,
+                    PRIMARY KEY (outpoint, address)
+                );",
+        )
+        .await?;
+
+        self.just_execute("CREATE INDEX utxo_addresses_index ON ml.utxo_addresses (address);")
+            .await?;
+
+        // index for reorgs
+        self.just_execute(
+            "CREATE INDEX utxo_addresses_block_height_index ON ml.utxo_addresses (block_height DESC);",
         )
         .await?;
 
@@ -1803,12 +1923,12 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 SELECT
                     t.transaction_data,
                     b.aux_data,
-                    t.global_tx_index
+                    t.tx_global_index
                 FROM
                     ml.transactions t
                 INNER JOIN
                     ml.block_aux_data b ON t.owning_block_id = b.block_id
-                ORDER BY t.global_tx_index DESC
+                ORDER BY t.tx_global_index DESC
                 OFFSET $1
                 LIMIT $2;
                 "#,
@@ -1821,7 +1941,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .map(|data| {
                 let transaction_data: Vec<u8> = data.get(0);
                 let block_data: Vec<u8> = data.get(1);
-                let global_tx_index: i64 = data.get(2);
+                let tx_global_index: i64 = data.get(2);
 
                 let block_aux =
                     BlockAuxData::decode_all(&mut block_data.as_slice()).map_err(|e| {
@@ -1841,7 +1961,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 Ok(TransactionWithBlockInfo {
                     tx_info,
                     block_aux,
-                    global_tx_index: global_tx_index as u64,
+                    tx_global_index: tx_global_index as u64,
                 })
             })
             .collect()
@@ -1850,10 +1970,10 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
     pub async fn get_transactions_with_block_before_tx_global_index(
         &self,
         len: u32,
-        global_tx_index: u64,
+        tx_global_index: u64,
     ) -> Result<Vec<TransactionWithBlockInfo>, ApiServerStorageError> {
         let len = len as i64;
-        let tx_global_index = Self::tx_global_index_to_postgres_friendly(global_tx_index);
+        let tx_global_index = Self::tx_global_index_to_postgres_friendly(tx_global_index)?;
         let rows = self
             .tx
             .query(
@@ -1861,13 +1981,13 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 SELECT
                     t.transaction_data,
                     b.aux_data,
-                    t.global_tx_index
+                    t.tx_global_index
                 FROM
                     ml.transactions t
                 INNER JOIN
                     ml.block_aux_data b ON t.owning_block_id = b.block_id
-                WHERE t.global_tx_index < $1
-                ORDER BY t.global_tx_index DESC
+                WHERE t.tx_global_index < $1
+                ORDER BY t.tx_global_index DESC
                 LIMIT $2;
                 "#,
                 &[&tx_global_index, &len],
@@ -1879,7 +1999,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .map(|data| {
                 let transaction_data: Vec<u8> = data.get(0);
                 let block_data: Vec<u8> = data.get(1);
-                let global_tx_index: i64 = data.get(2);
+                let tx_global_index: i64 = data.get(2);
 
                 let block_aux =
                     BlockAuxData::decode_all(&mut block_data.as_slice()).map_err(|e| {
@@ -1899,7 +2019,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 Ok(TransactionWithBlockInfo {
                     tx_info,
                     block_aux,
-                    global_tx_index: global_tx_index as u64,
+                    tx_global_index: tx_global_index as u64,
                 })
             })
             .collect()
@@ -1913,7 +2033,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .query_one(
                 r#"
                 SELECT
-                    MAX(t.global_tx_index)
+                    MAX(t.tx_global_index)
                 FROM
                     ml.transactions t;
                 "#,
@@ -1930,7 +2050,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
     pub async fn set_transaction(
         &mut self,
         transaction_id: Id<Transaction>,
-        global_tx_index: u64,
+        tx_global_index: u64,
         owning_block: Id<Block>,
         transaction: &TransactionInfo,
     ) -> Result<(), ApiServerStorageError> {
@@ -1939,13 +2059,13 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             transaction_id,
             owning_block
         );
-        let global_tx_index = Self::tx_global_index_to_postgres_friendly(global_tx_index);
+        let tx_global_index = Self::tx_global_index_to_postgres_friendly(tx_global_index)?;
 
         self.tx.execute(
-                "INSERT INTO ml.transactions (transaction_id, owning_block_id, transaction_data, global_tx_index) VALUES ($1, $2, $3, $4)
+                "INSERT INTO ml.transactions (transaction_id, owning_block_id, transaction_data, tx_global_index) VALUES ($1, $2, $3, $4)
                     ON CONFLICT (transaction_id) DO UPDATE
-                    SET owning_block_id = $2, transaction_data = $3, global_tx_index = $4;",
-                &[&transaction_id.encode(), &owning_block.encode(), &transaction.encode(), &global_tx_index]
+                    SET owning_block_id = $2, transaction_data = $3, tx_global_index = $4;",
+                &[&transaction_id.encode(), &owning_block.encode(), &transaction.encode(), &tx_global_index]
             ).await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
 
@@ -1993,13 +2113,16 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         let rows = self
             .tx
             .query(
-                r#"SELECT outpoint, utxo
-                FROM (
-                    SELECT outpoint, utxo, spent, ROW_NUMBER() OVER(PARTITION BY outpoint ORDER BY block_height DESC) as newest
+                r#"SELECT ua.outpoint, u.utxo
+                FROM ml.utxo_addresses ua
+                CROSS JOIN LATERAL (
+                    SELECT utxo, spent
                     FROM ml.utxo
-                    WHERE address = $1
-                ) AS sub
-                WHERE newest = 1 AND spent = false;"#,
+                    WHERE outpoint = ua.outpoint
+                    ORDER BY block_height DESC
+                    LIMIT 1
+                ) u
+                WHERE ua.address = $1 AND u.spent = false;"#,
                 &[&address],
             )
             .await
@@ -2035,17 +2158,21 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         let rows = self
             .tx
             .query(
-                r#"SELECT outpoint, utxo
-                FROM (
-                    SELECT outpoint, utxo, spent, ROW_NUMBER() OVER(PARTITION BY outpoint ORDER BY block_height DESC) as newest
+                r#"SELECT ua.outpoint, u.utxo
+                FROM ml.utxo_addresses ua
+                CROSS JOIN LATERAL (
+                    SELECT utxo, spent
                     FROM ml.utxo
-                    WHERE address = $1
-                ) AS sub
-                WHERE newest = 1 AND spent = false
+                    WHERE outpoint = ua.outpoint
+                    ORDER BY block_height DESC
+                    LIMIT 1
+                ) u
+                WHERE ua.address = $1 AND u.spent = false
                 UNION ALL
-                SELECT outpoint, utxo
-                FROM ml.locked_utxo AS locked
-                WHERE locked.address = $1 AND NOT EXISTS (SELECT 1 FROM ml.utxo WHERE outpoint = locked.outpoint)
+                SELECT l.outpoint, l.utxo
+                FROM ml.locked_utxo AS l
+                INNER JOIN ml.utxo_addresses ua ON l.outpoint = ua.outpoint
+                WHERE ua.address = $1 AND NOT EXISTS (SELECT 1 FROM ml.utxo WHERE outpoint = l.outpoint)
                 ;"#,
                 &[&address],
             )
@@ -2120,7 +2247,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         &mut self,
         outpoint: UtxoOutPoint,
         utxo: Utxo,
-        address: &str,
+        addresses: &[&str],
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
         logging::log::debug!("Inserting utxo {:?} for outpoint {:?}", utxo, outpoint);
@@ -2129,13 +2256,24 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
 
         self.tx
             .execute(
-                "INSERT INTO ml.utxo (outpoint, utxo, spent, address, block_height) VALUES ($1, $2, $3, $4, $5)
+                "INSERT INTO ml.utxo (outpoint, utxo, spent, block_height) VALUES ($1, $2, $3, $4)
                     ON CONFLICT (outpoint, block_height) DO UPDATE
                     SET utxo = $2, spent = $3;",
-                &[&outpoint.encode(), &utxo.utxo_with_extra_info().encode(), &spent, &address, &height],
+                &[&outpoint.encode(), &utxo.utxo_with_extra_info().encode(), &spent, &height],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        for address in addresses {
+            self.tx
+                .execute(
+                    "INSERT INTO ml.utxo_addresses (outpoint, block_height, address) VALUES ($1, $2, $3)
+                     ON CONFLICT (outpoint, address) DO NOTHING;",
+                    &[&outpoint.encode(), &height, &address],
+                )
+                .await
+                .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+        }
 
         Ok(())
     }
@@ -2144,7 +2282,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         &mut self,
         outpoint: UtxoOutPoint,
         utxo: LockedUtxo,
-        address: &str,
+        addresses: &[&str],
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
         logging::log::debug!("Inserting utxo {:?} for outpoint {:?}", utxo, outpoint);
@@ -2155,12 +2293,23 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
 
         self.tx
             .execute(
-                "INSERT INTO ml.locked_utxo (outpoint, utxo, lock_until_timestamp, lock_until_block, address, block_height)
-                    VALUES ($1, $2, $3, $4, $5, $6);",
-                &[&outpoint.encode(), &utxo.utxo_with_extra_info().encode(), &lock_time, &lock_height, &address, &height],
+                "INSERT INTO ml.locked_utxo (outpoint, utxo, lock_until_timestamp, lock_until_block, block_height)
+                    VALUES ($1, $2, $3, $4, $5);",
+                &[&outpoint.encode(), &utxo.utxo_with_extra_info().encode(), &lock_time, &lock_height, &height],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        for address in addresses {
+            self.tx
+                .execute(
+                    "INSERT INTO ml.utxo_addresses (outpoint, block_height, address) VALUES ($1, $2, $3)
+                     ON CONFLICT (outpoint, address) DO NOTHING;",
+                    &[&outpoint.encode(), &height, &address],
+                )
+                .await
+                .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+        }
 
         Ok(())
     }
@@ -2176,6 +2325,14 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
 
+        self.tx
+            .execute(
+                "DELETE FROM ml.utxo_addresses WHERE block_height > $1;",
+                &[&height],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
         Ok(())
     }
 
@@ -2188,6 +2345,14 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         self.tx
             .execute(
                 "DELETE FROM ml.locked_utxo WHERE block_height > $1;",
+                &[&height],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        self.tx
+            .execute(
+                "DELETE FROM ml.utxo_addresses WHERE block_height > $1;",
                 &[&height],
             )
             .await

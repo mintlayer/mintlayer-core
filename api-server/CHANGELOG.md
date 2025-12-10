@@ -8,6 +8,7 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ### Added
 - New endpoint was added: `/v2/transaction/{id}/output/{idx}`.
+- New endpoint was added: `/v2/token/{id}/transactions` will return all transactions related to a token
 
 ### Changed
 - `/v2/token/ticker/{ticker}` will now return all tokens whose ticker has the specified `{ticker}`

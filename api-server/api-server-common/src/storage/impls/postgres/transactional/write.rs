@@ -31,8 +31,8 @@ use crate::storage::{
         block_aux_data::{BlockAuxData, BlockWithExtraData},
         AmountWithDecimals, ApiServerStorageError, ApiServerStorageRead, ApiServerStorageWrite,
         BlockInfo, CoinOrTokenStatistic, Delegation, FungibleTokenData, LockedUtxo, NftWithOwner,
-        Order, PoolBlockStats, PoolDataWithExtraInfo, TransactionInfo, TransactionWithBlockInfo,
-        Utxo, UtxoWithExtraInfo,
+        Order, PoolBlockStats, PoolDataWithExtraInfo, TokenTransaction, TransactionInfo,
+        TransactionWithBlockInfo, Utxo, UtxoWithExtraInfo,
     },
 };
 
@@ -80,6 +80,16 @@ impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'_> {
         Ok(())
     }
 
+    async fn del_token_transactions_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        conn.del_token_transactions_above_height(block_height).await?;
+
+        Ok(())
+    }
+
     async fn set_address_balance_at_height(
         &mut self,
         address: &Address<Destination>,
@@ -117,6 +127,25 @@ impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'_> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         conn.set_address_transactions_at_height(address, transaction_ids, block_height)
             .await?;
+
+        Ok(())
+    }
+
+    async fn set_token_transaction_at_height(
+        &mut self,
+        token_id: TokenId,
+        transaction_id: Id<Transaction>,
+        block_height: BlockHeight,
+        tx_global_index: u64,
+    ) -> Result<(), ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        conn.set_token_transactions_at_height(
+            token_id,
+            transaction_id,
+            block_height,
+            tx_global_index,
+        )
+        .await?;
 
         Ok(())
     }
@@ -218,11 +247,11 @@ impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'_> {
         &mut self,
         outpoint: UtxoOutPoint,
         utxo: Utxo,
-        address: &str,
+        addresses: &[&str],
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
-        conn.set_utxo_at_height(outpoint, utxo, address, block_height).await?;
+        conn.set_utxo_at_height(outpoint, utxo, addresses, block_height).await?;
 
         Ok(())
     }
@@ -231,11 +260,11 @@ impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'_> {
         &mut self,
         outpoint: UtxoOutPoint,
         utxo: LockedUtxo,
-        address: &str,
+        addresses: &[&str],
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
-        conn.set_locked_utxo_at_height(outpoint, utxo, address, block_height).await?;
+        conn.set_locked_utxo_at_height(outpoint, utxo, addresses, block_height).await?;
 
         Ok(())
     }
@@ -430,6 +459,18 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
     ) -> Result<Vec<Id<Transaction>>, ApiServerStorageError> {
         let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_address_transactions(address).await?;
+
+        Ok(res)
+    }
+
+    async fn get_token_transactions(
+        &self,
+        token_id: TokenId,
+        len: u32,
+        tx_global_index: u64,
+    ) -> Result<Vec<TokenTransaction>, ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_token_transactions(token_id, len, tx_global_index).await?;
 
         Ok(res)
     }
