@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{num::NonZeroUsize, time::Duration};
+use std::{collections::BTreeSet, num::NonZeroUsize, time::Duration};
 
 use blockprod::{rpc::BlockProductionRpcClient, TimestampSearchData};
 use chainstate::{rpc::ChainstateRpcClient, ChainInfo};
@@ -169,6 +169,21 @@ impl NodeInterface for NodeRpcClient {
     async fn get_token_info(&self, token_id: TokenId) -> Result<Option<RPCTokenInfo>, Self::Error> {
         let token_id = Address::new(&self.chain_config, token_id)?.into_string();
         ChainstateRpcClient::token_info(&self.http_client, token_id)
+            .await
+            .map_err(NodeRpcError::ResponseError)
+    }
+
+    async fn get_tokens_info(
+        &self,
+        token_ids: BTreeSet<TokenId>,
+    ) -> Result<Vec<RPCTokenInfo>, Self::Error> {
+        let token_ids = token_ids
+            .into_iter()
+            .map(|token_id| {
+                Ok::<_, Self::Error>(Address::new(&self.chain_config, token_id)?.into_string())
+            })
+            .collect::<Result<_, _>>()?;
+        ChainstateRpcClient::tokens_info(&self.http_client, token_ids)
             .await
             .map_err(NodeRpcError::ResponseError)
     }

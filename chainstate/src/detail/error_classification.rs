@@ -449,9 +449,8 @@ impl BlockProcessingErrorClassification for PropertyQueryError {
             | PropertyQueryError::GenesisHeaderRequested
             | PropertyQueryError::InvalidStartingBlockHeightForMainchainBlocks(_)
             | PropertyQueryError::InvalidBlockHeightRange { .. }
-            | PropertyQueryError::UnsupportedTokenV0InOrder(_) => {
-                BlockProcessingErrorClass::General
-            }
+            | PropertyQueryError::UnsupportedTokenV0InOrder(_)
+            | PropertyQueryError::TokenInfoMissing(_) => BlockProcessingErrorClass::General,
             // Note: these errors are strange - sometimes they don't look like General, judging
             // by the code that uses them. But other times some of them seem to just wrap storage
             // errors.

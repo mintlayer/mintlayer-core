@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{num::NonZeroUsize, time::Duration};
+use std::{collections::BTreeSet, num::NonZeroUsize, time::Duration};
 
 use blockprod::{BlockProductionError, BlockProductionHandle, TimestampSearchData};
 use chainstate::{BlockSource, ChainInfo, ChainstateError, ChainstateHandle};
@@ -224,6 +224,17 @@ impl NodeInterface for WalletHandlesClient {
         let result = self
             .chainstate
             .call(move |this| this.get_token_info_for_rpc(token_id))
+            .await??;
+        Ok(result)
+    }
+
+    async fn get_tokens_info(
+        &self,
+        token_ids: BTreeSet<TokenId>,
+    ) -> Result<Vec<RPCTokenInfo>, Self::Error> {
+        let result = self
+            .chainstate
+            .call(move |this| this.get_tokens_info_for_rpc(&token_ids))
             .await??;
         Ok(result)
     }
