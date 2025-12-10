@@ -201,11 +201,11 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
                 .await
                 .expect("Unable to set block");
 
-            for (i, tx_info) in transactions.iter().enumerate() {
+            for (idx, tx_info) in transactions.iter().enumerate() {
                 db_tx
                     .set_transaction(
                         tx_info.tx.transaction().get_id(),
-                        next_order_number + i as u64,
+                        next_order_number + idx as u64,
                         block_id,
                         tx_info,
                     )
@@ -1054,7 +1054,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
         BTreeMap::new();
     let mut transaction_tokens: BTreeSet<TokenId> = BTreeSet::new();
 
-    let update_tokens_in_transaction = |order: &Order, tokens_in_transaction: &mut BTreeSet<_>| {
+    let update_tokens_for_order = |order: &Order, tokens_in_transaction: &mut BTreeSet<_>| {
         match order.give_currency {
             CoinOrTokenId::TokenId(token_id) => {
                 tokens_in_transaction.insert(token_id);
@@ -1265,7 +1265,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
 
                     db_tx.set_order_at_height(*order_id, &order, block_height).await?;
 
-                    update_tokens_in_transaction(&order, &mut transaction_tokens);
+                    update_tokens_for_order(&order, &mut transaction_tokens);
                 }
                 AccountCommand::ConcludeOrder(order_id) => {
                     let order = db_tx.get_order(*order_id).await?.expect("must exist");
@@ -1273,7 +1273,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
 
                     db_tx.set_order_at_height(*order_id, &order, block_height).await?;
 
-                    update_tokens_in_transaction(&order, &mut transaction_tokens);
+                    update_tokens_for_order(&order, &mut transaction_tokens);
                 }
             },
             TxInput::OrderAccountCommand(cmd) => match cmd {
@@ -1283,20 +1283,21 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                         order.fill(&chain_config, block_height, *fill_amount_in_ask_currency);
 
                     db_tx.set_order_at_height(*order_id, &order, block_height).await?;
-                    update_tokens_in_transaction(&order, &mut transaction_tokens);
+                    update_tokens_for_order(&order, &mut transaction_tokens);
                 }
                 OrderAccountCommand::ConcludeOrder(order_id) => {
                     let order = db_tx.get_order(*order_id).await?.expect("must exist");
                     let order = order.conclude();
 
                     db_tx.set_order_at_height(*order_id, &order, block_height).await?;
-                    update_tokens_in_transaction(&order, &mut transaction_tokens);
+                    update_tokens_for_order(&order, &mut transaction_tokens);
                 }
                 OrderAccountCommand::FreezeOrder(order_id) => {
                     let order = db_tx.get_order(*order_id).await?.expect("must exist");
                     let order = order.freeze();
 
                     db_tx.set_order_at_height(*order_id, &order, block_height).await?;
+                    update_tokens_for_order(&order, &mut transaction_tokens);
                 }
             },
             TxInput::Account(outpoint) => {

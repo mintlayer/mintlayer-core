@@ -17,13 +17,11 @@ use serde_json::Value;
 
 use chainstate_test_framework::empty_witness;
 use common::{
-    chain::{
-        make_token_id,
-        tokens::{TokenId, TokenIssuance, TokenTotalSupply},
-        AccountCommand, AccountNonce, UtxoOutPoint,
-    },
+    chain::{tokens::TokenId, AccountCommand, AccountNonce, UtxoOutPoint},
     primitives::H256,
 };
+
+use crate::v2::helpers::{issue_and_mint_tokens_from_genesis, IssueAndMintTokensResult};
 
 use super::*;
 
@@ -121,23 +119,6 @@ async fn ok(#[case] seed: Seed) {
                     .with_chain_config(chain_config.clone())
                     .build();
 
-                let token_issuance_fee =
-                    tf.chainstate.get_chain_config().fungible_token_issuance_fee();
-
-                let issuance = test_utils::token_utils::random_token_issuance_v1(
-                    tf.chain_config(),
-                    Destination::AnyoneCanSpend,
-                    &mut rng,
-                );
-                let amount_to_mint = match issuance.total_supply {
-                    TokenTotalSupply::Fixed(limit) => {
-                        Amount::from_atoms(rng.gen_range(1..=limit.into_atoms()))
-                    }
-                    TokenTotalSupply::Lockable | TokenTotalSupply::Unlimited => {
-                        Amount::from_atoms(rng.gen_range(100..1000))
-                    }
-                };
-
                 let genesis_outpoint = UtxoOutPoint::new(tf.best_block_id().into(), 0);
                 let genesis_coins = chainstate_test_framework::get_output_value(
                     tf.chainstate.utxo(&genesis_outpoint).unwrap().unwrap().output(),
@@ -145,69 +126,38 @@ async fn ok(#[case] seed: Seed) {
                 .unwrap()
                 .coin_amount()
                 .unwrap();
+
+                let token_issuance_fee =
+                    tf.chainstate.get_chain_config().fungible_token_issuance_fee();
+
+                let min_amount_to_mint = Amount::from_atoms(100);
+                let IssueAndMintTokensResult {
+                    token_id,
+                    issue_block,
+                    mint_block,
+                    change_outpoint,
+                    tokens_outpoint,
+                    minted_tokens,
+                } = issue_and_mint_tokens_from_genesis(min_amount_to_mint, &mut rng, &mut tf);
+
                 let coins_after_issue = (genesis_coins - token_issuance_fee).unwrap();
 
                 // Issue token
-                let issue_token_tx = TransactionBuilder::new()
-                    .add_input(genesis_outpoint.into(), empty_witness(&mut rng))
-                    .add_output(TxOutput::Transfer(
-                        OutputValue::Coin(coins_after_issue),
-                        Destination::AnyoneCanSpend,
-                    ))
-                    .add_output(TxOutput::IssueFungibleToken(Box::new(TokenIssuance::V1(
-                        issuance,
-                    ))))
-                    .build();
-                let token_id = make_token_id(
-                    &chain_config,
-                    BlockHeight::new(1),
-                    issue_token_tx.transaction().inputs(),
-                )
-                .unwrap();
+                let issue_token_tx = &issue_block.transactions()[0];
                 let issue_token_tx_id = issue_token_tx.transaction().get_id();
-                let block1 =
-                    tf.make_block_builder().add_transaction(issue_token_tx).build(&mut rng);
-
-                tf.process_block(block1.clone(), chainstate::BlockSource::Local).unwrap();
 
                 // Mint tokens
                 let token_supply_change_fee =
                     tf.chainstate.get_chain_config().token_supply_change_fee(BlockHeight::zero());
                 let coins_after_mint = (coins_after_issue - token_supply_change_fee).unwrap();
 
-                let mint_tokens_tx = TransactionBuilder::new()
-                    .add_input(
-                        TxInput::from_command(
-                            AccountNonce::new(0),
-                            AccountCommand::MintTokens(token_id, amount_to_mint),
-                        ),
-                        empty_witness(&mut rng),
-                    )
-                    .add_input(
-                        TxInput::from_utxo(issue_token_tx_id.into(), 0),
-                        empty_witness(&mut rng),
-                    )
-                    .add_output(TxOutput::Transfer(
-                        OutputValue::Coin(coins_after_mint),
-                        Destination::AnyoneCanSpend,
-                    ))
-                    .add_output(TxOutput::Transfer(
-                        OutputValue::TokenV1(token_id, amount_to_mint),
-                        Destination::AnyoneCanSpend,
-                    ))
-                    .build();
-
+                let mint_tokens_tx = &mint_block.transactions()[0];
                 let mint_tokens_tx_id = mint_tokens_tx.transaction().get_id();
-
-                let block2 =
-                    tf.make_block_builder().add_transaction(mint_tokens_tx).build(&mut rng);
-
-                tf.process_block(block2.clone(), chainstate::BlockSource::Local).unwrap();
 
                 // Unmint tokens
                 let coins_after_unmint = (coins_after_mint - token_supply_change_fee).unwrap();
                 let tokens_to_unmint = Amount::from_atoms(1);
-                let tokens_leff_after_unmint = (amount_to_mint - tokens_to_unmint).unwrap();
+                let tokens_left_after_unmint = (minted_tokens - tokens_to_unmint).unwrap();
                 let unmint_tokens_tx = TransactionBuilder::new()
                     .add_input(
                         TxInput::from_command(
@@ -216,20 +166,14 @@ async fn ok(#[case] seed: Seed) {
                         ),
                         empty_witness(&mut rng),
                     )
-                    .add_input(
-                        TxInput::from_utxo(mint_tokens_tx_id.into(), 0),
-                        empty_witness(&mut rng),
-                    )
-                    .add_input(
-                        TxInput::from_utxo(mint_tokens_tx_id.into(), 1),
-                        empty_witness(&mut rng),
-                    )
+                    .add_input(TxInput::Utxo(change_outpoint), empty_witness(&mut rng))
+                    .add_input(TxInput::Utxo(tokens_outpoint), empty_witness(&mut rng))
                     .add_output(TxOutput::Transfer(
                         OutputValue::Coin(coins_after_unmint),
                         Destination::AnyoneCanSpend,
                     ))
                     .add_output(TxOutput::Transfer(
-                        OutputValue::TokenV1(token_id, tokens_leff_after_unmint),
+                        OutputValue::TokenV1(token_id, tokens_left_after_unmint),
                         Destination::AnyoneCanSpend,
                     ))
                     .add_output(TxOutput::Burn(OutputValue::TokenV1(
@@ -288,7 +232,7 @@ async fn ok(#[case] seed: Seed) {
                     token_transactions,
                 ));
 
-                vec![block1, block2, block3, block4]
+                vec![issue_block, mint_block, block3, block4]
             };
 
             let storage = {

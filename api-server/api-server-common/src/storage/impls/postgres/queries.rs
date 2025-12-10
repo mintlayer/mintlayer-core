@@ -616,8 +616,8 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 r#"
                     INSERT INTO ml.token_transactions (token_id, block_height, transaction_id, tx_global_index)
                     VALUES ($1, $2, $3, $4)
-                    ON CONFLICT (token_id, transaction_id, block_height)
-                    DO NOTHING;
+                    ON CONFLICT (token_id, transaction_id, block_height) DO UPDATE
+                    SET tx_global_index = $4;
                 "#,
                 &[&token_id.encode(), &height, &transaction_id.encode(), &tx_global_index],
             )
