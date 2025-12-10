@@ -22,6 +22,8 @@ use std::{
     sync::Arc,
 };
 
+use itertools::Itertools as _;
+
 use common::{
     address::Address,
     chain::{
@@ -39,8 +41,6 @@ use crate::storage::storage_api::{
     FungibleTokenData, LockedUtxo, NftWithOwner, Order, PoolBlockStats, PoolDataWithExtraInfo,
     TokenTransaction, TransactionInfo, TransactionWithBlockInfo, Utxo, UtxoLock, UtxoWithExtraInfo,
 };
-
-use itertools::Itertools as _;
 
 use super::CURRENT_STORAGE_VERSION;
 
@@ -207,7 +207,11 @@ impl ApiServerInMemoryStorage {
                 transactions
                     .iter()
                     .rev()
-                    .flat_map(|(_, txs)| txs.iter().map(|tx| &tx.0))
+                    .flat_map(|(_, txs)| {
+                        let mut txs: Vec<_> = txs.iter().map(|tx| &tx.0).collect();
+                        txs.sort_by_key(|tx| std::cmp::Reverse(tx.tx_global_index));
+                        txs
+                    })
                     .flat_map(|tx| (tx.tx_global_index < tx_global_index).then_some(tx))
                     .cloned()
                     .take(len as usize)

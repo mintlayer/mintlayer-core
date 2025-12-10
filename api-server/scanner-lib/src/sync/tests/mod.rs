@@ -17,7 +17,7 @@ mod simulation;
 
 use std::{
     borrow::Cow,
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     convert::Infallible,
     sync::{Arc, Mutex},
     time::Duration,
@@ -1361,13 +1361,21 @@ async fn token_transactions_storage_check(#[case] seed: Seed) {
     tf.process_block(block2.clone(), BlockSource::Local).unwrap();
     local_state.scan_blocks(BlockHeight::new(2), vec![block2]).await.unwrap();
 
+    let mut token_txs = BTreeSet::new();
+    token_txs.insert(tx_issue_id);
+    token_txs.insert(tx_mint_id);
+
     // Check count: Issue(1) + Mint(1) = 2
     let db_tx = local_state.storage().transaction_ro().await.unwrap();
-    let txs = db_tx.get_token_transactions(token_id, 100, u64::MAX).await.unwrap();
-    assert_eq!(txs.len(), 2);
+    let txs = db_tx
+        .get_token_transactions(token_id, 100, u64::MAX)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|t| t.tx_id)
+        .collect::<BTreeSet<_>>();
+    assert_eq!(txs, token_txs);
     drop(db_tx);
-    assert!(txs.iter().any(|t| t.tx_id == tx_issue_id));
-    assert!(txs.iter().any(|t| t.tx_id == tx_mint_id));
 
     // ------------------------------------------------------------------------
     // 2. Token Authority Management Commands
@@ -1442,15 +1450,21 @@ async fn token_transactions_storage_check(#[case] seed: Seed) {
     tf.process_block(block3.clone(), BlockSource::Local).unwrap();
     local_state.scan_blocks(BlockHeight::new(3), vec![block3]).await.unwrap();
 
+    token_txs.insert(tx_freeze_id);
+    token_txs.insert(tx_unfreeze_id);
+    token_txs.insert(tx_metadata_id);
+    token_txs.insert(tx_authority_id);
+
     // Verify Storage: 2 previous + 4 new = 6 transactions
     let db_tx = local_state.storage().transaction_ro().await.unwrap();
-    let txs = db_tx.get_token_transactions(token_id, 100, u64::MAX).await.unwrap();
-    assert_eq!(txs.len(), 6);
-    let ids: Vec<_> = txs.iter().map(|t| t.tx_id).collect();
-    assert!(ids.contains(&tx_freeze_id));
-    assert!(ids.contains(&tx_unfreeze_id));
-    assert!(ids.contains(&tx_metadata_id));
-    assert!(ids.contains(&tx_authority_id));
+    let txs = db_tx
+        .get_token_transactions(token_id, 100, u64::MAX)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|t| t.tx_id)
+        .collect::<BTreeSet<_>>();
+    assert_eq!(txs, token_txs);
     drop(db_tx);
 
     // ------------------------------------------------------------------------
@@ -1482,10 +1496,16 @@ async fn token_transactions_storage_check(#[case] seed: Seed) {
     local_state.scan_blocks(BlockHeight::new(4), vec![block4]).await.unwrap();
 
     // Verify Storage: 6 previous + 1 spend = 7
+    token_txs.insert(tx_spend_id);
     let db_tx = local_state.storage().transaction_ro().await.unwrap();
-    let txs = db_tx.get_token_transactions(token_id, 100, u64::MAX).await.unwrap();
-    assert_eq!(txs.len(), 7);
-    assert!(txs.iter().any(|t| t.tx_id == tx_spend_id));
+    let txs = db_tx
+        .get_token_transactions(token_id, 100, u64::MAX)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|t| t.tx_id)
+        .collect::<BTreeSet<_>>();
+    assert_eq!(txs, token_txs);
     drop(db_tx);
 
     // ------------------------------------------------------------------------
@@ -1533,10 +1553,16 @@ async fn token_transactions_storage_check(#[case] seed: Seed) {
 
     // Verify Storage: Order creation involves the token (in 'Give'), so it should be indexed.
     let db_tx = local_state.storage().transaction_ro().await.unwrap();
-    let txs = db_tx.get_token_transactions(token_id, 100, u64::MAX).await.unwrap();
+    let txs = db_tx
+        .get_token_transactions(token_id, 100, u64::MAX)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|t| t.tx_id)
+        .collect::<BTreeSet<_>>();
     // 7 prev + 1 creation = 8
-    assert_eq!(txs.len(), 8);
-    assert!(txs.iter().any(|t| t.tx_id == tx_create_order_id));
+    token_txs.insert(tx_create_order_id);
+    assert_eq!(txs, token_txs);
     drop(db_tx);
 
     // 4b. Fill Order
@@ -1577,16 +1603,64 @@ async fn token_transactions_storage_check(#[case] seed: Seed) {
 
     // Verify Storage: Fill Order should be indexed for the token
     let db_tx = local_state.storage().transaction_ro().await.unwrap();
-    let txs = db_tx.get_token_transactions(token_id, 100, u64::MAX).await.unwrap();
+    let txs = db_tx
+        .get_token_transactions(token_id, 100, u64::MAX)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|t| t.tx_id)
+        .collect::<BTreeSet<_>>();
     // 8 prev + 1 fill = 9
-    assert_eq!(txs.len(), 9);
-    assert!(txs.iter().any(|t| t.tx_id == tx_fill_id));
+    token_txs.insert(tx_fill_id);
+    assert_eq!(txs, token_txs);
     drop(db_tx);
 
-    // 4c. Conclude Order
-    let tx_conclude = TransactionBuilder::new()
+    // 4c. Freeze Order
+    let tx_freeze = TransactionBuilder::new()
         .add_input(
             TxInput::from_utxo(OutPointSourceId::Transaction(tx_fill_id), 0),
+            InputWitness::NoSignature(None),
+        )
+        .add_input(
+            TxInput::OrderAccountCommand(OrderAccountCommand::FreezeOrder(order_id)),
+            InputWitness::NoSignature(None),
+        )
+        .add_output(TxOutput::Transfer(
+            OutputValue::Coin(coins_amount),
+            Destination::AnyoneCanSpend,
+        ))
+        .build();
+    let tx_freeze_id = tx_freeze.transaction().get_id();
+
+    // Process Block 7
+    tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
+    let best_block_id = tf.best_block_id();
+    let block7 = tf
+        .make_block_builder()
+        .with_parent(best_block_id)
+        .with_transactions(vec![tx_freeze.clone()])
+        .build(&mut rng);
+    tf.process_block(block7.clone(), BlockSource::Local).unwrap();
+    local_state.scan_blocks(BlockHeight::new(7), vec![block7]).await.unwrap();
+
+    // Verify Storage: Conclude Order should be indexed for the token
+    let db_tx = local_state.storage().transaction_ro().await.unwrap();
+    let txs = db_tx
+        .get_token_transactions(token_id, 100, u64::MAX)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|t| t.tx_id)
+        .collect::<BTreeSet<_>>();
+    // 9 prev + 1 freeze = 10
+    token_txs.insert(tx_freeze_id);
+    assert_eq!(txs, token_txs);
+    drop(db_tx);
+
+    // 4d. Conclude Order
+    let tx_conclude = TransactionBuilder::new()
+        .add_input(
+            TxInput::from_utxo(OutPointSourceId::Transaction(tx_freeze_id), 0),
             InputWitness::NoSignature(None),
         )
         .add_input(
@@ -1600,23 +1674,29 @@ async fn token_transactions_storage_check(#[case] seed: Seed) {
         .build();
     let tx_conclude_id = tx_conclude.transaction().get_id();
 
-    // Process Block 7
+    // Process Block 8
     tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
     let best_block_id = tf.best_block_id();
-    let block7 = tf
+    let block8 = tf
         .make_block_builder()
         .with_parent(best_block_id)
         .with_transactions(vec![tx_conclude.clone()])
         .build(&mut rng);
-    tf.process_block(block7.clone(), BlockSource::Local).unwrap();
-    local_state.scan_blocks(BlockHeight::new(7), vec![block7]).await.unwrap();
+    tf.process_block(block8.clone(), BlockSource::Local).unwrap();
+    local_state.scan_blocks(BlockHeight::new(8), vec![block8]).await.unwrap();
 
     // Verify Storage: Conclude Order should be indexed for the token
     let db_tx = local_state.storage().transaction_ro().await.unwrap();
-    let txs = db_tx.get_token_transactions(token_id, 100, u64::MAX).await.unwrap();
-    // 9 prev + 1 conclude = 10
-    assert_eq!(txs.len(), 10);
-    assert!(txs.iter().any(|t| t.tx_id == tx_conclude_id));
+    let txs = db_tx
+        .get_token_transactions(token_id, 100, u64::MAX)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|t| t.tx_id)
+        .collect::<BTreeSet<_>>();
+    // 10 prev + 1 conclude = 10
+    token_txs.insert(tx_conclude_id);
+    assert_eq!(txs, token_txs);
     drop(db_tx);
 }
 
@@ -1694,38 +1774,49 @@ async fn htlc_addresses_storage_check(#[case] seed: Seed) {
     // Verify Storage
     let db_tx = local_state.storage().transaction_ro().await.unwrap();
 
+    let expected_txs = BTreeSet::from([tx_fund_id]);
+
     // Check Spend Address Transactions
     let spend_address = Address::new(&chain_config, spend_dest).unwrap();
-    let spend_txs = db_tx.get_address_transactions(spend_address.as_str()).await.unwrap();
-    assert!(
-        spend_txs.contains(&tx_fund_id),
-        "Spend address should track the transaction"
-    );
+    let spend_txs = db_tx
+        .get_address_transactions(spend_address.as_str())
+        .await
+        .unwrap()
+        .into_iter()
+        .collect::<BTreeSet<_>>();
+    assert_eq!(spend_txs, expected_txs);
 
     // Check Refund Address Transactions
     let refund_address = Address::new(&chain_config, refund_dest).unwrap();
-    let refund_txs = db_tx.get_address_transactions(refund_address.as_str()).await.unwrap();
-    assert!(
-        refund_txs.contains(&tx_fund_id),
-        "Refund address should track the transaction"
-    );
+    let refund_txs = db_tx
+        .get_address_transactions(refund_address.as_str())
+        .await
+        .unwrap()
+        .into_iter()
+        .collect::<BTreeSet<_>>();
+    assert_eq!(refund_txs, expected_txs);
 
-    let utxos = db_tx.get_address_available_utxos(spend_address.as_str()).await.unwrap();
-    assert_eq!(utxos.len(), 2);
-    assert!(utxos.iter().map(|(outpoint, _)| outpoint).any(
-        |outpoint| *outpoint == UtxoOutPoint::new(OutPointSourceId::Transaction(tx_fund_id), 0)
-    ));
-    assert!(utxos.iter().map(|(outpoint, _)| outpoint).any(
-        |outpoint| *outpoint == UtxoOutPoint::new(OutPointSourceId::Transaction(tx_fund_id), 1)
-    ));
-    let utxos = db_tx.get_address_available_utxos(refund_address.as_str()).await.unwrap();
-    assert_eq!(utxos.len(), 2);
-    assert!(utxos.iter().map(|(outpoint, _)| outpoint).any(
-        |outpoint| *outpoint == UtxoOutPoint::new(OutPointSourceId::Transaction(tx_fund_id), 0)
-    ));
-    assert!(utxos.iter().map(|(outpoint, _)| outpoint).any(
-        |outpoint| *outpoint == UtxoOutPoint::new(OutPointSourceId::Transaction(tx_fund_id), 1)
-    ));
+    let expected_utxso = BTreeSet::from([
+        UtxoOutPoint::new(OutPointSourceId::Transaction(tx_fund_id), 0),
+        UtxoOutPoint::new(OutPointSourceId::Transaction(tx_fund_id), 1),
+    ]);
+
+    let utxos = db_tx
+        .get_address_available_utxos(spend_address.as_str())
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|(outpoint, _)| outpoint)
+        .collect::<BTreeSet<_>>();
+    assert_eq!(utxos, expected_utxso);
+    let utxos = db_tx
+        .get_address_available_utxos(refund_address.as_str())
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|(outpoint, _)| outpoint)
+        .collect::<BTreeSet<_>>();
+    assert_eq!(utxos, expected_utxso);
     drop(db_tx);
 
     // ------------------------------------------------------------------------
@@ -1858,36 +1949,39 @@ async fn htlc_addresses_storage_check(#[case] seed: Seed) {
     // ------------------------------------------------------------------------
     let db_tx = local_state.storage().transaction_ro().await.unwrap();
 
+    let mut expected_spend_address_txs = expected_txs.clone();
     // A. Check Spend Address Transactions
     // Should see Fund Tx (because it's the spend authority in the outputs)
+    expected_spend_address_txs.insert(tx_fund_id);
     // Should see Spend Tx (because it spent the input using the key)
-    let spend_txs = db_tx.get_address_transactions(spend_address.as_str()).await.unwrap();
-    assert!(
-        spend_txs.contains(&tx_fund_id),
-        "Spend address missing funding tx"
-    );
-    assert!(
-        spend_txs.contains(&tx_spend_id),
-        "Spend address missing spend tx"
-    );
+    expected_spend_address_txs.insert(tx_spend_id);
+
+    let spend_txs = db_tx
+        .get_address_transactions(spend_address.as_str())
+        .await
+        .unwrap()
+        .into_iter()
+        .collect::<BTreeSet<_>>();
+    assert_eq!(spend_txs, expected_spend_address_txs);
     // Should NOT contain refund tx
     assert!(
         !spend_txs.contains(&tx_refund_id),
         "Spend address has refund tx"
     );
 
+    let mut expected_refund_address_txs = expected_txs.clone();
     // B. Check Refund Address Transactions
     // Should see Fund Tx (because it's the refund authority in the outputs)
+    expected_refund_address_txs.insert(tx_fund_id);
     // Should see Refund Tx (because it refunded the input using the key)
-    let refund_txs = db_tx.get_address_transactions(refund_address.as_str()).await.unwrap();
-    assert!(
-        refund_txs.contains(&tx_fund_id),
-        "Refund address missing funding tx"
-    );
-    assert!(
-        refund_txs.contains(&tx_refund_id),
-        "Refund address missing refund tx"
-    );
+    expected_refund_address_txs.insert(tx_refund_id);
+    let refund_txs = db_tx
+        .get_address_transactions(refund_address.as_str())
+        .await
+        .unwrap()
+        .into_iter()
+        .collect::<BTreeSet<_>>();
+    assert_eq!(refund_txs, expected_refund_address_txs);
     // Should NOT contain spend tx
     assert!(
         !refund_txs.contains(&tx_spend_id),

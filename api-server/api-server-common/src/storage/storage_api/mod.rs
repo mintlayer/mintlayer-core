@@ -68,7 +68,7 @@ pub enum ApiServerStorageError {
     AddressableError,
     #[error("Block timestamp too high: {0}")]
     TimestampTooHigh(BlockTimestamp),
-    #[error("Tx global index too hight: {0}")]
+    #[error("Tx global index too high: {0}")]
     TxGlobalIndexTooHigh(u64),
     #[error("Id creation error: {0}")]
     IdCreationError(#[from] IdCreationError),
@@ -619,7 +619,7 @@ pub trait ApiServerStorageRead: Sync {
 
     /// Returns a page of transaction IDs that reference this `token_id`, limited to `len` entries
     /// and with a `tx_global_index` older than the specified value.
-    /// The `tx_global_index` and is not continuous for a specific `token_id`.
+    /// The `tx_global_index` is not continuous for a specific `token_id`.
     async fn get_token_transactions(
         &self,
         token_id: TokenId,
