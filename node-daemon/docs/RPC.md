@@ -389,7 +389,7 @@ EITHER OF
 
 ### Method `chainstate_token_info`
 
-Get token information, given a token id, in address form.
+Get token information, given a token id in address form.
 
 
 Parameters:
@@ -495,6 +495,115 @@ EITHER OF
             },
         }
      3) null
+```
+
+### Method `chainstate_tokens_info`
+
+Get tokens information, given multiple token ids in address form.
+
+
+Parameters:
+```
+{ "token_ids": [ string, .. ] }
+```
+
+Returns:
+```
+[ EITHER OF
+     1) {
+            "type": "FungibleToken",
+            "content": {
+                "token_id": hex string,
+                "token_ticker": {
+                    "text": EITHER OF
+                         1) string
+                         2) null,
+                    "hex": hex string,
+                },
+                "number_of_decimals": number,
+                "metadata_uri": {
+                    "text": EITHER OF
+                         1) string
+                         2) null,
+                    "hex": hex string,
+                },
+                "circulating_supply": { "atoms": number string },
+                "total_supply": EITHER OF
+                     1) {
+                            "type": "Fixed",
+                            "content": { "amount": { "atoms": number string } },
+                        }
+                     2) { "type": "Lockable" }
+                     3) { "type": "Unlimited" },
+                "is_locked": bool,
+                "frozen": EITHER OF
+                     1) {
+                            "type": "NotFrozen",
+                            "content": { "freezable": bool },
+                        }
+                     2) {
+                            "type": "Frozen",
+                            "content": { "unfreezable": bool },
+                        },
+                "authority": bech32 string,
+            },
+        }
+     2) {
+            "type": "NonFungibleToken",
+            "content": {
+                "token_id": hex string,
+                "creation_tx_id": hex string,
+                "creation_block_id": hex string,
+                "metadata": {
+                    "creator": EITHER OF
+                         1) hex string
+                         2) null,
+                    "name": {
+                        "text": EITHER OF
+                             1) string
+                             2) null,
+                        "hex": hex string,
+                    },
+                    "description": {
+                        "text": EITHER OF
+                             1) string
+                             2) null,
+                        "hex": hex string,
+                    },
+                    "ticker": {
+                        "text": EITHER OF
+                             1) string
+                             2) null,
+                        "hex": hex string,
+                    },
+                    "icon_uri": EITHER OF
+                         1) {
+                                "text": EITHER OF
+                                     1) string
+                                     2) null,
+                                "hex": hex string,
+                            }
+                         2) null,
+                    "additional_metadata_uri": EITHER OF
+                         1) {
+                                "text": EITHER OF
+                                     1) string
+                                     2) null,
+                                "hex": hex string,
+                            }
+                         2) null,
+                    "media_uri": EITHER OF
+                         1) {
+                                "text": EITHER OF
+                                     1) string
+                                     2) null,
+                                "hex": hex string,
+                            }
+                         2) null,
+                    "media_hash": hex string,
+                },
+            },
+        }, .. ]
 ```
 
 ### Method `chainstate_order_info`

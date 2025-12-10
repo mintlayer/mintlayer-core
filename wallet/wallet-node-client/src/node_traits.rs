@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{num::NonZeroUsize, time::Duration};
+use std::{collections::BTreeSet, num::NonZeroUsize, time::Duration};
 
 use chainstate::ChainInfo;
 use common::{
@@ -77,6 +77,10 @@ pub trait NodeInterface {
         delegation_id: DelegationId,
     ) -> Result<Option<Amount>, Self::Error>;
     async fn get_token_info(&self, token_id: TokenId) -> Result<Option<RPCTokenInfo>, Self::Error>;
+    async fn get_tokens_info(
+        &self,
+        token_ids: BTreeSet<TokenId>,
+    ) -> Result<Vec<RPCTokenInfo>, Self::Error>;
     async fn get_order_info(&self, order_id: OrderId) -> Result<Option<RpcOrderInfo>, Self::Error>;
     async fn blockprod_e2e_public_key(&self) -> Result<EndToEndPublicKey, Self::Error>;
     async fn generate_block(

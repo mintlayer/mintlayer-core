@@ -13,7 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeMap, num::NonZeroUsize, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    num::NonZeroUsize,
+    sync::Arc,
+};
 
 use chainstate::{
     BlockSource, ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent, Locator,
@@ -139,6 +143,7 @@ mockall::mock! {
         ) -> Result<Option<BlockReward>, ChainstateError>;
         fn get_epoch_data(&self, epoch_index: u64) -> Result<Option<EpochData>, ChainstateError>;
         fn get_token_info_for_rpc(&self, token_id: TokenId) -> Result<Option<RPCTokenInfo>, ChainstateError>;
+        fn get_tokens_info_for_rpc(&self, token_ids: &BTreeSet<TokenId>) -> Result<Vec<RPCTokenInfo>, ChainstateError>;
         fn get_token_aux_data(
             &self,
             token_id: TokenId,
