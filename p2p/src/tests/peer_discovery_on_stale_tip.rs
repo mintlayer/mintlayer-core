@@ -504,6 +504,7 @@ pub fn make_p2p_config(peer_manager_config: PeerManagerConfig) -> P2pConfig {
         allow_discover_private_ips: Default::default(),
         user_agent: mintlayer_core_user_agent(),
         protocol_config: Default::default(),
+        custom_disconnection_reason_for_banning: Default::default(),
     }
 }
 

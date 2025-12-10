@@ -80,6 +80,7 @@ async fn basic(#[case] seed: Seed) {
             user_agent: mintlayer_core_user_agent(),
             sync_stalling_timeout: Default::default(),
             peer_manager_config: Default::default(),
+            custom_disconnection_reason_for_banning: Default::default(),
         });
 
         let blocks = make_new_blocks(
@@ -322,6 +323,7 @@ async fn block_announcement_disconnected_headers(#[case] seed: Seed) {
             user_agent: mintlayer_core_user_agent(),
             sync_stalling_timeout: Default::default(),
             peer_manager_config: Default::default(),
+            custom_disconnection_reason_for_banning: Default::default(),
         });
 
         let initial_block_count = rng.gen_range(1..=MAX_REQUEST_BLOCKS_COUNT);
@@ -440,6 +442,7 @@ async fn send_block_from_the_future_again(#[case] seed: Seed) {
             sync_stalling_timeout: Default::default(),
             peer_manager_config: Default::default(),
             protocol_config: Default::default(),
+            custom_disconnection_reason_for_banning: Default::default(),
         });
 
         let mut rng = make_seedable_rng(seed);

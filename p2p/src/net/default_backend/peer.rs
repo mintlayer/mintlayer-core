@@ -229,7 +229,7 @@ where
         })();
 
         self.maybe_send_will_disconnect_for_protocol_version(
-            DisconnectionReason::from_result(&result),
+            DisconnectionReason::from_result(&result, &self.p2p_config),
             peer_protocol_version,
         )
         .await?;
@@ -498,7 +498,7 @@ where
                         log::info!("Connection closed for peer {}, reason: {err:?}", self.peer_id);
 
                         let err = P2pError::NetworkingError(err);
-                        self.maybe_send_will_disconnect(DisconnectionReason::from_error(&err)).await?;
+                        self.maybe_send_will_disconnect(DisconnectionReason::from_error(&err, &self.p2p_config)).await?;
 
                         let ban_score = err.ban_score();
                         if ban_score > 0 {

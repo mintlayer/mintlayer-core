@@ -721,6 +721,7 @@ async fn dont_use_dns_seed_if_connections_exist(#[case] seed: Seed) {
         sync_stalling_timeout: Default::default(),
         peer_manager_config: Default::default(),
         protocol_config: Default::default(),
+        custom_disconnection_reason_for_banning: Default::default(),
     });
     let (cmd_sender, mut cmd_receiver) = tokio::sync::mpsc::unbounded_channel();
     let (conn_event_sender, conn_event_receiver) = tokio::sync::mpsc::unbounded_channel();

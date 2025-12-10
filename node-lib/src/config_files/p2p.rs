@@ -100,6 +100,8 @@ pub struct P2pConfigFile {
     /// If true, the node will perform an early dns query if the peer db doesn't contain
     /// any global addresses at startup.
     pub force_dns_query_if_no_global_addresses_known: Option<bool>,
+    /// If set, this text will be sent to banned peers as part of the DisconnectionReason.
+    pub custom_disconnection_reason_for_banning: Option<String>,
 }
 
 impl From<P2pConfigFile> for P2pConfig {
@@ -122,6 +124,7 @@ impl From<P2pConfigFile> for P2pConfig {
             sync_stalling_timeout,
             node_type,
             force_dns_query_if_no_global_addresses_known,
+            custom_disconnection_reason_for_banning,
         } = config_file;
 
         P2pConfig {
@@ -179,6 +182,7 @@ impl From<P2pConfigFile> for P2pConfig {
             },
             protocol_config: Default::default(),
             peer_handshake_timeout: Default::default(),
+            custom_disconnection_reason_for_banning,
         }
     }
 }

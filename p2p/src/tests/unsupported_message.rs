@@ -120,7 +120,12 @@ async fn unsupported_message_impl(seed: Seed, make_msg_too_big: bool) {
     );
 
     let msg_data = if make_msg_too_big {
-        gen_random_bytes(&mut rng, max_message_size, max_message_size_for_peer)
+        // Note: the max bytes count we can generate here is max_message_size_for_peer minus
+        // the encoding overhead, which is 1 for the TestMessage's enum discriminant plus
+        // the encoded length of the byte vector.
+        // Since we don't need the exact maximum sizes in this test, we just subtract some number
+        // that should be enough to cover any possible overhead.
+        gen_random_bytes(&mut rng, max_message_size, max_message_size_for_peer - 10)
     } else {
         gen_random_bytes(&mut rng, 1, max_message_size / 2)
     };
