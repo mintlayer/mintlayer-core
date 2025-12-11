@@ -361,6 +361,8 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         self.last_common_ancestor(block_index, &best_block_index)
     }
 
+    // Note: this function will return Some for NFTs only, because the data is only written
+    // for NFTs. This is decided by `token_issuance_cache::has_tokens_issuance_to_cache`.
     #[log_error]
     pub fn get_token_aux_data(
         &self,
@@ -369,8 +371,9 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         self.db_tx.get_token_aux_data(token_id).map_err(PropertyQueryError::from)
     }
 
+    // Note: same as get_token_aux_data, this only works for NFTs, for the same reason.
     #[log_error]
-    pub fn get_token_id(
+    pub fn get_token_id_from_issuance_tx(
         &self,
         tx_id: &Id<Transaction>,
     ) -> Result<Option<TokenId>, PropertyQueryError> {

@@ -217,14 +217,17 @@ pub trait ChainstateInterface: Send + Sync {
         token_ids: &BTreeSet<TokenId>,
     ) -> Result<Vec<RPCTokenInfo>, ChainstateError>;
 
+    /// Return token's auxiliary data; available for NFTs only.
     fn get_token_aux_data(
         &self,
         token_id: TokenId,
     ) -> Result<Option<TokenAuxiliaryData>, ChainstateError>;
+    /// Obtain token id given the id of the issuing tx; available for NFTs only.
     fn get_token_id_from_issuance_tx(
         &self,
         tx_id: &Id<Transaction>,
     ) -> Result<Option<TokenId>, ChainstateError>;
+    /// Obtain token data given its id; available for fungible tokens only.
     fn get_token_data(
         &self,
         id: &TokenId,

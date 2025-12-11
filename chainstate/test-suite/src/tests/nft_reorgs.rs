@@ -17,10 +17,8 @@ use chainstate::{BlockError, BlockSource, ChainstateError, ConnectTransactionErr
 use chainstate_test_framework::{TestFramework, TransactionBuilder};
 use common::{
     chain::{
-        output_value::OutputValue,
-        signature::inputsig::InputWitness,
-        tokens::{NftIssuance, TokenId},
-        Destination, OutPointSourceId, TxInput, TxOutput, UtxoOutPoint,
+        output_value::OutputValue, signature::inputsig::InputWitness, tokens::TokenId, Destination,
+        OutPointSourceId, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Idable},
 };
@@ -29,6 +27,8 @@ use test_utils::{
     random::{make_seedable_rng, Seed},
     token_utils::random_nft_issuance,
 };
+
+use crate::tests::helpers::token_checks::{assert_token_missing, check_nft, ExpectedNftData};
 
 #[rstest]
 #[trace]
@@ -328,56 +328,42 @@ fn nft_reorgs_and_cleanup_data(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng).build();
 
         // Issue a new NFT
-        let issuance_value = random_nft_issuance(tf.chain_config().as_ref(), &mut rng);
+        let issuance = random_nft_issuance(tf.chain_config().as_ref(), &mut rng);
 
         let genesis_id = tf.genesis().get_id();
         let genesis_outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let issuance_tx_first_input = TxInput::from_utxo(genesis_outpoint_id, 0);
         let token_id = TokenId::from_tx_input(&issuance_tx_first_input);
 
+        let issuance_tx = TransactionBuilder::new()
+            .add_input(issuance_tx_first_input, InputWitness::NoSignature(None))
+            .add_output(TxOutput::IssueNft(
+                token_id,
+                Box::new(issuance.clone().into()),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let issuance_tx_id = issuance_tx.transaction().get_id();
         let block_index = tf
             .make_block_builder()
             .with_parent(genesis_id.into())
-            .add_transaction(
-                TransactionBuilder::new()
-                    .add_input(issuance_tx_first_input, InputWitness::NoSignature(None))
-                    .add_output(TxOutput::IssueNft(
-                        token_id,
-                        Box::new(issuance_value.clone().into()),
-                        Destination::AnyoneCanSpend,
-                    ))
-                    .build(),
-            )
+            .add_transaction(issuance_tx.clone())
             .build_and_process(&mut rng)
             .unwrap()
             .unwrap();
 
-        let issuance_block = tf.block(*block_index.block_id());
-
-        // Check NFT available in storage
-        let token_aux_data = tf.chainstate.get_token_aux_data(token_id).unwrap().unwrap();
-        // Check id
-        assert_eq!(issuance_block.get_id(), token_aux_data.issuance_block_id());
-        let issuance_tx = &issuance_block.transactions()[0];
-        assert_eq!(
-            issuance_tx.transaction().get_id(),
-            token_aux_data.issuance_tx().get_id()
+        // Check NFT
+        check_nft(
+            &tf,
+            &mut rng,
+            &token_id,
+            &ExpectedNftData {
+                metadata: issuance.metadata.clone(),
+                issuance_tx: issuance_tx.take_transaction(),
+                issuance_tx_output_index: 0,
+                issuance_block_id: *block_index.block_id(),
+            },
         );
-
-        // Check issuance storage in the chain and in the storage
-
-        match &issuance_tx.outputs()[0] {
-            TxOutput::IssueNft(_, nft, _) => match nft.as_ref() {
-                NftIssuance::V0(nft) => assert_eq!(*nft, issuance_value),
-            },
-            _ => panic!("unexpected output"),
-        };
-        match &token_aux_data.issuance_tx().outputs()[0] {
-            TxOutput::IssueNft(_, nft, _) => match nft.as_ref() {
-                NftIssuance::V0(nft) => assert_eq!(*nft, issuance_value),
-            },
-            _ => panic!("unexpected output"),
-        };
 
         // Cause reorg
         tf.create_chain(&tf.genesis().get_id().into(), 5, &mut rng).unwrap();
@@ -393,14 +379,6 @@ fn nft_reorgs_and_cleanup_data(#[case] seed: Seed) {
         );
 
         // Check that tokens not in storage
-        assert!(tf
-            .chainstate
-            .get_token_id_from_issuance_tx(&issuance_tx.transaction().get_id())
-            .unwrap()
-            .is_none());
-
-        assert!(tf.chainstate.get_token_info_for_rpc(token_id).unwrap().is_none());
-
-        assert!(tf.chainstate.get_token_aux_data(token_id).unwrap().is_none());
+        assert_token_missing(&tf, &token_id, &issuance_tx_id, true);
     })
 }

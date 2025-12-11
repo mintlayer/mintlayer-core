@@ -22,7 +22,7 @@ use rpc_description::HasValueHint;
 use rpc_types::{RpcHexString, RpcString};
 use serialization::Encode;
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, HasValueHint)]
 #[serde(tag = "type", content = "content")]
 pub enum RPCTokenInfo {
     FungibleToken(RPCFungibleTokenInfo),
@@ -149,7 +149,7 @@ impl RPCFungibleTokenInfo {
     }
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct RPCNonFungibleTokenInfo {
     pub token_id: TokenId,
     pub creation_tx_id: Id<Transaction>,

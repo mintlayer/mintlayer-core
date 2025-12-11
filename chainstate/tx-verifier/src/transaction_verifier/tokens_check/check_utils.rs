@@ -58,7 +58,7 @@ pub fn check_token_ticker(
     // Check if ticker has alphanumeric chars
     ensure!(
         check_is_text_ascii_alphanumeric(ticker),
-        TokenIssuanceError::IssueErrorTickerHasNoneAlphaNumericChar
+        TokenIssuanceError::IssueErrorTickerHasNonAlphaNumericChar
     );
 
     Ok(())
