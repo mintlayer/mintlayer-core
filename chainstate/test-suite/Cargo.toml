@@ -37,6 +37,7 @@ tokio = { workspace = true, features = ["rt", "time"] }
 
 criterion.workspace = true
 expect-test.workspace = true
+rand.workspace = true
 rstest.workspace = true
 
 [[bench]]

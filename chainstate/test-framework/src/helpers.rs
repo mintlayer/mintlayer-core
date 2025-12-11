@@ -64,7 +64,7 @@ pub fn issue_and_mint_random_token_from_best_block(
         TokenIssuance::V1(issuance)
     };
 
-    let (token_id, _, utxo_with_change) =
+    let (token_id, _, _, utxo_with_change) =
         issue_token_from_block(rng, tf, best_block_id, utxo_to_pay_fee, issuance);
 
     let best_block_id = tf.best_block_id();
@@ -91,7 +91,12 @@ pub fn issue_token_from_block(
     parent_block_id: Id<GenBlock>,
     utxo_to_pay_fee: UtxoOutPoint,
     issuance: TokenIssuance,
-) -> (TokenId, Id<Block>, UtxoOutPoint) {
+) -> (
+    TokenId,
+    /*issuance_block_id*/ Id<Block>,
+    /*issuance_tx*/ Transaction,
+    /*change_outpoint*/ UtxoOutPoint,
+) {
     let token_issuance_fee = tf.chainstate.get_chain_config().fungible_token_issuance_fee();
 
     let fee_utxo_coins =
@@ -118,13 +123,64 @@ pub fn issue_token_from_block(
     let tx_id = tx.transaction().get_id();
     let block = tf
         .make_block_builder()
-        .add_transaction(tx)
+        .add_transaction(tx.clone())
         .with_parent(parent_block_id)
         .build(rng);
     let block_id = block.get_id();
     tf.process_block(block, BlockSource::Local).unwrap();
 
-    (token_id, block_id, UtxoOutPoint::new(tx_id.into(), 0))
+    (
+        token_id,
+        block_id,
+        tx.take_transaction(),
+        UtxoOutPoint::new(tx_id.into(), 0),
+    )
+}
+
+pub fn make_token_issuance(
+    rng: &mut impl Rng,
+    supply: TokenTotalSupply,
+    freezable: IsTokenFreezable,
+) -> TokenIssuance {
+    TokenIssuance::V1(TokenIssuanceV1 {
+        token_ticker: random_ascii_alphanumeric_string(rng, 1..5).as_bytes().to_vec(),
+        number_of_decimals: rng.gen_range(1..18),
+        metadata_uri: random_ascii_alphanumeric_string(rng, 1..1024).as_bytes().to_vec(),
+        total_supply: supply,
+        authority: Destination::AnyoneCanSpend,
+        is_freezable: freezable,
+    })
+}
+
+pub fn issue_token_from_genesis(
+    rng: &mut (impl Rng + CryptoRng),
+    tf: &mut TestFramework,
+    supply: TokenTotalSupply,
+    freezable: IsTokenFreezable,
+) -> (
+    TokenId,
+    /*issuance_block_id*/ Id<Block>,
+    /*issuance_tx*/ Transaction,
+    TokenIssuance,
+    /*change_outpoint*/ UtxoOutPoint,
+) {
+    let utxo_input_outpoint = UtxoOutPoint::new(tf.best_block_id().into(), 0);
+    let issuance = make_token_issuance(rng, supply, freezable);
+    let (token_id, issuance_block_id, issuance_tx, change_outpoint) = issue_token_from_block(
+        rng,
+        tf,
+        tf.genesis().get_id().into(),
+        utxo_input_outpoint,
+        issuance.clone(),
+    );
+
+    (
+        token_id,
+        issuance_block_id,
+        issuance_tx,
+        issuance,
+        change_outpoint,
+    )
 }
 
 pub fn mint_tokens_in_block(

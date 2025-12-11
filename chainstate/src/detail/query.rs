@@ -391,7 +391,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         &self,
         tx_id: &Id<Transaction>,
     ) -> Result<Option<TokenId>, PropertyQueryError> {
-        self.chainstate_ref.get_token_id(tx_id)
+        self.chainstate_ref.get_token_id_from_issuance_tx(tx_id)
     }
 
     pub fn get_mainchain_blocks_list(&self) -> Result<Vec<Id<Block>>, PropertyQueryError> {
