@@ -20,7 +20,10 @@ use common::{
         timelock::OutputTimeLock, tokens::TokenId, ChainConfig, DelegationId, Destination, PoolId,
         TxOutput,
     },
-    primitives::amount::{RpcAmountIn, RpcAmountOut},
+    primitives::{
+        amount::{RpcAmountIn, RpcAmountOut},
+        Amount,
+    },
 };
 use crypto::vrf::VRFPublicKey;
 use rpc::types::RpcHexString;
@@ -65,20 +68,57 @@ impl RpcOutputValueOut {
             OutputValue::Coin(amount) => RpcOutputValueOut::Coin {
                 amount: RpcAmountOut::from_amount(amount, chain_config.coin_decimals()),
             },
-            OutputValue::TokenV0(_) => unimplemented!(),
+            OutputValue::TokenV0(_) => return Err(RpcTypeError::TokenV0Encountered),
             OutputValue::TokenV1(token_id, amount) => RpcOutputValueOut::Token {
                 id: RpcAddress::new(chain_config, token_id)?,
                 amount: RpcAmountOut::from_amount(
                     amount,
-                    token_decimals_provider
-                        .get_token_decimals(&token_id)
-                        .ok_or(RpcTypeError::TokenDecimalsUnavailable(token_id))?
-                        .0,
+                    token_decimals(&token_id, token_decimals_provider)?,
                 ),
             },
         };
         Ok(result)
     }
+
+    pub fn amount(&self) -> &RpcAmountOut {
+        match self {
+            Self::Coin { amount } => amount,
+            Self::Token { id: _, amount } => amount,
+        }
+    }
+
+    pub fn token_id(&self) -> Option<&RpcAddress<TokenId>> {
+        match self {
+            Self::Coin { amount: _ } => None,
+            Self::Token { id, amount: _ } => Some(id),
+        }
+    }
+}
+
+fn token_decimals(
+    token_id: &TokenId,
+    token_decimals_provider: &impl TokenDecimalsProvider,
+) -> Result<u8, RpcTypeError> {
+    Ok(token_decimals_provider
+        .get_token_decimals(token_id)
+        .ok_or(RpcTypeError::TokenDecimalsUnavailable(*token_id))?
+        .0)
+}
+
+// FIXME put elsewhere?
+pub fn make_rpc_amount_out(
+    amount: Amount,
+    token_id: Option<&TokenId>,
+    chain_config: &ChainConfig,
+    token_decimals_provider: &impl TokenDecimalsProvider,
+) -> Result<RpcAmountOut, RpcTypeError> {
+    let decimals = if let Some(token_id) = token_id {
+        token_decimals(&token_id, token_decimals_provider)?
+    } else {
+        chain_config.coin_decimals()
+    };
+
+    Ok(RpcAmountOut::from_amount(amount, decimals))
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, rpc_description::HasValueHint)]

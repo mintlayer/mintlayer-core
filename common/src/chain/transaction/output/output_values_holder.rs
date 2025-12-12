@@ -15,12 +15,20 @@
 
 use std::collections::BTreeSet;
 
-use crate::chain::{output_value::OutputValue, tokens::TokenId};
+use crate::chain::{
+    output_value::{OutputValue, RpcOutputValue},
+    tokens::TokenId,
+};
 
 /// A trait that will be implemented by types that contain one or more `OutputValue`'s, e.g.
 /// a transaction output, a transaction itself, a block.
 pub trait OutputValuesHolder {
     fn output_values_iter(&self) -> impl Iterator<Item = &OutputValue>;
+}
+
+/// A trait that will be implemented by types that contain one or more `RpcOutputValue`'s.
+pub trait RpcOutputValuesHolder {
+    fn rpc_output_values_iter(&self) -> impl Iterator<Item = &RpcOutputValue>;
 }
 
 pub fn collect_token_v1_ids_from_output_values_holder_into(

@@ -172,6 +172,9 @@ pub enum RpcError<N: NodeInterface> {
 
     #[error("Wallet recovery requires mnemonic to be specified")]
     WalletRecoveryWithoutMnemonic,
+
+    #[error(transparent)]
+    ChainstateRpcTypeError(#[from] chainstate::rpc::RpcTypeError),
 }
 
 impl<N: NodeInterface> From<RpcError<N>> for rpc::Error {
@@ -525,6 +528,30 @@ impl PoolInfo {
             cost_per_block,
         }
     }
+}
+
+/// Additional data for an already/still existing order.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
+pub struct ExistingOwnOrderData {
+    pub ask_balance: RpcAmountOut,
+    pub give_balance: RpcAmountOut,
+    pub creation_timestamp: BlockTimestamp,
+    pub is_frozen: bool,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
+pub struct OwnOrderInfo {
+    pub order_id: RpcAddress<OrderId>,
+
+    pub initially_asked: RpcOutputValueOut,
+    pub initially_given: RpcOutputValueOut,
+
+    /// If this is unset, the order creation tx hasn't been included in a block yet,
+    /// or the order has been concluded and the conclusion tx has been included in a block.
+    pub existing_order_data: Option<ExistingOwnOrderData>,
+
+    pub is_marked_as_frozen_in_wallet: bool,
+    pub is_marked_as_concluded_in_wallet: bool,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
@@ -1037,6 +1064,18 @@ impl NewOrderTransaction {
             fees: tx.fees,
             broadcasted: tx.broadcasted,
         }
+    }
+
+    pub fn into_order_id_and_new_tx(self) -> (RpcAddress<OrderId>, RpcNewTransaction) {
+        (
+            self.order_id,
+            RpcNewTransaction {
+                tx_id: self.tx_id,
+                tx: self.tx,
+                fees: self.fees,
+                broadcasted: self.broadcasted,
+            },
+        )
     }
 }
 

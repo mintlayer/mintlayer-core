@@ -14,11 +14,23 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 ### Added
   - Node RPC: new method added - `chainstate_tokens_info`.
 
+  - Wallet RPC:
+    - new methods added: `node_get_tokens_info`, `order_list_own`;
+
+  - Wallet CLI:
+    - the commands `order-create`, `order-fill`, `order-freeze`, `order-conclude` were added,
+      mirroring their existing RPC counterparts;
+    - other new commands added: `order-list-own`;
+
 ### Changed
   - Wallet RPC:
-    `wallet_info`: the structure of the returned field `extra_info` was changed.
+    - `wallet_info`: the structure of the returned field `extra_info` was changed.
+    - `create_order`, `conclude_order`, `fill_order`, `freeze_order` were renamed to
+      `order_create`, `order_conclude`, `order_fill`, `order_freeze`.
 
   - The format of `PartiallySignedTransaction was changed again.
+
+  - Node RPC: the result of `chainstate_order_info` now also indicates whether the order is frozen.
 
 ### Fixed
   - p2p: when a peer sends a message that can't be decoded, it will now be discouraged (which is what

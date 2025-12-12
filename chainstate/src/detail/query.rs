@@ -462,6 +462,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                     give_balance,
                     ask_balance,
                     nonce,
+                    is_frozen: order_data.is_frozen(),
                 };
 
                 Ok(info)

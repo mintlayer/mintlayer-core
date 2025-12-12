@@ -40,8 +40,8 @@ use crypto::{
 use mempool::FeeRate;
 use wallet::{
     account::{
-        transaction_list::TransactionList, CoinSelectionAlgo, DelegationData, PoolData, TxInfo,
-        UnconfirmedTokenInfo,
+        transaction_list::TransactionList, CoinSelectionAlgo, DelegationData, OrderData, PoolData,
+        TxInfo, UnconfirmedTokenInfo,
     },
     destination_getters::HtlcSpendingCondition,
     send_request::{SelectedInputs, StakePoolCreationArguments},
@@ -243,15 +243,15 @@ where
         }
     }
 
-    pub fn get_pool_ids(
+    pub fn get_pools(
         &self,
         account_index: U31,
         filter: WalletPoolsFilter,
     ) -> WalletResult<Vec<(PoolId, PoolData)>> {
         match self {
-            RuntimeWallet::Software(w) => w.get_pool_ids(account_index, filter),
+            RuntimeWallet::Software(w) => w.get_pools(account_index, filter),
             #[cfg(feature = "trezor")]
-            RuntimeWallet::Trezor(w) => w.get_pool_ids(account_index, filter),
+            RuntimeWallet::Trezor(w) => w.get_pools(account_index, filter),
         }
     }
 
@@ -1443,6 +1443,19 @@ where
                 .await
             }
         }
+    }
+
+    pub fn get_orders(&self, account_index: U31) -> WalletResult<Vec<(OrderId, OrderData)>> {
+        let orders = match self {
+            RuntimeWallet::Software(w) => {
+                w.get_orders(account_index)?.map(|(id, data)| (*id, data.clone())).collect()
+            }
+            #[cfg(feature = "trezor")]
+            RuntimeWallet::Trezor(w) => {
+                w.get_orders(account_index)?.map(|(id, data)| (*id, data.clone())).collect()
+            }
+        };
+        Ok(orders)
     }
 
     pub async fn sign_raw_transaction(

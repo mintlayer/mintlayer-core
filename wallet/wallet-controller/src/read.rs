@@ -17,9 +17,14 @@
 
 use std::collections::BTreeMap;
 
+use futures::{stream::FuturesUnordered, FutureExt, TryStreamExt};
+
 use common::{
     address::Address,
-    chain::{ChainConfig, DelegationId, Destination, PoolId, Transaction, TxOutput, UtxoOutPoint},
+    chain::{
+        ChainConfig, DelegationId, Destination, OrderId, PoolId, Transaction, TxOutput,
+        UtxoOutPoint,
+    },
     primitives::{id::WithId, Amount, Id},
 };
 use crypto::{
@@ -29,7 +34,6 @@ use crypto::{
     },
     vrf::VRFPublicKey,
 };
-use futures::{stream::FuturesUnordered, FutureExt, TryStreamExt};
 use node_comm::node_traits::NodeInterface;
 use utils::tap_log::TapLog;
 use wallet::{
@@ -313,12 +317,12 @@ where
     ) -> Result<Vec<(PoolId, PoolData, Amount, Amount)>, ControllerError<T>> {
         let pools = self
             .wallet
-            .get_pool_ids(self.account_index, filter)
+            .get_pools(self.account_index, filter)
             .map_err(ControllerError::WalletError)?;
 
         let tasks: FuturesUnordered<_> = pools
             .into_iter()
-            .map(|(pool_id, block_info)| self.get_pool_info(pool_id, block_info))
+            .map(|(pool_id, pool_data)| self.get_pool_info(pool_id, pool_data))
             .collect();
 
         tasks.try_collect().await
@@ -417,5 +421,12 @@ where
             // chainstate due to the pool being decommissioned and the delegation's balance being 0
             .map(|opt_balance| opt_balance.map(|balance| (delegation_id, balance)))
             .log_err()
+    }
+
+    /// Return info about all orders owned by the selected account.
+    pub async fn get_own_orders(
+        &self,
+    ) -> Result<Vec<(OrderId, wallet::account::OrderData)>, ControllerError<T>> {
+        self.wallet.get_orders(self.account_index).map_err(ControllerError::WalletError)
     }
 }

@@ -23,9 +23,10 @@ use chainstate::rpc::RpcOutputValueIn;
 use common::{
     address::RpcAddress,
     chain::{
-        block::timestamp::BlockTimestamp, tokens::TokenId, Block, DelegationId, Destination,
-        GenBlock, OrderId, PoolId, SignedTransaction, SignedTransactionIntent, Transaction,
-        TxOutput,
+        block::timestamp::BlockTimestamp,
+        tokens::{RPCTokenInfo, TokenId},
+        Block, DelegationId, Destination, GenBlock, OrderId, PoolId, SignedTransaction,
+        SignedTransactionIntent, Transaction, TxOutput,
     },
     primitives::{BlockHeight, Id},
 };
@@ -46,7 +47,7 @@ use crate::types::{
     ComposedTransaction, CreatedWallet, DelegationInfo, HardwareWalletType, HexEncoded,
     LegacyVrfPublicKeyInfo, MaybeSignedTransaction, NewAccountInfo, NewDelegationTransaction,
     NewOrderTransaction, NewSubmittedTransaction, NewTokenTransaction, NftMetadata, NodeVersion,
-    OpenedWallet, PoolInfo, PublicKeyInfo, RpcAmountIn, RpcHashedTimelockContract,
+    OpenedWallet, OwnOrderInfo, PoolInfo, PublicKeyInfo, RpcAmountIn, RpcHashedTimelockContract,
     RpcInspectTransaction, RpcNewTransaction, RpcPreparedTransaction, RpcStandaloneAddresses,
     RpcUtxoOutpoint, RpcUtxoState, RpcUtxoType, SendTokensFromMultisigAddressResult,
     StakePoolBalance, StakingStatus, StandaloneAddressWithDetails, TokenMetadata,
@@ -814,12 +815,12 @@ trait WalletRpc {
         options: TransactionRequestOptions,
     ) -> rpc::RpcResult<RpcPreparedTransaction>;
 
-    /// Create an order for exchanging "given" amount of an arbitrary currency (coins or tokens) for
-    /// an arbitrary amount of "asked" currency.
+    /// Create an order for exchanging an amount of one ("given") currency for a certain amount of
+    /// another ("asked") currency. Either of the currencies can be coins or tokens.
     ///
-    /// Conclude key is the key that can authorize a conclude order command, closing the order and withdrawing
-    /// all the remaining funds from it.
-    #[method(name = "create_order")]
+    /// Conclude key is the key that can authorize the conclude order command, closing the order
+    /// and withdrawing all the remaining funds from it.
+    #[method(name = "order_create")]
     async fn create_order(
         &self,
         account: AccountArg,
@@ -834,7 +835,8 @@ trait WalletRpc {
     /// This assumes that the conclude key is owned by the selected account in this wallet.
     ///
     /// Optionally, an output address can be provided where remaining funds from the order are transferred.
-    #[method(name = "conclude_order")]
+    /// If not specified, a new receive address will be generated for this purpose.
+    #[method(name = "order_conclude")]
     async fn conclude_order(
         &self,
         account: AccountArg,
@@ -846,7 +848,8 @@ trait WalletRpc {
     /// Fill order completely or partially given its id and an amount in the order's "asked" currency.
     ///
     /// Optionally, an output address can be provided where the exchanged funds from the order are transferred.
-    #[method(name = "fill_order")]
+    /// If not specified, a new receive address will be generated for this purpose.
+    #[method(name = "order_fill")]
     async fn fill_order(
         &self,
         account: AccountArg,
@@ -858,13 +861,17 @@ trait WalletRpc {
 
     /// Freeze an order given its id. This prevents an order from being filled.
     /// Only a conclude operation is allowed afterwards.
-    #[method(name = "freeze_order")]
+    #[method(name = "order_freeze")]
     async fn freeze_order(
         &self,
         account: AccountArg,
         order_id: RpcAddress<OrderId>,
         options: TransactionOptions,
     ) -> rpc::RpcResult<RpcNewTransaction>;
+
+    /// List orders whose conclude key is owned by the given account.
+    #[method(name = "order_list_own")]
+    async fn list_own_orders(&self, account: AccountArg) -> rpc::RpcResult<Vec<OwnOrderInfo>>;
 
     /// Obtain the node version
     #[method(name = "node_version")]
@@ -1074,4 +1081,11 @@ trait WalletRpc {
         end_height: BlockHeight,
         step: NonZeroUsize,
     ) -> rpc::RpcResult<Vec<(BlockHeight, Id<GenBlock>)>>;
+
+    /// Return token infos for the given token ids.
+    #[method(name = "node_get_tokens_info")]
+    async fn node_get_tokens_info(
+        &self,
+        token_ids: Vec<RpcAddress<TokenId>>,
+    ) -> rpc::RpcResult<Vec<RPCTokenInfo>>;
 }

@@ -1980,7 +1980,7 @@ async fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
     let block1_amount = Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
     let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
 
-    let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
+    let pool_ids = wallet.get_pools(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
     assert!(pool_ids.is_empty());
 
     let coin_balance = get_coin_balance(&wallet);
@@ -2043,12 +2043,12 @@ async fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, Amount::ZERO);
 
-    let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
+    let pool_ids = wallet.get_pools(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
     assert_eq!(pool_ids.len(), 1);
-    let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::Stake).unwrap();
+    let pool_ids = wallet.get_pools(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::Stake).unwrap();
     assert_eq!(pool_ids.len(), 1);
     let pool_ids = wallet
-        .get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::Decommission)
+        .get_pools(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::Decommission)
         .unwrap();
     assert_eq!(pool_ids.len(), 1);
 
@@ -2102,7 +2102,7 @@ async fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
 
     scan_wallet(&mut wallet, BlockHeight::new(2), vec![block3.clone()]);
 
-    let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
+    let pool_ids = wallet.get_pools(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
     assert_eq!(pool_ids.len(), 1);
     let (_pool_id, pool_data) = pool_ids.first().unwrap();
     assert_eq!(
@@ -2112,7 +2112,7 @@ async fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
 
     // do a reorg back to block 2
     scan_wallet(&mut wallet, BlockHeight::new(1), vec![block2.clone()]);
-    let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
+    let pool_ids = wallet.get_pools(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
     assert_eq!(pool_ids.len(), 1);
     let (pool_id, pool_data) = pool_ids.first().unwrap();
     assert_eq!(
@@ -2139,12 +2139,12 @@ async fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
         Amount::ZERO,
         2,
     );
-    let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
+    let pool_ids = wallet.get_pools(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
     assert!(pool_ids.is_empty());
-    let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::Stake).unwrap();
+    let pool_ids = wallet.get_pools(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::Stake).unwrap();
     assert!(pool_ids.is_empty());
     let pool_ids = wallet
-        .get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::Decommission)
+        .get_pools(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::Decommission)
         .unwrap();
     assert!(pool_ids.is_empty());
 
@@ -2178,9 +2178,9 @@ async fn create_stake_pool_for_different_wallet_and_list_pool_ids(#[case] seed: 
     let (_, block1) = create_block(&chain_config, &mut wallet1, vec![], block1_amount, 0);
     scan_wallet(&mut wallet2, BlockHeight::new(0), vec![block1]);
 
-    let pool_ids1 = wallet1.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
+    let pool_ids1 = wallet1.get_pools(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
     assert!(pool_ids1.is_empty());
-    let pool_ids2 = wallet2.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
+    let pool_ids2 = wallet2.get_pools(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
     assert!(pool_ids2.is_empty());
 
     let coin_balance1 = get_coin_balance(&wallet1);
@@ -2283,19 +2283,19 @@ async fn create_stake_pool_for_different_wallet_and_list_pool_ids(#[case] seed: 
     assert_eq!(coin_balance2, Amount::ZERO);
 
     let pool_ids_for_staking1 =
-        wallet1.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::Stake).unwrap();
+        wallet1.get_pools(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::Stake).unwrap();
     assert!(pool_ids_for_staking1.is_empty());
     let pool_ids_for_decommission1 = wallet1
-        .get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::Decommission)
+        .get_pools(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::Decommission)
         .unwrap();
     assert_eq!(pool_ids_for_decommission1.len(), 1);
 
     let pool_ids_for_decommission2 = wallet2
-        .get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::Decommission)
+        .get_pools(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::Decommission)
         .unwrap();
     assert!(pool_ids_for_decommission2.is_empty());
     let pool_ids_for_staking2 =
-        wallet2.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::Stake).unwrap();
+        wallet2.get_pools(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::Stake).unwrap();
     assert_eq!(pool_ids_for_staking2.len(), 1);
 
     assert_eq!(pool_ids_for_decommission1[0], pool_ids_for_staking2[0]);
@@ -2364,19 +2364,19 @@ async fn create_stake_pool_for_different_wallet_and_list_pool_ids(#[case] seed: 
     scan_wallet(&mut wallet2, BlockHeight::new(2), vec![block3.clone()]);
 
     let pool_ids_for_staking1 =
-        wallet1.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::Stake).unwrap();
+        wallet1.get_pools(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::Stake).unwrap();
     assert!(pool_ids_for_staking1.is_empty());
     let pool_ids_for_decommission1 = wallet1
-        .get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::Decommission)
+        .get_pools(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::Decommission)
         .unwrap();
     assert_eq!(pool_ids_for_decommission1.len(), 1);
 
     let pool_ids_for_decommission2 = wallet2
-        .get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::Decommission)
+        .get_pools(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::Decommission)
         .unwrap();
     assert!(pool_ids_for_decommission2.is_empty());
     let pool_ids_for_staking2 =
-        wallet2.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::Stake).unwrap();
+        wallet2.get_pools(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::Stake).unwrap();
     assert_eq!(pool_ids_for_staking2.len(), 1);
 
     assert_eq!(pool_ids_for_decommission1[0], pool_ids_for_staking2[0]);
@@ -2417,9 +2417,9 @@ async fn create_stake_pool_for_different_wallet_and_list_pool_ids(#[case] seed: 
     );
     scan_wallet(&mut wallet2, BlockHeight::new(3), vec![block4]);
 
-    let pool_ids1 = wallet1.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
+    let pool_ids1 = wallet1.get_pools(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
     assert!(pool_ids1.is_empty());
-    let pool_ids2 = wallet2.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
+    let pool_ids2 = wallet2.get_pools(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
     assert!(pool_ids2.is_empty());
 
     let coin_balance1 = get_coin_balance(&wallet1);
@@ -2668,7 +2668,7 @@ async fn create_spend_from_delegations(#[case] seed: Seed) {
     let block1_amount = (chain_config.min_stake_pool_pledge() + delegation_amount).unwrap();
     let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
 
-    let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
+    let pool_ids = wallet.get_pools(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
     assert!(pool_ids.is_empty());
 
     let coin_balance = get_coin_balance(&wallet);
@@ -2705,7 +2705,7 @@ async fn create_spend_from_delegations(#[case] seed: Seed) {
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, (block1_amount - pool_amount).unwrap(),);
 
-    let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
+    let pool_ids = wallet.get_pools(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
     assert_eq!(pool_ids.len(), 1);
 
     let pool_id = pool_ids.first().unwrap().0;
@@ -5024,7 +5024,7 @@ async fn decommission_pool_wrong_account(#[case] seed: Seed) {
     let block1_amount = Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
     let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
 
-    let pool_ids = wallet.get_pool_ids(acc_0_index, WalletPoolsFilter::All).unwrap();
+    let pool_ids = wallet.get_pools(acc_0_index, WalletPoolsFilter::All).unwrap();
     assert!(pool_ids.is_empty());
 
     let coin_balance = get_coin_balance(&wallet);
@@ -5062,7 +5062,7 @@ async fn decommission_pool_wrong_account(#[case] seed: Seed) {
         1,
     );
 
-    let pool_ids = wallet.get_pool_ids(acc_0_index, WalletPoolsFilter::All).unwrap();
+    let pool_ids = wallet.get_pools(acc_0_index, WalletPoolsFilter::All).unwrap();
     assert_eq!(pool_ids.len(), 1);
 
     // Try to decommission the pool with default account
@@ -5126,7 +5126,7 @@ async fn decommission_pool_request_wrong_account(#[case] seed: Seed) {
     let block1_amount = Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
     let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
 
-    let pool_ids = wallet.get_pool_ids(acc_0_index, WalletPoolsFilter::All).unwrap();
+    let pool_ids = wallet.get_pools(acc_0_index, WalletPoolsFilter::All).unwrap();
     assert!(pool_ids.is_empty());
 
     let coin_balance = get_coin_balance(&wallet);
@@ -5164,7 +5164,7 @@ async fn decommission_pool_request_wrong_account(#[case] seed: Seed) {
         1,
     );
 
-    let pool_ids = wallet.get_pool_ids(acc_0_index, WalletPoolsFilter::All).unwrap();
+    let pool_ids = wallet.get_pools(acc_0_index, WalletPoolsFilter::All).unwrap();
     assert_eq!(pool_ids.len(), 1);
 
     // Try to create decommission request from account that holds the key
@@ -5221,7 +5221,7 @@ async fn sign_decommission_pool_request_between_accounts(#[case] seed: Seed) {
     let (addr, _) = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
     let utxo = make_address_output(addr.clone().into_object(), block1_amount);
 
-    let pool_ids = wallet.get_pool_ids(acc_0_index, WalletPoolsFilter::All).unwrap();
+    let pool_ids = wallet.get_pools(acc_0_index, WalletPoolsFilter::All).unwrap();
     assert!(pool_ids.is_empty());
 
     let coin_balance = get_coin_balance(&wallet);
@@ -5282,7 +5282,7 @@ async fn sign_decommission_pool_request_between_accounts(#[case] seed: Seed) {
 
     assert_eq!(get_coin_balance(&wallet), Amount::ZERO);
 
-    let pool_ids = wallet.get_pool_ids(acc_0_index, WalletPoolsFilter::All).unwrap();
+    let pool_ids = wallet.get_pools(acc_0_index, WalletPoolsFilter::All).unwrap();
     assert_eq!(pool_ids.len(), 1);
 
     let pool_id = pool_ids.first().unwrap().0;
@@ -5353,7 +5353,7 @@ async fn sign_decommission_pool_request_cold_wallet(#[case] seed: Seed) {
     let block1_amount = Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
     let _ = create_block(&chain_config, &mut hot_wallet, vec![], block1_amount, 0);
 
-    let pool_ids = hot_wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
+    let pool_ids = hot_wallet.get_pools(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
     assert!(pool_ids.is_empty());
 
     let coin_balance = get_coin_balance(&hot_wallet);
@@ -5389,7 +5389,7 @@ async fn sign_decommission_pool_request_cold_wallet(#[case] seed: Seed) {
         1,
     );
 
-    let pool_ids = hot_wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
+    let pool_ids = hot_wallet.get_pools(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
     assert_eq!(pool_ids.len(), 1);
 
     let pool_id = pool_ids.first().unwrap().0;
@@ -5468,10 +5468,10 @@ async fn filter_pools(#[case] seed: Seed) {
     let _ = create_block(&chain_config, &mut wallet1, vec![], block1_amount, 0);
     let _ = create_block(&chain_config, &mut wallet2, vec![], block1_amount, 0);
 
-    let pool_ids = wallet1.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
+    let pool_ids = wallet1.get_pools(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
     assert!(pool_ids.is_empty());
 
-    let pool_ids = wallet2.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
+    let pool_ids = wallet2.get_pools(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
     assert!(pool_ids.is_empty());
 
     let pool_amount = block1_amount;
@@ -5511,27 +5511,27 @@ async fn filter_pools(#[case] seed: Seed) {
     );
 
     // check wallet1 filter
-    let pool_ids = wallet1.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
+    let pool_ids = wallet1.get_pools(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
     assert_eq!(pool_ids.len(), 1);
 
     let pool_ids = wallet1
-        .get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::Decommission)
+        .get_pools(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::Decommission)
         .unwrap();
     assert_eq!(pool_ids.len(), 0);
 
-    let pool_ids = wallet1.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::Stake).unwrap();
+    let pool_ids = wallet1.get_pools(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::Stake).unwrap();
     assert_eq!(pool_ids.len(), 1);
 
     // check wallet2 filter
-    let pool_ids = wallet2.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
+    let pool_ids = wallet2.get_pools(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
     assert_eq!(pool_ids.len(), 1);
 
     let pool_ids = wallet2
-        .get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::Decommission)
+        .get_pools(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::Decommission)
         .unwrap();
     assert_eq!(pool_ids.len(), 1);
 
-    let pool_ids = wallet2.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::Stake).unwrap();
+    let pool_ids = wallet2.get_pools(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::Stake).unwrap();
     assert_eq!(pool_ids.len(), 0);
 }
 
@@ -6418,6 +6418,7 @@ async fn create_order_and_conclude(#[case] seed: Seed) {
         give_balance: token_amount_to_mint,
         ask_balance: Amount::from_atoms(111),
         nonce: None,
+        is_frozen: false,
     };
 
     let _ = create_block(
@@ -6630,6 +6631,7 @@ async fn create_order_fill_completely_conclude(#[case] seed: Seed) {
         give_balance: sell_amount,
         ask_balance: token_amount_to_mint,
         nonce: None,
+        is_frozen: false,
     };
 
     let (_, block4) = create_block(
@@ -6734,6 +6736,7 @@ async fn create_order_fill_completely_conclude(#[case] seed: Seed) {
         give_balance: (sell_amount - Amount::from_atoms(100)).unwrap(),
         ask_balance: (token_amount_to_mint - Amount::from_atoms(10)).unwrap(),
         nonce: Some(AccountNonce::new(0)),
+        is_frozen: false,
     };
 
     let additional_info = TxAdditionalInfo::new()
@@ -6804,6 +6807,7 @@ async fn create_order_fill_completely_conclude(#[case] seed: Seed) {
         give_balance: Amount::ZERO,
         ask_balance: Amount::ZERO,
         nonce: Some(AccountNonce::new(1)),
+        is_frozen: false,
     };
     let additional_info = TxAdditionalInfo::new()
         .with_token_info(
@@ -7014,6 +7018,7 @@ async fn create_order_fill_partially_conclude(#[case] seed: Seed) {
         give_balance: sell_amount,
         ask_balance: token_amount_to_mint,
         nonce: None,
+        is_frozen: false,
     };
 
     let (_, block4) = create_block(
@@ -7118,6 +7123,7 @@ async fn create_order_fill_partially_conclude(#[case] seed: Seed) {
         give_balance: (sell_amount - Amount::from_atoms(100)).unwrap(),
         ask_balance: (token_amount_to_mint - Amount::from_atoms(10)).unwrap(),
         nonce: Some(AccountNonce::new(0)),
+        is_frozen: false,
     };
 
     let additional_info = TxAdditionalInfo::new()
@@ -7211,7 +7217,7 @@ async fn conflicting_delegation_account_nonce(#[case] seed: Seed) {
     let (_, block1) = create_block(&chain_config, &mut wallet1, vec![], block1_amount, 0);
     scan_wallet(&mut wallet2, BlockHeight::new(0), vec![block1]);
 
-    let pool_ids = wallet1.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
+    let pool_ids = wallet1.get_pools(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
     assert!(pool_ids.is_empty());
 
     let coin_balance = get_coin_balance(&wallet1);
@@ -7250,7 +7256,7 @@ async fn conflicting_delegation_account_nonce(#[case] seed: Seed) {
     let coin_balance = get_coin_balance(&wallet1);
     assert_eq!(coin_balance, (block1_amount - pool_amount).unwrap(),);
 
-    let pool_ids = wallet1.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
+    let pool_ids = wallet1.get_pools(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
     assert_eq!(pool_ids.len(), 1);
 
     // Create a delegation
@@ -7512,7 +7518,7 @@ async fn conflicting_delegation_account_nonce_same_wallet(#[case] seed: Seed) {
     let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
 
     // Create a pool
-    let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
+    let pool_ids = wallet.get_pools(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
     assert!(pool_ids.is_empty());
 
     let coin_balance = get_coin_balance(&wallet);
@@ -7549,7 +7555,7 @@ async fn conflicting_delegation_account_nonce_same_wallet(#[case] seed: Seed) {
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, (block1_amount - pool_amount).unwrap(),);
 
-    let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
+    let pool_ids = wallet.get_pools(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
     assert_eq!(pool_ids.len(), 1);
 
     // Create a delegation
@@ -7888,6 +7894,7 @@ async fn conflicting_order_account_nonce(#[case] seed: Seed) {
         give_balance: sell_amount,
         ask_balance: buy_amount,
         nonce: None,
+        is_frozen: false,
     };
     let order_additional_info_for_ptx = OrderAdditionalInfo {
         initially_asked: order_info.initially_asked.into(),
@@ -8048,7 +8055,7 @@ async fn conflicting_delegation_account_nonce_multiple_inputs(#[case] seed: Seed
     let (_, block1) = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
     scan_wallet(&mut wallet2, BlockHeight::new(0), vec![block1]);
 
-    let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
+    let pool_ids = wallet.get_pools(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
     assert!(pool_ids.is_empty());
 
     let coin_balance = get_coin_balance(&wallet);
@@ -8087,7 +8094,7 @@ async fn conflicting_delegation_account_nonce_multiple_inputs(#[case] seed: Seed
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, (block1_amount - pool_amount).unwrap(),);
 
-    let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
+    let pool_ids = wallet.get_pools(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
     assert_eq!(pool_ids.len(), 1);
 
     // Create a delegation
@@ -8334,7 +8341,7 @@ async fn conflicting_delegation_account_with_reorg(#[case] seed: Seed) {
     let (_, block1) = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
     scan_wallet(&mut wallet2, BlockHeight::new(0), vec![block1]);
 
-    let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
+    let pool_ids = wallet.get_pools(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
     assert!(pool_ids.is_empty());
 
     let coin_balance = get_coin_balance(&wallet);
@@ -8373,7 +8380,7 @@ async fn conflicting_delegation_account_with_reorg(#[case] seed: Seed) {
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, (block1_amount - pool_amount).unwrap(),);
 
-    let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
+    let pool_ids = wallet.get_pools(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
     assert_eq!(pool_ids.len(), 1);
 
     // Create a delegation

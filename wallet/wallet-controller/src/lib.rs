@@ -591,13 +591,6 @@ where
         }
     }
 
-    pub async fn get_token_number_of_decimals(
-        &self,
-        token_id: TokenId,
-    ) -> Result<u8, ControllerError<N>> {
-        Ok(self.get_token_info(token_id).await?.token_number_of_decimals())
-    }
-
     pub async fn get_token_info(
         &self,
         token_id: TokenId,
@@ -655,7 +648,7 @@ where
     ) -> Result<Block, ControllerError<N>> {
         let pools = self
             .wallet
-            .get_pool_ids(account_index, WalletPoolsFilter::Stake)
+            .get_pools(account_index, WalletPoolsFilter::Stake)
             .map_err(ControllerError::WalletError)?;
 
         let mut last_error = ControllerError::NoStakingPool;

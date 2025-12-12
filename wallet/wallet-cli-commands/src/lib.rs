@@ -1066,6 +1066,85 @@ pub enum WalletCommand {
         /// Transaction id, encoded in hex
         transaction_id: HexEncoded<Id<Transaction>>,
     },
+
+    /// Create an order for exchanging an amount of one ("given") currency for a certain amount of
+    /// another ("asked") currency.
+    ///
+    /// Either of the currencies can be coins or tokens.
+    /// The ratio between the asked and given amounts determines the exchange rate.
+    ///
+    /// The entire given amount of the "given" currency will be locked inside the order, so that
+    /// it can be given away when the order is filled.
+    ///
+    /// The accumulated "ask" and the remaining "give" amounts can be withdrawn by concluding
+    /// the order.
+    #[clap(name = "order-create")]
+    CreateOrder {
+        /// The currency you are asking for - a token id or "coin" for coins.
+        ask_currency: String,
+        /// The asked amount.
+        ask_amount: DecimalAmount,
+        /// The currency you will be giving - a token id or "coin" for coins.
+        give_currency: String,
+        /// The given amount.
+        give_amount: DecimalAmount,
+        /// The address (key) that can authorize the conclusion and freezing of the order.
+        conclude_address: String,
+    },
+
+    /// Fill the specified order with the specified amount of the order's "asked" currency,
+    /// receiving the corresponding amount of the "given" currency.
+    #[clap(name = "order-fill")]
+    FillOrder {
+        /// The id of the order to fill.
+        order_id: String,
+
+        /// The amount of the "asked" currency to fill the order with.
+        amount: DecimalAmount,
+
+        /// The address where the corresponding amount of the order's "given" currency should be
+        /// transferred to.
+        /// If not specified, a new receive address will be generated for this purpose.
+        output_address: Option<String>,
+    },
+
+    /// Freeze the order.
+    ///
+    /// Once an order is frozen, it can no longer be filled. The only possible operation for
+    /// a frozen order is conclusion.
+    ///
+    /// Note that freezing an order is optional, you can conclude a non-frozen order too.
+    /// However it may not succeed if the order is still being actively filled. In such a case
+    /// you may want to freeze the order first, wait for the corresponding transaction to be
+    /// included in a block and then conclude the order.
+    ///
+    /// To be able to freeze an order, the order's conclude key must be owned by the selected
+    /// account.
+    #[clap(name = "order-freeze")]
+    FreezeOrder {
+        /// The id of the order to freeze.
+        order_id: String,
+    },
+
+    /// Conclude the order, withdrawing the accumulated "asked" and the remaining "given"
+    /// amounts.
+    ///
+    /// To be able to conclude an order, the order's conclude key must be owned by the selected
+    /// account.
+    #[clap(name = "order-conclude")]
+    ConcludeOrder {
+        /// The id of the order to conclude.
+        order_id: String,
+
+        /// The address where the accumulated "asked" amount and the remaining "given" amount
+        /// should be transferred to. If not specified, a new receive address will be generated
+        /// for this purpose.
+        output_address: Option<String>,
+    },
+
+    /// List orders whose conclude key is owned by the selected account.
+    #[clap(name = "order-list-own")]
+    ListOwnOrders,
 }
 
 #[derive(Debug, Parser)]
@@ -1377,6 +1456,11 @@ mod tests {
     use rstest::rstest;
 
     use super::*;
+
+    #[ctor::ctor]
+    fn init() {
+        logging::init_logging();
+    }
 
     #[rstest]
     fn ensure_commands_have_description(

@@ -13,21 +13,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{fmt::Display, str::FromStr};
+use std::{collections::BTreeMap, fmt::Display, str::FromStr};
 
+use chainstate::rpc::RpcOutputValueOut;
 use clap::ValueEnum;
 
 use common::{
-    address::Address,
-    chain::{ChainConfig, OutPointSourceId, TxOutput, UtxoOutPoint},
-    primitives::{DecimalAmount, Id, H256},
+    address::{decode_address, Address, RpcAddress},
+    chain::{
+        tokens::{RPCTokenInfo, TokenId},
+        ChainConfig, OutPointSourceId, TxOutput, UtxoOutPoint,
+    },
+    primitives::{
+        amount::decimal::subtract_decimal_amounts_of_same_currency, DecimalAmount, Id, H256,
+    },
 };
+use itertools::Itertools;
 use wallet_controller::types::{GenericCurrencyTransfer, GenericTokenTransfer};
-use wallet_rpc_lib::types::{NodeInterface, PoolInfo, TokenTotalSupply};
+use wallet_rpc_lib::types::{NodeInterface, OwnOrderInfo, PoolInfo, TokenTotalSupply};
 use wallet_types::{
     seed_phrase::StoreSeedPhrase,
     utxo_types::{UtxoState, UtxoType},
     with_locked::WithLocked,
+    Currency,
 };
 
 use crate::errors::WalletCliCommandError;
@@ -100,15 +108,123 @@ impl CliUtxoState {
     }
 }
 
-pub fn format_pool_info(pool_info: PoolInfo) -> String {
+pub fn format_pool_info(info: PoolInfo) -> String {
     format!(
-        "Pool Id: {}, Pledge: {}, Balance: {}, Creation Block Height: {}, Creation block timestamp: {}, Staker: {}, Decommission Key: {}, VRF Public Key: {}",
-        pool_info.pool_id, pool_info.pledge.decimal(), pool_info.balance.decimal(), pool_info.height, pool_info.block_timestamp, pool_info.staker, pool_info.decommission_key, pool_info.vrf_public_key
+        concat!(
+            "Pool Id: {}, Pledge: {}, Balance: {}, Creation Block Height: {}, Creation block timestamp: {}, ",
+            "Staker: {}, Decommission Key: {}, VRF Public Key: {}"
+        ),
+        info.pool_id, info.pledge.decimal(), info.balance.decimal(), info.height, info.block_timestamp,
+        info.staker, info.decommission_key, info.vrf_public_key
     )
 }
 
+pub fn format_own_order_info<N: NodeInterface>(
+    order_info: &OwnOrderInfo,
+    chain_config: &ChainConfig,
+    token_infos: &BTreeMap<TokenId, RPCTokenInfo>,
+) -> Result<String, WalletCliCommandError<N>> {
+    if let Some(existing_order_data) = &order_info.existing_order_data {
+        let accumulated_ask_amount = subtract_decimal_amounts_of_same_currency(
+            &order_info.initially_asked.amount().decimal(),
+            &existing_order_data.ask_balance.decimal(),
+        )
+        .ok_or_else(|| {
+            WalletCliCommandError::OrderNegativeAccumulatedAskAmount(order_info.order_id.clone())
+        })?;
+        let status = if !existing_order_data.is_frozen
+            && !order_info.is_marked_as_frozen_in_wallet
+            && !order_info.is_marked_as_concluded_in_wallet
+        {
+            "Active".to_owned()
+        } else {
+            let frozen_status = match (
+                existing_order_data.is_frozen,
+                order_info.is_marked_as_frozen_in_wallet,
+            ) {
+                // Note: it's technically possible for the order to be frozen but not marked as such
+                // in the wallet, e.g. when the wallet hasn't scanned the corresponding block yet.
+                (true, _) => Some("Frozen"),
+                (false, true) => Some("Frozen (unconfirmed)"),
+                (false, false) => None,
+            };
+            let concluded_status =
+                order_info.is_marked_as_concluded_in_wallet.then_some("Concluded (unconfirmed)");
+
+            frozen_status.iter().chain(concluded_status.iter()).join(", ")
+        };
+        Ok(format!(
+            concat!(
+                "Order Id: {id}, ",
+                "Initially asked: {ia}, ",
+                "Initially given: {ig}, ",
+                "Remaining ask amount: {ra}, ",
+                "Remaining give amount: {rg}, ",
+                "Accumulated ask amount: {aa}, ",
+                "Created at: {ts}, ",
+                "Status: {st}"
+            ),
+            id = order_info.order_id,
+            ia = format_output_value(&order_info.initially_asked, chain_config, token_infos)?,
+            ig = format_output_value(&order_info.initially_given, chain_config, token_infos)?,
+            ra = existing_order_data.ask_balance.decimal(),
+            rg = existing_order_data.give_balance.decimal(),
+            aa = accumulated_ask_amount,
+            ts = existing_order_data.creation_timestamp.into_time(),
+            st = status,
+        ))
+    } else {
+        Ok(format!(
+            concat!(
+                "Order Id: {id}, ",
+                "Initially asked: {ia}, ",
+                "Initially given: {ig}, ",
+                "Status: Unconfirmed"
+            ),
+            id = order_info.order_id,
+            ia = format_output_value(&order_info.initially_asked, chain_config, token_infos)?,
+            ig = format_output_value(&order_info.initially_given, chain_config, token_infos)?,
+        ))
+    }
+}
+
+pub fn format_output_value<N: NodeInterface>(
+    value: &RpcOutputValueOut,
+    chain_config: &ChainConfig,
+    token_infos: &BTreeMap<TokenId, RPCTokenInfo>,
+) -> Result<String, WalletCliCommandError<N>> {
+    let asset_name = if let Some(token_id) = value.token_id() {
+        format_token_name(token_id, chain_config, token_infos)?
+    } else {
+        chain_config.coin_ticker().to_owned()
+    };
+
+    Ok(format!("{} {}", value.amount().decimal(), asset_name))
+}
+
+pub fn format_token_name<N: NodeInterface>(
+    token_id: &RpcAddress<TokenId>,
+    chain_config: &ChainConfig,
+    token_infos: &BTreeMap<TokenId, RPCTokenInfo>,
+) -> Result<String, WalletCliCommandError<N>> {
+    let decoded_token_id = token_id
+        .decode_object(chain_config)
+        .map_err(WalletCliCommandError::TokenIdDecodingError)?;
+
+    let result = if let Some(token_ticker) = token_infos
+        .get(&decoded_token_id)
+        .and_then(|token_info| str::from_utf8(token_info.token_ticker()).ok())
+    {
+        format!("{} ({token_ticker})", token_id.as_str())
+    } else {
+        token_id.as_str().to_owned()
+    };
+
+    Ok(result)
+}
+
 pub fn format_delegation_info(delegation_id: String, balance: String) -> String {
-    format!("Delegation Id: {}, Balance: {}", delegation_id, balance,)
+    format!("Delegation Id: {}, Balance: {}", delegation_id, balance)
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -228,14 +344,10 @@ pub fn parse_generic_currency_transfer<N: NodeInterface>(
 
     let destination = Address::from_string(chain_config, dest_str)
         .map_err(|err| {
-            WalletCliCommandError::<N>::InvalidInput(format!("Invalid address {dest_str} {err}"))
+            WalletCliCommandError::<N>::InvalidInput(format!("Invalid address '{dest_str}': {err}"))
         })?
         .into_object();
-
-    let amount = DecimalAmount::from_str(amount_str).map_err(|err| {
-        WalletCliCommandError::<N>::InvalidInput(format!("Invalid amount {amount_str} {err}"))
-    })?;
-
+    let amount = parse_decimal_amount(amount_str)?;
     let output = match name {
         "transfer" => GenericCurrencyTransfer {
             amount,
@@ -276,21 +388,17 @@ pub fn parse_generic_token_transfer<N: NodeInterface>(
     let token_id = Address::from_string(chain_config, token_id_str)
         .map_err(|err| {
             WalletCliCommandError::<N>::InvalidInput(format!(
-                "Invalid token id {token_id_str} {err}"
+                "Invalid token id '{token_id_str}': {err}"
             ))
         })?
         .into_object();
 
     let destination = Address::from_string(chain_config, dest_str)
         .map_err(|err| {
-            WalletCliCommandError::<N>::InvalidInput(format!("Invalid address {dest_str} {err}"))
+            WalletCliCommandError::<N>::InvalidInput(format!("Invalid address '{dest_str}': {err}"))
         })?
         .into_object();
-
-    let amount = DecimalAmount::from_str(amount_str).map_err(|err| {
-        WalletCliCommandError::<N>::InvalidInput(format!("Invalid amount {amount_str} {err}"))
-    })?;
-
+    let amount = parse_decimal_amount(amount_str)?;
     let output = match name {
         "transfer" => GenericTokenTransfer {
             token_id,
@@ -380,7 +488,7 @@ fn parse_fixed_token_supply<N: NodeInterface>(
         )?))
     } else {
         Err(WalletCliCommandError::<N>::InvalidInput(format!(
-            "Failed to parse token supply from {input}"
+            "Failed to parse token supply from '{input}'"
         )))
     }
 }
@@ -392,6 +500,31 @@ fn parse_token_amount<N: NodeInterface>(
     let amount = common::primitives::Amount::from_fixedpoint_str(value, token_number_of_decimals)
         .ok_or_else(|| WalletCliCommandError::<N>::InvalidInput(value.to_owned()))?;
     Ok(amount.into())
+}
+
+/// Parse a decimal amount
+pub fn parse_decimal_amount<N: NodeInterface>(
+    input: &str,
+) -> Result<DecimalAmount, WalletCliCommandError<N>> {
+    DecimalAmount::from_str(input).map_err(|_| {
+        WalletCliCommandError::InvalidInput(format!("Invalid decimal amount: '{input}'"))
+    })
+}
+
+/// Try parsing the passed input as coins (case-insensitive "coin" is accepted) or
+/// as a token id.
+pub fn parse_currency<N: NodeInterface>(
+    input: &str,
+    chain_config: &ChainConfig,
+) -> Result<Currency, WalletCliCommandError<N>> {
+    if input.eq_ignore_ascii_case("coin") {
+        Ok(Currency::Coin)
+    } else {
+        let token_id = decode_address::<TokenId>(chain_config, input).map_err(|_| {
+            WalletCliCommandError::InvalidInput(format!("Invalid currency: '{input}'"))
+        })?;
+        Ok(Currency::Token(token_id))
+    }
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -652,5 +785,38 @@ mod tests {
             parse_assert_error(&format!("transfer({token_id_as_addr},{addr},{amount}"));
             parse_assert_error(&format!("transfer {token_id_as_addr},{addr},{amount}"));
         }
+    }
+
+    #[test]
+    fn test_parse_currency() {
+        let chain_config = chain::config::create_unit_test_config();
+
+        let currency = parse_currency::<ColdWalletClient>("coin", &chain_config).unwrap();
+        assert_eq!(currency, Currency::Coin);
+        let currency = parse_currency::<ColdWalletClient>("cOiN", &chain_config).unwrap();
+        assert_eq!(currency, Currency::Coin);
+
+        let err = parse_currency::<ColdWalletClient>("coins", &chain_config).unwrap_err();
+        assert_matches!(err, WalletCliCommandError::InvalidInput(_));
+
+        let currency = parse_currency::<ColdWalletClient>(
+            "rmltk1ktt2slkqdy607kzhueudqucqphjzl7kl506xf78f9w7v00ydythqzgwlyp",
+            &chain_config,
+        )
+        .unwrap();
+        assert_eq!(
+            currency,
+            Currency::Token(TokenId::new(
+                H256::from_str("b2d6a87ec06934ff5857e678d073000de42ffadfa3f464f8e92bbcc7bc8d22ee")
+                    .unwrap()
+            ))
+        );
+
+        let err = parse_currency::<ColdWalletClient>(
+            "rpool1zg7yccqqjlz38cyghxlxyp5lp36vwecu2g7gudrf58plzjm75tzq99fr6v",
+            &chain_config,
+        )
+        .unwrap_err();
+        assert_matches!(err, WalletCliCommandError::InvalidInput(_));
     }
 }

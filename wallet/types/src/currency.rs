@@ -51,4 +51,11 @@ impl Currency {
             Currency::Token(id) => OutputValue::TokenV1(*id, amount),
         }
     }
+
+    pub fn token_id(&self) -> Option<&TokenId> {
+        match self {
+            Currency::Coin => None,
+            Currency::Token(id) => Some(id),
+        }
+    }
 }

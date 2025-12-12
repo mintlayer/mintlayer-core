@@ -1420,7 +1420,7 @@ where
     pub fn start_staking(&mut self) -> Result<(), ControllerError<T>> {
         utils::ensure!(!self.wallet.is_locked(), ControllerError::WalletIsLocked);
         // Make sure that account_index is valid and that pools exist
-        let pool_ids = self.wallet.get_pool_ids(self.account_index, WalletPoolsFilter::Stake)?;
+        let pool_ids = self.wallet.get_pools(self.account_index, WalletPoolsFilter::Stake)?;
         utils::ensure!(!pool_ids.is_empty(), ControllerError::NoStakingPool);
         log::info!("Start staking, account_index: {}", self.account_index);
         self.staking_started.insert(self.account_index);

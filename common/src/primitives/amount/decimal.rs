@@ -100,6 +100,33 @@ impl DecimalAmount {
     }
 }
 
+// FIXME tests, including one for with_decimals calls
+/// Subtract two DecimalAmount's.
+///
+/// This function is intended to be used with amounts that represent the same currency (i.e. when
+/// the original `decimals` of both amounts were the same).
+/// In this case it will only return None if the result would be negative.
+///
+/// If the function is used with arbitrary unrelated amounts, it may also return None is a loss
+/// of precision would occur, either during the final or an intermediate value calculation.
+pub fn subtract_decimal_amounts_of_same_currency(
+    lhs: &DecimalAmount,
+    rhs: &DecimalAmount,
+) -> Option<DecimalAmount> {
+    // Remove extra zeroes, in case one of the amounts' decimals were artificially increased via `with_decimals`
+    // (in which case the later call "with_decimals(max_decimals)") may fail even if both amounts refer to the same
+    // currency).
+    let lhs = lhs.without_padding();
+    let rhs = rhs.without_padding();
+
+    let max_decimals = std::cmp::max(lhs.decimals(), rhs.decimals());
+    let lhs = lhs.with_decimals(max_decimals)?;
+    let rhs = rhs.with_decimals(max_decimals)?;
+
+    let mantissa_diff = lhs.mantissa().checked_sub(rhs.mantissa())?;
+    Some(DecimalAmount::from_uint_decimal(mantissa_diff, max_decimals).without_padding())
+}
+
 fn empty_to_zero(s: &str) -> &str {
     match s {
         "" => "0",

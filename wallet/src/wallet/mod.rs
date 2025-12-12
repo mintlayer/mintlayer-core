@@ -1421,13 +1421,16 @@ where
         })
     }
 
-    pub fn get_pool_ids(
+    pub fn get_pools(
         &self,
         account_index: U31,
         filter: WalletPoolsFilter,
     ) -> WalletResult<Vec<(PoolId, PoolData)>> {
-        let pool_ids = self.get_account(account_index)?.get_pool_ids(filter);
-        Ok(pool_ids)
+        Ok(self
+            .get_account(account_index)?
+            .get_pools(filter)
+            .map(|(id, data)| (*id, data.clone()))
+            .collect())
     }
 
     pub fn get_delegations(
@@ -2271,8 +2274,7 @@ where
         &self,
         account_index: U31,
     ) -> WalletResult<impl Iterator<Item = (&OrderId, &OrderData)>> {
-        let orders = self.get_account(account_index)?.get_orders();
-        Ok(orders)
+        Ok(self.get_account(account_index)?.get_orders())
     }
 
     #[allow(clippy::too_many_arguments)]

@@ -27,7 +27,7 @@ use std::{
 };
 
 use chainstate::{
-    rpc::{RpcOutputValueIn, TokenDecimals},
+    rpc::{make_rpc_amount_out, RpcOutputValueIn, RpcOutputValueOut, TokenDecimals},
     tx_verifier::check_transaction,
     ChainInfo, TokenIssuanceError,
 };
@@ -41,7 +41,9 @@ use common::{
         signature::inputsig::arbitrary_message::{
             produce_message_challenge, ArbitraryMessageSignature,
         },
-        tokens::{IsTokenFreezable, IsTokenUnfreezable, Metadata, TokenId, TokenTotalSupply},
+        tokens::{
+            IsTokenFreezable, IsTokenUnfreezable, Metadata, RPCTokenInfo, TokenId, TokenTotalSupply,
+        },
         Block, ChainConfig, DelegationId, Destination, GenBlock, OrderId, PoolId,
         SignedTransaction, SignedTransactionIntent, Transaction, TxOutput, UtxoOutPoint,
     },
@@ -53,6 +55,7 @@ use crypto::{
     key::{hdkd::u31::U31, PrivateKey, PublicKey},
     vrf::VRFPublicKey,
 };
+use futures::{stream::FuturesUnordered, TryStreamExt as _};
 use mempool::tx_accumulator::PackingStrategy;
 use mempool_types::tx_options::TxOptionsOverrides;
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
@@ -85,11 +88,11 @@ use wallet_types::{
     SignedTxWithFees,
 };
 
-use crate::{WalletHandle, WalletRpcConfig};
+use crate::{types::ExistingOwnOrderData, WalletHandle, WalletRpcConfig};
 
 use self::types::{
     AddressInfo, AddressWithUsageInfo, DelegationInfo, HardwareWalletType, LegacyVrfPublicKeyInfo,
-    NewAccountInfo, PoolInfo, PublicKeyInfo, RpcAddress, RpcAmountIn, RpcHexString,
+    NewAccountInfo, OwnOrderInfo, PoolInfo, PublicKeyInfo, RpcAddress, RpcAmountIn, RpcHexString,
     RpcStandaloneAddress, RpcStandaloneAddressDetails, RpcStandaloneAddresses,
     RpcStandalonePrivateKeyAddress, RpcUtxoOutpoint, StakingStatus, StandaloneAddressWithDetails,
     VrfPublicKeyInfo,
@@ -758,12 +761,28 @@ where
             .await?
     }
 
+    pub async fn node_get_tokens_info(
+        &self,
+        token_ids: impl IntoIterator<Item = RpcAddress<TokenId>>,
+    ) -> WRpcResult<Vec<RPCTokenInfo>, N> {
+        let token_ids = token_ids
+            .into_iter()
+            .map(|token_id_addr| -> WRpcResult<_, N> {
+                Ok(token_id_addr
+                    .decode_object(&self.chain_config)
+                    .map_err(|_| RpcError::InvalidAddress)?)
+            })
+            .collect::<Result<_, _>>()?;
+        let infos = self.node.get_tokens_info(token_ids).await.map_err(RpcError::RpcError)?;
+        Ok(infos)
+    }
+
     pub async fn get_tokens_decimals(
         &self,
         token_ids: BTreeSet<TokenId>,
     ) -> WRpcResult<BTreeMap<TokenId, TokenDecimals>, N> {
         let infos = self.node.get_tokens_info(token_ids).await.map_err(RpcError::RpcError)?;
-        let desimals = infos
+        let decimals = infos
             .iter()
             .map(|info| {
                 (
@@ -773,7 +792,7 @@ where
             })
             .collect();
 
-        Ok(desimals)
+        Ok(decimals)
     }
 
     pub async fn get_transaction(
@@ -1697,6 +1716,124 @@ where
                 })
             })
             .await?
+    }
+
+    pub async fn list_own_orders(&self, account_index: U31) -> WRpcResult<Vec<OwnOrderInfo>, N> {
+        let wallet_orders_data = self
+            .wallet
+            .call_async(move |controller| {
+                Box::pin(async move {
+                    controller.readonly_controller(account_index).get_own_orders().await
+                })
+            })
+            .await??;
+        let token_ids = wallet_orders_data
+            .iter()
+            .flat_map(|(_, order_data)| {
+                order_data
+                    .initially_asked
+                    .token_id()
+                    .into_iter()
+                    .chain(order_data.initially_given.token_id().into_iter())
+            })
+            .copied()
+            .collect::<BTreeSet<_>>();
+        let orders_data = wallet_orders_data
+            .into_iter()
+            .map(async |(order_id, wallet_order_data)| -> WRpcResult<_, N> {
+                let node_rpc_order_info =
+                    self.node.get_order_info(order_id).await.map_err(RpcError::RpcError)?;
+
+                Ok((order_id, wallet_order_data, node_rpc_order_info))
+            })
+            .collect::<FuturesUnordered<_>>()
+            .try_collect::<Vec<_>>()
+            .await?;
+        let token_decimals = self.get_tokens_decimals(token_ids).await?;
+
+        let result_iter = orders_data.into_iter().map(
+            |(order_id, wallet_order_data, node_rpc_order_info)| -> WRpcResult<_, N> {
+                let order_id_as_rpc_addr = RpcAddress::new(&self.chain_config, order_id)?;
+                let initially_asked = RpcOutputValueOut::new(
+                    &self.chain_config,
+                    &token_decimals,
+                    wallet_order_data.initially_asked.into(),
+                )?;
+                let initially_given = RpcOutputValueOut::new(
+                    &self.chain_config,
+                    &token_decimals,
+                    wallet_order_data.initially_given.into(),
+                )?;
+
+                // Note: if node_rpc_order_info is unset, the order data doesn't exist in the chainstate db,
+                // which means that either the order creation tx hasn't been included in a block yet,
+                // or that the order has been concluded and the conclusion tx has been included in a block.
+                let existing_order_data =
+                    match (node_rpc_order_info, wallet_order_data.creation_timestamp) {
+                        (Some(node_rpc_order_info), Some(creation_timestamp)) => {
+                            let ask_balance = make_rpc_amount_out(
+                                node_rpc_order_info.ask_balance,
+                                node_rpc_order_info.initially_asked.token_id(),
+                                &self.chain_config,
+                                &token_decimals,
+                            )?;
+                            let give_balance = make_rpc_amount_out(
+                                node_rpc_order_info.give_balance,
+                                node_rpc_order_info.initially_given.token_id(),
+                                &self.chain_config,
+                                &token_decimals,
+                            )?;
+
+                            Some(ExistingOwnOrderData {
+                                ask_balance,
+                                give_balance,
+                                creation_timestamp,
+                                is_frozen: node_rpc_order_info.is_frozen,
+                            })
+                        }
+                        (None, None) => None,
+                        (Some(_), None) => {
+                            // The wallet may not yet have handled the block containing the order creation tx.
+                            // This is a normal (though rare) situation. Consider the order to not yet exist in this case.
+                            None
+                        }
+                        (None, Some(_)) => {
+                            // If wallet_order_data.is_concluded is true, this is a normal situation - the order has been
+                            // concluded and the conclusion has been confirmed.
+                            // If it's false, this situation is still possible, e.g. if another instance of this wallet
+                            // issued a conclusion tx, the tx has been included in a block, but this instance of
+                            // the wallet hasn't seen it yet.
+                            None
+                        }
+                    };
+
+                // TODO: consider storing order creation timestamp in the chainstate db; this will make
+                // the timestamp available for non-own orders too, and also allow to simplify the logic above.
+                // (note that `output_cache::OrderData::creation_timestamp` will no longer be needed in this
+                // case and can be removed).
+
+                Ok(OwnOrderInfo {
+                    order_id: order_id_as_rpc_addr,
+                    initially_asked,
+                    initially_given,
+                    existing_order_data,
+                    is_marked_as_frozen_in_wallet: wallet_order_data.is_frozen,
+                    is_marked_as_concluded_in_wallet: wallet_order_data.is_concluded,
+                })
+            },
+        );
+
+        Ok(itertools::process_results(result_iter, |iter| {
+            // Filter out concluded orders whose conclusion has been confirmed.
+            // Note that this will also filter out orders that were concluded right after creation,
+            // so that the creation tx has not been included in a block yet. Technically this
+            // is incorrect, but it's a degenerate case, so we just consider the conclusion to
+            // be confirmed.
+            iter.filter(|info| {
+                !(info.is_marked_as_concluded_in_wallet && info.existing_order_data.is_none())
+            })
+            .collect()
+        })?)
     }
 
     pub async fn compose_transaction(

@@ -834,6 +834,7 @@ mod tx_to_partially_signed_tx_general_test {
             give_balance: data.give_balance,
             ask_balance: data.ask_balance,
             nonce: Some(AccountNonce::new(rng.gen())),
+            is_frozen: false,
         }
     }
 }

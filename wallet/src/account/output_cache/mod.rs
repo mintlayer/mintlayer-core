@@ -23,16 +23,17 @@ use common::{
     chain::{
         block::timestamp::BlockTimestamp,
         make_delegation_id, make_order_id, make_token_id, make_token_id_with_version,
-        output_value::OutputValue,
+        output_value::{OutputValue, RpcOutputValue},
         stakelock::StakePoolData,
         tokens::{
             get_referenced_token_ids_ignore_issuance, IsTokenFreezable, IsTokenUnfreezable,
             RPCFungibleTokenInfo, RPCIsTokenFrozen, RPCNonFungibleTokenInfo, RPCTokenTotalSupply,
             TokenId, TokenIssuance, TokenTotalSupply,
         },
-        AccountCommand, AccountNonce, AccountSpending, AccountType, ChainConfig, DelegationId,
-        Destination, GenBlock, OrderAccountCommand, OrderId, OutPointSourceId, PoolId,
-        TokenIdGenerationVersion, Transaction, TxInput, TxOutput, UtxoOutPoint,
+        AccountCommand, AccountCommandTag, AccountNonce, AccountSpending, AccountType, ChainConfig,
+        DelegationId, Destination, GenBlock, OrderAccountCommand, OrderAccountCommandTag, OrderId,
+        OutPointSourceId, PoolId, TokenIdGenerationVersion, Transaction, TxInput, TxOutput,
+        UtxoOutPoint,
     },
     primitives::{id::WithId, per_thousand::PerThousand, Amount, BlockHeight, Id, Idable},
 };
@@ -42,7 +43,6 @@ use rpc_description::HasValueHint;
 use tx_verifier::transaction_verifier::calculate_tokens_burned_in_outputs;
 use utils::ensure;
 use wallet_types::{
-    currency::Currency,
     utxo_types::{get_utxo_state, UtxoState, UtxoStates},
     wallet_tx::{TxData, TxState},
     with_locked::WithLocked,
@@ -526,24 +526,39 @@ impl TokenIssuanceData {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct OrderData {
     pub conclude_key: Destination,
-    pub give_currency: Currency,
-    pub ask_currency: Currency,
+    pub initially_asked: RpcOutputValue,
+    pub initially_given: RpcOutputValue,
+
+    /// Timestamp of order creation tx, if it is confirmed.
+    pub creation_timestamp: Option<BlockTimestamp>,
 
     pub last_nonce: Option<AccountNonce>,
-    /// last parent transaction if the parent is unconfirmed
+    /// Last parent transaction if the parent is unconfirmed.
     pub last_parent: Option<OutPointSourceId>,
+
+    pub is_concluded: bool,
+    pub is_frozen: bool,
 }
 
 impl OrderData {
-    pub fn new(conclude_key: Destination, give_currency: Currency, ask_currency: Currency) -> Self {
+    pub fn new(
+        conclude_key: Destination,
+        initially_asked: RpcOutputValue,
+        initially_given: RpcOutputValue,
+        creation_timestamp: Option<BlockTimestamp>,
+    ) -> Self {
         Self {
             conclude_key,
-            give_currency,
-            ask_currency,
+            initially_asked,
+            initially_given,
+            creation_timestamp,
             last_nonce: None,
             last_parent: None,
+            is_concluded: false,
+            is_frozen: false,
         }
     }
 }
@@ -625,14 +640,11 @@ impl OutputCache {
             .and_then(|tx| tx.outputs().get(outpoint.output_index() as usize))
     }
 
-    pub fn pool_ids(&self) -> Vec<(PoolId, PoolData)> {
+    /// Return an iterator over pools that haven't been decommissioned yet.
+    pub fn pools_iter(&self) -> impl Iterator<Item = (&PoolId, &PoolData)> {
         self.pools
             .iter()
-            .filter_map(|(pool_id, pool_data)| {
-                (!self.consumed.contains_key(&pool_data.utxo_outpoint))
-                    .then_some((*pool_id, (*pool_data).clone()))
-            })
-            .collect()
+            .filter(|(_, pool_data)| !self.consumed.contains_key(&pool_data.utxo_outpoint))
     }
 
     fn is_txo_for_pool_id(pool_id_to_find: PoolId, output: &TxOutput) -> bool {
@@ -672,7 +684,7 @@ impl OutputCache {
         self.pools.get(&pool_id).ok_or(WalletError::UnknownPoolId(pool_id))
     }
 
-    pub fn delegation_ids(&self) -> impl Iterator<Item = (&DelegationId, &DelegationData)> {
+    pub fn delegations_iter(&self) -> impl Iterator<Item = (&DelegationId, &DelegationData)> {
         self.delegations.iter()
     }
 
@@ -684,7 +696,8 @@ impl OutputCache {
         self.token_issuance.get(token_id)
     }
 
-    pub fn orders(&self) -> impl Iterator<Item = (&OrderId, &OrderData)> {
+    /// Return an iterator over all orders, including concluded ones.
+    pub fn orders_iter(&self) -> impl Iterator<Item = (&OrderId, &OrderData)> {
         self.orders.iter()
     }
 
@@ -898,6 +911,14 @@ impl OutputCache {
             get_referenced_token_ids_ignore_issuance(output).contains(frozen_token_id)
         };
 
+        let order_violates_frozen_token = |order_id| {
+            self.order_data(order_id).is_some_and(|data| {
+                [&data.initially_asked, &data.initially_given]
+                    .into_iter()
+                    .any(|v| v.token_id() == Some(frozen_token_id))
+            })
+        };
+
         let in_inputs = unconfirmed_tx.inputs().iter().any(|input| match input {
             TxInput::Utxo(outpoint) => self.txs.get(&outpoint.source_id()).is_some_and(|tx| {
                 let output =
@@ -915,23 +936,13 @@ impl OutputCache {
                 AccountCommand::UnfreezeToken(_) => false, // Frozen token can be unfrozen
                 AccountCommand::ConcludeOrder(order_id)
                 | AccountCommand::FillOrder(order_id, _, _) => {
-                    self.order_data(order_id).is_some_and(|data| {
-                        [data.ask_currency, data.give_currency].iter().any(|v| match v {
-                            Currency::Coin => false,
-                            Currency::Token(token_id) => frozen_token_id == token_id,
-                        })
-                    })
+                    order_violates_frozen_token(order_id)
                 }
             },
             TxInput::OrderAccountCommand(cmd) => match cmd {
                 OrderAccountCommand::FillOrder(order_id, _)
                 | OrderAccountCommand::ConcludeOrder(order_id) => {
-                    self.order_data(order_id).is_some_and(|data| {
-                        [data.ask_currency, data.give_currency].iter().any(|v| match v {
-                            Currency::Coin => false,
-                            Currency::Token(token_id) => frozen_token_id == token_id,
-                        })
-                    })
+                    order_violates_frozen_token(order_id)
                 }
                 OrderAccountCommand::FreezeOrder(_) => false,
             },
@@ -1063,16 +1074,17 @@ impl OutputCache {
                 TxOutput::IssueNft(_, _, _) => {}
                 TxOutput::CreateOrder(order_data) => {
                     let order_id = make_order_id(tx.inputs())?;
-                    let give_currency = Currency::from_output_value(order_data.give())
+                    let initially_asked = RpcOutputValue::from_output_value(order_data.ask())
                         .ok_or(WalletError::TokenV0(tx.id()))?;
-                    let ask_currency = Currency::from_output_value(order_data.ask())
+                    let initially_given = RpcOutputValue::from_output_value(order_data.give())
                         .ok_or(WalletError::TokenV0(tx.id()))?;
                     self.orders.insert(
                         order_id,
                         OrderData::new(
                             order_data.conclude_key().clone(),
-                            give_currency,
-                            ask_currency,
+                            initially_asked,
+                            initially_given,
+                            block_info.map(|info| info.timestamp),
                         ),
                     );
                 }
@@ -1169,11 +1181,18 @@ impl OutputCache {
                     AccountCommand::ConcludeOrder(order_id)
                     | AccountCommand::FillOrder(order_id, _, _) => {
                         if !already_present {
+                            let op_tag: AccountCommandTag = op.into();
+                            let cmd_tag = if op_tag == AccountCommandTag::ConcludeOrder {
+                                OrderAccountCommandTag::ConcludeOrder
+                            } else {
+                                OrderAccountCommandTag::FillOrder
+                            };
                             if let Some(data) = self.orders.get_mut(order_id) {
                                 Self::update_order_state(
                                     &mut self.unconfirmed_descendants,
                                     data,
                                     order_id,
+                                    cmd_tag,
                                     Some(*nonce),
                                     tx_id,
                                 )?;
@@ -1191,6 +1210,7 @@ impl OutputCache {
                                     &mut self.unconfirmed_descendants,
                                     data,
                                     order_id,
+                                    cmd.into(),
                                     None,
                                     tx_id,
                                 )?;
@@ -1270,6 +1290,7 @@ impl OutputCache {
         unconfirmed_descendants: &mut BTreeMap<OutPointSourceId, BTreeSet<OutPointSourceId>>,
         data: &mut OrderData,
         order_id: &OrderId,
+        command_tag: OrderAccountCommandTag,
         nonce: Option<AccountNonce>,
         tx_id: &OutPointSourceId,
     ) -> Result<(), WalletError> {
@@ -1296,6 +1317,20 @@ impl OutputCache {
             descendants.insert(tx_id.clone());
         }
         data.last_parent = Some(tx_id.clone());
+
+        match command_tag {
+            OrderAccountCommandTag::FillOrder => {}
+            OrderAccountCommandTag::FreezeOrder => {
+                // FIXME revise debug_asserts here and on revert
+                debug_assert!(!data.is_frozen);
+                data.is_frozen = true;
+            }
+            OrderAccountCommandTag::ConcludeOrder => {
+                debug_assert!(!data.is_concluded);
+                data.is_concluded = true;
+            }
+        }
+
         Ok(())
     }
 
@@ -1569,6 +1604,12 @@ impl OutputCache {
                         if let Some(data) = self.orders.get_mut(order_id) {
                             data.last_nonce = nonce.decrement();
                             data.last_parent = find_parent(&self.unconfirmed_descendants, &tx_id);
+
+                            let op_tag: AccountCommandTag = op.into();
+                            if op_tag == AccountCommandTag::ConcludeOrder {
+                                debug_assert!(data.is_concluded);
+                                data.is_concluded = false;
+                            }
                         }
                     }
                 },
@@ -1578,6 +1619,19 @@ impl OutputCache {
                     | OrderAccountCommand::ConcludeOrder(order_id) => {
                         if let Some(data) = self.orders.get_mut(order_id) {
                             data.last_parent = find_parent(&self.unconfirmed_descendants, &tx_id);
+
+                            let cmd_tag: OrderAccountCommandTag = cmd.into();
+                            match cmd_tag {
+                                OrderAccountCommandTag::FillOrder => {}
+                                OrderAccountCommandTag::FreezeOrder => {
+                                    debug_assert!(data.is_frozen);
+                                    data.is_frozen = false;
+                                }
+                                OrderAccountCommandTag::ConcludeOrder => {
+                                    debug_assert!(data.is_concluded);
+                                    data.is_concluded = false;
+                                }
+                            }
                         }
                     }
                 },

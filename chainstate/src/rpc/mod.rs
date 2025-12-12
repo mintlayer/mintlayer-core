@@ -47,7 +47,7 @@ use self::types::{block::RpcBlock, event::RpcEvent};
 
 pub use types::{
     input::RpcUtxoOutpoint,
-    output::{RpcOutputValueIn, RpcOutputValueOut, RpcTxOutput},
+    output::{make_rpc_amount_out, RpcOutputValueIn, RpcOutputValueOut, RpcTxOutput},
     signed_transaction::RpcSignedTransaction,
     token_decimals_provider::{TokenDecimals, TokenDecimalsProvider},
     RpcTypeError,

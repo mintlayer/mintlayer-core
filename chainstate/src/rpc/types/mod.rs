@@ -33,4 +33,7 @@ pub enum RpcTypeError {
 
     #[error("Token decimals unavailable for token {0:x}")]
     TokenDecimalsUnavailable(TokenId),
+
+    #[error("Token V0 encountered")]
+    TokenV0Encountered,
 }

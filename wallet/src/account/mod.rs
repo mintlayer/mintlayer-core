@@ -884,25 +884,24 @@ impl<K: AccountKeyChains> Account<K> {
         Ok(req)
     }
 
-    pub fn get_pool_ids(&self, filter: WalletPoolsFilter) -> Vec<(PoolId, PoolData)> {
-        self.output_cache
-            .pool_ids()
-            .into_iter()
-            .filter(|(_, pool_data)| match filter {
-                WalletPoolsFilter::All => true,
-                WalletPoolsFilter::Decommission => {
-                    self.key_chain.has_private_key_for_destination(&pool_data.decommission_key)
-                }
-                WalletPoolsFilter::Stake => {
-                    self.key_chain.has_private_key_for_destination(&pool_data.stake_destination)
-                }
-            })
-            .collect()
+    pub fn get_pools(
+        &self,
+        filter: WalletPoolsFilter,
+    ) -> impl Iterator<Item = (&PoolId, &PoolData)> {
+        self.output_cache.pools_iter().filter(move |(_, pool_data)| match filter {
+            WalletPoolsFilter::All => true,
+            WalletPoolsFilter::Decommission => {
+                self.key_chain.has_private_key_for_destination(&pool_data.decommission_key)
+            }
+            WalletPoolsFilter::Stake => {
+                self.key_chain.has_private_key_for_destination(&pool_data.stake_destination)
+            }
+        })
     }
 
     pub fn get_delegations(&self) -> impl Iterator<Item = (&DelegationId, &DelegationData)> {
         self.output_cache
-            .delegation_ids()
+            .delegations_iter()
             .filter(|(_, data)| self.is_destination_mine(&data.destination))
     }
 
@@ -922,7 +921,7 @@ impl<K: AccountKeyChains> Account<K> {
 
     pub fn get_orders(&self) -> impl Iterator<Item = (&OrderId, &OrderData)> {
         self.output_cache
-            .orders()
+            .orders_iter()
             .filter(|(_, data)| self.is_destination_mine(&data.conclude_key))
     }
 

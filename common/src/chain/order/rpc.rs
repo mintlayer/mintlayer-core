@@ -16,7 +16,10 @@
 use rpc_description::HasValueHint;
 
 use crate::{
-    chain::{output_value::RpcOutputValue, AccountNonce, Destination},
+    chain::{
+        output_value::RpcOutputValue, output_values_holder::RpcOutputValuesHolder, AccountNonce,
+        Destination,
+    },
     primitives::Amount,
 };
 
@@ -33,4 +36,12 @@ pub struct RpcOrderInfo {
     pub ask_balance: Amount,
 
     pub nonce: Option<AccountNonce>,
+
+    pub is_frozen: bool,
+}
+
+impl RpcOutputValuesHolder for RpcOrderInfo {
+    fn rpc_output_values_iter(&self) -> impl Iterator<Item = &RpcOutputValue> {
+        [&self.initially_asked, &self.initially_given].into_iter()
+    }
 }
