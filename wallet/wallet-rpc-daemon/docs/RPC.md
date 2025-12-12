@@ -2347,13 +2347,13 @@ Returns:
 }
 ```
 
-### Method `create_order`
+### Method `order_create`
 
-Create an order for exchanging "given" amount of an arbitrary currency (coins or tokens) for
-an arbitrary amount of "asked" currency.
+Create an order for exchanging an amount of one ("given") currency for a certain amount of
+another ("asked") currency. Either of the currencies can be coins or tokens.
 
-Conclude key is the key that can authorize a conclude order command, closing the order and withdrawing
-all the remaining funds from it.
+Conclude key is the key that can authorize the conclude order command, closing the order
+and withdrawing all the remaining funds from it.
 
 
 Parameters:
@@ -2424,13 +2424,14 @@ Returns:
 }
 ```
 
-### Method `conclude_order`
+### Method `order_conclude`
 
 Conclude an order, given its id.
 
 This assumes that the conclude key is owned by the selected account in this wallet.
 
 Optionally, an output address can be provided where remaining funds from the order are transferred.
+If not specified, a new receive address will be generated for this purpose.
 
 
 Parameters:
@@ -2471,11 +2472,12 @@ Returns:
 }
 ```
 
-### Method `fill_order`
+### Method `order_fill`
 
 Fill order completely or partially given its id and an amount in the order's "asked" currency.
 
 Optionally, an output address can be provided where the exchanged funds from the order are transferred.
+If not specified, a new receive address will be generated for this purpose.
 
 
 Parameters:
@@ -2519,7 +2521,7 @@ Returns:
 }
 ```
 
-### Method `freeze_order`
+### Method `order_freeze`
 
 Freeze an order given its id. This prevents an order from being filled.
 Only a conclude operation is allowed afterwards.
@@ -2558,6 +2560,154 @@ Returns:
     },
     "broadcasted": bool,
 }
+```
+
+### Method `order_list_own`
+
+List orders whose conclude key is owned by the given account.
+
+
+Parameters:
+```
+{ "account": number }
+```
+
+Returns:
+```
+[ {
+    "order_id": bech32 string,
+    "initially_asked": EITHER OF
+         1) {
+                "type": "Coin",
+                "content": { "amount": {
+                    "atoms": number string,
+                    "decimal": decimal string,
+                } },
+            }
+         2) {
+                "type": "Token",
+                "content": {
+                    "id": bech32 string,
+                    "amount": {
+                        "atoms": number string,
+                        "decimal": decimal string,
+                    },
+                },
+            },
+    "initially_given": EITHER OF
+         1) {
+                "type": "Coin",
+                "content": { "amount": {
+                    "atoms": number string,
+                    "decimal": decimal string,
+                } },
+            }
+         2) {
+                "type": "Token",
+                "content": {
+                    "id": bech32 string,
+                    "amount": {
+                        "atoms": number string,
+                        "decimal": decimal string,
+                    },
+                },
+            },
+    "existing_order_data": EITHER OF
+         1) {
+                "ask_balance": {
+                    "atoms": number string,
+                    "decimal": decimal string,
+                },
+                "give_balance": {
+                    "atoms": number string,
+                    "decimal": decimal string,
+                },
+                "creation_timestamp": { "timestamp": number },
+                "is_frozen": bool,
+            }
+         2) null,
+    "is_marked_as_frozen_in_wallet": bool,
+    "is_marked_as_concluded_in_wallet": bool,
+}, .. ]
+```
+
+### Method `order_list_all_active`
+
+List all active (i.e. non-concluded, non-frozen) orders whose currencies match the passed ones.
+If a passed currency is None, any order will match.
+
+
+Parameters:
+```
+{
+    "account": number,
+    "ask_currency": EITHER OF
+         1) { "type": "Coin" }
+         2) {
+                "type": "Token",
+                "content": hex string,
+            }
+         3) null,
+    "give_currency": EITHER OF
+         1) { "type": "Coin" }
+         2) {
+                "type": "Token",
+                "content": hex string,
+            }
+         3) null,
+}
+```
+
+Returns:
+```
+[ {
+    "order_id": bech32 string,
+    "initially_asked": EITHER OF
+         1) {
+                "type": "Coin",
+                "content": { "amount": {
+                    "atoms": number string,
+                    "decimal": decimal string,
+                } },
+            }
+         2) {
+                "type": "Token",
+                "content": {
+                    "id": bech32 string,
+                    "amount": {
+                        "atoms": number string,
+                        "decimal": decimal string,
+                    },
+                },
+            },
+    "initially_given": EITHER OF
+         1) {
+                "type": "Coin",
+                "content": { "amount": {
+                    "atoms": number string,
+                    "decimal": decimal string,
+                } },
+            }
+         2) {
+                "type": "Token",
+                "content": {
+                    "id": bech32 string,
+                    "amount": {
+                        "atoms": number string,
+                        "decimal": decimal string,
+                    },
+                },
+            },
+    "ask_balance": {
+        "atoms": number string,
+        "decimal": decimal string,
+    },
+    "give_balance": {
+        "atoms": number string,
+        "decimal": decimal string,
+    },
+    "is_own": bool,
+}, .. ]
 ```
 
 ### Method `node_version`
@@ -3184,6 +3334,115 @@ Returns:
     number,
     hex string,
 ], .. ]
+```
+
+### Method `node_get_tokens_info`
+
+Return token infos for the given token ids.
+
+
+Parameters:
+```
+{ "token_ids": [ bech32 string, .. ] }
+```
+
+Returns:
+```
+[ EITHER OF
+     1) {
+            "type": "FungibleToken",
+            "content": {
+                "token_id": hex string,
+                "token_ticker": {
+                    "text": EITHER OF
+                         1) string
+                         2) null,
+                    "hex": hex string,
+                },
+                "number_of_decimals": number,
+                "metadata_uri": {
+                    "text": EITHER OF
+                         1) string
+                         2) null,
+                    "hex": hex string,
+                },
+                "circulating_supply": { "atoms": number string },
+                "total_supply": EITHER OF
+                     1) {
+                            "type": "Fixed",
+                            "content": { "amount": { "atoms": number string } },
+                        }
+                     2) { "type": "Lockable" }
+                     3) { "type": "Unlimited" },
+                "is_locked": bool,
+                "frozen": EITHER OF
+                     1) {
+                            "type": "NotFrozen",
+                            "content": { "freezable": bool },
+                        }
+                     2) {
+                            "type": "Frozen",
+                            "content": { "unfreezable": bool },
+                        },
+                "authority": bech32 string,
+            },
+        }
+     2) {
+            "type": "NonFungibleToken",
+            "content": {
+                "token_id": hex string,
+                "creation_tx_id": hex string,
+                "creation_block_id": hex string,
+                "metadata": {
+                    "creator": EITHER OF
+                         1) hex string
+                         2) null,
+                    "name": {
+                        "text": EITHER OF
+                             1) string
+                             2) null,
+                        "hex": hex string,
+                    },
+                    "description": {
+                        "text": EITHER OF
+                             1) string
+                             2) null,
+                        "hex": hex string,
+                    },
+                    "ticker": {
+                        "text": EITHER OF
+                             1) string
+                             2) null,
+                        "hex": hex string,
+                    },
+                    "icon_uri": EITHER OF
+                         1) {
+                                "text": EITHER OF
+                                     1) string
+                                     2) null,
+                                "hex": hex string,
+                            }
+                         2) null,
+                    "additional_metadata_uri": EITHER OF
+                         1) {
+                                "text": EITHER OF
+                                     1) string
+                                     2) null,
+                                "hex": hex string,
+                            }
+                         2) null,
+                    "media_uri": EITHER OF
+                         1) {
+                                "text": EITHER OF
+                                     1) string
+                                     2) null,
+                                "hex": hex string,
+                            }
+                         2) null,
+                    "media_hash": hex string,
+                },
+            },
+        }, .. ]
 ```
 
 ## Module `ColdWalletRpc`

@@ -75,7 +75,7 @@ pub struct DelegationData {
     pub pool_id: PoolId,
     pub destination: Destination,
     pub last_nonce: Option<AccountNonce>,
-    /// last parent transaction if the parent is unconfirmed
+    /// Last transaction that changed the delegation state.
     pub last_parent: Option<OutPointSourceId>,
     pub not_staked_yet: bool,
 }
@@ -509,7 +509,7 @@ pub struct TokenIssuanceData {
     pub authority: Destination,
     pub last_nonce: Option<AccountNonce>,
 
-    /// last parent transaction if the parent is unconfirmed
+    /// Last transaction that changed the token issuance state.
     pub last_parent: Option<OutPointSourceId>,
 
     /// unconfirmed transactions that modify the total supply or frozen state of this token
@@ -527,7 +527,7 @@ impl TokenIssuanceData {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct OrderData {
     pub conclude_key: Destination,
     pub initially_asked: RpcOutputValue,
@@ -537,7 +537,7 @@ pub struct OrderData {
     pub creation_timestamp: Option<BlockTimestamp>,
 
     pub last_nonce: Option<AccountNonce>,
-    /// Last parent transaction if the parent is unconfirmed.
+    /// Last transaction that changed the order state.
     pub last_parent: Option<OutPointSourceId>,
 
     pub is_concluded: bool,
@@ -1101,7 +1101,7 @@ impl OutputCache {
     }
 
     /// Update the inputs for a new transaction, mark them as consumed and update delegation account
-    /// balances
+    /// balances, token issuance states and order states.
     fn update_inputs(
         &mut self,
         tx: &WalletTx,

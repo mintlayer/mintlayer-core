@@ -30,10 +30,11 @@ pub struct RpcOrderInfo {
     pub initially_asked: RpcOutputValue,
     pub initially_given: RpcOutputValue,
 
-    // left to offer
-    pub give_balance: Amount,
-    // how much more is expected to get in return
+    // The remaining amount of the "ask" currency that the order is expected to receive in
+    // exchange for the remaining amount of the "give" currency.
     pub ask_balance: Amount,
+    // The remaining amount of the "give" currency.
+    pub give_balance: Amount,
 
     pub nonce: Option<AccountNonce>,
 

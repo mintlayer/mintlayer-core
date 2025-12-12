@@ -28,7 +28,7 @@ use common::{
 };
 use orders_accounting::{OrdersAccountingDB, OrdersAccountingView as _};
 use randomness::{CryptoRng, Rng, SliceRandom as _};
-use test_utils::random_ascii_alphanumeric_string;
+use test_utils::{random_ascii_alphanumeric_string, token_utils::random_nft_issuance};
 
 use crate::{get_output_value, TestFramework, TransactionBuilder};
 
@@ -98,12 +98,7 @@ pub fn issue_token_from_block(
     /*change_outpoint*/ UtxoOutPoint,
 ) {
     let token_issuance_fee = tf.chainstate.get_chain_config().fungible_token_issuance_fee();
-
-    let fee_utxo_coins =
-        get_output_value(tf.chainstate.utxo(&utxo_to_pay_fee).unwrap().unwrap().output())
-            .unwrap()
-            .coin_amount()
-            .unwrap();
+    let fee_utxo_coins = tf.coin_amount_from_utxo(&utxo_to_pay_fee);
 
     let tx = TransactionBuilder::new()
         .add_input(utxo_to_pay_fee.into(), InputWitness::NoSignature(None))
@@ -239,6 +234,46 @@ pub fn mint_tokens_in_block(
     tf.process_block(block, BlockSource::Local).unwrap();
 
     (block_id, tx_id)
+}
+
+pub fn issue_random_nft_from_best_block(
+    rng: &mut (impl Rng + CryptoRng),
+    tf: &mut TestFramework,
+    utxo_to_pay_fee: UtxoOutPoint,
+) -> (
+    TokenId,
+    /*nft*/ UtxoOutPoint,
+    /*coins change*/ UtxoOutPoint,
+) {
+    let nft_issuance_fee = tf.chainstate.get_chain_config().nft_issuance_fee(BlockHeight::zero());
+    let fee_utxo_coins = tf.coin_amount_from_utxo(&utxo_to_pay_fee);
+
+    let nft_tx_first_input = TxInput::Utxo(utxo_to_pay_fee);
+    let nft_id = TokenId::from_tx_input(&nft_tx_first_input);
+    let nft_issuance = random_nft_issuance(tf.chain_config().as_ref(), rng);
+
+    let ntf_issuance_tx = TransactionBuilder::new()
+        .add_input(nft_tx_first_input, InputWitness::NoSignature(None))
+        .add_output(TxOutput::IssueNft(
+            nft_id,
+            Box::new(nft_issuance.clone().into()),
+            Destination::AnyoneCanSpend,
+        ))
+        .add_output(TxOutput::Transfer(
+            OutputValue::Coin((fee_utxo_coins - nft_issuance_fee).unwrap()),
+            Destination::AnyoneCanSpend,
+        ))
+        .build();
+    let nft_issuance_tx_id = ntf_issuance_tx.transaction().get_id();
+    let nft_utxo = UtxoOutPoint::new(nft_issuance_tx_id.into(), 0);
+    let change_utxo = UtxoOutPoint::new(nft_issuance_tx_id.into(), 1);
+
+    tf.make_block_builder()
+        .add_transaction(ntf_issuance_tx)
+        .build_and_process(rng)
+        .unwrap();
+
+    (nft_id, nft_utxo, change_utxo)
 }
 
 /// Given the fill amount in the "ask" currency, return the filled amount in the "give" currency.

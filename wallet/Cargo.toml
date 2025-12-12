@@ -37,6 +37,7 @@ itertools.workspace = true
 parity-scale-codec.workspace = true
 semver.workspace = true
 serde.workspace = true
+strum.workspace = true
 thiserror.workspace = true
 trezor-client = { workspace = true, optional = true }
 zeroize.workspace = true

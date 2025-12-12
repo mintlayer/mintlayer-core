@@ -24,6 +24,7 @@ itertools.workspace = true
 parity-scale-codec.workspace = true
 semver.workspace = true
 serde.workspace = true
+strum.workspace = true
 thiserror.workspace = true
 zeroize.workspace = true
 

@@ -252,6 +252,7 @@ pub fn format_token_name<N: NodeInterface>(
         .decode_object(chain_config)
         .map_err(WalletCliCommandError::TokenIdDecodingError)?;
 
+    // FIXME ticker is supposed to be alphanum only; at least print an error to log; same for orders sorting.
     let result = if let Some(token_ticker) = token_infos
         .get(&decoded_token_id)
         .and_then(|token_info| str::from_utf8(token_info.token_ticker()).ok())

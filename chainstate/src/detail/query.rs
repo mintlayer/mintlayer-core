@@ -23,7 +23,7 @@ use chainstate_types::{BlockIndex, GenBlockIndex, Locator, PropertyQueryError};
 use common::{
     chain::{
         block::{signed_block_header::SignedBlockHeader, BlockReward},
-        output_value::RpcOutputValue,
+        output_value::{OutputValue, RpcOutputValue},
         tokens::{
             NftIssuance, RPCFungibleTokenInfo, RPCIsTokenFrozen, RPCNonFungibleTokenInfo,
             RPCTokenInfo, TokenAuxiliaryData, TokenId,
@@ -458,24 +458,22 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     ) -> Result<BTreeMap<OrderId, RpcOrderInfo>, PropertyQueryError> {
         let order_ids = self.get_all_order_ids()?;
 
-        // FIXME add separate test with many orders to test various combinations
-
         let orders_info = order_ids
             .into_iter()
             .map(|order_id| -> Result<_, PropertyQueryError> {
                 match self.get_order_data(&order_id)? {
                     Some(order_data) => {
-                        let rpc_info = self.order_data_to_rpc_info(&order_id, &order_data)?;
                         let actual_ask_currency =
-                            RpcCurrency::from_rpc_output_value(&rpc_info.initially_asked);
+                            Self::order_currency(&order_id, order_data.ask())?;
                         let actual_give_currency =
-                            RpcCurrency::from_rpc_output_value(&rpc_info.initially_given);
+                            Self::order_currency(&order_id, order_data.give())?;
 
                         if ask_currency
                             .is_none_or(|ask_currency| ask_currency == &actual_ask_currency)
                             && give_currency
                                 .is_none_or(|give_currency| give_currency == &actual_give_currency)
                         {
+                            let rpc_info = self.order_data_to_rpc_info(&order_id, &order_data)?;
                             Ok(Some((order_id, rpc_info)))
                         } else {
                             Ok(None)
@@ -494,17 +492,19 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(orders_info)
     }
 
+    fn order_currency(
+        order_id: &OrderId,
+        value: &OutputValue,
+    ) -> Result<RpcCurrency, PropertyQueryError> {
+        RpcCurrency::from_output_value(value)
+            .ok_or(PropertyQueryError::UnsupportedTokenV0InOrder(*order_id))
+    }
+
     fn order_data_to_rpc_info(
         &self,
         order_id: &OrderId,
         order_data: &OrderData,
     ) -> Result<RpcOrderInfo, PropertyQueryError> {
-        let order_id_addr =
-            common::address::Address::new(self.chainstate_ref.chain_config(), *order_id).unwrap();
-        logging::log::warn!(
-            "order_id = {order_id:x}, order_id_addr = {order_id_addr}, order_data = {order_data:?}"
-        ); // FIXME
-
         // Note: the balances are deleted from the chainstate db once they reach zero.
         let ask_balance = self.get_order_ask_balance(order_id)?.unwrap_or(Amount::ZERO);
         let give_balance = self.get_order_give_balance(order_id)?.unwrap_or(Amount::ZERO);

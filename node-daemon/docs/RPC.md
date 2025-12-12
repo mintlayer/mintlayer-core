@@ -645,13 +645,77 @@ EITHER OF
                             "amount": { "atoms": number string },
                         },
                     },
-            "give_balance": { "atoms": number string },
             "ask_balance": { "atoms": number string },
+            "give_balance": { "atoms": number string },
             "nonce": EITHER OF
                  1) number
                  2) null,
+            "is_frozen": bool,
         }
      2) null
+```
+
+### Method `chainstate_orders_info_by_currencies`
+
+Return infos for all orders that match the given currencies. Passing None for a currency
+means "any currency".
+
+
+Parameters:
+```
+{
+    "ask_currency": EITHER OF
+         1) { "type": "Coin" }
+         2) {
+                "type": "Token",
+                "content": hex string,
+            }
+         3) null,
+    "give_currency": EITHER OF
+         1) { "type": "Coin" }
+         2) {
+                "type": "Token",
+                "content": hex string,
+            }
+         3) null,
+}
+```
+
+Returns:
+```
+{ hex string: {
+    "conclude_key": bech32 string,
+    "initially_asked": EITHER OF
+         1) {
+                "type": "Coin",
+                "content": { "amount": { "atoms": number string } },
+            }
+         2) {
+                "type": "Token",
+                "content": {
+                    "id": hex string,
+                    "amount": { "atoms": number string },
+                },
+            },
+    "initially_given": EITHER OF
+         1) {
+                "type": "Coin",
+                "content": { "amount": { "atoms": number string } },
+            }
+         2) {
+                "type": "Token",
+                "content": {
+                    "id": hex string,
+                    "amount": { "atoms": number string },
+                },
+            },
+    "ask_balance": { "atoms": number string },
+    "give_balance": { "atoms": number string },
+    "nonce": EITHER OF
+         1) number
+         2) null,
+    "is_frozen": bool,
+}, .. }
 ```
 
 ### Method `chainstate_export_bootstrap_file`

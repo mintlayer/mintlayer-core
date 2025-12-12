@@ -13,8 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Cow;
+use std::{borrow::Cow, collections::BTreeMap};
 
+use chainstate_storage::Transactional as _;
+use orders_accounting::OrdersAccountingStorageRead as _;
 use rstest::rstest;
 
 use chainstate::{
@@ -24,14 +26,14 @@ use chainstate::{
 use chainstate_test_framework::{
     helpers::{
         calculate_fill_order, issue_and_mint_random_token_from_best_block,
-        order_min_non_zero_fill_amount,
+        issue_random_nft_from_best_block, order_min_non_zero_fill_amount,
     },
     output_value_amount, TestFramework, TransactionBuilder,
 };
 use common::{
     address::pubkeyhash::PublicKeyHash,
     chain::{
-        make_order_id, make_token_id,
+        make_order_id,
         output_value::{OutputValue, RpcOutputValue},
         signature::{
             inputsig::{standard_signature::StandardInputSignature, InputWitness},
@@ -39,19 +41,16 @@ use common::{
             verify_signature, DestinationSigError, EvaluatedInputWitness,
         },
         tokens::{IsTokenFreezable, TokenId, TokenTotalSupply},
-        AccountCommand, AccountNonce, ChainstateUpgradeBuilder, Destination, IdCreationError,
-        OrderAccountCommand, OrderData, OrderId, OrdersVersion, RpcCurrency, RpcOrderInfo,
-        SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
+        AccountCommand, AccountNonce, AccountType, ChainstateUpgradeBuilder, Destination,
+        IdCreationError, OrderAccountCommand, OrderData, OrderId, OrdersVersion, RpcCurrency,
+        RpcOrderInfo, SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Idable, H256},
 };
 use crypto::key::{KeyKind, PrivateKey};
 use logging::log;
 use randomness::{CryptoRng, Rng, SliceRandom};
-use test_utils::{
-    random::{gen_random_bytes, make_seedable_rng, Seed},
-    token_utils::random_nft_issuance,
-};
+use test_utils::random::{gen_random_bytes, make_seedable_rng, Seed};
 use tx_verifier::{
     error::{InputCheckError, InputCheckErrorPayload, ScriptError, TranslationError},
     input_check::signature_only_check::verify_tx_signature,
@@ -80,7 +79,11 @@ fn create_test_framework_with_orders(
 fn issue_and_mint_token_from_genesis(
     rng: &mut (impl Rng + CryptoRng),
     tf: &mut TestFramework,
-) -> (TokenId, UtxoOutPoint, UtxoOutPoint) {
+) -> (
+    TokenId,
+    /*tokens*/ UtxoOutPoint,
+    /*coins change*/ UtxoOutPoint,
+) {
     let to_mint = Amount::from_atoms(rng.gen_range(100..100_000_000));
     issue_and_mint_token_amount_from_genesis(rng, tf, to_mint)
 }
@@ -89,14 +92,18 @@ fn issue_and_mint_token_amount_from_genesis(
     rng: &mut (impl Rng + CryptoRng),
     tf: &mut TestFramework,
     to_mint: Amount,
-) -> (TokenId, UtxoOutPoint, UtxoOutPoint) {
+) -> (
+    TokenId,
+    /*tokens*/ UtxoOutPoint,
+    /*coins change*/ UtxoOutPoint,
+) {
     let genesis_block_id = tf.genesis().get_id();
-    let utxo = UtxoOutPoint::new(genesis_block_id.into(), 0);
+    let utxo_to_pay_fee = UtxoOutPoint::new(genesis_block_id.into(), 0);
 
     issue_and_mint_random_token_from_best_block(
         rng,
         tf,
-        utxo,
+        utxo_to_pay_fee,
         to_mint,
         TokenTotalSupply::Unlimited,
         IsTokenFreezable::Yes,
@@ -106,23 +113,25 @@ fn issue_and_mint_token_amount_from_genesis(
 fn issue_and_mint_token_amount_from_best_block(
     rng: &mut (impl Rng + CryptoRng),
     tf: &mut TestFramework,
-    utxo_outpoint: UtxoOutPoint,
+    utxo_to_pay_fee: UtxoOutPoint,
     to_mint: Amount,
-) -> (TokenId, UtxoOutPoint, UtxoOutPoint) {
+) -> (
+    TokenId,
+    /*tokens*/ UtxoOutPoint,
+    /*coins change*/ UtxoOutPoint,
+) {
     issue_and_mint_random_token_from_best_block(
         rng,
         tf,
-        utxo_outpoint,
+        utxo_to_pay_fee,
         to_mint,
         TokenTotalSupply::Unlimited,
         IsTokenFreezable::Yes,
     )
 }
 
-type InitialOrderData = common::chain::OrderData;
-
 struct ExpectedOrderData {
-    initial_data: InitialOrderData,
+    initial_data: common::chain::OrderData,
     ask_balance: Option<Amount>,
     give_balance: Option<Amount>,
     nonce: Option<AccountNonce>,
@@ -134,22 +143,37 @@ fn assert_order_exists(
     rng: &mut (impl Rng + CryptoRng),
     order_id: &OrderId,
     expected_data: &ExpectedOrderData,
+    no_other_orders_present: bool,
 ) {
-    let current_data = tf.chainstate.get_order_data(order_id).unwrap().unwrap();
-    let (current_data_conclude_key, current_data_ask, current_data_give, current_data_is_frozen) =
-        current_data.consume();
-    assert_eq!(
-        &current_data_conclude_key,
-        expected_data.initial_data.conclude_key()
-    );
-    assert_eq!(&current_data_ask, expected_data.initial_data.ask());
-    assert_eq!(&current_data_give, expected_data.initial_data.give());
-    assert_eq!(current_data_is_frozen, expected_data.is_frozen);
+    let random_order_id = OrderId::random_using(rng);
 
-    let current_ask_balance = tf.chainstate.get_order_ask_balance(order_id).unwrap();
-    assert_eq!(current_ask_balance, expected_data.ask_balance);
-    let current_give_balance = tf.chainstate.get_order_give_balance(order_id).unwrap();
-    assert_eq!(current_give_balance, expected_data.give_balance);
+    let expected_order_data = orders_accounting::OrderData::new_generic(
+        expected_data.initial_data.conclude_key().clone(),
+        expected_data.initial_data.ask().clone(),
+        expected_data.initial_data.give().clone(),
+        expected_data.is_frozen,
+    );
+
+    let actual_order_data = tf.chainstate.get_order_data(order_id).unwrap().unwrap();
+    assert_eq!(actual_order_data, expected_order_data);
+    assert_eq!(
+        tf.chainstate.get_order_data(&random_order_id).unwrap(),
+        None
+    );
+
+    let actual_ask_balance = tf.chainstate.get_order_ask_balance(order_id).unwrap();
+    assert_eq!(actual_ask_balance, expected_data.ask_balance);
+    assert_eq!(
+        tf.chainstate.get_order_ask_balance(&random_order_id).unwrap(),
+        None
+    );
+
+    let actual_give_balance = tf.chainstate.get_order_give_balance(order_id).unwrap();
+    assert_eq!(actual_give_balance, expected_data.give_balance);
+    assert_eq!(
+        tf.chainstate.get_order_give_balance(&random_order_id).unwrap(),
+        None
+    );
 
     let expected_info_for_rpc = RpcOrderInfo {
         conclude_key: expected_data.initial_data.conclude_key().clone(),
@@ -165,12 +189,25 @@ fn assert_order_exists(
 
     let actual_info_for_rpc = tf.chainstate.get_order_info_for_rpc(order_id).unwrap().unwrap();
     assert_eq!(actual_info_for_rpc, expected_info_for_rpc);
+    assert_eq!(
+        tf.chainstate.get_order_info_for_rpc(&random_order_id).unwrap(),
+        None
+    );
 
     let all_order_ids = tf.chainstate.get_all_order_ids().unwrap();
     assert!(all_order_ids.contains(order_id));
 
-    let all_orders = tf.chainstate.get_orders_info_for_rpc_by_currencies(None, None).unwrap();
-    assert_eq!(all_orders.get(order_id).unwrap(), &expected_info_for_rpc);
+    let all_infos_for_rpc =
+        tf.chainstate.get_orders_info_for_rpc_by_currencies(None, None).unwrap();
+    assert_eq!(
+        all_infos_for_rpc.get(order_id).unwrap(),
+        &expected_info_for_rpc
+    );
+
+    if no_other_orders_present {
+        assert_eq!(all_order_ids.len(), 1);
+        assert_eq!(all_infos_for_rpc.len(), 1);
+    }
 
     let ask_currency = RpcCurrency::from_output_value(expected_data.initial_data.ask()).unwrap();
     let give_currency = RpcCurrency::from_output_value(expected_data.initial_data.give()).unwrap();
@@ -191,6 +228,10 @@ fn assert_order_exists(
             orders_rpc_infos.get(order_id).unwrap(),
             &expected_info_for_rpc
         );
+
+        if no_other_orders_present {
+            assert_eq!(orders_rpc_infos.len(), 1);
+        }
     }
 
     let mut make_different_currency = |currency, other_currency| {
@@ -232,11 +273,70 @@ fn assert_order_exists(
         assert_eq!(orders_rpc_infos.get(order_id), None);
     }
 
-    let actual_nonce = tf
-        .chainstate
-        .get_account_nonce_count(common::chain::AccountType::Order(*order_id))
-        .unwrap();
+    let actual_nonce =
+        tf.chainstate.get_account_nonce_count(AccountType::Order(*order_id)).unwrap();
     assert_eq!(actual_nonce, expected_data.nonce);
+    assert_eq!(
+        tf.chainstate
+            .get_account_nonce_count(AccountType::Order(random_order_id))
+            .unwrap(),
+        None
+    );
+
+    // Check the storage directly
+    {
+        let storage_tx = tf.storage.transaction_ro().unwrap();
+
+        let actual_order_data = storage_tx.get_order_data(order_id).unwrap().unwrap();
+        assert_eq!(actual_order_data, expected_order_data);
+        assert_eq!(storage_tx.get_order_data(&random_order_id).unwrap(), None);
+
+        let actual_ask_balance = storage_tx.get_ask_balance(order_id).unwrap();
+        assert_eq!(actual_ask_balance, expected_data.ask_balance);
+        assert_eq!(storage_tx.get_ask_balance(&random_order_id).unwrap(), None);
+
+        let actual_give_balance = storage_tx.get_give_balance(order_id).unwrap();
+        assert_eq!(actual_give_balance, expected_data.give_balance);
+        assert_eq!(storage_tx.get_give_balance(&random_order_id).unwrap(), None);
+
+        let all_order_ids = storage_tx.get_all_order_ids().unwrap();
+        assert!(all_order_ids.contains(order_id));
+
+        let orders_accounting_data = storage_tx.read_orders_accounting_data().unwrap();
+        assert_eq!(
+            orders_accounting_data.order_data.get(order_id).unwrap(),
+            &expected_order_data
+        );
+        assert_eq!(
+            orders_accounting_data.ask_balances.get(order_id),
+            expected_data.ask_balance.as_ref()
+        );
+        assert_eq!(
+            orders_accounting_data.give_balances.get(order_id),
+            expected_data.give_balance.as_ref()
+        );
+
+        if no_other_orders_present {
+            assert_eq!(all_order_ids.len(), 1);
+            assert_eq!(orders_accounting_data.order_data.len(), 1);
+            assert_eq!(
+                orders_accounting_data.ask_balances.len(),
+                if expected_data.ask_balance.is_some() {
+                    1
+                } else {
+                    0
+                }
+            );
+            assert_eq!(
+                orders_accounting_data.give_balances.len(),
+                if expected_data.give_balance.is_some() {
+                    1
+                } else {
+                    0
+                }
+            );
+        }
+    }
 }
 
 trait OrdersVersionExt {
@@ -252,18 +352,20 @@ impl OrdersVersionExt for OrdersVersion {
     }
 }
 
-fn assert_order_missing(tf: &TestFramework, order_id: &OrderId) {
-    let data = tf.chainstate.get_order_data(order_id).unwrap();
-    assert_eq!(data, None);
+fn assert_order_missing(tf: &TestFramework, order_id: &OrderId, no_other_orders_present: bool) {
+    assert_eq!(tf.chainstate.get_order_data(order_id).unwrap(), None);
 
-    let ask_balance = tf.chainstate.get_order_ask_balance(order_id).unwrap();
-    assert_eq!(ask_balance, None);
+    assert_eq!(tf.chainstate.get_order_ask_balance(order_id).unwrap(), None);
 
-    let give_balance = tf.chainstate.get_order_give_balance(order_id).unwrap();
-    assert_eq!(give_balance, None);
+    assert_eq!(
+        tf.chainstate.get_order_give_balance(order_id).unwrap(),
+        None
+    );
 
-    let info_for_rpc = tf.chainstate.get_order_info_for_rpc(order_id).unwrap();
-    assert_eq!(info_for_rpc, None);
+    assert_eq!(
+        tf.chainstate.get_order_info_for_rpc(order_id).unwrap(),
+        None
+    );
 
     let all_infos_for_rpc =
         tf.chainstate.get_orders_info_for_rpc_by_currencies(None, None).unwrap();
@@ -271,6 +373,35 @@ fn assert_order_missing(tf: &TestFramework, order_id: &OrderId) {
 
     let all_order_ids = tf.chainstate.get_all_order_ids().unwrap();
     assert!(!all_order_ids.contains(order_id));
+
+    if no_other_orders_present {
+        assert_eq!(all_infos_for_rpc.len(), 0);
+        assert_eq!(all_order_ids.len(), 0);
+    }
+
+    // Check the storage directly
+    {
+        let storage_tx = tf.storage.transaction_ro().unwrap();
+
+        assert_eq!(storage_tx.get_order_data(&order_id).unwrap(), None);
+        assert_eq!(storage_tx.get_ask_balance(&order_id).unwrap(), None);
+        assert_eq!(storage_tx.get_give_balance(&order_id).unwrap(), None);
+
+        let all_order_ids = storage_tx.get_all_order_ids().unwrap();
+        assert!(!all_order_ids.contains(order_id));
+
+        let orders_accounting_data = storage_tx.read_orders_accounting_data().unwrap();
+        assert_eq!(orders_accounting_data.order_data.get(order_id), None);
+        assert_eq!(orders_accounting_data.ask_balances.get(order_id), None);
+        assert_eq!(orders_accounting_data.give_balances.get(order_id), None);
+
+        if no_other_orders_present {
+            assert_eq!(all_order_ids.len(), 0);
+            assert_eq!(orders_accounting_data.order_data.len(), 0);
+            assert_eq!(orders_accounting_data.ask_balances.len(), 0);
+            assert_eq!(orders_accounting_data.give_balances.len(), 0);
+        }
+    }
 }
 
 #[rstest]
@@ -312,6 +443,7 @@ fn create_order_check_storage(#[case] seed: Seed) {
                 nonce: None,
                 is_frozen: false,
             },
+            true,
         );
     });
 }
@@ -683,7 +815,7 @@ fn conclude_order_check_storage(#[case] seed: Seed, #[case] version: OrdersVersi
             .build();
         tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
-        assert_order_missing(&tf, &order_id);
+        assert_order_missing(&tf, &order_id, true);
     });
 }
 
@@ -860,6 +992,7 @@ fn fill_order_check_storage(#[case] seed: Seed, #[case] version: OrdersVersion) 
                 nonce: version.v0_then_some(AccountNonce::new(0)),
                 is_frozen: false,
             },
+            true,
         );
 
         // Note: even though zero fills are allowed in orders V0 in general, we can't do a zero
@@ -919,6 +1052,7 @@ fn fill_order_check_storage(#[case] seed: Seed, #[case] version: OrdersVersion) 
                     nonce: version.v0_then_some(AccountNonce::new(1)),
                     is_frozen: false,
                 },
+                true,
             );
         }
     });
@@ -1081,7 +1215,7 @@ fn fill_then_conclude(#[case] seed: Seed, #[case] version: OrdersVersion) {
             .build();
         tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
-        assert_order_missing(&tf, &order_id);
+        assert_order_missing(&tf, &order_id, true);
 
         {
             // Try filling concluded order
@@ -1444,7 +1578,7 @@ fn fill_completely_then_conclude(#[case] seed: Seed, #[case] version: OrdersVers
             .build();
         tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
-        assert_order_missing(&tf, &order_id);
+        assert_order_missing(&tf, &order_id, true);
     });
 }
 
@@ -1661,14 +1795,14 @@ fn reorg_before_create(#[case] seed: Seed, #[case] version: OrdersVersion) {
             is_frozen: false,
         };
 
-        assert_order_exists(&tf, &mut rng, &order_id, &expected_order_data);
+        assert_order_exists(&tf, &mut rng, &order_id, &expected_order_data, true);
 
         // Create alternative chain and trigger the reorg
         let new_best_block =
             tf.create_chain_with_empty_blocks(&reorg_common_ancestor, 3, &mut rng).unwrap();
         assert_eq!(tf.best_block_id(), new_best_block);
 
-        assert_order_missing(&tf, &order_id);
+        assert_order_missing(&tf, &order_id, true);
 
         // Reapply txs again
         tf.make_block_builder()
@@ -1676,7 +1810,7 @@ fn reorg_before_create(#[case] seed: Seed, #[case] version: OrdersVersion) {
             .build_and_process(&mut rng)
             .unwrap();
 
-        assert_order_exists(&tf, &mut rng, &order_id, &expected_order_data);
+        assert_order_exists(&tf, &mut rng, &order_id, &expected_order_data, true);
     });
 }
 
@@ -1770,7 +1904,7 @@ fn reorg_after_create(#[case] seed: Seed, #[case] version: OrdersVersion) {
             .build_and_process(&mut rng)
             .unwrap();
 
-        assert_order_missing(&tf, &order_id);
+        assert_order_missing(&tf, &order_id, true);
 
         // Create alternative chain and trigger the reorg
         let new_best_block =
@@ -1788,6 +1922,7 @@ fn reorg_after_create(#[case] seed: Seed, #[case] version: OrdersVersion) {
                 nonce: None,
                 is_frozen: false,
             },
+            true,
         );
 
         // Reapply txs again
@@ -1796,7 +1931,7 @@ fn reorg_after_create(#[case] seed: Seed, #[case] version: OrdersVersion) {
             .build_and_process(&mut rng)
             .unwrap();
 
-        assert_order_missing(&tf, &order_id);
+        assert_order_missing(&tf, &order_id, true);
     });
 }
 
@@ -1895,48 +2030,20 @@ fn create_order_with_nft(#[case] seed: Seed, #[case] version: OrdersVersion) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = create_test_framework_with_orders(&mut rng, version);
 
-        let genesis_input = TxInput::from_utxo(tf.genesis().get_id().into(), 0);
-        let token_id = make_token_id(
-            tf.chain_config(),
-            tf.next_block_height(),
-            std::slice::from_ref(&genesis_input),
-        )
-        .unwrap();
-        let nft_issuance = random_nft_issuance(tf.chain_config(), &mut rng);
-        let token_min_issuance_fee =
-            tf.chainstate.get_chain_config().nft_issuance_fee(BlockHeight::zero());
-
-        let ask_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
+        let genesis_utxo = UtxoOutPoint::new(tf.genesis().get_id().into(), 0);
 
         // Issue an NFT
-        let issue_nft_tx = TransactionBuilder::new()
-            .add_input(genesis_input, InputWitness::NoSignature(None))
-            .add_output(TxOutput::IssueNft(
-                token_id,
-                Box::new(nft_issuance.into()),
-                Destination::AnyoneCanSpend,
-            ))
-            .add_output(TxOutput::Transfer(
-                OutputValue::Coin(ask_amount),
-                Destination::AnyoneCanSpend,
-            ))
-            .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
-            .build();
-        let issue_nft_tx_id = issue_nft_tx.transaction().get_id();
-        tf.make_block_builder()
-            .add_transaction(issue_nft_tx)
-            .build_and_process(&mut rng)
-            .unwrap();
+        let (token_id, nft_outpoint, coins_outpoint) =
+            issue_random_nft_from_best_block(&mut rng, &mut tf, genesis_utxo);
 
         // Create order selling NFT for coins
+        let ask_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
         let give_amount = Amount::from_atoms(1);
         let order_data = OrderData::new(
             Destination::AnyoneCanSpend,
             OutputValue::Coin(ask_amount),
             OutputValue::TokenV1(token_id, give_amount),
         );
-
-        let nft_outpoint = UtxoOutPoint::new(issue_nft_tx_id.into(), 0);
 
         let tx = TransactionBuilder::new()
             .add_input(nft_outpoint.into(), InputWitness::NoSignature(None))
@@ -1956,6 +2063,7 @@ fn create_order_with_nft(#[case] seed: Seed, #[case] version: OrdersVersion) {
                 nonce: None,
                 is_frozen: false,
             },
+            true,
         );
 
         // Try get 2 nfts out of order
@@ -1971,7 +2079,7 @@ fn create_order_with_nft(#[case] seed: Seed, #[case] version: OrdersVersion) {
             };
             let tx = TransactionBuilder::new()
                 .add_input(
-                    TxInput::from_utxo(issue_nft_tx_id.into(), 1),
+                    TxInput::Utxo(coins_outpoint.clone()),
                     InputWitness::NoSignature(None),
                 )
                 .add_input(fill_input, InputWitness::NoSignature(None))
@@ -2008,7 +2116,7 @@ fn create_order_with_nft(#[case] seed: Seed, #[case] version: OrdersVersion) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::from_utxo(issue_nft_tx_id.into(), 1),
+                        TxInput::Utxo(coins_outpoint),
                         InputWitness::NoSignature(None),
                     )
                     .add_input(fill_input, InputWitness::NoSignature(None))
@@ -2032,6 +2140,7 @@ fn create_order_with_nft(#[case] seed: Seed, #[case] version: OrdersVersion) {
                 nonce: version.v0_then_some(AccountNonce::new(0)),
                 is_frozen: false,
             },
+            true,
         );
     });
 }
@@ -2058,40 +2167,14 @@ fn partially_fill_order_with_nft_v0(#[case] seed: Seed) {
             )
             .build();
 
-        let genesis_input = TxInput::from_utxo(tf.genesis().get_id().into(), 0);
-        let token_id = make_token_id(
-            tf.chain_config(),
-            tf.next_block_height(),
-            std::slice::from_ref(&genesis_input),
-        )
-        .unwrap();
-        let nft_issuance = random_nft_issuance(tf.chain_config(), &mut rng);
-        let token_min_issuance_fee =
-            tf.chainstate.get_chain_config().nft_issuance_fee(BlockHeight::zero());
-
-        let ask_amount = Amount::from_atoms(rng.gen_range(10u128..1000));
+        let genesis_utxo = UtxoOutPoint::new(tf.genesis().get_id().into(), 0);
 
         // Issue an NFT
-        let issue_nft_tx = TransactionBuilder::new()
-            .add_input(genesis_input, InputWitness::NoSignature(None))
-            .add_output(TxOutput::IssueNft(
-                token_id,
-                Box::new(nft_issuance.into()),
-                Destination::AnyoneCanSpend,
-            ))
-            .add_output(TxOutput::Transfer(
-                OutputValue::Coin(ask_amount),
-                Destination::AnyoneCanSpend,
-            ))
-            .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
-            .build();
-        let issue_nft_tx_id = issue_nft_tx.transaction().get_id();
-        tf.make_block_builder()
-            .add_transaction(issue_nft_tx)
-            .build_and_process(&mut rng)
-            .unwrap();
+        let (token_id, nft_outpoint, coins_outpoint) =
+            issue_random_nft_from_best_block(&mut rng, &mut tf, genesis_utxo);
 
         // Create order selling NFT for coins
+        let ask_amount = Amount::from_atoms(rng.gen_range(10u128..1000));
         let give_amount = Amount::from_atoms(1);
         let order_data = OrderData::new(
             Destination::AnyoneCanSpend,
@@ -2099,7 +2182,6 @@ fn partially_fill_order_with_nft_v0(#[case] seed: Seed) {
             OutputValue::TokenV1(token_id, give_amount),
         );
 
-        let nft_outpoint = UtxoOutPoint::new(issue_nft_tx_id.into(), 0);
         let tx = TransactionBuilder::new()
             .add_input(nft_outpoint.into(), InputWitness::NoSignature(None))
             .add_output(TxOutput::CreateOrder(Box::new(order_data.clone())))
@@ -2118,13 +2200,14 @@ fn partially_fill_order_with_nft_v0(#[case] seed: Seed) {
                 nonce: None,
                 is_frozen: false,
             },
+            true,
         );
 
         // Try get an nft out of order with 1 atom less
         {
             let tx = TransactionBuilder::new()
                 .add_input(
-                    TxInput::from_utxo(issue_nft_tx_id.into(), 1),
+                    TxInput::Utxo(coins_outpoint.clone()),
                     InputWitness::NoSignature(None),
                 )
                 .add_input(
@@ -2160,7 +2243,7 @@ fn partially_fill_order_with_nft_v0(#[case] seed: Seed) {
         // Fill order with 1 atom less, getting 0 nfts
         let partially_fill_tx = TransactionBuilder::new()
             .add_input(
-                TxInput::from_utxo(issue_nft_tx_id.into(), 1),
+                TxInput::Utxo(coins_outpoint),
                 InputWitness::NoSignature(None),
             )
             .add_input(
@@ -2200,6 +2283,7 @@ fn partially_fill_order_with_nft_v0(#[case] seed: Seed) {
                 nonce: Some(AccountNonce::new(0)),
                 is_frozen: false,
             },
+            true,
         );
 
         // Fill order only with proper amount spent
@@ -2241,6 +2325,7 @@ fn partially_fill_order_with_nft_v0(#[case] seed: Seed) {
                 nonce: Some(AccountNonce::new(1)),
                 is_frozen: false,
             },
+            true,
         );
     });
 }
@@ -2267,40 +2352,14 @@ fn partially_fill_order_with_nft_v1(#[case] seed: Seed) {
             )
             .build();
 
-        let genesis_input = TxInput::from_utxo(tf.genesis().get_id().into(), 0);
-        let token_id = make_token_id(
-            tf.chain_config(),
-            tf.next_block_height(),
-            std::slice::from_ref(&genesis_input),
-        )
-        .unwrap();
-        let nft_issuance = random_nft_issuance(tf.chain_config(), &mut rng);
-        let token_min_issuance_fee =
-            tf.chainstate.get_chain_config().nft_issuance_fee(BlockHeight::zero());
-
-        let ask_amount = Amount::from_atoms(rng.gen_range(10u128..1000));
+        let genesis_utxo = UtxoOutPoint::new(tf.genesis().get_id().into(), 0);
 
         // Issue an NFT
-        let issue_nft_tx = TransactionBuilder::new()
-            .add_input(genesis_input, InputWitness::NoSignature(None))
-            .add_output(TxOutput::IssueNft(
-                token_id,
-                Box::new(nft_issuance.into()),
-                Destination::AnyoneCanSpend,
-            ))
-            .add_output(TxOutput::Transfer(
-                OutputValue::Coin(ask_amount),
-                Destination::AnyoneCanSpend,
-            ))
-            .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
-            .build();
-        let issue_nft_tx_id = issue_nft_tx.transaction().get_id();
-        tf.make_block_builder()
-            .add_transaction(issue_nft_tx)
-            .build_and_process(&mut rng)
-            .unwrap();
+        let (token_id, nft_outpoint, coins_outpoint) =
+            issue_random_nft_from_best_block(&mut rng, &mut tf, genesis_utxo);
 
         // Create order selling NFT for coins
+        let ask_amount = Amount::from_atoms(rng.gen_range(10u128..1000));
         let give_amount = Amount::from_atoms(1);
         let order_data = OrderData::new(
             Destination::AnyoneCanSpend,
@@ -2308,7 +2367,6 @@ fn partially_fill_order_with_nft_v1(#[case] seed: Seed) {
             OutputValue::TokenV1(token_id, give_amount),
         );
 
-        let nft_outpoint = UtxoOutPoint::new(issue_nft_tx_id.into(), 0);
         let tx = TransactionBuilder::new()
             .add_input(nft_outpoint.into(), InputWitness::NoSignature(None))
             .add_output(TxOutput::CreateOrder(Box::new(order_data.clone())))
@@ -2327,6 +2385,7 @@ fn partially_fill_order_with_nft_v1(#[case] seed: Seed) {
                 nonce: None,
                 is_frozen: false,
             },
+            true,
         );
 
         // Try to get nft by filling order with 1 atom less, getting 0 nfts
@@ -2334,7 +2393,7 @@ fn partially_fill_order_with_nft_v1(#[case] seed: Seed) {
             let underbid_amount = (ask_amount - Amount::from_atoms(1)).unwrap();
             let tx = TransactionBuilder::new()
                 .add_input(
-                    TxInput::from_utxo(issue_nft_tx_id.into(), 1),
+                    TxInput::Utxo(coins_outpoint.clone()),
                     InputWitness::NoSignature(None),
                 )
                 .add_input(
@@ -2371,7 +2430,7 @@ fn partially_fill_order_with_nft_v1(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::from_utxo(issue_nft_tx_id.into(), 1),
+                        TxInput::Utxo(coins_outpoint),
                         InputWitness::NoSignature(None),
                     )
                     .add_input(
@@ -2400,6 +2459,7 @@ fn partially_fill_order_with_nft_v1(#[case] seed: Seed) {
                 nonce: None,
                 is_frozen: false,
             },
+            true,
         );
     });
 }
@@ -2465,6 +2525,7 @@ fn fill_order_with_zero(#[case] seed: Seed, #[case] version: OrdersVersion) {
                         nonce: Some(AccountNonce::new(0)),
                         is_frozen: false,
                     },
+                    true,
                 );
             }
 
@@ -2567,6 +2628,7 @@ fn fill_order_underbid(#[case] seed: Seed, #[case] version: OrdersVersion) {
                         nonce: Some(AccountNonce::new(0)),
                         is_frozen: false,
                     },
+                    true,
                 );
             }
             OrdersVersion::V1 => {
@@ -2668,6 +2730,7 @@ fn fill_orders_shuffle(#[case] seed: Seed, #[case] fills: Vec<u128>) {
                 nonce: None,
                 is_frozen: false,
             },
+            true,
         );
     });
 }
@@ -2989,7 +3052,7 @@ fn create_order_fill_activate_fork_fill_conclude(#[case] seed: Seed) {
             .build();
         tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
-        assert_order_missing(&tf, &order_id);
+        assert_order_missing(&tf, &order_id, true);
     });
 }
 
@@ -3112,6 +3175,7 @@ fn freeze_order_check_storage(#[case] seed: Seed, #[case] version: OrdersVersion
                         nonce: None,
                         is_frozen: true,
                     },
+                    true,
                 );
             }
         }
@@ -3704,6 +3768,7 @@ fn fill_order_v0_destination_irrelevancy(#[case] seed: Seed) {
                 nonce: Some(AccountNonce::new(2)),
                 is_frozen: false,
             },
+            true,
         );
     });
 }
@@ -3860,6 +3925,7 @@ fn fill_order_v1_must_not_be_signed(#[case] seed: Seed) {
                 nonce: None,
                 is_frozen: false,
             },
+            true,
         );
     });
 }
@@ -4023,6 +4089,7 @@ fn fill_order_twice_in_same_block(
                 nonce: version.v0_then_some(AccountNonce::new(1)),
                 is_frozen: false,
             },
+            true,
         );
     });
 }
@@ -4164,6 +4231,7 @@ fn conclude_and_recreate_in_same_tx_with_same_balances(
                 nonce: None,
                 is_frozen: false,
             },
+            true,
         );
 
         let new_order_id = {
@@ -4199,10 +4267,8 @@ fn conclude_and_recreate_in_same_tx_with_same_balances(
             order_id
         };
 
-        assert_order_missing(&tf, &orig_order_id);
-
         // The original order is no longer there
-        assert_order_missing(&tf, &orig_order_id);
+        assert_order_missing(&tf, &orig_order_id, false);
 
         // The new order exists and has the same balances as the original one before the conclusion.
         assert_order_exists(
@@ -4216,6 +4282,7 @@ fn conclude_and_recreate_in_same_tx_with_same_balances(
                 nonce: None,
                 is_frozen: false,
             },
+            true,
         );
     });
 }
@@ -4362,7 +4429,7 @@ fn conclude_and_recreate_in_same_tx_with_different_balances(
         };
 
         // The original order is no longer there
-        assert_order_missing(&tf, &orig_order_id);
+        assert_order_missing(&tf, &orig_order_id, false);
 
         // The new order exists with the correct balances.
         assert_order_exists(
@@ -4376,6 +4443,417 @@ fn conclude_and_recreate_in_same_tx_with_different_balances(
                 nonce: None,
                 is_frozen: false,
             },
+            true,
         );
+    });
+}
+
+// Test get_orders_info_for_rpc_by_currencies when multiple orders are available.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn get_orders_info_for_rpc_by_currencies_test(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+
+        // Create 2 fungible tokens and 2 NFTs
+
+        let token1_mint_amount = Amount::from_atoms(rng.gen_range(1000..100_000));
+        let (token1_id, token1_utxo, coins_utxo) =
+            issue_and_mint_token_amount_from_genesis(&mut rng, &mut tf, token1_mint_amount);
+
+        let token2_mint_amount = Amount::from_atoms(rng.gen_range(1000..100_000));
+        let (token2_id, _, coins_utxo) = issue_and_mint_token_amount_from_best_block(
+            &mut rng,
+            &mut tf,
+            coins_utxo,
+            token2_mint_amount,
+        );
+
+        let (nft1_id, nft1_utxo, coins_utxo) =
+            issue_random_nft_from_best_block(&mut rng, &mut tf, coins_utxo);
+
+        let (nft2_id, nft2_utxo, coins_utxo) =
+            issue_random_nft_from_best_block(&mut rng, &mut tf, coins_utxo);
+
+        let coins_change_amount = tf.coin_amount_from_utxo(&coins_utxo);
+
+        // Now create the orders; we won't be doing anything with them in this test,
+        // so all non-initial data will have the default values.
+
+        fn make_expected_order_info(initial_data: &OrderData) -> RpcOrderInfo {
+            RpcOrderInfo {
+                conclude_key: initial_data.conclude_key().clone(),
+                initially_asked: RpcOutputValue::from_output_value(initial_data.ask()).unwrap(),
+                initially_given: RpcOutputValue::from_output_value(initial_data.give()).unwrap(),
+                ask_balance: initial_data.ask().amount(),
+                give_balance: initial_data.give().amount(),
+                nonce: None,
+                is_frozen: false,
+            }
+        }
+
+        // Create order 1, which gives token1 for coins
+
+        let order1_coin_ask_amount = Amount::from_atoms(rng.gen_range(100..200));
+        let order1_token1_give_amount = Amount::from_atoms(rng.gen_range(100..200));
+
+        let token1_change_amount = (token1_mint_amount - order1_token1_give_amount).unwrap();
+        let order1_data = OrderData::new(
+            Destination::AnyoneCanSpend,
+            OutputValue::Coin(order1_coin_ask_amount),
+            OutputValue::TokenV1(token1_id, order1_token1_give_amount),
+        );
+        let order1_expected_info = make_expected_order_info(&order1_data);
+        let order1_tx = TransactionBuilder::new()
+            .add_input(token1_utxo.into(), InputWitness::NoSignature(None))
+            .add_output(TxOutput::CreateOrder(Box::new(order1_data)))
+            .add_output(TxOutput::Transfer(
+                OutputValue::TokenV1(token1_id, token1_change_amount),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let token1_utxo = UtxoOutPoint::new(order1_tx.transaction().get_id().into(), 1);
+        let order1_id = make_order_id(order1_tx.inputs()).unwrap();
+        tf.make_block_builder()
+            .add_transaction(order1_tx)
+            .build_and_process(&mut rng)
+            .unwrap();
+
+        // Create order 2, which gives NFT1 for coins
+
+        let order2_coin_ask_amount = Amount::from_atoms(rng.gen_range(100..200));
+
+        let order2_data = OrderData::new(
+            Destination::AnyoneCanSpend,
+            OutputValue::Coin(order2_coin_ask_amount),
+            OutputValue::TokenV1(nft1_id, Amount::from_atoms(1)),
+        );
+        let order2_expected_info = make_expected_order_info(&order2_data);
+        let order2_tx = TransactionBuilder::new()
+            .add_input(nft1_utxo.into(), InputWitness::NoSignature(None))
+            .add_output(TxOutput::CreateOrder(Box::new(order2_data)))
+            .build();
+        let order2_id = make_order_id(order2_tx.inputs()).unwrap();
+        tf.make_block_builder()
+            .add_transaction(order2_tx)
+            .build_and_process(&mut rng)
+            .unwrap();
+
+        // Create order 3, which gives NFT2 for token2
+
+        let order3_token2_ask_amount = Amount::from_atoms(rng.gen_range(100..200));
+
+        let order3_data = OrderData::new(
+            Destination::AnyoneCanSpend,
+            OutputValue::TokenV1(token2_id, order3_token2_ask_amount),
+            OutputValue::TokenV1(nft2_id, Amount::from_atoms(1)),
+        );
+        let order3_expected_info = make_expected_order_info(&order3_data);
+        let order3_tx = TransactionBuilder::new()
+            .add_input(nft2_utxo.into(), InputWitness::NoSignature(None))
+            .add_output(TxOutput::CreateOrder(Box::new(order3_data)))
+            .build();
+        let order3_id = make_order_id(order3_tx.inputs()).unwrap();
+        tf.make_block_builder()
+            .add_transaction(order3_tx)
+            .build_and_process(&mut rng)
+            .unwrap();
+
+        // Create order 4, which gives token1 for NFT1
+
+        let order4_token1_give_amount = Amount::from_atoms(rng.gen_range(100..200));
+
+        let token1_change_amount = (token1_change_amount - order4_token1_give_amount).unwrap();
+        let order4_data = OrderData::new(
+            Destination::AnyoneCanSpend,
+            OutputValue::TokenV1(nft1_id, Amount::from_atoms(1)),
+            OutputValue::TokenV1(token1_id, order4_token1_give_amount),
+        );
+        let order4_expected_info = make_expected_order_info(&order4_data);
+        let order4_tx = TransactionBuilder::new()
+            .add_input(token1_utxo.into(), InputWitness::NoSignature(None))
+            .add_output(TxOutput::CreateOrder(Box::new(order4_data)))
+            .add_output(TxOutput::Transfer(
+                OutputValue::TokenV1(token1_id, token1_change_amount),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let token1_utxo = UtxoOutPoint::new(order4_tx.transaction().get_id().into(), 1);
+        let order4_id = make_order_id(order4_tx.inputs()).unwrap();
+        tf.make_block_builder()
+            .add_transaction(order4_tx)
+            .build_and_process(&mut rng)
+            .unwrap();
+
+        // Create order 5, which gives coins for NFT2
+
+        let order5_coins_give_amount = Amount::from_atoms(rng.gen_range(100..200));
+        let coins_change_amount = (coins_change_amount - order5_coins_give_amount).unwrap();
+
+        let order5_data = OrderData::new(
+            Destination::AnyoneCanSpend,
+            OutputValue::TokenV1(nft2_id, Amount::from_atoms(1)),
+            OutputValue::Coin(order5_coins_give_amount),
+        );
+        let order5_expected_info = make_expected_order_info(&order5_data);
+        let order5_tx = TransactionBuilder::new()
+            .add_input(coins_utxo.into(), InputWitness::NoSignature(None))
+            .add_output(TxOutput::CreateOrder(Box::new(order5_data)))
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin(coins_change_amount),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let coins_utxo = UtxoOutPoint::new(order5_tx.transaction().get_id().into(), 1);
+        let order5_id = make_order_id(order5_tx.inputs()).unwrap();
+        tf.make_block_builder()
+            .add_transaction(order5_tx)
+            .build_and_process(&mut rng)
+            .unwrap();
+
+        // Create order 6, which gives token1 for token2
+
+        let order6_token2_ask_amount = Amount::from_atoms(rng.gen_range(100..200));
+        let order6_token1_give_amount = Amount::from_atoms(rng.gen_range(100..200));
+
+        let token1_change_amount = (token1_change_amount - order6_token1_give_amount).unwrap();
+        let order6_data = OrderData::new(
+            Destination::AnyoneCanSpend,
+            OutputValue::TokenV1(token2_id, order6_token2_ask_amount),
+            OutputValue::TokenV1(token1_id, order6_token1_give_amount),
+        );
+        let order6_expected_info = make_expected_order_info(&order6_data);
+        let order6_tx = TransactionBuilder::new()
+            .add_input(token1_utxo.into(), InputWitness::NoSignature(None))
+            .add_output(TxOutput::CreateOrder(Box::new(order6_data)))
+            .add_output(TxOutput::Transfer(
+                OutputValue::TokenV1(token1_id, token1_change_amount),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let order6_id = make_order_id(order6_tx.inputs()).unwrap();
+        tf.make_block_builder()
+            .add_transaction(order6_tx)
+            .build_and_process(&mut rng)
+            .unwrap();
+
+        // Create order 7, which gives coins for token2
+
+        let order7_token2_ask_amount = Amount::from_atoms(rng.gen_range(100..200));
+        let order7_coins_give_amount = Amount::from_atoms(rng.gen_range(100..200));
+
+        let coins_change_amount = (coins_change_amount - order7_coins_give_amount).unwrap();
+        let order7_data = OrderData::new(
+            Destination::AnyoneCanSpend,
+            OutputValue::TokenV1(token2_id, order7_token2_ask_amount),
+            OutputValue::Coin(order7_coins_give_amount),
+        );
+        let order7_expected_info = make_expected_order_info(&order7_data);
+        let order7_tx = TransactionBuilder::new()
+            .add_input(coins_utxo.into(), InputWitness::NoSignature(None))
+            .add_output(TxOutput::CreateOrder(Box::new(order7_data)))
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin(coins_change_amount),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let order7_id = make_order_id(order7_tx.inputs()).unwrap();
+        tf.make_block_builder()
+            .add_transaction(order7_tx)
+            .build_and_process(&mut rng)
+            .unwrap();
+
+        // Now we have:
+        // 2 orders that ask for coins - orders 1 and 2;
+        // 3 orders that ask for token2 - orders 3, 6 and 7;
+        // 1 order that asks for NFT1 - order 4;
+        // 1 order that asks for NFT2 - order 5;
+        // 2 orders that give coins - orders 5 and 7;
+        // 3 orders that give token1 - orders 1, 4 and 6;
+        // 1 order that gives NFT1 - order 2;
+        // 1 order that gives NFT2 - order 3;
+
+        let check_ask = |ask_currency, expected_infos| {
+            let actual_infos = tf
+                .chainstate
+                .get_orders_info_for_rpc_by_currencies(Some(&ask_currency), None)
+                .unwrap();
+            assert_eq!(actual_infos, expected_infos);
+        };
+
+        let check_give = |give_currency, expected_infos| {
+            let actual_infos = tf
+                .chainstate
+                .get_orders_info_for_rpc_by_currencies(None, Some(&give_currency))
+                .unwrap();
+            assert_eq!(actual_infos, expected_infos);
+        };
+
+        let check_both = |ask_currency, give_currency, expected_infos| {
+            let actual_infos = tf
+                .chainstate
+                .get_orders_info_for_rpc_by_currencies(Some(&ask_currency), Some(&give_currency))
+                .unwrap();
+            assert_eq!(actual_infos, expected_infos);
+        };
+
+        // Use unqualified names of the currencies to prevent rustfmt from turning a one-liner check
+        // into 5 lines (note that having a shorter alias like Curr doesn't always help).
+        use RpcCurrency::*;
+
+        // Get all orders
+        {
+            let expected_infos = BTreeMap::from_iter([
+                (order1_id, order1_expected_info.clone()),
+                (order2_id, order2_expected_info.clone()),
+                (order3_id, order3_expected_info.clone()),
+                (order4_id, order4_expected_info.clone()),
+                (order5_id, order5_expected_info.clone()),
+                (order6_id, order6_expected_info.clone()),
+                (order7_id, order7_expected_info.clone()),
+            ]);
+            let actual_infos =
+                tf.chainstate.get_orders_info_for_rpc_by_currencies(None, None).unwrap();
+            assert_eq!(actual_infos, expected_infos);
+        }
+
+        // Check currencies that are never given or asked for
+        {
+            // No one asks for token1
+            check_ask(Token(token1_id), BTreeMap::new());
+            check_both(Token(token1_id), Coin, BTreeMap::new());
+            check_both(Token(token1_id), Token(token1_id), BTreeMap::new());
+            check_both(Token(token1_id), Token(token2_id), BTreeMap::new());
+            check_both(Token(token1_id), Token(nft1_id), BTreeMap::new());
+            check_both(Token(token1_id), Token(nft2_id), BTreeMap::new());
+
+            // No one gives token2
+            check_give(Token(token2_id), BTreeMap::new());
+            check_both(Coin, Token(token2_id), BTreeMap::new());
+            check_both(Token(token1_id), Token(token2_id), BTreeMap::new());
+            check_both(Token(token2_id), Token(token2_id), BTreeMap::new());
+            check_both(Token(nft1_id), Token(token2_id), BTreeMap::new());
+            check_both(Token(nft2_id), Token(token2_id), BTreeMap::new());
+        }
+
+        // Get all orders that ask for a specific currency.
+        {
+            // Get all orders that ask for coins
+            let expected_infos = BTreeMap::from_iter([
+                (order1_id, order1_expected_info.clone()),
+                (order2_id, order2_expected_info.clone()),
+            ]);
+            check_ask(Coin, expected_infos);
+
+            // Get all orders that ask for token2
+            let expected_infos = BTreeMap::from_iter([
+                (order3_id, order3_expected_info.clone()),
+                (order6_id, order6_expected_info.clone()),
+                (order7_id, order7_expected_info.clone()),
+            ]);
+            check_ask(Token(token2_id), expected_infos);
+
+            // Get all orders that ask for NFT1
+            let expected_infos = BTreeMap::from_iter([(order4_id, order4_expected_info.clone())]);
+            check_ask(Token(nft1_id), expected_infos);
+
+            // Get all orders that ask for NFT2
+            let expected_infos = BTreeMap::from_iter([(order5_id, order5_expected_info.clone())]);
+            check_ask(Token(nft2_id), expected_infos);
+        }
+
+        // Get all orders that give specific currency.
+        {
+            // Get all orders that give coins
+            let expected_infos = BTreeMap::from_iter([
+                (order5_id, order5_expected_info.clone()),
+                (order7_id, order7_expected_info.clone()),
+            ]);
+            check_give(Coin, expected_infos);
+
+            // Get all orders that give token1
+            let expected_infos = BTreeMap::from_iter([
+                (order1_id, order1_expected_info.clone()),
+                (order4_id, order4_expected_info.clone()),
+                (order6_id, order6_expected_info.clone()),
+            ]);
+            check_give(Token(token1_id), expected_infos);
+
+            // Get all orders that give NFT1
+            let expected_infos = BTreeMap::from_iter([(order2_id, order2_expected_info.clone())]);
+            check_give(Token(nft1_id), expected_infos);
+
+            // Get all orders that give NFT2
+            let expected_infos = BTreeMap::from_iter([(order3_id, order3_expected_info.clone())]);
+            check_give(Token(nft2_id), expected_infos);
+        }
+
+        // Get all orders with specific give/ask currencies.
+        {
+            // Asking for coins
+
+            // Get all orders that ask for coins and give coins
+            check_both(Coin, Coin, BTreeMap::new());
+
+            // Get all orders that ask for coins and give token1
+            let expected_infos = BTreeMap::from_iter([(order1_id, order1_expected_info.clone())]);
+            check_both(Coin, Token(token1_id), expected_infos);
+
+            // Get all orders that ask for coins and give NFT1
+            let expected_infos = BTreeMap::from_iter([(order2_id, order2_expected_info.clone())]);
+            check_both(Coin, Token(nft1_id), expected_infos);
+
+            // Get all orders that ask for coins and give NFT2
+            check_both(Coin, Token(nft2_id), BTreeMap::new());
+
+            // Asking for token2
+
+            // Get all orders that ask for token2 and give coins
+            let expected_infos = BTreeMap::from_iter([(order7_id, order7_expected_info.clone())]);
+            check_both(Token(token2_id), Coin, expected_infos);
+
+            // Get all orders that ask for token2 and give token1
+            let expected_infos = BTreeMap::from_iter([(order6_id, order6_expected_info.clone())]);
+            check_both(Token(token2_id), Token(token1_id), expected_infos);
+
+            // Get all orders that ask for token2 and give NFT1
+            check_both(Token(token2_id), Token(nft1_id), BTreeMap::new());
+
+            // Get all orders that ask for token2 and give NFT2
+            let expected_infos = BTreeMap::from_iter([(order3_id, order3_expected_info.clone())]);
+            check_both(Token(token2_id), Token(nft2_id), expected_infos);
+
+            // Asking for NFT1
+
+            // Get all orders that ask for NFT1 and give coins
+            check_both(Token(nft1_id), Coin, BTreeMap::new());
+
+            // Get all orders that ask for NFT1 and give token1
+            let expected_infos = BTreeMap::from_iter([(order4_id, order4_expected_info.clone())]);
+            check_both(Token(nft1_id), Token(token1_id), expected_infos);
+
+            // Get all orders that ask for NFT1 and give NFT1
+            check_both(Token(nft1_id), Token(nft1_id), BTreeMap::new());
+
+            // Get all orders that ask for NFT1 and give NFT2
+            check_both(Token(nft1_id), Token(nft2_id), BTreeMap::new());
+
+            // Asking for NFT2
+
+            // Get all orders that ask for NFT2 and give coins
+            let expected_infos = BTreeMap::from_iter([(order5_id, order5_expected_info.clone())]);
+            check_both(Token(nft2_id), Coin, expected_infos);
+
+            // Get all orders that ask for NFT2 and give token1
+            check_both(Token(nft2_id), Token(token1_id), BTreeMap::new());
+
+            // Get all orders that ask for NFT2 and give NFT1
+            check_both(Token(nft2_id), Token(nft1_id), BTreeMap::new());
+
+            // Get all orders that ask for NFT2 and give NFT2
+            check_both(Token(nft2_id), Token(nft2_id), BTreeMap::new());
+        }
     });
 }
