@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::num::NonZeroUsize;
+use std::{collections::BTreeSet, num::NonZeroUsize};
 
 use chainstate_storage::BlockchainStorageRead;
 use chainstate_types::{BlockIndex, GenBlockIndex, Locator, PropertyQueryError};
@@ -367,6 +367,19 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         }
     }
 
+    pub fn get_tokens_info_for_rpc(
+        &self,
+        token_ids: &BTreeSet<TokenId>,
+    ) -> Result<Vec<RPCTokenInfo>, PropertyQueryError> {
+        token_ids
+            .iter()
+            .map(|id| -> Result<_, PropertyQueryError> {
+                self.get_token_info_for_rpc(*id)?
+                    .ok_or(PropertyQueryError::TokenInfoMissing(*id))
+            })
+            .collect::<Result<_, _>>()
+    }
+
     pub fn get_token_aux_data(
         &self,
         token_id: &TokenId,
@@ -378,7 +391,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         &self,
         tx_id: &Id<Transaction>,
     ) -> Result<Option<TokenId>, PropertyQueryError> {
-        self.chainstate_ref.get_token_id(tx_id)
+        self.chainstate_ref.get_token_id_from_issuance_tx(tx_id)
     }
 
     pub fn get_mainchain_blocks_list(&self) -> Result<Vec<Id<Block>>, PropertyQueryError> {

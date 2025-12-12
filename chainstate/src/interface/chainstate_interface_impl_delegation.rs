@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     num::NonZeroUsize,
     ops::{Deref, DerefMut},
     sync::Arc,
@@ -274,6 +274,13 @@ where
         token_id: TokenId,
     ) -> Result<Option<RPCTokenInfo>, ChainstateError> {
         self.deref().get_token_info_for_rpc(token_id)
+    }
+
+    fn get_tokens_info_for_rpc(
+        &self,
+        token_ids: &BTreeSet<TokenId>,
+    ) -> Result<Vec<RPCTokenInfo>, ChainstateError> {
+        self.deref().get_tokens_info_for_rpc(token_ids)
     }
 
     fn get_token_aux_data(

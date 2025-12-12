@@ -29,6 +29,7 @@ pub mod block_creation_helpers;
 pub mod block_status_helpers;
 pub mod in_memory_storage_wrapper;
 pub mod pos;
+pub mod token_checks;
 
 /// Adds a block with the locked output and returns input corresponding to this output.
 pub fn add_block_with_locked_output(

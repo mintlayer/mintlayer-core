@@ -13,7 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeMap, num::NonZeroUsize, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    num::NonZeroUsize,
+    sync::Arc,
+};
 
 use crate::{
     detail::{
@@ -520,6 +524,18 @@ where
             .query()
             .map_err(ChainstateError::from)?
             .get_token_info_for_rpc(token_id)
+            .map_err(ChainstateError::FailedToReadProperty)
+    }
+
+    #[tracing::instrument(skip(self))]
+    fn get_tokens_info_for_rpc(
+        &self,
+        token_ids: &BTreeSet<TokenId>,
+    ) -> Result<Vec<RPCTokenInfo>, ChainstateError> {
+        self.chainstate
+            .query()
+            .map_err(ChainstateError::from)?
+            .get_tokens_info_for_rpc(token_ids)
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
