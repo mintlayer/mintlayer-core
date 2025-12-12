@@ -22,6 +22,9 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
     is normally done for misbehaving peers) and the node won't try connecting to it again.\
     Also, the peer will be sent an appropriate `WillDisconnect` message prior to disconnection.
 
+  - Wallet CLI and RPC: the commands `account-utxos` and `standalone-multisig-utxos` and their RPC
+    counterparts now return correct decimal amounts for tokens with non-default number of decimals.
+
 ## [1.2.0] - 2025-10-27
 
 ### Changed

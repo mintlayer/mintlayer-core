@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use common::{
-    address::{AddressError, RpcAddress},
+    address::RpcAddress,
     chain::{
         tokens::{IsTokenFreezable, NftIssuance, TokenIssuance, TokenTotalSupply},
         ChainConfig, Destination,
@@ -22,6 +22,8 @@ use common::{
     primitives::amount::RpcAmountOut,
 };
 use rpc::types::{RpcHexString, RpcString};
+
+use super::RpcTypeError;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, rpc_description::HasValueHint)]
 #[serde(tag = "type", content = "content")]
@@ -32,7 +34,7 @@ pub enum RpcTokenTotalSupply {
 }
 
 impl RpcTokenTotalSupply {
-    pub fn new(chain_config: &ChainConfig, supply: TokenTotalSupply) -> Result<Self, AddressError> {
+    pub fn new(chain_config: &ChainConfig, supply: TokenTotalSupply) -> Result<Self, RpcTypeError> {
         let result = match supply {
             TokenTotalSupply::Fixed(amount) => RpcTokenTotalSupply::Fixed {
                 amount: RpcAmountOut::from_amount(amount, chain_config.coin_decimals()),
@@ -55,7 +57,7 @@ pub struct RpcTokenIssuance {
 }
 
 impl RpcTokenIssuance {
-    pub fn new(chain_config: &ChainConfig, issuance: &TokenIssuance) -> Result<Self, AddressError> {
+    pub fn new(chain_config: &ChainConfig, issuance: &TokenIssuance) -> Result<Self, RpcTypeError> {
         let result = match issuance {
             TokenIssuance::V1(issuance) => Self {
                 token_ticker: RpcString::from_bytes(issuance.token_ticker.clone()),
@@ -80,7 +82,7 @@ pub struct RpcNftIssuance {
 }
 
 impl RpcNftIssuance {
-    pub fn new(chain_config: &ChainConfig, issuance: &NftIssuance) -> Result<Self, AddressError> {
+    pub fn new(chain_config: &ChainConfig, issuance: &NftIssuance) -> Result<Self, RpcTypeError> {
         let result = match issuance {
             NftIssuance::V0(issuance) => Self {
                 metadata: RpcNftMetadata::new(chain_config, &issuance.metadata)?,
@@ -106,7 +108,7 @@ impl RpcNftMetadata {
     fn new(
         chain_config: &ChainConfig,
         metadata: &common::chain::tokens::Metadata,
-    ) -> Result<Self, AddressError> {
+    ) -> Result<Self, RpcTypeError> {
         let result = Self {
             creator: metadata
                 .creator

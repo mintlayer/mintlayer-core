@@ -13,12 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::{
-    address::AddressError,
-    chain::{block::BlockReward, ChainConfig},
-};
+use common::chain::{block::BlockReward, ChainConfig};
 
-use super::output::RpcTxOutput;
+use super::{output::RpcTxOutput, token_decimals_provider::TokenDecimalsProvider, RpcTypeError};
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct RpcBlockReward {
@@ -27,11 +24,17 @@ pub struct RpcBlockReward {
 }
 
 impl RpcBlockReward {
-    pub fn new(chain_config: &ChainConfig, reward: &BlockReward) -> Result<Self, AddressError> {
+    // Note: in a real blockchain BlockReward will never reference tokens. But it's still
+    // possible to manually construct it this way.
+    pub fn new(
+        chain_config: &ChainConfig,
+        token_decimals_provider: &impl TokenDecimalsProvider,
+        reward: &BlockReward,
+    ) -> Result<Self, RpcTypeError> {
         let rpc_outputs = reward
             .outputs()
             .iter()
-            .map(|output| RpcTxOutput::new(chain_config, output.clone()))
+            .map(|output| RpcTxOutput::new(chain_config, token_decimals_provider, output.clone()))
             .collect::<Result<Vec<_>, _>>()?;
 
         let rpc_tx = Self {

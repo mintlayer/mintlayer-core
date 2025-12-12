@@ -18,18 +18,18 @@
 mod types;
 
 use std::{
+    collections::BTreeMap,
     convert::Infallible,
     io::{Read, Write},
     num::NonZeroUsize,
     sync::Arc,
 };
 
-use self::types::{block::RpcBlock, event::RpcEvent};
-use crate::{Block, BlockSource, ChainInfo, GenBlock};
 use chainstate_types::BlockIndex;
 use common::{
     address::{dehexify::to_dehexified_json, Address},
     chain::{
+        output_values_holder::collect_token_v1_ids_from_output_values_holder,
         tokens::{RPCTokenInfo, TokenId},
         ChainConfig, DelegationId, Destination, OrderId, PoolId, RpcOrderInfo, TxOutput,
     },
@@ -37,10 +37,20 @@ use common::{
 };
 use rpc::{subscription, RpcResult};
 use serialization::hex_encoded::HexEncoded;
+
+use crate::{
+    chainstate_interface::ChainstateInterface, Block, BlockSource, ChainInfo, ChainstateError,
+    GenBlock,
+};
+
+use self::types::{block::RpcBlock, event::RpcEvent};
+
 pub use types::{
     input::RpcUtxoOutpoint,
     output::{RpcOutputValueIn, RpcOutputValueOut, RpcTxOutput},
     signed_transaction::RpcSignedTransaction,
+    token_decimals_provider::{TokenDecimals, TokenDecimalsProvider},
+    RpcTypeError,
 };
 
 #[rpc::describe]
@@ -231,15 +241,33 @@ impl ChainstateRpcServer for super::ChainstateHandle {
             .await,
         )?;
 
-        let rpc_blk: Option<RpcBlock> = both
-            .map(|(block, block_index)| {
-                rpc::handle_result(RpcBlock::new(&chain_config, block, block_index))
-            })
-            .transpose()?;
+        if let Some((block, block_index)) = both {
+            let token_ids = collect_token_v1_ids_from_output_values_holder(&block);
+            let mut token_decimals = BTreeMap::new();
 
-        let result = rpc_blk.map(|rpc_blk| to_dehexified_json(&chain_config, rpc_blk)).transpose();
+            // TODO replace this loop with a single ChainstateInterface function call obtaining
+            // all infos at once (when the function is implemented).
+            for token_id in token_ids {
+                let token_info: RPCTokenInfo = rpc::handle_result(
+                    self.call(move |this| get_existing_token_info_for_rpc(this, token_id)).await,
+                )?;
+                token_decimals.insert(
+                    token_id,
+                    TokenDecimals(token_info.token_number_of_decimals()),
+                );
+            }
 
-        rpc::handle_result(result)
+            let rpc_block: RpcBlock = rpc::handle_result(RpcBlock::new(
+                &chain_config,
+                &token_decimals,
+                block,
+                block_index,
+            ))?;
+            let json = rpc::handle_result(to_dehexified_json(&chain_config, rpc_block))?;
+            Ok(Some(json))
+        } else {
+            Ok(None)
+        }
     }
 
     async fn get_mainchain_blocks(
@@ -467,6 +495,24 @@ where
     Box<dyn std::error::Error + Send + Sync>: From<E>,
 {
     o.map_err(Into::into)
+}
+
+fn get_existing_token_info_for_rpc(
+    chainstate: &(impl ChainstateInterface + ?Sized),
+    token_id: TokenId,
+) -> Result<RPCTokenInfo, LocalRpcError> {
+    chainstate
+        .get_token_info_for_rpc(token_id)?
+        .ok_or(LocalRpcError::MissingTokenInfo(token_id))
+}
+
+#[derive(thiserror::Error, Debug, PartialEq, Eq)]
+enum LocalRpcError {
+    #[error("Token info missing for token {0:x}")]
+    MissingTokenInfo(TokenId),
+
+    #[error(transparent)]
+    ChainstateError(#[from] ChainstateError),
 }
 
 #[cfg(test)]

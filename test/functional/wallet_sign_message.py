@@ -25,11 +25,10 @@ Check that:
 
 from random import choice, randint
 from test_framework.test_framework import BitcoinTestFramework
-from test_framework.util import assert_equal, assert_in
+from test_framework.util import assert_in
 from test_framework.wallet_cli_controller import WalletCliController
 
 import asyncio
-import sys
 import string
 
 class WalletSignMessage(BitcoinTestFramework):

@@ -16,6 +16,7 @@
 #  limitations under the License.
 
 from dataclasses import dataclass
+from decimal import Decimal
 import re
 
 
@@ -70,3 +71,11 @@ class WalletCliControllerBase:
         match = re.search(pattern, output)
         assert match is not None
         return match.group(1)
+
+    async def get_coins_balance(self, with_locked: str = "unlocked"):
+        balance_response = await self.get_balance(with_locked=with_locked)
+        match = re.search(r'Coins amount: (\d+(\.\d+)?)', balance_response)
+        assert match is not None
+
+        balance = Decimal(match.group(1))
+        return balance

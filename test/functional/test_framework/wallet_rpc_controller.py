@@ -16,16 +16,16 @@
 #  limitations under the License.
 """A wrapper around a RPC wallet instance"""
 
-import os
 import asyncio
+import base64
 import http.client
 import json
+import os
 from dataclasses import dataclass
-from tempfile import NamedTemporaryFile
-import base64
+from decimal import Decimal
 from operator import itemgetter
-
-from typing import Optional, List, Union, TypedDict
+from tempfile import NamedTemporaryFile
+from typing import Optional, List, TypedDict
 
 from test_framework.util import assert_in, rpc_port
 from test_framework.wallet_controller_common import (
@@ -274,9 +274,42 @@ class WalletRpcController(WalletCliControllerBase):
     async def add_standalone_multisig_address(self, min_required_signatures: int, pub_keys: List[str], label: Optional[str] = None) -> str:
         return self._write_command("standalone_add_multisig", [self.account, min_required_signatures, pub_keys, label, None])['result']
 
-    async def list_utxos(self, utxo_types: str = '', with_locked: str = '', utxo_states: List[str] = []) -> List[UtxoOutpoint]:
-        outputs = self._write_command("account_utxos", [self.account, utxo_types, with_locked, ''.join(utxo_states)])['result']
-        return [UtxoOutpoint(id=match["outpoint"]["source_id"]["content"]['tx_id'], index=int(match["outpoint"]['index'])) for match in outputs]
+    # Return unlocked UTXOs with any type and any state, returning a list of UtxoOutpoint's.
+    # Note: unlike CLI controller's counterpart, this function doesn't accept the utxo_types/with_locked/utxo_states
+    # parameters. But both functions behave identically when no parameters are passed.
+    async def list_utxos(self) -> List[UtxoOutpoint]:
+        output = await self.list_utxos_raw()
+        return [UtxoOutpoint(id=match["outpoint"]["source_id"]["content"]['tx_id'], index=int(match["outpoint"]['index'])) for match in output]
+
+    # Same as list_utxos, but return a raw dict.
+    async def list_utxos_raw(self,) -> any:
+        return self._write_command("account_utxos", [self.account])['result']
+
+    # List multisig UTXOs of the specified kind, returning a list of UtxoOutpoint's.
+    # By default, all unlocked and confirmed UTXOs are returned.
+    # Note: the accepted parameter values differ from ones accepted by this function's CLI counterpart.
+    # So, controller-agnostic tests should always call it without parameters.
+    # TODO: make the parameters compatible.
+    async def list_multisig_utxos(self, utxo_type: str = '', with_locked: str = '', utxo_states: List[str] = []) -> List[UtxoOutpoint]:
+        output = await self.list_multisig_utxos_raw(utxo_type, with_locked, utxo_states)
+        return [UtxoOutpoint(id=match["outpoint"]["source_id"]["content"]["tx_id"], index=int(match["outpoint"]["index"])) for match in output]
+
+    # Same as list_multisig_utxos, but return a raw dict.
+    async def list_multisig_utxos_raw(self, utxo_type: str = '', with_locked: str = '', utxo_states: List[str] = []) -> List[UtxoOutpoint]:
+        if utxo_type == "":
+            utxo_types = []
+        else:
+            utxo_types = [utxo_type]
+
+        if with_locked == "":
+            with_locked = None
+
+        result = self._write_command(
+            "standalone_multisig_utxos",
+            {"account": self.account, "utxo_states": utxo_states, "utxo_types": utxo_types, "with_locked": with_locked }
+        )
+
+        return result['result']
 
     async def get_transaction(self, tx_id: str) -> str:
         return self._write_command("transaction_get", [self.account, tx_id])['result']
@@ -288,11 +321,11 @@ class WalletRpcController(WalletCliControllerBase):
         self._write_command("address_send", [self.account, address, {'decimal': str(amount)}, selected_utxos, {'in_top_x_mb': 5}])
         return "The transaction was submitted successfully"
 
-    async def send_tokens_to_address(self, token_id: str, address: str, amount: Union[float, str]):
+    async def send_tokens_to_address(self, token_id: str, address: str, amount: int | float | Decimal | str):
         return self._write_command("token_send", [self.account, token_id, address, {'decimal': str(amount)}, {'in_top_x_mb': 5}])['result']
 
     # Note: unlike send_tokens_to_address, this function behaves identically both for wallet_cli_controller and wallet_rpc_controller.
-    async def send_tokens_to_address_or_fail(self, token_id: str, address: str, amount: Union[float, str]):
+    async def send_tokens_to_address_or_fail(self, token_id: str, address: str, amount: int | float | Decimal | str):
         # send_tokens_to_address already fails on error.
         await self.send_tokens_to_address(token_id, address, amount)
 

@@ -19,12 +19,10 @@
 from test_framework.mintlayer import (block_input_data_obj, make_tx, reward_input, ATOMS_PER_COIN)
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.util import assert_in, assert_not_in, assert_equal
-from test_framework.wallet_cli_controller import (TokenTxOutput, WalletCliController, DEFAULT_ACCOUNT_INDEX)
+from test_framework.wallet_cli_controller import (TokenTxOutput, WalletCliController)
 
 import asyncio
 import random
-import string
-import sys
 from typing import List, Tuple
 
 

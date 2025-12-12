@@ -18,8 +18,11 @@ use thiserror::Error;
 use serialization::{DirectDecode, DirectEncode};
 use typename::TypeName;
 
-use crate::primitives::{id::WithId, Id, Idable, H256};
-use crate::text_summary::TextSummary;
+use crate::{
+    chain::{output_value::OutputValue, output_values_holder::OutputValuesHolder},
+    primitives::{id::WithId, Id, Idable, H256},
+    text_summary::TextSummary,
+};
 
 pub mod input;
 pub use input::*;
@@ -182,6 +185,13 @@ impl serde::Serialize for Id<Transaction> {
 impl<'de> serde::Deserialize<'de> for Id<Transaction> {
     fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
         Self::serde_deserialize(d)
+    }
+}
+
+impl OutputValuesHolder for Transaction {
+    fn output_values_iter(&self) -> impl Iterator<Item = &OutputValue> {
+        // Note: TxInput's don't contain OutputValue's.
+        self.outputs().iter().flat_map(|output| output.output_values_iter())
     }
 }
 

@@ -24,6 +24,7 @@ use crate::{
     chain::{
         order::OrderData,
         output_value::OutputValue,
+        output_values_holder::OutputValuesHolder,
         tokens::{IsTokenFreezable, NftIssuance, TokenId, TokenIssuance, TokenTotalSupply},
         ChainConfig, DelegationId, PoolId,
     },
@@ -33,6 +34,7 @@ use crate::{
 use crypto::vrf::VRFPublicKey;
 use script::Script;
 use serialization::{Decode, DecodeAll, Encode};
+use smallvec::SmallVec;
 use strum::{EnumCount, EnumDiscriminants, EnumIter};
 
 use self::{htlc::HashedTimelockContract, stakelock::StakePoolData, timelock::OutputTimeLock};
@@ -40,6 +42,7 @@ use self::{htlc::HashedTimelockContract, stakelock::StakePoolData, timelock::Out
 pub mod classic_multisig;
 pub mod htlc;
 pub mod output_value;
+pub mod output_values_holder;
 pub mod stakelock;
 pub mod timelock;
 
@@ -379,4 +382,31 @@ impl TextSummary for TxOutput {
 
 impl rpc_description::HasValueHint for TxOutput {
     const HINT_SER: rpc_description::ValueHint = rpc_description::ValueHint::GENERIC_OBJECT;
+}
+
+impl OutputValuesHolder for TxOutput {
+    fn output_values_iter(&self) -> impl Iterator<Item = &OutputValue> {
+        // Use SmallVec to avoid allocations (we'll be producing at most 2 values here).
+        let mut values = SmallVec::<[_; 2]>::new();
+
+        match self {
+            TxOutput::Transfer(value, _)
+            | TxOutput::LockThenTransfer(value, _, _)
+            | TxOutput::Burn(value)
+            | TxOutput::Htlc(value, _) => values.push(value),
+            TxOutput::CreateOrder(order_data) => {
+                values.push(order_data.ask());
+                values.push(order_data.give())
+            }
+            TxOutput::CreateStakePool(_, _)
+            | TxOutput::ProduceBlockFromStake(_, _)
+            | TxOutput::CreateDelegationId(_, _)
+            | TxOutput::DelegateStaking(_, _)
+            | TxOutput::IssueFungibleToken(_)
+            | TxOutput::IssueNft(_, _, _)
+            | TxOutput::DataDeposit(_) => {}
+        }
+
+        values.into_iter()
+    }
 }

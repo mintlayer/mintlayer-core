@@ -26,16 +26,14 @@ Check that:
 * try to spend coins from the wallet should fail
 """
 
-from time import time
 import scalecodec
 from test_framework.test_framework import BitcoinTestFramework
-from test_framework.mintlayer import (calc_tx_id, make_tx_dict, reward_input, tx_input, ATOMS_PER_COIN, tx_output)
+from test_framework.mintlayer import (calc_tx_id, make_tx_dict, reward_input, ATOMS_PER_COIN)
 from test_framework.util import assert_greater_than, assert_in, assert_equal
-from test_framework.mintlayer import mintlayer_hash, block_input_data_obj
+from test_framework.mintlayer import block_input_data_obj
 from test_framework.wallet_cli_controller import WalletCliController
 
 import asyncio
-import sys
 
 class WalletSubmitTransaction(BitcoinTestFramework):
 
