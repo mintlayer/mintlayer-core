@@ -45,7 +45,7 @@ use wallet_controller::{
 };
 use wallet_rpc_lib::{
     types::{
-        AccountExtendedPublicKey, AddressInfo, AddressWithUsageInfo, BlockInfo,
+        AccountExtendedPublicKey, ActiveOrderInfo, AddressInfo, AddressWithUsageInfo, BlockInfo,
         ComposedTransaction, CreatedWallet, DelegationInfo, HardwareWalletType,
         LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegationTransaction, NewOrderTransaction,
         NewSubmittedTransaction, NewTokenTransaction, NftMetadata, NodeVersion, OpenedWallet,
@@ -1125,6 +1125,22 @@ impl WalletInterface for ClientWalletRpc {
         WalletRpcClient::list_own_orders(&self.http_client, account_index.into())
             .await
             .map_err(WalletRpcError::ResponseError)
+    }
+
+    async fn list_all_active_orders(
+        &self,
+        account_index: U31,
+        ask_curency: Option<common::chain::RpcCurrency>,
+        give_curency: Option<common::chain::RpcCurrency>,
+    ) -> Result<Vec<ActiveOrderInfo>, Self::Error> {
+        WalletRpcClient::list_all_active_orders(
+            &self.http_client,
+            account_index.into(),
+            ask_curency,
+            give_curency,
+        )
+        .await
+        .map_err(WalletRpcError::ResponseError)
     }
 
     async fn node_version(&self) -> Result<NodeVersion, Self::Error> {

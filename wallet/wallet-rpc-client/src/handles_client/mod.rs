@@ -43,8 +43,8 @@ use wallet_controller::{
 };
 use wallet_rpc_lib::{
     types::{
-        AccountExtendedPublicKey, AddressInfo, AddressWithUsageInfo, Balances, BlockInfo,
-        ComposedTransaction, CreatedWallet, DelegationInfo, HardwareWalletType,
+        AccountExtendedPublicKey, ActiveOrderInfo, AddressInfo, AddressWithUsageInfo, Balances,
+        BlockInfo, ComposedTransaction, CreatedWallet, DelegationInfo, HardwareWalletType,
         LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegationTransaction, NewOrderTransaction,
         NewSubmittedTransaction, NewTokenTransaction, NftMetadata, NodeVersion, OpenedWallet,
         OwnOrderInfo, PoolInfo, PublicKeyInfo, RpcHashedTimelockContract, RpcInspectTransaction,
@@ -1213,6 +1213,18 @@ where
     async fn list_own_orders(&self, account_index: U31) -> Result<Vec<OwnOrderInfo>, Self::Error> {
         self.wallet_rpc
             .list_own_orders(account_index)
+            .await
+            .map_err(WalletRpcHandlesClientError::WalletRpcError)
+    }
+
+    async fn list_all_active_orders(
+        &self,
+        account_index: U31,
+        ask_curency: Option<common::chain::RpcCurrency>,
+        give_curency: Option<common::chain::RpcCurrency>,
+    ) -> Result<Vec<ActiveOrderInfo>, Self::Error> {
+        self.wallet_rpc
+            .list_all_active_orders(account_index, ask_curency, give_curency)
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }

@@ -12,15 +12,15 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 ## [Unreleased]
 
 ### Added
-  - Node RPC: new method added - `chainstate_tokens_info`.
+  - Node RPC: new method added - `chainstate_tokens_info`, `chainstate_orders_info_by_currencies`.
 
   - Wallet RPC:
-    - new methods added: `node_get_tokens_info`, `order_list_own`;
+    - new methods added: `node_get_tokens_info`, `order_list_own`, `order_list_all_active`.
 
   - Wallet CLI:
     - the commands `order-create`, `order-fill`, `order-freeze`, `order-conclude` were added,
       mirroring their existing RPC counterparts;
-    - other new commands added: `order-list-own`;
+    - other new commands added: `order-list-own`, `order-list-all-active`;
 
 ### Changed
   - Wallet RPC:
@@ -39,6 +39,8 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
   - Wallet CLI and RPC: the commands `account-utxos` and `standalone-multisig-utxos` and their RPC
     counterparts now return correct decimal amounts for tokens with non-default number of decimals.
+
+  - Node RPC: `chainstate_order_info` will no longer fail if one of the order's balances became zero.
 
 ## [1.2.0] - 2025-10-27
 

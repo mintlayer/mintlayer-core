@@ -15,6 +15,7 @@
 
 use std::{collections::BTreeMap, fmt::Display, str::FromStr};
 
+use bigdecimal::BigDecimal;
 use chainstate::rpc::RpcOutputValueOut;
 use clap::ValueEnum;
 
@@ -30,7 +31,9 @@ use common::{
 };
 use itertools::Itertools;
 use wallet_controller::types::{GenericCurrencyTransfer, GenericTokenTransfer};
-use wallet_rpc_lib::types::{NodeInterface, OwnOrderInfo, PoolInfo, TokenTotalSupply};
+use wallet_rpc_lib::types::{
+    ActiveOrderInfo, NodeInterface, OwnOrderInfo, PoolInfo, TokenTotalSupply,
+};
 use wallet_types::{
     seed_phrase::StoreSeedPhrase,
     utxo_types::{UtxoState, UtxoType},
@@ -155,30 +158,27 @@ pub fn format_own_order_info<N: NodeInterface>(
         };
         Ok(format!(
             concat!(
-                "Order Id: {id}, ",
-                "Initially asked: {ia}, ",
-                "Initially given: {ig}, ",
-                "Remaining ask amount: {ra}, ",
-                "Remaining give amount: {rg}, ",
-                "Accumulated ask amount: {aa}, ",
+                "Id: {id}, ",
+                "Asked: {ia} [left: {ra}, can withdraw: {aa}], ",
+                "Given: {ig} [left: {rg}], ",
                 "Created at: {ts}, ",
                 "Status: {st}"
             ),
             id = order_info.order_id,
             ia = format_output_value(&order_info.initially_asked, chain_config, token_infos)?,
-            ig = format_output_value(&order_info.initially_given, chain_config, token_infos)?,
             ra = existing_order_data.ask_balance.decimal(),
-            rg = existing_order_data.give_balance.decimal(),
             aa = accumulated_ask_amount,
+            ig = format_output_value(&order_info.initially_given, chain_config, token_infos)?,
+            rg = existing_order_data.give_balance.decimal(),
             ts = existing_order_data.creation_timestamp.into_time(),
             st = status,
         ))
     } else {
         Ok(format!(
             concat!(
-                "Order Id: {id}, ",
-                "Initially asked: {ia}, ",
-                "Initially given: {ig}, ",
+                "Id: {id}, ",
+                "Asked: {ia}, ",
+                "Given: {ig}, ",
                 "Status: Unconfirmed"
             ),
             id = order_info.order_id,
@@ -188,17 +188,58 @@ pub fn format_own_order_info<N: NodeInterface>(
     }
 }
 
+pub fn active_order_infos_header() -> &'static str {
+    concat!(
+        "The list of active orders goes below, orders belonging to this account are marked with '*'.\n",
+        "WARNING: token tickers are not unique, always check the token id when buying a token."
+    )
+}
+
+pub fn format_active_order_info<N: NodeInterface>(
+    order_info: &ActiveOrderInfo,
+    give_ask_price: &BigDecimal,
+    chain_config: &ChainConfig,
+    token_infos: &BTreeMap<TokenId, RPCTokenInfo>,
+) -> Result<String, WalletCliCommandError<N>> {
+    // Note: we show what's given first because the orders are sorted by the given currency first
+    // by the caller code.
+    Ok(format!(
+        concat!(
+            "{marker} ",
+            "Id: {id}, ",
+            "Given: {g} [left: {rg}], ",
+            "Asked: {a} [left: {ra}], ",
+            "Give/Ask: {price}, "
+        ),
+        marker = if order_info.is_own { "*" } else { " " },
+        id = order_info.order_id,
+        g = format_asset_name(&order_info.initially_given, chain_config, token_infos)?,
+        a = format_asset_name(&order_info.initially_asked, chain_config, token_infos)?,
+        rg = order_info.give_balance.decimal(),
+        ra = order_info.ask_balance.decimal(),
+        price = give_ask_price.normalized(),
+    ))
+}
+
+pub fn format_asset_name<N: NodeInterface>(
+    value: &RpcOutputValueOut,
+    chain_config: &ChainConfig,
+    token_infos: &BTreeMap<TokenId, RPCTokenInfo>,
+) -> Result<String, WalletCliCommandError<N>> {
+    let result = if let Some(token_id) = value.token_id() {
+        format_token_name(token_id, chain_config, token_infos)?
+    } else {
+        chain_config.coin_ticker().to_owned()
+    };
+    Ok(result)
+}
+
 pub fn format_output_value<N: NodeInterface>(
     value: &RpcOutputValueOut,
     chain_config: &ChainConfig,
     token_infos: &BTreeMap<TokenId, RPCTokenInfo>,
 ) -> Result<String, WalletCliCommandError<N>> {
-    let asset_name = if let Some(token_id) = value.token_id() {
-        format_token_name(token_id, chain_config, token_infos)?
-    } else {
-        chain_config.coin_ticker().to_owned()
-    };
-
+    let asset_name = format_asset_name(value, chain_config, token_infos)?;
     Ok(format!("{} {}", value.amount().decimal(), asset_name))
 }
 

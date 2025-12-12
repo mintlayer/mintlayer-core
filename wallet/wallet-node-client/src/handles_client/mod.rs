@@ -13,7 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeSet, num::NonZeroUsize, time::Duration};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    num::NonZeroUsize,
+    time::Duration,
+};
 
 use blockprod::{BlockProductionError, BlockProductionHandle, TimestampSearchData};
 use chainstate::{BlockSource, ChainInfo, ChainstateError, ChainstateHandle};
@@ -242,7 +246,24 @@ impl NodeInterface for WalletHandlesClient {
     async fn get_order_info(&self, order_id: OrderId) -> Result<Option<RpcOrderInfo>, Self::Error> {
         let result = self
             .chainstate
-            .call(move |this| this.get_order_info_for_rpc(order_id))
+            .call(move |this| this.get_order_info_for_rpc(&order_id))
+            .await??;
+        Ok(result)
+    }
+
+    async fn get_orders_info_by_currencies(
+        &self,
+        ask_currency: Option<common::chain::RpcCurrency>, // FIXME use RpcCurrency directly?
+        give_currency: Option<common::chain::RpcCurrency>,
+    ) -> Result<BTreeMap<OrderId, RpcOrderInfo>, Self::Error> {
+        let result = self
+            .chainstate
+            .call(move |this| {
+                this.get_orders_info_for_rpc_by_currencies(
+                    ask_currency.as_ref(),
+                    give_currency.as_ref(),
+                )
+            })
             .await??;
         Ok(result)
     }

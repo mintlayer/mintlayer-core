@@ -38,6 +38,7 @@ use common::{
         classic_multisig::ClassicMultisigChallenge,
         htlc::{HashedTimelockContract, HtlcSecret, HtlcSecretHash},
         output_value::OutputValue,
+        output_values_holder::collect_token_v1_ids_from_rpc_output_values_holders,
         signature::inputsig::arbitrary_message::{
             produce_message_challenge, ArbitraryMessageSignature,
         },
@@ -88,7 +89,10 @@ use wallet_types::{
     SignedTxWithFees,
 };
 
-use crate::{types::ExistingOwnOrderData, WalletHandle, WalletRpcConfig};
+use crate::{
+    types::{ActiveOrderInfo, ExistingOwnOrderData},
+    WalletHandle, WalletRpcConfig,
+};
 
 use self::types::{
     AddressInfo, AddressWithUsageInfo, DelegationInfo, HardwareWalletType, LegacyVrfPublicKeyInfo,
@@ -1727,17 +1731,9 @@ where
                 })
             })
             .await??;
-        let token_ids = wallet_orders_data
-            .iter()
-            .flat_map(|(_, order_data)| {
-                order_data
-                    .initially_asked
-                    .token_id()
-                    .into_iter()
-                    .chain(order_data.initially_given.token_id().into_iter())
-            })
-            .copied()
-            .collect::<BTreeSet<_>>();
+        let token_ids = collect_token_v1_ids_from_rpc_output_values_holders(
+            wallet_orders_data.iter().map(|(_, order_data)| order_data),
+        );
         let orders_data = wallet_orders_data
             .into_iter()
             .map(async |(order_id, wallet_order_data)| -> WRpcResult<_, N> {
@@ -1834,6 +1830,79 @@ where
             })
             .collect()
         })?)
+    }
+
+    pub async fn list_all_active_orders(
+        &self,
+        account_index: U31,
+        ask_currency: Option<common::chain::RpcCurrency>,
+        give_currency: Option<common::chain::RpcCurrency>,
+    ) -> WRpcResult<Vec<ActiveOrderInfo>, N> {
+        let wallet_order_ids = self
+            .wallet
+            .call_async(move |controller| {
+                Box::pin(async move {
+                    controller.readonly_controller(account_index).get_own_orders().await
+                })
+            })
+            .await??
+            .into_iter()
+            .map(|(order_id, _)| order_id)
+            .collect::<BTreeSet<_>>();
+
+        let node_rpc_order_infos = self
+            .node
+            .get_orders_info_by_currencies(ask_currency, give_currency)
+            .await
+            .map_err(RpcError::RpcError)?;
+
+        let token_ids = collect_token_v1_ids_from_rpc_output_values_holders(
+            node_rpc_order_infos.iter().map(|(_, order_node_rpc_info)| order_node_rpc_info),
+        );
+        let token_decimals = self.get_tokens_decimals(token_ids).await?;
+
+        let result = node_rpc_order_infos
+            .into_iter()
+            .filter_map(|(order_id, node_rpc_order_info)| {
+                (!node_rpc_order_info.is_frozen).then(|| -> WRpcResult<_, N> {
+                    let order_id_as_rpc_addr = RpcAddress::new(&self.chain_config, order_id)?;
+                    let initially_asked = RpcOutputValueOut::new(
+                        &self.chain_config,
+                        &token_decimals,
+                        node_rpc_order_info.initially_asked.into(),
+                    )?;
+                    let initially_given = RpcOutputValueOut::new(
+                        &self.chain_config,
+                        &token_decimals,
+                        node_rpc_order_info.initially_given.into(),
+                    )?;
+                    let ask_balance = make_rpc_amount_out(
+                        node_rpc_order_info.ask_balance,
+                        node_rpc_order_info.initially_asked.token_id(),
+                        &self.chain_config,
+                        &token_decimals,
+                    )?;
+                    let give_balance = make_rpc_amount_out(
+                        node_rpc_order_info.give_balance,
+                        node_rpc_order_info.initially_given.token_id(),
+                        &self.chain_config,
+                        &token_decimals,
+                    )?;
+                    let is_own = wallet_order_ids.contains(&order_id);
+
+                    Ok(ActiveOrderInfo {
+                        order_id: order_id_as_rpc_addr,
+                        initially_asked,
+                        initially_given,
+                        ask_balance,
+                        give_balance,
+                        is_own,
+                    })
+                })
+            })
+            .collect::<Result<_, _>>()?;
+
+        Ok(result)
     }
 
     pub async fn compose_transaction(

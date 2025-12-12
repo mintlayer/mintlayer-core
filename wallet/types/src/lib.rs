@@ -16,7 +16,6 @@
 pub mod account_id;
 pub mod account_info;
 pub mod chain_info;
-pub mod currency;
 pub mod generic_transaction;
 pub mod hw_data;
 pub mod keys;
@@ -34,7 +33,6 @@ pub use account_id::{
     AccountWalletTxId,
 };
 pub use account_info::AccountInfo;
-pub use currency::Currency;
 pub use keys::{KeyPurpose, KeychainUsageState, RootKeys};
 pub use wallet_tx::{BlockInfo, WalletTx};
 
@@ -46,6 +44,8 @@ use common::{
 };
 
 use crate::scan_blockchain::ScanBlockchain;
+
+pub type Currency = common::chain::RpcCurrency;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SignedTxWithFees {

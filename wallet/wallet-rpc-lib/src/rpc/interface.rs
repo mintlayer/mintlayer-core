@@ -43,15 +43,16 @@ use wallet_types::{
 };
 
 use crate::types::{
-    AccountArg, AccountExtendedPublicKey, AddressInfo, AddressWithUsageInfo, Balances, ChainInfo,
-    ComposedTransaction, CreatedWallet, DelegationInfo, HardwareWalletType, HexEncoded,
-    LegacyVrfPublicKeyInfo, MaybeSignedTransaction, NewAccountInfo, NewDelegationTransaction,
-    NewOrderTransaction, NewSubmittedTransaction, NewTokenTransaction, NftMetadata, NodeVersion,
-    OpenedWallet, OwnOrderInfo, PoolInfo, PublicKeyInfo, RpcAmountIn, RpcHashedTimelockContract,
-    RpcInspectTransaction, RpcNewTransaction, RpcPreparedTransaction, RpcStandaloneAddresses,
-    RpcUtxoOutpoint, RpcUtxoState, RpcUtxoType, SendTokensFromMultisigAddressResult,
-    StakePoolBalance, StakingStatus, StandaloneAddressWithDetails, TokenMetadata,
-    TransactionOptions, TransactionRequestOptions, TxOptionsOverrides, UtxoInfo, VrfPublicKeyInfo,
+    AccountArg, AccountExtendedPublicKey, ActiveOrderInfo, AddressInfo, AddressWithUsageInfo,
+    Balances, ChainInfo, ComposedTransaction, CreatedWallet, DelegationInfo, HardwareWalletType,
+    HexEncoded, LegacyVrfPublicKeyInfo, MaybeSignedTransaction, NewAccountInfo,
+    NewDelegationTransaction, NewOrderTransaction, NewSubmittedTransaction, NewTokenTransaction,
+    NftMetadata, NodeVersion, OpenedWallet, OwnOrderInfo, PoolInfo, PublicKeyInfo, RpcAmountIn,
+    RpcHashedTimelockContract, RpcInspectTransaction, RpcNewTransaction, RpcPreparedTransaction,
+    RpcStandaloneAddresses, RpcUtxoOutpoint, RpcUtxoState, RpcUtxoType,
+    SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
+    StandaloneAddressWithDetails, TokenMetadata, TransactionOptions, TransactionRequestOptions,
+    TxOptionsOverrides, UtxoInfo, VrfPublicKeyInfo,
 };
 
 #[rpc::rpc(server)]
@@ -872,6 +873,16 @@ trait WalletRpc {
     /// List orders whose conclude key is owned by the given account.
     #[method(name = "order_list_own")]
     async fn list_own_orders(&self, account: AccountArg) -> rpc::RpcResult<Vec<OwnOrderInfo>>;
+
+    /// List all active (i.e. non-concluded, non-frozen) orders whose currencies match the passed ones.
+    /// If a passed currency is None, any order will match.
+    #[method(name = "order_list_all_active")]
+    async fn list_all_active_orders(
+        &self,
+        account: AccountArg,
+        ask_currency: Option<common::chain::RpcCurrency>,
+        give_currency: Option<common::chain::RpcCurrency>,
+    ) -> rpc::RpcResult<Vec<ActiveOrderInfo>>;
 
     /// Obtain the node version
     #[method(name = "node_version")]

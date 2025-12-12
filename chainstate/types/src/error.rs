@@ -49,8 +49,6 @@ pub enum PropertyQueryError {
     StakerBalanceOverflow(PoolId),
     #[error("Balance of pool {0} not found")]
     PoolBalanceNotFound(PoolId),
-    #[error("Balance of order {0} not found")]
-    OrderBalanceNotFound(OrderId),
     #[error("Unsupported token V0 in order {0}")]
     UnsupportedTokenV0InOrder(OrderId),
     #[error("Invalid starting block height: {0}")]

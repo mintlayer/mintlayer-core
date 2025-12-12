@@ -58,3 +58,31 @@ pub fn collect_token_v1_ids_from_output_values_holders<'a, H: OutputValuesHolder
     }
     result
 }
+
+pub fn collect_token_v1_ids_from_rpc_output_values_holder_into(
+    holder: &impl RpcOutputValuesHolder,
+    dest: &mut BTreeSet<TokenId>,
+) {
+    for token_id in holder
+        .rpc_output_values_iter()
+        .flat_map(|output_value| output_value.token_id().into_iter())
+    {
+        dest.insert(*token_id);
+    }
+}
+
+pub fn collect_token_v1_ids_from_rpc_output_values_holder(
+    holder: &impl RpcOutputValuesHolder,
+) -> BTreeSet<TokenId> {
+    collect_token_v1_ids_from_rpc_output_values_holders(std::iter::once(holder))
+}
+
+pub fn collect_token_v1_ids_from_rpc_output_values_holders<'a, H: RpcOutputValuesHolder + 'a>(
+    holders: impl IntoIterator<Item = &'a H>,
+) -> BTreeSet<TokenId> {
+    let mut result = BTreeSet::new();
+    for holder in holders {
+        collect_token_v1_ids_from_rpc_output_values_holder_into(holder, &mut result);
+    }
+    result
+}

@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::transaction_verifier::TransactionSource;
 
@@ -223,6 +223,7 @@ mockall::mock! {
         fn get_order_data(&self, id: &OrderId) -> Result<Option<OrderData>, orders_accounting::Error>;
         fn get_ask_balance(&self, id: &OrderId) -> Result<Option<Amount>, orders_accounting::Error>;
         fn get_give_balance(&self, id: &OrderId) -> Result<Option<Amount>, orders_accounting::Error>;
+        fn get_all_order_ids(&self) -> Result<BTreeSet<OrderId>, orders_accounting::Error>;
     }
 
     impl FlushableOrdersAccountingView for Store {

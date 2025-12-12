@@ -142,6 +142,7 @@ atomic-traits = "0.4"
 axum = "0.7"
 base64 = "0.22"
 bech32 = "0.11"
+bigdecimal = "0.4"
 bip39 = { version = "2.0", default-features = false }
 bitcoin-bech32 = "0.13"
 blake2 = "0.10"

@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeSet;
+
 use accounting::combine_amount_delta;
 use common::{
     chain::{OrderId, OrdersVersion},
@@ -139,6 +141,29 @@ impl<P: OrdersAccountingView> OrdersAccountingView for OrdersAccountingCache<P> 
         let parent_supply = self.parent.get_give_balance(id).map_err(|_| Error::ViewFail)?;
         let local_delta = self.data.give_balances.data().get(id).cloned();
         combine_amount_delta(parent_supply, local_delta).map_err(Error::AccountingError)
+    }
+
+    fn get_all_order_ids(&self) -> Result<BTreeSet<OrderId>> {
+        // FIXME break this and ensure tests fail
+
+        Ok(self
+            .parent
+            .get_all_order_ids()
+            .map_err(|_| Error::ViewFail)?
+            .into_iter()
+            .filter(|id| match self.data.order_data.get_data(id) {
+                accounting::GetDataResult::Present(_) | accounting::GetDataResult::Missing => true,
+                accounting::GetDataResult::Deleted => false,
+            })
+            .chain(self.data.order_data.data().keys().copied().filter(|id| {
+                match self.data.order_data.get_data(&id) {
+                    accounting::GetDataResult::Present(_) => true,
+                    accounting::GetDataResult::Missing | accounting::GetDataResult::Deleted => {
+                        false
+                    }
+                }
+            }))
+            .collect())
     }
 }
 

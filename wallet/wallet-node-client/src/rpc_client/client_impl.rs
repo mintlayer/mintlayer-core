@@ -13,7 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeSet, num::NonZeroUsize, time::Duration};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    num::NonZeroUsize,
+    time::Duration,
+};
 
 use blockprod::{rpc::BlockProductionRpcClient, TimestampSearchData};
 use chainstate::{rpc::ChainstateRpcClient, ChainInfo};
@@ -193,6 +197,20 @@ impl NodeInterface for NodeRpcClient {
         ChainstateRpcClient::order_info(&self.http_client, order_id)
             .await
             .map_err(NodeRpcError::ResponseError)
+    }
+
+    async fn get_orders_info_by_currencies(
+        &self,
+        ask_currency: Option<common::chain::RpcCurrency>,
+        give_currency: Option<common::chain::RpcCurrency>,
+    ) -> Result<BTreeMap<OrderId, RpcOrderInfo>, Self::Error> {
+        ChainstateRpcClient::orders_info_by_currencies(
+            &self.http_client,
+            ask_currency,
+            give_currency,
+        )
+        .await
+        .map_err(NodeRpcError::ResponseError)
     }
 
     async fn blockprod_e2e_public_key(&self) -> Result<EndToEndPublicKey, Self::Error> {

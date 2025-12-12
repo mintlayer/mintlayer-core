@@ -1145,6 +1145,19 @@ pub enum WalletCommand {
     /// List orders whose conclude key is owned by the selected account.
     #[clap(name = "order-list-own")]
     ListOwnOrders,
+
+    /// List all active (i.e. not concluded and not frozen) orders, optionally filtering them
+    /// by the "asked" or "given" currency.
+    #[clap(name = "order-list-all-active")]
+    ListActiveOrders {
+        /// Filter orders by the specified "asked" currency - pass a token id or "coin" for coins.
+        #[arg(long = "ask-currency")]
+        ask_currency: Option<String>,
+
+        /// Filter orders by the specified "given" currency - pass a token id or "coin" for coins.
+        #[arg(long = "give-currency")]
+        give_currency: Option<String>,
+    },
 }
 
 #[derive(Debug, Parser)]

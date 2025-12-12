@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::detail::{
     chainstateref::ChainstateRef,
@@ -569,6 +569,11 @@ impl<S: BlockchainStorageRead, V: TransactionVerificationStrategy> OrdersAccount
     #[log_error]
     fn get_give_balance(&self, id: &OrderId) -> Result<Option<Amount>, Self::Error> {
         self.db_tx.get_give_balance(id)
+    }
+
+    #[log_error]
+    fn get_all_order_ids(&self) -> Result<BTreeSet<OrderId>, Self::Error> {
+        self.db_tx.get_all_order_ids()
     }
 }
 

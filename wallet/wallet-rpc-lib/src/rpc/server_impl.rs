@@ -47,14 +47,15 @@ use wallet_types::{
 use crate::{
     rpc::{ColdWalletRpcServer, WalletEventsRpcServer, WalletRpc, WalletRpcServer},
     types::{
-        AccountArg, AddressInfo, AddressWithUsageInfo, Balances, ChainInfo, ComposedTransaction,
-        CreatedWallet, DelegationInfo, HardwareWalletType, HexEncoded, LegacyVrfPublicKeyInfo,
-        MaybeSignedTransaction, NewAccountInfo, NewDelegationTransaction, NewSubmittedTransaction,
-        NftMetadata, NodeVersion, OpenedWallet, OwnOrderInfo, PoolInfo, PublicKeyInfo, RpcAddress,
-        RpcAmountIn, RpcHexString, RpcInspectTransaction, RpcStandaloneAddresses, RpcUtxoOutpoint,
-        RpcUtxoState, RpcUtxoType, SendTokensFromMultisigAddressResult, StakePoolBalance,
-        StakingStatus, StandaloneAddressWithDetails, TokenMetadata, TransactionOptions,
-        TransactionRequestOptions, TxOptionsOverrides, UtxoInfo, VrfPublicKeyInfo,
+        AccountArg, ActiveOrderInfo, AddressInfo, AddressWithUsageInfo, Balances, ChainInfo,
+        ComposedTransaction, CreatedWallet, DelegationInfo, HardwareWalletType, HexEncoded,
+        LegacyVrfPublicKeyInfo, MaybeSignedTransaction, NewAccountInfo, NewDelegationTransaction,
+        NewSubmittedTransaction, NftMetadata, NodeVersion, OpenedWallet, OwnOrderInfo, PoolInfo,
+        PublicKeyInfo, RpcAddress, RpcAmountIn, RpcHexString, RpcInspectTransaction,
+        RpcStandaloneAddresses, RpcUtxoOutpoint, RpcUtxoState, RpcUtxoType,
+        SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
+        StandaloneAddressWithDetails, TokenMetadata, TransactionOptions, TransactionRequestOptions,
+        TxOptionsOverrides, UtxoInfo, VrfPublicKeyInfo,
     },
     RpcError,
 };
@@ -1128,6 +1129,18 @@ where
 
     async fn list_own_orders(&self, account_arg: AccountArg) -> rpc::RpcResult<Vec<OwnOrderInfo>> {
         rpc::handle_result(self.list_own_orders(account_arg.index::<N>()?).await)
+    }
+
+    async fn list_all_active_orders(
+        &self,
+        account_arg: AccountArg,
+        ask_currency: Option<common::chain::RpcCurrency>,
+        give_currency: Option<common::chain::RpcCurrency>,
+    ) -> rpc::RpcResult<Vec<ActiveOrderInfo>> {
+        rpc::handle_result(
+            self.list_all_active_orders(account_arg.index::<N>()?, ask_currency, give_currency)
+                .await,
+        )
     }
 
     async fn stake_pool_balance(

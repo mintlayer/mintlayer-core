@@ -15,8 +15,9 @@
 
 mod local_state;
 
-use std::{fmt::Write, str::FromStr};
+use std::{collections::BTreeMap, fmt::Write, str::FromStr};
 
+use bigdecimal::BigDecimal;
 use itertools::Itertools;
 
 use chainstate::rpc::RpcOutputValueOut;
@@ -51,7 +52,9 @@ use wallet_types::{partially_signed_transaction::PartiallySignedTransaction, Cur
 
 use crate::{
     errors::WalletCliCommandError,
-    helper_types::{format_token_name, parse_currency, parse_generic_token_transfer},
+    helper_types::{
+        active_order_infos_header, format_token_name, parse_currency, parse_generic_token_transfer,
+    },
     CreateWalletDeviceSelectMenu, ManageableWalletCommand, OpenWalletDeviceSelectMenu,
     OpenWalletSubCommand, WalletManagementCommand,
 };
@@ -60,8 +63,8 @@ use self::local_state::WalletWithState;
 
 use super::{
     helper_types::{
-        format_delegation_info, format_own_order_info, format_pool_info, parse_coin_output,
-        parse_token_supply, parse_utxo_outpoint, CliForceReduce, CliUtxoState,
+        format_active_order_info, format_delegation_info, format_own_order_info, format_pool_info,
+        parse_coin_output, parse_token_supply, parse_utxo_outpoint, CliForceReduce, CliUtxoState,
     },
     ColdWalletCommand, ConsoleCommand, WalletCommand,
 };
@@ -2107,6 +2110,164 @@ where
                 Ok(ConsoleCommand::Print(format!(
                     "{}\n",
                     order_infos.join("\n")
+                )))
+            }
+            WalletCommand::ListActiveOrders {
+                ask_currency,
+                give_currency,
+            } => {
+                let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
+
+                let ask_currency = ask_currency
+                    .map(|ask_currency| parse_currency(&ask_currency, chain_config))
+                    .transpose()?;
+                let give_currency = give_currency
+                    .map(|give_currency| parse_currency(&give_currency, chain_config))
+                    .transpose()?;
+
+                let order_infos = wallet
+                    .list_all_active_orders(selected_account, ask_currency, give_currency)
+                    .await?;
+                let token_ids_iter = get_token_ids_from_order_infos(
+                    order_infos.iter().map(|info| (&info.initially_asked, &info.initially_given)),
+                );
+                let token_ids_str_vec = token_ids_iter
+                    .clone()
+                    .map(|rpc_addr| rpc_addr.as_str().to_owned())
+                    .collect_vec();
+                let token_ids_map = token_ids_iter
+                    .map(|rpc_addr| -> Result<_, WalletCliCommandError<N>> {
+                        Ok((
+                            rpc_addr.clone(),
+                            rpc_addr
+                                .decode_object(chain_config)
+                                .map_err(WalletCliCommandError::TokenIdDecodingError)?,
+                        ))
+                    })
+                    .collect::<Result<BTreeMap<_, _>, _>>()?;
+                let token_infos = wallet
+                    .node_get_tokens_info(token_ids_str_vec)
+                    .await?
+                    .into_iter()
+                    .map(|info| (info.token_id(), info))
+                    .collect::<BTreeMap<_, _>>();
+
+                let currency_decimals = |token_id_opt: Option<&TokenId>| {
+                    if let Some(token_id) = token_id_opt {
+                        // FIXME
+                        token_infos
+                            .get(token_id)
+                            .expect("Token id is known to be present")
+                            .token_number_of_decimals()
+                    } else {
+                        chain_config.coin_decimals()
+                    }
+                };
+                let token_ticker_str_by_id = |token_id| {
+                    let ticker_bytes =
+                        token_infos.get(token_id).expect("Token info must exist").token_ticker();
+                    // FIXME allow only alpha num tickers??
+                    str::from_utf8(ticker_bytes).ok()
+                };
+
+                let order_infos_with_price = order_infos
+                    .into_iter()
+                    .map(|info| {
+                        let asked_token_id = info.initially_asked.token_id().map(|token_id| {
+                            token_ids_map.get(token_id).expect("Token id is known to be present")
+                        });
+                        let given_token_id = info.initially_given.token_id().map(|token_id| {
+                            token_ids_map.get(token_id).expect("Token id is known to be present")
+                        });
+                        let ask_currency_decimals = currency_decimals(asked_token_id);
+                        let give_currency_decimals = currency_decimals(given_token_id);
+
+                        let give_ask_price = BigDecimal::new(
+                            info.initially_given.amount().amount().into_atoms().into(),
+                            give_currency_decimals as i64,
+                        ) / BigDecimal::new(
+                            info.initially_asked.amount().amount().into_atoms().into(),
+                            ask_currency_decimals as i64,
+                        );
+                        // FIXME check that it works correctly
+                        let give_ask_price = give_ask_price.with_scale_round(
+                            give_currency_decimals.into(),
+                            bigdecimal::rounding::RoundingMode::Down,
+                        );
+
+                        (info, give_ask_price)
+                    })
+                    .collect_vec();
+
+                use std::cmp::Ordering;
+
+                let compare_currencies =
+                    |token1_id: Option<&RpcAddress<TokenId>>,
+                     token2_id: Option<&RpcAddress<TokenId>>| {
+                        match (token1_id, token2_id) {
+                            (Some(token1_id_as_addr), Some(token2_id_as_addr)) => {
+                                let token1_id = token_ids_map
+                                    .get(token1_id_as_addr)
+                                    .expect("Token id is known to be present");
+                                let token2_id = token_ids_map
+                                    .get(token2_id_as_addr)
+                                    .expect("Token id is known to be present");
+
+                                if token1_id == token2_id {
+                                    Ordering::Equal
+                                } else {
+                                    let token1_ticker = token_ticker_str_by_id(token1_id);
+                                    let token2_ticker = token_ticker_str_by_id(token2_id);
+                                    let token_ids_as_addr_cmp =
+                                        token1_id_as_addr.cmp(token2_id_as_addr);
+
+                                    // If tickers are valid strings, compare them first; if they are
+                                    // equal, compare the ids.
+                                    // Otherwise, put tokens with bad tickers later on the list.
+                                    // If both tickers are bad, compare the ids.
+                                    match (token1_ticker, token2_ticker) {
+                                        (Some(token1_ticker), Some(token2_ticker)) => token1_ticker
+                                            .cmp(token2_ticker)
+                                            .then(token_ids_as_addr_cmp),
+                                        (Some(_), None) => Ordering::Less,
+                                        (None, Some(_)) => Ordering::Greater,
+                                        (None, None) => token_ids_as_addr_cmp,
+                                    }
+                                }
+                            }
+                            // The coin should come first, so it's "less" than tokens.
+                            (Some(_), None) => Ordering::Greater,
+                            (None, Some(_)) => Ordering::Less,
+                            (None, None) => Ordering::Equal,
+                        }
+                    };
+
+                let order_infos_with_give_ask_price = order_infos_with_price.sorted_by(
+                    |(order1_info, order1_price), (order2_info, order2_price)| {
+                        let order1_asked_token_id = order1_info.initially_asked.token_id();
+                        let order1_given_token_id = order1_info.initially_given.token_id();
+                        let order2_asked_token_id = order2_info.initially_asked.token_id();
+                        let order2_given_token_id = order2_info.initially_given.token_id();
+
+                        compare_currencies(order1_given_token_id, order2_given_token_id)
+                            .then_with(|| {
+                                compare_currencies(order1_asked_token_id, order2_asked_token_id)
+                            })
+                            .then_with(|| order2_price.cmp(order1_price))
+                    },
+                );
+
+                let formatted_order_infos = order_infos_with_give_ask_price
+                    .iter()
+                    .map(|(info, give_ask_price)| {
+                        format_active_order_info(info, give_ask_price, chain_config, &token_infos)
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+
+                Ok(ConsoleCommand::Print(format!(
+                    "{}\n{}\n",
+                    active_order_infos_header(),
+                    formatted_order_infos.join("\n")
                 )))
             }
         }

@@ -68,6 +68,10 @@ impl OrderData {
             })
         }
     }
+
+    pub fn consume(self) -> (Destination, OutputValue, OutputValue, bool) {
+        (self.conclude_key, self.ask, self.give, self.is_frozen)
+    }
 }
 
 impl From<common::chain::OrderData> for OrderData {

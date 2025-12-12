@@ -24,6 +24,7 @@ use common::{
         block::timestamp::BlockTimestamp,
         make_delegation_id, make_order_id, make_token_id, make_token_id_with_version,
         output_value::{OutputValue, RpcOutputValue},
+        output_values_holder::RpcOutputValuesHolder,
         stakelock::StakePoolData,
         tokens::{
             get_referenced_token_ids_ignore_issuance, IsTokenFreezable, IsTokenUnfreezable,
@@ -560,6 +561,12 @@ impl OrderData {
             is_concluded: false,
             is_frozen: false,
         }
+    }
+}
+
+impl RpcOutputValuesHolder for OrderData {
+    fn rpc_output_values_iter(&self) -> impl Iterator<Item = &RpcOutputValue> {
+        [&self.initially_asked, &self.initially_given].into_iter()
     }
 }
 

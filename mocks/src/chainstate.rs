@@ -30,8 +30,8 @@ use common::{
             GenBlock,
         },
         tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
-        AccountNonce, AccountType, ChainConfig, DelegationId, OrderId, PoolId, RpcOrderInfo,
-        TxInput, UtxoOutPoint,
+        AccountNonce, AccountType, ChainConfig, DelegationId, OrderId, PoolId, RpcCurrency,
+        RpcOrderInfo, TxInput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -209,7 +209,13 @@ mockall::mock! {
         fn get_order_data(&self, id: &OrderId) -> Result<Option<OrderData>, ChainstateError>;
         fn get_order_ask_balance(&self, id: &OrderId) -> Result<Option<Amount>, ChainstateError>;
         fn get_order_give_balance(&self, id: &OrderId) -> Result<Option<Amount>, ChainstateError>;
-        fn get_order_info_for_rpc(&self, id: OrderId) -> Result<Option<RpcOrderInfo>, ChainstateError>;
+        fn get_order_info_for_rpc(&self, id: &OrderId) -> Result<Option<RpcOrderInfo>, ChainstateError>;
+        fn get_all_order_ids(&self) -> Result<BTreeSet<OrderId>, ChainstateError>;
+        fn get_orders_info_for_rpc_by_currencies<'a>(
+            &self,
+            ask_currency: Option<&'a RpcCurrency>,
+            give_currency: Option<&'a RpcCurrency>,
+        ) -> Result<BTreeMap<OrderId, RpcOrderInfo>, ChainstateError>;
     }
 }
 

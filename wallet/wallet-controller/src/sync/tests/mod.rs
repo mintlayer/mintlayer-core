@@ -312,6 +312,14 @@ impl NodeInterface for MockNode {
         unreachable!()
     }
 
+    async fn get_orders_info_by_currencies(
+        &self,
+        _ask_currency: Option<common::chain::RpcCurrency>,
+        _give_currency: Option<common::chain::RpcCurrency>,
+    ) -> Result<BTreeMap<OrderId, RpcOrderInfo>, Self::Error> {
+        unreachable!()
+    }
+
     async fn generate_block_e2e(
         &self,
         _encrypted_input_data: Vec<u8>,

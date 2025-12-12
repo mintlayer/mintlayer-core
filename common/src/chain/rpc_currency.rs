@@ -1,4 +1,4 @@
-// Copyright (c) 2024 RBB S.r.l
+// Copyright (c) 2021-2025 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::{
+use crate::{
     chain::{
         output_value::{OutputValue, RpcOutputValue},
         tokens::TokenId,
@@ -22,40 +22,43 @@ use common::{
 };
 
 #[derive(
-    PartialEq, Eq, PartialOrd, Ord, Copy, Clone, Debug, serde::Serialize, serde::Deserialize,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Copy,
+    Clone,
+    Debug,
+    serde::Serialize,
+    serde::Deserialize,
+    rpc_description::HasValueHint,
 )]
-pub enum Currency {
+#[serde(tag = "type", content = "content")]
+pub enum RpcCurrency {
     Coin,
     Token(TokenId),
 }
 
-impl Currency {
+impl RpcCurrency {
     pub fn from_output_value(output_value: &OutputValue) -> Option<Self> {
         match output_value {
-            OutputValue::Coin(_) => Some(Currency::Coin),
+            OutputValue::Coin(_) => Some(Self::Coin),
             OutputValue::TokenV0(_) => None,
-            OutputValue::TokenV1(id, _) => Some(Currency::Token(*id)),
+            OutputValue::TokenV1(id, _) => Some(Self::Token(*id)),
         }
     }
 
     pub fn from_rpc_output_value(output_value: &RpcOutputValue) -> Self {
         match output_value {
-            RpcOutputValue::Coin { .. } => Currency::Coin,
-            RpcOutputValue::Token { id, .. } => Currency::Token(*id),
+            RpcOutputValue::Coin { .. } => Self::Coin,
+            RpcOutputValue::Token { id, .. } => Self::Token(*id),
         }
     }
 
     pub fn into_output_value(&self, amount: Amount) -> OutputValue {
         match self {
-            Currency::Coin => OutputValue::Coin(amount),
-            Currency::Token(id) => OutputValue::TokenV1(*id, amount),
-        }
-    }
-
-    pub fn token_id(&self) -> Option<&TokenId> {
-        match self {
-            Currency::Coin => None,
-            Currency::Token(id) => Some(id),
+            Self::Coin => OutputValue::Coin(amount),
+            Self::Token(id) => OutputValue::TokenV1(*id, amount),
         }
     }
 }

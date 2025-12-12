@@ -32,7 +32,7 @@ use common::{
     address::pubkeyhash::PublicKeyHash,
     chain::{
         make_order_id, make_token_id,
-        output_value::OutputValue,
+        output_value::{OutputValue, RpcOutputValue},
         signature::{
             inputsig::{standard_signature::StandardInputSignature, InputWitness},
             sighash::{input_commitments::SighashInputCommitment, sighashtype::SigHashType},
@@ -40,8 +40,8 @@ use common::{
         },
         tokens::{IsTokenFreezable, TokenId, TokenTotalSupply},
         AccountCommand, AccountNonce, ChainstateUpgradeBuilder, Destination, IdCreationError,
-        OrderAccountCommand, OrderData, OrderId, OrdersVersion, SignedTransaction, Transaction,
-        TxInput, TxOutput, UtxoOutPoint,
+        OrderAccountCommand, OrderData, OrderId, OrdersVersion, RpcCurrency, RpcOrderInfo,
+        SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Idable, H256},
 };
@@ -119,6 +119,160 @@ fn issue_and_mint_token_amount_from_best_block(
     )
 }
 
+type InitialOrderData = common::chain::OrderData;
+
+struct ExpectedOrderData {
+    initial_data: InitialOrderData,
+    ask_balance: Option<Amount>,
+    give_balance: Option<Amount>,
+    nonce: Option<AccountNonce>,
+    is_frozen: bool,
+}
+
+fn assert_order_exists(
+    tf: &TestFramework,
+    rng: &mut (impl Rng + CryptoRng),
+    order_id: &OrderId,
+    expected_data: &ExpectedOrderData,
+) {
+    let current_data = tf.chainstate.get_order_data(order_id).unwrap().unwrap();
+    let (current_data_conclude_key, current_data_ask, current_data_give, current_data_is_frozen) =
+        current_data.consume();
+    assert_eq!(
+        &current_data_conclude_key,
+        expected_data.initial_data.conclude_key()
+    );
+    assert_eq!(&current_data_ask, expected_data.initial_data.ask());
+    assert_eq!(&current_data_give, expected_data.initial_data.give());
+    assert_eq!(current_data_is_frozen, expected_data.is_frozen);
+
+    let current_ask_balance = tf.chainstate.get_order_ask_balance(order_id).unwrap();
+    assert_eq!(current_ask_balance, expected_data.ask_balance);
+    let current_give_balance = tf.chainstate.get_order_give_balance(order_id).unwrap();
+    assert_eq!(current_give_balance, expected_data.give_balance);
+
+    let expected_info_for_rpc = RpcOrderInfo {
+        conclude_key: expected_data.initial_data.conclude_key().clone(),
+        initially_asked: RpcOutputValue::from_output_value(expected_data.initial_data.ask())
+            .unwrap(),
+        initially_given: RpcOutputValue::from_output_value(expected_data.initial_data.give())
+            .unwrap(),
+        ask_balance: expected_data.ask_balance.unwrap_or(Amount::ZERO),
+        give_balance: expected_data.give_balance.unwrap_or(Amount::ZERO),
+        nonce: expected_data.nonce.clone(),
+        is_frozen: expected_data.is_frozen,
+    };
+
+    let actual_info_for_rpc = tf.chainstate.get_order_info_for_rpc(order_id).unwrap().unwrap();
+    assert_eq!(actual_info_for_rpc, expected_info_for_rpc);
+
+    let all_order_ids = tf.chainstate.get_all_order_ids().unwrap();
+    assert!(all_order_ids.contains(order_id));
+
+    let all_orders = tf.chainstate.get_orders_info_for_rpc_by_currencies(None, None).unwrap();
+    assert_eq!(all_orders.get(order_id).unwrap(), &expected_info_for_rpc);
+
+    let ask_currency = RpcCurrency::from_output_value(expected_data.initial_data.ask()).unwrap();
+    let give_currency = RpcCurrency::from_output_value(expected_data.initial_data.give()).unwrap();
+
+    // Check get_orders_info_for_rpc_by_currencies when all currency filters match or are None -
+    // the order should be present in the result
+    for (ask_currency_filter, give_currency_filter) in [
+        (None, None),
+        (Some(&ask_currency), None),
+        (None, Some(&give_currency)),
+        (Some(&ask_currency), Some(&give_currency)),
+    ] {
+        let orders_rpc_infos = tf
+            .chainstate
+            .get_orders_info_for_rpc_by_currencies(ask_currency_filter, give_currency_filter)
+            .unwrap();
+        assert_eq!(
+            orders_rpc_infos.get(order_id).unwrap(),
+            &expected_info_for_rpc
+        );
+    }
+
+    let mut make_different_currency = |currency, other_currency| {
+        if currency != other_currency && rng.gen_bool(0.5) {
+            return other_currency;
+        }
+
+        match currency {
+            RpcCurrency::Coin => RpcCurrency::Token(TokenId::random_using(rng)),
+            RpcCurrency::Token(_) => {
+                if rng.gen_bool(0.5) {
+                    RpcCurrency::Coin
+                } else {
+                    RpcCurrency::Token(TokenId::random_using(rng))
+                }
+            }
+        }
+    };
+
+    let different_ask_currency = make_different_currency(ask_currency, give_currency);
+    let different_give_currency = make_different_currency(give_currency, ask_currency);
+
+    // Check get_orders_info_for_rpc_by_currencies when at least one currency filter doesn't match -
+    // the order should not be present in the result.
+    for (ask_currency_filter, give_currency_filter) in [
+        (Some(&different_ask_currency), None),
+        (Some(&different_ask_currency), Some(&give_currency)),
+        (None, Some(&different_give_currency)),
+        (Some(&ask_currency), Some(&different_give_currency)),
+        (
+            Some(&different_ask_currency),
+            Some(&different_give_currency),
+        ),
+    ] {
+        let orders_rpc_infos = tf
+            .chainstate
+            .get_orders_info_for_rpc_by_currencies(ask_currency_filter, give_currency_filter)
+            .unwrap();
+        assert_eq!(orders_rpc_infos.get(order_id), None);
+    }
+
+    let actual_nonce = tf
+        .chainstate
+        .get_account_nonce_count(common::chain::AccountType::Order(*order_id))
+        .unwrap();
+    assert_eq!(actual_nonce, expected_data.nonce);
+}
+
+trait OrdersVersionExt {
+    fn v0_then_some<T>(&self, val: T) -> Option<T>;
+}
+
+impl OrdersVersionExt for OrdersVersion {
+    fn v0_then_some<T>(&self, val: T) -> Option<T> {
+        match self {
+            OrdersVersion::V0 => Some(val),
+            OrdersVersion::V1 => None,
+        }
+    }
+}
+
+fn assert_order_missing(tf: &TestFramework, order_id: &OrderId) {
+    let data = tf.chainstate.get_order_data(order_id).unwrap();
+    assert_eq!(data, None);
+
+    let ask_balance = tf.chainstate.get_order_ask_balance(order_id).unwrap();
+    assert_eq!(ask_balance, None);
+
+    let give_balance = tf.chainstate.get_order_give_balance(order_id).unwrap();
+    assert_eq!(give_balance, None);
+
+    let info_for_rpc = tf.chainstate.get_order_info_for_rpc(order_id).unwrap();
+    assert_eq!(info_for_rpc, None);
+
+    let all_infos_for_rpc =
+        tf.chainstate.get_orders_info_for_rpc_by_currencies(None, None).unwrap();
+    assert_eq!(all_infos_for_rpc.get(order_id), None);
+
+    let all_order_ids = tf.chainstate.get_all_order_ids().unwrap();
+    assert!(!all_order_ids.contains(order_id));
+}
+
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -147,17 +301,17 @@ fn create_order_check_storage(#[case] seed: Seed) {
         let order_id = make_order_id(tx.inputs()).unwrap();
         tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
-        assert_eq!(
-            Some(order_data.into()),
-            tf.chainstate.get_order_data(&order_id).unwrap()
-        );
-        assert_eq!(
-            Some(ask_amount),
-            tf.chainstate.get_order_ask_balance(&order_id).unwrap()
-        );
-        assert_eq!(
-            Some(give_amount),
-            tf.chainstate.get_order_give_balance(&order_id).unwrap()
+        assert_order_exists(
+            &tf,
+            &mut rng,
+            &order_id,
+            &ExpectedOrderData {
+                initial_data: order_data,
+                ask_balance: Some(ask_amount),
+                give_balance: Some(give_amount),
+                nonce: None,
+                is_frozen: false,
+            },
         );
     });
 }
@@ -529,15 +683,7 @@ fn conclude_order_check_storage(#[case] seed: Seed, #[case] version: OrdersVersi
             .build();
         tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
-        assert_eq!(None, tf.chainstate.get_order_data(&order_id).unwrap());
-        assert_eq!(
-            None,
-            tf.chainstate.get_order_ask_balance(&order_id).unwrap()
-        );
-        assert_eq!(
-            None,
-            tf.chainstate.get_order_give_balance(&order_id).unwrap()
-        );
+        assert_order_missing(&tf, &order_id);
     });
 }
 
@@ -703,17 +849,17 @@ fn fill_order_check_storage(#[case] seed: Seed, #[case] version: OrdersVersion) 
         let partial_fill_tx_id = tx.transaction().get_id();
         tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
-        assert_eq!(
-            Some(order_data.clone().into()),
-            tf.chainstate.get_order_data(&order_id).unwrap()
-        );
-        assert_eq!(
-            left_to_fill.as_non_zero(),
-            tf.chainstate.get_order_ask_balance(&order_id).unwrap()
-        );
-        assert_eq!(
-            (give_amount - filled_amount).unwrap().as_non_zero(),
-            tf.chainstate.get_order_give_balance(&order_id).unwrap()
+        assert_order_exists(
+            &tf,
+            &mut rng,
+            &order_id,
+            &ExpectedOrderData {
+                initial_data: order_data.clone(),
+                ask_balance: left_to_fill.as_non_zero(),
+                give_balance: (give_amount - filled_amount).unwrap().as_non_zero(),
+                nonce: version.v0_then_some(AccountNonce::new(0)),
+                is_frozen: false,
+            },
         );
 
         // Note: even though zero fills are allowed in orders V0 in general, we can't do a zero
@@ -748,21 +894,8 @@ fn fill_order_check_storage(#[case] seed: Seed, #[case] version: OrdersVersion) 
                 .build();
             tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
-            assert_eq!(
-                Some(order_data.into()),
-                tf.chainstate.get_order_data(&order_id).unwrap()
-            );
-            assert_eq!(
-                None,
-                tf.chainstate.get_order_ask_balance(&order_id).unwrap()
-            );
-            match version {
-                OrdersVersion::V0 => {
-                    assert_eq!(
-                        None,
-                        tf.chainstate.get_order_give_balance(&order_id).unwrap()
-                    );
-                }
+            let expected_give_balance = match version {
+                OrdersVersion::V0 => None,
                 OrdersVersion::V1 => {
                     let filled1 = (give_amount.into_atoms() * fill_amount.into_atoms())
                         / ask_amount.into_atoms();
@@ -771,12 +904,22 @@ fn fill_order_check_storage(#[case] seed: Seed, #[case] version: OrdersVersion) 
                     let remainder = (give_amount - Amount::from_atoms(filled1 + filled2))
                         .unwrap()
                         .as_non_zero();
-                    assert_eq!(
-                        remainder,
-                        tf.chainstate.get_order_give_balance(&order_id).unwrap()
-                    );
+                    remainder
                 }
-            }
+            };
+
+            assert_order_exists(
+                &tf,
+                &mut rng,
+                &order_id,
+                &ExpectedOrderData {
+                    initial_data: order_data.clone(),
+                    ask_balance: None,
+                    give_balance: expected_give_balance,
+                    nonce: version.v0_then_some(AccountNonce::new(1)),
+                    is_frozen: false,
+                },
+            );
         }
     });
 }
@@ -938,15 +1081,7 @@ fn fill_then_conclude(#[case] seed: Seed, #[case] version: OrdersVersion) {
             .build();
         tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
-        assert_eq!(None, tf.chainstate.get_order_data(&order_id).unwrap());
-        assert_eq!(
-            None,
-            tf.chainstate.get_order_ask_balance(&order_id).unwrap()
-        );
-        assert_eq!(
-            None,
-            tf.chainstate.get_order_give_balance(&order_id).unwrap()
-        );
+        assert_order_missing(&tf, &order_id);
 
         {
             // Try filling concluded order
@@ -1309,15 +1444,7 @@ fn fill_completely_then_conclude(#[case] seed: Seed, #[case] version: OrdersVers
             .build();
         tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
-        assert_eq!(None, tf.chainstate.get_order_data(&order_id).unwrap());
-        assert_eq!(
-            None,
-            tf.chainstate.get_order_ask_balance(&order_id).unwrap()
-        );
-        assert_eq!(
-            None,
-            tf.chainstate.get_order_give_balance(&order_id).unwrap()
-        );
+        assert_order_missing(&tf, &order_id);
     });
 }
 
@@ -1526,33 +1653,22 @@ fn reorg_before_create(#[case] seed: Seed, #[case] version: OrdersVersion) {
             .build_and_process(&mut rng)
             .unwrap();
 
-        assert_eq!(
-            Some(order_data.clone().into()),
-            tf.chainstate.get_order_data(&order_id).unwrap()
-        );
-        assert_eq!(
-            Some(left_to_fill),
-            tf.chainstate.get_order_ask_balance(&order_id).unwrap()
-        );
-        assert_eq!(
-            Some((give_amount - filled_amount).unwrap()),
-            tf.chainstate.get_order_give_balance(&order_id).unwrap()
-        );
+        let expected_order_data = ExpectedOrderData {
+            initial_data: order_data,
+            ask_balance: Some(left_to_fill),
+            give_balance: Some((give_amount - filled_amount).unwrap()),
+            nonce: version.v0_then_some(AccountNonce::new(0)),
+            is_frozen: false,
+        };
+
+        assert_order_exists(&tf, &mut rng, &order_id, &expected_order_data);
 
         // Create alternative chain and trigger the reorg
         let new_best_block =
             tf.create_chain_with_empty_blocks(&reorg_common_ancestor, 3, &mut rng).unwrap();
         assert_eq!(tf.best_block_id(), new_best_block);
 
-        assert_eq!(None, tf.chainstate.get_order_data(&order_id).unwrap());
-        assert_eq!(
-            None,
-            tf.chainstate.get_order_ask_balance(&order_id).unwrap()
-        );
-        assert_eq!(
-            None,
-            tf.chainstate.get_order_give_balance(&order_id).unwrap()
-        );
+        assert_order_missing(&tf, &order_id);
 
         // Reapply txs again
         tf.make_block_builder()
@@ -1560,18 +1676,7 @@ fn reorg_before_create(#[case] seed: Seed, #[case] version: OrdersVersion) {
             .build_and_process(&mut rng)
             .unwrap();
 
-        assert_eq!(
-            Some(order_data.into()),
-            tf.chainstate.get_order_data(&order_id).unwrap()
-        );
-        assert_eq!(
-            Some(left_to_fill),
-            tf.chainstate.get_order_ask_balance(&order_id).unwrap()
-        );
-        assert_eq!(
-            Some((give_amount - filled_amount).unwrap()),
-            tf.chainstate.get_order_give_balance(&order_id).unwrap()
-        );
+        assert_order_exists(&tf, &mut rng, &order_id, &expected_order_data);
     });
 }
 
@@ -1665,32 +1770,24 @@ fn reorg_after_create(#[case] seed: Seed, #[case] version: OrdersVersion) {
             .build_and_process(&mut rng)
             .unwrap();
 
-        assert_eq!(None, tf.chainstate.get_order_data(&order_id).unwrap());
-        assert_eq!(
-            None,
-            tf.chainstate.get_order_ask_balance(&order_id).unwrap()
-        );
-        assert_eq!(
-            None,
-            tf.chainstate.get_order_give_balance(&order_id).unwrap()
-        );
+        assert_order_missing(&tf, &order_id);
 
         // Create alternative chain and trigger the reorg
         let new_best_block =
             tf.create_chain_with_empty_blocks(&reorg_common_ancestor, 3, &mut rng).unwrap();
         assert_eq!(tf.best_block_id(), new_best_block);
 
-        assert_eq!(
-            Some(output_value_amount(order_data.ask())),
-            tf.chainstate.get_order_ask_balance(&order_id).unwrap()
-        );
-        assert_eq!(
-            Some(output_value_amount(order_data.give())),
-            tf.chainstate.get_order_give_balance(&order_id).unwrap()
-        );
-        assert_eq!(
-            Some(order_data.into()),
-            tf.chainstate.get_order_data(&order_id).unwrap()
+        assert_order_exists(
+            &tf,
+            &mut rng,
+            &order_id,
+            &ExpectedOrderData {
+                initial_data: order_data.clone(),
+                ask_balance: Some(output_value_amount(order_data.ask())),
+                give_balance: Some(output_value_amount(order_data.give())),
+                nonce: None,
+                is_frozen: false,
+            },
         );
 
         // Reapply txs again
@@ -1699,15 +1796,7 @@ fn reorg_after_create(#[case] seed: Seed, #[case] version: OrdersVersion) {
             .build_and_process(&mut rng)
             .unwrap();
 
-        assert_eq!(None, tf.chainstate.get_order_data(&order_id).unwrap());
-        assert_eq!(
-            None,
-            tf.chainstate.get_order_ask_balance(&order_id).unwrap()
-        );
-        assert_eq!(
-            None,
-            tf.chainstate.get_order_give_balance(&order_id).unwrap()
-        );
+        assert_order_missing(&tf, &order_id);
     });
 }
 
@@ -1856,17 +1945,17 @@ fn create_order_with_nft(#[case] seed: Seed, #[case] version: OrdersVersion) {
         let order_id = make_order_id(tx.inputs()).unwrap();
         tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
-        assert_eq!(
-            Some(order_data.clone().into()),
-            tf.chainstate.get_order_data(&order_id).unwrap()
-        );
-        assert_eq!(
-            Some(ask_amount),
-            tf.chainstate.get_order_ask_balance(&order_id).unwrap()
-        );
-        assert_eq!(
-            Some(give_amount),
-            tf.chainstate.get_order_give_balance(&order_id).unwrap()
+        assert_order_exists(
+            &tf,
+            &mut rng,
+            &order_id,
+            &ExpectedOrderData {
+                initial_data: order_data.clone(),
+                ask_balance: Some(ask_amount),
+                give_balance: Some(give_amount),
+                nonce: None,
+                is_frozen: false,
+            },
         );
 
         // Try get 2 nfts out of order
@@ -1932,17 +2021,17 @@ fn create_order_with_nft(#[case] seed: Seed, #[case] version: OrdersVersion) {
             .build_and_process(&mut rng)
             .unwrap();
 
-        assert_eq!(
-            Some(order_data.into()),
-            tf.chainstate.get_order_data(&order_id).unwrap()
-        );
-        assert_eq!(
-            None,
-            tf.chainstate.get_order_ask_balance(&order_id).unwrap()
-        );
-        assert_eq!(
-            None,
-            tf.chainstate.get_order_give_balance(&order_id).unwrap()
+        assert_order_exists(
+            &tf,
+            &mut rng,
+            &order_id,
+            &ExpectedOrderData {
+                initial_data: order_data,
+                ask_balance: None,
+                give_balance: None,
+                nonce: version.v0_then_some(AccountNonce::new(0)),
+                is_frozen: false,
+            },
         );
     });
 }
@@ -2018,17 +2107,17 @@ fn partially_fill_order_with_nft_v0(#[case] seed: Seed) {
         let order_id = make_order_id(tx.inputs()).unwrap();
         tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
-        assert_eq!(
-            Some(order_data.clone().into()),
-            tf.chainstate.get_order_data(&order_id).unwrap()
-        );
-        assert_eq!(
-            Some(ask_amount),
-            tf.chainstate.get_order_ask_balance(&order_id).unwrap()
-        );
-        assert_eq!(
-            Some(give_amount),
-            tf.chainstate.get_order_give_balance(&order_id).unwrap()
+        assert_order_exists(
+            &tf,
+            &mut rng,
+            &order_id,
+            &ExpectedOrderData {
+                initial_data: order_data.clone(),
+                ask_balance: Some(ask_amount),
+                give_balance: Some(give_amount),
+                nonce: None,
+                is_frozen: false,
+            },
         );
 
         // Try get an nft out of order with 1 atom less
@@ -2100,17 +2189,17 @@ fn partially_fill_order_with_nft_v0(#[case] seed: Seed) {
             .build_and_process(&mut rng)
             .unwrap();
 
-        assert_eq!(
-            Some(order_data.clone().into()),
-            tf.chainstate.get_order_data(&order_id).unwrap()
-        );
-        assert_eq!(
-            Some(Amount::from_atoms(1)),
-            tf.chainstate.get_order_ask_balance(&order_id).unwrap()
-        );
-        assert_eq!(
-            Some(give_amount),
-            tf.chainstate.get_order_give_balance(&order_id).unwrap()
+        assert_order_exists(
+            &tf,
+            &mut rng,
+            &order_id,
+            &ExpectedOrderData {
+                initial_data: order_data.clone(),
+                ask_balance: Some(Amount::from_atoms(1)),
+                give_balance: Some(give_amount),
+                nonce: Some(AccountNonce::new(0)),
+                is_frozen: false,
+            },
         );
 
         // Fill order only with proper amount spent
@@ -2141,17 +2230,17 @@ fn partially_fill_order_with_nft_v0(#[case] seed: Seed) {
             .build_and_process(&mut rng)
             .unwrap();
 
-        assert_eq!(
-            Some(order_data.into()),
-            tf.chainstate.get_order_data(&order_id).unwrap()
-        );
-        assert_eq!(
-            None,
-            tf.chainstate.get_order_ask_balance(&order_id).unwrap()
-        );
-        assert_eq!(
-            None,
-            tf.chainstate.get_order_give_balance(&order_id).unwrap()
+        assert_order_exists(
+            &tf,
+            &mut rng,
+            &order_id,
+            &ExpectedOrderData {
+                initial_data: order_data,
+                ask_balance: None,
+                give_balance: None,
+                nonce: Some(AccountNonce::new(1)),
+                is_frozen: false,
+            },
         );
     });
 }
@@ -2227,17 +2316,17 @@ fn partially_fill_order_with_nft_v1(#[case] seed: Seed) {
         let order_id = make_order_id(tx.inputs()).unwrap();
         tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
-        assert_eq!(
-            Some(order_data.clone().into()),
-            tf.chainstate.get_order_data(&order_id).unwrap()
-        );
-        assert_eq!(
-            Some(ask_amount),
-            tf.chainstate.get_order_ask_balance(&order_id).unwrap()
-        );
-        assert_eq!(
-            Some(give_amount),
-            tf.chainstate.get_order_give_balance(&order_id).unwrap()
+        assert_order_exists(
+            &tf,
+            &mut rng,
+            &order_id,
+            &ExpectedOrderData {
+                initial_data: order_data.clone(),
+                ask_balance: Some(ask_amount),
+                give_balance: Some(give_amount),
+                nonce: None,
+                is_frozen: false,
+            },
         );
 
         // Try to get nft by filling order with 1 atom less, getting 0 nfts
@@ -2300,17 +2389,17 @@ fn partially_fill_order_with_nft_v1(#[case] seed: Seed) {
             .build_and_process(&mut rng)
             .unwrap();
 
-        assert_eq!(
-            Some(order_data.into()),
-            tf.chainstate.get_order_data(&order_id).unwrap()
-        );
-        assert_eq!(
-            None,
-            tf.chainstate.get_order_ask_balance(&order_id).unwrap()
-        );
-        assert_eq!(
-            None,
-            tf.chainstate.get_order_give_balance(&order_id).unwrap()
+        assert_order_exists(
+            &tf,
+            &mut rng,
+            &order_id,
+            &ExpectedOrderData {
+                initial_data: order_data,
+                ask_balance: None,
+                give_balance: None,
+                nonce: None,
+                is_frozen: false,
+            },
         );
     });
 }
@@ -2365,25 +2454,20 @@ fn fill_order_with_zero(#[case] seed: Seed, #[case] version: OrdersVersion) {
             OrdersVersion::V0 => {
                 // Check that order has not changed except nonce
                 assert!(result.is_ok());
-                assert_eq!(
-                    Some(AccountNonce::new(0)),
-                    tf.chainstate
-                        .get_account_nonce_count(common::chain::AccountType::Order(order_id))
-                        .unwrap()
-                );
-                assert_eq!(
-                    Some(order_data.into()),
-                    tf.chainstate.get_order_data(&order_id).unwrap()
-                );
-                assert_eq!(
-                    Some(ask_amount),
-                    tf.chainstate.get_order_ask_balance(&order_id).unwrap()
-                );
-                assert_eq!(
-                    Some(give_amount),
-                    tf.chainstate.get_order_give_balance(&order_id).unwrap()
+                assert_order_exists(
+                    &tf,
+                    &mut rng,
+                    &order_id,
+                    &ExpectedOrderData {
+                        initial_data: order_data,
+                        ask_balance: Some(ask_amount),
+                        give_balance: Some(give_amount),
+                        nonce: Some(AccountNonce::new(0)),
+                        is_frozen: false,
+                    },
                 );
             }
+
             OrdersVersion::V1 => {
                 assert_eq!(
                     result.unwrap_err(),
@@ -2472,23 +2556,17 @@ fn fill_order_underbid(#[case] seed: Seed, #[case] version: OrdersVersion) {
                 // The ask balance must have changed, but the give balance must not.
                 let expected_ask_balance = (ask_amount - fill_amount).unwrap();
                 assert!(result.is_ok());
-                assert_eq!(
-                    tf.chainstate
-                        .get_account_nonce_count(common::chain::AccountType::Order(order_id))
-                        .unwrap(),
-                    Some(AccountNonce::new(0))
-                );
-                assert_eq!(
-                    tf.chainstate.get_order_data(&order_id).unwrap(),
-                    Some(order_data.into())
-                );
-                assert_eq!(
-                    tf.chainstate.get_order_ask_balance(&order_id).unwrap(),
-                    Some(expected_ask_balance),
-                );
-                assert_eq!(
-                    tf.chainstate.get_order_give_balance(&order_id).unwrap(),
-                    Some(give_amount),
+                assert_order_exists(
+                    &tf,
+                    &mut rng,
+                    &order_id,
+                    &ExpectedOrderData {
+                        initial_data: order_data,
+                        ask_balance: Some(expected_ask_balance),
+                        give_balance: Some(give_amount),
+                        nonce: Some(AccountNonce::new(0)),
+                        is_frozen: false,
+                    },
                 );
             }
             OrdersVersion::V1 => {
@@ -2579,17 +2657,17 @@ fn fill_orders_shuffle(#[case] seed: Seed, #[case] fills: Vec<u128>) {
             .build_and_process(&mut rng)
             .unwrap();
 
-        assert_eq!(
-            Some(order_data.into()),
-            tf.chainstate.get_order_data(&order_id).unwrap()
-        );
-        assert_eq!(
-            None,
-            tf.chainstate.get_order_ask_balance(&order_id).unwrap()
-        );
-        assert_eq!(
-            Some(Amount::from_atoms(1)),
-            tf.chainstate.get_order_give_balance(&order_id).unwrap()
+        assert_order_exists(
+            &tf,
+            &mut rng,
+            &order_id,
+            &ExpectedOrderData {
+                initial_data: order_data,
+                ask_balance: None,
+                give_balance: Some(Amount::from_atoms(1)),
+                nonce: None,
+                is_frozen: false,
+            },
         );
     });
 }
@@ -2911,15 +2989,7 @@ fn create_order_fill_activate_fork_fill_conclude(#[case] seed: Seed) {
             .build();
         tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
-        assert_eq!(None, tf.chainstate.get_order_data(&order_id).unwrap());
-        assert_eq!(
-            None,
-            tf.chainstate.get_order_ask_balance(&order_id).unwrap()
-        );
-        assert_eq!(
-            None,
-            tf.chainstate.get_order_give_balance(&order_id).unwrap()
-        );
+        assert_order_missing(&tf, &order_id);
     });
 }
 
@@ -3031,19 +3101,17 @@ fn freeze_order_check_storage(#[case] seed: Seed, #[case] version: OrdersVersion
             OrdersVersion::V1 => {
                 assert!(result.is_ok());
 
-                let expecter_order_data =
-                    orders_accounting::OrderData::from(order_data).try_freeze().unwrap();
-                assert_eq!(
-                    Some(expecter_order_data),
-                    tf.chainstate.get_order_data(&order_id).unwrap()
-                );
-                assert_eq!(
-                    Some(ask_amount),
-                    tf.chainstate.get_order_ask_balance(&order_id).unwrap()
-                );
-                assert_eq!(
-                    Some(give_amount),
-                    tf.chainstate.get_order_give_balance(&order_id).unwrap()
+                assert_order_exists(
+                    &tf,
+                    &mut rng,
+                    &order_id,
+                    &ExpectedOrderData {
+                        initial_data: order_data,
+                        ask_balance: Some(ask_amount),
+                        give_balance: Some(give_amount),
+                        nonce: None,
+                        is_frozen: true,
+                    },
                 );
             }
         }
@@ -3625,17 +3693,17 @@ fn fill_order_v0_destination_irrelevancy(#[case] seed: Seed) {
         let expected_ask_balance = (initial_ask_amount - total_fill_amount).unwrap();
         let expected_give_balance = (initial_give_amount - total_filled_amount).unwrap();
 
-        assert_eq!(
-            tf.chainstate.get_order_data(&order_id).unwrap(),
-            Some(order_data.into()),
-        );
-        assert_eq!(
-            tf.chainstate.get_order_ask_balance(&order_id).unwrap(),
-            Some(expected_ask_balance),
-        );
-        assert_eq!(
-            tf.chainstate.get_order_give_balance(&order_id).unwrap(),
-            Some(expected_give_balance),
+        assert_order_exists(
+            &tf,
+            &mut rng,
+            &order_id,
+            &ExpectedOrderData {
+                initial_data: order_data,
+                ask_balance: Some(expected_ask_balance),
+                give_balance: Some(expected_give_balance),
+                nonce: Some(AccountNonce::new(2)),
+                is_frozen: false,
+            },
         );
     });
 }
@@ -3781,17 +3849,17 @@ fn fill_order_v1_must_not_be_signed(#[case] seed: Seed) {
         let expected_ask_balance = (initial_ask_amount - fill_amount).unwrap();
         let expected_give_balance = (initial_give_amount - filled_amount).unwrap();
 
-        assert_eq!(
-            tf.chainstate.get_order_data(&order_id).unwrap(),
-            Some(order_data.into()),
-        );
-        assert_eq!(
-            tf.chainstate.get_order_ask_balance(&order_id).unwrap(),
-            Some(expected_ask_balance),
-        );
-        assert_eq!(
-            tf.chainstate.get_order_give_balance(&order_id).unwrap(),
-            Some(expected_give_balance),
+        assert_order_exists(
+            &tf,
+            &mut rng,
+            &order_id,
+            &ExpectedOrderData {
+                initial_data: order_data,
+                ask_balance: Some(expected_ask_balance),
+                give_balance: Some(expected_give_balance),
+                nonce: None,
+                is_frozen: false,
+            },
         );
     });
 }
@@ -3944,17 +4012,17 @@ fn fill_order_twice_in_same_block(
         let expected_ask_balance = (initial_ask_amount - total_fill_amount).unwrap();
         let expected_give_balance = (initial_give_amount - total_filled_amount).unwrap();
 
-        assert_eq!(
-            tf.chainstate.get_order_data(&order_id).unwrap(),
-            Some(order_data.into()),
-        );
-        assert_eq!(
-            tf.chainstate.get_order_ask_balance(&order_id).unwrap(),
-            Some(expected_ask_balance),
-        );
-        assert_eq!(
-            tf.chainstate.get_order_give_balance(&order_id).unwrap(),
-            Some(expected_give_balance),
+        assert_order_exists(
+            &tf,
+            &mut rng,
+            &order_id,
+            &ExpectedOrderData {
+                initial_data: order_data,
+                ask_balance: Some(expected_ask_balance),
+                give_balance: Some(expected_give_balance),
+                nonce: version.v0_then_some(AccountNonce::new(1)),
+                is_frozen: false,
+            },
         );
     });
 }
@@ -4085,17 +4153,17 @@ fn conclude_and_recreate_in_same_tx_with_same_balances(
         }
 
         // Check the original order data - it's still there
-        assert_eq!(
-            tf.chainstate.get_order_data(&orig_order_id).unwrap(),
-            Some(orig_order_data.clone().into()),
-        );
-        assert_eq!(
-            tf.chainstate.get_order_ask_balance(&orig_order_id).unwrap(),
-            Some(remaining_coins_amount_to_trade),
-        );
-        assert_eq!(
-            tf.chainstate.get_order_give_balance(&orig_order_id).unwrap(),
-            Some(remaining_tokens_amount_to_trade),
+        assert_order_exists(
+            &tf,
+            &mut rng,
+            &orig_order_id,
+            &ExpectedOrderData {
+                initial_data: orig_order_data,
+                ask_balance: Some(remaining_coins_amount_to_trade),
+                give_balance: Some(remaining_tokens_amount_to_trade),
+                nonce: None,
+                is_frozen: false,
+            },
         );
 
         let new_order_id = {
@@ -4131,29 +4199,23 @@ fn conclude_and_recreate_in_same_tx_with_same_balances(
             order_id
         };
 
+        assert_order_missing(&tf, &orig_order_id);
+
         // The original order is no longer there
-        assert_eq!(None, tf.chainstate.get_order_data(&orig_order_id).unwrap());
-        assert_eq!(
-            None,
-            tf.chainstate.get_order_ask_balance(&orig_order_id).unwrap()
-        );
-        assert_eq!(
-            None,
-            tf.chainstate.get_order_give_balance(&orig_order_id).unwrap()
-        );
+        assert_order_missing(&tf, &orig_order_id);
 
         // The new order exists and has the same balances as the original one before the conclusion.
-        assert_eq!(
-            tf.chainstate.get_order_data(&new_order_id).unwrap(),
-            Some(new_order_data.into()),
-        );
-        assert_eq!(
-            tf.chainstate.get_order_ask_balance(&new_order_id).unwrap(),
-            Some(remaining_coins_amount_to_trade),
-        );
-        assert_eq!(
-            tf.chainstate.get_order_give_balance(&new_order_id).unwrap(),
-            Some(remaining_tokens_amount_to_trade),
+        assert_order_exists(
+            &tf,
+            &mut rng,
+            &new_order_id,
+            &ExpectedOrderData {
+                initial_data: new_order_data,
+                ask_balance: Some(remaining_coins_amount_to_trade),
+                give_balance: Some(remaining_tokens_amount_to_trade),
+                nonce: None,
+                is_frozen: false,
+            },
         );
     });
 }
@@ -4300,28 +4362,20 @@ fn conclude_and_recreate_in_same_tx_with_different_balances(
         };
 
         // The original order is no longer there
-        assert_eq!(None, tf.chainstate.get_order_data(&orig_order_id).unwrap());
-        assert_eq!(
-            None,
-            tf.chainstate.get_order_ask_balance(&orig_order_id).unwrap()
-        );
-        assert_eq!(
-            None,
-            tf.chainstate.get_order_give_balance(&orig_order_id).unwrap()
-        );
+        assert_order_missing(&tf, &orig_order_id);
 
         // The new order exists with the correct balances.
-        assert_eq!(
-            tf.chainstate.get_order_data(&new_order_id).unwrap(),
-            Some(new_order_data.into()),
-        );
-        assert_eq!(
-            tf.chainstate.get_order_ask_balance(&new_order_id).unwrap(),
-            Some(new_coins_amount_to_trade),
-        );
-        assert_eq!(
-            tf.chainstate.get_order_give_balance(&new_order_id).unwrap(),
-            Some(new_tokens_amount_to_trade),
+        assert_order_exists(
+            &tf,
+            &mut rng,
+            &new_order_id,
+            &ExpectedOrderData {
+                initial_data: new_order_data,
+                ask_balance: Some(new_coins_amount_to_trade),
+                give_balance: Some(new_tokens_amount_to_trade),
+                nonce: None,
+                is_frozen: false,
+            },
         );
     });
 }

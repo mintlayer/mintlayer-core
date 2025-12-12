@@ -24,7 +24,7 @@ use common::{
     chain::{output_value::OutputValue, ChainConfig, Destination, TxOutput},
     primitives::{Amount, BlockHeight},
 };
-use wallet_types::currency::Currency;
+use wallet_types::Currency;
 
 use super::UtxoSelectorError;
 

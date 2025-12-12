@@ -27,6 +27,7 @@ mod make_id;
 mod order;
 mod pos;
 mod pow;
+mod rpc_currency;
 mod upgrades;
 
 pub use signed_transaction::SignedTransaction;
@@ -47,4 +48,5 @@ pub use pos::{
     get_initial_randomness, pool_id::PoolId, pos_initial_difficulty, PoSConsensusVersion,
 };
 pub use pow::{PoWChainConfig, PoWChainConfigBuilder};
+pub use rpc_currency::RpcCurrency;
 pub use upgrades::*;

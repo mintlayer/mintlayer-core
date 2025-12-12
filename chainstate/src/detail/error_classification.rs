@@ -457,8 +457,7 @@ impl BlockProcessingErrorClassification for PropertyQueryError {
             // For now, since their p2p ban score is 0, let's consider them General.
             PropertyQueryError::StakePoolDataNotFound(_)
             | PropertyQueryError::StakerBalanceOverflow(_)
-            | PropertyQueryError::PoolBalanceNotFound(_)
-            | PropertyQueryError::OrderBalanceNotFound(_) => BlockProcessingErrorClass::General,
+            | PropertyQueryError::PoolBalanceNotFound(_) => BlockProcessingErrorClass::General,
 
             PropertyQueryError::StorageError(err) => err.classify(),
             PropertyQueryError::GetAncestorError(err) => err.classify(),

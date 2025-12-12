@@ -31,7 +31,8 @@ use common::{
     chain::{
         output_values_holder::collect_token_v1_ids_from_output_values_holder,
         tokens::{RPCTokenInfo, TokenId},
-        ChainConfig, DelegationId, Destination, OrderId, PoolId, RpcOrderInfo, TxOutput,
+        ChainConfig, DelegationId, Destination, OrderId, PoolId, RpcCurrency, RpcOrderInfo,
+        TxOutput,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -183,6 +184,15 @@ trait ChainstateRpc {
     /// Get order information, given an order id, in address form.
     #[method(name = "order_info")]
     async fn order_info(&self, order_id: String) -> RpcResult<Option<RpcOrderInfo>>;
+
+    /// Return infos for all orders that match the given currencies. Passing None for a currency
+    /// means "any currency".
+    #[method(name = "orders_info_by_currencies")]
+    async fn orders_info_by_currencies(
+        &self,
+        ask_currency: Option<RpcCurrency>,
+        give_currency: Option<RpcCurrency>,
+    ) -> RpcResult<BTreeMap<OrderId, RpcOrderInfo>>;
 
     /// Exports a "bootstrap file", which contains all blocks
     #[method(name = "export_bootstrap_file")]
@@ -473,9 +483,25 @@ impl ChainstateRpcServer for super::ChainstateHandle {
                 let result: Result<Option<RpcOrderInfo>, _> =
                     dynamize_err(Address::<OrderId>::from_string(chain_config, order_id))
                         .map(|address| address.into_object())
-                        .and_then(|order_id| dynamize_err(this.get_order_info_for_rpc(order_id)));
+                        .and_then(|order_id| dynamize_err(this.get_order_info_for_rpc(&order_id)));
 
                 result
+            })
+            .await,
+        )
+    }
+
+    async fn orders_info_by_currencies(
+        &self,
+        ask_currency: Option<RpcCurrency>,
+        give_currency: Option<RpcCurrency>,
+    ) -> RpcResult<BTreeMap<OrderId, RpcOrderInfo>> {
+        rpc::handle_result(
+            self.call(move |this| {
+                this.get_orders_info_for_rpc_by_currencies(
+                    ask_currency.as_ref(),
+                    give_currency.as_ref(),
+                )
             })
             .await,
         )

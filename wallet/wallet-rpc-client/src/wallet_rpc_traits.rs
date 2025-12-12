@@ -35,12 +35,12 @@ use wallet_controller::{
     ConnectedPeer, ControllerConfig, UtxoState, UtxoType,
 };
 use wallet_rpc_lib::types::{
-    AccountExtendedPublicKey, AddressInfo, AddressWithUsageInfo, Balances, BlockInfo,
-    ComposedTransaction, CreatedWallet, DelegationInfo, HardwareWalletType, LegacyVrfPublicKeyInfo,
-    NewAccountInfo, NewDelegationTransaction, NewOrderTransaction, NewSubmittedTransaction,
-    NewTokenTransaction, NftMetadata, NodeVersion, OpenedWallet, OwnOrderInfo, PoolInfo,
-    PublicKeyInfo, RpcHashedTimelockContract, RpcInspectTransaction, RpcNewTransaction,
-    RpcPreparedTransaction, RpcSignatureStatus, RpcStandaloneAddresses,
+    AccountExtendedPublicKey, ActiveOrderInfo, AddressInfo, AddressWithUsageInfo, Balances,
+    BlockInfo, ComposedTransaction, CreatedWallet, DelegationInfo, HardwareWalletType,
+    LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegationTransaction, NewOrderTransaction,
+    NewSubmittedTransaction, NewTokenTransaction, NftMetadata, NodeVersion, OpenedWallet,
+    OwnOrderInfo, PoolInfo, PublicKeyInfo, RpcHashedTimelockContract, RpcInspectTransaction,
+    RpcNewTransaction, RpcPreparedTransaction, RpcSignatureStatus, RpcStandaloneAddresses,
     SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
     StandaloneAddressWithDetails, TokenMetadata, TxOptionsOverrides, UtxoInfo, VrfPublicKeyInfo,
 };
@@ -547,6 +547,13 @@ pub trait WalletInterface {
     ) -> Result<RpcNewTransaction, Self::Error>;
 
     async fn list_own_orders(&self, account_index: U31) -> Result<Vec<OwnOrderInfo>, Self::Error>;
+
+    async fn list_all_active_orders(
+        &self,
+        account_index: U31,
+        ask_curency: Option<common::chain::RpcCurrency>,
+        give_curency: Option<common::chain::RpcCurrency>,
+    ) -> Result<Vec<ActiveOrderInfo>, Self::Error>;
 
     async fn node_version(&self) -> Result<NodeVersion, Self::Error>;
 

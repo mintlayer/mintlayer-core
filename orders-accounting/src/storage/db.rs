@@ -13,7 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeMap, ops::Neg};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    ops::Neg,
+};
 
 use accounting::{
     combine_amount_delta, combine_data_with_delta, DeltaAmountCollection, DeltaDataUndoCollection,
@@ -137,6 +140,10 @@ impl<S: OrdersAccountingStorageRead> OrdersAccountingView for OrdersAccountingDB
     fn get_give_balance(&self, id: &OrderId) -> Result<Amount, Self::Error> {
         self.0.get_give_balance(id).map(|v| v.unwrap_or(Amount::ZERO))
     }
+
+    fn get_all_order_ids(&self) -> Result<BTreeSet<OrderId>, Self::Error> {
+        self.0.get_all_order_ids()
+    }
 }
 
 impl<S: OrdersAccountingStorageRead> OrdersAccountingStorageRead for OrdersAccountingDB<S> {
@@ -152,6 +159,10 @@ impl<S: OrdersAccountingStorageRead> OrdersAccountingStorageRead for OrdersAccou
 
     fn get_give_balance(&self, id: &OrderId) -> Result<Option<Amount>, Self::Error> {
         self.0.get_give_balance(id)
+    }
+
+    fn get_all_order_ids(&self) -> Result<BTreeSet<OrderId>, Self::Error> {
+        self.0.get_all_order_ids()
     }
 }
 

@@ -539,6 +539,7 @@ pub struct ExistingOwnOrderData {
     pub is_frozen: bool,
 }
 
+/// This represents an order that is owned by the wallet.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct OwnOrderInfo {
     pub order_id: RpcAddress<OrderId>,
@@ -552,6 +553,20 @@ pub struct OwnOrderInfo {
 
     pub is_marked_as_frozen_in_wallet: bool,
     pub is_marked_as_concluded_in_wallet: bool,
+}
+
+/// This represents an arbitrary order that is active - i.e. not concluded, not frozen.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
+pub struct ActiveOrderInfo {
+    pub order_id: RpcAddress<OrderId>,
+
+    pub initially_asked: RpcOutputValueOut,
+    pub initially_given: RpcOutputValueOut,
+
+    pub ask_balance: RpcAmountOut,
+    pub give_balance: RpcAmountOut,
+
+    pub is_own: bool,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
@@ -1077,13 +1092,6 @@ impl NewOrderTransaction {
             },
         )
     }
-}
-
-#[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
-#[serde(tag = "type", content = "content")]
-pub enum RpcCurrency {
-    Coin,
-    Token { token_id: RpcAddress<TokenId> },
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]

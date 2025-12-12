@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use chainstate::{
     chainstate_interface::ChainstateInterface,
@@ -372,6 +372,10 @@ impl OrdersAccountingView for ChainstateHandle {
         let id = *id;
         self.call(move |c| c.get_order_give_balance(&id).map(|v| v.unwrap_or(Amount::ZERO)))
     }
+
+    fn get_all_order_ids(&self) -> Result<BTreeSet<OrderId>, Self::Error> {
+        self.call(|c| c.get_all_order_ids())
+    }
 }
 
 impl OrdersAccountingStorageRead for ChainstateHandle {
@@ -390,5 +394,9 @@ impl OrdersAccountingStorageRead for ChainstateHandle {
     fn get_give_balance(&self, id: &OrderId) -> Result<Option<Amount>, Self::Error> {
         let id = *id;
         self.call(move |c| c.get_order_give_balance(&id))
+    }
+
+    fn get_all_order_ids(&self) -> Result<BTreeSet<OrderId>, Self::Error> {
+        self.call(|c| c.get_all_order_ids())
     }
 }

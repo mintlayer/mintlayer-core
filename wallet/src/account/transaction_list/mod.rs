@@ -21,9 +21,8 @@ use common::{
 };
 use serde::Serialize;
 use wallet_types::{
-    currency::Currency,
     wallet_tx::{TxData, TxState},
-    WalletTx,
+    Currency, WalletTx,
 };
 
 use crate::{key_chain::AccountKeyChains, WalletError, WalletResult};

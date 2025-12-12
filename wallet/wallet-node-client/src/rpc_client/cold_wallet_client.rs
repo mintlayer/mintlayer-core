@@ -13,7 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeSet, num::NonZeroUsize, time::Duration};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    num::NonZeroUsize,
+    time::Duration,
+};
 
 use blockprod::TimestampSearchData;
 use chainstate::ChainInfo;
@@ -152,6 +156,14 @@ impl NodeInterface for ColdWalletClient {
         &self,
         _order_id: OrderId,
     ) -> Result<Option<RpcOrderInfo>, Self::Error> {
+        Err(ColdWalletRpcError::NotAvailable)
+    }
+
+    async fn get_orders_info_by_currencies(
+        &self,
+        _ask_currency: Option<common::chain::RpcCurrency>,
+        _give_currency: Option<common::chain::RpcCurrency>,
+    ) -> Result<BTreeMap<OrderId, RpcOrderInfo>, Self::Error> {
         Err(ColdWalletRpcError::NotAvailable)
     }
 

@@ -23,7 +23,7 @@ use crate::{
     primitives::Amount,
 };
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
+#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct RpcOrderInfo {
     pub conclude_key: Destination,
 
