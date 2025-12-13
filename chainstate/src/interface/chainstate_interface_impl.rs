@@ -39,7 +39,7 @@ use common::{
         block::{signed_block_header::SignedBlockHeader, Block, BlockReward, GenBlock},
         config::ChainConfig,
         tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
-        AccountNonce, AccountType, DelegationId, OrderId, PoolId, RpcCurrency, RpcOrderInfo,
+        AccountNonce, AccountType, Currency, DelegationId, OrderId, PoolId, RpcOrderInfo,
         Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{id::WithId, Amount, BlockHeight, Id, Idable},
@@ -863,8 +863,8 @@ where
     #[tracing::instrument(skip_all, fields(ask_currency, give_currency))]
     fn get_orders_info_for_rpc_by_currencies(
         &self,
-        ask_currency: Option<&RpcCurrency>,
-        give_currency: Option<&RpcCurrency>,
+        ask_currency: Option<&Currency>,
+        give_currency: Option<&Currency>,
     ) -> Result<BTreeMap<OrderId, RpcOrderInfo>, ChainstateError> {
         self.chainstate
             .query()

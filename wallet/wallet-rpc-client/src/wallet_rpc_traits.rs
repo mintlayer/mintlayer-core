@@ -18,8 +18,8 @@ use std::{collections::BTreeMap, num::NonZeroUsize, path::PathBuf};
 use chainstate::{rpc::RpcOutputValueIn, ChainInfo};
 use common::{
     chain::{
-        block::timestamp::BlockTimestamp, tokens::RPCTokenInfo, Block, GenBlock, SignedTransaction,
-        SignedTransactionIntent, Transaction, TxOutput, UtxoOutPoint,
+        block::timestamp::BlockTimestamp, tokens::RPCTokenInfo, Block, GenBlock, RpcCurrency,
+        SignedTransaction, SignedTransactionIntent, Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{BlockHeight, DecimalAmount, Id},
 };
@@ -551,8 +551,8 @@ pub trait WalletInterface {
     async fn list_all_active_orders(
         &self,
         account_index: U31,
-        ask_curency: Option<common::chain::RpcCurrency>,
-        give_curency: Option<common::chain::RpcCurrency>,
+        ask_curency: Option<RpcCurrency>,
+        give_curency: Option<RpcCurrency>,
     ) -> Result<Vec<ActiveOrderInfo>, Self::Error>;
 
     async fn node_version(&self) -> Result<NodeVersion, Self::Error>;

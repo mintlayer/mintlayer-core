@@ -31,7 +31,7 @@ use common::{
             GenBlock,
         },
         tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
-        AccountNonce, AccountType, ChainConfig, DelegationId, OrderId, PoolId, RpcCurrency,
+        AccountNonce, AccountType, ChainConfig, Currency, DelegationId, OrderId, PoolId,
         RpcOrderInfo, Transaction, TxInput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
@@ -247,8 +247,8 @@ pub trait ChainstateInterface: Send + Sync {
     /// means "any currency".
     fn get_orders_info_for_rpc_by_currencies(
         &self,
-        ask_currency: Option<&RpcCurrency>,
-        give_currency: Option<&RpcCurrency>,
+        ask_currency: Option<&Currency>,
+        give_currency: Option<&Currency>,
     ) -> Result<BTreeMap<OrderId, RpcOrderInfo>, ChainstateError>;
 
     /// Returns the coin amounts of the outpoints spent by a transaction.

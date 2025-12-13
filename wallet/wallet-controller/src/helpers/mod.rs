@@ -28,7 +28,7 @@ use common::{
         htlc::HtlcSecret,
         output_values_holder::collect_token_v1_ids_from_output_values_holder,
         tokens::{RPCTokenInfo, TokenId},
-        AccountCommand, ChainConfig, Destination, OrderAccountCommand, OrderId, PoolId,
+        AccountCommand, ChainConfig, Currency, Destination, OrderAccountCommand, OrderId, PoolId,
         RpcOrderInfo, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{amount::RpcAmountOut, Amount},
@@ -39,12 +39,9 @@ use wallet::{
     destination_getters::{get_tx_output_destination, HtlcSpendingCondition},
     WalletError,
 };
-use wallet_types::{
-    partially_signed_transaction::{
-        OrderAdditionalInfo, PartiallySignedTransaction, PartiallySignedTransactionWalletExt as _,
-        PoolAdditionalInfo, PtxAdditionalInfo, TokenAdditionalInfo, TokensAdditionalInfo,
-    },
-    Currency,
+use wallet_types::partially_signed_transaction::{
+    OrderAdditionalInfo, PartiallySignedTransaction, PartiallySignedTransactionWalletExt as _,
+    PoolAdditionalInfo, PtxAdditionalInfo, TokenAdditionalInfo, TokensAdditionalInfo,
 };
 
 use crate::{runtime_wallet::RuntimeWallet, types::Balances, ControllerError};

@@ -62,3 +62,7 @@ impl Addressable for PoolId {
         "HexifiedPoolId"
     }
 }
+
+impl rpc_description::HasValueHint for PoolId {
+    const HINT_SER: rpc_description::ValueHint = rpc_description::ValueHint::HEXIFIED_POOL_ID;
+}

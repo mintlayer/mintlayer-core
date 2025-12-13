@@ -45,8 +45,9 @@ use common::{
         tokens::{
             IsTokenFreezable, IsTokenUnfreezable, Metadata, RPCTokenInfo, TokenId, TokenTotalSupply,
         },
-        Block, ChainConfig, DelegationId, Destination, GenBlock, OrderId, PoolId,
-        SignedTransaction, SignedTransactionIntent, Transaction, TxOutput, UtxoOutPoint,
+        Block, ChainConfig, Currency, DelegationId, Destination, GenBlock, OrderId, PoolId,
+        RpcCurrency, SignedTransaction, SignedTransactionIntent, Transaction, TxOutput,
+        UtxoOutPoint,
     },
     primitives::{
         id::WithId, per_thousand::PerThousand, time::Time, Amount, BlockHeight, Id, Idable,
@@ -85,7 +86,7 @@ use wallet_types::wallet_type::WalletType;
 use wallet_types::{
     account_info::StandaloneAddressDetails, generic_transaction::GenericTransaction,
     partially_signed_transaction::PartiallySignedTransaction, scan_blockchain::ScanBlockchain,
-    signature_status::SignatureStatus, wallet_tx::TxData, with_locked::WithLocked, Currency,
+    signature_status::SignatureStatus, wallet_tx::TxData, with_locked::WithLocked,
     SignedTxWithFees,
 };
 
@@ -1835,8 +1836,8 @@ where
     pub async fn list_all_active_orders(
         &self,
         account_index: U31,
-        ask_currency: Option<common::chain::RpcCurrency>,
-        give_currency: Option<common::chain::RpcCurrency>,
+        ask_currency: Option<RpcCurrency>,
+        give_currency: Option<RpcCurrency>,
     ) -> WRpcResult<Vec<ActiveOrderInfo>, N> {
         let wallet_order_ids = self
             .wallet
@@ -1852,7 +1853,14 @@ where
 
         let node_rpc_order_infos = self
             .node
-            .get_orders_info_by_currencies(ask_currency, give_currency)
+            .get_orders_info_by_currencies(
+                ask_currency
+                    .map(|rpc_currency| rpc_currency.to_currency(&self.chain_config))
+                    .transpose()?,
+                give_currency
+                    .map(|rpc_currency| rpc_currency.to_currency(&self.chain_config))
+                    .transpose()?,
+            )
             .await
             .map_err(RpcError::RpcError)?;
 

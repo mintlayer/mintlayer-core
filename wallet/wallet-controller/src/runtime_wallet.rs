@@ -23,9 +23,9 @@ use common::{
         output_value::OutputValue,
         signature::inputsig::arbitrary_message::ArbitraryMessageSignature,
         tokens::{IsTokenUnfreezable, Metadata, RPCFungibleTokenInfo, TokenId, TokenIssuance},
-        AccountCommand, AccountOutPoint, DelegationId, Destination, GenBlock, OrderAccountCommand,
-        OrderId, PoolId, RpcOrderInfo, SignedTransaction, SignedTransactionIntent, Transaction,
-        TxOutput, UtxoOutPoint,
+        AccountCommand, AccountOutPoint, Currency, DelegationId, Destination, GenBlock,
+        OrderAccountCommand, OrderId, PoolId, RpcOrderInfo, SignedTransaction,
+        SignedTransactionIntent, Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{id::WithId, Amount, BlockHeight, Id, H256},
 };
@@ -61,7 +61,7 @@ use wallet_types::{
     utxo_types::{UtxoState, UtxoStates, UtxoTypes},
     wallet_tx::TxData,
     with_locked::WithLocked,
-    Currency, KeyPurpose, KeychainUsageState, SignedTxWithFees,
+    KeyPurpose, KeychainUsageState, SignedTxWithFees,
 };
 
 #[cfg(feature = "trezor")]

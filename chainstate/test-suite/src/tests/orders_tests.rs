@@ -41,9 +41,9 @@ use common::{
             verify_signature, DestinationSigError, EvaluatedInputWitness,
         },
         tokens::{IsTokenFreezable, TokenId, TokenTotalSupply},
-        AccountCommand, AccountNonce, AccountType, ChainstateUpgradeBuilder, Destination,
-        IdCreationError, OrderAccountCommand, OrderData, OrderId, OrdersVersion, RpcCurrency,
-        RpcOrderInfo, SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
+        AccountCommand, AccountNonce, AccountType, ChainstateUpgradeBuilder, Currency, Destination,
+        IdCreationError, OrderAccountCommand, OrderData, OrderId, OrdersVersion, RpcOrderInfo,
+        SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Idable, H256},
 };
@@ -209,8 +209,8 @@ fn assert_order_exists(
         assert_eq!(all_infos_for_rpc.len(), 1);
     }
 
-    let ask_currency = RpcCurrency::from_output_value(expected_data.initial_data.ask()).unwrap();
-    let give_currency = RpcCurrency::from_output_value(expected_data.initial_data.give()).unwrap();
+    let ask_currency = Currency::from_output_value(expected_data.initial_data.ask()).unwrap();
+    let give_currency = Currency::from_output_value(expected_data.initial_data.give()).unwrap();
 
     // Check get_orders_info_for_rpc_by_currencies when all currency filters match or are None -
     // the order should be present in the result
@@ -240,12 +240,12 @@ fn assert_order_exists(
         }
 
         match currency {
-            RpcCurrency::Coin => RpcCurrency::Token(TokenId::random_using(rng)),
-            RpcCurrency::Token(_) => {
+            Currency::Coin => Currency::Token(TokenId::random_using(rng)),
+            Currency::Token(_) => {
                 if rng.gen_bool(0.5) {
-                    RpcCurrency::Coin
+                    Currency::Coin
                 } else {
-                    RpcCurrency::Token(TokenId::random_using(rng))
+                    Currency::Token(TokenId::random_using(rng))
                 }
             }
         }
@@ -4701,7 +4701,7 @@ fn get_orders_info_for_rpc_by_currencies_test(#[case] seed: Seed) {
 
         // Use unqualified names of the currencies to prevent rustfmt from turning a one-liner check
         // into 5 lines (note that having a shorter alias like Curr doesn't always help).
-        use RpcCurrency::*;
+        use Currency::*;
 
         // Get all orders
         {

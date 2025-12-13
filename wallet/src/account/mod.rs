@@ -63,8 +63,8 @@ use common::chain::tokens::{
     IsTokenUnfreezable, NftIssuance, NftIssuanceV0, RPCFungibleTokenInfo, TokenId, TokenIssuance,
 };
 use common::chain::{
-    make_token_id, AccountNonce, Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId,
-    SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
+    make_token_id, AccountNonce, Block, ChainConfig, Currency, DelegationId, Destination, GenBlock,
+    PoolId, SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
 };
 use common::primitives::{Amount, BlockHeight, Id};
 use consensus::PoSGenerateBlockInputData;
@@ -84,8 +84,8 @@ use wallet_storage::{
 use wallet_types::utxo_types::{get_utxo_type, UtxoState, UtxoStates, UtxoType, UtxoTypes};
 use wallet_types::wallet_tx::{BlockData, TxData, TxState};
 use wallet_types::{
-    AccountId, AccountInfo, AccountWalletCreatedTxId, AccountWalletTxId, BlockInfo, Currency,
-    KeyPurpose, KeychainUsageState, WalletTx,
+    AccountId, AccountInfo, AccountWalletCreatedTxId, AccountWalletTxId, BlockInfo, KeyPurpose,
+    KeychainUsageState, WalletTx,
 };
 
 pub use self::output_cache::{

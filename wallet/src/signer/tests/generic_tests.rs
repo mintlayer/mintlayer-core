@@ -40,7 +40,7 @@ use common::{
             TokenIssuance, TokenIssuanceV1, TokenTotalSupply,
         },
         AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, ChainConfig,
-        ChainstateUpgradeBuilder, DelegationId, Destination, GenBlock, NetUpgrades,
+        ChainstateUpgradeBuilder, Currency, DelegationId, Destination, GenBlock, NetUpgrades,
         OrderAccountCommand, OrderData, OrderId, OutPointSourceId, PoolId,
         SighashInputCommitmentVersion, SignedTransactionIntent, Transaction, TxInput, TxOutput,
         UtxoOutPoint,
@@ -66,7 +66,7 @@ use wallet_types::{
         OrderAdditionalInfo, PoolAdditionalInfo, PtxAdditionalInfo, TokenAdditionalInfo,
         TokensAdditionalInfo,
     },
-    BlockInfo, Currency, KeyPurpose,
+    BlockInfo, KeyPurpose,
 };
 
 use crate::{

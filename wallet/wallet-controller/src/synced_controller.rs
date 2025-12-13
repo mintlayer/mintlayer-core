@@ -30,8 +30,8 @@ use common::{
             Metadata, RPCFungibleTokenInfo, RPCTokenInfo, TokenId, TokenIssuance, TokenIssuanceV1,
             TokenTotalSupply,
         },
-        ChainConfig, DelegationId, Destination, OrderId, PoolId, RpcOrderInfo, SignedTransaction,
-        SignedTransactionIntent, Transaction, TxOutput, UtxoOutPoint,
+        ChainConfig, Currency, DelegationId, Destination, OrderId, PoolId, RpcOrderInfo,
+        SignedTransaction, SignedTransactionIntent, Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{amount::RpcAmountIn, per_thousand::PerThousand, Amount, Id},
 };
@@ -65,7 +65,7 @@ use wallet_types::{
     signature_status::SignatureStatus,
     utxo_types::{UtxoState, UtxoType},
     with_locked::WithLocked,
-    Currency, SignedTxWithFees,
+    SignedTxWithFees,
 };
 
 use crate::{

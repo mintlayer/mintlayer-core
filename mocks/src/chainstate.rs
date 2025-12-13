@@ -30,7 +30,7 @@ use common::{
             GenBlock,
         },
         tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
-        AccountNonce, AccountType, ChainConfig, DelegationId, OrderId, PoolId, RpcCurrency,
+        AccountNonce, AccountType, ChainConfig, Currency, DelegationId, OrderId, PoolId,
         RpcOrderInfo, TxInput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
@@ -213,8 +213,8 @@ mockall::mock! {
         fn get_all_order_ids(&self) -> Result<BTreeSet<OrderId>, ChainstateError>;
         fn get_orders_info_for_rpc_by_currencies<'a>(
             &self,
-            ask_currency: Option<&'a RpcCurrency>,
-            give_currency: Option<&'a RpcCurrency>,
+            ask_currency: Option<&'a Currency>,
+            give_currency: Option<&'a Currency>,
         ) -> Result<BTreeMap<OrderId, RpcOrderInfo>, ChainstateError>;
     }
 }

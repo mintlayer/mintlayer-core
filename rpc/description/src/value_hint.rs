@@ -64,6 +64,15 @@ impl ValueHint {
     pub const NUMBER_STRING: VH = VH::Prim("number string");
     pub const DECIMAL_STRING: VH = VH::Prim("decimal string");
     pub const BECH32_STRING: VH = VH::Prim("bech32 string");
+    // TODO: perhaps Destination and pool/delegation/token/order ids should not have
+    // an RPC ValueHint at all and their RpcAddress<> equivalent should be used in all RPC calls.
+    // Also see the TODO in `common/src/chain/currency.rs` for the info about current inconsistencies
+    // in RPC types.
+    pub const HEXIFIED_DEST: VH = VH::Prim("hexified destination");
+    pub const HEXIFIED_POOL_ID: VH = VH::Prim("hexified pool id");
+    pub const HEXIFIED_DELEGATION_ID: VH = VH::Prim("hexified delegation id");
+    pub const HEXIFIED_TOKEN_ID: VH = VH::Prim("hexified token id");
+    pub const HEXIFIED_ORDER_ID: VH = VH::Prim("hexified order id");
     pub const HEX_STRING: VH = VH::Prim("hex string");
     pub const GENERIC_OBJECT: VH = VH::Prim("object");
     pub const JSON: VH = VH::Prim("json");

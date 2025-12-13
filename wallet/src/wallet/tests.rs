@@ -31,7 +31,8 @@ use common::{
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
         tokens::{RPCIsTokenFrozen, TokenData, TokenIssuanceV0, TokenIssuanceV1},
-        AccountSpending, ChainstateUpgradeBuilder, Destination, Genesis, OutPointSourceId, TxInput,
+        AccountSpending, ChainstateUpgradeBuilder, Currency, Destination, Genesis,
+        OutPointSourceId, TxInput,
     },
     primitives::{per_thousand::PerThousand, Idable, H256},
 };
@@ -60,7 +61,7 @@ use wallet_types::{
     },
     seed_phrase::{PassPhrase, StoreSeedPhrase},
     utxo_types::{UtxoState, UtxoType},
-    AccountWalletTxId, Currency, WalletTx,
+    AccountWalletTxId, WalletTx,
 };
 
 use crate::{

@@ -25,7 +25,7 @@ use common::{
     address::Address,
     chain::{
         tokens::{RPCTokenInfo, TokenId},
-        Block, DelegationId, Destination, GenBlock, OrderId, PoolId, RpcOrderInfo,
+        Block, Currency, DelegationId, Destination, GenBlock, OrderId, PoolId, RpcOrderInfo,
         SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{time::Time, Amount, BlockHeight, Id},
@@ -133,14 +133,14 @@ impl NodeInterface for NodeRpcClient {
 
     async fn get_stake_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Self::Error> {
         let pool_address = Address::new(&self.chain_config, pool_id)?;
-        ChainstateRpcClient::stake_pool_balance(&self.http_client, pool_address.into_string())
+        ChainstateRpcClient::stake_pool_balance(&self.http_client, pool_address.into())
             .await
             .map_err(NodeRpcError::ResponseError)
     }
 
     async fn get_staker_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Self::Error> {
         let pool_address = Address::new(&self.chain_config, pool_id)?;
-        ChainstateRpcClient::staker_balance(&self.http_client, pool_address.into_string())
+        ChainstateRpcClient::staker_balance(&self.http_client, pool_address.into())
             .await
             .map_err(NodeRpcError::ResponseError)
     }
@@ -150,12 +150,14 @@ impl NodeInterface for NodeRpcClient {
         pool_id: PoolId,
     ) -> Result<Option<Destination>, Self::Error> {
         let pool_address = Address::new(&self.chain_config, pool_id)?;
-        ChainstateRpcClient::pool_decommission_destination(
+        let dest_as_address = ChainstateRpcClient::pool_decommission_destination(
             &self.http_client,
-            pool_address.into_string(),
+            pool_address.into(),
         )
         .await
-        .map_err(NodeRpcError::ResponseError)
+        .map_err(NodeRpcError::ResponseError)?;
+
+        Ok(dest_as_address.map(|addr| addr.decode_object(&self.chain_config)).transpose()?)
     }
 
     async fn get_delegation_share(
@@ -163,15 +165,15 @@ impl NodeInterface for NodeRpcClient {
         pool_id: PoolId,
         delegation_id: DelegationId,
     ) -> Result<Option<Amount>, Self::Error> {
-        let pool_address = Address::new(&self.chain_config, pool_id)?.into_string();
-        let delegation_address = Address::new(&self.chain_config, delegation_id)?.into_string();
+        let pool_address = Address::new(&self.chain_config, pool_id)?.into();
+        let delegation_address = Address::new(&self.chain_config, delegation_id)?.into();
         ChainstateRpcClient::delegation_share(&self.http_client, pool_address, delegation_address)
             .await
             .map_err(NodeRpcError::ResponseError)
     }
 
     async fn get_token_info(&self, token_id: TokenId) -> Result<Option<RPCTokenInfo>, Self::Error> {
-        let token_id = Address::new(&self.chain_config, token_id)?.into_string();
+        let token_id = Address::new(&self.chain_config, token_id)?.into();
         ChainstateRpcClient::token_info(&self.http_client, token_id)
             .await
             .map_err(NodeRpcError::ResponseError)
@@ -184,7 +186,7 @@ impl NodeInterface for NodeRpcClient {
         let token_ids = token_ids
             .into_iter()
             .map(|token_id| {
-                Ok::<_, Self::Error>(Address::new(&self.chain_config, token_id)?.into_string())
+                Ok::<_, Self::Error>(Address::new(&self.chain_config, token_id)?.into())
             })
             .collect::<Result<_, _>>()?;
         ChainstateRpcClient::tokens_info(&self.http_client, token_ids)
@@ -193,7 +195,7 @@ impl NodeInterface for NodeRpcClient {
     }
 
     async fn get_order_info(&self, order_id: OrderId) -> Result<Option<RpcOrderInfo>, Self::Error> {
-        let order_id = Address::new(&self.chain_config, order_id)?.into_string();
+        let order_id = Address::new(&self.chain_config, order_id)?.into();
         ChainstateRpcClient::order_info(&self.http_client, order_id)
             .await
             .map_err(NodeRpcError::ResponseError)
@@ -201,13 +203,17 @@ impl NodeInterface for NodeRpcClient {
 
     async fn get_orders_info_by_currencies(
         &self,
-        ask_currency: Option<common::chain::RpcCurrency>,
-        give_currency: Option<common::chain::RpcCurrency>,
+        ask_currency: Option<Currency>,
+        give_currency: Option<Currency>,
     ) -> Result<BTreeMap<OrderId, RpcOrderInfo>, Self::Error> {
         ChainstateRpcClient::orders_info_by_currencies(
             &self.http_client,
-            ask_currency,
-            give_currency,
+            ask_currency
+                .map(|currency| currency.to_rpc_currency(&self.chain_config))
+                .transpose()?,
+            give_currency
+                .map(|currency| currency.to_rpc_currency(&self.chain_config))
+                .transpose()?,
         )
         .await
         .map_err(NodeRpcError::ResponseError)

@@ -25,8 +25,8 @@ use common::{
     chain::{
         block::timestamp::BlockTimestamp,
         tokens::{RPCTokenInfo, TokenId},
-        Block, DelegationId, Destination, GenBlock, OrderId, PoolId, SignedTransaction,
-        SignedTransactionIntent, Transaction, TxOutput,
+        Block, DelegationId, Destination, GenBlock, OrderId, PoolId, RpcCurrency,
+        SignedTransaction, SignedTransactionIntent, Transaction, TxOutput,
     },
     primitives::{BlockHeight, Id},
 };
@@ -880,8 +880,8 @@ trait WalletRpc {
     async fn list_all_active_orders(
         &self,
         account: AccountArg,
-        ask_currency: Option<common::chain::RpcCurrency>,
-        give_currency: Option<common::chain::RpcCurrency>,
+        ask_currency: Option<RpcCurrency>,
+        give_currency: Option<RpcCurrency>,
     ) -> rpc::RpcResult<Vec<ActiveOrderInfo>>;
 
     /// Obtain the node version

@@ -24,8 +24,8 @@ use super::{ClientWalletRpc, WalletRpcError};
 use chainstate::{rpc::RpcOutputValueIn, ChainInfo};
 use common::{
     chain::{
-        block::timestamp::BlockTimestamp, tokens::RPCTokenInfo, Block, GenBlock, SignedTransaction,
-        SignedTransactionIntent, Transaction, TxOutput, UtxoOutPoint,
+        block::timestamp::BlockTimestamp, tokens::RPCTokenInfo, Block, GenBlock, RpcCurrency,
+        SignedTransaction, SignedTransactionIntent, Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{BlockHeight, DecimalAmount, Id},
 };
@@ -1130,8 +1130,8 @@ impl WalletInterface for ClientWalletRpc {
     async fn list_all_active_orders(
         &self,
         account_index: U31,
-        ask_curency: Option<common::chain::RpcCurrency>,
-        give_curency: Option<common::chain::RpcCurrency>,
+        ask_curency: Option<RpcCurrency>,
+        give_curency: Option<RpcCurrency>,
     ) -> Result<Vec<ActiveOrderInfo>, Self::Error> {
         WalletRpcClient::list_all_active_orders(
             &self.http_client,

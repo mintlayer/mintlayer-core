@@ -22,8 +22,8 @@ use common::{
         block::timestamp::BlockTimestamp,
         output_values_holder::collect_token_v1_ids_from_output_values_holders,
         tokens::{IsTokenUnfreezable, RPCTokenInfo},
-        Block, GenBlock, SignedTransaction, SignedTransactionIntent, Transaction, TxOutput,
-        UtxoOutPoint,
+        Block, GenBlock, RpcCurrency, SignedTransaction, SignedTransactionIntent, Transaction,
+        TxOutput, UtxoOutPoint,
     },
     primitives::{BlockHeight, DecimalAmount, Id, Idable, H256},
 };
@@ -1220,8 +1220,8 @@ where
     async fn list_all_active_orders(
         &self,
         account_index: U31,
-        ask_curency: Option<common::chain::RpcCurrency>,
-        give_curency: Option<common::chain::RpcCurrency>,
+        ask_curency: Option<RpcCurrency>,
+        give_curency: Option<RpcCurrency>,
     ) -> Result<Vec<ActiveOrderInfo>, Self::Error> {
         self.wallet_rpc
             .list_all_active_orders(account_index, ask_curency, give_curency)

@@ -48,6 +48,7 @@ impl<T> RpcAddress<T> {
 }
 
 impl<T: Addressable> RpcAddress<T> {
+    // TODO: this function should accept the object by ref, to avoid redundant cloning.
     /// Construct from an addressable object
     pub fn new(cfg: &ChainConfig, object: T) -> Result<Self, AddressError> {
         Ok(Self::from_address(Address::new(cfg, object)?))

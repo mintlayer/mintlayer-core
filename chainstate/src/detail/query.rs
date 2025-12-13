@@ -28,7 +28,7 @@ use common::{
             NftIssuance, RPCFungibleTokenInfo, RPCIsTokenFrozen, RPCNonFungibleTokenInfo,
             RPCTokenInfo, TokenAuxiliaryData, TokenId,
         },
-        AccountType, Block, GenBlock, OrderId, RpcCurrency, RpcOrderInfo, Transaction, TxOutput,
+        AccountType, Block, Currency, GenBlock, OrderId, RpcOrderInfo, Transaction, TxOutput,
     },
     primitives::{Amount, BlockDistance, BlockHeight, Id, Idable},
 };
@@ -453,8 +453,8 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
 
     pub fn get_orders_info_for_rpc_by_currencies(
         &self,
-        ask_currency: Option<&RpcCurrency>,
-        give_currency: Option<&RpcCurrency>,
+        ask_currency: Option<&Currency>,
+        give_currency: Option<&Currency>,
     ) -> Result<BTreeMap<OrderId, RpcOrderInfo>, PropertyQueryError> {
         let order_ids = self.get_all_order_ids()?;
 
@@ -495,8 +495,8 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     fn order_currency(
         order_id: &OrderId,
         value: &OutputValue,
-    ) -> Result<RpcCurrency, PropertyQueryError> {
-        RpcCurrency::from_output_value(value)
+    ) -> Result<Currency, PropertyQueryError> {
+        Currency::from_output_value(value)
             .ok_or(PropertyQueryError::UnsupportedTokenV0InOrder(*order_id))
     }
 

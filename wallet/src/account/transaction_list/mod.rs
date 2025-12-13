@@ -16,13 +16,13 @@
 use std::{cmp::Ordering, ops::Add};
 
 use common::{
-    chain::{block::timestamp::BlockTimestamp, Transaction, TxInput, TxOutput},
+    chain::{block::timestamp::BlockTimestamp, Currency, Transaction, TxInput, TxOutput},
     primitives::{Amount, BlockHeight, Id, Idable},
 };
 use serde::Serialize;
 use wallet_types::{
     wallet_tx::{TxData, TxState},
-    Currency, WalletTx,
+    WalletTx,
 };
 
 use crate::{key_chain::AccountKeyChains, WalletError, WalletResult};

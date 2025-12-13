@@ -25,7 +25,7 @@ use common::{
     address::{Address, RpcAddress},
     chain::{
         config::checkpoints_data::print_block_heights_ids_as_checkpoints_data, tokens::TokenId,
-        ChainConfig, Destination, SignedTransaction, TxOutput, UtxoOutPoint,
+        ChainConfig, Currency, Destination, SignedTransaction, TxOutput, UtxoOutPoint,
     },
     primitives::{Idable as _, H256},
     text_summary::TextSummary,
@@ -48,12 +48,13 @@ use wallet_rpc_lib::types::{
     RpcNewTransaction, RpcSignatureStats, RpcSignatureStatus, RpcStandaloneAddressDetails,
     RpcValidatedSignatures, TokenMetadata,
 };
-use wallet_types::{partially_signed_transaction::PartiallySignedTransaction, Currency};
+use wallet_types::partially_signed_transaction::PartiallySignedTransaction;
 
 use crate::{
     errors::WalletCliCommandError,
     helper_types::{
         active_order_infos_header, format_token_name, parse_currency, parse_generic_token_transfer,
+        parse_rpc_currency,
     },
     CreateWalletDeviceSelectMenu, ManageableWalletCommand, OpenWalletDeviceSelectMenu,
     OpenWalletSubCommand, WalletManagementCommand,
@@ -2121,10 +2122,10 @@ where
                 let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
 
                 let ask_currency = ask_currency
-                    .map(|ask_currency| parse_currency(&ask_currency, chain_config))
+                    .map(|ask_currency| parse_rpc_currency(&ask_currency, chain_config))
                     .transpose()?;
                 let give_currency = give_currency
-                    .map(|give_currency| parse_currency(&give_currency, chain_config))
+                    .map(|give_currency| parse_rpc_currency(&give_currency, chain_config))
                     .transpose()?;
 
                 let order_infos = wallet

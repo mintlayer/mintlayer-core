@@ -24,7 +24,7 @@ use chainstate::ChainInfo;
 use common::{
     chain::{
         tokens::{RPCTokenInfo, TokenId},
-        Block, DelegationId, Destination, GenBlock, OrderId, PoolId, RpcOrderInfo,
+        Block, Currency, DelegationId, Destination, GenBlock, OrderId, PoolId, RpcOrderInfo,
         SignedTransaction, Transaction,
     },
     primitives::{time::Time, Amount, BlockHeight, Id},
@@ -161,8 +161,8 @@ impl NodeInterface for ColdWalletClient {
 
     async fn get_orders_info_by_currencies(
         &self,
-        _ask_currency: Option<common::chain::RpcCurrency>,
-        _give_currency: Option<common::chain::RpcCurrency>,
+        _ask_currency: Option<Currency>,
+        _give_currency: Option<Currency>,
     ) -> Result<BTreeMap<OrderId, RpcOrderInfo>, Self::Error> {
         Err(ColdWalletRpcError::NotAvailable)
     }

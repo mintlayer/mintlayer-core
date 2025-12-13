@@ -51,10 +51,10 @@ use common::chain::tokens::{
 };
 use common::chain::{
     make_delegation_id, make_order_id, make_token_id, AccountCommand, AccountNonce,
-    AccountOutPoint, Block, ChainConfig, DelegationId, Destination, GenBlock, IdCreationError,
-    OrderAccountCommand, OrderId, OutPointSourceId, PoolId, RpcOrderInfo, SignedTransaction,
-    SignedTransactionIntent, Transaction, TransactionCreationError, TxInput, TxOutput,
-    UtxoOutPoint,
+    AccountOutPoint, Block, ChainConfig, Currency, DelegationId, Destination, GenBlock,
+    IdCreationError, OrderAccountCommand, OrderId, OutPointSourceId, PoolId, RpcOrderInfo,
+    SignedTransaction, SignedTransactionIntent, Transaction, TransactionCreationError, TxInput,
+    TxOutput, UtxoOutPoint,
 };
 use common::primitives::id::{hash_encoded, WithId};
 use common::primitives::{Amount, BlockHeight, Id, H256};
@@ -90,8 +90,7 @@ use wallet_types::wallet_tx::{TxData, TxState};
 use wallet_types::wallet_type::{WalletControllerMode, WalletType};
 use wallet_types::with_locked::WithLocked;
 use wallet_types::{
-    AccountId, AccountKeyPurposeId, BlockInfo, Currency, KeyPurpose, KeychainUsageState,
-    SignedTxWithFees,
+    AccountId, AccountKeyPurposeId, BlockInfo, KeyPurpose, KeychainUsageState, SignedTxWithFees,
 };
 
 pub const WALLET_VERSION_UNINITIALIZED: u32 = 0;

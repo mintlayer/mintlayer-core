@@ -22,8 +22,8 @@ use common::{
         block::timestamp::BlockTimestamp,
         output_values_holder::collect_token_v1_ids_from_output_values_holders,
         tokens::{IsTokenUnfreezable, RPCTokenInfo, TokenId},
-        Block, DelegationId, Destination, GenBlock, OrderId, PoolId, SignedTransaction,
-        SignedTransactionIntent, Transaction, TxOutput,
+        Block, DelegationId, Destination, GenBlock, OrderId, PoolId, RpcCurrency,
+        SignedTransaction, SignedTransactionIntent, Transaction, TxOutput,
     },
     primitives::{time::Time, BlockHeight, Id, Idable},
 };
@@ -1134,8 +1134,8 @@ where
     async fn list_all_active_orders(
         &self,
         account_arg: AccountArg,
-        ask_currency: Option<common::chain::RpcCurrency>,
-        give_currency: Option<common::chain::RpcCurrency>,
+        ask_currency: Option<RpcCurrency>,
+        give_currency: Option<RpcCurrency>,
     ) -> rpc::RpcResult<Vec<ActiveOrderInfo>> {
         rpc::handle_result(
             self.list_all_active_orders(account_arg.index::<N>()?, ask_currency, give_currency)

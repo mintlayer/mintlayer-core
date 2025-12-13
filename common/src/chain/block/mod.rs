@@ -252,6 +252,10 @@ impl OutputValuesHolder for Block {
     }
 }
 
+impl rpc_description::HasValueHint for Id<Block> {
+    const HINT_SER: rpc_description::ValueHint = rpc_description::ValueHint::HEX_STRING;
+}
+
 #[cfg(test)]
 mod tests {
     use crate::{

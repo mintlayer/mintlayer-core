@@ -26,7 +26,7 @@ use chainstate::ChainInfo;
 use common::{
     chain::{
         tokens::{RPCTokenInfo, TokenId},
-        Block, DelegationId, Destination, GenBlock, OrderId, PoolId, RpcOrderInfo,
+        Block, Currency, DelegationId, Destination, GenBlock, OrderId, PoolId, RpcOrderInfo,
         SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{time::Time, Amount, BlockHeight, Id},
@@ -159,8 +159,8 @@ impl NodeInterface for ClonableMockNodeInterface {
 
     async fn get_orders_info_by_currencies(
         &self,
-        ask_currency: Option<common::chain::RpcCurrency>,
-        give_currency: Option<common::chain::RpcCurrency>,
+        ask_currency: Option<Currency>,
+        give_currency: Option<Currency>,
     ) -> Result<BTreeMap<OrderId, RpcOrderInfo>, Self::Error> {
         self.lock()
             .await

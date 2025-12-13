@@ -23,7 +23,7 @@ use common::{
     address::{decode_address, Address, RpcAddress},
     chain::{
         tokens::{RPCTokenInfo, TokenId},
-        ChainConfig, OutPointSourceId, TxOutput, UtxoOutPoint,
+        ChainConfig, Currency, OutPointSourceId, RpcCurrency, TxOutput, UtxoOutPoint,
     },
     primitives::{
         amount::decimal::subtract_decimal_amounts_of_same_currency, DecimalAmount, Id, H256,
@@ -38,7 +38,6 @@ use wallet_types::{
     seed_phrase::StoreSeedPhrase,
     utxo_types::{UtxoState, UtxoType},
     with_locked::WithLocked,
-    Currency,
 };
 
 use crate::errors::WalletCliCommandError;
@@ -567,6 +566,13 @@ pub fn parse_currency<N: NodeInterface>(
         })?;
         Ok(Currency::Token(token_id))
     }
+}
+
+pub fn parse_rpc_currency<N: NodeInterface>(
+    input: &str,
+    chain_config: &ChainConfig,
+) -> Result<RpcCurrency, WalletCliCommandError<N>> {
+    Ok(parse_currency(input, chain_config)?.to_rpc_currency(chain_config)?)
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]

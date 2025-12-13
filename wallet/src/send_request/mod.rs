@@ -23,17 +23,14 @@ use common::{
         stakelock::StakePoolData,
         timelock::OutputTimeLock::ForBlockCount,
         tokens::{Metadata, TokenId, TokenIssuance},
-        ChainConfig, Destination, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
+        ChainConfig, Currency, Destination, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight},
 };
 use crypto::vrf::VRFPublicKey;
 use utils::ensure;
-use wallet_types::{
-    partially_signed_transaction::{
-        PartiallySignedTransaction, PartiallySignedTransactionWalletExt as _, PtxAdditionalInfo,
-    },
-    Currency,
+use wallet_types::partially_signed_transaction::{
+    PartiallySignedTransaction, PartiallySignedTransactionWalletExt as _, PtxAdditionalInfo,
 };
 
 use crate::{

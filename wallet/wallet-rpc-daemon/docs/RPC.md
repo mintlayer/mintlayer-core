@@ -2645,14 +2645,14 @@ Parameters:
          1) { "type": "Coin" }
          2) {
                 "type": "Token",
-                "content": hex string,
+                "content": bech32 string,
             }
          3) null,
     "give_currency": EITHER OF
          1) { "type": "Coin" }
          2) {
                 "type": "Token",
-                "content": hex string,
+                "content": bech32 string,
             }
          3) null,
 }
@@ -3352,7 +3352,7 @@ Returns:
      1) {
             "type": "FungibleToken",
             "content": {
-                "token_id": hex string,
+                "token_id": hexified token id,
                 "token_ticker": {
                     "text": EITHER OF
                          1) string
@@ -3384,13 +3384,13 @@ Returns:
                             "type": "Frozen",
                             "content": { "unfreezable": bool },
                         },
-                "authority": bech32 string,
+                "authority": hexified destination,
             },
         }
      2) {
             "type": "NonFungibleToken",
             "content": {
-                "token_id": hex string,
+                "token_id": hexified token id,
                 "creation_tx_id": hex string,
                 "creation_block_id": hex string,
                 "metadata": {

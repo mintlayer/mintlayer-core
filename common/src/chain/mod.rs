@@ -23,11 +23,11 @@ pub mod tokens;
 pub mod transaction;
 
 mod coin_unit;
+mod currency;
 mod make_id;
 mod order;
 mod pos;
 mod pow;
-mod rpc_currency;
 mod upgrades;
 
 pub use signed_transaction::SignedTransaction;
@@ -36,6 +36,7 @@ pub use transaction::*;
 pub use block::Block;
 pub use coin_unit::CoinUnit;
 pub use config::ChainConfig;
+pub use currency::{Currency, RpcCurrency};
 pub use gen_block::{GenBlock, GenBlockId};
 pub use genesis::Genesis;
 pub use make_id::{
@@ -48,5 +49,4 @@ pub use pos::{
     get_initial_randomness, pool_id::PoolId, pos_initial_difficulty, PoSConsensusVersion,
 };
 pub use pow::{PoWChainConfig, PoWChainConfigBuilder};
-pub use rpc_currency::RpcCurrency;
 pub use upgrades::*;

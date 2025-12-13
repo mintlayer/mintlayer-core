@@ -76,4 +76,7 @@ pub enum WalletCliCommandError<N: NodeInterface> {
 
     #[error("Accumulated ask amount for order {0} is negative")]
     OrderNegativeAccumulatedAskAmount(RpcAddress<OrderId>),
+
+    #[error("Address error: {0}")]
+    AddressError(#[from] AddressError),
 }

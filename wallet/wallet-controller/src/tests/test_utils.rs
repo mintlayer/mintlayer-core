@@ -25,7 +25,8 @@ use common::{
             RPCFungibleTokenInfo, RPCIsTokenFrozen, RPCTokenTotalSupply, TokenCreator, TokenId,
             TokenTotalSupply,
         },
-        Block, ChainConfig, Destination, OrderId, SignedTransaction, Transaction, TxOutput,
+        Block, ChainConfig, Currency, Destination, OrderId, SignedTransaction, Transaction,
+        TxOutput,
     },
     primitives::{amount::RpcAmountOut, Amount, BlockHeight},
 };
@@ -36,7 +37,7 @@ use crypto::{
 use randomness::{CryptoRng, Rng};
 use test_utils::random::{gen_random_alnum_string, gen_random_bytes};
 use wallet::{signer::SignerProvider, wallet::test_helpers::scan_wallet, DefaultWallet, Wallet};
-use wallet_types::{account_info::DEFAULT_ACCOUNT_INDEX, Currency};
+use wallet_types::account_info::DEFAULT_ACCOUNT_INDEX;
 
 use crate::types::Balances;
 

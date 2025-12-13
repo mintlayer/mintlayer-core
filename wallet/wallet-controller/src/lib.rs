@@ -68,7 +68,7 @@ use common::{
             DestinationSigError, Transactable,
         },
         tokens::{RPCTokenInfo, TokenId},
-        Block, ChainConfig, Destination, GenBlock, PoolId, SighashInputCommitmentVersion,
+        Block, ChainConfig, Currency, Destination, GenBlock, PoolId, SighashInputCommitmentVersion,
         SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{
@@ -117,7 +117,6 @@ use wallet_types::{
     signature_status::SignatureStatus,
     wallet_type::{WalletControllerMode, WalletType},
     with_locked::WithLocked,
-    Currency,
 };
 
 #[cfg(feature = "trezor")]

@@ -22,7 +22,7 @@ use futures::{stream::FuturesUnordered, FutureExt, TryStreamExt};
 use common::{
     address::Address,
     chain::{
-        ChainConfig, DelegationId, Destination, OrderId, PoolId, Transaction, TxOutput,
+        ChainConfig, Currency, DelegationId, Destination, OrderId, PoolId, Transaction, TxOutput,
         UtxoOutPoint,
     },
     primitives::{id::WithId, Amount, Id},
@@ -45,7 +45,7 @@ use wallet_types::{
     utxo_types::{UtxoStates, UtxoTypes},
     wallet_tx::TxData,
     with_locked::WithLocked,
-    Currency, KeyPurpose, KeychainUsageState,
+    KeyPurpose, KeychainUsageState,
 };
 
 use crate::{
