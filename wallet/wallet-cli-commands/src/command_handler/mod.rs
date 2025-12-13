@@ -636,7 +636,9 @@ where
 
                 for (token_id, amount) in tokens {
                     let amount = amount.decimal();
-                    writeln!(&mut output, "Token: {token_id} amount: {amount}")
+                    // TODO: it'd be nice to print token tickers here too (as in GetBalance),
+                    // when the wallet is in the hot mode.
+                    writeln!(&mut output, "Token: {token_id}, amount: {amount}")
                         .expect("Writing to a memory buffer should not fail");
                 }
                 output.pop();

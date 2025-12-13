@@ -504,10 +504,14 @@ class WalletRpcController(WalletCliControllerBase):
         if 'tokens' in result:
             for (hexified_token_id, balance) in result['tokens'].items():
                 token_id_as_addr = self.node.test_functions_dehexify_all_addresses(hexified_token_id)
-                tokens[token_id_as_addr] = balance['decimal']
+                token_info = self.node.chainstate_token_info(token_id_as_addr)
+                ticker = token_info["content"]["token_ticker"]["text"]
+
+                tokens[token_id_as_addr] = (ticker, balance['decimal'])
 
         # Mimic the output of wallet_cli_controller's 'get_balance'
-        return "\n".join([f"Coins amount: {coins}"] + [f"Token: {token} amount: {amount}" for token, amount in tokens.items()])
+        return "\n".join([f"Coins amount: {coins}"] + [f"Token: {token} ({ticker}), amount: {amount}"
+                                                       for token, (ticker, amount) in tokens.items()])
 
     async def new_vrf_public_key(self) -> str:
         result = self._write_command("staking_new_vrf_public_key", [self.account])
@@ -660,7 +664,7 @@ class WalletRpcController(WalletCliControllerBase):
             give = {"type": "Coin", "content": {"amount": {'decimal': str(give_amount)}}}
 
         object = [self.account, ask, give, conclude_address, {'in_top_x_mb': 5}]
-        result = self._write_command("create_order", object)
+        result = self._write_command("order_create", object)
         return result
 
     async def fill_order(self,
@@ -668,17 +672,17 @@ class WalletRpcController(WalletCliControllerBase):
                          fill_amount: int,
                          output_address: Optional[str] = None) -> str:
         object = [self.account, order_id, {'decimal': str(fill_amount)}, output_address, {'in_top_x_mb': 5}]
-        result = self._write_command("fill_order", object)
+        result = self._write_command("order_fill", object)
         return result
 
     async def freeze_order(self, order_id: str) -> str:
         object = [self.account, order_id, {'in_top_x_mb': 5}]
-        result = self._write_command("freeze_order", object)
+        result = self._write_command("order_freeze", object)
         return result
 
     async def conclude_order(self,
                          order_id: str,
                          output_address: Optional[str] = None) -> str:
         object = [self.account, order_id, output_address, {'in_top_x_mb': 5}]
-        result = self._write_command("conclude_order", object)
+        result = self._write_command("order_conclude", object)
         return result

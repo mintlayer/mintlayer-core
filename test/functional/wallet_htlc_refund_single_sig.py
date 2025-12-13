@@ -157,7 +157,7 @@ class WalletHtlcRefund(BitcoinTestFramework):
             # Check Alice's balance
             balance = await wallet.get_balance()
             assert_in("Coins amount: 0", balance)
-            assert_in(f"Token: {token_id} amount: {amount_to_mint}", balance)
+            assert_in(f"Token: {token_id} ({token_ticker}), amount: {amount_to_mint}", balance)
 
             ########################################################################################
             # Setup Alice's htlc
@@ -315,8 +315,8 @@ class WalletHtlcRefund(BitcoinTestFramework):
             unlocked_balance = await wallet.get_balance(with_locked='unlocked')
             assert_in("Coins amount: 0", all_balance)
             assert_in("Coins amount: 0", unlocked_balance)
-            assert_in(f"Token: {token_id} amount: {alice_amount_to_swap}", all_balance)
-            assert_in(f"Token: {token_id} amount: {alice_amount_to_swap}", unlocked_balance)
+            assert_in(f"Token: {token_id} ({token_ticker}), amount: {alice_amount_to_swap}", all_balance)
+            assert_in(f"Token: {token_id} ({token_ticker}), amount: {alice_amount_to_swap}", unlocked_balance)
 
             # Switch to Bob's wallet and check balance - he got his coins back, but the're locked
             # because he used LockThenTransfer.

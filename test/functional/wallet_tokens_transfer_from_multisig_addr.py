@@ -72,7 +72,10 @@ class WalletTokensTransferFromMultisigAddr(BitcoinTestFramework):
         # This function will spend 2x100 coins on issuing tokens and 2x50 on minting;
         # also, a portion of a coin will be spent for the transaction fee.
         output = {
-            'Transfer': [ { 'Coin': (coin_amount + 301) * ATOMS_PER_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': pub_key_bytes}}} } ],
+            'Transfer': [
+                { 'Coin': (coin_amount + 301) * ATOMS_PER_COIN },
+                { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': pub_key_bytes}}} }
+            ],
         }
         encoded_tx, tx_id = make_tx([reward_input(tip_id)], [output], 0)
 
@@ -163,12 +166,12 @@ class WalletTokensTransferFromMultisigAddr(BitcoinTestFramework):
                 assert_in(f"Coins amount: {coin}", balances)
 
                 if foo:
-                    assert_in(f"Token: {token_foo_id} amount: {foo}", balances)
+                    assert_in(f"Token: {token_foo_id} (FOO), amount: {foo}", balances)
                 else:
                     assert_not_in(token_foo_id, balances)
 
                 if bar:
-                    assert_in(f"Token: {token_bar_id} amount: {bar}", balances)
+                    assert_in(f"Token: {token_bar_id} (BAR), amount: {bar}", balances)
                 else:
                     assert_not_in(token_bar_id, balances)
 

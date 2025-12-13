@@ -89,7 +89,10 @@ class WalletTokens(BitcoinTestFramework):
 
             # Submit a valid transaction
             output = {
-                    'Transfer': [ { 'Coin': 2001 * ATOMS_PER_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': pub_key_bytes}}} } ],
+                'Transfer': [
+                    { 'Coin': 2001 * ATOMS_PER_COIN },
+                    { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': pub_key_bytes}}} }
+                ],
             }
             encoded_tx, tx_id = make_tx([reward_input(tip_id)], [output], 0)
 
@@ -125,14 +128,15 @@ class WalletTokens(BitcoinTestFramework):
             assert_in("Invalid character in token ticker", err)
 
             # invalid url
-            token_id, tx_id, err = await wallet.issue_new_token("XXX", 2, "123 123", address)
+            valid_ticker = "XXX"
+            token_id, tx_id, err = await wallet.issue_new_token(valid_ticker, 2, "123 123", address)
             assert token_id is None
             assert tx_id is None
             assert err is not None
             assert_in("Incorrect metadata URI", err)
 
             # invalid num decimals
-            token_id, tx_id, err = await wallet.issue_new_token("XXX", 99, "http://uri", address)
+            token_id, tx_id, err = await wallet.issue_new_token(valid_ticker, 99, "http://uri", address)
             assert token_id is None
             assert tx_id is None
             assert err is not None
@@ -140,7 +144,7 @@ class WalletTokens(BitcoinTestFramework):
 
             # issue a valid token
             number_of_decimals = random.randrange(0, 4)
-            token_id, tx_id, err = await wallet.issue_new_token("XXX", number_of_decimals, "http://uri", address, 'lockable')
+            token_id, tx_id, err = await wallet.issue_new_token(valid_ticker, number_of_decimals, "http://uri", address, 'lockable')
             assert token_id is not None
             assert tx_id is not None
             assert err is None
@@ -175,7 +179,10 @@ class WalletTokens(BitcoinTestFramework):
                         expected_coins_balance -= 50
                         assert_in("The transaction was submitted successfully", await wallet.unmint_tokens(token_id, tokens_to_unmint))
                     else:
-                        assert_in(f"Trying to unmint Amount {{ atoms: {tokens_to_unmint * 10**number_of_decimals} }} but the current supply is Amount {{ atoms: {total_tokens_supply * 10**number_of_decimals} }}", await wallet.unmint_tokens(token_id, tokens_to_unmint))
+                        assert_in(
+                            f"Trying to unmint Amount {{ atoms: {tokens_to_unmint * 10**number_of_decimals} }} but the current supply is Amount {{ atoms: {total_tokens_supply * 10**number_of_decimals} }}",
+                            await wallet.unmint_tokens(token_id, tokens_to_unmint)
+                        )
                         continue
 
                 # either generate a new block or leave the transaction as in-memory state
@@ -186,7 +193,10 @@ class WalletTokens(BitcoinTestFramework):
 
                 # check total supply is correct
                 if total_tokens_supply > 0:
-                    assert_in(f"{token_id} amount: {total_tokens_supply}", await wallet.get_balance(utxo_states=['confirmed', 'inactive']))
+                    assert_in(
+                        f"{token_id} ({valid_ticker}), amount: {total_tokens_supply}",
+                        await wallet.get_balance(utxo_states=['confirmed', 'inactive'])
+                    )
                 else:
                     assert_not_in(f"{token_id}", await wallet.get_balance(utxo_states=['confirmed', 'inactive']))
 
@@ -197,7 +207,7 @@ class WalletTokens(BitcoinTestFramework):
             assert_in("Success", await wallet.sync())
             assert_in(f"Coins amount: {expected_coins_balance - 50}", await wallet.get_balance())
             if total_tokens_supply > 0:
-                assert_in(f"{token_id} amount: {total_tokens_supply}", await wallet.get_balance())
+                assert_in(f"{token_id} ({valid_ticker}), amount: {total_tokens_supply}", await wallet.get_balance())
             else:
                 assert_not_in(f"{token_id}", await wallet.get_balance())
 

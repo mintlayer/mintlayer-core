@@ -115,13 +115,20 @@ class WalletOrdersImpl(BitcoinTestFramework):
             self.log.debug(f'Tip: {tip_id}')
 
             # Submit a valid transaction
-            outputs = [{
-                'Transfer': [ { 'Coin': 151 * ATOMS_PER_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': alice_pub_key_bytes}}} } ],
-            }, {
-                'Transfer': [ { 'Coin': 151 * ATOMS_PER_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': bob_pub_key_bytes}}} } ],
-            }, {
-                'Transfer': [ { 'Coin': 151 * ATOMS_PER_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': carol_pub_key_bytes}}} } ],
-            }]
+            outputs = [
+                {'Transfer': [
+                    { 'Coin': 151 * ATOMS_PER_COIN },
+                    { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': alice_pub_key_bytes}}} }
+                ]},
+                {'Transfer': [
+                    { 'Coin': 151 * ATOMS_PER_COIN },
+                    { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': bob_pub_key_bytes}}} }
+                ]},
+                {'Transfer': [
+                    { 'Coin': 151 * ATOMS_PER_COIN },
+                    { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': carol_pub_key_bytes}}} }
+                ]}
+            ]
             encoded_tx, tx_id = make_tx([reward_input(tip_id)], outputs, 0)
 
             node.mempool_submit_transaction(encoded_tx, {})
@@ -142,7 +149,8 @@ class WalletOrdersImpl(BitcoinTestFramework):
             assert_not_in("Tokens", balance)
 
             # issue a valid token
-            token_id, _, _ = (await wallet.issue_new_token("XXXX", 2, "http://uri", alice_address))
+            token_ticker = "XXXX"
+            token_id, _, _ = (await wallet.issue_new_token(token_ticker, 2, "http://uri", alice_address))
             assert token_id is not None
             self.log.info(f"new token id: {token_id}")
 
@@ -160,7 +168,7 @@ class WalletOrdersImpl(BitcoinTestFramework):
             assert_in("Success", await wallet.sync())
             balance = await wallet.get_balance()
             assert_in(f"Coins amount: 0", balance)
-            assert_in(f"Token: {token_id} amount: {amount_to_mint}", balance)
+            assert_in(f"Token: {token_id} ({token_ticker}), amount: {amount_to_mint}", balance)
 
             ########################################################################################
             # Alice creates an order selling tokens for coins
@@ -188,7 +196,7 @@ class WalletOrdersImpl(BitcoinTestFramework):
             assert_in("Success", await wallet.sync())
             balance = await wallet.get_balance()
             assert_in(f"Coins amount: 148.99", balance)
-            assert_in(f"Token: {token_id} amount: 1", balance)
+            assert_in(f"Token: {token_id} ({token_ticker}), amount: 1", balance)
 
             # try conclude order
             conclude_order_result = await wallet.conclude_order(order_id)
@@ -208,7 +216,7 @@ class WalletOrdersImpl(BitcoinTestFramework):
             assert_in("Success", await wallet.sync())
             balance = await wallet.get_balance()
             assert_in(f"Coins amount: 140", balance)
-            assert_in(f"Token: {token_id} amount: 5", balance)
+            assert_in(f"Token: {token_id} ({token_ticker}), amount: 5", balance)
 
             # try freeze order
             freeze_order_result = await wallet.freeze_order(order_id)
@@ -246,7 +254,7 @@ class WalletOrdersImpl(BitcoinTestFramework):
             assert_in("Success", await wallet.sync())
             balance = await wallet.get_balance()
             assert_in(f"Coins amount: 12", balance)
-            assert_in(f"Token: {token_id} amount: {amount_to_mint - 5 - 1}", balance)
+            assert_in(f"Token: {token_id} ({token_ticker}), amount: {amount_to_mint - 5 - 1}", balance)
 
             ########################################################################################
             # Carol tries filling again

@@ -113,7 +113,8 @@ class WalletConflictTransaction(BitcoinTestFramework):
             assert_in(f"Coins amount: {coins_to_send * 2 + token_fee}", await wallet.get_balance())
 
             address = await wallet.new_address()
-            token_id, tx_id, err = await wallet.issue_new_token("XXX", 2, "http://uri", address)
+            token_ticker = "XXX"
+            token_id, tx_id, err = await wallet.issue_new_token(token_ticker, 2, "http://uri", address)
             assert token_id is not None
             assert tx_id is not None
             assert err is None
@@ -138,7 +139,7 @@ class WalletConflictTransaction(BitcoinTestFramework):
 
             # now send tokens from acc1 and freeze the tokens from default acc
             assert_in("Success", await wallet.select_account(1))
-            assert_in(f"{token_id} amount: {tokens_to_mint}", await wallet.get_balance())
+            assert_in(f"{token_id} ({token_ticker}), amount: {tokens_to_mint}", await wallet.get_balance())
             assert_in("The transaction was submitted successfully", await wallet.send_tokens_to_address(token_id, address, tokens_to_mint))
             transactions = node.mempool_transactions()
             assert_equal(len(transactions), 1)
@@ -189,7 +190,7 @@ class WalletConflictTransaction(BitcoinTestFramework):
             assert_in("Success", await wallet.sync())
 
             assert_in("Success", await wallet.select_account(DEFAULT_ACCOUNT_INDEX))
-            assert_in(f"{token_id} amount: 10", await wallet.get_balance())
+            assert_in(f"{token_id} ({token_ticker}), amount: 10", await wallet.get_balance())
 
             # check we cannot abandon an already confirmed transaction
             assert_in("Success", await wallet.select_account(1))

@@ -113,7 +113,8 @@ class WalletTokens(BitcoinTestFramework):
             address = await wallet.new_address()
 
             # issue a valid token
-            token_id, tx_id, err = await wallet.issue_new_token("XXX", 2, "http://uri", address, token_supply='lockable')
+            token_ticker = "XXX"
+            token_id, tx_id, err = await wallet.issue_new_token(token_ticker, 2, "http://uri", address, token_supply='lockable')
             assert token_id is not None
             assert tx_id is not None
             assert err is None
@@ -128,7 +129,7 @@ class WalletTokens(BitcoinTestFramework):
             self.generate_block()
             assert_in("Success", await wallet.sync())
 
-            assert_in(f"{token_id} amount: 10000", await wallet.get_balance())
+            assert_in(f"{token_id} ({token_ticker}), amount: 10000", await wallet.get_balance())
             assert_in("Coins amount: 850", await wallet.get_balance())
 
             ## create a new account and send some tokens to it
@@ -146,8 +147,7 @@ class WalletTokens(BitcoinTestFramework):
             assert_in("Success", await wallet.sync())
 
             ## check the new balance
-            assert_in(f"{token_id} amount: 9989.99", await wallet.get_balance())
-
+            assert_in(f"{token_id} ({token_ticker}), amount: 9989.99", await wallet.get_balance())
 
             assert_in("The transaction was submitted successfully", await wallet.change_token_authority(token_id, new_acc_address))
 

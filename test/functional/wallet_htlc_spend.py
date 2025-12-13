@@ -108,11 +108,16 @@ class WalletHtlcSpend(BitcoinTestFramework):
             self.log.debug(f'Tip: {tip_id}')
 
             # Submit a valid transaction
-            outputs = [{
-                    'Transfer': [ { 'Coin': 151 * ATOMS_PER_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': alice_pub_key_bytes}}} } ],
-            }, {
-                    'Transfer': [ { 'Coin': 151 * ATOMS_PER_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': bob_pub_key_bytes}}} } ],
-            }]
+            outputs = [
+                {'Transfer': [
+                    { 'Coin': 151 * ATOMS_PER_COIN },
+                    { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': alice_pub_key_bytes}}} }
+                ]},
+                {'Transfer': [
+                    { 'Coin': 151 * ATOMS_PER_COIN },
+                    { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': bob_pub_key_bytes}}} }
+                ]}
+            ]
             encoded_tx, tx_id = make_tx([reward_input(tip_id)], outputs, 0)
 
             node.mempool_submit_transaction(encoded_tx, {})
@@ -133,7 +138,8 @@ class WalletHtlcSpend(BitcoinTestFramework):
             assert_not_in("Tokens", balance)
 
             # issue a valid token
-            token_id, _, _ = (await wallet.issue_new_token("XXXX", 2, "http://uri", alice_address))
+            token_ticker = "XXXX"
+            token_id, _, _ = (await wallet.issue_new_token(token_ticker, 2, "http://uri", alice_address))
             assert token_id is not None
             self.log.info(f"new token id: {token_id}")
 
@@ -151,7 +157,7 @@ class WalletHtlcSpend(BitcoinTestFramework):
             assert_in("Success", await wallet.sync())
             balance = await wallet.get_balance()
             assert_in("Coins amount: 0", balance)
-            assert_in(f"Token: {token_id} amount: {amount_to_mint}", balance)
+            assert_in(f"Token: {token_id} ({token_ticker}), amount: {amount_to_mint}", balance)
 
             ########################################################################################
             # Setup Alice's htlc
@@ -276,7 +282,7 @@ class WalletHtlcSpend(BitcoinTestFramework):
 
             balance = await wallet.get_balance()
             assert_in("Coins amount: 0", balance)
-            assert_in(f"Token: {token_id} amount: {alice_amount_to_swap}", balance)
+            assert_in(f"Token: {token_id} ({token_ticker}), amount: {alice_amount_to_swap}", balance)
 
 
 if __name__ == '__main__':
