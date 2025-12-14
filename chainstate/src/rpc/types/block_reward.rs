@@ -13,9 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::chain::{block::BlockReward, ChainConfig};
+use common::{
+    chain::{block::BlockReward, ChainConfig},
+    TokenDecimalsProvider,
+};
 
-use super::{output::RpcTxOutput, token_decimals_provider::TokenDecimalsProvider, RpcTypeError};
+use super::{output::RpcTxOutput, RpcTypeError};
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct RpcBlockReward {

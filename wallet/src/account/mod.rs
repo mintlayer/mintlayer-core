@@ -89,8 +89,8 @@ use wallet_types::{
 };
 
 pub use self::output_cache::{
-    DelegationData, OrderData, OwnFungibleTokenInfo, PoolData, TxInfo, UnconfirmedTokenInfo,
-    UtxoWithTxOutput,
+    DelegationData, OrderData, OutputCacheInconsistencyError, OwnFungibleTokenInfo, PoolData,
+    TxInfo, UnconfirmedTokenInfo, UtxoWithTxOutput,
 };
 use self::output_cache::{OutputCache, TokenIssuanceData};
 use self::transaction_list::{get_transaction_list, TransactionList};

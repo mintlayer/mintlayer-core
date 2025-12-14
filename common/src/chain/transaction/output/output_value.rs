@@ -16,7 +16,10 @@
 use serialization::{Decode, Encode};
 
 use crate::{
-    chain::tokens::{NftIssuanceV0, TokenData, TokenId, TokenIssuanceV0, TokenTransfer},
+    chain::{
+        tokens::{NftIssuanceV0, TokenData, TokenId, TokenIssuanceV0, TokenTransfer},
+        Currency,
+    },
     primitives::Amount,
 };
 
@@ -137,6 +140,13 @@ impl RpcOutputValue {
         match self {
             RpcOutputValue::Coin { amount: _ } => None,
             RpcOutputValue::Token { id, amount: _ } => Some(id),
+        }
+    }
+
+    pub fn currency(&self) -> Currency {
+        match self {
+            Self::Coin { amount: _ } => Currency::Coin,
+            Self::Token { id, amount: _ } => Currency::Token(*id),
         }
     }
 

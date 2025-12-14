@@ -27,7 +27,7 @@ use std::{
 };
 
 use chainstate::{
-    rpc::{make_rpc_amount_out, RpcOutputValueIn, RpcOutputValueOut, TokenDecimals},
+    rpc::{RpcOutputValueIn, RpcOutputValueOut},
     tx_verifier::check_transaction,
     ChainInfo, TokenIssuanceError,
 };
@@ -52,6 +52,7 @@ use common::{
     primitives::{
         id::WithId, per_thousand::PerThousand, time::Time, Amount, BlockHeight, Id, Idable,
     },
+    TokenDecimals,
 };
 use crypto::{
     key::{hdkd::u31::U31, PrivateKey, PublicKey},
@@ -75,8 +76,9 @@ use wallet::{
 use wallet_controller::{
     types::{
         Balances, BlockInfo, CreatedBlockInfo, CreatedWallet, GenericTokenTransfer,
-        InspectTransaction, NewTransaction, OpenedWallet, SeedWithPassPhrase, SweepFromAddresses,
-        TransactionToInspect, WalletCreationOptions, WalletInfo, WalletTypeArgs,
+        InspectTransaction, NewTransaction, OpenedWallet, RpcAmountOut, SeedWithPassPhrase,
+        SweepFromAddresses, TransactionToInspect, WalletCreationOptions, WalletInfo,
+        WalletTypeArgs,
     },
     ConnectedPeer, ControllerConfig, ControllerError, NodeInterface, UtxoState, UtxoStates,
     UtxoType, UtxoTypes, DEFAULT_ACCOUNT_INDEX,
@@ -1768,15 +1770,15 @@ where
                 let existing_order_data =
                     match (node_rpc_order_info, wallet_order_data.creation_timestamp) {
                         (Some(node_rpc_order_info), Some(creation_timestamp)) => {
-                            let ask_balance = make_rpc_amount_out(
+                            let ask_balance = RpcAmountOut::from_currency_amount(
                                 node_rpc_order_info.ask_balance,
-                                node_rpc_order_info.initially_asked.token_id(),
+                                &node_rpc_order_info.initially_asked.currency(),
                                 &self.chain_config,
                                 &token_decimals,
                             )?;
-                            let give_balance = make_rpc_amount_out(
+                            let give_balance = RpcAmountOut::from_currency_amount(
                                 node_rpc_order_info.give_balance,
-                                node_rpc_order_info.initially_given.token_id(),
+                                &node_rpc_order_info.initially_given.currency(),
                                 &self.chain_config,
                                 &token_decimals,
                             )?;
@@ -1884,15 +1886,15 @@ where
                         &token_decimals,
                         node_rpc_order_info.initially_given.into(),
                     )?;
-                    let ask_balance = make_rpc_amount_out(
+                    let ask_balance = RpcAmountOut::from_currency_amount(
                         node_rpc_order_info.ask_balance,
-                        node_rpc_order_info.initially_asked.token_id(),
+                        &node_rpc_order_info.initially_asked.currency(),
                         &self.chain_config,
                         &token_decimals,
                     )?;
-                    let give_balance = make_rpc_amount_out(
+                    let give_balance = RpcAmountOut::from_currency_amount(
                         node_rpc_order_info.give_balance,
-                        node_rpc_order_info.initially_given.token_id(),
+                        &node_rpc_order_info.initially_given.currency(),
                         &self.chain_config,
                         &token_decimals,
                     )?;

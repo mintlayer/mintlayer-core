@@ -17,13 +17,13 @@ use chainstate_types::BlockIndex;
 use common::{
     chain::{block::timestamp::BlockTimestamp, Block, ChainConfig, GenBlock},
     primitives::{BlockHeight, Id, Idable},
+    TokenDecimalsProvider,
 };
 use serialization::hex_encoded::HexEncoded;
 
 use super::{
     block_reward::RpcBlockReward, consensus_data::RpcConsensusData,
-    signed_transaction::RpcSignedTransaction, token_decimals_provider::TokenDecimalsProvider,
-    RpcTypeError,
+    signed_transaction::RpcSignedTransaction, RpcTypeError,
 };
 
 #[derive(Debug, Clone, serde::Serialize)]

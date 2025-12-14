@@ -13,6 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::{
+    chain::{ChainConfig, Currency},
+    TokenDecimalsProvider, TokenDecimalsUnavailableError,
+};
+
 use super::{Amount, DecimalAmount, RpcAmountInSerde, RpcAmountOutSerde};
 
 /// Amount type suitable for getting user input supporting both decimal and atom formats in Json.
@@ -107,6 +112,19 @@ impl RpcAmountOut {
 
     pub fn from_amount(amount: Amount, decimals: u8) -> Self {
         Self::from_amount_no_padding(amount, decimals)
+    }
+
+    pub fn from_currency_amount(
+        amount: Amount,
+        currency: &Currency,
+        chain_config: &ChainConfig,
+        token_decimals_provider: &impl TokenDecimalsProvider,
+    ) -> Result<Self, TokenDecimalsUnavailableError> {
+        let decimals = match currency {
+            Currency::Coin => chain_config.coin_decimals(),
+            Currency::Token(token_id) => token_decimals_provider.get_token_decimals(token_id)?.0,
+        };
+        Ok(Self::from_amount(amount, decimals))
     }
 
     /// Construct from amount, keeping all decimal digits

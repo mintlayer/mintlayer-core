@@ -15,7 +15,7 @@
 
 //! Types supporting the RPC interface
 
-use chainstate::rpc::{RpcTypeError, TokenDecimalsProvider};
+use chainstate::rpc::RpcTypeError;
 use common::{
     address::{pubkeyhash::PublicKeyHash, Address, AddressError},
     chain::{
@@ -28,6 +28,7 @@ use common::{
         TxOutput, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, Idable},
+    TokenDecimalsProvider, TokenDecimalsUnavailableError,
 };
 use crypto::{
     key::{
@@ -175,6 +176,9 @@ pub enum RpcError<N: NodeInterface> {
 
     #[error(transparent)]
     ChainstateRpcTypeError(#[from] chainstate::rpc::RpcTypeError),
+
+    #[error(transparent)]
+    TokenDecimalsUnavailableError(#[from] TokenDecimalsUnavailableError),
 }
 
 impl<N: NodeInterface> From<RpcError<N>> for rpc::Error {

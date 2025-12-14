@@ -19,8 +19,12 @@ pub mod primitives;
 pub mod size_estimation;
 pub mod text_summary;
 pub mod time_getter;
+mod token_decimals_provider;
 pub mod uint;
 
+pub use token_decimals_provider::{
+    TokenDecimals, TokenDecimalsProvider, TokenDecimalsUnavailableError,
+};
 pub use uint::{Uint128, Uint256, Uint512, UintConversionError};
 
 #[cfg(test)]

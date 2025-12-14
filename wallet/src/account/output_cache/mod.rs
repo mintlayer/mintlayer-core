@@ -1118,7 +1118,9 @@ impl OutputCache {
                     {
                         ensure!(
                             is_unconfirmed,
-                            WalletError::ConfirmedTxAmongUnconfirmedDescendants(tx_id.clone())
+                            OutputCacheInconsistencyError::ConfirmedTxAmongUnconfirmedDescendants(
+                                tx_id.clone()
+                            )
                         );
                         descendants.insert(tx_id.clone());
                     }
@@ -1245,7 +1247,10 @@ impl OutputCache {
 
         ensure!(
             delegation_nonce == next_nonce,
-            WalletError::InconsistentDelegationDuplicateNonce(*delegation_id, delegation_nonce)
+            OutputCacheInconsistencyError::InconsistentDelegationDuplicateNonce(
+                *delegation_id,
+                delegation_nonce
+            )
         );
 
         data.last_nonce = Some(delegation_nonce);
@@ -1276,7 +1281,10 @@ impl OutputCache {
 
         ensure!(
             token_nonce == next_nonce,
-            WalletError::InconsistentTokenIssuanceDuplicateNonce(*delegation_id, token_nonce)
+            OutputCacheInconsistencyError::InconsistentTokenIssuanceDuplicateNonce(
+                *delegation_id,
+                token_nonce
+            )
         );
 
         data.last_nonce = Some(token_nonce);
@@ -1309,7 +1317,7 @@ impl OutputCache {
 
             ensure!(
                 nonce == next_nonce,
-                WalletError::InconsistentOrderDuplicateNonce(*order_id, nonce)
+                OutputCacheInconsistencyError::InconsistentOrderDuplicateNonce(*order_id, nonce)
             );
 
             data.last_nonce = Some(nonce);
@@ -1328,12 +1336,17 @@ impl OutputCache {
         match command_tag {
             OrderAccountCommandTag::FillOrder => {}
             OrderAccountCommandTag::FreezeOrder => {
-                // FIXME revise debug_asserts here and on revert
-                debug_assert!(!data.is_frozen);
+                ensure!(
+                    !data.is_frozen,
+                    OutputCacheInconsistencyError::OrderAlreadyFrozen(*order_id)
+                );
                 data.is_frozen = true;
             }
             OrderAccountCommandTag::ConcludeOrder => {
-                debug_assert!(!data.is_concluded);
+                ensure!(
+                    !data.is_concluded,
+                    OutputCacheInconsistencyError::OrderAlreadyConcluded(*order_id)
+                );
                 data.is_concluded = true;
             }
         }
@@ -1353,7 +1366,7 @@ impl OutputCache {
 
         ensure!(
             !self.unconfirmed_descendants.contains_key(tx_id),
-            WalletError::ConfirmedTxAmongUnconfirmedDescendants(tx_id.clone())
+            OutputCacheInconsistencyError::ConfirmedTxAmongUnconfirmedDescendants(tx_id.clone())
         );
 
         Ok(())
@@ -1614,7 +1627,7 @@ impl OutputCache {
 
                             let op_tag: AccountCommandTag = op.into();
                             if op_tag == AccountCommandTag::ConcludeOrder {
-                                debug_assert!(data.is_concluded);
+                                ensure!(data.is_concluded, OutputCacheInconsistencyError::OrderMustBeConcludedToRevertConclude(*order_id));
                                 data.is_concluded = false;
                             }
                         }
@@ -1631,11 +1644,11 @@ impl OutputCache {
                             match cmd_tag {
                                 OrderAccountCommandTag::FillOrder => {}
                                 OrderAccountCommandTag::FreezeOrder => {
-                                    debug_assert!(data.is_frozen);
+                                    ensure!(data.is_frozen, OutputCacheInconsistencyError::OrderMustBeFrozenToRevertFreeze(*order_id));
                                     data.is_frozen = false;
                                 }
                                 OrderAccountCommandTag::ConcludeOrder => {
-                                    debug_assert!(data.is_concluded);
+                                    ensure!(data.is_concluded, OutputCacheInconsistencyError::OrderMustBeConcludedToRevertConclude(*order_id));
                                     data.is_concluded = false;
                                 }
                             }
@@ -2013,6 +2026,33 @@ fn uses_conflicting_nonce(
                 && outpoint.nonce() <= confirmed_nonce
         }
     })
+}
+
+#[derive(thiserror::Error, Debug, Eq, PartialEq)]
+pub enum OutputCacheInconsistencyError {
+    #[error("Transaction from {0:?} is confirmed and among unconfirmed descendants")]
+    ConfirmedTxAmongUnconfirmedDescendants(OutPointSourceId),
+
+    #[error("Delegation {0:x} has duplicate AccountNonce: {1}")]
+    InconsistentDelegationDuplicateNonce(DelegationId, AccountNonce),
+
+    #[error("Token {0:x} has duplicate AccountNonce: {1}")]
+    InconsistentTokenIssuanceDuplicateNonce(TokenId, AccountNonce),
+
+    #[error("Order {0:x} has duplicate AccountNonce: {1}")]
+    InconsistentOrderDuplicateNonce(OrderId, AccountNonce),
+
+    #[error("Order {0:x} is already frozen")]
+    OrderAlreadyFrozen(OrderId),
+
+    #[error("Order {0:x} is already concluded")]
+    OrderAlreadyConcluded(OrderId),
+
+    #[error("Order {0:x} must already be concluded to revert the conclusion")]
+    OrderMustBeConcludedToRevertConclude(OrderId),
+
+    #[error("Order {0:x} must already be frozen to revert the freezing")]
+    OrderMustBeFrozenToRevertFreeze(OrderId),
 }
 
 #[cfg(test)]

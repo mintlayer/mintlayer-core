@@ -35,6 +35,7 @@ use common::{
         TxOutput,
     },
     primitives::{Amount, BlockHeight, Id},
+    TokenDecimals,
 };
 use rpc::{subscription, RpcResult};
 use serialization::hex_encoded::HexEncoded;
@@ -48,9 +49,8 @@ use self::types::{block::RpcBlock, event::RpcEvent};
 
 pub use types::{
     input::RpcUtxoOutpoint,
-    output::{make_rpc_amount_out, RpcOutputValueIn, RpcOutputValueOut, RpcTxOutput},
+    output::{RpcOutputValueIn, RpcOutputValueOut, RpcTxOutput},
     signed_transaction::RpcSignedTransaction,
-    token_decimals_provider::{TokenDecimals, TokenDecimalsProvider},
     RpcTypeError,
 };
 

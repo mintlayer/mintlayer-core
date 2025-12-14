@@ -13,8 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
+use accounting::GetDataResult;
 use common::{
     chain::{output_value::OutputValue, tokens::TokenId, Destination, OrderId, OrdersVersion},
     primitives::Amount,
@@ -880,4 +881,111 @@ fn conclude_freezed_order_and_undo(#[case] seed: Seed) {
         BTreeMap::from_iter([(order_id, output_value_amount(original_data.give()))]),
     );
     assert_eq!(expected_storage, storage);
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn get_all_order_ids(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let orig_order1_id = OrderId::random_using(&mut rng);
+    let orig_order2_id = OrderId::random_using(&mut rng);
+    let orig_order3_id = OrderId::random_using(&mut rng);
+    let orig_data1 = make_order_data(&mut rng);
+    let orig_data2 = make_order_data(&mut rng);
+    let orig_data3 = make_order_data(&mut rng);
+
+    let mut storage = InMemoryOrdersAccounting::from_values(
+        BTreeMap::from_iter([
+            (orig_order1_id, orig_data1.clone()),
+            (orig_order2_id, orig_data2.clone()),
+            (orig_order3_id, orig_data3.clone()),
+        ]),
+        BTreeMap::from_iter([
+            (orig_order1_id, output_value_amount(orig_data1.ask())),
+            (orig_order2_id, output_value_amount(orig_data2.ask())),
+            (orig_order3_id, output_value_amount(orig_data3.ask())),
+        ]),
+        BTreeMap::from_iter([
+            (orig_order1_id, output_value_amount(orig_data1.give())),
+            (orig_order2_id, output_value_amount(orig_data2.give())),
+            (orig_order3_id, output_value_amount(orig_data3.give())),
+        ]),
+    );
+    let db = OrdersAccountingDB::new(&mut storage);
+
+    let mut cache = OrdersAccountingCache::new(&db);
+
+    // All 3 orders are returned
+    assert_eq!(
+        cache.get_all_order_ids().unwrap(),
+        BTreeSet::from_iter([orig_order1_id, orig_order2_id, orig_order3_id])
+    );
+
+    // Conclude one of the orders
+    assert_eq!(
+        cache.data().order_data.get_data(&orig_order3_id),
+        GetDataResult::Missing
+    );
+    let _undo = cache.conclude_order(orig_order3_id).unwrap();
+    assert_eq!(
+        cache.data().order_data.get_data(&orig_order3_id),
+        GetDataResult::Deleted
+    );
+
+    // The concluded order should no longer be returned
+    assert_eq!(
+        cache.get_all_order_ids().unwrap(),
+        BTreeSet::from_iter([orig_order1_id, orig_order2_id])
+    );
+
+    // Freeze one of the orders so that it's "Present" in the cache.
+    assert_eq!(
+        cache.data().order_data.get_data(&orig_order2_id),
+        GetDataResult::Missing
+    );
+    let _undo = cache.freeze_order(orig_order2_id).unwrap();
+    assert_eq!(
+        cache.data().order_data.get_data(&orig_order2_id),
+        GetDataResult::Present(&orig_data2.try_freeze().unwrap())
+    );
+
+    // The result should remain the same
+    assert_eq!(
+        cache.get_all_order_ids().unwrap(),
+        BTreeSet::from_iter([orig_order1_id, orig_order2_id])
+    );
+
+    let new_order1_id = OrderId::random_using(&mut rng);
+    let new_order2_id = OrderId::random_using(&mut rng);
+    let new_data1 = make_order_data(&mut rng);
+    let new_data2 = make_order_data(&mut rng);
+
+    // Create 2 new orders
+    let _undo = cache.create_order(new_order1_id, new_data1.clone()).unwrap();
+    let _undo = cache.create_order(new_order2_id, new_data2.clone()).unwrap();
+
+    // The result should include the new orders
+    assert_eq!(
+        cache.get_all_order_ids().unwrap(),
+        BTreeSet::from_iter([orig_order1_id, orig_order2_id, new_order1_id, new_order2_id])
+    );
+
+    // Conclude one of the new orders
+    assert_eq!(
+        cache.data().order_data.get_data(&new_order2_id),
+        GetDataResult::Present(&new_data2)
+    );
+    let _undo = cache.conclude_order(new_order2_id).unwrap();
+    assert_eq!(
+        cache.data().order_data.get_data(&new_order2_id),
+        GetDataResult::Deleted
+    );
+
+    // The concluded order should no longer be returned
+    assert_eq!(
+        cache.get_all_order_ids().unwrap(),
+        BTreeSet::from_iter([orig_order1_id, orig_order2_id, new_order1_id])
+    );
 }

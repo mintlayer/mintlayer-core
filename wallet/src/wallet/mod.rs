@@ -19,7 +19,8 @@ use std::sync::Arc;
 
 use crate::account::{
     transaction_list::TransactionList, CoinSelectionAlgo, CurrentFeeRate, DelegationData,
-    OrderData, PoolData, TxInfo, UnconfirmedTokenInfo, UtxoSelectorError,
+    OrderData, OutputCacheInconsistencyError, PoolData, TxInfo, UnconfirmedTokenInfo,
+    UtxoSelectorError,
 };
 use crate::destination_getters::HtlcSpendingCondition;
 use crate::key_chain::{
@@ -50,11 +51,11 @@ use common::chain::tokens::{
     IsTokenUnfreezable, Metadata, RPCFungibleTokenInfo, TokenId, TokenIssuance,
 };
 use common::chain::{
-    make_delegation_id, make_order_id, make_token_id, AccountCommand, AccountNonce,
-    AccountOutPoint, Block, ChainConfig, Currency, DelegationId, Destination, GenBlock,
-    IdCreationError, OrderAccountCommand, OrderId, OutPointSourceId, PoolId, RpcOrderInfo,
-    SignedTransaction, SignedTransactionIntent, Transaction, TransactionCreationError, TxInput,
-    TxOutput, UtxoOutPoint,
+    make_delegation_id, make_order_id, make_token_id, AccountCommand, AccountOutPoint, Block,
+    ChainConfig, Currency, DelegationId, Destination, GenBlock, IdCreationError,
+    OrderAccountCommand, OrderId, OutPointSourceId, PoolId, RpcOrderInfo, SignedTransaction,
+    SignedTransactionIntent, Transaction, TransactionCreationError, TxInput, TxOutput,
+    UtxoOutPoint,
 };
 use common::primitives::id::{hash_encoded, WithId};
 use common::primitives::{Amount, BlockHeight, Id, H256};
@@ -144,8 +145,6 @@ pub enum WalletError {
     OutputAmountOverflow,
     #[error("Fee amounts overflow")]
     FeeAmountOverflow,
-    #[error("Delegation with id: {0} with duplicate AccountNonce: {1}")]
-    InconsistentDelegationDuplicateNonce(DelegationId, AccountNonce),
     #[error("Inconsistent produce block from stake for pool id: {0}, missing CreateStakePool")]
     InconsistentProduceBlockFromStake(PoolId),
     #[error("Delegation nonce overflow for id: {0}")]
@@ -154,10 +153,6 @@ pub enum WalletError {
     TokenIssuanceNonceOverflow(TokenId),
     #[error("Order nonce overflow for id: {0}")]
     OrderNonceOverflow(OrderId),
-    #[error("Token with id: {0} with duplicate AccountNonce: {1}")]
-    InconsistentTokenIssuanceDuplicateNonce(TokenId, AccountNonce),
-    #[error("Order with id: {0} with duplicate AccountNonce: {1}")]
-    InconsistentOrderDuplicateNonce(OrderId, AccountNonce),
     #[error("Unknown token with Id {0}")]
     UnknownTokenId(TokenId),
     #[error("Unknown order with Id {0}")]
@@ -278,10 +273,10 @@ pub enum WalletError {
     MismatchedTokenAdditionalData(TokenId),
     #[error("Unsupported operation for a Hardware wallet")]
     UnsupportedHardwareWalletOperation,
-    #[error("Transaction from {0:?} is confirmed and among unconfirmed descendants")]
-    ConfirmedTxAmongUnconfirmedDescendants(OutPointSourceId),
     #[error("Id creation error: {0}")]
     IdCreationError(#[from] IdCreationError),
+    #[error("Output cache inconsistency error: {0}")]
+    OutputCacheInconsistencyError(#[from] OutputCacheInconsistencyError),
 }
 
 /// Result type used for the wallet

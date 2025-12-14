@@ -15,17 +15,27 @@
 
 use std::collections::BTreeMap;
 
-use common::chain::tokens::TokenId;
+use crate::chain::tokens::TokenId;
 
 #[derive(Clone, Copy, Debug)]
 pub struct TokenDecimals(pub u8);
 
 pub trait TokenDecimalsProvider {
-    fn get_token_decimals(&self, token_id: &TokenId) -> Option<TokenDecimals>;
+    fn get_token_decimals(
+        &self,
+        token_id: &TokenId,
+    ) -> Result<TokenDecimals, TokenDecimalsUnavailableError>;
 }
 
 impl TokenDecimalsProvider for BTreeMap<TokenId, TokenDecimals> {
-    fn get_token_decimals(&self, token_id: &TokenId) -> Option<TokenDecimals> {
-        self.get(token_id).copied()
+    fn get_token_decimals(
+        &self,
+        token_id: &TokenId,
+    ) -> Result<TokenDecimals, TokenDecimalsUnavailableError> {
+        self.get(token_id).copied().ok_or(TokenDecimalsUnavailableError(*token_id))
     }
 }
+
+#[derive(thiserror::Error, Debug, Clone, Eq, PartialEq)]
+#[error("Token decimals unavailable for token {0:x}")]
+pub struct TokenDecimalsUnavailableError(TokenId);
