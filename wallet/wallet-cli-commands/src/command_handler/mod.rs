@@ -2100,7 +2100,7 @@ where
                     };
 
                     if ts_cmp_result == Ordering::Equal {
-                        info1.order_id.as_str().cmp(info2.order_id.as_str())
+                        info1.order_id.cmp(&info2.order_id)
                     } else {
                         ts_cmp_result
                     }
@@ -2172,9 +2172,11 @@ where
             (token_ids_map, token_infos)
         };
 
-        // Calculate give/ask price for each order. Note that the `filter_map` call shouldn't filter
-        // anything out normally; if it does, then the implementation of `node_get_tokens_info`
-        // has a bug.
+        // Calculate give/ask price for each order. Note:
+        // 1) The price is based on original amounts, which is valid for orders v1 but not for v0;
+        // this is ok, because orders v0 will be deprecated soon.
+        // 2) The `filter_map` call shouldn't filter anything out normally; if it does, then
+        // the implementation of `node_get_tokens_info` has a bug.
         let order_infos_with_price = order_infos
             .into_iter()
             .filter_map(|info| {
@@ -2210,7 +2212,6 @@ where
                     info.initially_asked.amount().amount().into_atoms().into(),
                     ask_currency_decimals as i64,
                 );
-                // FIXME check that it works correctly
                 let give_ask_price = give_ask_price.with_scale_round(
                     give_currency_decimals.into(),
                     bigdecimal::rounding::RoundingMode::Down,
@@ -2270,6 +2271,8 @@ where
                 compare_currencies(order1_given_token_id, order2_given_token_id)
                     .then_with(|| compare_currencies(order1_asked_token_id, order2_asked_token_id))
                     .then_with(|| order2_price.cmp(order1_price))
+                    // If the price is the same, sort by the order id.
+                    .then_with(|| order1_info.order_id.cmp(&order2_info.order_id))
             },
         );
 

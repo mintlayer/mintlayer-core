@@ -147,8 +147,7 @@ class WalletOrderDoubleFillWithSameDestImpl(BitcoinTestFramework):
             assert_not_in("Tokens", balance)
 
             amount_to_mint = random.randint(100, 10000)
-            mint_result = await wallet.mint_tokens(token_id, alice_address, amount_to_mint)
-            assert mint_result['tx_id'] is not None
+            await wallet.mint_tokens_or_fail(token_id, alice_address, amount_to_mint)
 
             self.generate_block()
             assert_in("Success", await wallet.sync())
@@ -158,9 +157,7 @@ class WalletOrderDoubleFillWithSameDestImpl(BitcoinTestFramework):
 
             ########################################################################################
             # Alice creates an order selling tokens for coins
-            create_order_result = await wallet.create_order(None, amount_to_mint * 2, token_id, amount_to_mint, alice_address)
-            assert create_order_result['result']['tx_id'] is not None
-            order_id = create_order_result['result']['order_id']
+            order_id = await wallet.create_order(None, amount_to_mint * 2, token_id, amount_to_mint, alice_address)
 
             self.generate_block()
             assert_in("Success", await wallet.sync())
@@ -181,14 +178,12 @@ class WalletOrderDoubleFillWithSameDestImpl(BitcoinTestFramework):
 
             # Perform the fill.
             result = await wallet.fill_order(order_id, fill_amount, fill_dest_address)
-            fill_tx1_id = result['result']['tx_id']
-            assert fill_tx1_id is not None
+            assert_in("The transaction was submitted successfully", result)
 
             if self.use_orders_v1:
                 # Perform another fill for the same amount.
                 result = await wallet.fill_order(order_id, fill_amount, fill_dest_address)
-                fill_tx2_id = result['result']['tx_id']
-                assert fill_tx2_id is not None
+                assert_in("The transaction was submitted successfully", result)
 
                 # We're able to successfully mine a block, which will contain both transactions.
                 self.generate_block()
@@ -199,15 +194,14 @@ class WalletOrderDoubleFillWithSameDestImpl(BitcoinTestFramework):
                 # the chainstate only, so creating another "fill" tx when the previos one hasn't been mined yet
                 # will use the same nonce.
                 result = await wallet.fill_order(order_id, fill_amount, fill_dest_address)
-                assert_in("Mempool error: Nonce is not incremental", result['error']['message'])
+                assert_in("Mempool error: Nonce is not incremental", result)
 
                 self.generate_block()
                 assert_in("Success", await wallet.sync())
 
                 # After the first tx has been mined, a new one will be created with the correct nonce.
                 result = await wallet.fill_order(order_id, fill_amount, fill_dest_address)
-                fill_tx2_id = result['result']['tx_id']
-                assert fill_tx2_id is not None
+                assert_in("The transaction was submitted successfully", result)
 
                 self.generate_block()
                 assert_in("Success", await wallet.sync())

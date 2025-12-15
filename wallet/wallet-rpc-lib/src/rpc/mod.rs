@@ -26,6 +26,9 @@ use std::{
     time::Duration,
 };
 
+use futures::{stream::FuturesUnordered, TryStreamExt as _};
+use itertools::Itertools as _;
+
 use chainstate::{
     rpc::{RpcOutputValueIn, RpcOutputValueOut},
     tx_verifier::check_transaction,
@@ -58,7 +61,6 @@ use crypto::{
     key::{hdkd::u31::U31, PrivateKey, PublicKey},
     vrf::VRFPublicKey,
 };
-use futures::{stream::FuturesUnordered, TryStreamExt as _};
 use mempool::tx_accumulator::PackingStrategy;
 use mempool_types::tx_options::TxOptionsOverrides;
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
@@ -67,7 +69,7 @@ use types::{
     AccountExtendedPublicKey, NewOrderTransaction, NewSubmittedTransaction, NewTokenTransaction,
     RpcHashedTimelockContract, RpcNewTransaction, RpcPreparedTransaction,
 };
-use utils::{ensure, shallow_clone::ShallowClone};
+use utils::{ensure, shallow_clone::ShallowClone, sorted::Sorted as _};
 use utils_networking::IpOrSocketAddress;
 use wallet::{
     account::{transaction_list::TransactionList, PoolData, TransactionToSign, TxInfo},
@@ -1822,7 +1824,7 @@ where
             },
         );
 
-        Ok(itertools::process_results(result_iter, |iter| {
+        let result = itertools::process_results(result_iter, |iter| {
             // Filter out concluded orders whose conclusion has been confirmed.
             // Note that this will also filter out orders that were concluded right after creation,
             // so that the creation tx has not been included in a block yet. Technically this
@@ -1831,8 +1833,14 @@ where
             iter.filter(|info| {
                 !(info.is_marked_as_concluded_in_wallet && info.existing_order_data.is_none())
             })
-            .collect()
-        })?)
+            .collect_vec()
+        })?;
+        // Note: currently the infos should be sorted by plain order id (because this is how
+        // they are sorted in the output cache).
+        // We re-sort then by the bech32 representation of the order id, to simplify testing.
+        let result = result.sorted_by(|info1, info2| info1.order_id.cmp(&info2.order_id));
+
+        Ok(result)
     }
 
     pub async fn list_all_active_orders(
@@ -1910,7 +1918,11 @@ where
                     })
                 })
             })
-            .collect::<Result<_, _>>()?;
+            .collect::<Result<Vec<_>, _>>()?;
+        // Note: currently the infos are sorted by plain order id (because node_rpc_order_infos
+        // is a BTreeMap).
+        // We re-sort then by the bech32 representation of the order id, to simplify testing.
+        let result = result.sorted_by(|info1, info2| info1.order_id.cmp(&info2.order_id));
 
         Ok(result)
     }

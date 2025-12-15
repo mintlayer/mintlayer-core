@@ -15,12 +15,13 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+from test_framework.wallet_rpc_controller import WalletRpcController
 from wallet_orders_impl import WalletOrdersImpl
 
 
 class WalletOrdersV1(WalletOrdersImpl):
     def set_test_params(self):
-        super().set_test_params(True)
+        super().set_test_params(True, WalletRpcController)
 
 
 if __name__ == '__main__':

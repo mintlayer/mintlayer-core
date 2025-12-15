@@ -208,7 +208,7 @@ pub fn format_active_order_info<N: NodeInterface>(
             "Id: {id}, ",
             "Given: {g} [left: {rg}], ",
             "Asked: {a} [left: {ra}], ",
-            "Give/Ask: {price}, "
+            "Give/Ask: {price}"
         ),
         marker = if order_info.is_own { "*" } else { " " },
         id = order_info.order_id,

@@ -30,6 +30,7 @@ from test_framework.test_framework import BitcoinTestFramework
 from test_framework.mintlayer import (make_tx, reward_input, ATOMS_PER_COIN)
 from test_framework.util import assert_in, assert_equal, assert_not_in
 from test_framework.mintlayer import  block_input_data_obj
+from test_framework.wallet_cli_controller import WalletCliController
 from test_framework.wallet_rpc_controller import WalletRpcController
 
 import asyncio
@@ -38,8 +39,9 @@ import random
 ATOMS_PER_TOKEN = 100
 
 class WalletOrdersImpl(BitcoinTestFramework):
-    def set_test_params(self, use_orders_v1):
+    def set_test_params(self, use_orders_v1, wallet_controller):
         self.use_orders_v1 = use_orders_v1
+        self.wallet_controller = wallet_controller
         self.setup_clean_chain = True
         self.num_nodes = 1
 
@@ -83,7 +85,8 @@ class WalletOrdersImpl(BitcoinTestFramework):
         node = self.nodes[0]
 
         # new wallet
-        async with WalletRpcController(node, self.config, self.log, [], self.chain_config_args()) as wallet:
+        wallet: WalletRpcController | WalletCliController
+        async with self.wallet_controller(node, self.config, self.log, [], self.chain_config_args()) as wallet:
             await wallet.create_wallet('alice_wallet')
 
             # check it is on genesis
@@ -161,8 +164,7 @@ class WalletOrdersImpl(BitcoinTestFramework):
             assert_not_in("Tokens", balance)
 
             amount_to_mint = random.randint(100, 10000)
-            mint_result = await wallet.mint_tokens(token_id, alice_address, amount_to_mint)
-            assert mint_result['tx_id'] is not None
+            await wallet.mint_tokens_or_fail(token_id, alice_address, amount_to_mint)
 
             self.generate_block()
             assert_in("Success", await wallet.sync())
@@ -172,9 +174,7 @@ class WalletOrdersImpl(BitcoinTestFramework):
 
             ########################################################################################
             # Alice creates an order selling tokens for coins
-            create_order_result = await wallet.create_order(None, amount_to_mint * 2, token_id, amount_to_mint, alice_address)
-            assert create_order_result['result']['tx_id'] is not None
-            order_id = create_order_result['result']['order_id']
+            order_id = await wallet.create_order(None, amount_to_mint * 2, token_id, amount_to_mint, alice_address)
 
             self.generate_block()
             assert_in("Success", await wallet.sync())
@@ -191,7 +191,7 @@ class WalletOrdersImpl(BitcoinTestFramework):
 
             # buy 1 token
             fill_order_result = await wallet.fill_order(order_id, 2)
-            assert fill_order_result['result']['tx_id'] is not None
+            assert_in("The transaction was submitted successfully", fill_order_result)
             self.generate_block()
             assert_in("Success", await wallet.sync())
             balance = await wallet.get_balance()
@@ -200,7 +200,7 @@ class WalletOrdersImpl(BitcoinTestFramework):
 
             # try conclude order
             conclude_order_result = await wallet.conclude_order(order_id)
-            assert_in("Failed to convert partially signed tx to signed", conclude_order_result['error']['message'])
+            assert_in("Failed to convert partially signed tx to signed", conclude_order_result)
 
             ########################################################################################
             # Carol fills the order partially
@@ -211,7 +211,7 @@ class WalletOrdersImpl(BitcoinTestFramework):
 
             # buy 5 token
             fill_order_result = await wallet.fill_order(order_id, 10)
-            assert fill_order_result['result']['tx_id'] is not None
+            assert_in("The transaction was submitted successfully", fill_order_result)
             self.generate_block()
             assert_in("Success", await wallet.sync())
             balance = await wallet.get_balance()
@@ -220,11 +220,11 @@ class WalletOrdersImpl(BitcoinTestFramework):
 
             # try freeze order
             freeze_order_result = await wallet.freeze_order(order_id)
-            assert_in("Failed to convert partially signed tx to signed", freeze_order_result['error']['message'])
+            assert_in("Failed to convert partially signed tx to signed", freeze_order_result)
 
             # try conclude order
             conclude_order_result = await wallet.conclude_order(order_id)
-            assert_in("Failed to convert partially signed tx to signed", conclude_order_result['error']['message'])
+            assert_in("Failed to convert partially signed tx to signed", conclude_order_result)
 
             if self.use_orders_v1:
                 ########################################################################################
@@ -233,7 +233,7 @@ class WalletOrdersImpl(BitcoinTestFramework):
                 assert_in("Success", await wallet.sync())
 
                 freeze_order_result = await wallet.freeze_order(order_id)
-                assert freeze_order_result['result']['tx_id'] is not None
+                assert_in("The transaction was submitted successfully", freeze_order_result)
                 self.generate_block()
                 assert_in("Success", await wallet.sync())
 
@@ -241,7 +241,7 @@ class WalletOrdersImpl(BitcoinTestFramework):
                 # Carol tries filling again
                 await self.switch_to_wallet(wallet, 'carol_wallet')
                 fill_order_result = await wallet.fill_order(order_id, 1)
-                assert_in("Attempt to fill frozen order", fill_order_result['error']['message'])
+                assert_in("Attempt to fill frozen order", fill_order_result)
 
             ########################################################################################
             # Alice concludes the order
@@ -249,7 +249,7 @@ class WalletOrdersImpl(BitcoinTestFramework):
             assert_in("Success", await wallet.sync())
 
             conclude_order_result = await wallet.conclude_order(order_id)
-            assert conclude_order_result['result']['tx_id'] is not None
+            assert_in("The transaction was submitted successfully", conclude_order_result)
             self.generate_block()
             assert_in("Success", await wallet.sync())
             balance = await wallet.get_balance()
@@ -260,4 +260,4 @@ class WalletOrdersImpl(BitcoinTestFramework):
             # Carol tries filling again
             await self.switch_to_wallet(wallet, 'carol_wallet')
             fill_order_result = await wallet.fill_order(order_id, 1)
-            assert_in("Unknown order", fill_order_result['error']['message'])
+            assert_in("Unknown order", fill_order_result)
