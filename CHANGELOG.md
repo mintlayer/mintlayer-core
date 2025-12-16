@@ -50,7 +50,7 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
   - Node RPC:
     - `chainstate_order_info` will no longer fail if one of the order's balances became zero.
-    
+
     - Documentation-only changes:
       - Certain parameters and/or returned values that were previously (incorrectly) designated as
         "hex string" are now designated as "hexified xxx id".

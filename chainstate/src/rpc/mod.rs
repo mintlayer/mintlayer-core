@@ -413,7 +413,7 @@ impl ChainstateRpcServer for super::ChainstateHandle {
                 pool_data
                     .map(|d| -> Result<_, DynamizedError> {
                         let addr = dynamize_err(Address::new(
-                            &chain_config,
+                            chain_config,
                             d.decommission_destination().clone(),
                         ))?;
 
@@ -453,7 +453,7 @@ impl ChainstateRpcServer for super::ChainstateHandle {
             self.call(move |this| {
                 let chain_config = this.get_chain_config();
                 let token_info_result: Result<Option<RPCTokenInfo>, _> =
-                    dynamize_err(token_id.decode_object(&chain_config))
+                    dynamize_err(token_id.decode_object(chain_config))
                         .and_then(|token_id| dynamize_err(this.get_token_info_for_rpc(token_id)));
 
                 token_info_result
@@ -473,7 +473,7 @@ impl ChainstateRpcServer for super::ChainstateHandle {
                 let token_ids = token_ids
                     .into_iter()
                     .map(|token_id| -> Result<_, DynamizedError> {
-                        Ok(token_id.decode_object(&chain_config)?)
+                        Ok(token_id.decode_object(chain_config)?)
                     })
                     .collect::<Result<_, _>>()?;
 
@@ -488,7 +488,7 @@ impl ChainstateRpcServer for super::ChainstateHandle {
             self.call(move |this| {
                 let chain_config = this.get_chain_config();
                 let result: Result<Option<RpcOrderInfo>, _> =
-                    dynamize_err(order_id.decode_object(&chain_config))
+                    dynamize_err(order_id.decode_object(chain_config))
                         .and_then(|order_id| dynamize_err(this.get_order_info_for_rpc(&order_id)));
 
                 result

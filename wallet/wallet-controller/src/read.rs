@@ -424,7 +424,7 @@ where
     }
 
     /// Return info about all orders owned by the selected account.
-    pub async fn get_own_orders(
+    pub fn get_own_orders(
         &self,
     ) -> Result<Vec<(OrderId, wallet::account::OrderData)>, ControllerError<T>> {
         self.wallet.get_orders(self.account_index).map_err(ControllerError::WalletError)

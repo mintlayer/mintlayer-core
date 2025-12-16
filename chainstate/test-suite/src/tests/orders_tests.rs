@@ -183,7 +183,7 @@ fn assert_order_exists(
             .unwrap(),
         ask_balance: expected_data.ask_balance.unwrap_or(Amount::ZERO),
         give_balance: expected_data.give_balance.unwrap_or(Amount::ZERO),
-        nonce: expected_data.nonce.clone(),
+        nonce: expected_data.nonce,
         is_frozen: expected_data.is_frozen,
     };
 
@@ -383,9 +383,9 @@ fn assert_order_missing(tf: &TestFramework, order_id: &OrderId, no_other_orders_
     {
         let storage_tx = tf.storage.transaction_ro().unwrap();
 
-        assert_eq!(storage_tx.get_order_data(&order_id).unwrap(), None);
-        assert_eq!(storage_tx.get_ask_balance(&order_id).unwrap(), None);
-        assert_eq!(storage_tx.get_give_balance(&order_id).unwrap(), None);
+        assert_eq!(storage_tx.get_order_data(order_id).unwrap(), None);
+        assert_eq!(storage_tx.get_ask_balance(order_id).unwrap(), None);
+        assert_eq!(storage_tx.get_give_balance(order_id).unwrap(), None);
 
         let all_order_ids = storage_tx.get_all_order_ids().unwrap();
         assert!(!all_order_ids.contains(order_id));

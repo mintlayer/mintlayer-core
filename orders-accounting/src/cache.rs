@@ -159,7 +159,7 @@ impl<P: OrdersAccountingView> OrdersAccountingView for OrdersAccountingCache<P> 
                 }
             })
             .chain(self.data.order_data.data().keys().copied().filter(|id| {
-                match self.data.order_data.get_data(&id) {
+                match self.data.order_data.get_data(id) {
                     accounting::GetDataResult::Present(_) => true,
                     accounting::GetDataResult::Missing => {
                         // This shouldn't happen.

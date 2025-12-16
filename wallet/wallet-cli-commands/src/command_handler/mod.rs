@@ -1342,7 +1342,7 @@ where
                     .into_coins_and_tokens();
 
                 let token_ids_str_vec =
-                    tokens.iter().map(|(token_id, _)| token_id.as_str().to_owned()).collect_vec();
+                    tokens.keys().map(|token_id| token_id.as_str().to_owned()).collect_vec();
 
                 let token_infos = wallet
                     .node_get_tokens_info(token_ids_str_vec)
@@ -2082,12 +2082,12 @@ where
 
                 // Sort the orders, so that the newer ones appear later.
                 let order_infos = order_infos.sorted_by(|info1, info2| {
+                    use std::cmp::Ordering;
+
                     let ts1 =
                         info1.existing_order_data.as_ref().map(|data| data.creation_timestamp);
                     let ts2 =
                         info2.existing_order_data.as_ref().map(|data| data.creation_timestamp);
-
-                    use std::cmp::Ordering;
 
                     let ts_cmp_result = match (ts1, ts2) {
                         (Some(ts1), Some(ts2)) => ts1.cmp(&ts2),
@@ -2221,12 +2221,12 @@ where
             })
             .collect_vec();
 
-        use std::cmp::Ordering;
-
         // This will be used with order_infos_with_price, so we know that the token_infos map
         // contains all tokens that we may encounter here.
         let compare_currencies =
             |token1_id: Option<&RpcAddress<TokenId>>, token2_id: Option<&RpcAddress<TokenId>>| {
+                use std::cmp::Ordering;
+
                 let ticker_by_id = |token_id| {
                     token_ticker_from_rpc_token_info(
                         token_infos.get(token_id).expect("Token info is known to be present"),

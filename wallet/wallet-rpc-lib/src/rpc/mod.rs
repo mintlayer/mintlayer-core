@@ -777,9 +777,9 @@ where
         let token_ids = token_ids
             .into_iter()
             .map(|token_id_addr| -> WRpcResult<_, N> {
-                Ok(token_id_addr
+                token_id_addr
                     .decode_object(&self.chain_config)
-                    .map_err(|_| RpcError::InvalidAddress)?)
+                    .map_err(|_| RpcError::InvalidAddress)
             })
             .collect::<Result<_, _>>()?;
         let infos = self.node.get_tokens_info(token_ids).await.map_err(RpcError::RpcError)?;
@@ -1730,11 +1730,7 @@ where
     pub async fn list_own_orders(&self, account_index: U31) -> WRpcResult<Vec<OwnOrderInfo>, N> {
         let wallet_orders_data = self
             .wallet
-            .call_async(move |controller| {
-                Box::pin(async move {
-                    controller.readonly_controller(account_index).get_own_orders().await
-                })
-            })
+            .call(move |controller| controller.readonly_controller(account_index).get_own_orders())
             .await??;
         let token_ids = collect_token_v1_ids_from_rpc_output_values_holders(
             wallet_orders_data.iter().map(|(_, order_data)| order_data),
@@ -1851,11 +1847,7 @@ where
     ) -> WRpcResult<Vec<ActiveOrderInfo>, N> {
         let wallet_order_ids = self
             .wallet
-            .call_async(move |controller| {
-                Box::pin(async move {
-                    controller.readonly_controller(account_index).get_own_orders().await
-                })
-            })
+            .call(move |controller| controller.readonly_controller(account_index).get_own_orders())
             .await??
             .into_iter()
             .map(|(order_id, _)| order_id)
@@ -1874,9 +1866,8 @@ where
             .await
             .map_err(RpcError::RpcError)?;
 
-        let token_ids = collect_token_v1_ids_from_rpc_output_values_holders(
-            node_rpc_order_infos.iter().map(|(_, order_node_rpc_info)| order_node_rpc_info),
-        );
+        let token_ids =
+            collect_token_v1_ids_from_rpc_output_values_holders(node_rpc_order_infos.values());
         let token_decimals = self.get_tokens_decimals(token_ids).await?;
 
         let result = node_rpc_order_infos

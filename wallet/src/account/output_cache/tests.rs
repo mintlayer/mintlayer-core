@@ -1140,7 +1140,7 @@ fn add_random_transfer_tx(
 
     output_cache
         .add_tx(
-            &chain_config,
+            chain_config,
             BlockHeight::new(rng.gen_range(0..100)),
             tx_id.into(),
             WalletTx::Tx(TxData::new(tx, tx_state)),
