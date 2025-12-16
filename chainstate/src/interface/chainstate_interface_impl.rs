@@ -860,7 +860,7 @@ where
             .map_err(ChainstateError::from)
     }
 
-    #[tracing::instrument(skip_all, fields(ask_currency, give_currency))]
+    #[tracing::instrument(skip(self))]
     fn get_orders_info_for_rpc_by_currencies(
         &self,
         ask_currency: Option<&Currency>,

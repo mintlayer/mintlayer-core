@@ -15,14 +15,13 @@
 
 use std::{borrow::Cow, collections::BTreeMap};
 
-use chainstate_storage::Transactional as _;
-use orders_accounting::OrdersAccountingStorageRead as _;
 use rstest::rstest;
 
 use chainstate::{
     BlockError, ChainstateError, CheckBlockError, CheckBlockTransactionsError,
     ConnectTransactionError,
 };
+use chainstate_storage::Transactional as _;
 use chainstate_test_framework::{
     helpers::{
         calculate_fill_order, issue_and_mint_random_token_from_best_block,
@@ -49,6 +48,7 @@ use common::{
 };
 use crypto::key::{KeyKind, PrivateKey};
 use logging::log;
+use orders_accounting::OrdersAccountingStorageRead as _;
 use randomness::{CryptoRng, Rng, SliceRandom};
 use test_utils::random::{gen_random_bytes, make_seedable_rng, Seed};
 use tx_verifier::{

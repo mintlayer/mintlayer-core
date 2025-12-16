@@ -27,7 +27,7 @@ use crate::{
 // The reason for having RPC types in the first place is that in RPC we'd like for certain things to have a more
 // human-readable representation, namely:
 // 1) Destinations, VRF public keys and ids of pools/delegations/tokens/orders should be bech32-encoded instead
-// of hex-encoded or "hexified" via `HexifiedAddress`. For this purpose we have the `RpcAddress` wrapper
+// of being hex-encoded or "hexified" via `HexifiedAddress`. For this purpose we have the `RpcAddress` wrapper
 // (which holds a bech-32 encoded string), so e.g. `RpcAddress<PoolId>` should be used instead of the plain
 // PoolId in RPC types.
 // 2) Amounts are more readable when they are in the decimal form instead of the plain number of atoms. But we also
@@ -49,7 +49,7 @@ use crate::{
 // `RpcTokenTotalSupplyIn` and moved out of the wallet).
 //
 // What should we do:
-// 1) The "RPC" prefix should be replace with "Rpc" to honor Rust's naming conventions.
+// 1) The "RPC" prefix should be replaced with "Rpc" to honor Rust's naming conventions.
 // 2) `RpcOutputValue` should be renamed to `OutputValueV1` and it should *not* implement `HasValueHint`.
 // Also, all functions that take `RpcOutputValue` and are named as such (e.g. `from_rpc_output_value` below)
 // should be renamed as well.
@@ -60,7 +60,7 @@ use crate::{
 // "Rpc...In" or "...Out" type. Which in turn means that RPC types that contain an amount or an output value must
 // themselves be designated as "In" or "Out" and have the corresponding suffix.
 // 5) We also need to reconsider where the RPC types live. Currently many of them live in `common`, even though they're
-// only used in the chainstate rpc, but lots of others live in `chainstate`, see the contents of the `chainstate/src/rpc/types/`
+// only used in the chainstate RPC, but lots of others live in `chainstate`, see the contents of the `chainstate/src/rpc/types/`
 // folder. One approach would be to put an RPC type into the same crate as its non-RPC counterpart. Another approach
 // is to put them all to chainstate (note that blockprod and mempool depend on chainstate, so we'll be able to use
 // chainstate types in their RPC interfaces if needed).

@@ -14,7 +14,7 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
-"""Wallet own orders listing test, CLI
+"""Test listing own orders via CLI
 """
 
 from test_framework.util import assert_in, assert_equal

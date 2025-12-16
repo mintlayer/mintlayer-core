@@ -2065,62 +2065,65 @@ where
                     .await?;
                 Ok(Self::new_tx_command(new_tx, chain_config))
             }
-            WalletCommand::ListOwnOrders => {
-                let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
-
-                let order_infos = wallet.list_own_orders(selected_account).await?;
-                let token_ids_str_vec = get_token_ids_from_order_infos_as_str(
-                    order_infos.iter().map(|info| (&info.initially_asked, &info.initially_given)),
-                );
-
-                let token_infos = wallet
-                    .node_get_tokens_info(token_ids_str_vec)
-                    .await?
-                    .into_iter()
-                    .map(|info| (info.token_id(), info))
-                    .collect();
-
-                // Sort the orders, so that the newer ones appear later.
-                let order_infos = order_infos.sorted_by(|info1, info2| {
-                    use std::cmp::Ordering;
-
-                    let ts1 =
-                        info1.existing_order_data.as_ref().map(|data| data.creation_timestamp);
-                    let ts2 =
-                        info2.existing_order_data.as_ref().map(|data| data.creation_timestamp);
-
-                    let ts_cmp_result = match (ts1, ts2) {
-                        (Some(ts1), Some(ts2)) => ts1.cmp(&ts2),
-                        // Note: the logic here is opposite to the normal comparison of Option's -
-                        // we want None to be bigger than Some, so that "unconfirmed" orders
-                        // appear later in the list.
-                        (Some(_), None) => Ordering::Less,
-                        (None, Some(_)) => Ordering::Greater,
-                        (None, None) => Ordering::Equal,
-                    };
-
-                    if ts_cmp_result == Ordering::Equal {
-                        info1.order_id.cmp(&info2.order_id)
-                    } else {
-                        ts_cmp_result
-                    }
-                });
-
-                let order_infos = order_infos
-                    .iter()
-                    .map(|info| format_own_order_info(info, chain_config, &token_infos))
-                    .collect::<Result<Vec<_>, _>>()?;
-
-                Ok(ConsoleCommand::Print(format!(
-                    "{}\n",
-                    order_infos.join("\n")
-                )))
-            }
+            WalletCommand::ListOwnOrders => self.list_own_orders(chain_config).await,
             WalletCommand::ListActiveOrders {
                 ask_currency,
                 give_currency,
             } => self.list_all_active_orders(chain_config, ask_currency, give_currency).await,
         }
+    }
+
+    async fn list_own_orders<N: NodeInterface>(
+        &mut self,
+        chain_config: &ChainConfig,
+    ) -> Result<ConsoleCommand, WalletCliCommandError<N>>
+    where
+        WalletCliCommandError<N>: From<E>,
+    {
+        let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
+
+        let order_infos = wallet.list_own_orders(selected_account).await?;
+        let token_ids_str_vec = get_token_ids_from_order_infos_as_str(
+            order_infos.iter().map(|info| (&info.initially_asked, &info.initially_given)),
+        );
+
+        let token_infos = wallet
+            .node_get_tokens_info(token_ids_str_vec)
+            .await?
+            .into_iter()
+            .map(|info| (info.token_id(), info))
+            .collect();
+
+        // Sort the orders, so that the newer ones appear later.
+        let order_infos = order_infos.sorted_by(|info1, info2| {
+            use std::cmp::Ordering;
+
+            let ts1 = info1.existing_order_data.as_ref().map(|data| data.creation_timestamp);
+            let ts2 = info2.existing_order_data.as_ref().map(|data| data.creation_timestamp);
+
+            let ts_cmp_result = match (ts1, ts2) {
+                (Some(ts1), Some(ts2)) => ts1.cmp(&ts2),
+                // Note: the logic here is opposite to the normal comparison of Option's -
+                // we want None to be bigger than Some, so that "unconfirmed" orders
+                // appear later in the list.
+                (Some(_), None) => Ordering::Less,
+                (None, Some(_)) => Ordering::Greater,
+                (None, None) => Ordering::Equal,
+            };
+
+            // If the timestamps are equal, sort the orders by id in the bech32 encoding.
+            ts_cmp_result.then_with(|| info1.order_id.cmp(&info2.order_id))
+        });
+
+        let order_infos = order_infos
+            .iter()
+            .map(|info| format_own_order_info(info, chain_config, &token_infos))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(ConsoleCommand::Print(format!(
+            "{}\n",
+            order_infos.join("\n")
+        )))
     }
 
     async fn list_all_active_orders<N: NodeInterface>(

@@ -16,20 +16,20 @@
 use std::{collections::BTreeMap, fmt::Display, str::FromStr};
 
 use bigdecimal::BigDecimal;
-use chainstate::rpc::RpcOutputValueOut;
 use clap::ValueEnum;
+use itertools::Itertools;
 
+use chainstate::rpc::RpcOutputValueOut;
 use common::{
     address::{decode_address, Address, RpcAddress},
     chain::{
         tokens::{RPCTokenInfo, TokenId},
-        ChainConfig, Currency, OutPointSourceId, RpcCurrency, TxOutput, UtxoOutPoint,
+        ChainConfig, Currency, Destination, OutPointSourceId, RpcCurrency, TxOutput, UtxoOutPoint,
     },
     primitives::{
         amount::decimal::subtract_decimal_amounts_of_same_currency, DecimalAmount, Id, H256,
     },
 };
-use itertools::Itertools;
 use wallet_controller::types::{GenericCurrencyTransfer, GenericTokenTransfer};
 use wallet_rpc_lib::types::{
     ActiveOrderInfo, NodeInterface, OwnOrderInfo, PoolInfo, TokenTotalSupply,
@@ -127,6 +127,7 @@ pub fn format_own_order_info<N: NodeInterface>(
     token_infos: &BTreeMap<TokenId, RPCTokenInfo>,
 ) -> Result<String, WalletCliCommandError<N>> {
     if let Some(existing_order_data) = &order_info.existing_order_data {
+        // The order exists on chain
         let accumulated_ask_amount = subtract_decimal_amounts_of_same_currency(
             &order_info.initially_asked.amount().decimal(),
             &existing_order_data.ask_balance.decimal(),
@@ -173,6 +174,7 @@ pub fn format_own_order_info<N: NodeInterface>(
             st = status,
         ))
     } else {
+        // The order only exists in the wallet
         Ok(format!(
             concat!(
                 "Id: {id}, ",
@@ -387,11 +389,7 @@ pub fn parse_generic_currency_transfer<N: NodeInterface>(
         }
     };
 
-    let destination = Address::from_string(chain_config, dest_str)
-        .map_err(|err| {
-            WalletCliCommandError::<N>::InvalidInput(format!("Invalid address '{dest_str}': {err}"))
-        })?
-        .into_object();
+    let destination = parse_destination(chain_config, dest_str)?;
     let amount = parse_decimal_amount(amount_str)?;
     let output = match name {
         "transfer" => GenericCurrencyTransfer {
@@ -438,11 +436,7 @@ pub fn parse_generic_token_transfer<N: NodeInterface>(
         })?
         .into_object();
 
-    let destination = Address::from_string(chain_config, dest_str)
-        .map_err(|err| {
-            WalletCliCommandError::<N>::InvalidInput(format!("Invalid address '{dest_str}': {err}"))
-        })?
-        .into_object();
+    let destination = parse_destination(chain_config, dest_str)?;
     let amount = parse_decimal_amount(amount_str)?;
     let output = match name {
         "transfer" => GenericTokenTransfer {
@@ -556,6 +550,16 @@ pub fn parse_decimal_amount<N: NodeInterface>(
     })
 }
 
+/// Parse a destination
+pub fn parse_destination<N: NodeInterface>(
+    chain_config: &ChainConfig,
+    input: &str,
+) -> Result<Destination, WalletCliCommandError<N>> {
+    decode_address(chain_config, input).map_err(|err| {
+        WalletCliCommandError::<N>::InvalidInput(format!("Invalid address '{input}': {err}"))
+    })
+}
+
 /// Try parsing the passed input as coins (case-insensitive "coin" is accepted) or
 /// as a token id.
 pub fn parse_currency<N: NodeInterface>(
@@ -572,6 +576,7 @@ pub fn parse_currency<N: NodeInterface>(
     }
 }
 
+/// Same as `parse_currency`, but return `RpcCurrency`.
 pub fn parse_rpc_currency<N: NodeInterface>(
     input: &str,
     chain_config: &ChainConfig,

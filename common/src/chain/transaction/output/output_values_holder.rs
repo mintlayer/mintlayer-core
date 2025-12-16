@@ -71,12 +71,6 @@ pub fn collect_token_v1_ids_from_rpc_output_values_holder_into(
     }
 }
 
-pub fn collect_token_v1_ids_from_rpc_output_values_holder(
-    holder: &impl RpcOutputValuesHolder,
-) -> BTreeSet<TokenId> {
-    collect_token_v1_ids_from_rpc_output_values_holders(std::iter::once(holder))
-}
-
 pub fn collect_token_v1_ids_from_rpc_output_values_holders<'a, H: RpcOutputValuesHolder + 'a>(
     holders: impl IntoIterator<Item = &'a H>,
 ) -> BTreeSet<TokenId> {

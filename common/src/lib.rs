@@ -31,8 +31,9 @@ pub use uint::{Uint128, Uint256, Uint512, UintConversionError};
 mod tests {
     use std::str::FromStr as _;
 
-    use crypto::vrf::VRFPublicKey;
     use hex::FromHex;
+
+    use crypto::vrf::VRFPublicKey;
     use rpc_description::HasValueHint;
     use serialization::DecodeAll as _;
 

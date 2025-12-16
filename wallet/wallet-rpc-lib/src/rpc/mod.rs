@@ -1831,7 +1831,7 @@ where
             })
             .collect_vec()
         })?;
-        // Note: currently the infos should be sorted by plain order id (because this is how
+        // Note: currently the infos are sorted by plain order id (because this is how
         // they are sorted in the output cache).
         // We re-sort then by the bech32 representation of the order id, to simplify testing.
         let result = result.sorted_by(|info1, info2| info1.order_id.cmp(&info2.order_id));

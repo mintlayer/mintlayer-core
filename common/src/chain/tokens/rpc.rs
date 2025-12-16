@@ -151,7 +151,6 @@ impl RPCFungibleTokenInfo {
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct RPCNonFungibleTokenInfo {
-    // TODO: same as in RPCFungibleTokenInfo, use RpcAddress<TokenId> here.
     pub token_id: TokenId,
     pub creation_tx_id: Id<Transaction>,
     pub creation_block_id: Id<Block>,
