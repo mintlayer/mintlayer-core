@@ -452,20 +452,19 @@ where
 
 #[cfg(test)]
 mod tests {
-
     use std::sync::Arc;
 
     use chainstate_storage::inmemory::Store;
     use common::{
         chain::{config::create_unit_test_config, ChainConfig},
         primitives::BlockHeight,
+        time_getter::TimeGetter,
     };
 
     use crate::{
         chainstate_interface::ChainstateInterface, make_chainstate, ChainstateConfig,
         DefaultTransactionVerificationStrategy,
     };
-    use common::time_getter::TimeGetter;
 
     fn test_interface_ref<C: ChainstateInterface>(chainstate: &C, chain_config: &ChainConfig) {
         assert_eq!(
@@ -495,8 +494,8 @@ mod tests {
             let chain_config = Arc::new(create_unit_test_config());
             let chainstate_config = ChainstateConfig {
                 max_db_commit_attempts: 10.into(),
+                enable_db_reckless_mode_in_ibd: Default::default(),
                 max_orphan_blocks: 0.into(),
-                min_max_bootstrap_import_buffer_sizes: Default::default(),
                 max_tip_age: Default::default(),
                 enable_heavy_checks: Some(true),
                 allow_checkpoints_mismatch: Default::default(),

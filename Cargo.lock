@@ -1243,6 +1243,7 @@ dependencies = [
  "serialization",
  "static_assertions",
  "storage",
+ "strum 0.26.3",
  "subsystem",
  "test-utils",
  "thiserror 1.0.69",
@@ -1314,7 +1315,9 @@ dependencies = [
  "rstest",
  "serialization",
  "storage",
+ "storage-failing",
  "storage-inmemory",
+ "storage-lmdb",
  "test-utils",
  "tokens-accounting",
  "utils",
@@ -1340,6 +1343,7 @@ dependencies = [
  "randomness",
  "rstest",
  "serialization",
+ "storage",
  "storage-failing",
  "storage-inmemory",
  "strum 0.26.3",
@@ -1375,6 +1379,7 @@ dependencies = [
  "randomness",
  "rstest",
  "serialization",
+ "strum 0.26.3",
  "test-utils",
  "tokens-accounting",
  "tokio",
@@ -1968,6 +1973,7 @@ dependencies = [
  "generic-array",
  "hex",
  "hmac",
+ "lazy_static",
  "merlin",
  "num",
  "num-derive",
@@ -4330,7 +4336,7 @@ checksum = "241eaef5fd12c88705a01fc1066c48c4b36e0dd4377dcdc7ec3942cea7a69956"
 [[package]]
 name = "lmdb-mintlayer"
 version = "0.16.2"
-source = "git+https://github.com/mintlayer/lmdb-rs-mintlayer.git?tag=v0.16.2#fb33e56a76697dd6f484c6d21f89a99ef9145e93"
+source = "git+https://github.com/ImplOfAnImpl/lmdb-rs-mintlayer.git?rev=9de1332f6307a9b1aad1e371bdb213188c93115a#9de1332f6307a9b1aad1e371bdb213188c93115a"
 dependencies = [
  "bitflags 1.3.2",
  "byteorder",
@@ -4343,7 +4349,7 @@ dependencies = [
 [[package]]
 name = "lmdb-rkv-sys"
 version = "0.11.3"
-source = "git+https://github.com/mintlayer/lmdb-rs-mintlayer.git?tag=v0.16.2#fb33e56a76697dd6f484c6d21f89a99ef9145e93"
+source = "git+https://github.com/ImplOfAnImpl/lmdb-rs-mintlayer.git?rev=9de1332f6307a9b1aad1e371bdb213188c93115a#9de1332f6307a9b1aad1e371bdb213188c93115a"
 dependencies = [
  "cc",
  "libc",

@@ -22,6 +22,9 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
       mirroring their existing RPC counterparts;
     - other new commands added: `order-list-own`, `order-list-all-active`;
 
+  - Node:
+    - Added an option to `node-daemon` and `node-gui` to import a bootstrap file on start. FIXME
+
 ### Changed
   - Wallet RPC:
     - `wallet_info`: the structure of the returned field `extra_info` was changed.
@@ -40,6 +43,9 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
     - Documentation-only changes:
       - Certain parameters that were designated as "string" are now designated as "bech32 string".
 
+  - Node:
+    - The now redundant option `min_max_bootstrap_import_buffer_sizes` was removed from chainstate config.
+
 ### Fixed
   - p2p: when a peer sends a message that can't be decoded, it will now be discouraged (which is what
     is normally done for misbehaving peers) and the node won't try connecting to it again.\
@@ -57,6 +63,16 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
       - Parameters and/or returned values having the "plain" `Destination` type were incorrectly
         designated as "bech32 string", while in reality they are "hexified destination".
+
+    - Bootstrapping:
+      - Fixed a bug where `chainstate_import_bootstrap_file` would truncate  the bootstrap file
+        to zero length instead of importing it.
+      
+      - Importing a bootstrap file will no longer fail if some of the blocks already exist in the
+        chainstate. FIXME
+
+      - The speed of the import was improved.
+
 
 ## [1.2.0] - 2025-10-27
 

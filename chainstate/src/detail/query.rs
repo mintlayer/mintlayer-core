@@ -90,8 +90,13 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         self.chainstate_ref.get_block(id)
     }
 
-    pub fn get_existing_block(&self, id: &Id<Block>) -> Result<Block, PropertyQueryError> {
-        self.chainstate_ref.get_block(id)?.ok_or(PropertyQueryError::BlockNotFound(*id))
+    pub fn get_encoded_existing_block(
+        &self,
+        id: &Id<Block>,
+    ) -> Result<Vec<u8>, PropertyQueryError> {
+        self.chainstate_ref
+            .get_encoded_block(id)?
+            .ok_or(PropertyQueryError::BlockNotFound(*id))
     }
 
     pub fn get_mainchain_blocks(

@@ -179,14 +179,27 @@ impl Secp256k1PublicKey {
         signature: &secp256k1::schnorr::Signature,
         msg_hashed: &secp256k1::Message,
     ) -> bool {
-        let secp = secp256k1::Secp256k1::new();
-        secp.verify_schnorr(
-            signature,
-            msg_hashed,
-            &self.pubkey_data.x_only_public_key().0,
-        )
-        .is_ok()
+        // Note: `Secp256k1::new()` introduces extra overhead due to context randomization,
+        // so we re-use the same "verification_only" object to avoid it.
+        // Also note that the overhead is noticeable when bootstrapping the chainstate using
+        // the "reckless" mode, e.g. importing the first ~640k blocks on Testnet took 708s
+        // when re-using the verifier object and 756s when creating a new one every time
+        // (in the non-"reckless" mode, however, the I/O dominates and the difference is barely
+        // noticeable, as both cases take more than 90 minutes to complete).
+        VERIFIER
+            .verify_schnorr(
+                signature,
+                msg_hashed,
+                &self.pubkey_data.x_only_public_key().0,
+            )
+            .is_ok()
     }
+}
+
+lazy_static::lazy_static! {
+    static ref VERIFIER: secp256k1::Secp256k1<secp256k1::VerifyOnly> = {
+        secp256k1::Secp256k1::verification_only()
+    };
 }
 
 #[cfg(test)]

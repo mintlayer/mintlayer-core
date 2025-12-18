@@ -271,6 +271,14 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     }
 
     #[log_error]
+    pub fn get_encoded_block(
+        &self,
+        block_id: &Id<Block>,
+    ) -> Result<Option<Vec<u8>>, PropertyQueryError> {
+        self.db_tx.get_encoded_block(block_id).map_err(PropertyQueryError::from)
+    }
+
+    #[log_error]
     pub fn block_exists(&self, block_id: &Id<Block>) -> Result<bool, PropertyQueryError> {
         self.db_tx.block_exists(block_id).map_err(PropertyQueryError::from)
     }

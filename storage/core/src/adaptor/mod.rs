@@ -17,7 +17,7 @@
 
 mod locking;
 
-pub use locking::Locking;
+pub use locking::{Locking, TransactionLockImpl};
 
 use crate::backend;
 

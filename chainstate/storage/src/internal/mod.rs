@@ -13,10 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod store_tx;
-
+mod blockchain_storage;
 #[cfg(any(test, feature = "expensive-reads"))]
 mod expensive;
+mod store_tx;
+mod version;
 
 use std::collections::BTreeMap;
 
@@ -31,13 +32,13 @@ use pos_accounting::{
 use utils::log_error;
 
 use crate::{
-    schema::Schema, BlockchainStorage, BlockchainStorageRead, BlockchainStorageWrite,
-    TransactionRw, Transactional,
+    schema::Schema, BlockchainStorageRead, BlockchainStorageWrite, TransactionRw, Transactional,
 };
 
+pub use blockchain_storage::{
+    BlockchainStorage, BlockchainStorageBackend, BlockchainStorageBackendImpl,
+};
 pub use store_tx::{StoreTxRo, StoreTxRw};
-
-mod version;
 pub use version::ChainstateStorageVersion;
 
 /// Store for blockchain data, parametrized over the backend B
@@ -113,7 +114,15 @@ impl<'tx, B: storage::SharedBackend + 'tx> Transactional<'tx> for Store<B> {
     }
 }
 
-impl<B: storage::SharedBackend + 'static> BlockchainStorage for Store<B> {}
+impl<B: BlockchainStorageBackend + 'static> BlockchainStorage for Store<B> {
+    fn set_reckless_mode(&self, set: bool) -> crate::Result<()> {
+        self.0.backend_impl().set_reckless_mode(set)
+    }
+
+    fn in_reckless_mode(&self) -> crate::Result<bool> {
+        self.0.backend_impl().in_reckless_mode()
+    }
+}
 
 impl<B: storage::SharedBackend> PoSAccountingStorageRead<TipStorageTag> for Store<B> {
     type Error = crate::Error;

@@ -568,6 +568,7 @@ impl BanScore for pos_accounting::Error {
 impl BanScore for ChainstateError {
     fn ban_score(&self) -> u32 {
         match self {
+            ChainstateError::StorageError(_) => 0,
             ChainstateError::FailedToInitializeChainstate(_) => 0,
             ChainstateError::ProcessBlockError(e) => e.ban_score(),
             ChainstateError::FailedToReadProperty(_) => 0,

@@ -23,7 +23,7 @@ use crate::{
     primitives::Amount,
 };
 
-// TODO: currently out RPC types are a bit of a mess and we need to revamp them.
+// TODO: currently our RPC types are a bit of a mess and we need to revamp them.
 // The reason for having RPC types in the first place is that in RPC we'd like for certain things to have a more
 // human-readable representation, namely:
 // 1) Destinations, VRF public keys and ids of pools/delegations/tokens/orders should be bech32-encoded instead

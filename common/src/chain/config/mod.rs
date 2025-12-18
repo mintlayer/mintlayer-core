@@ -154,7 +154,7 @@ impl ChainType {
         }
     }
 
-    const fn magic_bytes(&self) -> MagicBytes {
+    pub const fn magic_bytes(&self) -> MagicBytes {
         match self {
             ChainType::Mainnet => Self::MAINNET_MAGIC_BYTES,
             ChainType::Testnet => Self::TESTNET_MAGIC_BYTES,

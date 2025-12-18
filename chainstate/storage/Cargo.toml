@@ -17,7 +17,9 @@ pos-accounting = { path = "../../pos-accounting" }
 randomness = { path = "../../randomness" }
 serialization = { path = "../../serialization" }
 storage = { path = "../../storage" }
+storage-failing = { path = "../../storage/failing" }
 storage-inmemory = { path = "../../storage/inmemory" }
+storage-lmdb = { path = "../../storage/lmdb" }
 tokens-accounting = { path = "../../tokens-accounting" }
 utils = { path = "../../utils" }
 utxo = { path = "../../utxo" }

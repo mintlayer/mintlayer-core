@@ -156,6 +156,8 @@ pub struct LmdbImpl {
 
     /// Schedule a database resize of the database map
     map_resize_scheduled: Arc<AtomicBool>,
+
+    no_sync_on_commit: Arc<AtomicBool>,
 }
 
 impl LmdbImpl {
@@ -209,6 +211,19 @@ impl LmdbImpl {
         }
         err
     }
+
+    // FIXME ordering
+    pub fn set_no_sync_on_commit(&self, set: bool) {
+        self.no_sync_on_commit.store(set, Ordering::Release);
+    }
+
+    pub fn get_no_sync_on_commit(&self) -> bool {
+        self.no_sync_on_commit.load(Ordering::Acquire)
+    }
+
+    pub fn force_sync(&self) -> storage_core::Result<()> {
+        self.env.sync(true).or_else(error::process_with_err)
+    }
 }
 
 impl utils::shallow_clone::ShallowClone for LmdbImpl {
@@ -217,6 +232,7 @@ impl utils::shallow_clone::ShallowClone for LmdbImpl {
             env: self.env.shallow_clone(),
             dbs: self.dbs.shallow_clone(),
             map_resize_scheduled: self.map_resize_scheduled.shallow_clone(),
+            no_sync_on_commit: self.no_sync_on_commit.shallow_clone(),
         }
     }
 }
@@ -237,8 +253,11 @@ impl backend::BackendImpl for LmdbImpl {
 
 impl backend::SharedBackendImpl for LmdbImpl {
     fn transaction_rw(&self, size: Option<usize>) -> storage_core::Result<Self::TxRw<'_>> {
+        let no_sync_on_commit = self.no_sync_on_commit.load(Ordering::Acquire);
         self.resize_if_resize_scheduled();
-        self.start_transaction(|env| lmdb::Environment::begin_rw_txn(env, size))
+        self.start_transaction(|env| {
+            lmdb::Environment::begin_rw_txn_generic(env, size, no_sync_on_commit, false)
+        })
     }
 }
 
@@ -343,6 +362,7 @@ impl backend::Backend for Lmdb {
             env: Arc::new(environment),
             dbs,
             map_resize_scheduled: Arc::new(AtomicBool::new(false)),
+            no_sync_on_commit: Arc::new(AtomicBool::new(false)),
         })
     }
 }

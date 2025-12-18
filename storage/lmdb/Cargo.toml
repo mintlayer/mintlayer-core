@@ -10,7 +10,9 @@ logging = { path = '../../logging' }
 storage-core = { path = '../core' }
 utils = { path = '../../utils' }
 
-lmdb-mintlayer = { git = 'https://github.com/mintlayer/lmdb-rs-mintlayer.git', tag = 'v0.16.2' }
+# lmdb-mintlayer = { git = 'https://github.com/mintlayer/lmdb-rs-mintlayer.git', tag = 'v0.16.2' }
+# lmdb-mintlayer = { path = "/home/brd/work/src/lmdb-rs-mintlayer" }
+lmdb-mintlayer = { git = 'https://github.com/ImplOfAnImpl/lmdb-rs-mintlayer.git', rev = '9de1332f6307a9b1aad1e371bdb213188c93115a' }
 
 [dev-dependencies]
 rstest.workspace = true

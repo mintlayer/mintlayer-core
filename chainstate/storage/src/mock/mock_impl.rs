@@ -57,6 +57,7 @@ mockall::mock! {
         fn get_best_block_id(&self) -> crate::Result<Option<Id<GenBlock>>>;
         fn get_block_index(&self, id: &Id<Block>) -> crate::Result<Option<BlockIndex>>;
         fn get_block(&self, id: &Id<Block>) -> crate::Result<Option<Block>>;
+        fn get_encoded_block(&self, id: &Id<Block>) -> crate::Result<Option<Vec<u8>>>;
         fn block_exists(&self, id: &Id<Block>) -> crate::Result<bool>;
         fn get_block_reward(&self, block_index: &BlockIndex) -> crate::Result<Option<BlockReward>>;
         fn get_block_header(&self, id: &Id<Block>) -> crate::Result<Option<SignedBlockHeader>>;
@@ -349,7 +350,10 @@ mockall::mock! {
         fn transaction_rw<'st>(&'st self, size: Option<usize>) -> crate::Result<MockStoreTxRw> where 'st: 'tx;
     }
 
-    impl crate::BlockchainStorage for Store {}
+    impl crate::BlockchainStorage for Store {
+        fn set_reckless_mode(&self, set: bool) -> crate::Result<()>;
+        fn in_reckless_mode(&self) -> crate::Result<bool>;
+    }
 }
 
 mockall::mock! {
@@ -363,6 +367,7 @@ mockall::mock! {
         fn get_best_block_id(&self) -> crate::Result<Option<Id<GenBlock>>>;
         fn get_block_index(&self, id: &Id<Block>) -> crate::Result<Option<BlockIndex>>;
         fn get_block(&self, id: &Id<Block>) -> crate::Result<Option<Block>>;
+        fn get_encoded_block(&self, id: &Id<Block>) -> crate::Result<Option<Vec<u8>>>;
         fn block_exists(&self, id: &Id<Block>) -> crate::Result<bool>;
         fn get_block_reward(&self, block_index: &BlockIndex) -> crate::Result<Option<BlockReward>>;
         fn get_block_header(&self, id: &Id<Block>) -> crate::Result<Option<SignedBlockHeader>>;
@@ -489,6 +494,7 @@ mockall::mock! {
         fn get_chain_type(&self) -> crate::Result<Option<String>>;
         fn get_best_block_id(&self) -> crate::Result<Option<Id<GenBlock>>>;
         fn get_block(&self, id: &Id<Block>) -> crate::Result<Option<Block>>;
+        fn get_encoded_block(&self, id: &Id<Block>) -> crate::Result<Option<Vec<u8>>>;
         fn block_exists(&self, id: &Id<Block>) -> crate::Result<bool>;
         fn get_block_index(&self, id: &Id<Block>) -> crate::Result<Option<BlockIndex>>;
         fn get_block_reward(&self, block_index: &BlockIndex) -> crate::Result<Option<BlockReward>>;
