@@ -116,10 +116,10 @@ pub fn check_fungible_token(
     let random_token_id = TokenId::random_using(rng);
 
     // Check ChainstateInterface::get_token_info_for_rpc
-    let actual_info_for_rpc = tf.chainstate.get_token_info_for_rpc(*token_id).unwrap().unwrap();
+    let actual_info_for_rpc = tf.chainstate.get_token_info_for_rpc(token_id).unwrap().unwrap();
     assert_eq!(actual_info_for_rpc, expected_info_for_rpc);
     assert_eq!(
-        tf.chainstate.get_token_info_for_rpc(random_token_id).unwrap(),
+        tf.chainstate.get_token_info_for_rpc(&random_token_id).unwrap(),
         None
     );
 
@@ -144,7 +144,7 @@ pub fn check_fungible_token(
 
     // Check ChainstateInterface::get_token_aux_data; currently it's only stored for NFTs,
     // so the result should be None.
-    assert_eq!(tf.chainstate.get_token_aux_data(*token_id).unwrap(), None);
+    assert_eq!(tf.chainstate.get_token_aux_data(token_id).unwrap(), None);
 
     // Check ChainstateInterface::get_token_id_from_issuance_tx; this only works for NFTs too.
     assert_eq!(
@@ -289,10 +289,10 @@ pub fn check_nft(
     let random_tx_id = Id::<Transaction>::random_using(rng);
 
     // Check ChainstateInterface::get_token_info_for_rpc
-    let actual_info_for_rpc = tf.chainstate.get_token_info_for_rpc(*token_id).unwrap().unwrap();
+    let actual_info_for_rpc = tf.chainstate.get_token_info_for_rpc(token_id).unwrap().unwrap();
     assert_eq!(actual_info_for_rpc, expected_info_for_rpc);
     assert_eq!(
-        tf.chainstate.get_token_info_for_rpc(random_token_id).unwrap(),
+        tf.chainstate.get_token_info_for_rpc(&random_token_id).unwrap(),
         None
     );
 
@@ -316,10 +316,10 @@ pub fn check_nft(
     );
 
     // Check ChainstateInterface::get_token_aux_data
-    let actual_aux_data = tf.chainstate.get_token_aux_data(*token_id).unwrap().unwrap();
+    let actual_aux_data = tf.chainstate.get_token_aux_data(token_id).unwrap().unwrap();
     assert_eq!(actual_aux_data, expected_aux_data);
     assert_eq!(
-        tf.chainstate.get_token_aux_data(random_token_id).unwrap(),
+        tf.chainstate.get_token_aux_data(&random_token_id).unwrap(),
         None
     );
 
@@ -382,7 +382,7 @@ pub fn assert_token_missing(
 ) {
     // Check ChainstateInterface::get_token_info_for_rpc
     assert_eq!(
-        tf.chainstate.get_token_info_for_rpc(*token_id).unwrap(),
+        tf.chainstate.get_token_info_for_rpc(token_id).unwrap(),
         None
     );
 
@@ -395,7 +395,7 @@ pub fn assert_token_missing(
     );
 
     // Check ChainstateInterface::get_token_aux_data
-    assert_eq!(tf.chainstate.get_token_aux_data(*token_id).unwrap(), None);
+    assert_eq!(tf.chainstate.get_token_aux_data(token_id).unwrap(), None);
 
     // Check ChainstateInterface::get_token_id_from_issuance_tx; this only works for NFTs too.
     assert_eq!(

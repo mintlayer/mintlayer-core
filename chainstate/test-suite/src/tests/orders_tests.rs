@@ -274,11 +274,11 @@ fn assert_order_exists(
     }
 
     let actual_nonce =
-        tf.chainstate.get_account_nonce_count(AccountType::Order(*order_id)).unwrap();
+        tf.chainstate.get_account_nonce_count(&AccountType::Order(*order_id)).unwrap();
     assert_eq!(actual_nonce, expected_data.nonce);
     assert_eq!(
         tf.chainstate
-            .get_account_nonce_count(AccountType::Order(random_order_id))
+            .get_account_nonce_count(&AccountType::Order(random_order_id))
             .unwrap(),
         None
     );

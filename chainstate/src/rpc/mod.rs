@@ -230,19 +230,19 @@ impl ChainstateRpcServer for super::ChainstateHandle {
     }
 
     async fn block_id_at_height(&self, height: BlockHeight) -> RpcResult<Option<Id<GenBlock>>> {
-        rpc::handle_result(self.call(move |this| this.get_block_id_from_height(&height)).await)
+        rpc::handle_result(self.call(move |this| this.get_block_id_from_height(height)).await)
     }
 
     async fn get_block(&self, id: Id<Block>) -> RpcResult<Option<HexEncoded<Block>>> {
         let block: Option<Block> =
-            rpc::handle_result(self.call(move |this| this.get_block(id)).await)?;
+            rpc::handle_result(self.call(move |this| this.get_block(&id)).await)?;
         Ok(block.map(HexEncoded::new))
     }
 
     async fn get_block_json(&self, id: Id<Block>) -> RpcResult<Option<serde_json::Value>> {
         let both: Option<(Block, BlockIndex)> = rpc::handle_result(
             self.call(move |this| {
-                let block = this.get_block(id);
+                let block = this.get_block(&id);
                 let block_index = this.get_block_index_for_persisted_block(&id);
                 match (block, block_index) {
                     (Ok(block), Ok(block_index)) => Ok(block.zip(block_index)),
@@ -377,7 +377,7 @@ impl ChainstateRpcServer for super::ChainstateHandle {
             self.call(move |this| {
                 let chain_config = this.get_chain_config();
                 let id_result = pool_address.decode_object(chain_config);
-                id_result.map(|address| this.get_stake_pool_balance(address))
+                id_result.map(|address| this.get_stake_pool_balance(&address))
             })
             .await,
         )
@@ -389,7 +389,7 @@ impl ChainstateRpcServer for super::ChainstateHandle {
                 let chain_config = this.get_chain_config();
                 let result: Result<Option<Amount>, _> =
                     dynamize_err(pool_address.decode_object(chain_config))
-                        .and_then(|pool_id| dynamize_err(this.get_stake_pool_data(pool_id)))
+                        .and_then(|pool_id| dynamize_err(this.get_stake_pool_data(&pool_id)))
                         .and_then(|pool_data| {
                             dynamize_err(pool_data.map(|d| d.staker_balance()).transpose())
                         });
@@ -408,7 +408,7 @@ impl ChainstateRpcServer for super::ChainstateHandle {
             self.call(move |this| -> Result<_, DynamizedError> {
                 let chain_config = this.get_chain_config();
                 let pool_id = dynamize_err(pool_address.decode_object(chain_config))?;
-                let pool_data = dynamize_err(this.get_stake_pool_data(pool_id))?;
+                let pool_data = dynamize_err(this.get_stake_pool_data(&pool_id))?;
 
                 pool_data
                     .map(|d| -> Result<_, DynamizedError> {
@@ -441,7 +441,7 @@ impl ChainstateRpcServer for super::ChainstateHandle {
                 let ids = pool_id_result.and_then(|x| delegation_id_result.map(|y| (x, y)));
 
                 ids.and_then(|(pool_id, del_id)| {
-                    dynamize_err(this.get_stake_pool_delegation_share(pool_id, del_id))
+                    dynamize_err(this.get_stake_pool_delegation_share(&pool_id, &del_id))
                 })
             })
             .await,
@@ -454,7 +454,7 @@ impl ChainstateRpcServer for super::ChainstateHandle {
                 let chain_config = this.get_chain_config();
                 let token_info_result: Result<Option<RPCTokenInfo>, _> =
                     dynamize_err(token_id.decode_object(chain_config))
-                        .and_then(|token_id| dynamize_err(this.get_token_info_for_rpc(token_id)));
+                        .and_then(|token_id| dynamize_err(this.get_token_info_for_rpc(&token_id)));
 
                 token_info_result
             })

@@ -32,6 +32,7 @@ pub trait StorageTag {}
 pub struct DefaultStorageTag;
 impl StorageTag for DefaultStorageTag {}
 
+// TODO: here and in other places: pass Ids by ref
 pub trait PoSAccountingStorageRead<Tag: StorageTag = DefaultStorageTag> {
     type Error: std::error::Error;
 

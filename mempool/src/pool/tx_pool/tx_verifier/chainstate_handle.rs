@@ -146,27 +146,28 @@ impl PoSAccountingView for ChainstateHandle {
     type Error = Error;
 
     fn pool_exists(&self, pool_id: PoolId) -> Result<bool, Error> {
-        self.call(move |c| c.stake_pool_exists(pool_id))
+        self.call(move |c| c.stake_pool_exists(&pool_id))
     }
 
     fn get_pool_balance(&self, pool_id: PoolId) -> Result<Amount, Error> {
-        self.call(move |c| c.get_stake_pool_balance(pool_id).map(|v| v.unwrap_or(Amount::ZERO)))
+        self.call(move |c| c.get_stake_pool_balance(&pool_id).map(|v| v.unwrap_or(Amount::ZERO)))
     }
 
     fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, Error> {
-        self.call(move |c| c.get_stake_pool_data(pool_id))
+        self.call(move |c| c.get_stake_pool_data(&pool_id))
     }
 
     fn get_pool_delegations_shares(
         &self,
         pool_id: PoolId,
     ) -> Result<Option<BTreeMap<DelegationId, Amount>>, Error> {
-        self.call(move |c| c.get_stake_pool_delegations_shares(pool_id))
+        self.call(move |c| c.get_stake_pool_delegations_shares(&pool_id))
     }
 
     fn get_delegation_balance(&self, delegation_id: DelegationId) -> Result<Amount, Error> {
         self.call(move |c| {
-            c.get_stake_delegation_balance(delegation_id).map(|v| v.unwrap_or(Amount::ZERO))
+            c.get_stake_delegation_balance(&delegation_id)
+                .map(|v| v.unwrap_or(Amount::ZERO))
         })
     }
 
@@ -174,7 +175,7 @@ impl PoSAccountingView for ChainstateHandle {
         &self,
         delegation_id: DelegationId,
     ) -> Result<Option<DelegationData>, Error> {
-        self.call(move |c| c.get_stake_delegation_data(delegation_id))
+        self.call(move |c| c.get_stake_delegation_data(&delegation_id))
     }
 
     fn get_pool_delegation_share(
@@ -183,7 +184,7 @@ impl PoSAccountingView for ChainstateHandle {
         delegation_id: DelegationId,
     ) -> Result<Amount, Error> {
         self.call(move |c| {
-            c.get_stake_pool_delegation_share(pool_id, delegation_id)
+            c.get_stake_pool_delegation_share(&pool_id, &delegation_id)
                 .map(|v| v.unwrap_or(Amount::ZERO))
         })
     }
@@ -193,29 +194,29 @@ impl PoSAccountingStorageRead<TipStorageTag> for ChainstateHandle {
     type Error = Error;
 
     fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Error> {
-        self.call(move |c| c.get_stake_pool_balance(pool_id))
+        self.call(move |c| c.get_stake_pool_balance(&pool_id))
     }
 
     fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, Error> {
-        self.call(move |c| c.get_stake_pool_data(pool_id))
+        self.call(move |c| c.get_stake_pool_data(&pool_id))
     }
 
     fn get_pool_delegations_shares(
         &self,
         pool_id: PoolId,
     ) -> Result<Option<BTreeMap<DelegationId, Amount>>, Error> {
-        self.call(move |c| c.get_stake_pool_delegations_shares(pool_id))
+        self.call(move |c| c.get_stake_pool_delegations_shares(&pool_id))
     }
 
     fn get_delegation_balance(&self, delegation_id: DelegationId) -> Result<Option<Amount>, Error> {
-        self.call(move |c| c.get_stake_delegation_balance(delegation_id))
+        self.call(move |c| c.get_stake_delegation_balance(&delegation_id))
     }
 
     fn get_delegation_data(
         &self,
         delegation_id: DelegationId,
     ) -> Result<Option<DelegationData>, Error> {
-        self.call(move |c| c.get_stake_delegation_data(delegation_id))
+        self.call(move |c| c.get_stake_delegation_data(&delegation_id))
     }
 
     fn get_pool_delegation_share(
@@ -223,7 +224,7 @@ impl PoSAccountingStorageRead<TipStorageTag> for ChainstateHandle {
         pool_id: PoolId,
         delegation_id: DelegationId,
     ) -> Result<Option<Amount>, Error> {
-        self.call(move |c| c.get_stake_pool_delegation_share(pool_id, delegation_id))
+        self.call(move |c| c.get_stake_pool_delegation_share(&pool_id, &delegation_id))
     }
 }
 
@@ -271,7 +272,7 @@ impl TransactionVerifierStorageRef for ChainstateHandle {
 
     fn get_token_aux_data(&self, token_id: &TokenId) -> Result<Option<TokenAuxiliaryData>, Error> {
         let token_id = *token_id;
-        self.call(move |c| c.get_token_aux_data(token_id))
+        self.call(move |c| c.get_token_aux_data(&token_id))
     }
 
     fn get_pos_accounting_undo(
@@ -282,7 +283,7 @@ impl TransactionVerifierStorageRef for ChainstateHandle {
     }
 
     fn get_account_nonce_count(&self, account: AccountType) -> Result<Option<AccountNonce>, Error> {
-        self.call(move |c| c.get_account_nonce_count(account))
+        self.call(move |c| c.get_account_nonce_count(&account))
     }
 
     fn get_tokens_accounting_undo(

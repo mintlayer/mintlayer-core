@@ -67,11 +67,6 @@ pub trait BlockchainStorageRead:
     + OrdersAccountingStorageRead<Error = crate::Error>
     + EpochStorageRead
 {
-    // TODO: below (and in lots of other places too) Id is sometimes passes by ref and sometimes
-    // by value. It's better to choose one "canonical" approach and use it everywhere.
-    // Same applies to other "primitive" types, like BlockHeight (the latter, being 64 bit long,
-    // should probably be passed by value even if we decide to pass Id by ref).
-
     /// Get storage version
     fn get_storage_version(&self) -> crate::Result<Option<ChainstateStorageVersion>>;
 
@@ -89,21 +84,21 @@ pub trait BlockchainStorageRead:
     fn get_block_reward(&self, block_index: &BlockIndex) -> crate::Result<Option<BlockReward>>;
 
     /// Get block by its hash
-    fn get_block(&self, id: Id<Block>) -> crate::Result<Option<Block>>;
+    fn get_block(&self, id: &Id<Block>) -> crate::Result<Option<Block>>;
 
     /// Return true if the block exists in the db and false otherwise.
     /// This is cheaper than calling `get_block` and checking for `is_some`.
-    fn block_exists(&self, id: Id<Block>) -> crate::Result<bool>;
+    fn block_exists(&self, id: &Id<Block>) -> crate::Result<bool>;
 
-    fn get_block_header(&self, id: Id<Block>) -> crate::Result<Option<SignedBlockHeader>>;
+    fn get_block_header(&self, id: &Id<Block>) -> crate::Result<Option<SignedBlockHeader>>;
 
     /// Get the height below which reorgs should not be allowed.
     fn get_min_height_with_allowed_reorg(&self) -> crate::Result<Option<BlockHeight>>;
 
     /// Get mainchain block by its height
-    fn get_block_id_by_height(&self, height: &BlockHeight) -> crate::Result<Option<Id<GenBlock>>>;
+    fn get_block_id_by_height(&self, height: BlockHeight) -> crate::Result<Option<Id<GenBlock>>>;
 
-    fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<UtxosBlockUndo>>;
+    fn get_undo_data(&self, id: &Id<Block>) -> crate::Result<Option<UtxosBlockUndo>>;
 
     /// Get token creation tx
     fn get_token_aux_data(&self, token_id: &TokenId) -> crate::Result<Option<TokenAuxiliaryData>>;
@@ -120,19 +115,19 @@ pub trait BlockchainStorageRead:
     /// Get tokens accounting undo for specific block
     fn get_tokens_accounting_undo(
         &self,
-        id: Id<Block>,
+        id: &Id<Block>,
     ) -> crate::Result<Option<accounting::BlockUndo<TokenAccountingUndo>>>;
 
     /// Get tokens accounting undo for specific block
     fn get_orders_accounting_undo(
         &self,
-        id: Id<Block>,
+        id: &Id<Block>,
     ) -> crate::Result<Option<accounting::BlockUndo<OrdersAccountingUndo>>>;
 
     /// Get accounting undo for specific block
     fn get_pos_accounting_undo(
         &self,
-        id: Id<Block>,
+        id: &Id<Block>,
     ) -> crate::Result<Option<accounting::BlockUndo<PoSAccountingUndo>>>;
 
     /// Get accounting delta for specific epoch
@@ -148,7 +143,8 @@ pub trait BlockchainStorageRead:
     ) -> crate::Result<Option<DeltaMergeUndo>>;
 
     /// Get nonce value for specific account
-    fn get_account_nonce_count(&self, account: AccountType) -> crate::Result<Option<AccountNonce>>;
+    fn get_account_nonce_count(&self, account: &AccountType)
+        -> crate::Result<Option<AccountNonce>>;
 
     /// Get all keys (block ids) from the block map. This is used in the chainstate's
     /// "heavy" consistency checks.
@@ -175,7 +171,7 @@ pub trait BlockchainStorageWrite:
     fn set_storage_version(&mut self, version: ChainstateStorageVersion) -> Result<()>;
 
     /// Set magic bytes
-    fn set_magic_bytes(&mut self, bytes: &MagicBytes) -> Result<()>;
+    fn set_magic_bytes(&mut self, bytes: MagicBytes) -> Result<()>;
 
     /// Set chain type name
     fn set_chain_type(&mut self, chain: &str) -> Result<()>;
@@ -187,13 +183,13 @@ pub trait BlockchainStorageWrite:
     fn set_block_index(&mut self, block_index: &BlockIndex) -> Result<()>;
 
     /// Remove block index from the database
-    fn del_block_index(&mut self, block_id: Id<Block>) -> Result<()>;
+    fn del_block_index(&mut self, block_id: &Id<Block>) -> Result<()>;
 
     /// Add a new block into the database
     fn add_block(&mut self, block: &Block) -> Result<()>;
 
     /// Remove block from the database
-    fn del_block(&mut self, id: Id<Block>) -> Result<()>;
+    fn del_block(&mut self, id: &Id<Block>) -> Result<()>;
 
     /// Set the height below which reorgs should not be allowed.
     fn set_min_height_with_allowed_reorg(&mut self, height: BlockHeight) -> crate::Result<()>;
@@ -201,15 +197,15 @@ pub trait BlockchainStorageWrite:
     /// Set the mainchain block at given height to be given block.
     fn set_block_id_at_height(
         &mut self,
-        height: &BlockHeight,
+        height: BlockHeight,
         block_id: &Id<GenBlock>,
     ) -> Result<()>;
 
     /// Remove block id from given mainchain height
-    fn del_block_id_at_height(&mut self, height: &BlockHeight) -> Result<()>;
+    fn del_block_id_at_height(&mut self, height: BlockHeight) -> Result<()>;
 
-    fn set_undo_data(&mut self, id: Id<Block>, undo: &UtxosBlockUndo) -> Result<()>;
-    fn del_undo_data(&mut self, id: Id<Block>) -> Result<()>;
+    fn set_undo_data(&mut self, id: &Id<Block>, undo: &UtxosBlockUndo) -> Result<()>;
+    fn del_undo_data(&mut self, id: &Id<Block>) -> Result<()>;
 
     /// Set data associated with token issuance (and ACL changes in the future)
     fn set_token_aux_data(&mut self, token_id: &TokenId, data: &TokenAuxiliaryData) -> Result<()>;
@@ -226,32 +222,32 @@ pub trait BlockchainStorageWrite:
     /// Set tokens accounting undo data for specific block
     fn set_tokens_accounting_undo_data(
         &mut self,
-        id: Id<Block>,
+        id: &Id<Block>,
         undo: &accounting::BlockUndo<TokenAccountingUndo>,
     ) -> Result<()>;
 
     /// Remove tokens accounting undo data for specific block
-    fn del_tokens_accounting_undo_data(&mut self, id: Id<Block>) -> Result<()>;
+    fn del_tokens_accounting_undo_data(&mut self, id: &Id<Block>) -> Result<()>;
 
     /// Set orders accounting undo data for specific block
     fn set_orders_accounting_undo_data(
         &mut self,
-        id: Id<Block>,
+        id: &Id<Block>,
         undo: &accounting::BlockUndo<OrdersAccountingUndo>,
     ) -> Result<()>;
 
     /// Remove orders accounting undo data for specific block
-    fn del_orders_accounting_undo_data(&mut self, id: Id<Block>) -> Result<()>;
+    fn del_orders_accounting_undo_data(&mut self, id: &Id<Block>) -> Result<()>;
 
     /// Set accounting block undo data for specific block
     fn set_pos_accounting_undo_data(
         &mut self,
-        id: Id<Block>,
+        id: &Id<Block>,
         undo: &accounting::BlockUndo<PoSAccountingUndo>,
     ) -> Result<()>;
 
     /// Remove accounting block undo data for specific block
-    fn del_pos_accounting_undo_data(&mut self, id: Id<Block>) -> Result<()>;
+    fn del_pos_accounting_undo_data(&mut self, id: &Id<Block>) -> Result<()>;
 
     /// Set accounting delta for specific block
     fn set_accounting_epoch_delta(
@@ -273,8 +269,9 @@ pub trait BlockchainStorageWrite:
     /// Remove accounting block undo data for specific block
     fn del_accounting_epoch_undo_delta(&mut self, epoch_index: EpochIndex) -> Result<()>;
 
-    fn set_account_nonce_count(&mut self, account: AccountType, nonce: AccountNonce) -> Result<()>;
-    fn del_account_nonce_count(&mut self, account: AccountType) -> Result<()>;
+    fn set_account_nonce_count(&mut self, account: &AccountType, nonce: AccountNonce)
+        -> Result<()>;
+    fn del_account_nonce_count(&mut self, account: &AccountType) -> Result<()>;
 }
 
 /// Operations on read-only transactions

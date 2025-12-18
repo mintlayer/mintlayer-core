@@ -156,7 +156,7 @@ impl<'f> BlockBuilder<'f> {
         let account_nonce_getter = Box::new(|account: AccountType| -> Option<AccountNonce> {
             self.account_nonce_tracker.get(&account).copied().or_else(|| {
                 let db_tx = self.framework.storage.transaction_ro().unwrap();
-                db_tx.get_account_nonce_count(account).unwrap()
+                db_tx.get_account_nonce_count(&account).unwrap()
             })
         });
 

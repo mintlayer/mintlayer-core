@@ -91,7 +91,7 @@ fn get_locator(#[case] seed: Seed) {
             for (i, header) in locator.iter().skip(1).enumerate() {
                 let idx = height - BlockDistance::new(2i64.pow(i as u32));
                 let expected =
-                    btf.chainstate.get_block_id_from_height(&idx.unwrap()).unwrap().unwrap();
+                    btf.chainstate.get_block_id_from_height(idx.unwrap()).unwrap().unwrap();
                 assert_eq!(&expected, header);
             }
         }
@@ -125,12 +125,12 @@ fn get_locator_from_height(#[case] seed: Seed) {
             // Check the locator headers.
             assert_eq!(
                 &locator[0],
-                &btf.chainstate.get_block_id_from_height(&height.into()).unwrap().unwrap()
+                &btf.chainstate.get_block_id_from_height(height.into()).unwrap().unwrap()
             );
             for (i, header) in locator.iter().skip(1).enumerate() {
                 let idx = BlockHeight::from(height) - BlockDistance::new(2i64.pow(i as u32));
                 let expected =
-                    btf.chainstate.get_block_id_from_height(&idx.unwrap()).unwrap().unwrap();
+                    btf.chainstate.get_block_id_from_height(idx.unwrap()).unwrap().unwrap();
                 assert_eq!(&expected, header);
             }
         }
@@ -755,7 +755,7 @@ fn headers_check_with_checkpoints(#[case] seed: Seed) {
                 .iter()
                 .map(|id| {
                     let id = tf.to_chain_block_id(id);
-                    tf.chainstate.get_block_header(id).unwrap().unwrap()
+                    tf.chainstate.get_block_header(&id).unwrap().unwrap()
                 })
                 .collect::<Vec<_>>();
             (parent_block, block_headers)

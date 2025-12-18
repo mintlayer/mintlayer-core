@@ -57,7 +57,7 @@ impl<B: storage::SharedBackend> Store<B> {
         }
 
         if db_tx.get_magic_bytes()?.is_none() {
-            db_tx.set_magic_bytes(chain_config.magic_bytes())?;
+            db_tx.set_magic_bytes(*chain_config.magic_bytes())?;
         }
 
         if db_tx.get_chain_type()?.is_none() {

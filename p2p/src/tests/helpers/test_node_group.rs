@@ -108,7 +108,7 @@ where
             for node in &self.nodes {
                 let block = node
                     .chainstate()
-                    .call(move |cs| cs.get_block(block_id))
+                    .call(move |cs| cs.get_block(&block_id))
                     .await
                     .unwrap()
                     .unwrap();

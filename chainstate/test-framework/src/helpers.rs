@@ -192,7 +192,7 @@ pub fn mint_tokens_in_block(
 
     let nonce = BlockchainStorageRead::get_account_nonce_count(
         &tf.storage.transaction_ro().unwrap(),
-        AccountType::Token(token_id),
+        &AccountType::Token(token_id),
     )
     .unwrap()
     .map_or(AccountNonce::new(0), |n| n.increment().unwrap());

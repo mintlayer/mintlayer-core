@@ -43,8 +43,8 @@ impl<B: storage::SharedBackend> BlockchainStorageWrite for StoreTxRw<'_, B> {
     }
 
     #[log_error]
-    fn set_magic_bytes(&mut self, bytes: &MagicBytes) -> crate::Result<()> {
-        self.write_value::<well_known::MagicBytes>(bytes)
+    fn set_magic_bytes(&mut self, bytes: MagicBytes) -> crate::Result<()> {
+        self.write_value::<well_known::MagicBytes>(&bytes)
     }
 
     #[log_error]
@@ -63,7 +63,7 @@ impl<B: storage::SharedBackend> BlockchainStorageWrite for StoreTxRw<'_, B> {
     }
 
     #[log_error]
-    fn del_block(&mut self, id: Id<Block>) -> crate::Result<()> {
+    fn del_block(&mut self, id: &Id<Block>) -> crate::Result<()> {
         self.del::<db::DBBlock, _, _>(id)
     }
 
@@ -73,7 +73,7 @@ impl<B: storage::SharedBackend> BlockchainStorageWrite for StoreTxRw<'_, B> {
     }
 
     #[log_error]
-    fn del_block_index(&mut self, block_id: Id<Block>) -> crate::Result<()> {
+    fn del_block_index(&mut self, block_id: &Id<Block>) -> crate::Result<()> {
         self.del::<db::DBBlockIndex, _, _>(block_id)
     }
 
@@ -85,24 +85,24 @@ impl<B: storage::SharedBackend> BlockchainStorageWrite for StoreTxRw<'_, B> {
     #[log_error]
     fn set_block_id_at_height(
         &mut self,
-        height: &BlockHeight,
+        height: BlockHeight,
         block_id: &Id<GenBlock>,
     ) -> crate::Result<()> {
         self.write::<db::DBBlockByHeight, _, _, _>(height, block_id)
     }
 
     #[log_error]
-    fn del_block_id_at_height(&mut self, height: &BlockHeight) -> crate::Result<()> {
+    fn del_block_id_at_height(&mut self, height: BlockHeight) -> crate::Result<()> {
         self.del::<db::DBBlockByHeight, _, _>(height)
     }
 
     #[log_error]
-    fn set_undo_data(&mut self, id: Id<Block>, undo: &UtxosBlockUndo) -> crate::Result<()> {
+    fn set_undo_data(&mut self, id: &Id<Block>, undo: &UtxosBlockUndo) -> crate::Result<()> {
         self.write::<db::DBUtxosBlockUndo, _, _, _>(id, undo)
     }
 
     #[log_error]
-    fn del_undo_data(&mut self, id: Id<Block>) -> crate::Result<()> {
+    fn del_undo_data(&mut self, id: &Id<Block>) -> crate::Result<()> {
         self.del::<db::DBUtxosBlockUndo, _, _>(id)
     }
 
@@ -137,42 +137,42 @@ impl<B: storage::SharedBackend> BlockchainStorageWrite for StoreTxRw<'_, B> {
     #[log_error]
     fn set_tokens_accounting_undo_data(
         &mut self,
-        id: Id<Block>,
+        id: &Id<Block>,
         undo: &accounting::BlockUndo<TokenAccountingUndo>,
     ) -> crate::Result<()> {
         self.write::<db::DBTokensAccountingBlockUndo, _, _, _>(id, undo)
     }
 
     #[log_error]
-    fn del_tokens_accounting_undo_data(&mut self, id: Id<Block>) -> crate::Result<()> {
+    fn del_tokens_accounting_undo_data(&mut self, id: &Id<Block>) -> crate::Result<()> {
         self.del::<db::DBTokensAccountingBlockUndo, _, _>(id)
     }
 
     #[log_error]
     fn set_orders_accounting_undo_data(
         &mut self,
-        id: Id<Block>,
+        id: &Id<Block>,
         undo: &accounting::BlockUndo<OrdersAccountingUndo>,
     ) -> crate::Result<()> {
         self.write::<db::DBOrdersAccountingBlockUndo, _, _, _>(id, undo)
     }
 
     #[log_error]
-    fn del_orders_accounting_undo_data(&mut self, id: Id<Block>) -> crate::Result<()> {
+    fn del_orders_accounting_undo_data(&mut self, id: &Id<Block>) -> crate::Result<()> {
         self.del::<db::DBOrdersAccountingBlockUndo, _, _>(id)
     }
 
     #[log_error]
     fn set_pos_accounting_undo_data(
         &mut self,
-        id: Id<Block>,
+        id: &Id<Block>,
         undo: &accounting::BlockUndo<PoSAccountingUndo>,
     ) -> crate::Result<()> {
         self.write::<db::DBAccountingBlockUndo, _, _, _>(id, undo)
     }
 
     #[log_error]
-    fn del_pos_accounting_undo_data(&mut self, id: Id<Block>) -> crate::Result<()> {
+    fn del_pos_accounting_undo_data(&mut self, id: &Id<Block>) -> crate::Result<()> {
         self.del::<db::DBAccountingBlockUndo, _, _>(id)
     }
 
@@ -207,14 +207,14 @@ impl<B: storage::SharedBackend> BlockchainStorageWrite for StoreTxRw<'_, B> {
     #[log_error]
     fn set_account_nonce_count(
         &mut self,
-        account: AccountType,
+        account: &AccountType,
         nonce: AccountNonce,
     ) -> crate::Result<()> {
         self.write::<db::DBAccountNonceCount, _, _, _>(account, nonce)
     }
 
     #[log_error]
-    fn del_account_nonce_count(&mut self, account: AccountType) -> crate::Result<()> {
+    fn del_account_nonce_count(&mut self, account: &AccountType) -> crate::Result<()> {
         self.del::<db::DBAccountNonceCount, _, _>(account)
     }
 }

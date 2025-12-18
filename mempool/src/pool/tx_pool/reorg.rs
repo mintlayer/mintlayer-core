@@ -43,7 +43,7 @@ fn collect_blocks<C: ChainstateInterface + ?Sized>(
             .chain_block_id()
             .expect("Reached genesis before the stopping block");
         let block = chainstate
-            .get_block(curr_block_id)?
+            .get_block(&curr_block_id)?
             .ok_or(ReorgError::BlockNotFound(curr_block_id))?;
         curr_id = block.prev_block_id();
         result.push(block);

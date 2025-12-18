@@ -47,7 +47,7 @@ pub fn get_pool_staker_balance<CS: ChainstateInterface + ?Sized>(
     pool_id: &PoolId,
 ) -> Result<Amount, BlockProductionError> {
     let balance = chainstate
-        .get_stake_pool_data(*pool_id)
+        .get_stake_pool_data(pool_id)
         .map_err(|err| {
             BlockProductionError::ChainstateError(
                 consensus::ChainstateError::StakePoolDataReadError(*pool_id, err.to_string()),
@@ -65,7 +65,7 @@ pub fn get_pool_total_balance<CS: ChainstateInterface + ?Sized>(
     pool_id: &PoolId,
 ) -> Result<Amount, BlockProductionError> {
     let pool_balance = chainstate
-        .get_stake_pool_balance(*pool_id)
+        .get_stake_pool_balance(pool_id)
         .map_err(|err| {
             BlockProductionError::ChainstateError(consensus::ChainstateError::PoolBalanceReadError(
                 *pool_id,
@@ -263,7 +263,7 @@ pub fn get_block_id_from_height<CS: ChainstateInterface + ?Sized>(
     height: BlockHeight,
 ) -> Result<Id<GenBlock>, BlockProductionError> {
     let block_id = chainstate
-        .get_block_id_from_height(&height)
+        .get_block_id_from_height(height)
         .map_err(|err| {
             BlockProductionError::ChainstateError(
                 consensus::ChainstateError::FailedToObtainBlockIdFromHeight(

@@ -430,7 +430,7 @@ impl TestFramework {
     #[track_caller]
     pub fn block_id(&self, height: u64) -> Id<GenBlock> {
         self.chainstate
-            .get_block_id_from_height(&BlockHeight::from(height))
+            .get_block_id_from_height(BlockHeight::from(height))
             .unwrap()
             .unwrap()
     }
@@ -445,7 +445,7 @@ impl TestFramework {
                 outputs_from_genesis(self.chainstate.get_chain_config().genesis_block())
             }
             GenBlockId::Block(id) => {
-                outputs_from_block(&self.chainstate.get_block(id).unwrap().unwrap())
+                outputs_from_block(&self.chainstate.get_block(&id).unwrap().unwrap())
             }
         }
     }
@@ -454,7 +454,7 @@ impl TestFramework {
     #[track_caller]
     pub fn block_opt(&self, id: Id<Block>) -> Option<Block> {
         self.check_block_index_consistency(&id.into());
-        self.chainstate.get_block(id).unwrap()
+        self.chainstate.get_block(&id).unwrap()
     }
 
     /// Return a block given an id. Perform consistency checks.
@@ -502,10 +502,10 @@ impl TestFramework {
                         persisted_block_index_opt.as_ref(),
                         any_block_index_opt.as_ref(),
                     );
-                    assert!(self.chainstate.get_block(*id).unwrap().is_some());
+                    assert!(self.chainstate.get_block(id).unwrap().is_some());
                 } else {
                     assert_block_index_opt_identical_to(persisted_block_index_opt.as_ref(), None);
-                    assert!(self.chainstate.get_block(*id).unwrap().is_none());
+                    assert!(self.chainstate.get_block(id).unwrap().is_none());
                 }
 
                 let any_gen_block_index_opt2 =
@@ -593,8 +593,8 @@ impl TestFramework {
     pub fn purge_block(&mut self, block_id: &Id<Block>) {
         let mut tx_rw = self.storage.transaction_rw(None).unwrap();
 
-        tx_rw.del_block(*block_id).unwrap();
-        tx_rw.del_block_index(*block_id).unwrap();
+        tx_rw.del_block(block_id).unwrap();
+        tx_rw.del_block_index(block_id).unwrap();
         tx_rw.commit().unwrap();
     }
 

@@ -82,7 +82,7 @@ impl PoSAccountingView for PoSAccountingAdapterToCheckFees<'_> {
         &self,
         pool_id: PoolId,
     ) -> Result<Option<pos_accounting::PoolData>, Self::Error> {
-        Ok(self.chainstate.get_stake_pool_data(pool_id).unwrap())
+        Ok(self.chainstate.get_stake_pool_data(&pool_id).unwrap())
     }
 
     fn get_pool_delegations_shares(
@@ -366,7 +366,7 @@ async fn simulation(
         let block_height_to_continue_from = BlockHeight::new(height_to_continue_from as u64);
         let mut prev_block_hash = tf
             .chainstate
-            .get_block_id_from_height(&block_height_to_continue_from)
+            .get_block_id_from_height(block_height_to_continue_from)
             .unwrap()
             .unwrap();
 
@@ -789,7 +789,7 @@ async fn check_utxo(
             let utxo_block_id = block_id.classify(tf.chainstate.get_chain_config());
             let time_of_tx = match utxo_block_id {
                 GenBlockId::Block(id) => {
-                    tf.chainstate.get_block_header(id).unwrap().unwrap().timestamp()
+                    tf.chainstate.get_block_header(&id).unwrap().unwrap().timestamp()
                 }
                 GenBlockId::Genesis(_) => {
                     tf.chainstate.get_chain_config().genesis_block().timestamp()
@@ -868,13 +868,13 @@ async fn check_pool(
     let tx = local_state.storage().transaction_ro().await.unwrap();
     let scanner_data = tx.get_pool_data(pool_id).await.unwrap().unwrap();
 
-    if let Some(node_data) = tf.chainstate.get_stake_pool_data(pool_id).unwrap() {
+    if let Some(node_data) = tf.chainstate.get_stake_pool_data(&pool_id).unwrap() {
         // check all fields are the same
         assert_eq!(node_data, scanner_data.pool_data);
 
         // check delegations_balance
         let node_pool_balance =
-            tf.chainstate.get_stake_pool_balance(pool_id).unwrap().unwrap_or(Amount::ZERO);
+            tf.chainstate.get_stake_pool_balance(&pool_id).unwrap().unwrap_or(Amount::ZERO);
         let scanner_pool_balance =
             (scanner_data.staker_balance().unwrap() + scanner_data.delegations_balance).unwrap();
         assert_eq!(node_pool_balance, scanner_pool_balance);
@@ -887,7 +887,7 @@ async fn check_pool(
     // Compare the delegation shares
     let node_delegations = tf
         .chainstate
-        .get_stake_pool_delegations_shares(pool_id)
+        .get_stake_pool_delegations_shares(&pool_id)
         .unwrap()
         .unwrap_or_default();
 
@@ -926,7 +926,7 @@ async fn check_delegation(
     let tx = local_state.storage().transaction_ro().await.unwrap();
     let scanner_data = tx.get_delegation(delegation_id).await.unwrap().unwrap();
 
-    if let Some(node_data) = tf.chainstate.get_stake_delegation_data(delegation_id).unwrap() {
+    if let Some(node_data) = tf.chainstate.get_stake_delegation_data(&delegation_id).unwrap() {
         assert_eq!(node_data.source_pool(), scanner_data.pool_id());
         assert_eq!(
             node_data.spend_destination(),
@@ -936,14 +936,14 @@ async fn check_delegation(
         // check delegation balances are the same
         let node_delegation_balance = tf
             .chainstate
-            .get_stake_delegation_balance(delegation_id)
+            .get_stake_delegation_balance(&delegation_id)
             .unwrap()
             .unwrap_or(Amount::ZERO);
         assert_eq!(node_delegation_balance, *scanner_data.balance());
 
         let node_acc_next_nonce = tf
             .chainstate
-            .get_account_nonce_count(AccountType::Delegation(delegation_id))
+            .get_account_nonce_count(&AccountType::Delegation(delegation_id))
             .unwrap()
             .map_or(AccountNonce::new(0), |nonce| nonce.increment().unwrap());
         assert_eq!(&node_acc_next_nonce, scanner_data.next_nonce());
@@ -969,7 +969,7 @@ async fn check_token(
     token_id: TokenId,
 ) {
     let tx = local_state.storage().transaction_ro().await.unwrap();
-    let node_data = tf.chainstate.get_token_info_for_rpc(token_id).unwrap().unwrap();
+    let node_data = tf.chainstate.get_token_info_for_rpc(&token_id).unwrap().unwrap();
 
     match node_data {
         RPCTokenInfo::FungibleToken(node_data) => {

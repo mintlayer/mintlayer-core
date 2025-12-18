@@ -79,7 +79,7 @@ fn unmint_tokens_in_block(
 
     let nonce = BlockchainStorageRead::get_account_nonce_count(
         &tf.storage.transaction_ro().unwrap(),
-        AccountType::Token(token_id),
+        &AccountType::Token(token_id),
     )
     .unwrap()
     .map_or(AccountNonce::new(0), |n| n.increment().unwrap());
@@ -1839,7 +1839,7 @@ fn burn_zero_tokens_on_unmint(#[case] seed: Seed) {
 
         let nonce = BlockchainStorageRead::get_account_nonce_count(
             &tf.storage.transaction_ro().unwrap(),
-            AccountType::Token(token_id),
+            &AccountType::Token(token_id),
         )
         .unwrap()
         .map_or(AccountNonce::new(0), |n| n.increment().unwrap());
@@ -1919,7 +1919,7 @@ fn burn_less_than_input_on_unmint(#[case] seed: Seed) {
 
         let nonce = BlockchainStorageRead::get_account_nonce_count(
             &tf.storage.transaction_ro().unwrap(),
-            AccountType::Token(token_id),
+            &AccountType::Token(token_id),
         )
         .unwrap()
         .map_or(AccountNonce::new(0), |n| n.increment().unwrap());
@@ -2025,7 +2025,7 @@ fn burn_less_by_providing_smaller_input_utxo(#[case] seed: Seed) {
 
         let nonce = BlockchainStorageRead::get_account_nonce_count(
             &tf.storage.transaction_ro().unwrap(),
-            AccountType::Token(token_id),
+            &AccountType::Token(token_id),
         )
         .unwrap()
         .map_or(AccountNonce::new(0), |n| n.increment().unwrap());
@@ -2127,7 +2127,7 @@ fn unmint_using_multiple_burn_utxos(#[case] seed: Seed) {
 
         let nonce = BlockchainStorageRead::get_account_nonce_count(
             &tf.storage.transaction_ro().unwrap(),
-            AccountType::Token(token_id),
+            &AccountType::Token(token_id),
         )
         .unwrap()
         .map_or(AccountNonce::new(0), |n| n.increment().unwrap());

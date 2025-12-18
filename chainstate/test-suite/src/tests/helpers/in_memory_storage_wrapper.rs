@@ -87,7 +87,7 @@ impl TransactionVerifierStorageRef for InMemoryStorageWrapper {
         &self,
         tx_source: TransactionSource,
     ) -> Result<Option<CachedUtxosBlockUndo>, TransactionVerifierStorageError> {
-        match tx_source {
+        match &tx_source {
             TransactionSource::Chain(id) => {
                 let undo = self
                     .storage
@@ -118,7 +118,7 @@ impl TransactionVerifierStorageRef for InMemoryStorageWrapper {
         &self,
         tx_source: TransactionSource,
     ) -> Result<Option<CachedBlockUndo<PoSAccountingUndo>>, TransactionVerifierStorageError> {
-        match tx_source {
+        match &tx_source {
             TransactionSource::Chain(id) => {
                 let undo = self
                     .storage
@@ -139,7 +139,7 @@ impl TransactionVerifierStorageRef for InMemoryStorageWrapper {
         self.storage
             .transaction_ro()
             .unwrap()
-            .get_account_nonce_count(account)
+            .get_account_nonce_count(&account)
             .map_err(TransactionVerifierStorageError::from)
     }
 
@@ -147,7 +147,7 @@ impl TransactionVerifierStorageRef for InMemoryStorageWrapper {
         &self,
         tx_source: TransactionSource,
     ) -> Result<Option<CachedBlockUndo<TokenAccountingUndo>>, TransactionVerifierStorageError> {
-        match tx_source {
+        match &tx_source {
             TransactionSource::Chain(id) => {
                 let undo = self
                     .storage
@@ -166,7 +166,7 @@ impl TransactionVerifierStorageRef for InMemoryStorageWrapper {
         tx_source: TransactionSource,
     ) -> Result<Option<CachedBlockUndo<OrdersAccountingUndo>>, TransactionVerifierStorageError>
     {
-        match tx_source {
+        match &tx_source {
             TransactionSource::Chain(id) => {
                 let undo = self
                     .storage

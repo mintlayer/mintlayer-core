@@ -78,7 +78,7 @@ impl<S: BlockchainStorageRead, V: TransactionVerificationStrategy> TransactionVe
         match tx_source {
             TransactionSource::Chain(id) => {
                 let undo =
-                    self.db_tx.get_undo_data(id)?.map(CachedUtxosBlockUndo::from_utxo_block_undo);
+                    self.db_tx.get_undo_data(&id)?.map(CachedUtxosBlockUndo::from_utxo_block_undo);
                 Ok(undo)
             }
             TransactionSource::Mempool => {
@@ -105,7 +105,7 @@ impl<S: BlockchainStorageRead, V: TransactionVerificationStrategy> TransactionVe
         match tx_source {
             TransactionSource::Chain(id) => {
                 let undo =
-                    self.db_tx.get_pos_accounting_undo(id)?.map(CachedBlockUndo::from_block_undo);
+                    self.db_tx.get_pos_accounting_undo(&id)?.map(CachedBlockUndo::from_block_undo);
                 Ok(undo)
             }
             TransactionSource::Mempool => {
@@ -123,7 +123,7 @@ impl<S: BlockchainStorageRead, V: TransactionVerificationStrategy> TransactionVe
             TransactionSource::Chain(id) => {
                 let undo = self
                     .db_tx
-                    .get_tokens_accounting_undo(id)?
+                    .get_tokens_accounting_undo(&id)?
                     .map(CachedBlockUndo::from_block_undo);
                 Ok(undo)
             }
@@ -139,7 +139,7 @@ impl<S: BlockchainStorageRead, V: TransactionVerificationStrategy> TransactionVe
         account: AccountType,
     ) -> Result<Option<AccountNonce>, TransactionVerifierStorageError> {
         self.db_tx
-            .get_account_nonce_count(account)
+            .get_account_nonce_count(&account)
             .map_err(TransactionVerifierStorageError::from)
     }
 
@@ -153,7 +153,7 @@ impl<S: BlockchainStorageRead, V: TransactionVerificationStrategy> TransactionVe
             TransactionSource::Chain(id) => {
                 let undo = self
                     .db_tx
-                    .get_orders_accounting_undo(id)?
+                    .get_orders_accounting_undo(&id)?
                     .map(CachedBlockUndo::from_block_undo);
                 Ok(undo)
             }
@@ -264,7 +264,7 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> TransactionV
         match tx_source {
             TransactionSource::Chain(id) => self
                 .db_tx
-                .set_undo_data(id, &undo.clone().consume())
+                .set_undo_data(&id, &undo.clone().consume())
                 .map_err(TransactionVerifierStorageError::from),
             TransactionSource::Mempool => {
                 panic!("Flushing mempool info into the storage is forbidden")
@@ -280,7 +280,7 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> TransactionV
         // TODO: check tx_source at compile-time (mintlayer/mintlayer-core#633)
         match tx_source {
             TransactionSource::Chain(id) => {
-                self.db_tx.del_undo_data(id).map_err(TransactionVerifierStorageError::from)
+                self.db_tx.del_undo_data(&id).map_err(TransactionVerifierStorageError::from)
             }
             TransactionSource::Mempool => {
                 panic!("Flushing mempool info into the storage is forbidden")
@@ -298,7 +298,7 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> TransactionV
         match tx_source {
             TransactionSource::Chain(id) => self
                 .db_tx
-                .set_pos_accounting_undo_data(id, &undo.clone().consume())
+                .set_pos_accounting_undo_data(&id, &undo.clone().consume())
                 .map_err(TransactionVerifierStorageError::from),
             TransactionSource::Mempool => {
                 panic!("Flushing mempool info into the storage is forbidden")
@@ -315,7 +315,7 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> TransactionV
         match tx_source {
             TransactionSource::Chain(id) => self
                 .db_tx
-                .del_pos_accounting_undo_data(id)
+                .del_pos_accounting_undo_data(&id)
                 .map_err(TransactionVerifierStorageError::from),
             TransactionSource::Mempool => {
                 panic!("Flushing mempool info into the storage is forbidden")
@@ -364,7 +364,7 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> TransactionV
         nonce: AccountNonce,
     ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error> {
         self.db_tx
-            .set_account_nonce_count(account, nonce)
+            .set_account_nonce_count(&account, nonce)
             .map_err(TransactionVerifierStorageError::from)
     }
 
@@ -374,7 +374,7 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> TransactionV
         account: AccountType,
     ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error> {
         self.db_tx
-            .del_account_nonce_count(account)
+            .del_account_nonce_count(&account)
             .map_err(TransactionVerifierStorageError::from)
     }
 
@@ -388,7 +388,7 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> TransactionV
         match tx_source {
             TransactionSource::Chain(id) => self
                 .db_tx
-                .set_tokens_accounting_undo_data(id, &undo.clone().consume())
+                .set_tokens_accounting_undo_data(&id, &undo.clone().consume())
                 .map_err(TransactionVerifierStorageError::from),
             TransactionSource::Mempool => {
                 panic!("Flushing mempool info into the storage is forbidden")
@@ -405,7 +405,7 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> TransactionV
         match tx_source {
             TransactionSource::Chain(id) => self
                 .db_tx
-                .del_tokens_accounting_undo_data(id)
+                .del_tokens_accounting_undo_data(&id)
                 .map_err(TransactionVerifierStorageError::from),
             TransactionSource::Mempool => {
                 panic!("Flushing mempool info into the storage is forbidden")
@@ -423,7 +423,7 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> TransactionV
         match tx_source {
             TransactionSource::Chain(id) => self
                 .db_tx
-                .set_orders_accounting_undo_data(id, &undo.clone().consume())
+                .set_orders_accounting_undo_data(&id, &undo.clone().consume())
                 .map_err(TransactionVerifierStorageError::from),
             TransactionSource::Mempool => {
                 panic!("Flushing mempool info into the storage is forbidden")
@@ -440,7 +440,7 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> TransactionV
         match tx_source {
             TransactionSource::Chain(id) => self
                 .db_tx
-                .del_orders_accounting_undo_data(id)
+                .del_orders_accounting_undo_data(&id)
                 .map_err(TransactionVerifierStorageError::from),
             TransactionSource::Mempool => {
                 panic!("Flushing mempool info into the storage is forbidden")

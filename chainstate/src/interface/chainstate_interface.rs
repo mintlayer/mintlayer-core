@@ -79,9 +79,9 @@ pub trait ChainstateInterface: Send + Sync {
     fn get_best_block_header(&self) -> Result<SignedBlockHeader, ChainstateError>;
     fn get_block_id_from_height(
         &self,
-        height: &BlockHeight,
+        height: BlockHeight,
     ) -> Result<Option<Id<GenBlock>>, ChainstateError>;
-    fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, ChainstateError>;
+    fn get_block(&self, block_id: &Id<Block>) -> Result<Option<Block>, ChainstateError>;
     fn get_mainchain_blocks(
         &self,
         from: BlockHeight,
@@ -89,7 +89,7 @@ pub trait ChainstateInterface: Send + Sync {
     ) -> Result<Vec<Block>, ChainstateError>;
     fn get_block_header(
         &self,
-        block_id: Id<Block>,
+        block_id: &Id<Block>,
     ) -> Result<Option<SignedBlockHeader>, ChainstateError>;
 
     /// Returns a list of block headers whose heights distances increase exponentially starting
@@ -208,7 +208,7 @@ pub trait ChainstateInterface: Send + Sync {
     /// Returns token info by `token_id`.
     fn get_token_info_for_rpc(
         &self,
-        token_id: TokenId,
+        token_id: &TokenId,
     ) -> Result<Option<RPCTokenInfo>, ChainstateError>;
 
     /// Return infos for the specified token ids.
@@ -220,7 +220,7 @@ pub trait ChainstateInterface: Send + Sync {
     /// Return token's auxiliary data; available for NFTs only.
     fn get_token_aux_data(
         &self,
-        token_id: TokenId,
+        token_id: &TokenId,
     ) -> Result<Option<TokenAuxiliaryData>, ChainstateError>;
     /// Obtain token id given the id of the issuing tx; available for NFTs only.
     fn get_token_id_from_issuance_tx(
@@ -289,10 +289,10 @@ pub trait ChainstateInterface: Send + Sync {
     fn is_initial_block_download(&self) -> bool;
 
     /// Check whether stake pool with given ID exists.
-    fn stake_pool_exists(&self, pool_id: PoolId) -> Result<bool, ChainstateError>;
+    fn stake_pool_exists(&self, pool_id: &PoolId) -> Result<bool, ChainstateError>;
 
     /// Get stake pool balance. See [pos_accounting::PoSAccountingView::get_pool_balance].
-    fn get_stake_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, ChainstateError>;
+    fn get_stake_pool_balance(&self, pool_id: &PoolId) -> Result<Option<Amount>, ChainstateError>;
 
     /// Get balances of the specified stake pools at the specified heights (i.e. at the points
     /// when the mainchain tip had that particular height).
@@ -307,35 +307,35 @@ pub trait ChainstateInterface: Send + Sync {
     ) -> Result<BTreeMap<BlockHeight, BTreeMap<PoolId, NonZeroPoolBalances>>, ChainstateError>;
 
     /// Get stake pool data. See [pos_accounting::PoSAccountingView::get_pool_data].
-    fn get_stake_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, ChainstateError>;
+    fn get_stake_pool_data(&self, pool_id: &PoolId) -> Result<Option<PoolData>, ChainstateError>;
 
     /// Get all delegation shares for given stake pool.
     /// See [pos_accounting::PoSAccountingView::get_pool_delegations_shares].
     fn get_stake_pool_delegations_shares(
         &self,
-        pool_id: PoolId,
+        pool_id: &PoolId,
     ) -> Result<Option<BTreeMap<DelegationId, Amount>>, ChainstateError>;
 
     /// Get delegation balance for given stake pool delegation ID.
     /// See [pos_accounting::PoSAccountingView::get_delegation_balance].
     fn get_stake_delegation_balance(
         &self,
-        delegation_id: DelegationId,
+        delegation_id: &DelegationId,
     ) -> Result<Option<Amount>, ChainstateError>;
 
     /// Get data for given stake pool delegation ID.
     /// See [pos_accounting::PoSAccountingView::get_delegation_data].
     fn get_stake_delegation_data(
         &self,
-        delegation_id: DelegationId,
+        delegation_id: &DelegationId,
     ) -> Result<Option<DelegationData>, ChainstateError>;
 
     /// Get delegation share for given stake pool and delegation.
     /// See [pos_accounting::PoSAccountingView::get_pool_delegation_share].
     fn get_stake_pool_delegation_share(
         &self,
-        pool_id: PoolId,
-        delegation_id: DelegationId,
+        pool_id: &PoolId,
+        delegation_id: &DelegationId,
     ) -> Result<Option<Amount>, ChainstateError>;
 
     /// Returns information about the chain.
@@ -344,6 +344,6 @@ pub trait ChainstateInterface: Send + Sync {
     /// Returns account nonce for the account
     fn get_account_nonce_count(
         &self,
-        account: AccountType,
+        account: &AccountType,
     ) -> Result<Option<AccountNonce>, ChainstateError>;
 }
