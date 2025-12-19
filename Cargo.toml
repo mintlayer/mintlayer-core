@@ -295,8 +295,8 @@ rev = "510bb3ca30639af4bdb12a918b6bbbdb75fa5f52"
 
 [workspace.dependencies.mintlayer-ledger-messages]
 git = "https://github.com/mintlayer/mintlayer-ledger-app"
-# The commit "Remove App name and version instructions"
-rev = "d65b5200a4499c5ebdcf95903cc3a5579f611c6f"
+# The commit "fix tests"
+rev = "b87b78a330a7e2a80d30154e11c5065562ee9d0f"
 package = "messages"
 
 [workspace.dependencies.trezor-client]

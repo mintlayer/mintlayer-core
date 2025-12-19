@@ -1720,7 +1720,7 @@ dependencies = [
  "lazy_static",
  "logging",
  "merkletree-mintlayer",
- "mintlayer-core-primitives",
+ "mintlayer-core-primitives 1.0.0 (git+https://github.com/mintlayer/mintlayer-core-primitives?rev=4e21bf85e7fdca1577a49df7599b2b39ec913287)",
  "num",
  "num-traits",
  "once_cell",
@@ -4976,11 +4976,11 @@ dependencies = [
 [[package]]
 name = "messages"
 version = "0.1.0"
-source = "git+https://github.com/mintlayer/mintlayer-ledger-app?rev=d65b5200a4499c5ebdcf95903cc3a5579f611c6f#d65b5200a4499c5ebdcf95903cc3a5579f611c6f"
+source = "git+https://github.com/mintlayer/mintlayer-ledger-app?rev=b87b78a330a7e2a80d30154e11c5065562ee9d0f#b87b78a330a7e2a80d30154e11c5065562ee9d0f"
 dependencies = [
+ "mintlayer-core-primitives 1.0.0 (git+https://github.com/mintlayer/mintlayer-core-primitives?branch=feature%2Fledger-coin-type)",
  "num_enum",
- "parity-scale-codec 3.7.5 (git+https://github.com/OBorce/parity-scale-codec.git?branch=fix%2Fmissing-target-atomic-ptr)",
- "trezor-common",
+ "parity-scale-codec 3.7.5 (git+https://github.com/paritytech/parity-scale-codec.git?rev=5021525697edc0661591ebc71392c48d950a10b0)",
 ]
 
 [[package]]
@@ -5042,6 +5042,17 @@ dependencies = [
 [[package]]
 name = "mintlayer-core-primitives"
 version = "1.0.0"
+source = "git+https://github.com/mintlayer/mintlayer-core-primitives?branch=feature%2Fledger-coin-type#8d8926aba4f3352d885d7d3bc125a11eb13ff1fb"
+dependencies = [
+ "derive_more 2.1.0",
+ "fixed-hash",
+ "parity-scale-codec 3.7.5 (git+https://github.com/paritytech/parity-scale-codec.git?rev=5021525697edc0661591ebc71392c48d950a10b0)",
+ "strum 0.27.2",
+]
+
+[[package]]
+name = "mintlayer-core-primitives"
+version = "1.0.0"
 source = "git+https://github.com/mintlayer/mintlayer-core-primitives?rev=4e21bf85e7fdca1577a49df7599b2b39ec913287#4e21bf85e7fdca1577a49df7599b2b39ec913287"
 dependencies = [
  "derive_more 2.1.1",
@@ -5055,7 +5066,7 @@ name = "mintlayer-firmware-deps"
 version = "0.0.0"
 source = "git+https://github.com/mintlayer/mintlayer-trezor-firmware?rev=35716c865086f017f308c949c041f99d343057c0#35716c865086f017f308c949c041f99d343057c0"
 dependencies = [
- "mintlayer-core-primitives",
+ "mintlayer-core-primitives 1.0.0 (git+https://github.com/mintlayer/mintlayer-core-primitives?rev=4e21bf85e7fdca1577a49df7599b2b39ec913287)",
 ]
 
 [[package]]
@@ -6208,13 +6219,13 @@ dependencies = [
 [[package]]
 name = "parity-scale-codec"
 version = "3.7.5"
-source = "git+https://github.com/OBorce/parity-scale-codec.git?branch=fix%2Fmissing-target-atomic-ptr#b6aafd677f9b83d8bcd0d1a614ed115f7e43568a"
+source = "git+https://github.com/paritytech/parity-scale-codec.git?rev=5021525697edc0661591ebc71392c48d950a10b0#5021525697edc0661591ebc71392c48d950a10b0"
 dependencies = [
  "arrayvec",
  "byte-slice-cast",
  "const_format",
  "impl-trait-for-tuples",
- "parity-scale-codec-derive 3.7.5 (git+https://github.com/OBorce/parity-scale-codec.git?branch=fix%2Fmissing-target-atomic-ptr)",
+ "parity-scale-codec-derive 3.7.5 (git+https://github.com/paritytech/parity-scale-codec.git?rev=5021525697edc0661591ebc71392c48d950a10b0)",
  "rustversion",
 ]
 
@@ -6233,7 +6244,7 @@ dependencies = [
 [[package]]
 name = "parity-scale-codec-derive"
 version = "3.7.5"
-source = "git+https://github.com/OBorce/parity-scale-codec.git?branch=fix%2Fmissing-target-atomic-ptr#b6aafd677f9b83d8bcd0d1a614ed115f7e43568a"
+source = "git+https://github.com/paritytech/parity-scale-codec.git?rev=5021525697edc0661591ebc71392c48d950a10b0#5021525697edc0661591ebc71392c48d950a10b0"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
@@ -9327,17 +9338,6 @@ dependencies = [
  "thiserror 2.0.18",
  "tracing",
  "unicode-normalization",
-]
-
-[[package]]
-name = "trezor-common"
-version = "1.1.0"
-source = "git+https://github.com/mintlayer/mintlayer-core?branch=feature%2Fhardware-wallet-common2#5a2106e456ec767053dc81bbdacc33e8e7537d38"
-dependencies = [
- "num-derive",
- "num-traits",
- "parity-scale-codec 3.7.5 (git+https://github.com/OBorce/parity-scale-codec.git?branch=fix%2Fmissing-target-atomic-ptr)",
- "strum 0.26.3",
 ]
 
 [[package]]

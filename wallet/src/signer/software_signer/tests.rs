@@ -73,6 +73,7 @@ async fn test_sign_transaction(
         input_commitments_version,
         make_software_signer,
         no_another_signer(),
+        true,
     )
     .await;
 }

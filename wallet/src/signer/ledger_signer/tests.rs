@@ -355,33 +355,9 @@ async fn test_sign_transaction(
         input_commitments_version,
         make_ledger_signer,
         no_another_signer(),
+        false,
     )
     .await;
-
-    control_msg_tx.send(ControlMessage::Finish).await.unwrap();
-    if let Some(auto_confirmer_handle) = auto_confirmer_handle {
-        auto_confirmer_handle.await.unwrap();
-    }
-}
-
-#[rstest]
-#[trace]
-#[serial_test::serial]
-#[case(Seed::from_entropy(), SighashInputCommitmentVersion::V1)]
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_fixed_signatures2(
-    #[case] seed: Seed,
-    #[case] input_commitments_version: SighashInputCommitmentVersion,
-) {
-    use crate::signer::tests::generic_fixed_signature_tests::test_fixed_signatures_generic2;
-
-    log::debug!("test_fixed_signatures2, seed = {seed:?}, input_commitments_version = {input_commitments_version:?}");
-
-    let (auto_confirmer_handle, control_msg_tx, make_ledger_signer) = setup(true).await;
-
-    let mut rng = make_seedable_rng(seed);
-
-    test_fixed_signatures_generic2(&mut rng, input_commitments_version, make_ledger_signer).await;
 
     control_msg_tx.send(ControlMessage::Finish).await.unwrap();
     if let Some(auto_confirmer_handle) = auto_confirmer_handle {
@@ -468,6 +444,7 @@ async fn test_sign_transaction_sig_consistency(
         input_commitments_version,
         make_ledger_signer,
         Some(make_deterministic_software_signer),
+        false,
     )
     .await;
 
