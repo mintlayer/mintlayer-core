@@ -22,7 +22,9 @@ use crate::{
     signer::{
         ledger_signer::ledger_messages::{
             check_current_app, get_extended_public_key, get_extended_public_key_raw,
-            sign_challenge, sign_tx, to_ledger_amount, to_ledger_output_value, to_ledger_tx_input,
+            sign_challenge, sign_tx, to_ledger_account_command, to_ledger_account_nonce,
+            to_ledger_account_outpoint, to_ledger_additional_order_info, to_ledger_amount,
+            to_ledger_order_account_command, to_ledger_outpoint, to_ledger_output_value,
             to_ledger_tx_output,
         },
         utils::{is_htlc_utxo, produce_uniparty_signature_for_input},
@@ -71,7 +73,9 @@ use wallet_storage::{
 use wallet_types::{
     account_info::DEFAULT_ACCOUNT_INDEX,
     hw_data::{HardwareWalletFullInfo, LedgerData, LedgerFullInfo, LedgerModel},
-    partially_signed_transaction::{PartiallySignedTransaction, TokensAdditionalInfo},
+    partially_signed_transaction::{
+        PartiallySignedTransaction, PtxAdditionalInfo, TokensAdditionalInfo,
+    },
     signature_status::SignatureStatus,
     AccountId,
 };
@@ -80,9 +84,9 @@ use async_trait::async_trait;
 use itertools::{izip, Itertools};
 use ledger_lib::{info::Model, Exchange, Filters, LedgerHandle, LedgerProvider, Transport};
 use mintlayer_ledger_messages::{
-    AddrType, Bip32Path as LedgerBip32Path, CoinType, InputAdditionalInfoReq,
-    InputAddressPath as LedgerInputAddressPath, Signature as LedgerSignature, TxInputReq,
-    TxOutputReq,
+    AdditionalUtxoInfo, AddrType, Bip32Path as LedgerBip32Path, CoinType,
+    InputAddressPath as LedgerInputAddressPath, SighashInputCommitment as LSighashInputCommitment,
+    Signature as LedgerSignature, TxInputReq, TxInputWithAdditionalInfo, TxOutputReq,
 };
 use randomness::make_true_rng;
 use tokio::sync::Mutex;
@@ -499,8 +503,8 @@ where
         Vec<SignatureStatus>,
     )> {
         let (inputs, standalone_inputs) = to_ledger_input_msgs(&ptx, key_chain, &db_tx)?;
+        let input_commitments = to_ledger_input_commitments_reqs(&ptx)?;
         let outputs = self.to_ledger_output_msgs(&ptx);
-        let input_additional_infos = to_ledger_input_additional_info_reqs(&ptx)?;
         let coin_type = to_ledger_chain_type(&self.chain_config);
 
         let input_commitment_version = self
@@ -519,7 +523,7 @@ where
         let new_signatures = self
             .perform_ledger_operation(
                 async move |client| {
-                    sign_tx(client, coin_type, inputs, input_additional_infos, outputs).await
+                    sign_tx(client, coin_type, inputs, input_commitments, outputs).await
                 },
                 &mut db_tx,
                 key_chain,
@@ -855,25 +859,72 @@ fn to_ledger_input_msgs(
     db_tx: &impl WalletStorageReadUnlocked,
 ) -> SignerResult<(Vec<TxInputReq>, StandaloneInputs)> {
     let res: (Vec<_>, BTreeMap<_, _>) = itertools::process_results(
-        ptx.tx().inputs().iter().zip(ptx.destinations()).enumerate().map(
-            |(idx, (inp, dest))| -> SignerResult<_> {
+        ptx.tx()
+            .inputs()
+            .iter()
+            .zip(ptx.destinations())
+            .zip(ptx.input_utxos())
+            .enumerate()
+            .map(|(idx, ((inp, dest), utxo))| -> SignerResult<_> {
                 let (address_paths, standalone_inputs) =
                     dest.as_ref().map_or(Ok((vec![], vec![])), |dest| {
                         destination_to_address_paths(key_chain, dest, db_tx)
                     })?;
 
                 let input = TxInputReq {
-                    inp: to_ledger_tx_input(inp),
+                    inp: to_ledger_tx_input_with_additional_info(inp, utxo, ptx.additional_info())?,
                     addresses: address_paths,
                 };
 
                 Ok((input, (idx as u32, standalone_inputs)))
-            },
-        ),
+            }),
         |iter| iter.unzip(),
     )?;
 
     Ok(res)
+}
+
+fn to_ledger_tx_input_with_additional_info(
+    inp: &TxInput,
+    utxo: &Option<TxOutput>,
+    additional_info: &PtxAdditionalInfo,
+) -> SignerResult<TxInputWithAdditionalInfo> {
+    let inp = match inp {
+        TxInput::Utxo(outpoint) => {
+            let utxo = utxo.as_ref().ok_or(SignerError::MissingUtxo)?;
+            let info = match utxo {
+                TxOutput::ProduceBlockFromStake(_, pool_id) => {
+                    let pool_info = additional_info
+                        .get_pool_info(pool_id)
+                        .ok_or(SignerError::MissingTxExtraInfo)?;
+                    AdditionalUtxoInfo::PoolData {
+                        utxo: to_ledger_tx_output(utxo),
+                        staker_balance: to_ledger_amount(&pool_info.staker_balance),
+                    }
+                }
+                _ => AdditionalUtxoInfo::Utxo(to_ledger_tx_output(utxo)),
+            };
+            TxInputWithAdditionalInfo::Utxo(to_ledger_outpoint(outpoint), info)
+        }
+        TxInput::Account(acc) => {
+            TxInputWithAdditionalInfo::Account(to_ledger_account_outpoint(acc))
+        }
+        TxInput::AccountCommand(nonce, cmd) => TxInputWithAdditionalInfo::AccountCommand(
+            to_ledger_account_nonce(nonce),
+            to_ledger_account_command(cmd),
+        ),
+        TxInput::OrderAccountCommand(cmd) => {
+            let info = additional_info
+                .get_order_info(&cmd.order_id())
+                .ok_or(SignerError::MissingTxExtraInfo)?;
+
+            TxInputWithAdditionalInfo::OrderAccountCommand(
+                to_ledger_order_account_command(cmd),
+                to_ledger_additional_order_info(info),
+            )
+        }
+    };
+    Ok(inp)
 }
 
 /// Find the derivation paths to the key in the destination, or multiple in the case of a multisig
@@ -943,9 +994,9 @@ fn destination_to_address_paths_impl(
     }
 }
 
-fn to_ledger_input_additional_info_reqs(
+fn to_ledger_input_commitments_reqs(
     ptx: &PartiallySignedTransaction,
-) -> SignerResult<Vec<InputAdditionalInfoReq>> {
+) -> SignerResult<Vec<LSighashInputCommitment>> {
     ptx.input_utxos()
         .iter()
         .zip(ptx.tx().inputs())
@@ -959,17 +1010,15 @@ fn to_ledger_input_additional_info_reqs(
                                 .additional_info()
                                 .get_pool_info(pool_id)
                                 .ok_or(SignerError::MissingTxExtraInfo)?;
-                            InputAdditionalInfoReq::PoolInfo {
+                            LSighashInputCommitment::ProduceBlockFromStakeUtxo {
                                 utxo: to_ledger_tx_output(utxo),
                                 staker_balance: to_ledger_amount(&pool_info.staker_balance),
                             }
                         }
-                        _ => InputAdditionalInfoReq::Utxo {
-                            utxo: to_ledger_tx_output(utxo),
-                        },
+                        _ => LSighashInputCommitment::Utxo(to_ledger_tx_output(utxo)),
                     }
                 }
-                TxInput::Account(_) => InputAdditionalInfoReq::None,
+                TxInput::Account(_) => LSighashInputCommitment::None,
                 TxInput::AccountCommand(_, cmd) => match cmd {
                     AccountCommand::MintTokens(_, _)
                     | AccountCommand::UnmintTokens(_)
@@ -977,17 +1026,15 @@ fn to_ledger_input_additional_info_reqs(
                     | AccountCommand::FreezeToken(_, _)
                     | AccountCommand::UnfreezeToken(_)
                     | AccountCommand::ChangeTokenAuthority(_, _)
-                    | AccountCommand::ChangeTokenMetadataUri(_, _) => InputAdditionalInfoReq::None,
+                    | AccountCommand::ChangeTokenMetadataUri(_, _) => LSighashInputCommitment::None,
                     AccountCommand::FillOrder(order_id, _, _) => {
                         let order_info = ptx
                             .additional_info()
                             .get_order_info(order_id)
                             .ok_or(SignerError::MissingTxExtraInfo)?;
-                        InputAdditionalInfoReq::OrderInfo {
+                        LSighashInputCommitment::FillOrderAccountCommand {
                             initially_asked: to_ledger_output_value(&order_info.initially_asked),
                             initially_given: to_ledger_output_value(&order_info.initially_given),
-                            ask_balance: to_ledger_amount(&order_info.ask_balance),
-                            give_balance: to_ledger_amount(&order_info.give_balance),
                         }
                     }
                     AccountCommand::ConcludeOrder(order_id) => {
@@ -995,7 +1042,7 @@ fn to_ledger_input_additional_info_reqs(
                             .additional_info()
                             .get_order_info(order_id)
                             .ok_or(SignerError::MissingTxExtraInfo)?;
-                        InputAdditionalInfoReq::OrderInfo {
+                        LSighashInputCommitment::ConcludeOrderAccountCommand {
                             initially_asked: to_ledger_output_value(&order_info.initially_asked),
                             initially_given: to_ledger_output_value(&order_info.initially_given),
                             ask_balance: to_ledger_amount(&order_info.ask_balance),
@@ -1009,11 +1056,9 @@ fn to_ledger_input_additional_info_reqs(
                             .additional_info()
                             .get_order_info(order_id)
                             .ok_or(SignerError::MissingTxExtraInfo)?;
-                        InputAdditionalInfoReq::OrderInfo {
+                        LSighashInputCommitment::FillOrderAccountCommand {
                             initially_asked: to_ledger_output_value(&order_info.initially_asked),
                             initially_given: to_ledger_output_value(&order_info.initially_given),
-                            ask_balance: to_ledger_amount(&order_info.ask_balance),
-                            give_balance: to_ledger_amount(&order_info.give_balance),
                         }
                     }
                     OrderAccountCommand::ConcludeOrder(order_id) => {
@@ -1021,14 +1066,14 @@ fn to_ledger_input_additional_info_reqs(
                             .additional_info()
                             .get_order_info(order_id)
                             .ok_or(SignerError::MissingTxExtraInfo)?;
-                        InputAdditionalInfoReq::OrderInfo {
+                        LSighashInputCommitment::ConcludeOrderAccountCommand {
                             initially_asked: to_ledger_output_value(&order_info.initially_asked),
                             initially_given: to_ledger_output_value(&order_info.initially_given),
                             ask_balance: to_ledger_amount(&order_info.ask_balance),
                             give_balance: to_ledger_amount(&order_info.give_balance),
                         }
                     }
-                    OrderAccountCommand::FreezeOrder(_) => InputAdditionalInfoReq::None,
+                    OrderAccountCommand::FreezeOrder(_) => LSighashInputCommitment::None,
                 },
             };
             Ok(additional_info)

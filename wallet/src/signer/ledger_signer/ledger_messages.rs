@@ -31,13 +31,17 @@ use utils::ensure;
 use ledger_lib::{Device, Exchange};
 use ledger_proto::StatusCode;
 use mintlayer_ledger_messages::{
-    decode_all as ledger_decode_all, encode as ledger_encode, AddrType, Amount as LAmount, Apdu,
-    Bip32Path as LedgerBip32Path, CoinType, GetPublicKeyRespones, InputAdditionalInfoReq, Ins,
-    MsgSignature, OutputValue as LOutputValue, P1SignTx, PubKeyP1, PublicKeyReq, SignMessageReq,
-    SignTxReq, Signature as LedgerSignature, TxInput as LTxInput, TxInputReq, TxMetadataReq,
-    TxOutput as LTxOutput, TxOutputReq, APDU_CLASS, H256 as LH256, P1_SIGN_NEXT, P1_SIGN_START,
-    P2_DONE, P2_SIGN_MORE,
+    decode_all as ledger_decode_all, encode as ledger_encode, AccountCommand as LAccountCommand,
+    AccountNonce as LAccountNonce, AccountOutPoint as LAccountOutPoint, AdditionalOrderInfo,
+    AddrType, Amount as LAmount, Apdu, Bip32Path as LedgerBip32Path, CoinType,
+    GetPublicKeyRespones, Id as LId, Ins, MsgSignature,
+    OrderAccountCommand as LOrderAccountCommand, OutputValue as LOutputValue, P1SignTx, PubKeyP1,
+    PublicKeyReq, SighashInputCommitment as LSighashInputCommitment, SignMessageReq, SignTxReq,
+    Signature as LedgerSignature, TxInputReq, TxMetadataReq, TxOutput as LTxOutput, TxOutputReq,
+    UtxoOutPoint as LUtxoOutPoint, APDU_CLASS, H256 as LH256, P1_SIGN_NEXT, P1_SIGN_START, P2_DONE,
+    P2_MORE,
 };
+use wallet_types::partially_signed_transaction::OrderAdditionalInfo;
 
 const TIMEOUT_DUR: Duration = Duration::from_secs(100);
 const TX_VERSION: u8 = 1;
@@ -213,7 +217,7 @@ pub async fn sign_tx<L: Exchange>(
     ledger: &mut L,
     chain_type: CoinType,
     inputs: Vec<TxInputReq>,
-    input_additional_infos: Vec<InputAdditionalInfoReq>,
+    input_commitments: Vec<LSighashInputCommitment>,
     outputs: Vec<TxOutputReq>,
 ) -> SignerResult<BTreeMap<usize, Vec<LedgerSignature>>> {
     let metadata = ledger_encode(TxMetadataReq {
@@ -240,12 +244,12 @@ pub async fn sign_tx<L: Exchange>(
         .await?;
     }
 
-    for info in input_additional_infos {
+    for commitment in input_commitments {
         send_chunked_expect_empty_ok_response(
             ledger,
             Ins::SIGN_TX,
-            P1SignTx::InputAdditionalInfo.into(),
-            &ledger_encode(SignTxReq::InputAdditionalInfo(info)),
+            P1SignTx::InputCommitment.into(),
+            &ledger_encode(SignTxReq::InputCommitment(commitment)),
         )
         .await?;
     }
@@ -300,7 +304,7 @@ pub async fn sign_tx<L: Exchange>(
 
 fn decode_signature_response(resp: &[u8]) -> Result<SignatureResult, LedgerError> {
     let input_idx = *resp.first().ok_or(LedgerError::InvalidResponse)? as usize;
-    let has_more_signatures = *resp.last().ok_or(LedgerError::InvalidResponse)? == P2_SIGN_MORE;
+    let has_more_signatures = *resp.last().ok_or(LedgerError::InvalidResponse)? == P2_MORE;
 
     let sig: LedgerSignature =
         ledger_decode_all(&resp[..resp.len() - 1][1..]).ok_or(LedgerError::InvalidResponse)?;
@@ -316,12 +320,37 @@ pub fn to_ledger_tx_output(value: &chain::TxOutput) -> LTxOutput {
     ledger_decode_all(value.encode().as_slice()).expect("ok")
 }
 
-pub fn to_ledger_tx_input(value: &chain::TxInput) -> LTxInput {
+pub fn to_ledger_amount(value: &primitives::Amount) -> LAmount {
+    LAmount::from_atoms(value.into_atoms())
+}
+
+pub fn to_ledger_outpoint(value: &chain::UtxoOutPoint) -> LUtxoOutPoint {
     ledger_decode_all(value.encode().as_slice()).expect("ok")
 }
 
-pub fn to_ledger_amount(value: &primitives::Amount) -> LAmount {
-    LAmount::from_atoms(value.into_atoms())
+pub fn to_ledger_account_outpoint(value: &chain::AccountOutPoint) -> LAccountOutPoint {
+    ledger_decode_all(value.encode().as_slice()).expect("ok")
+}
+
+pub fn to_ledger_account_nonce(value: &chain::AccountNonce) -> LAccountNonce {
+    ledger_decode_all(value.encode().as_slice()).expect("ok")
+}
+
+pub fn to_ledger_account_command(value: &chain::AccountCommand) -> LAccountCommand {
+    ledger_decode_all(value.encode().as_slice()).expect("ok")
+}
+
+pub fn to_ledger_order_account_command(value: &chain::OrderAccountCommand) -> LOrderAccountCommand {
+    ledger_decode_all(value.encode().as_slice()).expect("ok")
+}
+
+pub fn to_ledger_additional_order_info(info: &OrderAdditionalInfo) -> AdditionalOrderInfo {
+    AdditionalOrderInfo {
+        initially_asked: to_ledger_output_value(&info.initially_asked),
+        initially_given: to_ledger_output_value(&info.initially_given),
+        ask_balance: to_ledger_amount(&info.ask_balance),
+        give_balance: to_ledger_amount(&info.give_balance),
+    }
 }
 
 pub fn to_ledger_output_value(value: &chain::output_value::OutputValue) -> LOutputValue {
@@ -330,8 +359,9 @@ pub fn to_ledger_output_value(value: &chain::output_value::OutputValue) -> LOutp
             LOutputValue::Coin(to_ledger_amount(amount))
         }
         chain::output_value::OutputValue::TokenV0(_) => panic!("unsupported V0"),
-        chain::output_value::OutputValue::TokenV1(token_id, amount) => {
-            LOutputValue::TokenV1(LH256(token_id.to_hash().into()), to_ledger_amount(amount))
-        }
+        chain::output_value::OutputValue::TokenV1(token_id, amount) => LOutputValue::TokenV1(
+            LId::new(LH256(token_id.to_hash().into())),
+            to_ledger_amount(amount),
+        ),
     }
 }
