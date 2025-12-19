@@ -132,6 +132,7 @@ async fn test_sign_transaction(
         input_commitments_version,
         make_trezor_signer,
         no_another_signer(),
+        true,
     )
     .await;
 }
@@ -267,6 +268,7 @@ async fn test_sign_transaction_sig_consistency(
         input_commitments_version,
         make_deterministic_trezor_signer,
         Some(make_deterministic_software_signer),
+        true,
     )
     .await;
 }
