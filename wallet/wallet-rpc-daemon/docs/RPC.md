@@ -3661,6 +3661,13 @@ Returns:
                     "device_id": string,
                     "firmware_version": string,
                 },
+            }
+         3) {
+                "type": "LedgerWallet",
+                "content": {
+                    "app_version": string,
+                    "model": string,
+                },
             },
 }
 ```

@@ -110,11 +110,9 @@ pub enum LedgerError {
     DeviceError(String),
     #[error("Missing hardware wallet data in database")]
     MissingHardwareWalletData,
-    #[error("Derivation path is too long to send to Ledger")]
-    PathToLong,
     #[error("Invalid public key returned from Ledger")]
     InvalidKey,
-    #[error("The file being loaded is a software wallet and does not correspond to the connected hardware wallet")]
+    #[error("The file being loaded is a software wallet and cannot be used with the connected Ledger wallet")]
     WalletFileIsSoftwareWallet,
     #[error("Public keys mismatch - wrong device or passphrase")]
     HardwareWalletDifferentMnemonicOrPassphrase,
@@ -126,6 +124,8 @@ pub enum LedgerError {
     MissingMultisigIndexForSignature,
     #[error("Signature error: {0}")]
     SignatureError(#[from] SignatureError),
+    #[error("Input commitments version 1 is not supported by the Ledger app")]
+    InputCommitmentVersion1NotSupported,
 }
 
 impl From<ledger_lib::Error> for LedgerError {
@@ -198,7 +198,7 @@ where
         key_chain: &impl AccountKeyChains,
     ) -> SignerResult<()> {
         let mut client = self.client.lock().await;
-        // Try and wait around 5sec 50 * 100ms for the screen to clear after a signing operation ends
+        // Try and wait around 50 * 100ms for the screen to clear after a signing operation ends
         let mut num_tries = 50;
         let derivation_path = make_account_path(&self.chain_config, key_chain.account_index());
         let coin_type = to_ledger_chain_type(&self.chain_config);
@@ -517,7 +517,7 @@ where
         // Ledger support is released
         ensure!(
             input_commitment_version == common::chain::SighashInputCommitmentVersion::V1,
-            LedgerError::MultisigSignatureReturned
+            LedgerError::InputCommitmentVersion1NotSupported
         );
 
         let new_signatures = self
@@ -915,12 +915,12 @@ fn to_ledger_tx_input_with_additional_info(
         ),
         TxInput::OrderAccountCommand(cmd) => {
             let info = additional_info
-                .get_order_info(&cmd.order_id())
+                .get_order_info(cmd.order_id())
                 .ok_or(SignerError::MissingTxExtraInfo)?;
 
             TxInputWithAdditionalInfo::OrderAccountCommand(
                 to_ledger_order_account_command(cmd),
-                to_ledger_additional_order_info(info),
+                to_ledger_additional_order_info(info)?,
             )
         }
     };
@@ -1033,8 +1033,8 @@ fn to_ledger_input_commitments_reqs(
                             .get_order_info(order_id)
                             .ok_or(SignerError::MissingTxExtraInfo)?;
                         LSighashInputCommitment::FillOrderAccountCommand {
-                            initially_asked: to_ledger_output_value(&order_info.initially_asked),
-                            initially_given: to_ledger_output_value(&order_info.initially_given),
+                            initially_asked: to_ledger_output_value(&order_info.initially_asked)?,
+                            initially_given: to_ledger_output_value(&order_info.initially_given)?,
                         }
                     }
                     AccountCommand::ConcludeOrder(order_id) => {
@@ -1043,8 +1043,8 @@ fn to_ledger_input_commitments_reqs(
                             .get_order_info(order_id)
                             .ok_or(SignerError::MissingTxExtraInfo)?;
                         LSighashInputCommitment::ConcludeOrderAccountCommand {
-                            initially_asked: to_ledger_output_value(&order_info.initially_asked),
-                            initially_given: to_ledger_output_value(&order_info.initially_given),
+                            initially_asked: to_ledger_output_value(&order_info.initially_asked)?,
+                            initially_given: to_ledger_output_value(&order_info.initially_given)?,
                             ask_balance: to_ledger_amount(&order_info.ask_balance),
                             give_balance: to_ledger_amount(&order_info.give_balance),
                         }
@@ -1057,8 +1057,8 @@ fn to_ledger_input_commitments_reqs(
                             .get_order_info(order_id)
                             .ok_or(SignerError::MissingTxExtraInfo)?;
                         LSighashInputCommitment::FillOrderAccountCommand {
-                            initially_asked: to_ledger_output_value(&order_info.initially_asked),
-                            initially_given: to_ledger_output_value(&order_info.initially_given),
+                            initially_asked: to_ledger_output_value(&order_info.initially_asked)?,
+                            initially_given: to_ledger_output_value(&order_info.initially_given)?,
                         }
                     }
                     OrderAccountCommand::ConcludeOrder(order_id) => {
@@ -1067,8 +1067,8 @@ fn to_ledger_input_commitments_reqs(
                             .get_order_info(order_id)
                             .ok_or(SignerError::MissingTxExtraInfo)?;
                         LSighashInputCommitment::ConcludeOrderAccountCommand {
-                            initially_asked: to_ledger_output_value(&order_info.initially_asked),
-                            initially_given: to_ledger_output_value(&order_info.initially_given),
+                            initially_asked: to_ledger_output_value(&order_info.initially_asked)?,
+                            initially_given: to_ledger_output_value(&order_info.initially_given)?,
                             ask_balance: to_ledger_amount(&order_info.ask_balance),
                             give_balance: to_ledger_amount(&order_info.give_balance),
                         }
@@ -1300,7 +1300,3 @@ fn to_ledger_model(model: &Model) -> LedgerModel {
 #[cfg(feature = "enable-ledger-device-tests")]
 #[cfg(test)]
 mod tests;
-
-#[cfg(feature = "enable-ledger-device-tests")]
-#[cfg(test)]
-mod speculos;
