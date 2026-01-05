@@ -51,6 +51,8 @@ pub enum LedgerModel {
     NanoSPlus,
     NanoX,
     Stax,
+    Flex,
+    NanoGen5,
     Unknown(u16),
 }
 
@@ -61,7 +63,9 @@ impl fmt::Display for LedgerModel {
             LedgerModel::NanoSPlus => write!(f, "Nano S Plus"),
             LedgerModel::NanoX => write!(f, "Nano X"),
             LedgerModel::Stax => write!(f, "Stax"),
-            LedgerModel::Unknown(id) => write!(f, "Unknown({})", id),
+            LedgerModel::Flex => write!(f, "Flex"),
+            LedgerModel::NanoGen5 => write!(f, "Nano Gen 5"),
+            LedgerModel::Unknown(id) => write!(f, "Unknown({id})"),
         }
     }
 }

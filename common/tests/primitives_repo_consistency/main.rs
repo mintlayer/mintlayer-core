@@ -30,6 +30,7 @@ use common::{
         OrderAccountCommandTag, OutPointSourceIdTag, TxInputTag, TxOutputTag,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, H256},
+    primitives_converters::TryConvertInto as _,
 };
 use crypto::{key::KeyKind, vrf::VRFKeyKind};
 use randomness::Rng as _;
@@ -37,7 +38,6 @@ use serialization::{DecodeAll, Encode};
 use test_utils::random::{make_seedable_rng, Seed};
 
 use crate::utils::{
-    converters::ConvertInto as _,
     make_test_values_for_compact_encoding,
     makers::{
         make_random_account_command_for_tag, make_random_account_outpoint,
@@ -148,7 +148,8 @@ fn test_account_spending_encoding(#[case] seed: Seed) {
     for _ in 0..100 {
         for tag in AccountSpendingTag::iter() {
             let ref_obj = make_random_account_spending_for_tag(&mut rng, tag);
-            let test_obj: ml_primitives::AccountSpending = ref_obj.clone().convert_into();
+            let test_obj: ml_primitives::AccountSpending =
+                ref_obj.clone().try_convert_into().unwrap();
 
             let encoded_ref_obj = ref_obj.encode();
             let encoded_test_obj = test_obj.encode();
@@ -179,7 +180,7 @@ fn test_account_outpoint_encoding(#[case] seed: Seed) {
 
     for _ in 0..100 {
         let ref_obj = make_random_account_outpoint(&mut rng);
-        let test_obj: ml_primitives::AccountOutPoint = ref_obj.clone().convert_into();
+        let test_obj: ml_primitives::AccountOutPoint = ref_obj.clone().try_convert_into().unwrap();
 
         let encoded_ref_obj = ref_obj.encode();
         let encoded_test_obj = test_obj.encode();
@@ -201,7 +202,8 @@ fn test_account_command_encoding(#[case] seed: Seed) {
     for _ in 0..100 {
         for tag in AccountCommandTag::iter() {
             let ref_obj = make_random_account_command_for_tag(&mut rng, tag);
-            let test_obj: ml_primitives::AccountCommand = ref_obj.clone().convert_into();
+            let test_obj: ml_primitives::AccountCommand =
+                ref_obj.clone().try_convert_into().unwrap();
 
             let encoded_ref_obj = ref_obj.encode();
             let encoded_test_obj = test_obj.encode();
@@ -243,7 +245,8 @@ fn test_order_account_command_encoding(#[case] seed: Seed) {
     for _ in 0..100 {
         for tag in OrderAccountCommandTag::iter() {
             let ref_obj = make_random_order_account_command_for_tag(&mut rng, tag);
-            let test_obj: ml_primitives::OrderAccountCommand = ref_obj.clone().convert_into();
+            let test_obj: ml_primitives::OrderAccountCommand =
+                ref_obj.clone().try_convert_into().unwrap();
 
             let encoded_ref_obj = ref_obj.encode();
             let encoded_test_obj = test_obj.encode();
@@ -276,7 +279,7 @@ fn test_public_key_hash_encoding(#[case] seed: Seed) {
 
     for _ in 0..100 {
         let ref_obj = make_random_public_key_hash(&mut rng);
-        let test_obj: ml_primitives::PublicKeyHash = ref_obj.convert_into();
+        let test_obj: ml_primitives::PublicKeyHash = ref_obj.try_convert_into().unwrap();
 
         let encoded_ref_obj = ref_obj.encode();
         let encoded_test_obj = test_obj.encode();
@@ -298,7 +301,7 @@ fn test_public_key_encoding(#[case] seed: Seed) {
     for _ in 0..100 {
         for kind in KeyKind::iter() {
             let ref_obj = make_random_public_key_for_kind(&mut rng, kind);
-            let test_obj: ml_primitives::PublicKey = ref_obj.clone().convert_into();
+            let test_obj: ml_primitives::PublicKey = ref_obj.clone().try_convert_into().unwrap();
 
             let encoded_ref_obj = ref_obj.encode();
             let encoded_test_obj = test_obj.encode();
@@ -327,7 +330,7 @@ fn test_vrf_public_key_encoding(#[case] seed: Seed) {
     for _ in 0..100 {
         for kind in VRFKeyKind::iter() {
             let ref_obj = make_random_vrf_public_key_for_kind(&mut rng, kind);
-            let test_obj: ml_primitives::VrfPublicKey = ref_obj.clone().convert_into();
+            let test_obj: ml_primitives::VrfPublicKey = ref_obj.clone().try_convert_into().unwrap();
 
             let encoded_ref_obj = ref_obj.encode();
             let encoded_test_obj = test_obj.encode();
@@ -356,7 +359,7 @@ fn test_destination_encoding(#[case] seed: Seed) {
     for _ in 0..100 {
         for tag in DestinationTag::iter() {
             let ref_obj = make_random_destination_for_tag(&mut rng, tag);
-            let test_obj: ml_primitives::Destination = ref_obj.clone().convert_into();
+            let test_obj: ml_primitives::Destination = ref_obj.clone().try_convert_into().unwrap();
 
             let encoded_ref_obj = ref_obj.encode();
             let encoded_test_obj = test_obj.encode();
@@ -393,7 +396,7 @@ fn test_id_encoding(#[case] seed: Seed) {
 
     for _ in 0..100 {
         let ref_obj: RefCustomId = H256(rng.gen()).into();
-        let test_obj = TestCustomId::new(ref_obj.to_hash().convert_into());
+        let test_obj = TestCustomId::new(ref_obj.to_hash().try_convert_into().unwrap());
 
         let encoded_ref_obj = ref_obj.encode();
         let encoded_test_obj = test_obj.encode();
@@ -413,7 +416,7 @@ fn test_per_thousand_encoding(#[case] seed: Seed) {
 
     for _ in 0..100 {
         let ref_obj = PerThousand::new_from_rng(&mut rng);
-        let test_obj: ml_primitives::PerThousand = ref_obj.convert_into();
+        let test_obj: ml_primitives::PerThousand = ref_obj.try_convert_into().unwrap();
 
         let encoded_ref_obj = ref_obj.encode();
         let encoded_test_obj = test_obj.encode();
@@ -435,7 +438,8 @@ fn test_sighash_input_commitment_encoding(#[case] seed: Seed) {
     for _ in 0..100 {
         for tag in SighashInputCommitmentTag::iter() {
             let ref_obj = make_random_input_commitment_for_tag(&mut rng, tag);
-            let test_obj: ml_primitives::SighashInputCommitment = ref_obj.clone().convert_into();
+            let test_obj: ml_primitives::SighashInputCommitment =
+                ref_obj.clone().try_convert_into().unwrap();
 
             let encoded_ref_obj = ref_obj.encode();
             let encoded_test_obj = test_obj.encode();
@@ -475,7 +479,8 @@ fn test_token_issuance_encoding(#[case] seed: Seed) {
     for _ in 0..100 {
         for tag in TokenIssuanceTag::iter() {
             let ref_obj = make_random_token_issuance_for_tag(&mut rng, tag);
-            let test_obj: ml_primitives::TokenIssuance = ref_obj.clone().convert_into();
+            let test_obj: ml_primitives::TokenIssuance =
+                ref_obj.clone().try_convert_into().unwrap();
 
             let encoded_ref_obj = ref_obj.encode();
             let encoded_test_obj = test_obj.encode();
@@ -498,7 +503,7 @@ fn test_token_issuance_encoding(#[case] seed: Seed) {
 #[test]
 fn test_is_token_freezable_encoding() {
     for ref_obj in IsTokenFreezable::iter() {
-        let test_obj: ml_primitives::IsTokenFreezable = ref_obj.convert_into();
+        let test_obj: ml_primitives::IsTokenFreezable = ref_obj.try_convert_into().unwrap();
 
         let encoded_ref_obj = ref_obj.encode();
         let encoded_test_obj = test_obj.encode();
@@ -521,7 +526,7 @@ fn test_is_token_freezable_encoding() {
 #[test]
 fn test_is_token_unfreezable_encoding() {
     for ref_obj in IsTokenUnfreezable::iter() {
-        let test_obj: ml_primitives::IsTokenUnfreezable = ref_obj.convert_into();
+        let test_obj: ml_primitives::IsTokenUnfreezable = ref_obj.try_convert_into().unwrap();
 
         let encoded_ref_obj = ref_obj.encode();
         let encoded_test_obj = test_obj.encode();
@@ -551,7 +556,7 @@ fn test_token_total_supply_encoding(#[case] seed: Seed) {
     for _ in 0..100 {
         for tag in TokenTotalSupplyTag::iter() {
             let ref_obj = make_random_token_total_supply_for_tag(&mut rng, tag);
-            let test_obj: ml_primitives::TokenTotalSupply = ref_obj.convert_into();
+            let test_obj: ml_primitives::TokenTotalSupply = ref_obj.try_convert_into().unwrap();
 
             let encoded_ref_obj = ref_obj.encode();
             let encoded_test_obj = test_obj.encode();
@@ -583,7 +588,7 @@ fn test_nft_issuance_encoding(#[case] seed: Seed) {
     for _ in 0..100 {
         for tag in NftIssuanceTag::iter() {
             let ref_obj = make_random_nft_issuance_for_tag(&mut rng, tag);
-            let test_obj: ml_primitives::NftIssuance = ref_obj.clone().convert_into();
+            let test_obj: ml_primitives::NftIssuance = ref_obj.clone().try_convert_into().unwrap();
 
             let encoded_ref_obj = ref_obj.encode();
             let encoded_test_obj = test_obj.encode();
@@ -612,7 +617,7 @@ fn test_output_value_encoding(#[case] seed: Seed) {
     for _ in 0..100 {
         for tag in OutputValueTag::iter() {
             let ref_obj = make_random_output_value_for_tag(&mut rng, tag);
-            let test_obj: ml_primitives::OutputValue = ref_obj.clone().convert_into();
+            let test_obj: ml_primitives::OutputValue = ref_obj.clone().try_convert_into().unwrap();
 
             let encoded_ref_obj = ref_obj.encode();
             let encoded_test_obj = test_obj.encode();
@@ -642,7 +647,7 @@ fn test_output_time_lock_encoding(#[case] seed: Seed) {
     for _ in 0..100 {
         for tag in OutputTimeLockTag::iter() {
             let ref_obj = make_random_output_time_lock_for_tag(&mut rng, tag);
-            let test_obj: ml_primitives::OutputTimeLock = ref_obj.convert_into();
+            let test_obj: ml_primitives::OutputTimeLock = ref_obj.try_convert_into().unwrap();
 
             let encoded_ref_obj = ref_obj.encode();
             let encoded_test_obj = test_obj.encode();
@@ -675,7 +680,8 @@ fn test_outpoint_source_id_encoding(#[case] seed: Seed) {
     for _ in 0..100 {
         for tag in OutPointSourceIdTag::iter() {
             let ref_obj = make_random_outpoint_source_id_for_tag(&mut rng, tag);
-            let test_obj: ml_primitives::OutPointSourceId = ref_obj.clone().convert_into();
+            let test_obj: ml_primitives::OutPointSourceId =
+                ref_obj.clone().try_convert_into().unwrap();
 
             let encoded_ref_obj = ref_obj.encode();
             let encoded_test_obj = test_obj.encode();
@@ -705,7 +711,7 @@ fn test_utxo_outpoint_encoding(#[case] seed: Seed) {
 
     for _ in 0..100 {
         let ref_obj = make_random_utxo_outpoint(&mut rng);
-        let test_obj: ml_primitives::UtxoOutPoint = ref_obj.clone().convert_into();
+        let test_obj: ml_primitives::UtxoOutPoint = ref_obj.clone().try_convert_into().unwrap();
 
         let encoded_ref_obj = ref_obj.encode();
         let encoded_test_obj = test_obj.encode();
@@ -726,7 +732,7 @@ fn test_stake_pool_data_encoding(#[case] seed: Seed) {
 
     for _ in 0..100 {
         let ref_obj = make_random_stake_pool_data(&mut rng);
-        let test_obj: ml_primitives::StakePoolData = ref_obj.clone().convert_into();
+        let test_obj: ml_primitives::StakePoolData = ref_obj.clone().try_convert_into().unwrap();
 
         let encoded_ref_obj = ref_obj.encode();
         let encoded_test_obj = test_obj.encode();
@@ -747,7 +753,7 @@ fn test_order_data_encoding(#[case] seed: Seed) {
 
     for _ in 0..100 {
         let ref_obj = make_random_order_data(&mut rng);
-        let test_obj: ml_primitives::OrderData = ref_obj.clone().convert_into();
+        let test_obj: ml_primitives::OrderData = ref_obj.clone().try_convert_into().unwrap();
 
         let encoded_ref_obj = ref_obj.encode();
         let encoded_test_obj = test_obj.encode();
@@ -768,7 +774,8 @@ fn test_htlc_encoding(#[case] seed: Seed) {
 
     for _ in 0..100 {
         let ref_obj = make_random_htlc(&mut rng);
-        let test_obj: ml_primitives::HashedTimelockContract = ref_obj.clone().convert_into();
+        let test_obj: ml_primitives::HashedTimelockContract =
+            ref_obj.clone().try_convert_into().unwrap();
 
         let encoded_ref_obj = ref_obj.encode();
         let encoded_test_obj = test_obj.encode();
@@ -791,7 +798,7 @@ fn test_tx_input_encoding(#[case] seed: Seed) {
     for _ in 0..100 {
         for tag in TxInputTag::iter() {
             let ref_obj = make_random_tx_input_for_tag(&mut rng, tag);
-            let test_obj: ml_primitives::TxInput = ref_obj.clone().convert_into();
+            let test_obj: ml_primitives::TxInput = ref_obj.clone().try_convert_into().unwrap();
 
             let encoded_ref_obj = ref_obj.encode();
             let encoded_test_obj = test_obj.encode();
@@ -823,7 +830,7 @@ fn test_tx_output_encoding(#[case] seed: Seed) {
     for _ in 0..100 {
         for tag in TxOutputTag::iter() {
             let ref_obj = make_random_tx_output_for_tag(&mut rng, tag);
-            let test_obj: ml_primitives::TxOutput = ref_obj.clone().convert_into();
+            let test_obj: ml_primitives::TxOutput = ref_obj.clone().try_convert_into().unwrap();
 
             let encoded_ref_obj = ref_obj.encode();
             let encoded_test_obj = test_obj.encode();

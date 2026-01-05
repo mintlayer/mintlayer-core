@@ -273,8 +273,10 @@ impl Backend {
         let wallet_id = WalletId::new();
         let wallet_events = GuiWalletEvents::new(wallet_id, self.wallet_updated_tx.clone());
 
-        let (wallet_data, accounts_info, best_block) = match (wallet_type, &self.controller) {
-            (WalletType::Hot, ColdHotNodeController::Hot(controller)) => {
+        let create_hot_wallet =
+            async |controller: &NodeController,
+                   wallet_args: WalletTypeArgs,
+                   wallet_events: GuiWalletEvents| {
                 let handles_client = WalletHandlesClient::new(
                     controller.chainstate.clone(),
                     controller.mempool.clone(),
@@ -284,8 +286,9 @@ impl Backend {
                 .await
                 .map_err(|e| BackendError::WalletError(e.to_string()))?;
 
-                let (wallet_rpc, command_handler, best_block, accounts_info, accounts_data) = self
-                    .create_wallet(
+                let (wallet_rpc, command_handler, best_block, accounts_info, accounts_data) =
+                    Self::create_wallet(
+                        self.chain_config.clone(),
                         handles_client,
                         file_path.clone(),
                         wallet_args,
@@ -301,13 +304,19 @@ impl Backend {
                     updated: false,
                 };
 
-                (wallet_data, accounts_info, best_block)
+                Ok((wallet_data, accounts_info, best_block))
+            };
+
+        let (wallet_data, accounts_info, best_block) = match (wallet_type, &self.controller) {
+            (WalletType::Hot, ColdHotNodeController::Hot(controller)) => {
+                create_hot_wallet(controller, wallet_args, wallet_events).await?
             }
             (WalletType::Cold, _) => {
                 let client = make_cold_wallet_rpc_client(Arc::clone(&self.chain_config));
 
-                let (wallet_rpc, command_handler, best_block, accounts_info, accounts_data) = self
-                    .create_wallet(
+                let (wallet_rpc, command_handler, best_block, accounts_info, accounts_data) =
+                    Self::create_wallet(
+                        self.chain_config.clone(),
                         client,
                         file_path.clone(),
                         wallet_args,
@@ -327,63 +336,11 @@ impl Backend {
             }
             #[cfg(feature = "trezor")]
             (WalletType::Trezor, ColdHotNodeController::Hot(controller)) => {
-                let handles_client = WalletHandlesClient::new(
-                    controller.chainstate.clone(),
-                    controller.mempool.clone(),
-                    controller.block_prod.clone(),
-                    controller.p2p.clone(),
-                )
-                .await
-                .map_err(|e| BackendError::WalletError(e.to_string()))?;
-
-                let (wallet_rpc, command_handler, best_block, accounts_info, accounts_data) = self
-                    .create_wallet(
-                        handles_client,
-                        file_path.clone(),
-                        wallet_args,
-                        import,
-                        wallet_events,
-                    )
-                    .await?;
-
-                let wallet_data = WalletData {
-                    controller: GuiHotColdController::Hot(wallet_rpc, command_handler),
-                    accounts: accounts_data,
-                    best_block,
-                    updated: false,
-                };
-
-                (wallet_data, accounts_info, best_block)
+                create_hot_wallet(controller, wallet_args, wallet_events).await?
             }
             #[cfg(feature = "ledger")]
             (WalletType::Ledger, ColdHotNodeController::Hot(controller)) => {
-                let handles_client = WalletHandlesClient::new(
-                    controller.chainstate.clone(),
-                    controller.mempool.clone(),
-                    controller.block_prod.clone(),
-                    controller.p2p.clone(),
-                )
-                .await
-                .map_err(|e| BackendError::WalletError(e.to_string()))?;
-
-                let (wallet_rpc, command_handler, best_block, accounts_info, accounts_data) = self
-                    .create_wallet(
-                        handles_client,
-                        file_path.clone(),
-                        wallet_args,
-                        import,
-                        wallet_events,
-                    )
-                    .await?;
-
-                let wallet_data = WalletData {
-                    controller: GuiHotColdController::Hot(wallet_rpc, command_handler),
-                    accounts: accounts_data,
-                    best_block,
-                    updated: false,
-                };
-
-                (wallet_data, accounts_info, best_block)
+                create_hot_wallet(controller, wallet_args, wallet_events).await?
             }
             #[cfg(feature = "trezor")]
             (WalletType::Trezor, ColdHotNodeController::Cold) => {
@@ -434,7 +391,7 @@ impl Backend {
     }
 
     async fn create_wallet<N>(
-        &mut self,
+        chain_config: Arc<ChainConfig>,
         handles_client: N,
         file_path: PathBuf,
         wallet_args: WalletTypeArgs,
@@ -453,15 +410,10 @@ impl Backend {
     where
         N: NodeInterface + Clone + Debug + Send + Sync + 'static,
     {
-        let wallet_service = WalletService::start(
-            self.chain_config.clone(),
-            None,
-            false,
-            vec![],
-            handles_client,
-        )
-        .await
-        .map_err(|err| BackendError::WalletError(err.to_string()))?;
+        let wallet_service =
+            WalletService::start(chain_config.clone(), None, false, vec![], handles_client)
+                .await
+                .map_err(|err| BackendError::WalletError(err.to_string()))?;
         let wallet_handle = wallet_service.handle();
         let node_rpc = wallet_service.node_rpc().clone();
         let chain_config = wallet_service.chain_config().clone();
@@ -542,37 +494,46 @@ impl Backend {
         let wallet_id = WalletId::new();
         let wallet_events = GuiWalletEvents::new(wallet_id, self.wallet_updated_tx.clone());
 
+        let open_hot_wallet = async |controller: &NodeController, wallet_type, wallet_events| {
+            let handles_client = WalletHandlesClient::new(
+                controller.chainstate.clone(),
+                controller.mempool.clone(),
+                controller.block_prod.clone(),
+                controller.p2p.clone(),
+            )
+            .await
+            .map_err(|e| BackendError::WalletError(e.to_string()))?;
+
+            let (
+                wallet_rpc,
+                command_handler,
+                encryption_state,
+                best_block,
+                accounts_info,
+                accounts_data,
+            ) = Self::open_wallet(
+                self.chain_config.clone(),
+                handles_client,
+                file_path.clone(),
+                wallet_events,
+                wallet_type,
+            )
+            .await?;
+
+            let wallet_data = WalletData {
+                controller: GuiHotColdController::Hot(wallet_rpc, command_handler),
+                accounts: accounts_data,
+                best_block,
+                updated: false,
+            };
+
+            Ok((wallet_data, accounts_info, best_block, encryption_state))
+        };
+
         let (wallet_data, accounts_info, best_block, encryption) =
             match (wallet_type, &self.controller) {
                 (WalletType::Hot, ColdHotNodeController::Hot(controller)) => {
-                    let handles_client = WalletHandlesClient::new(
-                        controller.chainstate.clone(),
-                        controller.mempool.clone(),
-                        controller.block_prod.clone(),
-                        controller.p2p.clone(),
-                    )
-                    .await
-                    .map_err(|e| BackendError::WalletError(e.to_string()))?;
-
-                    let (
-                        wallet_rpc,
-                        command_handler,
-                        encryption_state,
-                        best_block,
-                        accounts_info,
-                        accounts_data,
-                    ) = self
-                        .open_wallet(handles_client, file_path.clone(), wallet_events, None)
-                        .await?;
-
-                    let wallet_data = WalletData {
-                        controller: GuiHotColdController::Hot(wallet_rpc, command_handler),
-                        accounts: accounts_data,
-                        best_block,
-                        updated: false,
-                    };
-
-                    (wallet_data, accounts_info, best_block, encryption_state)
+                    open_hot_wallet(controller, None, wallet_events).await?
                 }
                 (WalletType::Cold, _) => {
                     let client = make_cold_wallet_rpc_client(Arc::clone(&self.chain_config));
@@ -584,7 +545,14 @@ impl Backend {
                         best_block,
                         accounts_info,
                         accounts_data,
-                    ) = self.open_wallet(client, file_path.clone(), wallet_events, None).await?;
+                    ) = Self::open_wallet(
+                        self.chain_config.clone(),
+                        client,
+                        file_path.clone(),
+                        wallet_events,
+                        None,
+                    )
+                    .await?;
 
                     let wallet_data = WalletData {
                         controller: GuiHotColdController::Cold(wallet_rpc, command_handler),
@@ -597,75 +565,17 @@ impl Backend {
                 }
                 #[cfg(feature = "trezor")]
                 (WalletType::Trezor, ColdHotNodeController::Hot(controller)) => {
-                    let handles_client = WalletHandlesClient::new(
-                        controller.chainstate.clone(),
-                        controller.mempool.clone(),
-                        controller.block_prod.clone(),
-                        controller.p2p.clone(),
+                    open_hot_wallet(
+                        controller,
+                        Some(HardwareWalletType::Trezor { device_id: None }),
+                        wallet_events,
                     )
-                    .await
-                    .map_err(|e| BackendError::WalletError(e.to_string()))?;
-
-                    let (
-                        wallet_rpc,
-                        command_handler,
-                        encryption_state,
-                        best_block,
-                        accounts_info,
-                        accounts_data,
-                    ) = self
-                        .open_wallet(
-                            handles_client,
-                            file_path.clone(),
-                            wallet_events,
-                            Some(HardwareWalletType::Trezor { device_id: None }),
-                        )
-                        .await?;
-
-                    let wallet_data = WalletData {
-                        controller: GuiHotColdController::Hot(wallet_rpc, command_handler),
-                        accounts: accounts_data,
-                        best_block,
-                        updated: false,
-                    };
-
-                    (wallet_data, accounts_info, best_block, encryption_state)
+                    .await?
                 }
                 #[cfg(feature = "ledger")]
                 (WalletType::Ledger, ColdHotNodeController::Hot(controller)) => {
-                    let handles_client = WalletHandlesClient::new(
-                        controller.chainstate.clone(),
-                        controller.mempool.clone(),
-                        controller.block_prod.clone(),
-                        controller.p2p.clone(),
-                    )
-                    .await
-                    .map_err(|e| BackendError::WalletError(e.to_string()))?;
-
-                    let (
-                        wallet_rpc,
-                        command_handler,
-                        encryption_state,
-                        best_block,
-                        accounts_info,
-                        accounts_data,
-                    ) = self
-                        .open_wallet(
-                            handles_client,
-                            file_path.clone(),
-                            wallet_events,
-                            Some(HardwareWalletType::Ledger),
-                        )
-                        .await?;
-
-                    let wallet_data = WalletData {
-                        controller: GuiHotColdController::Hot(wallet_rpc, command_handler),
-                        accounts: accounts_data,
-                        best_block,
-                        updated: false,
-                    };
-
-                    (wallet_data, accounts_info, best_block, encryption_state)
+                    open_hot_wallet(controller, Some(HardwareWalletType::Ledger), wallet_events)
+                        .await?
                 }
                 #[cfg(feature = "trezor")]
                 (WalletType::Trezor, ColdHotNodeController::Cold) => {
@@ -698,7 +608,7 @@ impl Backend {
     }
 
     async fn open_wallet<N>(
-        &mut self,
+        chain_config: Arc<ChainConfig>,
         handles_client: N,
         file_path: PathBuf,
         wallet_events: GuiWalletEvents,
@@ -717,15 +627,10 @@ impl Backend {
     where
         N: NodeInterface + Clone + Debug + Send + Sync + 'static,
     {
-        let wallet_service = WalletService::start(
-            self.chain_config.clone(),
-            None,
-            false,
-            vec![],
-            handles_client,
-        )
-        .await
-        .map_err(|err| BackendError::WalletError(err.to_string()))?;
+        let wallet_service =
+            WalletService::start(chain_config.clone(), None, false, vec![], handles_client)
+                .await
+                .map_err(|err| BackendError::WalletError(err.to_string()))?;
         let wallet_handle = wallet_service.handle();
         let node_rpc = wallet_service.node_rpc().clone();
         let chain_config = wallet_service.chain_config().clone();

@@ -44,9 +44,9 @@ pub enum BackendError {
     InvalidMarginPerThousand(String),
     #[error("Unsupported operation by a cold wallet")]
     ColdWallet,
-    #[error("Cannot interact with a hot wallet when in Cold wallet mode")]
+    #[error("Cannot interact with a Hot wallet when in Cold wallet mode")]
     HotNotSupported,
-    #[error("Cannot use a hardware wallet in a Cold wallet mode")]
+    #[error("Cannot use a hardware wallet when in Cold wallet mode")]
     HardwareWalletNotSupportedInColdMode,
     #[error("Invalid console command: {0}")]
     InvalidConsoleCommand(String),

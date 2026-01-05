@@ -113,7 +113,7 @@ impl SyncingWallet for MockWallet {
         account: U31,
         common_block_height: BlockHeight,
         blocks: Vec<Block>,
-        _wallet_events: &(impl WalletEvents + Send),
+        _wallet_events: &impl WalletEvents,
     ) -> WalletResult<()> {
         assert!(account == DEFAULT_ACCOUNT_INDEX);
         assert!(!blocks.is_empty());
@@ -151,7 +151,7 @@ impl SyncingWallet for MockWallet {
         &mut self,
         common_block_height: BlockHeight,
         blocks: Vec<Block>,
-        _wallet_events: &(impl WalletEvents + Send),
+        _wallet_events: &impl WalletEvents,
     ) -> WalletResult<()> {
         assert!(!blocks.is_empty());
         assert!(

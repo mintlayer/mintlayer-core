@@ -369,7 +369,7 @@ where
                         )
                     }
                     WalletExtraInfo::LedgerWallet { app_version, model } => format!(
-                        "This is a ledger wallet; model: {model}, running app version {}",
+                        "This is a Ledger wallet; model: {model}, running app version {}",
                         app_version
                     ),
                 };

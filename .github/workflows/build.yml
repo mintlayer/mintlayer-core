@@ -296,21 +296,27 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout the core repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           submodules: recursive
           path: ./mintlayer-core
+
       - name: Update local dependency repositories
         run: sudo apt-get update
+
       - name: Install build dependencies
         run: sudo apt-get install -yqq --no-install-recommends build-essential pkg-config libdbus-1-dev libusb-1.0-0-dev
+
       - name: Install rust
         run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+
       - name: Install cargo-nextest
         uses: taiki-e/install-action@nextest
+
       - name: Build and archive the tests
         run: cargo nextest archive --release --locked -p wallet --features enable-ledger-device-tests --archive-file ledger-tests.tar.zst
         working-directory: ./mintlayer-core
+
       - name: Upload archived tests
         uses: actions/upload-artifact@v4
         with:
@@ -324,32 +330,37 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        model: [flex, stax, nanox, nanosplus]
+        model: [apex_p, flex, stax, nanox, nanosplus]
     steps:
       - name: Checkout the core repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           submodules: recursive
           path: ./mintlayer-core
+
       - name: Checkout mintlayer-ledger-app repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: mintlayer/mintlayer-ledger-app
           ref: feature/mintlayer-app
           path: ./mintlayer-ledger-app
+
       - name: Download archived tests
         uses: actions/download-artifact@v4
         with:
           name: archived-ledger-tests
           path: ./mintlayer-core
+
       - name: Install cargo-nextest
         uses: taiki-e/install-action@nextest
+
       - name: Build Ledger app in container
         run: |
           sudo docker run --rm \
             -v "$(realpath ./mintlayer-ledger-app):/app" \
             ghcr.io/ledgerhq/ledger-app-builder/ledger-app-dev-tools:latest \
             sh -c 'cargo ledger build ${{ matrix.model }}'
+
       - name: Run Ledger emulator and execute tests
         run: |
           set -e

@@ -225,7 +225,7 @@ pub type ColdController<WalletEvents> = Controller<ColdWalletClient, WalletEvent
 impl<N, W, B> Controller<N, W, B>
 where
     N: NodeInterface + Clone + Send + Sync + 'static,
-    W: WalletEvents + Send + 'static,
+    W: WalletEvents,
     B: storage::BackendWithSendableTransactions + 'static,
 {
     pub async fn new(

@@ -34,6 +34,7 @@ use common::{
         Transaction, UtxoOutPoint,
     },
     primitives::BlockHeight,
+    primitives_converters::PrimitivesConvertersError,
 };
 use crypto::key::hdkd::{derivable::DerivationError, u31::U31};
 use wallet_storage::{
@@ -118,6 +119,15 @@ pub enum SignerError {
     #[error("Wallet not initialized")]
     WalletNotInitialized,
 }
+
+impl From<PrimitivesConvertersError> for SignerError {
+    fn from(value: PrimitivesConvertersError) -> Self {
+        match value {
+            PrimitivesConvertersError::UnsupportedTokenV0 => Self::UnsupportedTokensV0,
+        }
+    }
+}
+
 type SignerResult<T> = Result<T, SignerError>;
 
 /// Signer trait responsible for signing transactions or challenges using a software or hardware

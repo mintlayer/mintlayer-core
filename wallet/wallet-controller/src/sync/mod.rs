@@ -43,14 +43,14 @@ pub trait SyncingWallet {
         account: U31,
         common_block_height: BlockHeight,
         blocks: Vec<Block>,
-        wallet_events: &(impl WalletEvents + Send),
+        wallet_events: &impl WalletEvents,
     ) -> WalletResult<()>;
 
     async fn scan_blocks_for_unused_account(
         &mut self,
         common_block_height: BlockHeight,
         blocks: Vec<Block>,
-        wallet_events: &(impl WalletEvents + Send),
+        wallet_events: &impl WalletEvents,
     ) -> WalletResult<()>;
 
     fn update_median_time(&mut self, median_time: BlockTimestamp) -> WalletResult<()>;
@@ -71,7 +71,7 @@ where
         account: U31,
         common_block_height: BlockHeight,
         blocks: Vec<Block>,
-        wallet_events: &(impl WalletEvents + Send),
+        wallet_events: &impl WalletEvents,
     ) -> WalletResult<()> {
         self.scan_new_blocks(account, common_block_height, blocks, wallet_events)
     }
@@ -80,7 +80,7 @@ where
         &mut self,
         common_block_height: BlockHeight,
         blocks: Vec<Block>,
-        wallet_events: &(impl WalletEvents + Send),
+        wallet_events: &impl WalletEvents,
     ) -> WalletResult<()> {
         self.scan_new_blocks_unused_account(common_block_height, blocks, wallet_events)
             .await
@@ -127,7 +127,7 @@ pub async fn sync_once<T: NodeInterface>(
     chain_config: &ChainConfig,
     rpc_client: &T,
     wallet: &mut impl SyncingWallet,
-    wallet_events: &(impl WalletEvents + Send + 'static),
+    wallet_events: &impl WalletEvents,
 ) -> Result<InSync, ControllerError<T>> {
     let mut print_flag = SetFlag::new();
     let mut _log_on_exit = None;
@@ -229,7 +229,7 @@ async fn fetch_and_sync_to_next_group<T: NodeInterface>(
     mut next_group_accounts: Vec<AccountType>,
     rpc_client: &T,
     wallet: &mut impl SyncingWallet,
-    wallet_events: &(impl WalletEvents + Send + 'static),
+    wallet_events: &impl WalletEvents,
 ) -> Result<(NextBlockInfo, Vec<AccountType>), ControllerError<T>> {
     let block_to_fetch = (next_group_block_info.common_block_height - current.0.common_block_height)
         .expect("already sorted")
@@ -246,7 +246,7 @@ async fn fetch_and_sync<T: NodeInterface>(
     block_to_fetch: usize,
     rpc_client: &T,
     wallet: &mut impl SyncingWallet,
-    wallet_events: &(impl WalletEvents + Send + 'static),
+    wallet_events: &impl WalletEvents,
 ) -> Result<(), ControllerError<T>> {
     let FetchedBlocks {
         blocks,
@@ -279,7 +279,7 @@ async fn scan_new_blocks<T: NodeInterface>(
     wallet: &mut impl SyncingWallet,
     common_block_height: BlockHeight,
     blocks: Vec<Block>,
-    wallet_events: &(impl WalletEvents + Send + 'static),
+    wallet_events: &impl WalletEvents,
 ) -> Result<(), ControllerError<T>> {
     match acc {
         AccountType::Account(account) => {

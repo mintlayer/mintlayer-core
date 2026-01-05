@@ -344,24 +344,28 @@ pub fn to_ledger_order_account_command(value: &chain::OrderAccountCommand) -> LO
     ledger_decode_all(value.encode().as_slice()).expect("ok")
 }
 
-pub fn to_ledger_additional_order_info(info: &OrderAdditionalInfo) -> AdditionalOrderInfo {
-    AdditionalOrderInfo {
-        initially_asked: to_ledger_output_value(&info.initially_asked),
-        initially_given: to_ledger_output_value(&info.initially_given),
+pub fn to_ledger_additional_order_info(
+    info: &OrderAdditionalInfo,
+) -> SignerResult<AdditionalOrderInfo> {
+    Ok(AdditionalOrderInfo {
+        initially_asked: to_ledger_output_value(&info.initially_asked)?,
+        initially_given: to_ledger_output_value(&info.initially_given)?,
         ask_balance: to_ledger_amount(&info.ask_balance),
         give_balance: to_ledger_amount(&info.give_balance),
-    }
+    })
 }
 
-pub fn to_ledger_output_value(value: &chain::output_value::OutputValue) -> LOutputValue {
+pub fn to_ledger_output_value(
+    value: &chain::output_value::OutputValue,
+) -> SignerResult<LOutputValue> {
     match value {
         chain::output_value::OutputValue::Coin(amount) => {
-            LOutputValue::Coin(to_ledger_amount(amount))
+            Ok(LOutputValue::Coin(to_ledger_amount(amount)))
         }
-        chain::output_value::OutputValue::TokenV0(_) => panic!("unsupported V0"),
-        chain::output_value::OutputValue::TokenV1(token_id, amount) => LOutputValue::TokenV1(
+        chain::output_value::OutputValue::TokenV0(_) => Err(SignerError::UnsupportedTokensV0),
+        chain::output_value::OutputValue::TokenV1(token_id, amount) => Ok(LOutputValue::TokenV1(
             LId::new(LH256(token_id.to_hash().into())),
             to_ledger_amount(amount),
-        ),
+        )),
     }
 }

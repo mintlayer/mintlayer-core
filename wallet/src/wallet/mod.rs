@@ -265,8 +265,6 @@ pub enum WalletError {
     VrfKeyMustBeProvided,
     #[error("Cannot change a {from} wallet type to {to}")]
     CannotChangeWalletType { from: WalletType, to: WalletType },
-    #[error("Cannot change a Ledger wallet type")]
-    CannotChangeLedgerWalletType,
     #[error("Missing additional data for Pool {0}")]
     MissingPoolAdditionalData(PoolId),
     #[error("Missing additional data for Token {0}")]

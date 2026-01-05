@@ -149,9 +149,9 @@ pub enum TrezorError {
     MultipleSignaturesReturned,
     #[error("A multisig signature was returned for a single address from Device")]
     MultisigSignatureReturned,
-    #[error("The file being loaded is a ledger wallet and does not correspond to the connected hardware wallet")]
+    #[error("The file being loaded is a Ledger wallet and cannot be used with the connected Trezor wallet")]
     LedgerWalletDifferentFile,
-    #[error("The file being loaded is a software wallet and does not correspond to the connected hardware wallet")]
+    #[error("The file being loaded is a software wallet and cannot be used with the connected Trezor wallet")]
     WalletFileIsSoftwareWallet,
     #[error(
         "Public keys mismatch - wrong device or passphrase.\n\
