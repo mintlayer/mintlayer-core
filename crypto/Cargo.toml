@@ -27,7 +27,7 @@ num.workspace = true
 parity-scale-codec.workspace = true
 ripemd.workspace = true
 schnorrkel.workspace = true
-secp256k1 = { workspace = true, default-features = false, features = ["rand-std", "std", "rand"] }
+secp256k1 = { workspace = true, default-features = false, features = ["std", "rand"] }
 serde = { workspace = true, features = ["derive"] }
 sha-1.workspace = true
 sha2.workspace = true

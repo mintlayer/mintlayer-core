@@ -23,17 +23,14 @@ use std::{
 
 use common::{chain::ChainConfig, primitives::per_thousand::PerThousand};
 use futures::never::Never;
-use hickory_client::{
-    proto::rr::{LowerName, RrKey},
-    rr::{
-        rdata::{NS, SOA},
-        Name, RData, RecordSet, RecordType,
-    },
+use hickory_client::proto::rr::{
+    rdata::{NS, SOA},
+    LowerName, Name, RData, RecordSet, RecordType, RrKey,
 };
 use hickory_server::{
     authority::{
-        AuthLookup, Authority, Catalog, LookupError, LookupOptions, MessageRequest, UpdateResult,
-        ZoneType,
+        AuthLookup, Authority, Catalog, LookupControlFlow, LookupError, LookupOptions,
+        MessageRequest, UpdateResult, ZoneType,
     },
     server::RequestInfo,
     store::in_memory::InMemoryAuthority,
@@ -103,7 +100,8 @@ impl DnsServer {
 
         let mut catalog = Catalog::new();
 
-        catalog.upsert(config.host.clone().into(), Box::new(Arc::clone(&auth)));
+        let dyn_auth: Arc<dyn hickory_server::authority::AuthorityObject> = auth.clone();
+        catalog.upsert(config.host.clone().into(), vec![dyn_auth]);
 
         let mut server = ServerFuture::new(catalog);
 
@@ -376,7 +374,7 @@ impl Authority for AuthorityImpl {
         name: &LowerName,
         query_type: RecordType,
         lookup_options: LookupOptions,
-    ) -> Result<Self::Lookup, LookupError> {
+    ) -> LookupControlFlow<Self::Lookup, LookupError> {
         log::trace!(
             "In lookup for {:?}, query_type = {:?}, lookup_options = {:?}",
             name,
@@ -391,7 +389,7 @@ impl Authority for AuthorityImpl {
         &self,
         request_info: RequestInfo<'_>,
         lookup_options: LookupOptions,
-    ) -> Result<Self::Lookup, LookupError> {
+    ) -> LookupControlFlow<Self::Lookup, LookupError> {
         log::trace!(
             "In search, src = {:?}, protocol = {:?}, header = {:?}, query = {:?}, lookup_options = {:?}",
             request_info.src,
@@ -408,7 +406,7 @@ impl Authority for AuthorityImpl {
         &self,
         name: &LowerName,
         lookup_options: LookupOptions,
-    ) -> Result<Self::Lookup, LookupError> {
+    ) -> LookupControlFlow<Self::Lookup, LookupError> {
         self.inner.get_nsec_records(name, lookup_options).await
     }
 }

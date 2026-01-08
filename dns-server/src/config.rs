@@ -19,7 +19,7 @@ use std::{
 };
 
 use clap::Parser;
-use hickory_client::rr::Name;
+use hickory_client::proto::rr::Name;
 use utils_networking::IpOrSocketAddress;
 
 use common::primitives::per_thousand::PerThousand;
