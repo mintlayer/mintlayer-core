@@ -16,38 +16,27 @@
 use std::{collections::BTreeMap, mem::size_of_val, time::Duration};
 
 use crate::signer::{ledger_signer::LedgerError, SignerError, SignerResult};
-use common::{
-    chain::{self},
-    primitives,
-    primitives_converters::TryConvertInto as _,
-};
 use crypto::key::{
     extended::ExtendedPublicKey,
     hdkd::{chain_code::ChainCode, derivation_path::DerivationPath},
     secp256k1::{extended_keys::Secp256k1ExtendedPublicKey, Secp256k1PublicKey},
 };
-use serialization::Encode;
 use utils::ensure;
 
 use ledger_lib::{Device, Exchange};
 use ledger_proto::StatusCode;
 use mintlayer_ledger_messages::{
-    decode_all as ledger_decode_all, encode as ledger_encode, AccountCommand as LAccountCommand,
-    AccountNonce as LAccountNonce, AccountOutPoint as LAccountOutPoint, AdditionalOrderInfo,
-    AddrType, Amount as LAmount, Apdu, Bip32Path as LedgerBip32Path, CoinType,
-    GetPublicKeyRespones, Id as LId, Ins, MsgSignature,
-    OrderAccountCommand as LOrderAccountCommand, OutputValue as LOutputValue, PubKeyP1,
-    PublicKeyReq, SighashInputCommitment as LSighashInputCommitment, SignMessageReq, SignP1,
-    SignTxReq, Signature as LedgerSignature, TxInputReq, TxMetadataReq, TxOutput as LTxOutput,
-    TxOutputReq, UtxoOutPoint as LUtxoOutPoint, APDU_CLASS, H256 as LH256, P2_DONE, P2_MORE,
+    decode_all as ledger_decode_all, encode as ledger_encode, AddrType, Apdu,
+    Bip32Path as LedgerBip32Path, CoinType, GetPublicKeyRespones, Ins, MsgSignature, PubKeyP1,
+    PublicKeyReq, SighashInputCommitment, SignMessageReq, SignP1, SignTxReq, Signature, TxInputReq,
+    TxMetadataReq, TxOutputReq, APDU_CLASS, P2_DONE, P2_MORE,
 };
-use wallet_types::partially_signed_transaction::OrderAdditionalInfo;
 
 const TIMEOUT_DUR: Duration = Duration::from_secs(100);
 const TX_VERSION: u8 = 1;
 
 struct SignatureResult {
-    sig: LedgerSignature,
+    sig: Signature,
     input_idx: usize,
     has_more_signatures: bool,
 }
@@ -217,9 +206,9 @@ pub async fn sign_tx<L: Exchange>(
     ledger: &mut L,
     chain_type: CoinType,
     inputs: Vec<TxInputReq>,
-    input_commitments: Vec<LSighashInputCommitment>,
+    input_commitments: Vec<SighashInputCommitment>,
     outputs: Vec<TxOutputReq>,
-) -> SignerResult<BTreeMap<usize, Vec<LedgerSignature>>> {
+) -> SignerResult<BTreeMap<usize, Vec<Signature>>> {
     let metadata = ledger_encode(TxMetadataReq {
         coin: chain_type,
         version: TX_VERSION,
@@ -301,7 +290,7 @@ fn decode_signature_response(resp: &[u8]) -> Result<SignatureResult, LedgerError
     let input_idx = *resp.first().ok_or(LedgerError::InvalidResponse)? as usize;
     let has_more_signatures = *resp.last().ok_or(LedgerError::InvalidResponse)? == P2_MORE;
 
-    let sig: LedgerSignature =
+    let sig =
         ledger_decode_all(&resp[..resp.len() - 1][1..]).ok_or(LedgerError::InvalidResponse)?;
 
     Ok(SignatureResult {
@@ -309,58 +298,4 @@ fn decode_signature_response(resp: &[u8]) -> Result<SignatureResult, LedgerError
         input_idx,
         has_more_signatures,
     })
-}
-
-pub fn to_ledger_tx_output(value: &chain::TxOutput) -> LTxOutput {
-    ledger_decode_all(value.encode().as_slice()).expect("ok")
-}
-
-pub fn to_ledger_amount(value: &primitives::Amount) -> LAmount {
-    LAmount::from_atoms(value.into_atoms())
-}
-
-pub fn to_ledger_outpoint(value: &chain::UtxoOutPoint) -> LUtxoOutPoint {
-    ledger_decode_all(value.encode().as_slice()).expect("ok")
-}
-
-pub fn to_ledger_account_outpoint(value: &chain::AccountOutPoint) -> LAccountOutPoint {
-    ledger_decode_all(value.encode().as_slice()).expect("ok")
-}
-
-pub fn to_ledger_account_nonce(value: &chain::AccountNonce) -> LAccountNonce {
-    ledger_decode_all(value.encode().as_slice()).expect("ok")
-}
-
-pub fn to_ledger_account_command(value: &chain::AccountCommand) -> LAccountCommand {
-    ledger_decode_all(value.encode().as_slice()).expect("ok")
-}
-
-pub fn to_ledger_order_account_command(value: &chain::OrderAccountCommand) -> LOrderAccountCommand {
-    ledger_decode_all(value.encode().as_slice()).expect("ok")
-}
-
-pub fn to_ledger_additional_order_info(
-    info: &OrderAdditionalInfo,
-) -> SignerResult<AdditionalOrderInfo> {
-    Ok(AdditionalOrderInfo {
-        initially_asked: to_ledger_output_value(&info.initially_asked)?,
-        initially_given: to_ledger_output_value(&info.initially_given)?,
-        ask_balance: info.ask_balance.try_convert_into()?,
-        give_balance: to_ledger_amount(&info.give_balance),
-    })
-}
-
-pub fn to_ledger_output_value(
-    value: &chain::output_value::OutputValue,
-) -> SignerResult<LOutputValue> {
-    match value {
-        chain::output_value::OutputValue::Coin(amount) => {
-            Ok(LOutputValue::Coin(to_ledger_amount(amount)))
-        }
-        chain::output_value::OutputValue::TokenV0(_) => Err(SignerError::UnsupportedTokensV0),
-        chain::output_value::OutputValue::TokenV1(token_id, amount) => Ok(LOutputValue::TokenV1(
-            LId::new(LH256(token_id.to_hash().into())),
-            to_ledger_amount(amount),
-        )),
-    }
 }
