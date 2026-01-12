@@ -12,9 +12,9 @@ cargo fmt --check -- --config newline_style=Unix
 
 # Install cargo deny first with: cargo install cargo-deny.
 # Note: "--allow duplicate" silences the warning "found x duplicate entries for crate y".
-# cargo deny check --allow duplicate --hide-inclusion-graph
+cargo deny check --allow duplicate --hide-inclusion-graph
 
-# cargo vet check --locked
+cargo vet check --locked
 
 CLIPPY_VERSION_RESPONSE=$(cargo clippy --version)
 # Note: clippy version starts from 0, e.g. '0.1.90'

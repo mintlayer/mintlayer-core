@@ -70,7 +70,7 @@ async fn exchange_message<L: Exchange>(
     ok_response(resp)
 }
 
-/// Send a message in chunks to the ledger as the max size of a message can be 255 bytes
+/// Send a message in chunks to the ledger as the max size of a message is 255 bytes
 async fn send_chunked<L: Exchange>(
     ledger: &mut L,
     ins: u8,
