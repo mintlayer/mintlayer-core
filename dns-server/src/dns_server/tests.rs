@@ -19,7 +19,7 @@ use std::{
     sync::Arc,
 };
 
-use hickory_client::rr::{RData, RecordType};
+use hickory_client::proto::rr::{RData, RecordType};
 use hickory_server::{
     authority::{Authority, ZoneType},
     store::in_memory::InMemoryAuthority,
@@ -91,7 +91,7 @@ async fn dns_server_basic() {
         .cloned()
         .collect::<Vec<_>>();
     assert_eq!(result_a.len(), 1);
-    assert_eq!(result_a[0].data(), Some(&RData::A(ip1.into())));
+    assert_eq!(result_a[0].data(), &RData::A(ip1.into()));
 
     let result_aaaa = auth
         .lookup(&host.clone().into(), RecordType::AAAA, Default::default())
@@ -102,7 +102,7 @@ async fn dns_server_basic() {
         .cloned()
         .collect::<Vec<_>>();
     assert_eq!(result_aaaa.len(), 1);
-    assert_eq!(result_aaaa[0].data(), Some(&RData::AAAA(ip2.into())));
+    assert_eq!(result_aaaa[0].data(), &RData::AAAA(ip2.into()));
 
     handle_command(&auth, DnsServerCommand::DelAddress(ip1.into()));
     handle_command(&auth, DnsServerCommand::DelAddress(ip2.into()));
@@ -170,7 +170,7 @@ mod same_software_version_addr_selection_test {
         let selected_v4_addrs = records[0]
             .1
             .records_without_rrsigs()
-            .map(|rec| assert_matches_return_val!(rec.data(), Some(&RData::A(a)), a.0))
+            .map(|rec| assert_matches_return_val!(rec.data(), &RData::A(a), a.0))
             .collect::<Vec<_>>();
         assert_eq!(
             selected_v4_addrs.len(),
@@ -188,7 +188,7 @@ mod same_software_version_addr_selection_test {
         let selected_v6_addrs = records[1]
             .1
             .records_without_rrsigs()
-            .map(|rec| assert_matches_return_val!(rec.data(), Some(&RData::AAAA(a)), a.0))
+            .map(|rec| assert_matches_return_val!(rec.data(), &RData::AAAA(a), a.0))
             .collect::<Vec<_>>();
         assert_eq!(
             selected_v6_addrs.len(),

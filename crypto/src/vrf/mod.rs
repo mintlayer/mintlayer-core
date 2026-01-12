@@ -328,7 +328,7 @@ fn to_key_and_chain_code(
     key_kind: VRFKeyKind,
 ) -> Result<(VRFPrivateKey, ChainCode), DerivationError> {
     util::to_key_and_chain_code(mac, |secret_key_bytes| {
-        VRFPrivateKey::new_using_random_bytes(secret_key_bytes, key_kind)
+        VRFPrivateKey::new_using_random_bytes(&secret_key_bytes, key_kind)
             .map(|(prv, _pub)| prv)
             .map_err(|_| DerivationError::KeyDerivationError)
     })

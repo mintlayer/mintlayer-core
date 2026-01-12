@@ -52,7 +52,7 @@ pub fn web_server<
     socket: TcpListener,
     state: ApiServerWebServerState<Arc<T>, Arc<R>>,
     enable_post_endpoints: bool,
-) -> axum::serve::Serve<Router, Router> {
+) -> axum::serve::Serve<TcpListener, Router, Router> {
     let cors_layer = CorsLayer::new()
         .allow_methods(AllowMethods::list([Method::GET, Method::POST]))
         .allow_headers(Any)

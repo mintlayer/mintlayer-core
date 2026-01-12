@@ -57,7 +57,7 @@ fn to_key_and_chain_code(
     mac: Hmac<Sha512>,
 ) -> Result<(secp256k1::SecretKey, ChainCode), DerivationError> {
     util::to_key_and_chain_code(mac, |secret_key_bytes| {
-        secp256k1::SecretKey::from_slice(secret_key_bytes)
+        secp256k1::SecretKey::from_byte_array(&secret_key_bytes)
             .map_err(|_| DerivationError::KeyDerivationError)
     })
 }
