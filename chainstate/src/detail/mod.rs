@@ -94,9 +94,8 @@ type ChainstateEventHandler = EventHandler<ChainstateEvent>;
 
 pub type OrphanErrorHandler = dyn Fn(&BlockError) + Send + Sync;
 
-/// A tracing target that either forces full block ids to be printed where they're normally
-/// printed in the abbreviated form, or just makes block ids be printed where normally they won't
-/// be.
+/// A tracing target that forces full block ids to be printed in certain places where they're
+/// normally printed in the abbreviated form.
 pub const CHAINSTATE_TRACING_TARGET_VERBOSE_BLOCK_IDS: &str = "chainstate_verbose_block_ids";
 
 #[must_use]
@@ -635,11 +634,6 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
             self.update_initial_block_download_flag()
                 .map_err(BlockError::BestBlockIdQueryError)?;
-        } else {
-            tracing::debug!(
-                target: CHAINSTATE_TRACING_TARGET_VERBOSE_BLOCK_IDS,
-                "Stale block received: {block_id}"
-            );
         }
 
         Ok(result)

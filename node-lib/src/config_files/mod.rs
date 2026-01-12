@@ -196,6 +196,7 @@ fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {
         sync_stalling_timeout,
         node_type,
         force_dns_query_if_no_global_addresses_known,
+        custom_disconnection_reason_for_banning,
     } = config;
 
     let networking_enabled = options.p2p_networking_enabled.or(networking_enabled);
@@ -219,6 +220,10 @@ fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {
     let force_dns_query_if_no_global_addresses_known = options
         .p2p_force_dns_query_if_no_global_addresses_known
         .or(force_dns_query_if_no_global_addresses_known);
+    let custom_disconnection_reason_for_banning = options
+        .p2p_custom_disconnection_reason_for_banning
+        .clone()
+        .or(custom_disconnection_reason_for_banning);
 
     P2pConfigFile {
         networking_enabled,
@@ -238,6 +243,7 @@ fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {
         sync_stalling_timeout,
         node_type,
         force_dns_query_if_no_global_addresses_known,
+        custom_disconnection_reason_for_banning,
     }
 }
 

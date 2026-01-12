@@ -193,6 +193,7 @@ where
         sync_stalling_timeout: Default::default(),
         peer_manager_config: Default::default(),
         protocol_config: Default::default(),
+        custom_disconnection_reason_for_banning: Default::default(),
     });
     let shutdown = Arc::new(SeqCstAtomicBool::new(false));
     let (shutdown_sender_1, shutdown_receiver) = oneshot::channel();

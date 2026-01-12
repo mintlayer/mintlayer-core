@@ -318,6 +318,10 @@ pub struct RunOptions {
     #[arg(hide = true)]
     pub p2p_force_dns_query_if_no_global_addresses_known: Option<bool>,
 
+    /// If specified, this text will be sent to banned peers as part of the DisconnectionReason.
+    #[clap(long, hide = true)]
+    pub p2p_custom_disconnection_reason_for_banning: Option<String>,
+
     /// A maximum tip age in seconds.
     ///
     /// The initial block download is finished if the difference between the current time and the
@@ -426,6 +430,7 @@ mod tests {
             p2p_sync_stalling_timeout: Default::default(),
             p2p_max_clock_diff: Default::default(),
             p2p_force_dns_query_if_no_global_addresses_known: Default::default(),
+            p2p_custom_disconnection_reason_for_banning: Default::default(),
             max_tip_age: Default::default(),
             rpc_bind_address: Default::default(),
             rpc_enabled: Default::default(),

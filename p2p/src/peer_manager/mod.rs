@@ -576,7 +576,7 @@ where
             self.disconnect(
                 peer_id,
                 PeerDisconnectionDbAction::Keep,
-                Some(DisconnectionReason::AddressBanned),
+                Some(DisconnectionReason::ban_reason(&self.p2p_config)),
                 None,
             );
         }
@@ -1115,7 +1115,8 @@ where
         if let Err(accept_err) = &accept_res {
             log::debug!("Connection rejected for peer {peer_id}: {accept_err}");
 
-            let disconnection_reason = DisconnectionReason::from_error(accept_err);
+            let disconnection_reason =
+                DisconnectionReason::from_error(accept_err, &self.p2p_config);
 
             // Disconnect should always succeed unless the node is shutting down.
             // But at this moment there is a possibility for backend to be shut down

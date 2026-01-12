@@ -856,6 +856,7 @@ async fn connection_timeout_rpc_notified<T>(
         sync_stalling_timeout: Default::default(),
         peer_manager_config: Default::default(),
         protocol_config: Default::default(),
+        custom_disconnection_reason_for_banning: Default::default(),
     });
     let shutdown = Arc::new(SeqCstAtomicBool::new(false));
     let time_getter = TimeGetter::default();
@@ -971,6 +972,7 @@ where
         sync_stalling_timeout: Default::default(),
         peer_manager_config: Default::default(),
         protocol_config: Default::default(),
+        custom_disconnection_reason_for_banning: Default::default(),
     });
     let (peer_mgr_event_sender, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
         A::make_transport(),
@@ -1015,6 +1017,7 @@ where
         sync_stalling_timeout: Default::default(),
         peer_manager_config: Default::default(),
         protocol_config: Default::default(),
+        custom_disconnection_reason_for_banning: Default::default(),
     });
     let (peer_mgr_event_sender, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
         A::make_transport(),
@@ -1124,6 +1127,7 @@ where
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
         protocol_config: Default::default(),
+        custom_disconnection_reason_for_banning: Default::default(),
     });
     let (peer_mgr_event_sender1, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
         A::make_transport(),
@@ -1168,6 +1172,7 @@ where
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
         protocol_config: Default::default(),
+        custom_disconnection_reason_for_banning: Default::default(),
     });
     let (peer_mgr_event_sender2, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
         A::make_transport(),
@@ -1199,6 +1204,7 @@ where
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
         protocol_config: Default::default(),
+        custom_disconnection_reason_for_banning: Default::default(),
     });
     let (peer_mgr_event_sender3, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
         A::make_transport(),
@@ -1328,6 +1334,7 @@ async fn discovered_node_2_groups() {
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
         protocol_config: Default::default(),
+        custom_disconnection_reason_for_banning: Default::default(),
     });
     let (peer_mgr_event_sender1, _shutdown_sender, _subscribers_sender) =
         run_peer_manager::<DefaultNetworkingService<MpscChannelTransport>>(
@@ -1373,6 +1380,7 @@ async fn discovered_node_2_groups() {
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
         protocol_config: Default::default(),
+        custom_disconnection_reason_for_banning: Default::default(),
     });
     let (peer_mgr_event_sender2, _shutdown_sender, _subscribers_sender) =
         run_peer_manager::<DefaultNetworkingService<MpscChannelTransport>>(
@@ -1405,6 +1413,7 @@ async fn discovered_node_2_groups() {
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
         protocol_config: Default::default(),
+        custom_disconnection_reason_for_banning: Default::default(),
     });
     let (peer_mgr_event_sender3, _shutdown_sender, _subscribers_sender) =
         run_peer_manager::<DefaultNetworkingService<MpscChannelTransport>>(
@@ -1495,6 +1504,7 @@ async fn discovered_node_separate_groups() {
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
         protocol_config: Default::default(),
+        custom_disconnection_reason_for_banning: Default::default(),
     });
     let (peer_mgr_event_sender1, _shutdown_sender, _subscribers_sender) =
         run_peer_manager::<DefaultNetworkingService<MpscChannelTransport>>(
@@ -1540,6 +1550,7 @@ async fn discovered_node_separate_groups() {
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
         protocol_config: Default::default(),
+        custom_disconnection_reason_for_banning: Default::default(),
     });
     let (peer_mgr_event_sender2, _shutdown_sender, _subscribers_sender) =
         run_peer_manager::<DefaultNetworkingService<MpscChannelTransport>>(
@@ -1572,6 +1583,7 @@ async fn discovered_node_separate_groups() {
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
         protocol_config: Default::default(),
+        custom_disconnection_reason_for_banning: Default::default(),
     });
     let (peer_mgr_event_sender3, _shutdown_sender, _subscribers_sender) =
         run_peer_manager::<DefaultNetworkingService<MpscChannelTransport>>(
@@ -1886,6 +1898,7 @@ mod feeler_connections_test_utils {
             user_agent: mintlayer_core_user_agent(),
             sync_stalling_timeout: Default::default(),
             protocol_config: Default::default(),
+            custom_disconnection_reason_for_banning: Default::default(),
         }
     }
 
@@ -1972,6 +1985,7 @@ async fn reject_connection_to_existing_ip(#[case] seed: Seed) {
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
         protocol_config: Default::default(),
+        custom_disconnection_reason_for_banning: Default::default(),
     });
 
     let time_getter = BasicTestTimeGetter::new();

@@ -107,6 +107,8 @@ pub struct P2pConfig {
     pub peer_manager_config: PeerManagerConfig,
     /// Various limits related to the protocol; these should only be overridden in tests.
     pub protocol_config: ProtocolConfig,
+    /// If set, this text will be sent to banned peers as part of the DisconnectionReason.
+    pub custom_disconnection_reason_for_banning: Option<String>,
 }
 
 impl P2pConfig {
