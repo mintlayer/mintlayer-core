@@ -145,9 +145,9 @@ mod test {
     #[case(0, false)]
     #[case(1, false)]
     #[case(1234567, false)]
-    #[case(u32::MAX & (!0x80000000 - 1), false)]
-    #[case(u32::MAX & !0x80000000, false)]
-    #[case(u32::MAX & (!0x80000000 + 1), true)]
+    #[case(!0x80000000 - 1, false)]
+    #[case(!0x80000000, false)]
+    #[case(!0x80000000 + 1, true)]
     #[case(u32::MAX - 1, true)]
     #[case(u32::MAX, true)]
     fn create_child_number(#[case] encoded_num: u32, #[case] is_hardened: bool) {

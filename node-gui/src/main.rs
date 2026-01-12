@@ -497,7 +497,7 @@ fn view(state: &GuiState) -> Element<'_, Message> {
                     column![
                         iced::widget::text("Mintlayer-core node initialization failed".to_string())
                             .size(header_font_size),
-                        iced::widget::text(message.to_string()).size(text_font_size)
+                        iced::widget::text(message.clone()).size(text_font_size)
                     ]
                 }
                 InitializationInterruptionReason::DataDirCleanedUp => {

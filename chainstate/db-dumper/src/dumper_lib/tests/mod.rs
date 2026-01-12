@@ -58,7 +58,7 @@ fn dump_blocks_predefined() {
     let chain_config =
         Arc::new(chain::config::create_unit_test_config_builder().genesis_custom(genesis).build());
 
-    let block_infos = vec![
+    let block_infos = [
         TestBlockInfo::from_input_info(TestBlockInputInfo {
             height: BlockHeight::new(1),
             is_mainchain: true,
