@@ -1379,14 +1379,14 @@ impl<'a> RandomTxMaker<'a> {
                         PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
 
                     *dummy_pool_id = pool_id;
-                    *pool_data = Box::new(StakePoolData::new(
+                    **pool_data = StakePoolData::new(
                         pool_data.pledge(),
                         Destination::PublicKey(staker_pk),
                         vrf_pk,
                         Destination::AnyoneCanSpend,
                         pool_data.margin_ratio_per_thousand(),
                         pool_data.cost_per_block(),
-                    ));
+                    );
                     let _ = pos_accounting_cache
                         .create_pool(pool_id, pool_data.as_ref().clone().into())
                         .unwrap();

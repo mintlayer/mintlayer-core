@@ -22,12 +22,12 @@ use super::hexified::HexifiedAddress;
 
 #[allow(clippy::let_and_return)]
 pub fn dehexify_all_addresses(conf: &ChainConfig, input: &str) -> String {
-    let result = HexifiedAddress::<Destination>::replace_with_address(conf, input).to_string();
-    let result = HexifiedAddress::<PoolId>::replace_with_address(conf, &result).to_string();
-    let result = HexifiedAddress::<DelegationId>::replace_with_address(conf, &result).to_string();
-    let result = HexifiedAddress::<TokenId>::replace_with_address(conf, &result).to_string();
-    let result = HexifiedAddress::<OrderId>::replace_with_address(conf, &result).to_string();
-    let result = HexifiedAddress::<VRFPublicKey>::replace_with_address(conf, &result).to_string();
+    let result = HexifiedAddress::<Destination>::replace_with_address(conf, input).clone();
+    let result = HexifiedAddress::<PoolId>::replace_with_address(conf, &result).clone();
+    let result = HexifiedAddress::<DelegationId>::replace_with_address(conf, &result).clone();
+    let result = HexifiedAddress::<TokenId>::replace_with_address(conf, &result).clone();
+    let result = HexifiedAddress::<OrderId>::replace_with_address(conf, &result).clone();
+    let result = HexifiedAddress::<VRFPublicKey>::replace_with_address(conf, &result).clone();
 
     result
 }

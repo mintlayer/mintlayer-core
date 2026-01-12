@@ -209,9 +209,14 @@ where
 {
     let (peer_manager, peer_mgr_event_sender, shutdown_sender, subscribers_sender) =
         make_peer_manager_custom::<T>(transport, addr, chain_config, p2p_config, time_getter).await;
-    logging::spawn_in_current_span(async move {
-        peer_manager.run().await.unwrap();
-    });
+    logging::spawn_in_current_span(
+        // Rust 1.92 thinks that the unwrap call here is unreachable, even though the function
+        // returns a normal error.
+        #[allow(unreachable_code)]
+        async move {
+            peer_manager.run().await.unwrap();
+        },
+    );
     (peer_mgr_event_sender, shutdown_sender, subscribers_sender)
 }
 
