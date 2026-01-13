@@ -23,7 +23,7 @@ Check that:
 
 from typing import List
 from test_framework.test_framework import BitcoinTestFramework
-from test_framework.util import (assert_equal, assert_raises_rpc_error)
+from test_framework.util import assert_equal
 from test_framework.mintlayer import (block_input_data_obj, make_tx , reward_input, tx_input, tx_output)
 
 import random

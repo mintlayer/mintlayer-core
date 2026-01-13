@@ -1,4 +1,4 @@
-// Copyright (c) 2023 RBB S.r.l
+// Copyright (c) 2021-2025 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,24 +13,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod account;
-pub mod block;
-pub mod block_reward;
-pub mod consensus_data;
-pub mod event;
-pub mod input;
-pub mod output;
-pub mod signed_transaction;
-pub mod token;
-pub mod token_decimals_provider;
+use std::collections::BTreeMap;
 
-use common::{address::AddressError, chain::tokens::TokenId};
+use common::chain::tokens::TokenId;
 
-#[derive(thiserror::Error, Debug)]
-pub enum RpcTypeError {
-    #[error("Address error: {0}")]
-    Address(#[from] AddressError),
+#[derive(Clone, Copy, Debug)]
+pub struct TokenDecimals(pub u8);
 
-    #[error("Token decimals unavailable for token {0:x}")]
-    TokenDecimalsUnavailable(TokenId),
+pub trait TokenDecimalsProvider {
+    fn get_token_decimals(&self, token_id: &TokenId) -> Option<TokenDecimals>;
+}
+
+impl TokenDecimalsProvider for BTreeMap<TokenId, TokenDecimals> {
+    fn get_token_decimals(&self, token_id: &TokenId) -> Option<TokenDecimals> {
+        self.get(token_id).copied()
+    }
 }

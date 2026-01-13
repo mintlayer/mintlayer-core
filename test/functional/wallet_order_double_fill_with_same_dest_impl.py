@@ -30,7 +30,6 @@ from test_framework.mintlayer import  block_input_data_obj
 from test_framework.wallet_rpc_controller import WalletRpcController
 
 import asyncio
-import sys
 import random
 
 ATOMS_PER_TOKEN = 100

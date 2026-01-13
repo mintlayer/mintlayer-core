@@ -20,6 +20,7 @@ use serialization::{Decode, Encode};
 use crate::{
     chain::{
         output_value::OutputValue,
+        output_values_holder::OutputValuesHolder,
         signature::sighash::{self},
         OrderId, PoolId,
     },
@@ -55,6 +56,12 @@ pub struct OrderAdditionalInfo {
     pub initially_given: OutputValue,
     pub ask_balance: Amount,
     pub give_balance: Amount,
+}
+
+impl OutputValuesHolder for OrderAdditionalInfo {
+    fn output_values_iter(&self) -> impl Iterator<Item = &OutputValue> {
+        [&self.initially_asked, &self.initially_given].into_iter()
+    }
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Encode, Decode, serde::Serialize)]
@@ -145,5 +152,12 @@ impl sighash::input_commitments::OrderInfoProvider for TxAdditionalInfo {
                 give_balance: info.give_balance,
             }),
         )
+    }
+}
+
+impl OutputValuesHolder for TxAdditionalInfo {
+    fn output_values_iter(&self) -> impl Iterator<Item = &OutputValue> {
+        self.order_info_iter()
+            .flat_map(|(_, order_info)| order_info.output_values_iter())
     }
 }

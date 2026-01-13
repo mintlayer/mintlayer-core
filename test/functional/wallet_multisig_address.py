@@ -32,7 +32,6 @@ from test_framework.mintlayer import block_input_data_obj
 from test_framework.wallet_cli_controller import TxOutput, WalletCliController
 
 import asyncio
-import sys
 import random
 
 

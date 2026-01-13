@@ -25,16 +25,14 @@ Check that:
 """
 
 from test_framework.test_framework import BitcoinTestFramework
-from test_framework.mintlayer import (make_tx, reward_input, tx_input, ATOMS_PER_COIN)
+from test_framework.mintlayer import (make_tx, reward_input, ATOMS_PER_COIN)
 from test_framework.util import assert_in, assert_equal
-from test_framework.mintlayer import mintlayer_hash, block_input_data_obj
+from test_framework.mintlayer import block_input_data_obj
 from test_framework.wallet_cli_controller import WalletCliController
 
 import asyncio
-import sys
 import subprocess
 import os
-import re
 
 
 class WalletAddressGenerator(BitcoinTestFramework):

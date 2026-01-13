@@ -15,7 +15,6 @@
 
 use chainstate_types::BlockIndex;
 use common::{
-    address::AddressError,
     chain::{block::timestamp::BlockTimestamp, Block, ChainConfig, GenBlock},
     primitives::{BlockHeight, Id, Idable},
 };
@@ -23,16 +22,9 @@ use serialization::hex_encoded::HexEncoded;
 
 use super::{
     block_reward::RpcBlockReward, consensus_data::RpcConsensusData,
-    signed_transaction::RpcSignedTransaction,
+    signed_transaction::RpcSignedTransaction, token_decimals_provider::TokenDecimalsProvider,
+    RpcTypeError,
 };
-
-#[derive(thiserror::Error, Debug)]
-pub enum RpcTypeSerializationError {
-    #[error("Address error: {0}")]
-    Address(#[from] AddressError),
-    #[error("FromHex error: {0}")]
-    FromHex(#[from] hex::FromHexError),
-}
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct RpcBlock {
@@ -53,15 +45,17 @@ pub struct RpcBlock {
 impl RpcBlock {
     pub fn new(
         chain_config: &ChainConfig,
+        token_decimals_provider: &impl TokenDecimalsProvider,
         block: Block,
         block_index: BlockIndex,
-    ) -> Result<Self, RpcTypeSerializationError> {
+    ) -> Result<Self, RpcTypeError> {
         let rpc_consensus_data = RpcConsensusData::new(chain_config, block.consensus_data())?;
-        let rpc_block_reward = RpcBlockReward::new(chain_config, block.block_reward())?;
+        let rpc_block_reward =
+            RpcBlockReward::new(chain_config, token_decimals_provider, block.block_reward())?;
         let rpc_transactions = block
             .transactions()
             .iter()
-            .map(|tx| RpcSignedTransaction::new(chain_config, tx.clone()))
+            .map(|tx| RpcSignedTransaction::new(chain_config, token_decimals_provider, tx.clone()))
             .collect::<Result<Vec<_>, _>>()?;
 
         let rpc_block = Self {

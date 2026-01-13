@@ -21,10 +21,9 @@ Check that:
 * After submitting a transaction that defines the UTXO, both are in non-orphan mempool
 """
 
-from test_framework.p2p import (P2PInterface, P2PDataStore)
+from test_framework.p2p import P2PDataStore
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.mintlayer import (make_tx_dict, reward_input, tx_input, calc_tx_id)
-import scalecodec
 import time
 
 

@@ -21,7 +21,9 @@ pub mod merkle_proxy;
 use merkletree_mintlayer::{MerkleTreeFormError, MerkleTreeProofExtractionError};
 use serialization::{Decode, Encode};
 
-use crate::chain::SignedTransaction;
+use crate::chain::{
+    output_value::OutputValue, output_values_holder::OutputValuesHolder, SignedTransaction,
+};
 
 use self::merkle_proxy::BlockBodyMerkleProxy;
 
@@ -60,6 +62,16 @@ impl BlockBody {
 
     pub fn merkle_tree_proxy(&self) -> Result<BlockBodyMerkleProxy, BlockMerkleTreeError> {
         BlockBodyMerkleProxy::new(self)
+    }
+}
+
+impl OutputValuesHolder for BlockBody {
+    fn output_values_iter(&self) -> impl Iterator<Item = &OutputValue> {
+        let values_from_reward =
+            self.reward.outputs().iter().flat_map(|output| output.output_values_iter());
+        let values_from_txs = self.transactions.iter().flat_map(|tx| tx.output_values_iter());
+
+        values_from_reward.chain(values_from_txs)
     }
 }
 

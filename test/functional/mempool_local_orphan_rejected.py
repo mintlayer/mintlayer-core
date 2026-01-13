@@ -24,7 +24,6 @@ Check that:
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.mintlayer import (make_tx, reward_input, tx_input)
 from test_framework.util import assert_raises_rpc_error
-import scalecodec
 
 
 class MempoolLocalOrphanSubmissionTest(BitcoinTestFramework):

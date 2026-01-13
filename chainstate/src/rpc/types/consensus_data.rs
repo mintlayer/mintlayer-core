@@ -13,15 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::str::FromStr;
-
 use common::{
     address::RpcAddress,
     chain::{block::ConsensusData, ChainConfig, PoolId},
 };
 use rpc::types::RpcHexString;
 
-use super::{block::RpcTypeSerializationError, input::RpcTxInput};
+use super::{input::RpcTxInput, RpcTypeError};
 
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(tag = "type", content = "content")]
@@ -35,7 +33,7 @@ impl RpcConsensusData {
     pub fn new(
         chain_config: &ChainConfig,
         consensus_data: &ConsensusData,
-    ) -> Result<Self, RpcTypeSerializationError> {
+    ) -> Result<Self, RpcTypeError> {
         let rpc_consensus_data = match consensus_data {
             ConsensusData::None => RpcConsensusData::None,
             ConsensusData::PoW(_) => RpcConsensusData::PoW,
@@ -47,16 +45,14 @@ impl RpcConsensusData {
                     .collect::<Result<Vec<_>, _>>()?;
 
                 let compact_target =
-                    RpcHexString::from_str(format!("{:x}", pos_data.compact_target().0).as_str())?;
+                    RpcHexString::from_bytes(pos_data.compact_target().0.to_be_bytes().to_vec());
 
-                let target = RpcHexString::from_str(
-                    format!(
-                        "{:x}",
-                        TryInto::<common::Uint256>::try_into(pos_data.compact_target())
-                            .expect("valid target")
-                    )
-                    .as_str(),
-                )?;
+                let target = RpcHexString::from_bytes(
+                    TryInto::<common::Uint256>::try_into(pos_data.compact_target())
+                        .expect("valid target")
+                        .to_be_bytes()
+                        .to_vec(),
+                );
 
                 RpcConsensusData::PoS {
                     pos_data: RpcPoSData {

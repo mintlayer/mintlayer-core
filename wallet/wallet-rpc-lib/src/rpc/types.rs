@@ -15,6 +15,7 @@
 
 //! Types supporting the RPC interface
 
+use chainstate::rpc::{RpcTypeError, TokenDecimalsProvider};
 use common::{
     address::{pubkeyhash::PublicKeyHash, Address, AddressError},
     chain::{
@@ -171,6 +172,9 @@ pub enum RpcError<N: NodeInterface> {
 
     #[error("Wallet recovery requires mnemonic to be specified")]
     WalletRecoveryWithoutMnemonic,
+
+    #[error("Token info missing for token {0:x}")]
+    MissingTokenInfo(TokenId),
 }
 
 impl<N: NodeInterface> From<RpcError<N>> for rpc::Error {
@@ -389,9 +393,10 @@ impl UtxoInfo {
         outpoint: UtxoOutPoint,
         output: TxOutput,
         chain_config: &ChainConfig,
-    ) -> Result<Self, AddressError> {
+        token_decimals_provider: &impl TokenDecimalsProvider,
+    ) -> Result<Self, RpcTypeError> {
         Ok(Self {
-            output: RpcTxOutput::new(chain_config, output)?,
+            output: RpcTxOutput::new(chain_config, token_decimals_provider, output)?,
             outpoint: RpcUtxoOutpoint::new(outpoint),
         })
     }
