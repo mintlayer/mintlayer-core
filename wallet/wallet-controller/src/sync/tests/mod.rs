@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use std::{
+    collections::BTreeSet,
     num::NonZeroUsize,
     sync::{Arc, Mutex},
     time::Duration,
@@ -294,6 +295,13 @@ impl NodeInterface for MockNode {
         &self,
         _token_id: TokenId,
     ) -> Result<Option<RPCTokenInfo>, Self::Error> {
+        unreachable!()
+    }
+
+    async fn get_tokens_info(
+        &self,
+        _token_ids: BTreeSet<TokenId>,
+    ) -> Result<Vec<RPCTokenInfo>, Self::Error> {
         unreachable!()
     }
 

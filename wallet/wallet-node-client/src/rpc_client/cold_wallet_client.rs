@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{num::NonZeroUsize, time::Duration};
+use std::{collections::BTreeSet, num::NonZeroUsize, time::Duration};
 
 use blockprod::TimestampSearchData;
 use chainstate::ChainInfo;
@@ -138,6 +138,13 @@ impl NodeInterface for ColdWalletClient {
         &self,
         _token_id: TokenId,
     ) -> Result<Option<RPCTokenInfo>, Self::Error> {
+        Err(ColdWalletRpcError::NotAvailable)
+    }
+
+    async fn get_tokens_info(
+        &self,
+        _token_ids: BTreeSet<TokenId>,
+    ) -> Result<Vec<RPCTokenInfo>, Self::Error> {
         Err(ColdWalletRpcError::NotAvailable)
     }
 

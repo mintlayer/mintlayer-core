@@ -11,6 +11,9 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+### Added
+  - Node RPC: new method added - `chainstate_tokens_info`.
+
 ### Changed
   - Wallet RPC:
     `wallet_info`: the structure of the returned field `extra_info` was changed.

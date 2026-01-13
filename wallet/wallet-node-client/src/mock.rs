@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{num::NonZeroUsize, sync::Arc, time::Duration};
+use std::{collections::BTreeSet, num::NonZeroUsize, sync::Arc, time::Duration};
 
 use chainstate::ChainInfo;
 use common::{
@@ -138,6 +138,13 @@ impl NodeInterface for ClonableMockNodeInterface {
 
     async fn get_token_info(&self, token_id: TokenId) -> Result<Option<RPCTokenInfo>, Self::Error> {
         self.lock().await.get_token_info(token_id).await
+    }
+
+    async fn get_tokens_info(
+        &self,
+        token_ids: BTreeSet<TokenId>,
+    ) -> Result<Vec<RPCTokenInfo>, Self::Error> {
+        self.lock().await.get_tokens_info(token_ids).await
     }
 
     async fn get_order_info(&self, order_id: OrderId) -> Result<Option<RpcOrderInfo>, Self::Error> {

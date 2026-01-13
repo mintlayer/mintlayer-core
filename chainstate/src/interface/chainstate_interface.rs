@@ -13,7 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeMap, num::NonZeroUsize, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    num::NonZeroUsize,
+    sync::Arc,
+};
 
 use crate::{
     detail::BlockSource, ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent,
@@ -206,14 +210,24 @@ pub trait ChainstateInterface: Send + Sync {
         &self,
         token_id: TokenId,
     ) -> Result<Option<RPCTokenInfo>, ChainstateError>;
+
+    /// Return infos for the specified token ids.
+    fn get_tokens_info_for_rpc(
+        &self,
+        token_ids: &BTreeSet<TokenId>,
+    ) -> Result<Vec<RPCTokenInfo>, ChainstateError>;
+
+    /// Return token's auxiliary data; available for NFTs only.
     fn get_token_aux_data(
         &self,
         token_id: TokenId,
     ) -> Result<Option<TokenAuxiliaryData>, ChainstateError>;
+    /// Obtain token id given the id of the issuing tx; available for NFTs only.
     fn get_token_id_from_issuance_tx(
         &self,
         tx_id: &Id<Transaction>,
     ) -> Result<Option<TokenId>, ChainstateError>;
+    /// Obtain token data given its id; available for fungible tokens only.
     fn get_token_data(
         &self,
         id: &TokenId,

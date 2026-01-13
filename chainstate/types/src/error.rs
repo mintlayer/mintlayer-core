@@ -16,7 +16,7 @@
 use thiserror::Error;
 
 use common::{
-    chain::{Block, GenBlock, OrderId, PoolId},
+    chain::{tokens::TokenId, Block, GenBlock, OrderId, PoolId},
     primitives::{BlockHeight, Id},
 };
 
@@ -60,6 +60,8 @@ pub enum PropertyQueryError {
         start: BlockHeight,
         end: BlockHeight,
     },
+    #[error("Token info missing for token {0:x}")]
+    TokenInfoMissing(TokenId),
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]

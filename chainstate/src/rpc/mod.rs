@@ -172,9 +172,13 @@ trait ChainstateRpc {
         delegation_address: String,
     ) -> RpcResult<Option<Amount>>;
 
-    /// Get token information, given a token id, in address form.
+    /// Get token information, given a token id in address form.
     #[method(name = "token_info")]
     async fn token_info(&self, token_id: String) -> RpcResult<Option<RPCTokenInfo>>;
+
+    /// Get tokens information, given multiple token ids in address form.
+    #[method(name = "tokens_info")]
+    async fn tokens_info(&self, token_ids: Vec<String>) -> RpcResult<Vec<RPCTokenInfo>>;
 
     /// Get order information, given an order id, in address form.
     #[method(name = "order_info")]
@@ -243,19 +247,22 @@ impl ChainstateRpcServer for super::ChainstateHandle {
 
         if let Some((block, block_index)) = both {
             let token_ids = collect_token_v1_ids_from_output_values_holder(&block);
-            let mut token_decimals = BTreeMap::new();
-
-            // TODO replace this loop with a single ChainstateInterface function call obtaining
-            // all infos at once (when the function is implemented).
-            for token_id in token_ids {
-                let token_info: RPCTokenInfo = rpc::handle_result(
-                    self.call(move |this| get_existing_token_info_for_rpc(this, token_id)).await,
-                )?;
-                token_decimals.insert(
-                    token_id,
-                    TokenDecimals(token_info.token_number_of_decimals()),
-                );
-            }
+            let token_decimals: BTreeMap<TokenId, TokenDecimals> = rpc::handle_result(
+                self.call(move |this| -> Result<_, ChainstateError> {
+                    let infos = this.get_tokens_info_for_rpc(&token_ids)?;
+                    let decimals = infos
+                        .iter()
+                        .map(|info| {
+                            (
+                                info.token_id(),
+                                TokenDecimals(info.token_number_of_decimals()),
+                            )
+                        })
+                        .collect::<BTreeMap<_, _>>();
+                    Ok(decimals)
+                })
+                .await,
+            )?;
 
             let rpc_block: RpcBlock = rpc::handle_result(RpcBlock::new(
                 &chain_config,
@@ -438,6 +445,27 @@ impl ChainstateRpcServer for super::ChainstateHandle {
         )
     }
 
+    async fn tokens_info(&self, token_ids: Vec<String>) -> RpcResult<Vec<RPCTokenInfo>> {
+        rpc::handle_result(
+            self.call(move |this| -> Result<_, DynamizedError> {
+                let chain_config = this.get_chain_config();
+
+                let token_ids = token_ids
+                    .into_iter()
+                    .map(|token_id| -> Result<_, DynamizedError> {
+                        Ok(
+                            dynamize_err(Address::<TokenId>::from_string(chain_config, token_id))?
+                                .into_object(),
+                        )
+                    })
+                    .collect::<Result<_, _>>()?;
+
+                dynamize_err(this.get_tokens_info_for_rpc(&token_ids))
+            })
+            .await,
+        )
+    }
+
     async fn order_info(&self, order_id: String) -> RpcResult<Option<RpcOrderInfo>> {
         rpc::handle_result(
             self.call(move |this| {
@@ -488,31 +516,13 @@ impl ChainstateRpcServer for super::ChainstateHandle {
     }
 }
 
-fn dynamize_err<T, E: std::error::Error + Send + Sync>(
-    o: Result<T, E>,
-) -> Result<T, Box<dyn std::error::Error + Send + Sync>>
+type DynamizedError = Box<dyn std::error::Error + Send + Sync>;
+
+fn dynamize_err<T, E: std::error::Error + Send + Sync>(o: Result<T, E>) -> Result<T, DynamizedError>
 where
-    Box<dyn std::error::Error + Send + Sync>: From<E>,
+    DynamizedError: From<E>,
 {
     o.map_err(Into::into)
-}
-
-fn get_existing_token_info_for_rpc(
-    chainstate: &(impl ChainstateInterface + ?Sized),
-    token_id: TokenId,
-) -> Result<RPCTokenInfo, LocalRpcError> {
-    chainstate
-        .get_token_info_for_rpc(token_id)?
-        .ok_or(LocalRpcError::MissingTokenInfo(token_id))
-}
-
-#[derive(thiserror::Error, Debug, PartialEq, Eq)]
-enum LocalRpcError {
-    #[error("Token info missing for token {0:x}")]
-    MissingTokenInfo(TokenId),
-
-    #[error(transparent)]
-    ChainstateError(#[from] ChainstateError),
 }
 
 #[cfg(test)]

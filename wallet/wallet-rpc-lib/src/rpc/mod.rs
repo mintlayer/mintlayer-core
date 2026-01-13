@@ -41,9 +41,7 @@ use common::{
         signature::inputsig::arbitrary_message::{
             produce_message_challenge, ArbitraryMessageSignature,
         },
-        tokens::{
-            IsTokenFreezable, IsTokenUnfreezable, Metadata, RPCTokenInfo, TokenId, TokenTotalSupply,
-        },
+        tokens::{IsTokenFreezable, IsTokenUnfreezable, Metadata, TokenId, TokenTotalSupply},
         Block, ChainConfig, DelegationId, Destination, GenBlock, OrderId, PoolId,
         SignedTransaction, SignedTransactionIntent, Transaction, TxOutput, UtxoOutPoint,
     },
@@ -760,36 +758,22 @@ where
             .await?
     }
 
-    pub async fn get_token_infos(
-        &self,
-        token_ids: BTreeSet<TokenId>,
-    ) -> WRpcResult<BTreeMap<TokenId, RPCTokenInfo>, N> {
-        let mut result = BTreeMap::new();
-
-        // TODO: consider introducing a separate node RPC call that would fetch all token infos at once.
-        for token_id in token_ids {
-            let token_info = self
-                .node
-                .get_token_info(token_id)
-                .await
-                .map_err(RpcError::RpcError)?
-                .ok_or(RpcError::MissingTokenInfo(token_id))?;
-            result.insert(token_id, token_info);
-        }
-
-        Ok(result)
-    }
-
     pub async fn get_tokens_decimals(
         &self,
         token_ids: BTreeSet<TokenId>,
     ) -> WRpcResult<BTreeMap<TokenId, TokenDecimals>, N> {
-        Ok(self
-            .get_token_infos(token_ids)
-            .await?
+        let infos = self.node.get_tokens_info(token_ids).await.map_err(RpcError::RpcError)?;
+        let desimals = infos
             .iter()
-            .map(|(id, info)| (*id, TokenDecimals(info.token_number_of_decimals())))
-            .collect())
+            .map(|info| {
+                (
+                    info.token_id(),
+                    TokenDecimals(info.token_number_of_decimals()),
+                )
+            })
+            .collect();
+
+        Ok(desimals)
     }
 
     pub async fn get_transaction(

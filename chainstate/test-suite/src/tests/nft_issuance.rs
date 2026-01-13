@@ -20,7 +20,6 @@ use chainstate::{
     ConnectTransactionError, TokensError,
 };
 use chainstate_test_framework::{TestFramework, TransactionBuilder};
-use common::primitives::{BlockHeight, Idable};
 use common::{
     chain::{
         output_value::OutputValue,
@@ -29,7 +28,7 @@ use common::{
         Block, ChainstateUpgradeBuilder, Destination, GenBlock, OutPointSourceId,
         TokenIssuanceVersion, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::Id,
+    primitives::{BlockHeight, Id, Idable},
 };
 use randomness::{CryptoRng, Rng};
 use serialization::extras::non_empty_vec::DataOrNoVec;
@@ -40,6 +39,8 @@ use test_utils::{
     token_utils::{random_creator, random_nft_issuance, random_token_issuance_v1},
 };
 use tx_verifier::{error::TokenIssuanceError, CheckTransactionError};
+
+use crate::tests::helpers::token_checks::{check_nft, ExpectedNftData};
 
 #[rstest]
 #[trace]
@@ -456,7 +457,7 @@ fn nft_invalid_ticker(#[case] seed: Seed) {
                     BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
                         CheckBlockTransactionsError::CheckTransactionError(
                             CheckTransactionError::TokensError(TokensError::IssueError(
-                                TokenIssuanceError::IssueErrorTickerHasNoneAlphaNumericChar,
+                                TokenIssuanceError::IssueErrorTickerHasNonAlphaNumericChar,
                                 _,
                             ))
                         )
@@ -786,43 +787,39 @@ fn nft_icon_uri_empty(#[case] seed: Seed) {
             media_uri: DataOrNoVec::from(None),
             media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
         };
-        let block_index = tf
+        let issuance_tx = TransactionBuilder::new()
+            .add_input(tx_first_input, InputWitness::NoSignature(None))
+            .add_output(TxOutput::IssueNft(
+                token_id,
+                Box::new(
+                    NftIssuanceV0 {
+                        metadata: metadata.clone(),
+                    }
+                    .into(),
+                ),
+                Destination::AnyoneCanSpend,
+            ))
+            .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
+            .build();
+        let issuance_block_id = *tf
             .make_block_builder()
-            .add_transaction(
-                TransactionBuilder::new()
-                    .add_input(tx_first_input, InputWitness::NoSignature(None))
-                    .add_output(TxOutput::IssueNft(
-                        token_id,
-                        Box::new(
-                            NftIssuanceV0 {
-                                metadata: metadata.clone(),
-                            }
-                            .into(),
-                        ),
-                        Destination::AnyoneCanSpend,
-                    ))
-                    .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
-                    .build(),
-            )
+            .add_transaction(issuance_tx.clone())
             .build_and_process(&mut rng)
             .unwrap()
-            .unwrap();
+            .unwrap()
+            .block_id();
 
-        assert_eq!(
-            block_index.block_height(),
-            common::primitives::BlockHeight::from(1)
-        );
-
-        let block = tf.block(*block_index.block_id());
-        let outputs =
-            tf.outputs_from_genblock(block.get_id().into()).values().next().unwrap().clone();
-
-        match &outputs[0] {
-            TxOutput::IssueNft(_, nft, _) => match nft.as_ref() {
-                NftIssuance::V0(nft) => assert_eq!(nft.metadata, metadata),
+        check_nft(
+            &tf,
+            &mut rng,
+            &token_id,
+            &ExpectedNftData {
+                metadata,
+                issuance_tx: issuance_tx.take_transaction(),
+                issuance_tx_output_index: 0,
+                issuance_block_id,
             },
-            _ => panic!("unexpected output"),
-        };
+        );
     })
 }
 
@@ -1014,43 +1011,39 @@ fn nft_metadata_uri_empty(#[case] seed: Seed) {
             media_uri: DataOrNoVec::from(None),
             media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
         };
-        let block_index = tf
+        let issuance_tx = TransactionBuilder::new()
+            .add_input(tx_first_input, InputWitness::NoSignature(None))
+            .add_output(TxOutput::IssueNft(
+                token_id,
+                Box::new(
+                    NftIssuanceV0 {
+                        metadata: metadata.clone(),
+                    }
+                    .into(),
+                ),
+                Destination::AnyoneCanSpend,
+            ))
+            .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
+            .build();
+        let issuance_block_id = *tf
             .make_block_builder()
-            .add_transaction(
-                TransactionBuilder::new()
-                    .add_input(tx_first_input, InputWitness::NoSignature(None))
-                    .add_output(TxOutput::IssueNft(
-                        token_id,
-                        Box::new(
-                            NftIssuanceV0 {
-                                metadata: metadata.clone(),
-                            }
-                            .into(),
-                        ),
-                        Destination::AnyoneCanSpend,
-                    ))
-                    .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
-                    .build(),
-            )
+            .add_transaction(issuance_tx.clone())
             .build_and_process(&mut rng)
             .unwrap()
-            .unwrap();
+            .unwrap()
+            .block_id();
 
-        assert_eq!(
-            block_index.block_height(),
-            common::primitives::BlockHeight::from(1)
-        );
-
-        let block = tf.block(*block_index.block_id());
-        let outputs =
-            tf.outputs_from_genblock(block.get_id().into()).values().next().unwrap().clone();
-
-        match &outputs[0] {
-            TxOutput::IssueNft(_, nft, _) => match nft.as_ref() {
-                NftIssuance::V0(nft) => assert_eq!(nft.metadata, metadata),
+        check_nft(
+            &tf,
+            &mut rng,
+            &token_id,
+            &ExpectedNftData {
+                metadata,
+                issuance_tx: issuance_tx.take_transaction(),
+                issuance_tx_output_index: 0,
+                issuance_block_id,
             },
-            _ => panic!("unexpected output"),
-        };
+        );
     })
 }
 
@@ -1244,43 +1237,39 @@ fn nft_media_uri_empty(#[case] seed: Seed) {
             media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
         };
 
-        let block_index = tf
+        let issuance_tx = TransactionBuilder::new()
+            .add_input(tx_first_input, InputWitness::NoSignature(None))
+            .add_output(TxOutput::IssueNft(
+                token_id,
+                Box::new(
+                    NftIssuanceV0 {
+                        metadata: metadata.clone(),
+                    }
+                    .into(),
+                ),
+                Destination::AnyoneCanSpend,
+            ))
+            .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
+            .build();
+        let issuance_block_id = *tf
             .make_block_builder()
-            .add_transaction(
-                TransactionBuilder::new()
-                    .add_input(tx_first_input, InputWitness::NoSignature(None))
-                    .add_output(TxOutput::IssueNft(
-                        token_id,
-                        Box::new(
-                            NftIssuanceV0 {
-                                metadata: metadata.clone(),
-                            }
-                            .into(),
-                        ),
-                        Destination::AnyoneCanSpend,
-                    ))
-                    .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
-                    .build(),
-            )
+            .add_transaction(issuance_tx.clone())
             .build_and_process(&mut rng)
             .unwrap()
-            .unwrap();
+            .unwrap()
+            .block_id();
 
-        assert_eq!(
-            block_index.block_height(),
-            common::primitives::BlockHeight::from(1)
-        );
-
-        let block = tf.block(*block_index.block_id());
-        let outputs =
-            tf.outputs_from_genblock(block.get_id().into()).values().next().unwrap().clone();
-
-        match &outputs[0] {
-            TxOutput::IssueNft(_, nft, _) => match nft.as_ref() {
-                NftIssuance::V0(nft) => assert_eq!(nft.metadata, metadata),
+        check_nft(
+            &tf,
+            &mut rng,
+            &token_id,
+            &ExpectedNftData {
+                metadata,
+                issuance_tx: issuance_tx.take_transaction(),
+                issuance_tx_output_index: 0,
+                issuance_block_id,
             },
-            _ => panic!("unexpected output"),
-        };
+        );
     })
 }
 
@@ -1559,43 +1548,39 @@ fn nft_valid_case(#[case] seed: Seed) {
             media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
         };
 
-        let block_index = tf
+        let issuance_tx = TransactionBuilder::new()
+            .add_input(tx_first_input, InputWitness::NoSignature(None))
+            .add_output(TxOutput::IssueNft(
+                token_id,
+                Box::new(
+                    NftIssuanceV0 {
+                        metadata: metadata.clone(),
+                    }
+                    .into(),
+                ),
+                Destination::AnyoneCanSpend,
+            ))
+            .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
+            .build();
+        let issuance_block_id = *tf
             .make_block_builder()
-            .add_transaction(
-                TransactionBuilder::new()
-                    .add_input(tx_first_input, InputWitness::NoSignature(None))
-                    .add_output(TxOutput::IssueNft(
-                        token_id,
-                        Box::new(
-                            NftIssuanceV0 {
-                                metadata: metadata.clone(),
-                            }
-                            .into(),
-                        ),
-                        Destination::AnyoneCanSpend,
-                    ))
-                    .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
-                    .build(),
-            )
+            .add_transaction(issuance_tx.clone())
             .build_and_process(&mut rng)
             .unwrap()
-            .unwrap();
+            .unwrap()
+            .block_id();
 
-        assert_eq!(
-            block_index.block_height(),
-            common::primitives::BlockHeight::from(1)
-        );
-
-        let block = tf.block(*block_index.block_id());
-        let outputs =
-            tf.outputs_from_genblock(block.get_id().into()).values().next().unwrap().clone();
-
-        match &outputs[0] {
-            TxOutput::IssueNft(_, nft, _) => match nft.as_ref() {
-                NftIssuance::V0(nft) => assert_eq!(nft.metadata, metadata),
+        check_nft(
+            &tf,
+            &mut rng,
+            &token_id,
+            &ExpectedNftData {
+                metadata,
+                issuance_tx: issuance_tx.take_transaction(),
+                issuance_tx_output_index: 0,
+                issuance_block_id,
             },
-            _ => panic!("unexpected output"),
-        };
+        );
     })
 }
 
@@ -1818,7 +1803,7 @@ fn only_ascii_alphanumeric_after_v1(#[case] seed: Seed) {
                 CheckBlockError::CheckTransactionFailed(
                     CheckBlockTransactionsError::CheckTransactionError(
                         CheckTransactionError::TokensError(TokensError::IssueError(
-                            TokenIssuanceError::IssueErrorTickerHasNoneAlphaNumericChar,
+                            TokenIssuanceError::IssueErrorTickerHasNonAlphaNumericChar,
                             tx_id,
                         ))
                     )

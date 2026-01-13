@@ -172,9 +172,6 @@ pub enum RpcError<N: NodeInterface> {
 
     #[error("Wallet recovery requires mnemonic to be specified")]
     WalletRecoveryWithoutMnemonic,
-
-    #[error("Token info missing for token {0:x}")]
-    MissingTokenInfo(TokenId),
 }
 
 impl<N: NodeInterface> From<RpcError<N>> for rpc::Error {
