@@ -18,6 +18,7 @@ node-comm = { path = "../../wallet/wallet-node-client" }
 orders-accounting = { path = "../../orders-accounting" }
 pos-accounting = { path = "../../pos-accounting" }
 randomness = { path = "../../randomness" }
+serialization = { path = "../../serialization" }
 tokens-accounting = { path = "../../tokens-accounting" }
 tx-verifier = { path = "../../chainstate/tx-verifier" }
 utils = { path = "../../utils" }
@@ -28,10 +29,11 @@ thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }
 
 [dev-dependencies]
-chainstate-storage = { path = "../../chainstate/storage", features = ["expensive-reads"] }
+chainstate-storage = { path = "../../chainstate/storage", features = [
+  "expensive-reads",
+] }
 chainstate-test-framework = { path = "../../chainstate/test-framework" }
 crypto = { path = "../../crypto" }
-serialization = { path = "../../serialization" }
 test-utils = { path = "../../test-utils" }
 
 ctor.workspace = true

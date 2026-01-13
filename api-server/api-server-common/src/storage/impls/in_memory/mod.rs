@@ -15,12 +15,15 @@
 
 pub mod transactional;
 
-use crate::storage::storage_api::{
-    block_aux_data::{BlockAuxData, BlockWithExtraData},
-    AmountWithDecimals, ApiServerStorageError, BlockInfo, CoinOrTokenStatistic, Delegation,
-    FungibleTokenData, LockedUtxo, NftWithOwner, Order, PoolBlockStats, PoolDataWithExtraInfo,
-    TransactionInfo, TransactionWithBlockInfo, Utxo, UtxoLock, UtxoWithExtraInfo,
+use std::{
+    cmp::{Ordering, Reverse},
+    collections::{BTreeMap, BTreeSet},
+    ops::Bound::{Excluded, Unbounded},
+    sync::Arc,
 };
+
+use itertools::Itertools as _;
+
 use common::{
     address::Address,
     chain::{
@@ -31,15 +34,30 @@ use common::{
     },
     primitives::{id::WithId, Amount, BlockHeight, CoinOrTokenId, Id, Idable},
 };
-use itertools::Itertools as _;
-use std::{
-    cmp::Reverse,
-    collections::{BTreeMap, BTreeSet},
-    ops::Bound::{Excluded, Unbounded},
-    sync::Arc,
+
+use crate::storage::storage_api::{
+    block_aux_data::{BlockAuxData, BlockWithExtraData},
+    AmountWithDecimals, ApiServerStorageError, BlockInfo, CoinOrTokenStatistic, Delegation,
+    FungibleTokenData, LockedUtxo, NftWithOwner, Order, PoolBlockStats, PoolDataWithExtraInfo,
+    TokenTransaction, TransactionInfo, TransactionWithBlockInfo, Utxo, UtxoLock, UtxoWithExtraInfo,
 };
 
 use super::CURRENT_STORAGE_VERSION;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct TokenTransactionOrderedByTxId(TokenTransaction);
+
+impl PartialOrd for TokenTransactionOrderedByTxId {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for TokenTransactionOrderedByTxId {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.0.tx_id.cmp(&other.0.tx_id)
+    }
+}
 
 #[derive(Debug, Clone)]
 struct ApiServerInMemoryStorage {
@@ -48,6 +66,8 @@ struct ApiServerInMemoryStorage {
     address_balance_table: BTreeMap<String, BTreeMap<CoinOrTokenId, BTreeMap<BlockHeight, Amount>>>,
     address_locked_balance_table: BTreeMap<String, BTreeMap<(CoinOrTokenId, BlockHeight), Amount>>,
     address_transactions_table: BTreeMap<String, BTreeMap<BlockHeight, Vec<Id<Transaction>>>>,
+    token_transactions_table:
+        BTreeMap<TokenId, BTreeMap<BlockHeight, BTreeSet<TokenTransactionOrderedByTxId>>>,
     delegation_table: BTreeMap<DelegationId, BTreeMap<BlockHeight, Delegation>>,
     main_chain_blocks_table: BTreeMap<BlockHeight, Id<Block>>,
     pool_data_table: BTreeMap<PoolId, BTreeMap<BlockHeight, PoolDataWithExtraInfo>>,
@@ -75,6 +95,7 @@ impl ApiServerInMemoryStorage {
             address_balance_table: BTreeMap::new(),
             address_locked_balance_table: BTreeMap::new(),
             address_transactions_table: BTreeMap::new(),
+            token_transactions_table: BTreeMap::new(),
             delegation_table: BTreeMap::new(),
             main_chain_blocks_table: BTreeMap::new(),
             pool_data_table: BTreeMap::new(),
@@ -173,6 +194,31 @@ impl ApiServerInMemoryStorage {
             }))
     }
 
+    fn get_token_transactions(
+        &self,
+        token_id: TokenId,
+        len: u32,
+        tx_global_index: u64,
+    ) -> Result<Vec<TokenTransaction>, ApiServerStorageError> {
+        Ok(self
+            .token_transactions_table
+            .get(&token_id)
+            .map_or_else(Vec::new, |transactions| {
+                transactions
+                    .iter()
+                    .rev()
+                    .flat_map(|(_, txs)| {
+                        let mut txs: Vec<_> = txs.iter().map(|tx| &tx.0).collect();
+                        txs.sort_by_key(|tx| std::cmp::Reverse(tx.tx_global_index));
+                        txs
+                    })
+                    .flat_map(|tx| (tx.tx_global_index < tx_global_index).then_some(tx))
+                    .cloned()
+                    .take(len as usize)
+                    .collect()
+            }))
+    }
+
     fn get_block(&self, block_id: Id<Block>) -> Result<Option<BlockInfo>, ApiServerStorageError> {
         let block_result = self.block_table.get(&block_id);
         let block = match block_result {
@@ -214,7 +260,7 @@ impl ApiServerInMemoryStorage {
                                 additional_info: additinal_data.clone(),
                             },
                             block_aux: *block_aux,
-                            global_tx_index: *tx_global_index,
+                            tx_global_index: *tx_global_index,
                         }
                     },
                 )
@@ -240,7 +286,7 @@ impl ApiServerInMemoryStorage {
                 TransactionWithBlockInfo {
                     tx_info: tx_info.clone(),
                     block_aux: *block_aux,
-                    global_tx_index: *tx_global_index,
+                    tx_global_index: *tx_global_index,
                 }
             })
             .collect())
@@ -864,6 +910,20 @@ impl ApiServerInMemoryStorage {
         Ok(())
     }
 
+    fn del_token_transactions_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        // Inefficient, but acceptable for testing with InMemoryStorage
+
+        self.token_transactions_table.retain(|_, v| {
+            v.retain(|k, _| k <= &block_height);
+            !v.is_empty()
+        });
+
+        Ok(())
+    }
+
     fn set_address_balance_at_height(
         &mut self,
         address: &Address<Destination>,
@@ -938,6 +998,26 @@ impl ApiServerInMemoryStorage {
             .entry(address.to_string())
             .or_default()
             .insert(block_height, transaction_ids.into_iter().collect());
+
+        Ok(())
+    }
+
+    fn set_token_transaction_at_height(
+        &mut self,
+        token_id: TokenId,
+        tx_id: Id<Transaction>,
+        block_height: BlockHeight,
+        tx_global_index: u64,
+    ) -> Result<(), ApiServerStorageError> {
+        self.token_transactions_table
+            .entry(token_id)
+            .or_default()
+            .entry(block_height)
+            .or_default()
+            .replace(TokenTransactionOrderedByTxId(TokenTransaction {
+                tx_global_index,
+                tx_id,
+            }));
 
         Ok(())
     }
@@ -1087,11 +1167,16 @@ impl ApiServerInMemoryStorage {
         &mut self,
         outpoint: UtxoOutPoint,
         utxo: Utxo,
-        address: &str,
+        addresses: &[&str],
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
         self.utxo_table.entry(outpoint.clone()).or_default().insert(block_height, utxo);
-        self.address_utxos.entry(address.into()).or_default().insert(outpoint);
+        for address in addresses {
+            self.address_utxos
+                .entry((*address).into())
+                .or_default()
+                .insert(outpoint.clone());
+        }
         Ok(())
     }
 
@@ -1099,14 +1184,19 @@ impl ApiServerInMemoryStorage {
         &mut self,
         outpoint: UtxoOutPoint,
         utxo: LockedUtxo,
-        address: &str,
+        addresses: &[&str],
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
         self.locked_utxo_table
             .entry(outpoint.clone())
             .or_default()
             .insert(block_height, utxo);
-        self.address_locked_utxos.entry(address.into()).or_default().insert(outpoint);
+        for address in addresses {
+            self.address_locked_utxos
+                .entry((*address).into())
+                .or_default()
+                .insert(outpoint.clone());
+        }
         Ok(())
     }
 

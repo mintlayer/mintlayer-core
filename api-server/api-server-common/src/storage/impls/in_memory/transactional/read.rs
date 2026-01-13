@@ -26,8 +26,8 @@ use common::{
 use crate::storage::storage_api::{
     block_aux_data::BlockAuxData, AmountWithDecimals, ApiServerStorageError, ApiServerStorageRead,
     BlockInfo, CoinOrTokenStatistic, Delegation, FungibleTokenData, NftWithOwner, Order,
-    PoolBlockStats, PoolDataWithExtraInfo, TransactionInfo, TransactionWithBlockInfo, Utxo,
-    UtxoWithExtraInfo,
+    PoolBlockStats, PoolDataWithExtraInfo, TokenTransaction, TransactionInfo,
+    TransactionWithBlockInfo, Utxo, UtxoWithExtraInfo,
 };
 
 use super::ApiServerInMemoryStorageTransactionalRo;
@@ -66,6 +66,15 @@ impl ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'_> {
         address: &str,
     ) -> Result<Vec<Id<Transaction>>, ApiServerStorageError> {
         self.transaction.get_address_transactions(address)
+    }
+
+    async fn get_token_transactions(
+        &self,
+        token_id: TokenId,
+        len: u32,
+        tx_global_index: u64,
+    ) -> Result<Vec<TokenTransaction>, ApiServerStorageError> {
+        self.transaction.get_token_transactions(token_id, len, tx_global_index)
     }
 
     async fn get_block(

@@ -149,6 +149,7 @@ pub struct IssueAndMintTokensResult {
 
     pub change_outpoint: UtxoOutPoint,
     pub tokens_outpoint: UtxoOutPoint,
+    pub minted_tokens: Amount,
 }
 
 pub fn issue_and_mint_tokens_from_genesis(
@@ -240,5 +241,6 @@ pub fn issue_and_mint_tokens_from_genesis(
         mint_block: block2,
         change_outpoint: UtxoOutPoint::new(tx2_id.into(), 0),
         tokens_outpoint: UtxoOutPoint::new(tx2_id.into(), 1),
+        minted_tokens: amount_to_mint,
     }
 }

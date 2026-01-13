@@ -13,7 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::sync::local_state::LocalBlockchainState;
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    ops::{Add, Sub},
+    sync::Arc,
+};
+
+use futures::{stream::FuturesOrdered, TryStreamExt};
+
 use api_server_common::storage::storage_api::{
     block_aux_data::{BlockAuxData, BlockWithExtraData},
     ApiServerStorage, ApiServerStorageError, ApiServerStorageRead, ApiServerStorageWrite,
@@ -31,6 +38,10 @@ use common::{
         config::ChainConfig,
         make_delegation_id, make_order_id, make_token_id,
         output_value::OutputValue,
+        signature::inputsig::{
+            authorize_hashed_timelock_contract_spend::AuthorizedHashedTimelockContractSpend,
+            InputWitness,
+        },
         tokens::{get_referenced_token_ids_ignore_issuance, IsTokenFrozen, TokenId, TokenIssuance},
         transaction::OutPointSourceId,
         AccountCommand, AccountNonce, AccountSpending, Block, DelegationId, Destination, GenBlock,
@@ -39,18 +50,15 @@ use common::{
     },
     primitives::{id::WithId, Amount, BlockHeight, CoinOrTokenId, Fee, Id, Idable, H256},
 };
-use futures::{stream::FuturesOrdered, TryStreamExt};
 use orders_accounting::OrderData;
 use pos_accounting::{PoSAccountingView, PoolData};
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    ops::{Add, Sub},
-    sync::Arc,
-};
+use serialization::DecodeAll;
 use tokens_accounting::TokensAccountingView;
 use tx_verifier::transaction_verifier::{
     calculate_tokens_burned_in_outputs, distribute_pos_reward,
 };
+
+use crate::sync::local_state::LocalBlockchainState;
 
 mod pos_adapter;
 
@@ -153,7 +161,7 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
             // Third, txs are flushed to the db AFTER the block.
             // This is done because transaction table has FOREIGN key `owning_block_id` referring block table.
 
-            for tx in block.transactions().iter() {
+            for (idx, tx) in block.transactions().iter().enumerate() {
                 let (tx_fee, tx_additional_info) = calculate_tx_fee_and_collect_token_info(
                     &self.chain_config,
                     &mut db_tx,
@@ -171,6 +179,7 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
                     (block_height, block_timestamp),
                     new_median_time,
                     tx,
+                    next_order_number + idx as u64,
                 )
                 .await
                 .expect("Unable to update tables from transaction");
@@ -192,11 +201,11 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
                 .await
                 .expect("Unable to set block");
 
-            for (i, tx_info) in transactions.iter().enumerate() {
+            for (idx, tx_info) in transactions.iter().enumerate() {
                 db_tx
                     .set_transaction(
                         tx_info.tx.transaction().get_id(),
-                        next_order_number + i as u64,
+                        next_order_number + idx as u64,
                         block_id,
                         tx_info,
                     )
@@ -299,7 +308,9 @@ async fn update_locked_amounts_for_current_block<T: ApiServerStorageWrite>(
             let address = Address::<Destination>::new(chain_config, destination.clone())
                 .expect("Unable to encode destination");
             let utxo = Utxo::new_with_info(locked_utxo, None);
-            db_tx.set_utxo_at_height(outpoint, utxo, address.as_str(), block_height).await?;
+            db_tx
+                .set_utxo_at_height(outpoint, utxo, &[address.as_str()], block_height)
+                .await?;
         }
     }
 
@@ -330,6 +341,8 @@ async fn disconnect_tables_above_height<T: ApiServerStorageWrite>(
     db_tx.del_address_locked_balance_above_height(block_height).await?;
 
     db_tx.del_address_transactions_above_height(block_height).await?;
+
+    db_tx.del_token_transactions_above_height(block_height).await?;
 
     db_tx.del_utxo_above_height(block_height).await?;
 
@@ -1002,13 +1015,14 @@ async fn update_tables_from_transaction<T: ApiServerStorageWrite>(
     (block_height, block_timestamp): (BlockHeight, BlockTimestamp),
     median_time: BlockTimestamp,
     transaction: &SignedTransaction,
+    tx_global_index: u64,
 ) -> Result<(), ApiServerStorageError> {
     update_tables_from_transaction_inputs(
         Arc::clone(&chain_config),
         db_tx,
         block_height,
-        transaction.transaction().inputs(),
-        transaction.transaction(),
+        transaction,
+        tx_global_index,
     )
     .await
     .expect("Unable to update tables from transaction inputs");
@@ -1018,9 +1032,8 @@ async fn update_tables_from_transaction<T: ApiServerStorageWrite>(
         db_tx,
         (block_height, block_timestamp),
         median_time,
-        transaction.transaction().get_id(),
-        transaction.transaction().inputs(),
-        transaction.transaction().outputs(),
+        transaction.transaction(),
+        tx_global_index,
     )
     .await
     .expect("Unable to update tables from transaction outputs");
@@ -1032,13 +1045,31 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
     chain_config: Arc<ChainConfig>,
     db_tx: &mut T,
     block_height: BlockHeight,
-    inputs: &[TxInput],
-    tx: &Transaction,
+    tx: &SignedTransaction,
+    tx_global_index: u64,
 ) -> Result<(), ApiServerStorageError> {
+    let sigs = tx.signatures();
+    let tx = tx.transaction();
     let mut address_transactions: BTreeMap<Address<Destination>, BTreeSet<Id<Transaction>>> =
         BTreeMap::new();
+    let mut transaction_tokens: BTreeSet<TokenId> = BTreeSet::new();
 
-    for input in inputs {
+    let update_tokens_for_order = |order: &Order, tokens_in_transaction: &mut BTreeSet<_>| {
+        match order.give_currency {
+            CoinOrTokenId::TokenId(token_id) => {
+                tokens_in_transaction.insert(token_id);
+            }
+            CoinOrTokenId::Coin => {}
+        }
+        match order.ask_currency {
+            CoinOrTokenId::TokenId(token_id) => {
+                tokens_in_transaction.insert(token_id);
+            }
+            CoinOrTokenId::Coin => {}
+        }
+    };
+
+    for (input, sig) in tx.inputs().iter().zip(sigs) {
         match input {
             TxInput::AccountCommand(nonce, cmd) => match cmd {
                 AccountCommand::MintTokens(token_id, amount) => {
@@ -1072,6 +1103,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                         block_height,
                     )
                     .await;
+                    transaction_tokens.insert(*token_id);
                 }
                 AccountCommand::UnmintTokens(token_id) => {
                     let total_burned =
@@ -1099,6 +1131,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                         block_height,
                     )
                     .await;
+                    transaction_tokens.insert(*token_id);
                 }
                 AccountCommand::FreezeToken(token_id, is_unfreezable) => {
                     let issuance =
@@ -1123,6 +1156,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                         block_height,
                     )
                     .await;
+                    transaction_tokens.insert(*token_id);
                 }
                 AccountCommand::UnfreezeToken(token_id) => {
                     let issuance =
@@ -1147,6 +1181,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                         block_height,
                     )
                     .await;
+                    transaction_tokens.insert(*token_id);
                 }
                 AccountCommand::LockTokenSupply(token_id) => {
                     let issuance =
@@ -1171,6 +1206,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                         block_height,
                     )
                     .await;
+                    transaction_tokens.insert(*token_id);
                 }
                 AccountCommand::ChangeTokenAuthority(token_id, destination) => {
                     let issuance =
@@ -1195,6 +1231,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                         block_height,
                     )
                     .await;
+                    transaction_tokens.insert(*token_id);
                 }
                 AccountCommand::ChangeTokenMetadataUri(token_id, metadata_uri) => {
                     let issuance =
@@ -1219,6 +1256,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                         block_height,
                     )
                     .await;
+                    transaction_tokens.insert(*token_id);
                 }
                 AccountCommand::FillOrder(order_id, fill_amount_in_ask_currency, _) => {
                     let order = db_tx.get_order(*order_id).await?.expect("must exist");
@@ -1226,12 +1264,16 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                         order.fill(&chain_config, block_height, *fill_amount_in_ask_currency);
 
                     db_tx.set_order_at_height(*order_id, &order, block_height).await?;
+
+                    update_tokens_for_order(&order, &mut transaction_tokens);
                 }
                 AccountCommand::ConcludeOrder(order_id) => {
                     let order = db_tx.get_order(*order_id).await?.expect("must exist");
                     let order = order.conclude();
 
                     db_tx.set_order_at_height(*order_id, &order, block_height).await?;
+
+                    update_tokens_for_order(&order, &mut transaction_tokens);
                 }
             },
             TxInput::OrderAccountCommand(cmd) => match cmd {
@@ -1241,18 +1283,21 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                         order.fill(&chain_config, block_height, *fill_amount_in_ask_currency);
 
                     db_tx.set_order_at_height(*order_id, &order, block_height).await?;
+                    update_tokens_for_order(&order, &mut transaction_tokens);
                 }
                 OrderAccountCommand::ConcludeOrder(order_id) => {
                     let order = db_tx.get_order(*order_id).await?.expect("must exist");
                     let order = order.conclude();
 
                     db_tx.set_order_at_height(*order_id, &order, block_height).await?;
+                    update_tokens_for_order(&order, &mut transaction_tokens);
                 }
                 OrderAccountCommand::FreezeOrder(order_id) => {
                     let order = db_tx.get_order(*order_id).await?.expect("must exist");
                     let order = order.freeze();
 
                     db_tx.set_order_at_height(*order_id, &order, block_height).await?;
+                    update_tokens_for_order(&order, &mut transaction_tokens);
                 }
             },
             TxInput::Account(outpoint) => {
@@ -1414,16 +1459,41 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                                 block_height,
                             )
                             .await;
+                            transaction_tokens.insert(token_id);
                         }
-                        TxOutput::Htlc(_, htlc) => {
-                            let address =
-                                Address::<Destination>::new(&chain_config, htlc.spend_key)
-                                    .expect("Unable to encode destination");
+                        TxOutput::Htlc(output_value, htlc) => {
+                            let address = if let InputWitness::Standard(sig) = sig {
+                                let htlc_sig = AuthorizedHashedTimelockContractSpend::decode_all(
+                                    &mut sig.raw_signature(),
+                                )
+                                .expect("proper signature");
+
+                                let dest = match htlc_sig {
+                                    AuthorizedHashedTimelockContractSpend::Spend(_, _) => {
+                                        htlc.spend_key
+                                    }
+                                    AuthorizedHashedTimelockContractSpend::Refund(_) => {
+                                        htlc.refund_key
+                                    }
+                                };
+                                Address::<Destination>::new(&chain_config, dest)
+                                    .expect("Unable to encode destination")
+                            } else {
+                                panic!("Empty signature for htlc")
+                            };
 
                             address_transactions
                                 .entry(address.clone())
                                 .or_default()
                                 .insert(tx.get_id());
+
+                            match output_value {
+                                OutputValue::TokenV0(_) => {}
+                                OutputValue::TokenV1(token_id, _) => {
+                                    transaction_tokens.insert(token_id);
+                                }
+                                OutputValue::Coin(_) => {}
+                            }
                         }
                         TxOutput::LockThenTransfer(output_value, destination, _)
                         | TxOutput::Transfer(output_value, destination) => {
@@ -1446,6 +1516,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                                         block_height,
                                     )
                                     .await;
+                                    transaction_tokens.insert(token_id);
                                 }
                                 OutputValue::Coin(amount) => {
                                     decrease_address_amount(
@@ -1465,17 +1536,24 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
         }
     }
 
-    for address_transaction in address_transactions {
+    for (address, transactions) in address_transactions {
         db_tx
-            .set_address_transactions_at_height(
-                address_transaction.0.as_str(),
-                address_transaction.1.into_iter().collect(),
-                block_height,
-            )
+            .set_address_transactions_at_height(address.as_str(), transactions, block_height)
             .await
             .map_err(|_| {
                 ApiServerStorageError::LowLevelStorageError(
                     "Unable to set address transactions".to_string(),
+                )
+            })?;
+    }
+    let tx_id = tx.get_id();
+    for token_id in transaction_tokens {
+        db_tx
+            .set_token_transaction_at_height(token_id, tx_id, block_height, tx_global_index)
+            .await
+            .map_err(|_| {
+                ApiServerStorageError::LowLevelStorageError(
+                    "Unable to set token transactions".to_string(),
                 )
             })?;
     }
@@ -1488,15 +1566,18 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
     db_tx: &mut T,
     (block_height, block_timestamp): (BlockHeight, BlockTimestamp),
     median_time: BlockTimestamp,
-    transaction_id: Id<Transaction>,
-    inputs: &[TxInput],
-    outputs: &[TxOutput],
+    transaction: &Transaction,
+    tx_global_index: u64,
 ) -> Result<(), ApiServerStorageError> {
+    let tx_id = transaction.get_id();
+    let inputs = transaction.inputs();
+    let outputs = transaction.outputs();
     let mut address_transactions: BTreeMap<Address<Destination>, BTreeSet<Id<Transaction>>> =
         BTreeMap::new();
+    let mut transaction_tokens: BTreeSet<TokenId> = BTreeSet::new();
 
     for (idx, output) in outputs.iter().enumerate() {
-        let outpoint = UtxoOutPoint::new(OutPointSourceId::Transaction(transaction_id), idx as u32);
+        let outpoint = UtxoOutPoint::new(OutPointSourceId::Transaction(tx_id), idx as u32);
         match output {
             TxOutput::Burn(value) => {
                 let (coin_or_token_id, amount) = match value {
@@ -1505,6 +1586,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                         continue;
                     }
                     OutputValue::TokenV1(token_id, amount) => {
+                        transaction_tokens.insert(*token_id);
                         (CoinOrTokenId::TokenId(*token_id), amount)
                     }
                 };
@@ -1578,11 +1660,13 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                     block_height,
                 )
                 .await;
+                transaction_tokens.insert(token_id);
             }
             TxOutput::IssueNft(token_id, issuance, destination) => {
                 let address = Address::<Destination>::new(&chain_config, destination.clone())
                     .expect("Unable to encode destination");
-                address_transactions.entry(address.clone()).or_default().insert(transaction_id);
+                address_transactions.entry(address.clone()).or_default().insert(tx_id);
+                transaction_tokens.insert(*token_id);
 
                 db_tx
                     .set_nft_token_issuance(*token_id, block_height, *issuance.clone(), destination)
@@ -1683,12 +1767,12 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                     stake_pool_data.decommission_key().clone(),
                 )
                 .expect("Unable to encode address");
-                address_transactions.entry(address.clone()).or_default().insert(transaction_id);
+                address_transactions.entry(address.clone()).or_default().insert(tx_id);
 
                 let staker_address =
                     Address::<Destination>::new(&chain_config, stake_pool_data.staker().clone())
                         .expect("Unable to encode address");
-                address_transactions.entry(staker_address).or_default().insert(transaction_id);
+                address_transactions.entry(staker_address).or_default().insert(tx_id);
             }
             TxOutput::DelegateStaking(amount, delegation_id) => {
                 // Update delegation pledge
@@ -1732,13 +1816,13 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                     new_delegation.spend_destination().clone(),
                 )
                 .expect("Unable to encode address");
-                address_transactions.entry(address.clone()).or_default().insert(transaction_id);
+                address_transactions.entry(address.clone()).or_default().insert(tx_id);
             }
             TxOutput::Transfer(output_value, destination) => {
                 let address = Address::<Destination>::new(&chain_config, destination.clone())
                     .expect("Unable to encode destination");
 
-                address_transactions.entry(address.clone()).or_default().insert(transaction_id);
+                address_transactions.entry(address.clone()).or_default().insert(tx_id);
 
                 let token_decimals = match output_value {
                     OutputValue::TokenV0(_) => None,
@@ -1751,6 +1835,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                             block_height,
                         )
                         .await;
+                        transaction_tokens.insert(*token_id);
                         Some(token_decimals(*token_id, &BTreeMap::new(), db_tx).await?.1)
                     }
                     OutputValue::Coin(amount) => {
@@ -1766,11 +1851,10 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                     }
                 };
 
-                let outpoint =
-                    UtxoOutPoint::new(OutPointSourceId::Transaction(transaction_id), idx as u32);
+                let outpoint = UtxoOutPoint::new(OutPointSourceId::Transaction(tx_id), idx as u32);
                 let utxo = Utxo::new(output.clone(), token_decimals, None);
                 db_tx
-                    .set_utxo_at_height(outpoint, utxo, address.as_str(), block_height)
+                    .set_utxo_at_height(outpoint, utxo, &[address.as_str()], block_height)
                     .await
                     .expect("Unable to set utxo");
             }
@@ -1778,9 +1862,8 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                 let address = Address::<Destination>::new(&chain_config, destination.clone())
                     .expect("Unable to encode destination");
 
-                address_transactions.entry(address.clone()).or_default().insert(transaction_id);
-                let outpoint =
-                    UtxoOutPoint::new(OutPointSourceId::Transaction(transaction_id), idx as u32);
+                address_transactions.entry(address.clone()).or_default().insert(tx_id);
+                let outpoint = UtxoOutPoint::new(OutPointSourceId::Transaction(tx_id), idx as u32);
 
                 let already_unlocked = tx_verifier::timelock_check::check_timelock(
                     &block_height,
@@ -1817,6 +1900,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                     }
                     OutputValue::TokenV0(_) => None,
                     OutputValue::TokenV1(token_id, amount) => {
+                        transaction_tokens.insert(*token_id);
                         if already_unlocked {
                             increase_address_amount(
                                 db_tx,
@@ -1843,44 +1927,64 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                 if already_unlocked {
                     let utxo = Utxo::new(output.clone(), token_decimals, None);
                     db_tx
-                        .set_utxo_at_height(outpoint, utxo, address.as_str(), block_height)
+                        .set_utxo_at_height(outpoint, utxo, &[address.as_str()], block_height)
                         .await
                         .expect("Unable to set utxo");
                 } else {
                     let lock = UtxoLock::from_output_lock(*lock, block_timestamp, block_height);
                     let utxo = LockedUtxo::new(output.clone(), token_decimals, lock);
                     db_tx
-                        .set_locked_utxo_at_height(outpoint, utxo, address.as_str(), block_height)
+                        .set_locked_utxo_at_height(
+                            outpoint,
+                            utxo,
+                            &[address.as_str()],
+                            block_height,
+                        )
                         .await
                         .expect("Unable to set locked utxo");
                 }
             }
             TxOutput::Htlc(output_value, htlc) => {
-                let address = Address::<Destination>::new(&chain_config, htlc.spend_key.clone())
-                    .expect("Unable to encode destination");
+                let spend_address =
+                    Address::<Destination>::new(&chain_config, htlc.spend_key.clone())
+                        .expect("Unable to encode destination");
 
-                address_transactions.entry(address.clone()).or_default().insert(transaction_id);
+                address_transactions.entry(spend_address.clone()).or_default().insert(tx_id);
+
+                let refund_address =
+                    Address::<Destination>::new(&chain_config, htlc.refund_key.clone())
+                        .expect("Unable to encode destination");
+
+                address_transactions.entry(refund_address.clone()).or_default().insert(tx_id);
 
                 let token_decimals = match output_value {
                     OutputValue::Coin(_) | OutputValue::TokenV0(_) => None,
                     OutputValue::TokenV1(token_id, _) => {
+                        transaction_tokens.insert(*token_id);
                         Some(token_decimals(*token_id, &BTreeMap::new(), db_tx).await?.1)
                     }
                 };
 
-                let outpoint =
-                    UtxoOutPoint::new(OutPointSourceId::Transaction(transaction_id), idx as u32);
+                let outpoint = UtxoOutPoint::new(OutPointSourceId::Transaction(tx_id), idx as u32);
                 let utxo = Utxo::new(output.clone(), token_decimals, None);
                 db_tx
-                    .set_utxo_at_height(outpoint, utxo, address.as_str(), block_height)
+                    .set_utxo_at_height(
+                        outpoint,
+                        utxo,
+                        &[spend_address.as_str(), refund_address.as_str()],
+                        block_height,
+                    )
                     .await
                     .expect("Unable to set utxo");
             }
             TxOutput::CreateOrder(order_data) => {
                 let order_id = make_order_id(inputs)?;
-                let amount_and_currency = |v: &OutputValue| match v {
+                let mut amount_and_currency = |v: &OutputValue| match v {
                     OutputValue::Coin(amount) => (CoinOrTokenId::Coin, *amount),
-                    OutputValue::TokenV1(id, amount) => (CoinOrTokenId::TokenId(*id), *amount),
+                    OutputValue::TokenV1(id, amount) => {
+                        transaction_tokens.insert(*id);
+                        (CoinOrTokenId::TokenId(*id), *amount)
+                    }
                     OutputValue::TokenV0(_) => panic!("unsupported token"),
                 };
 
@@ -1908,17 +2012,24 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
         }
     }
 
-    for address_transaction in address_transactions {
+    for (address, transactions) in address_transactions {
         db_tx
-            .set_address_transactions_at_height(
-                address_transaction.0.as_str(),
-                address_transaction.1,
-                block_height,
-            )
+            .set_address_transactions_at_height(address.as_str(), transactions, block_height)
             .await
             .map_err(|_| {
                 ApiServerStorageError::LowLevelStorageError(
                     "Unable to set address transactions".to_string(),
+                )
+            })?;
+    }
+
+    for token_id in transaction_tokens {
+        db_tx
+            .set_token_transaction_at_height(token_id, tx_id, block_height, tx_global_index)
+            .await
+            .map_err(|_| {
+                ApiServerStorageError::LowLevelStorageError(
+                    "Unable to set token transactions".to_string(),
                 )
             })?;
     }
@@ -2080,7 +2191,7 @@ async fn set_utxo<T: ApiServerStorageWrite>(
         let address = Address::<Destination>::new(chain_config, destination.clone())
             .expect("Unable to encode destination");
         db_tx
-            .set_utxo_at_height(outpoint, utxo, address.as_str(), block_height)
+            .set_utxo_at_height(outpoint, utxo, &[address.as_str()], block_height)
             .await
             .expect("Unable to set utxo");
     }
