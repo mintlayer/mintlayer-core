@@ -14,40 +14,40 @@ consensus = { path = "../../consensus" }
 crypto = { path = "../../crypto" }
 logging = { path = "../../logging" }
 mempool = { path = "../../mempool" }
-p2p-types = { path = "../../p2p/types" }
 node-comm = { path = "../wallet-node-client" }
-rpc = { path = "../../rpc" }
+p2p-types = { path = "../../p2p/types" }
 randomness = { path = "../../randomness" }
+rpc = { path = "../../rpc" }
 serialization = { path = "../../serialization" }
 utils = { path = "../../utils" }
 utils-networking = { path = "../../utils/networking" }
 wallet = { path = ".." }
 wallet-controller = { path = "../wallet-controller" }
-wallet-storage = { path = "../storage" }
-wallet-types = { path = "../types" }
 wallet-rpc-lib = { path = "../wallet-rpc-lib" }
 wallet-rpc-client = { path = "../wallet-rpc-client" }
+wallet-storage = { path = "../storage" }
+wallet-types = { path = "../types" }
 
-clap = { workspace = true, features = ["derive"] }
 async-trait.workspace = true
+bigdecimal.workspace = true
+clap = { workspace = true, features = ["derive"] }
 crossterm.workspace = true
 derive_more.workspace = true
 directories.workspace = true
 dyn-clone.workspace = true
+futures.workspace = true
 humantime.workspace = true
 hex.workspace = true
 itertools.workspace = true
 lazy_static.workspace = true
-regex.workspace = true
+prettytable-rs = "0.10"
 reedline = { workspace = true, features = ["external_printer"] }
+regex.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 shlex.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "sync"] }
-futures.workspace = true
-
-prettytable-rs = "0.10"
 
 [dev-dependencies]
 blockprod = { path = "../../blockprod" }
@@ -60,6 +60,7 @@ subsystem = { path = "../../subsystem" }
 test-utils = { path = "../../test-utils" }
 wallet-test-node = { path = "../wallet-test-node" }
 
+ctor.workspace = true
 jsonrpsee.workspace = true
 rstest.workspace = true
 

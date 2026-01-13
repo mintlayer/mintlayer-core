@@ -169,6 +169,10 @@ impl OrdersAccountingView for OrderAccountingAdapterToCheckFees<'_> {
     fn get_give_balance(&self, id: &OrderId) -> Result<Amount, Self::Error> {
         Ok(self.chainstate.get_order_give_balance(id).unwrap().unwrap_or(Amount::ZERO))
     }
+
+    fn get_all_order_ids(&self) -> Result<BTreeSet<OrderId>, Self::Error> {
+        Ok(self.chainstate.get_all_order_ids().unwrap())
+    }
 }
 
 #[rstest]
@@ -996,7 +1000,7 @@ async fn check_orders(
         let tx = local_state.storage().transaction_ro().await.unwrap();
         let scanner_data = tx.get_order(order_id).await.unwrap().unwrap();
 
-        if let Some(node_data) = tf.chainstate.get_order_info_for_rpc(order_id).unwrap() {
+        if let Some(node_data) = tf.chainstate.get_order_info_for_rpc(&order_id).unwrap() {
             assert_eq!(scanner_data.conclude_destination, node_data.conclude_key);
             assert_eq!(
                 scanner_data.next_nonce,

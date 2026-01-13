@@ -26,8 +26,8 @@ use common::{
         block::{signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp, BlockReward},
         config::ChainConfig,
         tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
-        AccountNonce, AccountType, Block, DelegationId, GenBlock, OrderId, PoolId, RpcOrderInfo,
-        Transaction, TxInput, UtxoOutPoint,
+        AccountNonce, AccountType, Block, Currency, DelegationId, GenBlock, OrderId, PoolId,
+        RpcOrderInfo, Transaction, TxInput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -432,9 +432,21 @@ where
 
     fn get_order_info_for_rpc(
         &self,
-        order_id: OrderId,
+        order_id: &OrderId,
     ) -> Result<Option<RpcOrderInfo>, ChainstateError> {
         self.deref().get_order_info_for_rpc(order_id)
+    }
+
+    fn get_all_order_ids(&self) -> Result<BTreeSet<OrderId>, ChainstateError> {
+        self.deref().get_all_order_ids()
+    }
+
+    fn get_orders_info_for_rpc_by_currencies(
+        &self,
+        ask_currency: Option<&Currency>,
+        give_currency: Option<&Currency>,
+    ) -> Result<BTreeMap<OrderId, RpcOrderInfo>, ChainstateError> {
+        self.deref().get_orders_info_for_rpc_by_currencies(ask_currency, give_currency)
     }
 }
 

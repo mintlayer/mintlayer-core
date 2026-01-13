@@ -31,8 +31,8 @@ use common::{
             GenBlock,
         },
         tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
-        AccountNonce, AccountType, ChainConfig, DelegationId, OrderId, PoolId, RpcOrderInfo,
-        Transaction, TxInput, UtxoOutPoint,
+        AccountNonce, AccountType, ChainConfig, Currency, DelegationId, OrderId, PoolId,
+        RpcOrderInfo, Transaction, TxInput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -240,8 +240,16 @@ pub trait ChainstateInterface: Send + Sync {
     fn get_order_give_balance(&self, id: &OrderId) -> Result<Option<Amount>, ChainstateError>;
     fn get_order_info_for_rpc(
         &self,
-        order_id: OrderId,
+        order_id: &OrderId,
     ) -> Result<Option<RpcOrderInfo>, ChainstateError>;
+    fn get_all_order_ids(&self) -> Result<BTreeSet<OrderId>, ChainstateError>;
+    /// Return infos for all orders that match the given currencies. Passing None for a currency
+    /// means "any currency".
+    fn get_orders_info_for_rpc_by_currencies(
+        &self,
+        ask_currency: Option<&Currency>,
+        give_currency: Option<&Currency>,
+    ) -> Result<BTreeMap<OrderId, RpcOrderInfo>, ChainstateError>;
 
     /// Returns the coin amounts of the outpoints spent by a transaction.
     /// If a utxo for an input was not found or contains tokens the result is `None`.

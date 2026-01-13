@@ -155,7 +155,7 @@ class WalletHtlcRefund(BitcoinTestFramework):
             balance = await wallet.get_balance()
             print(balance)
             assert_in("Coins amount: 0", balance)
-            assert_in(f"Token: {token_id} amount: {amount_to_mint}", balance)
+            assert_in(f"Token: {token_id} ({token_ticker}), amount: {amount_to_mint}", balance)
 
             ########################################################################################
             # Setup Alice's htlc
@@ -317,7 +317,7 @@ class WalletHtlcRefund(BitcoinTestFramework):
             assert_in("Success", await wallet.sync())
             balance = await wallet.get_balance()
             assert_in("Coins amount: 0", balance)
-            assert_in(f"Token: {token_id} amount: {alice_amount_to_swap}", balance)
+            assert_in(f"Token: {token_id} ({token_ticker}), amount: {alice_amount_to_swap}", balance)
 
             await self.switch_to_wallet(wallet, 'bob_wallet')
             assert_in("Success", await wallet.sync())

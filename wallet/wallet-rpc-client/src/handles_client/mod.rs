@@ -21,8 +21,9 @@ use common::{
     chain::{
         block::timestamp::BlockTimestamp,
         output_values_holder::collect_token_v1_ids_from_output_values_holders,
-        tokens::IsTokenUnfreezable, Block, GenBlock, SignedTransaction, SignedTransactionIntent,
-        Transaction, TxOutput, UtxoOutPoint,
+        tokens::{IsTokenUnfreezable, RPCTokenInfo},
+        Block, GenBlock, RpcCurrency, SignedTransaction, SignedTransactionIntent, Transaction,
+        TxOutput, UtxoOutPoint,
     },
     primitives::{BlockHeight, DecimalAmount, Id, Idable, H256},
 };
@@ -42,11 +43,11 @@ use wallet_controller::{
 };
 use wallet_rpc_lib::{
     types::{
-        AccountExtendedPublicKey, AddressInfo, AddressWithUsageInfo, Balances, BlockInfo,
-        ComposedTransaction, CreatedWallet, DelegationInfo, HardwareWalletType,
+        AccountExtendedPublicKey, ActiveOrderInfo, AddressInfo, AddressWithUsageInfo, Balances,
+        BlockInfo, ComposedTransaction, CreatedWallet, DelegationInfo, HardwareWalletType,
         LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegationTransaction, NewOrderTransaction,
         NewSubmittedTransaction, NewTokenTransaction, NftMetadata, NodeVersion, OpenedWallet,
-        PoolInfo, PublicKeyInfo, RpcHashedTimelockContract, RpcInspectTransaction,
+        OwnOrderInfo, PoolInfo, PublicKeyInfo, RpcHashedTimelockContract, RpcInspectTransaction,
         RpcNewTransaction, RpcPreparedTransaction, RpcStandaloneAddresses,
         SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
         StandaloneAddressWithDetails, TokenMetadata, TxOptionsOverrides, UtxoInfo,
@@ -1209,6 +1210,25 @@ where
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
 
+    async fn list_own_orders(&self, account_index: U31) -> Result<Vec<OwnOrderInfo>, Self::Error> {
+        self.wallet_rpc
+            .list_own_orders(account_index)
+            .await
+            .map_err(WalletRpcHandlesClientError::WalletRpcError)
+    }
+
+    async fn list_all_active_orders(
+        &self,
+        account_index: U31,
+        ask_curency: Option<RpcCurrency>,
+        give_curency: Option<RpcCurrency>,
+    ) -> Result<Vec<ActiveOrderInfo>, Self::Error> {
+        self.wallet_rpc
+            .list_all_active_orders(account_index, ask_curency, give_curency)
+            .await
+            .map_err(WalletRpcHandlesClientError::WalletRpcError)
+    }
+
     async fn node_version(&self) -> Result<NodeVersion, Self::Error> {
         self.wallet_rpc
             .node_version()
@@ -1529,6 +1549,16 @@ where
     ) -> Result<Vec<(BlockHeight, Id<GenBlock>)>, Self::Error> {
         self.wallet_rpc
             .node_get_block_ids_as_checkpoints(start_height, end_height, step)
+            .await
+            .map_err(WalletRpcHandlesClientError::WalletRpcError)
+    }
+
+    async fn node_get_tokens_info(
+        &self,
+        token_ids: Vec<String>,
+    ) -> Result<Vec<RPCTokenInfo>, Self::Error> {
+        self.wallet_rpc
+            .node_get_tokens_info(token_ids.into_iter().map(Into::into))
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }

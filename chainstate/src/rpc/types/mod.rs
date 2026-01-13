@@ -22,15 +22,17 @@ pub mod input;
 pub mod output;
 pub mod signed_transaction;
 pub mod token;
-pub mod token_decimals_provider;
 
-use common::{address::AddressError, chain::tokens::TokenId};
+use common::{address::AddressError, TokenDecimalsUnavailableError};
 
 #[derive(thiserror::Error, Debug)]
 pub enum RpcTypeError {
     #[error("Address error: {0}")]
     Address(#[from] AddressError),
 
-    #[error("Token decimals unavailable for token {0:x}")]
-    TokenDecimalsUnavailable(TokenId),
+    #[error("Token V0 encountered")]
+    TokenV0Encountered,
+
+    #[error(transparent)]
+    TokenDecimalsUnavailableError(#[from] TokenDecimalsUnavailableError),
 }

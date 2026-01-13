@@ -360,7 +360,8 @@ class WalletRpcController(WalletCliControllerBase):
             return None, None, result['error']
 
     async def mint_tokens(self, token_id: str, address: str, amount: int) -> NewTxResult:
-        return self._write_command("token_mint", [self.account, token_id, address, {'decimal': str(amount)}, {'in_top_x_mb': 5}])['result']
+        result = self._write_command("token_mint", [self.account, token_id, address, {'decimal': str(amount)}, {'in_top_x_mb': 5}])
+        return result['result']
 
     # Note: unlike mint_tokens, this function behaves identically both for wallet_cli_controller and wallet_rpc_controller.
     async def mint_tokens_or_fail(self, token_id: str, address: str, amount: int):
@@ -504,10 +505,14 @@ class WalletRpcController(WalletCliControllerBase):
         if 'tokens' in result:
             for (hexified_token_id, balance) in result['tokens'].items():
                 token_id_as_addr = self.node.test_functions_dehexify_all_addresses(hexified_token_id)
-                tokens[token_id_as_addr] = balance['decimal']
+                token_info = self.node.chainstate_token_info(token_id_as_addr)
+                ticker = token_info["content"]["token_ticker"]["text"]
+
+                tokens[token_id_as_addr] = (ticker, balance['decimal'])
 
         # Mimic the output of wallet_cli_controller's 'get_balance'
-        return "\n".join([f"Coins amount: {coins}"] + [f"Token: {token} amount: {amount}" for token, amount in tokens.items()])
+        return "\n".join([f"Coins amount: {coins}"] + [f"Token: {token} ({ticker}), amount: {amount}"
+                                                       for token, (ticker, amount) in tokens.items()])
 
     async def new_vrf_public_key(self) -> str:
         result = self._write_command("staking_new_vrf_public_key", [self.account])
@@ -618,11 +623,13 @@ class WalletRpcController(WalletCliControllerBase):
 
         return (result['transaction'], siginfo_to_return)
 
-    async def compose_transaction(self,
-                                  outputs: List[TransferTxOutput],
-                                  selected_utxos: List[UtxoOutpoint],
-                                  htlc_secrets: Optional[List[Optional[str]]] = None,
-                                  only_transaction: bool = False) -> str:
+    async def compose_transaction(
+        self,
+        outputs: List[TransferTxOutput],
+        selected_utxos: List[UtxoOutpoint],
+        htlc_secrets: Optional[List[Optional[str]]] = None,
+        only_transaction: bool = False
+    ) -> str:
         utxos = [to_json(utxo) for utxo in selected_utxos]
         outputs = [to_json(output) for output in outputs]
         print(f"outputs = {outputs}")
@@ -631,24 +638,27 @@ class WalletRpcController(WalletCliControllerBase):
         return result
 
     async def create_htlc_transaction(self,
-                         amount: int,
-                         token_id: Optional[str],
-                         secret_hash: str,
-                         spend_address: str,
-                         refund_address: str,
-                         refund_lock_for_blocks: int) -> NewTxResult:
+        amount: int,
+        token_id: Optional[str],
+        secret_hash: str,
+        spend_address: str,
+        refund_address: str,
+        refund_lock_for_blocks: int
+    ) -> NewTxResult:
         timelock = { "type": "ForBlockCount", "content": refund_lock_for_blocks }
         htlc = { "secret_hash": secret_hash, "spend_address": spend_address, "refund_address": refund_address, "refund_timelock": timelock }
-        object = [self.account, {'decimal': str(amount)}, token_id, htlc, {'in_top_x_mb': 5}]
-        result = self._write_command("create_htlc_transaction", object)
+        params = [self.account, {'decimal': str(amount)}, token_id, htlc, {'in_top_x_mb': 5}]
+        result = self._write_command("create_htlc_transaction", params)
         return result['result']
 
-    async def create_order(self,
-                         ask_token_id: Optional[str],
-                         ask_amount: int,
-                         give_token_id: Optional[str],
-                         give_amount: int,
-                         conclude_address: str) -> str:
+    async def create_order(
+        self,
+        ask_token_id: Optional[str],
+        ask_amount: int | float | Decimal | str,
+        give_token_id: Optional[str],
+        give_amount: int | float | Decimal | str,
+        conclude_address: str
+    ) -> str:
         if ask_token_id is not None:
             ask = {"type": "Token", "content": {"id": ask_token_id, "amount": {'decimal': str(ask_amount)}}}
         else:
@@ -659,26 +669,67 @@ class WalletRpcController(WalletCliControllerBase):
         else:
             give = {"type": "Coin", "content": {"amount": {'decimal': str(give_amount)}}}
 
-        object = [self.account, ask, give, conclude_address, {'in_top_x_mb': 5}]
-        result = self._write_command("create_order", object)
-        return result
+        params = [self.account, ask, give, conclude_address, {'in_top_x_mb': 5}]
 
-    async def fill_order(self,
-                         order_id: str,
-                         fill_amount: int,
-                         output_address: Optional[str] = None) -> str:
-        object = [self.account, order_id, {'decimal': str(fill_amount)}, output_address, {'in_top_x_mb': 5}]
-        result = self._write_command("fill_order", object)
-        return result
+        result = self._write_command("order_create", params)
+        assert result['result']['tx_id'] is not None
+        order_id = result['result']['order_id']
+
+        return order_id
+
+    async def fill_order(
+        self,
+        order_id: str,
+        fill_amount: int | float | Decimal | str,
+        output_address: Optional[str] = None
+    ) -> str:
+        params = [self.account, order_id, {'decimal': str(fill_amount)}, output_address, {'in_top_x_mb': 5}]
+        result = self._write_command("order_fill", params)
+        return get_tx_submission_success_or_error(result)
 
     async def freeze_order(self, order_id: str) -> str:
-        object = [self.account, order_id, {'in_top_x_mb': 5}]
-        result = self._write_command("freeze_order", object)
-        return result
+        params = [self.account, order_id, {'in_top_x_mb': 5}]
+        result = self._write_command("order_freeze", params)
+        return get_tx_submission_success_or_error(result)
 
-    async def conclude_order(self,
-                         order_id: str,
-                         output_address: Optional[str] = None) -> str:
-        object = [self.account, order_id, output_address, {'in_top_x_mb': 5}]
-        result = self._write_command("conclude_order", object)
-        return result
+    async def conclude_order(
+        self,
+        order_id: str,
+        output_address: Optional[str] = None
+    ) -> str:
+        params = [self.account, order_id, output_address, {'in_top_x_mb': 5}]
+        result = self._write_command("order_conclude", params)
+        return get_tx_submission_success_or_error(result)
+
+    # Note: the result of this function is incompatible with CLI controller's list_own_orders.
+    async def list_own_orders(self) -> List[dict]:
+        params = [self.account, {'in_top_x_mb': 5}]
+        result = self._write_command("order_list_own", params)
+        return result['result']
+
+    # Note: the result of this function is incompatible with CLI controller's list_all_active_orders.
+    async def list_all_active_orders(self, ask_currency: str | None, give_currency: str | None):
+        def make_currency(currency):
+            if currency is None:
+                return None
+            elif currency == "coin":
+                return { "type": "Coin" }
+            else:
+                return { "type": "Token", "content": currency }
+
+        params = [self.account, make_currency(ask_currency), make_currency(give_currency), {'in_top_x_mb': 5}]
+
+        result = self._write_command("order_list_all_active", params)
+        return result['result']
+
+
+def get_tx_submission_success_or_error(submission_result: dict) -> str:
+    success_res = submission_result.get('result')
+    error_res = submission_result.get('error')
+    assert success_res is not None or error_res is not None
+
+    if success_res is not None:
+        assert success_res['tx_id'] is not None
+        return "The transaction was submitted successfully"
+    elif error_res is not None:
+        return error_res['message']

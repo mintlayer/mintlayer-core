@@ -44,6 +44,8 @@ fi
 #   error type instead of `Infallible` can be seen as redundant).
 # * "manual_is_multiple_of" - starting from v1.90 clippy insists that `x % 2 == 0` should be
 #   replaced with `x.is_multiple_of(2)`, which is a questionable improvement.
+# * "let_and_return" is disabled because having `let` before returning can be useful at least
+#   as a potential place for a breakpoint.
 EXTRA_ARGS=()
 if [[ $CLIPPY_VERSION -ge 1089 ]]; then
     EXTRA_ARGS+=(-A clippy::infallible_try_from)
@@ -56,6 +58,7 @@ cargo clippy --all-features --workspace --all-targets -- \
     -A clippy::unnecessary_literal_unwrap \
     -A clippy::new_without_default \
     -A clippy::uninlined_format_args \
+    -A clippy::let-and-return \
     -D clippy::implicit_saturating_sub \
     -D clippy::implicit_clone \
     -D clippy::map_unwrap_or \

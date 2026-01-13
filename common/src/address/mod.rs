@@ -61,12 +61,7 @@ impl<T: Addressable> Address<T> {
         address: impl Into<String>,
     ) -> Result<Self, AddressError> {
         let address = address.into();
-        let data = bech32_encoding::bech32m_decode(&address)?;
-        let object = T::decode_from_bytes_from_address(data.data())
-            .map_err(|e| AddressError::DecodingError(e.to_string()))?;
-
-        let hrp_ok = data.hrp() == object.address_prefix(cfg);
-        ensure!(hrp_ok, AddressError::InvalidPrefix(data.hrp().to_owned()));
+        let object = decode_address(cfg, &address)?;
 
         Ok(Self { address, object })
     }
@@ -111,6 +106,17 @@ impl<T> Display for Address<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.address.fmt(f)
     }
+}
+
+pub fn decode_address<T: Addressable>(cfg: &ChainConfig, address: &str) -> Result<T, AddressError> {
+    let data = bech32_encoding::bech32m_decode(address)?;
+    let object = T::decode_from_bytes_from_address(data.data())
+        .map_err(|e| AddressError::DecodingError(e.to_string()))?;
+
+    let hrp_ok = data.hrp() == object.address_prefix(cfg);
+    ensure!(hrp_ok, AddressError::InvalidPrefix(data.hrp().to_owned()));
+
+    Ok(object)
 }
 
 #[cfg(test)]

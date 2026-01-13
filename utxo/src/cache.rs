@@ -521,13 +521,17 @@ fn should_include_in_utxo_set(output: &TxOutput) -> bool {
 
 #[cfg(test)]
 mod unit_test {
-    use super::*;
-    use crate::tests::test_helper::{
-        empty_test_utxos_view, insert_single_entry, Presence, UnwrapInfallible,
-    };
-    use common::primitives::H256;
     use rstest::rstest;
-    use test_utils::random::{make_seedable_rng, Seed};
+
+    use common::primitives::H256;
+    use test_utils::{
+        random::{make_seedable_rng, Seed},
+        UnwrapInfallible as _,
+    };
+
+    use super::*;
+
+    use crate::tests::test_helper::{empty_test_utxos_view, insert_single_entry, Presence};
 
     #[rstest]
     #[trace]

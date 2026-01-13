@@ -89,7 +89,10 @@ class WalletNfts(BitcoinTestFramework):
 
             # Submit a valid transaction
             output = {
-                    'Transfer': [ { 'Coin': 1000 * ATOMS_PER_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': pub_key_bytes}}} } ],
+                'Transfer': [
+                    { 'Coin': 1000 * ATOMS_PER_COIN },
+                    { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': pub_key_bytes}}} }
+                ],
             }
             encoded_tx, tx_id = make_tx([reward_input(tip_id)], [output], 0)
 
@@ -128,13 +131,14 @@ class WalletNfts(BitcoinTestFramework):
             # invalid name
             # > max len
             invalid_name = ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(random.randint(11, 20)))
-            nft_id, err = await wallet.issue_new_nft(address, "123456", invalid_name, "SomeNFT", "XXX")
+            nft_ticker = "XXX"
+            nft_id, err = await wallet.issue_new_nft(address, "123456", invalid_name, "SomeNFT", nft_ticker)
             assert nft_id is None
             assert err is not None
             assert_in("Invalid name length", err)
             # non alphanumeric
             invalid_name = "asd" + random.choice(r"#$%&'()*+,-./:;<=>?@[]^_`{|}~")
-            nft_id, err = await wallet.issue_new_nft(address, "123456", invalid_name, "SomeNFT", "XXX")
+            nft_id, err = await wallet.issue_new_nft(address, "123456", invalid_name, "SomeNFT", nft_ticker)
             assert nft_id is None
             assert err is not None
             assert_in("Invalid character in token name", err)
@@ -142,13 +146,13 @@ class WalletNfts(BitcoinTestFramework):
             # invalid description
             # > max len
             invalid_desc = ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(random.randint(101, 200)))
-            nft_id, err = await wallet.issue_new_nft(address, "123456", "Name", invalid_desc, "XXX")
+            nft_id, err = await wallet.issue_new_nft(address, "123456", "Name", invalid_desc, nft_ticker)
             assert nft_id is None
             assert err is not None
             assert_in("Invalid description length", err)
 
             # issue a valid NFT
-            nft_id, err = await wallet.issue_new_nft(address, "123456", "Name", "SomeNFT", "XXX")
+            nft_id, err = await wallet.issue_new_nft(address, "123456", "Name", "SomeNFT", nft_ticker)
             assert err is None
             assert nft_id is not None
             self.log.info(f"new nft id: '{nft_id}'")
@@ -157,9 +161,8 @@ class WalletNfts(BitcoinTestFramework):
             assert_in("Success", await wallet.sync())
             assert_in(f"Coins amount: 994", await wallet.get_balance())
 
-
             self.log.info(await wallet.get_balance())
-            assert_in(f"{nft_id} amount: 1", await wallet.get_balance())
+            assert_in(f"{nft_id} ({nft_ticker}), amount: 1", await wallet.get_balance())
 
             # create a new account and send some tokens to it
             await wallet.create_new_account()
@@ -167,7 +170,7 @@ class WalletNfts(BitcoinTestFramework):
             address = await wallet.new_address()
 
             await wallet.select_account(0)
-            assert_in(f"{nft_id} amount: 1", await wallet.get_balance())
+            assert_in(f"{nft_id} ({nft_ticker}), amount: 1", await wallet.get_balance())
             output = await wallet.send_tokens_to_address(nft_id, address, 1)
             self.log.info(output)
             assert_in("The transaction was submitted successfully", output)

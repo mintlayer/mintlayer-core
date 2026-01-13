@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use ::tx_verifier::transaction_verifier::storage::{
     TransactionVerifierStorageError, TransactionVerifierStorageRef,
@@ -267,5 +267,9 @@ impl OrdersAccountingStorageRead for InMemoryStorageWrapper {
 
     fn get_give_balance(&self, id: &OrderId) -> Result<Option<Amount>, Self::Error> {
         self.storage.transaction_ro().unwrap().get_give_balance(id)
+    }
+
+    fn get_all_order_ids(&self) -> Result<BTreeSet<OrderId>, Self::Error> {
+        self.storage.transaction_ro().unwrap().get_all_order_ids()
     }
 }

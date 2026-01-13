@@ -593,3 +593,74 @@ class WalletCliController(WalletCliControllerBase):
         assert match is not None
 
         return (match.group(1), match.group(2), match.group(3))
+
+    async def create_order(
+        self,
+        ask_token_id: Optional[str],
+        ask_amount: int | float | Decimal | str,
+        give_token_id: Optional[str],
+        give_amount: int | float | Decimal | str,
+        conclude_address: str
+    ) -> str:
+        if ask_token_id is None:
+            ask_token_id = "coin"
+        if give_token_id is None:
+            give_token_id = "coin"
+
+        output = await self._write_command(
+            f"order-create {ask_token_id} {ask_amount} {give_token_id} {give_amount} {conclude_address}\n")
+
+        match = re.search("New order id: (.*)\n", output)
+        assert match is not None
+        return match.group(1)
+
+    async def fill_order(
+        self,
+        order_id: str,
+        fill_amount: int | float | Decimal | str,
+        output_address: Optional[str] = None
+    ) -> str:
+        if output_address is None:
+            output_address = ""
+
+        output = await self._write_command(f"order-fill {order_id} {fill_amount} {output_address}\n")
+        return output
+
+    async def freeze_order(self, order_id: str) -> str:
+        output = await self._write_command(f"order-freeze {order_id}\n")
+        return output
+
+    async def conclude_order(
+        self,
+        order_id: str,
+        output_address: Optional[str] = None
+    ) -> str:
+        if output_address is None:
+            output_address = ""
+
+        output = await self._write_command(f"order-conclude {order_id} {output_address}\n")
+        return output
+
+    # Note: the result of this function is incompatible with RPC controller's list_own_orders.
+    async def list_own_orders(self) -> List[str]:
+        output = await self._write_command(f"order-list-own\n")
+        return output.strip().split("\n")
+
+    # Note: the result of this function is incompatible with RPC controller's list_all_active_orders.
+    async def list_all_active_orders(self, ask_currency_filter: str | None, give_currency_filter: str | None):
+        if ask_currency_filter is None:
+            ask_currency_filter = ""
+        else:
+            ask_currency_filter = f"--ask-currency {ask_currency_filter}"
+
+        if give_currency_filter is None:
+            give_currency_filter = ""
+        else:
+            give_currency_filter = f"--give-currency {give_currency_filter}"
+
+        output = await self._write_command(f"order-list-all-active {ask_currency_filter} {give_currency_filter}\n")
+
+        result = output.split("\n")
+        assert_in("The list of active orders goes below", result[0])
+        assert_in("WARNING: token tickers are not unique", result[1])
+        return result[2:]

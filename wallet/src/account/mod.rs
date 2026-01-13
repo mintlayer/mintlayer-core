@@ -63,8 +63,8 @@ use common::chain::tokens::{
     IsTokenUnfreezable, NftIssuance, NftIssuanceV0, RPCFungibleTokenInfo, TokenId, TokenIssuance,
 };
 use common::chain::{
-    make_token_id, AccountNonce, Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId,
-    SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
+    make_token_id, AccountNonce, Block, ChainConfig, Currency, DelegationId, Destination, GenBlock,
+    PoolId, SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
 };
 use common::primitives::{Amount, BlockHeight, Id};
 use consensus::PoSGenerateBlockInputData;
@@ -84,13 +84,13 @@ use wallet_storage::{
 use wallet_types::utxo_types::{get_utxo_type, UtxoState, UtxoStates, UtxoType, UtxoTypes};
 use wallet_types::wallet_tx::{BlockData, TxData, TxState};
 use wallet_types::{
-    AccountId, AccountInfo, AccountWalletCreatedTxId, AccountWalletTxId, BlockInfo, Currency,
-    KeyPurpose, KeychainUsageState, WalletTx,
+    AccountId, AccountInfo, AccountWalletCreatedTxId, AccountWalletTxId, BlockInfo, KeyPurpose,
+    KeychainUsageState, WalletTx,
 };
 
 pub use self::output_cache::{
-    DelegationData, OrderData, OwnFungibleTokenInfo, PoolData, TxInfo, UnconfirmedTokenInfo,
-    UtxoWithTxOutput,
+    DelegationData, OrderData, OutputCacheInconsistencyError, OwnFungibleTokenInfo, PoolData,
+    TxInfo, UnconfirmedTokenInfo, UtxoWithTxOutput,
 };
 use self::output_cache::{OutputCache, TokenIssuanceData};
 use self::transaction_list::{get_transaction_list, TransactionList};
@@ -884,25 +884,24 @@ impl<K: AccountKeyChains> Account<K> {
         Ok(req)
     }
 
-    pub fn get_pool_ids(&self, filter: WalletPoolsFilter) -> Vec<(PoolId, PoolData)> {
-        self.output_cache
-            .pool_ids()
-            .into_iter()
-            .filter(|(_, pool_data)| match filter {
-                WalletPoolsFilter::All => true,
-                WalletPoolsFilter::Decommission => {
-                    self.key_chain.has_private_key_for_destination(&pool_data.decommission_key)
-                }
-                WalletPoolsFilter::Stake => {
-                    self.key_chain.has_private_key_for_destination(&pool_data.stake_destination)
-                }
-            })
-            .collect()
+    pub fn get_pools(
+        &self,
+        filter: WalletPoolsFilter,
+    ) -> impl Iterator<Item = (&PoolId, &PoolData)> {
+        self.output_cache.pools_iter().filter(move |(_, pool_data)| match filter {
+            WalletPoolsFilter::All => true,
+            WalletPoolsFilter::Decommission => {
+                self.key_chain.has_private_key_for_destination(&pool_data.decommission_key)
+            }
+            WalletPoolsFilter::Stake => {
+                self.key_chain.has_private_key_for_destination(&pool_data.stake_destination)
+            }
+        })
     }
 
     pub fn get_delegations(&self) -> impl Iterator<Item = (&DelegationId, &DelegationData)> {
         self.output_cache
-            .delegation_ids()
+            .delegations_iter()
             .filter(|(_, data)| self.is_destination_mine(&data.destination))
     }
 
@@ -922,7 +921,7 @@ impl<K: AccountKeyChains> Account<K> {
 
     pub fn get_orders(&self) -> impl Iterator<Item = (&OrderId, &OrderData)> {
         self.output_cache
-            .orders()
+            .orders_iter()
             .filter(|(_, data)| self.is_destination_mine(&data.conclude_key))
     }
 

@@ -21,13 +21,13 @@ use common::{
         TxOutput,
     },
     primitives::amount::{RpcAmountIn, RpcAmountOut},
+    TokenDecimalsProvider,
 };
 use crypto::vrf::VRFPublicKey;
 use rpc::types::RpcHexString;
 
 use super::{
     token::{RpcNftIssuance, RpcTokenIssuance},
-    token_decimals_provider::TokenDecimalsProvider,
     RpcTypeError,
 };
 
@@ -65,19 +65,30 @@ impl RpcOutputValueOut {
             OutputValue::Coin(amount) => RpcOutputValueOut::Coin {
                 amount: RpcAmountOut::from_amount(amount, chain_config.coin_decimals()),
             },
-            OutputValue::TokenV0(_) => unimplemented!(),
+            OutputValue::TokenV0(_) => return Err(RpcTypeError::TokenV0Encountered),
             OutputValue::TokenV1(token_id, amount) => RpcOutputValueOut::Token {
                 id: RpcAddress::new(chain_config, token_id)?,
                 amount: RpcAmountOut::from_amount(
                     amount,
-                    token_decimals_provider
-                        .get_token_decimals(&token_id)
-                        .ok_or(RpcTypeError::TokenDecimalsUnavailable(token_id))?
-                        .0,
+                    token_decimals_provider.get_token_decimals(&token_id)?.0,
                 ),
             },
         };
         Ok(result)
+    }
+
+    pub fn amount(&self) -> &RpcAmountOut {
+        match self {
+            Self::Coin { amount } => amount,
+            Self::Token { id: _, amount } => amount,
+        }
+    }
+
+    pub fn token_id(&self) -> Option<&RpcAddress<TokenId>> {
+        match self {
+            Self::Coin { amount: _ } => None,
+            Self::Token { id, amount: _ } => Some(id),
+        }
     }
 }
 

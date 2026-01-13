@@ -19,7 +19,8 @@ use std::sync::Arc;
 
 use crate::account::{
     transaction_list::TransactionList, CoinSelectionAlgo, CurrentFeeRate, DelegationData,
-    OrderData, PoolData, TxInfo, UnconfirmedTokenInfo, UtxoSelectorError,
+    OrderData, OutputCacheInconsistencyError, PoolData, TxInfo, UnconfirmedTokenInfo,
+    UtxoSelectorError,
 };
 use crate::destination_getters::HtlcSpendingCondition;
 use crate::key_chain::{
@@ -50,8 +51,8 @@ use common::chain::tokens::{
     IsTokenUnfreezable, Metadata, RPCFungibleTokenInfo, TokenId, TokenIssuance,
 };
 use common::chain::{
-    make_delegation_id, make_order_id, make_token_id, AccountCommand, AccountNonce,
-    AccountOutPoint, Block, ChainConfig, DelegationId, Destination, GenBlock, IdCreationError,
+    make_delegation_id, make_order_id, make_token_id, AccountCommand, AccountOutPoint, Block,
+    ChainConfig, Currency, DelegationId, Destination, GenBlock, IdCreationError,
     OrderAccountCommand, OrderId, OutPointSourceId, PoolId, RpcOrderInfo, SignedTransaction,
     SignedTransactionIntent, Transaction, TransactionCreationError, TxInput, TxOutput,
     UtxoOutPoint,
@@ -90,8 +91,7 @@ use wallet_types::wallet_tx::{TxData, TxState};
 use wallet_types::wallet_type::{WalletControllerMode, WalletType};
 use wallet_types::with_locked::WithLocked;
 use wallet_types::{
-    AccountId, AccountKeyPurposeId, BlockInfo, Currency, KeyPurpose, KeychainUsageState,
-    SignedTxWithFees,
+    AccountId, AccountKeyPurposeId, BlockInfo, KeyPurpose, KeychainUsageState, SignedTxWithFees,
 };
 
 pub const WALLET_VERSION_UNINITIALIZED: u32 = 0;
@@ -145,8 +145,6 @@ pub enum WalletError {
     OutputAmountOverflow,
     #[error("Fee amounts overflow")]
     FeeAmountOverflow,
-    #[error("Delegation with id: {0} with duplicate AccountNonce: {1}")]
-    InconsistentDelegationDuplicateNonce(DelegationId, AccountNonce),
     #[error("Inconsistent produce block from stake for pool id: {0}, missing CreateStakePool")]
     InconsistentProduceBlockFromStake(PoolId),
     #[error("Delegation nonce overflow for id: {0}")]
@@ -155,10 +153,6 @@ pub enum WalletError {
     TokenIssuanceNonceOverflow(TokenId),
     #[error("Order nonce overflow for id: {0}")]
     OrderNonceOverflow(OrderId),
-    #[error("Token with id: {0} with duplicate AccountNonce: {1}")]
-    InconsistentTokenIssuanceDuplicateNonce(TokenId, AccountNonce),
-    #[error("Order with id: {0} with duplicate AccountNonce: {1}")]
-    InconsistentOrderDuplicateNonce(OrderId, AccountNonce),
     #[error("Unknown token with Id {0}")]
     UnknownTokenId(TokenId),
     #[error("Unknown order with Id {0}")]
@@ -279,10 +273,10 @@ pub enum WalletError {
     MismatchedTokenAdditionalData(TokenId),
     #[error("Unsupported operation for a Hardware wallet")]
     UnsupportedHardwareWalletOperation,
-    #[error("Transaction from {0:?} is confirmed and among unconfirmed descendants")]
-    ConfirmedTxAmongUnconfirmedDescendants(OutPointSourceId),
     #[error("Id creation error: {0}")]
     IdCreationError(#[from] IdCreationError),
+    #[error("Output cache inconsistency error: {0}")]
+    OutputCacheInconsistencyError(#[from] OutputCacheInconsistencyError),
 }
 
 /// Result type used for the wallet
@@ -1421,13 +1415,16 @@ where
         })
     }
 
-    pub fn get_pool_ids(
+    pub fn get_pools(
         &self,
         account_index: U31,
         filter: WalletPoolsFilter,
     ) -> WalletResult<Vec<(PoolId, PoolData)>> {
-        let pool_ids = self.get_account(account_index)?.get_pool_ids(filter);
-        Ok(pool_ids)
+        Ok(self
+            .get_account(account_index)?
+            .get_pools(filter)
+            .map(|(id, data)| (*id, data.clone()))
+            .collect())
     }
 
     pub fn get_delegations(
@@ -2271,8 +2268,7 @@ where
         &self,
         account_index: U31,
     ) -> WalletResult<impl Iterator<Item = (&OrderId, &OrderData)>> {
-        let orders = self.get_account(account_index)?.get_orders();
-        Ok(orders)
+        Ok(self.get_account(account_index)?.get_orders())
     }
 
     #[allow(clippy::too_many_arguments)]

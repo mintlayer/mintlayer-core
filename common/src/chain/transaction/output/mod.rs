@@ -76,7 +76,7 @@ impl<'de> serde::Deserialize<'de> for Destination {
 }
 
 impl rpc_description::HasValueHint for Destination {
-    const HINT_SER: rpc_description::ValueHint = rpc_description::ValueHint::BECH32_STRING;
+    const HINT_SER: rpc_description::ValueHint = rpc_description::ValueHint::HEXIFIED_DEST;
 }
 
 impl Addressable for Destination {

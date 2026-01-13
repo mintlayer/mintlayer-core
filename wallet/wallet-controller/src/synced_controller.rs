@@ -30,8 +30,8 @@ use common::{
             Metadata, RPCFungibleTokenInfo, RPCTokenInfo, TokenId, TokenIssuance, TokenIssuanceV1,
             TokenTotalSupply,
         },
-        ChainConfig, DelegationId, Destination, OrderId, PoolId, RpcOrderInfo, SignedTransaction,
-        SignedTransactionIntent, Transaction, TxOutput, UtxoOutPoint,
+        ChainConfig, Currency, DelegationId, Destination, OrderId, PoolId, RpcOrderInfo,
+        SignedTransaction, SignedTransactionIntent, Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{amount::RpcAmountIn, per_thousand::PerThousand, Amount, Id},
 };
@@ -65,7 +65,7 @@ use wallet_types::{
     signature_status::SignatureStatus,
     utxo_types::{UtxoState, UtxoType},
     with_locked::WithLocked,
-    Currency, SignedTxWithFees,
+    SignedTxWithFees,
 };
 
 use crate::{
@@ -1420,7 +1420,7 @@ where
     pub fn start_staking(&mut self) -> Result<(), ControllerError<T>> {
         utils::ensure!(!self.wallet.is_locked(), ControllerError::WalletIsLocked);
         // Make sure that account_index is valid and that pools exist
-        let pool_ids = self.wallet.get_pool_ids(self.account_index, WalletPoolsFilter::Stake)?;
+        let pool_ids = self.wallet.get_pools(self.account_index, WalletPoolsFilter::Stake)?;
         utils::ensure!(!pool_ids.is_empty(), ControllerError::NoStakingPool);
         log::info!("Start staking, account_index: {}", self.account_index);
         self.staking_started.insert(self.account_index);

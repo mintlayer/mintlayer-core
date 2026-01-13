@@ -16,7 +16,6 @@
 pub mod account_id;
 pub mod account_info;
 pub mod chain_info;
-pub mod currency;
 pub mod generic_transaction;
 pub mod hw_data;
 pub mod keys;
@@ -34,14 +33,13 @@ pub use account_id::{
     AccountWalletTxId,
 };
 pub use account_info::AccountInfo;
-pub use currency::Currency;
 pub use keys::{KeyPurpose, KeychainUsageState, RootKeys};
 pub use wallet_tx::{BlockInfo, WalletTx};
 
 use std::collections::BTreeMap;
 
 use common::{
-    chain::{SignedTransaction, Transaction},
+    chain::{Currency, SignedTransaction, Transaction},
     primitives::Amount,
 };
 

@@ -30,18 +30,6 @@ use crypto::key::{KeyKind, PrivateKey};
 use itertools::Itertools;
 use randomness::{seq, CryptoRng, Rng};
 
-pub trait UnwrapInfallible {
-    type Output;
-    fn unwrap_infallible(self) -> Self::Output;
-}
-
-impl<T> UnwrapInfallible for Result<T, Infallible> {
-    type Output = T;
-    fn unwrap_infallible(self) -> Self::Output {
-        self.unwrap_or_else(|inf| match inf {})
-    }
-}
-
 struct EmptyUtxosView {
     best_block_hash: Id<GenBlock>,
 }

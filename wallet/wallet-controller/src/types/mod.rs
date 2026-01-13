@@ -23,10 +23,8 @@ mod transaction;
 
 use std::collections::BTreeSet;
 
-pub use balances::Balances;
 use bip39::{Language, Mnemonic};
-pub use block_info::{BlockInfo, CreatedBlockInfo};
-pub use common::primitives::amount::RpcAmountOut;
+
 use common::{
     chain::{
         output_value::OutputValue,
@@ -34,12 +32,6 @@ use common::{
         ChainConfig, Destination, TxOutput,
     },
     primitives::{DecimalAmount, H256},
-};
-pub use seed_phrase::SeedWithPassPhrase;
-pub use standalone_key::AccountStandaloneKeyDetails;
-pub use transaction::{
-    InspectTransaction, NewTransaction, PreparedTransaction, SignatureStats, TransactionToInspect,
-    ValidatedSignatures,
 };
 use utils::ensure;
 use wallet::signer::trezor_signer::FoundDevice;
@@ -50,6 +42,17 @@ use wallet_types::{
 };
 
 use crate::mnemonic;
+
+pub use common::primitives::amount::RpcAmountOut;
+
+pub use balances::Balances;
+pub use block_info::{BlockInfo, CreatedBlockInfo};
+pub use seed_phrase::SeedWithPassPhrase;
+pub use standalone_key::AccountStandaloneKeyDetails;
+pub use transaction::{
+    InspectTransaction, NewTransaction, PreparedTransaction, SignatureStats, TransactionToInspect,
+    ValidatedSignatures,
+};
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, rpc_description::HasValueHint)]
 pub struct WalletInfo {

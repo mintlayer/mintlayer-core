@@ -27,13 +27,15 @@ use std::{
 
 use chainstate_types::BlockIndex;
 use common::{
-    address::{dehexify::to_dehexified_json, Address},
+    address::{dehexify::to_dehexified_json, Address, RpcAddress},
     chain::{
         output_values_holder::collect_token_v1_ids_from_output_values_holder,
         tokens::{RPCTokenInfo, TokenId},
-        ChainConfig, DelegationId, Destination, OrderId, PoolId, RpcOrderInfo, TxOutput,
+        ChainConfig, DelegationId, Destination, OrderId, PoolId, RpcCurrency, RpcOrderInfo,
+        TxOutput,
     },
     primitives::{Amount, BlockHeight, Id},
+    TokenDecimals,
 };
 use rpc::{subscription, RpcResult};
 use serialization::hex_encoded::HexEncoded;
@@ -49,7 +51,6 @@ pub use types::{
     input::RpcUtxoOutpoint,
     output::{RpcOutputValueIn, RpcOutputValueOut, RpcTxOutput},
     signed_transaction::RpcSignedTransaction,
-    token_decimals_provider::{TokenDecimals, TokenDecimalsProvider},
     RpcTypeError,
 };
 
@@ -145,14 +146,17 @@ trait ChainstateRpc {
     /// The balance contains both delegated balance and staker balance.
     /// Returns `None` (null) if the pool is not found.
     #[method(name = "stake_pool_balance")]
-    async fn stake_pool_balance(&self, pool_address: String) -> RpcResult<Option<Amount>>;
+    async fn stake_pool_balance(
+        &self,
+        pool_address: RpcAddress<PoolId>,
+    ) -> RpcResult<Option<Amount>>;
 
     /// Returns the balance of the staker (pool owner) of the pool associated with the given pool address.
     ///
     /// This excludes the delegation balances.
     /// Returns `None` (null) if the pool is not found.
     #[method(name = "staker_balance")]
-    async fn staker_balance(&self, pool_address: String) -> RpcResult<Option<Amount>>;
+    async fn staker_balance(&self, pool_address: RpcAddress<PoolId>) -> RpcResult<Option<Amount>>;
 
     /// Returns the pool's decommission destination associated with the given pool address.
     ///
@@ -160,29 +164,41 @@ trait ChainstateRpc {
     #[method(name = "pool_decommission_destination")]
     async fn pool_decommission_destination(
         &self,
-        pool_address: String,
-    ) -> RpcResult<Option<Destination>>;
+        pool_address: RpcAddress<PoolId>,
+    ) -> RpcResult<Option<RpcAddress<Destination>>>;
 
     /// Given a pool defined by a pool address, and a delegation address,
     /// returns the amount of coins owned by that delegation in that pool.
     #[method(name = "delegation_share")]
     async fn delegation_share(
         &self,
-        pool_address: String,
-        delegation_address: String,
+        pool_address: RpcAddress<PoolId>,
+        delegation_address: RpcAddress<DelegationId>,
     ) -> RpcResult<Option<Amount>>;
 
     /// Get token information, given a token id in address form.
     #[method(name = "token_info")]
-    async fn token_info(&self, token_id: String) -> RpcResult<Option<RPCTokenInfo>>;
+    async fn token_info(&self, token_id: RpcAddress<TokenId>) -> RpcResult<Option<RPCTokenInfo>>;
 
     /// Get tokens information, given multiple token ids in address form.
     #[method(name = "tokens_info")]
-    async fn tokens_info(&self, token_ids: Vec<String>) -> RpcResult<Vec<RPCTokenInfo>>;
+    async fn tokens_info(
+        &self,
+        token_ids: Vec<RpcAddress<TokenId>>,
+    ) -> RpcResult<Vec<RPCTokenInfo>>;
 
     /// Get order information, given an order id, in address form.
     #[method(name = "order_info")]
-    async fn order_info(&self, order_id: String) -> RpcResult<Option<RpcOrderInfo>>;
+    async fn order_info(&self, order_id: RpcAddress<OrderId>) -> RpcResult<Option<RpcOrderInfo>>;
+
+    /// Return infos for all orders that match the given currencies. Passing None for a currency
+    /// means "any currency".
+    #[method(name = "orders_info_by_currencies")]
+    async fn orders_info_by_currencies(
+        &self,
+        ask_currency: Option<RpcCurrency>,
+        give_currency: Option<RpcCurrency>,
+    ) -> RpcResult<BTreeMap<OrderId, RpcOrderInfo>>;
 
     /// Exports a "bootstrap file", which contains all blocks
     #[method(name = "export_bootstrap_file")]
@@ -353,24 +369,26 @@ impl ChainstateRpcServer for super::ChainstateHandle {
         )
     }
 
-    async fn stake_pool_balance(&self, pool_address: String) -> RpcResult<Option<Amount>> {
+    async fn stake_pool_balance(
+        &self,
+        pool_address: RpcAddress<PoolId>,
+    ) -> RpcResult<Option<Amount>> {
         rpc::handle_result(
             self.call(move |this| {
                 let chain_config = this.get_chain_config();
-                let id_result = Address::<PoolId>::from_string(chain_config, pool_address);
-                id_result.map(|address| this.get_stake_pool_balance(address.into_object()))
+                let id_result = pool_address.decode_object(chain_config);
+                id_result.map(|address| this.get_stake_pool_balance(address))
             })
             .await,
         )
     }
 
-    async fn staker_balance(&self, pool_address: String) -> RpcResult<Option<Amount>> {
+    async fn staker_balance(&self, pool_address: RpcAddress<PoolId>) -> RpcResult<Option<Amount>> {
         rpc::handle_result(
             self.call(move |this| {
                 let chain_config = this.get_chain_config();
                 let result: Result<Option<Amount>, _> =
-                    dynamize_err(Address::<PoolId>::from_string(chain_config, pool_address))
-                        .map(|address| address.into_object())
+                    dynamize_err(pool_address.decode_object(chain_config))
                         .and_then(|pool_id| dynamize_err(this.get_stake_pool_data(pool_id)))
                         .and_then(|pool_data| {
                             dynamize_err(pool_data.map(|d| d.staker_balance()).transpose())
@@ -384,18 +402,24 @@ impl ChainstateRpcServer for super::ChainstateHandle {
 
     async fn pool_decommission_destination(
         &self,
-        pool_address: String,
-    ) -> RpcResult<Option<Destination>> {
+        pool_address: RpcAddress<PoolId>,
+    ) -> RpcResult<Option<RpcAddress<Destination>>> {
         rpc::handle_result(
-            self.call(move |this| {
+            self.call(move |this| -> Result<_, DynamizedError> {
                 let chain_config = this.get_chain_config();
-                let result: Result<Option<Destination>, _> =
-                    dynamize_err(Address::<PoolId>::from_string(chain_config, pool_address))
-                        .map(|address| address.into_object())
-                        .and_then(|pool_id| dynamize_err(this.get_stake_pool_data(pool_id)))
-                        .map(|pool_data| pool_data.map(|d| d.decommission_destination().clone()));
+                let pool_id = dynamize_err(pool_address.decode_object(chain_config))?;
+                let pool_data = dynamize_err(this.get_stake_pool_data(pool_id))?;
 
-                result
+                pool_data
+                    .map(|d| -> Result<_, DynamizedError> {
+                        let addr = dynamize_err(Address::new(
+                            chain_config,
+                            d.decommission_destination().clone(),
+                        ))?;
+
+                        Ok(addr.into())
+                    })
+                    .transpose()
             })
             .await,
         )
@@ -403,22 +427,16 @@ impl ChainstateRpcServer for super::ChainstateHandle {
 
     async fn delegation_share(
         &self,
-        pool_address: String,
-        delegation_address: String,
+        pool_address: RpcAddress<PoolId>,
+        delegation_address: RpcAddress<DelegationId>,
     ) -> RpcResult<Option<Amount>> {
         rpc::handle_result(
             self.call(move |this| {
                 let chain_config = this.get_chain_config();
 
-                let pool_id_result =
-                    dynamize_err(Address::<PoolId>::from_string(chain_config, &pool_address))
-                        .map(|address| address.into_object());
-
-                let delegation_id_result = dynamize_err(Address::<DelegationId>::from_string(
-                    chain_config,
-                    &delegation_address,
-                ))
-                .map(|address| address.into_object());
+                let pool_id_result = dynamize_err(pool_address.decode_object(chain_config));
+                let delegation_id_result =
+                    dynamize_err(delegation_address.decode_object(chain_config));
 
                 let ids = pool_id_result.and_then(|x| delegation_id_result.map(|y| (x, y)));
 
@@ -430,13 +448,12 @@ impl ChainstateRpcServer for super::ChainstateHandle {
         )
     }
 
-    async fn token_info(&self, token_id: String) -> RpcResult<Option<RPCTokenInfo>> {
+    async fn token_info(&self, token_id: RpcAddress<TokenId>) -> RpcResult<Option<RPCTokenInfo>> {
         rpc::handle_result(
             self.call(move |this| {
                 let chain_config = this.get_chain_config();
                 let token_info_result: Result<Option<RPCTokenInfo>, _> =
-                    dynamize_err(Address::<TokenId>::from_string(chain_config, token_id))
-                        .map(|address| address.into_object())
+                    dynamize_err(token_id.decode_object(chain_config))
                         .and_then(|token_id| dynamize_err(this.get_token_info_for_rpc(token_id)));
 
                 token_info_result
@@ -445,7 +462,10 @@ impl ChainstateRpcServer for super::ChainstateHandle {
         )
     }
 
-    async fn tokens_info(&self, token_ids: Vec<String>) -> RpcResult<Vec<RPCTokenInfo>> {
+    async fn tokens_info(
+        &self,
+        token_ids: Vec<RpcAddress<TokenId>>,
+    ) -> RpcResult<Vec<RPCTokenInfo>> {
         rpc::handle_result(
             self.call(move |this| -> Result<_, DynamizedError> {
                 let chain_config = this.get_chain_config();
@@ -453,10 +473,7 @@ impl ChainstateRpcServer for super::ChainstateHandle {
                 let token_ids = token_ids
                     .into_iter()
                     .map(|token_id| -> Result<_, DynamizedError> {
-                        Ok(
-                            dynamize_err(Address::<TokenId>::from_string(chain_config, token_id))?
-                                .into_object(),
-                        )
+                        Ok(token_id.decode_object(chain_config)?)
                     })
                     .collect::<Result<_, _>>()?;
 
@@ -466,16 +483,38 @@ impl ChainstateRpcServer for super::ChainstateHandle {
         )
     }
 
-    async fn order_info(&self, order_id: String) -> RpcResult<Option<RpcOrderInfo>> {
+    async fn order_info(&self, order_id: RpcAddress<OrderId>) -> RpcResult<Option<RpcOrderInfo>> {
         rpc::handle_result(
             self.call(move |this| {
                 let chain_config = this.get_chain_config();
                 let result: Result<Option<RpcOrderInfo>, _> =
-                    dynamize_err(Address::<OrderId>::from_string(chain_config, order_id))
-                        .map(|address| address.into_object())
-                        .and_then(|order_id| dynamize_err(this.get_order_info_for_rpc(order_id)));
+                    dynamize_err(order_id.decode_object(chain_config))
+                        .and_then(|order_id| dynamize_err(this.get_order_info_for_rpc(&order_id)));
 
                 result
+            })
+            .await,
+        )
+    }
+
+    async fn orders_info_by_currencies(
+        &self,
+        ask_currency: Option<RpcCurrency>,
+        give_currency: Option<RpcCurrency>,
+    ) -> RpcResult<BTreeMap<OrderId, RpcOrderInfo>> {
+        rpc::handle_result(
+            self.call(move |this| -> Result<_, DynamizedError> {
+                let chain_config = this.get_chain_config();
+                Ok(this.get_orders_info_for_rpc_by_currencies(
+                    ask_currency
+                        .map(|rpc_currency| dynamize_err(rpc_currency.to_currency(chain_config)))
+                        .transpose()?
+                        .as_ref(),
+                    give_currency
+                        .map(|rpc_currency| dynamize_err(rpc_currency.to_currency(chain_config)))
+                        .transpose()?
+                        .as_ref(),
+                ))
             })
             .await,
         )

@@ -15,40 +15,48 @@
 
 mod local_state;
 
-use std::{fmt::Write, str::FromStr};
+use std::{collections::BTreeMap, fmt::Write, str::FromStr};
 
+use bigdecimal::BigDecimal;
+use itertools::Itertools;
+
+use chainstate::rpc::RpcOutputValueOut;
 use common::{
-    address::Address,
+    address::{Address, RpcAddress},
     chain::{
-        config::checkpoints_data::print_block_heights_ids_as_checkpoints_data, ChainConfig,
-        Destination, SignedTransaction, TxOutput, UtxoOutPoint,
+        config::checkpoints_data::print_block_heights_ids_as_checkpoints_data, tokens::TokenId,
+        ChainConfig, Currency, Destination, SignedTransaction, TxOutput, UtxoOutPoint,
     },
     primitives::{Idable as _, H256},
     text_summary::TextSummary,
 };
 use crypto::key::hdkd::u31::U31;
-use itertools::Itertools;
+use logging::log;
 use mempool::tx_options::TxOptionsOverrides;
 use node_comm::node_traits::NodeInterface;
 use serialization::{hex::HexEncode, hex_encoded::HexEncoded};
 use utils::{
     ensure,
     qrcode::{QrCode, QrCodeError},
+    sorted::Sorted as _,
 };
 use wallet::version::get_version;
 use wallet_controller::types::{GenericTokenTransfer, WalletExtraInfo};
 use wallet_rpc_client::wallet_rpc_traits::{PartialOrSignedTx, WalletInterface};
 use wallet_rpc_lib::types::{
     Balances, ComposedTransaction, ControllerConfig, HardwareWalletType, MnemonicInfo,
-    NewSubmittedTransaction, NftMetadata, RpcInspectTransaction, RpcNewTransaction,
-    RpcSignatureStats, RpcSignatureStatus, RpcStandaloneAddressDetails, RpcValidatedSignatures,
-    TokenMetadata,
+    NewOrderTransaction, NewSubmittedTransaction, NftMetadata, RpcInspectTransaction,
+    RpcNewTransaction, RpcSignatureStats, RpcSignatureStatus, RpcStandaloneAddressDetails,
+    RpcValidatedSignatures, TokenMetadata,
 };
-
 use wallet_types::partially_signed_transaction::PartiallySignedTransaction;
 
 use crate::{
-    errors::WalletCliCommandError, helper_types::parse_generic_token_transfer,
+    errors::WalletCliCommandError,
+    helper_types::{
+        active_order_infos_header, format_token_name, parse_currency, parse_generic_token_transfer,
+        parse_rpc_currency, token_ticker_from_rpc_token_info,
+    },
     CreateWalletDeviceSelectMenu, ManageableWalletCommand, OpenWalletDeviceSelectMenu,
     OpenWalletSubCommand, WalletManagementCommand,
 };
@@ -57,8 +65,8 @@ use self::local_state::WalletWithState;
 
 use super::{
     helper_types::{
-        format_delegation_info, format_pool_info, parse_coin_output, parse_token_supply,
-        parse_utxo_outpoint, CliForceReduce, CliUtxoState,
+        format_active_order_info, format_delegation_info, format_own_order_info, format_pool_info,
+        parse_coin_output, parse_token_supply, parse_utxo_outpoint, CliForceReduce, CliUtxoState,
     },
     ColdWalletCommand, ConsoleCommand, WalletCommand,
 };
@@ -125,8 +133,8 @@ where
         Ok(status)
     }
 
-    pub fn new_tx_command(new_tx: RpcNewTransaction, chain_config: &ChainConfig) -> ConsoleCommand {
-        let status_text = if new_tx.broadcasted {
+    fn new_tx_command_status_text(new_tx: RpcNewTransaction, chain_config: &ChainConfig) -> String {
+        if new_tx.broadcasted {
             let mut summary = new_tx.tx.take().transaction().text_summary(chain_config);
             format_fees(&mut summary, &new_tx.fees);
 
@@ -136,9 +144,25 @@ where
             )
         } else {
             format_tx_to_be_broadcasted(new_tx.tx, &new_tx.fees, chain_config)
-        };
+        }
+    }
 
-        ConsoleCommand::Print(status_text)
+    pub fn new_tx_command(new_tx: RpcNewTransaction, chain_config: &ChainConfig) -> ConsoleCommand {
+        ConsoleCommand::Print(Self::new_tx_command_status_text(new_tx, chain_config))
+    }
+
+    pub fn new_order_tx_command<N: NodeInterface>(
+        new_tx: NewOrderTransaction,
+        chain_config: &ChainConfig,
+    ) -> Result<ConsoleCommand, WalletCliCommandError<N>> {
+        let (order_id, new_tx) = new_tx.into_order_id_and_new_tx();
+        let order_id = order_id
+            .into_address(chain_config)
+            .map_err(|_| WalletCliCommandError::InvalidAddressInNewlyCreatedTransaction)?;
+        let status_text = Self::new_tx_command_status_text(new_tx, chain_config);
+        let status_text = format!("New order id: {order_id}\n\n{status_text}");
+
+        Ok(ConsoleCommand::Print(status_text))
     }
 
     pub fn new_tx_submitted_command(new_tx: NewSubmittedTransaction) -> ConsoleCommand {
@@ -614,7 +638,9 @@ where
 
                 for (token_id, amount) in tokens {
                     let amount = amount.decimal();
-                    writeln!(&mut output, "Token: {token_id} amount: {amount}")
+                    // TODO: it'd be nice to print token tickers here too (as in GetBalance),
+                    // when the wallet is in the hot mode.
+                    writeln!(&mut output, "Token: {token_id}, amount: {amount}")
                         .expect("Writing to a memory buffer should not fail");
                 }
                 output.pop();
@@ -1315,12 +1341,23 @@ where
                     .await?
                     .into_coins_and_tokens();
 
+                let token_ids_str_vec =
+                    tokens.keys().map(|token_id| token_id.as_str().to_owned()).collect_vec();
+
+                let token_infos = wallet
+                    .node_get_tokens_info(token_ids_str_vec)
+                    .await?
+                    .into_iter()
+                    .map(|info| (info.token_id(), info))
+                    .collect();
+
                 let coins = coins.decimal();
                 let mut output = format!("Coins amount: {coins}\n");
 
                 for (token_id, amount) in tokens {
+                    let token_name = format_token_name(&token_id, chain_config, &token_infos)?;
                     let amount = amount.decimal();
-                    writeln!(&mut output, "Token: {token_id} amount: {amount}")
+                    writeln!(&mut output, "Token: {token_name}, amount: {amount}")
                         .expect("Writing to a memory buffer should not fail");
                 }
                 output.pop();
@@ -1823,24 +1860,30 @@ where
 
             WalletCommand::ListPools => {
                 let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
-                let pool_ids: Vec<_> = wallet
+                let pool_infos: Vec<_> = wallet
                     .list_staking_pools(selected_account)
                     .await?
                     .into_iter()
                     .map(format_pool_info)
                     .collect();
-                Ok(ConsoleCommand::Print(format!("{}\n", pool_ids.join("\n"))))
+                Ok(ConsoleCommand::Print(format!(
+                    "{}\n",
+                    pool_infos.join("\n")
+                )))
             }
 
             WalletCommand::ListOwnedPoolsForDecommission => {
                 let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
-                let pool_ids: Vec<_> = wallet
+                let pool_infos: Vec<_> = wallet
                     .list_pools_for_decommission(selected_account)
                     .await?
                     .into_iter()
                     .map(format_pool_info)
                     .collect();
-                Ok(ConsoleCommand::Print(format!("{}\n", pool_ids.join("\n"))))
+                Ok(ConsoleCommand::Print(format!(
+                    "{}\n",
+                    pool_infos.join("\n")
+                )))
             }
 
             WalletCommand::ListDelegationIds => {
@@ -1955,7 +1998,299 @@ where
                 self.wallet().await?.remove_reserved_peer(address).await?;
                 Ok(ConsoleCommand::Print("Success".to_owned()))
             }
+            WalletCommand::CreateOrder {
+                ask_currency,
+                ask_amount,
+                give_currency,
+                give_amount,
+                conclude_address,
+            } => {
+                let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
+
+                let parse_token_id = |curency_str: String| -> Result<_, WalletCliCommandError<N>> {
+                    let parsed_currency = parse_currency(&curency_str, chain_config)?;
+                    match parsed_currency {
+                        Currency::Coin => Ok(None),
+                        Currency::Token(_) => Ok(Some(curency_str)),
+                    }
+                };
+
+                let ask_token_id = parse_token_id(ask_currency)?;
+                let give_token_id = parse_token_id(give_currency)?;
+                let new_tx = wallet
+                    .create_order(
+                        selected_account,
+                        ask_token_id,
+                        ask_amount,
+                        give_token_id,
+                        give_amount,
+                        conclude_address,
+                        self.config,
+                    )
+                    .await?;
+                Ok(Self::new_order_tx_command(new_tx, chain_config)?)
+            }
+            WalletCommand::FillOrder {
+                order_id,
+                amount,
+                output_address,
+            } => {
+                let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
+
+                let new_tx = wallet
+                    .fill_order(
+                        selected_account,
+                        order_id,
+                        amount,
+                        output_address,
+                        self.config,
+                    )
+                    .await?;
+                Ok(Self::new_tx_command(new_tx, chain_config))
+            }
+            WalletCommand::FreezeOrder { order_id } => {
+                let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
+
+                let new_tx = wallet.freeze_order(selected_account, order_id, self.config).await?;
+                Ok(Self::new_tx_command(new_tx, chain_config))
+            }
+            WalletCommand::ConcludeOrder {
+                order_id,
+                output_address,
+            } => {
+                let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
+
+                let new_tx = wallet
+                    .conclude_order(selected_account, order_id, output_address, self.config)
+                    .await?;
+                Ok(Self::new_tx_command(new_tx, chain_config))
+            }
+            WalletCommand::ListOwnOrders => self.list_own_orders(chain_config).await,
+            WalletCommand::ListActiveOrders {
+                ask_currency,
+                give_currency,
+            } => self.list_all_active_orders(chain_config, ask_currency, give_currency).await,
         }
+    }
+
+    async fn list_own_orders<N: NodeInterface>(
+        &mut self,
+        chain_config: &ChainConfig,
+    ) -> Result<ConsoleCommand, WalletCliCommandError<N>>
+    where
+        WalletCliCommandError<N>: From<E>,
+    {
+        let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
+
+        let order_infos = wallet.list_own_orders(selected_account).await?;
+        let token_ids_str_vec = get_token_ids_from_order_infos_as_str(
+            order_infos.iter().map(|info| (&info.initially_asked, &info.initially_given)),
+        );
+
+        let token_infos = wallet
+            .node_get_tokens_info(token_ids_str_vec)
+            .await?
+            .into_iter()
+            .map(|info| (info.token_id(), info))
+            .collect();
+
+        // Sort the orders, so that the newer ones appear later.
+        let order_infos = order_infos.sorted_by(|info1, info2| {
+            use std::cmp::Ordering;
+
+            let ts1 = info1.existing_order_data.as_ref().map(|data| data.creation_timestamp);
+            let ts2 = info2.existing_order_data.as_ref().map(|data| data.creation_timestamp);
+
+            let ts_cmp_result = match (ts1, ts2) {
+                (Some(ts1), Some(ts2)) => ts1.cmp(&ts2),
+                // Note: the logic here is opposite to the normal comparison of Option's -
+                // we want None to be bigger than Some, so that "unconfirmed" orders
+                // appear later in the list.
+                (Some(_), None) => Ordering::Less,
+                (None, Some(_)) => Ordering::Greater,
+                (None, None) => Ordering::Equal,
+            };
+
+            // If the timestamps are equal, sort the orders by id in the bech32 encoding.
+            ts_cmp_result.then_with(|| info1.order_id.cmp(&info2.order_id))
+        });
+
+        let order_infos = order_infos
+            .iter()
+            .map(|info| format_own_order_info(info, chain_config, &token_infos))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(ConsoleCommand::Print(format!(
+            "{}\n",
+            order_infos.join("\n")
+        )))
+    }
+
+    async fn list_all_active_orders<N: NodeInterface>(
+        &mut self,
+        chain_config: &ChainConfig,
+        ask_currency: Option<String>,
+        give_currency: Option<String>,
+    ) -> Result<ConsoleCommand, WalletCliCommandError<N>>
+    where
+        WalletCliCommandError<N>: From<E>,
+    {
+        let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
+
+        let ask_currency = ask_currency
+            .map(|ask_currency| parse_rpc_currency(&ask_currency, chain_config))
+            .transpose()?;
+        let give_currency = give_currency
+            .map(|give_currency| parse_rpc_currency(&give_currency, chain_config))
+            .transpose()?;
+
+        let order_infos = wallet
+            .list_all_active_orders(selected_account, ask_currency, give_currency)
+            .await?;
+        let (token_ids_map, token_infos) = {
+            let token_ids_iter = get_token_ids_from_order_infos(
+                order_infos.iter().map(|info| (&info.initially_asked, &info.initially_given)),
+            );
+            let token_ids_str_vec = token_ids_iter
+                .clone()
+                .map(|rpc_addr| rpc_addr.as_str().to_owned())
+                .collect_vec();
+            let token_ids_map = token_ids_iter
+                .map(|rpc_addr| -> Result<_, WalletCliCommandError<N>> {
+                    Ok((
+                        rpc_addr.clone(),
+                        rpc_addr
+                            .decode_object(chain_config)
+                            .map_err(WalletCliCommandError::TokenIdDecodingError)?,
+                    ))
+                })
+                .collect::<Result<BTreeMap<_, _>, _>>()?;
+            let token_infos = wallet
+                .node_get_tokens_info(token_ids_str_vec)
+                .await?
+                .into_iter()
+                .map(|info| (info.token_id(), info))
+                .collect::<BTreeMap<_, _>>();
+
+            (token_ids_map, token_infos)
+        };
+
+        // Calculate give/ask price for each order. Note:
+        // 1) The price is based on original amounts, which is valid for orders v1 but not for v0;
+        // this is ok, because orders v0 will be deprecated soon.
+        // 2) The `filter_map` call shouldn't filter anything out normally; if it does, then
+        // the implementation of `node_get_tokens_info` has a bug.
+        let order_infos_with_price = order_infos
+            .into_iter()
+            .filter_map(|info| {
+                let get_decimals = |token_id_opt: Option<&TokenId>| {
+                    if let Some(token_id) = token_id_opt {
+                        if let Some(info) = token_infos.get(token_id) {
+                            Some(info.token_number_of_decimals())
+                        }
+                        else {
+                            log::error!(
+                                "Token {token_id:x} is missing in the result of node_get_tokens_info"
+                            );
+                            None
+                        }
+                    } else {
+                        Some(chain_config.coin_decimals())
+                    }
+                };
+
+                let asked_token_id = info.initially_asked.token_id().map(|token_id| {
+                    token_ids_map.get(token_id).expect("Token id is known to be present")
+                });
+                let given_token_id = info.initially_given.token_id().map(|token_id| {
+                    token_ids_map.get(token_id).expect("Token id is known to be present")
+                });
+                let ask_currency_decimals = get_decimals(asked_token_id)?;
+                let give_currency_decimals = get_decimals(given_token_id)?;
+
+                let give_ask_price = BigDecimal::new(
+                    info.initially_given.amount().amount().into_atoms().into(),
+                    give_currency_decimals as i64,
+                ) / BigDecimal::new(
+                    info.initially_asked.amount().amount().into_atoms().into(),
+                    ask_currency_decimals as i64,
+                );
+                let give_ask_price = give_ask_price.with_scale_round(
+                    give_currency_decimals.into(),
+                    bigdecimal::rounding::RoundingMode::Down,
+                );
+
+                Some((info, give_ask_price))
+            })
+            .collect_vec();
+
+        // This will be used with order_infos_with_price, so we know that the token_infos map
+        // contains all tokens that we may encounter here.
+        let compare_currencies =
+            |token1_id: Option<&RpcAddress<TokenId>>, token2_id: Option<&RpcAddress<TokenId>>| {
+                use std::cmp::Ordering;
+
+                let ticker_by_id = |token_id| {
+                    token_ticker_from_rpc_token_info(
+                        token_infos.get(token_id).expect("Token info is known to be present"),
+                    )
+                };
+
+                match (token1_id, token2_id) {
+                    (Some(token1_id_as_addr), Some(token2_id_as_addr)) => {
+                        let token1_id = token_ids_map
+                            .get(token1_id_as_addr)
+                            .expect("Token id is known to be present");
+                        let token2_id = token_ids_map
+                            .get(token2_id_as_addr)
+                            .expect("Token id is known to be present");
+
+                        if token1_id == token2_id {
+                            Ordering::Equal
+                        } else {
+                            let token1_ticker = ticker_by_id(token1_id);
+                            let token2_ticker = ticker_by_id(token2_id);
+
+                            // Compare the tickers first; if they are equal, compare the ids.
+                            token1_ticker
+                                .cmp(token2_ticker)
+                                .then(token1_id_as_addr.cmp(token2_id_as_addr))
+                        }
+                    }
+                    // The coin should come first, so it's "less" than tokens.
+                    (Some(_), None) => Ordering::Greater,
+                    (None, Some(_)) => Ordering::Less,
+                    (None, None) => Ordering::Equal,
+                }
+            };
+
+        let order_infos_with_give_ask_price = order_infos_with_price.sorted_by(
+            |(order1_info, order1_price), (order2_info, order2_price)| {
+                let order1_asked_token_id = order1_info.initially_asked.token_id();
+                let order1_given_token_id = order1_info.initially_given.token_id();
+                let order2_asked_token_id = order2_info.initially_asked.token_id();
+                let order2_given_token_id = order2_info.initially_given.token_id();
+
+                compare_currencies(order1_given_token_id, order2_given_token_id)
+                    .then_with(|| compare_currencies(order1_asked_token_id, order2_asked_token_id))
+                    .then_with(|| order2_price.cmp(order1_price))
+                    // If the price is the same, sort by the order id.
+                    .then_with(|| order1_info.order_id.cmp(&order2_info.order_id))
+            },
+        );
+
+        let formatted_order_infos = order_infos_with_give_ask_price
+            .iter()
+            .map(|(info, give_ask_price)| {
+                format_active_order_info(info, give_ask_price, chain_config, &token_infos)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(ConsoleCommand::Print(format!(
+            "{}\n{}\n",
+            active_order_infos_header(),
+            formatted_order_infos.join("\n")
+        )))
     }
 
     pub async fn handle_manageable_wallet_command<N: NodeInterface>(
@@ -1995,7 +2330,8 @@ fn format_signature_status((idx, status): (usize, &RpcSignatureStatus)) -> Strin
         RpcSignatureStatus::NotSigned => "NotSigned".to_owned(),
         RpcSignatureStatus::InvalidSignature => "InvalidSignature".to_owned(),
         RpcSignatureStatus::UnknownSignature => "UnknownSignature".to_owned(),
-        RpcSignatureStatus::PartialMultisig { required_signatures, num_signatures } => format!("PartialMultisig having {num_signatures} out of {required_signatures} required signatures"),
+        RpcSignatureStatus::PartialMultisig { required_signatures, num_signatures } =>
+            format!("PartialMultisig having {num_signatures} out of {required_signatures} required signatures"),
     };
 
     format!("Signature for input {idx}: {status}")
@@ -2040,4 +2376,20 @@ where
     N: NodeInterface,
 {
     wallet.get_wallet_with_acc().await
+}
+
+fn get_token_ids_from_order_infos<'a>(
+    initial_balances_iter: impl Iterator<Item = (&'a RpcOutputValueOut, &'a RpcOutputValueOut)> + Clone,
+) -> impl Iterator<Item = &'a RpcAddress<TokenId>> + Clone {
+    initial_balances_iter
+        .flat_map(|(balance1, balance2)| [balance1, balance2].into_iter())
+        .flat_map(|balance| balance.token_id().into_iter())
+}
+
+fn get_token_ids_from_order_infos_as_str<'a>(
+    initial_balances_iter: impl Iterator<Item = (&'a RpcOutputValueOut, &'a RpcOutputValueOut)> + Clone,
+) -> Vec<String> {
+    get_token_ids_from_order_infos(initial_balances_iter)
+        .map(|rpc_addr| rpc_addr.as_str().to_owned())
+        .collect_vec()
 }

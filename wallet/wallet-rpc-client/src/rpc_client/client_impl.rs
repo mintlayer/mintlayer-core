@@ -24,8 +24,8 @@ use super::{ClientWalletRpc, WalletRpcError};
 use chainstate::{rpc::RpcOutputValueIn, ChainInfo};
 use common::{
     chain::{
-        block::timestamp::BlockTimestamp, Block, GenBlock, SignedTransaction,
-        SignedTransactionIntent, Transaction, TxOutput, UtxoOutPoint,
+        block::timestamp::BlockTimestamp, tokens::RPCTokenInfo, Block, GenBlock, RpcCurrency,
+        SignedTransaction, SignedTransactionIntent, Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{BlockHeight, DecimalAmount, Id},
 };
@@ -45,11 +45,11 @@ use wallet_controller::{
 };
 use wallet_rpc_lib::{
     types::{
-        AccountExtendedPublicKey, AddressInfo, AddressWithUsageInfo, BlockInfo,
+        AccountExtendedPublicKey, ActiveOrderInfo, AddressInfo, AddressWithUsageInfo, BlockInfo,
         ComposedTransaction, CreatedWallet, DelegationInfo, HardwareWalletType,
         LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegationTransaction, NewOrderTransaction,
         NewSubmittedTransaction, NewTokenTransaction, NftMetadata, NodeVersion, OpenedWallet,
-        PoolInfo, PublicKeyInfo, RpcHashedTimelockContract, RpcInspectTransaction,
+        OwnOrderInfo, PoolInfo, PublicKeyInfo, RpcHashedTimelockContract, RpcInspectTransaction,
         RpcNewTransaction, RpcPreparedTransaction, RpcStandaloneAddresses,
         SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
         StandaloneAddressWithDetails, TokenMetadata, TransactionOptions, TransactionRequestOptions,
@@ -1121,6 +1121,28 @@ impl WalletInterface for ClientWalletRpc {
         .map_err(WalletRpcError::ResponseError)
     }
 
+    async fn list_own_orders(&self, account_index: U31) -> Result<Vec<OwnOrderInfo>, Self::Error> {
+        WalletRpcClient::list_own_orders(&self.http_client, account_index.into())
+            .await
+            .map_err(WalletRpcError::ResponseError)
+    }
+
+    async fn list_all_active_orders(
+        &self,
+        account_index: U31,
+        ask_curency: Option<RpcCurrency>,
+        give_curency: Option<RpcCurrency>,
+    ) -> Result<Vec<ActiveOrderInfo>, Self::Error> {
+        WalletRpcClient::list_all_active_orders(
+            &self.http_client,
+            account_index.into(),
+            ask_curency,
+            give_curency,
+        )
+        .await
+        .map_err(WalletRpcError::ResponseError)
+    }
+
     async fn node_version(&self) -> Result<NodeVersion, Self::Error> {
         WalletRpcClient::node_version(&self.http_client)
             .await
@@ -1513,6 +1535,21 @@ impl WalletInterface for ClientWalletRpc {
             start_height,
             end_height,
             step,
+        )
+        .await
+        .map_err(WalletRpcError::ResponseError)
+    }
+
+    async fn node_get_tokens_info(
+        &self,
+        token_ids: Vec<String>,
+    ) -> Result<Vec<RPCTokenInfo>, Self::Error> {
+        // TODO: instead of repacking a vec of String's into a vec of `RpcAddress<TokenId>`'s,
+        // we could make WalletInterface accept `RpcAddress`'s in the first place.
+        // Though for consistency it should be done for all address parameters.
+        WalletRpcClient::node_get_tokens_info(
+            &self.http_client,
+            token_ids.into_iter().map(Into::into).collect(),
         )
         .await
         .map_err(WalletRpcError::ResponseError)

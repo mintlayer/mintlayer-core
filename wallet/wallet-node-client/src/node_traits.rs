@@ -13,13 +13,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeSet, num::NonZeroUsize, time::Duration};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    num::NonZeroUsize,
+    time::Duration,
+};
 
 use chainstate::ChainInfo;
 use common::{
     chain::{
         tokens::{RPCTokenInfo, TokenId},
-        Block, DelegationId, Destination, GenBlock, OrderId, PoolId, RpcOrderInfo,
+        Block, Currency, DelegationId, Destination, GenBlock, OrderId, PoolId, RpcOrderInfo,
         SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{time::Time, Amount, BlockHeight, Id},
@@ -82,6 +86,11 @@ pub trait NodeInterface {
         token_ids: BTreeSet<TokenId>,
     ) -> Result<Vec<RPCTokenInfo>, Self::Error>;
     async fn get_order_info(&self, order_id: OrderId) -> Result<Option<RpcOrderInfo>, Self::Error>;
+    async fn get_orders_info_by_currencies(
+        &self,
+        ask_currency: Option<Currency>,
+        give_currency: Option<Currency>,
+    ) -> Result<BTreeMap<OrderId, RpcOrderInfo>, Self::Error>;
     async fn blockprod_e2e_public_key(&self) -> Result<EndToEndPublicKey, Self::Error>;
     async fn generate_block(
         &self,

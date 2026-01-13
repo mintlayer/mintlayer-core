@@ -160,7 +160,7 @@ class WalletTokens(BitcoinTestFramework):
             assert_in("Success", await wallet.sync())
             assert_in("Coins amount: 50", await wallet.get_balance())
 
-            assert_in(f"{token_id} amount: {amount_to_mint}", await wallet.get_balance())
+            assert_in(f"{token_id} ({valid_ticker}), amount: {amount_to_mint}", await wallet.get_balance())
 
             ## create a new account and send some tokens to it
             await wallet.create_new_account()
@@ -184,7 +184,7 @@ class WalletTokens(BitcoinTestFramework):
             token_balance_decimals = 10**len(str(amount_to_send_decimals)) - amount_to_send_decimals
             num_zeroes = len(str(amount_to_send_decimals)) - len(str(token_balance_decimals))
             token_balance_str = f"{token_balance}.{'0'*num_zeroes}{token_balance_decimals}".rstrip('0').rstrip('.')
-            assert_in(f"{token_id} amount: {token_balance_str}", await wallet.get_balance())
+            assert_in(f"{token_id} ({valid_ticker}), amount: {token_balance_str}", await wallet.get_balance())
 
             ## try to issue a new token, should fail with not enough coins
             token_id, tx_id, err = await wallet.issue_new_token("XXX", 2, "http://uri", address)

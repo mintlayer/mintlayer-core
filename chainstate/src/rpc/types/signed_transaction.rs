@@ -16,13 +16,11 @@
 use common::{
     chain::{ChainConfig, SignedTransaction, Transaction},
     primitives::{Id, Idable},
+    TokenDecimalsProvider,
 };
 use serialization::hex_encoded::HexEncoded;
 
-use super::{
-    input::RpcTxInput, output::RpcTxOutput, token_decimals_provider::TokenDecimalsProvider,
-    RpcTypeError,
-};
+use super::{input::RpcTxInput, output::RpcTxOutput, RpcTypeError};
 
 #[derive(Debug, Clone, serde::Serialize, rpc_description::HasValueHint)]
 pub struct RpcSignedTransaction {

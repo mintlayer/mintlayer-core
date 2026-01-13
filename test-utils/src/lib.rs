@@ -20,7 +20,7 @@ pub mod test_dir;
 pub mod threading;
 pub mod token_utils;
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, convert::Infallible};
 
 use hex::ToHex;
 use itertools::Itertools;
@@ -29,6 +29,18 @@ use randomness::distributions::uniform::SampleRange;
 use randomness::Rng;
 
 pub use basic_test_time_getter::BasicTestTimeGetter;
+
+pub trait UnwrapInfallible {
+    type Output;
+    fn unwrap_infallible(self) -> Self::Output;
+}
+
+impl<T> UnwrapInfallible for Result<T, Infallible> {
+    type Output = T;
+    fn unwrap_infallible(self) -> Self::Output {
+        self.unwrap_or_else(|inf| match inf {})
+    }
+}
 
 /// Assert that the encoded object matches the expected hex string.
 pub fn assert_encoded_eq<E: serialization::Encode>(to_encode: &E, expected_hex: &str) {

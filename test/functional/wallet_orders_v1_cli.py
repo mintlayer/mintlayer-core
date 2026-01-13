@@ -15,13 +15,14 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+from test_framework.wallet_cli_controller import WalletCliController
 from wallet_orders_impl import WalletOrdersImpl
 
 
-class WalletOrdersV0(WalletOrdersImpl):
+class WalletOrdersV1(WalletOrdersImpl):
     def set_test_params(self):
-        super().set_test_params(False)
+        super().set_test_params(True, WalletCliController)
 
 
 if __name__ == '__main__':
-    WalletOrdersV0().main()
+    WalletOrdersV1().main()

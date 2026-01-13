@@ -20,7 +20,6 @@ import tempfile
 import time
 
 from typing import List
-from .address import create_deterministic_address_bcrt1_p2tr_op_true
 from .authproxy import JSONRPCException
 from . import coverage
 from .p2p import NetworkThread

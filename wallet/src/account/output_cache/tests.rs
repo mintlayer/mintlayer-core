@@ -15,15 +15,25 @@
 
 use rstest::rstest;
 
+use strum::IntoEnumIterator as _;
+
 use chainstate_test_framework::{empty_witness, TransactionBuilder};
-use common::chain::{
-    config::{create_unit_test_config, create_unit_test_config_builder},
-    signature::inputsig::InputWitness,
-    timelock::OutputTimeLock,
-    OrderData,
+use common::{
+    address::pubkeyhash::PublicKeyHash,
+    chain::{
+        config::{create_unit_test_config, create_unit_test_config_builder},
+        make_token_id_with_version,
+        signature::inputsig::InputWitness,
+        timelock::OutputTimeLock,
+        tokens::TokenIssuanceV1,
+        AccountOutPoint, ChainstateUpgradeBuilder, OrderData, TokenIdGenerationVersion,
+    },
 };
-use randomness::Rng;
+use randomness::{seq::IteratorRandom as _, Rng};
 use test_utils::random::{make_seedable_rng, Seed};
+use wallet_types::wallet_tx::TxStateTag;
+
+use crate::account::output_cache;
 
 use super::*;
 
@@ -448,11 +458,6 @@ fn update_conflicting_txs_frozen_token_only_in_outputs(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn token_id_in_add_tx(#[case] seed: Seed) {
-    use common::chain::{
-        make_token_id_with_version, tokens::TokenIssuanceV1, AccountOutPoint,
-        ChainstateUpgradeBuilder, TokenIdGenerationVersion,
-    };
-
     let mut rng = make_seedable_rng(seed);
 
     let fork_height = BlockHeight::new(rng.gen_range(1000..1_000_000));
@@ -740,4 +745,405 @@ fn abandon_transaction(#[case] seed: Seed) {
             (tx_c_id, WalletTx::Tx(TxData::new(tx_c, TxState::Abandoned))),
         ])
     );
+}
+
+// Create, fill, freeze and conclude 2 orders, checking the contents of the `orders` map
+// inside the cache.
+// The txs related to the 1st order are Confirmed, and those related to the 2nd one are Inactive.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn orders_state_update(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let chain_config = create_unit_test_config();
+
+    let token_id = TokenId::random_using(&mut rng);
+
+    let conclude_key1 = Destination::PublicKeyHash(PublicKeyHash::random_using(&mut rng));
+    let conclude_key2 = Destination::PublicKeyHash(PublicKeyHash::random_using(&mut rng));
+    let coins1 = OutputValue::Coin(Amount::from_atoms(rng.gen_range(1000..100_1000)));
+    let coins2 = OutputValue::Coin(Amount::from_atoms(rng.gen_range(1000..100_1000)));
+    let tokens1 = OutputValue::TokenV1(token_id, Amount::from_atoms(rng.gen_range(1000..100_1000)));
+    let tokens2 = OutputValue::TokenV1(token_id, Amount::from_atoms(rng.gen_range(1000..100_1000)));
+
+    let parent_tx_1_id = Id::<Transaction>::random_using(&mut rng);
+    let order1_creation_tx = TransactionBuilder::new()
+        .add_input(
+            TxInput::from_utxo(parent_tx_1_id.into(), 0),
+            InputWitness::NoSignature(None),
+        )
+        .add_output(TxOutput::CreateOrder(Box::new(OrderData::new(
+            conclude_key1.clone(),
+            coins1.clone(),
+            tokens1.clone(),
+        ))))
+        .build();
+    let order1_creation_tx_id = order1_creation_tx.transaction().get_id();
+    let order1_creation_timestamp = BlockTimestamp::from_int_seconds(rng.gen_range(0..10));
+    let order1_id = make_order_id(order1_creation_tx.inputs()).unwrap();
+    let order1_creation_tx_confirmation_height = BlockHeight::new(rng.gen_range(0..10));
+
+    let mut output_cache = OutputCache::empty();
+
+    // Create order 1
+
+    if rng.gen_bool(0.5) {
+        add_random_transfer_tx(&mut output_cache, &chain_config, &mut rng);
+    }
+
+    output_cache
+        .add_tx(
+            &chain_config,
+            BlockHeight::new(10),
+            order1_creation_tx_id.into(),
+            WalletTx::Tx(TxData::new(
+                order1_creation_tx,
+                TxState::Confirmed(
+                    order1_creation_tx_confirmation_height,
+                    order1_creation_timestamp,
+                    rng.gen_range(0..10),
+                ),
+            )),
+        )
+        .unwrap();
+
+    if rng.gen_bool(0.5) {
+        add_random_transfer_tx(&mut output_cache, &chain_config, &mut rng);
+    }
+
+    let mut expected_cached_order1_data = output_cache::OrderData {
+        conclude_key: conclude_key1.clone(),
+        initially_asked: RpcOutputValue::from_output_value(&coins1).unwrap(),
+        initially_given: RpcOutputValue::from_output_value(&tokens1).unwrap(),
+        creation_timestamp: Some(order1_creation_timestamp),
+        last_nonce: None,
+        last_parent: None,
+        is_concluded: false,
+        is_frozen: false,
+    };
+
+    assert_eq!(
+        output_cache.orders,
+        BTreeMap::from_iter([(order1_id, expected_cached_order1_data.clone())])
+    );
+
+    // Create order 2
+
+    let parent_tx_2_id = Id::<Transaction>::random_using(&mut rng);
+    let order2_creation_tx = TransactionBuilder::new()
+        .add_input(
+            TxInput::from_utxo(parent_tx_2_id.into(), 0),
+            InputWitness::NoSignature(None),
+        )
+        .add_output(TxOutput::CreateOrder(Box::new(OrderData::new(
+            conclude_key2.clone(),
+            tokens2.clone(),
+            coins2.clone(),
+        ))))
+        .build();
+    let order2_creation_tx_id = order2_creation_tx.transaction().get_id();
+    let order2_id = make_order_id(order2_creation_tx.inputs()).unwrap();
+
+    output_cache
+        .add_tx(
+            &chain_config,
+            BlockHeight::new(20),
+            order2_creation_tx_id.into(),
+            WalletTx::Tx(TxData::new(
+                order2_creation_tx,
+                TxState::Inactive(rng.gen()),
+            )),
+        )
+        .unwrap();
+
+    if rng.gen_bool(0.5) {
+        add_random_transfer_tx(&mut output_cache, &chain_config, &mut rng);
+    }
+
+    let mut expected_cached_order2_data = output_cache::OrderData {
+        conclude_key: conclude_key2,
+        initially_asked: RpcOutputValue::from_output_value(&tokens2).unwrap(),
+        initially_given: RpcOutputValue::from_output_value(&coins2).unwrap(),
+        creation_timestamp: None,
+        last_nonce: None,
+        last_parent: None,
+        is_concluded: false,
+        is_frozen: false,
+    };
+
+    assert_eq!(
+        output_cache.orders,
+        BTreeMap::from_iter([
+            (order1_id, expected_cached_order1_data.clone()),
+            (order2_id, expected_cached_order2_data.clone())
+        ])
+    );
+
+    // Fill order 1
+
+    let order1_fill_tx = TransactionBuilder::new()
+        .add_input(
+            TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(
+                order1_id,
+                Amount::from_atoms(rng.gen_range(100..200)),
+            )),
+            InputWitness::NoSignature(None),
+        )
+        .build();
+    let order1_fill_tx_id = order1_fill_tx.transaction().get_id();
+
+    output_cache
+        .add_tx(
+            &chain_config,
+            BlockHeight::new(30),
+            order1_fill_tx_id.into(),
+            WalletTx::Tx(TxData::new(
+                order1_fill_tx,
+                TxState::Confirmed(
+                    BlockHeight::new(rng.gen_range(20..30)),
+                    BlockTimestamp::from_int_seconds(rng.gen_range(20..30)),
+                    rng.gen_range(0..10),
+                ),
+            )),
+        )
+        .unwrap();
+
+    if rng.gen_bool(0.5) {
+        add_random_transfer_tx(&mut output_cache, &chain_config, &mut rng);
+    }
+
+    expected_cached_order1_data.last_parent = Some(order1_fill_tx_id.into());
+    assert_eq!(
+        output_cache.orders,
+        BTreeMap::from_iter([
+            (order1_id, expected_cached_order1_data.clone()),
+            (order2_id, expected_cached_order2_data.clone())
+        ])
+    );
+
+    // Fill order 2
+
+    let order2_fill_tx = TransactionBuilder::new()
+        .add_input(
+            TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(
+                order2_id,
+                Amount::from_atoms(rng.gen_range(100..200)),
+            )),
+            InputWitness::NoSignature(None),
+        )
+        .build();
+    let order2_fill_tx_id = order2_fill_tx.transaction().get_id();
+
+    output_cache
+        .add_tx(
+            &chain_config,
+            BlockHeight::new(40),
+            order2_fill_tx_id.into(),
+            WalletTx::Tx(TxData::new(order2_fill_tx, TxState::Inactive(rng.gen()))),
+        )
+        .unwrap();
+
+    if rng.gen_bool(0.5) {
+        add_random_transfer_tx(&mut output_cache, &chain_config, &mut rng);
+    }
+
+    expected_cached_order2_data.last_parent = Some(order2_fill_tx_id.into());
+    assert_eq!(
+        output_cache.orders,
+        BTreeMap::from_iter([
+            (order1_id, expected_cached_order1_data.clone()),
+            (order2_id, expected_cached_order2_data.clone())
+        ])
+    );
+
+    // Freeze order 1
+
+    let order1_freeze_tx = TransactionBuilder::new()
+        .add_input(
+            TxInput::OrderAccountCommand(OrderAccountCommand::FreezeOrder(order1_id)),
+            InputWitness::NoSignature(None),
+        )
+        .build();
+    let order1_freeze_tx_id = order1_freeze_tx.transaction().get_id();
+
+    output_cache
+        .add_tx(
+            &chain_config,
+            BlockHeight::new(50),
+            order1_freeze_tx_id.into(),
+            WalletTx::Tx(TxData::new(
+                order1_freeze_tx,
+                TxState::Confirmed(
+                    BlockHeight::new(rng.gen_range(40..50)),
+                    BlockTimestamp::from_int_seconds(rng.gen_range(40..50)),
+                    rng.gen_range(0..10),
+                ),
+            )),
+        )
+        .unwrap();
+
+    if rng.gen_bool(0.5) {
+        add_random_transfer_tx(&mut output_cache, &chain_config, &mut rng);
+    }
+
+    expected_cached_order1_data.last_parent = Some(order1_freeze_tx_id.into());
+    expected_cached_order1_data.is_frozen = true;
+    assert_eq!(
+        output_cache.orders,
+        BTreeMap::from_iter([
+            (order1_id, expected_cached_order1_data.clone()),
+            (order2_id, expected_cached_order2_data.clone())
+        ])
+    );
+
+    // Freeze order 2
+
+    let order2_freeze_tx = TransactionBuilder::new()
+        .add_input(
+            TxInput::OrderAccountCommand(OrderAccountCommand::FreezeOrder(order2_id)),
+            InputWitness::NoSignature(None),
+        )
+        .build();
+    let order2_freeze_tx_id = order2_freeze_tx.transaction().get_id();
+
+    output_cache
+        .add_tx(
+            &chain_config,
+            BlockHeight::new(60),
+            order2_freeze_tx_id.into(),
+            WalletTx::Tx(TxData::new(order2_freeze_tx, TxState::Inactive(rng.gen()))),
+        )
+        .unwrap();
+
+    if rng.gen_bool(0.5) {
+        add_random_transfer_tx(&mut output_cache, &chain_config, &mut rng);
+    }
+
+    expected_cached_order2_data.last_parent = Some(order2_freeze_tx_id.into());
+    expected_cached_order2_data.is_frozen = true;
+    assert_eq!(
+        output_cache.orders,
+        BTreeMap::from_iter([
+            (order1_id, expected_cached_order1_data.clone()),
+            (order2_id, expected_cached_order2_data.clone())
+        ])
+    );
+
+    // Conclude order 1
+
+    let order1_conclude_tx = TransactionBuilder::new()
+        .add_input(
+            TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder(order1_id)),
+            InputWitness::NoSignature(None),
+        )
+        .build();
+    let order1_conclude_tx_id = order1_conclude_tx.transaction().get_id();
+
+    output_cache
+        .add_tx(
+            &chain_config,
+            BlockHeight::new(70),
+            order1_conclude_tx_id.into(),
+            WalletTx::Tx(TxData::new(
+                order1_conclude_tx,
+                TxState::Confirmed(
+                    BlockHeight::new(rng.gen_range(60..70)),
+                    BlockTimestamp::from_int_seconds(rng.gen_range(60..70)),
+                    rng.gen_range(0..10),
+                ),
+            )),
+        )
+        .unwrap();
+
+    if rng.gen_bool(0.5) {
+        add_random_transfer_tx(&mut output_cache, &chain_config, &mut rng);
+    }
+
+    expected_cached_order1_data.last_parent = Some(order1_conclude_tx_id.into());
+    expected_cached_order1_data.is_concluded = true;
+    assert_eq!(
+        output_cache.orders,
+        BTreeMap::from_iter([
+            (order1_id, expected_cached_order1_data.clone()),
+            (order2_id, expected_cached_order2_data.clone())
+        ])
+    );
+
+    // Conclude order 2
+
+    let order2_conclude_tx = TransactionBuilder::new()
+        .add_input(
+            TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder(order2_id)),
+            InputWitness::NoSignature(None),
+        )
+        .build();
+    let order2_conclude_tx_id = order2_conclude_tx.transaction().get_id();
+
+    output_cache
+        .add_tx(
+            &chain_config,
+            BlockHeight::new(80),
+            order2_conclude_tx_id.into(),
+            WalletTx::Tx(TxData::new(
+                order2_conclude_tx,
+                TxState::Inactive(rng.gen()),
+            )),
+        )
+        .unwrap();
+
+    if rng.gen_bool(0.5) {
+        add_random_transfer_tx(&mut output_cache, &chain_config, &mut rng);
+    }
+
+    expected_cached_order2_data.last_parent = Some(order2_conclude_tx_id.into());
+    expected_cached_order2_data.is_concluded = true;
+    assert_eq!(
+        output_cache.orders,
+        BTreeMap::from_iter([
+            (order1_id, expected_cached_order1_data.clone()),
+            (order2_id, expected_cached_order2_data.clone())
+        ])
+    );
+}
+
+fn add_random_transfer_tx(
+    output_cache: &mut OutputCache,
+    chain_config: &ChainConfig,
+    mut rng: impl Rng,
+) {
+    let random_tx_id = Id::<Transaction>::random_using(&mut rng);
+    let random_block_id = Id::<GenBlock>::random_using(&mut rng);
+    let tx = TransactionBuilder::new()
+        .add_input(
+            TxInput::from_utxo(random_tx_id.into(), rng.gen()),
+            InputWitness::NoSignature(None),
+        )
+        .add_output(TxOutput::Transfer(
+            OutputValue::Coin(Amount::from_atoms(rng.gen())),
+            Destination::PublicKeyHash(PublicKeyHash::random_using(&mut rng)),
+        ))
+        .build();
+    let tx_id = tx.transaction().get_id();
+
+    let tx_state = match TxStateTag::iter().choose(&mut rng).unwrap() {
+        TxStateTag::Confirmed => TxState::Confirmed(
+            BlockHeight::new(rng.gen_range(0..100)),
+            BlockTimestamp::from_int_seconds(rng.gen_range(0..100)),
+            rng.gen_range(0..100),
+        ),
+        TxStateTag::InMempool => TxState::InMempool(rng.gen()),
+        TxStateTag::Conflicted => TxState::Conflicted(random_block_id),
+        TxStateTag::Inactive => TxState::Inactive(rng.gen()),
+        TxStateTag::Abandoned => TxState::Abandoned,
+    };
+
+    output_cache
+        .add_tx(
+            chain_config,
+            BlockHeight::new(rng.gen_range(0..100)),
+            tx_id.into(),
+            WalletTx::Tx(TxData::new(tx, tx_state)),
+        )
+        .unwrap();
 }

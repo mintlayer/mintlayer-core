@@ -173,6 +173,7 @@ mockall::mock! {
         fn get_order_data(&self, id: &OrderId) -> crate::Result<Option<OrderData>>;
         fn get_ask_balance(&self, id: &OrderId) -> crate::Result<Option<Amount>>;
         fn get_give_balance(&self, id: &OrderId) -> crate::Result<Option<Amount>>;
+        fn get_all_order_ids(&self) -> crate::Result<BTreeSet<OrderId>>;
     }
 
     impl crate::BlockchainStorageWrite for Store {
@@ -470,6 +471,7 @@ mockall::mock! {
         fn get_order_data(&self, id: &OrderId) -> crate::Result<Option<OrderData>>;
         fn get_ask_balance(&self, id: &OrderId) -> crate::Result<Option<Amount>>;
         fn get_give_balance(&self, id: &OrderId) -> crate::Result<Option<Amount>>;
+        fn get_all_order_ids(&self) -> crate::Result<BTreeSet<OrderId>>;
     }
 
     impl crate::TransactionRo for StoreTxRo {
@@ -596,6 +598,7 @@ mockall::mock! {
         fn get_order_data(&self, id: &OrderId) -> crate::Result<Option<OrderData>>;
         fn get_ask_balance(&self, id: &OrderId) -> crate::Result<Option<Amount>>;
         fn get_give_balance(&self, id: &OrderId) -> crate::Result<Option<Amount>>;
+        fn get_all_order_ids(&self) -> crate::Result<BTreeSet<OrderId>>;
     }
 
     impl crate::BlockchainStorageWrite for StoreTxRw {

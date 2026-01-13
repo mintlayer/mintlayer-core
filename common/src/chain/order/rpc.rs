@@ -16,21 +16,33 @@
 use rpc_description::HasValueHint;
 
 use crate::{
-    chain::{output_value::RpcOutputValue, AccountNonce, Destination},
+    chain::{
+        output_value::RpcOutputValue, output_values_holder::RpcOutputValuesHolder, AccountNonce,
+        Destination,
+    },
     primitives::Amount,
 };
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
+#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct RpcOrderInfo {
     pub conclude_key: Destination,
 
     pub initially_asked: RpcOutputValue,
     pub initially_given: RpcOutputValue,
 
-    // left to offer
-    pub give_balance: Amount,
-    // how much more is expected to get in return
+    // The remaining amount of the "ask" currency that the order is expected to receive in
+    // exchange for the remaining amount of the "give" currency.
     pub ask_balance: Amount,
+    // The remaining amount of the "give" currency.
+    pub give_balance: Amount,
 
     pub nonce: Option<AccountNonce>,
+
+    pub is_frozen: bool,
+}
+
+impl RpcOutputValuesHolder for RpcOrderInfo {
+    fn rpc_output_values_iter(&self) -> impl Iterator<Item = &RpcOutputValue> {
+        [&self.initially_asked, &self.initially_given].into_iter()
+    }
 }

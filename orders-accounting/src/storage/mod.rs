@@ -13,8 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::{
+    collections::BTreeSet,
+    ops::{Deref, DerefMut},
+};
+
 use common::{chain::OrderId, primitives::Amount};
-use std::ops::{Deref, DerefMut};
 
 use crate::OrderData;
 
@@ -44,6 +48,9 @@ pub trait OrdersAccountingStorageRead {
     ///
     /// It's represented by `Amount` to simplify accounting math and the currency can be enquired from OrderData.
     fn get_give_balance(&self, id: &OrderId) -> Result<Option<Amount>, Self::Error>;
+
+    /// Return ids of all orders that exist in the storage.
+    fn get_all_order_ids(&self) -> Result<BTreeSet<OrderId>, Self::Error>;
 }
 
 pub trait OrdersAccountingStorageWrite: OrdersAccountingStorageRead {
@@ -74,6 +81,10 @@ where
 
     fn get_give_balance(&self, id: &OrderId) -> Result<Option<Amount>, Self::Error> {
         self.deref().get_give_balance(id)
+    }
+
+    fn get_all_order_ids(&self) -> Result<BTreeSet<OrderId>, Self::Error> {
+        self.deref().get_all_order_ids()
     }
 }
 

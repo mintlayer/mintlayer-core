@@ -100,6 +100,33 @@ impl DecimalAmount {
     }
 }
 
+/// Subtract two DecimalAmount's.
+///
+/// This function is intended to be used with amounts that represent the same currency (i.e. when
+/// the original `decimals` of both amounts were the same).
+/// In this case it will only return None if the result would be negative.
+///
+/// If the function is used with arbitrary unrelated amounts, it may also return None is a loss
+/// of precision would occur, either during the final or an intermediate value calculation.
+pub fn subtract_decimal_amounts_of_same_currency(
+    lhs: &DecimalAmount,
+    rhs: &DecimalAmount,
+) -> Option<DecimalAmount> {
+    // Remove extra zeroes, in case one of the amounts' decimals were artificially increased via `with_decimals`
+    // (in which case the later call "with_decimals(max_decimals)") may fail even if both amounts refer to the same
+    // currency).
+    // Note that since this function can only succeed if lhs is bigger than or equal to rhs,
+    // any padding that lhs has should be ok for rhs too. I.e. removing padding for lhs is redundant.
+    let rhs = rhs.without_padding();
+
+    let max_decimals = std::cmp::max(lhs.decimals(), rhs.decimals());
+    let lhs = lhs.with_decimals(max_decimals)?;
+    let rhs = rhs.with_decimals(max_decimals)?;
+
+    let mantissa_diff = lhs.mantissa().checked_sub(rhs.mantissa())?;
+    Some(DecimalAmount::from_uint_decimal(mantissa_diff, max_decimals).without_padding())
+}
+
 fn empty_to_zero(s: &str) -> &str {
     match s {
         "" => "0",
@@ -348,5 +375,60 @@ mod test {
         assert_eq!(amount, Some(Amount::from_atoms(123450)));
         let amount = dec_amount2.to_amount(4);
         assert_eq!(amount, Some(Amount::from_atoms(1234500)));
+    }
+
+    #[test]
+    fn subtract_same_currency() {
+        let res = subtract_decimal_amounts_of_same_currency(
+            &DecimalAmount::from_uint_decimal(12345, 3),
+            &DecimalAmount::from_uint_decimal(1234, 3),
+        )
+        .unwrap();
+        assert!(res.is_same(&DecimalAmount::from_uint_decimal(11111, 3)));
+
+        let res = subtract_decimal_amounts_of_same_currency(
+            &DecimalAmount::from_uint_decimal(12345, 3),
+            &DecimalAmount::from_uint_decimal(123400, 5),
+        )
+        .unwrap();
+        assert!(res.is_same(&DecimalAmount::from_uint_decimal(11111, 3)));
+
+        let res = subtract_decimal_amounts_of_same_currency(
+            &DecimalAmount::from_uint_decimal(1234500, 5),
+            &DecimalAmount::from_uint_decimal(1234, 3),
+        )
+        .unwrap();
+        assert!(res.is_same(&DecimalAmount::from_uint_decimal(11111, 3)));
+
+        let res = subtract_decimal_amounts_of_same_currency(
+            &DecimalAmount::from_uint_decimal(12345, 3),
+            &DecimalAmount::from_uint_decimal(2345, 3),
+        )
+        .unwrap();
+        assert!(res.is_same(&DecimalAmount::from_uint_decimal(10, 0)));
+
+        let res = subtract_decimal_amounts_of_same_currency(
+            &DecimalAmount::from_uint_decimal(12345, 3),
+            &DecimalAmount::from_uint_decimal(234500, 5),
+        )
+        .unwrap();
+        assert!(res.is_same(&DecimalAmount::from_uint_decimal(10, 0)));
+
+        let res = subtract_decimal_amounts_of_same_currency(
+            &DecimalAmount::from_uint_decimal(1234500, 5),
+            &DecimalAmount::from_uint_decimal(2345, 3),
+        )
+        .unwrap();
+        assert!(res.is_same(&DecimalAmount::from_uint_decimal(10, 0)));
+
+        // The difference between the decimals is 35 and 12345*10^35 won't fit into u128
+        // (but 2345*10^35 still fits into u128, so we can construct it).
+        assert!(DecimalAmount::from_uint_decimal(12345, 3).with_decimals(38).is_none()); // sanity check
+        let res = subtract_decimal_amounts_of_same_currency(
+            &DecimalAmount::from_uint_decimal(12345, 3),
+            &DecimalAmount::from_uint_decimal(2345, 3).with_decimals(38).unwrap(),
+        )
+        .unwrap();
+        assert!(res.is_same(&DecimalAmount::from_uint_decimal(10, 0)));
     }
 }

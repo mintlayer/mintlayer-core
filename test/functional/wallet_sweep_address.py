@@ -107,11 +107,17 @@ class WalletSweepAddresses(BitcoinTestFramework):
             # Submit a valid transaction
             def make_output(pub_key_bytes):
                 return {
-                        'Transfer': [ { 'Coin': coins_per_utxo * ATOMS_PER_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': pub_key_bytes}}} } ],
+                    'Transfer': [
+                        { 'Coin': coins_per_utxo * ATOMS_PER_COIN },
+                        { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': pub_key_bytes}}} }
+                    ],
                 }
             def make_locked_output(pub_key_bytes):
                 return {
-                        'LockThenTransfer': [ { 'Coin': coins_per_utxo * ATOMS_PER_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': pub_key_bytes}}} }, { 'ForBlockCount': 99 } ],
+                    'LockThenTransfer': [
+                        { 'Coin': coins_per_utxo * ATOMS_PER_COIN },
+                        { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': pub_key_bytes}}} }, { 'ForBlockCount': 99 }
+                    ],
                 }
             encoded_tx, tx_id = make_tx([reward_input(tip_id)], [make_output(pk) for pk in pks] + [make_locked_output(locked_pub_key_bytes)], 0)
 
@@ -169,7 +175,8 @@ class WalletSweepAddresses(BitcoinTestFramework):
 
             # issue some tokens to also transfer
             tokens_address = await wallet.new_address()
-            token_id, tx_id, err = await wallet.issue_new_token("XXX", 2, "http://uri", tokens_address)
+            token_ticker = "XXX"
+            token_id, tx_id, err = await wallet.issue_new_token(token_ticker, 2, "http://uri", tokens_address)
             assert token_id is not None
             assert tx_id is not None
             assert err is None
@@ -182,7 +189,8 @@ class WalletSweepAddresses(BitcoinTestFramework):
 
             # issue some more tokens but freeze them
             frozen_tokens_address = await wallet.new_address()
-            frozen_token_id, frozen_tx_id, err = await wallet.issue_new_token("XXX", 2, "http://uri", frozen_tokens_address)
+            frozen_token_ticker = "YYY"
+            frozen_token_id, frozen_tx_id, err = await wallet.issue_new_token(frozen_token_ticker, 2, "http://uri", frozen_tokens_address)
             assert frozen_token_id is not None
             assert frozen_tx_id is not None
             assert err is None
@@ -210,7 +218,7 @@ class WalletSweepAddresses(BitcoinTestFramework):
             # check the balance
             balance = await wallet.get_balance()
             # frozen tokens can't be transferred so they should be here
-            assert_in(f"{frozen_token_id} amount: 10000", balance)
+            assert_in(f"{frozen_token_id} ({frozen_token_ticker}), amount: 10000", balance)
             # the other token should not be in the acc1 balance any more
             assert_not_in(f"{token_id}", balance)
 
@@ -219,7 +227,7 @@ class WalletSweepAddresses(BitcoinTestFramework):
             # frozen tokens can't be transferred so they are not in acc0 balance
             assert_not_in(f"{frozen_token_id}", balance)
             # the other token should be fully transferred in the acc0 balance
-            assert_in(f"{token_id} amount: 10000", balance)
+            assert_in(f"{token_id} ({token_ticker}), amount: 10000", balance)
 
 
 if __name__ == '__main__':

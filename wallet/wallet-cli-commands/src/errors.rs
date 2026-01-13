@@ -13,6 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common::{
+    address::{AddressError, RpcAddress},
+    chain::OrderId,
+};
 use crypto::key::hdkd::u31::U31;
 use node_comm::node_traits::NodeInterface;
 use utils::qrcode::QrCodeError;
@@ -24,30 +28,55 @@ use wallet_rpc_lib::RpcError;
 pub enum WalletCliCommandError<N: NodeInterface> {
     #[error("Invalid quoting")]
     InvalidQuoting,
+
     #[error("{0}")]
     InvalidCommandInput(clap::Error),
+
     #[error("Invalid input: {0}")]
     InvalidInput(String),
+
     #[error("Please open or create a wallet file first")]
     NoWallet,
+
     #[error("Account not found for index: {0}")]
     AccountNotFound(U31),
+
     #[error("QR Code encoding error: {0}")]
     QrCodeEncoding(#[from] QrCodeError),
+
     #[error("Error converting to json: {0}")]
     SerdeJsonFormatError(#[from] serde_json::Error),
+
     #[error("{0}")]
     WalletRpcError(#[from] RpcError<N>),
+
     #[error("{0}")]
     WalletHandlessRpcError(#[from] WalletRpcHandlesClientError<N>),
+
     #[error("{0}")]
     WalletClientRpcError(#[from] WalletRpcError),
+
     #[error("A new wallet has been opened between commands")]
     NewWalletWasOpened,
+
     #[error("A different wallet than the existing one has been opened between commands")]
     DifferentWalletWasOpened,
+
     #[error("The wallet has been closed between commands")]
     ExistingWalletWasClosed,
+
     #[error("Invalid tx output: {0}")]
     InvalidTxOutput(GenericCurrencyTransferToTxOutputConversionError),
+
+    #[error("Invalid address in a newly created transaction")]
+    InvalidAddressInNewlyCreatedTransaction,
+
+    #[error("Error decoding token id: {0}")]
+    TokenIdDecodingError(AddressError),
+
+    #[error("Accumulated ask amount for order {0} is negative")]
+    OrderNegativeAccumulatedAskAmount(RpcAddress<OrderId>),
+
+    #[error("Address error: {0}")]
+    AddressError(#[from] AddressError),
 }

@@ -39,8 +39,8 @@ use common::{
         block::{signed_block_header::SignedBlockHeader, Block, BlockReward, GenBlock},
         config::ChainConfig,
         tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
-        AccountNonce, AccountType, DelegationId, OrderId, PoolId, RpcOrderInfo, Transaction,
-        TxInput, TxOutput, UtxoOutPoint,
+        AccountNonce, AccountType, Currency, DelegationId, OrderId, PoolId, RpcOrderInfo,
+        Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{id::WithId, Amount, BlockHeight, Id, Idable},
 };
@@ -840,11 +840,36 @@ where
     }
 
     #[tracing::instrument(skip_all, fields(id = %id))]
-    fn get_order_info_for_rpc(&self, id: OrderId) -> Result<Option<RpcOrderInfo>, ChainstateError> {
+    fn get_order_info_for_rpc(
+        &self,
+        id: &OrderId,
+    ) -> Result<Option<RpcOrderInfo>, ChainstateError> {
         self.chainstate
             .query()
             .map_err(ChainstateError::from)?
             .get_order_info_for_rpc(id)
+            .map_err(ChainstateError::from)
+    }
+
+    #[tracing::instrument(skip_all)]
+    fn get_all_order_ids(&self) -> Result<BTreeSet<OrderId>, ChainstateError> {
+        self.chainstate
+            .query()
+            .map_err(ChainstateError::from)?
+            .get_all_order_ids()
+            .map_err(ChainstateError::from)
+    }
+
+    #[tracing::instrument(skip(self))]
+    fn get_orders_info_for_rpc_by_currencies(
+        &self,
+        ask_currency: Option<&Currency>,
+        give_currency: Option<&Currency>,
+    ) -> Result<BTreeMap<OrderId, RpcOrderInfo>, ChainstateError> {
+        self.chainstate
+            .query()
+            .map_err(ChainstateError::from)?
+            .get_orders_info_for_rpc_by_currencies(ask_currency, give_currency)
             .map_err(ChainstateError::from)
     }
 }

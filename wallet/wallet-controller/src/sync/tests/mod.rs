@@ -26,7 +26,8 @@ use chainstate_test_framework::TestFramework;
 use common::{
     chain::{
         tokens::{RPCTokenInfo, TokenId},
-        DelegationId, Destination, OrderId, PoolId, RpcOrderInfo, SignedTransaction, Transaction,
+        Currency, DelegationId, Destination, OrderId, PoolId, RpcOrderInfo, SignedTransaction,
+        Transaction,
     },
     primitives::{time::Time, Amount},
 };
@@ -309,6 +310,14 @@ impl NodeInterface for MockNode {
         &self,
         _order_id: OrderId,
     ) -> Result<Option<RpcOrderInfo>, Self::Error> {
+        unreachable!()
+    }
+
+    async fn get_orders_info_by_currencies(
+        &self,
+        _ask_currency: Option<Currency>,
+        _give_currency: Option<Currency>,
+    ) -> Result<BTreeMap<OrderId, RpcOrderInfo>, Self::Error> {
         unreachable!()
     }
 

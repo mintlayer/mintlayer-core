@@ -26,8 +26,11 @@ use std::{
     time::Duration,
 };
 
+use futures::{stream::FuturesUnordered, TryStreamExt as _};
+use itertools::Itertools as _;
+
 use chainstate::{
-    rpc::{RpcOutputValueIn, TokenDecimals},
+    rpc::{RpcOutputValueIn, RpcOutputValueOut},
     tx_verifier::check_transaction,
     ChainInfo, TokenIssuanceError,
 };
@@ -38,16 +41,21 @@ use common::{
         classic_multisig::ClassicMultisigChallenge,
         htlc::{HashedTimelockContract, HtlcSecret, HtlcSecretHash},
         output_value::OutputValue,
+        output_values_holder::collect_token_v1_ids_from_rpc_output_values_holders,
         signature::inputsig::arbitrary_message::{
             produce_message_challenge, ArbitraryMessageSignature,
         },
-        tokens::{IsTokenFreezable, IsTokenUnfreezable, Metadata, TokenId, TokenTotalSupply},
-        Block, ChainConfig, DelegationId, Destination, GenBlock, OrderId, PoolId,
-        SignedTransaction, SignedTransactionIntent, Transaction, TxOutput, UtxoOutPoint,
+        tokens::{
+            IsTokenFreezable, IsTokenUnfreezable, Metadata, RPCTokenInfo, TokenId, TokenTotalSupply,
+        },
+        Block, ChainConfig, Currency, DelegationId, Destination, GenBlock, OrderId, PoolId,
+        RpcCurrency, SignedTransaction, SignedTransactionIntent, Transaction, TxOutput,
+        UtxoOutPoint,
     },
     primitives::{
         id::WithId, per_thousand::PerThousand, time::Time, Amount, BlockHeight, Id, Idable,
     },
+    TokenDecimals,
 };
 use crypto::{
     key::{hdkd::u31::U31, PrivateKey, PublicKey},
@@ -61,7 +69,7 @@ use types::{
     AccountExtendedPublicKey, NewOrderTransaction, NewSubmittedTransaction, NewTokenTransaction,
     RpcHashedTimelockContract, RpcNewTransaction, RpcPreparedTransaction,
 };
-use utils::{ensure, shallow_clone::ShallowClone};
+use utils::{ensure, shallow_clone::ShallowClone, sorted::Sorted as _};
 use utils_networking::IpOrSocketAddress;
 use wallet::{
     account::{transaction_list::TransactionList, PoolData, TransactionToSign, TxInfo},
@@ -70,8 +78,9 @@ use wallet::{
 use wallet_controller::{
     types::{
         Balances, BlockInfo, CreatedBlockInfo, CreatedWallet, GenericTokenTransfer,
-        InspectTransaction, NewTransaction, OpenedWallet, SeedWithPassPhrase, SweepFromAddresses,
-        TransactionToInspect, WalletCreationOptions, WalletInfo, WalletTypeArgs,
+        InspectTransaction, NewTransaction, OpenedWallet, RpcAmountOut, SeedWithPassPhrase,
+        SweepFromAddresses, TransactionToInspect, WalletCreationOptions, WalletInfo,
+        WalletTypeArgs,
     },
     ConnectedPeer, ControllerConfig, ControllerError, NodeInterface, UtxoState, UtxoStates,
     UtxoType, UtxoTypes, DEFAULT_ACCOUNT_INDEX,
@@ -81,15 +90,18 @@ use wallet_types::wallet_type::WalletType;
 use wallet_types::{
     account_info::StandaloneAddressDetails, generic_transaction::GenericTransaction,
     partially_signed_transaction::PartiallySignedTransaction, scan_blockchain::ScanBlockchain,
-    signature_status::SignatureStatus, wallet_tx::TxData, with_locked::WithLocked, Currency,
+    signature_status::SignatureStatus, wallet_tx::TxData, with_locked::WithLocked,
     SignedTxWithFees,
 };
 
-use crate::{WalletHandle, WalletRpcConfig};
+use crate::{
+    types::{ActiveOrderInfo, ExistingOwnOrderData},
+    WalletHandle, WalletRpcConfig,
+};
 
 use self::types::{
     AddressInfo, AddressWithUsageInfo, DelegationInfo, HardwareWalletType, LegacyVrfPublicKeyInfo,
-    NewAccountInfo, PoolInfo, PublicKeyInfo, RpcAddress, RpcAmountIn, RpcHexString,
+    NewAccountInfo, OwnOrderInfo, PoolInfo, PublicKeyInfo, RpcAddress, RpcAmountIn, RpcHexString,
     RpcStandaloneAddress, RpcStandaloneAddressDetails, RpcStandaloneAddresses,
     RpcStandalonePrivateKeyAddress, RpcUtxoOutpoint, StakingStatus, StandaloneAddressWithDetails,
     VrfPublicKeyInfo,
@@ -758,12 +770,28 @@ where
             .await?
     }
 
+    pub async fn node_get_tokens_info(
+        &self,
+        token_ids: impl IntoIterator<Item = RpcAddress<TokenId>>,
+    ) -> WRpcResult<Vec<RPCTokenInfo>, N> {
+        let token_ids = token_ids
+            .into_iter()
+            .map(|token_id_addr| -> WRpcResult<_, N> {
+                token_id_addr
+                    .decode_object(&self.chain_config)
+                    .map_err(|_| RpcError::InvalidAddress)
+            })
+            .collect::<Result<_, _>>()?;
+        let infos = self.node.get_tokens_info(token_ids).await.map_err(RpcError::RpcError)?;
+        Ok(infos)
+    }
+
     pub async fn get_tokens_decimals(
         &self,
         token_ids: BTreeSet<TokenId>,
     ) -> WRpcResult<BTreeMap<TokenId, TokenDecimals>, N> {
         let infos = self.node.get_tokens_info(token_ids).await.map_err(RpcError::RpcError)?;
-        let desimals = infos
+        let decimals = infos
             .iter()
             .map(|info| {
                 (
@@ -773,7 +801,7 @@ where
             })
             .collect();
 
-        Ok(desimals)
+        Ok(decimals)
     }
 
     pub async fn get_transaction(
@@ -1697,6 +1725,197 @@ where
                 })
             })
             .await?
+    }
+
+    pub async fn list_own_orders(&self, account_index: U31) -> WRpcResult<Vec<OwnOrderInfo>, N> {
+        let wallet_orders_data = self
+            .wallet
+            .call(move |controller| controller.readonly_controller(account_index).get_own_orders())
+            .await??;
+        let token_ids = collect_token_v1_ids_from_rpc_output_values_holders(
+            wallet_orders_data.iter().map(|(_, order_data)| order_data),
+        );
+        let orders_data = wallet_orders_data
+            .into_iter()
+            .map(async |(order_id, wallet_order_data)| -> WRpcResult<_, N> {
+                let node_rpc_order_info =
+                    self.node.get_order_info(order_id).await.map_err(RpcError::RpcError)?;
+
+                Ok((order_id, wallet_order_data, node_rpc_order_info))
+            })
+            .collect::<FuturesUnordered<_>>()
+            .try_collect::<Vec<_>>()
+            .await?;
+        let token_decimals = self.get_tokens_decimals(token_ids).await?;
+
+        let result_iter = orders_data.into_iter().map(
+            |(order_id, wallet_order_data, node_rpc_order_info)| -> WRpcResult<_, N> {
+                let order_id_as_rpc_addr = RpcAddress::new(&self.chain_config, order_id)?;
+                let initially_asked = RpcOutputValueOut::new(
+                    &self.chain_config,
+                    &token_decimals,
+                    wallet_order_data.initially_asked.into(),
+                )?;
+                let initially_given = RpcOutputValueOut::new(
+                    &self.chain_config,
+                    &token_decimals,
+                    wallet_order_data.initially_given.into(),
+                )?;
+
+                // Note: if node_rpc_order_info is unset, the order data doesn't exist in the chainstate db,
+                // which means that either the order creation tx hasn't been included in a block yet,
+                // or that the order has been concluded and the conclusion tx has been included in a block.
+                let existing_order_data =
+                    match (node_rpc_order_info, wallet_order_data.creation_timestamp) {
+                        (Some(node_rpc_order_info), Some(creation_timestamp)) => {
+                            let ask_balance = RpcAmountOut::from_currency_amount(
+                                node_rpc_order_info.ask_balance,
+                                &node_rpc_order_info.initially_asked.currency(),
+                                &self.chain_config,
+                                &token_decimals,
+                            )?;
+                            let give_balance = RpcAmountOut::from_currency_amount(
+                                node_rpc_order_info.give_balance,
+                                &node_rpc_order_info.initially_given.currency(),
+                                &self.chain_config,
+                                &token_decimals,
+                            )?;
+
+                            Some(ExistingOwnOrderData {
+                                ask_balance,
+                                give_balance,
+                                creation_timestamp,
+                                is_frozen: node_rpc_order_info.is_frozen,
+                            })
+                        }
+                        (None, None) => None,
+                        (Some(_), None) => {
+                            // The wallet may not yet have handled the block containing the order creation tx.
+                            // This is a normal (though rare) situation. Consider the order to not yet exist in this case.
+                            None
+                        }
+                        (None, Some(_)) => {
+                            // If wallet_order_data.is_concluded is true, this is a normal situation - the order has been
+                            // concluded and the conclusion has been confirmed.
+                            // If it's false, this situation is still possible, e.g. if another instance of this wallet
+                            // issued a conclusion tx, the tx has been included in a block, but this instance of
+                            // the wallet hasn't seen it yet.
+                            None
+                        }
+                    };
+
+                // TODO: consider storing order creation timestamp in the chainstate db; this will make
+                // the timestamp available for non-own orders too, and also allow to simplify the logic above.
+                // (note that `output_cache::OrderData::creation_timestamp` will no longer be needed in this
+                // case and can be removed).
+
+                Ok(OwnOrderInfo {
+                    order_id: order_id_as_rpc_addr,
+                    initially_asked,
+                    initially_given,
+                    existing_order_data,
+                    is_marked_as_frozen_in_wallet: wallet_order_data.is_frozen,
+                    is_marked_as_concluded_in_wallet: wallet_order_data.is_concluded,
+                })
+            },
+        );
+
+        let result = itertools::process_results(result_iter, |iter| {
+            // Filter out concluded orders whose conclusion has been confirmed.
+            // Note that this will also filter out orders that were concluded right after creation,
+            // so that the creation tx has not been included in a block yet. Technically this
+            // is incorrect, but it's a degenerate case, so we just consider the conclusion to
+            // be confirmed.
+            iter.filter(|info| {
+                !(info.is_marked_as_concluded_in_wallet && info.existing_order_data.is_none())
+            })
+            .collect_vec()
+        })?;
+        // Note: currently the infos are sorted by plain order id (because this is how
+        // they are sorted in the output cache).
+        // We re-sort then by the bech32 representation of the order id, to simplify testing.
+        let result = result.sorted_by(|info1, info2| info1.order_id.cmp(&info2.order_id));
+
+        Ok(result)
+    }
+
+    pub async fn list_all_active_orders(
+        &self,
+        account_index: U31,
+        ask_currency: Option<RpcCurrency>,
+        give_currency: Option<RpcCurrency>,
+    ) -> WRpcResult<Vec<ActiveOrderInfo>, N> {
+        let wallet_order_ids = self
+            .wallet
+            .call(move |controller| controller.readonly_controller(account_index).get_own_orders())
+            .await??
+            .into_iter()
+            .map(|(order_id, _)| order_id)
+            .collect::<BTreeSet<_>>();
+
+        let node_rpc_order_infos = self
+            .node
+            .get_orders_info_by_currencies(
+                ask_currency
+                    .map(|rpc_currency| rpc_currency.to_currency(&self.chain_config))
+                    .transpose()?,
+                give_currency
+                    .map(|rpc_currency| rpc_currency.to_currency(&self.chain_config))
+                    .transpose()?,
+            )
+            .await
+            .map_err(RpcError::RpcError)?;
+
+        let token_ids =
+            collect_token_v1_ids_from_rpc_output_values_holders(node_rpc_order_infos.values());
+        let token_decimals = self.get_tokens_decimals(token_ids).await?;
+
+        let result = node_rpc_order_infos
+            .into_iter()
+            .filter_map(|(order_id, node_rpc_order_info)| {
+                (!node_rpc_order_info.is_frozen).then(|| -> WRpcResult<_, N> {
+                    let order_id_as_rpc_addr = RpcAddress::new(&self.chain_config, order_id)?;
+                    let initially_asked = RpcOutputValueOut::new(
+                        &self.chain_config,
+                        &token_decimals,
+                        node_rpc_order_info.initially_asked.into(),
+                    )?;
+                    let initially_given = RpcOutputValueOut::new(
+                        &self.chain_config,
+                        &token_decimals,
+                        node_rpc_order_info.initially_given.into(),
+                    )?;
+                    let ask_balance = RpcAmountOut::from_currency_amount(
+                        node_rpc_order_info.ask_balance,
+                        &node_rpc_order_info.initially_asked.currency(),
+                        &self.chain_config,
+                        &token_decimals,
+                    )?;
+                    let give_balance = RpcAmountOut::from_currency_amount(
+                        node_rpc_order_info.give_balance,
+                        &node_rpc_order_info.initially_given.currency(),
+                        &self.chain_config,
+                        &token_decimals,
+                    )?;
+                    let is_own = wallet_order_ids.contains(&order_id);
+
+                    Ok(ActiveOrderInfo {
+                        order_id: order_id_as_rpc_addr,
+                        initially_asked,
+                        initially_given,
+                        ask_balance,
+                        give_balance,
+                        is_own,
+                    })
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        // Note: currently the infos are sorted by plain order id (because node_rpc_order_infos
+        // is a BTreeMap).
+        // We re-sort then by the bech32 representation of the order id, to simplify testing.
+        let result = result.sorted_by(|info1, info2| info1.order_id.cmp(&info2.order_id));
+
+        Ok(result)
     }
 
     pub async fn compose_transaction(

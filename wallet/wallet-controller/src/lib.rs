@@ -68,7 +68,7 @@ use common::{
             DestinationSigError, Transactable,
         },
         tokens::{RPCTokenInfo, TokenId},
-        Block, ChainConfig, Destination, GenBlock, PoolId, SighashInputCommitmentVersion,
+        Block, ChainConfig, Currency, Destination, GenBlock, PoolId, SighashInputCommitmentVersion,
         SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{
@@ -117,7 +117,6 @@ use wallet_types::{
     signature_status::SignatureStatus,
     wallet_type::{WalletControllerMode, WalletType},
     with_locked::WithLocked,
-    Currency,
 };
 
 #[cfg(feature = "trezor")]
@@ -591,13 +590,6 @@ where
         }
     }
 
-    pub async fn get_token_number_of_decimals(
-        &self,
-        token_id: TokenId,
-    ) -> Result<u8, ControllerError<N>> {
-        Ok(self.get_token_info(token_id).await?.token_number_of_decimals())
-    }
-
     pub async fn get_token_info(
         &self,
         token_id: TokenId,
@@ -655,7 +647,7 @@ where
     ) -> Result<Block, ControllerError<N>> {
         let pools = self
             .wallet
-            .get_pool_ids(account_index, WalletPoolsFilter::Stake)
+            .get_pools(account_index, WalletPoolsFilter::Stake)
             .map_err(ControllerError::WalletError)?;
 
         let mut last_error = ControllerError::NoStakingPool;

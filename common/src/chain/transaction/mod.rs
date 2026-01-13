@@ -195,6 +195,10 @@ impl OutputValuesHolder for Transaction {
     }
 }
 
+impl rpc_description::HasValueHint for Id<Transaction> {
+    const HINT_SER: rpc_description::ValueHint = rpc_description::ValueHint::HEX_STRING;
+}
+
 #[cfg(test)]
 mod test {
     use super::*;

@@ -91,7 +91,10 @@ class WalletTokens(BitcoinTestFramework):
 
             # Submit a valid transaction
             output = {
-                    'Transfer': [ { 'Coin': 501 * ATOMS_PER_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': pub_key_bytes}}} } ],
+                'Transfer': [
+                    { 'Coin': 501 * ATOMS_PER_COIN },
+                    { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': pub_key_bytes}}} }
+                ],
             }
             encoded_tx, tx_id = make_tx([reward_input(tip_id)], [output], 0)
 
@@ -139,7 +142,7 @@ class WalletTokens(BitcoinTestFramework):
             assert_in("Success", await wallet.sync())
 
             assert_in("Coins amount: 350", await wallet.get_balance())
-            assert_in(f"{token_id} amount: 10000", await wallet.get_balance())
+            assert_in(f"{token_id} ({ticker}), amount: 10000", await wallet.get_balance())
 
             ## create a new account and send some tokens to it
             await wallet.create_new_account()
@@ -154,7 +157,7 @@ class WalletTokens(BitcoinTestFramework):
             assert_in("Success", await wallet.sync())
 
             ## check the new balance
-            assert_in(f"{token_id} amount: 9989.99", await wallet.get_balance())
+            assert_in(f"{token_id} ({ticker}), amount: 9989.99", await wallet.get_balance())
 
             assert_in("The transaction was submitted successfully", await wallet.freeze_token(token_id, 'unfreezable'))
 

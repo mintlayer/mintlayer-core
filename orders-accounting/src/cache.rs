@@ -13,13 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeSet;
+
 use accounting::combine_amount_delta;
 use common::{
     chain::{OrderId, OrdersVersion},
     primitives::Amount,
 };
 use logging::log;
-use utils::ensure;
+use utils::{debug_panic_or_log, ensure};
 
 use crate::{
     calculate_fill_order,
@@ -139,6 +141,41 @@ impl<P: OrdersAccountingView> OrdersAccountingView for OrdersAccountingCache<P> 
         let parent_supply = self.parent.get_give_balance(id).map_err(|_| Error::ViewFail)?;
         let local_delta = self.data.give_balances.data().get(id).cloned();
         combine_amount_delta(parent_supply, local_delta).map_err(Error::AccountingError)
+    }
+
+    fn get_all_order_ids(&self) -> Result<BTreeSet<OrderId>> {
+        Ok(self
+            .parent
+            .get_all_order_ids()
+            .map_err(|_| Error::ViewFail)?
+            .into_iter()
+            .filter(|id| match self.data.order_data.get_data(id) {
+                accounting::GetDataResult::Missing => true,
+                accounting::GetDataResult::Deleted => false,
+                accounting::GetDataResult::Present(_) => {
+                    // No need to include orders that are present in `self.data.order_data`,
+                    // because they'll be included by the code below anyway.
+                    false
+                }
+            })
+            .chain(self.data.order_data.data().keys().copied().filter(|id| {
+                match self.data.order_data.get_data(id) {
+                    accounting::GetDataResult::Present(_) => true,
+                    accounting::GetDataResult::Missing => {
+                        // This shouldn't happen.
+                        debug_panic_or_log!(
+                            concat!(
+                                "Got GetDataResult::Missing for order {id:x} ",
+                                "even though the id came from the collection itself"
+                            ),
+                            id = id
+                        );
+                        false
+                    }
+                    accounting::GetDataResult::Deleted => false,
+                }
+            }))
+            .collect())
     }
 }
 

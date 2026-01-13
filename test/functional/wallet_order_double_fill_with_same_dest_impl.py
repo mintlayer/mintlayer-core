@@ -105,11 +105,16 @@ class WalletOrderDoubleFillWithSameDestImpl(BitcoinTestFramework):
             self.log.debug(f'Tip: {tip_id}')
 
             # Submit a valid transaction
-            outputs = [{
-                'Transfer': [ { 'Coin': 151 * ATOMS_PER_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': alice_pub_key_bytes}}} } ],
-            }, {
-                'Transfer': [ { 'Coin': 151 * ATOMS_PER_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': bob_pub_key_bytes}}} } ],
-            }]
+            outputs = [
+                {'Transfer': [
+                    { 'Coin': 151 * ATOMS_PER_COIN },
+                    { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': alice_pub_key_bytes}}} }
+                ]},
+                {'Transfer': [
+                    { 'Coin': 151 * ATOMS_PER_COIN },
+                    { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': bob_pub_key_bytes}}} }
+                ]}
+            ]
             encoded_tx, tx_id = make_tx([reward_input(tip_id)], outputs, 0)
 
             node.mempool_submit_transaction(encoded_tx, {})
@@ -130,7 +135,8 @@ class WalletOrderDoubleFillWithSameDestImpl(BitcoinTestFramework):
             assert_not_in("Tokens", balance)
 
             # issue a valid token
-            token_id, _, _ = (await wallet.issue_new_token("XXXX", 2, "http://uri", alice_address))
+            token_ticker = "XXXX"
+            token_id, _, _ = (await wallet.issue_new_token(token_ticker, 2, "http://uri", alice_address))
             assert token_id is not None
             self.log.info(f"new token id: {token_id}")
 
@@ -141,20 +147,17 @@ class WalletOrderDoubleFillWithSameDestImpl(BitcoinTestFramework):
             assert_not_in("Tokens", balance)
 
             amount_to_mint = random.randint(100, 10000)
-            mint_result = await wallet.mint_tokens(token_id, alice_address, amount_to_mint)
-            assert mint_result['tx_id'] is not None
+            await wallet.mint_tokens_or_fail(token_id, alice_address, amount_to_mint)
 
             self.generate_block()
             assert_in("Success", await wallet.sync())
             balance = await wallet.get_balance()
             assert_in(f"Coins amount: 0", balance)
-            assert_in(f"Token: {token_id} amount: {amount_to_mint}", balance)
+            assert_in(f"Token: {token_id} ({token_ticker}), amount: {amount_to_mint}", balance)
 
             ########################################################################################
             # Alice creates an order selling tokens for coins
-            create_order_result = await wallet.create_order(None, amount_to_mint * 2, token_id, amount_to_mint, alice_address)
-            assert create_order_result['result']['tx_id'] is not None
-            order_id = create_order_result['result']['order_id']
+            order_id = await wallet.create_order(None, amount_to_mint * 2, token_id, amount_to_mint, alice_address)
 
             self.generate_block()
             assert_in("Success", await wallet.sync())
@@ -175,14 +178,12 @@ class WalletOrderDoubleFillWithSameDestImpl(BitcoinTestFramework):
 
             # Perform the fill.
             result = await wallet.fill_order(order_id, fill_amount, fill_dest_address)
-            fill_tx1_id = result['result']['tx_id']
-            assert fill_tx1_id is not None
+            assert_in("The transaction was submitted successfully", result)
 
             if self.use_orders_v1:
                 # Perform another fill for the same amount.
                 result = await wallet.fill_order(order_id, fill_amount, fill_dest_address)
-                fill_tx2_id = result['result']['tx_id']
-                assert fill_tx2_id is not None
+                assert_in("The transaction was submitted successfully", result)
 
                 # We're able to successfully mine a block, which will contain both transactions.
                 self.generate_block()
@@ -193,19 +194,18 @@ class WalletOrderDoubleFillWithSameDestImpl(BitcoinTestFramework):
                 # the chainstate only, so creating another "fill" tx when the previos one hasn't been mined yet
                 # will use the same nonce.
                 result = await wallet.fill_order(order_id, fill_amount, fill_dest_address)
-                assert_in("Mempool error: Nonce is not incremental", result['error']['message'])
+                assert_in("Mempool error: Nonce is not incremental", result)
 
                 self.generate_block()
                 assert_in("Success", await wallet.sync())
 
                 # After the first tx has been mined, a new one will be created with the correct nonce.
                 result = await wallet.fill_order(order_id, fill_amount, fill_dest_address)
-                fill_tx2_id = result['result']['tx_id']
-                assert fill_tx2_id is not None
+                assert_in("The transaction was submitted successfully", result)
 
                 self.generate_block()
                 assert_in("Success", await wallet.sync())
 
             balance = await wallet.get_balance()
             assert_in(f"Coins amount: 146.99", balance)
-            assert_in(f"Token: {token_id} amount: 2", balance)
+            assert_in(f"Token: {token_id} ({token_ticker}), amount: 2", balance)

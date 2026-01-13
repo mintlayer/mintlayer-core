@@ -13,18 +13,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::test_helper::{create_tx_outputs, empty_test_utxos_view, UnwrapInfallible};
-use crate::{
-    ConsumedUtxoCache, FlushableUtxoView, UtxoSource, UtxosCache, UtxosTxUndoWithSources, UtxosView,
-};
+use std::{collections::BTreeMap, convert::Infallible};
+
+use rstest::rstest;
+
 use common::{
     chain::{block::BlockReward, OutPointSourceId, Transaction, TxInput, UtxoOutPoint},
     primitives::{BlockHeight, Id, Idable, H256},
 };
 use randomness::{CryptoRng, Rng};
-use rstest::rstest;
-use std::{collections::BTreeMap, convert::Infallible};
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::{
+    random::{make_seedable_rng, Seed},
+    UnwrapInfallible as _,
+};
+
+use crate::{
+    ConsumedUtxoCache, FlushableUtxoView, UtxoSource, UtxosCache, UtxosTxUndoWithSources, UtxosView,
+};
+
+use super::test_helper::{create_tx_outputs, empty_test_utxos_view};
 
 // Structure to store outpoints of current utxo set and info for undo
 #[derive(Default)]

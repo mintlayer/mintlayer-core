@@ -395,6 +395,13 @@ impl<B: storage::SharedBackend> OrdersAccountingStorageRead for super::StoreTxRo
     fn get_give_balance(&self, id: &OrderId) -> Result<Option<Amount>, Self::Error> {
         self.read::<db::DBOrdersGiveBalances, _, _>(id)
     }
+
+    #[log_error]
+    fn get_all_order_ids(&self) -> crate::Result<BTreeSet<OrderId>> {
+        let map = self.0.get::<db::DBOrdersData, _>();
+        let iter = map.prefix_iter_keys(&())?;
+        Ok(iter.collect::<BTreeSet<_>>())
+    }
 }
 
 /// Blockchain data storage transaction
@@ -711,5 +718,12 @@ impl<B: storage::SharedBackend> OrdersAccountingStorageRead for super::StoreTxRw
     #[log_error]
     fn get_give_balance(&self, id: &OrderId) -> Result<Option<Amount>, Self::Error> {
         self.read::<db::DBOrdersGiveBalances, _, _>(id)
+    }
+
+    #[log_error]
+    fn get_all_order_ids(&self) -> crate::Result<BTreeSet<OrderId>> {
+        let map = self.get_map::<db::DBOrdersData, _>()?;
+        let iter = map.prefix_iter_keys(&())?;
+        Ok(iter.collect::<BTreeSet<_>>())
     }
 }

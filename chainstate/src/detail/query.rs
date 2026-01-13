@@ -13,22 +13,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeSet, num::NonZeroUsize};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    num::NonZeroUsize,
+};
 
 use chainstate_storage::BlockchainStorageRead;
 use chainstate_types::{BlockIndex, GenBlockIndex, Locator, PropertyQueryError};
 use common::{
     chain::{
         block::{signed_block_header::SignedBlockHeader, BlockReward},
-        output_value::RpcOutputValue,
+        output_value::{OutputValue, RpcOutputValue},
         tokens::{
             NftIssuance, RPCFungibleTokenInfo, RPCIsTokenFrozen, RPCNonFungibleTokenInfo,
             RPCTokenInfo, TokenAuxiliaryData, TokenId,
         },
-        AccountType, Block, GenBlock, OrderId, RpcOrderInfo, Transaction, TxOutput,
+        AccountType, Block, Currency, GenBlock, OrderId, RpcOrderInfo, Transaction, TxOutput,
     },
     primitives::{Amount, BlockDistance, BlockHeight, Id, Idable},
 };
+use logging::log;
 use orders_accounting::{OrderData, OrdersAccountingStorageRead};
 use tokens_accounting::TokensAccountingStorageRead;
 use utils::ensure;
@@ -436,36 +440,92 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
 
     pub fn get_order_info_for_rpc(
         &self,
-        order_id: OrderId,
+        order_id: &OrderId,
     ) -> Result<Option<RpcOrderInfo>, PropertyQueryError> {
-        self.get_order_data(&order_id)?
-            .map(|order_data| {
-                let ask_balance = self
-                    .get_order_ask_balance(&order_id)?
-                    .ok_or(PropertyQueryError::OrderBalanceNotFound(order_id))?;
-                let give_balance = self
-                    .get_order_give_balance(&order_id)?
-                    .ok_or(PropertyQueryError::OrderBalanceNotFound(order_id))?;
-
-                let nonce =
-                    self.chainstate_ref.get_account_nonce_count(AccountType::Order(order_id))?;
-
-                let initially_asked = RpcOutputValue::from_output_value(order_data.ask())
-                    .ok_or(PropertyQueryError::UnsupportedTokenV0InOrder(order_id))?;
-                let initially_given = RpcOutputValue::from_output_value(order_data.give())
-                    .ok_or(PropertyQueryError::UnsupportedTokenV0InOrder(order_id))?;
-
-                let info = RpcOrderInfo {
-                    conclude_key: order_data.conclude_key().clone(),
-                    initially_asked,
-                    initially_given,
-                    give_balance,
-                    ask_balance,
-                    nonce,
-                };
-
-                Ok(info)
-            })
+        self.get_order_data(order_id)?
+            .map(|order_data| self.order_data_to_rpc_info(order_id, &order_data))
             .transpose()
+    }
+
+    pub fn get_all_order_ids(&self) -> Result<BTreeSet<OrderId>, PropertyQueryError> {
+        self.chainstate_ref.get_all_order_ids().map_err(PropertyQueryError::from)
+    }
+
+    pub fn get_orders_info_for_rpc_by_currencies(
+        &self,
+        ask_currency: Option<&Currency>,
+        give_currency: Option<&Currency>,
+    ) -> Result<BTreeMap<OrderId, RpcOrderInfo>, PropertyQueryError> {
+        let order_ids = self.get_all_order_ids()?;
+
+        let orders_info = order_ids
+            .into_iter()
+            .map(|order_id| -> Result<_, PropertyQueryError> {
+                match self.get_order_data(&order_id)? {
+                    Some(order_data) => {
+                        let actual_ask_currency =
+                            Self::order_currency(&order_id, order_data.ask())?;
+                        let actual_give_currency =
+                            Self::order_currency(&order_id, order_data.give())?;
+
+                        if ask_currency
+                            .is_none_or(|ask_currency| ask_currency == &actual_ask_currency)
+                            && give_currency
+                                .is_none_or(|give_currency| give_currency == &actual_give_currency)
+                        {
+                            let rpc_info = self.order_data_to_rpc_info(&order_id, &order_data)?;
+                            Ok(Some((order_id, rpc_info)))
+                        } else {
+                            Ok(None)
+                        }
+                    }
+                    None => {
+                        // This should never happen.
+                        log::error!("Order data missing for existing order {order_id:x}");
+                        Ok(None)
+                    }
+                }
+            })
+            .filter_map(|res_of_opt| res_of_opt.transpose())
+            .collect::<Result<_, _>>()?;
+
+        Ok(orders_info)
+    }
+
+    fn order_currency(
+        order_id: &OrderId,
+        value: &OutputValue,
+    ) -> Result<Currency, PropertyQueryError> {
+        Currency::from_output_value(value)
+            .ok_or(PropertyQueryError::UnsupportedTokenV0InOrder(*order_id))
+    }
+
+    fn order_data_to_rpc_info(
+        &self,
+        order_id: &OrderId,
+        order_data: &OrderData,
+    ) -> Result<RpcOrderInfo, PropertyQueryError> {
+        // Note: the balances are deleted from the chainstate db once they reach zero.
+        let ask_balance = self.get_order_ask_balance(order_id)?.unwrap_or(Amount::ZERO);
+        let give_balance = self.get_order_give_balance(order_id)?.unwrap_or(Amount::ZERO);
+
+        let nonce = self.chainstate_ref.get_account_nonce_count(AccountType::Order(*order_id))?;
+
+        let initially_asked = RpcOutputValue::from_output_value(order_data.ask())
+            .ok_or(PropertyQueryError::UnsupportedTokenV0InOrder(*order_id))?;
+        let initially_given = RpcOutputValue::from_output_value(order_data.give())
+            .ok_or(PropertyQueryError::UnsupportedTokenV0InOrder(*order_id))?;
+
+        let info = RpcOrderInfo {
+            conclude_key: order_data.conclude_key().clone(),
+            initially_asked,
+            initially_given,
+            give_balance,
+            ask_balance,
+            nonce,
+            is_frozen: order_data.is_frozen(),
+        };
+
+        Ok(info)
     }
 }

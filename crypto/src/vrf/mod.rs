@@ -72,6 +72,8 @@ pub struct VRFPublicKey {
     pub_key: VRFPublicKeyHolder,
 }
 
+// TODO: since VRFPublicKey implements Addressable (see common/src/address/traits.rs),
+// perhaps it should be serialized as HexifiedAddress instead of plain hex.
 impl serde::Serialize for VRFPublicKey {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         HexEncoded::new(self).serialize(serializer)

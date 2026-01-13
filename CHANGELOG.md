@@ -12,13 +12,33 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 ## [Unreleased]
 
 ### Added
-  - Node RPC: new method added - `chainstate_tokens_info`.
+  - Node RPC: new method added - `chainstate_tokens_info`, `chainstate_orders_info_by_currencies`.
+
+  - Wallet RPC:
+    - new methods added: `node_get_tokens_info`, `order_list_own`, `order_list_all_active`.
+
+  - Wallet CLI:
+    - the commands `order-create`, `order-fill`, `order-freeze`, `order-conclude` were added,
+      mirroring their existing RPC counterparts;
+    - other new commands added: `order-list-own`, `order-list-all-active`;
 
 ### Changed
   - Wallet RPC:
-    `wallet_info`: the structure of the returned field `extra_info` was changed.
+    - `wallet_info`: the structure of the returned field `extra_info` was changed.
+    - `create_order`, `conclude_order`, `fill_order`, `freeze_order` were renamed to
+      `order_create`, `order_conclude`, `order_fill`, `order_freeze`.
 
   - The format of `PartiallySignedTransaction was changed again.
+
+  - Node RPC:
+    - The result of `chainstate_order_info` now also indicates whether the order is frozen.
+
+    - `chainstate_pool_decommission_destination` now returns a bech32 string instead of a hexified
+      destination (note that in the generated documentation its result was already incorrectly
+      designated as "bech32 string"; now the description is correct).
+
+    - Documentation-only changes:
+      - Certain parameters that were designated as "string" are now designated as "bech32 string".
 
 ### Fixed
   - p2p: when a peer sends a message that can't be decoded, it will now be discouraged (which is what
@@ -27,6 +47,16 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
   - Wallet CLI and RPC: the commands `account-utxos` and `standalone-multisig-utxos` and their RPC
     counterparts now return correct decimal amounts for tokens with non-default number of decimals.
+
+  - Node RPC:
+    - `chainstate_order_info` will no longer fail if one of the order's balances became zero.
+
+    - Documentation-only changes:
+      - Certain parameters and/or returned values that were previously (incorrectly) designated as
+        "hex string" are now designated as "hexified xxx id".
+
+      - Parameters and/or returned values having the "plain" `Destination` type were incorrectly
+        designated as "bech32 string", while in reality they are "hexified destination".
 
 ## [1.2.0] - 2025-10-27
 

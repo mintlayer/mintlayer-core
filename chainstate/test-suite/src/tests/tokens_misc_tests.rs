@@ -21,7 +21,6 @@ use rstest::rstest;
 
 use chainstate::{ChainstateError, PropertyQueryError};
 use chainstate_test_framework::{
-    get_output_value,
     helpers::{issue_token_from_block, issue_token_from_genesis, make_token_issuance},
     TestFramework, TransactionBuilder,
 };
@@ -96,11 +95,7 @@ fn get_tokens_info_for_rpc_test(#[case] seed: Seed) {
 
         let nft_issuance_fee =
             tf.chainstate.get_chain_config().nft_issuance_fee(BlockHeight::zero());
-        let change_amount =
-            get_output_value(tf.chainstate.utxo(&utxo_with_change).unwrap().unwrap().output())
-                .unwrap()
-                .coin_amount()
-                .unwrap();
+        let change_amount = tf.coin_amount_from_utxo(&utxo_with_change);
 
         let nft_tx1_first_input = TxInput::Utxo(utxo_with_change);
         let nft1_id = TokenId::from_tx_input(&nft_tx1_first_input);
@@ -120,7 +115,7 @@ fn get_tokens_info_for_rpc_test(#[case] seed: Seed) {
             ))
             .build();
         let nft1_issuance_tx_id = ntf1_issuance_tx.transaction().get_id();
-        let utxo_with_change = UtxoOutPoint::new(ntf1_issuance_tx.transaction().get_id().into(), 1);
+        let utxo_with_change = UtxoOutPoint::new(nft1_issuance_tx_id.into(), 1);
         let change_amount = next_change_amount;
 
         let nft1_issuance_block_id = *tf
