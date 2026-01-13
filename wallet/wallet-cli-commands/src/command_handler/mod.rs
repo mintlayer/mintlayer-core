@@ -1856,7 +1856,7 @@ where
                         )
                     })
                     .collect();
-                Ok(ConsoleCommand::Print(delegations.join("\n").to_string()))
+                Ok(ConsoleCommand::Print(delegations.join("\n").clone()))
             }
 
             WalletCommand::ListCreatedBlocksIds => {

@@ -279,7 +279,7 @@ impl TextSummary for TxOutput {
             NftIssuance::V0(iss1) => {
                 let md = &iss1.metadata;
                 let creator = match &md.creator {
-                    Some(c) => hex::encode(c.public_key.encode()).to_string(),
+                    Some(c) => hex::encode(c.public_key.encode()).clone(),
                     None => "Unspecified".to_string(),
                 };
                 format!(

@@ -19,16 +19,12 @@ use chainstate::ChainstateConfig;
 
 /// Storage type to use
 #[must_use]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum StorageBackendConfig {
+    #[default]
     Lmdb,
-    InMemory,
-}
 
-impl Default for StorageBackendConfig {
-    fn default() -> Self {
-        Self::Lmdb
-    }
+    InMemory,
 }
 
 impl StorageBackendConfig {

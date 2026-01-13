@@ -153,7 +153,7 @@ async fn diamond_graph(#[case] seed: Seed, #[case] insertion_plan: Vec<(usize, u
 
     let tx3 = make_tx(&mut rng, &[(tx1_outpt, 0), (tx2_outpt, 0)], &[90_000_000]);
 
-    let txs = vec![tx0, tx1, tx2, tx3];
+    let txs = [tx0, tx1, tx2, tx3];
     let tx_ids: Vec<_> = txs.iter().map(|tx| tx.transaction().get_id()).collect();
 
     // Set up mempool and execute the insertion plan
