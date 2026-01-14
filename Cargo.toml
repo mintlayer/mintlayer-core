@@ -286,12 +286,12 @@ rev = "32d9e3c50ce3c9b2e08920c2f3300f11fdad4c03"
 package = "mintlayer-core-primitives"
 
 [workspace.dependencies.ledger-lib]
-git = "https://github.com/ledger-community/rust-ledger.git"
-rev = "510bb3ca30639af4bdb12a918b6bbbdb75fa5f52"
+git = "https://github.com/ImplOfAnImpl/rust-ledger.git"
+rev = "035789ec436d47b938e8a3d2085ffb2fbf6f0559"
 
 [workspace.dependencies.ledger-proto]
-git = "https://github.com/ledger-community/rust-ledger.git"
-rev = "510bb3ca30639af4bdb12a918b6bbbdb75fa5f52"
+git = "https://github.com/ImplOfAnImpl/rust-ledger.git"
+rev = "035789ec436d47b938e8a3d2085ffb2fbf6f0559"
 
 [workspace.dependencies.mintlayer-ledger-messages]
 git = "https://github.com/mintlayer/mintlayer-ledger-app"
@@ -360,4 +360,4 @@ tokio = { git = "https://github.com/tokio-rs/tokio", rev = "0d6c7af3e43457350bdc
 
 # This patch is needed because there is no release of the library and because ledger-lib depends on ledger-proto, so this is the only way to make the former find the latter.
 # Note that the revision specified here must be the same as the one used in the workspace.dependencies section
-ledger-proto = { git = "https://github.com/ledger-community/rust-ledger.git", rev = "510bb3ca30639af4bdb12a918b6bbbdb75fa5f52" }
+ledger-proto = { git = "https://github.com/ImplOfAnImpl/rust-ledger.git", rev = "035789ec436d47b938e8a3d2085ffb2fbf6f0559" }

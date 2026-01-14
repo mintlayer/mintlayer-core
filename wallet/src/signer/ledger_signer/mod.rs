@@ -1325,7 +1325,9 @@ fn to_ledger_model(model: &Model) -> LedgerModel {
         Model::NanoSPlus => LedgerModel::NanoSPlus,
         Model::NanoX => LedgerModel::NanoX,
         Model::Stax => LedgerModel::Stax,
-        Model::Unknown(m) => LedgerModel::Unknown(*m),
+        Model::Flex => LedgerModel::Flex,
+        Model::NanoGen5 => LedgerModel::NanoGen5,
+        Model::Unknown { usb_pid } => LedgerModel::Unknown(usb_pid.unwrap_or(0)),
     }
 }
 

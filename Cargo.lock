@@ -4582,7 +4582,7 @@ checksum = "09edd9e8b54e49e587e4f6295a7d29c3ea94d469cb40ab8ca70b288248a81db2"
 [[package]]
 name = "ledger-lib"
 version = "0.1.0"
-source = "git+https://github.com/ledger-community/rust-ledger.git?rev=510bb3ca30639af4bdb12a918b6bbbdb75fa5f52#510bb3ca30639af4bdb12a918b6bbbdb75fa5f52"
+source = "git+https://github.com/ImplOfAnImpl/rust-ledger.git?rev=035789ec436d47b938e8a3d2085ffb2fbf6f0559#035789ec436d47b938e8a3d2085ffb2fbf6f0559"
 dependencies = [
  "async-trait",
  "btleplug",
@@ -4590,6 +4590,7 @@ dependencies = [
  "encdec",
  "futures",
  "hidapi",
+ "lazy_static",
  "ledger-proto",
  "once_cell",
  "strum 0.26.3",
@@ -4603,7 +4604,7 @@ dependencies = [
 [[package]]
 name = "ledger-proto"
 version = "0.1.0"
-source = "git+https://github.com/ledger-community/rust-ledger.git?rev=510bb3ca30639af4bdb12a918b6bbbdb75fa5f52#510bb3ca30639af4bdb12a918b6bbbdb75fa5f52"
+source = "git+https://github.com/ImplOfAnImpl/rust-ledger.git?rev=035789ec436d47b938e8a3d2085ffb2fbf6f0559#035789ec436d47b938e8a3d2085ffb2fbf6f0559"
 dependencies = [
  "bitflags 2.10.0",
  "displaydoc",
