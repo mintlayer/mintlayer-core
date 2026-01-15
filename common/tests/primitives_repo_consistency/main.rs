@@ -998,7 +998,7 @@ fn test_coin_type_destination_address_prefixes(#[case] seed: Seed) {
             let primitive_dest: ml_primitives::Destination =
                 common_dest.clone().try_convert_into().unwrap();
             let expected_prefix = config.destination_address_prefix(tag);
-            let actual_prefix = coin_type.address_prefix(&primitive_dest);
+            let actual_prefix = coin_type.address_prefix((&primitive_dest).into());
 
             assert_eq!(
                 expected_prefix, actual_prefix,

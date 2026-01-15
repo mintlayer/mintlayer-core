@@ -651,7 +651,7 @@ where
                 },
                 #[cfg(feature = "ledger")]
                 HardwareWalletFullInfo::Ledger(ledger_data) => WalletExtraInfo::LedgerWallet {
-                    app_version: ledger_data.app_version.to_string(),
+                    app_version: ledger_data.app_version.clone(),
                     model: ledger_data.model.to_string(),
                 },
             },

@@ -5002,7 +5002,7 @@ dependencies = [
 [[package]]
 name = "messages"
 version = "0.1.0"
-source = "git+https://github.com/mintlayer/mintlayer-ledger-app?rev=bf565b1b6e2fdd6ae0f21035b184737d834f4e33#bf565b1b6e2fdd6ae0f21035b184737d834f4e33"
+source = "git+https://github.com/mintlayer/mintlayer-ledger-app?rev=9ca7570eaac395f403d34da893333ea8ad4479c6#9ca7570eaac395f403d34da893333ea8ad4479c6"
 dependencies = [
  "mintlayer-core-primitives",
  "num_enum",
@@ -5068,7 +5068,7 @@ dependencies = [
 [[package]]
 name = "mintlayer-core-primitives"
 version = "1.0.0"
-source = "git+https://github.com/mintlayer/mintlayer-core-primitives?rev=32d9e3c50ce3c9b2e08920c2f3300f11fdad4c03#32d9e3c50ce3c9b2e08920c2f3300f11fdad4c03"
+source = "git+https://github.com/mintlayer/mintlayer-core-primitives?rev=13b10dbc88efdf3b5aa31ece8e34278bc69a5a9b#13b10dbc88efdf3b5aa31ece8e34278bc69a5a9b"
 dependencies = [
  "derive_more 2.1.1",
  "fixed-hash",
@@ -5079,7 +5079,7 @@ dependencies = [
 [[package]]
 name = "mintlayer-firmware-deps"
 version = "0.0.0"
-source = "git+https://github.com/mintlayer/mintlayer-trezor-firmware?rev=a37e325b059c3e0958b82a402a2ad5e57b54f1d7#a37e325b059c3e0958b82a402a2ad5e57b54f1d7"
+source = "git+https://github.com/mintlayer/mintlayer-trezor-firmware?rev=a2e67f6cf804dd905791ec36bff1981871f5321c#a2e67f6cf804dd905791ec36bff1981871f5321c"
 dependencies = [
  "mintlayer-core-primitives",
 ]
@@ -9352,7 +9352,7 @@ dependencies = [
 [[package]]
 name = "trezor-client"
 version = "0.1.5"
-source = "git+https://github.com/mintlayer/mintlayer-trezor-firmware?rev=a37e325b059c3e0958b82a402a2ad5e57b54f1d7#a37e325b059c3e0958b82a402a2ad5e57b54f1d7"
+source = "git+https://github.com/mintlayer/mintlayer-trezor-firmware?rev=a2e67f6cf804dd905791ec36bff1981871f5321c#a2e67f6cf804dd905791ec36bff1981871f5321c"
 dependencies = [
  "bitcoin",
  "byteorder",
