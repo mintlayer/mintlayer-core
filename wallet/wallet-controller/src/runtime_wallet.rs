@@ -1833,6 +1833,10 @@ where
             RuntimeWallet::Trezor(w) => {
                 w.get_orders(account_index)?.map(|(id, data)| (*id, data.clone())).collect()
             }
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => {
+                w.get_orders(account_index)?.map(|(id, data)| (*id, data.clone())).collect()
+            }
         };
         Ok(orders)
     }
