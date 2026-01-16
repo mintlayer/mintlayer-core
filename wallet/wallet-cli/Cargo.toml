@@ -4,7 +4,11 @@ license.workspace = true
 edition.workspace = true
 version.workspace = true
 rust-version.workspace = true
-authors = ["Samer Afach <samer.afach@mintlayer.org>", "Ben Marsh <benjamin.marsh@mintlayer.org>", "Enrico Rubboli <enrico.rubboli@mintlayer.org>"]
+authors = [
+  "Samer Afach <samer.afach@mintlayer.org>",
+  "Ben Marsh <benjamin.marsh@mintlayer.org>",
+  "Enrico Rubboli <enrico.rubboli@mintlayer.org>",
+]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -13,8 +17,15 @@ utils = { path = "../../utils" }
 wallet-cli-lib = { path = "../wallet-cli-lib" }
 
 clap = { workspace = true, features = ["derive"] }
-tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "sync"] }
+tokio = { workspace = true, default-features = false, features = [
+  "io-util",
+  "macros",
+  "net",
+  "rt",
+  "sync",
+] }
 
 [features]
 trezor = ["wallet-cli-lib/trezor"]
-default = ["trezor"]
+ledger = ["wallet-cli-lib/ledger"]
+default = ["trezor", "ledger"]

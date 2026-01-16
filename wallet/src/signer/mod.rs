@@ -34,6 +34,7 @@ use common::{
         Transaction, UtxoOutPoint,
     },
     primitives::BlockHeight,
+    primitives_converters::PrimitivesConvertersError,
 };
 use crypto::key::hdkd::{derivable::DerivationError, u31::U31};
 use wallet_storage::{
@@ -48,6 +49,8 @@ use wallet_types::{
     AccountId,
 };
 
+#[cfg(feature = "ledger")]
+use crate::signer::ledger_signer::LedgerError;
 use crate::{
     key_chain::{AccountKeyChains, KeyChainError},
     Account, WalletResult,
@@ -60,6 +63,9 @@ pub mod utils;
 
 #[cfg(feature = "trezor")]
 use self::trezor_signer::TrezorError;
+
+#[cfg(feature = "ledger")]
+pub mod ledger_signer;
 
 /// Signer errors
 #[derive(thiserror::Error, Debug, Eq, PartialEq)]
@@ -87,6 +93,9 @@ pub enum SignerError {
     #[cfg(feature = "trezor")]
     #[error("Trezor error: {0}")]
     TrezorError(#[from] TrezorError),
+    #[cfg(feature = "ledger")]
+    #[error("Ledger error: {0}")]
+    LedgerError(#[from] LedgerError),
     #[error("Partially signed tx is missing input's destination")]
     MissingDestinationInTransaction,
     #[error("Partially signed tx is missing UTXO type input's UTXO")]
@@ -107,7 +116,18 @@ pub enum SignerError {
     PartiallySignedTransactionError(#[from] PartiallySignedTransactionError),
     #[error("Duplicate UTXO input: {0:?}")]
     DuplicateUtxoInput(UtxoOutPoint),
+    #[error("Wallet not initialized")]
+    WalletNotInitialized,
 }
+
+impl From<PrimitivesConvertersError> for SignerError {
+    fn from(value: PrimitivesConvertersError) -> Self {
+        match value {
+            PrimitivesConvertersError::UnsupportedTokenV0 => Self::UnsupportedTokensV0,
+        }
+    }
+}
+
 type SignerResult<T> = Result<T, SignerError>;
 
 /// Signer trait responsible for signing transactions or challenges using a software or hardware
@@ -150,18 +170,19 @@ pub trait Signer {
     ) -> SignerResult<SignedTransactionIntent>;
 }
 
-pub trait SignerProvider {
+#[async_trait]
+pub trait SignerProvider: Send {
     type S: Signer + Send;
     type K: AccountKeyChains + Sync + Send;
 
     fn provide(&mut self, chain_config: Arc<ChainConfig>, account_index: U31) -> Self::S;
 
-    fn make_new_account(
+    async fn make_new_account<T: WalletStorageWriteUnlocked + Send>(
         &mut self,
         chain_config: Arc<ChainConfig>,
         account_index: U31,
         name: Option<String>,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
+        db_tx: &mut T,
     ) -> WalletResult<Account<Self::K>>;
 
     fn load_account_from_database(

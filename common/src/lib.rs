@@ -16,6 +16,7 @@
 pub mod address;
 pub mod chain;
 pub mod primitives;
+pub mod primitives_converters;
 pub mod size_estimation;
 pub mod text_summary;
 pub mod time_getter;

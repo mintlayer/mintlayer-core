@@ -88,7 +88,7 @@ fn base_button<'a>(
 fn labeled_button<'a>(label: &'a str, msg: MenuMessage) -> button::Button<'a, MenuMessage> {
     base_button::<'a>(
         text(label)
-            .width(Length::Fixed(220.0))
+            .width(Length::Fixed(270.0))
             .height(Length::Fixed(25.0))
             .align_y(alignment::Vertical::Center),
         msg,
@@ -97,7 +97,7 @@ fn labeled_button<'a>(label: &'a str, msg: MenuMessage) -> button::Button<'a, Me
 
 fn menu_item(label: &str, msg: MenuMessage) -> Item<'_, MenuMessage, Theme, iced::Renderer> {
     // Note: if this width is smaller than the text, the menu item will drop the whole last word.
-    Item::new(labeled_button(label, msg).width(Length::Fixed(270.0)))
+    Item::new(labeled_button(label, msg).width(Length::Fixed(300.0)))
 }
 
 fn make_menu_file<'a>(wallet_mode: WalletMode) -> Item<'a, MenuMessage, Theme, iced::Renderer> {
@@ -125,6 +125,27 @@ fn make_menu_file<'a>(wallet_mode: WalletMode) -> Item<'a, MenuMessage, Theme, i
                         },
                     ),
                 ];
+                #[cfg(feature = "ledger")]
+                {
+                    menu.push(menu_item(
+                        "(Beta) Create new Ledger wallet",
+                        MenuMessage::CreateNewWallet {
+                            wallet_type: WalletType::Ledger,
+                        },
+                    ));
+                    menu.push(menu_item(
+                        "(Beta) Recover from Ledger wallet",
+                        MenuMessage::RecoverWallet {
+                            wallet_type: WalletType::Ledger,
+                        },
+                    ));
+                    menu.push(menu_item(
+                        "(Beta) Open Ledger wallet",
+                        MenuMessage::OpenWallet {
+                            wallet_type: WalletType::Ledger,
+                        },
+                    ));
+                }
                 #[cfg(feature = "trezor")]
                 {
                     menu.push(menu_item(
@@ -146,6 +167,7 @@ fn make_menu_file<'a>(wallet_mode: WalletMode) -> Item<'a, MenuMessage, Theme, i
                         },
                     ));
                 }
+
                 // TODO: enable setting when needed
                 // menu.push(menu_item("Settings", MenuMessage::NoOp));
                 menu.push(menu_item("Exit", MenuMessage::Exit));
