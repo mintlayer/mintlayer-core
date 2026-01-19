@@ -195,11 +195,11 @@ impl ChainType {
         match self {
             ChainType::Mainnet => {
                 vec![
-                    "51.159.232.144:3031".parse().expect("Cannot fail"),
-                    "51.159.179.229:3031".parse().expect("Cannot fail"),
-                    "151.115.35.206:3031".parse().expect("Cannot fail"),
-                    "172.232.50.132:3031".parse().expect("Cannot fail"),
-                    "103.3.61.21:3031".parse().expect("Cannot fail"),
+                    "51.15.192.100:3031".parse().expect("Cannot fail"),
+                    "51.158.236.130:3031".parse().expect("Cannot fail"),
+                    "151.115.60.31:3031".parse().expect("Cannot fail"),
+                    "172.232.43.9:3031".parse().expect("Cannot fail"),
+                    "139.162.4.113:3031".parse().expect("Cannot fail"),
                 ]
             }
             ChainType::Testnet => {
