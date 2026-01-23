@@ -23,6 +23,7 @@ use std::{
     io::{Read, Write},
     num::NonZeroUsize,
     sync::Arc,
+    time::Duration,
 };
 
 use chainstate_types::BlockIndex;
@@ -39,6 +40,7 @@ use common::{
 };
 use rpc::{subscription, RpcResult};
 use serialization::hex_encoded::HexEncoded;
+use logging::log;
 
 use crate::{
     chainstate_interface::ChainstateInterface, Block, BlockSource, ChainInfo, ChainstateError,
@@ -53,6 +55,29 @@ pub use types::{
     signed_transaction::RpcSignedTransaction,
     RpcTypeError,
 };
+
+const SLOW_CHAINSTATE_RPC_WARN_AFTER: Duration = Duration::from_secs(30);
+
+async fn warn_if_slow_rpc<F, T>(method: &'static str, fut: F) -> T
+where
+    F: std::future::Future<Output = T>,
+{
+    let mut fut = Box::pin(fut);
+    let warn = tokio::time::sleep(SLOW_CHAINSTATE_RPC_WARN_AFTER);
+    tokio::pin!(warn);
+
+    tokio::select! {
+        res = &mut fut => return res,
+        _ = &mut warn => {
+            log::warn!(
+                "Chainstate RPC {method} taking longer than {:?}",
+                SLOW_CHAINSTATE_RPC_WARN_AFTER
+            );
+        }
+    }
+
+    fut.await
+}
 
 #[rpc::describe]
 #[rpc::rpc(server, client, namespace = "chainstate")]
@@ -226,22 +251,36 @@ trait ChainstateRpc {
 #[async_trait::async_trait]
 impl ChainstateRpcServer for super::ChainstateHandle {
     async fn best_block_id(&self) -> RpcResult<Id<GenBlock>> {
-        rpc::handle_result(self.call(|this| this.get_best_block_id()).await)
+        rpc::handle_result(
+            warn_if_slow_rpc("chainstate.best_block_id", self.call(|this| this.get_best_block_id()))
+                .await,
+        )
     }
 
     async fn block_id_at_height(&self, height: BlockHeight) -> RpcResult<Option<Id<GenBlock>>> {
-        rpc::handle_result(self.call(move |this| this.get_block_id_from_height(height)).await)
+        rpc::handle_result(
+            warn_if_slow_rpc(
+                "chainstate.block_id_at_height",
+                self.call(move |this| this.get_block_id_from_height(height)),
+            )
+            .await,
+        )
     }
 
     async fn get_block(&self, id: Id<Block>) -> RpcResult<Option<HexEncoded<Block>>> {
         let block: Option<Block> =
-            rpc::handle_result(self.call(move |this| this.get_block(&id)).await)?;
+            rpc::handle_result(
+                warn_if_slow_rpc("chainstate.get_block", self.call(move |this| this.get_block(&id)))
+                    .await,
+            )?;
         Ok(block.map(HexEncoded::new))
     }
 
     async fn get_block_json(&self, id: Id<Block>) -> RpcResult<Option<serde_json::Value>> {
         let both: Option<(Block, BlockIndex)> = rpc::handle_result(
-            self.call(move |this| {
+            warn_if_slow_rpc(
+                "chainstate.get_block_json",
+                self.call(move |this| {
                 let block = this.get_block(&id);
                 let block_index = this.get_block_index_for_persisted_block(&id);
                 match (block, block_index) {
@@ -249,34 +288,41 @@ impl ChainstateRpcServer for super::ChainstateHandle {
                     (Err(e), _) => Err(e),
                     (_, Err(e)) => Err(e),
                 }
-            })
+            }),
+            )
             .await,
         )?;
 
         let chain_config: Arc<ChainConfig> = rpc::handle_result(
-            self.call(move |this| {
-                let chain_config = Arc::clone(this.get_chain_config());
-                Ok::<_, Infallible>(chain_config)
-            })
+            warn_if_slow_rpc(
+                "chainstate.get_block_json",
+                self.call(move |this| {
+                    let chain_config = Arc::clone(this.get_chain_config());
+                    Ok::<_, Infallible>(chain_config)
+                }),
+            )
             .await,
         )?;
 
         if let Some((block, block_index)) = both {
             let token_ids = collect_token_v1_ids_from_output_values_holder(&block);
             let token_decimals: BTreeMap<TokenId, TokenDecimals> = rpc::handle_result(
-                self.call(move |this| -> Result<_, ChainstateError> {
-                    let infos = this.get_tokens_info_for_rpc(&token_ids)?;
-                    let decimals = infos
-                        .iter()
-                        .map(|info| {
-                            (
-                                info.token_id(),
-                                TokenDecimals(info.token_number_of_decimals()),
-                            )
-                        })
-                        .collect::<BTreeMap<_, _>>();
-                    Ok(decimals)
-                })
+                warn_if_slow_rpc(
+                    "chainstate.get_block_json",
+                    self.call(move |this| -> Result<_, ChainstateError> {
+                        let infos = this.get_tokens_info_for_rpc(&token_ids)?;
+                        let decimals = infos
+                            .iter()
+                            .map(|info| {
+                                (
+                                    info.token_id(),
+                                    TokenDecimals(info.token_number_of_decimals()),
+                                )
+                            })
+                            .collect::<BTreeMap<_, _>>();
+                        Ok(decimals)
+                    }),
+                )
                 .await,
             )?;
 
@@ -299,7 +345,11 @@ impl ChainstateRpcServer for super::ChainstateHandle {
         max_count: usize,
     ) -> RpcResult<Vec<HexEncoded<Block>>> {
         let blocks: Vec<Block> = rpc::handle_result(
-            self.call(move |this| this.get_mainchain_blocks(from, max_count)).await,
+            warn_if_slow_rpc(
+                "chainstate.get_mainchain_blocks",
+                self.call(move |this| this.get_mainchain_blocks(from, max_count)),
+            )
+            .await,
         )?;
         Ok(blocks.into_iter().map(HexEncoded::new).collect())
     }
@@ -311,9 +361,12 @@ impl ChainstateRpcServer for super::ChainstateHandle {
         step: NonZeroUsize,
     ) -> RpcResult<Vec<(BlockHeight, Id<GenBlock>)>> {
         rpc::handle_result(
-            self.call(move |this| {
-                this.get_block_ids_as_checkpoints(start_height, end_height, step)
-            })
+            warn_if_slow_rpc(
+                "chainstate.get_block_ids_as_checkpoints",
+                self.call(move |this| {
+                    this.get_block_ids_as_checkpoints(start_height, end_height, step)
+                }),
+            )
             .await,
         )
     }
@@ -321,28 +374,45 @@ impl ChainstateRpcServer for super::ChainstateHandle {
     async fn get_utxo(&self, outpoint: RpcUtxoOutpoint) -> RpcResult<Option<TxOutput>> {
         let outpoint = outpoint.into_outpoint();
         rpc::handle_result(
-            self.call_mut(move |this| {
-                this.utxo(&outpoint).map(|utxo| utxo.map(|utxo| utxo.take_output()))
-            })
+            warn_if_slow_rpc(
+                "chainstate.get_utxo",
+                self.call_mut(move |this| {
+                    this.utxo(&outpoint).map(|utxo| utxo.map(|utxo| utxo.take_output()))
+                }),
+            )
             .await,
         )
     }
 
     async fn submit_block(&self, block: HexEncoded<Block>) -> RpcResult<()> {
-        let res = self
-            .call_mut(move |this| this.process_block(block.take(), BlockSource::Local))
-            .await;
+        let res = warn_if_slow_rpc(
+            "chainstate.submit_block",
+            self.call_mut(move |this| this.process_block(block.take(), BlockSource::Local)),
+        )
+        .await;
         // remove the block index from the return value
         let res = res.map(|v| v.map(|_bi| ()));
         rpc::handle_result(res)
     }
 
     async fn invalidate_block(&self, id: Id<Block>) -> RpcResult<()> {
-        rpc::handle_result(self.call_mut(move |this| this.invalidate_block(&id)).await)
+        rpc::handle_result(
+            warn_if_slow_rpc(
+                "chainstate.invalidate_block",
+                self.call_mut(move |this| this.invalidate_block(&id)),
+            )
+            .await,
+        )
     }
 
     async fn reset_block_failure_flags(&self, id: Id<Block>) -> RpcResult<()> {
-        rpc::handle_result(self.call_mut(move |this| this.reset_block_failure_flags(&id)).await)
+        rpc::handle_result(
+            warn_if_slow_rpc(
+                "chainstate.reset_block_failure_flags",
+                self.call_mut(move |this| this.reset_block_failure_flags(&id)),
+            )
+            .await,
+        )
     }
 
     async fn block_height_in_main_chain(
@@ -350,12 +420,22 @@ impl ChainstateRpcServer for super::ChainstateHandle {
         block_id: Id<GenBlock>,
     ) -> RpcResult<Option<BlockHeight>> {
         rpc::handle_result(
-            self.call(move |this| this.get_block_height_in_main_chain(&block_id)).await,
+            warn_if_slow_rpc(
+                "chainstate.block_height_in_main_chain",
+                self.call(move |this| this.get_block_height_in_main_chain(&block_id)),
+            )
+            .await,
         )
     }
 
     async fn best_block_height(&self) -> RpcResult<BlockHeight> {
-        rpc::handle_result(self.call(move |this| this.get_best_block_height()).await)
+        rpc::handle_result(
+            warn_if_slow_rpc(
+                "chainstate.best_block_height",
+                self.call(move |this| this.get_best_block_height()),
+            )
+            .await,
+        )
     }
 
     async fn last_common_ancestor_by_id(
@@ -364,8 +444,13 @@ impl ChainstateRpcServer for super::ChainstateHandle {
         second_block: Id<GenBlock>,
     ) -> RpcResult<Option<(Id<GenBlock>, BlockHeight)>> {
         rpc::handle_result(
-            self.call(move |this| this.last_common_ancestor_by_id(&first_block, &second_block))
-                .await,
+            warn_if_slow_rpc(
+                "chainstate.last_common_ancestor_by_id",
+                self.call(move |this| {
+                    this.last_common_ancestor_by_id(&first_block, &second_block)
+                }),
+            )
+            .await,
         )
     }
 
@@ -374,28 +459,34 @@ impl ChainstateRpcServer for super::ChainstateHandle {
         pool_address: RpcAddress<PoolId>,
     ) -> RpcResult<Option<Amount>> {
         rpc::handle_result(
-            self.call(move |this| {
-                let chain_config = this.get_chain_config();
-                let id_result = pool_address.decode_object(chain_config);
-                id_result.map(|address| this.get_stake_pool_balance(&address))
-            })
+            warn_if_slow_rpc(
+                "chainstate.stake_pool_balance",
+                self.call(move |this| {
+                    let chain_config = this.get_chain_config();
+                    let id_result = pool_address.decode_object(chain_config);
+                    id_result.map(|address| this.get_stake_pool_balance(&address))
+                }),
+            )
             .await,
         )
     }
 
     async fn staker_balance(&self, pool_address: RpcAddress<PoolId>) -> RpcResult<Option<Amount>> {
         rpc::handle_result(
-            self.call(move |this| {
-                let chain_config = this.get_chain_config();
-                let result: Result<Option<Amount>, _> =
-                    dynamize_err(pool_address.decode_object(chain_config))
-                        .and_then(|pool_id| dynamize_err(this.get_stake_pool_data(&pool_id)))
-                        .and_then(|pool_data| {
-                            dynamize_err(pool_data.map(|d| d.staker_balance()).transpose())
-                        });
+            warn_if_slow_rpc(
+                "chainstate.staker_balance",
+                self.call(move |this| {
+                    let chain_config = this.get_chain_config();
+                    let result: Result<Option<Amount>, _> =
+                        dynamize_err(pool_address.decode_object(chain_config))
+                            .and_then(|pool_id| dynamize_err(this.get_stake_pool_data(&pool_id)))
+                            .and_then(|pool_data| {
+                                dynamize_err(pool_data.map(|d| d.staker_balance()).transpose())
+                            });
 
-                result
-            })
+                    result
+                }),
+            )
             .await,
         )
     }
@@ -405,22 +496,25 @@ impl ChainstateRpcServer for super::ChainstateHandle {
         pool_address: RpcAddress<PoolId>,
     ) -> RpcResult<Option<RpcAddress<Destination>>> {
         rpc::handle_result(
-            self.call(move |this| -> Result<_, DynamizedError> {
-                let chain_config = this.get_chain_config();
-                let pool_id = dynamize_err(pool_address.decode_object(chain_config))?;
-                let pool_data = dynamize_err(this.get_stake_pool_data(&pool_id))?;
+            warn_if_slow_rpc(
+                "chainstate.pool_decommission_destination",
+                self.call(move |this| -> Result<_, DynamizedError> {
+                    let chain_config = this.get_chain_config();
+                    let pool_id = dynamize_err(pool_address.decode_object(chain_config))?;
+                    let pool_data = dynamize_err(this.get_stake_pool_data(&pool_id))?;
 
-                pool_data
-                    .map(|d| -> Result<_, DynamizedError> {
-                        let addr = dynamize_err(Address::new(
-                            chain_config,
-                            d.decommission_destination().clone(),
-                        ))?;
+                    pool_data
+                        .map(|d| -> Result<_, DynamizedError> {
+                            let addr = dynamize_err(Address::new(
+                                chain_config,
+                                d.decommission_destination().clone(),
+                            ))?;
 
-                        Ok(addr.into())
-                    })
-                    .transpose()
-            })
+                            Ok(addr.into())
+                        })
+                        .transpose()
+                }),
+            )
             .await,
         )
     }
@@ -431,33 +525,40 @@ impl ChainstateRpcServer for super::ChainstateHandle {
         delegation_address: RpcAddress<DelegationId>,
     ) -> RpcResult<Option<Amount>> {
         rpc::handle_result(
-            self.call(move |this| {
-                let chain_config = this.get_chain_config();
+            warn_if_slow_rpc(
+                "chainstate.delegation_share",
+                self.call(move |this| {
+                    let chain_config = this.get_chain_config();
 
-                let pool_id_result = dynamize_err(pool_address.decode_object(chain_config));
-                let delegation_id_result =
-                    dynamize_err(delegation_address.decode_object(chain_config));
+                    let pool_id_result = dynamize_err(pool_address.decode_object(chain_config));
+                    let delegation_id_result =
+                        dynamize_err(delegation_address.decode_object(chain_config));
 
-                let ids = pool_id_result.and_then(|x| delegation_id_result.map(|y| (x, y)));
+                    let ids = pool_id_result.and_then(|x| delegation_id_result.map(|y| (x, y)));
 
-                ids.and_then(|(pool_id, del_id)| {
-                    dynamize_err(this.get_stake_pool_delegation_share(&pool_id, &del_id))
-                })
-            })
+                    ids.and_then(|(pool_id, del_id)| {
+                        dynamize_err(this.get_stake_pool_delegation_share(&pool_id, &del_id))
+                    })
+                }),
+            )
             .await,
         )
     }
 
     async fn token_info(&self, token_id: RpcAddress<TokenId>) -> RpcResult<Option<RPCTokenInfo>> {
         rpc::handle_result(
-            self.call(move |this| {
-                let chain_config = this.get_chain_config();
-                let token_info_result: Result<Option<RPCTokenInfo>, _> =
-                    dynamize_err(token_id.decode_object(chain_config))
-                        .and_then(|token_id| dynamize_err(this.get_token_info_for_rpc(&token_id)));
+            warn_if_slow_rpc(
+                "chainstate.token_info",
+                self.call(move |this| {
+                    let chain_config = this.get_chain_config();
+                    let token_info_result: Result<Option<RPCTokenInfo>, _> =
+                        dynamize_err(token_id.decode_object(chain_config)).and_then(|token_id| {
+                            dynamize_err(this.get_token_info_for_rpc(&token_id))
+                        });
 
-                token_info_result
-            })
+                    token_info_result
+                }),
+            )
             .await,
         )
     }
@@ -467,32 +568,39 @@ impl ChainstateRpcServer for super::ChainstateHandle {
         token_ids: Vec<RpcAddress<TokenId>>,
     ) -> RpcResult<Vec<RPCTokenInfo>> {
         rpc::handle_result(
-            self.call(move |this| -> Result<_, DynamizedError> {
-                let chain_config = this.get_chain_config();
+            warn_if_slow_rpc(
+                "chainstate.tokens_info",
+                self.call(move |this| -> Result<_, DynamizedError> {
+                    let chain_config = this.get_chain_config();
 
-                let token_ids = token_ids
-                    .into_iter()
-                    .map(|token_id| -> Result<_, DynamizedError> {
-                        Ok(token_id.decode_object(chain_config)?)
-                    })
-                    .collect::<Result<_, _>>()?;
+                    let token_ids = token_ids
+                        .into_iter()
+                        .map(|token_id| -> Result<_, DynamizedError> {
+                            Ok(token_id.decode_object(chain_config)?)
+                        })
+                        .collect::<Result<_, _>>()?;
 
-                dynamize_err(this.get_tokens_info_for_rpc(&token_ids))
-            })
+                    dynamize_err(this.get_tokens_info_for_rpc(&token_ids))
+                }),
+            )
             .await,
         )
     }
 
     async fn order_info(&self, order_id: RpcAddress<OrderId>) -> RpcResult<Option<RpcOrderInfo>> {
         rpc::handle_result(
-            self.call(move |this| {
-                let chain_config = this.get_chain_config();
-                let result: Result<Option<RpcOrderInfo>, _> =
-                    dynamize_err(order_id.decode_object(chain_config))
-                        .and_then(|order_id| dynamize_err(this.get_order_info_for_rpc(&order_id)));
+            warn_if_slow_rpc(
+                "chainstate.order_info",
+                self.call(move |this| {
+                    let chain_config = this.get_chain_config();
+                    let result: Result<Option<RpcOrderInfo>, _> =
+                        dynamize_err(order_id.decode_object(chain_config)).and_then(|order_id| {
+                            dynamize_err(this.get_order_info_for_rpc(&order_id))
+                        });
 
-                result
-            })
+                    result
+                }),
+            )
             .await,
         )
     }
@@ -503,19 +611,22 @@ impl ChainstateRpcServer for super::ChainstateHandle {
         give_currency: Option<RpcCurrency>,
     ) -> RpcResult<BTreeMap<OrderId, RpcOrderInfo>> {
         rpc::handle_result(
-            self.call(move |this| -> Result<_, DynamizedError> {
-                let chain_config = this.get_chain_config();
-                Ok(this.get_orders_info_for_rpc_by_currencies(
-                    ask_currency
-                        .map(|rpc_currency| dynamize_err(rpc_currency.to_currency(chain_config)))
-                        .transpose()?
-                        .as_ref(),
-                    give_currency
-                        .map(|rpc_currency| dynamize_err(rpc_currency.to_currency(chain_config)))
-                        .transpose()?
-                        .as_ref(),
-                ))
-            })
+            warn_if_slow_rpc(
+                "chainstate.orders_info_by_currencies",
+                self.call(move |this| -> Result<_, DynamizedError> {
+                    let chain_config = this.get_chain_config();
+                    Ok(this.get_orders_info_for_rpc_by_currencies(
+                        ask_currency
+                            .map(|rpc_currency| dynamize_err(rpc_currency.to_currency(chain_config)))
+                            .transpose()?
+                            .as_ref(),
+                        give_currency
+                            .map(|rpc_currency| dynamize_err(rpc_currency.to_currency(chain_config)))
+                            .transpose()?
+                            .as_ref(),
+                    ))
+                }),
+            )
             .await,
         )
     }
@@ -531,8 +642,11 @@ impl ChainstateRpcServer for super::ChainstateHandle {
             std::io::BufWriter::new(Box::new(file_obj));
 
         rpc::handle_result(
-            self.call(move |this| this.export_bootstrap_stream(writer, include_stale_blocks))
-                .await,
+            warn_if_slow_rpc(
+                "chainstate.export_bootstrap_file",
+                self.call(move |this| this.export_bootstrap_stream(writer, include_stale_blocks)),
+            )
+            .await,
         )
     }
 
@@ -542,15 +656,27 @@ impl ChainstateRpcServer for super::ChainstateHandle {
         let reader: std::io::BufReader<Box<dyn Read + Send>> =
             std::io::BufReader::new(Box::new(file_obj));
 
-        rpc::handle_result(self.call_mut(move |this| this.import_bootstrap_stream(reader)).await)
+        rpc::handle_result(
+            warn_if_slow_rpc(
+                "chainstate.import_bootstrap_file",
+                self.call_mut(move |this| this.import_bootstrap_stream(reader)),
+            )
+            .await,
+        )
     }
 
     async fn info(&self) -> RpcResult<ChainInfo> {
-        rpc::handle_result(self.call(move |this| this.info()).await)
+        rpc::handle_result(
+            warn_if_slow_rpc("chainstate.info", self.call(move |this| this.info())).await,
+        )
     }
 
     async fn subscribe_to_events(&self, pending: subscription::Pending) -> subscription::Reply {
-        let event_rx = self.call_mut(move |this| this.subscribe_to_rpc_events()).await?;
+        let event_rx = warn_if_slow_rpc(
+            "chainstate.subscribe_to_events",
+            self.call_mut(move |this| this.subscribe_to_rpc_events()),
+        )
+        .await?;
         rpc::subscription::connect_broadcast_map(event_rx, pending, RpcEvent::from_event).await
     }
 }
