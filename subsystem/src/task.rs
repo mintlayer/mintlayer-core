@@ -31,6 +31,7 @@ use std::time::{Duration, Instant};
 
 const CHAINSTATE_WATCHDOG_NO_PROGRESS_AFTER: Duration = Duration::from_secs(10);
 const CHAINSTATE_WATCHDOG_POLL_INTERVAL: Duration = Duration::from_secs(1);
+const CHAINSTATE_WATCHDOG_WRITE_LOCK_WARN_AFTER: Duration = Duration::from_secs(10);
 
 /// Handle a task completion result
 pub fn handle_result(full_name: &str, task_type: &str, res: Result<(), tokio::task::JoinError>) {
@@ -161,7 +162,22 @@ pub async fn subsystem<S, IF, SF, E>(
                         if let Some((_, _, inflight_writes, _)) = &watchdog_state {
                             inflight_writes.fetch_add(1, Ordering::Relaxed);
                         }
-                        call(subsys.write().await.interface_mut()).await;
+                        let mut write_guard = if watchdog_state.is_some() {
+                            let wait_start = Instant::now();
+                            let guard = subsys.write().await;
+                            let wait = wait_start.elapsed();
+                            if wait > CHAINSTATE_WATCHDOG_WRITE_LOCK_WARN_AFTER {
+                                log::warn!(
+                                    "Subsystem {full_name} write lock wait {:?} (>{:?})",
+                                    wait,
+                                    CHAINSTATE_WATCHDOG_WRITE_LOCK_WARN_AFTER
+                                );
+                            }
+                            guard
+                        } else {
+                            subsys.write().await
+                        };
+                        call(write_guard.interface_mut()).await;
                         if let Some((_, _, inflight_writes, _)) = &watchdog_state {
                             inflight_writes.fetch_sub(1, Ordering::Relaxed);
                         }
@@ -194,7 +210,21 @@ pub async fn subsystem<S, IF, SF, E>(
                     last_progress_ms.store(start.elapsed().as_millis() as u64, Ordering::Relaxed);
                     inflight_writes.fetch_add(1, Ordering::Relaxed);
                 }
-                subsys.write().await.perform_background_work_unit();
+                if watchdog_state.is_some() {
+                    let wait_start = Instant::now();
+                    let mut guard = subsys.write().await;
+                    let wait = wait_start.elapsed();
+                    if wait > CHAINSTATE_WATCHDOG_WRITE_LOCK_WARN_AFTER {
+                        log::warn!(
+                            "Subsystem {full_name} write lock wait {:?} (>{:?})",
+                            wait,
+                            CHAINSTATE_WATCHDOG_WRITE_LOCK_WARN_AFTER
+                        );
+                    }
+                    guard.perform_background_work_unit();
+                } else {
+                    subsys.write().await.perform_background_work_unit();
+                }
                 if let Some((start, last_progress_ms, inflight_writes, _)) = &watchdog_state {
                     last_progress_ms.store(start.elapsed().as_millis() as u64, Ordering::Relaxed);
                     inflight_writes.fetch_sub(1, Ordering::Relaxed);
