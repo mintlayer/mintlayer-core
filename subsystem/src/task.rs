@@ -26,6 +26,12 @@ use utils::{once_destructor::OnceDestructor, sync::Arc};
 
 use crate::{calls::Action, SubmitOnlyHandle, Subsystem};
 
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::time::{Duration, Instant};
+
+const CHAINSTATE_WATCHDOG_NO_PROGRESS_AFTER: Duration = Duration::from_secs(10);
+const CHAINSTATE_WATCHDOG_POLL_INTERVAL: Duration = Duration::from_secs(1);
+
 /// Handle a task completion result
 pub fn handle_result(full_name: &str, task_type: &str, res: Result<(), tokio::task::JoinError>) {
     log::trace!("Subsystem {full_name} {task_type} task finished");
@@ -82,6 +88,50 @@ pub async fn subsystem<S, IF, SF, E>(
         }
     };
 
+    let mut watchdog_state: Option<(Instant, Arc<AtomicU64>, Arc<AtomicU64>, Arc<AtomicBool>)> =
+        None;
+    if full_name.ends_with("/chainstate") {
+        let start = Instant::now();
+        let last_progress_ms = Arc::new(AtomicU64::new(0));
+        let inflight_writes = Arc::new(AtomicU64::new(0));
+        let running = Arc::new(AtomicBool::new(true));
+        let last_warn_ms = Arc::new(AtomicU64::new(0));
+        let full_name_clone = full_name.clone();
+
+        let last_progress_ms_watch = Arc::clone(&last_progress_ms);
+        let inflight_writes_watch = Arc::clone(&inflight_writes);
+        let running_watch = Arc::clone(&running);
+        let last_warn_ms_watch = Arc::clone(&last_warn_ms);
+
+        tokio::spawn(async move {
+            let warn_after_ms = CHAINSTATE_WATCHDOG_NO_PROGRESS_AFTER.as_millis() as u64;
+            loop {
+                tokio::time::sleep(CHAINSTATE_WATCHDOG_POLL_INTERVAL).await;
+                if !running_watch.load(Ordering::Relaxed) {
+                    break;
+                }
+                if inflight_writes_watch.load(Ordering::Relaxed) == 0 {
+                    continue;
+                }
+                let now_ms = start.elapsed().as_millis() as u64;
+                let last_ms = last_progress_ms_watch.load(Ordering::Relaxed);
+                let since_ms = now_ms.saturating_sub(last_ms);
+                if since_ms >= warn_after_ms {
+                    let last_warn = last_warn_ms_watch.load(Ordering::Relaxed);
+                    if now_ms.saturating_sub(last_warn) >= warn_after_ms {
+                        log::warn!(
+                            "Subsystem {full_name_clone} no progress for {since_ms}ms (inflight writes: {})",
+                            inflight_writes_watch.load(Ordering::Relaxed),
+                        );
+                        last_warn_ms_watch.store(now_ms, Ordering::Relaxed);
+                    }
+                }
+            }
+        });
+
+        watchdog_state = Some((start, last_progress_ms, inflight_writes, running));
+    }
+
     log::info!("Subsystem {full_name} started");
 
     // Main event loop
@@ -95,20 +145,40 @@ pub async fn subsystem<S, IF, SF, E>(
                 if let Err(err) = result {
                     log::error!("Shutdown channel for {full_name} closed prematurely: {err}");
                 }
+                if let Some((_, _, _, running)) = &watchdog_state {
+                    running.store(false, Ordering::Relaxed);
+                }
                 break;
             }
 
             // Handle external call requests next.
             Some(call) = action_rx.recv() => {
+                if let Some((start, last_progress_ms, inflight_writes, _)) = &watchdog_state {
+                    last_progress_ms.store(start.elapsed().as_millis() as u64, Ordering::Relaxed);
+                }
                 match call {
                     Action::Mut(call) => {
-                        call(subsys.write().await.interface_mut()).await
+                        if let Some((_, _, inflight_writes, _)) = &watchdog_state {
+                            inflight_writes.fetch_add(1, Ordering::Relaxed);
+                        }
+                        call(subsys.write().await.interface_mut()).await;
+                        if let Some((_, _, inflight_writes, _)) = &watchdog_state {
+                            inflight_writes.fetch_sub(1, Ordering::Relaxed);
+                        }
+                        if let Some((start, last_progress_ms, _, _)) = &watchdog_state {
+                            last_progress_ms
+                                .store(start.elapsed().as_millis() as u64, Ordering::Relaxed);
+                        }
                     },
                     Action::Ref(call) => {
                         let subsys = Arc::clone(&subsys);
                         worker_tasks.spawn(async move {
                             call(subsys.read().await.interface_ref()).await
                         }.in_current_span());
+                        if let Some((start, last_progress_ms, _, _)) = &watchdog_state {
+                            last_progress_ms
+                                .store(start.elapsed().as_millis() as u64, Ordering::Relaxed);
+                        }
                     },
                 }
             }
@@ -120,9 +190,21 @@ pub async fn subsystem<S, IF, SF, E>(
 
             // Finally, if nothing else is going on, process a unit of background work.
             () = background_work_signal() => {
+                if let Some((start, last_progress_ms, inflight_writes, _)) = &watchdog_state {
+                    last_progress_ms.store(start.elapsed().as_millis() as u64, Ordering::Relaxed);
+                    inflight_writes.fetch_add(1, Ordering::Relaxed);
+                }
                 subsys.write().await.perform_background_work_unit();
+                if let Some((start, last_progress_ms, inflight_writes, _)) = &watchdog_state {
+                    last_progress_ms.store(start.elapsed().as_millis() as u64, Ordering::Relaxed);
+                    inflight_writes.fetch_sub(1, Ordering::Relaxed);
+                }
             }
         }
+    }
+
+    if let Some((_, _, _, running)) = &watchdog_state {
+        running.store(false, Ordering::Relaxed);
     }
 
     while let Some(task_result) = worker_tasks.join_next().await {
