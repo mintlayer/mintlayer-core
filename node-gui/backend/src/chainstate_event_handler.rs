@@ -13,12 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use anyhow::Context as _;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
 use chainstate::ChainstateEvent;
+use logging::log;
 use utils::tap_log::TapLog;
 
 use super::{backend_impl::Backend, messages::BackendEvent};
@@ -30,14 +31,38 @@ pub struct ChainstateEventHandler {
     chain_info_updated: bool,
 }
 
+const CHAINSTATE_MUT_CALL_WARN_AFTER: Duration = Duration::from_secs(10);
+
+async fn warn_if_slow_chainstate_mut<F, T>(label: &'static str, fut: F) -> T
+where
+    F: std::future::Future<Output = T>,
+{
+    let mut fut = Box::pin(fut);
+    let warn = tokio::time::sleep(CHAINSTATE_MUT_CALL_WARN_AFTER);
+    tokio::pin!(warn);
+
+    tokio::select! {
+        res = &mut fut => return res,
+        _ = &mut warn => {
+            log::warn!(
+                "Chainstate call {label} taking longer than {:?}",
+                CHAINSTATE_MUT_CALL_WARN_AFTER
+            );
+        }
+    }
+
+    fut.await
+}
+
 impl ChainstateEventHandler {
     pub async fn new(
         chainstate: chainstate::ChainstateHandle,
         event_tx: UnboundedSender<BackendEvent>,
     ) -> anyhow::Result<Self> {
         let (chainstate_event_tx, chainstate_event_rx) = unbounded_channel();
-        chainstate
-            .call_mut(|this| {
+        warn_if_slow_chainstate_mut(
+            "node_gui.subscribe_to_subsystem_events",
+            chainstate.call_mut(|this| {
                 this.subscribe_to_subsystem_events(Arc::new(
                     move |chainstate_event: ChainstateEvent| {
                         _ = chainstate_event_tx
@@ -45,8 +70,9 @@ impl ChainstateEventHandler {
                             .log_err_pfx("Chainstate subscriber failed to send new tip");
                     },
                 ));
-            })
-            .await
+            }),
+        )
+        .await
             .context("Error subscribing to chainstate events")?;
 
         Ok(Self {

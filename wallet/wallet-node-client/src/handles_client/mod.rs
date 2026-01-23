@@ -41,6 +41,7 @@ use p2p::{
     P2pHandle,
 };
 use serialization::hex::HexError;
+use logging::log;
 use utils_networking::IpOrSocketAddress;
 use wallet_types::wallet_type::WalletControllerMode;
 
@@ -52,6 +53,29 @@ pub struct WalletHandlesClient {
     mempool: MempoolHandle,
     block_prod: BlockProductionHandle,
     p2p: P2pHandle,
+}
+
+const CHAINSTATE_MUT_CALL_WARN_AFTER: Duration = Duration::from_secs(10);
+
+async fn warn_if_slow_chainstate_mut<F, T>(label: &'static str, fut: F) -> T
+where
+    F: std::future::Future<Output = T>,
+{
+    let mut fut = Box::pin(fut);
+    let warn = tokio::time::sleep(CHAINSTATE_MUT_CALL_WARN_AFTER);
+    tokio::pin!(warn);
+
+    tokio::select! {
+        res = &mut fut => return res,
+        _ = &mut warn => {
+            log::warn!(
+                "Chainstate call {label} taking longer than {:?}",
+                CHAINSTATE_MUT_CALL_WARN_AFTER
+            );
+        }
+    }
+
+    fut.await
 }
 
 impl std::fmt::Debug for WalletHandlesClient {
@@ -342,9 +366,12 @@ impl NodeInterface for WalletHandlesClient {
     }
 
     async fn submit_block(&self, block: Block) -> Result<(), Self::Error> {
-        self.chainstate
-            .call_mut(move |this| this.process_block(block, BlockSource::Local))
-            .await??;
+        warn_if_slow_chainstate_mut(
+            "wallet.submit_block",
+            self.chainstate
+                .call_mut(move |this| this.process_block(block, BlockSource::Local)),
+        )
+        .await??;
         Ok(())
     }
 
@@ -352,10 +379,11 @@ impl NodeInterface for WalletHandlesClient {
         &self,
         outpoint: common::chain::UtxoOutPoint,
     ) -> Result<Option<common::chain::TxOutput>, Self::Error> {
-        let output = self
-            .chainstate
-            .call_mut(move |this| this.utxo(&outpoint))
-            .await??
+        let output = warn_if_slow_chainstate_mut(
+            "wallet.get_utxo",
+            self.chainstate.call_mut(move |this| this.utxo(&outpoint)),
+        )
+        .await??
             .map(|utxo| utxo.take_output());
         Ok(output)
     }

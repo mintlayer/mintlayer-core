@@ -15,7 +15,7 @@
 
 mod jobs_container;
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use crate::detail::CustomId;
 use async_trait::async_trait;
@@ -31,6 +31,29 @@ use tokio::sync::{
     oneshot,
 };
 use utils::{ensure, tap_log::TapLog};
+
+const CHAINSTATE_MUT_CALL_WARN_AFTER: Duration = Duration::from_secs(10);
+
+async fn warn_if_slow_chainstate_mut<F, T>(label: &'static str, fut: F) -> T
+where
+    F: std::future::Future<Output = T>,
+{
+    let mut fut = Box::pin(fut);
+    let warn = tokio::time::sleep(CHAINSTATE_MUT_CALL_WARN_AFTER);
+    tokio::pin!(warn);
+
+    tokio::select! {
+        res = &mut fut => return res,
+        _ = &mut warn => {
+            log::warn!(
+                "Chainstate call {label} taking longer than {:?}",
+                CHAINSTATE_MUT_CALL_WARN_AFTER
+            );
+        }
+    }
+
+    fut.await
+}
 
 #[derive(thiserror::Error, Debug, PartialEq, Eq)]
 pub enum JobManagerError {
@@ -273,8 +296,9 @@ impl JobManager {
         };
 
         tokio::spawn(async move {
-            chainstate_handle
-                .call_mut(|this| {
+            warn_if_slow_chainstate_mut(
+                "blockprod.subscribe_to_subsystem_events",
+                chainstate_handle.call_mut(|this| {
                     let subscribe_func =
                         Arc::new(
                             move |chainstate_event: ChainstateEvent| match chainstate_event {
@@ -287,8 +311,9 @@ impl JobManager {
                         );
 
                     this.subscribe_to_subsystem_events(subscribe_func);
-                })
-                .await
+                }),
+            )
+            .await
         });
     }
 
