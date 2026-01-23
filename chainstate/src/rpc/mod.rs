@@ -57,13 +57,18 @@ pub use types::{
 };
 
 const SLOW_CHAINSTATE_RPC_WARN_AFTER: Duration = Duration::from_secs(30);
+const SLOW_CHAINSTATE_MUT_RPC_WARN_AFTER: Duration = Duration::from_secs(10);
 
-async fn warn_if_slow_rpc<F, T>(method: &'static str, fut: F) -> T
+async fn warn_if_slow_rpc_with_timeout<F, T>(
+    method: &'static str,
+    timeout: Duration,
+    fut: F,
+) -> T
 where
     F: std::future::Future<Output = T>,
 {
     let mut fut = Box::pin(fut);
-    let warn = tokio::time::sleep(SLOW_CHAINSTATE_RPC_WARN_AFTER);
+    let warn = tokio::time::sleep(timeout);
     tokio::pin!(warn);
 
     tokio::select! {
@@ -71,12 +76,26 @@ where
         _ = &mut warn => {
             log::warn!(
                 "Chainstate RPC {method} taking longer than {:?}",
-                SLOW_CHAINSTATE_RPC_WARN_AFTER
+                timeout
             );
         }
     }
 
     fut.await
+}
+
+async fn warn_if_slow_rpc<F, T>(method: &'static str, fut: F) -> T
+where
+    F: std::future::Future<Output = T>,
+{
+    warn_if_slow_rpc_with_timeout(method, SLOW_CHAINSTATE_RPC_WARN_AFTER, fut).await
+}
+
+async fn warn_if_slow_mut_rpc<F, T>(method: &'static str, fut: F) -> T
+where
+    F: std::future::Future<Output = T>,
+{
+    warn_if_slow_rpc_with_timeout(method, SLOW_CHAINSTATE_MUT_RPC_WARN_AFTER, fut).await
 }
 
 #[rpc::describe]
@@ -385,7 +404,7 @@ impl ChainstateRpcServer for super::ChainstateHandle {
     }
 
     async fn submit_block(&self, block: HexEncoded<Block>) -> RpcResult<()> {
-        let res = warn_if_slow_rpc(
+        let res = warn_if_slow_mut_rpc(
             "chainstate.submit_block",
             self.call_mut(move |this| this.process_block(block.take(), BlockSource::Local)),
         )
@@ -397,7 +416,7 @@ impl ChainstateRpcServer for super::ChainstateHandle {
 
     async fn invalidate_block(&self, id: Id<Block>) -> RpcResult<()> {
         rpc::handle_result(
-            warn_if_slow_rpc(
+            warn_if_slow_mut_rpc(
                 "chainstate.invalidate_block",
                 self.call_mut(move |this| this.invalidate_block(&id)),
             )
@@ -407,7 +426,7 @@ impl ChainstateRpcServer for super::ChainstateHandle {
 
     async fn reset_block_failure_flags(&self, id: Id<Block>) -> RpcResult<()> {
         rpc::handle_result(
-            warn_if_slow_rpc(
+            warn_if_slow_mut_rpc(
                 "chainstate.reset_block_failure_flags",
                 self.call_mut(move |this| this.reset_block_failure_flags(&id)),
             )
@@ -657,7 +676,7 @@ impl ChainstateRpcServer for super::ChainstateHandle {
             std::io::BufReader::new(Box::new(file_obj));
 
         rpc::handle_result(
-            warn_if_slow_rpc(
+            warn_if_slow_mut_rpc(
                 "chainstate.import_bootstrap_file",
                 self.call_mut(move |this| this.import_bootstrap_stream(reader)),
             )
@@ -672,7 +691,7 @@ impl ChainstateRpcServer for super::ChainstateHandle {
     }
 
     async fn subscribe_to_events(&self, pending: subscription::Pending) -> subscription::Reply {
-        let event_rx = warn_if_slow_rpc(
+        let event_rx = warn_if_slow_mut_rpc(
             "chainstate.subscribe_to_events",
             self.call_mut(move |this| this.subscribe_to_rpc_events()),
         )
