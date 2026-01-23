@@ -20,6 +20,7 @@ use std::{
 
 use itertools::Itertools;
 use tokio::sync::mpsc::{Receiver, UnboundedReceiver, UnboundedSender};
+use std::time::Duration;
 
 use chainstate::{chainstate_interface::ChainstateInterface, BlockIndex, BlockSource, Locator};
 use common::{
@@ -56,6 +57,28 @@ use crate::{
     MessagingService, PeerManagerEvent, Result,
 };
 
+const CHAINSTATE_MUT_CALL_WARN_AFTER: Duration = Duration::from_secs(10);
+
+async fn warn_if_slow_chainstate_call<F, T>(label: &'static str, fut: F) -> T
+where
+    F: std::future::Future<Output = T>,
+{
+    let mut fut = Box::pin(fut);
+    let warn = tokio::time::sleep(CHAINSTATE_MUT_CALL_WARN_AFTER);
+    tokio::pin!(warn);
+
+    tokio::select! {
+        res = &mut fut => return res,
+        _ = &mut warn => {
+            log::warn!(
+                "Chainstate call {label} taking longer than {:?}",
+                CHAINSTATE_MUT_CALL_WARN_AFTER
+            );
+        }
+    }
+
+    fut.await
+}
 // TODO: Take into account the chain work when syncing.
 /// Block syncing manager.
 ///
@@ -718,9 +741,9 @@ where
 
         // Process the block and also determine the new value for peers_best_block_that_we_have.
         let old_peers_best_block_that_we_have = self.incoming.peers_best_block_that_we_have;
-        let (best_block, new_tip_received) = self
-            .chainstate_handle
-            .call_mut(move |c| {
+        let (best_block, new_tip_received) = warn_if_slow_chainstate_call(
+            "process_block_from_peer",
+            self.chainstate_handle.call_mut(move |c| {
                 let block = c.preliminary_block_check(block)?;
 
                 // If the block already exists in the block tree, skip it.
@@ -740,8 +763,9 @@ where
                 )?;
 
                 Ok((best_block, new_tip_received))
-            })
-            .await?;
+            }),
+        )
+        .await?;
         self.incoming.peers_best_block_that_we_have = best_block;
 
         if new_tip_received {
