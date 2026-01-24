@@ -27,7 +27,7 @@ pub mod bootstrap;
 pub mod query;
 pub mod tx_verification_strategy;
 
-use std::{collections::VecDeque, sync::Arc};
+use std::{collections::VecDeque, env, sync::Arc, thread, time::Duration};
 
 use itertools::Itertools;
 use thiserror::Error;
@@ -655,6 +655,13 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         block: WithId<Block>,
         block_source: BlockSource,
     ) -> Result<Option<BlockIndex>, BlockError> {
+        if let Ok(delay_str) = env::var("ML_CHAINSTATE_DELAY_MS") {
+            if let Ok(delay_ms) = delay_str.parse::<u64>() {
+                if delay_ms > 0 {
+                    thread::sleep(Duration::from_millis(delay_ms));
+                }
+            }
+        }
         let result = self.process_block_and_related_orphans(block, block_source);
         // Note: we don't ignore the result of check_consistency even though we may already have
         // an error to return (if the checks are enabled but couldn't be done for some reason,
