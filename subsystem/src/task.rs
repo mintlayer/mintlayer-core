@@ -122,10 +122,10 @@ pub async fn subsystem<S, IF, SF, E>(
         let current_write_kind_watch = Arc::clone(&current_write_kind);
         let last_warn_ms_watch = Arc::clone(&last_warn_ms);
 
-        tokio::spawn(async move {
+        std::thread::spawn(move || {
             let warn_after_ms = CHAINSTATE_WATCHDOG_NO_PROGRESS_AFTER.as_millis() as u64;
             loop {
-                tokio::time::sleep(CHAINSTATE_WATCHDOG_POLL_INTERVAL).await;
+                std::thread::sleep(CHAINSTATE_WATCHDOG_POLL_INTERVAL);
                 if !running_watch.load(Ordering::Relaxed) {
                     break;
                 }
