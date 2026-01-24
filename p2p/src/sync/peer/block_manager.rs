@@ -20,7 +20,7 @@ use std::{
 
 use itertools::Itertools;
 use tokio::sync::mpsc::{Receiver, UnboundedReceiver, UnboundedSender};
-use std::time::Duration;
+use std::{env, thread, time::Duration};
 
 use chainstate::{chainstate_interface::ChainstateInterface, BlockIndex, BlockSource, Locator};
 use common::{
@@ -58,6 +58,7 @@ use crate::{
 };
 
 const CHAINSTATE_MUT_CALL_WARN_AFTER: Duration = Duration::from_secs(10);
+const CHAINSTATE_P2P_DELAY_ENV: &str = "ML_CHAINSTATE_P2P_DELAY_MS";
 
 async fn warn_if_slow_chainstate_call<F, T>(label: &'static str, fut: F) -> T
 where
@@ -744,6 +745,14 @@ where
         let (best_block, new_tip_received) = warn_if_slow_chainstate_call(
             "process_block_from_peer",
             self.chainstate_handle.call_mut(move |c| {
+                if let Ok(delay_str) = env::var(CHAINSTATE_P2P_DELAY_ENV) {
+                    if let Ok(delay_ms) = delay_str.parse::<u64>() {
+                        if delay_ms > 0 {
+                            thread::sleep(Duration::from_millis(delay_ms));
+                        }
+                    }
+                }
+
                 let block = c.preliminary_block_check(block)?;
 
                 // If the block already exists in the block tree, skip it.
