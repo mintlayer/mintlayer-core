@@ -27,7 +27,16 @@ pub mod bootstrap;
 pub mod query;
 pub mod tx_verification_strategy;
 
-use std::{collections::VecDeque, env, sync::Arc, thread, time::Duration};
+use std::{
+    collections::VecDeque,
+    env,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    thread,
+    time::Duration,
+};
 
 use itertools::Itertools;
 use thiserror::Error;
@@ -102,6 +111,48 @@ pub type OrphanErrorHandler = dyn Fn(&BlockError) + Send + Sync;
 /// A tracing target that forces full block ids to be printed in certain places where they're
 /// normally printed in the abbreviated form.
 pub const CHAINSTATE_TRACING_TARGET_VERBOSE_BLOCK_IDS: &str = "chainstate_verbose_block_ids";
+const CHAINSTATE_PROCESS_BLOCK_WATCHDOG_ENV: &str = "ML_CHAINSTATE_PROCESS_BLOCK_WATCHDOG_MS";
+
+struct ProcessBlockWatchdog {
+    done: Arc<AtomicBool>,
+}
+
+impl Drop for ProcessBlockWatchdog {
+    fn drop(&mut self) {
+        self.done.store(true, Ordering::Relaxed);
+    }
+}
+
+fn spawn_process_block_watchdog(
+    block_id: Id<Block>,
+    block_source: BlockSource,
+) -> Option<ProcessBlockWatchdog> {
+    let warn_after_ms = env::var(CHAINSTATE_PROCESS_BLOCK_WATCHDOG_ENV)
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .unwrap_or(10000);
+    if warn_after_ms == 0 {
+        return None;
+    }
+    let done = Arc::new(AtomicBool::new(false));
+    let done_watch = Arc::clone(&done);
+    thread::spawn(move || {
+        let mut elapsed_ms = 0u64;
+        loop {
+            thread::sleep(Duration::from_millis(warn_after_ms));
+            if done_watch.load(Ordering::Relaxed) {
+                break;
+            }
+            elapsed_ms = elapsed_ms.saturating_add(warn_after_ms);
+            log::warn!(
+                "Chainstate process_block still running for {elapsed_ms}ms (block: {:x}, source: {:?})",
+                block_id,
+                block_source
+            );
+        }
+    });
+    Some(ProcessBlockWatchdog { done })
+}
 
 #[must_use]
 pub struct Chainstate<S, V> {
@@ -655,6 +706,8 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         block: WithId<Block>,
         block_source: BlockSource,
     ) -> Result<Option<BlockIndex>, BlockError> {
+        let block_id = block.get_id();
+        let _watchdog = spawn_process_block_watchdog(block_id, block_source);
         if let Ok(delay_str) = env::var("ML_CHAINSTATE_DELAY_MS") {
             if let Ok(delay_ms) = delay_str.parse::<u64>() {
                 if delay_ms > 0 {
@@ -662,7 +715,15 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
                 }
             }
         }
+        let started_at = std::time::Instant::now();
         let result = self.process_block_and_related_orphans(block, block_source);
+        let elapsed = started_at.elapsed();
+        if elapsed > Duration::from_secs(10) {
+            log::warn!(
+                "Chainstate process_block took {:?} (>10s)",
+                elapsed
+            );
+        }
         // Note: we don't ignore the result of check_consistency even though we may already have
         // an error to return (if the checks are enabled but couldn't be done for some reason,
         // we don't want to miss this).
