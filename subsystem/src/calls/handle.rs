@@ -59,7 +59,7 @@ impl<T: ?Sized + Send + Sync + 'static> SubmitOnlyHandle<T> {
         &self,
         func: impl FnOnce(&mut T) -> BoxFuture<()> + Send + 'static,
     ) -> Result<(), SubmissionError> {
-        self.send_action(Action::Mut(Box::new(func)))
+        self.send_action(Action::new_mut(Box::new(func), None))
     }
 
     /// Submit an async procedure to be performed by the subsystem.
@@ -67,7 +67,25 @@ impl<T: ?Sized + Send + Sync + 'static> SubmitOnlyHandle<T> {
         &self,
         func: impl FnOnce(&T) -> BoxFuture<()> + Send + 'static,
     ) -> Result<(), SubmissionError> {
-        self.send_action(Action::Ref(Box::new(func)))
+        self.send_action(Action::new_ref(Box::new(func), None))
+    }
+
+    /// Submit an async procedure to be performed by the subsystem (mutable) with a label.
+    pub fn submit_async_mut_with_label(
+        &self,
+        label: &'static str,
+        func: impl FnOnce(&mut T) -> BoxFuture<()> + Send + 'static,
+    ) -> Result<(), SubmissionError> {
+        self.send_action(Action::new_mut(Box::new(func), Some(label)))
+    }
+
+    /// Submit an async procedure to be performed by the subsystem with a label.
+    pub fn submit_async_with_label(
+        &self,
+        label: &'static str,
+        func: impl FnOnce(&T) -> BoxFuture<()> + Send + 'static,
+    ) -> Result<(), SubmissionError> {
+        self.send_action(Action::new_ref(Box::new(func), Some(label)))
     }
 
     /// Submit a procedure to be preformed by the subsystem (mutable).
@@ -75,16 +93,50 @@ impl<T: ?Sized + Send + Sync + 'static> SubmitOnlyHandle<T> {
         &self,
         func: impl FnOnce(&mut T) + Send + 'static,
     ) -> Result<(), SubmissionError> {
-        self.send_action(Action::Mut(Box::new(move |subsys| {
-            Box::pin(async { func(subsys) })
-        })))
+        self.send_action(Action::new_mut(
+            Box::new(move |subsys| {
+                Box::pin(async { func(subsys) })
+            }),
+            None,
+        ))
+    }
+
+    /// Submit a procedure to be preformed by the subsystem (mutable) with a label.
+    pub fn submit_mut_with_label(
+        &self,
+        label: &'static str,
+        func: impl FnOnce(&mut T) + Send + 'static,
+    ) -> Result<(), SubmissionError> {
+        self.send_action(Action::new_mut(
+            Box::new(move |subsys| {
+                Box::pin(async { func(subsys) })
+            }),
+            Some(label),
+        ))
+    }
+
+    /// Submit a procedure to be preformed by the subsystem with a label.
+    pub fn submit_with_label(
+        &self,
+        label: &'static str,
+        func: impl FnOnce(&T) + Send + 'static,
+    ) -> Result<(), SubmissionError> {
+        self.send_action(Action::new_ref(
+            Box::new(move |subsys| {
+                Box::pin(async { func(subsys) })
+            }),
+            Some(label),
+        ))
     }
 
     /// Submit a procedure to be preformed by the subsystem.
     pub fn submit(&self, func: impl FnOnce(&T) + Send + 'static) -> Result<(), SubmissionError> {
-        self.send_action(Action::Ref(Box::new(move |subsys| {
-            Box::pin(async { func(subsys) })
-        })))
+        self.send_action(Action::new_ref(
+            Box::new(move |subsys| {
+                Box::pin(async { func(subsys) })
+            }),
+            None,
+        ))
     }
 }
 
@@ -137,6 +189,24 @@ impl<T: ?Sized + Send + Sync + 'static> Handle<T> {
         CallResult::new(result.map(|()| CallResponse::new(rrx)))
     }
 
+    /// Call an async procedure to the subsystem (mutable) with a label.
+    pub fn call_async_mut_with_label<R: Send + 'static>(
+        &self,
+        label: &'static str,
+        func: impl FnOnce(&mut T) -> BoxFuture<R> + Send + 'static,
+    ) -> CallResult<R> {
+        let current_tracing_span = tracing::Span::current();
+        let (rtx, rrx) = tokio::sync::oneshot::channel::<R>();
+        let result = self.0.submit_async_mut_with_label(label, move |subsys| {
+            Box::pin(async move {
+                if rtx.send(func(subsys).instrument(current_tracing_span).await).is_err() {
+                    log::trace!("Subsystem call (mut) result ignored");
+                }
+            })
+        });
+        CallResult::new(result.map(|()| CallResponse::new(rrx)))
+    }
+
     /// Call an async procedure to the subsystem (immutable).
     pub fn call_async<R: Send + 'static>(
         &self,
@@ -164,6 +234,15 @@ impl<T: ?Sized + Send + Sync + 'static> Handle<T> {
         // an `async` block. But `instrument`-ing the `Ready` future (which happens inside
         // `call_async_mut`) doesn't work for some reason.
         self.call_async_mut(|this| Box::pin(async { func(this) }))
+    }
+
+    /// Call a procedure to the subsystem (mutable) with a label.
+    pub fn call_mut_with_label<R: Send + 'static>(
+        &self,
+        label: &'static str,
+        func: impl FnOnce(&mut T) -> R + Send + 'static,
+    ) -> CallResult<R> {
+        self.call_async_mut_with_label(label, |this| Box::pin(async { func(this) }))
     }
 
     /// Call a procedure to the subsystem (immutable).

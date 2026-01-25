@@ -42,6 +42,16 @@ impl ChainstateHandle {
         self.handle.call_mut(move |cs| func(cs)).await?
     }
 
+    pub async fn call_mut_with_label<R: Send + 'static>(
+        &self,
+        label: &'static str,
+        func: impl FnOnce(&mut dyn ChainstateInterface) -> crate::Result<R> + Send + 'static,
+    ) -> crate::Result<R> {
+        self.handle
+            .call_mut_with_label(label, move |cs| func(cs))
+            .await?
+    }
+
     pub async fn call<R: Send + 'static>(
         &self,
         func: impl FnOnce(&dyn ChainstateInterface) -> crate::Result<R> + Send + 'static,

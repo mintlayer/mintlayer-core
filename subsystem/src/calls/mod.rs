@@ -20,7 +20,7 @@ mod handle;
 
 pub use handle::{Handle, SubmitOnlyHandle};
 
-use std::{future, pin::Pin, task::Poll};
+use std::{future, pin::Pin, task::Poll, time::Instant};
 
 use crate::error::{CallError, ResponseError, SubmissionError};
 
@@ -31,9 +31,39 @@ use tokio::sync::{mpsc, oneshot};
 type ActionRefFn<T> = Box<dyn Send + FnOnce(&T) -> BoxFuture<()>>;
 type ActionMutFn<T> = Box<dyn Send + FnOnce(&mut T) -> BoxFuture<()>>;
 
+pub struct ActionRef<T: ?Sized> {
+    pub(crate) submitted_at: Instant,
+    pub(crate) label: Option<&'static str>,
+    pub(crate) func: ActionRefFn<T>,
+}
+
+pub struct ActionMut<T: ?Sized> {
+    pub(crate) submitted_at: Instant,
+    pub(crate) label: Option<&'static str>,
+    pub(crate) func: ActionMutFn<T>,
+}
+
 pub enum Action<T: ?Sized> {
-    Ref(ActionRefFn<T>),
-    Mut(ActionMutFn<T>),
+    Ref(ActionRef<T>),
+    Mut(ActionMut<T>),
+}
+
+impl<T: ?Sized> Action<T> {
+    pub fn new_ref(func: ActionRefFn<T>, label: Option<&'static str>) -> Self {
+        Self::Ref(ActionRef {
+            submitted_at: Instant::now(),
+            label,
+            func,
+        })
+    }
+
+    pub fn new_mut(func: ActionMutFn<T>, label: Option<&'static str>) -> Self {
+        Self::Mut(ActionMut {
+            submitted_at: Instant::now(),
+            label,
+            func,
+        })
+    }
 }
 
 pub type ActionSender<T> = mpsc::UnboundedSender<Action<T>>;

@@ -16,6 +16,7 @@
 use std::{
     collections::{BTreeSet, VecDeque},
     mem,
+    time::Instant,
 };
 
 use itertools::Itertools;
@@ -744,7 +745,7 @@ where
         let old_peers_best_block_that_we_have = self.incoming.peers_best_block_that_we_have;
         let (best_block, new_tip_received) = warn_if_slow_chainstate_call(
             "process_block_from_peer",
-            self.chainstate_handle.call_mut(move |c| {
+            self.chainstate_handle.call_mut_with_label("process_block_from_peer", move |c| {
                 if let Ok(delay_str) = env::var(CHAINSTATE_P2P_DELAY_ENV) {
                     if let Ok(delay_ms) = delay_str.parse::<u64>() {
                         if delay_ms > 0 {
@@ -753,14 +754,40 @@ where
                     }
                 }
 
+                let precheck_started = Instant::now();
                 let block = c.preliminary_block_check(block)?;
+                let precheck_elapsed = precheck_started.elapsed();
+                if precheck_elapsed > Duration::from_secs(10) {
+                    log::warn!(
+                        "Chainstate preliminary_block_check took {:?} (>10s) for block {:x}",
+                        precheck_elapsed,
+                        block_id
+                    );
+                }
 
                 // If the block already exists in the block tree, skip it.
+                let index_check_started = Instant::now();
                 let new_tip_received =
                     if c.get_block_index_for_persisted_block(&block.get_id())?.is_some() {
+                        let index_check_elapsed = index_check_started.elapsed();
+                        if index_check_elapsed > Duration::from_secs(10) {
+                            log::warn!(
+                                "Chainstate get_block_index_for_persisted_block took {:?} (>10s) for block {:x}",
+                                index_check_elapsed,
+                                block_id
+                            );
+                        }
                         log::debug!("The peer sent a block that already exists ({block_id})");
                         false
                     } else {
+                        let index_check_elapsed = index_check_started.elapsed();
+                        if index_check_elapsed > Duration::from_secs(10) {
+                            log::warn!(
+                                "Chainstate get_block_index_for_persisted_block took {:?} (>10s) for block {:x}",
+                                index_check_elapsed,
+                                block_id
+                            );
+                        }
                         let block_index = c.process_block(block, BlockSource::Peer)?;
                         block_index.is_some()
                     };

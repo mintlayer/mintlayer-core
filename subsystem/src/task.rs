@@ -32,6 +32,7 @@ use std::time::{Duration, Instant};
 const CHAINSTATE_WATCHDOG_NO_PROGRESS_AFTER: Duration = Duration::from_secs(10);
 const CHAINSTATE_WATCHDOG_POLL_INTERVAL: Duration = Duration::from_secs(1);
 const CHAINSTATE_WATCHDOG_WRITE_LOCK_WARN_AFTER: Duration = Duration::from_secs(10);
+const CHAINSTATE_WATCHDOG_QUEUE_WARN_AFTER: Duration = Duration::from_secs(10);
 const CHAINSTATE_WRITE_KIND_NONE: u8 = 0;
 const CHAINSTATE_WRITE_KIND_ACTION_MUT: u8 = 1;
 const CHAINSTATE_WRITE_KIND_BACKGROUND: u8 = 2;
@@ -186,6 +187,23 @@ pub async fn subsystem<S, IF, SF, E>(
                 }
                 match call {
                     Action::Mut(call) => {
+                        if let Some((_, _, _, _, _)) = &watchdog_state {
+                            let queued_ms = call.submitted_at.elapsed().as_millis() as u64;
+                            if queued_ms >= CHAINSTATE_WATCHDOG_QUEUE_WARN_AFTER.as_millis() as u64 {
+                                match call.label {
+                                    Some(label) => {
+                                        log::warn!(
+                                            "Subsystem {full_name} mut call queued for {queued_ms}ms (label: {label})"
+                                        );
+                                    }
+                                    None => {
+                                        log::warn!(
+                                            "Subsystem {full_name} mut call queued for {queued_ms}ms"
+                                        );
+                                    }
+                                }
+                            }
+                        }
                         if let Some((_, _, inflight_writes, _, current_write_kind)) = &watchdog_state {
                             inflight_writes.fetch_add(1, Ordering::Relaxed);
                             current_write_kind
@@ -207,7 +225,7 @@ pub async fn subsystem<S, IF, SF, E>(
                         } else {
                             subsys.write().await
                         };
-                        call(write_guard.interface_mut()).await;
+                        (call.func)(write_guard.interface_mut()).await;
                         if let Some((_, _, inflight_writes, _, current_write_kind)) = &watchdog_state {
                             inflight_writes.fetch_sub(1, Ordering::Relaxed);
                             current_write_kind
@@ -219,9 +237,26 @@ pub async fn subsystem<S, IF, SF, E>(
                         }
                     },
                     Action::Ref(call) => {
+                        if let Some((_, _, _, _, _)) = &watchdog_state {
+                            let queued_ms = call.submitted_at.elapsed().as_millis() as u64;
+                            if queued_ms >= CHAINSTATE_WATCHDOG_QUEUE_WARN_AFTER.as_millis() as u64 {
+                                match call.label {
+                                    Some(label) => {
+                                        log::warn!(
+                                            "Subsystem {full_name} ref call queued for {queued_ms}ms (label: {label})"
+                                        );
+                                    }
+                                    None => {
+                                        log::warn!(
+                                            "Subsystem {full_name} ref call queued for {queued_ms}ms"
+                                        );
+                                    }
+                                }
+                            }
+                        }
                         let subsys = Arc::clone(&subsys);
                         worker_tasks.spawn(async move {
-                            call(subsys.read().await.interface_ref()).await
+                            (call.func)(subsys.read().await.interface_ref()).await
                         }.in_current_span());
                         if let Some((start, last_progress_ms, _, _, _)) = &watchdog_state {
                             last_progress_ms
