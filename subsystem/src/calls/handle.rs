@@ -22,14 +22,16 @@ use logging::log;
 use utils::shallow_clone::ShallowClone;
 
 use crate::{
-    calls::{Action, ActionSender, CallResponse, CallResult},
+    calls::{Action, ActionSender, CallResponse, CallResult, QueueWatch},
     error::SubmissionError,
 };
+use utils::sync::Arc;
 
 /// Submit-only subsystem handle. Can be used when a call result is not needed.
 pub struct SubmitOnlyHandle<T: ?Sized> {
     // Send the subsystem stuff to do.
     action_tx: ActionSender<T>,
+    queue_watch: Option<Arc<QueueWatch>>,
 }
 
 impl<T: ?Sized> Clone for SubmitOnlyHandle<T> {
@@ -41,17 +43,33 @@ impl<T: ?Sized> Clone for SubmitOnlyHandle<T> {
 impl<T: ?Sized> ShallowClone for SubmitOnlyHandle<T> {
     fn shallow_clone(&self) -> Self {
         let action_tx = self.action_tx.clone();
-        Self { action_tx }
+        let queue_watch = self.queue_watch.clone();
+        Self {
+            action_tx,
+            queue_watch,
+        }
     }
 }
 
 impl<T: ?Sized + Send + Sync + 'static> SubmitOnlyHandle<T> {
-    pub(crate) fn new(action_tx: ActionSender<T>) -> Self {
-        Self { action_tx }
+    pub(crate) fn new(action_tx: ActionSender<T>, queue_watch: Option<Arc<QueueWatch>>) -> Self {
+        Self {
+            action_tx,
+            queue_watch,
+        }
     }
 
     fn send_action(&self, action: Action<T>) -> Result<(), SubmissionError> {
-        self.action_tx.send(action).map_err(|_| SubmissionError::ChannelClosed)
+        if let Some(queue_watch) = &self.queue_watch {
+            queue_watch.mark_submit();
+        }
+        if self.action_tx.send(action).is_err() {
+            if let Some(queue_watch) = &self.queue_watch {
+                queue_watch.mark_submit_failed();
+            }
+            return Err(SubmissionError::ChannelClosed);
+        }
+        Ok(())
     }
 
     /// Submit an async procedure to be performed by the subsystem (mutable).

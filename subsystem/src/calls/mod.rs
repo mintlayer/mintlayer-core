@@ -20,7 +20,15 @@ mod handle;
 
 pub use handle::{Handle, SubmitOnlyHandle};
 
-use std::{future, pin::Pin, task::Poll, time::Instant};
+use std::{
+    future,
+    pin::Pin,
+    sync::atomic::{AtomicU64, Ordering},
+    task::Poll,
+    time::Instant,
+};
+
+use utils::sync::Arc;
 
 use crate::error::{CallError, ResponseError, SubmissionError};
 
@@ -67,6 +75,61 @@ impl<T: ?Sized> Action<T> {
 }
 
 pub type ActionSender<T> = mpsc::UnboundedSender<Action<T>>;
+
+#[derive(Debug)]
+pub struct QueueWatch {
+    start: Instant,
+    last_submit_ms: AtomicU64,
+    last_dequeue_ms: AtomicU64,
+    queue_depth: AtomicU64,
+}
+
+impl QueueWatch {
+    pub fn new() -> Arc<Self> {
+        Arc::new(Self {
+            start: Instant::now(),
+            last_submit_ms: AtomicU64::new(0),
+            last_dequeue_ms: AtomicU64::new(0),
+            queue_depth: AtomicU64::new(0),
+        })
+    }
+
+    pub fn mark_submit(&self) {
+        let now_ms = self.start.elapsed().as_millis() as u64;
+        self.last_submit_ms.store(now_ms, Ordering::Relaxed);
+        self.queue_depth.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn mark_submit_failed(&self) {
+        let _ = self.queue_depth.fetch_update(
+            Ordering::Relaxed,
+            Ordering::Relaxed,
+            |val| val.checked_sub(1),
+        );
+    }
+
+    pub fn mark_dequeue(&self) {
+        let now_ms = self.start.elapsed().as_millis() as u64;
+        self.last_dequeue_ms.store(now_ms, Ordering::Relaxed);
+        let _ = self.queue_depth.fetch_update(
+            Ordering::Relaxed,
+            Ordering::Relaxed,
+            |val| val.checked_sub(1),
+        );
+    }
+
+    pub fn queue_depth(&self) -> u64 {
+        self.queue_depth.load(Ordering::Relaxed)
+    }
+
+    pub fn last_submit_ms(&self) -> u64 {
+        self.last_submit_ms.load(Ordering::Relaxed)
+    }
+
+    pub fn last_dequeue_ms(&self) -> u64 {
+        self.last_dequeue_ms.load(Ordering::Relaxed)
+    }
+}
 
 /// Call response that can be polled for result
 #[must_use = "Subsystem call response ignored"]

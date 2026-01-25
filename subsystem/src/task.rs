@@ -24,7 +24,7 @@ use tracing::Instrument;
 use logging::log;
 use utils::{once_destructor::OnceDestructor, sync::Arc};
 
-use crate::{calls::Action, SubmitOnlyHandle, Subsystem};
+use crate::{calls::{Action, QueueWatch}, SubmitOnlyHandle, Subsystem};
 
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering};
 use std::time::{Duration, Instant};
@@ -62,6 +62,7 @@ pub async fn subsystem<S, IF, SF, E>(
     subsys_init: IF,
     submit_handle: SubmitOnlyHandle<S::Interface>,
     mut action_rx: mpsc::UnboundedReceiver<Action<S::Interface>>,
+    queue_watch: Option<Arc<QueueWatch>>,
     mut shutdown_rx: oneshot::Receiver<()>,
     shutting_down_tx: mpsc::UnboundedSender<()>,
 ) where
@@ -115,6 +116,7 @@ pub async fn subsystem<S, IF, SF, E>(
         let running = Arc::new(AtomicBool::new(true));
         let current_write_kind = Arc::new(AtomicU8::new(CHAINSTATE_WRITE_KIND_NONE));
         let last_warn_ms = Arc::new(AtomicU64::new(0));
+        let last_queue_warn_ms = Arc::new(AtomicU64::new(0));
         let full_name_clone = full_name.clone();
 
         let last_progress_ms_watch = Arc::clone(&last_progress_ms);
@@ -122,6 +124,8 @@ pub async fn subsystem<S, IF, SF, E>(
         let running_watch = Arc::clone(&running);
         let current_write_kind_watch = Arc::clone(&current_write_kind);
         let last_warn_ms_watch = Arc::clone(&last_warn_ms);
+        let last_queue_warn_ms_watch = Arc::clone(&last_queue_warn_ms);
+        let queue_watch = queue_watch.clone();
 
         std::thread::spawn(move || {
             let warn_after_ms = CHAINSTATE_WATCHDOG_NO_PROGRESS_AFTER.as_millis() as u64;
@@ -130,23 +134,40 @@ pub async fn subsystem<S, IF, SF, E>(
                 if !running_watch.load(Ordering::Relaxed) {
                     break;
                 }
-                if inflight_writes_watch.load(Ordering::Relaxed) == 0 {
-                    continue;
-                }
                 let now_ms = start.elapsed().as_millis() as u64;
-                let last_ms = last_progress_ms_watch.load(Ordering::Relaxed);
-                let since_ms = now_ms.saturating_sub(last_ms);
-                if since_ms >= warn_after_ms {
-                    let last_warn = last_warn_ms_watch.load(Ordering::Relaxed);
-                    if now_ms.saturating_sub(last_warn) >= warn_after_ms {
-                        log::warn!(
-                            "Subsystem {full_name_clone} no progress for {since_ms}ms (inflight writes: {}, write_kind: {})",
-                            inflight_writes_watch.load(Ordering::Relaxed),
-                            chainstate_write_kind_name(
-                                current_write_kind_watch.load(Ordering::Relaxed),
-                            ),
-                        );
-                        last_warn_ms_watch.store(now_ms, Ordering::Relaxed);
+                if inflight_writes_watch.load(Ordering::Relaxed) > 0 {
+                    let last_ms = last_progress_ms_watch.load(Ordering::Relaxed);
+                    let since_ms = now_ms.saturating_sub(last_ms);
+                    if since_ms >= warn_after_ms {
+                        let last_warn = last_warn_ms_watch.load(Ordering::Relaxed);
+                        if now_ms.saturating_sub(last_warn) >= warn_after_ms {
+                            log::warn!(
+                                "Subsystem {full_name_clone} no progress for {since_ms}ms (inflight writes: {}, write_kind: {})",
+                                inflight_writes_watch.load(Ordering::Relaxed),
+                                chainstate_write_kind_name(
+                                    current_write_kind_watch.load(Ordering::Relaxed),
+                                ),
+                            );
+                            last_warn_ms_watch.store(now_ms, Ordering::Relaxed);
+                        }
+                    }
+                }
+                if let Some(queue_watch) = &queue_watch {
+                    let queue_depth = queue_watch.queue_depth();
+                    if queue_depth > 0 {
+                        let last_dequeue = queue_watch.last_dequeue_ms();
+                        let since_dequeue = now_ms.saturating_sub(last_dequeue);
+                        if since_dequeue >= warn_after_ms {
+                            let last_warn = last_queue_warn_ms_watch.load(Ordering::Relaxed);
+                            if now_ms.saturating_sub(last_warn) >= warn_after_ms {
+                                let last_submit = queue_watch.last_submit_ms();
+                                let since_submit = now_ms.saturating_sub(last_submit);
+                                log::warn!(
+                                    "Subsystem {full_name_clone} action queue stalled for {since_dequeue}ms (queued: {queue_depth}, last submit {since_submit}ms ago)",
+                                );
+                                last_queue_warn_ms_watch.store(now_ms, Ordering::Relaxed);
+                            }
+                        }
                     }
                 }
             }
@@ -184,6 +205,9 @@ pub async fn subsystem<S, IF, SF, E>(
             Some(call) = action_rx.recv() => {
                 if let Some((start, last_progress_ms, inflight_writes, _, _)) = &watchdog_state {
                     last_progress_ms.store(start.elapsed().as_millis() as u64, Ordering::Relaxed);
+                }
+                if let Some(queue_watch) = &queue_watch {
+                    queue_watch.mark_dequeue();
                 }
                 match call {
                     Action::Mut(call) => {

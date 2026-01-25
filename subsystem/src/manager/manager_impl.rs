@@ -94,7 +94,8 @@ impl Manager {
 
         // Call related channels
         let (action_tx, action_rx) = mpsc::unbounded_channel();
-        let submit_handle = SubmitOnlyHandle::new(action_tx);
+        let queue_watch = crate::calls::QueueWatch::new();
+        let submit_handle = SubmitOnlyHandle::new(action_tx, Some(queue_watch.clone()));
 
         log::info!("Registering subsystem {full_name}");
 
@@ -103,6 +104,7 @@ impl Manager {
             subsys_init,
             submit_handle.shallow_clone(),
             action_rx,
+            Some(queue_watch),
             shutdown_rx,
             self.shutting_down_tx.clone(),
         ));
