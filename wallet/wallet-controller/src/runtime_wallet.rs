@@ -1568,6 +1568,18 @@ where
         }
     }
 
+    pub fn add_mempool_transactions(
+        &mut self,
+        txs: &[SignedTransaction],
+        wallet_events: &impl WalletEvents,
+    ) -> WalletResult<()> {
+        match self {
+            RuntimeWallet::Software(w) => w.scan_mempool(txs, wallet_events),
+            #[cfg(feature = "trezor")]
+            RuntimeWallet::Trezor(w) => w.scan_mempool(txs, wallet_events),
+        }
+    }
+
     pub fn get_delegations(
         &self,
         account_index: U31,

@@ -19,6 +19,8 @@ use std::{
     time::Duration,
 };
 
+use futures::StreamExt;
+
 use blockprod::{BlockProductionError, BlockProductionHandle, TimestampSearchData};
 use chainstate::{BlockSource, ChainInfo, ChainstateError, ChainstateHandle};
 use common::{
@@ -32,7 +34,8 @@ use common::{
 use consensus::GenerateBlockInputData;
 use crypto::ephemeral_e2e::EndToEndPublicKey;
 use mempool::{
-    tx_accumulator::PackingStrategy, tx_options::TxOptionsOverrides, FeeRate, MempoolHandle,
+    event::MempoolEvent, tx_accumulator::PackingStrategy, tx_options::TxOptionsOverrides, FeeRate,
+    MempoolHandle,
 };
 use p2p::{
     error::P2pError,
@@ -44,7 +47,7 @@ use serialization::hex::HexError;
 use utils_networking::IpOrSocketAddress;
 use wallet_types::wallet_type::WalletControllerMode;
 
-use crate::node_traits::NodeInterface;
+use crate::node_traits::{MempoolEvents, MempoolNotification, NodeInterface};
 
 #[derive(Clone)]
 pub struct WalletHandlesClient {
@@ -450,6 +453,29 @@ impl NodeInterface for WalletHandlesClient {
         // MIN(1) + 9 = 10, to keep it as const
         const NUM_POINTS: NonZeroUsize = NonZeroUsize::MIN.saturating_add(9);
         let res = self.mempool.call(move |this| this.get_fee_rate_points(NUM_POINTS)).await??;
+        Ok(res)
+    }
+
+    async fn mempool_subscribe_to_events(&self) -> Result<MempoolEvents, Self::Error> {
+        let res = self.mempool.call_mut(move |this| this.subscribe_to_rpc_events()).await?;
+
+        let subscription = res.into_stream().filter_map(|event| {
+            futures::future::ready(match event {
+                MempoolEvent::NewTip { .. } => None,
+
+                MempoolEvent::TransactionProcessed(tx) => tx
+                    .was_accepted()
+                    .then_some(MempoolNotification::NewTransaction { tx_id: *tx.tx_id() }),
+            })
+        });
+        Ok(Box::new(subscription))
+    }
+
+    async fn mempool_get_transaction(
+        &self,
+        tx_id: Id<Transaction>,
+    ) -> Result<Option<SignedTransaction>, Self::Error> {
+        let res = self.mempool.call(move |this| this.transaction(&tx_id)).await?;
         Ok(res)
     }
 }

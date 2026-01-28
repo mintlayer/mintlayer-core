@@ -19,6 +19,8 @@ use std::{
     time::Duration,
 };
 
+use futures::stream::Stream;
+
 use chainstate::ChainInfo;
 use common::{
     chain::{
@@ -36,6 +38,8 @@ use utils_networking::IpOrSocketAddress;
 use wallet_types::wallet_type::WalletControllerMode;
 
 pub use p2p::{interface::types::ConnectedPeer, types::peer_id::PeerId};
+
+pub type MempoolEvents = Box<dyn Stream<Item = MempoolNotification> + Sync + Send + Unpin>;
 
 #[mockall::automock(type Error = anyhow::Error;)]
 #[async_trait::async_trait]
@@ -146,6 +150,15 @@ pub trait NodeInterface {
 
     async fn mempool_get_fee_rate(&self, in_top_x_mb: usize) -> Result<FeeRate, Self::Error>;
     async fn mempool_get_fee_rate_points(&self) -> Result<Vec<(usize, FeeRate)>, Self::Error>;
+    async fn mempool_get_transaction(
+        &self,
+        tx_id: Id<Transaction>,
+    ) -> Result<Option<SignedTransaction>, Self::Error>;
+    async fn mempool_subscribe_to_events(&self) -> Result<MempoolEvents, Self::Error>;
 
     async fn get_utxo(&self, outpoint: UtxoOutPoint) -> Result<Option<TxOutput>, Self::Error>;
+}
+
+pub enum MempoolNotification {
+    NewTransaction { tx_id: Id<Transaction> },
 }

@@ -39,7 +39,7 @@ use p2p::{
 use utils_networking::IpOrSocketAddress;
 use wallet_types::wallet_type::WalletControllerMode;
 
-use crate::node_traits::NodeInterface;
+use crate::node_traits::{MempoolEvents, NodeInterface};
 
 use super::ColdWalletClient;
 
@@ -287,6 +287,17 @@ impl NodeInterface for ColdWalletClient {
     }
 
     async fn mempool_get_fee_rate_points(&self) -> Result<Vec<(usize, FeeRate)>, Self::Error> {
+        Err(ColdWalletRpcError::NotAvailable)
+    }
+
+    async fn mempool_subscribe_to_events(&self) -> Result<MempoolEvents, Self::Error> {
+        Ok(Box::new(futures::stream::empty()))
+    }
+
+    async fn mempool_get_transaction(
+        &self,
+        _tx_id: Id<Transaction>,
+    ) -> Result<Option<SignedTransaction>, Self::Error> {
         Err(ColdWalletRpcError::NotAvailable)
     }
 
