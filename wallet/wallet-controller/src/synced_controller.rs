@@ -619,7 +619,7 @@ where
         let selected_utxos = self.wallet.get_utxos(
             self.account_index,
             UtxoType::Transfer | UtxoType::LockThenTransfer | UtxoType::IssueNft,
-            UtxoState::Confirmed | UtxoState::Inactive,
+            UtxoState::Confirmed | UtxoState::Inactive | UtxoState::InMempool,
             WithLocked::Unlocked,
         )?;
 

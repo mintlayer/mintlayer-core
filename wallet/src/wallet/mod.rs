@@ -2558,8 +2558,6 @@ where
     }
 
     /// Rescan mempool for unconfirmed transactions and UTXOs
-    /// TODO: Currently we don't sync with the mempool
-    #[cfg(test)]
     pub fn scan_mempool(
         &mut self,
         transactions: &[SignedTransaction],

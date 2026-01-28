@@ -18,13 +18,15 @@ pub mod cold_wallet_client;
 
 use std::sync::Arc;
 
+use tokio::sync::Mutex;
+
 use common::address::AddressError;
 use common::chain::ChainConfig;
 use common::primitives::per_thousand::PerThousandParseError;
-use rpc::new_http_client;
+use rpc::new_ws_client;
 use rpc::ClientError;
 use rpc::RpcAuthData;
-use rpc::RpcHttpClient;
+use rpc::RpcWsClient;
 
 use crate::node_traits::NodeInterface;
 
@@ -57,7 +59,7 @@ impl ColdWalletClient {
 
 #[derive(Clone, Debug)]
 pub struct NodeRpcClient {
-    http_client: RpcHttpClient,
+    rpc_client: Arc<Mutex<RpcWsClient>>,
     chain_config: Arc<ChainConfig>,
 }
 
@@ -67,13 +69,13 @@ impl NodeRpcClient {
         remote_socket_address: String,
         rpc_auth: RpcAuthData,
     ) -> Result<Self, NodeRpcError> {
-        let host = format!("http://{remote_socket_address}");
+        let host = format!("ws://{remote_socket_address}");
 
-        let http_client =
-            new_http_client(host, rpc_auth).map_err(NodeRpcError::ClientCreationError)?;
+        let rpc_client =
+            new_ws_client(host, rpc_auth).await.map_err(NodeRpcError::ClientCreationError)?;
 
         let client = Self {
-            http_client,
+            rpc_client: Arc::new(Mutex::new(rpc_client)),
             chain_config,
         };
 

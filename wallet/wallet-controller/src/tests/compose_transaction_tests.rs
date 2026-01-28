@@ -183,6 +183,10 @@ async fn general_test(#[case] seed: Seed, #[case] use_htlc_secret: bool) {
             .returning(move || Ok(chain_info_to_return.clone()));
 
         node_mock
+            .expect_mempool_subscribe_to_events()
+            .returning(|| Ok(Box::new(futures::stream::empty())));
+
+        node_mock
     };
 
     let controller = Controller::new(

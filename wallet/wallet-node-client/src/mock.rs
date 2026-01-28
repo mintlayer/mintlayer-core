@@ -41,7 +41,7 @@ use p2p::{
 use utils_networking::IpOrSocketAddress;
 use wallet_types::wallet_type::WalletControllerMode;
 
-use crate::node_traits::{MockNodeInterface, NodeInterface};
+use crate::node_traits::{MempoolEvents, MockNodeInterface, NodeInterface};
 
 /// `Controller` requires the provided `impl NodeInterface` to also implement `Clone`.
 /// There is no way to make `MockNodeInterface` itself clonable, since `mockall::automock` doesn't
@@ -313,6 +313,17 @@ impl NodeInterface for ClonableMockNodeInterface {
 
     async fn mempool_get_fee_rate_points(&self) -> Result<Vec<(usize, FeeRate)>, Self::Error> {
         self.lock().await.mempool_get_fee_rate_points().await
+    }
+
+    async fn mempool_get_transaction(
+        &self,
+        tx_id: Id<Transaction>,
+    ) -> Result<Option<SignedTransaction>, Self::Error> {
+        self.lock().await.mempool_get_transaction(tx_id).await
+    }
+
+    async fn mempool_subscribe_to_events(&self) -> Result<MempoolEvents, Self::Error> {
+        self.lock().await.mempool_subscribe_to_events().await
     }
 
     async fn get_utxo(&self, outpoint: UtxoOutPoint) -> Result<Option<TxOutput>, Self::Error> {

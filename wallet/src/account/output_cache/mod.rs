@@ -971,7 +971,23 @@ impl OutputCache {
         tx_id: OutPointSourceId,
         tx: WalletTx,
     ) -> WalletResult<()> {
-        let already_present = self.txs.get(&tx_id).is_some_and(|tx| match tx.state() {
+        let existing_tx = self.txs.get(&tx_id);
+        let existing_tx_already_confirmed_or_same = existing_tx.is_some_and(|existing_tx| {
+            matches!(
+                (existing_tx.state(), tx.state()),
+                (TxState::Confirmed(_, _, _), _)
+                    | (TxState::Inactive(_), TxState::Inactive(_))
+                    | (TxState::Abandoned, TxState::Abandoned)
+                    | (TxState::Conflicted(_), TxState::Conflicted(_))
+                    | (TxState::InMempool(_), TxState::InMempool(_))
+            )
+        });
+
+        if existing_tx_already_confirmed_or_same {
+            return Ok(());
+        }
+
+        let already_present = existing_tx.is_some_and(|tx| match tx.state() {
             TxState::Abandoned | TxState::Conflicted(_) => false,
             TxState::Confirmed(_, _, _) | TxState::InMempool(_) | TxState::Inactive(_) => true,
         });
@@ -1270,19 +1286,19 @@ impl OutputCache {
     fn update_token_issuance_state(
         unconfirmed_descendants: &mut BTreeMap<OutPointSourceId, BTreeSet<OutPointSourceId>>,
         data: &mut TokenIssuanceData,
-        delegation_id: &TokenId,
+        token_id: &TokenId,
         token_nonce: AccountNonce,
         tx_id: &OutPointSourceId,
     ) -> Result<(), WalletError> {
         let next_nonce = data
             .last_nonce
             .map_or(Some(AccountNonce::new(0)), |nonce| nonce.increment())
-            .ok_or(WalletError::TokenIssuanceNonceOverflow(*delegation_id))?;
+            .ok_or(WalletError::TokenIssuanceNonceOverflow(*token_id))?;
 
         ensure!(
             token_nonce == next_nonce,
             OutputCacheInconsistencyError::InconsistentTokenIssuanceDuplicateNonce(
-                *delegation_id,
+                *token_id,
                 token_nonce
             )
         );
@@ -1490,12 +1506,10 @@ impl OutputCache {
             .filter_map(|tx| match tx {
                 WalletTx::Block(_) => None,
                 WalletTx::Tx(tx) => match tx.state() {
-                    TxState::Inactive(_) | TxState::Conflicted(_) => {
+                    TxState::Inactive(_) | TxState::Conflicted(_) | TxState::InMempool(_) => {
                         Some(tx.get_transaction_with_id())
                     }
-                    TxState::Confirmed(_, _, _) | TxState::InMempool(_) | TxState::Abandoned => {
-                        None
-                    }
+                    TxState::Confirmed(_, _, _) | TxState::Abandoned => None,
                 },
             })
             .collect()
@@ -1720,6 +1734,18 @@ impl OutputCache {
         chain_config: &ChainConfig,
         tx_id: Id<Transaction>,
     ) -> WalletResult<Vec<(Id<Transaction>, WalletTx)>> {
+        if let Some(tx) = self.txs.get(&tx_id.into()) {
+            let cannot_abandone = match tx.state() {
+                TxState::Confirmed(_, _, _) | TxState::InMempool(_) | TxState::Abandoned => true,
+                TxState::Inactive(_) | TxState::Conflicted(_) => false,
+            };
+            if cannot_abandone {
+                return Err(WalletError::CannotChangeTransactionState(
+                    tx.state(),
+                    TxState::Abandoned,
+                ));
+            }
+        }
         let all_abandoned = self.remove_from_unconfirmed_descendants(tx_id);
         let mut txs_to_rollback = vec![];
 

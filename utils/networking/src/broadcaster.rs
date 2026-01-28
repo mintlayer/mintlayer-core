@@ -16,6 +16,7 @@
 //! Broadcaster is a reliable version of [tokio::sync::broadcast].
 
 use tokio::sync::mpsc;
+use tokio_stream::{wrappers::UnboundedReceiverStream, Stream};
 
 /// A reliable version of [tokio::sync::broadcast], sender part.
 ///
@@ -96,6 +97,10 @@ impl<T> Receiver<T> {
     /// Receive a value in the blocking context
     pub fn blocking_recv(&mut self) -> Option<T> {
         self.0.blocking_recv()
+    }
+
+    pub fn into_stream(self) -> impl Stream<Item = T> {
+        UnboundedReceiverStream::new(self.0)
     }
 }
 
