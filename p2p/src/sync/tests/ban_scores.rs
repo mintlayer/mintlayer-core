@@ -29,6 +29,7 @@ use mempool::error::MempoolPolicyError;
 use p2p_test_utils::create_n_blocks;
 use randomness::Rng;
 use test_utils::random::{make_seedable_rng, Seed};
+use utils::tokio_spawn_in_current_tracing_span;
 
 use crate::{
     error::{P2pError, PeerError, ProtocolError},
@@ -58,21 +59,24 @@ fn ban_scores() {
 #[tokio::test]
 async fn peer_handle_result() {
     let (peer_mgr_event_sender, mut peer_mgr_event_receiver) = unbounded_channel();
-    logging::spawn_in_current_span(async move {
-        while let Some(event) = peer_mgr_event_receiver.recv().await {
-            match event {
-                crate::PeerManagerEvent::AdjustPeerScore {
-                    peer_id: _,
-                    adjust_by: _,
-                    reason: _,
-                    response_sender,
-                } => {
-                    response_sender.send(Ok(()));
+    tokio_spawn_in_current_tracing_span(
+        async move {
+            while let Some(event) = peer_mgr_event_receiver.recv().await {
+                match event {
+                    crate::PeerManagerEvent::AdjustPeerScore {
+                        peer_id: _,
+                        adjust_by: _,
+                        reason: _,
+                        response_sender,
+                    } => {
+                        response_sender.send(Ok(()));
+                    }
+                    e => unreachable!("Unexpected event: {e:?}"),
                 }
-                e => unreachable!("Unexpected event: {e:?}"),
             }
-        }
-    });
+        },
+        "",
+    );
 
     // Test that the non-fatal errors are converted to Ok
     for err in [

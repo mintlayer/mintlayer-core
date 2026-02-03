@@ -22,7 +22,10 @@ use tokio::{
 };
 
 use logging::log;
-use utils::{const_value::ConstValue, shallow_clone::ShallowClone};
+use utils::{
+    const_value::ConstValue, shallow_clone::ShallowClone, tokio_spawn_in_current_tracing_span,
+    tokio_spawn_in_tracing_span,
+};
 
 use crate::{task, Handle, ManagerConfig, SubmitOnlyHandle, Subsystem};
 
@@ -150,7 +153,11 @@ impl Manager {
         let subsystems: Vec<_> = self
             .subsystems
             .into_iter()
-            .map(|s| s.map_task(logging::spawn_in_current_span))
+            .map(|subsys_data| {
+                subsys_data.map_task(|fut, subsys_full_name| {
+                    tokio_spawn_in_current_tracing_span(fut, subsys_full_name)
+                })
+            })
             .collect();
 
         // Signal the manager is shut down so it does not wait for itself
@@ -173,11 +180,12 @@ impl Manager {
     /// Runs the application in a separate task.
     ///
     /// This method should always be used instead of spawning a task manually because it prevents
-    /// an incorrect usage. The returned handle must be joined to ensure a proper subsystems
+    /// incorrect usage. The returned handle must be joined to ensure a proper subsystems
     /// shutdown.
     pub fn main_in_task(self) -> ManagerJoinHandle {
-        let handle = Some(logging::spawn_in_current_span(
+        let handle = Some(tokio_spawn_in_current_tracing_span(
             async move { self.main().await },
+            "Subsystem mgr",
         ));
         ManagerJoinHandle { handle }
     }
@@ -186,10 +194,11 @@ impl Manager {
     ///
     /// This does the same as `main_in_task` but uses the specified tracing span instead of
     /// the current one.
-    pub fn main_in_task_in_span(self, tracing_span: tracing::Span) -> ManagerJoinHandle {
-        let handle = Some(logging::spawn_in_span(
+    pub fn main_in_task_in_tracing_span(self, tracing_span: tracing::Span) -> ManagerJoinHandle {
+        let handle = Some(tokio_spawn_in_tracing_span(
             async move { self.main().await },
             tracing_span,
+            "Subsystem mgr",
         ));
         ManagerJoinHandle { handle }
     }
@@ -203,16 +212,17 @@ struct SubsystemData<T> {
 }
 
 impl<T> SubsystemData<T> {
-    fn map_task<U>(self, f: impl FnOnce(T) -> U) -> SubsystemData<U> {
+    fn map_task<U>(self, f: impl FnOnce(T, /*full_name*/ &str) -> U) -> SubsystemData<U> {
         let Self {
             full_name,
             shutdown_tx,
             task,
         } = self;
+        let task = f(task, &full_name);
         SubsystemData {
             full_name,
             shutdown_tx,
-            task: f(task),
+            task,
         }
     }
 }

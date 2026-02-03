@@ -95,7 +95,7 @@ pub fn start_subsystems_generic(
     );
     let mempool = manager.add_custom_subsystem("p2p-test-mempool", |handle| mempool.init(handle));
 
-    let manager_handle = manager.main_in_task_in_span(tracing_span);
+    let manager_handle = manager.main_in_task_in_tracing_span(tracing_span);
 
     (chainstate, mempool, shutdown_trigger, manager_handle)
 }

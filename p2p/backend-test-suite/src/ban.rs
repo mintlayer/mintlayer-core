@@ -35,7 +35,7 @@ use p2p::{
     test_helpers::{connect_and_accept_services, test_p2p_config},
     PeerManagerEvent,
 };
-use utils::atomics::SeqCstAtomicBool;
+use utils::{atomics::SeqCstAtomicBool, tokio_spawn_in_current_tracing_span};
 
 tests![invalid_pubsub_block,];
 
@@ -117,37 +117,40 @@ where
     )
     .unwrap();
 
-    let sync1_handle = logging::spawn_in_current_span(async move { sync1.run().await });
+    let sync1_handle = tokio_spawn_in_current_tracing_span(async move { sync1.run().await }, "");
 
     // spawn `sync2` into background and spam an orphan block on the network
-    logging::spawn_in_current_span(async move {
-        let (peer, mut block_sync_msg_receiver) = match sync2.poll_next().await.unwrap() {
-            SyncingEvent::Connected {
-                peer_id,
-                common_services: _,
-                protocol_version: _,
-                block_sync_msg_receiver,
-                transaction_sync_msg_receiver: _,
-            } => (peer_id, block_sync_msg_receiver),
-            e => panic!("Unexpected event type: {e:?}"),
-        };
-        match block_sync_msg_receiver.recv().await.unwrap() {
-            BlockSyncMessage::HeaderListRequest(_) => {}
-            e => panic!("Unexpected event type: {e:?}"),
-        };
-        messaging_handle_2
-            .send_block_sync_message(
-                peer,
-                BlockSyncMessage::HeaderList(HeaderList::new(Vec::new())),
-            )
-            .unwrap();
-        messaging_handle_2
-            .send_block_sync_message(
-                peer,
-                BlockSyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()])),
-            )
-            .unwrap();
-    });
+    tokio_spawn_in_current_tracing_span(
+        async move {
+            let (peer, mut block_sync_msg_receiver) = match sync2.poll_next().await.unwrap() {
+                SyncingEvent::Connected {
+                    peer_id,
+                    common_services: _,
+                    protocol_version: _,
+                    block_sync_msg_receiver,
+                    transaction_sync_msg_receiver: _,
+                } => (peer_id, block_sync_msg_receiver),
+                e => panic!("Unexpected event type: {e:?}"),
+            };
+            match block_sync_msg_receiver.recv().await.unwrap() {
+                BlockSyncMessage::HeaderListRequest(_) => {}
+                e => panic!("Unexpected event type: {e:?}"),
+            };
+            messaging_handle_2
+                .send_block_sync_message(
+                    peer,
+                    BlockSyncMessage::HeaderList(HeaderList::new(Vec::new())),
+                )
+                .unwrap();
+            messaging_handle_2
+                .send_block_sync_message(
+                    peer,
+                    BlockSyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()])),
+                )
+                .unwrap();
+        },
+        "",
+    );
 
     match peer_mgr_event_receiver.recv().await {
         Some(PeerManagerEvent::AdjustPeerScore {

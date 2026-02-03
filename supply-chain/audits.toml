@@ -141,6 +141,18 @@ user-id = 3618 # David Tolnay (dtolnay)
 start = "2019-07-23"
 end = "2026-10-15"
 
+[[trusted.axum]]
+criteria = "safe-to-deploy"
+user-id = 6913 # Jonas Platte (jplatte)
+start = "2024-09-20"
+end = "2027-02-04"
+
+[[trusted.axum-core]]
+criteria = "safe-to-deploy"
+user-id = 6913 # Jonas Platte (jplatte)
+start = "2024-09-20"
+end = "2027-02-04"
+
 [[trusted.base58ck]]
 criteria = "safe-to-deploy"
 user-id = 1588 # Andrew Poelstra (apoelstra)
@@ -356,6 +368,18 @@ criteria = "safe-to-deploy"
 user-id = 33035 # Taiki Endo (taiki-e)
 start = "2022-07-17"
 end = "2026-10-15"
+
+[[trusted.console-api]]
+criteria = "safe-to-deploy"
+user-id = 1249 # Eliza Weisman (hawkw)
+start = "2021-12-16"
+end = "2027-02-04"
+
+[[trusted.console-subscriber]]
+criteria = "safe-to-deploy"
+user-id = 1249 # Eliza Weisman (hawkw)
+start = "2021-12-16"
+end = "2027-02-04"
 
 [[trusted.cpufeatures]]
 criteria = "safe-to-deploy"
@@ -584,6 +608,12 @@ criteria = "safe-to-deploy"
 user-id = 4556 # Dirkjan Ochtman (djc)
 start = "2025-10-26"
 end = "2026-12-08"
+
+[[trusted.hdrhistogram]]
+criteria = "safe-to-deploy"
+user-id = 3989 # Jon Gjengset (jonhoo)
+start = "2019-06-01"
+end = "2027-02-04"
 
 [[trusted.hex-conservative]]
 criteria = "safe-to-deploy"
@@ -1101,6 +1131,24 @@ user-id = 3618 # David Tolnay (dtolnay)
 start = "2019-04-23"
 end = "2026-10-15"
 
+[[trusted.prost]]
+criteria = "safe-to-deploy"
+user-id = 3959 # Lucio Franco (LucioFranco)
+start = "2021-07-08"
+end = "2027-02-04"
+
+[[trusted.prost-derive]]
+criteria = "safe-to-deploy"
+user-id = 3959 # Lucio Franco (LucioFranco)
+start = "2021-07-08"
+end = "2027-02-04"
+
+[[trusted.prost-types]]
+criteria = "safe-to-deploy"
+user-id = 3959 # Lucio Franco (LucioFranco)
+start = "2021-07-08"
+end = "2027-02-04"
+
 [[trusted.quote]]
 criteria = "safe-to-deploy"
 user-id = 3618 # David Tolnay (dtolnay)
@@ -1433,6 +1481,18 @@ end = "2026-10-15"
 
 [[trusted.tokio]]
 criteria = "safe-to-deploy"
+user-id = 1249 # Eliza Weisman (hawkw)
+start = "2020-04-04"
+end = "2027-02-04"
+
+[[trusted.tokio]]
+criteria = "safe-to-deploy"
+user-id = 3959 # Lucio Franco (LucioFranco)
+start = "2019-10-01"
+end = "2027-02-04"
+
+[[trusted.tokio]]
+criteria = "safe-to-deploy"
 user-id = 6741 # Alice Ryhl (Darksonn)
 start = "2020-12-25"
 end = "2026-10-15"
@@ -1442,6 +1502,12 @@ criteria = "safe-to-deploy"
 user-id = 10
 start = "2019-04-24"
 end = "2026-10-15"
+
+[[trusted.tokio-macros]]
+criteria = "safe-to-deploy"
+user-id = 3959 # Lucio Franco (LucioFranco)
+start = "2019-10-01"
+end = "2027-02-04"
 
 [[trusted.tokio-macros]]
 criteria = "safe-to-deploy"
@@ -1509,6 +1575,18 @@ user-id = 6743 # Ed Page (epage)
 start = "2025-04-25"
 end = "2026-10-15"
 
+[[trusted.tonic]]
+criteria = "safe-to-deploy"
+user-id = 3959 # Lucio Franco (LucioFranco)
+start = "2019-10-02"
+end = "2027-02-04"
+
+[[trusted.tonic-prost]]
+criteria = "safe-to-deploy"
+user-id = 3959 # Lucio Franco (LucioFranco)
+start = "2025-07-28"
+end = "2027-02-04"
+
 [[trusted.tower]]
 criteria = "safe-to-deploy"
 user-id = 10
@@ -1527,11 +1605,35 @@ user-id = 359 # Sean McArthur (seanmonstar)
 start = "2024-09-23"
 end = "2026-10-15"
 
+[[trusted.tower-http]]
+criteria = "safe-to-deploy"
+user-id = 3959 # Lucio Franco (LucioFranco)
+start = "2023-09-01"
+end = "2027-02-04"
+
 [[trusted.tower-layer]]
 criteria = "safe-to-deploy"
 user-id = 10
 start = "2019-04-27"
 end = "2026-10-15"
+
+[[trusted.tower-layer]]
+criteria = "safe-to-deploy"
+user-id = 3959 # Lucio Franco (LucioFranco)
+start = "2019-09-11"
+end = "2027-02-04"
+
+[[trusted.tower-service]]
+criteria = "safe-to-deploy"
+user-id = 3959 # Lucio Franco (LucioFranco)
+start = "2019-08-20"
+end = "2027-02-04"
+
+[[trusted.tracing-serde]]
+criteria = "safe-to-deploy"
+user-id = 1249 # Eliza Weisman (hawkw)
+start = "2019-06-27"
+end = "2027-02-04"
 
 [[trusted.unicode-ident]]
 criteria = "safe-to-deploy"

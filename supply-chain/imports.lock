@@ -134,6 +134,34 @@ user-id = 3618
 user-login = "dtolnay"
 user-name = "David Tolnay"
 
+[[publisher.axum]]
+version = "0.7.9"
+when = "2024-11-16"
+user-id = 6913
+user-login = "jplatte"
+user-name = "Jonas Platte"
+
+[[publisher.axum]]
+version = "0.8.8"
+when = "2025-12-20"
+user-id = 6913
+user-login = "jplatte"
+user-name = "Jonas Platte"
+
+[[publisher.axum-core]]
+version = "0.4.5"
+when = "2024-09-27"
+user-id = 6913
+user-login = "jplatte"
+user-name = "Jonas Platte"
+
+[[publisher.axum-core]]
+version = "0.5.6"
+when = "2025-12-27"
+user-id = 6913
+user-login = "jplatte"
+user-name = "Jonas Platte"
+
 [[publisher.base58ck]]
 version = "0.1.0"
 when = "2024-04-02"
@@ -370,6 +398,20 @@ when = "2025-06-04"
 user-id = 6743
 user-login = "epage"
 user-name = "Ed Page"
+
+[[publisher.console-api]]
+version = "0.9.0"
+when = "2025-10-30"
+user-id = 1249
+user-login = "hawkw"
+user-name = "Eliza Weisman"
+
+[[publisher.console-subscriber]]
+version = "0.5.0"
+when = "2025-10-30"
+user-id = 1249
+user-login = "hawkw"
+user-name = "Eliza Weisman"
 
 [[publisher.core-foundation]]
 version = "0.9.3"
@@ -663,6 +705,13 @@ when = "2024-11-25"
 user-id = 2915
 user-login = "Amanieu"
 user-name = "Amanieu d'Antras"
+
+[[publisher.hdrhistogram]]
+version = "7.5.4"
+when = "2023-11-18"
+user-id = 3989
+user-login = "jonhoo"
+user-name = "Jon Gjengset"
 
 [[publisher.hex-conservative]]
 version = "0.1.2"
@@ -1213,6 +1262,27 @@ user-id = 3618
 user-login = "dtolnay"
 user-name = "David Tolnay"
 
+[[publisher.prost]]
+version = "0.14.3"
+when = "2026-01-10"
+user-id = 3959
+user-login = "LucioFranco"
+user-name = "Lucio Franco"
+
+[[publisher.prost-derive]]
+version = "0.14.3"
+when = "2026-01-10"
+user-id = 3959
+user-login = "LucioFranco"
+user-name = "Lucio Franco"
+
+[[publisher.prost-types]]
+version = "0.14.3"
+when = "2026-01-10"
+user-id = 3959
+user-login = "LucioFranco"
+user-name = "Lucio Franco"
+
 [[publisher.quote]]
 version = "1.0.41"
 when = "2025-09-29"
@@ -1640,6 +1710,20 @@ user-id = 6743
 user-login = "epage"
 user-name = "Ed Page"
 
+[[publisher.tonic]]
+version = "0.14.3"
+when = "2026-01-28"
+user-id = 3959
+user-login = "LucioFranco"
+user-name = "Lucio Franco"
+
+[[publisher.tonic-prost]]
+version = "0.14.3"
+when = "2026-01-28"
+user-id = 3959
+user-login = "LucioFranco"
+user-name = "Lucio Franco"
+
 [[publisher.tower]]
 version = "0.5.2"
 when = "2024-12-11"
@@ -1653,6 +1737,20 @@ when = "2025-11-24"
 user-id = 359
 user-login = "seanmonstar"
 user-name = "Sean McArthur"
+
+[[publisher.tower-layer]]
+version = "0.3.3"
+when = "2024-08-13"
+user-id = 3959
+user-login = "LucioFranco"
+user-name = "Lucio Franco"
+
+[[publisher.tower-service]]
+version = "0.3.3"
+when = "2024-08-13"
+user-id = 3959
+user-login = "LucioFranco"
+user-name = "Lucio Franco"
 
 [[publisher.unicode-ident]]
 version = "1.0.19"
@@ -3526,6 +3624,15 @@ Unsafe review in https://docs.google.com/document/d/1IXQbD1GhTRqNHIGxq6yy7qHqxeO
 
 Unsafety is generally very well-documented, with one exception, which we
 describe in the review doc.
+"""
+aggregated-from = "https://chromium.googlesource.com/chromium/src/+/main/third_party/rust/chromium_crates_io/supply-chain/audits.toml?format=TEXT"
+
+[[audits.google.audits.nom]]
+who = "danakj@chromium.org"
+criteria = "safe-to-deploy"
+version = "7.1.3"
+notes = """
+Reviewed in https://chromium-review.googlesource.com/c/chromium/src/+/5046153
 """
 aggregated-from = "https://chromium.googlesource.com/chromium/src/+/main/third_party/rust/chromium_crates_io/supply-chain/audits.toml?format=TEXT"
 

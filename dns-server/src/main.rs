@@ -17,18 +17,21 @@ use std::sync::Arc;
 
 use clap::Parser;
 use futures::never::Never;
-use logging::log;
 use tokio::sync::{mpsc, oneshot};
 
 use common::{primitives::user_agent::UserAgent, time_getter::TimeGetter};
 use config::DnsServerRunOptions;
 use crawler_p2p::crawler_manager::{CrawlerManager, CrawlerManagerConfig};
+use logging::log;
 use p2p::{
     config::{NodeType, P2pConfig},
     net::NetworkingService,
 };
-use utils::atomics::SeqCstAtomicBool;
-use utils::default_data_dir::{default_data_dir_for_chain, prepare_data_dir};
+use utils::{
+    atomics::SeqCstAtomicBool,
+    default_data_dir::{default_data_dir_for_chain, prepare_data_dir},
+    tokio_spawn,
+};
 
 use crate::{
     crawler_p2p::{crawler::CrawlerConfig, crawler_manager::storage::open_storage},
@@ -170,8 +173,9 @@ async fn run(options: DnsServerRunOptions) -> anyhow::Result<Never> {
     let server = dns_server::DnsServer::new(config, chain_config, dns_server_cmd_rx).await?;
 
     // Spawn for better parallelism
-    let crawler_manager_task = tokio::spawn(async move { crawler_manager.run().await });
-    let server_task = tokio::spawn(server.run());
+    let crawler_manager_task =
+        tokio_spawn(async move { crawler_manager.run().await }, "Crawler mgr");
+    let server_task = tokio_spawn(server.run(), "Server");
 
     tokio::select! {
         res = crawler_manager_task => {
