@@ -37,6 +37,12 @@ audit-as-crates-io = true
 [policy.lmdb-rkv-sys]
 audit-as-crates-io = false
 
+[policy.tokio]
+audit-as-crates-io = true
+
+[policy.tokio-macros]
+audit-as-crates-io = true
+
 [policy.trezor-client]
 audit-as-crates-io = false
 
@@ -1282,6 +1288,14 @@ criteria = "safe-to-deploy"
 
 [[exemptions.tinyvec]]
 version = "1.10.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.tokio]]
+version = "1.49.0@git:0d6c7af3e43457350bdc03a6dbcafa276fab7352"
+criteria = "safe-to-deploy"
+
+[[exemptions.tokio-macros]]
+version = "2.6.0@git:0d6c7af3e43457350bdc03a6dbcafa276fab7352"
 criteria = "safe-to-deploy"
 
 [[exemptions.tokio-socks]]
