@@ -815,7 +815,7 @@ version = "0.1.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.oneshot]]
-version = "0.1.11"
+version = "0.1.13"
 criteria = "safe-to-deploy"
 
 [[exemptions.oorandom]]

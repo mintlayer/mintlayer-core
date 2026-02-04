@@ -275,8 +275,8 @@ user-login = "mbrubeck"
 user-name = "Matt Brubeck"
 
 [[publisher.bytes]]
-version = "1.10.1"
-when = "2025-03-05"
+version = "1.11.1"
+when = "2026-02-03"
 user-id = 6741
 user-login = "Darksonn"
 user-name = "Alice Ryhl"
@@ -4226,7 +4226,7 @@ who = "Nicolas Silva <nical@fastmail.com>"
 criteria = "safe-to-deploy"
 user-id = 1281 # Nicolas Silva (nical)
 start = "2019-03-14"
-end = "2025-04-25"
+end = "2027-01-15"
 notes = "I wrote most of the commits in the euclid reprository and review every change that is not produced by me."
 aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
 
