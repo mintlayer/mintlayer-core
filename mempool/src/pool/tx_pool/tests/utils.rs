@@ -41,10 +41,10 @@ pub const HUGE_MAX_TIP_AGE: MaxTipAge =
 pub const TEST_MIN_TX_RELAY_FEE_RATE: FeeRate =
     FeeRate::from_amount_per_kb(Amount::from_atoms(1000));
 
-pub fn create_mempool_config() -> ConstValue<MempoolConfig> {
-    ConstValue::new(MempoolConfig {
+pub fn create_mempool_config() -> MempoolConfig {
+    MempoolConfig {
         min_tx_relay_fee_rate: TEST_MIN_TX_RELAY_FEE_RATE.into(),
-    })
+    }
 }
 
 pub fn get_relay_fee_from_tx_size(tx_size: usize) -> Amount {
@@ -60,20 +60,9 @@ mockall::mock! {
 }
 
 impl<M: MemoryUsageEstimator> TxPool<M> {
-    /// Create transaction with some default values for testing.
-    ///
-    /// Origin is set to a default value and work queue is set to be temporary one and the orphans
-    /// are immediately processed. If the test needs to adjust the origin or a different orphan
-    /// behavior it should use [Mempool::add_transaction] directly.
-    pub fn make_transaction_test(&self, tx: SignedTransaction) -> TxEntry {
-        let origin = TxOrigin::Remote(RemoteTxOrigin::new(p2p_types::PeerId::from_u64(1)));
-        let creation_time = self.clock.get_time();
-        let options = TxOptions::default_for(origin);
-        TxEntry::new(tx, creation_time, origin, options)
-    }
-
     pub fn add_transaction_test(&mut self, tx: SignedTransaction) -> Result<TxStatus, Error> {
-        self.add_transaction_bare(self.make_transaction_test(tx))
+        let tx = make_test_tx_entry(&self.clock, tx);
+        self.add_transaction_bare(tx)
     }
 
     pub fn add_transaction_bare(&mut self, tx: TxEntry) -> Result<TxStatus, Error> {
@@ -97,14 +86,24 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
     }
 }
 
+pub fn make_test_tx_entry(clock: &TimeGetter, tx: SignedTransaction) -> TxEntry {
+    let origin = TxOrigin::Remote(RemoteTxOrigin::new(p2p_types::PeerId::from_u64(1)));
+    let creation_time = clock.get_time();
+    let options = TxOptions::default_for(origin);
+    TxEntry::new(tx, creation_time, origin, options)
+}
+
 // Expose some transaction pool internals via mempool for testing
 impl<M: MemoryUsageEstimator> crate::pool::Mempool<M> {
     pub fn tx_pool(&self) -> &TxPool<M> {
-        &self.tx_pool
+        match &self.0 {
+            crate::pool::MempoolState::InIbd(_) => panic!("No TxPool while in IBD"),
+            crate::pool::MempoolState::AfterIbd(state) => &state.tx_pool,
+        }
     }
 
     pub fn tx_store(&self) -> &MempoolStore {
-        &self.tx_pool.store
+        &self.tx_pool().store
     }
 }
 
@@ -325,7 +324,7 @@ pub fn setup() -> TxPool<StoreMemoryUsageEstimator> {
     let chainstate_interface = start_chainstate_with_config(Arc::clone(&chain_config));
     TxPool::new(
         chain_config,
-        create_mempool_config(),
+        create_mempool_config().into(),
         chainstate_interface,
         Default::default(),
         StoreMemoryUsageEstimator,
@@ -350,19 +349,27 @@ pub fn setup_with_min_tx_relay_fee_rate(fee_rate: FeeRate) -> TxPool<StoreMemory
 pub fn setup_with_chainstate(
     chainstate: Box<dyn ChainstateInterface>,
 ) -> TxPool<StoreMemoryUsageEstimator> {
+    setup_with_chainstate_generic(chainstate, create_mempool_config(), Default::default())
+}
+
+pub fn setup_with_chainstate_generic(
+    chainstate: Box<dyn ChainstateInterface>,
+    mempool_config: MempoolConfig,
+    clock: TimeGetter,
+) -> TxPool<StoreMemoryUsageEstimator> {
     let chain_config = Arc::clone(chainstate.get_chain_config());
     let chainstate_handle = start_chainstate(chainstate);
     TxPool::new(
         chain_config,
-        create_mempool_config(),
+        mempool_config.into(),
         chainstate_handle,
-        Default::default(),
+        clock,
         StoreMemoryUsageEstimator,
     )
 }
 
 pub fn start_chainstate(chainstate: Box<dyn ChainstateInterface>) -> chainstate::ChainstateHandle {
-    let mut man = subsystem::Manager::new("TODO");
+    let mut man = subsystem::Manager::new("Test subsystem mgr");
     let handle = man.add_subsystem("chainstate", chainstate);
     tokio::spawn(async move { man.main().await });
     handle

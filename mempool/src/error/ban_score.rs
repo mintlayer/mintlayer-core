@@ -25,7 +25,7 @@ use chainstate::{
 };
 use common::chain::IdCreationError;
 
-use crate::error::{Error, MempoolPolicyError, TxValidationError};
+use crate::error::{Error, MempoolPolicyError, ReorgError, TxValidationError};
 
 /// Ban score for transactions
 pub trait MempoolBanScore {
@@ -43,6 +43,13 @@ impl MempoolBanScore for Error {
             Error::Orphan(_) => 0,
             // Tip moved during validation
             Error::TipMoved => 0,
+
+            // Inspect these errors as well, just in case
+            Error::ChainstateError(err) => err.mempool_ban_score(),
+            Error::ReorgError(err) => err.mempool_ban_score(),
+
+            // Internal error
+            Error::SubsystemCallError(_) => 0,
         }
     }
 }
@@ -94,7 +101,7 @@ impl MempoolBanScore for TxValidationError {
             TxValidationError::AddedDuringIBD => 0,
 
             // Internal errors
-            TxValidationError::CallError(_) => 0,
+            TxValidationError::SubsystemCallError(_) => 0,
         }
     }
 }
@@ -106,10 +113,26 @@ impl MempoolBanScore for ChainstateError {
             ChainstateError::ProcessBlockError(_) => 0,
 
             // Internal errors
+            ChainstateError::StorageError(_) => 0,
             ChainstateError::FailedToInitializeChainstate(_) => 0,
             ChainstateError::FailedToReadProperty(_) => 0,
             ChainstateError::BootstrapError(_) => 0,
             ChainstateError::BlockInvalidatorError(_) => 0,
+        }
+    }
+}
+
+impl MempoolBanScore for ReorgError {
+    fn mempool_ban_score(&self) -> u32 {
+        match self {
+            ReorgError::ChainstateError(err) => err.mempool_ban_score(),
+
+            // Internal errors
+            ReorgError::SubsystemCallError(_) => 0,
+            ReorgError::BestBlockForUtxos => 0,
+            ReorgError::OldTipIndex => 0,
+            ReorgError::NewTipIndex => 0,
+            ReorgError::BlockNotFound(_) => 0,
         }
     }
 }
