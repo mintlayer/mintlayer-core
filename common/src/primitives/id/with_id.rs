@@ -36,8 +36,8 @@ impl<T: Idable> WithId<T> {
     }
 
     /// Get the pre-calculated object ID
-    pub fn id(this: &Self) -> Id<T::Tag> {
-        this.id
+    pub fn id(this: &Self) -> &Id<T::Tag> {
+        &this.id
     }
 
     /// Take ownership of the underlying object
@@ -68,7 +68,7 @@ impl<T: Idable> WithId<T> {
 impl<T: Idable> Idable for WithId<T> {
     type Tag = T::Tag;
     fn get_id(&self) -> Id<Self::Tag> {
-        Self::id(self)
+        *Self::id(self)
     }
 }
 

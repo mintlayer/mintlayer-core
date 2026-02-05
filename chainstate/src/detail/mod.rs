@@ -31,25 +31,21 @@ use std::{collections::VecDeque, sync::Arc};
 
 use itertools::Itertools;
 use thiserror::Error;
-use utils_networking::broadcaster;
 
-use self::{
-    block_invalidation::BlockInvalidator,
-    orphan_blocks::{OrphanBlocksMut, OrphansProxy},
-    query::ChainstateQuery,
-    tx_verification_strategy::TransactionVerificationStrategy,
-};
-use crate::{BlockInvalidatorError, ChainstateConfig, ChainstateEvent};
 use chainstate_storage::{
     BlockchainStorage, BlockchainStorageRead, BlockchainStorageWrite, TransactionRw, Transactional,
 };
 use chainstate_types::{
     pos_randomness::PoSRandomness, BlockIndex, BlockStatus, BlockValidationStage, EpochData,
-    EpochStorageWrite, PropertyQueryError, SealedStorageTag, TipStorageTag,
+    EpochStorageWrite, GenBlockIndexRef, PropertyQueryError, SealedStorageTag, TipStorageTag,
 };
 use chainstateref::{ChainstateRef, ReorgError};
 use common::{
-    chain::{block::timestamp::BlockTimestamp, config::ChainConfig, Block, GenBlock, TxOutput},
+    chain::{
+        block::{timestamp::BlockTimestamp, ConsensusData},
+        config::ChainConfig,
+        Block, GenBlock, TxOutput,
+    },
     primitives::{id::WithId, BlockHeight, Compact, Id, Idable},
     time_getter::TimeGetter,
     Uint256,
@@ -68,7 +64,17 @@ use utils::{
     set_flag::SetFlag,
     tap_log::TapLog,
 };
+use utils_networking::broadcaster;
 use utxo::UtxosDB;
+
+use crate::{BlockInvalidatorError, ChainstateConfig, ChainstateEvent};
+
+use self::{
+    block_invalidation::BlockInvalidator,
+    orphan_blocks::{OrphanBlocksMut, OrphansProxy},
+    query::ChainstateQuery,
+    tx_verification_strategy::TransactionVerificationStrategy,
+};
 
 pub use self::{
     error::*, info::ChainInfo, median_time::calculate_median_time_past,
@@ -180,12 +186,8 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         use crate::ChainstateError;
 
         let best_block_id = {
-            let db_tx = chainstate_storage
-                .transaction_ro()
-                .map_err(|e| ChainstateError::FailedToInitializeChainstate(e.into()))?;
-            db_tx
-                .get_best_block_id()
-                .map_err(|e| ChainstateError::FailedToInitializeChainstate(e.into()))?
+            let db_tx = chainstate_storage.transaction_ro()?;
+            db_tx.get_best_block_id()?
         };
 
         let mut chainstate = Self::new_no_genesis(
@@ -200,14 +202,15 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         if best_block_id.is_none() {
             chainstate.process_genesis().map_err(ChainstateError::ProcessBlockError)?;
         } else {
-            chainstate.check_genesis().map_err(crate::ChainstateError::from)?;
+            chainstate.check_genesis().map_err(ChainstateError::from)?;
         }
-
-        chainstate.update_initial_block_download_flag()?;
 
         chainstate
             .check_consistency()
             .map_err(|e| ChainstateError::FailedToInitializeChainstate(e.into()))?;
+
+        let best_block_index = chainstate.make_db_tx_ro()?.get_best_block_index()?;
+        chainstate.update_initial_block_download_flag(best_block_index.as_ref());
 
         Ok(chainstate)
     }
@@ -265,10 +268,16 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         Ok(())
     }
 
-    fn broadcast_new_tip_event(&mut self, new_block_index: &BlockIndex) {
-        let new_height = new_block_index.block_height();
-        let new_id = *new_block_index.block_id();
-        let event = ChainstateEvent::NewTip(new_id, new_height);
+    fn broadcast_new_tip_event(
+        &mut self,
+        best_block_index: &BlockIndex,
+        is_initial_block_download: bool,
+    ) {
+        let event = ChainstateEvent::NewTip {
+            id: *best_block_index.block_id(),
+            height: best_block_index.block_height(),
+            is_initial_block_download,
+        };
 
         self.rpc_events.broadcast(&event);
         self.subsystem_events.broadcast(event);
@@ -602,41 +611,40 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
     ) -> Result<Option<BlockIndex>, BlockError> {
         let block_id = block.get_id();
 
-        let result = self.attempt_to_process_block(block, block_source)?;
+        // If this is Some, it's the new best block index.
+        let best_block_index_after_process_block_opt =
+            self.attempt_to_process_block(block, block_source)?;
 
-        let new_block_index_after_orphans = self.process_orphans_of(&block_id)?;
+        // If this is Some, it's the new best block index.
+        let best_block_index_after_orphans_opt = self.process_orphans_of(&block_id)?;
 
-        let result = match new_block_index_after_orphans {
-            Some(result_from_orphan) => Some(result_from_orphan),
-            None => result,
-        };
+        let best_block_index_opt =
+            best_block_index_after_orphans_opt.or(best_block_index_after_process_block_opt);
 
-        if let Some(bi) = &result {
-            self.broadcast_new_tip_event(bi);
+        if let Some(best_block_index) = &best_block_index_opt {
+            self.update_initial_block_download_flag(GenBlockIndexRef::Block(best_block_index));
+            self.broadcast_new_tip_event(best_block_index, self.is_initial_block_download());
 
-            let compact_target = match bi.block_header().consensus_data() {
-                common::chain::block::ConsensusData::None => Compact::from(Uint256::ZERO),
-                common::chain::block::ConsensusData::PoW(data) => data.bits(),
-                common::chain::block::ConsensusData::PoS(data) => data.compact_target(),
+            let compact_target = match best_block_index.block_header().consensus_data() {
+                ConsensusData::None => Compact::from(Uint256::ZERO),
+                ConsensusData::PoW(data) => data.bits(),
+                ConsensusData::PoS(data) => data.compact_target(),
             };
 
             log::info!(
                 "NEW TIP in chainstate {:x} with height {}, timestamp: {} ({})",
-                bi.block_id(),
-                bi.block_height(),
-                bi.block_timestamp(),
-                bi.block_timestamp().into_time(),
+                best_block_index.block_id(),
+                best_block_index.block_height(),
+                best_block_index.block_timestamp(),
+                best_block_index.block_timestamp().into_time(),
             );
             log::debug!(
                 "Difficulty target of new tip: {:#x}",
                 TryInto::<common::Uint256>::try_into(compact_target).expect("valid target")
             );
-
-            self.update_initial_block_download_flag()
-                .map_err(BlockError::BestBlockIdQueryError)?;
         }
 
-        Ok(result)
+        Ok(best_block_index_opt)
     }
 
     /// returns the block index of the new tip
@@ -766,23 +774,16 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
     }
 
     /// Update `is_initial_block_download_finished` when tip changes (can only be set once)
-    #[log_error]
-    fn update_initial_block_download_flag(&mut self) -> Result<(), PropertyQueryError> {
+    fn update_initial_block_download_flag(&mut self, best_block_index: GenBlockIndexRef<'_>) {
         if self.is_initial_block_download_finished.test() {
-            return Ok(());
+            return;
         }
 
-        // TODO: Add a check for importing and reindex.
-
-        // TODO: Add a check for the chain trust.
-
-        let tip_timestamp = self.query()?.get_best_block_index()?.block_timestamp();
+        let tip_timestamp = best_block_index.block_timestamp();
 
         if self.is_fresh_block(&tip_timestamp) {
             self.is_initial_block_download_finished.set();
         }
-
-        Ok(())
     }
 
     #[log_error]

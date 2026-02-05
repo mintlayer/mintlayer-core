@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use utils::shallow_clone::ShallowClone;
+
 use super::MempoolStore;
 
 pub trait MemoryUsageEstimator: Send + Sync + 'static {
@@ -20,10 +22,17 @@ pub trait MemoryUsageEstimator: Send + Sync + 'static {
 }
 
 /// Estimate memory usage by asking the mempool store
+#[derive(Copy, Clone)]
 pub struct StoreMemoryUsageEstimator;
 
 impl MemoryUsageEstimator for StoreMemoryUsageEstimator {
     fn estimate_memory_usage(&self, store: &MempoolStore) -> usize {
         store.memory_usage()
+    }
+}
+
+impl ShallowClone for StoreMemoryUsageEstimator {
+    fn shallow_clone(&self) -> Self {
+        StoreMemoryUsageEstimator
     }
 }

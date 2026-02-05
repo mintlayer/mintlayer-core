@@ -397,8 +397,12 @@ fn subscribe_to_events(tf: &mut TestFramework, events: &EventList) {
     // Event handler
     let subscribe_func = Arc::new(
         move |chainstate_event: ChainstateEvent| match chainstate_event {
-            ChainstateEvent::NewTip(block_id, block_height) => {
-                events.lock().unwrap().push((block_id, block_height));
+            ChainstateEvent::NewTip {
+                id,
+                height,
+                is_initial_block_download: _,
+            } => {
+                events.lock().unwrap().push((id, height));
                 assert!(!events.lock().unwrap().is_empty());
             }
         },

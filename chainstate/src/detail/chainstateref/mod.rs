@@ -649,7 +649,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     #[log_error]
     pub fn check_block_header(&self, header: &SignedBlockHeader) -> Result<(), CheckBlockError> {
         let header = WithId::new(header);
-        if self.skip_check_block_because_block_exists_and_is_checked(&WithId::id(&header))? {
+        if self.skip_check_block_because_block_exists_and_is_checked(WithId::id(&header))? {
             return Ok(());
         }
 
@@ -721,7 +721,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         ensure!(
             block_timestamp.as_duration_since_epoch() <= current_time_as_secs + max_future_offset,
             CheckBlockError::BlockFromTheFuture {
-                block_id: WithId::id(header),
+                block_id: *WithId::id(header),
                 block_timestamp,
                 current_time
             },
@@ -893,9 +893,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     #[log_error]
     pub fn check_block(&self, block: &WithId<Block>) -> Result<(), CheckBlockError> {
         let header_with_id = WithId::as_sub_obj(block);
-        if self
-            .skip_check_block_because_block_exists_and_is_checked(&WithId::id(&header_with_id))?
-        {
+        if self.skip_check_block_because_block_exists_and_is_checked(WithId::id(&header_with_id))? {
             return Ok(());
         }
 

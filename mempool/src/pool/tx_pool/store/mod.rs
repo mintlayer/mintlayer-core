@@ -30,8 +30,10 @@ use logging::log;
 use utils::newtype;
 
 use super::{Fee, Time, TxEntry, TxEntryWithFee};
+
 use crate::{error::MempoolPolicyError, pool::entry::TxDependency, FeeRate};
-use mem_usage::Tracked;
+
+pub use mem_usage::Tracked;
 
 newtype! {
     #[derive(Debug)]
@@ -72,13 +74,13 @@ newtype! {
 }
 
 #[cfg(test)]
-type StrictDropPolicy = mem_usage::AssertDropPolicy;
+pub type StrictDropPolicy = mem_usage::AssertDropPolicy;
 #[cfg(not(test))]
-type StrictDropPolicy = mem_usage::NoOpDropPolicy;
+pub type StrictDropPolicy = mem_usage::NoOpDropPolicy;
 
-type TrackedMap<K, V> = Tracked<BTreeMap<K, V>>;
-type TrackedSet<K> = Tracked<BTreeSet<K>>;
-type TrackedTxIdMultiMap<K> = TrackedSet<(K, Id<Transaction>)>;
+pub type TrackedMap<K, V> = Tracked<BTreeMap<K, V>>;
+pub type TrackedSet<K> = Tracked<BTreeSet<K>>;
+pub type TrackedTxIdMultiMap<K> = TrackedSet<(K, Id<Transaction>)>;
 
 #[derive(Debug)]
 pub struct MempoolStore {

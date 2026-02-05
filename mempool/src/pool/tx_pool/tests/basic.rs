@@ -635,7 +635,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
     log::debug!("before adding parent");
     let mut tx_pool = TxPool::new(
         Arc::clone(&chain_config),
-        create_mempool_config(),
+        create_mempool_config().into(),
         chainstate_interface,
         mock_clock,
         mock_usage,
@@ -1235,7 +1235,7 @@ async fn mempool_full_mock(#[case] seed: Seed) -> anyhow::Result<()> {
 
     let mut tx_pool = TxPool::new(
         chain_config,
-        create_mempool_config(),
+        create_mempool_config().into(),
         chainstate_handle,
         Default::default(),
         mock_usage,
@@ -1456,4 +1456,37 @@ async fn accepted_tx_size(#[case] seed: Seed, #[case] tx_size: usize, #[case] ac
         result, expected,
         "tx_size: {tx_size}, max tx size: {max_tx_size}"
     );
+}
+
+// Check that values returned by `get_initial_fee_rate` and `get_initial_fee_rate_points` are
+// the same that `get_fee_rate` and `get_fee_rate_points` return for a freshly constructed tx pool.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn initial_values(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let tf = TestFramework::builder(&mut rng).build();
+
+    let mempool_config = MempoolConfig {
+        min_tx_relay_fee_rate: FeeRate::from_atoms_per_kb(
+            rng.gen_range(100_000..100_000_000_000_000),
+        )
+        .into(),
+    };
+    let tx_pool =
+        setup_with_chainstate_generic(tf.chainstate(), mempool_config.clone(), Default::default());
+
+    let initial_fee_rate =
+        TxPool::<StoreMemoryUsageEstimator>::get_initial_fee_rate(&mempool_config);
+    let fee_rate = tx_pool.get_fee_rate(rng.gen_range(1..100));
+    assert_eq!(initial_fee_rate, fee_rate);
+
+    let initial_fee_rate_points =
+        TxPool::<StoreMemoryUsageEstimator>::get_initial_fee_rate_points(&mempool_config).unwrap();
+    let fee_rate_points = tx_pool
+        .get_fee_rate_points(NonZeroUsize::new(rng.gen_range(1..100)).unwrap())
+        .unwrap();
+    assert_eq!(initial_fee_rate_points, fee_rate_points);
 }

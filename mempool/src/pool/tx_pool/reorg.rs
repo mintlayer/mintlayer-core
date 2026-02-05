@@ -134,39 +134,23 @@ pub fn handle_new_tip<M: MemoryUsageEstimator>(
 ) -> Result<(), ReorgError> {
     tx_pool.rolling_fee_rate.get_mut().set_block_since_last_rolling_fee_bump(true);
 
-    let (is_ibd, actual_tip) = tx_pool.blocking_chainstate_handle().call(|cs| {
-        let is_ibd = cs.is_initial_block_download();
-        let actual_tip = cs.get_best_block_id()?;
-        Ok::<_, chainstate::ChainstateError>((is_ibd, actual_tip))
-    })??;
-
-    // Note:
-    // 1) When chainstate receives multiple blocks in rapid succession, mempool may start lagging
-    // behind it significantly. So a situation is possible when the chainstate is out of ibd
-    // already, but new_tip corresponds to an earlier block, which was obtained when the node
-    // was still in ibd.
-    // 2) If we allowed mempool to handle new_tip events normally while it's lagging, it would lead
-    // to issues. E.g. in the past it was possible for mempool to try connecting transactions of
-    // a past block to some of that block's descendants because of this.
-    // So we bail out if new_tip isn't equal to the actual tip of the chainstate.
+    // Note: when chainstate receives multiple blocks in rapid succession, mempool may start lagging
+    // behind it noticeably. If we allowed mempool to handle new tip events normally while it's
+    // lagging, it would lead to issues. E.g. in the past it was possible for mempool to try
+    // connecting transactions of a past block to some of that block's descendants because of this.
+    //
+    // So we bail out if new_tip isn't equal to the chainstate's current tip.
     // (Note that this check doesn't fully prevent mempool from falling out of sync with chainstate.
     // E.g a new chainstate tip may appear while mempool is in the process of reorging transactions,
     // which still may cause issues).
-    if is_ibd || new_tip != actual_tip {
-        log::debug!("Not updating mempool: is_ibd = {is_ibd}, new_tip = {new_tip:?}, actual_tip = {actual_tip:?}");
 
-        if is_ibd {
-            // Note: mempool.reset() will also re-create the tx verifier from the current chainstate,
-            // which will also change its "best block for utxos". This is not really needed here,
-            // but some existing functional tests, namely blockprod_ibd.py and mempool_ibd.py,
-            // use this fact to detect that the corresponding new tip event has already reached
-            // the mempool. TODO: refactor the tests, remove this call of "tx_pool.reset()".
-            let mut old_transactions = tx_pool.reset();
-            if old_transactions.next().is_some() {
-                // Note: actually, this should never happen during ibd.
-                log::warn!("Discarding mempool transactions during IBD");
-            }
-        }
+    let actual_tip = tx_pool.blocking_chainstate_handle().call(|cs| cs.get_best_block_id())??;
+
+    if new_tip != actual_tip {
+        log::debug!(
+            "Not updating mempool because actual tip differs: new_tip = {new_tip:?}, actual_tip = {actual_tip:?}"
+        );
+
         return Ok(());
     }
 

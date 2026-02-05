@@ -284,7 +284,11 @@ impl JobManager {
                         let subscribe_func =
                             Arc::new(
                                 move |chainstate_event: ChainstateEvent| match chainstate_event {
-                                    ChainstateEvent::NewTip(block_id, _) => {
+                                    ChainstateEvent::NewTip {
+                                        id: block_id,
+                                        height: _,
+                                        is_initial_block_download: _,
+                                    } => {
                                         _ = chainstate_sender.send(block_id.into()).log_err_pfx(
                                             "Chainstate subscriber failed to send new tip",
                                         );

@@ -29,7 +29,11 @@ pub enum RpcEvent {
 impl RpcEvent {
     pub fn from_event(event: ChainstateEvent) -> Self {
         match event {
-            ChainstateEvent::NewTip(id, height) => Self::NewTip { id, height },
+            ChainstateEvent::NewTip {
+                id,
+                height,
+                is_initial_block_download: _,
+            } => Self::NewTip { id, height },
         }
     }
 }

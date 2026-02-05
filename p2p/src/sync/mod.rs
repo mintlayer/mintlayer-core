@@ -389,7 +389,11 @@ pub async fn subscribe_to_new_tip(
     let subscribe_func =
         Arc::new(
             move |chainstate_event: chainstate::ChainstateEvent| match chainstate_event {
-                chainstate::ChainstateEvent::NewTip(block_id, _) => {
+                chainstate::ChainstateEvent::NewTip {
+                    id: block_id,
+                    height: _,
+                    is_initial_block_download: _,
+                } => {
                     let _ = sender.send(block_id).log_err_pfx("The new tip receiver closed");
                 }
             },

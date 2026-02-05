@@ -51,7 +51,11 @@ pub use tx_verifier;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum ChainstateEvent {
-    NewTip(Id<Block>, BlockHeight),
+    NewTip {
+        id: Id<Block>,
+        height: BlockHeight,
+        is_initial_block_download: bool,
+    },
 }
 
 /// A struct that will be used to print ChainstateEvent when it becomes a part of tracing's span.
@@ -62,8 +66,15 @@ pub struct ChainstateEventTracingWrapper<'a>(pub &'a ChainstateEvent);
 impl std::fmt::Display for ChainstateEventTracingWrapper<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.0 {
-            ChainstateEvent::NewTip(id, height) => {
-                write!(f, "NewTip({id}, {height})")
+            ChainstateEvent::NewTip {
+                id: block_id,
+                height: block_height,
+                is_initial_block_download,
+            } => {
+                write!(
+                    f,
+                    "NewTip({block_id}, {block_height}, ibd={is_initial_block_download})"
+                )
             }
         }
     }
@@ -71,6 +82,8 @@ impl std::fmt::Display for ChainstateEventTracingWrapper<'_> {
 
 #[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 pub enum ChainstateError {
+    #[error("Block storage error: `{0}`")]
+    StorageError(#[from] chainstate_storage::Error),
     #[error("Initialization error: {0}")]
     FailedToInitializeChainstate(#[from] InitializationError),
     #[error("Block processing failed: `{0}`")]

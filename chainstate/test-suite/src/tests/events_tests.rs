@@ -243,7 +243,11 @@ fn subscribe(chainstate: &mut TestChainstate, n: usize) -> EventList {
     for _ in 0..n {
         let events_ = Arc::clone(&events);
         let handler = Arc::new(move |event: ChainstateEvent| match event {
-            ChainstateEvent::NewTip(block_id, block_height) => {
+            ChainstateEvent::NewTip {
+                id: block_id,
+                height: block_height,
+                is_initial_block_download: _,
+            } => {
                 events_.lock().unwrap().push((block_id, block_height));
             }
         });
@@ -267,18 +271,28 @@ fn orphan_error_hook() -> (Arc<OrphanErrorHandler>, ErrorList) {
 #[case(Seed::from_entropy())]
 #[tokio::test]
 async fn several_subscribers_several_events_broadcaster(#[case] seed: Seed) {
+    use std::time::Duration;
+
     let mut rng = make_seedable_rng(seed);
-    let mut tf = TestFramework::builder(&mut rng).build();
 
-    let subscribers = rng.gen_range(4..16);
-    let blocks = rng.gen_range(8..128);
+    let initial_secs_since_genesis = 100;
+    let max_tip_age_secs = 10;
+    let mut tf = TestFramework::builder(&mut rng)
+        .with_max_tip_age(Duration::from_secs(max_tip_age_secs).into())
+        .with_initial_time_since_genesis(initial_secs_since_genesis)
+        .build();
+    let mock_time = Arc::clone(tf.time_value.as_ref().unwrap());
 
-    let mut receivers: Vec<_> =
-        (0..subscribers).map(|_| tf.chainstate.subscribe_to_rpc_events()).collect();
+    let subscribers_count = rng.gen_range(4..16);
+    let blocks_count = rng.gen_range(8..128);
+
+    let mut receivers: Vec<_> = (0..subscribers_count)
+        .map(|_| tf.chainstate.subscribe_to_rpc_events())
+        .collect();
 
     let event_processor = tokio::spawn(async move {
         let mut events = vec![Vec::new(); receivers.len()];
-        for _ in 0..blocks {
+        for _ in 0..blocks_count {
             for (idx, receiver) in receivers.iter_mut().enumerate() {
                 events[idx].push(receiver.recv().await.unwrap());
             }
@@ -289,17 +303,38 @@ async fn several_subscribers_several_events_broadcaster(#[case] seed: Seed) {
         events
     });
 
+    let first_fresh_block_idx = rng.gen_range(0..blocks_count);
+
     let mut expected_events = Vec::new();
-    for _ in 0..blocks {
+    for idx in 0..blocks_count {
+        let (time_advance, is_ibd) = match idx.cmp(&first_fresh_block_idx) {
+            std::cmp::Ordering::Less => {
+                // The block will not be considered fresh and the chainstate will remain in ibd.
+                (rng.gen_range(max_tip_age_secs..max_tip_age_secs * 2), true)
+            }
+            std::cmp::Ordering::Equal => {
+                // The block will be considered fresh and the chainstate will no longer be in ibd.
+                (rng.gen_range(0..max_tip_age_secs), false)
+            }
+            std::cmp::Ordering::Greater => {
+                // The chainstate can't return to ibd once it switched to non-ibd,
+                // so block time can be arbitrary here.
+                (rng.gen_range(0..max_tip_age_secs * 2), false)
+            }
+        };
+
+        let timestamp = BlockTimestamp::from_int_seconds(mock_time.fetch_add(time_advance));
         let block = tf
             .make_block_builder()
+            .with_timestamp(timestamp)
             .add_test_transaction_from_best_block(&mut rng)
             .build(&mut rng);
         let index = tf.process_block(block.clone(), BlockSource::Local).ok().flatten().unwrap();
-        expected_events.push(ChainstateEvent::NewTip(
-            *index.block_id(),
-            index.block_height(),
-        ));
+        expected_events.push(ChainstateEvent::NewTip {
+            id: *index.block_id(),
+            height: index.block_height(),
+            is_initial_block_download: is_ibd,
+        });
     }
 
     std::mem::drop(tf);
@@ -309,6 +344,10 @@ async fn several_subscribers_several_events_broadcaster(#[case] seed: Seed) {
         .expect("timeout")
         .expect("event processor panicked");
 
-    // All receivers get the same sequence of events
-    assert!(event_traces.into_iter().all(|t| t == expected_events));
+    for (subscriber_idx, actual_events) in event_traces.iter().enumerate() {
+        assert_eq!(
+            actual_events, &expected_events,
+            "events mismatch for subscriber {subscriber_idx}"
+        );
+    }
 }
