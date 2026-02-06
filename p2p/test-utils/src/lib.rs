@@ -163,7 +163,7 @@ where
         }
     };
 
-    tokio::time::timeout(LONG_TIMEOUT, future_or_panic).await.unwrap()
+    tokio::time::timeout(LONG_TIMEOUT, future_or_panic).await.unwrap();
 }
 
 /// Await for the specified future for some reasonably big amount of time; panic if the timeout
