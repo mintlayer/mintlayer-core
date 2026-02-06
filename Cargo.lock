@@ -23,7 +23,7 @@ name = "accounting"
 version = "1.2.0"
 dependencies = [
  "common",
- "parity-scale-codec 3.7.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-scale-codec",
  "proptest",
  "rstest",
  "serialization",
@@ -312,7 +312,7 @@ dependencies = [
  "logging",
  "mempool",
  "orders-accounting",
- "parity-scale-codec 3.7.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-scale-codec",
  "pos-accounting",
  "rstest",
  "serialization",
@@ -966,7 +966,7 @@ dependencies = [
  "mockall",
  "mocks",
  "p2p",
- "parity-scale-codec 3.7.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-scale-codec",
  "pos-accounting",
  "randomness",
  "rayon",
@@ -1298,7 +1298,7 @@ dependencies = [
  "num",
  "oneshot",
  "orders-accounting",
- "parity-scale-codec 3.7.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-scale-codec",
  "pos-accounting",
  "randomness",
  "rpc",
@@ -1374,7 +1374,7 @@ dependencies = [
  "mockall",
  "num-traits",
  "orders-accounting",
- "parity-scale-codec 3.7.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-scale-codec",
  "pos-accounting",
  "randomness",
  "rstest",
@@ -1461,7 +1461,7 @@ dependencies = [
  "logging",
  "num-derive",
  "num-traits",
- "parity-scale-codec 3.7.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-scale-codec",
  "pos-accounting",
  "serialization",
  "static_assertions",
@@ -1681,7 +1681,7 @@ dependencies = [
  "num",
  "num-traits",
  "once_cell",
- "parity-scale-codec 3.7.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-scale-codec",
  "paste",
  "proptest",
  "randomness",
@@ -1704,6 +1704,7 @@ dependencies = [
  "thiserror 1.0.69",
  "trezor-client",
  "typename",
+ "unwrap-infallible",
  "utils",
 ]
 
@@ -1726,7 +1727,7 @@ dependencies = [
  "itertools 0.14.0",
  "logging",
  "num",
- "parity-scale-codec 3.7.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-scale-codec",
  "pos-accounting",
  "randomness",
  "rstest",
@@ -1780,6 +1781,15 @@ name = "convert_case"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ec182b0ca2f35d8fc196cf3404988fd8b8c739a4d270ff118a398feb0cbec1ca"
+dependencies = [
+ "unicode-segmentation",
+]
+
+[[package]]
+name = "convert_case"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "633458d4ef8c78b72454de2d54fd6ab2e60f9e02be22f3c6104cdc8a4e0fceb9"
 dependencies = [
  "unicode-segmentation",
 ]
@@ -2014,7 +2024,7 @@ dependencies = [
  "num",
  "num-derive",
  "num-traits",
- "parity-scale-codec 3.7.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-scale-codec",
  "rand_chacha 0.3.1",
  "randomness",
  "ripemd",
@@ -2305,11 +2315,11 @@ dependencies = [
 
 [[package]]
 name = "derive_more"
-version = "2.1.0"
+version = "2.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "10b768e943bed7bf2cab53df09f4bc34bfd217cdb57d971e769874c9a6710618"
+checksum = "d751e9e49156b02b44f9c1815bcb94b984cdcc4396ecc32521c739452808b134"
 dependencies = [
- "derive_more-impl 2.1.0",
+ "derive_more-impl 2.1.1",
 ]
 
 [[package]]
@@ -2318,7 +2328,7 @@ version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cb7330aeadfbe296029522e6c40f315320aba36fc43a5b3632f3795348f3bd22"
 dependencies = [
- "convert_case",
+ "convert_case 0.6.0",
  "proc-macro2",
  "quote",
  "syn 2.0.113",
@@ -2327,10 +2337,11 @@ dependencies = [
 
 [[package]]
 name = "derive_more-impl"
-version = "2.1.0"
+version = "2.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6d286bfdaf75e988b4a78e013ecd79c581e06399ab53fbacd2d916c2f904f30b"
+checksum = "799a97264921d8623a957f6c3b9011f3b5492f557bbb7a5a19b7fa6d06ba8dcb"
 dependencies = [
+ "convert_case 0.10.0",
  "proc-macro2",
  "quote",
  "rustc_version",
@@ -2492,7 +2503,7 @@ dependencies = [
  "networking",
  "p2p",
  "p2p-test-utils",
- "parity-scale-codec 3.7.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-scale-codec",
  "randomness",
  "rstest",
  "serialization",
@@ -3464,9 +3475,6 @@ name = "hex"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
-dependencies = [
- "serde",
-]
 
 [[package]]
 name = "hex-conservative"
@@ -4476,9 +4484,7 @@ dependencies = [
  "bitflags 2.10.0",
  "displaydoc",
  "encdec",
- "hex",
  "num_enum",
- "serde",
  "thiserror 2.0.17",
 ]
 
@@ -4844,7 +4850,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b69f92eb22368186aa4d25e71d2263f822b137ed3c022356acf37634c1ddda0"
 dependencies = [
  "itertools 0.12.1",
- "parity-scale-codec 3.7.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-scale-codec",
  "thiserror 1.0.69",
 ]
 
@@ -4863,11 +4869,12 @@ dependencies = [
 [[package]]
 name = "messages"
 version = "0.1.0"
-source = "git+https://github.com/mintlayer/mintlayer-ledger-app?rev=9ca7570eaac395f403d34da893333ea8ad4479c6#9ca7570eaac395f403d34da893333ea8ad4479c6"
+source = "git+https://github.com/mintlayer/mintlayer-ledger-app?rev=dbc41342564b2198037ed4ad41b4cf0c34617870#dbc41342564b2198037ed4ad41b4cf0c34617870"
 dependencies = [
+ "derive_more 2.1.1",
  "mintlayer-core-primitives",
  "num_enum",
- "parity-scale-codec 3.7.5 (git+https://github.com/paritytech/parity-scale-codec.git?rev=5021525697edc0661591ebc71392c48d950a10b0)",
+ "parity-scale-codec",
 ]
 
 [[package]]
@@ -4925,9 +4932,9 @@ name = "mintlayer-core-primitives"
 version = "1.0.0"
 source = "git+https://github.com/mintlayer/mintlayer-core-primitives?rev=13b10dbc88efdf3b5aa31ece8e34278bc69a5a9b#13b10dbc88efdf3b5aa31ece8e34278bc69a5a9b"
 dependencies = [
- "derive_more 2.1.0",
+ "derive_more 2.1.1",
  "fixed-hash",
- "parity-scale-codec 3.7.5 (git+https://github.com/paritytech/parity-scale-codec.git?rev=5021525697edc0661591ebc71392c48d950a10b0)",
+ "parity-scale-codec",
  "strum 0.27.2",
 ]
 
@@ -5123,7 +5130,7 @@ dependencies = [
  "futures",
  "logging",
  "once_cell",
- "parity-scale-codec 3.7.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-scale-codec",
  "randomness",
  "rstest",
  "serde",
@@ -5899,7 +5906,7 @@ dependencies = [
  "common",
  "crypto",
  "logging",
- "parity-scale-codec 3.7.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-scale-codec",
  "randomness",
  "rstest",
  "serialization",
@@ -5974,7 +5981,7 @@ dependencies = [
  "p2p-backend-test-suite",
  "p2p-test-utils",
  "p2p-types",
- "parity-scale-codec 3.7.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-scale-codec",
  "pos-accounting",
  "randomness",
  "rpc",
@@ -6042,7 +6049,7 @@ name = "p2p-types"
 version = "1.2.0"
 dependencies = [
  "common",
- "parity-scale-codec 3.7.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-scale-codec",
  "rpc-description",
  "serde",
  "serialization",
@@ -6075,42 +6082,16 @@ dependencies = [
 [[package]]
 name = "parity-scale-codec"
 version = "3.7.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "799781ae679d79a948e13d4824a40970bfa500058d245760dd857301059810fa"
+source = "git+https://github.com/paritytech/parity-scale-codec.git?rev=5021525697edc0661591ebc71392c48d950a10b0#5021525697edc0661591ebc71392c48d950a10b0"
 dependencies = [
  "arrayvec",
  "bitvec",
  "byte-slice-cast",
  "const_format",
  "impl-trait-for-tuples",
- "parity-scale-codec-derive 3.7.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-scale-codec-derive",
  "rustversion",
  "serde",
-]
-
-[[package]]
-name = "parity-scale-codec"
-version = "3.7.5"
-source = "git+https://github.com/paritytech/parity-scale-codec.git?rev=5021525697edc0661591ebc71392c48d950a10b0#5021525697edc0661591ebc71392c48d950a10b0"
-dependencies = [
- "arrayvec",
- "byte-slice-cast",
- "const_format",
- "impl-trait-for-tuples",
- "parity-scale-codec-derive 3.7.5 (git+https://github.com/paritytech/parity-scale-codec.git?rev=5021525697edc0661591ebc71392c48d950a10b0)",
- "rustversion",
-]
-
-[[package]]
-name = "parity-scale-codec-derive"
-version = "3.7.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34b4653168b563151153c9e4c08ebed57fb8262bebfa79711552fa983c623e7a"
-dependencies = [
- "proc-macro-crate",
- "proc-macro2",
- "quote",
- "syn 2.0.113",
 ]
 
 [[package]]
@@ -6402,7 +6383,7 @@ dependencies = [
  "accounting",
  "common",
  "crypto",
- "parity-scale-codec 3.7.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-scale-codec",
  "randomness",
  "rstest",
  "serialization",
@@ -7548,7 +7529,7 @@ dependencies = [
  "hex",
  "hex-literal",
  "logging",
- "parity-scale-codec 3.7.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-scale-codec",
  "proptest",
  "serde",
  "serde_json",
@@ -7866,7 +7847,7 @@ version = "1.2.0"
 dependencies = [
  "arraytools",
  "hex-literal",
- "parity-scale-codec 3.7.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-scale-codec",
  "rand 0.8.5",
 ]
 
@@ -7874,7 +7855,7 @@ dependencies = [
 name = "serialization-tagged"
 version = "1.2.0"
 dependencies = [
- "parity-scale-codec 3.7.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-scale-codec",
  "proptest",
  "serialization",
  "serialization-core",
@@ -8257,7 +8238,7 @@ version = "1.2.0"
 dependencies = [
  "libtest-mimic",
  "logging",
- "parity-scale-codec 3.7.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-scale-codec",
  "proptest",
  "serialization",
  "storage",
@@ -8580,7 +8561,7 @@ dependencies = [
  "futures",
  "hex",
  "jsonrpsee",
- "parity-scale-codec 3.7.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-scale-codec",
  "randomness",
  "rpc",
  "serde",
@@ -8781,7 +8762,7 @@ dependencies = [
  "common",
  "crypto",
  "logging",
- "parity-scale-codec 3.7.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-scale-codec",
  "randomness",
  "rstest",
  "serialization",
@@ -9342,6 +9323,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ecb6da28b8a351d773b68d5825ac39017e680750f980f3a1a85cd8dd28a47c1"
 
 [[package]]
+name = "unwrap-infallible"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e497bb1f828cc9fb236722c2eaa100dcf201563f38f4da6252357a59037adf31"
+
+[[package]]
 name = "url"
 version = "2.5.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9392,7 +9379,7 @@ dependencies = [
  "logging",
  "loom",
  "num-traits",
- "parity-scale-codec 3.7.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-scale-codec",
  "probabilistic-collections",
  "qrcodegen",
  "randomness",
@@ -9432,7 +9419,7 @@ dependencies = [
  "crypto",
  "itertools 0.14.0",
  "logging",
- "parity-scale-codec 3.7.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-scale-codec",
  "randomness",
  "rstest",
  "serialization",
@@ -9516,12 +9503,11 @@ dependencies = [
  "itertools 0.14.0",
  "lazy_static",
  "ledger-lib",
- "ledger-proto",
  "logging",
  "mempool",
  "messages",
  "orders-accounting",
- "parity-scale-codec 3.7.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-scale-codec",
  "pos-accounting",
  "randomness",
  "reqwest",
@@ -9874,7 +9860,7 @@ dependencies = [
  "hex",
  "itertools 0.14.0",
  "logging",
- "parity-scale-codec 3.7.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-scale-codec",
  "randomness",
  "rpc-description",
  "rstest",

@@ -53,7 +53,7 @@ pub enum LedgerModel {
     Stax,
     Flex,
     NanoGen5,
-    Unknown(u16),
+    Unknown { usb_pid: Option<u16> },
 }
 
 impl fmt::Display for LedgerModel {
@@ -65,7 +65,11 @@ impl fmt::Display for LedgerModel {
             LedgerModel::Stax => write!(f, "Stax"),
             LedgerModel::Flex => write!(f, "Flex"),
             LedgerModel::NanoGen5 => write!(f, "Nano Gen 5"),
-            LedgerModel::Unknown(id) => write!(f, "Unknown({id})"),
+            LedgerModel::Unknown { usb_pid } => write!(
+                f,
+                "Unknown({})",
+                usb_pid.map_or("None".into(), |x| x.to_string())
+            ),
         }
     }
 }

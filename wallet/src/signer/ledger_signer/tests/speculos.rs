@@ -43,7 +43,10 @@ pub enum Device {
 impl Device {
     /// Returns true if the device has a touch screen
     pub fn is_touch(&self) -> bool {
-        matches!(self, Device::Stax | Device::Flex | Device::NanoGen5)
+        match self {
+            Self::Stax | Self::Flex | Self::NanoGen5 => true,
+            Self::NanoS | Self::NanoSPlus | Self::NanoX => false,
+        }
     }
 }
 
@@ -89,29 +92,29 @@ pub struct FingerPayload {
 /// Semantic elements on the screen to avoid hardcoding X/Y in tests.
 /// Mapped from the "UseCase" python dictionary.
 #[derive(Clone, Copy, PartialEq, Debug)]
-pub enum ScreenElement {
+pub enum TouchScreenElement {
     ReviewTap,     // Used to go to next page (lower right)
     ReviewConfirm, // Above lower right
 }
 
-impl ScreenElement {
+impl TouchScreenElement {
     /// Returns the (x, y) coordinates for the specific device
+    /// The coordinates were found mostly by trial and error
     pub fn position(&self, device: Device) -> (u32, u32) {
-        // Device resolutions
-        // Stax: 400 x 672
-        // Flex: 480 x 600
         match (self, device) {
             // --- UseCaseReview ---
-            (ScreenElement::ReviewTap, Device::Stax) => (335, 606),
-            (ScreenElement::ReviewTap, Device::Flex) => (430, 530),
-            (ScreenElement::ReviewTap, Device::NanoGen5) => (295, 370),
+            (TouchScreenElement::ReviewTap, Device::Stax) => (335, 606),
+            (TouchScreenElement::ReviewTap, Device::Flex) => (430, 530),
+            (TouchScreenElement::ReviewTap, Device::NanoGen5) => (295, 370),
 
-            (ScreenElement::ReviewConfirm, Device::Stax) => (335, 515),
-            (ScreenElement::ReviewConfirm, Device::Flex) => (240, 435),
-            (ScreenElement::ReviewConfirm, Device::NanoGen5) => (290, 335),
+            (TouchScreenElement::ReviewConfirm, Device::Stax) => (335, 515),
+            (TouchScreenElement::ReviewConfirm, Device::Flex) => (240, 435),
+            (TouchScreenElement::ReviewConfirm, Device::NanoGen5) => (290, 335),
 
             // Fallback or unimplemented combinations
-            _ => panic!("Coordinate not mapped for {:?} on {:?}", self, device),
+            (_, Device::NanoS) | (_, Device::NanoSPlus) | (_, Device::NanoX) => {
+                panic!("Coordinate not mapped for {:?} on {:?}", self, device)
+            }
         }
     }
 }
@@ -144,7 +147,7 @@ impl Handle {
     pub async fn button(&self, button: Button, action: ButtonAction) -> anyhow::Result<()> {
         if self.device.is_touch() {
             log::warn!(concat!(
-                "Sending physical button command to a touch device (Stax/Flex).",
+                "Sending physical button command to a touch device.",
                 "This might be intended (Power button) but usually incorrect for UI navigation."
             ));
         }
@@ -188,7 +191,7 @@ impl Handle {
         Ok(())
     }
 
-    pub async fn hold(&self, element: ScreenElement) -> anyhow::Result<()> {
+    pub async fn hold(&self, element: TouchScreenElement) -> anyhow::Result<()> {
         let (x, y) = element.position(self.device);
         self.finger(x, y, ButtonAction::Press).await?;
         sleep(Duration::from_millis(1800)).await;
@@ -196,7 +199,7 @@ impl Handle {
         Ok(())
     }
 
-    pub async fn tap(&self, element: ScreenElement) -> anyhow::Result<()> {
+    pub async fn tap(&self, element: TouchScreenElement) -> anyhow::Result<()> {
         let (x, y) = element.position(self.device);
         self.finger(x, y, ButtonAction::PressAndRelease).await?;
         Ok(())

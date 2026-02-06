@@ -913,13 +913,13 @@ fn ensure_trezor_firmware_uses_same_ml_primitives() {
 #[test]
 fn test_coin_type_consistency_settings() {
     for chain_type in ChainType::iter() {
-        let config = Builder::new(chain_type).build();
+        let chain_config = Builder::new(chain_type).build();
 
-        let coin_type = to_coin_type(chain_type);
+        let coin_type = chain_type_to_primitives_coin_type(chain_type);
 
         // Check Ticker consistency
         assert_eq!(
-            config.coin_ticker(),
+            chain_config.coin_ticker(),
             coin_type.coin_ticker(),
             "Coin ticker mismatch for {:?}",
             chain_type
@@ -927,14 +927,14 @@ fn test_coin_type_consistency_settings() {
 
         // Check Decimals consistency
         assert_eq!(
-            config.coin_decimals(),
+            chain_config.coin_decimals(),
             coin_type.coin_decimals(),
             "Coin decimals mismatch for {:?}",
             chain_type
         );
 
         // Check BIP44 Coin Type consistency
-        let config_bip44: u32 = config.bip44_coin_type().into_encoded_index();
+        let config_bip44: u32 = chain_config.bip44_coin_type().into_encoded_index();
         assert_eq!(
             config_bip44,
             coin_type.bip44_coin_type(),
@@ -944,35 +944,35 @@ fn test_coin_type_consistency_settings() {
 
         // Check Bech32 Prefixes for specific entity IDs
         assert_eq!(
-            config.pool_id_address_prefix(),
+            chain_config.pool_id_address_prefix(),
             coin_type.pool_id_address_prefix(),
             "Pool ID address prefix mismatch for {:?}",
             chain_type
         );
 
         assert_eq!(
-            config.delegation_id_address_prefix(),
+            chain_config.delegation_id_address_prefix(),
             coin_type.delegation_id_address_prefix(),
             "Delegation ID address prefix mismatch for {:?}",
             chain_type
         );
 
         assert_eq!(
-            config.token_id_address_prefix(),
+            chain_config.token_id_address_prefix(),
             coin_type.token_id_address_prefix(),
             "Token ID address prefix mismatch for {:?}",
             chain_type
         );
 
         assert_eq!(
-            config.order_id_address_prefix(),
+            chain_config.order_id_address_prefix(),
             coin_type.order_id_address_prefix(),
             "Order ID address prefix mismatch for {:?}",
             chain_type
         );
 
         assert_eq!(
-            config.vrf_public_key_address_prefix(),
+            chain_config.vrf_public_key_address_prefix(),
             coin_type.vrf_public_key_address_prefix(),
             "VRF public key address prefix mismatch for {:?}",
             chain_type
@@ -987,9 +987,9 @@ fn test_coin_type_destination_address_prefixes(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     for chain_type in ChainType::iter() {
-        let config = Builder::new(chain_type).build();
+        let chain_config = Builder::new(chain_type).build();
 
-        let coin_type = to_coin_type(chain_type);
+        let coin_type = chain_type_to_primitives_coin_type(chain_type);
 
         for tag in DestinationTag::iter() {
             // Create a random valid destination in the `common` format
@@ -997,7 +997,7 @@ fn test_coin_type_destination_address_prefixes(#[case] seed: Seed) {
 
             let primitive_dest: ml_primitives::Destination =
                 common_dest.clone().try_convert_into().unwrap();
-            let expected_prefix = config.destination_address_prefix(tag);
+            let expected_prefix = chain_config.destination_address_prefix(tag);
             let actual_prefix = coin_type.address_prefix((&primitive_dest).into());
 
             assert_eq!(
@@ -1009,7 +1009,7 @@ fn test_coin_type_destination_address_prefixes(#[case] seed: Seed) {
     }
 }
 
-fn to_coin_type(chain_type: ChainType) -> ml_primitives::CoinType {
+fn chain_type_to_primitives_coin_type(chain_type: ChainType) -> ml_primitives::CoinType {
     match chain_type {
         ChainType::Mainnet => ml_primitives::CoinType::Mainnet,
         ChainType::Testnet => ml_primitives::CoinType::Testnet,

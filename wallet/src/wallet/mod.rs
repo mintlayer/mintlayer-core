@@ -725,7 +725,7 @@ where
             (WalletType::Hot, WalletType::Hot) => {}
             #[cfg(feature = "trezor")]
             (WalletType::Trezor, WalletType::Trezor) => {}
-            #[cfg(feature = "trezor")]
+            #[cfg(feature = "ledger")]
             (WalletType::Ledger, WalletType::Ledger) => {}
         }
         Ok(())

@@ -56,10 +56,14 @@ use crate::{
     Account, WalletResult,
 };
 
+#[cfg(any(feature = "trezor", feature = "ledger"))]
+pub mod hardware_signer_utils;
 pub mod software_signer;
 #[cfg(feature = "trezor")]
 pub mod trezor_signer;
 pub mod utils;
+#[cfg(any(feature = "trezor", feature = "ledger"))]
+use hardware_signer_utils::HardwareSignerError;
 
 #[cfg(feature = "trezor")]
 use self::trezor_signer::TrezorError;
@@ -90,6 +94,9 @@ pub enum SignerError {
     MultisigError(#[from] PartiallySignedMultisigStructureError),
     #[error("{0}")]
     SerializationError(#[from] serialization::Error),
+    #[cfg(any(feature = "trezor", feature = "ledger"))]
+    #[error("Hardware singer error: {0}")]
+    HardwareSignerError(#[from] HardwareSignerError),
     #[cfg(feature = "trezor")]
     #[error("Trezor error: {0}")]
     TrezorError(#[from] TrezorError),

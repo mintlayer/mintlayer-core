@@ -65,11 +65,11 @@ pub struct WalletInfo {
 #[serde(tag = "type", content = "content")]
 pub enum WalletExtraInfo {
     SoftwareWallet,
+    // Note: semver::Version is not serializable, so we can't use it here.
     #[cfg(feature = "trezor")]
     TrezorWallet {
         device_name: String,
         device_id: String,
-        // Note: semver::Version is not serializable, so we can't use it here.
         firmware_version: String,
     },
     #[cfg(feature = "ledger")]
@@ -219,7 +219,7 @@ impl WalletTypeArgs {
             } => controller_mode.into(),
             #[cfg(feature = "trezor")]
             Self::Trezor { device_id: _ } => WalletType::Trezor,
-            #[cfg(feature = "trezor")]
+            #[cfg(feature = "ledger")]
             Self::Ledger => WalletType::Ledger,
         }
     }

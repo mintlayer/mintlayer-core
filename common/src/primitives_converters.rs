@@ -36,6 +36,9 @@ use crypto::{
     vrf::{SchnorrkelPublicKey, VRFKeyKind, VRFPublicKey},
 };
 use script::Script;
+use serialization::extras::non_empty_vec::DataOrNoVec;
+
+use unwrap_infallible::UnwrapInfallible;
 
 #[derive(thiserror::Error, Debug, Eq, PartialEq)]
 pub enum PrimitivesConvertersError {
@@ -118,7 +121,7 @@ impl TryConvertFrom<AccountSpending> for ml_primitives::AccountSpending {
 impl TryConvertFrom<AccountOutPoint> for ml_primitives::AccountOutPoint {
     fn try_convert_from(value: AccountOutPoint) -> Result<Self, PrimitivesConvertersError> {
         Ok(Self {
-            nonce: ml_primitives::AccountNonce(value.nonce().value()),
+            nonce: value.nonce().try_convert_into()?,
             spending: value.account().clone().try_convert_into()?,
         })
     }
@@ -137,7 +140,7 @@ impl TryConvertFrom<PublicKey> for ml_primitives::PublicKey {
     fn try_convert_from(value: PublicKey) -> Result<Self, PrimitivesConvertersError> {
         match value.kind() {
             KeyKind::Secp256k1Schnorr => {
-                let key: Secp256k1PublicKey = value.try_into().unwrap();
+                let key: Secp256k1PublicKey = value.try_into().unwrap_infallible();
                 Ok(ml_primitives::PublicKey::Secp256k1Schnorr(
                     ml_primitives::Secp256k1PublicKey(key.as_bytes()),
                 ))
@@ -228,7 +231,7 @@ impl TryConvertFrom<TxInput> for ml_primitives::TxInput {
             TxInput::Utxo(utxo) => Ok(Self::Utxo(utxo.try_convert_into()?)),
             TxInput::Account(acc) => Ok(Self::Account(acc.try_convert_into()?)),
             TxInput::AccountCommand(nonce, command) => Ok(Self::AccountCommand(
-                ml_primitives::AccountNonce(nonce.value()),
+                nonce.try_convert_into()?,
                 command.try_convert_into()?,
             )),
             TxInput::OrderAccountCommand(command) => {
@@ -242,7 +245,6 @@ impl TryConvertFrom<OutputValue> for ml_primitives::OutputValue {
     fn try_convert_from(value: OutputValue) -> Result<Self, PrimitivesConvertersError> {
         match value {
             OutputValue::Coin(amount) => Ok(Self::Coin(amount.try_convert_into()?)),
-            // Replaced panic with Error
             OutputValue::TokenV0(_) => Err(PrimitivesConvertersError::UnsupportedTokenV0),
             OutputValue::TokenV1(token_id, amount) => Ok(Self::TokenV1(
                 token_id.try_convert_into()?,
@@ -296,7 +298,7 @@ impl TryConvertFrom<VRFPublicKey> for ml_primitives::VrfPublicKey {
     fn try_convert_from(value: VRFPublicKey) -> Result<Self, PrimitivesConvertersError> {
         match value.kind() {
             VRFKeyKind::Schnorrkel => {
-                let key: SchnorrkelPublicKey = value.try_into().unwrap();
+                let key: SchnorrkelPublicKey = value.try_into().unwrap_infallible();
 
                 Ok(ml_primitives::VrfPublicKey::Schnorrkel(
                     ml_primitives::SchnorrkelPublicKey(key.as_bytes()),
@@ -333,14 +335,16 @@ impl TryConvertFrom<NftIssuance> for ml_primitives::NftIssuance {
                 name: data.metadata.name,
                 description: data.metadata.description,
                 ticker: data.metadata.ticker,
-                icon_uri: data.metadata.icon_uri.as_ref().clone().map_or(Vec::new(), Into::into),
+                icon_uri: <DataOrNoVec<u8> as Into<Option<_>>>::into(data.metadata.icon_uri)
+                    .unwrap_or(Vec::new()),
                 additional_metadata_uri: data
                     .metadata
                     .additional_metadata_uri
                     .as_ref()
                     .clone()
                     .map_or(Vec::new(), Into::into),
-                media_uri: data.metadata.media_uri.as_ref().clone().map_or(Vec::new(), Into::into),
+                media_uri: <DataOrNoVec<u8> as Into<Option<_>>>::into(data.metadata.media_uri)
+                    .unwrap_or(Vec::new()),
                 media_hash: data.metadata.media_hash,
             })),
         }
