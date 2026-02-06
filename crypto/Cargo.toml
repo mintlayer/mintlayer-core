@@ -24,7 +24,7 @@ merlin = { workspace = true, default-features = false }
 num-derive.workspace = true
 num-traits.workspace = true
 num.workspace = true
-parity-scale-codec.workspace = true
+parity-scale-codec = { workspace = true, features = ["std"] }
 ripemd.workspace = true
 schnorrkel.workspace = true
 secp256k1 = { workspace = true, default-features = false, features = ["rand-std", "std", "rand"] }

@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use core::fmt;
+
 use serialization::{Decode, Encode};
 
 /// This is the data that will be stored in the wallet db.
@@ -32,6 +34,7 @@ pub struct TrezorFullInfo {
     pub firmware_version: semver::Version,
 }
 
+#[cfg(feature = "trezor")]
 impl From<TrezorFullInfo> for TrezorData {
     fn from(info: TrezorFullInfo) -> Self {
         Self {
@@ -41,12 +44,65 @@ impl From<TrezorFullInfo> for TrezorData {
     }
 }
 
+#[cfg(feature = "ledger")]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+pub enum LedgerModel {
+    NanoS,
+    NanoSPlus,
+    NanoX,
+    Stax,
+    Flex,
+    NanoGen5,
+    Unknown { usb_pid: Option<u16> },
+}
+
+impl fmt::Display for LedgerModel {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            LedgerModel::NanoS => write!(f, "Nano S"),
+            LedgerModel::NanoSPlus => write!(f, "Nano S Plus"),
+            LedgerModel::NanoX => write!(f, "Nano X"),
+            LedgerModel::Stax => write!(f, "Stax"),
+            LedgerModel::Flex => write!(f, "Flex"),
+            LedgerModel::NanoGen5 => write!(f, "Nano Gen 5"),
+            LedgerModel::Unknown { usb_pid } => write!(
+                f,
+                "Unknown({})",
+                usb_pid.map_or("None".into(), |x| x.to_string())
+            ),
+        }
+    }
+}
+
+/// This is the data that will be stored in the wallet db.
+#[cfg(feature = "ledger")]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+pub struct LedgerData {}
+
+/// All the info we may want to know about a Ledger device.
+#[cfg(feature = "ledger")]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+pub struct LedgerFullInfo {
+    pub app_version: String,
+    pub model: LedgerModel,
+}
+
+#[cfg(feature = "ledger")]
+impl From<LedgerFullInfo> for LedgerData {
+    fn from(_value: LedgerFullInfo) -> Self {
+        Self {}
+    }
+}
+
 /// This is the data that will be stored in the wallet db.
 #[derive(Debug, Clone, Encode, Decode)]
 pub enum HardwareWalletData {
     #[cfg(feature = "trezor")]
     #[codec(index = 0)]
     Trezor(TrezorData),
+    #[cfg(feature = "ledger")]
+    #[codec(index = 1)]
+    Ledger(LedgerData),
 }
 
 /// All the info we may want to know about a hardware wallet.
@@ -54,6 +110,8 @@ pub enum HardwareWalletData {
 pub enum HardwareWalletFullInfo {
     #[cfg(feature = "trezor")]
     Trezor(TrezorFullInfo),
+    #[cfg(feature = "ledger")]
+    Ledger(LedgerFullInfo),
 }
 
 impl From<HardwareWalletFullInfo> for HardwareWalletData {
@@ -61,6 +119,8 @@ impl From<HardwareWalletFullInfo> for HardwareWalletData {
         match info {
             #[cfg(feature = "trezor")]
             HardwareWalletFullInfo::Trezor(trezor_data) => Self::Trezor(trezor_data.into()),
+            #[cfg(feature = "ledger")]
+            HardwareWalletFullInfo::Ledger(ledger_data) => Self::Ledger(ledger_data.into()),
         }
     }
 }

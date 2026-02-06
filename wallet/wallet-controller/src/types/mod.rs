@@ -65,12 +65,17 @@ pub struct WalletInfo {
 #[serde(tag = "type", content = "content")]
 pub enum WalletExtraInfo {
     SoftwareWallet,
+    // Note: semver::Version is not serializable, so we can't use it here.
     #[cfg(feature = "trezor")]
     TrezorWallet {
         device_name: String,
         device_id: String,
-        // Note: semver::Version is not serializable, so we can't use it here.
         firmware_version: String,
+    },
+    #[cfg(feature = "ledger")]
+    LedgerWallet {
+        app_version: String,
+        model: String,
     },
 }
 
@@ -192,6 +197,8 @@ pub enum WalletTypeArgs {
     },
     #[cfg(feature = "trezor")]
     Trezor { device_id: Option<String> },
+    #[cfg(feature = "ledger")]
+    Ledger,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -212,6 +219,8 @@ impl WalletTypeArgs {
             } => controller_mode.into(),
             #[cfg(feature = "trezor")]
             Self::Trezor { device_id: _ } => WalletType::Trezor,
+            #[cfg(feature = "ledger")]
+            Self::Ledger => WalletType::Ledger,
         }
     }
 
@@ -254,6 +263,11 @@ impl WalletTypeArgs {
                 WalletTypeArgsComputed::Trezor { device_id },
                 CreatedWallet::UserProvidedMnemonic,
             )),
+            #[cfg(feature = "ledger")]
+            Self::Ledger => Ok((
+                WalletTypeArgsComputed::Ledger,
+                CreatedWallet::UserProvidedMnemonic,
+            )),
         }
     }
 }
@@ -266,6 +280,8 @@ pub enum WalletTypeArgsComputed {
     },
     #[cfg(feature = "trezor")]
     Trezor { device_id: Option<String> },
+    #[cfg(feature = "ledger")]
+    Ledger,
 }
 
 pub enum SweepFromAddresses {

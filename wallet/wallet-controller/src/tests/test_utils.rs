@@ -163,7 +163,7 @@ pub fn tx_with_outputs(outputs: Vec<TxOutput>) -> SignedTransaction {
     SignedTransaction::new(Transaction::new(0, vec![], outputs).unwrap(), Vec::new()).unwrap()
 }
 
-pub fn create_block_scan_wallet<B, P>(
+pub async fn create_block_scan_wallet<B, P>(
     chain_config: &ChainConfig,
     wallet: &mut Wallet<B, P>,
     transactions: Vec<SignedTransaction>,
@@ -187,7 +187,7 @@ where
     )
     .unwrap();
 
-    scan_wallet(wallet, BlockHeight::new(block_height), vec![block.clone()]);
+    scan_wallet(wallet, BlockHeight::new(block_height), vec![block.clone()]).await;
     block
 }
 

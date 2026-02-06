@@ -21,7 +21,6 @@ use serialization::Encode;
 use test_utils::random::{make_seedable_rng, Seed};
 use utils::sorted::Sorted;
 
-pub mod converters;
 pub mod makers;
 
 #[derive(Encode)]
