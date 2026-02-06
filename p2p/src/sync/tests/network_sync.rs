@@ -15,13 +15,14 @@
 
 use std::{sync::Arc, time::Duration};
 
-use chainstate::ChainstateConfig;
+use chainstate::{BlockSource, ChainstateConfig};
 use chainstate_test_framework::TestFramework;
 use common::{
-    chain::block::timestamp::BlockTimestamp,
+    chain::{self, block::timestamp::BlockTimestamp},
     primitives::{user_agent::mintlayer_core_user_agent, Idable},
 };
 use logging::log;
+use p2p_test_utils::{create_n_blocks, run_with_timeout, MEDIUM_TIMEOUT};
 use p2p_types::PeerId;
 use randomness::Rng;
 use test_utils::{
@@ -31,14 +32,14 @@ use test_utils::{
 
 use crate::{
     config::P2pConfig,
-    message::{BlockListRequest, BlockResponse, BlockSyncMessage, HeaderList},
+    message::{BlockListRequest, BlockResponse, BlockSyncMessage, HeaderList, HeaderListRequest},
     protocol::ProtocolConfig,
     sync::tests::helpers::{
         make_new_block, make_new_blocks, make_new_top_blocks,
         test_node_group::{MsgAction, TestNodeGroup},
         TestNode,
     },
-    test_helpers::for_each_protocol_version,
+    test_helpers::{for_each_protocol_version, test_p2p_config_with_protocol_config},
 };
 
 #[tracing::instrument(skip(seed))]
@@ -582,6 +583,271 @@ async fn send_block_from_the_future_again(#[case] seed: Seed) {
         }
 
         node.join_subsystem_manager().await;
+    })
+    .await;
+}
+
+// Simulate a situation where when `PeerBlockSyncManager` is handling a block, the same block
+// gets added to the chainstate via other means.
+// Generate a large number of blocks (a few hundred) and then for each block:
+// 1) the peer sends HeaderList with 1 header;
+// 2) the node responds with BlockListRequest for 1 block;
+// 3) the peer sends BlockResponse with the requested block; at the same time the block
+// is added to the chainstate via an explicit call to `process_block`;
+// 4) expected result: the interference has no effect, the node must send a new HeaderListRequest
+// as usual.
+// Note: a the moment of writing this, this basically ensures that when `PeerBlockSyncManager`
+// calls chainstate's `process_block`, it first checks that the block is indeed new; if this is not
+// done, `process_block` would fail and the rest of the block processing logic (i.e. requesting
+// more headers) would be skipped.
+#[tracing::instrument(skip(seed))]
+#[rstest::rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn process_block_interference1(#[case] seed: Seed) {
+    for_each_protocol_version(|protocol_version| async move {
+        run_with_timeout(async {
+            let mut rng = test_utils::random::make_seedable_rng(seed);
+
+            let chain_config = Arc::new(chain::config::create_unit_test_config());
+            let mut tf = TestFramework::builder(&mut rng)
+                .with_chain_config(chain_config.as_ref().clone())
+                .build();
+            let num_blocks = 200;
+            let blocks = create_n_blocks(&mut rng, &mut tf, num_blocks);
+
+            let mut node = TestNode::builder(protocol_version)
+                .with_chain_config(chain_config)
+                .with_chainstate(tf.into_chainstate())
+                .build()
+                .await;
+
+            let peer = node.connect_peer(PeerId::new(), protocol_version).await;
+            let peer_id = peer.get_id();
+            let peer = Arc::new(tokio::sync::Mutex::new(peer));
+
+            for block in blocks {
+                let block_id = block.get_id();
+                peer.lock()
+                    .await
+                    .send_block_sync_message(BlockSyncMessage::HeaderList(HeaderList::new(vec![
+                        block.header().clone(),
+                    ])))
+                    .await;
+
+                let (sent_to, message) = node.get_sent_block_sync_message().await;
+                assert_eq!(sent_to, peer_id);
+                assert_eq!(
+                    message,
+                    BlockSyncMessage::BlockListRequest(BlockListRequest::new(vec![block_id]))
+                );
+
+                // Send block response and explicitly call process_block at the same time.
+                // Run the 2 futures jointly to increase the likelihood of interference.
+                {
+                    let node_call = {
+                        let block = block.clone();
+                        async {
+                            peer.lock()
+                                .await
+                                .send_block_sync_message(BlockSyncMessage::BlockResponse(
+                                    BlockResponse::new(block),
+                                ))
+                                .await;
+
+                            tokio::time::sleep(Duration::from_millis(rng.gen_range(1..10))).await;
+                        }
+                    };
+
+                    let chainstate_call = async {
+                        node.chainstate()
+                            .call_mut(move |cs| {
+                                if cs
+                                    .get_block_index_for_persisted_block(&block_id)
+                                    .unwrap()
+                                    .is_none()
+                                {
+                                    cs.process_block(block, BlockSource::Peer).unwrap();
+                                } else {
+                                    log::debug!("Block already processed by the node");
+                                }
+                            })
+                            .await
+                            .unwrap();
+                    };
+
+                    tokio::join!(node_call, chainstate_call);
+                }
+
+                // The node should request for more headers.
+                // This is the place where we expect the failure to occur in a buggy implementation.
+                let (sent_to, message) =
+                    tokio::time::timeout(MEDIUM_TIMEOUT, node.get_sent_block_sync_message())
+                        .await
+                        .unwrap();
+                assert_eq!(sent_to, peer_id);
+                assert!(matches!(
+                    message,
+                    BlockSyncMessage::HeaderListRequest(HeaderListRequest { .. })
+                ));
+            }
+
+            node.assert_no_error().await;
+            node.join_subsystem_manager().await;
+        })
+        .await;
+    })
+    .await;
+}
+
+// Same as process_block_interference1, but with slightly different steps.
+// Generate a large number of blocks (a few hundred) and then for each pair of blocks:
+// 1) the peer sends HeaderList with the 2 headers;
+// 2) the node responds with BlockListRequest for 1 block (enforced by `max_request_blocks_count`);
+// 3) the peer sends BlockResponse with the requested block; at the same time the block
+// is added to the chainstate via an explicit call to `process_block`;
+// 4) expected result: the interference has no effect, the node must send a BlockListRequest for
+// the 2nd block as usual.
+#[tracing::instrument(skip(seed))]
+#[rstest::rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn process_block_interference2(#[case] seed: Seed) {
+    for_each_protocol_version(|protocol_version| async move {
+        run_with_timeout(async {
+            let mut rng = test_utils::random::make_seedable_rng(seed);
+
+            let chain_config = Arc::new(chain::config::create_unit_test_config());
+            let mut tf = TestFramework::builder(&mut rng)
+                .with_chain_config(chain_config.as_ref().clone())
+                .build();
+            let num_blocks = 200;
+            let blocks = create_n_blocks(&mut rng, &mut tf, num_blocks);
+
+            let p2p_config = Arc::new(test_p2p_config_with_protocol_config(ProtocolConfig {
+                // Only 1 block in a BlockListRequest is allowed.
+                max_request_blocks_count: 1.into(),
+
+                msg_header_count_limit: Default::default(),
+                max_addr_list_response_address_count: Default::default(),
+                msg_max_locator_count: Default::default(),
+                max_message_size: Default::default(),
+                max_peer_tx_announcements: Default::default(),
+            }));
+            let mut node = TestNode::builder(protocol_version)
+                .with_chain_config(chain_config)
+                .with_chainstate(tf.into_chainstate())
+                .with_p2p_config(p2p_config)
+                .build()
+                .await;
+
+            let peer = node.connect_peer(PeerId::new(), protocol_version).await;
+            let peer_id = peer.get_id();
+            let peer = Arc::new(tokio::sync::Mutex::new(peer));
+
+            for two_blocks in blocks.chunks(2) {
+                let block1 = &two_blocks[0];
+                let block2 = &two_blocks[1];
+                let block1_id = block1.get_id();
+                let block2_id = block2.get_id();
+
+                // Send 2 headers in the HeaderList response.
+                peer.lock()
+                    .await
+                    .send_block_sync_message(BlockSyncMessage::HeaderList(HeaderList::new(vec![
+                        block1.header().clone(),
+                        block2.header().clone(),
+                    ])))
+                    .await;
+
+                // The node requests only one block due to max_request_blocks_count.
+                let (sent_to, message) = node.get_sent_block_sync_message().await;
+                assert_eq!(sent_to, peer_id);
+                assert_eq!(
+                    message,
+                    BlockSyncMessage::BlockListRequest(BlockListRequest::new(vec![block1_id]))
+                );
+
+                // Send block1 as a response and explicitly call process_block at the same time.
+                // Run the 2 futures jointly to increase the likelihood of interference.
+                {
+                    let node_call = {
+                        let block1 = block1.clone();
+                        async {
+                            peer.lock()
+                                .await
+                                .send_block_sync_message(BlockSyncMessage::BlockResponse(
+                                    BlockResponse::new(block1),
+                                ))
+                                .await;
+
+                            tokio::time::sleep(Duration::from_millis(rng.gen_range(1..10))).await;
+                        }
+                    };
+
+                    let chainstate_call = {
+                        let block1 = block1.clone();
+                        async {
+                            node.chainstate()
+                                .call_mut(move |cs| {
+                                    if cs
+                                        .get_block_index_for_persisted_block(&block1_id)
+                                        .unwrap()
+                                        .is_none()
+                                    {
+                                        cs.process_block(block1, BlockSource::Peer).unwrap();
+                                    } else {
+                                        log::debug!("Block already processed by the node");
+                                    }
+                                })
+                                .await
+                                .unwrap();
+                        }
+                    };
+
+                    tokio::join!(node_call, chainstate_call);
+                }
+
+                // The node should request block2.
+                // This is the place where we expect the failure to occur in a buggy implementation.
+                let (sent_to, message) =
+                    tokio::time::timeout(MEDIUM_TIMEOUT, node.get_sent_block_sync_message())
+                        .await
+                        .unwrap();
+                assert_eq!(sent_to, peer_id);
+                assert_eq!(
+                    message,
+                    BlockSyncMessage::BlockListRequest(BlockListRequest::new(vec![block2_id]))
+                );
+
+                // Send block2.
+                peer.lock()
+                    .await
+                    .send_block_sync_message(BlockSyncMessage::BlockResponse(BlockResponse::new(
+                        block2.clone(),
+                    )))
+                    .await;
+
+                // The node requests for more headers.
+                // Note that this is also a potential place for failure, though it's less likely
+                // to happen in this test (as opposed to process_block_interference1)
+                let (sent_to, message) =
+                    tokio::time::timeout(MEDIUM_TIMEOUT, node.get_sent_block_sync_message())
+                        .await
+                        .unwrap();
+                assert_eq!(sent_to, peer_id);
+                assert!(matches!(
+                    message,
+                    BlockSyncMessage::HeaderListRequest(HeaderListRequest { .. })
+                ));
+            }
+
+            node.assert_no_error().await;
+            node.join_subsystem_manager().await;
+        })
+        .await;
     })
     .await;
 }
