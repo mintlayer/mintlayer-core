@@ -197,6 +197,7 @@ where
                 wallet,
                 self.wallet_events.clone(),
             )
+            .await?
         };
         self.controller.replace(controller);
 
@@ -261,6 +262,8 @@ where
                 wallet,
                 self.wallet_events.clone(),
             )
+            .await
+            .map_err(RpcError::Controller)?
         };
 
         self.controller.replace(controller);

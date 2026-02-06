@@ -195,10 +195,10 @@ class WalletTokens(BitcoinTestFramework):
                 if total_tokens_supply > 0:
                     assert_in(
                         f"{token_id} ({valid_ticker}), amount: {total_tokens_supply}",
-                        await wallet.get_balance(utxo_states=['confirmed', 'inactive'])
+                        await wallet.get_balance(utxo_states=['confirmed', 'inactive', 'in-mempool'])
                     )
                 else:
-                    assert_not_in(f"{token_id}", await wallet.get_balance(utxo_states=['confirmed', 'inactive']))
+                    assert_not_in(f"{token_id}", await wallet.get_balance(utxo_states=['confirmed', 'inactive', 'in-mempool']))
 
 
             # lock token supply

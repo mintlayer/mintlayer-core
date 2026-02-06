@@ -4911,6 +4911,7 @@ dependencies = [
  "common",
  "consensus",
  "crypto",
+ "futures",
  "logging",
  "mempool",
  "mockall",
@@ -8998,6 +8999,7 @@ dependencies = [
  "test-utils",
  "thiserror 1.0.69",
  "tokio",
+ "tokio-stream",
 ]
 
 [[package]]
