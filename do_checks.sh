@@ -8,12 +8,14 @@ PYTHON=$(which python || which python3)
 
 cd "$SCRIPT_DIR"
 
+echo "Running cargo fmt"
 cargo fmt --check -- --config newline_style=Unix
 
-# Install cargo deny first with: cargo install cargo-deny.
 # Note: "--allow duplicate" silences the warning "found x duplicate entries for crate y".
+echo "Running cargo deny"
 cargo deny check --allow duplicate --hide-inclusion-graph
 
+echo "Running cargo vet"
 cargo vet check --locked
 
 CLIPPY_VERSION_RESPONSE=$(cargo clippy --version)
@@ -46,6 +48,7 @@ fi
 #   replaced with `x.is_multiple_of(2)`, which is a questionable improvement.
 # * "let_and_return" is disabled because having `let` before returning can be useful at least
 #   as a potential place for a breakpoint.
+echo "Running clippy"
 EXTRA_ARGS=()
 if [[ $CLIPPY_VERSION -ge 1089 ]]; then
     EXTRA_ARGS+=(-A clippy::infallible_try_from)
@@ -79,7 +82,9 @@ cargo clippy --all-features --workspace --lib --bins --examples -- \
     -D clippy::fallible_impl_from \
     -D clippy::string_slice
 
+echo "Running codecheck.py"
 "$PYTHON" "build-tools/codecheck/codecheck.py"
 
 # Ensure that wasm documentation is up-to-date
+echo "Checking WASM documentation"
 cargo run -p wasm-doc-gen -- -o wasm-wrappers/WASM-API.md --check

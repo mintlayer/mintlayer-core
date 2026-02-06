@@ -28,7 +28,7 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
     - `create_order`, `conclude_order`, `fill_order`, `freeze_order` were renamed to
       `order_create`, `order_conclude`, `order_fill`, `order_freeze`.
 
-  - The format of `PartiallySignedTransaction was changed again.
+  - The format of `PartiallySignedTransaction` was changed again.
 
   - Node RPC:
     - The result of `chainstate_order_info` now also indicates whether the order is frozen.
@@ -57,6 +57,10 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
       - Parameters and/or returned values having the "plain" `Destination` type were incorrectly
         designated as "bech32 string", while in reality they are "hexified destination".
+
+  - General
+    - Fixed a bug that could lead to indefinite stalling of the node during initial sync when there
+      are many peers and the host machine is slow.
 
 ## [1.2.0] - 2025-10-27
 

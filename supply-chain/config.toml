@@ -37,6 +37,12 @@ audit-as-crates-io = true
 [policy.lmdb-rkv-sys]
 audit-as-crates-io = false
 
+[policy.tokio]
+audit-as-crates-io = true
+
+[policy.tokio-macros]
+audit-as-crates-io = true
+
 [policy.trezor-client]
 audit-as-crates-io = false
 
@@ -130,10 +136,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.block2]]
 version = "0.5.1"
-criteria = "safe-to-deploy"
-
-[[exemptions.block2]]
-version = "0.6.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.borsh-derive]]
@@ -558,7 +560,7 @@ criteria = "safe-to-deploy"
 
 [[exemptions.iri-string]]
 version = "0.7.9"
-criteria = "safe-to-deploy"
+criteria = "safe-to-run"
 
 [[exemptions.jni-sys]]
 version = "0.3.0"
@@ -700,10 +702,6 @@ criteria = "safe-to-deploy"
 version = "0.29.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.nu-ansi-term]]
-version = "0.50.3"
-criteria = "safe-to-deploy"
-
 [[exemptions.num-format]]
 version = "0.4.4"
 criteria = "safe-to-deploy"
@@ -728,10 +726,6 @@ criteria = "safe-to-deploy"
 version = "0.5.2"
 criteria = "safe-to-deploy"
 
-[[exemptions.objc2]]
-version = "0.6.3"
-criteria = "safe-to-deploy"
-
 [[exemptions.objc2-app-kit]]
 version = "0.2.2"
 criteria = "safe-to-deploy"
@@ -752,10 +746,6 @@ criteria = "safe-to-deploy"
 version = "0.2.2"
 criteria = "safe-to-deploy"
 
-[[exemptions.objc2-core-foundation]]
-version = "0.3.2"
-criteria = "safe-to-deploy"
-
 [[exemptions.objc2-core-image]]
 version = "0.2.2"
 criteria = "safe-to-deploy"
@@ -764,16 +754,8 @@ criteria = "safe-to-deploy"
 version = "0.2.2"
 criteria = "safe-to-deploy"
 
-[[exemptions.objc2-encode]]
-version = "4.1.0"
-criteria = "safe-to-deploy"
-
 [[exemptions.objc2-foundation]]
 version = "0.2.2"
-criteria = "safe-to-deploy"
-
-[[exemptions.objc2-foundation]]
-version = "0.3.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.objc2-link-presentation]]
@@ -809,12 +791,8 @@ version = "0.1.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.oneshot]]
-version = "0.1.11"
+version = "0.1.13"
 criteria = "safe-to-deploy"
-
-[[exemptions.oorandom]]
-version = "11.1.5"
-criteria = "safe-to-run"
 
 [[exemptions.orbclient]]
 version = "0.3.48"
@@ -862,10 +840,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.piper]]
 version = "0.2.4"
-criteria = "safe-to-deploy"
-
-[[exemptions.pkg-config]]
-version = "0.3.32"
 criteria = "safe-to-deploy"
 
 [[exemptions.plotters]]
@@ -1068,14 +1042,6 @@ criteria = "safe-to-deploy"
 version = "2.1.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.rustls-pemfile]]
-version = "1.0.4"
-criteria = "safe-to-deploy"
-
-[[exemptions.rustls-pemfile]]
-version = "2.2.0"
-criteria = "safe-to-deploy"
-
 [[exemptions.rusty-fork]]
 version = "0.3.1"
 criteria = "safe-to-deploy"
@@ -1093,19 +1059,11 @@ version = "0.1.28"
 criteria = "safe-to-deploy"
 
 [[exemptions.schemars]]
-version = "0.9.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.schemars]]
 version = "1.0.4"
 criteria = "safe-to-deploy"
 
 [[exemptions.schnorrkel]]
 version = "0.11.5"
-criteria = "safe-to-deploy"
-
-[[exemptions.sct]]
-version = "0.7.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.sctk-adwaita]]
@@ -1122,7 +1080,7 @@ criteria = "safe-to-deploy"
 
 [[exemptions.security-framework]]
 version = "2.11.1"
-criteria = "safe-to-deploy"
+criteria = "safe-to-run"
 
 [[exemptions.security-framework]]
 version = "3.5.1"
@@ -1241,10 +1199,6 @@ version = "0.1.19"
 criteria = "safe-to-deploy"
 
 [[exemptions.sync_wrapper]]
-version = "0.1.2"
-criteria = "safe-to-run"
-
-[[exemptions.sync_wrapper]]
 version = "1.0.2"
 criteria = "safe-to-deploy"
 
@@ -1284,16 +1238,16 @@ criteria = "safe-to-deploy"
 version = "1.10.0"
 criteria = "safe-to-deploy"
 
+[[exemptions.tokio]]
+version = "1.49.0@git:0d6c7af3e43457350bdc03a6dbcafa276fab7352"
+criteria = "safe-to-deploy"
+
+[[exemptions.tokio-macros]]
+version = "2.6.0@git:0d6c7af3e43457350bdc03a6dbcafa276fab7352"
+criteria = "safe-to-deploy"
+
 [[exemptions.tokio-socks]]
 version = "0.5.2"
-criteria = "safe-to-deploy"
-
-[[exemptions.tower]]
-version = "0.4.13"
-criteria = "safe-to-deploy"
-
-[[exemptions.tower-http]]
-version = "0.4.4"
 criteria = "safe-to-deploy"
 
 [[exemptions.tower-http]]
@@ -1487,10 +1441,6 @@ criteria = "safe-to-deploy"
 [[exemptions.winreg]]
 version = "0.10.1"
 criteria = "safe-to-deploy"
-
-[[exemptions.winreg]]
-version = "0.50.0"
-criteria = "safe-to-run"
 
 [[exemptions.winres]]
 version = "0.1.12"

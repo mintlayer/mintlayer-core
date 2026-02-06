@@ -257,7 +257,9 @@ testing_logger = "0.1"
 thiserror = "1.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["registry", "env-filter", "json"] }
-tokio = { version = "1.27", default-features = false }
+# Note: we use an unreleased version of Tokio, because we need a certain bugfix, see the `[patch.crates-io]`
+# section for additional details.
+tokio = { git = "https://github.com/tokio-rs/tokio", rev = "0d6c7af3e43457350bdc03a6dbcafa276fab7352", default-features = false }
 tokio-socks = "0.5"
 tokio-stream = "0.1"
 tokio-util = { version = "0.7", default-features = false }
@@ -324,3 +326,8 @@ default = ["trezor"]
 # is fontconfig-parser <- fontdb <- cosmic-text <- various "iced" crates.
 # TODO: investigate this further.
 fontconfig-parser = { git = "https://github.com/Riey/fontconfig-parser", rev = "f7d13a779e6ee282ce75acbc00a1270c0350e0c2" }
+
+# We need this PR - https://github.com/tokio-rs/tokio/pull/7879 - to fix potential indefinite stalling of the chainstate
+# subsystem (reproducible on a slow machine during initial sync with 30+ connected peers).
+# The PR was merged after 1.49, so it should probably be part of 1.50 when it comes out.
+tokio = { git = "https://github.com/tokio-rs/tokio", rev = "0d6c7af3e43457350bdc03a6dbcafa276fab7352" }
