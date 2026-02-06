@@ -110,14 +110,6 @@ criteria = "safe-to-deploy"
 version = "4.7.1"
 criteria = "safe-to-deploy"
 
-[[exemptions.axum]]
-version = "0.7.9"
-criteria = "safe-to-deploy"
-
-[[exemptions.axum-core]]
-version = "0.4.5"
-criteria = "safe-to-deploy"
-
 [[exemptions.bigdecimal]]
 version = "0.4.9"
 criteria = "safe-to-deploy"
@@ -538,6 +530,10 @@ criteria = "safe-to-deploy"
 version = "0.2.1"
 criteria = "safe-to-deploy"
 
+[[exemptions.hyper-timeout]]
+version = "0.5.2"
+criteria = "safe-to-deploy"
+
 [[exemptions.iced_aw]]
 version = "0.12.2@git:def1db9aac1e58a47e0c3127d4d4e95d724ca8ad"
 criteria = "safe-to-deploy"
@@ -658,6 +654,10 @@ criteria = "safe-to-deploy"
 version = "0.7.3"
 criteria = "safe-to-deploy"
 
+[[exemptions.matchit]]
+version = "0.8.4"
+criteria = "safe-to-deploy"
+
 [[exemptions.memmap2]]
 version = "0.9.8"
 criteria = "safe-to-deploy"
@@ -672,6 +672,10 @@ criteria = "safe-to-deploy"
 
 [[exemptions.merlin]]
 version = "3.0.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.minimal-lexical]]
+version = "0.2.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.mockall]]
@@ -1252,14 +1256,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.tower-http]]
 version = "0.5.2"
-criteria = "safe-to-deploy"
-
-[[exemptions.tower-layer]]
-version = "0.3.3"
-criteria = "safe-to-deploy"
-
-[[exemptions.tower-service]]
-version = "0.3.3"
 criteria = "safe-to-deploy"
 
 [[exemptions.tracing-serde]]

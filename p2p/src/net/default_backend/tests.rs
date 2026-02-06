@@ -35,7 +35,7 @@ use networking::{
 };
 use p2p_test_utils::run_with_timeout;
 use test_utils::assert_matches_return_val;
-use utils::atomics::SeqCstAtomicBool;
+use utils::{atomics::SeqCstAtomicBool, tokio_spawn_in_current_tracing_span};
 
 use crate::{
     config::NodeType,
@@ -445,18 +445,21 @@ where
     let transport = A::make_transport();
     let mut listener = transport.bind(vec![A::make_address()]).await.unwrap();
     let addr = listener.local_addresses().unwrap();
-    let _peer_socket_join_handle = logging::spawn_in_current_span(async move {
-        let (mut peer_socket, _address) = listener.accept().await.unwrap();
-        let _ = peer_socket.write_all(b"invalid message").await;
-        // Return the socket to make sure it lives to the end of the test.
-        // This is mainly needed in the case of MpscChannelTransport, where a connection
-        // is just a pair of tokio::io::DuplexStream's, one of which is held inside
-        // the socket. Once the socket is dropped, any attempts to write to the stream
-        // on the other side will fail immediately. I.e. the handshake will likely fail
-        // when the node tries to send Hello, so it won't even see the "invalid message",
-        // which it's supposed to receive instead of HelloAck.
-        peer_socket
-    });
+    let _peer_socket_join_handle = tokio_spawn_in_current_tracing_span(
+        async move {
+            let (mut peer_socket, _address) = listener.accept().await.unwrap();
+            let _ = peer_socket.write_all(b"invalid message").await;
+            // Return the socket to make sure it lives to the end of the test.
+            // This is mainly needed in the case of MpscChannelTransport, where a connection
+            // is just a pair of tokio::io::DuplexStream's, one of which is held inside
+            // the socket. Once the socket is dropped, any attempts to write to the stream
+            // on the other side will fail immediately. I.e. the handshake will likely fail
+            // when the node tries to send Hello, so it won't even see the "invalid message",
+            // which it's supposed to receive instead of HelloAck.
+            peer_socket
+        },
+        "",
+    );
 
     let config = Arc::new(common::chain::config::create_unit_test_config());
     let p2p_config = Arc::new(test_p2p_config());

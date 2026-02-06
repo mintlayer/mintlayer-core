@@ -35,6 +35,7 @@ use common::{
 };
 use logging::log;
 use node_lib::OptionsWithResolvedCommand;
+use utils::tokio_spawn;
 
 use crate::{chainstate_event_handler::ChainstateEventHandler, p2p_event_handler::P2pEventHandler};
 
@@ -150,7 +151,8 @@ pub async fn node_initialize(
 
             let controller = node.controller().clone();
 
-            let manager_join_handle = tokio::spawn(async move { node.main().await });
+            let manager_join_handle =
+                tokio_spawn(async move { node.main().await }, "Node subsystem mgr");
 
             // Subscribe to chainstate before getting the current chain_info!
             let chainstate_event_handler =
@@ -172,16 +174,19 @@ pub async fn node_initialize(
                 manager_join_handle,
             );
 
-            tokio::spawn(async move {
-                backend_impl::run(
-                    backend,
-                    request_rx,
-                    wallet_updated_rx,
-                    chainstate_event_handler,
-                    p2p_event_handler,
-                )
-                .await;
-            });
+            tokio_spawn(
+                async move {
+                    backend_impl::run(
+                        backend,
+                        request_rx,
+                        wallet_updated_rx,
+                        chainstate_event_handler,
+                        p2p_event_handler,
+                    )
+                    .await;
+                },
+                "NodeGUI backend",
+            );
             (chain_config, chain_info)
         }
         WalletMode::Cold => spawn_cold_backend(
@@ -228,7 +233,7 @@ fn spawn_cold_backend(
         is_initial_block_download: false,
     };
 
-    let manager_join_handle = tokio::spawn(async move {});
+    let manager_join_handle = tokio_spawn(async move {}, "Fake node subsystem mgr");
 
     let backend = backend_impl::Backend::new_cold(
         chain_config.clone(),
@@ -238,9 +243,12 @@ fn spawn_cold_backend(
         manager_join_handle,
     );
 
-    tokio::spawn(async move {
-        backend_impl::run_cold(backend, request_rx, wallet_updated_rx).await;
-    });
+    tokio_spawn(
+        async move {
+            backend_impl::run_cold(backend, request_rx, wallet_updated_rx).await;
+        },
+        "NodeGUI cold backend",
+    );
 
     Ok((chain_config, chain_info))
 }

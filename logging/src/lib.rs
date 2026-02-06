@@ -14,7 +14,6 @@
 // limitations under the License.
 
 mod log_style;
-mod tracing_utils;
 mod utils;
 
 use std::{
@@ -31,7 +30,6 @@ use log_style::{get_log_style_from_env, LogStyleParseError};
 
 pub use log;
 pub use log_style::{LogStyle, TextColoring};
-pub use tracing_utils::{spawn_in_current_span, spawn_in_span};
 pub use utils::{get_from_env, GetFromEnvError, ValueOrEnvVar};
 
 /// Send log output to the terminal.
@@ -100,10 +98,12 @@ pub fn init_logging_generic<MW1, MW2>(
         let mut errors = Vec::new();
         let main_layer = make_layer(main_writer_settings, &mut errors);
         let aux_layer = aux_writer_settings.map(|settings| make_layer(settings, &mut errors));
+        let tokio_console_layer = make_tokio_console_layer();
 
         Registry::default()
             .with(main_layer)
             .with(aux_layer)
+            .with(tokio_console_layer)
             // This basically calls tracing::subscriber::set_global_default on self and then
             // initializes a 'log' compatibility layer, so that 'log' macros continue to work
             // (this requires the "tracing-log" feature to be enabled, but it is enabled by default).
@@ -118,6 +118,22 @@ pub fn init_logging_generic<MW1, MW2>(
 
 pub fn no_writer_settings() -> Option<WriterSettings<tracing_subscriber::fmt::TestWriter>> {
     None
+}
+
+fn make_tokio_console_layer<S>() -> Option<Box<dyn Layer<S> + Send + Sync>>
+where
+    S: Subscriber + for<'a> tracing_subscriber::registry::LookupSpan<'a>,
+{
+    // Note: `spawn` calls `Builder::with_default_env`, which reads config values (such as the bind
+    // address) from a number of env vars, see:
+    // https://github.com/tokio-rs/console/blob/console-subscriber-v0.5.0/console-subscriber/src/builder.rs#L314-L321
+    // Also note: if we ever decide to enable tokio-console support permanently (and switch it on/off via command
+    // line arguments), then this env-based configuration should better be disabled.
+    #[cfg(feature = "tokio-console")]
+    return Some(console_subscriber::spawn().boxed());
+
+    #[cfg(not(feature = "tokio-console"))]
+    return None;
 }
 
 fn make_layer<MW, S>(

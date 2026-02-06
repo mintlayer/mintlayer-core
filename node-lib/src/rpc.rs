@@ -20,6 +20,7 @@ use std::{sync::Arc, time::Duration};
 use chainstate_launcher::ChainConfig;
 use rpc::{description::Described, handle_result, RpcResult};
 use subsystem::ShutdownTrigger;
+use utils::tokio_spawn;
 
 /// RPC methods controlling the node.
 #[rpc::describe]
@@ -63,10 +64,13 @@ impl NodeRpcServer for NodeRpc {
         // TODO: This is supposedly fixed in jsonrpsee 0.17.1: https://github.com/paritytech/jsonrpsee/releases/tag/v0.17.1
         // See if we can remove this workaround since we're using that version now.
         let shutdown_trigger = self.shutdown_trigger.clone();
-        tokio::spawn(async move {
-            tokio::time::sleep(Duration::from_millis(100)).await;
-            shutdown_trigger.initiate();
-        });
+        tokio_spawn(
+            async move {
+                tokio::time::sleep(Duration::from_millis(100)).await;
+                shutdown_trigger.initiate();
+            },
+            "NodeRpc shutdown trigger",
+        );
         Ok(())
     }
 

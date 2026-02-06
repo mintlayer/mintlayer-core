@@ -17,8 +17,12 @@ mod jobs_container;
 
 use std::sync::Arc;
 
-use crate::detail::CustomId;
 use async_trait::async_trait;
+use tokio::sync::{
+    mpsc::{self, unbounded_channel, UnboundedReceiver, UnboundedSender},
+    oneshot,
+};
+
 use chainstate::{ChainstateEvent, ChainstateHandle};
 use common::{
     chain::{block::timestamp::BlockTimestamp, GenBlock},
@@ -26,11 +30,9 @@ use common::{
 };
 use logging::log;
 use serialization::{Decode, Encode};
-use tokio::sync::{
-    mpsc::{self, unbounded_channel, UnboundedReceiver, UnboundedSender},
-    oneshot,
-};
-use utils::{ensure, tap_log::TapLog};
+use utils::{ensure, tap_log::TapLog, tokio_spawn};
+
+use crate::detail::CustomId;
 
 #[derive(thiserror::Error, Debug, PartialEq, Eq)]
 pub enum JobManagerError {
@@ -239,31 +241,34 @@ impl JobManager {
         mut stop_job_receiver: UnboundedReceiver<(Option<JobKey>, oneshot::Sender<usize>)>,
         mut shutdown_receiver: UnboundedReceiver<oneshot::Sender<usize>>,
     ) {
-        tokio::spawn(async move {
-            let mut jobs = jobs_container::JobsContainer::default();
+        tokio_spawn(
+            async move {
+                let mut jobs = jobs_container::JobsContainer::default();
 
-            loop {
-                tokio::select! {
-                    event = get_job_count_receiver.recv()
-                        => event_then(event, |result_sender| jobs.handle_job_count(result_sender)),
+                loop {
+                    tokio::select! {
+                        event = get_job_count_receiver.recv()
+                            => event_then(event, |result_sender| jobs.handle_job_count(result_sender)),
 
-                    tip_id = chainstate_receiver.recv()
-                        => event_then(tip_id, |id| jobs.handle_chainstate_event(id)),
+                        tip_id = chainstate_receiver.recv()
+                            => event_then(tip_id, |id| jobs.handle_chainstate_event(id)),
 
-                    event = new_job_receiver.recv()
-                        => event_then(event, |job| jobs.handle_add_job(job)),
+                        event = new_job_receiver.recv()
+                            => event_then(event, |job| jobs.handle_add_job(job)),
 
-                    event = last_used_block_timestamp_receiver.recv()
-                        => event_then(event, |ev| jobs.handle_update_last_used_block_timestamp(ev)),
+                        event = last_used_block_timestamp_receiver.recv()
+                            => event_then(event, |ev| jobs.handle_update_last_used_block_timestamp(ev)),
 
-                    event = stop_job_receiver.recv()
-                        => event_then(event, |ev| jobs.handle_stop_job(ev)),
+                        event = stop_job_receiver.recv()
+                            => event_then(event, |ev| jobs.handle_stop_job(ev)),
 
-                    event = shutdown_receiver.recv()
-                        => return event_then(event, |result_sender| jobs.handle_shutdown(result_sender)),
+                        event = shutdown_receiver.recv()
+                            => return event_then(event, |result_sender| jobs.handle_shutdown(result_sender)),
+                    }
                 }
-            }
-        });
+            },
+            "Blockprod job mgr",
+        );
     }
 
     fn subscribe_to_chainstate(&self, chainstate_sender: UnboundedSender<Id<GenBlock>>) {
@@ -272,24 +277,27 @@ impl JobManager {
             None => return,
         };
 
-        tokio::spawn(async move {
-            chainstate_handle
-                .call_mut(|this| {
-                    let subscribe_func =
-                        Arc::new(
-                            move |chainstate_event: ChainstateEvent| match chainstate_event {
-                                ChainstateEvent::NewTip(block_id, _) => {
-                                    _ = chainstate_sender.send(block_id.into()).log_err_pfx(
-                                        "Chainstate subscriber failed to send new tip",
-                                    );
-                                }
-                            },
-                        );
+        tokio_spawn(
+            async move {
+                chainstate_handle
+                    .call_mut(|this| {
+                        let subscribe_func =
+                            Arc::new(
+                                move |chainstate_event: ChainstateEvent| match chainstate_event {
+                                    ChainstateEvent::NewTip(block_id, _) => {
+                                        _ = chainstate_sender.send(block_id.into()).log_err_pfx(
+                                            "Chainstate subscriber failed to send new tip",
+                                        );
+                                    }
+                                },
+                            );
 
-                    this.subscribe_to_subsystem_events(subscribe_func);
-                })
-                .await
-        });
+                        this.subscribe_to_subsystem_events(subscribe_func);
+                    })
+                    .await
+            },
+            "Blockprod subscribe to CS",
+        );
     }
 
     #[allow(dead_code)]
@@ -397,7 +405,7 @@ impl Drop for JobManager {
             return;
         }
 
-        tokio::spawn(result_receiver);
+        tokio_spawn(result_receiver, "Blockprod job mgr drop result receiver");
     }
 }
 

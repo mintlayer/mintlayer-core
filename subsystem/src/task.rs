@@ -22,7 +22,7 @@ use tokio::{
 use tracing::Instrument;
 
 use logging::log;
-use utils::{once_destructor::OnceDestructor, sync::Arc};
+use utils::{once_destructor::OnceDestructor, sync::Arc, tokio_spawn_in_join_set};
 
 use crate::{calls::Action, SubmitOnlyHandle, Subsystem};
 
@@ -106,9 +106,13 @@ pub async fn subsystem<S, IF, SF, E>(
                     },
                     Action::Ref(call) => {
                         let subsys = Arc::clone(&subsys);
-                        worker_tasks.spawn(async move {
-                            call(subsys.read().await.interface_ref()).await
-                        }.in_current_span());
+                        tokio_spawn_in_join_set(
+                            &mut worker_tasks,
+                            async move {
+                                call(subsys.read().await.interface_ref()).await
+                            }.in_current_span(),
+                            &format!("{full_name}'s Action::Ref"),
+                        );
                     },
                 }
             }

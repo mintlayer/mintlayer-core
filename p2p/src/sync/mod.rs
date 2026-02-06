@@ -30,6 +30,7 @@ use tokio::{
     sync::mpsc::{self, Receiver, UnboundedReceiver, UnboundedSender},
     task::JoinSet,
 };
+use tracing::Instrument;
 
 use common::{
     chain::{config::ChainConfig, Block, Transaction},
@@ -38,8 +39,7 @@ use common::{
 };
 use logging::log;
 use mempool::{event::TransactionProcessed, tx_origin::TxOrigin, MempoolHandle};
-use tracing::Instrument;
-use utils::{sync::Arc, tap_log::TapLog};
+use utils::{sync::Arc, tap_log::TapLog, tokio_spawn_in_join_set};
 
 use crate::{
     config::P2pConfig,
@@ -207,11 +207,13 @@ where
             self.time_getter.clone(),
         );
 
-        peer_tasks.spawn(
+        tokio_spawn_in_join_set(
+            &mut peer_tasks,
             async move {
                 mgr.run().await;
             }
             .in_current_span(),
+            &format!("Peer[id={peer_id}] block sync mgr"),
         );
 
         peer_local_event_senders.push(local_event_sender);
@@ -231,11 +233,13 @@ where
             self.observer.clone(),
         );
 
-        peer_tasks.spawn(
+        tokio_spawn_in_join_set(
+            &mut peer_tasks,
             async move {
                 mgr.run().await;
             }
             .in_current_span(),
+            &format!("Peer[id={peer_id}] tx sync mgr"),
         );
 
         peer_local_event_senders.push(local_event_sender);

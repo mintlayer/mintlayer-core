@@ -103,6 +103,10 @@ will be automatically removed by `cargo vet`, while `cargo vet --locked` will co
     | Joe Birr-Pixton | ctz | The creator and lead maintainer of the widely used `rustls` crate. |
     | Dirkjan Ochtman | djc | One of the maintainers of `rustls`. |
     | Daniel McCarney | cpu | One of the maintainers of `rustls`. He's also a member of `Go`. |
+    | Lucio Franco | LucioFranco | Member of `tokio-rs`, `tower-rs` and `hyperium`, original author of `tonic`, maintains other crates, e.g. `tower` and `prost`. |
+    | Jonas Platte | jplatte | Member of `tokio-rs` and `tower-rs`, maintainer of `axum`. |
+    | Eliza Weisman | hawkw | Member of `tokio-rs` and `tower-rs`, creator/maintainer of `tracing` crates and crates related to `tokio-console`. |
+    | Jon Gjengset | jonhoo | Educator, author of "Rust for Rustaceans", author and maintainer of the `hdrhistogram` crate used by `console-subscriber`. |
 
 - We also trust the crates that we've forked.
 

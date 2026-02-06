@@ -24,6 +24,7 @@ use test_utils::{
     random::{make_seedable_rng, Seed},
     BasicTestTimeGetter,
 };
+use utils::tokio_spawn_in_current_tracing_span;
 
 use crate::{
     ban_config::BanConfig,
@@ -90,11 +91,14 @@ async fn dont_auto_ban_connected_peer(#[case] seed: Seed) {
         time_getter.get_time_getter(),
     );
 
-    let peer_mgr_join_handle = logging::spawn_in_current_span(async move {
-        let mut peer_mgr = peer_mgr;
-        let _ = peer_mgr.run_internal(None).await;
-        peer_mgr
-    });
+    let peer_mgr_join_handle = tokio_spawn_in_current_tracing_span(
+        async move {
+            let mut peer_mgr = peer_mgr;
+            let _ = peer_mgr.run_internal(None).await;
+            peer_mgr
+        },
+        "",
+    );
 
     let peer_addr = TestAddressMaker::new_random_address(&mut rng).into();
     let peer_id = inbound_block_relay_peer_accepted_by_backend(
@@ -155,11 +159,14 @@ async fn disconnect_manually_banned_peer(#[case] seed: Seed) {
         time_getter.get_time_getter(),
     );
 
-    let peer_mgr_join_handle = logging::spawn_in_current_span(async move {
-        let mut peer_mgr = peer_mgr;
-        let _ = peer_mgr.run_internal(None).await;
-        peer_mgr
-    });
+    let peer_mgr_join_handle = tokio_spawn_in_current_tracing_span(
+        async move {
+            let mut peer_mgr = peer_mgr;
+            let _ = peer_mgr.run_internal(None).await;
+            peer_mgr
+        },
+        "",
+    );
 
     let peer_addr = TestAddressMaker::new_random_address(&mut rng).into();
     let peer_id = inbound_block_relay_peer_accepted_by_backend(
@@ -251,11 +258,14 @@ async fn reject_incoming_connection_from_banned_peer(#[case] seed: Seed) {
 
     peer_mgr.ban(banned_addr.as_bannable(), ban_duration);
 
-    let peer_mgr_join_handle = logging::spawn_in_current_span(async move {
-        let mut peer_mgr = peer_mgr;
-        let _ = peer_mgr.run_internal(None).await;
-        peer_mgr
-    });
+    let peer_mgr_join_handle = tokio_spawn_in_current_tracing_span(
+        async move {
+            let mut peer_mgr = peer_mgr;
+            let _ = peer_mgr.run_internal(None).await;
+            peer_mgr
+        },
+        "",
+    );
 
     // Connection from the banned peer is rejected.
     let peer1_id = inbound_block_relay_peer_accepted_by_backend(
@@ -345,11 +355,14 @@ async fn no_outgoing_connection_to_banned_peer(#[case] seed: Seed) {
 
     peer_mgr.ban(banned_addr.as_bannable(), ban_duration);
 
-    let peer_mgr_join_handle = logging::spawn_in_current_span(async move {
-        let mut peer_mgr = peer_mgr;
-        let _ = peer_mgr.run_internal(None).await;
-        peer_mgr
-    });
+    let peer_mgr_join_handle = tokio_spawn_in_current_tracing_span(
+        async move {
+            let mut peer_mgr = peer_mgr;
+            let _ = peer_mgr.run_internal(None).await;
+            peer_mgr
+        },
+        "",
+    );
 
     // Connection to the normal peer is established.
     let cmd = expect_recv!(cmd_receiver);
@@ -426,11 +439,14 @@ async fn banned_address_is_not_announced(#[case] seed: Seed) {
 
     peer_mgr.ban(banned_addr.as_bannable(), ban_duration);
 
-    let peer_mgr_join_handle = logging::spawn_in_current_span(async move {
-        let mut peer_mgr = peer_mgr;
-        let _ = peer_mgr.run_internal(None).await;
-        peer_mgr
-    });
+    let peer_mgr_join_handle = tokio_spawn_in_current_tracing_span(
+        async move {
+            let mut peer_mgr = peer_mgr;
+            let _ = peer_mgr.run_internal(None).await;
+            peer_mgr
+        },
+        "",
+    );
 
     let peer1_id = inbound_full_relay_peer_accepted_by_backend(
         &conn_event_sender,
@@ -550,11 +566,14 @@ async fn banned_address_not_in_addr_response(#[case] seed: Seed) {
 
     peer_mgr.ban(banned_addr.as_bannable(), ban_duration);
 
-    let peer_mgr_join_handle = logging::spawn_in_current_span(async move {
-        let mut peer_mgr = peer_mgr;
-        let _ = peer_mgr.run_internal(None).await;
-        peer_mgr
-    });
+    let peer_mgr_join_handle = tokio_spawn_in_current_tracing_span(
+        async move {
+            let mut peer_mgr = peer_mgr;
+            let _ = peer_mgr.run_internal(None).await;
+            peer_mgr
+        },
+        "",
+    );
 
     let peer_id = inbound_full_relay_peer_accepted_by_backend(
         &conn_event_sender,

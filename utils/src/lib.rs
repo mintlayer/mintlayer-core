@@ -50,6 +50,12 @@ pub mod workspace_path;
 mod concurrency_impl;
 pub use concurrency_impl::*;
 
+mod tokio_utils;
+pub use tokio_utils::{
+    tokio_spawn, tokio_spawn_blocking, tokio_spawn_in_current_tracing_span,
+    tokio_spawn_in_join_set, tokio_spawn_in_tracing_span,
+};
+
 pub use log_error::log_error;
 
 // The internals of the `log_error` macro will refer to other parts of the repository as

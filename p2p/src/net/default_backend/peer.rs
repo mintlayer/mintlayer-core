@@ -557,7 +557,7 @@ mod tests {
         assert_matches,
         mock_time_getter::{mocked_time_getter_milliseconds, mocked_time_getter_seconds},
     };
-    use utils::atomics::SeqCstAtomicU64;
+    use utils::{atomics::SeqCstAtomicU64, tokio_spawn_in_current_tracing_span};
 
     use super::*;
     use crate::{
@@ -631,10 +631,13 @@ mod tests {
             time_getter,
         );
 
-        let handle = logging::spawn_in_current_span(async move {
-            peer.handshake().await.unwrap();
-            peer
-        });
+        let handle = tokio_spawn_in_current_tracing_span(
+            async move {
+                peer.handshake().await.unwrap();
+                peer
+            },
+            "",
+        );
 
         let mut socket2 =
             BufferedTranscoder::new(socket2, Some(*p2p_config.protocol_config.max_message_size));
@@ -717,10 +720,13 @@ mod tests {
             time_getter,
         );
 
-        let handle = logging::spawn_in_current_span(async move {
-            peer.handshake().await.unwrap();
-            peer
-        });
+        let handle = tokio_spawn_in_current_tracing_span(
+            async move {
+                peer.handshake().await.unwrap();
+                peer
+            },
+            "",
+        );
 
         let mut socket2 =
             BufferedTranscoder::new(socket2, Some(*p2p_config.protocol_config.max_message_size));
@@ -798,7 +804,7 @@ mod tests {
             time_getter,
         );
 
-        let handle = logging::spawn_in_current_span(async move { peer.handshake().await });
+        let handle = tokio_spawn_in_current_tracing_span(async move { peer.handshake().await }, "");
 
         let mut socket2 =
             BufferedTranscoder::new(socket2, Some(*p2p_config.protocol_config.max_message_size));
@@ -866,7 +872,7 @@ mod tests {
             time_getter,
         );
 
-        let handle = logging::spawn_in_current_span(async move { peer.handshake().await });
+        let handle = tokio_spawn_in_current_tracing_span(async move { peer.handshake().await }, "");
 
         let mut socket2 =
             BufferedTranscoder::new(socket2, Some(*p2p_config.protocol_config.max_message_size));
@@ -987,7 +993,8 @@ mod tests {
             peer_time_getter,
         );
 
-        let handle = logging::spawn_in_current_span(async move { peer.run_handshake().await });
+        let handle =
+            tokio_spawn_in_current_tracing_span(async move { peer.run_handshake().await }, "");
 
         // Advance both peer clocks and tokio time by given delay in 200ms increments to simulate
         // the flow of time. Doing this in one step makes the test result sensitive to the runtime

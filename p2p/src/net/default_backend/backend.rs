@@ -37,7 +37,7 @@ use p2p_types::socket_address::SocketAddress;
 use randomness::{make_pseudo_rng, Rng};
 use utils::{
     atomics::SeqCstAtomicBool, eventhandler::EventsController, set_flag::SetFlag,
-    shallow_clone::ShallowClone,
+    shallow_clone::ShallowClone, tokio_spawn_in_current_tracing_span,
 };
 
 use crate::{
@@ -404,13 +404,16 @@ where
             self.time_getter.shallow_clone(),
         );
         let shutdown = Arc::clone(&self.shutdown);
-        let handle = logging::spawn_in_current_span(async move {
-            match peer.run().await {
-                Ok(()) => {}
-                Err(P2pError::ChannelClosed) if shutdown.load() => {}
-                Err(e) => log::error!("Peer {peer_id} failed: {e}"),
-            }
-        });
+        let handle = tokio_spawn_in_current_tracing_span(
+            async move {
+                match peer.run().await {
+                    Ok(()) => {}
+                    Err(P2pError::ChannelClosed) if shutdown.load() => {}
+                    Err(e) => log::error!("Peer {peer_id} failed: {e}"),
+                }
+            },
+            &format!("Peer[id={peer_id}]"),
+        );
 
         self.pending_peers.insert(
             peer_id,

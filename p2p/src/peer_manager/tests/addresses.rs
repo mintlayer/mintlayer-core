@@ -44,6 +44,7 @@ use test_utils::{
     random::{make_seedable_rng, Seed},
     BasicTestTimeGetter,
 };
+use utils::tokio_spawn_in_current_tracing_span;
 
 use crate::{
     config::{NodeType, P2pConfig},
@@ -434,7 +435,10 @@ async fn resend_own_addresses(#[case] seed: Seed) {
     assert_eq!(pm.peers.len(), peer_count);
 
     let (started_sender, started_receiver) = oneshot_nofail::channel();
-    logging::spawn_in_current_span(async move { pm.run_internal(Some(started_sender)).await });
+    tokio_spawn_in_current_tracing_span(
+        async move { pm.run_internal(Some(started_sender)).await },
+        "",
+    );
     started_receiver.await.unwrap();
 
     // Flush all pending messages
@@ -510,11 +514,14 @@ async fn connect_to_predefined_address_if_dns_seed_is_empty(#[case] seed: Seed) 
     )
     .unwrap();
 
-    let peer_mgr_join_handle = logging::spawn_in_current_span(async move {
-        let mut peer_mgr = peer_mgr;
-        let _ = peer_mgr.run_internal(None).await;
-        peer_mgr
-    });
+    let peer_mgr_join_handle = tokio_spawn_in_current_tracing_span(
+        async move {
+            let mut peer_mgr = peer_mgr;
+            let _ = peer_mgr.run_internal(None).await;
+            peer_mgr
+        },
+        "",
+    );
 
     // Connection to predefined_peer_address is requested
     let cmd =
@@ -577,11 +584,14 @@ async fn dont_connect_to_predefined_address_if_dns_seed_is_non_empty(#[case] see
     )
     .unwrap();
 
-    let peer_mgr_join_handle = logging::spawn_in_current_span(async move {
-        let mut peer_mgr = peer_mgr;
-        let _ = peer_mgr.run_internal(None).await;
-        peer_mgr
-    });
+    let peer_mgr_join_handle = tokio_spawn_in_current_tracing_span(
+        async move {
+            let mut peer_mgr = peer_mgr;
+            let _ = peer_mgr.run_internal(None).await;
+            peer_mgr
+        },
+        "",
+    );
 
     // Connection to seeded_peer_address is requested
     let cmd =
@@ -647,11 +657,14 @@ async fn connect_to_predefined_address_if_dns_seed_returned_bogus_address(#[case
     )
     .unwrap();
 
-    let peer_mgr_join_handle = logging::spawn_in_current_span(async move {
-        let mut peer_mgr = peer_mgr;
-        let _ = peer_mgr.run_internal(None).await;
-        peer_mgr
-    });
+    let peer_mgr_join_handle = tokio_spawn_in_current_tracing_span(
+        async move {
+            let mut peer_mgr = peer_mgr;
+            let _ = peer_mgr.run_internal(None).await;
+            peer_mgr
+        },
+        "",
+    );
 
     // Connection to seeded_peer_address is requested; make it fail.
     let cmd =
@@ -748,11 +761,14 @@ async fn dont_use_dns_seed_if_connections_exist(#[case] seed: Seed) {
 
     peer_mgr.peerdb.peer_discovered(existing_address);
 
-    let peer_mgr_join_handle = logging::spawn_in_current_span(async move {
-        let mut peer_mgr = peer_mgr;
-        let _ = peer_mgr.run_internal(None).await;
-        peer_mgr
-    });
+    let peer_mgr_join_handle = tokio_spawn_in_current_tracing_span(
+        async move {
+            let mut peer_mgr = peer_mgr;
+            let _ = peer_mgr.run_internal(None).await;
+            peer_mgr
+        },
+        "",
+    );
 
     // Connection to existing_address is requested
     let cmd =

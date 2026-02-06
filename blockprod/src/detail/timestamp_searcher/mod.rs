@@ -38,7 +38,7 @@ use crypto::vrf::{VRFPrivateKey, VRFPublicKey};
 use logging::log;
 use randomness::{CryptoRng, Rng};
 use serialization::{Decode, Encode};
-use utils::{ensure, once_destructor::OnceDestructor};
+use utils::{ensure, once_destructor::OnceDestructor, tokio_spawn_blocking};
 
 use crate::{
     detail::utils::{
@@ -289,9 +289,10 @@ pub async fn find_timestamps_for_staking(
     secret_input_data: PoSTimestampSearchInputData,
     search_data: TimestampSearchData,
 ) -> Result<BTreeMap<BlockHeight, Vec<BlockTimestamp>>, BlockProductionError> {
-    let task_join_result = tokio::task::spawn_blocking({
-        move || find_timestamps_for_staking_impl(&search_data, &secret_input_data)
-    })
+    let task_join_result = tokio_spawn_blocking(
+        move || find_timestamps_for_staking_impl(&search_data, &secret_input_data),
+        "find_timestamps_for_staking",
+    )
     .await;
 
     match task_join_result {

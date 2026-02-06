@@ -21,7 +21,6 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use common::{chain::ChainConfig, primitives::per_thousand::PerThousand};
 use futures::never::Never;
 use hickory_client::{
     proto::rr::{LowerName, RrKey},
@@ -40,10 +39,12 @@ use hickory_server::{
     ServerFuture,
 };
 use itertools::Itertools;
+use tokio::{net::UdpSocket, sync::mpsc};
+
+use common::{chain::ChainConfig, primitives::per_thousand::PerThousand};
 use logging::log;
 use randomness::{make_pseudo_rng, Rng, SliceRandom};
-use tokio::{net::UdpSocket, sync::mpsc};
-use utils::{atomics::RelaxedAtomicU32, make_config_setting};
+use utils::{atomics::RelaxedAtomicU32, make_config_setting, tokio_spawn};
 
 use crate::{
     config::DnsServerConfig, crawler_p2p::crawler::address_data::SoftwareInfo,
@@ -126,11 +127,14 @@ impl DnsServer {
             mut cmd_rx,
         } = self;
 
-        tokio::spawn(async move {
-            while let Some(command) = cmd_rx.recv().await {
-                handle_command(&auth, command);
-            }
-        });
+        tokio_spawn(
+            async move {
+                while let Some(command) = cmd_rx.recv().await {
+                    handle_command(&auth, command);
+                }
+            },
+            "Cmd handling loop",
+        );
 
         server.block_until_done().await?;
 
