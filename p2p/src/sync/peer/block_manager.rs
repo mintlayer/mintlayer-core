@@ -21,7 +21,7 @@ use std::{
 use itertools::Itertools;
 use tokio::sync::mpsc::{Receiver, UnboundedReceiver, UnboundedSender};
 
-use chainstate::{chainstate_interface::ChainstateInterface, BlockIndex, BlockSource, Locator};
+use chainstate::{BlockIndex, BlockSource, Locator};
 use common::{
     chain::{
         block::{signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp},
@@ -717,38 +717,54 @@ where
         }
 
         // Process the block and also determine the new value for peers_best_block_that_we_have.
-        let old_peers_best_block_that_we_have = self.incoming.peers_best_block_that_we_have;
-        let (best_block, new_tip_received) = self
-            .chainstate_handle
-            .call_mut(move |c| {
-                let block = c.preliminary_block_check(block)?;
+        {
+            let old_peers_best_block_that_we_have = self.incoming.peers_best_block_that_we_have;
+            let block_id = block.get_id();
 
-                // If the block already exists in the block tree, skip it.
-                let new_tip_received =
-                    if c.get_block_index_for_persisted_block(&block.get_id())?.is_some() {
-                        log::debug!("The peer sent a block that already exists ({block_id})");
-                        false
-                    } else {
+            // Determine whether the block already exists via a separate readonly call to chainstate
+            // (subsystems can parallelize readonly calls).
+            let (block, mut new_tip_received, peers_best_block_id) = self
+                .chainstate_handle
+                .call(move |c| {
+                    let block = c.preliminary_block_check(block)?;
+                    let new_tip_received =
+                        c.get_block_index_for_persisted_block(&block_id)?.is_none();
+                    let peers_best_block_id = choose_peers_best_block(
+                        c,
+                        old_peers_best_block_that_we_have,
+                        Some(block_id.into()),
+                    )?;
+
+                    Ok((block, new_tip_received, peers_best_block_id))
+                })
+                .await?;
+
+            self.incoming.peers_best_block_that_we_have = peers_best_block_id;
+
+            // If the block is new, process it. Note that the block may have been received from
+            // another peer in the meantime, so we need to update new_tip_received.
+            if new_tip_received {
+                new_tip_received = self
+                    .chainstate_handle
+                    .call_mut(move |c| {
                         let block_index = c.process_block(block, BlockSource::Peer)?;
-                        block_index.is_some()
-                    };
+                        Ok(block_index.is_some())
+                    })
+                    .await?;
 
-                let best_block = choose_peers_best_block(
-                    c,
-                    old_peers_best_block_that_we_have,
-                    Some(block_id.into()),
-                )?;
+                if !new_tip_received {
+                    log::debug!("Block {block_id} obtained from another peer while waiting for process_block");
+                }
+            } else {
+                log::debug!("The peer sent a block that already exists ({block_id})");
+            };
 
-                Ok((best_block, new_tip_received))
-            })
-            .await?;
-        self.incoming.peers_best_block_that_we_have = best_block;
-
-        if new_tip_received {
-            self.peer_mgr_event_sender.send(PeerManagerEvent::NewTipReceived {
-                peer_id: self.id(),
-                block_id,
-            })?;
+            if new_tip_received {
+                self.peer_mgr_event_sender.send(PeerManagerEvent::NewTipReceived {
+                    peer_id: self.id(),
+                    block_id,
+                })?;
+            }
         }
 
         if self.incoming.requested_blocks.is_empty() {
