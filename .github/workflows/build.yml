@@ -301,14 +301,26 @@ jobs:
           submodules: recursive
           path: ./mintlayer-core
 
-      - name: Update local dependency repositories
+      - name: Update the list of available system packages
         run: sudo apt-get update
 
       - name: Install build dependencies
         run: sudo apt-get install -yqq --no-install-recommends build-essential pkg-config libdbus-1-dev libusb-1.0-0-dev
 
-      - name: Install rust
-        run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version-file: "./mintlayer-core/build-tools/.python-version"
+
+      - name: Extract required info from Cargo.toml
+        id: extract_cargo_info
+        run: echo "RUST_VERSION=$(python ./build-tools/cargo-info-extractor/extract.py --rust-version)" >> $GITHUB_OUTPUT
+        working-directory: ./mintlayer-core
+
+      - name: Install Rust
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
+            --default-toolchain ${{ steps.extract_cargo_info.outputs.RUST_VERSION }}
 
       - name: Install cargo-nextest
         uses: taiki-e/install-action@nextest
@@ -331,6 +343,8 @@ jobs:
     strategy:
       matrix:
         model: [apex_p, flex, stax, nanox, nanosplus]
+    env:
+      LEDGER_TESTS_AUTO_CONFIRM: true
     steps:
       - name: Checkout the core repository
         uses: actions/checkout@v5
@@ -369,13 +383,19 @@ jobs:
             -v "$(realpath ./mintlayer-ledger-app):/app" \
             --publish 5000:5000 --publish 9999:9999 \
             ghcr.io/ledgerhq/ledger-app-builder/ledger-app-dev-tools:latest \
-            sh -c 'speculos --apdu-port 9999 --api-port 5000 --display headless -s "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"  target/${{ matrix.model }}/release/mintlayer-app'
+            sh -c 'speculos --apdu-port 9999 --api-port 5000 --display headless \
+               -s "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about" \
+               target/${{ matrix.model }}/release/mintlayer-app'
 
           echo "--- Waiting for emulator to initialize ---"
           sleep 15
 
           # Set up a trap to ensure the container is stopped even if tests fail or the job is cancelled
-          trap "echo '--- Dumping Ledger emulator logs ---'; sudo docker logs ledger-emulator; echo '--- Stopping Ledger emulator ---'; sudo docker stop ledger-emulator" EXIT
+          trap "echo '--- Dumping Ledger emulator logs ---'; \
+                sudo docker logs ledger-emulator; \
+                echo '--- Stopping Ledger emulator ---'; \
+                sudo docker stop ledger-emulator" \
+                EXIT
 
           echo "--- Running Ledger device tests on the host ---"
           cd ./mintlayer-core
@@ -383,7 +403,5 @@ jobs:
           # Export the device model from the matrix so the Rust test can pick it up
           export LEDGER_TESTS_DEVICE_MODEL=${{ matrix.model }}
 
-          cargo-nextest nextest run --archive-file ledger-tests.tar.zst -j1 ledger_signer || test_exit_code=$?
-
-          exit $test_exit_code
+          cargo-nextest nextest run --archive-file ledger-tests.tar.zst -j1 ledger_signer
         timeout-minutes: 15

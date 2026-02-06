@@ -28,10 +28,7 @@ use ledger_lib::{
     Device as _, Transport,
 };
 use mintlayer_ledger_messages::CoinType;
-use randomness::make_true_rng;
 use rstest::rstest;
-use serialization::hex::HexEncode;
-use test_utils::random::{make_seedable_rng, Seed};
 use tokio::{
     sync::{
         mpsc::{self, Sender},
@@ -48,11 +45,12 @@ use crate::signer::{
         LedgerError, LedgerFinder, LedgerSigner,
     },
     tests::{
+        generic_fixed_signature_tests::test_fixed_signatures_generic_no_legacy,
         generic_tests::{
-            sign_message_test_params, test_sign_transaction_generic,
+            sign_message_test_params, test_sign_message_generic, test_sign_transaction_generic,
             test_sign_transaction_intent_generic, MessageToSign,
         },
-        no_another_signer,
+        make_deterministic_software_signer, no_another_signer,
     },
     SignerError, SignerResult,
 };
@@ -62,7 +60,10 @@ use crypto::key::{
     PredefinedSigAuxDataProvider, SigAuxDataProvider,
 };
 use logging::log;
-use speculos::{Button, ButtonAction, Device, Handle, ScreenElement};
+use randomness::make_true_rng;
+use serialization::hex::HexEncode;
+use speculos::{Button, ButtonAction, Device, Handle, TouchScreenElement};
+use test_utils::random::{make_seedable_rng, Seed};
 use utils::env_utils::{bool_from_env, get_from_env};
 use wallet_storage::WalletStorageReadLocked;
 use wallet_types::hw_data::LedgerData;
@@ -96,17 +97,17 @@ async fn auto_confirmer(mut control_msg_rx: mpsc::Receiver<ControlMessage>, hand
             _ = sleep(Duration::from_millis(500)) => {
                 // Logic depends on whether we are using a touch screen or buttons
                 if handle.device().is_touch() {
-                    // TOUCH DEVICE STRATEGY (Stax/Flex)
+                    // TOUCH DEVICE STRATEGY
                     // On Speculos, blindly tapping coordinates is safe.
                     // 1. Try to go to the next page (Tap the "Next/Tap" zone)
                     // 2. Try to confirm (Tap the "Confirm" zone)
 
                     // Attempt to advance review
-                    let _ = handle.tap(ScreenElement::ReviewTap).await;
+                    let _ = handle.tap(TouchScreenElement::ReviewTap).await;
                     sleep(Duration::from_millis(100)).await;
 
                     // Attempt to confirm review
-                    let _ = handle.hold(ScreenElement::ReviewConfirm).await;
+                    let _ = handle.hold(TouchScreenElement::ReviewConfirm).await;
                     sleep(Duration::from_millis(100)).await;
                 } else {
                     // BUTTON DEVICE STRATEGY (Nano S/S+/X)
@@ -152,6 +153,23 @@ impl LedgerFinder for DummyProvider {
     }
 }
 
+async fn wait_for_valid_reponse(device: &mut TcpDevice) {
+    let mut tries = 0;
+    let derivation_path = DerivationPath::from_str("m/44h/19788h/0h").unwrap();
+    loop {
+        match get_extended_public_key_raw(device, CoinType::Mainnet, &derivation_path).await {
+            Ok(_) => break,
+            Err(_) => {
+                tries += 1;
+                if tries > 10 {
+                    panic!("Could not get a valid response from the device")
+                }
+                sleep(Duration::from_millis(100)).await;
+            }
+        }
+    }
+}
+
 async fn setup(
     deterministic_signing: bool,
 ) -> (
@@ -179,28 +197,15 @@ async fn setup(
 
     let mut device = create_device_connection().await;
 
-    let mut tries = 0;
-    let derivation_path = DerivationPath::from_str("m/44h/19788h/0h").unwrap();
-    loop {
-        match get_extended_public_key_raw(&mut device, CoinType::Mainnet, &derivation_path).await {
-            Ok(_) => break,
-            Err(_) => {
-                tries += 1;
-                if tries > 10 {
-                    break;
-                }
-                sleep(Duration::from_millis(100)).await;
-            }
-        }
-    }
+    wait_for_valid_reponse(&mut device).await;
 
     let device = Arc::new(Mutex::new(device));
 
     let (control_msg_tx, control_msg_rx) = mpsc::channel(1);
     let auto_confirmer_handle = if should_auto_confirm() {
-        None
-    } else {
         Some(tokio::spawn(auto_confirmer(control_msg_rx, handle)))
+    } else {
+        None
     };
 
     (
@@ -230,29 +235,13 @@ async fn setup(
 async fn test_app_name() {
     let mut device = create_device_connection().await;
 
-    let derivation_path = DerivationPath::from_str("m/44h/19788h/0h").unwrap();
-    let mut tries = 0;
-    loop {
-        match get_extended_public_key_raw(&mut device, CoinType::Mainnet, &derivation_path).await {
-            Ok(_) => break,
-            Err(_) => {
-                tries += 1;
-                if tries > 10 {
-                    break;
-                }
-                sleep(Duration::from_millis(100)).await;
-            }
-        }
-    }
+    wait_for_valid_reponse(&mut device).await;
 
     let info = device.app_info(Duration::from_millis(500)).await.unwrap();
 
-    let err = check_current_app(&mut device).await.unwrap_err();
-    eprintln!("info: {err:?}");
-    assert_eq!(
-        err,
-        SignerError::LedgerError(LedgerError::DifferentActiveApp(info.name))
-    )
+    let version = check_current_app(&mut device).await.unwrap();
+    assert_eq!(version, "0.1.0");
+    assert_eq!(version, info.version);
 }
 
 #[rstest]
@@ -283,8 +272,8 @@ async fn test_account_extended_public_key() {
     let expected_chain_code = "0b71f99e82c97a4c8f75d8d215e7260bcf9e964d437ec252af26877adf7e8683";
     assert_eq!(expected_chain_code, chain_code.hex_encode());
 
-    control_msg_tx.send(ControlMessage::Finish).await.unwrap();
     if let Some(auto_confirmer_handle) = auto_confirmer_handle {
+        control_msg_tx.send(ControlMessage::Finish).await.unwrap();
         auto_confirmer_handle.await.unwrap();
     }
 }
@@ -296,9 +285,7 @@ async fn test_account_extended_public_key() {
 #[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_sign_message(#[case] seed: Seed, message_to_sign: MessageToSign) {
-    use crate::signer::tests::generic_tests::test_sign_message_generic;
-
-    log::debug!("test_sign_transaction_intent, seed = {seed:?}");
+    log::debug!("test_sign_message, seed = {seed:?}");
 
     let mut rng = make_seedable_rng(seed);
 
@@ -312,8 +299,8 @@ async fn test_sign_message(#[case] seed: Seed, message_to_sign: MessageToSign) {
     )
     .await;
 
-    control_msg_tx.send(ControlMessage::Finish).await.unwrap();
     if let Some(auto_confirmer_handle) = auto_confirmer_handle {
+        control_msg_tx.send(ControlMessage::Finish).await.unwrap();
         auto_confirmer_handle.await.unwrap();
     }
 }
@@ -332,8 +319,8 @@ async fn test_sign_transaction_intent(#[case] seed: Seed) {
 
     test_sign_transaction_intent_generic(&mut rng, make_ledger_signer, no_another_signer()).await;
 
-    control_msg_tx.send(ControlMessage::Finish).await.unwrap();
     if let Some(auto_confirmer_handle) = auto_confirmer_handle {
+        control_msg_tx.send(ControlMessage::Finish).await.unwrap();
         auto_confirmer_handle.await.unwrap();
     }
 }
@@ -362,8 +349,8 @@ async fn test_sign_transaction(
     )
     .await;
 
-    control_msg_tx.send(ControlMessage::Finish).await.unwrap();
     if let Some(auto_confirmer_handle) = auto_confirmer_handle {
+        control_msg_tx.send(ControlMessage::Finish).await.unwrap();
         auto_confirmer_handle.await.unwrap();
     }
 }
@@ -374,10 +361,6 @@ async fn test_sign_transaction(
 #[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_sign_message_sig_consistency(#[case] seed: Seed) {
-    use crate::signer::tests::{
-        generic_tests::test_sign_message_generic, make_deterministic_software_signer,
-    };
-
     log::debug!("test_sign_message_sig_consistency, seed = {seed:?}");
 
     let (auto_confirmer_handle, control_msg_tx, make_ledger_signer) = setup(true).await;
@@ -392,8 +375,8 @@ async fn test_sign_message_sig_consistency(#[case] seed: Seed) {
     )
     .await;
 
-    control_msg_tx.send(ControlMessage::Finish).await.unwrap();
     if let Some(auto_confirmer_handle) = auto_confirmer_handle {
+        control_msg_tx.send(ControlMessage::Finish).await.unwrap();
         auto_confirmer_handle.await.unwrap();
     }
 }
@@ -404,8 +387,6 @@ async fn test_sign_message_sig_consistency(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_sign_transaction_intent_sig_consistency(#[case] seed: Seed) {
-    use crate::signer::tests::make_deterministic_software_signer;
-
     log::debug!("test_sign_transaction_intent_sig_consistency, seed = {seed:?}");
 
     let (auto_confirmer_handle, control_msg_tx, make_ledger_signer) = setup(true).await;
@@ -419,8 +400,8 @@ async fn test_sign_transaction_intent_sig_consistency(#[case] seed: Seed) {
     )
     .await;
 
-    control_msg_tx.send(ControlMessage::Finish).await.unwrap();
     if let Some(auto_confirmer_handle) = auto_confirmer_handle {
+        control_msg_tx.send(ControlMessage::Finish).await.unwrap();
         auto_confirmer_handle.await.unwrap();
     }
 }
@@ -434,8 +415,6 @@ async fn test_sign_transaction_sig_consistency(
     #[case] seed: Seed,
     #[case] input_commitments_version: SighashInputCommitmentVersion,
 ) {
-    use crate::signer::tests::make_deterministic_software_signer;
-
     log::debug!("test_sign_transaction_sig_consistency, seed = {seed:?}, input_commitments_version = {input_commitments_version:?}");
 
     let (auto_confirmer_handle, control_msg_tx, make_ledger_signer) = setup(true).await;
@@ -451,10 +430,20 @@ async fn test_sign_transaction_sig_consistency(
     )
     .await;
 
-    control_msg_tx.send(ControlMessage::Finish).await.unwrap();
     if let Some(auto_confirmer_handle) = auto_confirmer_handle {
+        control_msg_tx.send(ControlMessage::Finish).await.unwrap();
         auto_confirmer_handle.await.unwrap();
     }
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_fixed_signatures_no_legacy(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    test_fixed_signatures_generic_no_legacy(&mut rng, make_deterministic_software_signer).await;
 }
 
 async fn create_device_connection() -> TcpDevice {

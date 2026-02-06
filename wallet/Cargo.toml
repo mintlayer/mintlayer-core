@@ -48,7 +48,6 @@ tokio = { workspace = true, default-features = false, features = [
 ] }
 trezor-client = { workspace = true, optional = true }
 ledger-lib = { workspace = true, optional = true }
-ledger-proto = { workspace = true, optional = true }
 mintlayer-ledger-messages = { workspace = true, optional = true }
 zeroize.workspace = true
 
@@ -87,7 +86,6 @@ enable-ledger-device-tests = []
 use-deterministic-signatures-in-software-signer-for-regtest = []
 ledger = [
   "dep:ledger-lib",
-  "dep:ledger-proto",
   "dep:mintlayer-ledger-messages",
   "wallet-types/ledger",
 ]

@@ -20,9 +20,13 @@ use std::{collections::BTreeMap, sync::Arc};
 use crate::{
     key_chain::{make_account_path, AccountKeyChainImplHardware, AccountKeyChains, FoundPubKey},
     signer::{
+        hardware_signer_utils::{
+            arbitrary_message_signature_from_raw_sig, sign_with_standalone_private_keys,
+            StandaloneInput, StandaloneInputs,
+        },
         ledger_signer::ledger_messages::{
             check_current_app, get_extended_public_key, get_extended_public_key_raw,
-            sign_challenge, sign_tx,
+            sign_challenge, sign_tx, LedgerMessagesError,
         },
         utils::{is_htlc_utxo, produce_uniparty_signature_for_input},
         Signer, SignerError, SignerProvider, SignerResult,
@@ -39,10 +43,7 @@ use common::{
                 authorize_pubkey_spend::AuthorizedPublicKeySpend,
                 authorize_pubkeyhash_spend::AuthorizedPublicKeyHashSpend,
                 classical_multisig::{
-                    authorize_classical_multisig::{
-                        sign_classical_multisig_spending, AuthorizedClassicalMultisigSpend,
-                        ClassicalMultisigCompletionStatus,
-                    },
+                    authorize_classical_multisig::AuthorizedClassicalMultisigSpend,
                     multisig_partial_signature::{self, PartiallySignedMultisigChallenge},
                 },
                 standard_signature::StandardInputSignature,
@@ -51,8 +52,8 @@ use common::{
             sighash::{sighashtype::SigHashType, signature_hash},
             DestinationSigError,
         },
-        AccountCommand, ChainConfig, Destination, OrderAccountCommand, SignedTransactionIntent,
-        Transaction, TxInput, TxOutput,
+        AccountCommand, ChainConfig, Destination, DestinationTag, OrderAccountCommand,
+        SignedTransactionIntent, Transaction, TxInput, TxOutput,
     },
     primitives::{BlockHeight, Idable, H256},
     primitives_converters::TryConvertInto as _,
@@ -61,7 +62,7 @@ use crypto::key::{
     extended::ExtendedPublicKey,
     hdkd::{derivable::Derivable, u31::U31},
     signature::SignatureKind,
-    PrivateKey, SigAuxDataProvider, Signature, SignatureError,
+    SigAuxDataProvider, Signature, SignatureError,
 };
 use serialization::Encode;
 use utils::ensure;
@@ -70,7 +71,9 @@ use wallet_storage::{
 };
 use wallet_types::{
     account_info::DEFAULT_ACCOUNT_INDEX,
-    hw_data::{HardwareWalletFullInfo, LedgerData, LedgerFullInfo, LedgerModel},
+    hw_data::{
+        HardwareWalletData, HardwareWalletFullInfo, LedgerData, LedgerFullInfo, LedgerModel,
+    },
     partially_signed_transaction::{
         PartiallySignedTransaction, PtxAdditionalInfo, TokensAdditionalInfo,
     },
@@ -89,13 +92,11 @@ use mintlayer_ledger_messages::{
 use randomness::make_true_rng;
 use tokio::sync::Mutex;
 
-/// Signer errors
+/// Ledger Signer errors
 #[derive(thiserror::Error, Debug, Eq, PartialEq)]
 pub enum LedgerError {
     #[error("No connected Ledger device found")]
     NoDeviceFound,
-    #[error("Connected to an unknown Ledger device model")]
-    UnknownModel,
     #[error("Device timeout")]
     DeviceTimeout,
     #[error("A different app is currently open on your Ledger device: \"{0}\". Please close it and open the Mintlayer app instead.")]
@@ -106,12 +107,16 @@ pub enum LedgerError {
     ErrorResponse(String),
     #[error("Device error: {0}")]
     DeviceError(String),
-    #[error("Missing hardware wallet data in database")]
-    MissingHardwareWalletData,
+    #[error("Derivation path too long")]
+    DerivationPathTooLong,
+    #[error("APDU message too long")]
+    ApduMessageTooLong,
     #[error("Invalid public key returned from Ledger")]
     InvalidKey,
     #[error("The file being loaded is a software wallet and cannot be used with the connected Ledger wallet")]
     WalletFileIsSoftwareWallet,
+    #[error("The file being loaded is a trezor wallet and cannot be used with the connected Ledger wallet")]
+    WalletFileIsTrezorWallet,
     #[error("Public keys mismatch - wrong device or passphrase")]
     HardwareWalletDifferentMnemonicOrPassphrase,
     #[error("A multisig signature was returned for a single address from Device")]
@@ -122,7 +127,7 @@ pub enum LedgerError {
     MissingMultisigIndexForSignature,
     #[error("Signature error: {0}")]
     SignatureError(#[from] SignatureError),
-    #[error("Input commitments version 1 is not supported by the Ledger app")]
+    #[error("Input commitments version 0 is not supported by the Ledger app")]
     InputCommitmentVersion1NotSupported,
 }
 
@@ -132,12 +137,15 @@ impl From<ledger_lib::Error> for LedgerError {
     }
 }
 
-struct StandaloneInput {
-    multisig_idx: Option<u32>,
-    private_key: PrivateKey,
+impl From<LedgerMessagesError> for LedgerError {
+    fn from(value: LedgerMessagesError) -> Self {
+        match value {
+            LedgerMessagesError::DerivationPathTooLong => Self::DerivationPathTooLong,
+            LedgerMessagesError::ApduMessageTooLong => Self::ApduMessageTooLong,
+            LedgerMessagesError::DeviceError(err) => err.into(),
+        }
+    }
 }
-
-type StandaloneInputs = BTreeMap</*input index*/ u32, Vec<StandaloneInput>>;
 
 #[async_trait]
 pub trait LedgerFinder {
@@ -185,8 +193,8 @@ where
         }
     }
 
-    /// Tries to confirm the running app name is still matching Mintlayer app
-    /// Also waits after a signing operation for the device to start listening to new instructions
+    /// Tries to confirm the running app name is still matching Mintlayer app.
+    /// Also waits after a signing operation for the device to start listening to new instructions.
     ///
     /// If the operation fails due to an USB error (which may indicate a lost connection to the device),
     /// the function will attempt to reconnect to the Ledger device once before returning an error.
@@ -196,7 +204,7 @@ where
         key_chain: &impl AccountKeyChains,
     ) -> SignerResult<()> {
         let mut client = self.client.lock().await;
-        // Try and wait around 50 * 100ms for the screen to clear after a signing operation ends
+        // Try and wait around 50 * TIMEOUT_DUR for the screen to clear after a signing operation ends
         let mut num_tries = 50;
         let derivation_path = make_account_path(&self.chain_config, key_chain.account_index());
         let coin_type = to_ledger_chain_type(&self.chain_config);
@@ -212,10 +220,10 @@ where
                     .await?;
                     return Ok(());
                 }
-                // After finishing a signing operation the device shows a status success/failed
-                // At those times any command sent is not handles so waiting for a response will
-                // just timeout
-                Err(ledger_lib::Error::Timeout) => {
+                // After finishing a signing operation the device shows a status success/failed.
+                // At those times any command sent is not handled so waiting for a response will
+                // just timeout.
+                Err(LedgerMessagesError::DeviceError(ledger_lib::Error::Timeout)) => {
                     num_tries -= 1;
                     if num_tries > 0 {
                         continue;
@@ -225,9 +233,9 @@ where
                 }
                 // In case of a communication error try to reconnect, and try again
                 Err(
-                    ledger_lib::Error::Hid(_)
-                    | ledger_lib::Error::Tcp(_)
-                    | ledger_lib::Error::Ble(_),
+                    LedgerMessagesError::DeviceError(ledger_lib::Error::Hid(_))
+                    | LedgerMessagesError::DeviceError(ledger_lib::Error::Tcp(_))
+                    | LedgerMessagesError::DeviceError(ledger_lib::Error::Ble(_)),
                 ) => {
                     let (mut new_client, _data) = self
                         .provider
@@ -252,7 +260,7 @@ where
 
     /// Attempts to perform an operation on the Ledger client.
     ///
-    /// If the operation fails due to an USB error (which may indicate a lost connection to the device),
+    /// If the operation fails due to a USB error (which may indicate a lost connection to the device),
     /// the function will attempt to reconnect to the Ledger device once before returning an error.
     async fn perform_ledger_operation<F, R, T: WalletStorageReadLocked + Send>(
         &mut self,
@@ -356,7 +364,9 @@ where
                         sighash,
                     )?;
 
-                    let (current_signatures, status) = self.sign_with_standalone_private_keys(
+                    let (current_signatures, status) = sign_with_standalone_private_keys(
+                        &self.chain_config,
+                        self.sig_aux_data_provider.lock().expect("poisoned mutex").as_mut(),
                         current_signatures,
                         standalone_inputs,
                         status,
@@ -437,54 +447,6 @@ where
 
         Ok((current_signatures, status))
     }
-
-    fn sign_with_standalone_private_keys(
-        &self,
-        current_signatures: AuthorizedClassicalMultisigSpend,
-        standalone_inputs: &[StandaloneInput],
-        new_status: SignatureStatus,
-        sighash: H256,
-    ) -> SignerResult<(AuthorizedClassicalMultisigSpend, SignatureStatus)> {
-        let challenge = current_signatures.challenge().clone();
-
-        standalone_inputs.iter().try_fold(
-            (current_signatures, new_status),
-            |(mut current_signatures, mut status), inp| -> SignerResult<_> {
-                if status == SignatureStatus::FullySigned {
-                    return Ok((current_signatures, status));
-                }
-
-                let key_index =
-                    inp.multisig_idx.ok_or(LedgerError::MissingMultisigIndexForSignature)?;
-                let res = sign_classical_multisig_spending(
-                    &self.chain_config,
-                    key_index as u8,
-                    &inp.private_key,
-                    &challenge,
-                    &sighash,
-                    current_signatures,
-                    self.sig_aux_data_provider.lock().expect("poisoned mutex").as_mut(),
-                )
-                .map_err(DestinationSigError::ClassicalMultisigSigningFailed)?;
-
-                match res {
-                    ClassicalMultisigCompletionStatus::Complete(signatures) => {
-                        current_signatures = signatures;
-                        status = SignatureStatus::FullySigned;
-                    }
-                    ClassicalMultisigCompletionStatus::Incomplete(signatures) => {
-                        current_signatures = signatures;
-                        status = SignatureStatus::PartialMultisig {
-                            required_signatures: challenge.min_required_signatures(),
-                            num_signatures: current_signatures.signatures().len() as u8,
-                        };
-                    }
-                };
-
-                Ok((current_signatures, status))
-            },
-        )
-    }
 }
 
 #[async_trait]
@@ -526,7 +488,9 @@ where
         let new_signatures = self
             .perform_ledger_operation(
                 async move |client| {
-                    sign_tx(client, coin_type, inputs, input_commitments, outputs).await
+                    sign_tx(client, coin_type, inputs, input_commitments, outputs)
+                        .await
+                        .map_err(SignerError::LedgerError)
                 },
                 &mut db_tx,
                 key_chain,
@@ -644,7 +608,9 @@ where
                                     };
 
                                     let (current_signatures, new_status) =
-                                        self.sign_with_standalone_private_keys(
+                                        sign_with_standalone_private_keys(
+                                            &self.chain_config,
+                                            self.sig_aux_data_provider.lock().expect("poisoned mutex").as_mut(),
                                             current_signatures,
                                             standalone_inputs.get(&(input_index as u32)).map_or(&[], |x| x.as_slice()),
                                             new_status,
@@ -737,73 +703,25 @@ where
         key_chain: &(impl AccountKeyChains + Sync),
         mut db_tx: impl WalletStorageReadUnlocked + Send,
     ) -> SignerResult<ArbitraryMessageSignature> {
-        let data = match key_chain.find_public_key(destination) {
+        match key_chain.find_public_key(destination) {
             Some(FoundPubKey::Hierarchy(xpub)) => {
-                let address_n = LedgerBip32Path(
-                    xpub.get_derivation_path()
-                        .as_slice()
-                        .iter()
-                        .map(|c| c.into_encoded_index())
-                        .collect(),
-                );
-
-                let addr_type = match destination {
-                    Destination::PublicKey(_) => AddrType::PublicKey,
-                    Destination::PublicKeyHash(_) => AddrType::PublicKeyHash,
-                    Destination::AnyoneCanSpend => {
-                        return Err(SignerError::SigningError(
-                            DestinationSigError::AttemptedToProduceSignatureForAnyoneCanSpend,
-                        ))
-                    }
-                    Destination::ClassicMultisig(_) => {
-                        return Err(SignerError::SigningError(
-                            DestinationSigError::AttemptedToProduceClassicalMultisigSignatureInUnipartySignatureCode,
-                        ))
-                    }
-                    Destination::ScriptHash(_) => {
-                        return Err(SignerError::SigningError(
-                            DestinationSigError::Unsupported,
-                        ))
-                    }
-                };
-
+                let address_n = to_ledger_bip32_path(&xpub);
+                let addr_type = to_ledger_addr_type(destination.into())?;
                 let coin_type = to_ledger_chain_type(&self.chain_config);
                 let message = message.to_vec();
                 let sig = self
                     .perform_ledger_operation(
                         async move |client| {
-                            sign_challenge(client, coin_type, address_n, addr_type, &message).await
+                            sign_challenge(client, coin_type, address_n, addr_type, &message)
+                                .await
+                                .map_err(SignerError::LedgerError)
                         },
                         &mut db_tx,
                         key_chain,
                     )
                     .await?;
 
-                let signature = Signature::from_raw_data(&sig, SignatureKind::Secp256k1Schnorr)
-                    .map_err(LedgerError::SignatureError)?;
-
-                match &destination {
-                        Destination::PublicKey(_) => Ok(AuthorizedPublicKeySpend::new(signature).encode()),
-                        Destination::PublicKeyHash(_) => {
-                            Ok(AuthorizedPublicKeyHashSpend::new(xpub.into_public_key(), signature)
-                                .encode())
-                        }
-                        Destination::AnyoneCanSpend => {
-                            Err(SignerError::SigningError(
-                                DestinationSigError::AttemptedToProduceSignatureForAnyoneCanSpend,
-                            ))
-                        }
-                        Destination::ClassicMultisig(_) => {
-                            Err(SignerError::SigningError(
-                                DestinationSigError::AttemptedToProduceClassicalMultisigSignatureInUnipartySignatureCode,
-                            ))
-                        }
-                        Destination::ScriptHash(_) => {
-                            Err(SignerError::SigningError(
-                                DestinationSigError::Unsupported,
-                            ))
-                        }
-                    }?
+                arbitrary_message_signature_from_raw_sig(&sig, destination.into(), xpub)
             }
             Some(FoundPubKey::Standalone(acc_public_key)) => {
                 let standalone_pk = db_tx
@@ -816,13 +734,10 @@ where
                     message,
                     self.sig_aux_data_provider.lock().expect("poisoned mutex").as_mut(),
                 )?;
-                return Ok(sig);
+                Ok(sig)
             }
-            None => return Err(SignerError::DestinationNotFromThisWallet),
-        };
-
-        let sig = ArbitraryMessageSignature::from_data(data);
-        Ok(sig)
+            None => Err(SignerError::DestinationNotFromThisWallet),
+        }
     }
 
     async fn sign_transaction_intent(
@@ -1117,25 +1032,51 @@ fn to_ledger_chain_type(chain_config: &ChainConfig) -> CoinType {
     match chain_config.chain_type() {
         ChainType::Mainnet => CoinType::Mainnet,
         ChainType::Testnet => CoinType::Testnet,
-        ChainType::Signet => CoinType::Regtest,
-        ChainType::Regtest => CoinType::Signet,
+        ChainType::Signet => CoinType::Signet,
+        ChainType::Regtest => CoinType::Regtest,
     }
 }
 
-async fn find_ledger_device() -> SignerResult<(LedgerHandle, LedgerFullInfo)> {
+fn to_ledger_addr_type(dest: DestinationTag) -> SignerResult<AddrType> {
+    match dest {
+        DestinationTag::PublicKey => Ok(AddrType::PublicKey),
+        DestinationTag::PublicKeyHash => Ok(AddrType::PublicKeyHash),
+        DestinationTag::AnyoneCanSpend => {
+            return Err(SignerError::SigningError(
+                DestinationSigError::AttemptedToProduceSignatureForAnyoneCanSpend,
+            ))
+        }
+        DestinationTag::ClassicMultisig => {
+            return Err(SignerError::SigningError(
+                DestinationSigError::AttemptedToProduceClassicalMultisigSignatureInUnipartySignatureCode,
+            ))
+        }
+        DestinationTag::ScriptHash => {
+            return Err(SignerError::SigningError(
+                DestinationSigError::Unsupported,
+            ))
+        }
+    }
+}
+
+fn to_ledger_bip32_path(xpub: &ExtendedPublicKey) -> LedgerBip32Path {
+    LedgerBip32Path(
+        xpub.get_derivation_path()
+            .as_slice()
+            .iter()
+            .map(|c| c.into_encoded_index())
+            .collect(),
+    )
+}
+
+async fn find_ledger_device() -> Result<(LedgerHandle, LedgerFullInfo), LedgerError> {
     let mut provider = LedgerProvider::init().await;
-    let mut devices = provider
-        .list(Filters::Any)
-        .await
-        .map_err(|err| LedgerError::DeviceError(err.to_string()))?;
+    let mut devices = provider.list(Filters::Any).await?;
 
     let device = devices.pop().ok_or(LedgerError::NoDeviceFound)?;
     let model = to_ledger_model(&device.model);
 
-    let mut handle = provider
-        .connect(device)
-        .await
-        .map_err(|err| LedgerError::DeviceError(err.to_string()))?;
+    let mut handle = provider.connect(device).await?;
 
     let app_version = check_current_app(&mut handle).await?;
 
@@ -1157,12 +1098,21 @@ async fn check_public_keys_against_key_chain<L: Exchange, T: WalletStorageReadLo
         return Ok(());
     }
 
-    if let Ok(Some(_data)) = db_tx.get_hardware_wallet_data() {
-        // Data is empty there is nothing to compare
-        return Err(LedgerError::HardwareWalletDifferentMnemonicOrPassphrase.into());
+    match db_tx.get_hardware_wallet_data()? {
+        Some(data) => {
+            match data {
+                #[cfg(feature = "trezor")]
+                HardwareWalletData::Trezor(_) => {
+                    return Err(LedgerError::WalletFileIsTrezorWallet.into());
+                }
+                HardwareWalletData::Ledger(_data) => {
+                    // Data is empty there is nothing to compare
+                    return Err(LedgerError::HardwareWalletDifferentMnemonicOrPassphrase.into());
+                }
+            }
+        }
+        None => return Err(LedgerError::WalletFileIsSoftwareWallet.into()),
     }
-
-    Err(LedgerError::WalletFileIsSoftwareWallet.into())
 }
 
 /// Check that the public keys in the DB are the same as the ones from the connected hardware
@@ -1198,7 +1148,9 @@ async fn fetch_extended_pub_key<L: Exchange>(
     let derivation_path = make_account_path(chain_config, account_index);
     let coin_type = to_ledger_chain_type(chain_config);
 
-    get_extended_public_key(client, coin_type, derivation_path).await
+    get_extended_public_key(client, coin_type, derivation_path)
+        .await
+        .map_err(Into::into)
 }
 
 fn single_signature(
@@ -1255,7 +1207,7 @@ impl LedgerSignerProvider {
         chain_config: Arc<ChainConfig>,
         db_tx: &mut T,
     ) -> WalletResult<Self> {
-        let (mut client, info) = find_ledger_device().await?;
+        let (mut client, info) = find_ledger_device().await.map_err(SignerError::LedgerError)?;
 
         check_public_keys_against_db(db_tx, &mut client, chain_config).await?;
 
@@ -1327,7 +1279,7 @@ fn to_ledger_model(model: &Model) -> LedgerModel {
         Model::Stax => LedgerModel::Stax,
         Model::Flex => LedgerModel::Flex,
         Model::NanoGen5 => LedgerModel::NanoGen5,
-        Model::Unknown { usb_pid } => LedgerModel::Unknown(usb_pid.unwrap_or(0)),
+        Model::Unknown { usb_pid } => LedgerModel::Unknown { usb_pid: *usb_pid },
     }
 }
 

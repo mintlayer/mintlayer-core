@@ -21,7 +21,7 @@ pub trait Secp256k1SchnorrAuxDataProvider {
     /// https://github.com/bitcoin-core/secp256k1/blob/f24b838bedffe19643fafd817b82fc49472d4877/src/modules/schnorrsig/main_impl.h#L52
     ///
     /// Note: using all-zeros array is safe and it's what Bitcoin Core does. Also, we do the same for Mintlayer in
-    /// the Trezor firmware. But our software wallets use random aux data.
+    /// the Trezor firmware and the Ledger app. But our software wallets use random aux data.
     /// TODO: consider using fixed aux data in software wallets too, so that they also produce deterministic signatures.
     fn get_secp256k1_schnorr_aux_data(&mut self) -> [u8; 32];
 }

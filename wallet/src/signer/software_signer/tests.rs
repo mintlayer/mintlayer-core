@@ -21,7 +21,7 @@ use test_utils::random::{make_seedable_rng, Seed};
 use crate::signer::tests::{
     generic_fixed_signature_tests::{
         test_fixed_signatures_generic, test_fixed_signatures_generic2,
-        test_fixed_signatures_generic_htlc_refunding,
+        test_fixed_signatures_generic_htlc_refunding, test_fixed_signatures_generic_no_legacy,
     },
     generic_tests::{
         test_sign_message_generic, test_sign_transaction_generic,
@@ -106,6 +106,16 @@ async fn test_fixed_signatures2(
         make_deterministic_software_signer,
     )
     .await;
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_fixed_signatures_no_legacy(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    test_fixed_signatures_generic_no_legacy(&mut rng, make_deterministic_software_signer).await;
 }
 
 #[rstest]

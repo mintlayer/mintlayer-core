@@ -850,51 +850,57 @@ impl MainWindow {
                 match &self.active_dialog {
                     ActiveDialog::None => Text::new("Nothing to show").into(),
 
-                    ActiveDialog::WalletCreate { wallet_args } => match wallet_args {
-                        WalletArgs::Software { mnemonic, is_cold } => {
-                            let is_cold = *is_cold;
-                            wallet_mnemonic_dialog(
-                                Some(mnemonic.clone()),
-                                Box::new(move |mnemonic| MainWindowMessage::ImportWalletMnemonic {
-                                    args: WalletArgs::Software { mnemonic, is_cold },
-                                    import: ImportOrCreate::Create,
+                    ActiveDialog::WalletCreate { wallet_args } => {
+                        let create = ImportOrCreate::Create;
+                        match wallet_args {
+                            WalletArgs::Software { mnemonic, is_cold } => {
+                                let is_cold = *is_cold;
+                                wallet_mnemonic_dialog(
+                                    Some(mnemonic.clone()),
+                                    Box::new(move |mnemonic| {
+                                        MainWindowMessage::ImportWalletMnemonic {
+                                            args: WalletArgs::Software { mnemonic, is_cold },
+                                            import: create,
+                                        }
+                                    }),
+                                    Box::new(|| MainWindowMessage::CloseDialog),
+                                    Box::new(MainWindowMessage::CopyToClipboard),
+                                )
+                                .into()
+                            }
+                            #[cfg(feature = "trezor")]
+                            WalletArgs::Trezor => hw_wallet_create_dialog(
+                                Box::new(move || MainWindowMessage::ImportWalletMnemonic {
+                                    args: WalletArgs::Trezor,
+                                    import: create,
                                 }),
                                 Box::new(|| MainWindowMessage::CloseDialog),
-                                Box::new(MainWindowMessage::CopyToClipboard),
+                                create,
+                                HardwareWalletType::Trezor,
                             )
-                            .into()
+                            .into(),
+                            #[cfg(feature = "ledger")]
+                            WalletArgs::Ledger => hw_wallet_create_dialog(
+                                Box::new(move || MainWindowMessage::ImportWalletMnemonic {
+                                    args: WalletArgs::Ledger,
+                                    import: create,
+                                }),
+                                Box::new(|| MainWindowMessage::CloseDialog),
+                                create,
+                                HardwareWalletType::Ledger,
+                            )
+                            .into(),
                         }
-                        #[cfg(feature = "trezor")]
-                        WalletArgs::Trezor => hw_wallet_create_dialog(
-                            Box::new(move || MainWindowMessage::ImportWalletMnemonic {
-                                args: WalletArgs::Trezor,
-                                import: ImportOrCreate::Create,
-                            }),
-                            Box::new(|| MainWindowMessage::CloseDialog),
-                            ImportOrCreate::Create,
-                            HardwareWalletType::Trezor,
-                        )
-                        .into(),
-                        #[cfg(feature = "ledger")]
-                        WalletArgs::Ledger => hw_wallet_create_dialog(
-                            Box::new(move || MainWindowMessage::ImportWalletMnemonic {
-                                args: WalletArgs::Ledger,
-                                import: ImportOrCreate::Create,
-                            }),
-                            Box::new(|| MainWindowMessage::CloseDialog),
-                            ImportOrCreate::Create,
-                            HardwareWalletType::Ledger,
-                        )
-                        .into(),
-                    },
+                    }
                     ActiveDialog::WalletRecover { wallet_type } => {
                         let is_cold = *wallet_type == WalletType::Cold;
+                        let import = ImportOrCreate::Import;
                         match wallet_type {
                             WalletType::Hot | WalletType::Cold => wallet_mnemonic_dialog(
                                 None,
                                 Box::new(move |mnemonic| MainWindowMessage::ImportWalletMnemonic {
                                     args: WalletArgs::Software { mnemonic, is_cold },
-                                    import: ImportOrCreate::Import,
+                                    import,
                                 }),
                                 Box::new(|| MainWindowMessage::CloseDialog),
                                 Box::new(MainWindowMessage::CopyToClipboard),
@@ -904,10 +910,10 @@ impl MainWindow {
                             WalletType::Trezor => hw_wallet_create_dialog(
                                 Box::new(move || MainWindowMessage::ImportWalletMnemonic {
                                     args: WalletArgs::Trezor,
-                                    import: ImportOrCreate::Import,
+                                    import,
                                 }),
                                 Box::new(|| MainWindowMessage::CloseDialog),
-                                ImportOrCreate::Import,
+                                import,
                                 HardwareWalletType::Trezor,
                             )
                             .into(),
@@ -915,10 +921,10 @@ impl MainWindow {
                             WalletType::Ledger => hw_wallet_create_dialog(
                                 Box::new(move || MainWindowMessage::ImportWalletMnemonic {
                                     args: WalletArgs::Ledger,
-                                    import: ImportOrCreate::Create,
+                                    import,
                                 }),
                                 Box::new(|| MainWindowMessage::CloseDialog),
-                                ImportOrCreate::Import,
+                                import,
                                 HardwareWalletType::Ledger,
                             )
                             .into(),

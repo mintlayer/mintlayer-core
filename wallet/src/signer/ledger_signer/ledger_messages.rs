@@ -15,7 +15,7 @@
 
 use std::{collections::BTreeMap, mem::size_of_val, time::Duration};
 
-use crate::signer::{ledger_signer::LedgerError, SignerError, SignerResult};
+use crate::signer::ledger_signer::LedgerError;
 use crypto::key::{
     extended::ExtendedPublicKey,
     hdkd::{chain_code::ChainCode, derivation_path::DerivationPath},
@@ -24,37 +24,45 @@ use crypto::key::{
 use utils::ensure;
 
 use ledger_lib::{Device, Exchange};
-use ledger_proto::StatusCode;
-use mintlayer_ledger_messages::{
-    decode_all as ledger_decode_all, encode as ledger_encode, AddrType, Apdu,
-    Bip32Path as LedgerBip32Path, CoinType, GetPublicKeyRespones, Ins, MsgSignature, PubKeyP1,
-    PublicKeyReq, SighashInputCommitment, SignMessageReq, SignP1, SignTxReq, Signature, TxInputReq,
-    TxMetadataReq, TxOutputReq, APDU_CLASS, P2_DONE, P2_MORE,
-};
+use mintlayer_ledger_messages as ledger_msg;
 
+/// Timeout duration for normal Ledger operations
 const TIMEOUT_DUR: Duration = Duration::from_secs(100);
+/// While trying to get a successful operation use a short timeout.
+/// Used in between normal operations when the screen is showing success/failure,
+/// and the Ledger app doesn't respond with any response so no need to wait for a long time.
+const SHORT_TIMEOUT_DUR: Duration = Duration::from_millis(200);
+/// The supported transaction version by the ledger app
 const TX_VERSION: u8 = 1;
 
-struct SignatureResult {
-    sig: Signature,
-    input_idx: usize,
-    has_more_signatures: bool,
+/// Ledger Signer errors
+#[derive(thiserror::Error, Debug)]
+pub enum LedgerMessagesError {
+    #[error("Device error: {0}")]
+    DeviceError(ledger_lib::Error),
+    #[error("Derivation path too long")]
+    DerivationPathTooLong,
+    #[error("APDU message too long")]
+    ApduMessageTooLong,
 }
 
 /// Check that the response ends with the OK status code and return the rest of the response back
-pub fn ok_response(mut resp: Vec<u8>) -> SignerResult<Vec<u8>> {
+pub fn ok_response(mut resp: Vec<u8>) -> Result<Vec<u8>, LedgerError> {
     let (_, status_code) = resp.split_last_chunk().ok_or(LedgerError::InvalidResponse)?;
     let response_status = u16::from_be_bytes(*status_code);
+    let status_word_ok: u16 = ledger_msg::StatusWord::Ok.into();
 
-    let code = StatusCode::try_from(response_status)
-        .map_err(|_| LedgerError::ErrorResponse(format!("Unknown error: {response_status}")))?;
+    if response_status == status_word_ok {
+        resp.truncate(resp.len() - size_of_val(&response_status));
+        return Ok(resp);
+    }
 
-    match code {
-        StatusCode::Ok => {
-            resp.truncate(resp.len() - size_of_val(&response_status));
-            Ok(resp)
-        }
-        err => Err(LedgerError::ErrorResponse(err.to_string()).into()),
+    match ledger_msg::StatusWord::try_from(response_status) {
+        Ok(word) => Err(LedgerError::ErrorResponse(word.to_string())),
+        Err(_) => Err(LedgerError::ErrorResponse(format!(
+            "Unknown device status code: 0x{:04X}",
+            response_status
+        ))),
     }
 }
 
@@ -62,11 +70,11 @@ pub fn ok_response(mut resp: Vec<u8>) -> SignerResult<Vec<u8>> {
 async fn exchange_message<L: Exchange>(
     ledger: &mut L,
     msg_buf: &[u8],
-) -> Result<Vec<u8>, SignerError> {
+) -> Result<Vec<u8>, LedgerError> {
     let resp = ledger
         .exchange(msg_buf, TIMEOUT_DUR)
         .await
-        .map_err(|err| LedgerError::DeviceError(err.to_string()))?;
+        .map_err(LedgerMessagesError::DeviceError)?;
     ok_response(resp)
 }
 
@@ -76,16 +84,20 @@ async fn send_chunked<L: Exchange>(
     ins: u8,
     p1: u8,
     message: &[u8],
-) -> Result<Vec<u8>, SignerError> {
+) -> Result<Vec<u8>, LedgerError> {
     let mut msg_buf = vec![];
-    let chunks = Apdu::new_chunks(ins, p1, message);
+    let chunks = ledger_msg::Apdu::new_chunks(ins, p1, message);
     let mut resp = vec![];
+
     for chunk in chunks {
         msg_buf.clear();
         msg_buf.reserve(chunk.bytes_count());
         chunk.write_bytes(&mut msg_buf);
 
         resp = exchange_message(ledger, &msg_buf).await?;
+        if !chunk.is_last() {
+            ensure!(resp.is_empty(), LedgerError::InvalidResponse);
+        }
     }
 
     Ok(resp)
@@ -96,7 +108,7 @@ async fn send_chunked_expect_empty_ok_response<L: Exchange>(
     ins: u8,
     p1: u8,
     message: &[u8],
-) -> Result<(), SignerError> {
+) -> Result<(), LedgerError> {
     let resp = send_chunked(ledger, ins, p1, message).await?;
     ensure!(resp.is_empty(), LedgerError::InvalidResponse);
     Ok(())
@@ -104,12 +116,12 @@ async fn send_chunked_expect_empty_ok_response<L: Exchange>(
 
 pub async fn sign_challenge<L: Exchange>(
     ledger: &mut L,
-    coin: CoinType,
-    path: LedgerBip32Path,
-    addr_type: AddrType,
+    coin: ledger_msg::CoinType,
+    path: ledger_msg::Bip32Path,
+    addr_type: ledger_msg::AddrType,
     message: &[u8],
-) -> SignerResult<Vec<u8>> {
-    let req = SignMessageReq {
+) -> Result<Vec<u8>, LedgerError> {
+    let req = ledger_msg::SignMessageReq {
         coin,
         addr_type,
         path,
@@ -117,81 +129,85 @@ pub async fn sign_challenge<L: Exchange>(
 
     send_chunked_expect_empty_ok_response(
         ledger,
-        Ins::SIGN_MSG,
-        SignP1::Start.into(),
-        &ledger_encode(req),
+        ledger_msg::Ins::SIGN_MSG,
+        ledger_msg::SignP1::Start.into(),
+        &ledger_msg::encode(req),
     )
     .await?;
 
-    let resp = send_chunked(ledger, Ins::SIGN_MSG, SignP1::Next.into(), message).await?;
+    let resp = send_chunked(
+        ledger,
+        ledger_msg::Ins::SIGN_MSG,
+        ledger_msg::SignP1::Next.into(),
+        message,
+    )
+    .await?;
 
-    let sig: MsgSignature = ledger_decode_all(&resp).ok_or(LedgerError::InvalidResponse)?;
+    let sig: ledger_msg::MsgSignature =
+        ledger_msg::decode_all(&resp).ok_or(LedgerError::InvalidResponse)?;
 
     Ok(sig.signature.to_vec())
 }
 
 pub async fn check_current_app<L: Exchange + Device + Send>(
     ledger: &mut L,
-) -> SignerResult<String> {
-    let info = ledger
-        .app_info(TIMEOUT_DUR)
-        .await
-        .map_err(|err| LedgerError::DeviceError(err.to_string()))?;
+) -> Result<String, LedgerError> {
+    let info = ledger.app_info(TIMEOUT_DUR).await.map_err(LedgerMessagesError::DeviceError)?;
     let name = info.name;
     let app_version = info.version;
 
-    ensure!(
-        name == "mintlayer-app",
-        LedgerError::DifferentActiveApp(name)
-    );
+    ensure!(name == "Mintlayer", LedgerError::DifferentActiveApp(name));
 
     Ok(app_version)
 }
 
 pub async fn get_extended_public_key_raw<L: Exchange>(
     ledger: &mut L,
-    coin_type: CoinType,
+    coin_type: ledger_msg::CoinType,
     derivation_path: &DerivationPath,
-) -> Result<Vec<u8>, ledger_lib::Error> {
-    let path = LedgerBip32Path(
+) -> Result<Vec<u8>, LedgerMessagesError> {
+    let path = ledger_msg::Bip32Path(
         derivation_path.as_slice().iter().map(|c| c.into_encoded_index()).collect(),
     );
-    let req = PublicKeyReq { coin_type, path };
-    let encoded_req = ledger_encode(req);
+    let req = ledger_msg::PublicKeyReq { coin_type, path };
+    let encoded_req = ledger_msg::encode(req);
 
-    let apdu = Apdu::new_with_data(
-        Ins::PUB_KEY,
-        PubKeyP1::NoDisplayAddress.into(),
+    let apdu = ledger_msg::Apdu::new_with_data(
+        ledger_msg::Ins::PUB_KEY,
+        ledger_msg::PubKeyP1::NoDisplayAddress.into(),
         &encoded_req,
     )
-    .expect("ok size");
+    .ok_or(LedgerMessagesError::DerivationPathTooLong)?;
 
     let mut msg_buf = Vec::with_capacity(apdu.bytes_count());
     apdu.write_bytes(&mut msg_buf);
 
-    ledger.exchange(&msg_buf, Duration::from_millis(200)).await
+    ledger
+        .exchange(&msg_buf, SHORT_TIMEOUT_DUR)
+        .await
+        .map_err(LedgerMessagesError::DeviceError)
 }
 
 pub async fn get_extended_public_key<L: Exchange>(
     ledger: &mut L,
-    coin_type: CoinType,
+    coin_type: ledger_msg::CoinType,
     derivation_path: DerivationPath,
-) -> SignerResult<ExtendedPublicKey> {
-    let path = LedgerBip32Path(
+) -> Result<ExtendedPublicKey, LedgerError> {
+    let path = ledger_msg::Bip32Path(
         derivation_path.as_slice().iter().map(|c| c.into_encoded_index()).collect(),
     );
-    let req = PublicKeyReq { coin_type, path };
+    let req = ledger_msg::PublicKeyReq { coin_type, path };
 
     let resp = send_chunked(
         ledger,
-        Ins::PUB_KEY,
-        PubKeyP1::NoDisplayAddress.into(),
-        &ledger_encode(req),
+        ledger_msg::Ins::PUB_KEY,
+        ledger_msg::PubKeyP1::NoDisplayAddress.into(),
+        &ledger_msg::encode(req),
     )
     .await?;
 
-    let resp: GetPublicKeyRespones =
-        ledger_decode_all(&resp).ok_or(LedgerError::InvalidResponse)?;
+    let resp: ledger_msg::GetPublicKeyRespones =
+        ledger_msg::decode_all(&resp).ok_or(LedgerError::InvalidResponse)?;
 
     let extended_public_key = Secp256k1ExtendedPublicKey::new_unchecked(
         derivation_path,
@@ -204,26 +220,31 @@ pub async fn get_extended_public_key<L: Exchange>(
 
 pub async fn sign_tx<L: Exchange>(
     ledger: &mut L,
-    chain_type: CoinType,
-    inputs: Vec<TxInputReq>,
-    input_commitments: Vec<SighashInputCommitment>,
-    outputs: Vec<TxOutputReq>,
-) -> SignerResult<BTreeMap<usize, Vec<Signature>>> {
-    let metadata = ledger_encode(TxMetadataReq {
+    chain_type: ledger_msg::CoinType,
+    inputs: Vec<ledger_msg::TxInputReq>,
+    input_commitments: Vec<ledger_msg::SighashInputCommitment>,
+    outputs: Vec<ledger_msg::TxOutputReq>,
+) -> Result<BTreeMap<usize, Vec<ledger_msg::Signature>>, LedgerError> {
+    let metadata = ledger_msg::encode(ledger_msg::TxMetadataReq {
         coin: chain_type,
         version: TX_VERSION,
         num_inputs: inputs.len() as u32,
         num_outputs: outputs.len() as u32,
     });
-    send_chunked_expect_empty_ok_response(ledger, Ins::SIGN_TX, SignP1::Start.into(), &metadata)
-        .await?;
+    send_chunked_expect_empty_ok_response(
+        ledger,
+        ledger_msg::Ins::SIGN_TX,
+        ledger_msg::SignP1::Start.into(),
+        &metadata,
+    )
+    .await?;
 
     for inp in inputs {
         send_chunked_expect_empty_ok_response(
             ledger,
-            Ins::SIGN_TX,
-            SignP1::Next.into(),
-            &ledger_encode(SignTxReq::Input(inp)),
+            ledger_msg::Ins::SIGN_TX,
+            ledger_msg::SignP1::Next.into(),
+            &ledger_msg::encode(ledger_msg::SignTxReq::Input(inp)),
         )
         .await?;
     }
@@ -231,9 +252,9 @@ pub async fn sign_tx<L: Exchange>(
     for commitment in input_commitments {
         send_chunked_expect_empty_ok_response(
             ledger,
-            Ins::SIGN_TX,
-            SignP1::Next.into(),
-            &ledger_encode(SignTxReq::InputCommitment(commitment)),
+            ledger_msg::Ins::SIGN_TX,
+            ledger_msg::SignP1::Next.into(),
+            &ledger_msg::encode(ledger_msg::SignTxReq::InputCommitment(commitment)),
         )
         .await?;
     }
@@ -244,18 +265,18 @@ pub async fn sign_tx<L: Exchange>(
         if idx < num_outputs - 1 {
             send_chunked_expect_empty_ok_response(
                 ledger,
-                Ins::SIGN_TX,
-                SignP1::Next.into(),
-                &ledger_encode(SignTxReq::Output(o)),
+                ledger_msg::Ins::SIGN_TX,
+                ledger_msg::SignP1::Next.into(),
+                &ledger_msg::encode(ledger_msg::SignTxReq::Output(o)),
             )
             .await?;
         } else {
             // the response from the last output will have the first signature returned
             resp = send_chunked(
                 ledger,
-                Ins::SIGN_TX,
-                SignP1::Next.into(),
-                &ledger_encode(SignTxReq::Output(o)),
+                ledger_msg::Ins::SIGN_TX,
+                ledger_msg::SignP1::Next.into(),
+                &ledger_msg::encode(ledger_msg::SignTxReq::Output(o)),
             )
             .await?;
         }
@@ -263,20 +284,27 @@ pub async fn sign_tx<L: Exchange>(
 
     let mut signatures: BTreeMap<_, Vec<_>> = BTreeMap::new();
 
-    let next_sig = ledger_encode(SignTxReq::NextSignature);
-    let mut msg_buf = vec![APDU_CLASS, Ins::SIGN_TX, SignP1::Next.into(), P2_DONE];
-    msg_buf.push(next_sig.len() as u8);
-    msg_buf.extend(next_sig);
+    let next_sig = ledger_msg::encode(ledger_msg::SignTxReq::NextSignature);
+    let apdu = ledger_msg::Apdu::new_with_data(
+        ledger_msg::Ins::SIGN_TX,
+        ledger_msg::SignP1::Next.into(),
+        &next_sig,
+    )
+    .ok_or(LedgerMessagesError::ApduMessageTooLong)?;
+
+    let mut msg_buf = Vec::with_capacity(apdu.bytes_count());
+    apdu.write_bytes(&mut msg_buf);
+
     loop {
-        let SignatureResult {
-            sig,
+        let ledger_msg::SignatureResponse {
+            signature,
             input_idx,
-            has_more_signatures,
-        } = decode_signature_response(&resp)?;
+            has_next,
+        } = ledger_msg::decode_all(&resp).ok_or(LedgerError::InvalidResponse)?;
 
-        signatures.entry(input_idx).or_default().push(sig);
+        signatures.entry(input_idx as usize).or_default().push(signature);
 
-        if !has_more_signatures {
+        if !has_next {
             break;
         }
 
@@ -284,18 +312,4 @@ pub async fn sign_tx<L: Exchange>(
     }
 
     Ok(signatures)
-}
-
-fn decode_signature_response(resp: &[u8]) -> Result<SignatureResult, LedgerError> {
-    let input_idx = *resp.first().ok_or(LedgerError::InvalidResponse)? as usize;
-    let has_more_signatures = *resp.last().ok_or(LedgerError::InvalidResponse)? == P2_MORE;
-
-    let sig =
-        ledger_decode_all(&resp[..resp.len() - 1][1..]).ok_or(LedgerError::InvalidResponse)?;
-
-    Ok(SignatureResult {
-        sig,
-        input_idx,
-        has_more_signatures,
-    })
 }
