@@ -178,7 +178,7 @@ mod tests {
         key::{KeyKind, PrivateKey},
         vrf::{VRFKeyKind, VRFPrivateKey},
     };
-    use mempool::{MempoolConfig, MempoolHandle};
+    use mempool::{MempoolConfig, MempoolHandle, MempoolInit};
     use p2p::{
         peer_manager::peerdb::storage_impl::PeerDbStorageImpl, test_helpers::test_p2p_config,
     };
@@ -291,13 +291,13 @@ mod tests {
 
         let chainstate = manager.add_subsystem("chainstate", chainstate);
 
-        let mempool = mempool::make_mempool(
+        let mempool_init = MempoolInit::new(
             Arc::clone(&chain_config),
             mempool_config,
             subsystem::Handle::clone(&chainstate),
             time_getter.clone(),
         );
-        let mempool = manager.add_custom_subsystem("mempool", |hdl| mempool.init(hdl));
+        let mempool = manager.add_custom_subsystem("mempool", |hdl| mempool_init.init(hdl));
 
         let mut p2p_config = test_p2p_config();
         p2p_config.bind_addresses = vec![SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0).into()];

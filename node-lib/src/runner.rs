@@ -29,7 +29,7 @@ use chainstate::{rpc::ChainstateRpcServer, ChainstateError, InitializationError}
 use chainstate_launcher::{ChainConfig, StorageBackendConfig};
 use common::chain::config::{assert_no_ignore_consensus_in_chain_config, ChainType};
 use logging::log;
-use mempool::rpc::MempoolRpcServer;
+use mempool::{rpc::MempoolRpcServer, MempoolInit};
 use p2p::{error::P2pError, rpc::P2pRpcServer};
 use rpc::rpc_creds::RpcCreds;
 use test_rpc_functions::{
@@ -93,13 +93,13 @@ async fn initialize(
     let chainstate = manager.add_subsystem("chainstate", chainstate);
 
     // Mempool subsystem
-    let mempool = mempool::make_mempool(
+    let mempool_init = MempoolInit::new(
         Arc::clone(&chain_config),
         node_config.mempool.unwrap_or_default().into(),
         subsystem::Handle::clone(&chainstate),
         Default::default(),
     );
-    let mempool = manager.add_custom_subsystem("mempool", |handle| mempool.init(handle));
+    let mempool = manager.add_custom_subsystem("mempool", |handle| mempool_init.init(handle));
 
     // P2P subsystem
     let peerdb_storage = {

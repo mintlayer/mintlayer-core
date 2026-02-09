@@ -42,7 +42,7 @@ use common::{
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, H256},
 };
-use mempool::{rpc::MempoolRpcServer, MempoolConfig};
+use mempool::{rpc::MempoolRpcServer, MempoolConfig, MempoolInit};
 use p2p::rpc::P2pRpcServer;
 use rpc::rpc_creds::RpcCreds;
 
@@ -208,13 +208,14 @@ pub async fn start_node(chain_config: Arc<ChainConfig>) -> (subsystem::Manager, 
 
     let chainstate = manager.add_subsystem("wallet-cli-test-chainstate", chainstate);
 
-    let mempool = mempool::make_mempool(
+    let mempool_init = MempoolInit::new(
         Arc::clone(&chain_config),
         mempool_config,
         chainstate.clone(),
         Default::default(),
     );
-    let mempool = manager.add_custom_subsystem("wallet-cli-test-mempool", |hdl| mempool.init(hdl));
+    let mempool =
+        manager.add_custom_subsystem("wallet-cli-test-mempool", |hdl| mempool_init.init(hdl));
 
     let peerdb_storage = p2p::test_helpers::peerdb_inmemory_store();
     let p2p = p2p::make_p2p(
