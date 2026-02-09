@@ -31,6 +31,7 @@ use logging::log;
 use node_comm::rpc_client::ColdWalletClient;
 use node_lib::node_controller::NodeController;
 use serialization::hex_encoded::HexEncoded;
+use utils::tokio_spawn;
 use wallet::{account::transaction_list::TransactionList, wallet::Error, WalletError};
 use wallet_cli_commands::{
     get_repl_command, parse_input, CommandHandler, ConsoleCommand, ManageableWalletCommand,
@@ -448,14 +449,17 @@ impl Backend {
                 return Err(BackendError::MultipleTrezorDevicesFound(found_devices))
             }
         }
-        tokio::spawn(forward_events(
-            wallet_events,
-            wallet_service
-                .handle()
-                .subscribe()
-                .await
-                .map_err(|e| BackendError::WalletError(e.to_string()))?,
-        ));
+        tokio_spawn(
+            forward_events(
+                wallet_events,
+                wallet_service
+                    .handle()
+                    .subscribe()
+                    .await
+                    .map_err(|e| BackendError::WalletError(e.to_string()))?,
+            ),
+            "Forward events (create_wallet)",
+        );
         let command_handler = CommandHandler::new(
             ControllerConfig {
                 in_top_x_mb: IN_TOP_X_MB,
@@ -669,14 +673,17 @@ impl Backend {
                 return Err(BackendError::MultipleTrezorDevicesFound(found_devices))
             }
         }
-        tokio::spawn(forward_events(
-            wallet_events,
-            wallet_service
-                .handle()
-                .subscribe()
-                .await
-                .map_err(|e| BackendError::WalletError(e.to_string()))?,
-        ));
+        tokio_spawn(
+            forward_events(
+                wallet_events,
+                wallet_service
+                    .handle()
+                    .subscribe()
+                    .await
+                    .map_err(|e| BackendError::WalletError(e.to_string()))?,
+            ),
+            "Forward events (open_wallet)",
+        );
         let command_handler = CommandHandler::new(
             ControllerConfig {
                 in_top_x_mb: IN_TOP_X_MB,

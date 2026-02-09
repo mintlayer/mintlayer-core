@@ -29,6 +29,7 @@ use test_utils::{
     random::{make_seedable_rng, Seed},
     BasicTestTimeGetter,
 };
+use utils::tokio_spawn_in_current_tracing_span;
 
 use crate::{
     config::P2pConfig,
@@ -170,11 +171,14 @@ mod dont_evict_if_blocks_in_flight {
         for addr in &addresses {
             peer_mgr.peerdb.peer_discovered(*addr);
         }
-        let peer_mgr_join_handle = logging::spawn_in_current_span(async move {
-            let mut peer_mgr = peer_mgr;
-            let _ = peer_mgr.run_internal(None).await;
-            peer_mgr
-        });
+        let peer_mgr_join_handle = tokio_spawn_in_current_tracing_span(
+            async move {
+                let mut peer_mgr = peer_mgr;
+                let _ = peer_mgr.run_internal(None).await;
+                peer_mgr
+            },
+            "",
+        );
 
         let mut peer_ids = Vec::new();
 

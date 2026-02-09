@@ -43,8 +43,7 @@ use tokio::{
     task::JoinHandle,
 };
 
-use ::utils::atomics::SeqCstAtomicBool;
-use ::utils::ensure;
+use ::utils::{atomics::SeqCstAtomicBool, ensure, tokio_spawn_in_current_tracing_span};
 use common::{
     chain::{config::ChainType, ChainConfig},
     primitives::BlockHeight,
@@ -158,19 +157,22 @@ where
             peerdb_storage,
         )?;
         let shutdown_ = Arc::clone(&shutdown);
-        let peer_manager_task = logging::spawn_in_current_span(async move {
-            match peer_manager.run().await {
-                Ok(never) => match never {},
-                // The channel can be closed during the shutdown process.
-                Err(P2pError::ChannelClosed) if shutdown_.load() => {
-                    log::info!("Peer manager is shut down");
+        let peer_manager_task = tokio_spawn_in_current_tracing_span(
+            async move {
+                match peer_manager.run().await {
+                    Ok(never) => match never {},
+                    // The channel can be closed during the shutdown process.
+                    Err(P2pError::ChannelClosed) if shutdown_.load() => {
+                        log::info!("Peer manager is shut down");
+                    }
+                    Err(e) => {
+                        shutdown_.store(true);
+                        log::error!("Peer manager failed: {e:?}");
+                    }
                 }
-                Err(e) => {
-                    shutdown_.store(true);
-                    log::error!("Peer manager failed: {e:?}");
-                }
-            }
-        });
+            },
+            "P2p peer mgr",
+        );
 
         let sync_manager = sync::SyncManager::<T>::new(
             chain_config,
@@ -183,19 +185,22 @@ where
             time_getter,
         );
         let shutdown_ = Arc::clone(&shutdown);
-        let sync_manager_task = logging::spawn_in_current_span(async move {
-            match sync_manager.run().await {
-                Ok(never) => match never {},
-                // The channel can be closed during the shutdown process.
-                Err(P2pError::ChannelClosed) if shutdown_.load() => {
-                    log::info!("Sync manager is shut down");
+        let sync_manager_task = tokio_spawn_in_current_tracing_span(
+            async move {
+                match sync_manager.run().await {
+                    Ok(never) => match never {},
+                    // The channel can be closed during the shutdown process.
+                    Err(P2pError::ChannelClosed) if shutdown_.load() => {
+                        log::info!("Sync manager is shut down");
+                    }
+                    Err(e) => {
+                        shutdown_.store(true);
+                        log::error!("Sync manager failed: {e:?}");
+                    }
                 }
-                Err(e) => {
-                    shutdown_.store(true);
-                    log::error!("Sync manager failed: {e:?}");
-                }
-            }
-        });
+            },
+            "P2p sync mgr",
+        );
 
         Ok(Self {
             peer_mgr_event_sender,

@@ -20,6 +20,7 @@ use networking::test_helpers::{TestTransportMaker, TestTransportTcp};
 use networking::transport::TcpTransportSocket;
 use p2p_test_utils::expect_recv;
 use test_utils::{assert_matches, assert_matches_return_val, BasicTestTimeGetter};
+use utils::tokio_spawn_in_current_tracing_span;
 
 use crate::{
     config::{NodeType, P2pConfig},
@@ -92,9 +93,12 @@ async fn ping_timeout() {
     )
     .unwrap();
 
-    logging::spawn_in_current_span(async move {
-        let _ = peer_manager.run().await;
-    });
+    tokio_spawn_in_current_tracing_span(
+        async move {
+            let _ = peer_manager.run().await;
+        },
+        "",
+    );
 
     // Notify about new inbound connection
     conn_event_sender

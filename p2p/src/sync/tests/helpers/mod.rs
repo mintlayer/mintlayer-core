@@ -52,7 +52,7 @@ use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress
 use randomness::Rng;
 use subsystem::{ManagerJoinHandle, ShutdownTrigger};
 use test_utils::random::Seed;
-use utils::atomics::SeqCstAtomicBool;
+use utils::{atomics::SeqCstAtomicBool, tokio_spawn_in_current_tracing_span};
 use utils_networking::IpOrSocketAddress;
 
 use crate::{
@@ -145,10 +145,13 @@ impl TestNode {
         let sync_manager_chainstate_handle = sync_manager.chainstate().clone();
 
         let (error_sender, error_receiver) = mpsc::unbounded_channel();
-        let sync_manager_handle = logging::spawn_in_current_span(async move {
-            let e = sync_manager.run().await.unwrap_err();
-            let _ = error_sender.send(e);
-        });
+        let sync_manager_handle = tokio_spawn_in_current_tracing_span(
+            async move {
+                let e = sync_manager.run().await.unwrap_err();
+                let _ = error_sender.send(e);
+            },
+            "",
+        );
 
         let new_tip_receiver = subscribe_to_new_tip(&sync_manager_chainstate_handle).await.unwrap();
         let tx_processed_receiver = subscribe_to_tx_processed(&mempool_handle).await.unwrap();

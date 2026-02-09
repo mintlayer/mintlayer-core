@@ -39,7 +39,7 @@ use p2p_test_utils::SHORT_TIMEOUT;
 use p2p_types::{p2p_event::P2pEventHandler, socket_address::SocketAddress};
 use storage_inmemory::InMemory;
 use subsystem::ShutdownTrigger;
-use utils::atomics::SeqCstAtomicBool;
+use utils::{atomics::SeqCstAtomicBool, tokio_spawn_in_tracing_span};
 use utils_networking::IpOrSocketAddress;
 
 use crate::{
@@ -191,7 +191,7 @@ where
             Box::new(TestDnsSeed::new(dns_seed_addresses.clone())),
         )
         .unwrap();
-        let peer_mgr_join_handle = logging::spawn_in_span(
+        let peer_mgr_join_handle = tokio_spawn_in_tracing_span(
             async move {
                 let mut peer_mgr = peer_mgr;
                 let err = match peer_mgr.run_without_consuming_self().await {
@@ -202,6 +202,7 @@ where
                 (peer_mgr, err)
             },
             tracing_span.clone(),
+            "",
         );
 
         let sync_mgr = SyncManager::<DefaultNetworkingService<Transport>>::new(
@@ -214,7 +215,7 @@ where
             peer_mgr_event_sender.clone(),
             time_getter.get_time_getter(),
         );
-        let sync_mgr_join_handle = logging::spawn_in_span(
+        let sync_mgr_join_handle = tokio_spawn_in_tracing_span(
             async move {
                 match sync_mgr.run().await {
                     Err(err) => err,
@@ -222,6 +223,7 @@ where
                 }
             },
             tracing_span.clone(),
+            "",
         );
 
         TestNode {

@@ -41,10 +41,6 @@ pub fn default_rpc_config(chain_config: &ChainConfig) -> RpcConfigFile {
     )
 }
 
-pub fn init_logging(_opts: &Options) {
-    logging::init_logging()
-}
-
 #[cfg(test)]
 mod tests {
     #[ctor::ctor]
