@@ -30,7 +30,10 @@ use chainstate_launcher::ChainConfig;
 pub use config_files::{
     NodeConfigFile, NodeTypeConfigFile, RpcConfigFile, StorageBackendConfigFile,
 };
-pub use options::{Command, Options, OptionsWithResolvedCommand, RunOptions, TopLevelOptions};
+pub use options::{
+    Command, Options, OptionsWithResolvedCommand, RunOptions, TopLevelOptions,
+    CLEAN_DATA_OPTION_LONG_NAME,
+};
 pub use runner::{setup, NodeSetupResult};
 
 pub fn default_rpc_config(chain_config: &ChainConfig) -> RpcConfigFile {

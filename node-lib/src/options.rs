@@ -82,7 +82,7 @@ pub struct OptionsWithResolvedCommand {
 
 impl OptionsWithResolvedCommand {
     pub fn clean_data_option_set(&self) -> bool {
-        self.command.run_options().clean_data.unwrap_or(false)
+        self.command.run_options().clean_data
     }
 
     pub fn log_to_file_option_set(&self) -> bool {
@@ -191,11 +191,18 @@ pub struct RegtestOptions {
     pub chain_config: ChainConfigOptions,
 }
 
+pub const CLEAN_DATA_OPTION_LONG_NAME: &str = "clean-data";
+
 #[derive(Args, Clone, Debug, Default)]
 pub struct RunOptions {
     /// If specified, the application will clean the data directory and exit immediately.
-    #[clap(long, short, action = clap::ArgAction::SetTrue)]
-    pub clean_data: Option<bool>,
+    #[clap(
+        long = CLEAN_DATA_OPTION_LONG_NAME,
+        short,
+        action = clap::ArgAction::SetTrue,
+        default_value_t = false
+    )]
+    pub clean_data: bool,
 
     /// Minimum number of connected peers to enable block production.
     #[clap(long, value_name = "COUNT")]

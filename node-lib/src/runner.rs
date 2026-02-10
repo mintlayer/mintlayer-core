@@ -246,18 +246,8 @@ pub async fn setup(options: OptionsWithResolvedCommand) -> Result<NodeSetupResul
     // Lock data dir
     let lock_file = lock_data_dir(&data_dir)?;
 
-    // Clean data dir if needed
-    if options.clean_data_option_set() {
-        clean_data_dir(
-            &data_dir,
-            std::slice::from_ref(&data_dir.join(LOCK_FILE_NAME).as_path()),
-        )?;
-        return Ok(NodeSetupResult::DataDirCleanedUp);
-    }
-
-    let main_log_writer_settings = logging::default_writer_settings();
-
     // Init logging
+    let main_log_writer_settings = logging::default_writer_settings();
     if options.log_to_file_option_set() {
         let log_file_name = std::env::current_exe().map_or_else(
             |_| DEFAULT_LOG_FILE_NAME.to_owned(),
@@ -289,6 +279,16 @@ pub async fn setup(options: OptionsWithResolvedCommand) -> Result<NodeSetupResul
         );
     } else {
         logging::init_logging_generic(main_log_writer_settings, logging::no_writer_settings());
+    }
+
+    // Clean data dir if needed
+    if options.clean_data_option_set() {
+        clean_data_dir(
+            &data_dir,
+            std::slice::from_ref(&data_dir.join(LOCK_FILE_NAME).as_path()),
+        )?;
+
+        return Ok(NodeSetupResult::DataDirCleanedUp);
     }
 
     logging::log::info!("Command line options: {options:?}");

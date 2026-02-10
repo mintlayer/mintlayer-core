@@ -22,8 +22,7 @@ mod chainstate_event_handler;
 mod p2p_event_handler;
 mod wallet_events;
 
-use std::fmt::Debug;
-use std::sync::Arc;
+use std::{fmt::Debug, sync::Arc};
 
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
@@ -257,6 +256,8 @@ fn handle_options_in_cold_wallet_mode(
     options: OptionsWithResolvedCommand,
 ) -> anyhow::Result<ChainConfig> {
     if options.clean_data_option_set() {
+        // Note: actually at this moment we can't get here, because the "clean data" option
+        // is checked before the cold mode can be chosen.
         log::warn!("Ignoring clean-data option in cold wallet mode");
     }
 

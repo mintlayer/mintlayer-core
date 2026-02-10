@@ -18,8 +18,7 @@
 mod main_window;
 mod widgets;
 
-use std::convert::identity;
-use std::env;
+use std::{convert::identity, env};
 
 use heck::ToUpperCamelCase as _;
 use iced::{
@@ -38,6 +37,7 @@ use node_gui_backend::{
     node_initialize, BackendControls, BackendSender, InitNetwork, NodeInitializationOutcome,
     WalletMode,
 };
+use node_lib::CLEAN_DATA_OPTION_LONG_NAME;
 
 const COLD_WALLET_TOOLTIP_TEXT: &str =
     "Start the wallet in Cold mode without connecting to the network or any nodes. The Cold mode is made to run the wallet on an air-gapped machine without internet connection for storage of keys of high-value. For example, pool decommission keys.";
@@ -172,27 +172,46 @@ fn title(state: &GuiState) -> String {
     }
 }
 
+// Update the state once the wallet mode has been selected/decided upon.
+fn update_on_mode_selected(
+    state: &mut GuiState,
+    wallet_mode: WalletMode,
+    opts: node_lib::OptionsWithResolvedCommand,
+) -> Task<Message> {
+    *state = GuiState::Loading {
+        wallet_mode,
+        chain_type: opts.command.chain_type(),
+    };
+
+    Task::perform(node_initialize(opts, wallet_mode), Message::Loaded)
+}
+
 fn update(state: &mut GuiState, message: Message) -> Task<Message> {
     match state {
         GuiState::Initial { initial_options } => match message {
-            Message::FontLoaded(Ok(())) => {
-                match &initial_options.command {
-                    Some(command) => {
-                        *state = GuiState::SelectWalletMode {
-                            resolved_options: node_lib::OptionsWithResolvedCommand {
-                                top_level: initial_options.top_level.clone(),
-                                command: command.clone(),
-                            },
-                        };
-                    }
-                    None => {
-                        *state = GuiState::SelectNetwork {
-                            top_level_options: initial_options.top_level.clone(),
-                        };
+            Message::FontLoaded(Ok(())) => match &initial_options.command {
+                Some(command) => {
+                    let resolved_options = node_lib::OptionsWithResolvedCommand {
+                        top_level: initial_options.top_level.clone(),
+                        command: command.clone(),
+                    };
+
+                    if resolved_options.clean_data_option_set() {
+                        // If "clean data" option was set, selecting the wallet mode makes no sense;
+                        // since the option is ignored in the cold mode, we use the hot one.
+                        update_on_mode_selected(state, WalletMode::Hot, resolved_options)
+                    } else {
+                        *state = GuiState::SelectWalletMode { resolved_options };
+                        Task::none()
                     }
                 }
-                Task::none()
-            }
+                None => {
+                    *state = GuiState::SelectNetwork {
+                        top_level_options: initial_options.top_level.clone(),
+                    };
+                    Task::none()
+                }
+            },
             Message::FontLoaded(Err(_)) => {
                 *state = InitializationFailure {
                     message: "Failed to load font".into(),
@@ -252,14 +271,8 @@ fn update(state: &mut GuiState, message: Message) -> Task<Message> {
         GuiState::SelectWalletMode { resolved_options } => {
             match message {
                 Message::InitWalletMode(mode) => {
-                    let opts = resolved_options.clone();
-
-                    *state = GuiState::Loading {
-                        wallet_mode: mode,
-                        chain_type: opts.command.chain_type(),
-                    };
-
-                    Task::perform(node_initialize(opts, mode), Message::Loaded)
+                    let resolved_options = resolved_options.clone();
+                    update_on_mode_selected(state, mode, resolved_options)
                 }
                 Message::ShuttingDownFinished => {
                     iced::window::get_latest().and_then(iced::window::close)
@@ -503,8 +516,11 @@ fn view(state: &GuiState) -> Element<'_, Message> {
                 InitializationInterruptionReason::DataDirCleanedUp => {
                     column![
                         iced::widget::text("Data directory is now clean").size(header_font_size),
-                        iced::widget::text("Please restart the node without `--clean-data` flag")
-                            .size(text_font_size)
+                        iced::widget::text(format!(
+                            "Please restart the node without the `--{}` flag",
+                            CLEAN_DATA_OPTION_LONG_NAME
+                        ))
+                        .size(text_font_size)
                     ]
                 }
             };

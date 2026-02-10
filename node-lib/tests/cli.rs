@@ -162,7 +162,8 @@ fn read_config_override_values() {
         rpc_username: Some(rpc_username.to_owned()),
         rpc_password: Some(rpc_password.to_owned()),
         rpc_cookie_file: Some(rpc_cookie_file.to_owned()),
-        clean_data: Some(false),
+        // Note: there is no correspondence to this option inside NodeConfigFile.
+        clean_data: false,
         min_tx_relay_fee_rate: Some(min_tx_relay_fee_rate),
         force_allow_run_as_root_outer: Default::default(),
         enable_chainstate_heavy_checks: Some(enable_chainstate_heavy_checks),
