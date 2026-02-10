@@ -39,8 +39,6 @@ use wallet_types::wallet_type::WalletControllerMode;
 
 pub use p2p::{interface::types::ConnectedPeer, types::peer_id::PeerId};
 
-pub type MempoolEvents = Box<dyn Stream<Item = MempoolNotification> + Sync + Send + Unpin>;
-
 #[mockall::automock(type Error = anyhow::Error;)]
 #[async_trait::async_trait]
 pub trait NodeInterface {
@@ -159,6 +157,8 @@ pub trait NodeInterface {
     async fn get_utxo(&self, outpoint: UtxoOutPoint) -> Result<Option<TxOutput>, Self::Error>;
 }
 
-pub enum MempoolNotification {
+pub type MempoolEvents = Box<dyn Stream<Item = MempoolEvent> + Sync + Send + Unpin>;
+
+pub enum MempoolEvent {
     NewTransaction { tx_id: Id<Transaction> },
 }

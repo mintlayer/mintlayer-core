@@ -17,14 +17,14 @@
 """Wallet mempool events test
 
 Check that:
-* We can create 2 wallets with same mnemonic,
-* get an address
+* We create 2 wallets with same mnemonic,
+* get an address from the first wallet
 * send coins to the wallet's address
-* sync the wallet with the node
+* sync both wallets with the node
 * check balance in both wallets
-* send coins from Acc 0 to Acc 1 without creating a block
+* from the first wallet send coins from Acc 0 to Acc 1 without creating a block
 * the second wallet should get the new Tx from mempool events
-* second wallet can create a new unconfirmed Tx on top of the on in mempool
+* second wallet can create a new unconfirmed Tx on top of the Tx in mempool
 """
 
 import asyncio
@@ -77,14 +77,17 @@ class WalletMempoolEvents(BitcoinTestFramework):
 
     async def async_test(self):
         node = self.nodes[0]
-        async with WalletCliController(node, self.config, self.log) as wallet, \
-                   WalletCliController(node, self.config, self.log) as wallet2:
+        async with WalletCliController(
+            node, self.config, self.log
+        ) as wallet, WalletCliController(node, self.config, self.log) as wallet2:
             # new wallet
             await wallet.create_wallet()
             # create wallet2 with the same mnemonic
             mnemonic = await wallet.show_seed_phrase()
             assert mnemonic is not None
-            assert_in("Wallet recovered successfully", await wallet2.recover_wallet(mnemonic))
+            assert_in(
+                "Wallet recovered successfully", await wallet2.recover_wallet(mnemonic)
+            )
 
             # check it is on genesis
             best_block_height = await wallet.get_best_block_height()
@@ -170,7 +173,6 @@ class WalletMempoolEvents(BitcoinTestFramework):
             # check mempool has 1 transaction now
             transactions = node.mempool_transactions()
             assert_equal(len(transactions), 1)
-            transfer_tx = transactions[0]
 
             # check wallet 1 has it as pending
             pending_txs = await wallet.list_pending_transactions()
@@ -189,11 +191,11 @@ class WalletMempoolEvents(BitcoinTestFramework):
             # check both balances have `coins_to_send` coins in-mempool state
             assert_in(
                 f"Coins amount: {coins_to_send}",
-                await wallet.get_balance(utxo_states=['in-mempool']),
+                await wallet.get_balance(utxo_states=["in-mempool"]),
             )
             assert_in(
                 f"Coins amount: {coins_to_send}",
-                await wallet2.get_balance(utxo_states=['in-mempool']),
+                await wallet2.get_balance(utxo_states=["in-mempool"]),
             )
 
             # check wallet2 can send 1 coin back to Acc0 from the not yet confirmed tx in mempool

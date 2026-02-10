@@ -47,7 +47,7 @@ use serialization::hex::HexError;
 use utils_networking::IpOrSocketAddress;
 use wallet_types::wallet_type::WalletControllerMode;
 
-use crate::node_traits::{MempoolEvents, MempoolNotification, NodeInterface};
+use crate::node_traits::{MempoolEvents, NodeInterface};
 
 #[derive(Clone)]
 pub struct WalletHandlesClient {
@@ -459,15 +459,16 @@ impl NodeInterface for WalletHandlesClient {
     async fn mempool_subscribe_to_events(&self) -> Result<MempoolEvents, Self::Error> {
         let res = self.mempool.call_mut(move |this| this.subscribe_to_rpc_events()).await?;
 
-        let subscription = res.into_stream().filter_map(|event| {
-            futures::future::ready(match event {
-                MempoolEvent::NewTip { .. } => None,
+        let subscription =
+            res.into_stream().filter_map(|event| {
+                futures::future::ready(match event {
+                    MempoolEvent::NewTip { .. } => None,
 
-                MempoolEvent::TransactionProcessed(tx) => tx
-                    .was_accepted()
-                    .then_some(MempoolNotification::NewTransaction { tx_id: *tx.tx_id() }),
-            })
-        });
+                    MempoolEvent::TransactionProcessed(tx) => tx.was_accepted().then_some(
+                        crate::node_traits::MempoolEvent::NewTransaction { tx_id: *tx.tx_id() },
+                    ),
+                })
+            });
         Ok(Box::new(subscription))
     }
 

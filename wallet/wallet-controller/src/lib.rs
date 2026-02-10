@@ -82,7 +82,7 @@ use crypto::{ephemeral_e2e::EndToEndPrivateKey, key::hdkd::u31::U31};
 use logging::log;
 use mempool::tx_accumulator::PackingStrategy;
 pub use node_comm::node_traits::{
-    ConnectedPeer, MempoolEvents, MempoolNotification, NodeInterface, PeerId,
+    ConnectedPeer, MempoolEvent, MempoolEvents, NodeInterface, PeerId,
 };
 pub use node_comm::{
     handles_client::WalletHandlesClient, make_cold_wallet_rpc_client, make_rpc_client,
@@ -1368,37 +1368,47 @@ where
                         break;
                     }
 
-
                     maybe_event = self.mempool_events.next() => {
                         let event = match maybe_event {
                             Some(e) => e,
                             None => {
-                                log::error!("Mempool notifications channel closed.");
+                                log::error!("Mempool notifications channel is closed.");
                                 tokio::time::sleep(ERROR_DELAY).await;
 
-                                self.mempool_events = self.rpc_client
+
+                                match self.rpc_client
                                     .mempool_subscribe_to_events()
-                                    .await
-                                    .map_err(ControllerError::NodeCallError)?;
+                                    .await {
+                                    Ok(events) => {
+                                        self.mempool_events = events;
+                                    }
+                                    Err(err) => {
+                                        log::error!("Subscribing to mempool notifications failed with: {err}");
+                                    }
+                                }
                                 break
                             }
                         };
 
                         match event {
-                            MempoolNotification::NewTransaction { tx_id } => {
+                            MempoolEvent::NewTransaction { tx_id } => {
                                 let transaction = self.rpc_client
                                     .mempool_get_transaction(tx_id)
-                                    .await
-                                    .map_err(ControllerError::NodeCallError)?;
+                                    .await;
 
-                                if let Some(transaction) = transaction {
-                                    let txs = [transaction];
-                                    self.wallet.add_mempool_transactions(&txs, &self.wallet_events)?;
-                                } else {
-                                    log::warn!(
-                                        "Transaction ID {} from mempool notification but not found",
-                                        tx_id
-                                    );
+                                match transaction {
+                                    Ok(Some(transaction)) => {
+                                        let txs = [transaction];
+                                        if let Err(err) = self.wallet.add_mempool_transactions(&txs, &self.wallet_events) {
+                                            log::error!("Tx {} failed to be added in the wallet because of an error: {err}", tx_id);
+                                        }
+                                    }
+                                    Ok(None) => {
+                                        log::warn!("Tx {} announced by mempool, but not found when fetched", tx_id);
+                                    }
+                                    Err(err) => {
+                                        log::error!("Error while fetching a transaction from mempool {err}");
+                                    }
                                 }
                             }
                         }

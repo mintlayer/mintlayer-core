@@ -1735,11 +1735,11 @@ impl OutputCache {
         tx_id: Id<Transaction>,
     ) -> WalletResult<Vec<(Id<Transaction>, WalletTx)>> {
         if let Some(tx) = self.txs.get(&tx_id.into()) {
-            let cannot_abandone = match tx.state() {
+            let cannot_abandon = match tx.state() {
                 TxState::Confirmed(_, _, _) | TxState::InMempool(_) | TxState::Abandoned => true,
                 TxState::Inactive(_) | TxState::Conflicted(_) => false,
             };
-            if cannot_abandone {
+            if cannot_abandon {
                 return Err(WalletError::CannotChangeTransactionState(
                     tx.state(),
                     TxState::Abandoned,

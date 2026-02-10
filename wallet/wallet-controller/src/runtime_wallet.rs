@@ -1574,9 +1574,9 @@ where
         wallet_events: &impl WalletEvents,
     ) -> WalletResult<()> {
         match self {
-            RuntimeWallet::Software(w) => w.scan_mempool(txs, wallet_events),
+            RuntimeWallet::Software(w) => w.add_mempool_transactions(txs, wallet_events),
             #[cfg(feature = "trezor")]
-            RuntimeWallet::Trezor(w) => w.scan_mempool(txs, wallet_events),
+            RuntimeWallet::Trezor(w) => w.add_mempool_transactions(txs, wallet_events),
         }
     }
 

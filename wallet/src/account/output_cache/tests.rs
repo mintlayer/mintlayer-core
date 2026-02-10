@@ -747,6 +747,162 @@ fn abandon_transaction(#[case] seed: Seed) {
     );
 }
 
+// Having transactions "A->B", where A is InMempool and B is Inactive,
+// Trying to abandon A should fail and unconfirmed_descendants should remain unchanged
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn abandon_transaction_in_mempool_fail(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let chain_config = create_unit_test_config();
+    let best_block_height = BlockHeight::new(rng.gen());
+    let mut output_cache = OutputCache::empty();
+
+    let genesis_tx_id = Id::<Transaction>::random_using(&mut rng);
+    let tx_a = TransactionBuilder::new()
+        .add_input(
+            TxInput::from_utxo(genesis_tx_id.into(), 0),
+            InputWitness::NoSignature(None),
+        )
+        .add_output(TxOutput::Transfer(
+            OutputValue::Coin(Amount::from_atoms(rng.gen())),
+            Destination::AnyoneCanSpend,
+        ))
+        .build();
+    let tx_a_id = tx_a.transaction().get_id();
+
+    // Add A to cache as InMempool
+    output_cache
+        .add_tx(
+            &chain_config,
+            best_block_height,
+            tx_a_id.into(),
+            WalletTx::Tx(TxData::new(tx_a, TxState::InMempool(0))),
+        )
+        .unwrap();
+
+    // Create Transaction B (spends A)
+    let tx_b = TransactionBuilder::new()
+        .add_input(
+            TxInput::from_utxo(tx_a_id.into(), 0),
+            empty_witness(&mut rng),
+        )
+        .add_output(TxOutput::Transfer(
+            OutputValue::Coin(Amount::from_atoms(rng.gen())),
+            Destination::AnyoneCanSpend,
+        ))
+        .build();
+    let tx_b_id = tx_b.transaction().get_id();
+
+    output_cache
+        .add_tx(
+            &chain_config,
+            best_block_height,
+            tx_b_id.into(),
+            WalletTx::Tx(TxData::new(tx_b, TxState::Inactive(0))),
+        )
+        .unwrap();
+
+    let unconfirmed_descendants = output_cache.unconfirmed_descendants.clone();
+
+    // Try to abandon transaction A (InMempool) -> Should fail
+    let err = output_cache.abandon_transaction(&chain_config, tx_a_id).unwrap_err();
+
+    assert_eq!(
+        err,
+        WalletError::CannotChangeTransactionState(TxState::InMempool(0), TxState::Abandoned,)
+    );
+
+    assert_eq!(
+        unconfirmed_descendants,
+        output_cache.unconfirmed_descendants
+    );
+}
+
+// Create a transaction A and transition its state to verify `unconfirmed_descendants` tracking:
+// 1. Add as Inactive -> should be present in unconfirmed_descendants.
+// 2. Add as Confirmed -> should be removed from unconfirmed_descendants.
+// 3. Try to add as InMempool -> should be ignored because the transaction is already Confirmed,
+//    so it remains absent from unconfirmed_descendants.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn test_add_tx_state_transitions_logic(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let chain_config = create_unit_test_config();
+    let best_block_height = BlockHeight::new(rng.gen());
+    let mut output_cache = OutputCache::empty();
+
+    let genesis_tx_id = Id::<Transaction>::random_using(&mut rng);
+    let tx_a = TransactionBuilder::new()
+        .add_input(
+            TxInput::from_utxo(genesis_tx_id.into(), 0),
+            InputWitness::NoSignature(None),
+        )
+        .add_output(TxOutput::Transfer(
+            OutputValue::Coin(Amount::from_atoms(rng.gen())),
+            Destination::AnyoneCanSpend,
+        ))
+        .build();
+    let tx_a_id = tx_a.transaction().get_id();
+    let tx_a_source_id: OutPointSourceId = tx_a_id.into();
+
+    // Add A as Inactive
+    output_cache
+        .add_tx(
+            &chain_config,
+            best_block_height,
+            tx_a_source_id.clone(),
+            WalletTx::Tx(TxData::new(tx_a.clone(), TxState::Inactive(0))),
+        )
+        .unwrap();
+
+    assert!(
+        output_cache.unconfirmed_descendants.contains_key(&tx_a_source_id),
+        "Tx A (Inactive) should be in unconfirmed_descendants"
+    );
+
+    // Add A as Confirmed
+    let confirmed_state =
+        TxState::Confirmed(BlockHeight::new(1), BlockTimestamp::from_int_seconds(0), 0);
+    output_cache
+        .add_tx(
+            &chain_config,
+            best_block_height,
+            tx_a_source_id.clone(),
+            WalletTx::Tx(TxData::new(tx_a.clone(), confirmed_state)),
+        )
+        .unwrap();
+
+    assert!(
+        !output_cache.unconfirmed_descendants.contains_key(&tx_a_source_id),
+        "Tx A (Confirmed) should NOT be in unconfirmed_descendants"
+    );
+
+    // Add A as InMempool
+    // Because existing state is Confirmed, existing_tx_already_confirmed_or_same
+    // returns true. The state remains Confirmed (and not unconfirmed).
+    output_cache
+        .add_tx(
+            &chain_config,
+            best_block_height,
+            tx_a_source_id.clone(),
+            WalletTx::Tx(TxData::new(tx_a, TxState::InMempool(0))),
+        )
+        .unwrap();
+
+    assert!(
+        !output_cache.unconfirmed_descendants.contains_key(&tx_a_source_id),
+        "Tx A should still NOT be in unconfirmed_descendants because the update to InMempool was ignored"
+    );
+
+    // Verify the state actually remained Confirmed
+    let stored_tx = output_cache.txs.get(&tx_a_source_id).unwrap();
+    assert_eq!(stored_tx.state(), confirmed_state);
+}
+
 // Create, fill, freeze and conclude 2 orders, checking the contents of the `orders` map
 // inside the cache.
 // The txs related to the 1st order are Confirmed, and those related to the 2nd one are Inactive.

@@ -18,8 +18,6 @@ pub mod cold_wallet_client;
 
 use std::sync::Arc;
 
-use tokio::sync::Mutex;
-
 use common::address::AddressError;
 use common::chain::ChainConfig;
 use common::primitives::per_thousand::PerThousandParseError;
@@ -59,7 +57,7 @@ impl ColdWalletClient {
 
 #[derive(Clone, Debug)]
 pub struct NodeRpcClient {
-    rpc_client: Arc<Mutex<RpcWsClient>>,
+    rpc_client: Arc<RpcWsClient>,
     chain_config: Arc<ChainConfig>,
 }
 
@@ -75,7 +73,7 @@ impl NodeRpcClient {
             new_ws_client(host, rpc_auth).await.map_err(NodeRpcError::ClientCreationError)?;
 
         let client = Self {
-            rpc_client: Arc::new(Mutex::new(rpc_client)),
+            rpc_client: Arc::new(rpc_client),
             chain_config,
         };
 

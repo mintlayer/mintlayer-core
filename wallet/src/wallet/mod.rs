@@ -2557,8 +2557,8 @@ where
         Ok(())
     }
 
-    /// Rescan mempool for unconfirmed transactions and UTXOs
-    pub fn scan_mempool(
+    /// Adds unconfirmed transactions and UTXOs from the mempool
+    pub fn add_mempool_transactions(
         &mut self,
         transactions: &[SignedTransaction],
         wallet_events: &impl WalletEvents,
