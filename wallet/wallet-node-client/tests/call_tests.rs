@@ -92,7 +92,8 @@ pub async fn start_subsystems(
         chainstate_handle.clone(),
         Default::default(),
     );
-    let mempool_handle = manager.add_custom_subsystem("test-mempool", |hdl| mempool_init.init(hdl));
+    let mempool_handle =
+        manager.add_custom_subsystem("test-mempool", |hdl, _| mempool_init.init(hdl));
 
     let peerdb_storage = p2p::test_helpers::peerdb_inmemory_store();
     let p2p_handle = p2p::make_p2p(

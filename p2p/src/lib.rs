@@ -298,15 +298,15 @@ impl<S: PeerDbStorage + 'static> P2pInit<S> {
             assert_eq!(*self.chain_config.chain_type(), ChainType::Regtest);
             assert!(self.p2p_config.socks5_proxy.is_none());
             let transport = make_p2p_transport_unencrypted();
-            manager.add_custom_subsystem(name, move |_| self.init::<NetService>(transport))
+            manager.add_custom_subsystem(name, move |_, _| self.init::<NetService>(transport))
         } else if let Some(socks5_proxy) = &self.p2p_config.socks5_proxy {
             type NetService = P2pNetworkingServiceSocks5Proxy;
             let transport = make_p2p_transport_socks5_proxy(socks5_proxy);
-            manager.add_custom_subsystem(name, move |_| self.init::<NetService>(transport))
+            manager.add_custom_subsystem(name, move |_, _| self.init::<NetService>(transport))
         } else {
             type NetService = P2pNetworkingService;
             let transport = make_p2p_transport();
-            manager.add_custom_subsystem(name, move |_| self.init::<NetService>(transport))
+            manager.add_custom_subsystem(name, move |_, _| self.init::<NetService>(transport))
         }
     }
 }

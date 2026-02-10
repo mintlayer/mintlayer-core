@@ -99,7 +99,7 @@ async fn initialize(
         subsystem::Handle::clone(&chainstate),
         Default::default(),
     );
-    let mempool = manager.add_custom_subsystem("mempool", |handle| mempool_init.init(handle));
+    let mempool = manager.add_custom_subsystem("mempool", |handle, _| mempool_init.init(handle));
 
     // P2P subsystem
     let peerdb_storage = {

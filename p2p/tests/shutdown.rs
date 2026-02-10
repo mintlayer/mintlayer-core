@@ -61,7 +61,7 @@ async fn shutdown_timeout() {
         Default::default(),
     );
     let mempool =
-        manager.add_custom_subsystem("shutdown-test-mempool", |hdl| mempool_init.init(hdl));
+        manager.add_custom_subsystem("shutdown-test-mempool", |hdl, _| mempool_init.init(hdl));
 
     let peerdb_storage = PeerDbStorageImpl::new(InMemory::new()).unwrap();
     let _p2p = make_p2p(

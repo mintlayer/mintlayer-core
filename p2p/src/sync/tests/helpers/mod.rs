@@ -615,7 +615,7 @@ impl TestNodeBuilder {
             time_getter.clone(),
         );
         let mempool =
-            manager.add_custom_subsystem("p2p-sync-test-mempool", |h| mempool_init.init(h));
+            manager.add_custom_subsystem("p2p-sync-test-mempool", |h, _| mempool_init.init(h));
 
         let manager_handle = manager.main_in_task();
 
