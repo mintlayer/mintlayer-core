@@ -277,13 +277,13 @@ end = "2026-10-15"
 criteria = "safe-to-deploy"
 user-id = 1 # Alex Crichton (alexcrichton)
 start = "2019-03-01"
-end = "2026-10-15"
+end = "2027-02-11"
 
 [[trusted.cc]]
 criteria = "safe-to-deploy"
 user-id = 2915 # Amanieu d'Antras (Amanieu)
 start = "2024-02-20"
-end = "2026-10-15"
+end = "2027-02-11"
 
 [[trusted.cfg-if]]
 criteria = "safe-to-deploy"
@@ -435,6 +435,12 @@ user-id = 15027 # Timon (TimonPost)
 start = "2019-04-02"
 end = "2026-10-16"
 
+[[trusted.crypto-common]]
+criteria = "safe-to-deploy"
+user-id = 5059 # Artyom Pavlov (newpavlov)
+start = "2021-02-10"
+end = "2027-02-11"
+
 [[trusted.csv]]
 criteria = "safe-to-deploy"
 user-id = 189 # Andrew Gallant (BurntSushi)
@@ -549,6 +555,12 @@ user-id = 539 # Josh Stone (cuviper)
 start = "2025-08-29"
 end = "2026-10-15"
 
+[[trusted.flate2]]
+criteria = "safe-to-deploy"
+user-id = 980 # Sebastian Thiel (Byron)
+start = "2023-08-15"
+end = "2027-02-11"
+
 [[trusted.futures-lite]]
 criteria = "safe-to-deploy"
 user-id = 33035 # Taiki Endo (taiki-e)
@@ -577,7 +589,7 @@ end = "2026-10-15"
 criteria = "safe-to-deploy"
 user-id = 5059 # Artyom Pavlov (newpavlov)
 start = "2019-06-28"
-end = "2026-10-15"
+end = "2027-02-11"
 
 [[trusted.ghash]]
 criteria = "safe-to-deploy"
@@ -603,11 +615,17 @@ user-id = 2915 # Amanieu d'Antras (Amanieu)
 start = "2019-04-02"
 end = "2026-10-15"
 
+[[trusted.hashbrown]]
+criteria = "safe-to-deploy"
+user-id = 55123 # rust-lang-owner
+start = "2025-04-30"
+end = "2027-02-11"
+
 [[trusted.hashlink]]
 criteria = "safe-to-deploy"
 user-id = 4556 # Dirkjan Ochtman (djc)
 start = "2025-10-26"
-end = "2026-12-08"
+end = "2027-02-11"
 
 [[trusted.hdrhistogram]]
 criteria = "safe-to-deploy"
@@ -765,6 +783,12 @@ user-id = 45266 # Héctor (hecrj)
 start = "2019-10-05"
 end = "2026-10-15"
 
+[[trusted.id-arena]]
+criteria = "safe-to-deploy"
+user-id = 696 # Nick Fitzgerald (fitzgen)
+start = "2026-01-14"
+end = "2027-02-11"
+
 [[trusted.indexmap]]
 criteria = "safe-to-deploy"
 user-id = 539 # Josh Stone (cuviper)
@@ -795,6 +819,12 @@ user-id = 1442 # Jack Wrenn (jswrenn)
 start = "2019-10-27"
 end = "2026-10-15"
 
+[[trusted.itoa]]
+criteria = "safe-to-deploy"
+user-id = 3618 # David Tolnay (dtolnay)
+start = "2019-05-02"
+end = "2027-02-11"
+
 [[trusted.jobserver]]
 criteria = "safe-to-deploy"
 user-id = 1 # Alex Crichton (alexcrichton)
@@ -811,7 +841,7 @@ end = "2026-10-15"
 criteria = "safe-to-deploy"
 user-id = 1 # Alex Crichton (alexcrichton)
 start = "2019-03-04"
-end = "2026-10-15"
+end = "2027-02-11"
 
 [[trusted.keccak]]
 criteria = "safe-to-deploy"
@@ -885,6 +915,12 @@ user-id = 2915 # Amanieu d'Antras (Amanieu)
 start = "2019-05-04"
 end = "2026-10-15"
 
+[[trusted.log]]
+criteria = "safe-to-deploy"
+user-id = 3204 # Ashley Mannix (KodrAus)
+start = "2019-07-10"
+end = "2027-02-11"
+
 [[trusted.loom]]
 criteria = "safe-to-deploy"
 user-id = 10
@@ -951,6 +987,12 @@ user-id = 539 # Josh Stone (cuviper)
 start = "2019-06-10"
 end = "2026-10-15"
 
+[[trusted.num-conv]]
+criteria = "safe-to-deploy"
+user-id = 15682 # Jacob Pratt (jhpratt)
+start = "2023-12-23"
+end = "2027-02-11"
+
 [[trusted.num_cpus]]
 criteria = "safe-to-deploy"
 user-id = 359 # Sean McArthur (seanmonstar)
@@ -985,7 +1027,13 @@ end = "2026-10-16"
 criteria = "safe-to-deploy"
 user-id = 1 # Alex Crichton (alexcrichton)
 start = "2020-08-04"
-end = "2026-10-15"
+end = "2027-02-11"
+
+[[trusted.openssl-probe]]
+criteria = "safe-to-deploy"
+user-id = 4556 # Dirkjan Ochtman (djc)
+start = "2025-12-29"
+end = "2027-02-11"
 
 [[trusted.openssl-sys]]
 criteria = "safe-to-deploy"
@@ -1125,6 +1173,12 @@ user-id = 6743 # Ed Page (epage)
 start = "2020-12-29"
 end = "2026-10-15"
 
+[[trusted.prettyplease]]
+criteria = "safe-to-deploy"
+user-id = 3618 # David Tolnay (dtolnay)
+start = "2022-01-04"
+end = "2027-02-11"
+
 [[trusted.proc-macro2]]
 criteria = "safe-to-deploy"
 user-id = 3618 # David Tolnay (dtolnay)
@@ -1195,7 +1249,7 @@ end = "2026-10-15"
 criteria = "safe-to-deploy"
 user-id = 2751 # Joe Birr-Pixton (ctz)
 start = "2025-02-22"
-end = "2026-12-08"
+end = "2027-02-11"
 
 [[trusted.ripemd]]
 criteria = "safe-to-deploy"
@@ -1229,9 +1283,15 @@ end = "2026-10-15"
 
 [[trusted.rustls]]
 criteria = "safe-to-deploy"
+user-id = 2751 # Joe Birr-Pixton (ctz)
+start = "2019-04-02"
+end = "2027-02-11"
+
+[[trusted.rustls]]
+criteria = "safe-to-deploy"
 user-id = 4556 # Dirkjan Ochtman (djc)
 start = "2022-05-18"
-end = "2026-12-08"
+end = "2027-02-11"
 
 [[trusted.rustls-native-certs]]
 criteria = "safe-to-deploy"
@@ -1473,17 +1533,23 @@ user-id = 15682 # Jacob Pratt (jhpratt)
 start = "2019-12-02"
 end = "2026-10-16"
 
+[[trusted.tinystr]]
+criteria = "safe-to-deploy"
+user-id = 1139 # Manish Goregaokar (Manishearth)
+start = "2021-01-14"
+end = "2027-02-11"
+
 [[trusted.tokio]]
 criteria = "safe-to-deploy"
 user-id = 10
 start = "2019-03-02"
-end = "2026-10-15"
+end = "2027-02-11"
 
 [[trusted.tokio]]
 criteria = "safe-to-deploy"
 user-id = 1249 # Eliza Weisman (hawkw)
 start = "2020-04-04"
-end = "2027-02-04"
+end = "2027-02-11"
 
 [[trusted.tokio]]
 criteria = "safe-to-deploy"
@@ -1495,13 +1561,13 @@ end = "2027-02-04"
 criteria = "safe-to-deploy"
 user-id = 6741 # Alice Ryhl (Darksonn)
 start = "2020-12-25"
-end = "2026-10-15"
+end = "2027-02-11"
 
 [[trusted.tokio-macros]]
 criteria = "safe-to-deploy"
 user-id = 10
 start = "2019-04-24"
-end = "2026-10-15"
+end = "2027-02-11"
 
 [[trusted.tokio-macros]]
 criteria = "safe-to-deploy"
@@ -1513,7 +1579,7 @@ end = "2027-02-04"
 criteria = "safe-to-deploy"
 user-id = 6741 # Alice Ryhl (Darksonn)
 start = "2020-10-26"
-end = "2026-10-15"
+end = "2027-02-11"
 
 [[trusted.tokio-postgres]]
 criteria = "safe-to-deploy"
@@ -1526,6 +1592,12 @@ criteria = "safe-to-deploy"
 user-id = 4556 # Dirkjan Ochtman (djc)
 start = "2023-06-09"
 end = "2026-12-08"
+
+[[trusted.tokio-stream]]
+criteria = "safe-to-deploy"
+user-id = 6741 # Alice Ryhl (Darksonn)
+start = "2021-01-04"
+end = "2027-02-11"
 
 [[trusted.tokio-util]]
 criteria = "safe-to-deploy"
@@ -1629,11 +1701,41 @@ user-id = 3959 # Lucio Franco (LucioFranco)
 start = "2019-08-20"
 end = "2027-02-04"
 
+[[trusted.tracing]]
+criteria = "safe-to-deploy"
+user-id = 1249 # Eliza Weisman (hawkw)
+start = "2019-06-28"
+end = "2027-02-11"
+
+[[trusted.tracing-attributes]]
+criteria = "safe-to-deploy"
+user-id = 1249 # Eliza Weisman (hawkw)
+start = "2019-08-08"
+end = "2027-02-11"
+
+[[trusted.tracing-core]]
+criteria = "safe-to-deploy"
+user-id = 1249 # Eliza Weisman (hawkw)
+start = "2019-06-20"
+end = "2027-02-11"
+
 [[trusted.tracing-serde]]
 criteria = "safe-to-deploy"
 user-id = 1249 # Eliza Weisman (hawkw)
 start = "2019-06-27"
-end = "2027-02-04"
+end = "2027-02-11"
+
+[[trusted.tracing-subscriber]]
+criteria = "safe-to-deploy"
+user-id = 10
+start = "2025-08-29"
+end = "2027-02-11"
+
+[[trusted.tracing-subscriber]]
+criteria = "safe-to-deploy"
+user-id = 1249 # Eliza Weisman (hawkw)
+start = "2019-06-27"
+end = "2027-02-11"
 
 [[trusted.unicode-ident]]
 criteria = "safe-to-deploy"
@@ -1652,6 +1754,12 @@ criteria = "safe-to-deploy"
 user-id = 1139 # Manish Goregaokar (Manishearth)
 start = "2020-01-02"
 end = "2026-10-15"
+
+[[trusted.url]]
+criteria = "safe-to-deploy"
+user-id = 1139 # Manish Goregaokar (Manishearth)
+start = "2021-02-18"
+end = "2027-02-11"
 
 [[trusted.uuid]]
 criteria = "safe-to-deploy"
@@ -1687,7 +1795,7 @@ end = "2026-10-15"
 criteria = "safe-to-deploy"
 user-id = 1 # Alex Crichton (alexcrichton)
 start = "2019-03-04"
-end = "2026-10-15"
+end = "2027-02-11"
 
 [[trusted.wasm-bindgen-backend]]
 criteria = "safe-to-deploy"
@@ -1699,31 +1807,31 @@ end = "2026-10-15"
 criteria = "safe-to-deploy"
 user-id = 1 # Alex Crichton (alexcrichton)
 start = "2019-03-04"
-end = "2026-10-15"
+end = "2027-02-11"
 
 [[trusted.wasm-bindgen-macro]]
 criteria = "safe-to-deploy"
 user-id = 1 # Alex Crichton (alexcrichton)
 start = "2019-03-04"
-end = "2026-10-15"
+end = "2027-02-11"
 
 [[trusted.wasm-bindgen-macro-support]]
 criteria = "safe-to-deploy"
 user-id = 1 # Alex Crichton (alexcrichton)
 start = "2019-03-04"
-end = "2026-10-15"
+end = "2027-02-11"
 
 [[trusted.wasm-bindgen-shared]]
 criteria = "safe-to-deploy"
 user-id = 1 # Alex Crichton (alexcrichton)
 start = "2019-03-04"
-end = "2026-10-15"
+end = "2027-02-11"
 
 [[trusted.web-sys]]
 criteria = "safe-to-deploy"
 user-id = 1 # Alex Crichton (alexcrichton)
 start = "2019-03-04"
-end = "2026-10-15"
+end = "2027-02-11"
 
 [[trusted.webpki-root-certs]]
 criteria = "safe-to-deploy"
@@ -1899,6 +2007,12 @@ user-id = 6423 # Zeeshan Ali Khan (zeenix)
 start = "2023-03-28"
 end = "2026-10-15"
 
+[[trusted.yoke]]
+criteria = "safe-to-deploy"
+user-id = 1139 # Manish Goregaokar (Manishearth)
+start = "2021-05-01"
+end = "2027-02-11"
+
 [[trusted.zbus]]
 criteria = "safe-to-deploy"
 user-id = 6423 # Zeeshan Ali Khan (zeenix)
@@ -1934,6 +2048,30 @@ criteria = "safe-to-deploy"
 user-id = 267 # Tony Arcieri (tarcieri)
 start = "2021-11-05"
 end = "2026-10-15"
+
+[[trusted.zeroize_derive]]
+criteria = "safe-to-deploy"
+user-id = 267 # Tony Arcieri (tarcieri)
+start = "2019-03-23"
+end = "2027-02-11"
+
+[[trusted.zerotrie]]
+criteria = "safe-to-deploy"
+user-id = 1139 # Manish Goregaokar (Manishearth)
+start = "2023-10-03"
+end = "2027-02-11"
+
+[[trusted.zerovec]]
+criteria = "safe-to-deploy"
+user-id = 1139 # Manish Goregaokar (Manishearth)
+start = "2021-04-19"
+end = "2027-02-11"
+
+[[trusted.zmij]]
+criteria = "safe-to-deploy"
+user-id = 3618 # David Tolnay (dtolnay)
+start = "2025-12-18"
+end = "2027-02-11"
 
 [[trusted.zvariant]]
 criteria = "safe-to-deploy"

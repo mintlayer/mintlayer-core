@@ -34,8 +34,20 @@ audit-as-crates-io = true
 [policy.iced_aw]
 audit-as-crates-io = true
 
+[policy.ledger-lib]
+audit-as-crates-io = true
+
+[policy.ledger-proto]
+audit-as-crates-io = true
+
 [policy.lmdb-rkv-sys]
 audit-as-crates-io = false
+
+[policy.parity-scale-codec]
+audit-as-crates-io = true
+
+[policy.parity-scale-codec-derive]
+audit-as-crates-io = true
 
 [policy.tokio]
 audit-as-crates-io = true
@@ -831,11 +843,11 @@ version = "0.7.6"
 criteria = "safe-to-deploy"
 
 [[exemptions.parity-scale-codec]]
-version = "3.7.5"
+version = "3.7.5@git:5021525697edc0661591ebc71392c48d950a10b0"
 criteria = "safe-to-deploy"
 
 [[exemptions.parity-scale-codec-derive]]
-version = "3.7.5"
+version = "3.7.5@git:5021525697edc0661591ebc71392c48d950a10b0"
 criteria = "safe-to-deploy"
 
 [[exemptions.parking]]
@@ -1327,10 +1339,6 @@ version = "0.1.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.wasm-bindgen]]
-version = "0.2.104"
-criteria = "safe-to-deploy"
-
-[[exemptions.wasm-bindgen-backend]]
 version = "0.2.104"
 criteria = "safe-to-deploy"
 
