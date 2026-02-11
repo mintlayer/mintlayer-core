@@ -191,7 +191,7 @@ end = "2026-10-15"
 
 [[trusted.bip39]]
 criteria = "safe-to-deploy"
-user-id = 28012 # Steven Roose (stevenroose)
+user-id = 28012
 start = "2020-07-22"
 end = "2026-10-15"
 
