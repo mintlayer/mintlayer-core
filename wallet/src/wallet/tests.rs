@@ -405,8 +405,30 @@ async fn wallet_creation_in_memory() {
     let wallet = create_wallet(chain_config.clone()).await;
     let initialized_db = wallet.db;
 
+    // fail to load the wallet on the wrong network
+    let wrong_network_chain_config = Arc::new(create_mainnet());
+    match Wallet::load_wallet(
+        wrong_network_chain_config.clone(),
+        initialized_db,
+        None,
+        |_| Ok(()),
+        WalletControllerMode::Hot,
+        false,
+        async |db_tx| {
+            SoftwareSignerProvider::load_from_database(wrong_network_chain_config, &db_tx)
+        },
+    )
+    .await
+    {
+        Ok(_) => panic!("Wallet loading should fail"),
+        Err(err) => assert_eq!(err, WalletError::DifferentChainType),
+    }
+
+    let wallet = create_wallet(chain_config.clone()).await;
+    let initialized_db = wallet.db;
+
     // successfully load a wallet from initialized db
-    let _wallet = Wallet::load_wallet(
+    let mut wallet = Wallet::load_wallet(
         chain_config.clone(),
         initialized_db,
         None,
@@ -416,7 +438,45 @@ async fn wallet_creation_in_memory() {
         async |db_tx| SoftwareSignerProvider::load_from_database(chain_config.clone(), &db_tx),
     )
     .await
+    .unwrap()
+    .wallet()
     .unwrap();
+
+    #[cfg(any(feature = "trezor", feature = "ledger"))]
+    {
+        let mut db_tx = wallet.db.transaction_rw(None).unwrap();
+
+        #[cfg(feature = "trezor")]
+        let wallet_type = WalletType::Trezor;
+
+        #[cfg(all(not(feature = "trezor"), feature = "ledger"))]
+        let wallet_type = WalletType::Ledger;
+
+        db_tx.set_wallet_type(wallet_type).unwrap();
+
+        db_tx.commit().unwrap();
+
+        eprintln!("load again.");
+        match Wallet::load_wallet(
+            Arc::clone(&chain_config),
+            wallet.db,
+            None,
+            |_| Ok(()),
+            WalletControllerMode::Hot,
+            false,
+            async |db_tx| {
+                SoftwareSignerProvider::load_from_database(Arc::clone(&chain_config), &db_tx)
+            },
+        )
+        .await
+        {
+            Ok(_) => panic!("Wallet loading should fail"),
+            Err(err) => assert_eq!(
+                err,
+                WalletError::HardwareWalletOpenedAsSoftwareWallet(wallet_type)
+            ),
+        }
+    }
 }
 
 #[rstest]

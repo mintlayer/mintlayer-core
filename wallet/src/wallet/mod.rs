@@ -111,6 +111,8 @@ pub enum WalletError {
     WalletNotInitialized,
     #[error("A {0} wallet is trying to open a {1} wallet file")]
     DifferentWalletType(WalletControllerMode, WalletType),
+    #[error("Trying to open a {0} wallet file as a software wallet")]
+    HardwareWalletOpenedAsSoftwareWallet(WalletType),
     #[error("The wallet belongs to a different chain than the one specified")]
     DifferentChainType,
     #[error("Unsupported wallet version: {0}, max supported version of this software is {CURRENT_WALLET_VERSION}")]

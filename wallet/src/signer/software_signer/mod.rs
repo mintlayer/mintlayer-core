@@ -49,6 +49,7 @@ use crypto::key::{
     PredefinedSigAuxDataProvider, PrivateKey, SigAuxDataProvider,
 };
 use randomness::make_true_rng;
+use utils::ensure;
 use wallet_storage::{
     WalletStorageReadLocked, WalletStorageReadUnlocked, WalletStorageWriteUnlocked,
 };
@@ -57,6 +58,7 @@ use wallet_types::{
     partially_signed_transaction::{PartiallySignedTransaction, TokensAdditionalInfo},
     seed_phrase::StoreSeedPhrase,
     signature_status::SignatureStatus,
+    wallet_type::WalletType,
     AccountId,
 };
 
@@ -66,7 +68,7 @@ use crate::{
         MasterKeyChain,
     },
     signer::utils::produce_uniparty_signature_for_input,
-    Account, WalletResult,
+    Account, WalletError, WalletResult,
 };
 
 use super::{utils::is_htlc_utxo, Signer, SignerError, SignerProvider, SignerResult};
@@ -474,6 +476,11 @@ impl SoftwareSignerProvider {
         chain_config: Arc<ChainConfig>,
         db_tx: &impl WalletStorageReadLocked,
     ) -> WalletResult<Self> {
+        let this_wallet_type = db_tx.get_wallet_type()?;
+        ensure!(
+            this_wallet_type == WalletType::Hot || this_wallet_type == WalletType::Cold,
+            WalletError::HardwareWalletOpenedAsSoftwareWallet(this_wallet_type)
+        );
         let master_key_chain = MasterKeyChain::new_from_existing_database(chain_config, db_tx)?;
         Ok(Self { master_key_chain })
     }
