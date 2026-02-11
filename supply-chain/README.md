@@ -107,8 +107,32 @@ will be automatically removed by `cargo vet`, while `cargo vet --locked` will co
     | Jonas Platte | jplatte | Member of `tokio-rs` and `tower-rs`, maintainer of `axum`. |
     | Eliza Weisman | hawkw | Member of `tokio-rs` and `tower-rs`, creator/maintainer of `tracing` crates and crates related to `tokio-console`. |
     | Jon Gjengset | jonhoo | Educator, author of "Rust for Rustaceans", author and maintainer of the `hdrhistogram` crate used by `console-subscriber`. |
+    | Frank Denis | jedisct1 | Member of `WebAssembly` and `wasm-crypto`, creator/maintainer of `libsodium`. |
+    | Hayden Stainsby | hds | One of the owners of the `tracing` crates. Recent versions of `tracing` were published by him. |
 
 - We also trust the crates that we've forked.
 
     Normally this is done by putting them to the `policy` table in `config.toml` and setting its
     `audit-as-crates-io` key to `false`.
+
+## What to do when a dependency gets updated and `cagro vet` starts complaining.
+
+- First of all, run `cargo vet check` (i.e. without `--locked`), which may pull some new audits.
+
+- The `cargo vet check` call above may also suggest trusting crates published by people that we already trust, so you may run what it suggests.\
+  Alternatively, you may want to just run `cargo vet trust` for all publishers that we already trust, e.g.
+  ```
+  for var in alexcrichton Darksonn Amanieu ...; do cargo vet trust --all "$var" --allow-multiple-publishers --criteria safe-to-deploy; done
+  ```
+  (use all publisher ids both from the list and the table above).
+
+- Consider adding new publishers as trusted. In particular, if a crate is from an ecosystem that we generally trust (e.g. `tracing`)
+  and a new version of that crate has been published by a new publisher, it makes sense to add that publisher as trusted as well (after
+  verifying that the person is indeed among the crate's owners/maintainers).
+
+  Don't forget to add the newly trusted publishers to the table above.
+
+- Consider making an audit yourself.
+
+- Finally, if there are still some unvetted dependecies, run `cargo vet regenerate exemptions`, which will create new exemptions
+  or update existing ones.

@@ -1583,6 +1583,20 @@ user-id = 5059
 user-login = "newpavlov"
 user-name = "Artyom Pavlov"
 
+[[publisher.siphasher]]
+version = "0.3.11"
+when = "2023-08-23"
+user-id = 468
+user-login = "jedisct1"
+user-name = "Frank Denis"
+
+[[publisher.siphasher]]
+version = "1.0.2"
+when = "2026-01-27"
+user-id = 468
+user-login = "jedisct1"
+user-name = "Frank Denis"
+
 [[publisher.slab]]
 version = "0.4.12"
 when = "2026-01-31"
@@ -1799,6 +1813,41 @@ when = "2024-08-13"
 user-id = 3959
 user-login = "LucioFranco"
 user-name = "Lucio Franco"
+
+[[publisher.tracing]]
+version = "0.1.44"
+when = "2025-12-18"
+user-id = 172786
+user-login = "hds"
+user-name = "Hayden Stainsby"
+
+[[publisher.tracing-attributes]]
+version = "0.1.31"
+when = "2025-11-26"
+user-id = 172786
+user-login = "hds"
+user-name = "Hayden Stainsby"
+
+[[publisher.tracing-core]]
+version = "0.1.36"
+when = "2025-12-18"
+user-id = 172786
+user-login = "hds"
+user-name = "Hayden Stainsby"
+
+[[publisher.tracing-serde]]
+version = "0.2.0"
+when = "2024-11-27"
+user-id = 172786
+user-login = "hds"
+user-name = "Hayden Stainsby"
+
+[[publisher.tracing-subscriber]]
+version = "0.3.22"
+when = "2025-11-28"
+user-id = 172786
+user-login = "hds"
+user-name = "Hayden Stainsby"
 
 [[publisher.unicode-ident]]
 version = "1.0.23"
@@ -5616,13 +5665,6 @@ who = "Jack Grigg <jack@electriccoin.co>"
 criteria = "safe-to-deploy"
 delta = "0.1.4 -> 0.1.7"
 notes = "Only change to an `unsafe` block is to fix a clippy lint."
-aggregated-from = "https://raw.githubusercontent.com/zcash/zcash/master/qa/supply-chain/audits.toml"
-
-[[audits.zcash.audits.siphasher]]
-who = "Jack Grigg <jack@electriccoin.co>"
-criteria = "safe-to-deploy"
-delta = "0.3.11 -> 1.0.1"
-notes = "No code changes, just stabilising the code in SemVer."
 aggregated-from = "https://raw.githubusercontent.com/zcash/zcash/master/qa/supply-chain/audits.toml"
 
 [[audits.zcash.audits.strum]]

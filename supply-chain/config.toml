@@ -1150,10 +1150,6 @@ criteria = "safe-to-deploy"
 version = "0.1.5"
 criteria = "safe-to-deploy"
 
-[[exemptions.siphasher]]
-version = "0.3.11"
-criteria = "safe-to-deploy"
-
 [[exemptions.slave-pool]]
 version = "0.2.3"
 criteria = "safe-to-deploy"
@@ -1268,10 +1264,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.tower-http]]
 version = "0.5.2"
-criteria = "safe-to-deploy"
-
-[[exemptions.tracing-serde]]
-version = "0.2.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.tsify]]
