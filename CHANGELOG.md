@@ -32,6 +32,9 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
   - Node:
     - new options added to `node-daemon` and `node-gui`:
+      - `--import-bootstrap-file` - import a bootstrap file on start (previously bootstrapping
+        was only available via node RPC).
+
       - `--enable-db-reckless-mode-in-ibd` - this enables the "reckless" mode of the chainstate
         database during initial block download or bootstrapping, which significantly increases
         its speed at the cost of a potential db corruption if the system crashes in the meantime.

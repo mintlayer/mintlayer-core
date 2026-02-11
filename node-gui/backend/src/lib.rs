@@ -26,7 +26,7 @@ use std::{fmt::Debug, sync::Arc};
 
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
-use chainstate::ChainInfo;
+use chainstate::{BootstrapError, ChainInfo};
 use common::{
     address::{Address, AddressError},
     chain::{ChainConfig, Destination},
@@ -103,6 +103,7 @@ pub struct InitializedNode {
 pub enum NodeInitializationOutcome {
     BackendControls(BackendControls),
     DataDirCleanedUp,
+    BootstrapFileImported(Result<(), BootstrapError>),
 }
 
 pub async fn node_initialize(
@@ -145,6 +146,11 @@ pub async fn node_initialize(
                 node_lib::NodeSetupResult::Node(node) => node,
                 node_lib::NodeSetupResult::DataDirCleanedUp => {
                     return Ok(NodeInitializationOutcome::DataDirCleanedUp);
+                }
+                node_lib::NodeSetupResult::BootstrapFileImported(bootstrap_result) => {
+                    return Ok(NodeInitializationOutcome::BootstrapFileImported(
+                        bootstrap_result,
+                    ));
                 }
             };
 

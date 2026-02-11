@@ -19,12 +19,17 @@ use std::env;
 async fn main() -> Result<(), node_lib::Error> {
     let opts = node_lib::Options::from_args(env::args_os());
     let setup_result = node_lib::setup(opts.with_resolved_command()).await?;
-    let node = match setup_result {
-        node_lib::NodeSetupResult::Node(node) => node,
+
+    match setup_result {
+        node_lib::NodeSetupResult::Node(node) => {
+            node.main().await;
+        }
         node_lib::NodeSetupResult::DataDirCleanedUp => {
             panic!("Data dir cleanup option was passed to the test node");
         }
-    };
-    node.main().await;
+        node_lib::NodeSetupResult::BootstrapFileImported(_) => {
+            logging::log::debug!("Node bootstrap option was passed to the test node");
+        }
+    }
     Ok(())
 }

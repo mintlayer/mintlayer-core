@@ -26,6 +26,20 @@ pub async fn run() -> anyhow::Result<()> {
                 node_lib::CLEAN_DATA_OPTION_LONG_NAME
             );
         }
+        node_lib::NodeSetupResult::BootstrapFileImported(bootstrap_result) => {
+            match bootstrap_result {
+                Ok(()) => {
+                    logging::log::info!(
+                        "Node was bootstrapped successfully. Please restart the node without the `--{}` flag",
+                        node_lib::IMPORT_BOOTSTRAP_FILE_OPTION_LONG_NAME
+                    );
+                }
+                Err(err) => {
+                    logging::log::error!("Node bootstrapping failed: {err}");
+                    std::process::exit(1)
+                }
+            }
+        }
     };
 
     Ok(())

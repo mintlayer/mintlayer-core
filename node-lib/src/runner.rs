@@ -25,7 +25,10 @@ use anyhow::{anyhow, Context, Result};
 use file_rotate::{compression::Compression, suffix::AppendCount, ContentLimit, FileRotate};
 
 use blockprod::rpc::BlockProductionRpcServer;
-use chainstate::{rpc::ChainstateRpcServer, ChainstateError, InitializationError};
+use chainstate::{
+    import_bootstrap_file, rpc::ChainstateRpcServer, BootstrapError, ChainstateError,
+    InitializationError,
+};
 use chainstate_launcher::{ChainConfig, StorageBackendConfig};
 use common::chain::config::{assert_no_ignore_consensus_in_chain_config, ChainType};
 use logging::log;
@@ -35,6 +38,7 @@ use rpc::rpc_creds::RpcCreds;
 use test_rpc_functions::{
     empty::make_empty_rpc_test_functions, make_rpc_test_functions, rpc::RpcTestFunctionsRpcServer,
 };
+use utils::{shallow_clone::ShallowClone, tokio_spawn};
 
 use crate::{
     config_files::{NodeConfigFile, DEFAULT_P2P_NETWORKING_ENABLED, DEFAULT_RPC_ENABLED},
@@ -50,6 +54,7 @@ const DEFAULT_LOG_FILE_NAME: &str = "mintlayer.log";
 pub enum NodeSetupResult {
     Node(Node),
     DataDirCleanedUp,
+    BootstrapFileImported(Result<(), BootstrapError>),
 }
 
 pub struct Node {
@@ -235,7 +240,6 @@ async fn initialize(
 
 /// Processes options and potentially runs the node.
 pub async fn setup(options: OptionsWithResolvedCommand) -> Result<NodeSetupResult> {
-    let run_options = options.command.run_options();
     let chain_config = options.command.create_chain_config()?;
 
     // Prepare data dir
@@ -296,6 +300,15 @@ pub async fn setup(options: OptionsWithResolvedCommand) -> Result<NodeSetupResul
 
     logging::log::info!("Command line options: {options:?}");
 
+    let mut options = options;
+
+    if options.command.run_options().import_bootstrap_file.is_some() {
+        logging::log::info!("Disabling p2p networking due to bootstrapping");
+        options.command.run_options_mut().p2p_networking_enabled = Some(false);
+    }
+
+    let run_options = options.command.run_options();
+
     let (manager, controller) = start(
         &options.top_level.config_path(*chain_config.chain_type()),
         &data_dir,
@@ -304,11 +317,46 @@ pub async fn setup(options: OptionsWithResolvedCommand) -> Result<NodeSetupResul
     )
     .await?;
 
-    Ok(NodeSetupResult::Node(Node {
+    let node = Node {
         manager,
         controller,
         lock_file,
-    }))
+    };
+
+    if let Some(file_path) = &run_options.import_bootstrap_file {
+        let chainstate_handle = node.controller().chainstate.shallow_clone();
+        let shutdown_trigger = node.controller().shutdown_trigger.clone();
+        let node_main_join_handle = tokio_spawn(node.main(), "Node main");
+
+        let file_path = file_path.clone();
+        let import_result = chainstate_handle
+            .call_mut(move |cs| import_bootstrap_file(cs, &file_path))
+            .await?;
+
+        shutdown_trigger.initiate();
+        node_main_join_handle.await?;
+
+        match import_result {
+            Ok(()) => {
+                return Ok(NodeSetupResult::BootstrapFileImported(Ok(())));
+            }
+            Err(err) => match err {
+                ChainstateError::BootstrapError(err) => {
+                    return Ok(NodeSetupResult::BootstrapFileImported(Err(err)));
+                }
+                err @ (ChainstateError::StorageError(_)
+                | ChainstateError::FailedToInitializeChainstate(_)
+                | ChainstateError::ProcessBlockError(_)
+                | ChainstateError::FailedToReadProperty(_)
+                | ChainstateError::BlockInvalidatorError(_)
+                | ChainstateError::IoError(_)) => {
+                    return Err(err.into());
+                }
+            },
+        }
+    }
+
+    Ok(NodeSetupResult::Node(node))
 }
 
 /// Creates an exclusive lock file in the specified directory.

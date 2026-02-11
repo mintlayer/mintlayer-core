@@ -192,6 +192,7 @@ pub struct RegtestOptions {
 }
 
 pub const CLEAN_DATA_OPTION_LONG_NAME: &str = "clean-data";
+pub const IMPORT_BOOTSTRAP_FILE_OPTION_LONG_NAME: &str = "import-bootstrap-file";
 
 #[derive(Args, Clone, Debug, Default)]
 pub struct RunOptions {
@@ -394,6 +395,11 @@ pub struct RunOptions {
     /// Path to a CSV file with custom checkpoints that must be used instead of the predefined ones.
     #[clap(long, hide = true)]
     pub custom_checkpoints_csv_file: Option<PathBuf>,
+
+    /// Start the node with networking disabled, import blocks from the specified bootstrap file
+    /// and exit.
+    #[clap(long = IMPORT_BOOTSTRAP_FILE_OPTION_LONG_NAME, value_name = "FILE", conflicts_with("clean_data"))]
+    pub import_bootstrap_file: Option<PathBuf>,
 }
 
 pub fn default_data_dir(chain_type: ChainType) -> PathBuf {
@@ -466,6 +472,7 @@ mod tests {
             enable_chainstate_heavy_checks: Default::default(),
             allow_checkpoints_mismatch: Default::default(),
             custom_checkpoints_csv_file,
+            import_bootstrap_file: Default::default(),
         };
         let make_cmd = |run_options| match chain_type {
             ChainType::Mainnet => Command::Mainnet(run_options),

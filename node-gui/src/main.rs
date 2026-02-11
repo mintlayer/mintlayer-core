@@ -20,6 +20,7 @@ mod widgets;
 
 use std::{convert::identity, env};
 
+use chainstate::BootstrapError;
 use heck::ToUpperCamelCase as _;
 use iced::{
     advanced::graphics::core::window,
@@ -37,7 +38,7 @@ use node_gui_backend::{
     node_initialize, BackendControls, BackendSender, InitNetwork, NodeInitializationOutcome,
     WalletMode,
 };
-use node_lib::CLEAN_DATA_OPTION_LONG_NAME;
+use node_lib::{CLEAN_DATA_OPTION_LONG_NAME, IMPORT_BOOTSTRAP_FILE_OPTION_LONG_NAME};
 
 const COLD_WALLET_TOOLTIP_TEXT: &str =
     "Start the wallet in Cold mode without connecting to the network or any nodes. The Cold mode is made to run the wallet on an air-gapped machine without internet connection for storage of keys of high-value. For example, pool decommission keys.";
@@ -103,6 +104,7 @@ impl From<InitializationFailure> for GuiState {
 enum InitializationInterruptionReason {
     Failure(InitializationFailure),
     DataDirCleanedUp,
+    BootstrapFileImported(Result<(), BootstrapError>),
 }
 
 struct InitializationFailure {
@@ -168,6 +170,9 @@ fn title(state: &GuiState) -> String {
             InitializationInterruptionReason::DataDirCleanedUp => {
                 "Mintlayer data directory cleaned up".into()
             }
+            InitializationInterruptionReason::BootstrapFileImported(_) => {
+                "Mintlayer node bootstrapping complete".into()
+            }
         },
     }
 }
@@ -196,9 +201,11 @@ fn update(state: &mut GuiState, message: Message) -> Task<Message> {
                         command: command.clone(),
                     };
 
-                    if resolved_options.clean_data_option_set() {
-                        // If "clean data" option was set, selecting the wallet mode makes no sense;
-                        // since the option is ignored in the cold mode, we use the hot one.
+                    let run_options = resolved_options.command.run_options();
+                    if run_options.clean_data || run_options.import_bootstrap_file.is_some() {
+                        // If either the "clean data" or "import bootstrap file" option was set,
+                        // selecting the wallet mode makes no sense.
+                        // Since these options don't work in the cold mode, we use the hot one.
                         update_on_mode_selected(state, WalletMode::Hot, resolved_options)
                     } else {
                         *state = GuiState::SelectWalletMode { resolved_options };
@@ -317,6 +324,12 @@ fn update(state: &mut GuiState, message: Message) -> Task<Message> {
                 NodeInitializationOutcome::DataDirCleanedUp => {
                     *state = GuiState::InitializationInterrupted(
                         InitializationInterruptionReason::DataDirCleanedUp,
+                    );
+                    Task::none()
+                }
+                NodeInitializationOutcome::BootstrapFileImported(bootstrap_result) => {
+                    *state = GuiState::InitializationInterrupted(
+                        InitializationInterruptionReason::BootstrapFileImported(bootstrap_result),
                     );
                     Task::none()
                 }
@@ -551,6 +564,27 @@ fn view(state: &GuiState) -> Element<'_, Message> {
                         ))
                         .size(text_font_size)
                     ]
+                }
+                InitializationInterruptionReason::BootstrapFileImported(bootstrap_result) => {
+                    match bootstrap_result {
+                        Ok(()) => {
+                            column![
+                                iced::widget::text("Bootstrap file has been imported")
+                                    .size(header_font_size),
+                                iced::widget::text(format!(
+                                    "Please restart the node without the `--{}` flag",
+                                    IMPORT_BOOTSTRAP_FILE_OPTION_LONG_NAME
+                                ))
+                                .size(text_font_size)
+                            ]
+                        }
+                        Err(err) => {
+                            column![
+                                iced::widget::text("Bootstrapping failed").size(header_font_size),
+                                iced::widget::text(err.to_string()).size(text_font_size)
+                            ]
+                        }
+                    }
                 }
             };
             let error_box = error_box

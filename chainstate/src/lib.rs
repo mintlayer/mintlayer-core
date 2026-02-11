@@ -19,7 +19,7 @@ mod interface;
 
 pub mod rpc;
 
-use std::sync::Arc;
+use std::{path::Path, sync::Arc};
 
 use tokio::sync::watch;
 
@@ -87,16 +87,24 @@ impl std::fmt::Display for ChainstateEventTracingWrapper<'_> {
 pub enum ChainstateError {
     #[error("Block storage error: `{0}`")]
     StorageError(#[from] chainstate_storage::Error),
+
     #[error("Initialization error: {0}")]
     FailedToInitializeChainstate(#[from] InitializationError),
+
     #[error("Block processing failed: `{0}`")]
     ProcessBlockError(#[from] BlockError),
+
     #[error("Property read error: `{0}`")]
     FailedToReadProperty(#[from] PropertyQueryError),
+
     #[error("Block import error {0}")]
     BootstrapError(#[from] BootstrapError),
+
     #[error("Error invoking block invalidator: {0}")]
     BlockInvalidatorError(#[from] BlockInvalidatorError),
+
+    #[error("I/O error: {0}")]
+    IoError(String),
 }
 
 pub type ChainstateSubsystem = Box<dyn ChainstateInterface>;
@@ -127,4 +135,29 @@ where
     )?;
     let chainstate_interface = ChainstateInterfaceImpl::new(chainstate);
     Ok(Box::new(chainstate_interface))
+}
+
+pub fn export_bootstrap_file<CS: ChainstateInterface + ?Sized>(
+    chainsate: &CS,
+    file_path: &Path,
+    include_stale_blocks: bool,
+) -> Result<(), ChainstateError> {
+    let file_obj = std::fs::File::create(file_path)
+        .map_err(|err| ChainstateError::IoError(err.to_string()))?;
+    let writer: std::io::BufWriter<Box<dyn std::io::Write + Send>> =
+        std::io::BufWriter::new(Box::new(file_obj));
+
+    chainsate.export_bootstrap_stream(writer, include_stale_blocks)
+}
+
+pub fn import_bootstrap_file<CS: ChainstateInterface + ?Sized>(
+    chainsate: &mut CS,
+    file_path: &Path,
+) -> Result<(), ChainstateError> {
+    let file_obj =
+        std::fs::File::open(file_path).map_err(|err| ChainstateError::IoError(err.to_string()))?;
+    let reader: std::io::BufReader<Box<dyn std::io::Read + Send>> =
+        std::io::BufReader::new(Box::new(file_obj));
+
+    chainsate.import_bootstrap_stream(reader)
 }

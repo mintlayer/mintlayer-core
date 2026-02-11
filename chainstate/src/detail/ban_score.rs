@@ -574,6 +574,7 @@ impl BanScore for ChainstateError {
             ChainstateError::FailedToReadProperty(_) => 0,
             ChainstateError::BootstrapError(_) => 0,
             ChainstateError::BlockInvalidatorError(_) => 0,
+            ChainstateError::IoError(_) => 0,
         }
     }
 }

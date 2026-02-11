@@ -173,6 +173,8 @@ fn read_config_override_values() {
         // Note: there is no correspondence to this option inside NodeConfigFile;
         // the contents of the csv file will become part of ChainConfig.
         custom_checkpoints_csv_file: Some("foo.csv".to_owned().into()),
+        // Note: there is no correspondence to this option inside NodeConfigFile.
+        import_bootstrap_file: Some("foo.bin".to_owned().into()),
     };
     let config = NodeConfigFile::read(&chain_config, &config_path, &options).unwrap();
 

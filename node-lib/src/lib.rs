@@ -32,7 +32,7 @@ pub use config_files::{
 };
 pub use options::{
     Command, Options, OptionsWithResolvedCommand, RunOptions, TopLevelOptions,
-    CLEAN_DATA_OPTION_LONG_NAME,
+    CLEAN_DATA_OPTION_LONG_NAME, IMPORT_BOOTSTRAP_FILE_OPTION_LONG_NAME,
 };
 pub use runner::{setup, NodeSetupResult};
 

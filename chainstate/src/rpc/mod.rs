@@ -17,13 +17,7 @@
 
 mod types;
 
-use std::{
-    collections::BTreeMap,
-    convert::Infallible,
-    io::{Read, Write},
-    num::NonZeroUsize,
-    sync::Arc,
-};
+use std::{collections::BTreeMap, convert::Infallible, num::NonZeroUsize, sync::Arc};
 
 use chainstate_types::BlockIndex;
 use common::{
@@ -41,8 +35,8 @@ use rpc::{subscription, RpcResult};
 use serialization::hex_encoded::HexEncoded;
 
 use crate::{
-    chainstate_interface::ChainstateInterface, Block, BlockSource, ChainInfo, ChainstateError,
-    GenBlock,
+    chainstate_interface::ChainstateInterface, export_bootstrap_file, import_bootstrap_file, Block,
+    BlockSource, ChainInfo, ChainstateError, GenBlock,
 };
 
 use self::types::{block::RpcBlock, event::RpcEvent};
@@ -526,23 +520,17 @@ impl ChainstateRpcServer for super::ChainstateHandle {
         include_stale_blocks: bool,
     ) -> RpcResult<()> {
         // FIXME: test this function in functional tests
-        let file_obj: std::fs::File = rpc::handle_result(std::fs::File::create(file_path))?;
-        let writer: std::io::BufWriter<Box<dyn Write + Send>> =
-            std::io::BufWriter::new(Box::new(file_obj));
-
+        let file_path = file_path.to_owned();
         rpc::handle_result(
-            self.call(move |this| this.export_bootstrap_stream(writer, include_stale_blocks))
+            self.call(move |this| export_bootstrap_file(this, &file_path, include_stale_blocks))
                 .await,
         )
     }
 
     async fn import_bootstrap_file(&self, file_path: &std::path::Path) -> RpcResult<()> {
         // FIXME: test this function in functional tests
-        let file_obj: std::fs::File = rpc::handle_result(std::fs::File::open(file_path))?;
-        let reader: std::io::BufReader<Box<dyn Read + Send>> =
-            std::io::BufReader::new(Box::new(file_obj));
-
-        rpc::handle_result(self.call_mut(move |this| this.import_bootstrap_stream(reader)).await)
+        let file_path = file_path.to_owned();
+        rpc::handle_result(self.call_mut(move |this| import_bootstrap_file(this, &file_path)).await)
     }
 
     async fn info(&self) -> RpcResult<ChainInfo> {
