@@ -32,6 +32,7 @@ use blockprod::BlockProductionError;
 use chainstate::tx_verifier::{
     self, error::ScriptError, input_check::signature_only_check::SignatureOnlyVerifiable,
 };
+use futures::StreamExt;
 use futures::{never::Never, stream::FuturesOrdered, TryStreamExt};
 use helpers::{
     fetch_input_infos, fetch_token_info, fetch_utxo, fetch_utxo_extra_info, into_balances,
@@ -80,7 +81,9 @@ use consensus::{GenerateBlockInputData, PoSTimestampSearchInputData};
 use crypto::{ephemeral_e2e::EndToEndPrivateKey, key::hdkd::u31::U31};
 use logging::log;
 use mempool::tx_accumulator::PackingStrategy;
-pub use node_comm::node_traits::{ConnectedPeer, NodeInterface, PeerId};
+pub use node_comm::node_traits::{
+    ConnectedPeer, MempoolEvent, MempoolEvents, NodeInterface, PeerId,
+};
 pub use node_comm::{
     handles_client::WalletHandlesClient, make_cold_wallet_rpc_client, make_rpc_client,
     rpc_client::NodeRpcClient,
@@ -202,6 +205,8 @@ pub struct Controller<T, W, B: storage::Backend + 'static> {
     staking_started: BTreeSet<U31>,
 
     wallet_events: W,
+
+    mempool_events: MempoolEvents,
 }
 
 impl<T, WalletEvents, B: storage::Backend> std::fmt::Debug for Controller<T, WalletEvents, B> {
@@ -227,12 +232,17 @@ where
         wallet: RuntimeWallet<B>,
         wallet_events: W,
     ) -> Result<Self, ControllerError<N>> {
+        let mempool_events = rpc_client
+            .mempool_subscribe_to_events()
+            .await
+            .map_err(ControllerError::NodeCallError)?;
         let mut controller = Self {
             chain_config,
             rpc_client,
             wallet,
             staking_started: BTreeSet::new(),
             wallet_events,
+            mempool_events,
         };
 
         log::info!("Syncing the wallet...");
@@ -241,19 +251,24 @@ where
         Ok(controller)
     }
 
-    pub fn new_unsynced(
+    pub async fn new_unsynced(
         chain_config: Arc<ChainConfig>,
         rpc_client: N,
         wallet: RuntimeWallet<B>,
         wallet_events: W,
-    ) -> Self {
-        Self {
+    ) -> Result<Self, ControllerError<N>> {
+        let mempool_events = rpc_client
+            .mempool_subscribe_to_events()
+            .await
+            .map_err(ControllerError::NodeCallError)?;
+        Ok(Self {
             chain_config,
             rpc_client,
             wallet,
             staking_started: BTreeSet::new(),
             wallet_events,
-        }
+            mempool_events,
+        })
     }
 
     pub fn create_wallet(
@@ -1345,8 +1360,61 @@ where
                 }
             }
 
-            tokio::time::sleep(NORMAL_DELAY).await;
+            let mut delay = Box::pin(tokio::time::sleep(NORMAL_DELAY));
 
+            loop {
+                tokio::select! {
+                    _ = &mut delay => {
+                        break;
+                    }
+
+                    maybe_event = self.mempool_events.next() => {
+                        let event = match maybe_event {
+                            Some(e) => e,
+                            None => {
+                                log::error!("Mempool notifications channel is closed.");
+                                tokio::time::sleep(ERROR_DELAY).await;
+
+
+                                match self.rpc_client
+                                    .mempool_subscribe_to_events()
+                                    .await {
+                                    Ok(events) => {
+                                        self.mempool_events = events;
+                                    }
+                                    Err(err) => {
+                                        log::error!("Subscribing to mempool notifications failed with: {err}");
+                                    }
+                                }
+                                break
+                            }
+                        };
+
+                        match event {
+                            MempoolEvent::NewTransaction { tx_id } => {
+                                let transaction = self.rpc_client
+                                    .mempool_get_transaction(tx_id)
+                                    .await;
+
+                                match transaction {
+                                    Ok(Some(transaction)) => {
+                                        let txs = [transaction];
+                                        if let Err(err) = self.wallet.add_mempool_transactions(&txs, &self.wallet_events) {
+                                            log::error!("Tx {} failed to be added in the wallet because of an error: {err}", tx_id);
+                                        }
+                                    }
+                                    Ok(None) => {
+                                        log::warn!("Tx {} announced by mempool, but not found when fetched", tx_id);
+                                    }
+                                    Err(err) => {
+                                        log::error!("Error while fetching a transaction from mempool {err}");
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             self.rebroadcast_txs(&mut rebroadcast_txs_timer).await;
         }
     }

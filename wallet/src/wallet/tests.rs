@@ -4545,7 +4545,9 @@ async fn wallet_multiple_transactions_in_single_block(#[case] seed: Seed) {
         }
 
         transactions.push(transaction);
-        wallet.scan_mempool(transactions.as_slice(), &WalletEventsNoOp).unwrap();
+        wallet
+            .add_mempool_transactions(transactions.as_slice(), &WalletEventsNoOp)
+            .unwrap();
     }
 
     let _ = create_block(
@@ -4673,7 +4675,9 @@ async fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
     }
 
     transactions.push(transaction);
-    wallet.scan_mempool(transactions.as_slice(), &WalletEventsNoOp).unwrap();
+    wallet
+        .add_mempool_transactions(transactions.as_slice(), &WalletEventsNoOp)
+        .unwrap();
 
     // create new wallet
     let mut wallet = create_wallet(chain_config);
@@ -4681,9 +4685,11 @@ async fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
     // scan the first block
     scan_wallet(&mut wallet, BlockHeight::new(0), vec![block1]);
 
-    // scan mempool transaction in random order
+    // add mempool transaction in random order
     transactions.shuffle(&mut rng);
-    wallet.scan_mempool(transactions.as_slice(), &WalletEventsNoOp).unwrap();
+    wallet
+        .add_mempool_transactions(transactions.as_slice(), &WalletEventsNoOp)
+        .unwrap();
 
     // Should fail to spend more than we have
     let should_fail_to_send = (amount_to_keep + Amount::from_atoms(1)).unwrap();
@@ -4746,7 +4752,7 @@ async fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
     assert_eq!(coin_balance, amount_to_keep);
 
     // if we add it back from the mempool it should return even if abandoned
-    wallet.scan_mempool(&[transaction], &WalletEventsNoOp).unwrap();
+    wallet.add_mempool_transactions(&[transaction], &WalletEventsNoOp).unwrap();
     let coin_balance = get_coin_balance_with_inactive(&wallet);
     assert_eq!(coin_balance, Amount::ZERO);
 }
@@ -4855,7 +4861,9 @@ async fn wallet_abandon_transactions(#[case] seed: Seed) {
     assert_eq!(coin_balance, coins_after_abandon);
 
     let txs_to_keep: Vec<_> = txs_to_keep.iter().map(|(tx, _)| tx.clone()).collect();
-    wallet.scan_mempool(txs_to_keep.as_slice(), &WalletEventsNoOp).unwrap();
+    wallet
+        .add_mempool_transactions(txs_to_keep.as_slice(), &WalletEventsNoOp)
+        .unwrap();
     let coin_balance = get_coin_balance_with_inactive(&wallet);
     assert_eq!(coin_balance, coins_after_abandon);
 

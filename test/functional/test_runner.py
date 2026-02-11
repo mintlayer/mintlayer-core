@@ -154,6 +154,7 @@ BASE_SCRIPTS = [
     'wallet_sweep_address.py',
     'wallet_sweep_delegation.py',
     'wallet_recover_accounts.py',
+    'wallet_mempool_events.py',
     'wallet_tokens.py',
     'wallet_tokens_freeze.py',
     'wallet_tokens_transfer_from_multisig_addr.py',

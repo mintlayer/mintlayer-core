@@ -155,7 +155,7 @@ class WalletConflictTransaction(BitcoinTestFramework):
             transactions.remove(transfer_tx)
             freeze_tx = transactions[0]
 
-            assert_equal(1, len(await wallet.list_pending_transactions()))
+            assert_equal(2, len(await wallet.list_pending_transactions()))
 
 
             # try to send tokens again should fail as the tokens are already sent
@@ -163,12 +163,15 @@ class WalletConflictTransaction(BitcoinTestFramework):
             assert_in("Coin selection error: No available UTXOs", await wallet.send_tokens_to_address(token_id, address, tokens_to_mint))
             # check that the mempool still has the transfer tx
             assert node.mempool_contains_tx(transfer_tx_id)
-            # abandon it from the wallet side so it is not rebroadcasted
-            assert_in("The transaction was marked as abandoned successfully", await wallet.abandon_transaction(transfer_tx_id))
+            assert_in("Cannot change a transaction's state from InMempool", await wallet.abandon_transaction(transfer_tx_id))
 
             # create a block with the freeze token transaction
             self.generate_block([freeze_tx])
             assert_in("Success", await wallet.sync())
+            self.log.info(f"transfer_tx_id = {transfer_tx_id}")
+
+            # abandon it from the wallet side so it is not rebroadcasted
+            assert_in("The transaction was marked as abandoned successfully", await wallet.abandon_transaction(transfer_tx_id))
 
             # after the token is frozen the transfer token tx should be evicted by the mempool as conflicting
             # wait until mempool evicts the conflicting tx

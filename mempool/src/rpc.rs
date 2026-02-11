@@ -31,9 +31,9 @@ use rpc::RpcResult;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, rpc::description::HasValueHint)]
 pub struct GetTxResponse {
-    id: Id<Transaction>,
-    status: TxStatus,
-    transaction: HexEncoded<SignedTransaction>,
+    pub id: Id<Transaction>,
+    pub status: TxStatus,
+    pub transaction: HexEncoded<SignedTransaction>,
 }
 
 #[rpc::describe]

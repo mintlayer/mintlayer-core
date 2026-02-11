@@ -19,6 +19,8 @@ use std::{
     time::Duration,
 };
 
+use futures::stream::Stream;
+
 use chainstate::ChainInfo;
 use common::{
     chain::{
@@ -146,6 +148,17 @@ pub trait NodeInterface {
 
     async fn mempool_get_fee_rate(&self, in_top_x_mb: usize) -> Result<FeeRate, Self::Error>;
     async fn mempool_get_fee_rate_points(&self) -> Result<Vec<(usize, FeeRate)>, Self::Error>;
+    async fn mempool_get_transaction(
+        &self,
+        tx_id: Id<Transaction>,
+    ) -> Result<Option<SignedTransaction>, Self::Error>;
+    async fn mempool_subscribe_to_events(&self) -> Result<MempoolEvents, Self::Error>;
 
     async fn get_utxo(&self, outpoint: UtxoOutPoint) -> Result<Option<TxOutput>, Self::Error>;
+}
+
+pub type MempoolEvents = Box<dyn Stream<Item = MempoolEvent> + Sync + Send + Unpin>;
+
+pub enum MempoolEvent {
+    NewTransaction { tx_id: Id<Transaction> },
 }

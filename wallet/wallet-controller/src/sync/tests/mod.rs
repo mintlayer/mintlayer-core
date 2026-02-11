@@ -38,7 +38,7 @@ use logging::log;
 use mempool::{tx_accumulator::PackingStrategy, FeeRate};
 use mempool_types::tx_options::TxOptionsOverrides;
 use node_comm::{
-    node_traits::{ConnectedPeer, PeerId},
+    node_traits::{ConnectedPeer, MempoolEvents, PeerId},
     rpc_client::NodeRpcError,
 };
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
@@ -437,6 +437,17 @@ impl NodeInterface for MockNode {
             1,
             FeeRate::from_amount_per_kb(Amount::from_atoms(1)),
         )])
+    }
+
+    async fn mempool_get_transaction(
+        &self,
+        _tx_id: Id<Transaction>,
+    ) -> Result<Option<SignedTransaction>, Self::Error> {
+        unreachable!()
+    }
+
+    async fn mempool_subscribe_to_events(&self) -> Result<MempoolEvents, Self::Error> {
+        unreachable!()
     }
 }
 
