@@ -416,6 +416,7 @@ fn update(state: &mut GuiState, message: Message) -> Task<Message> {
     }
 }
 
+#[allow(clippy::float_arithmetic)]
 fn view(state: &GuiState) -> Element<'_, Message> {
     match state {
         GuiState::Initial { .. } => {
@@ -493,7 +494,35 @@ fn view(state: &GuiState) -> Element<'_, Message> {
         }
 
         GuiState::Loading { .. } => {
-            iced::widget::container(Spinner::new().width(Length::Fill).height(Length::Fill)).into()
+            // Create a spinner. By default, the spinner is simply a dot of the radius "circle_radius"
+            // that goes in a circle whose size is the spinner's widget size. To make it look a bit
+            // nicer we also add a light gray circle border around the whole thing.
+            let spinner_size = 40.0;
+            let spinner_dot_size = 3.0;
+            let border_width = 2.0;
+            let border_color = iced::Color::from_rgb8(192, 192, 192);
+
+            let spinner = Spinner::new()
+                .width(spinner_size - 2.0 * border_width)
+                .height(spinner_size - 2.0 * border_width)
+                .circle_radius(spinner_dot_size);
+
+            iced::widget::container(
+                iced::widget::container(spinner)
+                    .width(spinner_size)
+                    .height(spinner_size)
+                    .padding(border_width)
+                    .style(move |_| iced::widget::container::Style {
+                        border: iced::Border {
+                            width: border_width,
+                            radius: (spinner_size / 2.0).into(),
+                            color: border_color,
+                        },
+                        ..Default::default()
+                    }),
+            )
+            .center(Length::Fill)
+            .into()
         }
 
         GuiState::Loaded {
