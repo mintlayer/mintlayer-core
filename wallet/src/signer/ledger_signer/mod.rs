@@ -232,11 +232,11 @@ where
                     }
                 }
                 // In case of a communication error try to reconnect, and try again
-                Err(
-                    LedgerMessagesError::DeviceError(ledger_lib::Error::Hid(_))
-                    | LedgerMessagesError::DeviceError(ledger_lib::Error::Tcp(_))
-                    | LedgerMessagesError::DeviceError(ledger_lib::Error::Ble(_)),
-                ) => {
+                Err(LedgerMessagesError::DeviceError(
+                    ledger_lib::Error::Hid(_)
+                    | ledger_lib::Error::Tcp(_)
+                    | ledger_lib::Error::Ble(_),
+                )) => {
                     let (mut new_client, _data) = self
                         .provider
                         .find_ledger_device_from_db(db_tx, self.chain_config.clone())
@@ -1042,17 +1042,17 @@ fn to_ledger_addr_type(dest: DestinationTag) -> SignerResult<AddrType> {
         DestinationTag::PublicKey => Ok(AddrType::PublicKey),
         DestinationTag::PublicKeyHash => Ok(AddrType::PublicKeyHash),
         DestinationTag::AnyoneCanSpend => {
-            return Err(SignerError::SigningError(
+            Err(SignerError::SigningError(
                 DestinationSigError::AttemptedToProduceSignatureForAnyoneCanSpend,
             ))
         }
         DestinationTag::ClassicMultisig => {
-            return Err(SignerError::SigningError(
+            Err(SignerError::SigningError(
                 DestinationSigError::AttemptedToProduceClassicalMultisigSignatureInUnipartySignatureCode,
             ))
         }
         DestinationTag::ScriptHash => {
-            return Err(SignerError::SigningError(
+            Err(SignerError::SigningError(
                 DestinationSigError::Unsupported,
             ))
         }
@@ -1102,16 +1102,14 @@ async fn check_public_keys_against_key_chain<L: Exchange, T: WalletStorageReadLo
         Some(data) => {
             match data {
                 #[cfg(feature = "trezor")]
-                HardwareWalletData::Trezor(_) => {
-                    return Err(LedgerError::WalletFileIsTrezorWallet.into());
-                }
+                HardwareWalletData::Trezor(_) => Err(LedgerError::WalletFileIsTrezorWallet.into()),
                 HardwareWalletData::Ledger(_data) => {
                     // Data is empty there is nothing to compare
-                    return Err(LedgerError::HardwareWalletDifferentMnemonicOrPassphrase.into());
+                    Err(LedgerError::HardwareWalletDifferentMnemonicOrPassphrase.into())
                 }
             }
         }
-        None => return Err(LedgerError::WalletFileIsSoftwareWallet.into()),
+        None => Err(LedgerError::WalletFileIsSoftwareWallet.into()),
     }
 }
 

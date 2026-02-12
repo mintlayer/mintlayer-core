@@ -112,7 +112,7 @@ impl TouchScreenElement {
             (TouchScreenElement::ReviewConfirm, Device::NanoGen5) => (290, 335),
 
             // Fallback or unimplemented combinations
-            (_, Device::NanoS) | (_, Device::NanoSPlus) | (_, Device::NanoX) => {
+            (_, Device::NanoS | Device::NanoSPlus | Device::NanoX) => {
                 panic!("Coordinate not mapped for {:?} on {:?}", self, device)
             }
         }

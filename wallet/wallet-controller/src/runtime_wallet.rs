@@ -1988,6 +1988,8 @@ where
             RuntimeWallet::Software(w) => w.add_mempool_transactions(txs, wallet_events),
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => w.add_mempool_transactions(txs, wallet_events),
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => w.add_mempool_transactions(txs, wallet_events),
         }
     }
 

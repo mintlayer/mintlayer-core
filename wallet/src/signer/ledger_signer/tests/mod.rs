@@ -161,9 +161,10 @@ async fn wait_for_valid_reponse(device: &mut TcpDevice) {
             Ok(_) => break,
             Err(_) => {
                 tries += 1;
-                if tries > 10 {
-                    panic!("Could not get a valid response from the device")
-                }
+                assert!(
+                    tries <= 10,
+                    "Could not get a valid response from the device"
+                );
                 sleep(Duration::from_millis(100)).await;
             }
         }
