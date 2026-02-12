@@ -29,6 +29,10 @@ pub struct EventsController<E> {
 impl<E: Clone + Send + Sync + 'static> EventsController<E> {
     pub fn new() -> Self {
         let events_broadcaster = slave_pool::ThreadPool::new();
+        // TODO: `slave_pool::ThreadPool` does not increase the number of threads automatically,
+        // so we'll always have exactly one thread here. Moreover, increasing the number of threads
+        // would allow events to be handled in a wrong order. So the thread pool is completely
+        // useless here and should be replaced with a single thread.
         events_broadcaster.set_threads(1).expect("Event thread-pool starting failed");
         Self {
             event_subscribers: Vec::new(),
@@ -72,4 +76,51 @@ impl<E: Clone + Send + Sync + 'static> Default for EventsController<E> {
     }
 }
 
-// TODO: add tests for events
+#[cfg(test)]
+mod tests {
+    use std::{
+        ops::Deref as _,
+        sync::{Arc, Mutex},
+        time::Duration,
+    };
+
+    use super::*;
+
+    // Check that a handler won't be called for a later event if its call for an earlier
+    // event hasn't finished yet.
+    #[test]
+    fn events_ordering() {
+        #[derive(Eq, PartialEq, Copy, Clone, Debug)]
+        enum Event {
+            A,
+            B,
+        }
+
+        let mut controller = EventsController::<Event>::new();
+        let handled_events = Arc::new(Mutex::new(Vec::new()));
+
+        controller.subscribe_to_events({
+            let handled_events = Arc::clone(&handled_events);
+
+            Arc::new(move |event| {
+                match event {
+                    Event::A => {
+                        std::thread::sleep(Duration::from_millis(500));
+                    }
+                    Event::B => {}
+                }
+
+                handled_events.lock().unwrap().push(event);
+            })
+        });
+
+        controller.broadcast(Event::A);
+        controller.broadcast(Event::B);
+        controller.wait_for_all_events();
+
+        assert_eq!(
+            handled_events.lock().unwrap().deref(),
+            &[Event::A, Event::B]
+        );
+    }
+}

@@ -120,8 +120,12 @@ pub fn create_n_blocks(
     blocks
 }
 
-/// A timeout for blocking calls.
-pub const LONG_TIMEOUT: Duration = Duration::from_secs(600);
+/// A timeout for long blocking calls, such as an entire async test.
+pub const LONG_TIMEOUT: Duration = Duration::from_secs(300);
+
+/// A timeout for medium-length blocking calls, such as a particular function call in a test.
+pub const MEDIUM_TIMEOUT: Duration = Duration::from_secs(60);
+
 /// A short timeout for events that shouldn't occur.
 pub const SHORT_TIMEOUT: Duration = Duration::from_millis(500);
 
