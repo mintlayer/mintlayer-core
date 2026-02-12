@@ -27,6 +27,8 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
   - Wallet:
     - Added support for Ledger hardware wallets (beta).
+    - Now the wallet subscribes to events from the Mempool to include not yet confirmed transactions
+      relevant to this wallet.
 
 ### Changed
   - Wallet RPC:
