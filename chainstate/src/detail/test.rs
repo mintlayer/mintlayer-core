@@ -57,6 +57,7 @@ fn process_genesis_block() {
             DefaultTransactionVerificationStrategy::new(),
             None,
             time_getter,
+            None,
         );
 
         chainstate.process_genesis().unwrap();
@@ -103,6 +104,7 @@ fn empty_chainstate_no_genesis() {
             DefaultTransactionVerificationStrategy::new(),
             None,
             time_getter,
+            None,
         );
         // This panics
         let _ = chainstate.query().unwrap().get_best_block_id();

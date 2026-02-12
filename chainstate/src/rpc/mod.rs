@@ -589,6 +589,7 @@ mod test {
                 DefaultTransactionVerificationStrategy::new(),
                 None,
                 Default::default(),
+                None,
             )
             .unwrap(),
         );

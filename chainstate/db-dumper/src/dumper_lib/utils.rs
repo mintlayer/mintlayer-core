@@ -80,6 +80,7 @@ pub fn create_chainstate(
         DefaultTransactionVerificationStrategy::new(),
         None,
         Default::default(),
+        None,
     )?;
 
     Ok(chainstate)

@@ -18,7 +18,7 @@ use std::io::{BufRead, Write};
 use strum::IntoEnumIterator;
 
 use chainstate_storage::BlockchainStorageRead;
-use chainstate_types::{BlockIndex, PropertyQueryError};
+use chainstate_types::PropertyQueryError;
 use common::{
     chain::{
         config::{ChainType, MagicBytes},
@@ -110,13 +110,17 @@ impl From<std::io::Error> for BootstrapError {
     }
 }
 
+/// Import blocks from the provided bootstrap stream.
+///
+/// `process_block_func` must return true if importing should continue and false if it should
+/// stop.
 pub fn import_bootstrap_stream<P, S: std::io::Read>(
     chain_config: &ChainConfig,
     file_reader: &mut std::io::BufReader<S>,
     process_block_func: &mut P,
 ) -> Result<(), BootstrapError>
 where
-    P: FnMut(WithId<Block>) -> Result<Option<BlockIndex>, BootstrapError>,
+    P: FnMut(WithId<Block>) -> Result<bool, BootstrapError>,
 {
     let mut buffer_queue = Vec::<u8>::with_capacity(1024 * 1024);
 
@@ -168,8 +172,12 @@ where
         );
 
         let block = Block::decode_all(&mut buffer_queue.as_slice())?;
-        process_block_func(block.into())?;
+        let should_continue = process_block_func(block.into())?;
         buffer_queue.clear();
+
+        if !should_continue {
+            break;
+        }
     }
 
     Ok(())

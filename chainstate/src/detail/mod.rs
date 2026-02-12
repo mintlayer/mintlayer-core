@@ -31,6 +31,7 @@ use std::{collections::VecDeque, sync::Arc};
 
 use itertools::Itertools;
 use thiserror::Error;
+use tokio::sync::watch;
 
 use chainstate_storage::{
     BlockchainStorage, BlockchainStorageRead, BlockchainStorageWrite, TransactionRw, Transactional,
@@ -119,6 +120,7 @@ pub struct Chainstate<S, V> {
     rpc_events: broadcaster::Broadcaster<ChainstateEvent>,
     time_getter: TimeGetter,
     is_initial_block_download_finished: SetFlag,
+    shutdown_initiated_rx: Option<watch::Receiver<SetFlag>>,
 }
 
 #[derive(Copy, Clone, Eq, Debug, PartialEq)]
@@ -185,6 +187,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         tx_verification_strategy: V,
         custom_orphan_error_hook: Option<Arc<OrphanErrorHandler>>,
         time_getter: TimeGetter,
+        shutdown_initiated_rx: Option<watch::Receiver<SetFlag>>,
     ) -> Result<Self, ChainstateError> {
         let best_block_id = {
             let db_tx = chainstate_storage.transaction_ro()?;
@@ -198,6 +201,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             tx_verification_strategy,
             custom_orphan_error_hook,
             time_getter,
+            shutdown_initiated_rx,
         );
 
         if best_block_id.is_none() {
@@ -229,6 +233,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         tx_verification_strategy: V,
         custom_orphan_error_hook: Option<Arc<OrphanErrorHandler>>,
         time_getter: TimeGetter,
+        shutdown_initiated_rx: Option<watch::Receiver<SetFlag>>,
     ) -> Self {
         let orphan_blocks = OrphansProxy::new(*chainstate_config.max_orphan_blocks);
         let subsystem_events = EventsController::new();
@@ -244,6 +249,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             rpc_events,
             time_getter,
             is_initial_block_download_finished: SetFlag::new(),
+            shutdown_initiated_rx,
         }
     }
 
@@ -902,13 +908,18 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
         let chain_config = Arc::clone(&self.chain_config);
         let mut block_processor = |block: WithId<Block>| -> Result<_, BootstrapError> {
+            // If chainstate is being shutdown, stop immediately.
+            if self.shutdown_initiated_rx.as_ref().is_some_and(|rx| rx.borrow().test()) {
+                return Ok(false);
+            }
+
             let block_exists = self.make_db_tx_ro()?.block_exists(&block.get_id())?;
 
             if !block_exists {
-                Ok(self.process_block(block, BlockSource::Local)?)
-            } else {
-                Ok(None)
+                self.process_block(block, BlockSource::Local)?;
             }
+
+            Ok(true)
         };
 
         let result = import_bootstrap_stream(&chain_config, &mut reader, &mut block_processor);

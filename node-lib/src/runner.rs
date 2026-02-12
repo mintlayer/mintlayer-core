@@ -85,12 +85,15 @@ async fn initialize(
     let mut manager = subsystem::Manager::new_with_config(manager_config);
 
     // Chainstate subsystem
-    let chainstate = chainstate_launcher::make_chainstate(
+    let chainstate_maker = chainstate_launcher::create_chainstate_maker(
         data_dir,
         Arc::clone(&chain_config),
         node_config.chainstate.unwrap_or_default().into(),
     )?;
-    let chainstate = manager.add_subsystem("chainstate", chainstate);
+    let chainstate = manager
+        .add_custom_subsystem("chainstate", async move |_, shutdown_initiated_rx| {
+            chainstate_maker(Some(shutdown_initiated_rx))
+        });
 
     // Mempool subsystem
     let mempool_init = MempoolInit::new(

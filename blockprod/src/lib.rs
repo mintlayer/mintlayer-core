@@ -286,6 +286,7 @@ mod tests {
             DefaultTransactionVerificationStrategy::new(),
             None,
             time_getter.clone(),
+            None,
         )
         .expect("Error initializing chainstate");
 

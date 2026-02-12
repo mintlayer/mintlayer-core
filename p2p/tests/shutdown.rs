@@ -49,6 +49,7 @@ async fn shutdown_timeout() {
         DefaultTransactionVerificationStrategy::new(),
         None,
         Default::default(),
+        None,
     )
     .unwrap();
     let chainstate = manager.add_subsystem("shutdown-test-chainstate", chainstate);

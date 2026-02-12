@@ -1402,6 +1402,7 @@ dependencies = [
  "storage-inmemory",
  "storage-lmdb",
  "subsystem",
+ "tokio",
  "utils",
 ]
 

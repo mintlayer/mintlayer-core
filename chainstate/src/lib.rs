@@ -21,6 +21,8 @@ pub mod rpc;
 
 use std::sync::Arc;
 
+use tokio::sync::watch;
+
 use chainstate_interface::ChainstateInterface;
 use chainstate_interface_impl::ChainstateInterfaceImpl;
 use common::{
@@ -30,6 +32,7 @@ use common::{
 };
 use detail::Chainstate;
 use interface::chainstate_interface_impl;
+use utils::set_flag::SetFlag;
 
 pub use crate::{
     config::{ChainstateConfig, MaxTipAge},
@@ -107,6 +110,7 @@ pub fn make_chainstate<S, V>(
     tx_verification_strategy: V,
     custom_orphan_error_hook: Option<Arc<detail::OrphanErrorHandler>>,
     time_getter: TimeGetter,
+    shutdown_initiated_rx: Option<watch::Receiver<SetFlag>>,
 ) -> Result<ChainstateSubsystem, ChainstateError>
 where
     S: chainstate_storage::BlockchainStorage + Sync + 'static,
@@ -119,6 +123,7 @@ where
         tx_verification_strategy,
         custom_orphan_error_hook,
         time_getter,
+        shutdown_initiated_rx,
     )?;
     let chainstate_interface = ChainstateInterfaceImpl::new(chainstate);
     Ok(Box::new(chainstate_interface))

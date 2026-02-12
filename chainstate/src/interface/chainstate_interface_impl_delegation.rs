@@ -509,6 +509,7 @@ mod tests {
                 DefaultTransactionVerificationStrategy::new(),
                 None,
                 TimeGetter::default(),
+                None,
             )
             .unwrap();
 

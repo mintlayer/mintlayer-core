@@ -137,6 +137,7 @@ where
             DefaultTransactionVerificationStrategy::new(),
             None,
             time_getter.get_time_getter(),
+            None,
         )
         .unwrap();
 
