@@ -93,7 +93,7 @@ mod collect_transactions {
         let mut mock_mempool = MockMempoolInterface::default();
         mock_mempool.expect_collect_txs().return_once(|_, _, _| {
             Err(BlockConstructionError::Validity(
-                TxValidationError::CallError(ResponseError::NoResponse.into()),
+                TxValidationError::SubsystemCallError(ResponseError::NoResponse.into()),
             ))
         });
 
@@ -116,7 +116,7 @@ mod collect_transactions {
 
             match transactions {
                 Err(BlockProductionError::MempoolBlockConstruction(
-                    BlockConstructionError::Validity(TxValidationError::CallError(_)),
+                    BlockConstructionError::Validity(TxValidationError::SubsystemCallError(_)),
                 )) => {}
                 _ => panic!("Expected collect_tx() to fail"),
             };
@@ -826,7 +826,7 @@ mod produce_block {
 
         mock_mempool.expect_collect_txs().return_once(|_, _, _| {
             Err(BlockConstructionError::Validity(
-                TxValidationError::CallError(ResponseError::NoResponse.into()),
+                TxValidationError::SubsystemCallError(ResponseError::NoResponse.into()),
             ))
         });
 
@@ -862,7 +862,7 @@ mod produce_block {
 
                 match result {
                     Err(BlockProductionError::MempoolBlockConstruction(
-                        BlockConstructionError::Validity(TxValidationError::CallError(_)),
+                        BlockConstructionError::Validity(TxValidationError::SubsystemCallError(_)),
                     )) => {}
                     _ => panic!("Unexpected return value: {result:?}"),
                 }

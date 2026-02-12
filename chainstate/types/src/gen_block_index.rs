@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use common::{
     chain::{block::timestamp::BlockTimestamp, ChainConfig, GenBlock, Genesis},
-    primitives::{id::WithId, BlockHeight, Id, Idable},
+    primitives::{id::WithId, BlockHeight, Id},
     Uint256,
 };
 use static_assertions::assert_not_impl_any;
@@ -33,67 +33,47 @@ pub enum GenBlockIndex {
 }
 
 impl GenBlockIndex {
-    pub fn block_id(&self) -> Id<GenBlock> {
+    pub fn as_ref(&self) -> GenBlockIndexRef<'_> {
         match self {
-            GenBlockIndex::Block(b) => (*b.block_id()).into(),
-            GenBlockIndex::Genesis(g) => g.get_id().into(),
+            Self::Block(b) => GenBlockIndexRef::Block(b),
+            Self::Genesis(g) => GenBlockIndexRef::Genesis(g),
         }
+    }
+
+    pub fn block_id(&self) -> Id<GenBlock> {
+        *self.as_ref().block_id()
     }
 
     pub fn block_timestamp(&self) -> BlockTimestamp {
-        match self {
-            GenBlockIndex::Block(b) => b.block_timestamp(),
-            GenBlockIndex::Genesis(g) => g.timestamp(),
-        }
+        self.as_ref().block_timestamp()
     }
 
     pub fn chain_timestamps_max(&self) -> BlockTimestamp {
-        match self {
-            GenBlockIndex::Block(b) => b.chain_timestamps_max(),
-            GenBlockIndex::Genesis(g) => g.timestamp(),
-        }
+        self.as_ref().chain_timestamps_max()
     }
 
     pub fn block_height(&self) -> BlockHeight {
-        match self {
-            GenBlockIndex::Block(b) => b.block_height(),
-            GenBlockIndex::Genesis(_g) => BlockHeight::zero(),
-        }
+        self.as_ref().block_height()
     }
 
     pub fn chain_trust(&self) -> Uint256 {
-        match self {
-            GenBlockIndex::Block(b) => b.chain_trust(),
-            GenBlockIndex::Genesis(_g) => Uint256::ZERO,
-        }
+        self.as_ref().chain_trust()
     }
 
     pub fn prev_block_id(&self) -> Option<Id<GenBlock>> {
-        match self {
-            GenBlockIndex::Block(b) => Some(*b.prev_block_id()),
-            GenBlockIndex::Genesis(..) => None,
-        }
+        self.as_ref().prev_block_id().copied()
     }
 
     pub fn status(&self) -> BlockStatus {
-        match self {
-            GenBlockIndex::Block(b) => b.status(),
-            GenBlockIndex::Genesis(..) => crate::block_status::BlockStatus::new_fully_checked(),
-        }
+        self.as_ref().status()
     }
 
     pub fn is_persisted(&self) -> bool {
-        match self {
-            GenBlockIndex::Block(b) => b.is_persisted(),
-            GenBlockIndex::Genesis(..) => true,
-        }
+        self.as_ref().is_persisted()
     }
 
     pub fn chain_transaction_count(&self) -> u128 {
-        match self {
-            GenBlockIndex::Block(b) => b.chain_transaction_count(),
-            GenBlockIndex::Genesis(_) => 0,
-        }
+        self.as_ref().chain_transaction_count()
     }
 
     pub fn genesis(chain_config: &ChainConfig) -> Self {
@@ -121,5 +101,78 @@ impl From<BlockIndex> for GenBlockIndex {
     }
 }
 
+/// Same as `GenBlockIndex`, but only holds a reference.
+#[derive(Clone, Copy, Debug)]
+pub enum GenBlockIndexRef<'a> {
+    Block(&'a BlockIndex),
+    Genesis(&'a WithId<Genesis>),
+}
+
+impl<'a> GenBlockIndexRef<'a> {
+    pub fn block_id(&self) -> &Id<GenBlock> {
+        match self {
+            Self::Block(b) => b.block_id().into(),
+            Self::Genesis(g) => WithId::id(g).into(),
+        }
+    }
+
+    pub fn block_timestamp(&self) -> BlockTimestamp {
+        match self {
+            Self::Block(b) => b.block_timestamp(),
+            Self::Genesis(g) => g.timestamp(),
+        }
+    }
+
+    pub fn chain_timestamps_max(&self) -> BlockTimestamp {
+        match self {
+            Self::Block(b) => b.chain_timestamps_max(),
+            Self::Genesis(g) => g.timestamp(),
+        }
+    }
+
+    pub fn block_height(&self) -> BlockHeight {
+        match self {
+            Self::Block(b) => b.block_height(),
+            Self::Genesis(_g) => BlockHeight::zero(),
+        }
+    }
+
+    pub fn chain_trust(&self) -> Uint256 {
+        match self {
+            Self::Block(b) => b.chain_trust(),
+            Self::Genesis(_g) => Uint256::ZERO,
+        }
+    }
+
+    pub fn prev_block_id(&self) -> Option<&Id<GenBlock>> {
+        match self {
+            Self::Block(b) => Some(b.prev_block_id()),
+            Self::Genesis(..) => None,
+        }
+    }
+
+    pub fn status(&self) -> BlockStatus {
+        match self {
+            Self::Block(b) => b.status(),
+            Self::Genesis(..) => crate::block_status::BlockStatus::new_fully_checked(),
+        }
+    }
+
+    pub fn is_persisted(&self) -> bool {
+        match self {
+            Self::Block(b) => b.is_persisted(),
+            Self::Genesis(..) => true,
+        }
+    }
+
+    pub fn chain_transaction_count(&self) -> u128 {
+        match self {
+            Self::Block(b) => b.chain_transaction_count(),
+            Self::Genesis(_) => 0,
+        }
+    }
+}
+
 // Forbid implementing Eq and PartialEq for GenBlockIndex.
 assert_not_impl_any!(GenBlockIndex: Eq, PartialEq);
+assert_not_impl_any!(GenBlockIndexRef<'static>: Eq, PartialEq);

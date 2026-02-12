@@ -17,6 +17,7 @@ use chainstate::chainstate_interface::ChainstateInterface;
 use common::{
     chain::{SignedTransaction, Transaction},
     primitives::Id,
+    time_getter::TimeGetter,
 };
 use mempool_types::{tx_origin::TxOrigin, TxOptions, TxStatus};
 
@@ -28,16 +29,24 @@ use super::{Error, MemoryUsageEstimator, Mempool, TxEntry};
 pub fn setup_with_chainstate(
     chainstate: Box<dyn ChainstateInterface>,
 ) -> Mempool<StoreMemoryUsageEstimator> {
+    setup_with_chainstate_and_clock(chainstate, Default::default())
+}
+
+pub fn setup_with_chainstate_and_clock(
+    chainstate: Box<dyn ChainstateInterface>,
+    clock: TimeGetter,
+) -> Mempool<StoreMemoryUsageEstimator> {
     let chain_config = std::sync::Arc::clone(chainstate.get_chain_config());
     let mempool_config = create_mempool_config();
     let chainstate_handle = start_chainstate(chainstate);
     Mempool::new(
         chain_config,
-        mempool_config,
+        mempool_config.into(),
         chainstate_handle,
-        Default::default(),
+        clock,
         StoreMemoryUsageEstimator,
     )
+    .unwrap()
 }
 
 pub fn fetch_status<T>(mempool: &Mempool<T>, tx_id: &Id<Transaction>) -> Option<TxStatus> {
@@ -58,12 +67,12 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         origin: TxOrigin,
     ) -> Result<TxStatus, Error> {
         let options = TxOptions::default_for(origin);
-        let entry = TxEntry::new(tx, self.clock.get_time(), origin, options);
+        let entry = TxEntry::new(tx, self.clock().get_time(), origin, options);
         self.add_transaction(entry)
     }
 
     pub fn add_transaction_test(&mut self, tx: SignedTransaction) -> Result<TxStatus, Error> {
-        let entry = self.tx_pool().make_transaction_test(tx);
+        let entry = make_test_tx_entry(self.clock(), tx);
         let result = self.add_transaction(entry)?;
         self.process_queue();
         Ok(result)

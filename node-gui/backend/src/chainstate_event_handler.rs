@@ -75,7 +75,7 @@ impl ChainstateEventHandler {
             let chainstate_event_opt = self.chainstate_event_rx.recv().await;
             match chainstate_event_opt {
                 Some(event) => match event {
-                    ChainstateEvent::NewTip(_, _) => {
+                    ChainstateEvent::NewTip { .. } => {
                         self.chain_info_updated = true;
                     }
                 },

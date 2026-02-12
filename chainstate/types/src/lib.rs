@@ -30,7 +30,7 @@ pub use crate::{
     },
     error::GetAncestorError,
     error::PropertyQueryError,
-    gen_block_index::GenBlockIndex,
+    gen_block_index::{GenBlockIndex, GenBlockIndexRef},
     height_skip::get_skip_height,
     locator::Locator,
 };

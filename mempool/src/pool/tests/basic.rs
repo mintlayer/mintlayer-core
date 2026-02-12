@@ -13,6 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::time::Duration;
+
+use tokio::sync::mpsc;
+
+use chainstate::BlockSource;
+use common::chain::block::timestamp::BlockTimestamp;
+
+use crate::event::NewTip;
+
 use super::*;
 
 #[rstest]
@@ -181,4 +190,187 @@ async fn spends_new_unconfirmed(#[case] seed: Seed) -> anyhow::Result<()> {
     assert_eq!(res, Err(Error::Orphan(OrphanPoolError::MempoolConflict)));
     mempool.tx_store().assert_valid();
     Ok(())
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn reject_txs_during_ibd(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    // Set up chainstate, mempool, and mock time
+    let tf = TestFramework::builder(&mut rng)
+        .with_max_tip_age(Duration::from_secs(10).into())
+        .with_initial_time_since_genesis(200)
+        .build();
+    let genesis_id = tf.genesis().get_id();
+    let mock_time = tf.time_value.as_ref().unwrap().shallow_clone();
+    let mock_clock = tf.time_getter.clone();
+
+    let mut mempool = setup_with_chainstate_and_clock(tf.chainstate(), mock_clock);
+    let chainstate = mempool.chainstate_handle().shallow_clone();
+
+    assert!(mempool.is_initial_block_download());
+
+    // A test transaction
+    let tx1 = make_tx(&mut rng, &[(genesis_id.into(), 0)], &[1_000_000_000]);
+    let tx1_id = tx1.transaction().get_id();
+
+    // We should not be able to add the transaction yet
+    let res = mempool.add_transaction_test(tx1.clone());
+    assert_eq!(res, Err(TxValidationError::AddedDuringIBD.into()));
+    assert!(!mempool.contains_transaction(&tx1_id));
+
+    // Submit an "old" block
+    let block1_time = BlockTimestamp::from_int_seconds(mock_time.fetch_add(15));
+    let block1 = make_test_block(vec![], genesis_id, block1_time);
+    let block1_id = block1.get_id();
+    chainstate
+        .call_mut(move |c| c.process_block(block1, BlockSource::Local))
+        .await
+        .unwrap()
+        .unwrap();
+
+    mempool
+        .process_chainstate_event(ChainstateEvent::NewTip {
+            id: block1_id,
+            height: BlockHeight::new(1),
+            is_initial_block_download: true,
+        })
+        .unwrap();
+    assert!(mempool.is_initial_block_download());
+
+    // We should not be able to add the transaction yet
+    let res = mempool.add_transaction_test(tx1.clone());
+    assert_eq!(res, Err(TxValidationError::AddedDuringIBD.into()));
+    assert!(!mempool.contains_transaction(&tx1_id));
+
+    // Submit a "fresh" block, but pass is_initial_block_download=true in the event.
+    // Mempool should trust the event.
+    let block2_time = BlockTimestamp::from_int_seconds(mock_time.fetch_add(3));
+    let block2 = make_test_block(vec![], block1_id, block2_time);
+    let block2_id = block2.get_id();
+    chainstate
+        .call_mut(move |c| c.process_block(block2, BlockSource::Local))
+        .await
+        .unwrap()
+        .unwrap();
+    mempool
+        .process_chainstate_event(ChainstateEvent::NewTip {
+            id: block2_id,
+            height: BlockHeight::new(2),
+            is_initial_block_download: true,
+        })
+        .unwrap();
+
+    assert!(mempool.is_initial_block_download());
+
+    // We should not be able to add the transaction yet
+    let res = mempool.add_transaction_test(tx1.clone());
+    assert_eq!(res, Err(TxValidationError::AddedDuringIBD.into()));
+    assert!(!mempool.contains_transaction(&tx1_id));
+
+    // Submit an "old" block, but pass is_initial_block_download=false in the event.
+    // Mempool should trust the event.
+    let block3_time = BlockTimestamp::from_int_seconds(mock_time.fetch_add(15));
+    let block3 = make_test_block(vec![], block2_id, block3_time);
+    let block3_id = block3.get_id();
+    chainstate
+        .call_mut(move |c| c.process_block(block3, BlockSource::Local))
+        .await
+        .unwrap()
+        .unwrap();
+    mempool
+        .process_chainstate_event(ChainstateEvent::NewTip {
+            id: block3_id,
+            height: BlockHeight::new(3),
+            is_initial_block_download: false,
+        })
+        .unwrap();
+
+    assert!(!mempool.is_initial_block_download());
+
+    // We should be able to add the transaction now
+    let res = mempool.add_transaction_test(tx1);
+    assert_eq!(res, Ok(TxStatus::InMempool));
+    assert!(mempool.contains_transaction(&tx1_id));
+}
+
+// Check that during transition from in-ibd to after-ibd state certain parts of the mempool's
+// internal state are correctly propagated, namely:
+// 1) the max size;
+// 2) the event broadcaster;
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn ibd_transition(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    // Set up chainstate, mempool, and mock time
+    let tf = TestFramework::builder(&mut rng)
+        .with_max_tip_age(Duration::from_secs(10).into())
+        .with_initial_time_since_genesis(200)
+        .build();
+    let genesis_id = tf.genesis().get_id();
+    let mock_time = tf.time_value.as_ref().unwrap().shallow_clone();
+    let mock_clock = tf.time_getter.clone();
+
+    let mut mempool = setup_with_chainstate_and_clock(tf.chainstate(), mock_clock);
+    let chainstate = mempool.chainstate_handle().shallow_clone();
+
+    assert!(mempool.is_initial_block_download());
+    assert_eq!(mempool.max_size().as_bytes(), MAX_MEMPOOL_SIZE_BYTES);
+
+    // Modify max size.
+    let new_max_size = MAX_MEMPOOL_SIZE_BYTES * 2;
+    mempool.set_size_limit(MempoolMaxSize::from_bytes(new_max_size)).unwrap();
+    assert_eq!(mempool.max_size().as_bytes(), new_max_size);
+
+    // Subscribe to events both via subscribe_to_events and subscribe_to_event_broadcast.
+    let (events_tx, mut events_rx) = mpsc::unbounded_channel();
+    mempool.subscribe_to_events(Arc::new(move |event| events_tx.send(event).unwrap()));
+    let mut events_broadcast_rx = mempool.subscribe_to_event_broadcast();
+
+    // Submit and process a block, passing false for is_initial_block_download.
+    // The mempool should switch to the after-ibd state.
+    let block_time = BlockTimestamp::from_int_seconds(mock_time.fetch_add(3));
+    let block = make_test_block(vec![], genesis_id, block_time);
+    let block_id = block.get_id();
+    let block_height = BlockHeight::new(1);
+    chainstate
+        .call_mut(move |c| c.process_block(block, BlockSource::Local))
+        .await
+        .unwrap()
+        .unwrap();
+    mempool
+        .process_chainstate_event(ChainstateEvent::NewTip {
+            id: block_id,
+            height: block_height,
+            is_initial_block_download: false,
+        })
+        .unwrap();
+
+    // The mempool is no longer in ibd.
+    assert!(!mempool.is_initial_block_download());
+
+    // Check that max_size is still correct
+    assert_eq!(mempool.max_size().as_bytes(), new_max_size);
+
+    // Make and add a transaction
+    let tx = make_tx(&mut rng, &[(genesis_id.into(), 0)], &[1_000_000_000]);
+    let tx_id = tx.transaction().get_id();
+    let res = mempool.add_transaction_test(tx);
+    assert_eq!(res, Ok(TxStatus::InMempool));
+    assert!(mempool.contains_transaction(&tx_id));
+
+    // Check that the new tip event was sent.
+    let expected_event = MempoolEvent::NewTip(NewTip::new(block_id, block_height));
+
+    let event = events_rx.recv().await;
+    assert_eq!(event.as_ref(), Some(&expected_event));
+
+    let event = events_broadcast_rx.recv().await;
+    assert_eq!(event.as_ref(), Some(&expected_event));
 }

@@ -62,7 +62,7 @@ impl MempoolInit {
     pub async fn init(
         self,
         this: subsystem::SubmitOnlyHandle<dyn MempoolInterface>,
-    ) -> Result<Mempool, subsystem::error::CallError> {
+    ) -> Result<Mempool, Error> {
         log::info!("Starting mempool");
         let mempool = Mempool::new(
             self.chain_config,
@@ -70,7 +70,7 @@ impl MempoolInit {
             self.chainstate_handle,
             self.time_getter,
             StoreMemoryUsageEstimator,
-        );
+        )?;
 
         log::trace!("Subscribing to chainstate events");
         let subscribe_func = Arc::new(move |event: chainstate::ChainstateEvent| {

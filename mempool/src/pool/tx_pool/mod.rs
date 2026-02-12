@@ -21,14 +21,14 @@ mod rolling_fee_rate;
 mod store;
 mod tx_verifier;
 
-use parking_lot::RwLock;
 use std::{
     collections::{BTreeMap, BTreeSet},
     num::NonZeroUsize,
     sync::Arc,
     time::Duration,
 };
-use utxo::UtxosStorageRead;
+
+use parking_lot::RwLock;
 
 use chainstate::{
     chainstate_interface::ChainstateInterface,
@@ -47,13 +47,9 @@ use common::{
     time_getter::TimeGetter,
 };
 use logging::log;
-use utils::{const_value::ConstValue, ensure, shallow_clone::ShallowClone};
+use utils::{const_value::ConstValue, debug_panic_or_log, ensure, shallow_clone::ShallowClone};
+use utxo::UtxosStorageRead;
 
-use self::{
-    memory_usage_estimator::MemoryUsageEstimator,
-    rolling_fee_rate::RollingFeeRate,
-    store::{Conflicts, DescendantScore, MempoolRemovalReason, MempoolStore, TxMempoolEntry},
-};
 use crate::{
     config::{self, MempoolConfig, MempoolMaxSize},
     error::{
@@ -64,9 +60,16 @@ use crate::{
         entry::{TxEntry, TxEntryWithFee},
         fee::Fee,
         feerate::FeeRate,
+        tx_pool::store::{StrictDropPolicy, Tracked, TrackedMap, TrackedTxIdMultiMap},
     },
     tx_accumulator::{PackingStrategy, TransactionAccumulator},
     tx_origin::RemoteTxOrigin,
+};
+
+use self::{
+    memory_usage_estimator::MemoryUsageEstimator,
+    rolling_fee_rate::RollingFeeRate,
+    store::{Conflicts, DescendantScore, MempoolRemovalReason, MempoolStore, TxMempoolEntry},
 };
 
 pub struct TxPool<M> {
@@ -108,7 +111,7 @@ impl<M> TxPool<M> {
             mempool_config,
             store: MempoolStore::new(),
             chainstate_handle,
-            max_size: config::MempoolMaxSize::default(),
+            max_size: Self::initial_max_size(),
             max_tx_age: config::DEFAULT_MEMPOOL_EXPIRY,
             rolling_fee_rate: RwLock::new(RollingFeeRate::new(clock.get_time())),
             clock,
@@ -117,11 +120,15 @@ impl<M> TxPool<M> {
         }
     }
 
+    pub fn initial_max_size() -> config::MempoolMaxSize {
+        config::MempoolMaxSize::default()
+    }
+
     pub fn chainstate_handle(&self) -> &chainstate::ChainstateHandle {
         &self.chainstate_handle
     }
 
-    pub fn blocking_chainstate_handle(
+    fn blocking_chainstate_handle(
         &self,
     ) -> subsystem::blocking::BlockingHandle<dyn ChainstateInterface> {
         subsystem::blocking::BlockingHandle::new(self.chainstate_handle().shallow_clone())
@@ -723,7 +730,11 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
         mut transaction: TxEntry,
         finalizer: impl for<'b> FnOnce(TxAdditionOutcome, &'b Self) -> R,
     ) -> Result<R, Error> {
-        ensure!(!self.is_ibd(), TxValidationError::AddedDuringIBD);
+        if self.is_ibd() {
+            // The caller code should have checked for IBD already.
+            debug_panic_or_log!("TxPool::add_transaction called during IBD");
+            return Err(TxValidationError::AddedDuringIBD.into());
+        }
 
         let tx_id = *transaction.tx_id();
         if let Some(transaction) = self.store.get_entry(&tx_id) {
@@ -875,17 +886,42 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
     }
 
     pub fn get_fee_rate(&self, in_top_x_mb: usize) -> FeeRate {
+        Self::get_fee_rate_impl(
+            in_top_x_mb,
+            &self.mempool_config,
+            &self.rolling_fee_rate.read(),
+            &self.store.txs_by_descendant_score,
+            &self.store.txs_by_id,
+        )
+    }
+
+    pub fn get_initial_fee_rate(mempool_config: &MempoolConfig) -> FeeRate {
+        Self::get_fee_rate_impl(
+            0,
+            mempool_config,
+            &RollingFeeRate::new(Time::from_secs_since_epoch(0)),
+            &Default::default(),
+            &Default::default(),
+        )
+    }
+
+    fn get_fee_rate_impl(
+        in_top_x_mb: usize,
+        mempool_config: &MempoolConfig,
+        rolling_fee_rate: &RollingFeeRate,
+        txs_by_descendant_score: &TrackedTxIdMultiMap<DescendantScore>,
+        txs_by_id: &TrackedMap<Id<Transaction>, Tracked<TxMempoolEntry, StrictDropPolicy>>,
+    ) -> FeeRate {
         let min_feerate = std::cmp::max(
-            self.rolling_fee_rate.read().rolling_minimum_fee_rate(),
-            *self.mempool_config.min_tx_relay_fee_rate,
+            rolling_fee_rate.rolling_minimum_fee_rate(),
+            *mempool_config.min_tx_relay_fee_rate,
         );
         let mut total_size = 0;
-        self.store
-            .txs_by_descendant_score
+        txs_by_descendant_score
             .iter()
             .rev()
             .find(|(_score, tx_id)| {
-                total_size += self.store.txs_by_id.get(tx_id).map_or(0, |tx| tx.size().into());
+                total_size += txs_by_id.get(tx_id).map_or(0, |tx| tx.size().into());
                 (total_size / 1_000_000) >= in_top_x_mb
             })
             .map_or(min_feerate, |(score, _txs)| score.to_feerate(min_feerate))
@@ -895,19 +931,45 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
         &self,
         num_points: NonZeroUsize,
     ) -> Result<Vec<(usize, FeeRate)>, MempoolPolicyError> {
+        Self::get_fee_rate_points_impl(
+            num_points,
+            &self.mempool_config,
+            &self.rolling_fee_rate.read(),
+            &self.store.txs_by_descendant_score,
+            &self.store.txs_by_id,
+        )
+    }
+
+    pub fn get_initial_fee_rate_points(
+        mempool_config: &MempoolConfig,
+    ) -> Result<Vec<(usize, FeeRate)>, MempoolPolicyError> {
+        Self::get_fee_rate_points_impl(
+            NonZeroUsize::MIN,
+            mempool_config,
+            &RollingFeeRate::new(Time::from_secs_since_epoch(0)),
+            &Default::default(),
+            &Default::default(),
+        )
+    }
+
+    fn get_fee_rate_points_impl(
+        num_points: NonZeroUsize,
+        mempool_config: &MempoolConfig,
+        rolling_fee_rate: &RollingFeeRate,
+        txs_by_descendant_score: &TrackedTxIdMultiMap<DescendantScore>,
+        txs_by_id: &TrackedMap<Id<Transaction>, Tracked<TxMempoolEntry, StrictDropPolicy>>,
+    ) -> Result<Vec<(usize, FeeRate)>, MempoolPolicyError> {
         let min_feerate = std::cmp::max(
-            self.rolling_fee_rate.read().rolling_minimum_fee_rate(),
-            *self.mempool_config.min_tx_relay_fee_rate,
+            rolling_fee_rate.rolling_minimum_fee_rate(),
+            *mempool_config.min_tx_relay_fee_rate,
         );
         let min_score = DescendantScore::new(min_feerate);
 
-        let size_to_score: BTreeMap<_, _> = self
-            .store
-            .txs_by_descendant_score
+        let size_to_score: BTreeMap<_, _> = txs_by_descendant_score
             .iter()
             .rev()
             .map(|(score, tx_id)| {
-                let size = self.store.txs_by_id.get(tx_id).map_or(0, |tx| tx.size().into());
+                let size = txs_by_id.get(tx_id).map_or(0, |tx| tx.size().into());
                 (score, size)
             })
             .chain(std::iter::once((&min_score, 1)))

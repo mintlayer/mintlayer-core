@@ -166,11 +166,12 @@ async fn non_orphans(#[case] seed: Seed) {
     let create_mempool = || {
         Mempool::new(
             Arc::clone(&chain_config),
-            mempool_config.clone(),
+            mempool_config.clone().into(),
             chainstate_handle.clone(),
             Default::default(),
             StoreMemoryUsageEstimator,
         )
+        .unwrap()
     };
 
     {
@@ -528,11 +529,12 @@ async fn orphans_with_missing_utxo(#[case] seed: Seed) {
     let create_mempool = || {
         Mempool::new(
             Arc::clone(&chain_config),
-            mempool_config.clone(),
+            mempool_config.clone().into(),
             chainstate_handle.clone(),
             Default::default(),
             StoreMemoryUsageEstimator,
         )
+        .unwrap()
     };
 
     // Note:
@@ -769,11 +771,12 @@ async fn orphans_with_missing_order(#[case] seed: Seed) {
     let create_mempool = || {
         Mempool::new(
             Arc::clone(&chain_config),
-            mempool_config.clone(),
+            mempool_config.clone().into(),
             chainstate_handle.clone(),
             Default::default(),
             StoreMemoryUsageEstimator,
         )
+        .unwrap()
     };
 
     // Note: at this moment missing order is considered a hard error, so the txs will just be rejected.
