@@ -444,7 +444,7 @@ fn check_block_at_height(
     expected_block_id: Option<&Id<Block>>,
 ) {
     if expected_block_id.is_some() {
-        let real_next_block_id = tf.chainstate.get_block_id_from_height(&block_height).unwrap();
+        let real_next_block_id = tf.chainstate.get_block_id_from_height(block_height).unwrap();
         let expected_block_id: Option<Id<GenBlock>> = expected_block_id.map(|id| (*id).into());
         assert_eq!(real_next_block_id, expected_block_id);
     }

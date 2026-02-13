@@ -114,17 +114,17 @@ impl<B: storage::SharedBackend> BlockchainStorageRead for super::StoreTxRo<'_, B
     }
 
     #[log_error]
-    fn get_block(&self, id: Id<Block>) -> crate::Result<Option<Block>> {
+    fn get_block(&self, id: &Id<Block>) -> crate::Result<Option<Block>> {
         self.read::<db::DBBlock, _, _>(id)
     }
 
     #[log_error]
-    fn block_exists(&self, id: Id<Block>) -> crate::Result<bool> {
+    fn block_exists(&self, id: &Id<Block>) -> crate::Result<bool> {
         self.entry_exists::<db::DBBlock, _, _>(id)
     }
 
     #[log_error]
-    fn get_block_header(&self, id: Id<Block>) -> crate::Result<Option<SignedBlockHeader>> {
+    fn get_block_header(&self, id: &Id<Block>) -> crate::Result<Option<SignedBlockHeader>> {
         let block_index = self.read::<db::DBBlockIndex, _, _>(id)?;
         Ok(block_index.map(|block_index| block_index.into_block_header()))
     }
@@ -142,12 +142,12 @@ impl<B: storage::SharedBackend> BlockchainStorageRead for super::StoreTxRo<'_, B
     }
 
     #[log_error]
-    fn get_block_id_by_height(&self, height: &BlockHeight) -> crate::Result<Option<Id<GenBlock>>> {
+    fn get_block_id_by_height(&self, height: BlockHeight) -> crate::Result<Option<Id<GenBlock>>> {
         self.read::<db::DBBlockByHeight, _, _>(height)
     }
 
     #[log_error]
-    fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<UtxosBlockUndo>> {
+    fn get_undo_data(&self, id: &Id<Block>) -> crate::Result<Option<UtxosBlockUndo>> {
         self.read::<db::DBUtxosBlockUndo, _, _>(id)
     }
 
@@ -164,7 +164,7 @@ impl<B: storage::SharedBackend> BlockchainStorageRead for super::StoreTxRo<'_, B
     #[log_error]
     fn get_tokens_accounting_undo(
         &self,
-        id: Id<Block>,
+        id: &Id<Block>,
     ) -> crate::Result<Option<accounting::BlockUndo<TokenAccountingUndo>>> {
         self.read::<db::DBTokensAccountingBlockUndo, _, _>(&id)
     }
@@ -172,7 +172,7 @@ impl<B: storage::SharedBackend> BlockchainStorageRead for super::StoreTxRo<'_, B
     #[log_error]
     fn get_orders_accounting_undo(
         &self,
-        id: Id<Block>,
+        id: &Id<Block>,
     ) -> crate::Result<Option<accounting::BlockUndo<OrdersAccountingUndo>>> {
         self.read::<db::DBOrdersAccountingBlockUndo, _, _>(id)
     }
@@ -198,7 +198,7 @@ impl<B: storage::SharedBackend> BlockchainStorageRead for super::StoreTxRo<'_, B
     #[log_error]
     fn get_pos_accounting_undo(
         &self,
-        id: Id<Block>,
+        id: &Id<Block>,
     ) -> crate::Result<Option<accounting::BlockUndo<PoSAccountingUndo>>> {
         self.read::<db::DBAccountingBlockUndo, _, _>(id)
     }
@@ -220,7 +220,10 @@ impl<B: storage::SharedBackend> BlockchainStorageRead for super::StoreTxRo<'_, B
     }
 
     #[log_error]
-    fn get_account_nonce_count(&self, account: AccountType) -> crate::Result<Option<AccountNonce>> {
+    fn get_account_nonce_count(
+        &self,
+        account: &AccountType,
+    ) -> crate::Result<Option<AccountNonce>> {
         self.read::<db::DBAccountNonceCount, _, _>(account)
     }
 
@@ -433,17 +436,17 @@ impl<B: storage::SharedBackend> BlockchainStorageRead for super::StoreTxRw<'_, B
     }
 
     #[log_error]
-    fn get_block(&self, id: Id<Block>) -> crate::Result<Option<Block>> {
+    fn get_block(&self, id: &Id<Block>) -> crate::Result<Option<Block>> {
         self.read::<db::DBBlock, _, _>(id)
     }
 
     #[log_error]
-    fn block_exists(&self, id: Id<Block>) -> crate::Result<bool> {
+    fn block_exists(&self, id: &Id<Block>) -> crate::Result<bool> {
         self.entry_exists::<db::DBBlock, _, _>(id)
     }
 
     #[log_error]
-    fn get_block_header(&self, id: Id<Block>) -> crate::Result<Option<SignedBlockHeader>> {
+    fn get_block_header(&self, id: &Id<Block>) -> crate::Result<Option<SignedBlockHeader>> {
         let block_index = self.read::<db::DBBlockIndex, _, _>(id)?;
         Ok(block_index.map(|block_index| block_index.into_block_header()))
     }
@@ -461,12 +464,12 @@ impl<B: storage::SharedBackend> BlockchainStorageRead for super::StoreTxRw<'_, B
     }
 
     #[log_error]
-    fn get_block_id_by_height(&self, height: &BlockHeight) -> crate::Result<Option<Id<GenBlock>>> {
+    fn get_block_id_by_height(&self, height: BlockHeight) -> crate::Result<Option<Id<GenBlock>>> {
         self.read::<db::DBBlockByHeight, _, _>(height)
     }
 
     #[log_error]
-    fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<UtxosBlockUndo>> {
+    fn get_undo_data(&self, id: &Id<Block>) -> crate::Result<Option<UtxosBlockUndo>> {
         self.read::<db::DBUtxosBlockUndo, _, _>(id)
     }
 
@@ -483,7 +486,7 @@ impl<B: storage::SharedBackend> BlockchainStorageRead for super::StoreTxRw<'_, B
     #[log_error]
     fn get_tokens_accounting_undo(
         &self,
-        id: Id<Block>,
+        id: &Id<Block>,
     ) -> crate::Result<Option<accounting::BlockUndo<TokenAccountingUndo>>> {
         self.read::<db::DBTokensAccountingBlockUndo, _, _>(&id)
     }
@@ -491,7 +494,7 @@ impl<B: storage::SharedBackend> BlockchainStorageRead for super::StoreTxRw<'_, B
     #[log_error]
     fn get_orders_accounting_undo(
         &self,
-        id: Id<Block>,
+        id: &Id<Block>,
     ) -> crate::Result<Option<accounting::BlockUndo<OrdersAccountingUndo>>> {
         self.read::<db::DBOrdersAccountingBlockUndo, _, _>(id)
     }
@@ -517,7 +520,7 @@ impl<B: storage::SharedBackend> BlockchainStorageRead for super::StoreTxRw<'_, B
     #[log_error]
     fn get_pos_accounting_undo(
         &self,
-        id: Id<Block>,
+        id: &Id<Block>,
     ) -> crate::Result<Option<accounting::BlockUndo<PoSAccountingUndo>>> {
         self.read::<db::DBAccountingBlockUndo, _, _>(id)
     }
@@ -539,7 +542,10 @@ impl<B: storage::SharedBackend> BlockchainStorageRead for super::StoreTxRw<'_, B
     }
 
     #[log_error]
-    fn get_account_nonce_count(&self, account: AccountType) -> crate::Result<Option<AccountNonce>> {
+    fn get_account_nonce_count(
+        &self,
+        account: &AccountType,
+    ) -> crate::Result<Option<AccountNonce>> {
         self.read::<db::DBAccountNonceCount, _, _>(account)
     }
 

@@ -252,10 +252,10 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
         // Look up the parent of block 1 to figure out the genesis ID according to storage
         let block1_id = dbtx
-            .get_block_id_by_height(&BlockHeight::new(1))?
+            .get_block_id_by_height(BlockHeight::new(1))?
             .ok_or(InitializationError::Block1Missing)?;
         let block1 = dbtx
-            .get_block(Id::new(block1_id.to_hash()))?
+            .get_block(&Id::new(block1_id.to_hash()))?
             .ok_or(InitializationError::Block1Missing)?;
         let stored_genesis_id = block1.prev_block_id();
 
@@ -672,7 +672,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         let mut db_tx = self.chainstate_storage.transaction_rw(None).map_err(BlockError::from)?;
         db_tx.set_best_block_id(&genesis_id).map_err(BlockError::StorageError)?;
         db_tx
-            .set_block_id_at_height(&BlockHeight::zero(), &genesis_id)
+            .set_block_id_at_height(BlockHeight::zero(), &genesis_id)
             .map_err(BlockError::StorageError)?;
 
         db_tx

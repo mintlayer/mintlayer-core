@@ -371,7 +371,7 @@ fn nft_reorgs_and_cleanup_data(#[case] seed: Seed) {
         // Check that reorg happened
         let height = block_index.block_height();
         assert!(
-            tf.chainstate.get_block_id_from_height(&height).unwrap().is_some_and(|id| &id
+            tf.chainstate.get_block_id_from_height(height).unwrap().is_some_and(|id| &id
                 .classify(tf.chainstate.get_chain_config())
                 .chain_block_id()
                 .unwrap()

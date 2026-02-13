@@ -67,31 +67,31 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     #[allow(dead_code)]
     pub fn get_header_from_height(
         &self,
-        height: &BlockHeight,
+        height: BlockHeight,
     ) -> Result<Option<SignedBlockHeader>, PropertyQueryError> {
         self.chainstate_ref.get_header_from_height(height)
     }
 
     pub fn get_block_header(
         &self,
-        id: Id<Block>,
+        id: &Id<Block>,
     ) -> Result<Option<SignedBlockHeader>, PropertyQueryError> {
         self.chainstate_ref.get_block_header(id)
     }
 
     pub fn get_block_id_from_height(
         &self,
-        height: &BlockHeight,
+        height: BlockHeight,
     ) -> Result<Option<Id<GenBlock>>, PropertyQueryError> {
         self.chainstate_ref.get_block_id_by_height(height)
     }
 
-    pub fn get_block(&self, id: Id<Block>) -> Result<Option<Block>, PropertyQueryError> {
+    pub fn get_block(&self, id: &Id<Block>) -> Result<Option<Block>, PropertyQueryError> {
         self.chainstate_ref.get_block(id)
     }
 
-    pub fn get_existing_block(&self, id: Id<Block>) -> Result<Block, PropertyQueryError> {
-        self.chainstate_ref.get_block(id)?.ok_or(PropertyQueryError::BlockNotFound(id))
+    pub fn get_existing_block(&self, id: &Id<Block>) -> Result<Block, PropertyQueryError> {
+        self.chainstate_ref.get_block(id)?.ok_or(PropertyQueryError::BlockNotFound(*id))
     }
 
     pub fn get_mainchain_blocks(
@@ -106,14 +106,14 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
 
         let mut res = Vec::new();
         for _ in 0..max_count {
-            match self.get_block_id_from_height(&from)? {
+            match self.get_block_id_from_height(from)? {
                 Some(get_block_id) => {
                     match get_block_id.classify(self.chainstate_ref.chain_config()) {
                         common::chain::GenBlockId::Genesis(_) => {
                             panic!("genesis block received at non-zero height {from}")
                         }
                         common::chain::GenBlockId::Block(block_id) => {
-                            let block = self.get_block(block_id)?.unwrap_or_else(|| {
+                            let block = self.get_block(&block_id)?.unwrap_or_else(|| {
                                 panic!("can't find block {block_id} at height {from}")
                             });
                             res.push(block);
@@ -182,7 +182,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     ) -> Result<Locator, PropertyQueryError> {
         let headers = locator_tip_distances()
             .map_while(|dist| height - dist)
-            .map(|ht| self.chainstate_ref.get_block_id_by_height(&ht));
+            .map(|ht| self.chainstate_ref.get_block_id_by_height(ht));
 
         itertools::process_results(headers, |iter| iter.flatten().collect::<Vec<_>>())
             .map(Locator::new)
@@ -218,7 +218,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                     let height = BlockHeight::new(height);
                     Ok((
                         height,
-                        self.chainstate_ref.get_existing_block_id_by_height(&height)?,
+                        self.chainstate_ref.get_existing_block_id_by_height(height)?,
                     ))
                 });
 
@@ -259,7 +259,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
 
         let headers = itertools::iterate(height.next_height(), |iter| iter.next_height())
             .take_while(|height| height <= &limit)
-            .map(|height| self.chainstate_ref.get_header_from_height(&height));
+            .map(|height| self.chainstate_ref.get_header_from_height(height));
         itertools::process_results(headers, |iter| iter.flatten().collect::<Vec<_>>())
     }
 
@@ -311,16 +311,16 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
 
     pub fn get_token_info_for_rpc(
         &self,
-        token_id: TokenId,
+        token_id: &TokenId,
     ) -> Result<Option<RPCTokenInfo>, PropertyQueryError> {
-        if let Some(token_data) = self.chainstate_ref.get_token_data(&token_id)? {
+        if let Some(token_data) = self.chainstate_ref.get_token_data(token_id)? {
             let circulating_supply =
-                self.chainstate_ref.get_circulating_supply(&token_id)?.unwrap_or(Amount::ZERO);
+                self.chainstate_ref.get_circulating_supply(token_id)?.unwrap_or(Amount::ZERO);
 
             match token_data {
                 tokens_accounting::TokenData::FungibleToken(token_data) => {
                     let rpc_issuance = RPCTokenInfo::new_fungible(RPCFungibleTokenInfo::new(
-                        token_id,
+                        *token_id,
                         token_data.token_ticker().to_owned(),
                         token_data.number_of_decimals(),
                         token_data.metadata_uri().to_owned(),
@@ -334,7 +334,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                 }
             }
         } else {
-            let token_aux_data = match self.get_token_aux_data(&token_id)? {
+            let token_aux_data = match self.get_token_aux_data(token_id)? {
                 Some(data) => data,
                 None => return Ok(None),
             };
@@ -358,7 +358,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                     TxOutput::IssueNft(_, issuance, _) => match issuance.as_ref() {
                         NftIssuance::V0(nft) => {
                             Some(RPCTokenInfo::new_nonfungible(RPCNonFungibleTokenInfo::new(
-                                token_id,
+                                *token_id,
                                 token_aux_data.issuance_tx().get_id(),
                                 token_aux_data.issuance_block_id(),
                                 &nft.metadata,
@@ -378,7 +378,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         token_ids
             .iter()
             .map(|id| -> Result<_, PropertyQueryError> {
-                self.get_token_info_for_rpc(*id)?
+                self.get_token_info_for_rpc(id)?
                     .ok_or(PropertyQueryError::TokenInfoMissing(*id))
             })
             .collect::<Result<_, _>>()
@@ -509,7 +509,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         let ask_balance = self.get_order_ask_balance(order_id)?.unwrap_or(Amount::ZERO);
         let give_balance = self.get_order_give_balance(order_id)?.unwrap_or(Amount::ZERO);
 
-        let nonce = self.chainstate_ref.get_account_nonce_count(AccountType::Order(*order_id))?;
+        let nonce = self.chainstate_ref.get_account_nonce_count(&AccountType::Order(*order_id))?;
 
         let initially_asked = RpcOutputValue::from_output_value(order_data.ask())
             .ok_or(PropertyQueryError::UnsupportedTokenV0InOrder(*order_id))?;

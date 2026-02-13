@@ -182,7 +182,7 @@ impl TestNode {
 
     pub async fn get_block(&self, block_id: Id<Block>) -> Option<Block> {
         self.chainstate_handle
-            .call(move |cs| cs.get_block(block_id))
+            .call(move |cs| cs.get_block(&block_id))
             .await
             .unwrap()
             .unwrap()
@@ -925,10 +925,10 @@ pub async fn make_new_top_blocks_return_headers(
                 .into_int()
                 .saturating_sub(start_distance_from_top);
             let start_block_id =
-                this.get_block_id_from_height(&start_height.into()).unwrap().unwrap();
+                this.get_block_id_from_height(start_height.into()).unwrap().unwrap();
             let mut last_block = match start_block_id.classify(this.get_chain_config()) {
                 common::chain::GenBlockId::Genesis(_) => None,
-                common::chain::GenBlockId::Block(id) => this.get_block(id).unwrap(),
+                common::chain::GenBlockId::Block(id) => this.get_block(&id).unwrap(),
             };
 
             for _ in 0..count {
