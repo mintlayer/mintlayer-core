@@ -59,7 +59,7 @@ use pos_accounting::{
 use tx_verifier::transaction_verifier;
 use utils::{
     const_value::ConstValue,
-    debug_assert_or_log, ensure,
+    debug_panic_or_log, ensure,
     eventhandler::{EventHandler, EventsController},
     log_error,
     set_flag::SetFlag,
@@ -121,6 +121,7 @@ pub struct Chainstate<S, V> {
     time_getter: TimeGetter,
     is_initial_block_download_finished: SetFlag,
     shutdown_initiated_rx: Option<watch::Receiver<SetFlag>>,
+    reckless_mode_counter: DbRecklessModeCounter,
 }
 
 #[derive(Copy, Clone, Eq, Debug, PartialEq)]
@@ -215,13 +216,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             .map_err(|e| ChainstateError::FailedToInitializeChainstate(e.into()))?;
 
         let best_block_index = chainstate.make_db_tx_ro()?.get_best_block_index()?;
-        chainstate.update_initial_block_download_flag(best_block_index.as_ref())?;
-
-        if !chainstate.is_initial_block_download_finished.test()
-            && chainstate.chainstate_config.db_reckless_mode_in_ibd_enabled()
-        {
-            chainstate.chainstate_storage.set_reckless_mode(true)?;
-        }
+        chainstate.update_initial_block_download_flag(best_block_index.as_ref(), true)?;
 
         Ok(chainstate)
     }
@@ -250,6 +245,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             time_getter,
             is_initial_block_download_finished: SetFlag::new(),
             shutdown_initiated_rx,
+            reckless_mode_counter: DbRecklessModeCounter::new(),
         }
     }
 
@@ -635,11 +631,9 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             best_block_index_after_orphans_opt.or(best_block_index_after_process_block_opt);
 
         if let Some(best_block_index) = &best_block_index_opt {
-            self.update_initial_block_download_flag(GenBlockIndexRef::Block(best_block_index))?;
-            self.broadcast_new_tip_event(
-                GenBlockIndexRef::Block(best_block_index),
-                self.is_initial_block_download(),
-            );
+            let best_block_index_ref = GenBlockIndexRef::Block(best_block_index);
+            self.update_initial_block_download_flag(best_block_index_ref, false)?;
+            self.broadcast_new_tip_event(best_block_index_ref, self.is_initial_block_download());
 
             let compact_target = match best_block_index.block_header().consensus_data() {
                 ConsensusData::None => Compact::from(Uint256::ZERO),
@@ -839,22 +833,26 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
     fn update_initial_block_download_flag(
         &mut self,
         best_block_index: GenBlockIndexRef<'_>,
+        initial_update: bool,
     ) -> Result<(), chainstate_storage::Error> {
         if self.is_initial_block_download_finished.test() {
             return Ok(());
         }
 
         let tip_timestamp = best_block_index.block_timestamp();
+        let is_fresh_block = self.is_fresh_block(&tip_timestamp);
 
-        if self.is_fresh_block(&tip_timestamp) {
+        if !is_fresh_block {
+            if initial_update {
+                self.reckless_mode_counter
+                    .inc(&self.chainstate_config, &self.chainstate_storage)?;
+            }
+        } else {
             self.is_initial_block_download_finished.set();
 
-            if self.chainstate_storage.in_reckless_mode()? {
-                debug_assert_or_log!(
-                    self.chainstate_config.db_reckless_mode_in_ibd_enabled(),
-                    "The db was in a reckless mode even though it wasn't enabled"
-                );
-                self.chainstate_storage.set_reckless_mode(false)?;
+            if !initial_update {
+                self.reckless_mode_counter
+                    .dec(&self.chainstate_config, &self.chainstate_storage)?;
             }
         }
 
@@ -899,12 +897,8 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         &mut self,
         mut reader: std::io::BufReader<Box<dyn std::io::Read + Send + 'a>>,
     ) -> Result<(), BootstrapError> {
-        let enable_reckless_mode = !self.chainstate_storage.in_reckless_mode()?
-            && self.chainstate_config.db_reckless_mode_in_ibd_enabled();
-
-        if enable_reckless_mode {
-            self.chainstate_storage.set_reckless_mode(true)?;
-        }
+        self.reckless_mode_counter
+            .inc(&self.chainstate_config, &self.chainstate_storage)?;
 
         let chain_config = Arc::clone(&self.chain_config);
         let mut block_processor = |block: WithId<Block>| -> Result<_, BootstrapError> {
@@ -924,13 +918,8 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
         let result = import_bootstrap_stream(&chain_config, &mut reader, &mut block_processor);
 
-        // FIXME write to log when reckless mode is turned on and off?
-
-        // FIXME check if the db can become corrupted silently
-
-        if enable_reckless_mode {
-            self.chainstate_storage.set_reckless_mode(false)?;
-        }
+        self.reckless_mode_counter
+            .dec(&self.chainstate_config, &self.chainstate_storage)?;
 
         result
     }
@@ -998,6 +987,60 @@ where
     chainstate_ref
         .is_block_in_main_chain(block_id)
         .map_err(|err| BlockError::IsBlockInMainChainQueryError(*block_id, err))
+}
+
+/// A counter that enters the reckless db mode (if enabled) when going from 0 to 1 and exits it
+/// when going from 1 to 0, i.e. to exit the reckless mode one has to make as many decrements as
+/// there were increments.
+///
+/// The main purpose is to make sure the reckless mode stays enabled during bootstrapping for
+/// the entire duration (i.e. for fresh blocks too).
+struct DbRecklessModeCounter {
+    counter: u32,
+}
+
+impl DbRecklessModeCounter {
+    fn new() -> Self {
+        Self { counter: 0 }
+    }
+
+    fn inc<S: BlockchainStorage>(
+        &mut self,
+        config: &ChainstateConfig,
+        storage: &S,
+    ) -> Result<(), chainstate_storage::Error> {
+        if config.db_reckless_mode_in_ibd_enabled() {
+            if self.counter == 0 {
+                storage.set_reckless_mode(true)?;
+            }
+
+            self.counter = self.counter.checked_add(1).unwrap_or_else(|| {
+                debug_panic_or_log!("Reckless mode counter overflow");
+                self.counter
+            });
+        }
+
+        Ok(())
+    }
+
+    fn dec<S: BlockchainStorage>(
+        &mut self,
+        config: &ChainstateConfig,
+        storage: &S,
+    ) -> Result<(), chainstate_storage::Error> {
+        if config.db_reckless_mode_in_ibd_enabled() {
+            self.counter = self.counter.checked_sub(1).unwrap_or_else(|| {
+                debug_panic_or_log!("Reckless mode counter underflow");
+                self.counter
+            });
+
+            if self.counter == 0 {
+                storage.set_reckless_mode(false)?;
+            }
+        }
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]
