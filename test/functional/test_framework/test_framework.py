@@ -91,7 +91,6 @@ class BitcoinTestFramework:
         self.network_thread = None
         self.rpc_timeout = 60  # Wait for up to 60 seconds for the RPC server to respond
         self.supports_cli = True
-        self.bind_to_localhost_only = True
         self.parse_args()
         self.disable_syscall_sandbox = self.options.nosandbox or self.options.valgrind
         self.default_wallet_name = "default_wallet" if self.options.descriptors else ""
@@ -439,6 +438,12 @@ class BitcoinTestFramework:
 
     # Public helper methods. These can be accessed by the subclass test scripts.
 
+    def get_node_datadir(self, node_idx: int) -> str:
+        return get_datadir_path(self.options.tmpdir, node_idx)
+
+    def init_node_datadir(self, node_idx: int):
+        initialize_datadir(self.options.tmpdir, node_idx)
+
     def add_nodes(self, num_nodes: int, extra_args=None, *, rpchost=None, binary=None, binary_cli=None, versions=None):
         """Instantiate TestNode objects.
 
@@ -463,10 +468,6 @@ class BitcoinTestFramework:
                 bin_name,
             )
 
-        if self.bind_to_localhost_only:
-            extra_confs = [["bind=127.0.0.1"]] * num_nodes
-        else:
-            extra_confs = [[]] * num_nodes
         if extra_args is None:
             extra_args = [[]] * num_nodes
         if versions is None:
@@ -479,7 +480,6 @@ class BitcoinTestFramework:
             binary = [get_bin_from_version(v, 'bitcoind', self.options.bitcoind) for v in versions]
         if binary_cli is None:
             binary_cli = [get_bin_from_version(v, 'bitcoin-cli', self.options.bitcoincli) for v in versions]
-        assert_equal(len(extra_confs), num_nodes)
         assert_equal(len(extra_args), num_nodes)
         assert_equal(len(versions), num_nodes)
         assert_equal(len(binary), num_nodes)
@@ -487,7 +487,7 @@ class BitcoinTestFramework:
         for i in range(num_nodes):
             test_node_i = TestNode(
                 i,
-                get_datadir_path(self.options.tmpdir, i),
+                self.get_node_datadir(i),
                 chain=self.chain,
                 rpchost=rpchost,
                 timewait=self.rpc_timeout,
@@ -497,7 +497,6 @@ class BitcoinTestFramework:
                 version=versions[i],
                 coverage_dir=self.options.coveragedir,
                 cwd=self.options.tmpdir,
-                extra_conf=extra_confs[i],
                 extra_args=extra_args[i],
                 use_cli=self.options.usecli,
                 start_perf=self.options.perf,
@@ -718,13 +717,12 @@ class BitcoinTestFramework:
         if not os.path.isdir(cache_node_dir):
             self.log.debug("Creating cache directory {}".format(cache_node_dir))
 
-            initialize_datadir(self.options.cachedir, CACHE_NODE_ID, self.chain, self.disable_autoconnect)
+            initialize_datadir(self.options.cachedir, CACHE_NODE_ID)
             self.nodes.append(
                 TestNode(
                     CACHE_NODE_ID,
                     cache_node_dir,
                     chain=self.chain,
-                    extra_conf=["bind=127.0.0.1"],
                     extra_args=[],
                     rpchost=None,
                     timewait=self.rpc_timeout,
@@ -776,9 +774,8 @@ class BitcoinTestFramework:
 
         for i in range(self.num_nodes):
             self.log.debug("Copy cache directory {} to node {}".format(cache_node_dir, i))
-            to_dir = get_datadir_path(self.options.tmpdir, i)
+            to_dir = self.get_node_datadir(i)
             shutil.copytree(cache_node_dir, to_dir)
-            initialize_datadir(self.options.tmpdir, i, self.chain, self.disable_autoconnect)  # Overwrite port/rpcport in bitcoin.conf
 
     def _initialize_chain_clean(self):
         """Initialize empty blockchain for use by the test.
@@ -786,7 +783,7 @@ class BitcoinTestFramework:
         Create an empty blockchain and num_nodes wallets.
         Useful if a test case wants complete control over initialization."""
         for i in range(self.num_nodes):
-            initialize_datadir(self.options.tmpdir, i, self.chain, self.disable_autoconnect)
+            self.init_node_datadir(i)
 
     def skip_if_no_py3_zmq(self):
         """Attempt to import the zmq package and skip the test if the import fails."""
