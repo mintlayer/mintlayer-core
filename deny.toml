@@ -1,8 +1,8 @@
 [sources.allow-org]
 github = [
-    "mintlayer",    # allow any code from mintlayer's github
-    "paritytech",   # we have to use an unreleased version of parity-scale-codec at this moment 
-    "tokio-rs",     # we have to use an unreleased version of tokio at this moment
+    "mintlayer",  # allow any code from mintlayer's github
+    "paritytech", # we have to use an unreleased version of parity-scale-codec at this moment
+    "tokio-rs",   # we have to use an unreleased version of tokio at this moment
 ]
 
 [licenses]
@@ -25,28 +25,24 @@ allow = [
     "MIT",
     "MPL-2.0",
     "Unicode-3.0",
-    "Unlicense", # this is a specific license rather than no license at all
+    "Unlicense",           # this is a specific license rather than no license at all
     "Zlib",
 ] # deny a license not in this set of licenses
 
 [[licenses.clarify]]
 name = "ring"
 expression = "LicenseRef-ring"
-license-files = [
-    { path = "LICENSE", hash = 0xbd0eed23 },
-]
+license-files = [{ path = "LICENSE", hash = 0xbd0eed23 }]
 
 [[licenses.clarify]]
 name = "webpki"
 expression = "LicenseRef-webpki"
-license-files = [
-    { path = "LICENSE", hash = 0x001c7e6c },
-]
+license-files = [{ path = "LICENSE", hash = 0x001c7e6c }]
 
 [advisories]
 version = 2
 db-path = "~/.cargo/advisory-dbs"
-db-urls = [ "https://github.com/RustSec/advisory-db" ]
+db-urls = ["https://github.com/RustSec/advisory-db"]
 yanked = "warn"
 ignore = [
     "RUSTSEC-2024-0436", # "paste" is no longer maintained
