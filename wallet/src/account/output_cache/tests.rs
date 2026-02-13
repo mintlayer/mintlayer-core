@@ -850,7 +850,7 @@ fn test_add_tx_state_transitions_logic(#[case] seed: Seed) {
     let tx_a_source_id: OutPointSourceId = tx_a_id.into();
 
     // Add A as Inactive
-    output_cache
+    let result = output_cache
         .add_tx(
             &chain_config,
             best_block_height,
@@ -858,6 +858,7 @@ fn test_add_tx_state_transitions_logic(#[case] seed: Seed) {
             WalletTx::Tx(TxData::new(tx_a.clone(), TxState::Inactive(0))),
         )
         .unwrap();
+    assert_eq!(result, TxChanged::Yes);
 
     assert!(
         output_cache.unconfirmed_descendants.contains_key(&tx_a_source_id),
@@ -867,7 +868,7 @@ fn test_add_tx_state_transitions_logic(#[case] seed: Seed) {
     // Add A as Confirmed
     let confirmed_state =
         TxState::Confirmed(BlockHeight::new(1), BlockTimestamp::from_int_seconds(0), 0);
-    output_cache
+    let result = output_cache
         .add_tx(
             &chain_config,
             best_block_height,
@@ -875,6 +876,7 @@ fn test_add_tx_state_transitions_logic(#[case] seed: Seed) {
             WalletTx::Tx(TxData::new(tx_a.clone(), confirmed_state)),
         )
         .unwrap();
+    assert_eq!(result, TxChanged::Yes);
 
     assert!(
         !output_cache.unconfirmed_descendants.contains_key(&tx_a_source_id),
@@ -884,7 +886,7 @@ fn test_add_tx_state_transitions_logic(#[case] seed: Seed) {
     // Add A as InMempool
     // Because existing state is Confirmed, existing_tx_already_confirmed_or_same
     // returns true. The state remains Confirmed (and not unconfirmed).
-    output_cache
+    let result = output_cache
         .add_tx(
             &chain_config,
             best_block_height,
@@ -892,6 +894,8 @@ fn test_add_tx_state_transitions_logic(#[case] seed: Seed) {
             WalletTx::Tx(TxData::new(tx_a, TxState::InMempool(0))),
         )
         .unwrap();
+
+    assert_eq!(result, TxChanged::No);
 
     assert!(
         !output_cache.unconfirmed_descendants.contains_key(&tx_a_source_id),

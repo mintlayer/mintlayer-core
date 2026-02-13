@@ -71,6 +71,14 @@ impl TxInfo {
     }
 }
 
+/// Result when adding a transaction representing if anything was changed or the tx already existed
+/// in the same state and nothing changed
+#[derive(Debug, Eq, PartialEq, Clone, Copy)]
+pub enum TxChanged {
+    No,
+    Yes,
+}
+
 pub struct DelegationData {
     pub pool_id: PoolId,
     pub destination: Destination,
@@ -970,7 +978,7 @@ impl OutputCache {
         best_block_height: BlockHeight,
         tx_id: OutPointSourceId,
         tx: WalletTx,
-    ) -> WalletResult<()> {
+    ) -> WalletResult<TxChanged> {
         let existing_tx = self.txs.get(&tx_id);
         let existing_tx_already_confirmed_or_same = existing_tx.is_some_and(|existing_tx| {
             matches!(
@@ -984,7 +992,7 @@ impl OutputCache {
         });
 
         if existing_tx_already_confirmed_or_same {
-            return Ok(());
+            return Ok(TxChanged::No);
         }
 
         let already_present = existing_tx.is_some_and(|tx| match tx.state() {
@@ -1016,7 +1024,7 @@ impl OutputCache {
         )?;
 
         self.txs.insert(tx_id, tx);
-        Ok(())
+        Ok(TxChanged::Yes)
     }
 
     /// Update the pool states for a newly confirmed transaction
