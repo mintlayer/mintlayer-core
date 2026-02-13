@@ -904,7 +904,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         let mut block_processor = |block: WithId<Block>| -> Result<_, BootstrapError> {
             // If chainstate is being shutdown, stop immediately.
             if self.shutdown_initiated_rx.as_ref().is_some_and(|rx| rx.borrow().test()) {
-                return Ok(false);
+                return Err(BootstrapError::Interrupted);
             }
 
             let block_exists = self.make_db_tx_ro()?.block_exists(&block.get_id())?;

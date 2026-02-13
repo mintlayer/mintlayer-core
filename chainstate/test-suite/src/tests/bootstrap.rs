@@ -668,6 +668,45 @@ fn bad_v0_file(#[case] seed: Seed) {
     });
 }
 
+// The recorded block size is too big.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn block_size_too_big(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+
+        let chain_type = ChainType::iter().choose(&mut rng).unwrap();
+        let chain_config = make_chain_config(chain_type);
+
+        let valid_blocks_count = rng.gen_range(0..5);
+        let valid_blocks = gen_blocks(chain_config.clone(), valid_blocks_count, &mut rng);
+
+        let mut tf =
+            TestFramework::builder(&mut rng).with_chain_config(chain_config.clone()).build();
+
+        let mut data = make_header_data(&chain_config, 0, (valid_blocks_count + 1) as u64);
+
+        for valid_block in valid_blocks {
+            let encoded_block = valid_block.encode();
+            append_block_data_for_v0(&mut data, &encoded_block);
+        }
+
+        let bad_block_size: u32 = 100 * 1024 * 1024;
+        data.extend_from_slice(&bad_block_size.to_le_bytes());
+
+        // Importing should fail with this specific error, meaning that we didn't attempt to
+        // actually read the data.
+        let err = import_from_slice(&mut tf, &data).unwrap_err();
+        assert_eq!(
+            err,
+            ChainstateError::BootstrapError(BootstrapError::BlockSizeTooBig(
+                bad_block_size as usize
+            ))
+        );
+    });
+}
+
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]

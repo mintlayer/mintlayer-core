@@ -61,6 +61,12 @@ const FILE_HEADER_SIZE: usize = 24;
 
 type BlockSizeType = u32;
 
+// Bootstrapping will fail if a block size value is bigger that this.
+// Note: the main purpose of this is to avoid reading a potentially unlimited amount of data from
+// a corrupted file. Since we don't have an exact limit on the encoded size of a block, we just use
+// a value large enough so that any real block would fit.
+const MAX_BLOCK_SIZE: usize = 10 * 1024 * 1024;
+
 #[derive(thiserror::Error, Debug, Clone, Eq, PartialEq)]
 pub enum BootstrapError {
     #[error("Block storage error: `{0}`")]
@@ -102,6 +108,12 @@ pub enum BootstrapError {
         "This seems to be some future version of bootstrap file that is not supported by this node"
     )]
     UnsupportedFutureFormatVersion,
+
+    #[error("Block size too big: {0}")]
+    BlockSizeTooBig(usize),
+
+    #[error("Bootstrapping was interrupted")]
+    Interrupted,
 }
 
 impl From<std::io::Error> for BootstrapError {
@@ -163,6 +175,10 @@ where
                 .expect("Buffer is known to have the correct size"),
         )
         .try_into()?;
+        ensure!(
+            block_size <= MAX_BLOCK_SIZE,
+            BootstrapError::BlockSizeTooBig(block_size)
+        );
         buffer_queue.clear();
 
         fill_buffer(&mut buffer_queue, file_reader, block_size)?;
