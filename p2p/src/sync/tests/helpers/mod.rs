@@ -85,7 +85,7 @@ pub struct TestNode {
     subsystem_manager_handle: ManagerJoinHandle,
     chainstate_handle: ChainstateHandle,
     mempool_handle: MempoolHandle,
-    new_tip_receiver: UnboundedReceiver<Id<Block>>,
+    new_tip_receiver: UnboundedReceiver<Id<GenBlock>>,
     tx_processed_receiver: UnboundedReceiver<TransactionProcessed>,
     sync_mgr_notification_receiver: UnboundedReceiver<SyncManagerNotification>,
     protocol_version: ProtocolVersion,
@@ -282,7 +282,7 @@ impl TestNode {
         expect_future_val!(future)
     }
 
-    pub async fn receive_new_tip_event(&mut self) -> Id<Block> {
+    pub async fn receive_new_tip_event(&mut self) -> Id<GenBlock> {
         expect_recv!(self.new_tip_receiver)
     }
 
@@ -650,7 +650,7 @@ pub enum PeerManagerEventDesc {
         peer_id: PeerId,
         block_id: Id<Block>,
     },
-    NewChainstateTip(Id<Block>),
+    NewChainstateTip(Id<GenBlock>),
     NewValidTransactionReceived {
         peer_id: PeerId,
         txid: Id<Transaction>,

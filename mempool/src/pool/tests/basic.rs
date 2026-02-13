@@ -234,7 +234,7 @@ async fn reject_txs_during_ibd(#[case] seed: Seed) {
 
     mempool
         .process_chainstate_event(ChainstateEvent::NewTip {
-            id: block1_id,
+            id: block1_id.into(),
             height: BlockHeight::new(1),
             is_initial_block_download: true,
         })
@@ -258,7 +258,7 @@ async fn reject_txs_during_ibd(#[case] seed: Seed) {
         .unwrap();
     mempool
         .process_chainstate_event(ChainstateEvent::NewTip {
-            id: block2_id,
+            id: block2_id.into(),
             height: BlockHeight::new(2),
             is_initial_block_download: true,
         })
@@ -283,7 +283,7 @@ async fn reject_txs_during_ibd(#[case] seed: Seed) {
         .unwrap();
     mempool
         .process_chainstate_event(ChainstateEvent::NewTip {
-            id: block3_id,
+            id: block3_id.into(),
             height: BlockHeight::new(3),
             is_initial_block_download: false,
         })
@@ -346,7 +346,7 @@ async fn ibd_transition(#[case] seed: Seed) {
         .unwrap();
     mempool
         .process_chainstate_event(ChainstateEvent::NewTip {
-            id: block_id,
+            id: block_id.into(),
             height: block_height,
             is_initial_block_download: false,
         })
@@ -366,7 +366,7 @@ async fn ibd_transition(#[case] seed: Seed) {
     assert!(mempool.contains_transaction(&tx_id));
 
     // Check that the new tip event was sent.
-    let expected_event = MempoolEvent::NewTip(NewTip::new(block_id, block_height));
+    let expected_event = MempoolEvent::NewTip(NewTip::new(block_id.into(), block_height));
 
     let event = events_rx.recv().await;
     assert_eq!(event.as_ref(), Some(&expected_event));

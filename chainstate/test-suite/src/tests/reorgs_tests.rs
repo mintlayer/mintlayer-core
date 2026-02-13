@@ -13,28 +13,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
-use crate::tests::EventList;
-use chainstate::BlockError;
-use chainstate::BlockSource;
-use chainstate::ChainstateError;
-use chainstate::ChainstateEvent;
-use chainstate::ConnectTransactionError;
-use chainstate_test_framework::TestFramework;
-use common::chain::Block;
-use common::chain::GenBlock;
-use common::chain::Transaction;
-use common::chain::UtxoOutPoint;
-use common::primitives::BlockHeight;
-use common::primitives::Id;
-use common::primitives::Idable;
-use randomness::CryptoRng;
-use randomness::Rng;
 use rstest::rstest;
-use test_utils::random::make_seedable_rng;
-use test_utils::random::Seed;
+
+use chainstate::{
+    BlockError, BlockSource, ChainstateError, ChainstateEvent, ConnectTransactionError,
+};
+use chainstate_test_framework::TestFramework;
+use common::{
+    chain::{Block, GenBlock, Transaction, UtxoOutPoint},
+    primitives::{id::Idable, BlockHeight, Id},
+};
+use randomness::{CryptoRng, Rng};
+use test_utils::random::{make_seedable_rng, Seed};
+
+// TODO use EventList from helpers instead.
+type EventList = Arc<Mutex<Vec<(Id<GenBlock>, BlockHeight)>>>;
 
 // Produce `genesis -> a` chain, then a parallel `genesis -> b -> c` that should trigger a reorg.
 #[rstest]

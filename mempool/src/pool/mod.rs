@@ -17,7 +17,7 @@ use std::{num::NonZeroUsize, sync::Arc};
 
 use chainstate::{ChainstateError, ChainstateEvent};
 use common::{
-    chain::{Block, ChainConfig, GenBlock, SignedTransaction, Transaction},
+    chain::{ChainConfig, GenBlock, SignedTransaction, Transaction},
     primitives::{time::Time, BlockHeight, Id},
     time_getter::TimeGetter,
 };
@@ -460,7 +460,7 @@ impl<M: MemoryUsageEstimator + ShallowClone> Mempool<M> {
 
     fn on_new_tip(
         &mut self,
-        block_id: Id<Block>,
+        block_id: Id<GenBlock>,
         height: BlockHeight,
         is_initial_block_download: bool,
     ) -> Result<(), Error> {
@@ -470,7 +470,7 @@ impl<M: MemoryUsageEstimator + ShallowClone> Mempool<M> {
             MempoolState::InIbd(state) => {
                 log::debug!("New tip {block_id:x} at height {height} (InIbd)");
 
-                state.best_block_id = block_id.into();
+                state.best_block_id = block_id;
             }
             MempoolState::AfterIbd(state) => {
                 log::debug!("New tip {block_id:x} at height {height} (AfterIbd)");

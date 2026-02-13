@@ -82,7 +82,7 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
         block_id: Id<Block>,
         block_height: BlockHeight,
     ) -> Result<(), ReorgError> {
-        self.reorg(block_id, block_height, |_, _| ())
+        self.reorg(block_id.into(), block_height, |_, _| ())
     }
 }
 

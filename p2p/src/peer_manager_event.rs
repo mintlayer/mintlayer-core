@@ -16,7 +16,7 @@
 use std::time::Duration;
 
 use common::{
-    chain::{Block, Transaction},
+    chain::{Block, GenBlock, Transaction},
     primitives::{time::Time, Id},
 };
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
@@ -86,7 +86,11 @@ pub enum PeerManagerEvent {
     /// that if NewTipReceived is produced, it will be accompanied by NewChainstateTip.
     /// However, peer manager should not use this fact and treat them as independent
     /// events instead.
-    NewChainstateTip(Id<Block>),
+    /// E.g. it's possible to receive `NewChainstateTip` after a block has been invalidated
+    /// by the user via the corresponding chainstate RPC call, in which case it will not be
+    /// accompanied by `NewTipReceived` (and this is also why `NewChainstateTip` contains
+    /// `Id<GenBlock>` - after the invalidation, the genesis may become the new best block).
+    NewChainstateTip(Id<GenBlock>),
 
     /// New valid unseen transaction received.
     /// It is used as an eviction criterion.
