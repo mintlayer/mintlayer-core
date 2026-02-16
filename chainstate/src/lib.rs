@@ -28,17 +28,17 @@ use common::{
     primitives::{BlockHeight, Id},
     time_getter::TimeGetter,
 };
-use detail::{bootstrap::BootstrapError, Chainstate};
+use detail::Chainstate;
 use interface::chainstate_interface_impl;
 
 pub use crate::{
     config::{ChainstateConfig, MaxTipAge},
     detail::{
-        ban_score, block_invalidation::BlockInvalidatorError, calculate_median_time_past,
-        calculate_median_time_past_from_blocktimestamps, BlockError, BlockProcessingErrorClass,
-        BlockProcessingErrorClassification, BlockSource, ChainInfo, CheckBlockError,
-        CheckBlockTransactionsError, ConnectTransactionError, IOPolicyError, InitializationError,
-        Locator, NonZeroPoolBalances, OrphanCheckError, SpendStakeError,
+        ban_score, block_invalidation::BlockInvalidatorError, bootstrap::BootstrapError,
+        calculate_median_time_past, calculate_median_time_past_from_blocktimestamps, BlockError,
+        BlockProcessingErrorClass, BlockProcessingErrorClassification, BlockSource, ChainInfo,
+        CheckBlockError, CheckBlockTransactionsError, ConnectTransactionError, IOPolicyError,
+        InitializationError, Locator, NonZeroPoolBalances, OrphanCheckError, SpendStakeError,
         StorageCompatibilityCheckError, TokenIssuanceError, TokensError,
         TransactionVerifierStorageError, MEDIAN_TIME_SPAN,
     },

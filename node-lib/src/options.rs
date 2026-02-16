@@ -246,6 +246,22 @@ pub struct RunOptions {
     #[clap(long, value_name = "COUNT")]
     pub max_db_commit_attempts: Option<usize>,
 
+    /// Whether to switch to the "reckless" mode during the initial block download or bootstrapping.
+    ///
+    /// In the "reckless" mode the chainstate db contents is not synced to disk on each commit, which
+    /// increases performance at the cost of potential db corruption on a system crash.
+    ///
+    /// Once the initial block download or bootstrapping is complete, the node will automatically
+    /// switch to the normal mode of operation.
+    ///
+    /// Note: if a system crash does occur during syncing in the reckless mode and the chainstate
+    /// db gets corrupted, you will need to delete it manually and re-sync again.
+    /// Additionally, the corruption may not be detectable by the db engine, in which case you'll
+    /// end up having a malfunctioning node. Therefore, if you are using the reckless mode and
+    /// the system crashes in the process, always delete the db and re-sync, just in case.
+    #[clap(long, action = clap::ArgAction::SetTrue)]
+    pub enable_db_reckless_mode_in_ibd: Option<bool>,
+
     /// The maximum capacity of the orphan blocks pool in blocks.
     #[clap(long, value_name = "COUNT")]
     pub max_orphan_blocks: Option<usize>,
@@ -420,6 +436,7 @@ mod tests {
             node_type: Default::default(),
             mock_time: Default::default(),
             max_db_commit_attempts: Default::default(),
+            enable_db_reckless_mode_in_ibd: Default::default(),
             max_orphan_blocks: Default::default(),
             p2p_networking_enabled: Default::default(),
             p2p_bind_addresses: Default::default(),

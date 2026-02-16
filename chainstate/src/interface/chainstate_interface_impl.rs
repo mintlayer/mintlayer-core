@@ -21,11 +21,8 @@ use std::{
 
 use crate::{
     detail::{
-        self,
-        block_checking::BlockChecker,
-        bootstrap::{export_bootstrap_stream, import_bootstrap_stream},
-        calculate_median_time_past,
-        tx_verification_strategy::TransactionVerificationStrategy,
+        self, block_checking::BlockChecker, bootstrap::export_bootstrap_stream,
+        calculate_median_time_past, tx_verification_strategy::TransactionVerificationStrategy,
         BlockSource, OrphanBlocksRef, CHAINSTATE_TRACING_TARGET_VERBOSE_BLOCK_IDS,
     },
     ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent, ChainstateInterface, Locator,
@@ -616,24 +613,7 @@ where
         &mut self,
         reader: std::io::BufReader<Box<dyn std::io::Read + Send + 'a>>,
     ) -> Result<(), ChainstateError> {
-        let magic_bytes = *self.chainstate.chain_config().magic_bytes();
-
-        let mut reader = reader;
-
-        // We clone because borrowing with the closure below prevents immutable borrows,
-        // and the cost of cloning is small compared to the bootstrapping
-        let chainstate_config = self.chainstate.chainstate_config().clone();
-
-        let mut block_processor = |block| self.chainstate.process_block(block, BlockSource::Local);
-
-        import_bootstrap_stream(
-            &magic_bytes.bytes(),
-            &mut reader,
-            &mut block_processor,
-            &chainstate_config,
-        )?;
-
-        Ok(())
+        Ok(self.chainstate.import_bootstrap_stream(reader)?)
     }
 
     #[tracing::instrument(skip_all)]
@@ -642,10 +622,9 @@ where
         writer: std::io::BufWriter<Box<dyn std::io::Write + Send + 'a>>,
         include_stale_blocks: bool,
     ) -> Result<(), ChainstateError> {
-        let magic_bytes = self.chainstate.chain_config().magic_bytes();
         let mut writer = writer;
         export_bootstrap_stream(
-            &magic_bytes.bytes(),
+            self.chainstate.chain_config(),
             &mut writer,
             include_stale_blocks,
             &self.chainstate.query().map_err(ChainstateError::from)?,

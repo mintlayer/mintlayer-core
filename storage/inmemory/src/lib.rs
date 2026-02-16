@@ -13,7 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use storage_core::{adaptor, backend, util::MapPrefixIter, Data, DbDesc, DbMapId, DbMapsData};
+use storage_core::{
+    adaptor::{self, TransactionLockImpl},
+    backend,
+    util::MapPrefixIter,
+    Data, DbDesc, DbMapId, DbMapsData,
+};
 
 use std::{borrow::Cow, collections::BTreeMap};
 
@@ -66,8 +71,13 @@ impl adaptor::Construct for StorageMaps {
 #[derive(Clone)]
 pub struct InMemory(adaptor::Locking<StorageMaps>);
 
+// Note: it'd be better if this was defined simply as `<adaptor::Locking<StorageMaps> as backend::Backend>::Impl`,
+// but then it'd be impossible to impl a trait for it due to an ancient Rust bug (e.g. see
+// https://github.com/rust-lang/rust/issues/150143)
+pub type InMemoryImpl = TransactionLockImpl<StorageMaps>;
+
 impl backend::Backend for InMemory {
-    type Impl = <adaptor::Locking<StorageMaps> as backend::Backend>::Impl;
+    type Impl = InMemoryImpl;
 
     fn open(self, desc: DbDesc) -> storage_core::Result<Self::Impl> {
         self.0.open(desc)

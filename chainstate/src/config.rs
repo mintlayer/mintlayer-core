@@ -18,19 +18,8 @@ use std::time::Duration;
 use common::chain::{config::ChainType, ChainConfig};
 use utils::make_config_setting;
 
-const DEFAULT_MIN_IMPORT_BUFFER_SIZE: usize = 1 << 22; // 4 MB
-const DEFAULT_MAX_IMPORT_BUFFER_SIZE: usize = 1 << 26; // 64 MB
-
 make_config_setting!(MaxDbCommitAttempts, usize, 10);
 make_config_setting!(MaxOrphanBlocks, usize, 512);
-make_config_setting!(
-    MinMaxBootstrapImportBufferSizes,
-    (usize, usize),
-    (
-        DEFAULT_MIN_IMPORT_BUFFER_SIZE,
-        DEFAULT_MAX_IMPORT_BUFFER_SIZE,
-    )
-);
 make_config_setting!(MaxTipAge, Duration, Duration::from_secs(60 * 60 * 24));
 
 /// The chainstate subsystem configuration.
@@ -39,12 +28,14 @@ pub struct ChainstateConfig {
     /// The number of maximum attempts to process a block.
     pub max_db_commit_attempts: MaxDbCommitAttempts,
 
+    /// Whether to use the "reckless" mode during the initial block download or bootstrapping.
+    ///
+    /// In "reckless" mode the db contents is not synced to disk on each commit, which increases
+    /// performance at the cost of a potential db corruption if the system crashes.
+    pub enable_db_reckless_mode_in_ibd: Option<bool>,
+
     /// The maximum capacity of the orphan blocks pool.
     pub max_orphan_blocks: MaxOrphanBlocks,
-
-    /// When importing bootstrap file, this controls the buffer sizes (min, max)
-    /// (see bootstrap import function for more information)
-    pub min_max_bootstrap_import_buffer_sizes: MinMaxBootstrapImportBufferSizes,
 
     /// The initial block download is finished if the difference between the current time and the
     /// tip time is less than this value.
@@ -74,17 +65,13 @@ impl ChainstateConfig {
         self
     }
 
-    pub fn with_bootstrap_buffer_sizes(
-        mut self,
-        min_max_bootstrap_import_buffer_sizes: (usize, usize),
-    ) -> Self {
-        self.min_max_bootstrap_import_buffer_sizes = min_max_bootstrap_import_buffer_sizes.into();
-        self
-    }
-
     pub fn with_heavy_checks_enabled(mut self, enable: bool) -> Self {
         self.enable_heavy_checks = Some(enable);
         self
+    }
+
+    pub fn db_reckless_mode_in_ibd_enabled(&self) -> bool {
+        self.enable_db_reckless_mode_in_ibd.unwrap_or(false)
     }
 
     pub fn heavy_checks_enabled(&self, chain_config: &ChainConfig) -> bool {

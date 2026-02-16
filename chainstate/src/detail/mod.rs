@@ -58,7 +58,7 @@ use pos_accounting::{
 use tx_verifier::transaction_verifier;
 use utils::{
     const_value::ConstValue,
-    ensure,
+    debug_assert_or_log, ensure,
     eventhandler::{EventHandler, EventsController},
     log_error,
     set_flag::SetFlag,
@@ -67,7 +67,10 @@ use utils::{
 use utils_networking::broadcaster;
 use utxo::UtxosDB;
 
-use crate::{BlockInvalidatorError, ChainstateConfig, ChainstateEvent};
+use crate::{
+    detail::bootstrap::import_bootstrap_stream, BlockInvalidatorError, BootstrapError,
+    ChainstateConfig, ChainstateError, ChainstateEvent,
+};
 
 use self::{
     block_invalidation::BlockInvalidator,
@@ -182,9 +185,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         tx_verification_strategy: V,
         custom_orphan_error_hook: Option<Arc<OrphanErrorHandler>>,
         time_getter: TimeGetter,
-    ) -> Result<Self, crate::ChainstateError> {
-        use crate::ChainstateError;
-
+    ) -> Result<Self, ChainstateError> {
         let best_block_id = {
             let db_tx = chainstate_storage.transaction_ro()?;
             db_tx.get_best_block_id()?
@@ -210,7 +211,13 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             .map_err(|e| ChainstateError::FailedToInitializeChainstate(e.into()))?;
 
         let best_block_index = chainstate.make_db_tx_ro()?.get_best_block_index()?;
-        chainstate.update_initial_block_download_flag(best_block_index.as_ref());
+        chainstate.update_initial_block_download_flag(best_block_index.as_ref())?;
+
+        if !chainstate.is_initial_block_download_finished.test()
+            && chainstate.chainstate_config.db_reckless_mode_in_ibd_enabled()
+        {
+            chainstate.chainstate_storage.set_reckless_mode(true)?;
+        }
 
         Ok(chainstate)
     }
@@ -622,7 +629,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             best_block_index_after_orphans_opt.or(best_block_index_after_process_block_opt);
 
         if let Some(best_block_index) = &best_block_index_opt {
-            self.update_initial_block_download_flag(GenBlockIndexRef::Block(best_block_index));
+            self.update_initial_block_download_flag(GenBlockIndexRef::Block(best_block_index))?;
             self.broadcast_new_tip_event(
                 GenBlockIndexRef::Block(best_block_index),
                 self.is_initial_block_download(),
@@ -822,16 +829,30 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
     }
 
     /// Update `is_initial_block_download_finished` when tip changes (can only be set once)
-    fn update_initial_block_download_flag(&mut self, best_block_index: GenBlockIndexRef<'_>) {
+    #[log_error]
+    fn update_initial_block_download_flag(
+        &mut self,
+        best_block_index: GenBlockIndexRef<'_>,
+    ) -> Result<(), chainstate_storage::Error> {
         if self.is_initial_block_download_finished.test() {
-            return;
+            return Ok(());
         }
 
         let tip_timestamp = best_block_index.block_timestamp();
 
         if self.is_fresh_block(&tip_timestamp) {
             self.is_initial_block_download_finished.set();
+
+            if self.chainstate_storage.in_reckless_mode()? {
+                debug_assert_or_log!(
+                    self.chainstate_config.db_reckless_mode_in_ibd_enabled(),
+                    "The db was in a reckless mode even though it wasn't enabled"
+                );
+                self.chainstate_storage.set_reckless_mode(false)?;
+            }
         }
+
+        Ok(())
     }
 
     #[log_error]
@@ -865,6 +886,42 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             Ok(_) => Ok(()),
             Err(err) => (*err).into(),
         }
+    }
+
+    #[log_error]
+    pub fn import_bootstrap_stream<'a>(
+        &mut self,
+        mut reader: std::io::BufReader<Box<dyn std::io::Read + Send + 'a>>,
+    ) -> Result<(), BootstrapError> {
+        let enable_reckless_mode = !self.chainstate_storage.in_reckless_mode()?
+            && self.chainstate_config.db_reckless_mode_in_ibd_enabled();
+
+        if enable_reckless_mode {
+            self.chainstate_storage.set_reckless_mode(true)?;
+        }
+
+        let chain_config = Arc::clone(&self.chain_config);
+        let mut block_processor = |block: WithId<Block>| -> Result<_, BootstrapError> {
+            let block_exists = self.make_db_tx_ro()?.block_exists(&block.get_id())?;
+
+            if !block_exists {
+                Ok(self.process_block(block, BlockSource::Local)?)
+            } else {
+                Ok(None)
+            }
+        };
+
+        let result = import_bootstrap_stream(&chain_config, &mut reader, &mut block_processor);
+
+        // FIXME write to log when reckless mode is turned on and off?
+
+        // FIXME check if the db can become corrupted silently
+
+        if enable_reckless_mode {
+            self.chainstate_storage.set_reckless_mode(false)?;
+        }
+
+        result
     }
 }
 

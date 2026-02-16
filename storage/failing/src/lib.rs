@@ -18,6 +18,6 @@
 mod backend;
 mod config;
 
-pub use backend::Failing;
+pub use backend::{Failing, FailingImpl};
 pub use config::{builder::Builder, ErrorGeneration, ErrorSet, FailureConfig};
 pub use storage_core::error::Recoverable as StorageError;

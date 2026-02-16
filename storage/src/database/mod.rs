@@ -67,6 +67,14 @@ impl<B: Backend, Sch: Schema> Storage<B, Sch> {
         let _schema = std::marker::PhantomData;
         Ok(Self { backend, _schema })
     }
+
+    pub fn backend_impl(&self) -> &B::Impl {
+        &self.backend
+    }
+
+    pub fn backend_impl_mut(&mut self) -> &mut B::Impl {
+        &mut self.backend
+    }
 }
 
 impl<B: Backend, Sch: Schema> Storage<B, Sch> {

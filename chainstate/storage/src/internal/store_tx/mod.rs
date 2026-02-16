@@ -70,6 +70,17 @@ pub struct StoreTxRw<'st, B: storage::SharedBackend> {
 }
 
 impl<B: storage::SharedBackend> StoreTxRo<'_, B> {
+    // Read a value from the database
+    fn read_raw<DbMap, I, K>(&self, key: K) -> crate::Result<Option<Vec<u8>>>
+    where
+        DbMap: schema::DbMap,
+        Schema: schema::HasDbMap<DbMap, I>,
+        K: EncodeLike<DbMap::Key>,
+    {
+        let map = self.0.get::<DbMap, I>();
+        Ok(map.get(key)?.map(|x| x.take_bytes().into_owned()))
+    }
+
     // Read a value from the database and decode it
     fn read<DbMap, I, K>(&self, key: K) -> crate::Result<Option<DbMap::Value>>
     where
@@ -78,7 +89,7 @@ impl<B: storage::SharedBackend> StoreTxRo<'_, B> {
         K: EncodeLike<DbMap::Key>,
     {
         let map = self.0.get::<DbMap, I>();
-        map.get(key).map_err(crate::Error::from).map(|x| x.map(|x| x.decode()))
+        Ok(map.get(key)?.map(|x| x.decode()))
     }
 
     // Return true if an entry for the given key exists in the db.
@@ -95,11 +106,9 @@ impl<B: storage::SharedBackend> StoreTxRo<'_, B> {
 
     // Read a value for a well-known entry
     fn read_value<E: well_known::Entry>(&self) -> crate::Result<Option<E::Value>> {
-        self.read::<db::DBValue, _, _>(E::KEY).map(|x| {
-            x.map(|x| {
-                E::Value::decode_all(&mut x.as_ref()).expect("db values to be encoded correctly")
-            })
-        })
+        Ok(self.read::<db::DBValue, _, _>(E::KEY)?.map(|x| {
+            E::Value::decode_all(&mut x.as_ref()).expect("db values to be encoded correctly")
+        }))
     }
 }
 
@@ -139,6 +148,17 @@ impl<'st, B: storage::SharedBackend> StoreTxRw<'st, B> {
         Ok(self.db_tx_ref()?.get::<DbMap, I>())
     }
 
+    // Read a value from the database
+    fn read_raw<DbMap, I, K>(&self, key: K) -> crate::Result<Option<Vec<u8>>>
+    where
+        DbMap: schema::DbMap,
+        Schema: schema::HasDbMap<DbMap, I>,
+        K: EncodeLike<DbMap::Key>,
+    {
+        let map = self.db_tx_ref()?.get::<DbMap, I>();
+        Ok(map.get(key)?.map(|x| x.take_bytes().into_owned()))
+    }
+
     // Read a value from the database and decode it
     fn read<DbMap, I, K>(&self, key: K) -> crate::Result<Option<DbMap::Value>>
     where
@@ -146,14 +166,8 @@ impl<'st, B: storage::SharedBackend> StoreTxRw<'st, B> {
         Schema: schema::HasDbMap<DbMap, I>,
         K: EncodeLike<DbMap::Key>,
     {
-        logging::log::trace!(
-            "Reading {}/{}",
-            DbMap::NAME,
-            serialization::hex_encoded::HexEncoded::new(&key),
-        );
-
         let map = self.db_tx_ref()?.get::<DbMap, I>();
-        map.get(key).map_err(crate::Error::from).map(|x| x.map(|x| x.decode()))
+        Ok(map.get(key)?.map(|x| x.decode()))
     }
 
     // Return true if an entry for the given key exists in the db.
@@ -165,16 +179,14 @@ impl<'st, B: storage::SharedBackend> StoreTxRw<'st, B> {
         K: EncodeLike<DbMap::Key>,
     {
         let map = self.db_tx_ref()?.get::<DbMap, I>();
-        map.get(key).map_err(crate::Error::from).map(|x| x.is_some())
+        Ok(map.get(key)?.is_some())
     }
 
     // Read a value for a well-known entry
     fn read_value<E: well_known::Entry>(&self) -> crate::Result<Option<E::Value>> {
-        self.read::<db::DBValue, _, _>(E::KEY).map(|x| {
-            x.map(|x| {
-                E::Value::decode_all(&mut x.as_ref()).expect("db values to be encoded correctly")
-            })
-        })
+        Ok(self.read::<db::DBValue, _, _>(E::KEY)?.map(|x| {
+            E::Value::decode_all(&mut x.as_ref()).expect("db values to be encoded correctly")
+        }))
     }
 
     // Encode a value and write it to the database
@@ -185,12 +197,6 @@ impl<'st, B: storage::SharedBackend> StoreTxRw<'st, B> {
         K: EncodeLike<<DbMap as schema::DbMap>::Key>,
         V: EncodeLike<<DbMap as schema::DbMap>::Value>,
     {
-        logging::log::trace!(
-            "Writing {}/{}",
-            DbMap::NAME,
-            serialization::hex_encoded::HexEncoded::new(&key),
-        );
-
         self.track_error(|tx| Ok(tx.get_mut::<DbMap, I>().put(key, value)?))
     }
 

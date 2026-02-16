@@ -21,7 +21,7 @@ mod storage_compatibility;
 use std::sync::Arc;
 
 use chainstate::InitializationError;
-use chainstate_storage::Transactional;
+use chainstate_storage::{BlockchainStorageBackend, Transactional};
 use storage_lmdb::resize_callback::MapResizeCallback;
 
 // Some useful reexports
@@ -37,7 +37,7 @@ pub const SUBDIRECTORY_LMDB: &str = "chainstate-lmdb";
 
 pub use storage_compatibility::check_storage_compatibility;
 
-fn make_chainstate_and_storage_impl<B: storage::SharedBackend + 'static>(
+fn make_chainstate_and_storage_impl<B: BlockchainStorageBackend + 'static>(
     storage_backend: B,
     chain_config: Arc<ChainConfig>,
     chainstate_config: ChainstateConfig,

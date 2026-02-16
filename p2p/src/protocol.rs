@@ -113,6 +113,6 @@ pub struct ProtocolConfig {
     pub msg_max_locator_count: MaxLocatorSize,
     /// The maximum size of a p2p message in bytes.
     pub max_message_size: MaxMessageSize,
-    /// The maximum number of announcements (hashes) for which we haven't receive transactions.
+    /// The maximum number of announcements (hashes) for which we haven't received transactions.
     pub max_peer_tx_announcements: MaxPeerTxAnnouncements,
 }

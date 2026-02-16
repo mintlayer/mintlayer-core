@@ -98,6 +98,7 @@ fn read_config_override_values() {
     let blockprod_skip_ibd_check = true;
     let blockprod_use_current_time_if_non_pos = true;
     let max_db_commit_attempts = 1;
+    let enable_db_reckless_mode_in_ibd = true;
     let max_orphan_blocks = 2;
     let p2p_networking_enabled = false;
     let p2p_bind_addr = "127.0.0.1:44444".parse::<SocketAddr>().unwrap();
@@ -134,6 +135,7 @@ fn read_config_override_values() {
         node_type: Some(node_type),
         mock_time: None,
         max_db_commit_attempts: Some(max_db_commit_attempts),
+        enable_db_reckless_mode_in_ibd: Some(enable_db_reckless_mode_in_ibd),
         max_orphan_blocks: Some(max_orphan_blocks),
         p2p_networking_enabled: Some(p2p_networking_enabled),
         p2p_bind_addresses: Some(vec![p2p_bind_addr]),
@@ -192,6 +194,15 @@ fn read_config_override_values() {
     assert_eq!(
         config.chainstate.as_ref().unwrap().chainstate_config.max_db_commit_attempts,
         Some(max_db_commit_attempts)
+    );
+    assert_eq!(
+        config
+            .chainstate
+            .as_ref()
+            .unwrap()
+            .chainstate_config
+            .enable_db_reckless_mode_in_ibd,
+        Some(enable_db_reckless_mode_in_ibd)
     );
     assert_eq!(
         config.chainstate.as_ref().unwrap().chainstate_config.max_orphan_blocks,

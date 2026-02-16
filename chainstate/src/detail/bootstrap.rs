@@ -15,74 +15,173 @@
 
 use std::io::{BufRead, Write};
 
+use strum::IntoEnumIterator;
+
 use chainstate_storage::BlockchainStorageRead;
 use chainstate_types::{BlockIndex, PropertyQueryError};
-use common::{chain::Block, primitives::id::WithId};
-use serialization::{Decode, Encode};
+use common::{
+    chain::{
+        config::{ChainType, MagicBytes},
+        Block, ChainConfig,
+    },
+    primitives::id::WithId,
+};
+use serialization::{Decode, DecodeAll as _, Encode};
+use utils::ensure;
 
-use crate::{BlockError, ChainstateConfig};
+use crate::BlockError;
 
 use super::{query::ChainstateQuery, tx_verification_strategy::TransactionVerificationStrategy};
 
+// Note: bootstrapping used to have a legacy format, where the file didn't have any header and
+// blocks were written one by one, prepended by the chain magic bytes corresponding to the
+// appropriate chain. This format is no longer supported, the `BootstrapFileSubHeaderV0` struct
+// below refers to version 0 of the new format.
+
+const FILE_MAGIC_BYTES: &[u8; 8] = b"MLBTSTRP";
+
+/// The bootstrap file will always start with this header (SCALE-encoded).
+#[derive(Encode, Decode)]
+struct BootstrapFileHeader {
+    /// This must be equal to FILE_MAGIC_BYTES
+    pub file_magic_bytes: [u8; 8],
+    /// Magic bytes of the chain this file belongs to.
+    pub chain_magic_bytes: MagicBytes,
+    /// This specifies the version of the file format and determines what
+    /// will go after the header.
+    pub file_format_version: u32,
+    /// The number of blocks in the file.
+    pub blocks_count: u64,
+}
+
+const FILE_HEADER_SIZE: usize = 24;
+
+// In format v0, blocks go directly after the header, each block preceded by its length
+// represented as a little-endian `u32`.
+
+type BlockSizeType = u32;
+
 #[derive(thiserror::Error, Debug, Clone, Eq, PartialEq)]
 pub enum BootstrapError {
-    #[error("File error: {0}")]
-    File(String),
+    #[error("Block storage error: `{0}`")]
+    StorageError(#[from] chainstate_storage::Error),
+
+    #[error("I/O error: {0}")]
+    IoError(String),
+
     #[error("Deserialization error: {0}")]
-    Deserialization(#[from] serialization::Error),
+    DeserializationError(#[from] serialization::Error),
+
     #[error("Block import error: {0}")]
     BlockProcessing(#[from] BlockError),
-    #[error("Block import error: {0}")]
+
+    #[error("Property query error: {0}")]
     FailedToReadProperty(#[from] PropertyQueryError),
+
+    // Note: integer conversions shouldn't happen here, so we don't bother including
+    // extra info in the error.
+    #[error(transparent)]
+    TryFromIntError(#[from] std::num::TryFromIntError),
+
+    #[error("Legacy file format no longer supported")]
+    LegacyFileFormat,
+
+    #[error("File too small")]
+    FileTooSmall,
+
+    #[error("Wrong file format")]
+    WrongFileFormat,
+
+    #[error("Bad file format")]
+    BadFileFormat,
+
+    #[error("This file belongs to a different chain")]
+    WrongChain,
+
+    #[error(
+        "This seems to be some future version of bootstrap file that is not supported by this node"
+    )]
+    UnsupportedFutureFormatVersion,
 }
 
 impl From<std::io::Error> for BootstrapError {
     fn from(error: std::io::Error) -> Self {
-        Self::File(error.to_string())
+        Self::IoError(error.to_string())
     }
 }
 
 pub fn import_bootstrap_stream<P, S: std::io::Read>(
-    expected_magic_bytes: &[u8],
+    chain_config: &ChainConfig,
     file_reader: &mut std::io::BufReader<S>,
     process_block_func: &mut P,
-    chainstate_config: &ChainstateConfig,
 ) -> Result<(), BootstrapError>
 where
-    P: FnMut(WithId<Block>) -> Result<Option<BlockIndex>, BlockError>,
+    P: FnMut(WithId<Block>) -> Result<Option<BlockIndex>, BootstrapError>,
 {
-    // min: The smallest buffer size, after which another read is triggered from the bootstrap file
-    // max: The largest buffer size, after which reading the file is stopped
-    // NOTE: both sizes MUST be larger than the largest block in the blockchain + 4 bytes for magic bytes
-    let (min_buffer_size, max_buffer_size) =
-        *chainstate_config.min_max_bootstrap_import_buffer_sizes;
+    let mut buffer_queue = Vec::<u8>::with_capacity(1024 * 1024);
 
-    // It's more reasonable to use a VeqDeque, but it's incompatible with the windows() method which is needed to search for magic bytes
-    // There's a performance hit behind this, but we don't care. Anyone is free to optimize this.
-    let mut buffer_queue = Vec::<u8>::new();
+    let header = {
+        fill_buffer(&mut buffer_queue, file_reader, FILE_HEADER_SIZE)?;
+        ensure!(
+            buffer_queue.len() == FILE_HEADER_SIZE,
+            BootstrapError::FileTooSmall
+        );
+        check_for_legacy_format(&buffer_queue)?;
 
-    loop {
-        if buffer_queue.len() < min_buffer_size + expected_magic_bytes.len() {
-            fill_buffer(&mut buffer_queue, file_reader, max_buffer_size)?;
-        }
+        BootstrapFileHeader::decode_all(&mut buffer_queue.as_slice())?
+    };
 
-        // locate magic bytes to recognize the start of a block
-        let current_pos = buffer_queue
-            .windows(expected_magic_bytes.len())
-            .position(|window| window == expected_magic_bytes);
+    buffer_queue.clear();
 
-        // read the block after the magic bytes
-        let block = match current_pos {
-            Some(v) => Block::decode(&mut &buffer_queue[v + expected_magic_bytes.len()..])?,
-            None => break,
-        };
-        let block_len = block.encoded_size();
+    ensure!(
+        &header.file_magic_bytes == FILE_MAGIC_BYTES,
+        BootstrapError::WrongFileFormat
+    );
+    ensure!(
+        &header.chain_magic_bytes == chain_config.magic_bytes(),
+        BootstrapError::WrongChain
+    );
+    ensure!(
+        header.file_format_version == 0,
+        BootstrapError::UnsupportedFutureFormatVersion
+    );
+
+    for _ in 0..header.blocks_count {
+        fill_buffer(&mut buffer_queue, file_reader, size_of::<BlockSizeType>())?;
+        ensure!(
+            buffer_queue.len() == size_of::<BlockSizeType>(),
+            BootstrapError::BadFileFormat
+        );
+        let block_size = BlockSizeType::from_le_bytes(
+            buffer_queue
+                .as_slice()
+                .try_into()
+                .expect("Buffer is known to have the correct size"),
+        )
+        .try_into()?;
+        buffer_queue.clear();
+
+        fill_buffer(&mut buffer_queue, file_reader, block_size)?;
+        ensure!(
+            buffer_queue.len() == block_size,
+            BootstrapError::BadFileFormat
+        );
+
+        let block = Block::decode_all(&mut buffer_queue.as_slice())?;
         process_block_func(block.into())?;
-
-        // consume the buffer from the front
-        buffer_queue = buffer_queue[expected_magic_bytes.len() + block_len..].to_vec();
+        buffer_queue.clear();
     }
 
+    Ok(())
+}
+
+fn check_for_legacy_format(header_bytes: &[u8]) -> Result<(), BootstrapError> {
+    // In the legacy format the file starts with magic bytes of the corresponding chain.
+    for chain_type in ChainType::iter() {
+        if header_bytes.starts_with(&chain_type.magic_bytes().bytes()) {
+            return Err(BootstrapError::LegacyFileFormat);
+        }
+    }
     Ok(())
 }
 
@@ -92,22 +191,22 @@ fn fill_buffer<S: std::io::Read>(
     max_buffer_size: usize,
 ) -> Result<(), BootstrapError> {
     while buffer_queue.len() < max_buffer_size {
-        let buf_len = {
-            let data = reader.fill_buf()?;
-            if data.is_empty() {
-                break;
-            }
-            buffer_queue.extend(data.iter());
-            data.len()
-        };
-        reader.consume(buf_len);
+        let data = reader.fill_buf()?;
+        if data.is_empty() {
+            break;
+        }
+
+        let remaining_len = max_buffer_size - buffer_queue.len();
+        let len_to_consume = std::cmp::min(remaining_len, data.len());
+        buffer_queue.extend_from_slice(&data[..len_to_consume]);
+        reader.consume(len_to_consume);
     }
 
     Ok(())
 }
 
 pub fn export_bootstrap_stream<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy>(
-    magic_bytes: &[u8],
+    chain_config: &ChainConfig,
     writer: &mut std::io::BufWriter<Box<dyn Write + Send + 'a>>,
     include_stale_blocks: bool,
     query_interface: &ChainstateQuery<'a, S, V>,
@@ -120,10 +219,53 @@ where
         query_interface.get_mainchain_blocks_list()?
     };
 
+    let header = BootstrapFileHeader {
+        file_magic_bytes: *FILE_MAGIC_BYTES,
+        chain_magic_bytes: *chain_config.magic_bytes(),
+        file_format_version: 0,
+        blocks_count: blocks_list.len().try_into()?,
+    };
+
+    header.encode_to(writer);
+
     for block_id in blocks_list {
-        writer.write_all(magic_bytes)?;
-        let block = query_interface.get_existing_block(&block_id)?;
-        writer.write_all(&block.encode())?;
+        let encoded_block = query_interface.get_encoded_existing_block(&block_id)?;
+        let block_size: BlockSizeType = encoded_block.len().try_into()?;
+        writer.write_all(block_size.to_le_bytes().as_slice())?;
+        writer.write_all(&encoded_block)?;
     }
+
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use rstest::rstest;
+
+    use randomness::Rng as _;
+    use test_utils::random::{make_seedable_rng, Seed};
+
+    use super::*;
+
+    // Check that BootstrapFileHeader's encoded size if is always FILE_HEADER_SIZE, no matter the contents.
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn header_encoding_size(#[case] seed: Seed) {
+        for _ in 0..100 {
+            let mut rng = make_seedable_rng(seed);
+
+            {
+                let header = BootstrapFileHeader {
+                    file_magic_bytes: rng.gen(),
+                    chain_magic_bytes: MagicBytes::new(rng.gen()),
+                    file_format_version: rng.gen(),
+                    blocks_count: rng.gen(),
+                };
+
+                let encoded_size = header.encoded_size();
+                assert_eq!(encoded_size, FILE_HEADER_SIZE);
+            }
+        }
+    }
 }

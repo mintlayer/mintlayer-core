@@ -15,13 +15,14 @@
 
 use std::{collections::BTreeMap, iter, num::NonZeroUsize, time::Duration};
 
+use chainstate_storage::BlockchainStorage;
 use rstest::rstest;
 
 use chainstate::{
     BlockError, BlockSource, ChainstateConfig, ChainstateError, CheckBlockError,
     CheckBlockTransactionsError,
 };
-use chainstate_test_framework::TestFramework;
+use chainstate_test_framework::{TestFramework, TestFrameworkBuilder};
 use chainstate_types::{BlockStatus, BlockValidationStage, PropertyQueryError};
 use common::{
     chain::{
@@ -642,23 +643,29 @@ fn split_off_leading_known_headers(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn initial_block_download(#[case] seed: Seed) {
+fn initial_block_download(
+    #[case] seed: Seed,
+    #[values(None, Some(false), Some(true))] enable_db_reckless_mode_in_ibd: Option<bool>,
+    #[values(false, true)] recreate_chainstate: bool,
+) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng)
             .with_chainstate_config(ChainstateConfig {
                 max_db_commit_attempts: Default::default(),
+                enable_db_reckless_mode_in_ibd,
                 max_orphan_blocks: Default::default(),
-                min_max_bootstrap_import_buffer_sizes: Default::default(),
                 max_tip_age: Duration::from_secs(1).into(),
                 enable_heavy_checks: Some(true),
                 allow_checkpoints_mismatch: Default::default(),
             })
             .with_initial_time_since_genesis(2)
             .build();
+        let use_reckless_mode = enable_db_reckless_mode_in_ibd.unwrap_or(false);
 
         // We are two seconds after genesis timestamp, so in the IBD state
         assert!(tf.chainstate.is_initial_block_download());
+        assert_eq!(tf.storage.in_reckless_mode().unwrap(), use_reckless_mode);
 
         // Create a block with an "old" timestamp.
         let now = tf.current_time();
@@ -668,14 +675,25 @@ fn initial_block_download(#[case] seed: Seed) {
             .build_and_process(&mut rng)
             .unwrap();
         assert!(tf.chainstate.is_initial_block_download());
+        assert_eq!(tf.storage.in_reckless_mode().unwrap(), use_reckless_mode);
 
         // Create a block with fresh timestamp.
         tf.make_block_builder().build_and_process(&mut rng).unwrap();
         assert!(!tf.chainstate.is_initial_block_download());
+        assert!(!tf.storage.in_reckless_mode().unwrap());
 
         // Add one more block.
         tf.make_block_builder().build_and_process(&mut rng).unwrap();
         assert!(!tf.chainstate.is_initial_block_download());
+        assert!(!tf.storage.in_reckless_mode().unwrap());
+
+        if recreate_chainstate {
+            // Create a new framework from the existing one; this will re-create Chainstate re-using
+            // the storage. The resulting chainstate should not be in ibd.
+            tf = TestFrameworkBuilder::from_existing_framework(tf).build();
+            assert!(!tf.chainstate.is_initial_block_download());
+            assert!(!tf.storage.in_reckless_mode().unwrap());
+        }
 
         // Check that receiving an "old" block does not revert `is_initial_block_download` back
         tf.progress_time_seconds_since_epoch(5);
@@ -687,6 +705,7 @@ fn initial_block_download(#[case] seed: Seed) {
         tf.progress_time_seconds_since_epoch(10);
         tf.process_block(block, BlockSource::Local).unwrap();
         assert!(!tf.chainstate.is_initial_block_download());
+        assert!(!tf.storage.in_reckless_mode().unwrap());
     });
 }
 

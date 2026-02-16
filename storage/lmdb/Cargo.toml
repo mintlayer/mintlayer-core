@@ -10,7 +10,8 @@ logging = { path = '../../logging' }
 storage-core = { path = '../core' }
 utils = { path = '../../utils' }
 
-lmdb-mintlayer = { git = 'https://github.com/mintlayer/lmdb-rs-mintlayer.git', tag = 'v0.16.2' }
+# Commit "Attempt to fix CI" from the branch "specify_nosync_per_tx"
+lmdb-mintlayer = { git = 'https://github.com/mintlayer/lmdb-rs-mintlayer.git', rev = '4427a41fc32e8b7a30bdae42ce48414a6a5d6920' }
 
 [dev-dependencies]
 rstest.workspace = true
