@@ -89,36 +89,7 @@ class TestNode():
         # For those callers that need more flexibility, they can just set the args property directly.
         self.extra_args = extra_args
         self.version = version
-
-        # Calculate RPC address to be passed into the command line
-        rpc_bind_address = rpc_addr(self.index)
-        p2p_bind_address = p2p_url(self.index)
-
-        # For functional tests, we don't want to fail when blocks are too old
-        max_tip_age = 60 * 60 * 24 * 365 * 100
-
-        # Note: some tests depend on this value being relatively small; they'll fail if the
-        # current default value is used.
-        min_tx_relay_fee_rate = 1000
-
-        self.args = [
-            self.binary,
-            f"--datadir={datadir}",
-            "regtest",
-            f"--rpc-bind-address={rpc_bind_address}",
-            f"--p2p-bind-addresses={p2p_bind_address}",
-            f"--max-tip-age={max_tip_age}",
-            f"--min-tx-relay-fee-rate={min_tx_relay_fee_rate}",
-        ]
-        if use_valgrind:
-            default_suppressions_file = os.path.join(
-                os.path.dirname(os.path.realpath(__file__)),
-                "..", "..", "..", "contrib", "valgrind.supp")
-            suppressions_file = os.getenv("VALGRIND_SUPPRESSIONS_FILE",
-                                          default_suppressions_file)
-            self.args = ["valgrind", "--suppressions={}".format(suppressions_file),
-                         "--gen-suppressions=all", "--exit-on-first-error=yes",
-                         "--error-exitcode=1", "--quiet"] + self.args
+        self.use_valgrind = use_valgrind
 
         self.cli = TestNodeCLI(bitcoin_cli, self.datadir)
         self.use_cli = use_cli
@@ -130,7 +101,7 @@ class TestNode():
         self.rpc = None
         self.url = None
         self.log = logging.getLogger('TestFramework.node%d' % i)
-        self.cleanup_on_exit = True # Whether to kill the node when this object goes away
+        self.cleanup_on_exit = True  # Whether to kill the node when this object goes away
         # Cache perf subprocesses here by their data output filename.
         self.perf_subprocesses = {}
 
@@ -139,19 +110,19 @@ class TestNode():
 
     AddressKeyPair = collections.namedtuple('AddressKeyPair', ['address', 'key'])
     PRIV_KEYS = [
-            # address , privkey
-            AddressKeyPair('mjTkW3DjgyZck4KbiRusZsqTgaYTxdSz6z', 'cVpF924EspNh8KjYsfhgY96mmxvT6DgdWiTYMtMjuM74hJaU5psW'),
-            AddressKeyPair('msX6jQXvxiNhx3Q62PKeLPrhrqZQdSimTg', 'cUxsWyKyZ9MAQTaAhUQWJmBbSvHMwSmuv59KgxQV7oZQU3PXN3KE'),
-            AddressKeyPair('mnonCMyH9TmAsSj3M59DsbH8H63U3RKoFP', 'cTrh7dkEAeJd6b3MRX9bZK8eRmNqVCMH3LSUkE3dSFDyzjU38QxK'),
-            AddressKeyPair('mqJupas8Dt2uestQDvV2NH3RU8uZh2dqQR', 'cVuKKa7gbehEQvVq717hYcbE9Dqmq7KEBKqWgWrYBa2CKKrhtRim'),
-            AddressKeyPair('msYac7Rvd5ywm6pEmkjyxhbCDKqWsVeYws', 'cQDCBuKcjanpXDpCqacNSjYfxeQj8G6CAtH1Dsk3cXyqLNC4RPuh'),
-            AddressKeyPair('n2rnuUnwLgXqf9kk2kjvVm8R5BZK1yxQBi', 'cQakmfPSLSqKHyMFGwAqKHgWUiofJCagVGhiB4KCainaeCSxeyYq'),
-            AddressKeyPair('myzuPxRwsf3vvGzEuzPfK9Nf2RfwauwYe6', 'cQMpDLJwA8DBe9NcQbdoSb1BhmFxVjWD5gRyrLZCtpuF9Zi3a9RK'),
-            AddressKeyPair('mumwTaMtbxEPUswmLBBN3vM9oGRtGBrys8', 'cSXmRKXVcoouhNNVpcNKFfxsTsToY5pvB9DVsFksF1ENunTzRKsy'),
-            AddressKeyPair('mpV7aGShMkJCZgbW7F6iZgrvuPHjZjH9qg', 'cSoXt6tm3pqy43UMabY6eUTmR3eSUYFtB2iNQDGgb3VUnRsQys2k'),
-            AddressKeyPair('mq4fBNdckGtvY2mijd9am7DRsbRB4KjUkf', 'cN55daf1HotwBAgAKWVgDcoppmUNDtQSfb7XLutTLeAgVc3u8hik'),
-            AddressKeyPair('mpFAHDjX7KregM3rVotdXzQmkbwtbQEnZ6', 'cT7qK7g1wkYEMvKowd2ZrX1E5f6JQ7TM246UfqbCiyF7kZhorpX3'),
-            AddressKeyPair('mzRe8QZMfGi58KyWCse2exxEFry2sfF2Y7', 'cPiRWE8KMjTRxH1MWkPerhfoHFn5iHPWVK5aPqjW8NxmdwenFinJ'),
+        # address , privkey
+        AddressKeyPair('mjTkW3DjgyZck4KbiRusZsqTgaYTxdSz6z', 'cVpF924EspNh8KjYsfhgY96mmxvT6DgdWiTYMtMjuM74hJaU5psW'),
+        AddressKeyPair('msX6jQXvxiNhx3Q62PKeLPrhrqZQdSimTg', 'cUxsWyKyZ9MAQTaAhUQWJmBbSvHMwSmuv59KgxQV7oZQU3PXN3KE'),
+        AddressKeyPair('mnonCMyH9TmAsSj3M59DsbH8H63U3RKoFP', 'cTrh7dkEAeJd6b3MRX9bZK8eRmNqVCMH3LSUkE3dSFDyzjU38QxK'),
+        AddressKeyPair('mqJupas8Dt2uestQDvV2NH3RU8uZh2dqQR', 'cVuKKa7gbehEQvVq717hYcbE9Dqmq7KEBKqWgWrYBa2CKKrhtRim'),
+        AddressKeyPair('msYac7Rvd5ywm6pEmkjyxhbCDKqWsVeYws', 'cQDCBuKcjanpXDpCqacNSjYfxeQj8G6CAtH1Dsk3cXyqLNC4RPuh'),
+        AddressKeyPair('n2rnuUnwLgXqf9kk2kjvVm8R5BZK1yxQBi', 'cQakmfPSLSqKHyMFGwAqKHgWUiofJCagVGhiB4KCainaeCSxeyYq'),
+        AddressKeyPair('myzuPxRwsf3vvGzEuzPfK9Nf2RfwauwYe6', 'cQMpDLJwA8DBe9NcQbdoSb1BhmFxVjWD5gRyrLZCtpuF9Zi3a9RK'),
+        AddressKeyPair('mumwTaMtbxEPUswmLBBN3vM9oGRtGBrys8', 'cSXmRKXVcoouhNNVpcNKFfxsTsToY5pvB9DVsFksF1ENunTzRKsy'),
+        AddressKeyPair('mpV7aGShMkJCZgbW7F6iZgrvuPHjZjH9qg', 'cSoXt6tm3pqy43UMabY6eUTmR3eSUYFtB2iNQDGgb3VUnRsQys2k'),
+        AddressKeyPair('mq4fBNdckGtvY2mijd9am7DRsbRB4KjUkf', 'cN55daf1HotwBAgAKWVgDcoppmUNDtQSfb7XLutTLeAgVc3u8hik'),
+        AddressKeyPair('mpFAHDjX7KregM3rVotdXzQmkbwtbQEnZ6', 'cT7qK7g1wkYEMvKowd2ZrX1E5f6JQ7TM246UfqbCiyF7kZhorpX3'),
+        AddressKeyPair('mzRe8QZMfGi58KyWCse2exxEFry2sfF2Y7', 'cPiRWE8KMjTRxH1MWkPerhfoHFn5iHPWVK5aPqjW8NxmdwenFinJ')
     ]
 
     def get_deterministic_priv_key(self):
@@ -185,7 +156,47 @@ class TestNode():
             assert self.rpc_connected and self.rpc is not None, self._node_msg("Error: no RPC connection")
             return getattr(RPCOverloadWrapper(self.rpc, descriptors=self.descriptors), name)
 
-    def start(self, extra_args=None, *, cwd=None, stdout=None, stderr=None, **kwargs):
+    def _make_args(self, extra_top_level_args: list[str] | None = None):
+        # Calculate RPC address to be passed into the command line
+        rpc_bind_address = rpc_addr(self.index)
+        p2p_bind_address = p2p_url(self.index)
+
+        # For functional tests, we don't want to fail when blocks are too old
+        max_tip_age = 60 * 60 * 24 * 365 * 100
+
+        # Note: some tests depend on this value being relatively small; they'll fail if the
+        # current default value is used.
+        min_tx_relay_fee_rate = 1000
+
+        args = [
+            self.binary,
+            f"--datadir={self.datadir}",
+        ]
+
+        if extra_top_level_args is not None:
+            args += extra_top_level_args
+
+        args += [
+            "regtest",
+            f"--rpc-bind-address={rpc_bind_address}",
+            f"--p2p-bind-addresses={p2p_bind_address}",
+            f"--max-tip-age={max_tip_age}",
+            f"--min-tx-relay-fee-rate={min_tx_relay_fee_rate}",
+        ]
+
+        if self.use_valgrind:
+            default_suppressions_file = os.path.join(
+                os.path.dirname(os.path.realpath(__file__)),
+                "..", "..", "..", "contrib", "valgrind.supp")
+            suppressions_file = os.getenv("VALGRIND_SUPPRESSIONS_FILE",
+                                          default_suppressions_file)
+            args = ["valgrind", "--suppressions={}".format(suppressions_file),
+                    "--gen-suppressions=all", "--exit-on-first-error=yes",
+                    "--error-exitcode=1", "--quiet"] + args
+
+        return args
+
+    def start(self, extra_args=None, extra_top_level_args=None, *, cwd=None, stdout=None, stderr=None, **kwargs):
         """Start the node."""
         if extra_args is None:
             extra_args = self.extra_args
@@ -214,8 +225,10 @@ class TestNode():
         # Create a dictionary to store the arguments
         arg_dict = {}
 
+        args = self._make_args(extra_top_level_args)
+
         # Process args list
-        for arg in self.args:
+        for arg in args:
             if '=' in arg:
                 name, value = arg.split('=')
                 arg_dict[name] = value

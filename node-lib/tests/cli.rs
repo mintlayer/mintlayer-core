@@ -164,8 +164,6 @@ fn read_config_override_values() {
         rpc_username: Some(rpc_username.to_owned()),
         rpc_password: Some(rpc_password.to_owned()),
         rpc_cookie_file: Some(rpc_cookie_file.to_owned()),
-        // Note: there is no correspondence to this option inside NodeConfigFile.
-        clean_data: false,
         min_tx_relay_fee_rate: Some(min_tx_relay_fee_rate),
         force_allow_run_as_root_outer: Default::default(),
         enable_chainstate_heavy_checks: Some(enable_chainstate_heavy_checks),
@@ -173,8 +171,6 @@ fn read_config_override_values() {
         // Note: there is no correspondence to this option inside NodeConfigFile;
         // the contents of the csv file will become part of ChainConfig.
         custom_checkpoints_csv_file: Some("foo.csv".to_owned().into()),
-        // Note: there is no correspondence to this option inside NodeConfigFile.
-        import_bootstrap_file: Some("foo.bin".to_owned().into()),
     };
     let config = NodeConfigFile::read(&chain_config, &config_path, &options).unwrap();
 

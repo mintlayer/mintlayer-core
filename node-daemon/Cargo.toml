@@ -9,6 +9,7 @@ authors = ["Samer Afach <samer.afach@mintlayer.org>", "Ben Marsh <benjamin.marsh
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+chainstate = { path = "../chainstate" }
 logging = { path = "../logging" }
 node-lib = { path = "../node-lib/" }
 utils = { path = "../utils" }

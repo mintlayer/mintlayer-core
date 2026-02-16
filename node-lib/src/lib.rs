@@ -19,6 +19,7 @@ mod checkpoints_from_file;
 mod config_files;
 mod mock_time;
 pub mod node_controller;
+mod node_daemon_runner;
 mod options;
 pub mod rpc;
 mod runner;
@@ -30,11 +31,12 @@ use chainstate_launcher::ChainConfig;
 pub use config_files::{
     NodeConfigFile, NodeTypeConfigFile, RpcConfigFile, StorageBackendConfigFile,
 };
+pub use node_daemon_runner::{run_node_daemon, ExitCode};
 pub use options::{
     Command, Options, OptionsWithResolvedCommand, RunOptions, TopLevelOptions,
     CLEAN_DATA_OPTION_LONG_NAME, IMPORT_BOOTSTRAP_FILE_OPTION_LONG_NAME,
 };
-pub use runner::{setup, NodeSetupResult};
+pub use runner::{setup, NodeSetupResult, NodeType};
 
 pub fn default_rpc_config(chain_config: &ChainConfig) -> RpcConfigFile {
     RpcConfigFile::with_run_options(

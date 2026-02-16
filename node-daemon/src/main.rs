@@ -13,37 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub async fn run() -> anyhow::Result<()> {
-    let opts = node_lib::Options::from_args(std::env::args_os());
-    let setup_result = node_lib::setup(opts.with_resolved_command()).await?;
-    match setup_result {
-        node_lib::NodeSetupResult::Node(node) => {
-            node.main().await;
-        }
-        node_lib::NodeSetupResult::DataDirCleanedUp => {
-            logging::log::info!(
-                "Data directory is now clean. Please restart the node without the `--{}` flag",
-                node_lib::CLEAN_DATA_OPTION_LONG_NAME
-            );
-        }
-        node_lib::NodeSetupResult::BootstrapFileImported(bootstrap_result) => {
-            match bootstrap_result {
-                Ok(()) => {
-                    logging::log::info!(
-                        "Node was bootstrapped successfully. Please restart the node without the `--{}` flag",
-                        node_lib::IMPORT_BOOTSTRAP_FILE_OPTION_LONG_NAME
-                    );
-                }
-                Err(err) => {
-                    logging::log::error!("Node bootstrapping failed: {err}");
-                    std::process::exit(1)
-                }
-            }
-        }
-    };
-
-    Ok(())
-}
+use node_lib::run_node_daemon;
 
 #[tokio::main]
 async fn main() {
@@ -53,8 +23,10 @@ async fn main() {
         std::env::set_var("RUST_LOG", "info");
     }
 
-    run().await.unwrap_or_else(|err| {
+    let exit_code = run_node_daemon().await.unwrap_or_else(|err| {
         eprintln!("Mintlayer node launch failed: {err:?}");
         std::process::exit(1)
-    })
+    });
+
+    std::process::exit(exit_code.0)
 }

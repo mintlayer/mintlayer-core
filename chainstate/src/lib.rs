@@ -97,7 +97,7 @@ pub enum ChainstateError {
     #[error("Property read error: `{0}`")]
     FailedToReadProperty(#[from] PropertyQueryError),
 
-    #[error("Block import error {0}")]
+    #[error("Bootstrap error {0}")]
     BootstrapError(#[from] BootstrapError),
 
     #[error("Error invoking block invalidator: {0}")]

@@ -22,7 +22,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use clap::{Args, Parser, Subcommand};
+use clap::{Args, CommandFactory, FromArgMatches, Parser, Subcommand};
 
 use chainstate_launcher::ChainConfig;
 use common::chain::{
@@ -40,9 +40,14 @@ use utils_networking::IpOrSocketAddress;
 use crate::{
     checkpoints_from_file::read_checkpoints_from_csv_file,
     config_files::{NodeTypeConfigFile, StorageBackendConfigFile},
+    NodeType,
 };
 
 const CONFIG_NAME: &str = "config.toml";
+
+pub const CLEAN_DATA_OPTION_LONG_NAME: &str = "clean-data";
+pub const IMPORT_BOOTSTRAP_FILE_OPTION_LONG_NAME: &str = "import-bootstrap-file";
+pub const IMPORT_BOOTSTRAP_FILE_OPTION_ID: &str = "import_bootstrap_file";
 
 /// Mintlayer node executable
 // Note: this struct is shared between different node executables, namely, node-daemon and node-gui,
@@ -60,8 +65,26 @@ pub struct Options {
 
 impl Options {
     /// Constructs an instance by parsing the given arguments.
-    pub fn from_args<A: Into<OsString> + Clone>(args: impl IntoIterator<Item = A>) -> Self {
-        Parser::parse_from(args)
+    pub fn from_args<A: Into<OsString> + Clone>(
+        args: impl IntoIterator<Item = A>,
+        node_type: NodeType,
+    ) -> Self {
+        // Here we do the same that `Parser::parse_from` does, but also hide the bootstrapping
+        // option for node-gui.
+
+        let mut cmd = <Self as CommandFactory>::command();
+
+        match node_type {
+            NodeType::NodeDaemon => {}
+            NodeType::NodeGui => {
+                cmd = cmd.mut_arg(IMPORT_BOOTSTRAP_FILE_OPTION_ID, |arg| arg.hide(true));
+            }
+        }
+
+        let mut matches = cmd.try_get_matches_from_mut(args).unwrap_or_else(|err| err.exit());
+
+        <Self as FromArgMatches>::from_arg_matches_mut(&mut matches)
+            .unwrap_or_else(|err| err.format(&mut cmd).exit())
     }
 
     /// Returns a different representation of `self`, where `command` is no longer optional.
@@ -82,7 +105,7 @@ pub struct OptionsWithResolvedCommand {
 
 impl OptionsWithResolvedCommand {
     pub fn clean_data_option_set(&self) -> bool {
-        self.command.run_options().clean_data
+        self.top_level.clean_data
     }
 
     pub fn log_to_file_option_set(&self) -> bool {
@@ -112,6 +135,25 @@ pub struct TopLevelOptions {
     /// By default, the option is enabled for node-gui and disabled for node-daemon.
     #[clap(long, action = clap::ArgAction::Set)]
     pub log_to_file: Option<bool>,
+
+    /// If specified, the application will clean the data directory and exit immediately.
+    #[clap(
+        long = CLEAN_DATA_OPTION_LONG_NAME,
+        short,
+        action = clap::ArgAction::SetTrue,
+        default_value_t = false
+    )]
+    pub clean_data: bool,
+
+    /// Start the node with networking disabled, import blocks from the specified bootstrap file
+    /// and exit.
+    #[clap(
+        long = IMPORT_BOOTSTRAP_FILE_OPTION_LONG_NAME,
+        id = IMPORT_BOOTSTRAP_FILE_OPTION_ID,
+        value_name = "FILE",
+        conflicts_with("clean_data")
+    )]
+    pub import_bootstrap_file: Option<PathBuf>,
 }
 
 impl TopLevelOptions {
@@ -191,20 +233,8 @@ pub struct RegtestOptions {
     pub chain_config: ChainConfigOptions,
 }
 
-pub const CLEAN_DATA_OPTION_LONG_NAME: &str = "clean-data";
-pub const IMPORT_BOOTSTRAP_FILE_OPTION_LONG_NAME: &str = "import-bootstrap-file";
-
 #[derive(Args, Clone, Debug, Default)]
 pub struct RunOptions {
-    /// If specified, the application will clean the data directory and exit immediately.
-    #[clap(
-        long = CLEAN_DATA_OPTION_LONG_NAME,
-        short,
-        action = clap::ArgAction::SetTrue,
-        default_value_t = false
-    )]
-    pub clean_data: bool,
-
     /// Minimum number of connected peers to enable block production.
     #[clap(long, value_name = "COUNT")]
     pub blockprod_min_peers_to_produce_blocks: Option<usize>,
@@ -395,11 +425,6 @@ pub struct RunOptions {
     /// Path to a CSV file with custom checkpoints that must be used instead of the predefined ones.
     #[clap(long, hide = true)]
     pub custom_checkpoints_csv_file: Option<PathBuf>,
-
-    /// Start the node with networking disabled, import blocks from the specified bootstrap file
-    /// and exit.
-    #[clap(long = IMPORT_BOOTSTRAP_FILE_OPTION_LONG_NAME, value_name = "FILE", conflicts_with("clean_data"))]
-    pub import_bootstrap_file: Option<PathBuf>,
 }
 
 pub fn default_data_dir(chain_type: ChainType) -> PathBuf {
@@ -434,7 +459,6 @@ mod tests {
         };
 
         let make_run_options = |custom_checkpoints_csv_file: Option<PathBuf>| RunOptions {
-            clean_data: Default::default(),
             blockprod_min_peers_to_produce_blocks: Default::default(),
             blockprod_skip_ibd_check: Default::default(),
             blockprod_use_current_time_if_non_pos: Default::default(),
@@ -472,7 +496,6 @@ mod tests {
             enable_chainstate_heavy_checks: Default::default(),
             allow_checkpoints_mismatch: Default::default(),
             custom_checkpoints_csv_file,
-            import_bootstrap_file: Default::default(),
         };
         let make_cmd = |run_options| match chain_type {
             ChainType::Mainnet => Command::Mainnet(run_options),

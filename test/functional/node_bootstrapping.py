@@ -75,6 +75,10 @@ class NodeBootstrappingTest(BitcoinTestFramework):
         stale_blocks_count = 5
         blocks_count = 10
 
+        bogus_file = os.path.join(self.options.tmpdir, 'bogus.bin')
+        with open(bogus_file, 'w') as f:
+            f.write('bogus data')
+
         # Create the shorter chain (which will be the stale one) and invalidate it immediately,
         # so that the next chain starts from generis as well.
         stale_block_ids = self.create_blocks(stale_blocks_count, 111)
@@ -142,6 +146,16 @@ class NodeBootstrappingTest(BitcoinTestFramework):
         assert_blocks_exist(node, block_ids)
         assert_blocks_missing(node, stale_block_ids)
 
+        # Try importing bogus_file; the RPC call should fail and the chainstate should remain
+        # in the same state.
+        try:
+            node.chainstate_import_bootstrap_file(file_path=bogus_file)
+        except JSONRPCException as e:
+            assert_in("Bootstrap error", str(e))
+
+        assert_blocks_exist(node, block_ids)
+        assert_blocks_missing(node, stale_block_ids)
+
         ############################################################################################
         # Test importing via the command line argument.
         # Note that in this case the node will exit immediately after importing, so we can't
@@ -152,7 +166,7 @@ class NodeBootstrappingTest(BitcoinTestFramework):
         reset_datadir('.bak2')
 
         # Import bootstrap_file_full
-        node.start(["--import-bootstrap-file", bootstrap_file_full])
+        node.start(extra_top_level_args=["--import-bootstrap-file", bootstrap_file_full])
         node_ret_code = node.process.wait(timeout=10)
         assert node_ret_code == 0
 
@@ -165,9 +179,29 @@ class NodeBootstrappingTest(BitcoinTestFramework):
         reset_datadir('.bak3')
 
         # Import bootstrap_file_mainchain
-        node.start(["--import-bootstrap-file", bootstrap_file_mainchain])
+        node.start(extra_top_level_args=["--import-bootstrap-file", bootstrap_file_mainchain])
         node_ret_code = node.process.wait(timeout=10)
         assert node_ret_code == 0
+
+        # Start the node normally and check the blocks.
+        self.start_node(0)
+        assert_blocks_exist(node, block_ids)
+        assert_blocks_missing(node, stale_block_ids)
+
+        self.stop_node(0)
+
+        # Try importing bogus_file; the node should exit with non-zero code and the chainstate
+        # should remain in the same state.
+        # Just in case, specify stderr_file explicitly, to make sure it's not re-used from
+        # previous runs (though `start` would create a new file anyway).
+        stderr_file = tempfile.NamedTemporaryFile(dir=node.stderr_dir, mode='w+', delete=False)
+        node.start(extra_top_level_args=["--import-bootstrap-file", bogus_file], stderr=stderr_file)
+        node_ret_code = node.process.wait(timeout=10)
+        assert node_ret_code != 0
+
+        stderr_file.seek(0)
+        stderr = stderr_file.read()
+        assert_in("Node bootstrapping failed", stderr)
 
         # Start the node normally and check the blocks.
         self.start_node(0)

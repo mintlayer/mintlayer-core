@@ -24,9 +24,10 @@ mod wallet_events;
 
 use std::{fmt::Debug, sync::Arc};
 
+use anyhow::anyhow;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
-use chainstate::{BootstrapError, ChainInfo};
+use chainstate::ChainInfo;
 use common::{
     address::{Address, AddressError},
     chain::{ChainConfig, Destination},
@@ -103,7 +104,6 @@ pub struct InitializedNode {
 pub enum NodeInitializationOutcome {
     BackendControls(BackendControls),
     DataDirCleanedUp,
-    BootstrapFileImported(Result<(), BootstrapError>),
 }
 
 pub async fn node_initialize(
@@ -143,14 +143,14 @@ pub async fn node_initialize(
         WalletMode::Hot => {
             let setup_result = node_lib::setup(opts).await?;
             let node = match setup_result {
-                node_lib::NodeSetupResult::Node(node) => node,
+                node_lib::NodeSetupResult::RunNode(node) => node,
+                node_lib::NodeSetupResult::Bootstrap(_, _) => {
+                    return Err(anyhow!(
+                        "Bootstrapping is not supported by node-gui, use node-daemon instead"
+                    ));
+                }
                 node_lib::NodeSetupResult::DataDirCleanedUp => {
                     return Ok(NodeInitializationOutcome::DataDirCleanedUp);
-                }
-                node_lib::NodeSetupResult::BootstrapFileImported(bootstrap_result) => {
-                    return Ok(NodeInitializationOutcome::BootstrapFileImported(
-                        bootstrap_result,
-                    ));
                 }
             };
 

@@ -31,13 +31,15 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
       relevant to this wallet.
 
   - Node:
-    - new options added to `node-daemon` and `node-gui`:
-      - `--import-bootstrap-file` - import a bootstrap file on start (previously bootstrapping
-        was only available via node RPC).
+    - new options added:
+      - `node-daemon`:
+        - `--import-bootstrap-file` - import a bootstrap file on start (previously bootstrapping
+          was only available via node RPC).
 
-      - `--enable-db-reckless-mode-in-ibd` - this enables the "reckless" mode of the chainstate
-        database during initial block download or bootstrapping, which significantly increases
-        its speed at the cost of a potential db corruption if the system crashes in the meantime.
+      `node-daemon` and `node-gui`:
+        - `--enable-db-reckless-mode-in-ibd` - this enables the "reckless" mode of the chainstate
+          database during initial block download or bootstrapping, which significantly increases
+          its speed at the cost of a potential db corruption if the system crashes in the meantime.
 
 ### Changed
   - Wallet RPC:
@@ -59,6 +61,8 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
   - Node:
     - The now redundant option `min_max_bootstrap_import_buffer_sizes` was removed from chainstate config.
+    - The option `--clean-data` is now a top-level option, i.e. instead of writing
+      `node-daemon testnet --clean-data` you have to write `node-daemon --clean-data testnet`.
 
   - Node bootstrapping:
     - The format of the bootstrap file was changed and the legacy format is no longer supported.
