@@ -519,7 +519,6 @@ impl ChainstateRpcServer for super::ChainstateHandle {
         file_path: &std::path::Path,
         include_stale_blocks: bool,
     ) -> RpcResult<()> {
-        // FIXME: test this function in functional tests
         let file_path = file_path.to_owned();
         rpc::handle_result(
             self.call(move |this| export_bootstrap_file(this, &file_path, include_stale_blocks))
@@ -528,7 +527,6 @@ impl ChainstateRpcServer for super::ChainstateHandle {
     }
 
     async fn import_bootstrap_file(&self, file_path: &std::path::Path) -> RpcResult<()> {
-        // FIXME: test this function in functional tests
         let file_path = file_path.to_owned();
         rpc::handle_result(self.call_mut(move |this| import_bootstrap_file(this, &file_path)).await)
     }
