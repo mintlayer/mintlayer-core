@@ -92,6 +92,8 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
     - Importing a bootstrap file will no longer fail if some of the blocks already exist in the
       chainstate.
 
+    - Bootstrapping can now be interrupted via Ctrl-C.
+
     - The speed of the import was improved.
 
   - General

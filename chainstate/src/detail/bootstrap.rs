@@ -54,6 +54,7 @@ struct BootstrapFileHeader {
     pub blocks_count: u64,
 }
 
+/// Size of the encoded BootstrapFileHeader.
 const FILE_HEADER_SIZE: usize = 24;
 
 // In format v0, blocks go directly after the header, each block preceded by its length
@@ -134,20 +135,20 @@ pub fn import_bootstrap_stream<P, S: std::io::Read>(
 where
     P: FnMut(WithId<Block>) -> Result<bool, BootstrapError>,
 {
-    let mut buffer_queue = Vec::<u8>::with_capacity(1024 * 1024);
+    let mut buffer = Vec::<u8>::with_capacity(1024 * 1024);
 
     let header = {
-        fill_buffer(&mut buffer_queue, file_reader, FILE_HEADER_SIZE)?;
+        fill_buffer(&mut buffer, file_reader, FILE_HEADER_SIZE)?;
         ensure!(
-            buffer_queue.len() == FILE_HEADER_SIZE,
+            buffer.len() == FILE_HEADER_SIZE,
             BootstrapError::FileTooSmall
         );
-        check_for_legacy_format(&buffer_queue)?;
+        check_for_legacy_format(&buffer)?;
 
-        BootstrapFileHeader::decode_all(&mut buffer_queue.as_slice())?
+        BootstrapFileHeader::decode_all(&mut buffer.as_slice())?
     };
 
-    buffer_queue.clear();
+    buffer.clear();
 
     ensure!(
         &header.file_magic_bytes == FILE_MAGIC_BYTES,
@@ -163,33 +164,27 @@ where
     );
 
     for _ in 0..header.blocks_count {
-        fill_buffer(&mut buffer_queue, file_reader, size_of::<BlockSizeType>())?;
+        fill_buffer(&mut buffer, file_reader, size_of::<BlockSizeType>())?;
         ensure!(
-            buffer_queue.len() == size_of::<BlockSizeType>(),
+            buffer.len() == size_of::<BlockSizeType>(),
             BootstrapError::BadFileFormat
         );
         let block_size = BlockSizeType::from_le_bytes(
-            buffer_queue
-                .as_slice()
-                .try_into()
-                .expect("Buffer is known to have the correct size"),
+            buffer.as_slice().try_into().expect("Buffer is known to have the correct size"),
         )
         .try_into()?;
         ensure!(
             block_size <= MAX_BLOCK_SIZE,
             BootstrapError::BlockSizeTooBig(block_size)
         );
-        buffer_queue.clear();
+        buffer.clear();
 
-        fill_buffer(&mut buffer_queue, file_reader, block_size)?;
-        ensure!(
-            buffer_queue.len() == block_size,
-            BootstrapError::BadFileFormat
-        );
+        fill_buffer(&mut buffer, file_reader, block_size)?;
+        ensure!(buffer.len() == block_size, BootstrapError::BadFileFormat);
 
-        let block = Block::decode_all(&mut buffer_queue.as_slice())?;
+        let block = Block::decode_all(&mut buffer.as_slice())?;
         let should_continue = process_block_func(block.into())?;
-        buffer_queue.clear();
+        buffer.clear();
 
         if !should_continue {
             break;
@@ -210,19 +205,19 @@ fn check_for_legacy_format(header_bytes: &[u8]) -> Result<(), BootstrapError> {
 }
 
 fn fill_buffer<S: std::io::Read>(
-    buffer_queue: &mut Vec<u8>,
+    buffer: &mut Vec<u8>,
     reader: &mut std::io::BufReader<S>,
     max_buffer_size: usize,
 ) -> Result<(), BootstrapError> {
-    while buffer_queue.len() < max_buffer_size {
+    while buffer.len() < max_buffer_size {
         let data = reader.fill_buf()?;
         if data.is_empty() {
             break;
         }
 
-        let remaining_len = max_buffer_size - buffer_queue.len();
+        let remaining_len = max_buffer_size - buffer.len();
         let len_to_consume = std::cmp::min(remaining_len, data.len());
-        buffer_queue.extend_from_slice(&data[..len_to_consume]);
+        buffer.extend_from_slice(&data[..len_to_consume]);
         reader.consume(len_to_consume);
     }
 

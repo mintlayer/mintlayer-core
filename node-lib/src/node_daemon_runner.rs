@@ -52,10 +52,10 @@ pub async fn run_node_daemon() -> anyhow::Result<ExitCode> {
                     );
                 }
                 Err(err) => {
-                    // Note: we don't return it as a generic error, because bootstrapping will
-                    // likely fail due to user's mistake rather than node's malfunction, so we
-                    // don't want for e.g. the stack trace to be printed (which would happen with
-                    // a "normal" error when backtrace is enabled).
+                    // Note: we don't return an error here, because bootstrapping will likely fail
+                    // due to a user mistake rather than node malfunction, so we don't want for
+                    // e.g. the stack trace to be printed in this case (anyhow::Error does this
+                    // when backtrace is enabled).
                     logging::log::error!("Node bootstrapping failed: {err}");
                     return Ok(ExitCode(1));
                 }

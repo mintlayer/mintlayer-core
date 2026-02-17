@@ -903,6 +903,8 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         let chain_config = Arc::clone(&self.chain_config);
         let mut block_processor = |block: WithId<Block>| -> Result<_, BootstrapError> {
             // If chainstate is being shutdown, stop immediately.
+            // Note that we return an error instead of Ok(false) to avoid an interrupted import
+            // being treated as successful.
             if self.shutdown_initiated_rx.as_ref().is_some_and(|rx| rx.borrow().test()) {
                 return Err(BootstrapError::Interrupted);
             }
@@ -995,6 +997,8 @@ where
 ///
 /// The main purpose is to make sure the reckless mode stays enabled during bootstrapping for
 /// the entire duration (i.e. for fresh blocks too).
+///
+/// Note: it is assumed that inc/dec are only called during bootstrapping or ibd.
 struct DbRecklessModeCounter {
     counter: u32,
 }

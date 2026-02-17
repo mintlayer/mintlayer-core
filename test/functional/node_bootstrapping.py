@@ -68,24 +68,36 @@ class NodeBootstrappingTest(BitcoinTestFramework):
             block_id = node.chainstate_best_block_id()
             block_ids.append(block_id)
 
+            self.wait_for_mempool_update(block_id)
+
         return block_ids
+
+    # Need to call this function after the tip has changed, if a new block is to be generated
+    # afterwards. Otherwise the block generation may fail with "Recoverable mempool error".
+    def wait_for_mempool_update(self, tip_id: str):
+        node = self.nodes[0]
+        self.wait_until(lambda: node.mempool_local_best_block_id() == tip_id, timeout=5)
 
     def run_test(self):
         node = self.nodes[0]
         stale_blocks_count = 5
         blocks_count = 10
 
+        genesis_id = node.chainstate_best_block_id()
+
         bogus_file = os.path.join(self.options.tmpdir, 'bogus.bin')
         with open(bogus_file, 'w') as f:
             f.write('bogus data')
 
         # Create the shorter chain (which will be the stale one) and invalidate it immediately,
-        # so that the next chain starts from generis as well.
+        # so that the next chain starts from genesis as well.
         stale_block_ids = self.create_blocks(stale_blocks_count, 111)
         node.chainstate_invalidate_block(stale_block_ids[0])
         # Sanity check
         tip_height = node.chainstate_best_block_height()
         assert_equal(tip_height, 0)
+
+        self.wait_for_mempool_update(genesis_id)
 
         # Create the longer chain.
         block_ids = self.create_blocks(blocks_count, 222)
@@ -129,6 +141,7 @@ class NodeBootstrappingTest(BitcoinTestFramework):
         reset_datadir('.bak0')
         self.start_node(0)
 
+        # Import bootstrap_file_full
         assert_blocks_missing(node, block_ids)
         assert_blocks_missing(node, stale_block_ids)
         node.chainstate_import_bootstrap_file(file_path=bootstrap_file_full)
@@ -139,10 +152,10 @@ class NodeBootstrappingTest(BitcoinTestFramework):
         reset_datadir('.bak1')
         self.start_node(0)
 
+        # Import bootstrap_file_mainchain
         assert_blocks_missing(node, block_ids)
         assert_blocks_missing(node, stale_block_ids)
-        node.chainstate_import_bootstrap_file(
-            file_path=bootstrap_file_mainchain)
+        node.chainstate_import_bootstrap_file(file_path=bootstrap_file_mainchain)
         assert_blocks_exist(node, block_ids)
         assert_blocks_missing(node, stale_block_ids)
 

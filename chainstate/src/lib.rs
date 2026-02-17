@@ -30,9 +30,9 @@ use common::{
     primitives::{BlockHeight, Id},
     time_getter::TimeGetter,
 };
-use detail::Chainstate;
-use interface::chainstate_interface_impl;
 use utils::set_flag::SetFlag;
+
+use crate::{detail::Chainstate, interface::chainstate_interface_impl};
 
 pub use crate::{
     config::{ChainstateConfig, MaxTipAge},

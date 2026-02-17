@@ -47,6 +47,16 @@ fn check_height_order(blocks: &[Id<Block>], tf: &TestFramework) {
     }
 }
 
+fn make_chain_config(chain_type: ChainType) -> ChainConfig {
+    chain::config::Builder::new(chain_type)
+        .consensus_upgrades(NetUpgrades::unit_tests())
+        .data_in_no_signature_witness_allowed(true)
+        .genesis_unittest(Destination::AnyoneCanSpend)
+        // Force empty checkpoints because a custom genesis is used.
+        .checkpoints(BTreeMap::new())
+        .build()
+}
+
 const EXPECTED_MAGIC_BYTES: &str = "MLBTSTRP";
 
 fn make_header_data(chain_config: &ChainConfig, version: u32, blocks_count: u64) -> Vec<u8> {
@@ -69,16 +79,20 @@ fn gen_blocks(
     blocks_count: usize,
     mut rng: impl Rng + CryptoRng,
 ) -> Vec<Block> {
-    let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
-    let genesis_id = tf.genesis().get_id();
-    tf.create_chain(&genesis_id.into(), blocks_count, &mut rng).unwrap();
+    if blocks_count > 0 {
+        let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
+        let genesis_id = tf.genesis().get_id();
+        tf.create_chain(&genesis_id.into(), blocks_count, &mut rng).unwrap();
 
-    tf.chainstate
-        .get_block_id_tree_as_list()
-        .unwrap()
-        .iter()
-        .map(|block_id| tf.chainstate.get_block(block_id).unwrap().unwrap())
-        .collect_vec()
+        tf.chainstate
+            .get_block_id_tree_as_list()
+            .unwrap()
+            .iter()
+            .map(|block_id| tf.chainstate.get_block(block_id).unwrap().unwrap())
+            .collect_vec()
+    } else {
+        Vec::new()
+    }
 }
 
 fn export_to_vec(tf: &TestFramework, with_stale_blocks: bool) -> Vec<u8> {
@@ -528,16 +542,6 @@ fn unsupported_version(#[case] seed: Seed) {
     });
 }
 
-fn make_chain_config(chain_type: ChainType) -> ChainConfig {
-    chain::config::Builder::new(chain_type)
-        .consensus_upgrades(NetUpgrades::unit_tests())
-        .data_in_no_signature_witness_allowed(true)
-        .genesis_unittest(Destination::AnyoneCanSpend)
-        // Force empty checkpoints because a custom genesis is used.
-        .checkpoints(BTreeMap::new())
-        .build()
-}
-
 // The data starts with wrong format magic bytes.
 #[rstest]
 #[trace]
@@ -707,6 +711,8 @@ fn block_size_too_big(#[case] seed: Seed) {
     });
 }
 
+// If chainstate reckless mode is enabled, it should be switched on when bootstrapping starts
+// and off when it ends, including the case when it ends due to an error.
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]

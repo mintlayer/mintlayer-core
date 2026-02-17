@@ -107,14 +107,6 @@ impl<T> FailingImpl<T> {
             transaction_failures: 0,
         }
     }
-
-    pub fn inner(&self) -> &T {
-        &self.inner
-    }
-
-    pub fn inner_mut(&mut self) -> &mut T {
-        &mut self.inner
-    }
 }
 
 impl<T: Clone> Clone for FailingImpl<T> {
