@@ -17,9 +17,8 @@ pos-accounting = { path = "../../pos-accounting" }
 randomness = { path = "../../randomness" }
 serialization = { path = "../../serialization" }
 storage = { path = "../../storage" }
-storage-failing = { path = "../../storage/failing" }
 storage-inmemory = { path = "../../storage/inmemory" }
-storage-lmdb = { path = "../../storage/lmdb" }
+storage-lmdb = { path = "../../storage/lmdb", optional = true }
 tokens-accounting = { path = "../../tokens-accounting" }
 utils = { path = "../../utils" }
 utxo = { path = "../../utxo" }
@@ -40,6 +39,7 @@ num-traits.workspace = true
 [features]
 mock = [ "mockall" ]
 expensive-reads = []
+lmdb = ["dep:storage-lmdb"]
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(loom)'] }

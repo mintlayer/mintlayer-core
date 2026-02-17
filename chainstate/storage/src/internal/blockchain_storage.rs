@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use storage_inmemory::{InMemory, InMemoryImpl};
+#[cfg(feature = "lmdb")]
 use storage_lmdb::{Lmdb, LmdbImpl};
 
 use crate::Transactional;
@@ -34,6 +35,10 @@ pub trait BlockchainStorage: for<'tx> Transactional<'tx> + Send {
     fn in_reckless_mode(&self) -> crate::Result<bool>;
 }
 
+// Note: since chainstate-storage is also used (indirectly) by wasm-bindings, we can't have
+// an unconditional dependency on LMDB here, because it won't compile for WASM. So we put it
+// behind a feature.
+#[cfg(feature = "lmdb")]
 impl BlockchainStorageBackendImpl for LmdbImpl {
     fn set_reckless_mode(&self, set: bool) -> crate::Result<()> {
         // When switching the reckless mode off, do a sync immediately.
@@ -53,6 +58,7 @@ impl BlockchainStorageBackendImpl for LmdbImpl {
     }
 }
 
+#[cfg(feature = "lmdb")]
 impl BlockchainStorageBackend for Lmdb {
     type ImplHelper = LmdbImpl;
 }

@@ -1425,7 +1425,6 @@ dependencies = [
  "rstest",
  "serialization",
  "storage",
- "storage-failing",
  "storage-inmemory",
  "storage-lmdb",
  "test-utils",
