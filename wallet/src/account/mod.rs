@@ -90,7 +90,7 @@ use wallet_types::{
 
 pub use self::output_cache::{
     DelegationData, OrderData, OutputCacheInconsistencyError, OwnFungibleTokenInfo, PoolData,
-    TxInfo, UnconfirmedTokenInfo, UtxoWithTxOutput,
+    TxChanged, TxInfo, UnconfirmedTokenInfo, UtxoWithTxOutput,
 };
 use self::output_cache::{OutputCache, TokenIssuanceData};
 use self::transaction_list::{get_transaction_list, TransactionList};
@@ -2089,14 +2089,16 @@ impl<K: AccountKeyChains> Account<K> {
         let relevant_outputs = self.mark_outputs_as_seen(db_tx, tx.outputs())?;
         if relevant_inputs || relevant_outputs {
             let id = AccountWalletTxId::new(self.get_account_id(), tx.id());
-            db_tx.set_transaction(&id, &tx)?;
-            wallet_events.set_transaction(self.account_index(), &tx);
-            self.output_cache.add_tx(
+            let changed = self.output_cache.add_tx(
                 &self.chain_config,
                 self.account_info.best_block_height(),
-                id.into_item_id(),
-                tx,
+                id.clone().into_item_id(),
+                tx.clone(),
             )?;
+            if changed == TxChanged::Yes {
+                db_tx.set_transaction(&id, &tx)?;
+                wallet_events.set_transaction(self.account_index(), &tx);
+            }
             Ok(true)
         } else {
             Ok(false)

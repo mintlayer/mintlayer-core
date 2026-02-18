@@ -192,7 +192,7 @@ class WalletComposeTransaction(BitcoinTestFramework):
 
             assert_in("The transaction was submitted successfully", await wallet.submit_transaction(signed_tx))
 
-            utxos = await wallet.list_utxos('all', 'unlocked', ['inactive'])
+            utxos = await wallet.list_utxos('all', 'unlocked', ['inactive', 'in-mempool'])
             assert_equal(1, len(utxos))
 
             # try to compose and sign a transaction with an inactive utxo that is not in chainstate only in the wallet

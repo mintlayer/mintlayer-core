@@ -103,7 +103,7 @@ class WalletSubmitTransaction(BitcoinTestFramework):
             assert_in("The transaction was submitted successfully", await wallet.submit_transaction(encoded_tx, not store_tx_in_wallet))
 
             if store_tx_in_wallet:
-                assert_in(f"Coins amount: {coins_to_send}", await wallet.get_balance(utxo_states=['inactive']))
+                assert_in(f"Coins amount: {coins_to_send}", await wallet.get_balance(utxo_states=['inactive', 'in-mempool']))
             else:
                 assert_in(f"Coins amount: 0", await wallet.get_balance(utxo_states=['inactive']))
 
