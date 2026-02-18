@@ -819,6 +819,12 @@ user-id = 267 # Tony Arcieri (tarcieri)
 start = "2022-05-24"
 end = "2026-10-15"
 
+[[trusted.keccak]]
+criteria = "safe-to-deploy"
+user-id = 5059 # Artyom Pavlov (newpavlov)
+start = "2026-02-13"
+end = "2027-02-18"
+
 [[trusted.libc]]
 criteria = "safe-to-deploy"
 user-id = 1 # Alex Crichton (alexcrichton)
