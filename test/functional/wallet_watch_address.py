@@ -143,23 +143,22 @@ class WalletSubmitTransaction(BitcoinTestFramework):
             output = await wallet.send_to_address(address_from_wallet1, 1)
             assert_in("The transaction was submitted successfully", output)
             receive_coins_tx_id = output.splitlines()[-1]
+            tx = await wallet.get_raw_signed_transaction(receive_coins_tx_id)
 
             # check in wallet2
             await wallet.close_wallet()
             await wallet.open_wallet('wallet2')
+            assert_in("Success", await wallet.sync())
 
             # tx is still in mempool
             assert node.mempool_contains_tx(receive_coins_tx_id)
 
-            assert_in("No transaction found", await wallet.get_raw_signed_transaction(receive_coins_tx_id))
+            # wallet2 should also have the tx because it scanned the mempool
+            assert_equal(tx, await wallet.get_raw_signed_transaction(receive_coins_tx_id))
 
             block_id = self.generate_block()
             assert not node.mempool_contains_tx(receive_coins_tx_id)
             assert_in("Success", await wallet.sync())
-
-            # after syncing the tx should be found
-            assert_not_in("No transaction found", await wallet.get_raw_signed_transaction(receive_coins_tx_id))
-
 
             # go back to wallet 1
             await wallet.close_wallet()
@@ -176,18 +175,17 @@ class WalletSubmitTransaction(BitcoinTestFramework):
             # go back to wallet 2
             await wallet.close_wallet()
             await wallet.open_wallet('wallet2')
+            assert_in("Success", await wallet.sync())
 
             # tx is still in mempool
             assert node.mempool_contains_tx(send_coins_tx_id)
 
-            assert_in("No transaction found", await wallet.get_raw_signed_transaction(send_coins_tx_id))
+            # wallet2 should again have the tx present
+            assert_not_in("No transaction found", await wallet.get_raw_signed_transaction(send_coins_tx_id))
 
             block_id = self.generate_block()
             assert not node.mempool_contains_tx(send_coins_tx_id)
             assert_in("Success", await wallet.sync())
-
-            # after syncing the tx should be found
-            assert_not_in("No transaction found", await wallet.get_raw_signed_transaction(send_coins_tx_id))
 
             output = await wallet.get_standalone_addresses()
             assert_in(address_from_wallet1, output)

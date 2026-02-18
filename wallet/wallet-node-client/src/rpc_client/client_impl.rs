@@ -419,6 +419,13 @@ impl NodeInterface for NodeRpcClient {
             .map(|opt| opt.map(|resp| resp.transaction.take()))
     }
 
+    async fn mempool_get_transactions(&self) -> Result<Vec<SignedTransaction>, Self::Error> {
+        MempoolRpcClient::get_all_transactions(&*self.rpc_client)
+            .await
+            .map_err(NodeRpcError::ResponseError)
+            .map(|txs| txs.into_iter().map(|tx| tx.take()).collect())
+    }
+
     async fn mempool_subscribe_to_events(&self) -> Result<MempoolEvents, Self::Error> {
         let subscription = MempoolRpcClient::subscribe_to_events(&*self.rpc_client)
             .await

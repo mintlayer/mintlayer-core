@@ -479,4 +479,9 @@ impl NodeInterface for WalletHandlesClient {
         let res = self.mempool.call(move |this| this.transaction(&tx_id)).await?;
         Ok(res)
     }
+
+    async fn mempool_get_transactions(&self) -> Result<Vec<SignedTransaction>, Self::Error> {
+        let res = self.mempool.call(move |this| this.get_all()).await?;
+        Ok(res)
+    }
 }

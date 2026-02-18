@@ -322,6 +322,10 @@ impl NodeInterface for ClonableMockNodeInterface {
         self.lock().await.mempool_get_transaction(tx_id).await
     }
 
+    async fn mempool_get_transactions(&self) -> Result<Vec<SignedTransaction>, Self::Error> {
+        self.lock().await.mempool_get_transactions().await
+    }
+
     async fn mempool_subscribe_to_events(&self) -> Result<MempoolEvents, Self::Error> {
         self.lock().await.mempool_subscribe_to_events().await
     }

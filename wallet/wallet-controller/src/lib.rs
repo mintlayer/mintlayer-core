@@ -207,6 +207,7 @@ pub struct Controller<T, W, B: storage::Backend + 'static> {
     wallet_events: W,
 
     mempool_events: MempoolEvents,
+    finished_initial_sync: bool,
 }
 
 impl<T, WalletEvents, B: storage::Backend> std::fmt::Debug for Controller<T, WalletEvents, B> {
@@ -243,6 +244,7 @@ where
             staking_started: BTreeSet::new(),
             wallet_events,
             mempool_events,
+            finished_initial_sync: false,
         };
 
         log::info!("Syncing the wallet...");
@@ -268,6 +270,7 @@ where
             staking_started: BTreeSet::new(),
             wallet_events,
             mempool_events,
+            finished_initial_sync: false,
         })
     }
 
@@ -1357,6 +1360,28 @@ where
                     }
 
                     continue 'outer;
+                }
+            }
+
+            // after the first successful sync to the tip fetch all mempool transactions
+            if !self.finished_initial_sync {
+                let txs = self.rpc_client.mempool_get_transactions().await;
+
+                match txs {
+                    Ok(txs) => {
+                        if let Err(err) =
+                            self.wallet.add_mempool_transactions(&txs, &self.wallet_events)
+                        {
+                            log::error!("Txs from mempool failed to be added in the wallet because of an error: {err}");
+                        } else {
+                            self.finished_initial_sync = true;
+                        }
+                    }
+                    Err(err) => {
+                        log::error!("Failed to fetch all transactios from the mempool: {err}");
+                        tokio::time::sleep(ERROR_DELAY).await;
+                        continue;
+                    }
                 }
             }
 
