@@ -181,7 +181,13 @@ impl_value_hint!({
     NonZeroIsize => VH::NONZERO_NUMBER;
     NonZeroUsize => VH::NONZERO_NUMBER;
     String => VH::STRING;
-    std::path::Path => VH::STRING;
+    // Note: we implement `HasValueHint` for `PathBuf` but not for `Path`, because the latter
+    // won't work if used as a parameter and a native Windows path is passed to it, producing
+    // weird errors like:
+    //  jsonrpsee_core::proc_macros_support: Failed to parse JSON-RPC params as object: ErrorObject
+    //  { code: InvalidParams, message: "Invalid params", data: Some(RawValue("invalid type: string
+    //  \"C:\\\\aaa\\\\bbb\\\\file.txt\", expected a borrowed path at line 1 column xxx")) }
+    std::path::PathBuf => VH::STRING;
     std::net::SocketAddr => VH::STRING;
     std::net::IpAddr => VH::STRING;
     std::net::Ipv4Addr => VH::STRING;

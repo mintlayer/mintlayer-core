@@ -198,13 +198,13 @@ trait ChainstateRpc {
     #[method(name = "export_bootstrap_file")]
     async fn export_bootstrap_file(
         &self,
-        file_path: &std::path::Path,
+        file_path: std::path::PathBuf,
         include_stale_blocks: bool,
     ) -> RpcResult<()>;
 
     /// Imports a bootstrap file's blocks to this node
     #[method(name = "import_bootstrap_file")]
-    async fn import_bootstrap_file(&self, file_path: &std::path::Path) -> RpcResult<()>;
+    async fn import_bootstrap_file(&self, file_path: std::path::PathBuf) -> RpcResult<()>;
 
     /// Return generic information about the chain, including the current best block, best block height and more.
     #[method(name = "info")]
@@ -516,18 +516,16 @@ impl ChainstateRpcServer for super::ChainstateHandle {
 
     async fn export_bootstrap_file(
         &self,
-        file_path: &std::path::Path,
+        file_path: std::path::PathBuf,
         include_stale_blocks: bool,
     ) -> RpcResult<()> {
-        let file_path = file_path.to_owned();
         rpc::handle_result(
             self.call(move |this| export_bootstrap_file(this, &file_path, include_stale_blocks))
                 .await,
         )
     }
 
-    async fn import_bootstrap_file(&self, file_path: &std::path::Path) -> RpcResult<()> {
-        let file_path = file_path.to_owned();
+    async fn import_bootstrap_file(&self, file_path: std::path::PathBuf) -> RpcResult<()> {
         rpc::handle_result(self.call_mut(move |this| import_bootstrap_file(this, &file_path)).await)
     }
 
