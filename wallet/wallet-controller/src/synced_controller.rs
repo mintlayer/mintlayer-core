@@ -22,8 +22,9 @@ use common::{
     address::{pubkeyhash::PublicKeyHash, Address},
     chain::{
         classic_multisig::ClassicMultisigChallenge,
-        htlc::HashedTimelockContract,
+        htlc::{HashedTimelockContract, HtlcSecret},
         output_value::OutputValue,
+        output_values_holder::collect_token_v1_ids_from_output_values_holder,
         signature::inputsig::arbitrary_message::ArbitraryMessageSignature,
         tokens::{
             get_referenced_token_ids_ignore_issuance, IsTokenFreezable, IsTokenUnfreezable,
@@ -70,8 +71,8 @@ use wallet_types::{
 
 use crate::{
     helpers::{
-        fetch_order_info, fetch_token_info, fetch_token_infos, fetch_token_infos_into, fetch_utxo,
-        get_referenced_token_ids_from_partially_signed_transaction, into_balances,
+        fetch_order_info, fetch_rpc_token_info, fetch_token_infos, fetch_token_infos_into,
+        fetch_utxo, get_referenced_token_ids_from_partially_signed_transaction, into_balances,
         tx_to_partially_signed_tx,
     },
     runtime_wallet::RuntimeWallet,
@@ -117,13 +118,13 @@ where
         }
     }
 
-    async fn fetch_token_infos(
+    async fn fetch_rpc_token_infos(
         &self,
         tokens: impl IntoIterator<Item = TokenId>,
     ) -> Result<Vec<RPCTokenInfo>, ControllerError<T>> {
         let tasks: FuturesUnordered<_> = tokens
             .into_iter()
-            .map(|token_id| fetch_token_info(&self.rpc_client, token_id))
+            .map(|token_id| fetch_rpc_token_info(&self.rpc_client, token_id))
             .collect();
         tasks.try_collect().await
     }
@@ -138,7 +139,7 @@ where
             .find_used_tokens(self.account_index, input_utxos)
             .map_err(ControllerError::WalletError)?;
 
-        for token_info in self.fetch_token_infos(token_ids).await? {
+        for token_info in self.fetch_rpc_token_infos(token_ids).await? {
             match token_info {
                 RPCTokenInfo::FungibleToken(token_info) => {
                     self.check_fungible_token_is_usable(token_info)?
@@ -174,7 +175,7 @@ where
             if token_ids.is_empty() {
                 result.push(utxo);
             } else {
-                let token_infos = self.fetch_token_infos(token_ids).await?;
+                let token_infos = self.fetch_rpc_token_infos(token_ids).await?;
                 let ok_to_use = token_infos.iter().try_fold(
                     true,
                     |all_ok, token_info| -> Result<bool, ControllerError<T>> {
@@ -569,8 +570,8 @@ where
         .await
     }
 
-    /// Create a transaction that transfers coins to the destination address and specified amount
-    /// and broadcast it to the mempool.
+    /// Create a transaction that transfers the specified amount of coins to the destination address
+    /// and broadcasts it to the mempool.
     /// If the selected_utxos are not empty it will try to select inputs from those for the
     /// transaction, else it will use available ones from the wallet.
     pub async fn send_to_address(
@@ -788,7 +789,7 @@ where
             let mut result = Vec::new();
 
             for (token_id, outputs_vec) in outputs {
-                let token_info = fetch_token_info(&self.rpc_client, token_id).await?;
+                let token_info = fetch_rpc_token_info(&self.rpc_client, token_id).await?;
 
                 match &token_info {
                     RPCTokenInfo::FungibleToken(token_info) => {
@@ -1362,6 +1363,52 @@ where
         .await
     }
 
+    pub async fn spend_utxo(
+        &mut self,
+        utxo_outpoint: UtxoOutPoint,
+        output_address: Destination,
+        htlc_secret: Option<HtlcSecret>,
+    ) -> Result<NewTransaction, ControllerError<T>> {
+        let utxo = fetch_utxo(&self.rpc_client, self.wallet, &utxo_outpoint).await?;
+        let mut tx_additional_info = TxAdditionalInfo::new();
+
+        let token_ids = collect_token_v1_ids_from_output_values_holder(&utxo);
+        let token_infos = self.fetch_rpc_token_infos(token_ids).await?;
+
+        for token_info in token_infos {
+            tx_additional_info = tx_additional_info.with_token_info(
+                token_info.token_id(),
+                TokenAdditionalInfo {
+                    num_decimals: token_info.token_number_of_decimals(),
+                    ticker: token_info.token_ticker().to_vec(),
+                },
+            );
+
+            let unconfirmed_token_info = self.unconfirmed_token_info(token_info)?;
+            unconfirmed_token_info.check_can_be_used()?;
+        }
+
+        self.create_and_send_tx(
+            async move |current_fee_rate: FeeRate,
+                        consolidate_fee_rate: FeeRate,
+                        wallet: &mut RuntimeWallet<B>,
+                        account_index: U31| {
+                wallet
+                    .create_spend_utxo_tx(
+                        account_index,
+                        utxo_outpoint,
+                        output_address,
+                        htlc_secret,
+                        current_fee_rate,
+                        consolidate_fee_rate,
+                        tx_additional_info,
+                    )
+                    .await
+            },
+        )
+        .await
+    }
+
     async fn convert_rpc_amount_in(
         &self,
         amount: RpcAmountIn,
@@ -1370,7 +1417,7 @@ where
     ) -> Result<OutputValue, ControllerError<T>> {
         let output_value = match token_id {
             Some(token_id) => {
-                let token_info = fetch_token_info(&self.rpc_client, token_id).await?;
+                let token_info = fetch_rpc_token_info(&self.rpc_client, token_id).await?;
                 let amount = amount
                     .to_amount(token_info.token_number_of_decimals())
                     .ok_or(ControllerError::InvalidCoinAmount)?;
@@ -1582,7 +1629,7 @@ where
             &UnconfirmedTokenInfo,
         ) -> WalletResult<R>,
     {
-        let unconfirmed_token_info = self.unconfirmed_token_info(token_info)?;
+        let token_unconfirmed_info = self.unconfirmed_token_info(token_info)?;
 
         let (current_fee_rate, consolidate_fee_rate) =
             self.get_current_and_consolidation_fee_rate().await?;
@@ -1592,7 +1639,7 @@ where
             consolidate_fee_rate,
             self.wallet,
             self.account_index,
-            &unconfirmed_token_info,
+            &token_unconfirmed_info,
         )
         .await
         .map_err(ControllerError::WalletError)?;
@@ -1631,7 +1678,7 @@ where
         &mut self,
         token_info: RPCTokenInfo,
     ) -> Result<UnconfirmedTokenInfo, ControllerError<T>> {
-        let unconfirmed_token_info = match token_info {
+        let token_unconfirmed_info = match token_info {
             RPCTokenInfo::FungibleToken(token_info) => {
                 self.wallet.get_token_unconfirmed_info(self.account_index, token_info)?
             }
@@ -1639,7 +1686,7 @@ where
                 UnconfirmedTokenInfo::NonFungibleToken(info.token_id, info.as_ref().into())
             }
         };
-        Ok(unconfirmed_token_info)
+        Ok(token_unconfirmed_info)
     }
 
     /// Similar to create_and_send_tx but some transactions also create an ID

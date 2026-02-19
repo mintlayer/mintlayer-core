@@ -35,7 +35,7 @@ use chainstate::tx_verifier::{
 use futures::StreamExt;
 use futures::{never::Never, stream::FuturesOrdered, TryStreamExt};
 use helpers::{
-    fetch_input_infos, fetch_token_info, fetch_utxo, fetch_utxo_extra_info, into_balances,
+    fetch_input_infos, fetch_rpc_token_info, fetch_utxo, fetch_utxo_extra_info, into_balances,
 };
 use itertools::Itertools as _;
 use node_comm::rpc_client::ColdWalletClient;
@@ -134,56 +134,83 @@ use crate::types::WalletExtraInfo;
 pub enum ControllerError<N: NodeInterface> {
     #[error("Node call error: {0}")]
     NodeCallError(N::Error),
+
     #[error("Wallet sync error: {0}")]
     SyncError(String),
+
     #[error("Synchronization is paused until the node has {0} blocks ({1} blocks currently)")]
     NotEnoughBlockHeight(BlockHeight, BlockHeight),
+
     #[error("Wallet file {0} error: {1}")]
     WalletFileError(PathBuf, String),
+
     #[error("Wallet error: {0}")]
     WalletError(#[from] wallet::wallet::WalletError),
+
     #[error("Encoding error: {0}")]
     AddressEncodingError(#[from] AddressError),
+
     #[error("No staking pool found")]
     NoStakingPool,
+
     #[error("Token with Id {0} is frozen")]
     FrozenToken(TokenId),
+
     #[error("Wallet is locked")]
     WalletIsLocked,
+
     #[error("Cannot lock wallet because staking is running")]
     StakingRunning,
+
     #[error("End-to-end encryption error: {0}")]
     EndToEndEncryptionError(#[from] crypto::ephemeral_e2e::error::Error),
+
     #[error("The node is not in sync yet")]
     NodeNotInSyncYet,
+
     #[error("Lookahead size cannot be 0")]
     InvalidLookaheadSize,
+
     #[error("Wallet file already open")]
     WalletFileAlreadyOpen,
+
     #[error("Please open or create wallet file first")]
     NoWallet,
+
     #[error("Search for timestamps failed: {0}")]
     SearchForTimestampsFailed(BlockProductionError),
+
     #[error("Expecting non-empty inputs")]
     ExpectingNonEmptyInputs,
+
     #[error("Expecting non-empty outputs")]
     ExpectingNonEmptyOutputs,
+
     #[error("No coin UTXOs to pay fee from")]
     NoCoinUtxosToPayFeeFrom,
+
     #[error("Invalid tx output: {0}")]
     InvalidTxOutput(GenericCurrencyTransferToTxOutputConversionError),
+
     #[error("The specified token {0} is not a fungible token")]
     NotFungibleToken(TokenId),
+
     #[error("Invalid coin amount")]
     InvalidCoinAmount,
+
     #[error("Partially signed transaction error: {0}")]
     PartiallySignedTransactionError(#[from] PartiallySignedTransactionError),
+
     #[error("Invalid token ID")]
     InvalidTokenId,
+
     #[error("Error creating sighash input commitment")]
     SighashInputCommitmentCreationError(#[from] SighashInputCommitmentCreationError),
+
     #[error("The number of htlc secrets does not match the number of inputs")]
     InvalidHtlcSecretsCount,
+    // #[error("Utxo cannot be spent")]
+    // UtxoCannotBeSpent
 }
 
 #[derive(Clone, Copy)]
@@ -673,7 +700,7 @@ where
         &self,
         token_id: TokenId,
     ) -> Result<RPCTokenInfo, ControllerError<N>> {
-        fetch_token_info(&self.rpc_client, token_id).await
+        fetch_rpc_token_info(&self.rpc_client, token_id).await
     }
 
     pub async fn generate_block_by_pool(
@@ -1320,12 +1347,13 @@ where
         let mut fees = BTreeMap::new();
 
         for (currency, output) in outputs {
-            let input_amount = inputs.remove(&currency).ok_or(
-                ControllerError::<N>::WalletError(WalletError::NotEnoughUtxo(Amount::ZERO, output)),
-            )?;
+            let input_amount =
+                inputs.remove(&currency).ok_or(ControllerError::<N>::WalletError(
+                    WalletError::InsufficientUtxoAmount(Amount::ZERO, output),
+                ))?;
 
             let fee = (input_amount - output).ok_or(ControllerError::<N>::WalletError(
-                WalletError::NotEnoughUtxo(input_amount, output),
+                WalletError::InsufficientUtxoAmount(input_amount, output),
             ))?;
             if fee != Amount::ZERO {
                 fees.insert(currency, fee);

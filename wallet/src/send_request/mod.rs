@@ -256,17 +256,10 @@ impl SendRequest {
     }
 
     pub fn with_inputs_and_destinations(
-        mut self,
+        self,
         utxos: impl IntoIterator<Item = (TxInput, Destination)>,
     ) -> Self {
-        for (outpoint, destination) in utxos {
-            self.inputs.push(outpoint);
-            self.destinations.push(destination);
-            self.utxos.push(None);
-            self.htlc_secrets.push(None);
-        }
-
-        self
+        self.with_all_inputs_data(utxos.into_iter().map(|(input, dest)| (input, dest, None, None)))
     }
 
     pub fn with_inputs<'a, PoolDataGetter>(
@@ -277,24 +270,36 @@ impl SendRequest {
     where
         PoolDataGetter: Fn(&PoolId) -> Option<&'a PoolData>,
     {
-        for (outpoint, txo, secret) in utxos {
-            self.inputs.push(outpoint);
+        for (input, utxo, secret) in utxos {
             let htlc_spending_condition = match &secret {
                 Some(_) => HtlcSpendingCondition::WithSpend,
                 None => HtlcSpendingCondition::WithRefund,
             };
 
-            self.destinations.push(
-                get_tx_output_destination(&txo, &pool_data_getter, htlc_spending_condition)
-                    .ok_or_else(|| {
-                        WalletError::UnsupportedTransactionOutput(Box::new(txo.clone()))
-                    })?,
-            );
-            self.utxos.push(Some(txo));
+            let dest = get_tx_output_destination(&utxo, pool_data_getter, htlc_spending_condition)
+                .ok_or_else(|| WalletError::UnsupportedTransactionOutput(Box::new(utxo.clone())))?;
+
+            self.inputs.push(input);
+            self.destinations.push(dest);
+            self.utxos.push(Some(utxo));
             self.htlc_secrets.push(secret);
         }
 
         Ok(self)
+    }
+
+    pub fn with_all_inputs_data(
+        mut self,
+        utxos: impl IntoIterator<Item = (TxInput, Destination, Option<TxOutput>, Option<HtlcSecret>)>,
+    ) -> Self {
+        for (input, destination, utxo, htlc_secret) in utxos {
+            self.inputs.push(input);
+            self.destinations.push(destination);
+            self.utxos.push(utxo);
+            self.htlc_secrets.push(htlc_secret);
+        }
+
+        self
     }
 
     pub fn add_outputs(&mut self, outputs: impl IntoIterator<Item = TxOutput>) {

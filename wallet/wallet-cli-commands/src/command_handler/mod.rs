@@ -24,8 +24,8 @@ use chainstate::rpc::RpcOutputValueOut;
 use common::{
     address::{Address, RpcAddress},
     chain::{
-        config::checkpoints_data::print_block_heights_ids_as_checkpoints_data, tokens::TokenId,
-        ChainConfig, Destination, RpcCurrency, SignedTransaction,
+        config::checkpoints_data::print_block_heights_ids_as_checkpoints_data, htlc::HtlcSecret,
+        tokens::TokenId, ChainConfig, Destination, RpcCurrency, SignedTransaction,
     },
     primitives::{Idable as _, H256},
     text_summary::TextSummary,
@@ -34,6 +34,7 @@ use crypto::key::hdkd::u31::U31;
 use logging::log;
 use mempool::tx_options::TxOptionsOverrides;
 use node_comm::node_traits::NodeInterface;
+use rpc::types::RpcHexString;
 use serialization::{hex::HexEncode, hex_encoded::HexEncoded};
 use utils::{
     ensure,
@@ -45,9 +46,9 @@ use wallet_controller::types::WalletExtraInfo;
 use wallet_rpc_client::wallet_rpc_traits::{PartialOrSignedTx, WalletInterface};
 use wallet_rpc_lib::types::{
     Balances, ComposedTransaction, ControllerConfig, HardwareWalletType, MnemonicInfo,
-    NewOrderTransaction, NewSubmittedTransaction, NftMetadata, RpcInspectTransaction,
-    RpcNewTransaction, RpcSignatureStats, RpcSignatureStatus, RpcStandaloneAddressDetails,
-    RpcValidatedSignatures, TokenMetadata,
+    NewOrderTransaction, NewSubmittedTransaction, NftMetadata, RpcHashedTimelockContract,
+    RpcInspectTransaction, RpcNewTransaction, RpcPreparedTransaction, RpcSignatureStats,
+    RpcSignatureStatus, RpcStandaloneAddressDetails, RpcValidatedSignatures, TokenMetadata,
 };
 use wallet_types::partially_signed_transaction::PartiallySignedTransaction;
 
@@ -148,6 +149,21 @@ where
 
     pub fn new_tx_command(new_tx: RpcNewTransaction, chain_config: &ChainConfig) -> ConsoleCommand {
         ConsoleCommand::Print(Self::new_tx_command_status_text(new_tx, chain_config))
+    }
+
+    pub fn prepared_tx_command(
+        prepared_tx: RpcPreparedTransaction,
+        chain_config: &ChainConfig,
+    ) -> ConsoleCommand {
+        let RpcPreparedTransaction { tx_id, tx, fees } = prepared_tx;
+        let new_tx = RpcNewTransaction {
+            tx_id,
+            tx,
+            fees,
+            broadcasted: false,
+        };
+
+        Self::new_tx_command(new_tx, chain_config)
     }
 
     pub fn new_order_tx_command<N: NodeInterface>(
@@ -2076,6 +2092,79 @@ where
                 ask_currency,
                 give_currency,
             } => self.list_all_active_orders(chain_config, ask_currency, give_currency).await,
+
+            WalletCommand::CreateHtlcTx {
+                currency,
+                amount,
+                secret_hash,
+                spend_address,
+                refund_timelock,
+                refund_address,
+            } => {
+                let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
+
+                let token_id =
+                    match currency.to_fully_parsed(chain_config)?.to_rpc_currency(chain_config)? {
+                        RpcCurrency::Coin => Ok(None),
+                        RpcCurrency::Token(token_id) => Ok(Some(token_id.into_string())),
+                    }?;
+
+                let htlc = RpcHashedTimelockContract {
+                    secret_hash: RpcHexString::from_str(&secret_hash)?,
+                    spend_address: RpcAddress::from_string(spend_address),
+                    refund_address: RpcAddress::from_string(refund_address),
+                    refund_timelock: refund_timelock.into(),
+                };
+
+                let prepared_tx = wallet
+                    .create_htlc_transaction(selected_account, amount, token_id, htlc, self.config)
+                    .await?;
+
+                Ok(Self::prepared_tx_command(prepared_tx, chain_config))
+            }
+
+            WalletCommand::GenerateHtlcSecret => {
+                let secret = HtlcSecret::new_from_rng(&mut randomness::make_true_rng());
+                let secret_hash = secret.hash();
+
+                Ok(ConsoleCommand::Print(format!(
+                    "New HTLC secret: {}\nand its hash: {:x}",
+                    hex::encode(secret.secret()),
+                    secret_hash
+                )))
+            }
+
+            WalletCommand::CalcHtlcSecretHash { secret } => {
+                let secret = hex::decode(&secret)
+                    .ok()
+                    .and_then(|bytes| Some(HtlcSecret::new(bytes.try_into().ok()?)))
+                    .ok_or(WalletCliCommandError::InvalidHtlcSecret)?;
+                let secret_hash = secret.hash();
+
+                Ok(ConsoleCommand::Print(format!(
+                    "The hash of the provided secret is: {secret_hash:x}",
+                )))
+            }
+
+            WalletCommand::SpendUtxo {
+                utxo,
+                address,
+                htlc_secret,
+            } => {
+                let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
+
+                let new_tx = wallet
+                    .spend_utxo(
+                        selected_account,
+                        utxo.into(),
+                        address,
+                        htlc_secret,
+                        self.config,
+                    )
+                    .await?;
+
+                Ok(Self::new_tx_command(new_tx, chain_config))
+            }
         }
     }
 
