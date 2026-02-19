@@ -1143,6 +1143,26 @@ where
         )
     }
 
+    async fn spend_utxo(
+        &self,
+        account_arg: AccountArg,
+        utxo: RpcUtxoOutpoint,
+        output_address: RpcAddress<Destination>,
+        htlc_secret: Option<RpcHexString>,
+        options: TransactionOptions,
+    ) -> rpc::RpcResult<RpcNewTransaction> {
+        rpc::handle_result(
+            self.spend_utxo(
+                account_arg.index::<N>()?,
+                utxo,
+                output_address,
+                htlc_secret,
+                options.into(),
+            )
+            .await,
+        )
+    }
+
     async fn stake_pool_balance(
         &self,
         pool_id: RpcAddress<PoolId>,

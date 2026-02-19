@@ -2710,6 +2710,63 @@ Returns:
 }, .. ]
 ```
 
+### Method `utxo_spend`
+
+Spend the specified utxo, moving the corresponding funds (coins or tokens) to the specified
+address. If the utxo is an HTLC, specifying `htlc_secret` means that the HTLC will be spent,
+and omitting it means that the HTLC wil be refunded.
+
+
+Parameters:
+```
+{
+    "account": number,
+    "utxo": {
+        "source_id": EITHER OF
+             1) {
+                    "type": "Transaction",
+                    "content": { "tx_id": hex string },
+                }
+             2) {
+                    "type": "BlockReward",
+                    "content": { "block_id": hex string },
+                },
+        "index": number,
+    },
+    "output_address": bech32 string,
+    "htlc_secret": EITHER OF
+         1) hex string
+         2) null,
+    "options": {
+        "in_top_x_mb": EITHER OF
+             1) number
+             2) null,
+        "broadcast_to_mempool": EITHER OF
+             1) bool
+             2) null,
+    },
+}
+```
+
+Returns:
+```
+{
+    "tx_id": hex string,
+    "tx": hex string,
+    "fees": {
+        "coins": {
+            "atoms": number string,
+            "decimal": decimal string,
+        },
+        "tokens": { bech32 string: {
+            "atoms": number string,
+            "decimal": decimal string,
+        }, .. },
+    },
+    "broadcasted": bool,
+}
+```
+
 ### Method `node_version`
 
 Obtain the node version

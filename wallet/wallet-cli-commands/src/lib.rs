@@ -17,21 +17,13 @@ mod command_handler;
 mod errors;
 mod helper_types;
 
-pub use command_handler::CommandHandler;
-use dyn_clone::DynClone;
-pub use errors::WalletCliCommandError;
-use helper_types::CliYesNo;
-use regex::Regex;
-use rpc::description::{Described, Module};
-use wallet_controller::types::WalletTypeArgs;
-use wallet_rpc_lib::{
-    types::{FoundDevice, NodeInterface},
-    ColdWalletRpcDescription, WalletRpcDescription,
-};
-
 use std::{collections::BTreeMap, fmt::Debug, num::NonZeroUsize, path::PathBuf, time::Duration};
 
 use clap::{Command, FromArgMatches, Parser, Subcommand};
+use dyn_clone::DynClone;
+use regex::Regex;
+
+use helper_types::CliYesNo;
 
 use common::{
     chain::{Block, SignedTransaction, Transaction},
@@ -39,17 +31,27 @@ use common::{
 };
 use crypto::key::{hdkd::u31::U31, PrivateKey, PublicKey};
 use p2p_types::{bannable_address::BannableAddress, PeerId};
+use rpc::description::{Described, Module};
 use serialization::hex_encoded::HexEncoded;
 use utils_networking::IpOrSocketAddress;
+use wallet_controller::types::WalletTypeArgs;
+use wallet_rpc_lib::{
+    types::{FoundDevice, NodeInterface},
+    ColdWalletRpcDescription, WalletRpcDescription,
+};
 
 use crate::helper_types::{
-    CliCurrency, CliTokenTotalSupply, CliUnspecifiedCurrencyTransfer, CliUtxoOutPoint,
+    CliCurrency, CliOutputTimeLock, CliTokenTotalSupply, CliUnspecifiedCurrencyTransfer,
+    CliUtxoOutPoint,
 };
 
 use self::helper_types::{
     CliEnableOrDisable, CliForceReduceLookaheadSize, CliIsFreezable, CliIsUnfreezable,
     CliStoreSeedPhrase, CliTokenTransfer, CliUtxoState, CliUtxoTypes, CliWithLocked,
 };
+
+pub use command_handler::CommandHandler;
+pub use errors::WalletCliCommandError;
 
 #[derive(Debug, Subcommand, Clone)]
 pub enum CreateWalletSubCommand {
@@ -1215,6 +1217,55 @@ pub enum WalletCommand {
         /// Filter orders by the specified "given" currency - pass a token id or "coin" for coins.
         #[arg(long = "give-currency")]
         give_currency: Option<CliCurrency>,
+    },
+
+    /// Create a transaction with an HTLC (Hashed TimeLock Contract) output without broadcasting it.
+    #[clap(name = "htlc-create-tx")]
+    CreateHtlcTx {
+        /// The currency to lock inside the HTLC - a token id or "coin" for coins.
+        currency: CliCurrency,
+
+        /// The amount to lock inside the HTLC.
+        amount: DecimalAmount,
+
+        /// Hex-encoded hash of the HTLC secret.
+        secret_hash: String,
+
+        /// The address (key) that can spend the HTLC providing the secret.
+        spend_address: String,
+
+        /// The refund timelock.
+        refund_timelock: CliOutputTimeLock,
+
+        /// The address (key) that can refund the HTLC after the refund timelock expires.
+        refund_address: String,
+    },
+
+    /// Generate a new HTLC secret and print it to the console.
+    #[clap(name = "htlc-generate-secret")]
+    GenerateHtlcSecret,
+
+    /// Calculate the hash of the provided HTLC secret.
+    #[clap(name = "htlc-calc-secret-hash")]
+    CalcHtlcSecretHash { secret: String },
+
+    /// Spend the specified utxo, moving the corresponding funds (coins or tokens) to the specified
+    /// address.
+    #[clap(name = "utxo-spend")]
+    SpendUtxo {
+        /// The utxo to spend, e.g. tx(000000000000000000059fa50103b9683e51e5aba83b8a34c9b98ce67d66136c,1).
+        utxo: CliUtxoOutPoint,
+
+        /// The destination address that will receive the funds from the spent utxo.
+        address: String,
+
+        /// (For HTLC utxos only) optional hex-encoded HTLC secret.
+        ///
+        /// Specifying the HTLC secret for an HTLC utxo means that you are spending the HTLC,
+        /// in which case HTLC's spend address must be owned by the current account.
+        /// Omitting the secret means that you are refunding the HTLC, in which case HTLC's
+        /// refund address must be owned by the current account.
+        htlc_secret: Option<String>,
     },
 }
 

@@ -555,6 +555,15 @@ pub trait WalletInterface {
         give_curency: Option<RpcCurrency>,
     ) -> Result<Vec<ActiveOrderInfo>, Self::Error>;
 
+    async fn spend_utxo(
+        &self,
+        account_index: U31,
+        utxo: UtxoOutPoint,
+        output_address: String,
+        htlc_secret: Option<String>,
+        config: ControllerConfig,
+    ) -> Result<RpcNewTransaction, Self::Error>;
+
     async fn node_version(&self) -> Result<NodeVersion, Self::Error>;
 
     async fn node_shutdown(&self) -> Result<(), Self::Error>;

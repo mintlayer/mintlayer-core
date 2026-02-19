@@ -32,7 +32,7 @@ use crate::chain::{
         },
         sighash::sighashtype::SigHashType,
     },
-    Destination, SignedTransaction, Transaction, TxOutput,
+    Destination, SignedTransaction, Transaction, TxInput, TxOutput,
 };
 
 /// Wallet errors
@@ -232,8 +232,22 @@ pub fn tx_size_with_num_inputs_and_outputs(
     Ok(*EMPTY_SIGNED_TX_SIZE + output_compact_size_diff + (input_compact_size_diff * 2))
 }
 
-pub fn outputs_encoded_size(outputs: &[TxOutput]) -> usize {
-    outputs.iter().map(serialization::Encode::encoded_size).sum()
+pub fn outputs_encoded_size<'a>(outputs: impl IntoIterator<Item = &'a TxOutput>) -> usize {
+    outputs.into_iter().map(serialization::Encode::encoded_size).sum()
+}
+
+pub fn inputs_encoded_size<'a>(inputs: impl IntoIterator<Item = &'a TxInput>) -> usize {
+    inputs.into_iter().map(serialization::Encode::encoded_size).sum()
+}
+
+pub fn input_signatures_size_from_destinations<'a>(
+    destinations: impl IntoIterator<Item = &'a Destination>,
+    dest_info_provider: Option<&dyn DestinationInfoProvider>,
+) -> Result<usize, SizeEstimationError> {
+    destinations
+        .into_iter()
+        .map(|dest| input_signature_size_from_destination(dest, dest_info_provider))
+        .sum()
 }
 
 fn get_tx_output_destination(txo: &TxOutput) -> Option<&Destination> {
