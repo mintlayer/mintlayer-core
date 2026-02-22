@@ -387,7 +387,16 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
         coin_input_amounts.iter().fold(Amount::ZERO, |acc, a| acc.add(*a).unwrap());
 
     let decommissioned_pool_id = PoolId::new(H256::random_using(rng));
-    let decommissioned_pool_balance = Amount::from_atoms(rng.gen_range(100..200));
+    let decommissioned_pool_balance = Amount::from_atoms(
+        rng.gen_range(100..200)
+            + chain_config.fungible_token_issuance_fee().into_atoms()
+            + chain_config.nft_issuance_fee(tx_block_height).into_atoms() * 2
+            + chain_config.token_supply_change_fee(tx_block_height).into_atoms() * 3
+            + chain_config.token_freeze_fee(tx_block_height).into_atoms() * 2
+            + chain_config.token_change_authority_fee(tx_block_height).into_atoms()
+            + chain_config.data_deposit_fee(tx_block_height).into_atoms(),
+    );
+
     let decommissioned_pool_data = PoolData {
         utxo_outpoint: UtxoOutPoint::new(Id::<Transaction>::random_using(rng).into(), 1),
         creation_block: BlockInfo {
@@ -645,14 +654,17 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
         ]);
     }
 
+    let token_max_fill = std::cmp::min(
+        filled_order2_info.initially_asked.amount(),
+        token_mint_amount,
+    );
+    let token_amount_to_fill = rng.gen_range(1..token_max_fill.into_atoms());
     acc_inputs.extend([
         TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder(concluded_order2_id)),
         TxInput::OrderAccountCommand(OrderAccountCommand::FreezeOrder(frozen_order_id)),
         TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(
             filled_order2_id,
-            Amount::from_atoms(
-                rng.gen_range(1..filled_order2_info.initially_asked.amount().into_atoms()),
-            ),
+            Amount::from_atoms(token_amount_to_fill),
         )),
     ]);
 
@@ -726,7 +738,9 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
         TxOutput::Transfer(
             OutputValue::TokenV1(
                 token_id,
-                Amount::from_atoms(rng.gen_range(1..=token_mint_amount.into_atoms())),
+                Amount::from_atoms(
+                    rng.gen_range(1..=(token_mint_amount.into_atoms() - token_amount_to_fill)),
+                ),
             ),
             Destination::PublicKey(dest_pub.clone()),
         ),
