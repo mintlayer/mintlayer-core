@@ -53,6 +53,7 @@ use types::{
     SeedWithPassPhrase, SignatureStats, TransactionToInspect, ValidatedSignatures, WalletInfo,
     WalletTypeArgsComputed,
 };
+use utils::set_flag::SetFlag;
 use wallet_storage::DefaultBackend;
 
 use read::ReadOnlyController;
@@ -207,7 +208,7 @@ pub struct Controller<T, W, B: storage::Backend + 'static> {
     wallet_events: W,
 
     mempool_events: MempoolEvents,
-    finished_initial_sync: bool,
+    finished_initial_sync: SetFlag,
 }
 
 impl<T, WalletEvents, B: storage::Backend> std::fmt::Debug for Controller<T, WalletEvents, B> {
@@ -244,7 +245,7 @@ where
             staking_started: BTreeSet::new(),
             wallet_events,
             mempool_events,
-            finished_initial_sync: false,
+            finished_initial_sync: SetFlag::new(),
         };
 
         log::info!("Syncing the wallet...");
@@ -270,7 +271,7 @@ where
             staking_started: BTreeSet::new(),
             wallet_events,
             mempool_events,
-            finished_initial_sync: false,
+            finished_initial_sync: SetFlag::new(),
         })
     }
 
@@ -1364,7 +1365,7 @@ where
             }
 
             // after the first successful sync to the tip fetch all mempool transactions
-            if !self.finished_initial_sync {
+            if !self.finished_initial_sync.test() {
                 let txs = self.rpc_client.mempool_get_transactions().await;
 
                 match txs {
@@ -1372,13 +1373,13 @@ where
                         if let Err(err) =
                             self.wallet.add_mempool_transactions(&txs, &self.wallet_events)
                         {
-                            log::error!("Txs from mempool failed to be added in the wallet because of an error: {err}");
+                            log::error!("Error adding mempool transactions: {err}");
                         } else {
-                            self.finished_initial_sync = true;
+                            self.finished_initial_sync.set();
                         }
                     }
                     Err(err) => {
-                        log::error!("Failed to fetch all transactios from the mempool: {err}");
+                        log::error!("Failed to fetch all transactions from the mempool: {err}");
                         tokio::time::sleep(ERROR_DELAY).await;
                         continue;
                     }

@@ -104,21 +104,10 @@ class WalletMempoolEvents(BitcoinTestFramework):
             tip_id = node.chainstate_best_block_id()
 
             # Submit a valid transaction
-            token_fee = 1000
-            coins_to_send = 1
-            token_fee_output = {
-                "Transfer": [
-                    {"Coin": token_fee * ATOMS_PER_COIN},
-                    {
-                        "PublicKey": {
-                            "key": {"Secp256k1Schnorr": {"pubkey_data": pub_key_bytes}}
-                        }
-                    },
-                ],
-            }
+            total_coins = 100
             tx_fee_output = {
                 "Transfer": [
-                    {"Coin": coins_to_send * ATOMS_PER_COIN},
+                    {"Coin": total_coins * ATOMS_PER_COIN},
                     {
                         "PublicKey": {
                             "key": {"Secp256k1Schnorr": {"pubkey_data": pub_key_bytes}}
@@ -126,9 +115,7 @@ class WalletMempoolEvents(BitcoinTestFramework):
                     },
                 ],
             }
-            encoded_tx, tx_id = make_tx(
-                [reward_input(tip_id)], [token_fee_output] + [tx_fee_output] * 2, 0
-            )
+            encoded_tx, tx_id = make_tx([reward_input(tip_id)], [tx_fee_output], 0)
 
             self.log.debug(f"Encoded transaction {tx_id}: {encoded_tx}")
 
@@ -148,11 +135,11 @@ class WalletMempoolEvents(BitcoinTestFramework):
 
             # both wallets have the same balances after syncing the new block
             assert_in(
-                f"Coins amount: {coins_to_send * 2 + token_fee}",
+                f"Coins amount: {total_coins}",
                 await wallet.get_balance(),
             )
             assert_in(
-                f"Coins amount: {coins_to_send * 2 + token_fee}",
+                f"Coins amount: {total_coins}",
                 await wallet2.get_balance(),
             )
 
