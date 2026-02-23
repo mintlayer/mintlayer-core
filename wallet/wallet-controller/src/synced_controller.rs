@@ -1576,7 +1576,7 @@ where
             &UnconfirmedTokenInfo,
         ) -> WalletResult<R>,
     {
-        let token_freezable_info = self.unconfirmed_token_info(token_info)?;
+        let unconfirmed_token_info = self.unconfirmed_token_info(token_info)?;
 
         let (current_fee_rate, consolidate_fee_rate) =
             self.get_current_and_consolidation_fee_rate().await?;
@@ -1586,7 +1586,7 @@ where
             consolidate_fee_rate,
             self.wallet,
             self.account_index,
-            &token_freezable_info,
+            &unconfirmed_token_info,
         )
         .await
         .map_err(ControllerError::WalletError)?;
@@ -1625,7 +1625,7 @@ where
         &mut self,
         token_info: RPCTokenInfo,
     ) -> Result<UnconfirmedTokenInfo, ControllerError<T>> {
-        let token_freezable_info = match token_info {
+        let unconfirmed_token_info = match token_info {
             RPCTokenInfo::FungibleToken(token_info) => {
                 self.wallet.get_token_unconfirmed_info(self.account_index, token_info)?
             }
@@ -1633,7 +1633,7 @@ where
                 UnconfirmedTokenInfo::NonFungibleToken(info.token_id, info.as_ref().into())
             }
         };
-        Ok(token_freezable_info)
+        Ok(unconfirmed_token_info)
     }
 
     /// Similar to create_and_send_tx but some transactions also create an ID

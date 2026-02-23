@@ -13,86 +13,93 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::{BTreeMap, BTreeSet};
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
-use crate::account::{
-    transaction_list::TransactionList, CoinSelectionAlgo, CurrentFeeRate, DelegationData,
-    OrderData, OutputCacheInconsistencyError, PoolData, TxInfo, UnconfirmedTokenInfo,
-    UtxoSelectorError,
+use common::{
+    address::{pubkeyhash::PublicKeyHash, Address, AddressError, RpcAddress},
+    chain::{
+        block::timestamp::BlockTimestamp,
+        classic_multisig::ClassicMultisigChallenge,
+        htlc::HashedTimelockContract,
+        make_delegation_id, make_order_id, make_token_id,
+        output_value::OutputValue,
+        signature::{
+            inputsig::arbitrary_message::{ArbitraryMessageSignature, SignArbitraryMessageError},
+            DestinationSigError,
+        },
+        tokens::{IsTokenUnfreezable, Metadata, RPCFungibleTokenInfo, TokenId, TokenIssuance},
+        AccountCommand, AccountOutPoint, Block, ChainConfig, Currency, DelegationId, Destination,
+        GenBlock, IdCreationError, OrderAccountCommand, OrderId, OutPointSourceId, PoolId,
+        RpcOrderInfo, SignedTransaction, SignedTransactionIntent, Transaction,
+        TransactionCreationError, TxInput, TxOutput, UtxoOutPoint,
+    },
+    primitives::{
+        id::{hash_encoded, WithId},
+        Amount, BlockHeight, Id, H256,
+    },
+    size_estimation::SizeEstimationError,
 };
-use crate::destination_getters::HtlcSpendingCondition;
-use crate::key_chain::{
-    make_account_path, make_path_to_vrf_key, AccountKeyChainImplSoftware, KeyChainError,
-    MasterKeyChain, LOOKAHEAD_SIZE, VRF_INDEX,
-};
-use crate::send_request::{
-    make_issue_token_outputs, IssueNftArguments, SelectedInputs, StakePoolCreationArguments,
-};
-#[cfg(feature = "trezor")]
-use crate::signer::trezor_signer::{FoundDevice, TrezorError};
-
-use crate::signer::{Signer, SignerError, SignerProvider};
-use crate::wallet_events::{WalletEvents, WalletEventsNoOp};
-use crate::{Account, SendRequest};
-pub use bip39::{Language, Mnemonic};
-use common::address::pubkeyhash::PublicKeyHash;
-use common::address::{Address, AddressError, RpcAddress};
-use common::chain::block::timestamp::BlockTimestamp;
-use common::chain::classic_multisig::ClassicMultisigChallenge;
-use common::chain::htlc::HashedTimelockContract;
-use common::chain::output_value::OutputValue;
-use common::chain::signature::inputsig::arbitrary_message::{
-    ArbitraryMessageSignature, SignArbitraryMessageError,
-};
-use common::chain::signature::DestinationSigError;
-use common::chain::tokens::{
-    IsTokenUnfreezable, Metadata, RPCFungibleTokenInfo, TokenId, TokenIssuance,
-};
-use common::chain::{
-    make_delegation_id, make_order_id, make_token_id, AccountCommand, AccountOutPoint, Block,
-    ChainConfig, Currency, DelegationId, Destination, GenBlock, IdCreationError,
-    OrderAccountCommand, OrderId, OutPointSourceId, PoolId, RpcOrderInfo, SignedTransaction,
-    SignedTransactionIntent, Transaction, TransactionCreationError, TxInput, TxOutput,
-    UtxoOutPoint,
-};
-use common::primitives::id::{hash_encoded, WithId};
-use common::primitives::{Amount, BlockHeight, Id, H256};
-use common::size_estimation::SizeEstimationError;
 use consensus::PoSGenerateBlockInputData;
-use crypto::key::extended::ExtendedPublicKey;
-use crypto::key::hdkd::child_number::ChildNumber;
-use crypto::key::hdkd::derivable::Derivable;
-use crypto::key::hdkd::u31::U31;
-use crypto::key::{PrivateKey, PublicKey};
-use crypto::vrf::VRFPublicKey;
+use crypto::{
+    key::{
+        extended::ExtendedPublicKey,
+        hdkd::{child_number::ChildNumber, derivable::Derivable, u31::U31},
+        PrivateKey, PublicKey,
+    },
+    vrf::VRFPublicKey,
+};
 use mempool::FeeRate;
-use tx_verifier::error::TokenIssuanceError;
-use tx_verifier::{check_transaction, CheckTransactionError};
+use tx_verifier::{check_transaction, error::TokenIssuanceError, CheckTransactionError};
 use utils::{debug_panic_or_log, ensure};
-pub use wallet_storage::Error;
 use wallet_storage::{
     DefaultBackend, Store, StoreTxRo, StoreTxRw, StoreTxRwUnlocked, TransactionRoLocked,
     TransactionRwLocked, TransactionRwUnlocked, Transactional, WalletStorageReadLocked,
     WalletStorageReadUnlocked, WalletStorageWriteLocked, WalletStorageWriteUnlocked,
 };
-use wallet_types::account_info::{StandaloneAddressDetails, StandaloneAddresses};
-use wallet_types::chain_info::ChainInfo;
-use wallet_types::hw_data::HardwareWalletFullInfo;
-use wallet_types::partially_signed_transaction::{
-    PartiallySignedTransaction, PartiallySignedTransactionError, PoolAdditionalInfo,
-    PtxAdditionalInfo, TokenAdditionalInfo, TokensAdditionalInfo, TxAdditionalInfo,
-};
-use wallet_types::seed_phrase::SerializableSeedPhrase;
-use wallet_types::signature_status::SignatureStatus;
-use wallet_types::utxo_types::{UtxoStates, UtxoTypes};
-use wallet_types::wallet_tx::{TxData, TxState};
-use wallet_types::wallet_type::{WalletControllerMode, WalletType};
-use wallet_types::with_locked::WithLocked;
 use wallet_types::{
+    account_info::{StandaloneAddressDetails, StandaloneAddresses},
+    chain_info::ChainInfo,
+    hw_data::HardwareWalletFullInfo,
+    partially_signed_transaction::{
+        PartiallySignedTransaction, PartiallySignedTransactionError, PoolAdditionalInfo,
+        PtxAdditionalInfo, TokenAdditionalInfo, TokensAdditionalInfo, TxAdditionalInfo,
+    },
+    seed_phrase::SerializableSeedPhrase,
+    signature_status::SignatureStatus,
+    utxo_types::{UtxoStates, UtxoTypes},
+    wallet_tx::{TxData, TxState},
+    wallet_type::{WalletControllerMode, WalletType},
+    with_locked::WithLocked,
     AccountId, AccountKeyPurposeId, BlockInfo, KeyPurpose, KeychainUsageState, SignedTxWithFees,
 };
+
+#[cfg(feature = "trezor")]
+use crate::signer::trezor_signer::{FoundDevice, TrezorError};
+use crate::{
+    account::{
+        transaction_list::TransactionList, CoinSelectionAlgo, CurrentFeeRate, DelegationData,
+        OrderData, OutputCacheInconsistencyError, PoolData, TxInfo, UnconfirmedTokenInfo,
+        UtxoSelectorError,
+    },
+    destination_getters::HtlcSpendingCondition,
+    key_chain::{
+        make_account_path, make_path_to_vrf_key, AccountKeyChainImplSoftware, KeyChainError,
+        MasterKeyChain, LOOKAHEAD_SIZE, VRF_INDEX,
+    },
+    send_request::{
+        make_issue_token_outputs, IssueNftArguments, SelectedInputs, StakePoolCreationArguments,
+    },
+    signer::{Signer, SignerError, SignerProvider},
+    wallet_events::{WalletEvents, WalletEventsNoOp},
+    Account, SendRequest,
+};
+
+pub use bip39::{Language, Mnemonic};
+pub use wallet_storage::Error;
 
 pub const WALLET_VERSION_UNINITIALIZED: u32 = 0;
 pub const WALLET_VERSION_V1: u32 = 1;
