@@ -125,7 +125,7 @@ impl NodeInterface for WalletHandlesClient {
     }
 
     async fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, Self::Error> {
-        let result = self.chainstate.call(move |this| this.get_block(block_id)).await??;
+        let result = self.chainstate.call(move |this| this.get_block(&block_id)).await??;
         Ok(result)
     }
 
@@ -165,7 +165,7 @@ impl NodeInterface for WalletHandlesClient {
     ) -> Result<Option<Id<GenBlock>>, Self::Error> {
         let result = self
             .chainstate
-            .call(move |this| this.get_block_id_from_height(&height))
+            .call(move |this| this.get_block_id_from_height(height))
             .await??;
         Ok(result)
     }
@@ -183,15 +183,17 @@ impl NodeInterface for WalletHandlesClient {
     }
 
     async fn get_stake_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Self::Error> {
-        let result =
-            self.chainstate.call(move |this| this.get_stake_pool_balance(pool_id)).await??;
+        let result = self
+            .chainstate
+            .call(move |this| this.get_stake_pool_balance(&pool_id))
+            .await??;
         Ok(result)
     }
 
     async fn get_staker_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Self::Error> {
         let result = self
             .chainstate
-            .call(move |this| this.get_stake_pool_data(pool_id))
+            .call(move |this| this.get_stake_pool_data(&pool_id))
             .await??
             .map(|data| data.staker_balance())
             .transpose()
@@ -209,7 +211,7 @@ impl NodeInterface for WalletHandlesClient {
     ) -> Result<Option<Destination>, Self::Error> {
         let result = self
             .chainstate
-            .call(move |this| this.get_stake_pool_data(pool_id))
+            .call(move |this| this.get_stake_pool_data(&pool_id))
             .await??
             .map(|data| data.decommission_destination().clone());
         Ok(result)
@@ -222,7 +224,7 @@ impl NodeInterface for WalletHandlesClient {
     ) -> Result<Option<Amount>, Self::Error> {
         let result = self
             .chainstate
-            .call(move |this| this.get_stake_pool_delegation_share(pool_id, delegation_id))
+            .call(move |this| this.get_stake_pool_delegation_share(&pool_id, &delegation_id))
             .await??;
         Ok(result)
     }
@@ -230,7 +232,7 @@ impl NodeInterface for WalletHandlesClient {
     async fn get_token_info(&self, token_id: TokenId) -> Result<Option<RPCTokenInfo>, Self::Error> {
         let result = self
             .chainstate
-            .call(move |this| this.get_token_info_for_rpc(token_id))
+            .call(move |this| this.get_token_info_for_rpc(&token_id))
             .await??;
         Ok(result)
     }

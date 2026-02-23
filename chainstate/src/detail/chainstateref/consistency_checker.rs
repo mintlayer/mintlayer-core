@@ -137,7 +137,7 @@ impl<'a, DbTx: BlockchainStorageRead> ConsistencyChecker<'a, DbTx> {
             // in the block itself.
             if block_index.is_persisted() {
                 let block =
-                    self.db_tx.get_block(*block_id)?.expect("The block is known to be present");
+                    self.db_tx.get_block(block_id)?.expect("The block is known to be present");
                 let calculated_block_id = block.get_id();
                 assert_eq!(
                     calculated_block_id, *block_id,

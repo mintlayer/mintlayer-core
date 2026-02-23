@@ -930,11 +930,11 @@ user-id = 55123
 user-login = "rust-lang-owner"
 
 [[publisher.keccak]]
-version = "0.1.5"
-when = "2024-01-12"
-user-id = 267
-user-login = "tarcieri"
-user-name = "Tony Arcieri"
+version = "0.1.6"
+when = "2026-02-13"
+user-id = 5059
+user-login = "newpavlov"
+user-name = "Artyom Pavlov"
 
 [[publisher.libc]]
 version = "0.2.177"

@@ -845,7 +845,7 @@ fn create_pool_and_delegation_and_delegate_same_block(#[case] seed: Seed) {
             .unwrap();
 
         assert_eq!(
-            tf.chainstate.get_stake_delegation_balance(delegation_id).unwrap(),
+            tf.chainstate.get_stake_delegation_balance(&delegation_id).unwrap(),
             Some(amount_to_stake)
         );
     });

@@ -45,7 +45,7 @@ use common::{
     time_getter::TimeGetter,
 };
 use logging::log;
-use mempool::{event::TransactionProcessed, MempoolConfig, MempoolHandle};
+use mempool::{event::TransactionProcessed, MempoolConfig, MempoolHandle, MempoolInit};
 use networking::transport::TcpTransportSocket;
 use p2p_test_utils::{expect_future_val, expect_no_recv, expect_recv, SHORT_TIMEOUT};
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
@@ -182,7 +182,7 @@ impl TestNode {
 
     pub async fn get_block(&self, block_id: Id<Block>) -> Option<Block> {
         self.chainstate_handle
-            .call(move |cs| cs.get_block(block_id))
+            .call(move |cs| cs.get_block(&block_id))
             .await
             .unwrap()
             .unwrap()
@@ -608,13 +608,14 @@ impl TestNodeBuilder {
         }
         let chainstate = manager.add_subsystem("p2p-sync-test-chainstate", chainstate);
 
-        let mempool = mempool::make_mempool(
+        let mempool_init = MempoolInit::new(
             Arc::clone(&chain_config),
             mempool_config,
             chainstate.clone(),
             time_getter.clone(),
         );
-        let mempool = manager.add_custom_subsystem("p2p-sync-test-mempool", |h| mempool.init(h));
+        let mempool =
+            manager.add_custom_subsystem("p2p-sync-test-mempool", |h| mempool_init.init(h));
 
         let manager_handle = manager.main_in_task();
 
@@ -925,10 +926,10 @@ pub async fn make_new_top_blocks_return_headers(
                 .into_int()
                 .saturating_sub(start_distance_from_top);
             let start_block_id =
-                this.get_block_id_from_height(&start_height.into()).unwrap().unwrap();
+                this.get_block_id_from_height(start_height.into()).unwrap().unwrap();
             let mut last_block = match start_block_id.classify(this.get_chain_config()) {
                 common::chain::GenBlockId::Genesis(_) => None,
-                common::chain::GenBlockId::Block(id) => this.get_block(id).unwrap(),
+                common::chain::GenBlockId::Block(id) => this.get_block(&id).unwrap(),
             };
 
             for _ in 0..count {

@@ -326,8 +326,8 @@ fn get_cur_balances(tf: &TestFramework, pool_ids: &[PoolId]) -> BTreeMap<PoolId,
     let mut result = BTreeMap::new();
 
     for pool_id in pool_ids {
-        let pool_balance = tf.chainstate.get_stake_pool_balance(*pool_id).unwrap();
-        let pool_data = tf.chainstate.get_stake_pool_data(*pool_id).unwrap();
+        let pool_balance = tf.chainstate.get_stake_pool_balance(pool_id).unwrap();
+        let pool_data = tf.chainstate.get_stake_pool_data(pool_id).unwrap();
 
         match (pool_balance, pool_data) {
             (Some(balance), Some(data)) => {

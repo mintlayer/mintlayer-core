@@ -215,7 +215,7 @@ impl NodeInterface for MockNode {
         unreachable!()
     }
     async fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, Self::Error> {
-        Ok(self.tf.lock().unwrap().chainstate.get_block(block_id).unwrap())
+        Ok(self.tf.lock().unwrap().chainstate.get_block(&block_id).unwrap())
     }
     async fn get_mainchain_blocks(
         &self,
@@ -251,7 +251,7 @@ impl NodeInterface for MockNode {
         &self,
         height: BlockHeight,
     ) -> Result<Option<Id<GenBlock>>, Self::Error> {
-        Ok(self.tf.lock().unwrap().chainstate.get_block_id_from_height(&height).unwrap())
+        Ok(self.tf.lock().unwrap().chainstate.get_block_id_from_height(height).unwrap())
     }
     async fn get_last_common_ancestor(
         &self,
@@ -453,7 +453,7 @@ impl NodeInterface for MockNode {
 
 fn create_chain(node: &MockNode, rng: &mut (impl Rng + CryptoRng), parent: u64, count: usize) {
     let mut tf = node.tf.lock().unwrap();
-    let parent_id = tf.chainstate.get_block_id_from_height(&parent.into()).unwrap().unwrap();
+    let parent_id = tf.chainstate.get_block_id_from_height(parent.into()).unwrap().unwrap();
     tf.create_chain(&parent_id, count, rng).unwrap();
 }
 

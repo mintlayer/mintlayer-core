@@ -251,7 +251,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     #[log_error]
     pub fn get_block_id_by_height(
         &self,
-        height: &BlockHeight,
+        height: BlockHeight,
     ) -> Result<Option<Id<GenBlock>>, PropertyQueryError> {
         self.db_tx.get_block_id_by_height(height).map_err(PropertyQueryError::from)
     }
@@ -259,26 +259,26 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     #[log_error]
     pub fn get_existing_block_id_by_height(
         &self,
-        height: &BlockHeight,
+        height: BlockHeight,
     ) -> Result<Id<GenBlock>, PropertyQueryError> {
         self.get_block_id_by_height(height)?
-            .ok_or(PropertyQueryError::BlockForHeightNotFound(*height))
+            .ok_or(PropertyQueryError::BlockForHeightNotFound(height))
     }
 
     #[log_error]
-    pub fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, PropertyQueryError> {
+    pub fn get_block(&self, block_id: &Id<Block>) -> Result<Option<Block>, PropertyQueryError> {
         self.db_tx.get_block(block_id).map_err(PropertyQueryError::from)
     }
 
     #[log_error]
-    pub fn block_exists(&self, block_id: Id<Block>) -> Result<bool, PropertyQueryError> {
+    pub fn block_exists(&self, block_id: &Id<Block>) -> Result<bool, PropertyQueryError> {
         self.db_tx.block_exists(block_id).map_err(PropertyQueryError::from)
     }
 
     #[log_error]
     pub fn get_block_header(
         &self,
-        block_id: Id<Block>,
+        block_id: &Id<Block>,
     ) -> Result<Option<SignedBlockHeader>, PropertyQueryError> {
         Ok(self.db_tx.get_block_header(block_id)?)
     }
@@ -383,7 +383,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     #[log_error]
     pub fn get_header_from_height(
         &self,
-        height: &BlockHeight,
+        height: BlockHeight,
     ) -> Result<Option<SignedBlockHeader>, PropertyQueryError> {
         let id = self.get_existing_block_id_by_height(height)?;
         let id = id
@@ -413,7 +413,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     #[log_error]
     pub fn get_account_nonce_count(
         &self,
-        account: AccountType,
+        account: &AccountType,
     ) -> Result<Option<AccountNonce>, PropertyQueryError> {
         self.db_tx.get_account_nonce_count(account).map_err(PropertyQueryError::from)
     }
@@ -430,7 +430,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         };
 
         if let Some(block_index) = self.get_block_index(&id)? {
-            let mainchain_block_id = self.get_block_id_by_height(&block_index.block_height())?;
+            let mainchain_block_id = self.get_block_id_by_height(block_index.block_height())?;
 
             // Note: this function may be called when the chain is still empty, so we don't unwrap
             // mainchain_block_id and wrap gen_id instead.
@@ -887,7 +887,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         &self,
         block_index: &BlockIndex,
     ) -> Result<Option<Block>, chainstate_storage::Error> {
-        self.db_tx.get_block(*block_index.block_id())
+        self.db_tx.get_block(block_index.block_id())
     }
 
     #[log_error]
@@ -958,7 +958,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         let id_from_height = |block_height: u64| -> Result<Id<Block>, PropertyQueryError> {
             let block_height: BlockHeight = block_height.into();
             let block_id = self
-                .get_block_id_by_height(&block_height)?
+                .get_block_id_by_height(block_height)?
                 .expect("Since block_height is >= best_height, this must exist");
             let block_id = block_id
                 .classify(self.chain_config)
@@ -1129,7 +1129,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         };
 
         let lowest_block_id = self
-            .get_existing_block_id_by_height(&min_height)
+            .get_existing_block_id_by_height(min_height)
             .map_err(BlockError::PropertyQueryError)?;
 
         self.disconnect_tip_in_memory_until(
@@ -1340,7 +1340,7 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
         self.connect_transactions(block_index, &block)?;
 
         self.db_tx.set_block_id_at_height(
-            &block_index.block_height(),
+            block_index.block_height(),
             &(*block_index.block_id()).into(),
         )?;
         self.db_tx.set_best_block_id(&(*block_index.block_id()).into())?;
@@ -1384,7 +1384,7 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
         self.disconnect_transactions(&block.into())?;
         self.db_tx.set_best_block_id(block_index.prev_block_id())?;
         // Disconnect block
-        self.db_tx.del_block_id_at_height(&block_index.block_height())?;
+        self.db_tx.del_block_id_at_height(block_index.block_height())?;
 
         let prev_block_index = self
             .get_previous_block_index(&block_index)
@@ -1415,7 +1415,7 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
 
     #[log_error]
     pub fn persist_block(&mut self, block: &WithId<Block>) -> Result<(), BlockError> {
-        if self.db_tx.block_exists(block.get_id()).map_err(BlockError::from)? {
+        if self.db_tx.block_exists(&block.get_id()).map_err(BlockError::from)? {
             return Err(BlockError::BlockAlreadyExists(block.get_id()));
         }
 
@@ -1450,7 +1450,7 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
                 "Trying to delete a block index for a persisted block {block_id}"
             );
 
-            self.db_tx.del_block_index(*block_id)?;
+            self.db_tx.del_block_index(block_id)?;
         }
         Ok(())
     }

@@ -206,7 +206,7 @@ fn create_chain(
     count: usize,
 ) {
     let mut tf = node.tf.lock().unwrap();
-    let parent_id = tf.chainstate.get_block_id_from_height(&parent.into()).unwrap().unwrap();
+    let parent_id = tf.chainstate.get_block_id_from_height(parent.into()).unwrap().unwrap();
     tf.create_chain(&parent_id, count, rng).unwrap();
 }
 
@@ -1077,7 +1077,7 @@ async fn sync_and_compare(
         .block_height();
     local_state.scan_blocks(block_height, vec![block]).await.unwrap();
 
-    let node_data = tf.chainstate.get_stake_pool_data(pool_id).unwrap().unwrap();
+    let node_data = tf.chainstate.get_stake_pool_data(&pool_id).unwrap().unwrap();
 
     let tx = local_state.storage().transaction_ro().await.unwrap();
     let scanner_data = tx.get_pool_data(pool_id).await.unwrap().unwrap();
@@ -1101,7 +1101,7 @@ async fn sync_and_compare(
 
     let node_delegations = tf
         .chainstate
-        .get_stake_pool_delegations_shares(pool_id)
+        .get_stake_pool_delegations_shares(&pool_id)
         .unwrap()
         .unwrap_or_default();
 

@@ -95,7 +95,7 @@ fn store_coin(#[case] seed: Seed) {
         .into();
 
         assert_eq!(
-            *db_tx.get_undo_data(block_id).expect("ok").expect("some").tx_undos(),
+            *db_tx.get_undo_data(&block_id).expect("ok").expect("some").tx_undos(),
             expected_undo_utxo_data
         );
     });
@@ -351,11 +351,11 @@ fn reorg_store_coin(#[case] seed: Seed) {
 
         // utxo from block_1 was deleted
         assert_eq!(db_tx.get_utxo(&tx_1_utxo_outpoint).expect("ok"), None);
-        assert_eq!(db_tx.get_undo_data(block_1_id).expect("ok"), None);
+        assert_eq!(db_tx.get_undo_data(&block_1_id).expect("ok"), None);
         // utxo from block_2 was deleted
         assert_eq!(db_tx.get_utxo(&tx_2_utxo_outpoint).expect("ok"), None);
         assert_eq!(
-            db_tx.get_undo_data(block_2_id).expect("ok").expect("some").tx_undos().len(),
+            db_tx.get_undo_data(&block_2_id).expect("ok").expect("some").tx_undos().len(),
             1
         );
         // utxo from block_3 is stored
@@ -364,7 +364,7 @@ fn reorg_store_coin(#[case] seed: Seed) {
             &tx_3_output
         );
         assert_eq!(
-            db_tx.get_undo_data(block_3_id).expect("ok").expect("some").tx_undos().len(),
+            db_tx.get_undo_data(&block_3_id).expect("ok").expect("some").tx_undos().len(),
             1
         );
     });
@@ -477,11 +477,11 @@ fn reorg_store_coin_disposable(#[case] seed: Seed) {
 
         // utxo from block_1 was deleted
         assert_eq!(db_tx.get_utxo(&tx_1_utxo_outpoint).expect("ok"), None);
-        assert_eq!(db_tx.get_undo_data(block_1_id).expect("ok"), None);
+        assert_eq!(db_tx.get_undo_data(&block_1_id).expect("ok"), None);
         // utxo from block_2 was deleted
         assert_eq!(db_tx.get_utxo(&tx_2_utxo_outpoint).expect("ok"), None);
         assert_eq!(
-            db_tx.get_undo_data(block_2_id).expect("ok").expect("some").tx_undos().len(),
+            db_tx.get_undo_data(&block_2_id).expect("ok").expect("some").tx_undos().len(),
             1
         );
         // utxo from block_3 is stored
@@ -490,7 +490,7 @@ fn reorg_store_coin_disposable(#[case] seed: Seed) {
             &tx_3_output
         );
         assert_eq!(
-            db_tx.get_undo_data(block_3_id).expect("ok").expect("some").tx_undos().len(),
+            db_tx.get_undo_data(&block_3_id).expect("ok").expect("some").tx_undos().len(),
             1
         );
     });

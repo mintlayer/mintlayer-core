@@ -1444,12 +1444,12 @@ impl<'a> RandomTxMaker<'a> {
             .unwrap();
         let utxo_block_id = self
             .chainstate
-            .get_block_id_from_height(&utxo_block_height)
+            .get_block_id_from_height(utxo_block_height)
             .unwrap()
             .unwrap()
             .classify(self.chainstate.get_chain_config());
 
-        let time_of_tx = match utxo_block_id {
+        let time_of_tx = match &utxo_block_id {
             GenBlockId::Block(id) => {
                 self.chainstate.get_block_header(id).unwrap().unwrap().timestamp()
             }

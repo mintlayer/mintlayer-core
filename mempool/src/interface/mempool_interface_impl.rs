@@ -45,7 +45,7 @@ pub struct MempoolInit {
 }
 
 impl MempoolInit {
-    fn new(
+    pub fn new(
         chain_config: Arc<ChainConfig>,
         mempool_config: MempoolConfig,
         chainstate_handle: chainstate::ChainstateHandle,
@@ -211,14 +211,4 @@ impl subsystem::Subsystem for Mempool {
     fn has_background_work(&self) -> bool {
         self.has_work()
     }
-}
-
-/// Mempool constructor
-pub fn make_mempool(
-    chain_config: Arc<ChainConfig>,
-    mempool_config: MempoolConfig,
-    chainstate_handle: chainstate::ChainstateHandle,
-    time_getter: TimeGetter,
-) -> MempoolInit {
-    MempoolInit::new(chain_config, mempool_config, chainstate_handle, time_getter)
 }

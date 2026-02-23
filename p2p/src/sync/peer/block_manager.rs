@@ -498,7 +498,7 @@ where
                             // Note that mainchain could have become shorter due to blocks
                             // invalidation, so no block at that height may be present at all.
                             if let Some(mainchain_block_id_at_height) =
-                                c.get_block_id_from_height(&best_sent_block.block_height())?
+                                c.get_block_id_from_height(best_sent_block.block_height())?
                             {
                                 if &mainchain_block_id_at_height == best_sent_block.block_id() {
                                     return Err(P2pError::ProtocolError(
@@ -838,7 +838,7 @@ where
             .chainstate_handle
             .call(move |c| {
                 let index = c.get_block_index_for_persisted_block(&id);
-                let block = c.get_block(id);
+                let block = c.get_block(&id);
                 Ok((block, index))
             })
             .await?;

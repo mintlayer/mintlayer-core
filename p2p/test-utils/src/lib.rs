@@ -34,7 +34,7 @@ use common::{
     time_getter::TimeGetter,
 };
 use logging::log;
-use mempool::{MempoolConfig, MempoolHandle};
+use mempool::{MempoolConfig, MempoolHandle, MempoolInit};
 use subsystem::{ManagerJoinHandle, ShutdownTrigger};
 use test_utils::random::{CryptoRng, Rng};
 
@@ -87,13 +87,14 @@ pub fn start_subsystems_generic(
 
     let chainstate = manager.add_subsystem("p2p-test-chainstate", chainstate);
 
-    let mempool = mempool::make_mempool(
+    let mempool_init = MempoolInit::new(
         chain_config,
         mempool_config,
         chainstate.clone(),
         time_getter,
     );
-    let mempool = manager.add_custom_subsystem("p2p-test-mempool", |handle| mempool.init(handle));
+    let mempool =
+        manager.add_custom_subsystem("p2p-test-mempool", |handle| mempool_init.init(handle));
 
     let manager_handle = manager.main_in_task_in_tracing_span(tracing_span);
 

@@ -192,7 +192,7 @@ where
     #[tracing::instrument(skip_all, fields(height = %height))]
     fn get_block_id_from_height(
         &self,
-        height: &BlockHeight,
+        height: BlockHeight,
     ) -> Result<Option<Id<GenBlock>>, ChainstateError> {
         self.chainstate
             .query()
@@ -202,7 +202,7 @@ where
     }
 
     #[tracing::instrument(skip_all, fields(id = %block_id))]
-    fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, ChainstateError> {
+    fn get_block(&self, block_id: &Id<Block>) -> Result<Option<Block>, ChainstateError> {
         self.chainstate
             .query()
             .map_err(ChainstateError::from)?
@@ -226,7 +226,7 @@ where
     #[tracing::instrument(skip_all, fields(id = %block_id))]
     fn get_block_header(
         &self,
-        block_id: Id<Block>,
+        block_id: &Id<Block>,
     ) -> Result<Option<SignedBlockHeader>, ChainstateError> {
         self.chainstate
             .query()
@@ -518,7 +518,7 @@ where
     #[tracing::instrument(skip_all, fields(token_id = %token_id))]
     fn get_token_info_for_rpc(
         &self,
-        token_id: TokenId,
+        token_id: &TokenId,
     ) -> Result<Option<RPCTokenInfo>, ChainstateError> {
         self.chainstate
             .query()
@@ -542,12 +542,12 @@ where
     #[tracing::instrument(skip_all, fields(token_id = %token_id))]
     fn get_token_aux_data(
         &self,
-        token_id: TokenId,
+        token_id: &TokenId,
     ) -> Result<Option<TokenAuxiliaryData>, ChainstateError> {
         self.chainstate
             .query()
             .map_err(ChainstateError::from)?
-            .get_token_aux_data(&token_id)
+            .get_token_aux_data(token_id)
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
@@ -671,16 +671,16 @@ where
     }
 
     #[tracing::instrument(skip_all, fields(pool_id = %pool_id))]
-    fn stake_pool_exists(&self, pool_id: PoolId) -> Result<bool, ChainstateError> {
+    fn stake_pool_exists(&self, pool_id: &PoolId) -> Result<bool, ChainstateError> {
         self.get_stake_pool_data(pool_id).map(|v| v.is_some())
     }
 
     #[tracing::instrument(skip_all, fields(pool_id = %pool_id))]
-    fn get_stake_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, ChainstateError> {
+    fn get_stake_pool_balance(&self, pool_id: &PoolId) -> Result<Option<Amount>, ChainstateError> {
         self.chainstate
             .make_db_tx_ro()
             .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))?
-            .get_pool_balance(pool_id)
+            .get_pool_balance(*pool_id)
             .map_err(|e| ChainstateError::ProcessBlockError(e.into()))
     }
 
@@ -699,60 +699,60 @@ where
     }
 
     #[tracing::instrument(skip_all, fields(pool_id = %pool_id))]
-    fn get_stake_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, ChainstateError> {
+    fn get_stake_pool_data(&self, pool_id: &PoolId) -> Result<Option<PoolData>, ChainstateError> {
         self.chainstate
             .make_db_tx_ro()
             .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))?
-            .get_pool_data(pool_id)
+            .get_pool_data(*pool_id)
             .map_err(|e| ChainstateError::ProcessBlockError(e.into()))
     }
 
     #[tracing::instrument(skip_all, fields(pool_id = %pool_id))]
     fn get_stake_pool_delegations_shares(
         &self,
-        pool_id: PoolId,
+        pool_id: &PoolId,
     ) -> Result<Option<BTreeMap<DelegationId, Amount>>, ChainstateError> {
         self.chainstate
             .make_db_tx_ro()
             .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))?
-            .get_pool_delegations_shares(pool_id)
+            .get_pool_delegations_shares(*pool_id)
             .map_err(|e| ChainstateError::ProcessBlockError(e.into()))
     }
 
     #[tracing::instrument(skip_all, fields(delegation_id = %delegation_id))]
     fn get_stake_delegation_balance(
         &self,
-        delegation_id: DelegationId,
+        delegation_id: &DelegationId,
     ) -> Result<Option<Amount>, ChainstateError> {
         self.chainstate
             .make_db_tx_ro()
             .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))?
-            .get_delegation_balance(delegation_id)
+            .get_delegation_balance(*delegation_id)
             .map_err(|e| ChainstateError::ProcessBlockError(e.into()))
     }
 
     #[tracing::instrument(skip_all, fields(delegation_id = %delegation_id))]
     fn get_stake_delegation_data(
         &self,
-        delegation_id: DelegationId,
+        delegation_id: &DelegationId,
     ) -> Result<Option<DelegationData>, ChainstateError> {
         self.chainstate
             .make_db_tx_ro()
             .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))?
-            .get_delegation_data(delegation_id)
+            .get_delegation_data(*delegation_id)
             .map_err(|e| ChainstateError::ProcessBlockError(e.into()))
     }
 
     #[tracing::instrument(skip_all, fields(pool_id = %pool_id, delegation_id = %delegation_id))]
     fn get_stake_pool_delegation_share(
         &self,
-        pool_id: PoolId,
-        delegation_id: DelegationId,
+        pool_id: &PoolId,
+        delegation_id: &DelegationId,
     ) -> Result<Option<Amount>, ChainstateError> {
         self.chainstate
             .make_db_tx_ro()
             .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))?
-            .get_pool_delegation_share(pool_id, delegation_id)
+            .get_pool_delegation_share(*pool_id, *delegation_id)
             .map_err(|e| ChainstateError::ProcessBlockError(e.into()))
     }
 
@@ -779,7 +779,7 @@ where
     #[tracing::instrument(skip_all)]
     fn get_account_nonce_count(
         &self,
-        account: AccountType,
+        account: &AccountType,
     ) -> Result<Option<AccountNonce>, ChainstateError> {
         self.chainstate
             .make_db_tx_ro()
