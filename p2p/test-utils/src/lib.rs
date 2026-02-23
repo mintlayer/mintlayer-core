@@ -94,7 +94,7 @@ pub fn start_subsystems_generic(
         time_getter,
     );
     let mempool =
-        manager.add_custom_subsystem("p2p-test-mempool", |handle| mempool_init.init(handle));
+        manager.add_custom_subsystem("p2p-test-mempool", |handle, _| mempool_init.init(handle));
 
     let manager_handle = manager.main_in_task_in_tracing_span(tracing_span);
 

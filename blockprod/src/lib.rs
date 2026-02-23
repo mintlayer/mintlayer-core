@@ -297,7 +297,7 @@ mod tests {
             subsystem::Handle::clone(&chainstate),
             time_getter.clone(),
         );
-        let mempool = manager.add_custom_subsystem("mempool", |hdl| mempool_init.init(hdl));
+        let mempool = manager.add_custom_subsystem("mempool", |hdl, _| mempool_init.init(hdl));
 
         let mut p2p_config = test_p2p_config();
         p2p_config.bind_addresses = vec![SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0).into()];

@@ -17,17 +17,17 @@ use std::{panic, time::Duration};
 
 use futures::future::BoxFuture;
 use tokio::{
-    sync::{mpsc, oneshot},
+    sync::{mpsc, oneshot, watch},
     task::JoinHandle,
 };
 
 use logging::log;
 use utils::{
-    const_value::ConstValue, shallow_clone::ShallowClone, tokio_spawn_in_current_tracing_span,
-    tokio_spawn_in_tracing_span,
+    const_value::ConstValue, set_flag::SetFlag, shallow_clone::ShallowClone,
+    tokio_spawn_in_current_tracing_span, tokio_spawn_in_tracing_span,
 };
 
-use crate::{task, Handle, ManagerConfig, SubmitOnlyHandle, Subsystem};
+use crate::{task, wrappers, Handle, ManagerConfig, SubmitOnlyHandle, Subsystem};
 
 use super::shutdown_signal::shutdown_signal;
 
@@ -41,11 +41,25 @@ pub struct Manager {
     // Manager configuration
     config: ConstValue<ManagerConfig>,
 
-    // Used by a subsystem to notify the manager it is shutting down. This is taken as a command
-    // for all subsystems to shut down. Shutdown completion is detected by all senders having closed
-    // this channel.
-    shutting_down_tx: mpsc::UnboundedSender<()>,
-    shutting_down_rx: mpsc::UnboundedReceiver<()>,
+    // The channel through which the shutdown may be initiated.
+    // Its sender is exposed to external callers via `ShutdownTrigger` and also passed to each
+    // subsystem task as the "task_shut_down_tx" parameter, so that when the subsystem is shut down
+    // for any reason (including a panic), the general shutdown is initiated as well.
+    shutdown_trigger_tx: mpsc::UnboundedSender<()>,
+    shutdown_trigger_rx: mpsc::UnboundedReceiver<()>,
+
+    // A watch channel (a shared flag) through which the manager can notify the actual subsystems
+    // that the general shutdown has been initiated (so that they can abort long-running blocking
+    // calls, for example).
+    // Note:
+    // 1) We can't re-use subsystem's own "task shutdown channel" (whose receiver is held
+    // in `SubsystemData`) for the purpose of blocking calls cancellation, because the blocking call
+    // may need to be cancelled before this particular subsystem's shutdown has been initiated
+    // (e.g. if another subsystem that is shut down earlier needs this one to unblock first).
+    // 2) We could technically "combine" `shutdown_trigger` and `shutdown_initiated` into one
+    // channel, but this would probably complicate things instead of simplifying them.
+    shutdown_initiated_tx: watch::Sender<SetFlag>,
+    shutdown_initiated_rx: watch::Receiver<SetFlag>,
 
     // List of subsystem tasks
     subsystems: Vec<SubsystemData<BoxFuture<'static, ()>>>,
@@ -60,13 +74,17 @@ impl Manager {
     /// Initialize a new subsystem manager.
     pub fn new_with_config(config: ManagerConfig) -> Self {
         log::info!("Initializing subsystem manager {}", config.name);
-        let (shutting_down_tx, shutting_down_rx) = mpsc::unbounded_channel();
+
+        let (shutdown_trigger_tx, shutdown_trigger_rx) = mpsc::unbounded_channel();
+        let (shutdown_initiated_tx, shutdown_initiated_rx) = watch::channel(SetFlag::new());
         let subsystems = Vec::new();
 
         Self {
             config: config.into(),
-            shutting_down_tx,
-            shutting_down_rx,
+            shutdown_trigger_tx,
+            shutdown_trigger_rx,
+            shutdown_initiated_tx,
+            shutdown_initiated_rx,
             subsystems,
         }
     }
@@ -76,15 +94,21 @@ impl Manager {
     /// This method allows you to set up the subsystem in a custom way using an asynchronous
     /// initialization routine. The routine should return the subsystem state object, which has to
     /// implement the [Subsystem] trait. The initialization routine is also given access to a
-    /// send-only handle to the subsystem itself. It can be used to register the subsystem into
-    /// various event handlers.
+    /// send-only handle to the subsystem itself, which can be used to register the subsystem into
+    /// various event handlers, and a shutdown flag, which can be used to cancel long-running
+    /// synchronous tasks if a shutdown has been initiated.
     pub fn add_custom_subsystem<S, IF, SF, E>(
         &mut self,
         subsys_name: &'static str,
         subsys_init: IF,
     ) -> Handle<S::Interface>
     where
-        IF: FnOnce(SubmitOnlyHandle<S::Interface>) -> SF + Send + 'static,
+        IF: FnOnce(
+                SubmitOnlyHandle<S::Interface>,
+                /*shutdown initiated*/ watch::Receiver<SetFlag>,
+            ) -> SF
+            + Send
+            + 'static,
         SF: std::future::IntoFuture<Output = Result<S, E>> + Send + 'static,
         SF::IntoFuture: Send,
         S: Subsystem,
@@ -92,28 +116,32 @@ impl Manager {
     {
         let full_name = self.config.full_name_of(subsys_name);
 
-        // Shutdown-related channels
-        let (shutdown_tx, shutdown_rx) = oneshot::channel();
+        // The channel through which the manager will initiate the shutdown of this particular
+        // subsystem's task.
+        let (task_shutdown_trigger_tx, task_shutdown_trigger_rx) = oneshot::channel();
 
-        // Call related channels
+        // Action channel
         let (action_tx, action_rx) = mpsc::unbounded_channel();
         let submit_handle = SubmitOnlyHandle::new(action_tx);
 
         log::info!("Registering subsystem {full_name}");
 
-        let task = Box::pin(task::subsystem(
-            full_name.clone(),
-            subsys_init,
+        let subsys_future = subsys_init(
             submit_handle.shallow_clone(),
+            self.shutdown_initiated_rx.clone(),
+        );
+        let task_future = Box::pin(task::subsystem(
+            full_name.clone(),
+            subsys_future,
             action_rx,
-            shutdown_rx,
-            self.shutting_down_tx.clone(),
+            task_shutdown_trigger_rx,
+            self.shutdown_trigger_tx.clone(),
         ));
 
         self.subsystems.push(SubsystemData {
             full_name,
-            task,
-            shutdown_tx,
+            task: task_future,
+            task_shutdown_tx: task_shutdown_trigger_tx,
         });
 
         Handle::new(submit_handle)
@@ -124,7 +152,7 @@ impl Manager {
     where
         S: Send + Sync + Subsystem + 'static,
     {
-        self.add_custom_subsystem(name, move |_| async {
+        self.add_custom_subsystem(name, move |_, _| async {
             Result::<S, std::convert::Infallible>::Ok(subsys)
         })
     }
@@ -134,12 +162,12 @@ impl Manager {
     where
         S: Send + Sync + 'static,
     {
-        self.add_subsystem(name, crate::wrappers::Direct::new(subsys))
+        self.add_subsystem(name, wrappers::Direct::new(subsys))
     }
 
     /// Create a trigger object that can be used to shut down the system
     pub fn make_shutdown_trigger(&self) -> ShutdownTrigger {
-        ShutdownTrigger::new(&self.shutting_down_tx)
+        ShutdownTrigger::new(&self.shutdown_trigger_tx)
     }
 
     /// Run the application main task.
@@ -150,7 +178,7 @@ impl Manager {
         log::info!("Manager {manager_name} starting subsystems");
 
         // Run all the subsystem tasks.
-        let subsystems: Vec<_> = self
+        let subsystems = self
             .subsystems
             .into_iter()
             .map(|subsys_data| {
@@ -158,16 +186,22 @@ impl Manager {
                     tokio_spawn_in_current_tracing_span(fut, subsys_full_name)
                 })
             })
-            .collect();
+            .collect::<Vec<_>>();
 
-        // Signal the manager is shut down so it does not wait for itself
-        drop(self.shutting_down_tx);
+        // Drop the shutdown trigger sender to ensure that the manager won't wait for itself
+        // (e.g. if no subsystems were registered or if they somehow exited without sending
+        // a shutdown trigger, though the latter should not be possible at this moment).
+        drop(self.shutdown_trigger_tx);
 
         // Wait for the shutdown trigger.
-        match shutdown_signal(self.shutting_down_rx, self.config.enable_signal_handlers).await {
+        match shutdown_signal(self.shutdown_trigger_rx, self.config.enable_signal_handlers).await {
             Ok(reason) => log::info!("Manager {manager_name} shutting down: {reason}"),
             Err(err) => log::error!("Manager {manager_name} shutting down: {err}"),
         }
+
+        // Set the "shutdown initiated" flag so that subsystems that perform long-running blocking
+        // calls could cancel whatever they're doing.
+        self.shutdown_initiated_tx.send_modify(|flag| flag.set());
 
         // Shut down the subsystems in the reverse order of creation.
         for subsys in subsystems.into_iter().rev() {
@@ -207,7 +241,7 @@ impl Manager {
 /// Information about each subsystem stored by the manager
 struct SubsystemData<T> {
     full_name: String,
-    shutdown_tx: oneshot::Sender<()>,
+    task_shutdown_tx: oneshot::Sender<()>,
     task: T,
 }
 
@@ -215,13 +249,13 @@ impl<T> SubsystemData<T> {
     fn map_task<U>(self, f: impl FnOnce(T, /*full_name*/ &str) -> U) -> SubsystemData<U> {
         let Self {
             full_name,
-            shutdown_tx,
+            task_shutdown_tx,
             task,
         } = self;
         let task = f(task, &full_name);
         SubsystemData {
             full_name,
-            shutdown_tx,
+            task_shutdown_tx,
             task,
         }
     }
@@ -231,7 +265,7 @@ impl SubsystemData<JoinHandle<()>> {
     async fn shutdown(self, timeout: Option<Duration>) {
         let full_name = self.full_name;
 
-        if let Err(()) = self.shutdown_tx.send(()) {
+        if let Err(()) = self.task_shutdown_tx.send(()) {
             log::warn!("Subsystem {full_name} is already down");
         }
 

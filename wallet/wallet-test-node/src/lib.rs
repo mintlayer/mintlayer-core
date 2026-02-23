@@ -215,7 +215,7 @@ pub async fn start_node(chain_config: Arc<ChainConfig>) -> (subsystem::Manager, 
         Default::default(),
     );
     let mempool =
-        manager.add_custom_subsystem("wallet-cli-test-mempool", |hdl| mempool_init.init(hdl));
+        manager.add_custom_subsystem("wallet-cli-test-mempool", |hdl, _| mempool_init.init(hdl));
 
     let peerdb_storage = p2p::test_helpers::peerdb_inmemory_store();
     let p2p = p2p::make_p2p(

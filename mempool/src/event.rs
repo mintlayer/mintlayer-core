@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use common::{
-    chain::{Block, Transaction},
+    chain::{GenBlock, Transaction},
     primitives::{BlockHeight, Id},
 };
 
@@ -84,16 +84,16 @@ impl TransactionProcessed {
 /// Event triggered when mempool has synced up to given tip
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct NewTip {
-    block_id: Id<Block>,
+    block_id: Id<GenBlock>,
     height: BlockHeight,
 }
 
 impl NewTip {
-    pub fn new(block_id: Id<Block>, height: BlockHeight) -> Self {
+    pub fn new(block_id: Id<GenBlock>, height: BlockHeight) -> Self {
         Self { block_id, height }
     }
 
-    pub fn block_id(&self) -> &Id<Block> {
+    pub fn block_id(&self) -> &Id<GenBlock> {
         &self.block_id
     }
 

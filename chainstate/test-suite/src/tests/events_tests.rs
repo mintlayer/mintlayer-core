@@ -25,8 +25,8 @@ use chainstate::{
 };
 use chainstate_test_framework::{OrphanErrorHandler, TestChainstate, TestFramework};
 use common::{
-    chain::block::timestamp::BlockTimestamp,
-    primitives::{id::Idable, BlockHeight},
+    chain::{block::timestamp::BlockTimestamp, GenBlock},
+    primitives::{id::Idable, BlockHeight, Id},
 };
 use randomness::Rng;
 use test_utils::{
@@ -34,7 +34,8 @@ use test_utils::{
     random::{make_seedable_rng, Seed},
 };
 
-use crate::tests::EventList;
+// TODO use EventList from helpers instead.
+type EventList = Arc<Mutex<Vec<(Id<GenBlock>, BlockHeight)>>>;
 
 type ErrorList = Arc<Mutex<Vec<BlockError>>>;
 
@@ -329,7 +330,7 @@ async fn several_subscribers_several_events_broadcaster(#[case] seed: Seed) {
             .build(&mut rng);
         let index = tf.process_block(block.clone(), BlockSource::Local).ok().flatten().unwrap();
         expected_events.push(ChainstateEvent::NewTip {
-            id: *index.block_id(),
+            id: (*index.block_id()).into(),
             height: index.block_height(),
             is_initial_block_download: is_ibd,
         });

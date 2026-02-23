@@ -52,7 +52,7 @@ pub use tx_verifier;
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum ChainstateEvent {
     NewTip {
-        id: Id<Block>,
+        id: Id<GenBlock>,
         height: BlockHeight,
         is_initial_block_download: bool,
     },

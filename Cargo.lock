@@ -8162,7 +8162,6 @@ dependencies = [
  "cfg-if",
  "futures",
  "logging",
- "oneshot",
  "static_assertions",
  "testing_logger",
  "thiserror 1.0.69",

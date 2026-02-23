@@ -40,8 +40,8 @@ use chainstate::{
 };
 use common::{
     chain::{
-        block::timestamp::BlockTimestamp, Block, ChainConfig, GenBlock, SignedTransaction,
-        Transaction, TxInput,
+        block::timestamp::BlockTimestamp, ChainConfig, GenBlock, SignedTransaction, Transaction,
+        TxInput,
     },
     primitives::{amount::DisplayAmount, time::Time, Amount, BlockHeight, Id},
     time_getter::TimeGetter,
@@ -878,7 +878,7 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
 
     pub fn reorg(
         &mut self,
-        block_id: Id<Block>,
+        block_id: Id<GenBlock>,
         _block_height: BlockHeight,
         finalizer: impl for<'b> FnMut(TxAdditionOutcome, &'b Self),
     ) -> Result<(), ReorgError> {

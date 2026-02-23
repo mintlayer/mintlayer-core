@@ -23,7 +23,6 @@ use crate::{
     detail::{
         self,
         block_checking::BlockChecker,
-        block_invalidation::BlockInvalidator,
         bootstrap::{export_bootstrap_stream, import_bootstrap_stream},
         calculate_median_time_past,
         tx_verification_strategy::TransactionVerificationStrategy,
@@ -108,7 +107,7 @@ where
 
     #[tracing::instrument(skip_all, fields(id = %block_id))]
     fn reset_block_failure_flags(&mut self, block_id: &Id<Block>) -> Result<(), ChainstateError> {
-        BlockInvalidator::new(&mut self.chainstate)
+        self.chainstate
             .reset_block_failure_flags(block_id)
             .map_err(ChainstateError::BlockInvalidatorError)
     }

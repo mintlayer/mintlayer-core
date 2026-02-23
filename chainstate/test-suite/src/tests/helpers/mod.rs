@@ -13,6 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::{
+    ops::DerefMut as _,
+    sync::{Arc, Mutex},
+};
+
+use chainstate::ChainstateEvent;
 use chainstate_test_framework::{anyonecanspend_address, TestFramework, TransactionBuilder};
 use common::{
     chain::{
@@ -76,4 +82,33 @@ pub fn add_block_with_locked_output(
 pub fn new_pub_key_destination(rng: &mut (impl Rng + CryptoRng)) -> Destination {
     let (_, pub_key) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
     Destination::PublicKey(pub_key)
+}
+
+#[derive(Clone)]
+pub struct EventList(Arc<Mutex<Vec<ChainstateEvent>>>);
+
+impl EventList {
+    fn new() -> Self {
+        Self(Arc::new(Mutex::new(Vec::new())))
+    }
+
+    pub fn subscribe_new(tf: &mut TestFramework) -> Self {
+        let this = Self::new();
+        this.subscribe(tf);
+        this
+    }
+
+    pub fn subscribe(&self, tf: &mut TestFramework) {
+        let this = self.clone();
+        let subscribe_func = Arc::new(move |event| this.push(event));
+        tf.chainstate.subscribe_to_subsystem_events(subscribe_func);
+    }
+
+    pub fn push(&self, event: ChainstateEvent) {
+        self.0.lock().unwrap().push(event)
+    }
+
+    pub fn take(&self) -> Vec<ChainstateEvent> {
+        std::mem::take(self.0.lock().unwrap().deref_mut())
+    }
 }

@@ -270,7 +270,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
     fn broadcast_new_tip_event(
         &mut self,
-        best_block_index: &BlockIndex,
+        best_block_index: GenBlockIndexRef<'_>,
         is_initial_block_download: bool,
     ) {
         let event = ChainstateEvent::NewTip {
@@ -623,7 +623,10 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
         if let Some(best_block_index) = &best_block_index_opt {
             self.update_initial_block_download_flag(GenBlockIndexRef::Block(best_block_index));
-            self.broadcast_new_tip_event(best_block_index, self.is_initial_block_download());
+            self.broadcast_new_tip_event(
+                GenBlockIndexRef::Block(best_block_index),
+                self.is_initial_block_download(),
+            );
 
             let compact_target = match best_block_index.block_header().consensus_data() {
                 ConsensusData::None => Compact::from(Uint256::ZERO),
@@ -707,13 +710,58 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
     #[log_error]
     pub fn invalidate_block(&mut self, block_id: &Id<Block>) -> Result<(), BlockInvalidatorError> {
+        let prev_best_block_id = self
+            .make_db_tx_ro()?
+            .get_best_block_id()
+            .map_err(BlockInvalidatorError::BestBlockIdQueryError)?;
+
         let result = BlockInvalidator::new(self)
             .invalidate_block(block_id, block_invalidation::IsExplicit::Yes);
         // Note: we don't ignore the result of check_consistency even though we may already have
         // an error to return (if the checks are enabled but couldn't be done for some reason,
         // we don't want to miss this).
         self.check_consistency()?;
+
+        let new_best_block_index = self
+            .make_db_tx_ro()?
+            .get_best_block_index()
+            .map_err(BlockInvalidatorError::BestBlockIndexQueryError)?;
+
+        if new_best_block_index.block_id() != prev_best_block_id {
+            self.broadcast_new_tip_event(
+                new_best_block_index.as_ref(),
+                self.is_initial_block_download(),
+            );
+        }
+
         result
+    }
+
+    #[log_error]
+    pub fn reset_block_failure_flags(
+        &mut self,
+        block_id: &Id<Block>,
+    ) -> Result<(), BlockInvalidatorError> {
+        let prev_best_block_id = self
+            .make_db_tx_ro()?
+            .get_best_block_id()
+            .map_err(BlockInvalidatorError::BestBlockIdQueryError)?;
+
+        BlockInvalidator::new(self).reset_block_failure_flags(block_id)?;
+
+        let new_best_block_index = self
+            .make_db_tx_ro()?
+            .get_best_block_index()
+            .map_err(BlockInvalidatorError::BestBlockIndexQueryError)?;
+
+        if new_best_block_index.block_id() != prev_best_block_id {
+            self.broadcast_new_tip_event(
+                new_best_block_index.as_ref(),
+                self.is_initial_block_download(),
+            );
+        }
+
+        Ok(())
     }
 
     #[log_error]

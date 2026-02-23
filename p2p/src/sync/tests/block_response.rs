@@ -239,7 +239,7 @@ async fn block_responses_in_wrong_order(#[case] seed: Seed) {
                                     peer_id: peer.get_id(),
                                     block_id: expected_block_id,
                                 },
-                                PeerManagerEventDesc::NewChainstateTip(expected_block_id),
+                                PeerManagerEventDesc::NewChainstateTip(expected_block_id.into()),
                             ]
                             .into_iter(),
                         ),

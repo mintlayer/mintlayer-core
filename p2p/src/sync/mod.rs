@@ -33,7 +33,7 @@ use tokio::{
 use tracing::Instrument;
 
 use common::{
-    chain::{config::ChainConfig, Block, Transaction},
+    chain::{config::ChainConfig, GenBlock, Transaction},
     primitives::Id,
     time_getter::TimeGetter,
 };
@@ -58,7 +58,7 @@ use self::chainstate_handle::ChainstateHandle;
 
 #[derive(Debug, Clone)]
 pub enum LocalEvent {
-    ChainstateNewTip(Id<Block>),
+    ChainstateNewTip(Id<GenBlock>),
     MempoolNewTx(Id<Transaction>),
 }
 
@@ -273,7 +273,7 @@ where
     }
 
     /// Announces the header of a new block to peers.
-    async fn handle_new_tip(&mut self, block_id: Id<Block>) -> Result<()> {
+    async fn handle_new_tip(&mut self, block_id: Id<GenBlock>) -> Result<()> {
         self.peer_mgr_event_sender
             .send(PeerManagerEvent::NewChainstateTip(block_id))
             .map_err(|_| P2pError::ChannelClosed)?;
@@ -383,7 +383,7 @@ where
 /// Returns a receiver for the chainstate `NewTip` events.
 pub async fn subscribe_to_new_tip(
     chainstate_handle: &ChainstateHandle,
-) -> Result<UnboundedReceiver<Id<Block>>> {
+) -> Result<UnboundedReceiver<Id<GenBlock>>> {
     let (sender, receiver) = mpsc::unbounded_channel();
 
     let subscribe_func =

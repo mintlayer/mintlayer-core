@@ -235,7 +235,7 @@ where
         self.send_message(BlockSyncMessage::HeaderList(headers))
     }
 
-    async fn handle_new_tip(&mut self, new_tip_id: &Id<Block>) -> Result<()> {
+    async fn handle_new_tip(&mut self, new_tip_id: &Id<GenBlock>) -> Result<()> {
         // This function is not supposed to be called when in IBD.
         debug_assert!(!self.chainstate_handle.is_initial_block_download().await?);
 

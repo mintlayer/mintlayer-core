@@ -28,7 +28,6 @@ from .p2p import P2P_USER_AGENT
 from .util import (
     MAX_NODES,
     assert_equal,
-    append_config,
     delete_cookie_file,
     get_auth_cookie,
     get_rpc_proxy,
@@ -67,7 +66,7 @@ class TestNode():
     To make things easier for the test writer, any unrecognized messages will
     be dispatched to the RPC connection."""
 
-    def __init__(self, i, datadir, *, chain, rpchost, timewait, timeout_factor, bitcoind, bitcoin_cli, coverage_dir, cwd, extra_conf=None, extra_args=None, use_cli=False, start_perf=False, use_valgrind=False, version=None, descriptors=False):
+    def __init__(self, i, datadir, *, chain, rpchost, timewait, timeout_factor, bitcoind, bitcoin_cli, coverage_dir, cwd, extra_args=None, use_cli=False, start_perf=False, use_valgrind=False, version=None, descriptors=False):
         """
         Kwargs:
             start_perf (bool): If True, begin profiling the node with `perf` as soon as
@@ -77,7 +76,6 @@ class TestNode():
         self.index = i
         self.p2p_conn_index = 1
         self.datadir = datadir
-        self.bitcoinconf = os.path.join(self.datadir, "bitcoin.conf")
         self.stdout_dir = os.path.join(self.datadir, "stdout")
         self.stderr_dir = os.path.join(self.datadir, "stderr")
         self.chain = chain
@@ -87,11 +85,8 @@ class TestNode():
         self.coverage_dir = coverage_dir
         self.cwd = cwd
         self.descriptors = descriptors
-        if extra_conf is not None:
-            append_config(datadir, extra_conf)
         # Most callers will just need to add extra args to the standard list below.
         # For those callers that need more flexibility, they can just set the args property directly.
-        # Note that common args are set in the config file (see initialize_datadir)
         self.extra_args = extra_args
         self.version = version
 
@@ -106,9 +101,6 @@ class TestNode():
         # current default value is used.
         min_tx_relay_fee_rate = 1000
 
-        # Configuration for logging is set as command-line args rather than in the bitcoin.conf file.
-        # This means that starting a bitcoind using the temp dir to debug a failed test won't
-        # spam debug.log.
         self.args = [
             self.binary,
             f"--datadir={datadir}",
@@ -117,12 +109,6 @@ class TestNode():
             f"--p2p-bind-addresses={p2p_bind_address}",
             f"--max-tip-age={max_tip_age}",
             f"--min-tx-relay-fee-rate={min_tx_relay_fee_rate}",
-            #"-X",
-            #"-logtimemicros",
-            #"-debug",
-            #"-debugexclude=libevent",
-            #"-debugexclude=leveldb",
-            #"-uacomment=testnode%d" % i,
         ]
         if use_valgrind:
             default_suppressions_file = os.path.join(
@@ -220,7 +206,7 @@ class TestNode():
         # Delete any existing cookie file -- if such a file exists (eg due to
         # unclean shutdown), it will get overwritten anyway by bitcoind, and
         # potentially interfere with our attempt to authenticate
-        delete_cookie_file(self.datadir, self.chain)
+        delete_cookie_file(self.datadir)
 
         # add environment variable LIBC_FATAL_STDERR_=1 so that libc errors are written to stderr and not the terminal
         subp_env = dict(os.environ, LIBC_FATAL_STDERR_="1")
@@ -328,7 +314,7 @@ class TestNode():
         poll_per_s = 4
         for _ in range(poll_per_s * self.rpc_timeout):
             try:
-                get_auth_cookie(self.datadir, self.chain)
+                get_auth_cookie(self.datadir)
                 self.log.debug("Cookie credentials successfully retrieved")
                 return
             except ValueError:  # cookie file not found and no rpcuser or rpcpassword; bitcoind is still starting

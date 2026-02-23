@@ -15,6 +15,8 @@
 
 //! Implementation of tasks that constitute the subsystem mechanism.
 
+use std::future::IntoFuture;
+
 use tokio::{
     sync::{mpsc, oneshot, RwLock},
     task::JoinSet,
@@ -24,7 +26,7 @@ use tracing::Instrument;
 use logging::log;
 use utils::{once_destructor::OnceDestructor, sync::Arc, tokio_spawn_in_join_set};
 
-use crate::{calls::Action, SubmitOnlyHandle, Subsystem};
+use crate::{calls::Action, Subsystem};
 
 /// Handle a task completion result
 pub fn handle_result(full_name: &str, task_type: &str, res: Result<(), tokio::task::JoinError>) {
@@ -38,16 +40,14 @@ pub fn handle_result(full_name: &str, task_type: &str, res: Result<(), tokio::ta
 }
 
 /// The subsystem worker task implementation
-pub async fn subsystem<S, IF, SF, E>(
+pub async fn subsystem<S, SF, E>(
     full_name: String,
-    subsys_init: IF,
-    submit_handle: SubmitOnlyHandle<S::Interface>,
+    subsys_fut: SF,
     mut action_rx: mpsc::UnboundedReceiver<Action<S::Interface>>,
-    mut shutdown_rx: oneshot::Receiver<()>,
-    shutting_down_tx: mpsc::UnboundedSender<()>,
+    mut task_shutdown_trigger_rx: oneshot::Receiver<()>,
+    task_shut_down_tx: mpsc::UnboundedSender<()>,
 ) where
-    IF: FnOnce(SubmitOnlyHandle<S::Interface>) -> SF + Send + 'static,
-    SF: std::future::IntoFuture<Output = Result<S, E>> + Send,
+    SF: IntoFuture<Output = Result<S, E>> + Send,
     SF::IntoFuture: Send,
     S: Subsystem,
     E: std::error::Error,
@@ -58,7 +58,7 @@ pub async fn subsystem<S, IF, SF, E>(
     let _shutdown_sender = OnceDestructor::new({
         let full_name = &full_name;
         move || {
-            let _ = shutting_down_tx.send(());
+            let _ = task_shut_down_tx.send(());
             log::info!("Subsystem {full_name} terminated");
         }
     });
@@ -67,7 +67,7 @@ pub async fn subsystem<S, IF, SF, E>(
     let mut worker_tasks = JoinSet::new();
 
     // Initialize the subsystem.
-    let subsys = match subsys_init(submit_handle).await {
+    let subsys = match subsys_fut.await {
         Ok(subsys) => Arc::new(RwLock::new(subsys)),
         Err(err) => {
             log::error!("Subsystem {full_name} failed to initialize: {err}");
@@ -91,7 +91,7 @@ pub async fn subsystem<S, IF, SF, E>(
             biased;
 
             // We're shutting down, no point in doing anything else.
-            result = (&mut shutdown_rx) => {
+            result = (&mut task_shutdown_trigger_rx) => {
                 if let Err(err) = result {
                     log::error!("Shutdown channel for {full_name} closed prematurely: {err}");
                 }

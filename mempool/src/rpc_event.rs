@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use common::{
-    chain::{Block, Transaction},
+    chain::{GenBlock, Transaction},
     primitives::{BlockHeight, Id},
 };
 use mempool_types::{tx_options::TxRelayPolicy, tx_origin::LocalTxOrigin};
@@ -26,7 +26,7 @@ use crate::event::MempoolEvent;
 #[serde(tag = "type", content = "content")]
 pub enum RpcEvent {
     NewTip {
-        id: Id<Block>,
+        id: Id<GenBlock>,
         height: BlockHeight,
     },
     TransactionProcessed {

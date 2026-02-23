@@ -110,7 +110,7 @@ impl ReorgData {
 
 fn fetch_disconnected_txs<M>(
     tx_pool: &TxPool<M>,
-    new_tip: Id<Block>,
+    new_tip: Id<GenBlock>,
 ) -> Result<impl Iterator<Item = TxEntry>, ReorgError> {
     let old_tip = tx_pool
         .tx_verifier
@@ -123,13 +123,13 @@ fn fetch_disconnected_txs<M>(
 
     tx_pool
         .blocking_chainstate_handle()
-        .call(move |c| ReorgData::from_chainstate(c, old_tip, new_tip.into()))?
+        .call(move |c| ReorgData::from_chainstate(c, old_tip, new_tip))?
         .map(|data| data.into_disconnected_transactions(now))
 }
 
 pub fn handle_new_tip<M: MemoryUsageEstimator>(
     tx_pool: &mut TxPool<M>,
-    new_tip: Id<Block>,
+    new_tip: Id<GenBlock>,
     finalizer: impl FnMut(TxAdditionOutcome, &TxPool<M>),
 ) -> Result<(), ReorgError> {
     tx_pool.rolling_fee_rate.get_mut().set_block_since_last_rolling_fee_bump(true);

@@ -13,13 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-use std::sync::Mutex;
-
 use chainstate::BlockSource;
 use chainstate_test_framework::TestFramework;
 use common::{
-    chain::{signature::inputsig::InputWitness, Block, GenBlock, Genesis},
+    chain::{signature::inputsig::InputWitness, GenBlock, Genesis},
     primitives::{BlockHeight, Id},
 };
 use randomness::Rng;
@@ -68,8 +65,6 @@ mod tx_verifier_among_threads;
 mod tx_verifier_disconnect;
 
 mod helpers;
-
-type EventList = Arc<Mutex<Vec<(Id<Block>, BlockHeight)>>>;
 
 #[ctor::ctor]
 fn init() {
