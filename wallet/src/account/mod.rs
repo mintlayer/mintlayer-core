@@ -42,7 +42,7 @@ use utxo_selector::SelectionResult;
 pub use utxo_selector::UtxoSelectorError;
 use wallet_types::account_id::AccountPrefixedId;
 use wallet_types::account_info::{StandaloneAddressDetails, StandaloneAddresses};
-use wallet_types::partially_signed_transaction::{PartiallySignedTransaction, PtxAdditionalInfo};
+use wallet_types::partially_signed_transaction::{PartiallySignedTransaction};
 use wallet_types::with_locked::WithLocked;
 
 use crate::account::utxo_selector::{select_coins, OutputGroup};
@@ -201,7 +201,7 @@ impl<K: AccountKeyChains> Account<K> {
 
     // Note: the default selection algo depends on whether input_utxos are empty.
     #[allow(clippy::too_many_arguments)]
-    fn select_inputs_for_send_request(
+    pub fn select_inputs_for_send_request(
         &mut self,
         mut request: SendRequest,
         input_utxos: SelectedInputs,
@@ -658,57 +658,6 @@ impl<K: AccountKeyChains> Account<K> {
         req.add_fee(Currency::Coin, total_fee)?;
 
         Ok(req)
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    pub fn process_send_request(
-        &mut self,
-        db_tx: &mut impl WalletStorageWriteLocked,
-        request: SendRequest,
-        inputs: SelectedInputs,
-        selection_algo: Option<CoinSelectionAlgo>,
-        change_addresses: BTreeMap<Currency, Address<Destination>>,
-        median_time: BlockTimestamp,
-        fee_rate: CurrentFeeRate,
-        ptx_additional_info: PtxAdditionalInfo,
-    ) -> WalletResult<(PartiallySignedTransaction, BTreeMap<Currency, Amount>)> {
-        let mut request = self.select_inputs_for_send_request(
-            request,
-            inputs,
-            selection_algo,
-            change_addresses,
-            db_tx,
-            median_time,
-            fee_rate,
-            None,
-        )?;
-
-        let fees = request.get_fees();
-        let ptx = request.into_partially_signed_tx(ptx_additional_info)?;
-
-        Ok((ptx, fees))
-    }
-
-    pub fn process_send_request_and_sign(
-        &mut self,
-        db_tx: &mut impl WalletStorageWriteLocked,
-        request: SendRequest,
-        inputs: SelectedInputs,
-        change_addresses: BTreeMap<Currency, Address<Destination>>,
-        median_time: BlockTimestamp,
-        fee_rate: CurrentFeeRate,
-    ) -> WalletResult<SendRequest> {
-        self.select_inputs_for_send_request(
-            request,
-            inputs,
-            None,
-            change_addresses,
-            db_tx,
-            median_time,
-            fee_rate,
-            None,
-        )
-        // TODO: Randomize inputs and outputs
     }
 
     fn decommission_stake_pool_impl(

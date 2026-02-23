@@ -1734,20 +1734,22 @@ where
             account_index,
             additional_info,
             |account, db_tx| {
-                let send_request = account.process_send_request_and_sign(
-                    db_tx,
+                let request = account.select_inputs_for_send_request(
                     request,
                     inputs,
+                    None,
                     change_addresses,
+                    db_tx,
                     latest_median_time,
                     CurrentFeeRate {
                         current_fee_rate,
                         consolidate_fee_rate,
                     },
+                    None,
                 )?;
 
-                let additional_data = additional_data_getter(&send_request);
-                Ok((send_request, additional_data))
+                let additional_data = additional_data_getter(&request);
+                Ok((request, additional_data))
             },
             |err| err,
         )
@@ -1769,19 +1771,24 @@ where
         let request = SendRequest::new().with_outputs(outputs);
         let latest_median_time = self.latest_median_time;
         self.for_account_rw(account_index, |account, db_tx| {
-            account.process_send_request(
-                db_tx,
+            let mut request = account.select_inputs_for_send_request(
                 request,
                 inputs,
                 selection_algo,
                 change_addresses,
+                db_tx,
                 latest_median_time,
                 CurrentFeeRate {
                     current_fee_rate,
                     consolidate_fee_rate,
                 },
-                ptx_additional_info,
-            )
+                None,
+            )?;
+
+            let fees = request.get_fees();
+            let ptx = request.into_partially_signed_tx(ptx_additional_info)?;
+
+            Ok((ptx, fees))
         })
     }
 
