@@ -546,14 +546,14 @@ class WalletRpcController(WalletCliControllerBase):
     async def sign_challenge_plain(self, message: str, address: str) -> str:
         result = self._write_command('challenge_sign_plain', [self.account, message, address])
         if 'result' in result:
-            return f"The generated hex encoded signature is\n\n{result['result']}"
+            return f"The generated hex-encoded signature is\n\n{result['result']}"
         else:
             return result['error']['message']
 
     async def sign_challenge_hex(self, message: str, address: str) -> str:
         result =  self._write_command('challenge_sign_hex', [self.account, message, address])
         if 'result' in result:
-            return f"The generated hex encoded signature is\n\n{result['result']}"
+            return f"The generated hex-encoded signature is\n\n{result['result']}"
         else:
             return result['error']['message']
 

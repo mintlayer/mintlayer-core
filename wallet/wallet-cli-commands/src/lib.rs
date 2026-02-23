@@ -365,7 +365,7 @@ pub enum ColdWalletCommand {
     #[clap(name = "address-new")]
     NewAddress,
 
-    /// Reveal the public key behind the specified "public key hash" address as a hex encoded string.
+    /// Reveal the public key behind the specified "public key hash" address as a hex-encoded string.
     #[clap(name = "address-reveal-public-key-as-hex")]
     RevealPublicKeyHex {
         public_key_hash: String,
@@ -409,14 +409,14 @@ pub enum ColdWalletCommand {
 
     #[clap(name = "account-sign-raw-transaction")]
     SignRawTransaction {
-        /// Hex encoded transaction or PartiallySignedTransaction.
+        /// Hex-encoded transaction or PartiallySignedTransaction.
         transaction: String,
     },
 
     #[clap(name = "challenge-sign-hex")]
     #[clap(hide = true)]
     SignChallegeHex {
-        /// Hex encoded message to be signed
+        /// Hex-encoded message to be signed
         message: String,
         /// Address with whose private key to sign the challenge
         address: String,
@@ -433,9 +433,9 @@ pub enum ColdWalletCommand {
     #[clap(name = "challenge-verify-hex")]
     #[clap(hide = true)]
     VerifyChallengeHex {
-        /// The hex encoded message that was signed
+        /// The hex-encoded message that was signed
         message: String,
-        /// Hex encoded signed challenge
+        /// Hex-encoded signed challenge
         signed_challenge: String,
         /// Address with whose private key the challenge was signed with
         address: String,
@@ -445,7 +445,7 @@ pub enum ColdWalletCommand {
     VerifyChallenge {
         /// The message that was signed
         message: String,
-        /// Hex encoded signed challenge
+        /// Hex-encoded signed challenge
         signed_challenge: String,
         /// Address with whose private key the challenge was signed with
         address: String,
@@ -543,7 +543,7 @@ pub enum WalletCommand {
 
     #[clap(name = "standalone-add-private-key-from-hex")]
     AddStandalonePrivateKey {
-        /// The new hex encoded standalone private key to be added to the selected account
+        /// The new hex-encoded standalone private key to be added to the selected account
         hex_private_key: HexEncoded<PrivateKey>,
 
         /// Optionally specify a label to the new address
@@ -597,7 +597,7 @@ pub enum WalletCommand {
         description: String,
         /// Ticker of the token
         ticker: String,
-        /// The owner, represented by a public key (hex encoded)
+        /// The owner, represented by a public key (hex-encoded)
         creator: Option<HexEncoded<PublicKey>>,
         /// URI for the icon of the NFT
         icon_uri: Option<String>,
@@ -782,7 +782,7 @@ pub enum WalletCommand {
 
     #[clap(name = "transaction-inspect")]
     InspectTransaction {
-        /// Hex encoded transaction or PartiallySignedTransaction.
+        /// Hex-encoded transaction or PartiallySignedTransaction.
         transaction: String,
     },
 
@@ -965,13 +965,13 @@ pub enum WalletCommand {
 
     #[clap(name = "node-submit-block")]
     SubmitBlock {
-        /// Hex encoded block
+        /// Hex-encoded block
         block: HexEncoded<Block>,
     },
 
     #[clap(name = "node-submit-transaction")]
     SubmitTransaction {
-        /// Hex encoded transaction.
+        /// Hex-encoded transaction.
         transaction: HexEncoded<SignedTransaction>,
         /// Do not store the transaction in the wallet
         #[arg(long = "do-not-store", default_value_t = false)]

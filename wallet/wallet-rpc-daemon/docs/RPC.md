@@ -3095,7 +3095,7 @@ json
 
 ### Method `transaction_get_raw`
 
-Get a transaction from the wallet, if present, as hex encoded raw transaction
+Get a transaction from the wallet, if present, as hex-encoded raw transaction
 
 
 Parameters:
@@ -3113,7 +3113,7 @@ hex string
 
 ### Method `transaction_get_signed_raw`
 
-Get a signed transaction from the wallet, if present, as hex encoded raw transaction
+Get a signed transaction from the wallet, if present, as hex-encoded raw transaction
 
 
 Parameters:
@@ -3133,7 +3133,7 @@ hex string
 
 Compose a new transaction from the specified outputs and selected utxos.
 
-The transaction is returned in a hex encoded form that can be passed to account-sign-raw-transaction.
+The transaction is returned in a hex-encoded form that can be passed to account-sign-raw-transaction.
 
 The fees that will be paid by the transaction are also returned.
 
@@ -3298,7 +3298,7 @@ Returns:
 
 ### Method `node_get_block`
 
-Get a block by its id, represented as hex encoded bytes
+Get a block by its id, represented as hex-encoded bytes
 
 
 Parameters:
@@ -4044,7 +4044,7 @@ Returns:
 
 Signs transaction inputs that are not yet signed.
 
-The input is a hex encoded transaction or PartiallySignedTransaction. This format is
+The input is a hex-encoded transaction or PartiallySignedTransaction. This format is
 automatically used in this wallet in functions such as staking-decommission-pool-request.
 
 Once all signatures are complete, the result can be broadcast to the network.

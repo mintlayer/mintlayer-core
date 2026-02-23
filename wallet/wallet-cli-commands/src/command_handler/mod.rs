@@ -772,7 +772,7 @@ where
                 };
 
                 Ok(ConsoleCommand::Print(format!(
-                    "The generated hex encoded signature is\n\n{result}{qr_code_string}",
+                    "The generated hex-encoded signature is\n\n{result}{qr_code_string}",
                 )))
             }
 
@@ -791,7 +791,7 @@ where
                 };
 
                 Ok(ConsoleCommand::Print(format!(
-                    "The generated hex encoded signature is\n\n{result}{qr_code_string}",
+                    "The generated hex-encoded signature is\n\n{result}{qr_code_string}",
                 )))
             }
 
@@ -1150,7 +1150,7 @@ where
                     .await?
                     .compose_transaction(utxos, outputs, None, only_transaction)
                     .await?;
-                let mut output = format!("The hex encoded transaction is:\n{hex}\n");
+                let mut output = format!("The hex-encoded transaction is:\n{hex}\n");
 
                 format_fees(&mut output, &fees);
 
@@ -1645,9 +1645,9 @@ where
 
                 let output = format!(
                     concat!(
-                        "The hex encoded transaction is:\n{}\n\n",
+                        "The hex-encoded transaction is:\n{}\n\n",
                         "The transaction id is:\n{:x}\n\n",
-                        "The hex encoded signed transaction intent is:\n{}\n"
+                        "The hex-encoded signed transaction intent is:\n{}\n"
                     ),
                     signed_tx, tx_id, signed_intent
                 );
