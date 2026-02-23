@@ -301,6 +301,10 @@ impl NodeInterface for ColdWalletClient {
         Err(ColdWalletRpcError::NotAvailable)
     }
 
+    async fn mempool_get_transactions(&self) -> Result<Vec<SignedTransaction>, Self::Error> {
+        Err(ColdWalletRpcError::NotAvailable)
+    }
+
     async fn get_utxo(
         &self,
         _outpoint: common::chain::UtxoOutPoint,

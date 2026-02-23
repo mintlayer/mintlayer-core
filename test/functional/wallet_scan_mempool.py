@@ -14,7 +14,7 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
-"""Wallet mempool events test
+"""Wallet scan mempool on startup test
 
 Check that:
 * We create 2 wallets with same mnemonic,
@@ -22,8 +22,10 @@ Check that:
 * send coins to the wallet's address
 * sync both wallets with the node
 * check balance in both wallets
+* close the second wallet
 * from the first wallet send coins from Acc 0 to Acc 1 without creating a block
-* the second wallet should get the new Tx from mempool events
+* reopen the second wallet and create a third wallet with the same mnemonic
+* they both should get the new Tx from the mempool upon creation/opening
 * second wallet can create a new unconfirmed Tx on top of the Tx in mempool
 """
 
@@ -37,7 +39,7 @@ from test_framework.wallet_cli_controller import (DEFAULT_ACCOUNT_INDEX,
                                                   WalletCliController)
 
 
-class WalletMempoolEvents(BitcoinTestFramework):
+class WalletMempoolScanning(BitcoinTestFramework):
 
     def set_test_params(self):
         self.setup_clean_chain = True
@@ -85,8 +87,10 @@ class WalletMempoolEvents(BitcoinTestFramework):
             # create wallet2 with the same mnemonic
             mnemonic = await wallet.show_seed_phrase()
             assert mnemonic is not None
+            wallet2_name = "wallet2"
             assert_in(
-                "Wallet recovered successfully", await wallet2.recover_wallet(mnemonic)
+                "Wallet recovered successfully",
+                await wallet2.recover_wallet(mnemonic, name=wallet2_name),
             )
 
             # check it is on genesis
@@ -149,6 +153,9 @@ class WalletMempoolEvents(BitcoinTestFramework):
             assert_in("Success", await wallet.select_account(1))
             acc1_address = await wallet.new_address()
 
+            # close wallet2
+            await wallet2.close_wallet()
+
             # go back to Acc 0 and send 1 coin to Acc 1
             coins_to_send = 2
             assert_in("Success", await wallet.select_account(DEFAULT_ACCOUNT_INDEX))
@@ -166,7 +173,11 @@ class WalletMempoolEvents(BitcoinTestFramework):
             assert_equal(1, len(pending_txs))
             transfer_tx_id = pending_txs[0]
 
-            # check wallet 2 also received it from mempool events
+            # reopen wallet2 and sync it will scan the mempool on first sync
+            await wallet2.open_wallet(wallet2_name)
+            assert_in("Success", await wallet2.sync())
+
+            # check wallet 2 has the new tx from scanning the mempool
             pending_txs = await wallet2.list_pending_transactions()
             assert_equal(1, len(pending_txs))
             assert_equal(transfer_tx_id, pending_txs[0])
@@ -191,6 +202,19 @@ class WalletMempoolEvents(BitcoinTestFramework):
                 await wallet2.send_to_address(acc0_address, 1),
             )
 
+            # close wallet2 and recover a new one with the same mnemonic
+            await wallet2.close_wallet()
+            assert_in(
+                "Wallet recovered successfully",
+                await wallet2.recover_wallet(mnemonic),
+            )
+            # sync the new wallet2
+            assert_in("Success", await wallet2.sync())
+            # check wallet 2 has the new tx from scanning the mempool
+            pending_txs = await wallet2.list_pending_transactions()
+            assert_equal(2, len(pending_txs))
+            assert_in(transfer_tx_id, pending_txs)
+
             self.generate_block()
 
             assert_in("Success", await wallet.sync())
@@ -198,4 +222,4 @@ class WalletMempoolEvents(BitcoinTestFramework):
 
 
 if __name__ == "__main__":
-    WalletMempoolEvents().main()
+    WalletMempoolScanning().main()

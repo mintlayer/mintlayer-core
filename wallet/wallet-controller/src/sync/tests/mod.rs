@@ -446,6 +446,10 @@ impl NodeInterface for MockNode {
         unreachable!()
     }
 
+    async fn mempool_get_transactions(&self) -> Result<Vec<SignedTransaction>, Self::Error> {
+        unreachable!()
+    }
+
     async fn mempool_subscribe_to_events(&self) -> Result<MempoolEvents, Self::Error> {
         unreachable!()
     }

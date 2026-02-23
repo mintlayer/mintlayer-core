@@ -152,6 +152,7 @@ pub trait NodeInterface {
         &self,
         tx_id: Id<Transaction>,
     ) -> Result<Option<SignedTransaction>, Self::Error>;
+    async fn mempool_get_transactions(&self) -> Result<Vec<SignedTransaction>, Self::Error>;
     async fn mempool_subscribe_to_events(&self) -> Result<MempoolEvents, Self::Error>;
 
     async fn get_utxo(&self, outpoint: UtxoOutPoint) -> Result<Option<TxOutput>, Self::Error>;
