@@ -108,7 +108,7 @@ impl EventList {
         self.0.lock().unwrap().push(event)
     }
 
-    pub fn pop_all(&self) -> Vec<ChainstateEvent> {
+    pub fn take(&self) -> Vec<ChainstateEvent> {
         std::mem::take(self.0.lock().unwrap().deref_mut())
     }
 }

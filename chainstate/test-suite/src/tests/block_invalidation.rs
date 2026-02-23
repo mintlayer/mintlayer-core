@@ -119,7 +119,7 @@ fn test_stale_chain_invalidation(#[case] seed: Seed, #[case] sb: StorageBuilder)
         );
 
         tf.chainstate.wait_for_all_events();
-        assert_eq!(&events.pop_all(), &[]);
+        assert_eq!(&events.take(), &[]);
     });
 }
 
@@ -155,7 +155,7 @@ fn test_basic_tip_invalidation(#[case] seed: Seed, #[case] sb: StorageBuilder) {
 
         tf.chainstate.wait_for_all_events();
         assert_eq!(
-            &events.pop_all(),
+            &events.take(),
             &[ChainstateEvent::NewTip {
                 id: m0_id.into(),
                 height: BlockHeight::new(1),
@@ -169,7 +169,7 @@ fn test_basic_tip_invalidation(#[case] seed: Seed, #[case] sb: StorageBuilder) {
 
         tf.chainstate.wait_for_all_events();
         assert_eq!(
-            &events.pop_all(),
+            &events.take(),
             &[ChainstateEvent::NewTip {
                 id: m1_id.into(),
                 height: BlockHeight::new(2),
@@ -211,7 +211,7 @@ fn test_basic_parent_invalidation(#[case] seed: Seed, #[case] sb: StorageBuilder
 
         tf.chainstate.wait_for_all_events();
         assert_eq!(
-            &events.pop_all(),
+            &events.take(),
             &[ChainstateEvent::NewTip {
                 id: genesis_id.into(),
                 height: BlockHeight::new(0),
@@ -225,7 +225,7 @@ fn test_basic_parent_invalidation(#[case] seed: Seed, #[case] sb: StorageBuilder
 
         tf.chainstate.wait_for_all_events();
         assert_eq!(
-            &events.pop_all(),
+            &events.take(),
             &[ChainstateEvent::NewTip {
                 id: m1_id.into(),
                 height: BlockHeight::new(2),
@@ -405,7 +405,7 @@ fn complex_test_impl(mut tf: TestFramework, block_ids: &TestChainBlockIds) {
 
         tf.chainstate.wait_for_all_events();
         assert_eq!(
-            &events.pop_all(),
+            &events.take(),
             &[ChainstateEvent::NewTip {
                 id: d[2].into(),
                 height: BlockHeight::new(5),
@@ -450,7 +450,7 @@ fn complex_test_impl(mut tf: TestFramework, block_ids: &TestChainBlockIds) {
         assert_eq!(tf.get_min_height_with_allowed_reorg(), 2.into());
 
         tf.chainstate.wait_for_all_events();
-        assert_eq!(&events.pop_all(), &[]);
+        assert_eq!(&events.take(), &[]);
     }
 
     {
@@ -492,7 +492,7 @@ fn complex_test_impl(mut tf: TestFramework, block_ids: &TestChainBlockIds) {
 
         tf.chainstate.wait_for_all_events();
         assert_eq!(
-            &events.pop_all(),
+            &events.take(),
             &[ChainstateEvent::NewTip {
                 id: c[1].into(),
                 height: BlockHeight::new(4),
@@ -541,7 +541,7 @@ fn complex_test_impl(mut tf: TestFramework, block_ids: &TestChainBlockIds) {
 
         tf.chainstate.wait_for_all_events();
         assert_eq!(
-            &events.pop_all(),
+            &events.take(),
             &[ChainstateEvent::NewTip {
                 id: b[0].into(),
                 height: BlockHeight::new(3),
@@ -595,7 +595,7 @@ fn complex_test_impl(mut tf: TestFramework, block_ids: &TestChainBlockIds) {
         assert_eq!(tf.get_min_height_with_allowed_reorg(), 2.into());
 
         tf.chainstate.wait_for_all_events();
-        assert_eq!(&events.pop_all(), &[]);
+        assert_eq!(&events.take(), &[]);
     }
 
     {
@@ -640,7 +640,7 @@ fn complex_test_impl(mut tf: TestFramework, block_ids: &TestChainBlockIds) {
         assert_eq!(tf.get_min_height_with_allowed_reorg(), 2.into());
 
         tf.chainstate.wait_for_all_events();
-        assert_eq!(&events.pop_all(), &[]);
+        assert_eq!(&events.take(), &[]);
     }
 
     {
@@ -691,7 +691,7 @@ fn complex_test_impl(mut tf: TestFramework, block_ids: &TestChainBlockIds) {
 
         tf.chainstate.wait_for_all_events();
         assert_eq!(
-            &events.pop_all(),
+            &events.take(),
             &[ChainstateEvent::NewTip {
                 id: m[6].into(),
                 height: BlockHeight::new(7),
@@ -773,7 +773,7 @@ fn test_tip_invalidation_with_no_better_candidates(#[case] seed: Seed, #[case] s
 
         tf.chainstate.wait_for_all_events();
         assert_eq!(
-            &events.pop_all(),
+            &events.take(),
             &[ChainstateEvent::NewTip {
                 id: m0_id.into(),
                 height: BlockHeight::new(1),
@@ -789,7 +789,7 @@ fn test_tip_invalidation_with_no_better_candidates(#[case] seed: Seed, #[case] s
 
         tf.chainstate.wait_for_all_events();
         assert_eq!(
-            &events.pop_all(),
+            &events.take(),
             &[ChainstateEvent::NewTip {
                 id: m1_id.into(),
                 height: BlockHeight::new(2),
@@ -837,7 +837,7 @@ fn test_invalidation_with_reorg_to_chain_with_bad_tip1(#[case] seed: Seed) {
         assert_no_block_indices(&tf, &[a1_id]);
 
         tf.chainstate.wait_for_all_events();
-        assert_eq!(&events.pop_all(), &[]);
+        assert_eq!(&events.take(), &[]);
 
         // For completeness, invalidate m0 and check that the chain reorgs to a0.
 
@@ -852,7 +852,7 @@ fn test_invalidation_with_reorg_to_chain_with_bad_tip1(#[case] seed: Seed) {
 
         tf.chainstate.wait_for_all_events();
         assert_eq!(
-            &events.pop_all(),
+            &events.take(),
             &[ChainstateEvent::NewTip {
                 id: a0_id.into(),
                 height: BlockHeight::new(1),
@@ -908,7 +908,7 @@ fn test_invalidation_with_reorg_to_chain_with_bad_tip2(#[case] seed: Seed) {
 
         tf.chainstate.wait_for_all_events();
         assert_eq!(
-            &events.pop_all(),
+            &events.take(),
             &[ChainstateEvent::NewTip {
                 id: a0_id.into(),
                 height: BlockHeight::new(1),
@@ -989,7 +989,7 @@ fn test_invalidation_with_reorg_attempt_to_chain_with_lower_chain_trust(#[case] 
         assert_no_block_indices(&tf, &[a1_id]);
 
         tf.chainstate.wait_for_all_events();
-        assert_eq!(&events.pop_all(), &[]);
+        assert_eq!(&events.take(), &[]);
     });
 }
 
@@ -1054,7 +1054,7 @@ fn test_invalidation_with_reorg_to_chain_with_tip_far_in_the_future(#[case] seed
 
         tf.chainstate.wait_for_all_events();
         assert_eq!(
-            &events.pop_all(),
+            &events.take(),
             &[ChainstateEvent::NewTip {
                 id: a0_id.into(),
                 height: BlockHeight::new(1),
@@ -1113,7 +1113,7 @@ fn test_reset_bad_stale_tip_status_and_add_blocks(#[case] seed: Seed, #[case] sb
         assert_ok_blocks_at_stage(&tf, &[a0_id, a1_id], BlockValidationStage::CheckBlockOk);
 
         tf.chainstate.wait_for_all_events();
-        assert_eq!(&events.pop_all(), &[]);
+        assert_eq!(&events.take(), &[]);
 
         let (a2_id, result) = process_block_spend_parent_reward(&mut tf, &a1_id.into(), &mut rng);
         assert!(result.is_ok());
@@ -1128,7 +1128,7 @@ fn test_reset_bad_stale_tip_status_and_add_blocks(#[case] seed: Seed, #[case] sb
         );
 
         tf.chainstate.wait_for_all_events();
-        assert_eq!(&events.pop_all(), &[]);
+        assert_eq!(&events.take(), &[]);
 
         let (a3_id, result) = process_block(&mut tf, &a2_id.into(), &mut rng);
         assert!(result.is_err());
@@ -1147,6 +1147,6 @@ fn test_reset_bad_stale_tip_status_and_add_blocks(#[case] seed: Seed, #[case] sb
         );
 
         tf.chainstate.wait_for_all_events();
-        assert_eq!(&events.pop_all(), &[]);
+        assert_eq!(&events.take(), &[]);
     });
 }
