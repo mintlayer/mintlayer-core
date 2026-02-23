@@ -85,6 +85,18 @@ pub enum MessageToSign {
     Predefined(Vec<u8>),
 }
 
+#[rstest_reuse::template]
+pub fn sign_message_test_params(
+    #[values(
+        MessageToSign::Random,
+        // Special case: an "overlong" utf-8 string (basically, the letter 'K' encoded with 2 bytes
+        // instead of 1). Trezor firmware used to have troubles with this.
+        MessageToSign::Predefined(vec![193, 139])
+    )]
+    message_to_sign: MessageToSign,
+) {
+}
+
 pub async fn test_sign_message_generic<MkS1, MkS2, S1, S2>(
     rng: &mut (impl Rng + CryptoRng),
     message_to_sign: MessageToSign,
@@ -312,6 +324,7 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
     input_commitments_version: SighashInputCommitmentVersion,
     make_signer: MkS1,
     make_another_signer: Option<MkS2>,
+    include_orders_v0: bool,
 ) where
     MkS1: Fn(Arc<ChainConfig>, U31) -> S1,
     MkS2: Fn(Arc<ChainConfig>, U31) -> S2,
@@ -374,7 +387,16 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
         coin_input_amounts.iter().fold(Amount::ZERO, |acc, a| acc.add(*a).unwrap());
 
     let decommissioned_pool_id = PoolId::new(H256::random_using(rng));
-    let decommissioned_pool_balance = Amount::from_atoms(rng.gen_range(100..200));
+    let decommissioned_pool_balance = Amount::from_atoms(
+        rng.gen_range(100..200)
+            + chain_config.fungible_token_issuance_fee().into_atoms()
+            + chain_config.nft_issuance_fee(tx_block_height).into_atoms() * 2
+            + chain_config.token_supply_change_fee(tx_block_height).into_atoms() * 3
+            + chain_config.token_freeze_fee(tx_block_height).into_atoms() * 2
+            + chain_config.token_change_authority_fee(tx_block_height).into_atoms()
+            + chain_config.data_deposit_fee(tx_block_height).into_atoms(),
+    );
+
     let decommissioned_pool_data = PoolData {
         utxo_outpoint: UtxoOutPoint::new(Id::<Transaction>::random_using(rng).into(), 1),
         creation_block: BlockInfo {
@@ -568,7 +590,7 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
         rng,
     );
 
-    let acc_inputs = vec![
+    let mut acc_inputs = vec![
         TxInput::Account(AccountOutPoint::new(
             AccountNonce::new(rng.gen_range(0..100)),
             AccountSpending::DelegationBalance(
@@ -610,29 +632,42 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
                 random_ascii_alphanumeric_string(rng, 10..20).into_bytes(),
             ),
         ),
-        TxInput::AccountCommand(
-            AccountNonce::new(rng.next_u64()),
-            AccountCommand::ConcludeOrder(concluded_order1_id),
-        ),
-        TxInput::AccountCommand(
-            AccountNonce::new(rng.next_u64()),
-            AccountCommand::FillOrder(
-                filled_order1_id,
-                Amount::from_atoms(
-                    rng.gen_range(1..filled_order1_info.initially_asked.amount().into_atoms()),
-                ),
-                Destination::AnyoneCanSpend,
+    ];
+
+    // optional orders V0
+    if include_orders_v0 {
+        acc_inputs.extend([
+            TxInput::AccountCommand(
+                AccountNonce::new(rng.next_u64()),
+                AccountCommand::ConcludeOrder(concluded_order1_id),
             ),
-        ),
+            TxInput::AccountCommand(
+                AccountNonce::new(rng.next_u64()),
+                AccountCommand::FillOrder(
+                    filled_order1_id,
+                    Amount::from_atoms(
+                        rng.gen_range(1..filled_order1_info.initially_asked.amount().into_atoms()),
+                    ),
+                    Destination::AnyoneCanSpend,
+                ),
+            ),
+        ]);
+    }
+
+    let token_max_fill = std::cmp::min(
+        filled_order2_info.initially_asked.amount(),
+        token_mint_amount,
+    );
+    let token_amount_to_fill = rng.gen_range(1..token_max_fill.into_atoms());
+    acc_inputs.extend([
         TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder(concluded_order2_id)),
         TxInput::OrderAccountCommand(OrderAccountCommand::FreezeOrder(frozen_order_id)),
         TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(
             filled_order2_id,
-            Amount::from_atoms(
-                rng.gen_range(1..filled_order2_info.initially_asked.amount().into_atoms()),
-            ),
+            Amount::from_atoms(token_amount_to_fill),
         )),
-    ];
+    ]);
+
     // Note: the last input is v1 FillOrder, which must not be signed.
     let acc_dests = (0..acc_inputs.len() - 1)
         .map(|_| destination_from_account(&mut account, &mut db_tx, rng))
@@ -703,7 +738,9 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
         TxOutput::Transfer(
             OutputValue::TokenV1(
                 token_id,
-                Amount::from_atoms(rng.gen_range(1..=token_mint_amount.into_atoms())),
+                Amount::from_atoms(
+                    rng.gen_range(1..=(token_mint_amount.into_atoms() - token_amount_to_fill)),
+                ),
             ),
             Destination::PublicKey(dest_pub.clone()),
         ),

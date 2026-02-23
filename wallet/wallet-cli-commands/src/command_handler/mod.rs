@@ -277,6 +277,15 @@ where
                             false,
                             Some(HardwareWalletType::Trezor { device_id }),
                         ),
+                        OpenWalletSubCommand::Ledger {
+                            wallet_path,
+                            encryption_password,
+                        } => (
+                            wallet_path,
+                            encryption_password,
+                            false,
+                            Some(HardwareWalletType::Ledger),
+                        ),
                     };
 
                 let response = self
@@ -359,6 +368,10 @@ where
                             device_name, device_id, firmware_version
                         )
                     }
+                    WalletExtraInfo::LedgerWallet { app_version, model } => format!(
+                        "This is a Ledger wallet; model: {model}, running app version {}",
+                        app_version
+                    ),
                 };
                 let account_names = info
                     .account_names

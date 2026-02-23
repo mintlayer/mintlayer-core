@@ -5,7 +5,11 @@ license.workspace = true
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
-authors = ["Samer Afach <samer.afach@mintlayer.org>", "Ben Marsh <benjamin.marsh@mintlayer.org>", "Enrico Rubboli <enrico.rubboli@mintlayer.org>"]
+authors = [
+  "Samer Afach <samer.afach@mintlayer.org>",
+  "Ben Marsh <benjamin.marsh@mintlayer.org>",
+  "Enrico Rubboli <enrico.rubboli@mintlayer.org>",
+]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -24,9 +28,9 @@ utils = { path = "../../utils" }
 wallet = { path = "../../wallet" }
 wallet-controller = { path = "../../wallet/wallet-controller" }
 wallet-types = { path = "../../wallet/types" }
-wallet-rpc-lib = { path = "../../wallet/wallet-rpc-lib"}
-wallet-rpc-client = { path = "../../wallet/wallet-rpc-client"}
-wallet-cli-commands = { path = "../../wallet/wallet-cli-commands"}
+wallet-rpc-lib = { path = "../../wallet/wallet-rpc-lib" }
+wallet-rpc-client = { path = "../../wallet/wallet-rpc-client" }
+wallet-cli-commands = { path = "../../wallet/wallet-cli-commands" }
 
 anyhow.workspace = true
 chrono.workspace = true
@@ -45,4 +49,20 @@ test-utils = { path = "../../test-utils" }
 rstest.workspace = true
 
 [features]
-trezor = ["wallet/trezor", "wallet-controller/trezor", "wallet-types/trezor", "wallet-rpc-lib/trezor", "wallet-rpc-client/trezor", "wallet-cli-commands/trezor"]
+trezor = [
+  "wallet/trezor",
+  "wallet-controller/trezor",
+  "wallet-types/trezor",
+  "wallet-rpc-lib/trezor",
+  "wallet-rpc-client/trezor",
+  "wallet-cli-commands/trezor",
+]
+ledger = [
+  "wallet/ledger",
+  "wallet-controller/ledger",
+  "wallet-types/ledger",
+  "wallet-rpc-lib/ledger",
+  "wallet-rpc-client/ledger",
+  "wallet-cli-commands/ledger",
+]
+default = ["trezor", "ledger"]

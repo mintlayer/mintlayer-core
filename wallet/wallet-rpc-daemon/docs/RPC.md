@@ -3500,7 +3500,8 @@ Parameters:
                      1) string
                      2) null },
             }
-         2) null,
+         2) { "type": "Ledger" }
+         3) null,
 }
 ```
 
@@ -3550,7 +3551,8 @@ Parameters:
                      1) string
                      2) null },
             }
-         2) null,
+         2) { "type": "Ledger" }
+         3) null,
 }
 ```
 
@@ -3597,7 +3599,8 @@ Parameters:
                      1) string
                      2) null },
             }
-         2) null,
+         2) { "type": "Ledger" }
+         3) null,
 }
 ```
 
@@ -3657,6 +3660,13 @@ Returns:
                     "device_name": string,
                     "device_id": string,
                     "firmware_version": string,
+                },
+            }
+         3) {
+                "type": "LedgerWallet",
+                "content": {
+                    "app_version": string,
+                    "model": string,
                 },
             },
 }

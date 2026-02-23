@@ -103,6 +103,8 @@ impl WalletInterface for ClientWalletRpc {
                 false,
                 Some(HardwareWalletType::Trezor { device_id }),
             ),
+            #[cfg(feature = "ledger")]
+            WalletTypeArgs::Ledger => (None, None, false, Some(HardwareWalletType::Ledger)),
         };
 
         ColdWalletRpcClient::create_wallet(
@@ -135,6 +137,8 @@ impl WalletInterface for ClientWalletRpc {
                 false,
                 Some(HardwareWalletType::Trezor { device_id }),
             ),
+            #[cfg(feature = "ledger")]
+            WalletTypeArgs::Ledger => (None, None, false, Some(HardwareWalletType::Ledger)),
         };
 
         ColdWalletRpcClient::recover_wallet(

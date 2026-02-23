@@ -16,11 +16,19 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
   - Wallet RPC:
     - new methods added: `node_get_tokens_info`, `order_list_own`, `order_list_all_active`.
+    - new value `ledger` in the `hardware_wallet` option for `wallet_create`, `wallet_recover` and `wallet_open` methods.
 
   - Wallet CLI:
     - the commands `order-create`, `order-fill`, `order-freeze`, `order-conclude` were added,
       mirroring their existing RPC counterparts;
     - other new commands added: `order-list-own`, `order-list-all-active`;
+    - `wallet-create`/`wallet-recover`/`wallet-open` support the `ledger` subcommand, in addition to the existing
+      `software` and `trezor`, which specifies the type of the wallet to operate on.
+
+  - Wallet:
+    - Added support for Ledger hardware wallets (beta).
+    - Now the wallet subscribes to events from the Mempool to include not yet confirmed transactions
+      relevant to this wallet.
 
 ### Changed
   - Wallet RPC:

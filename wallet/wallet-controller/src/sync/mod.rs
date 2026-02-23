@@ -15,6 +15,8 @@
 
 use std::{cmp::Reverse, collections::BTreeMap, iter};
 
+use async_trait::async_trait;
+
 use common::{
     chain::{block::timestamp::BlockTimestamp, Block, ChainConfig, GenBlock},
     primitives::{BlockHeight, Id},
@@ -32,6 +34,7 @@ use crate::ControllerError;
 
 const MAX_FETCH_BLOCK_COUNT: usize = 100;
 
+#[async_trait]
 pub trait SyncingWallet {
     fn syncing_state(&self) -> WalletSyncingState;
 
@@ -43,7 +46,7 @@ pub trait SyncingWallet {
         wallet_events: &impl WalletEvents,
     ) -> WalletResult<()>;
 
-    fn scan_blocks_for_unused_account(
+    async fn scan_blocks_for_unused_account(
         &mut self,
         common_block_height: BlockHeight,
         blocks: Vec<Block>,
@@ -53,6 +56,7 @@ pub trait SyncingWallet {
     fn update_median_time(&mut self, median_time: BlockTimestamp) -> WalletResult<()>;
 }
 
+#[async_trait]
 impl<B, P> SyncingWallet for Wallet<B, P>
 where
     B: storage::BackendWithSendableTransactions + 'static,
@@ -72,13 +76,14 @@ where
         self.scan_new_blocks(account, common_block_height, blocks, wallet_events)
     }
 
-    fn scan_blocks_for_unused_account(
+    async fn scan_blocks_for_unused_account(
         &mut self,
         common_block_height: BlockHeight,
         blocks: Vec<Block>,
         wallet_events: &impl WalletEvents,
     ) -> WalletResult<()> {
         self.scan_new_blocks_unused_account(common_block_height, blocks, wallet_events)
+            .await
     }
 
     fn update_median_time(&mut self, median_time: BlockTimestamp) -> WalletResult<()> {
@@ -260,13 +265,14 @@ async fn fetch_and_sync<T: NodeInterface>(
             common_block_height,
             blocks.clone(),
             wallet_events,
-        )?;
+        )
+        .await?;
     }
 
     Ok(())
 }
 
-fn scan_new_blocks<T: NodeInterface>(
+async fn scan_new_blocks<T: NodeInterface>(
     acc: &AccountType,
     new_height: u64,
     block_id: Id<Block>,
@@ -296,6 +302,7 @@ fn scan_new_blocks<T: NodeInterface>(
 
             wallet
                 .scan_blocks_for_unused_account(common_block_height, blocks, wallet_events)
+                .await
                 .map_err(ControllerError::WalletError)?;
         }
     }

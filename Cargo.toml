@@ -6,80 +6,84 @@ repository = "https://github.com/mintlayer/mintlayer-core"
 readme = "README.md"
 license = "MIT"
 version = "1.2.0"
-authors = ["Samer Afach <samer.afach@mintlayer.org>", "Ben Marsh <benjamin.marsh@mintlayer.org>", "Enrico Rubboli <enrico.rubboli@mintlayer.org>"]
+authors = [
+  "Samer Afach <samer.afach@mintlayer.org>",
+  "Ben Marsh <benjamin.marsh@mintlayer.org>",
+  "Enrico Rubboli <enrico.rubboli@mintlayer.org>",
+]
 edition = "2021"
 
 [workspace]
 members = [
-  "accounting",                         # Accounting and balances abstractions.
-  "api-server/api-server-common",       # API server, for light-wallets and block explorers: common between web-server and scanner.
-  "api-server/storage-test-suite",      # Test suite for the abstract storage layer of the API server to ensure consistent behavior.
-  "api-server/scanner-daemon",          # API server, for light-wallets and block explorers: blockchain scanner daemon.
-  "api-server/scanner-lib",             # API server, for light-wallets and block explorers: blockchain scanner library.
-  "api-server/stack-test-suite",        # API server, for light-wallets and block explorers: testing the scanner and web-server.
-  "api-server/web-server",              # API server, for light-wallets and block explorers: web-server.
-  "blockprod",                          # Block production with whatever consensus algorithm.
-  "chainstate",                         # Code on chainstate of blocks and transactions.
-  "chainstate/db-dumper",               # A tool for dumping the contents of the chainstate db.
-  "chainstate/test-suite",              # Tests for the chainstate, separated to make use of the chainstate test framework.
-  "common",                             # Everything else, until it's moved to another crate.
-  "consensus",                          # Consensus related logic.
-  "crypto",                             # Cryptographic primitives and their interfaces.
-  "dns-server",                         # DNS-server.
-  "logging",                            # Logging engine and its interfaces.
-  "mempool",                            # Mempool interface and implementation.
-  "mempool/types",                      # Common mempool types.
-  "mintscript",                         # Basic scripting language for validating transactions.
-  "mocks",                              # Mock implementations of our traits (used for testing).
-  "node-daemon",                        # Node terminal binary.
-  "networking",                         # Pure networking implementations
-  "node-gui",                           # Node GUI binary.
-  "node-gui/backend",                   # Node GUI backend, common logic for implementing GUI clients.
-  "node-lib",                           # Node lib; the common library between daemon, tui and gui node executables.
-  "orders-accounting",                  # Orders accounting
-  "p2p",                                # P2p communication interfaces and protocols.
-  "p2p/backend-test-suite",             # P2p backend agnostic tests.
-  "p2p/types",                          # P2p support types with minimal dependencies.
-  "pos-accounting",                     # PoS accounting and balances abstractions.
-  "randomness",                         # A wrapper around all randomness functionality to make audits easier
-  "rpc",                                # Rpc abstraction and implementation.
-  "rpc/description",                    # Data types describing an RPC interface.
-  "rpc/description-macro",              # Macro to generate rpc interface description.
-  "rpc/types",                          # Support types for use in RPC interfaces.
-  "script",                             # Bitcoin script and its interfaces.
-  "serialization",                      # Full featured serialization interfaces and implementations.
-  "serialization/core",                 # Serialization core tools.
-  "serialization/tagged",               # Serialization for direct/tagged encoding style.
-  "serialization/tagged/derive",        # direct/tagged encoding style derive macros.
-  "storage",                            # storage abstraction layer and its implementation.
-  "storage/backend-test-suite",         # Tests for validating storage backend implementations.
-  "storage/core",                       # Core backend-agnostic storage abstraction.
-  "storage/failing",                    # Storage adapter to occasionally fail certain operations, for testing.
-  "storage/inmemory",                   # In-memory storage backend implementation.
-  "storage/lmdb",                       # LMDB-based persistent storage backend implementation.
-  "storage/sqlite",                     # SQLite-based persistent storage backend implementation.
-  "subsystem",                          # Utilities for working with concurrent subsystems.
-  "test",                               # Integration tests.
-  "test-rpc-functions",                 # RPC functions specifically for tests.
-  "test-utils",                         # Various utilities for tests.
-  "tokens-accounting",                  # Tokens accounting
-  "utils",                              # Various utilities.
-  "utils/networking",                   # Various async/tokio utilities.
-  "utxo",                               # Utxo and related utilities (cache, undo, etc.).
-  "wallet",                             # Wallet primitives.
-  "wallet/wallet-cli",                  # Wallet CLI/REPL binary.
-  "wallet/wallet-cli-lib",              # Wallet CLI/REPL lib.
-  "wallet/wallet-cli-commands",         # Wallet CLI/REPL commands.
-  "wallet/wallet-controller",           # Common code for wallet UI applications.
-  "wallet/wallet-node-client",          # Wallet-to-node communication tools.
-  "wallet/wallet-address-generator",    # Wallet address generator binary.
-  "wallet/wallet-address-generator-lib",# Wallet address generator lib.
-  "wallet/wallet-rpc-client",           # Wallet RPC communication.
-  "wallet/wallet-rpc-daemon",           # Wallet RPC daemon binary.
-  "wallet/wallet-rpc-lib",              # Wallet RPC definitions library.
-  "wallet/wallet-test-node",            # Node for wallet testing as a library.
-  "wasm-wrappers",                      # WASM wrappers for various components.
-  "wasm-wrappers/wasm-doc-gen",         # WASM wrappers documentation generator.
+  "accounting",                          # Accounting and balances abstractions.
+  "api-server/api-server-common",        # API server, for light-wallets and block explorers: common between web-server and scanner.
+  "api-server/storage-test-suite",       # Test suite for the abstract storage layer of the API server to ensure consistent behavior.
+  "api-server/scanner-daemon",           # API server, for light-wallets and block explorers: blockchain scanner daemon.
+  "api-server/scanner-lib",              # API server, for light-wallets and block explorers: blockchain scanner library.
+  "api-server/stack-test-suite",         # API server, for light-wallets and block explorers: testing the scanner and web-server.
+  "api-server/web-server",               # API server, for light-wallets and block explorers: web-server.
+  "blockprod",                           # Block production with whatever consensus algorithm.
+  "chainstate",                          # Code on chainstate of blocks and transactions.
+  "chainstate/db-dumper",                # A tool for dumping the contents of the chainstate db.
+  "chainstate/test-suite",               # Tests for the chainstate, separated to make use of the chainstate test framework.
+  "common",                              # Everything else, until it's moved to another crate.
+  "consensus",                           # Consensus related logic.
+  "crypto",                              # Cryptographic primitives and their interfaces.
+  "dns-server",                          # DNS-server.
+  "logging",                             # Logging engine and its interfaces.
+  "mempool",                             # Mempool interface and implementation.
+  "mempool/types",                       # Common mempool types.
+  "mintscript",                          # Basic scripting language for validating transactions.
+  "mocks",                               # Mock implementations of our traits (used for testing).
+  "node-daemon",                         # Node terminal binary.
+  "networking",                          # Pure networking implementations
+  "node-gui",                            # Node GUI binary.
+  "node-gui/backend",                    # Node GUI backend, common logic for implementing GUI clients.
+  "node-lib",                            # Node lib; the common library between daemon, tui and gui node executables.
+  "orders-accounting",                   # Orders accounting
+  "p2p",                                 # P2p communication interfaces and protocols.
+  "p2p/backend-test-suite",              # P2p backend agnostic tests.
+  "p2p/types",                           # P2p support types with minimal dependencies.
+  "pos-accounting",                      # PoS accounting and balances abstractions.
+  "randomness",                          # A wrapper around all randomness functionality to make audits easier
+  "rpc",                                 # Rpc abstraction and implementation.
+  "rpc/description",                     # Data types describing an RPC interface.
+  "rpc/description-macro",               # Macro to generate rpc interface description.
+  "rpc/types",                           # Support types for use in RPC interfaces.
+  "script",                              # Bitcoin script and its interfaces.
+  "serialization",                       # Full featured serialization interfaces and implementations.
+  "serialization/core",                  # Serialization core tools.
+  "serialization/tagged",                # Serialization for direct/tagged encoding style.
+  "serialization/tagged/derive",         # direct/tagged encoding style derive macros.
+  "storage",                             # storage abstraction layer and its implementation.
+  "storage/backend-test-suite",          # Tests for validating storage backend implementations.
+  "storage/core",                        # Core backend-agnostic storage abstraction.
+  "storage/failing",                     # Storage adapter to occasionally fail certain operations, for testing.
+  "storage/inmemory",                    # In-memory storage backend implementation.
+  "storage/lmdb",                        # LMDB-based persistent storage backend implementation.
+  "storage/sqlite",                      # SQLite-based persistent storage backend implementation.
+  "subsystem",                           # Utilities for working with concurrent subsystems.
+  "test",                                # Integration tests.
+  "test-rpc-functions",                  # RPC functions specifically for tests.
+  "test-utils",                          # Various utilities for tests.
+  "tokens-accounting",                   # Tokens accounting
+  "utils",                               # Various utilities.
+  "utils/networking",                    # Various async/tokio utilities.
+  "utxo",                                # Utxo and related utilities (cache, undo, etc.).
+  "wallet",                              # Wallet primitives.
+  "wallet/wallet-cli",                   # Wallet CLI/REPL binary.
+  "wallet/wallet-cli-lib",               # Wallet CLI/REPL lib.
+  "wallet/wallet-cli-commands",          # Wallet CLI/REPL commands.
+  "wallet/wallet-controller",            # Common code for wallet UI applications.
+  "wallet/wallet-node-client",           # Wallet-to-node communication tools.
+  "wallet/wallet-address-generator",     # Wallet address generator binary.
+  "wallet/wallet-address-generator-lib", # Wallet address generator lib.
+  "wallet/wallet-rpc-client",            # Wallet RPC communication.
+  "wallet/wallet-rpc-daemon",            # Wallet RPC daemon binary.
+  "wallet/wallet-rpc-lib",               # Wallet RPC definitions library.
+  "wallet/wallet-test-node",             # Node for wallet testing as a library.
+  "wasm-wrappers",                       # WASM wrappers for various components.
+  "wasm-wrappers/wasm-doc-gen",          # WASM wrappers documentation generator.
 ]
 
 default-members = [
@@ -207,7 +211,7 @@ num-derive = "0.4"
 num-traits = { version = "0.2", default-features = false }
 once_cell = "1.13"
 oneshot = "0.1"
-parity-scale-codec = { version = "3.7", default-features = false }
+parity-scale-codec = "3.7"
 parking_lot = "0.12"
 paste = "1.0"
 probabilistic-collections = "0.7"
@@ -230,6 +234,7 @@ rfd = { version = "0.15", default-features = false }
 ripemd = "0.1"
 rlimit = "0.10"
 rstest = "0.24"
+rstest_reuse = "0.7"
 rusqlite = "0.33"
 schnorrkel = "0.11"
 secp256k1 = { version = "0.29", default-features = false }
@@ -257,7 +262,11 @@ tempfile = "3.3"
 testing_logger = "0.1"
 thiserror = "1.0"
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["registry", "env-filter", "json"] }
+tracing-subscriber = { version = "0.3", features = [
+  "registry",
+  "env-filter",
+  "json",
+] }
 # Note: we use an unreleased version of Tokio, because we need a certain bugfix, see the `[patch.crates-io]`
 # section for additional details.
 tokio = { git = "https://github.com/tokio-rs/tokio", rev = "0d6c7af3e43457350bdc03a6dbcafa276fab7352", default-features = false }
@@ -267,19 +276,34 @@ tokio-util = { version = "0.7", default-features = false }
 toml = "0.8"
 tower = "0.5"
 tower-http = "0.5"
+unwrap-infallible = "1.0"
 x25519-dalek = "2.0"
 zeroize = "1.5"
 
 [workspace.dependencies.ml_primitives]
 git = "https://github.com/mintlayer/mintlayer-core-primitives"
-# The commit "Merge pull request #1 from mintlayer/initial_implementation".
-rev = "4e21bf85e7fdca1577a49df7599b2b39ec913287"
+# The commit "Add CoinType used for Ledger and encode/decode utils".
+rev = "13b10dbc88efdf3b5aa31ece8e34278bc69a5a9b"
 package = "mintlayer-core-primitives"
+
+[workspace.dependencies.ledger-lib]
+git = "https://github.com/ImplOfAnImpl/rust-ledger.git"
+rev = "035789ec436d47b938e8a3d2085ffb2fbf6f0559"
+
+[workspace.dependencies.ledger-proto]
+git = "https://github.com/ImplOfAnImpl/rust-ledger.git"
+rev = "035789ec436d47b938e8a3d2085ffb2fbf6f0559"
+
+[workspace.dependencies.mintlayer-ledger-messages]
+git = "https://github.com/mintlayer/mintlayer-ledger-app"
+# The commit "Move StatusWord to messages crate"
+rev = "dbc41342564b2198037ed4ad41b4cf0c34617870"
+package = "messages"
 
 [workspace.dependencies.trezor-client]
 git = "https://github.com/mintlayer/mintlayer-trezor-firmware"
-# The commit "Merge pull request #22 from mintlayer/specify_license_for_ml_reexports"
-rev = "35716c865086f017f308c949c041f99d343057c0"
+# The commit "Bump ml_primitives and parity scale codec deps"
+rev = "a2e67f6cf804dd905791ec36bff1981871f5321c"
 features = ["bitcoin", "mintlayer"]
 
 [workspace.metadata.dist.dependencies.apt]
@@ -292,7 +316,7 @@ features = ["bitcoin", "mintlayer"]
 panic = "abort" # prevent panic catching (mostly for the tokio runtime)
 
 [profile.release]
-panic = "abort" # prevent panic catching (mostly for the tokio runtime)
+panic = "abort"        # prevent panic catching (mostly for the tokio runtime)
 overflow-checks = true
 
 # "Release" profile with debug info enabled.
@@ -316,7 +340,8 @@ opt-level = 2
 [features]
 tokio-console = []
 trezor = []
-default = ["trezor"]
+ledger = []
+default = ["trezor", "ledger"]
 
 [patch.crates-io]
 # Using fontconfig-parser v0.5.8 completely breaks UI in node-gui on Linux - most of the text disappears and the few
@@ -333,3 +358,11 @@ fontconfig-parser = { git = "https://github.com/Riey/fontconfig-parser", rev = "
 # subsystem (reproducible on a slow machine during initial sync with 30+ connected peers).
 # The PR was merged after 1.49, so it should probably be part of 1.50 when it comes out.
 tokio = { git = "https://github.com/tokio-rs/tokio", rev = "0d6c7af3e43457350bdc03a6dbcafa276fab7352" }
+
+# This patch is needed because there is no release of the library and because ledger-lib depends on ledger-proto, so this is the only way to make the former find the latter.
+# Note that the revision specified here must be the same as the one used in the workspace.dependencies section
+ledger-proto = { git = "https://github.com/ImplOfAnImpl/rust-ledger.git", rev = "035789ec436d47b938e8a3d2085ffb2fbf6f0559" }
+# The specific commit is chosen because it contains a fix for the Ledger NanoX,
+# and we use the same version across all Trezor, Ledger and Mintlayerr core primitives repos
+# If a different version is used the tests in Mintlayer core will stop compiling
+parity-scale-codec = { git = "https://github.com/paritytech/parity-scale-codec.git", rev = "5021525697edc0661591ebc71392c48d950a10b0" }

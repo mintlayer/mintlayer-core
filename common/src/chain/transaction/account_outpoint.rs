@@ -61,13 +61,19 @@ impl From<&AccountCommand> for AccountType {
     }
 }
 
-impl From<OrderAccountCommand> for AccountType {
-    fn from(cmd: OrderAccountCommand) -> Self {
-        match cmd {
+impl OrderAccountCommand {
+    pub fn order_id(&self) -> &OrderId {
+        match self {
             OrderAccountCommand::FillOrder(order_id, _)
             | OrderAccountCommand::FreezeOrder(order_id)
-            | OrderAccountCommand::ConcludeOrder(order_id) => AccountType::Order(order_id),
+            | OrderAccountCommand::ConcludeOrder(order_id) => order_id,
         }
+    }
+}
+
+impl From<OrderAccountCommand> for AccountType {
+    fn from(cmd: OrderAccountCommand) -> Self {
+        AccountType::Order(*cmd.order_id())
     }
 }
 

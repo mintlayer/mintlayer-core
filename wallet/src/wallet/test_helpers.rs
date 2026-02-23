@@ -34,7 +34,7 @@ use crate::{
     DefaultWallet, Wallet,
 };
 
-pub fn create_wallet_with_mnemonic(
+pub async fn create_wallet_with_mnemonic(
     chain_config: Arc<ChainConfig>,
     mnemonic: &str,
 ) -> DefaultWallet {
@@ -45,7 +45,7 @@ pub fn create_wallet_with_mnemonic(
         db,
         (BlockHeight::new(0), genesis_block_id),
         WalletType::Hot,
-        |db_tx| {
+        async |db_tx| {
             Ok(SoftwareSignerProvider::new_from_mnemonic(
                 chain_config,
                 db_tx,
@@ -55,6 +55,7 @@ pub fn create_wallet_with_mnemonic(
             )?)
         },
     )
+    .await
     .unwrap()
     .wallet()
     .unwrap()
@@ -68,7 +69,7 @@ pub fn create_named_in_memory_store(db_name: &str) -> Store<DefaultBackend> {
     Store::new(create_named_in_memory_backend(db_name)).unwrap()
 }
 
-pub fn create_wallet_with_mnemonic_and_named_db(
+pub async fn create_wallet_with_mnemonic_and_named_db(
     chain_config: Arc<ChainConfig>,
     mnemonic: &str,
     db_name: &str,
@@ -80,22 +81,24 @@ pub fn create_wallet_with_mnemonic_and_named_db(
         db,
         (BlockHeight::new(0), genesis_block_id),
         WalletType::Hot,
-        |db_tx| {
-            Ok(SoftwareSignerProvider::new_from_mnemonic(
+        async |db_tx| {
+            SoftwareSignerProvider::new_from_mnemonic(
                 chain_config,
                 db_tx,
                 mnemonic,
                 None,
                 StoreSeedPhrase::DoNotStore,
-            )?)
+            )
+            .map_err(Into::into)
         },
     )
+    .await
     .unwrap()
     .wallet()
     .unwrap()
 }
 
-pub fn scan_wallet<B, P>(wallet: &mut Wallet<B, P>, height: BlockHeight, blocks: Vec<Block>)
+pub async fn scan_wallet<B, P>(wallet: &mut Wallet<B, P>, height: BlockHeight, blocks: Vec<Block>)
 where
     B: storage::BackendWithSendableTransactions + 'static,
     P: SignerProvider,
@@ -108,5 +111,6 @@ where
 
     wallet
         .scan_new_blocks_unused_account(height, blocks, &WalletEventsNoOp)
+        .await
         .unwrap();
 }

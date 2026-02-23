@@ -33,10 +33,7 @@ use common::{
                 authorize_pubkey_spend::AuthorizedPublicKeySpend,
                 authorize_pubkeyhash_spend::AuthorizedPublicKeyHashSpend,
                 classical_multisig::{
-                    authorize_classical_multisig::{
-                        sign_classical_multisig_spending, AuthorizedClassicalMultisigSpend,
-                        ClassicalMultisigCompletionStatus,
-                    },
+                    authorize_classical_multisig::AuthorizedClassicalMultisigSpend,
                     multisig_partial_signature::{self, PartiallySignedMultisigChallenge},
                 },
                 standard_signature::StandardInputSignature,
@@ -58,7 +55,7 @@ use crypto::key::{
     hdkd::{chain_code::ChainCode, derivable::Derivable, u31::U31},
     secp256k1::{extended_keys::Secp256k1ExtendedPublicKey, Secp256k1PublicKey},
     signature::SignatureKind,
-    PrivateKey, SigAuxDataProvider, Signature, SignatureError,
+    SigAuxDataProvider, Signature, SignatureError,
 };
 use logging::log;
 use randomness::make_true_rng;
@@ -105,7 +102,13 @@ use wallet_types::{
 
 use crate::{
     key_chain::{make_account_path, AccountKeyChainImplHardware, AccountKeyChains, FoundPubKey},
-    signer::utils::produce_uniparty_signature_for_input,
+    signer::{
+        hardware_signer_utils::{
+            arbitrary_message_signature_from_raw_sig, sign_with_standalone_private_keys,
+            StandaloneInput, StandaloneInputs,
+        },
+        utils::produce_uniparty_signature_for_input,
+    },
     Account, WalletError, WalletResult,
 };
 
@@ -149,8 +152,10 @@ pub enum TrezorError {
     MultipleSignaturesReturned,
     #[error("A multisig signature was returned for a single address from Device")]
     MultisigSignatureReturned,
-    #[error("The file being loaded is a software wallet and does not correspond to the connected hardware wallet")]
-    HardwareWalletDifferentFile,
+    #[error("The file being loaded is a Ledger wallet and cannot be used with the connected Trezor wallet")]
+    WalletFileIsLedgerWallet,
+    #[error("The file being loaded is a software wallet and cannot be used with the connected Trezor wallet")]
+    WalletFileIsSoftwareWallet,
     #[error(
         "Public keys mismatch - wrong device or passphrase.\n\
          Last used device id: \"{file_device_id}\", connected device id: \"{connected_device_id}\".\n\
@@ -350,7 +355,9 @@ impl TrezorSigner {
                         sighash,
                     )?;
 
-                    let (current_signatures, status) = self.sign_with_standalone_private_keys(
+                    let (current_signatures, status) = sign_with_standalone_private_keys(
+                        &self.chain_config,
+                        self.sig_aux_data_provider.lock().expect("poisoned mutex").as_mut(),
                         current_signatures,
                         standalone_inputs,
                         status,
@@ -436,54 +443,6 @@ impl TrezorSigner {
         let status = self.check_signature_status(sighash, &current_signatures)?;
 
         Ok((current_signatures, status))
-    }
-
-    fn sign_with_standalone_private_keys(
-        &self,
-        current_signatures: AuthorizedClassicalMultisigSpend,
-        standalone_inputs: &[StandaloneInput],
-        new_status: SignatureStatus,
-        sighash: H256,
-    ) -> SignerResult<(AuthorizedClassicalMultisigSpend, SignatureStatus)> {
-        let challenge = current_signatures.challenge().clone();
-
-        standalone_inputs.iter().try_fold(
-            (current_signatures, new_status),
-            |(mut current_signatures, mut status), inp| -> SignerResult<_> {
-                if status == SignatureStatus::FullySigned {
-                    return Ok((current_signatures, status));
-                }
-
-                let key_index =
-                    inp.multisig_idx.ok_or(TrezorError::MissingMultisigIndexForSignature)?;
-                let res = sign_classical_multisig_spending(
-                    &self.chain_config,
-                    key_index as u8,
-                    &inp.private_key,
-                    &challenge,
-                    &sighash,
-                    current_signatures,
-                    self.sig_aux_data_provider.lock().expect("poisoned mutex").as_mut(),
-                )
-                .map_err(DestinationSigError::ClassicalMultisigSigningFailed)?;
-
-                match res {
-                    ClassicalMultisigCompletionStatus::Complete(signatures) => {
-                        current_signatures = signatures;
-                        status = SignatureStatus::FullySigned;
-                    }
-                    ClassicalMultisigCompletionStatus::Incomplete(signatures) => {
-                        current_signatures = signatures;
-                        status = SignatureStatus::PartialMultisig {
-                            required_signatures: challenge.min_required_signatures(),
-                            num_signatures: current_signatures.signatures().len() as u8,
-                        };
-                    }
-                };
-
-                Ok((current_signatures, status))
-            },
-        )
     }
 }
 
@@ -674,7 +633,9 @@ impl Signer for TrezorSigner {
                                     };
 
                                     let (current_signatures, new_status) =
-                                        self.sign_with_standalone_private_keys(
+                                        sign_with_standalone_private_keys(
+                                            &self.chain_config,
+                                            self.sig_aux_data_provider.lock().expect("poisoned mutex").as_mut(),
                                             current_signatures,
                                             standalone_inputs.get(&(input_index as u32)).map_or(&[], |x| x.as_slice()),
                                             new_status,
@@ -758,7 +719,7 @@ impl Signer for TrezorSigner {
         key_chain: &(impl AccountKeyChains + Sync),
         mut db_tx: impl WalletStorageReadUnlocked + Send,
     ) -> SignerResult<ArbitraryMessageSignature> {
-        let data = match key_chain.find_public_key(destination) {
+        match key_chain.find_public_key(destination) {
             Some(FoundPubKey::Hierarchy(xpub)) => {
                 let address_n: Vec<_> = xpub
                     .get_derivation_path()
@@ -802,31 +763,7 @@ impl Signer for TrezorSigner {
                     key_chain,
                 )?;
 
-                let signature = Signature::from_raw_data(&sig, SignatureKind::Secp256k1Schnorr)
-                    .map_err(TrezorError::SignatureError)?;
-
-                match &destination {
-                    Destination::PublicKey(_) => AuthorizedPublicKeySpend::new(signature).encode(),
-                    Destination::PublicKeyHash(_) => {
-                        AuthorizedPublicKeyHashSpend::new(xpub.into_public_key(), signature)
-                            .encode()
-                    }
-                    Destination::AnyoneCanSpend => {
-                        return Err(SignerError::SigningError(
-                            DestinationSigError::AttemptedToProduceSignatureForAnyoneCanSpend,
-                        ))
-                    }
-                    Destination::ClassicMultisig(_) => {
-                        return Err(SignerError::SigningError(
-                            DestinationSigError::AttemptedToProduceClassicalMultisigSignatureInUnipartySignatureCode,
-                        ))
-                    }
-                    Destination::ScriptHash(_) => {
-                        return Err(SignerError::SigningError(
-                            DestinationSigError::Unsupported,
-                        ))
-                    }
-                }
+                arbitrary_message_signature_from_raw_sig(&sig, destination.into(), xpub)
             }
             Some(FoundPubKey::Standalone(acc_public_key)) => {
                 let standalone_pk = db_tx
@@ -839,13 +776,10 @@ impl Signer for TrezorSigner {
                     message,
                     self.sig_aux_data_provider.lock().expect("poisoned mutex").as_mut(),
                 )?;
-                return Ok(sig);
+                Ok(sig)
             }
-            None => return Err(SignerError::DestinationNotFromThisWallet),
-        };
-
-        let sig = ArbitraryMessageSignature::from_data(data);
-        Ok(sig)
+            None => Err(SignerError::DestinationNotFromThisWallet),
+        }
     }
 
     async fn sign_transaction_intent(
@@ -1177,13 +1111,6 @@ fn to_trezor_utxo_input(
     inp.utxo = Some(inp_req).into();
     Ok(inp)
 }
-
-struct StandaloneInput {
-    multisig_idx: Option<u32>,
-    private_key: PrivateKey,
-}
-
-type StandaloneInputs = BTreeMap</*input index*/ u32, Vec<StandaloneInput>>;
 
 /// Find the derivation paths to the key in the destination, or multiple in the case of a multisig
 fn destination_to_address_paths(
@@ -1587,17 +1514,12 @@ fn to_trezor_output_lock(lock: &OutputTimeLock) -> trezor_client::protos::Mintla
     lock_req
 }
 
-#[derive(Clone)]
+#[derive(Clone, derive_more::Debug)]
 pub struct TrezorSignerProvider {
+    #[debug(skip)]
     client: Arc<Mutex<Trezor>>,
     info: TrezorFullInfo,
     session_id: Vec<u8>,
-}
-
-impl std::fmt::Debug for TrezorSignerProvider {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("TrezorSignerProvider")
-    }
 }
 
 impl TrezorSignerProvider {
@@ -1684,10 +1606,14 @@ fn check_public_keys_against_key_chain(
                     .into());
                 }
             }
+            #[cfg(feature = "ledger")]
+            HardwareWalletData::Ledger(_) => {
+                return Err(TrezorError::WalletFileIsLedgerWallet.into());
+            }
         }
     }
 
-    Err(TrezorError::HardwareWalletDifferentFile)?
+    Err(TrezorError::WalletFileIsSoftwareWallet)?
 }
 
 fn fetch_extended_pub_key(
@@ -1726,7 +1652,7 @@ fn check_public_keys_against_db(
             (info.account_index() == DEFAULT_ACCOUNT_INDEX).then_some(acc_id)
         })
         .cloned()
-        .ok_or(WalletError::WalletNotInitialized)?;
+        .ok_or(SignerError::WalletNotInitialized)?;
     let loaded_acc =
         provider.load_account_from_database(chain_config.clone(), db_tx, &first_acc)?;
 
@@ -1850,6 +1776,7 @@ fn get_checked_firmware_version(client: &mut Trezor) -> Result<semver::Version, 
     Ok(version)
 }
 
+#[async_trait]
 impl SignerProvider for TrezorSignerProvider {
     type S = TrezorSigner;
     type K = AccountKeyChainImplHardware;
@@ -1858,12 +1785,12 @@ impl SignerProvider for TrezorSignerProvider {
         TrezorSigner::new(chain_config, self.client.clone(), self.session_id.clone())
     }
 
-    fn make_new_account(
+    async fn make_new_account<T: WalletStorageWriteUnlocked + Send>(
         &mut self,
         chain_config: Arc<ChainConfig>,
         account_index: U31,
         name: Option<String>,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
+        db_tx: &mut T,
     ) -> WalletResult<Account<Self::K>> {
         let account_pubkey = self.fetch_extended_pub_key(&chain_config, account_index)?;
 

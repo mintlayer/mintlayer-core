@@ -8,7 +8,7 @@ on:
     branches:
       - "**" # target all branches
   schedule:
-    - cron: '15 0 * * *'  # every day at 00:15 UTC
+    - cron: "15 0 * * *" # every day at 00:15 UTC
 
 env:
   CARGO_TERM_COLOR: always
@@ -27,7 +27,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
-          python-version-file: './build-tools/.python-version'
+          python-version-file: "./build-tools/.python-version"
 
       - name: Install Rust
         # Use bash to be able to escape the newline via '\'.
@@ -37,17 +37,17 @@ jobs:
             --default-toolchain $(python ./build-tools/cargo-info-extractor/extract.py --rust-version)
 
       - name: Build
-        run: cargo build --release --locked --features trezor
+        run: cargo build --release --locked --features trezor,ledger
 
       - name: Run tests
-        run: cargo test --release --workspace --features trezor
+        run: cargo test --release --workspace --features trezor,ledger
 
       - name: Run doc tests
-        run: cargo test --release --doc --features trezor
+        run: cargo test --release --doc --features trezor,ledger
 
       # This test is ignored, so it needs to run separately.
       - name: Run mixed_sighash_types test
-        run: cargo test --release mixed_sighash_types --features trezor
+        run: cargo test --release mixed_sighash_types --features trezor,ledger
 
       # This test is ignored, so it needs to run separately.
       - name: Run test_4opc_sequences test
@@ -76,12 +76,12 @@ jobs:
         run: sudo apt-get update
 
       - name: Install build dependencies
-        run: sudo apt-get install -yqq --no-install-recommends build-essential podman pkg-config libssl-dev
+        run: sudo apt-get install -yqq --no-install-recommends build-essential podman pkg-config libssl-dev libdbus-1-dev libusb-1.0-0-dev
 
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
-          python-version-file: './build-tools/.python-version'
+          python-version-file: "./build-tools/.python-version"
 
       - name: Install Rust
         run: |
@@ -89,17 +89,17 @@ jobs:
             --default-toolchain $(python ./build-tools/cargo-info-extractor/extract.py --rust-version)
 
       - name: Build
-        run: cargo build --release --locked --features trezor
+        run: cargo build --release --locked --features trezor,ledger
 
       - name: Run tests
-        run: cargo test --release --workspace --features trezor
+        run: cargo test --release --workspace --features trezor,ledger
 
       - name: Run doc tests
-        run: cargo test --release --doc --features trezor
+        run: cargo test --release --doc --features trezor,ledger
 
       # This test is ignored, so it needs to run separately.
       - name: Run mixed_sighash_types test
-        run: cargo test --release mixed_sighash_types --features trezor
+        run: cargo test --release mixed_sighash_types --features trezor,ledger
 
       # This test is ignored, so it needs to run separately.
       - name: Run test_4opc_sequences test
@@ -125,7 +125,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
-          python-version-file: './build-tools/.python-version'
+          python-version-file: "./build-tools/.python-version"
 
       - name: Install Rust
         run: |
@@ -133,17 +133,17 @@ jobs:
             --default-toolchain $(python ./build-tools/cargo-info-extractor/extract.py --rust-version)
 
       - name: Build
-        run: cargo build --release --locked --features trezor
+        run: cargo build --release --locked --features trezor,ledger
 
       - name: Run tests
-        run: cargo test --release --workspace --features trezor
+        run: cargo test --release --workspace --features trezor,ledger
 
       - name: Run doc tests
-        run: cargo test --release --doc --features trezor
+        run: cargo test --release --doc --features trezor,ledger
 
       # This test is ignored, so it needs to run separately.
       - name: Run mixed_sighash_types test
-        run: cargo test --release mixed_sighash_types --features trezor
+        run: cargo test --release mixed_sighash_types --features trezor,ledger
 
       # This test is ignored, so it needs to run separately.
       - name: Run test_4opc_sequences test
@@ -162,9 +162,9 @@ jobs:
   run_tests_on_trezor_preparation:
     runs-on: ubuntu-latest
     steps:
-       # Note: we need to mimic the directory structure of the run_tests_on_trezor job, otherwise nextest
-       # will fail to execute archived tests. So we checkout the source code to "./mintlayer-core".
-       # (Also note that because of this the resulting path of the source dir will be "/.../mintlayer-core/mintlayer-core/mintlayer-core")
+      # Note: we need to mimic the directory structure of the run_tests_on_trezor job, otherwise nextest
+      # will fail to execute archived tests. So we checkout the source code to "./mintlayer-core".
+      # (Also note that because of this the resulting path of the source dir will be "/.../mintlayer-core/mintlayer-core/mintlayer-core")
       - name: Checkout the core repository
         uses: actions/checkout@v5
         with:
@@ -175,12 +175,12 @@ jobs:
         run: sudo apt-get update
 
       - name: Install build dependencies
-        run: sudo apt-get install -yqq --no-install-recommends build-essential pkg-config libssl-dev
+        run: sudo apt-get install -yqq --no-install-recommends build-essential pkg-config libssl-dev libdbus-1-dev libusb-1.0-0-dev
 
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
-          python-version-file: './mintlayer-core/build-tools/.python-version'
+          python-version-file: "./mintlayer-core/build-tools/.python-version"
 
       - name: Extract required info from Cargo.toml
         id: extract_cargo_info
@@ -240,7 +240,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
-          python-version-file: './mintlayer-core/build-tools/.python-version'
+          python-version-file: "./mintlayer-core/build-tools/.python-version"
 
       - name: Extract required info from Cargo.toml
         id: extract_cargo_info
@@ -281,13 +281,127 @@ jobs:
       # Note: since we haven't installed Cargo in this job, we have to execute "cargo-nextest nextest"
       # instead of "cargo nextest".
       - name: Run tests in the emulator
-        run:
-          nix-shell --run "
-            poetry run core/emu.py
-              --headless --quiet --temporary-profile
-              --mnemonic \"abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about\"
-              --command env --chdir ../mintlayer-core
-                cargo-nextest nextest run --archive-file tests.tar.zst -j1 trezor_signer
+        run: nix-shell --run "
+          poetry run core/emu.py
+          --headless --quiet --temporary-profile
+          --mnemonic \"abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about\"
+          --command env --chdir ../mintlayer-core
+          cargo-nextest nextest run --archive-file tests.tar.zst -j1 trezor_signer
           "
         working-directory: ./mintlayer-trezor-firmware
         timeout-minutes: 10
+
+  # Build Ledger-specific tests and archive them
+  run_tests_on_ledger_preparation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the core repository
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+          path: ./mintlayer-core
+
+      - name: Update the list of available system packages
+        run: sudo apt-get update
+
+      - name: Install build dependencies
+        run: sudo apt-get install -yqq --no-install-recommends build-essential pkg-config libdbus-1-dev libusb-1.0-0-dev
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version-file: "./mintlayer-core/build-tools/.python-version"
+
+      - name: Extract required info from Cargo.toml
+        id: extract_cargo_info
+        run: echo "RUST_VERSION=$(python ./build-tools/cargo-info-extractor/extract.py --rust-version)" >> $GITHUB_OUTPUT
+        working-directory: ./mintlayer-core
+
+      - name: Install Rust
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
+            --default-toolchain ${{ steps.extract_cargo_info.outputs.RUST_VERSION }}
+
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@nextest
+
+      - name: Build and archive the tests
+        run: cargo nextest archive --release --locked -p wallet --features enable-ledger-device-tests --archive-file ledger-tests.tar.zst
+        working-directory: ./mintlayer-core
+
+      - name: Upload archived tests
+        uses: actions/upload-artifact@v4
+        with:
+          name: archived-ledger-tests
+          path: ./mintlayer-core/ledger-tests.tar.zst
+          retention-days: 1
+
+  # Run Ledger-specific tests on an emulator
+  run_tests_on_ledger:
+    needs: run_tests_on_ledger_preparation
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        model: [apex_p, flex, stax, nanox, nanosplus]
+    env:
+      LEDGER_TESTS_AUTO_CONFIRM: true
+    steps:
+      - name: Checkout the core repository
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+          path: ./mintlayer-core
+
+      - name: Checkout mintlayer-ledger-app repository
+        uses: actions/checkout@v5
+        with:
+          repository: mintlayer/mintlayer-ledger-app
+          ref: feature/mintlayer-app
+          path: ./mintlayer-ledger-app
+
+      - name: Download archived tests
+        uses: actions/download-artifact@v4
+        with:
+          name: archived-ledger-tests
+          path: ./mintlayer-core
+
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@nextest
+
+      - name: Build Ledger app in container
+        run: |
+          sudo docker run --rm \
+            -v "$(realpath ./mintlayer-ledger-app):/app" \
+            ghcr.io/ledgerhq/ledger-app-builder/ledger-app-dev-tools:latest \
+            sh -c 'cargo ledger build ${{ matrix.model }}'
+
+      - name: Run Ledger emulator and execute tests
+        run: |
+          set -e
+
+          sudo docker run -d --rm --name ledger-emulator \
+            -v "$(realpath ./mintlayer-ledger-app):/app" \
+            --publish 5000:5000 --publish 9999:9999 \
+            ghcr.io/ledgerhq/ledger-app-builder/ledger-app-dev-tools:latest \
+            sh -c 'speculos --apdu-port 9999 --api-port 5000 --display headless \
+               -s "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about" \
+               target/${{ matrix.model }}/release/mintlayer-app'
+
+          echo "--- Waiting for emulator to initialize ---"
+          sleep 15
+
+          # Set up a trap to ensure the container is stopped even if tests fail or the job is cancelled
+          trap "echo '--- Dumping Ledger emulator logs ---'; \
+                sudo docker logs ledger-emulator; \
+                echo '--- Stopping Ledger emulator ---'; \
+                sudo docker stop ledger-emulator" \
+                EXIT
+
+          echo "--- Running Ledger device tests on the host ---"
+          cd ./mintlayer-core
+
+          # Export the device model from the matrix so the Rust test can pick it up
+          export LEDGER_TESTS_DEVICE_MODEL=${{ matrix.model }}
+
+          cargo-nextest nextest run --archive-file ledger-tests.tar.zst -j1 ledger_signer
+        timeout-minutes: 15

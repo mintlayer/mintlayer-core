@@ -118,17 +118,48 @@ pub fn view_left_panel(
             .on_press(WalletMessage::SelectPanel(panel))
             .padding(panel_button_row_padding)
     };
+    let is_cold_wallet = wallet_info.wallet_type == WalletType::Cold;
 
     // `next_height` is used to prevent flickering when a new block is found
-    let show_scan_progress = match wallet_info.wallet_type {
-        WalletType::Cold => false,
-        #[cfg(feature = "trezor")]
-        WalletType::Trezor => {
-            wallet_info.best_block.1.next_height() < node_state.chain_info.best_block_height
-        }
-        WalletType::Hot => {
-            wallet_info.best_block.1.next_height() < node_state.chain_info.best_block_height
-        }
+    let show_scan_progress = if is_cold_wallet {
+        false
+    } else {
+        wallet_info.best_block.1.next_height() < node_state.chain_info.best_block_height
+    };
+
+    let hardware_wallet_panels = || {
+        column![
+            panel_button(
+                "Transactions",
+                SelectedPanel::Transactions,
+                selected_panel,
+                TRANSACTIONS_TOOLTIP_TEXT
+            ),
+            panel_button(
+                "Addresses",
+                SelectedPanel::Addresses,
+                selected_panel,
+                ADDRESSES_TOOLTIP_TEXT
+            ),
+            panel_button(
+                "Send",
+                SelectedPanel::Send,
+                selected_panel,
+                SEND_TOOLTIP_TEXT
+            ),
+            panel_button(
+                "Delegation",
+                SelectedPanel::Delegation,
+                selected_panel,
+                DELEGATION_TOOLTIP_TEXT
+            ),
+            panel_button(
+                "Console",
+                SelectedPanel::Console,
+                selected_panel,
+                CONSOLE_TOOLTIP_TEXT,
+            )
+        ]
     };
 
     let scan_progress_widget = if show_scan_progress {
@@ -188,38 +219,11 @@ pub fn view_left_panel(
         match wallet_info.wallet_type {
             #[cfg(feature = "trezor")]
             WalletType::Trezor => {
-                column![
-                    panel_button(
-                        "Transactions",
-                        SelectedPanel::Transactions,
-                        selected_panel,
-                        TRANSACTIONS_TOOLTIP_TEXT
-                    ),
-                    panel_button(
-                        "Addresses",
-                        SelectedPanel::Addresses,
-                        selected_panel,
-                        ADDRESSES_TOOLTIP_TEXT
-                    ),
-                    panel_button(
-                        "Send",
-                        SelectedPanel::Send,
-                        selected_panel,
-                        SEND_TOOLTIP_TEXT
-                    ),
-                    panel_button(
-                        "Delegation",
-                        SelectedPanel::Delegation,
-                        selected_panel,
-                        DELEGATION_TOOLTIP_TEXT
-                    ),
-                    panel_button(
-                        "Console",
-                        SelectedPanel::Console,
-                        selected_panel,
-                        CONSOLE_TOOLTIP_TEXT,
-                    )
-                ]
+                hardware_wallet_panels()
+            }
+            #[cfg(feature = "ledger")]
+            WalletType::Ledger => {
+                hardware_wallet_panels()
             }
             WalletType::Cold => {
                 column![

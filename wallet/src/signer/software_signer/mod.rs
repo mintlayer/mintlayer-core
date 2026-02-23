@@ -49,15 +49,16 @@ use crypto::key::{
     PredefinedSigAuxDataProvider, PrivateKey, SigAuxDataProvider,
 };
 use randomness::make_true_rng;
+use utils::ensure;
 use wallet_storage::{
-    StoreTxRwUnlocked, WalletStorageReadLocked, WalletStorageReadUnlocked,
-    WalletStorageWriteUnlocked,
+    WalletStorageReadLocked, WalletStorageReadUnlocked, WalletStorageWriteUnlocked,
 };
 use wallet_types::{
     hw_data::HardwareWalletFullInfo,
     partially_signed_transaction::{PartiallySignedTransaction, TokensAdditionalInfo},
     seed_phrase::StoreSeedPhrase,
     signature_status::SignatureStatus,
+    wallet_type::WalletType,
     AccountId,
 };
 
@@ -67,7 +68,7 @@ use crate::{
         MasterKeyChain,
     },
     signer::utils::produce_uniparty_signature_for_input,
-    Account, WalletResult,
+    Account, WalletError, WalletResult,
 };
 
 use super::{utils::is_htlc_utxo, Signer, SignerError, SignerProvider, SignerResult};
@@ -453,9 +454,9 @@ pub struct SoftwareSignerProvider {
 }
 
 impl SoftwareSignerProvider {
-    pub fn new_from_mnemonic<B: storage::Backend>(
+    pub fn new_from_mnemonic(
         chain_config: Arc<ChainConfig>,
-        db_tx: &mut StoreTxRwUnlocked<B>,
+        db_tx: &mut impl WalletStorageWriteUnlocked,
         mnemonic_str: &str,
         passphrase: Option<&str>,
         save_seed_phrase: StoreSeedPhrase,
@@ -475,11 +476,17 @@ impl SoftwareSignerProvider {
         chain_config: Arc<ChainConfig>,
         db_tx: &impl WalletStorageReadLocked,
     ) -> WalletResult<Self> {
+        let this_wallet_type = db_tx.get_wallet_type()?;
+        ensure!(
+            this_wallet_type == WalletType::Hot || this_wallet_type == WalletType::Cold,
+            WalletError::HardwareWalletOpenedAsSoftwareWallet(this_wallet_type)
+        );
         let master_key_chain = MasterKeyChain::new_from_existing_database(chain_config, db_tx)?;
         Ok(Self { master_key_chain })
     }
 }
 
+#[async_trait]
 impl SignerProvider for SoftwareSignerProvider {
     type S = SoftwareSigner;
     type K = AccountKeyChainImplSoftware;
@@ -488,12 +495,12 @@ impl SignerProvider for SoftwareSignerProvider {
         SoftwareSigner::new(chain_config, account_index)
     }
 
-    fn make_new_account(
+    async fn make_new_account<T: WalletStorageWriteUnlocked + Send>(
         &mut self,
         chain_config: Arc<ChainConfig>,
         next_account_index: U31,
         name: Option<String>,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
+        db_tx: &mut T,
     ) -> WalletResult<Account<AccountKeyChainImplSoftware>> {
         let lookahead_size = db_tx.get_lookahead_size()?;
         let account_key_chain = self.master_key_chain.create_account_key_chain(

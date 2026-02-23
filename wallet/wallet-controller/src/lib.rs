@@ -90,6 +90,8 @@ pub use node_comm::{
     rpc_client::NodeRpcClient,
 };
 use randomness::{make_pseudo_rng, make_true_rng, Rng};
+#[cfg(feature = "ledger")]
+use wallet::signer::ledger_signer::LedgerSignerProvider;
 #[cfg(feature = "trezor")]
 use wallet::signer::trezor_signer::TrezorSignerProvider;
 #[cfg(feature = "trezor")]
@@ -123,7 +125,7 @@ use wallet_types::{
     with_locked::WithLocked,
 };
 
-#[cfg(feature = "trezor")]
+#[cfg(any(feature = "trezor", feature = "ledger"))]
 use crate::types::WalletExtraInfo;
 
 // Note: the standard `Debug` macro is not smart enough and requires N to implement the `Debug`
@@ -275,7 +277,7 @@ where
         })
     }
 
-    pub fn create_wallet(
+    pub async fn create_wallet(
         chain_config: Arc<ChainConfig>,
         file_path: impl AsRef<Path>,
         args: WalletTypeArgsComputed,
@@ -306,16 +308,18 @@ where
                     db,
                     best_block,
                     wallet_type,
-                    |db_tx| {
-                        Ok(SoftwareSignerProvider::new_from_mnemonic(
+                    async |db_tx| {
+                        SoftwareSignerProvider::new_from_mnemonic(
                             chain_config.clone(),
                             db_tx,
                             &mnemonic.to_string(),
                             passphrase_ref,
                             store_seed_phrase,
-                        )?)
+                        )
+                        .map_err(Into::into)
                     },
                 )
+                .await
                 .map_err(ControllerError::WalletError)
                 .map(|w| w.map_wallet(RuntimeWallet::Software))
             }
@@ -325,22 +329,35 @@ where
                 db,
                 best_block,
                 wallet_type,
-                |_db_tx| {
-                    Ok(TrezorSignerProvider::new(
+                async |_db_tx| {
+                    TrezorSignerProvider::new(
                         device_id.map(|device_id| SelectedDevice { device_id }),
                     )
-                    .map_err(SignerError::TrezorError)?)
+                    .map_err(SignerError::TrezorError)
+                    .map_err(Into::into)
                 },
             )
+            .await
             .map_err(ControllerError::WalletError)
             .map(|w| w.map_wallet(RuntimeWallet::Trezor)),
+            #[cfg(feature = "ledger")]
+            WalletTypeArgsComputed::Ledger => wallet::Wallet::create_new_wallet(
+                Arc::clone(&chain_config),
+                db,
+                best_block,
+                wallet_type,
+                async |_db_tx| LedgerSignerProvider::new().await.map_err(Into::into),
+            )
+            .await
+            .map_err(ControllerError::WalletError)
+            .map(|w| w.map_wallet(RuntimeWallet::Ledger)),
         };
 
         Self::delete_wallet_file_on_wallet_creation_failure(&res, file_path);
         res
     }
 
-    pub fn recover_wallet(
+    pub async fn recover_wallet(
         chain_config: Arc<ChainConfig>,
         file_path: impl AsRef<Path>,
         args: WalletTypeArgsComputed,
@@ -369,16 +386,18 @@ where
                     Arc::clone(&chain_config),
                     db,
                     wallet_type,
-                    |db_tx| {
-                        Ok(SoftwareSignerProvider::new_from_mnemonic(
+                    async |db_tx| {
+                        SoftwareSignerProvider::new_from_mnemonic(
                             chain_config.clone(),
                             db_tx,
                             &mnemonic.to_string(),
                             passphrase_ref,
                             store_seed_phrase,
-                        )?)
+                        )
+                        .map_err(Into::into)
                     },
                 )
+                .await
                 .map_err(ControllerError::WalletError)?;
                 Ok(wallet.map_wallet(RuntimeWallet::Software))
             }
@@ -388,15 +407,29 @@ where
                     Arc::clone(&chain_config),
                     db,
                     wallet_type,
-                    |_db_tx| {
-                        Ok(TrezorSignerProvider::new(
+                    async |_db_tx| {
+                        TrezorSignerProvider::new(
                             device_id.map(|device_id| SelectedDevice { device_id }),
                         )
-                        .map_err(SignerError::TrezorError)?)
+                        .map_err(SignerError::TrezorError)
+                        .map_err(Into::into)
                     },
                 )
+                .await
                 .map_err(ControllerError::WalletError)?;
                 Ok(wallet.map_wallet(RuntimeWallet::Trezor))
+            }
+            #[cfg(feature = "ledger")]
+            WalletTypeArgsComputed::Ledger => {
+                let wallet = wallet::Wallet::recover_wallet(
+                    Arc::clone(&chain_config),
+                    db,
+                    wallet_type,
+                    async |_db_tx| LedgerSignerProvider::new().await.map_err(Into::into),
+                )
+                .await
+                .map_err(ControllerError::WalletError)?;
+                Ok(wallet.map_wallet(RuntimeWallet::Ledger))
             }
         };
 
@@ -453,7 +486,7 @@ where
         Ok(())
     }
 
-    pub fn open_wallet(
+    pub async fn open_wallet(
         chain_config: Arc<ChainConfig>,
         file_path: impl AsRef<Path>,
         password: Option<String>,
@@ -482,8 +515,11 @@ where
                     |version| Self::make_backup_wallet_file(file_path.as_ref(), version),
                     current_controller_mode,
                     force_change_wallet_type,
-                    |db_tx| SoftwareSignerProvider::load_from_database(chain_config.clone(), db_tx),
+                    async |db_tx| {
+                        SoftwareSignerProvider::load_from_database(chain_config.clone(), &db_tx)
+                    },
                 )
+                .await
                 .map_err(ControllerError::WalletError)?;
                 Ok(wallet.map_wallet(RuntimeWallet::Software))
             }
@@ -496,16 +532,35 @@ where
                     |version| Self::make_backup_wallet_file(file_path.as_ref(), version),
                     current_controller_mode,
                     force_change_wallet_type,
-                    |db_tx| {
+                    async |db_tx| {
                         TrezorSignerProvider::load_from_database(
                             chain_config.clone(),
-                            db_tx,
+                            &db_tx,
                             device_id,
                         )
                     },
                 )
+                .await
                 .map_err(ControllerError::WalletError)?;
                 Ok(wallet.map_wallet(RuntimeWallet::Trezor))
+            }
+            #[cfg(feature = "ledger")]
+            WalletType::Ledger => {
+                let wallet = wallet::Wallet::load_wallet(
+                    Arc::clone(&chain_config),
+                    db,
+                    password,
+                    |version| Self::make_backup_wallet_file(file_path.as_ref(), version),
+                    current_controller_mode,
+                    force_change_wallet_type,
+                    async |mut db_tx| {
+                        LedgerSignerProvider::load_from_database(chain_config.clone(), &mut db_tx)
+                            .await
+                    },
+                )
+                .await
+                .map_err(ControllerError::WalletError)?;
+                Ok(wallet.map_wallet(RuntimeWallet::Ledger))
             }
         }
     }
@@ -597,6 +652,11 @@ where
                     device_name: trezor_info.device_name,
                     device_id: trezor_info.device_id,
                     firmware_version: trezor_info.firmware_version.to_string(),
+                },
+                #[cfg(feature = "ledger")]
+                HardwareWalletFullInfo::Ledger(ledger_data) => WalletExtraInfo::LedgerWallet {
+                    app_version: ledger_data.app_version.clone(),
+                    model: ledger_data.model.to_string(),
                 },
             },
             None => WalletExtraInfo::SoftwareWallet,
@@ -758,11 +818,14 @@ where
             .map_err(|err| ControllerError::SearchForTimestampsFailed(err))
     }
 
-    pub fn create_account(
+    pub async fn create_account(
         &mut self,
         name: Option<String>,
     ) -> Result<(U31, Option<String>), ControllerError<N>> {
-        self.wallet.create_next_account(name).map_err(ControllerError::WalletError)
+        self.wallet
+            .create_next_account(name)
+            .await
+            .map_err(ControllerError::WalletError)
     }
 
     pub fn update_account_name(
@@ -846,6 +909,10 @@ where
             RuntimeWallet::Trezor(w) => {
                 sync::sync_once(&self.chain_config, &self.rpc_client, w, &self.wallet_events).await
             }
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => {
+                sync::sync_once(&self.chain_config, &self.rpc_client, w, &self.wallet_events).await
+            }
         }?;
 
         match res {
@@ -862,6 +929,11 @@ where
             }
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => {
+                sync::sync_once(&self.chain_config, &self.rpc_client, w, &self.wallet_events)
+                    .await?;
+            }
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => {
                 sync::sync_once(&self.chain_config, &self.rpc_client, w, &self.wallet_events)
                     .await?;
             }
