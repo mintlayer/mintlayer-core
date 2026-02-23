@@ -20,7 +20,7 @@ mod helper_types;
 pub use command_handler::CommandHandler;
 use dyn_clone::DynClone;
 pub use errors::WalletCliCommandError;
-use helper_types::YesNo;
+use helper_types::CliYesNo;
 use regex::Regex;
 use rpc::description::{Described, Module};
 use wallet_controller::types::WalletTypeArgs;
@@ -42,9 +42,13 @@ use p2p_types::{bannable_address::BannableAddress, PeerId};
 use serialization::hex_encoded::HexEncoded;
 use utils_networking::IpOrSocketAddress;
 
+use crate::helper_types::{
+    CliCurrency, CliTokenTotalSupply, CliUnspecifiedCurrencyTransfer, CliUtxoOutPoint,
+};
+
 use self::helper_types::{
-    CliForceReduce, CliIsFreezable, CliIsUnfreezable, CliStoreSeedPhrase, CliUtxoState,
-    CliUtxoTypes, CliWithLocked, EnableOrDisable,
+    CliEnableOrDisable, CliForceReduceLookaheadSize, CliIsFreezable, CliIsUnfreezable,
+    CliStoreSeedPhrase, CliTokenTransfer, CliUtxoState, CliUtxoTypes, CliWithLocked,
 };
 
 #[derive(Debug, Subcommand, Clone)]
@@ -349,7 +353,7 @@ pub enum ColdWalletCommand {
 
         /// Forces the reduction of lookahead size even below the last used address;
         /// this may cause the wallet to lose track of used addresses and its actual balance.
-        i_know_what_i_am_doing: Option<CliForceReduce>,
+        i_know_what_i_am_doing: Option<CliForceReduceLookaheadSize>,
     },
 
     /// Creates a QR code of the provided address
@@ -477,7 +481,7 @@ pub enum WalletCommand {
     #[clap(name = "config-broadcast")]
     ConfigBroadcast {
         #[arg(value_enum)]
-        broadcast: YesNo,
+        broadcast: CliYesNo,
     },
 
     #[clap(name = "account-create")]
@@ -607,14 +611,21 @@ pub enum WalletCommand {
     IssueNewToken {
         /// The ticker/symbol of the token created
         token_ticker: String,
+
         /// The maximum number of digits after the decimal points
         number_of_decimals: u8,
+
         /// URI for data related to the token (website, media, etc)
         metadata_uri: String,
+
         /// The address of the authority who will be able to manage this token
         authority_address: String,
+
         /// The total supply of this token
-        token_supply: String,
+        ///
+        /// Valid values are "unlimited", "lockable" and "fixed(amount)"
+        token_supply: CliTokenTotalSupply,
+
         /// Whether it's possible to centrally freeze this token for all users (due to migration requirements, for example)
         is_freezable: CliIsFreezable,
     },
@@ -697,6 +708,9 @@ pub enum WalletCommand {
     /// The utxos to pay fees from will be selected automatically; these will be normal, single-sig utxos.
     /// The optional "fee change address" specifies the destination for the change for the fee payment;
     /// If it's unset, the destination will be taken from one of existing single-sig utxos.
+    // TODO: as mentioned in another TODO for `TransactionCompose` below, we should have a more general
+    // `CliCurrencyTransfer`, which would allow to specify either token or coin transfers. Once it's implemented,
+    // it's better to generalize this command, so that it can perform coin transfers as well.
     #[clap(name = "token-make-tx-to-send-from-multisig-address")]
     #[clap(hide = true)]
     MakeTxToSendTokensFromMultisigAddress {
@@ -709,7 +723,7 @@ pub enum WalletCommand {
 
         /// The transaction outputs, in the format `transfer(token_id,address,amount)`
         /// e.g. transfer(tmltk1e7egscactagl7e3met67658hpl4vf9ux0ralaculjvnzhtc4qmsqv9y857,tmt1q8lhgxhycm8e6yk9zpnetdwtn03h73z70c3ha4l7,0.9)
-        outputs: Vec<String>,
+        outputs: Vec<CliTokenTransfer>,
     },
 
     #[clap(name = "address-send")]
@@ -722,8 +736,7 @@ pub enum WalletCommand {
         /// A utxo can be from a transaction output or a block reward output:
         /// e.g tx(000000000000000000059fa50103b9683e51e5aba83b8a34c9b98ce67d66136c,1) or
         /// block(000000000000000000059fa50103b9683e51e5aba83b8a34c9b98ce67d66136c,2)
-        #[arg(default_values_t = Vec::<String>::new())]
-        utxos: Vec<String>,
+        utxos: Vec<CliUtxoOutPoint>,
     },
 
     /// Sweep all spendable coins or tokens from the specified (or all) addresses to the given destination address.
@@ -761,7 +774,7 @@ pub enum WalletCommand {
         /// You can choose what utxo to spend. A utxo can be from a transaction output or a block reward output:
         /// e.g tx(000000000000000000059fa50103b9683e51e5aba83b8a34c9b98ce67d66136c,1) or
         /// block(000000000000000000059fa50103b9683e51e5aba83b8a34c9b98ce67d66136c,2)
-        utxo: String,
+        utxo: CliUtxoOutPoint,
         /// Optional change address; if not specified, it returns the change to the same address from the input.
         #[arg(long = "change")]
         change_address: Option<String>,
@@ -900,7 +913,7 @@ pub enum WalletCommand {
 
     /// Enable or disable p2p networking in the node
     #[clap(name = "node-enable-p2p-networking")]
-    NodeEnableNetworking { enable: EnableOrDisable },
+    NodeEnableNetworking { enable: CliEnableOrDisable },
 
     #[clap(name = "node-connect-to-peer")]
     Connect { address: IpOrSocketAddress },
@@ -1018,7 +1031,7 @@ pub enum WalletCommand {
         /// of the next block.
         seconds_to_check_for_height: u64,
         /// This determines how "seconds_to_check_for_height" will be interpreted
-        check_all_timestamps_between_blocks: YesNo,
+        check_all_timestamps_between_blocks: CliYesNo,
     },
 
     /// Return mainchain block ids with heights in the given range using the given step.
@@ -1042,21 +1055,25 @@ pub enum WalletCommand {
         step: NonZeroUsize,
     },
 
+    // TODO: rework `CliUnspecifiedCurrencyTransfer` into a more general `CliCurrencyTransfer`,
+    // which would allow the user to say "transfer(token_id,addr,amount)" and "transfer(coin,addr,amount)"
+    // (while also supporting "transfer(addr,amount)" for backward compatibility).
+    // Then make `transaction-compose` support token transfers as well.
     #[clap(name = "transaction-compose")]
     TransactionCompose {
         /// The transaction outputs, in the format `transfer(address,amount)`
         /// e.g. transfer(tmt1q8lhgxhycm8e6yk9zpnetdwtn03h73z70c3ha4l7,0.9)
-        outputs: Vec<String>,
+        outputs: Vec<CliUnspecifiedCurrencyTransfer>,
         /// You can choose what utxos to spend (space separated as additional arguments).
         ///
         /// A utxo can be from a transaction output or a block reward output:
         /// e.g tx(000000000000000000059fa50103b9683e51e5aba83b8a34c9b98ce67d66136c,1) or
         /// block(000000000000000000059fa50103b9683e51e5aba83b8a34c9b98ce67d66136c,2)
-        #[arg(long = "utxos", default_values_t = Vec::<String>::new())]
-        utxos: Vec<String>,
+        #[arg(long = "utxos")]
+        utxos: Vec<CliUtxoOutPoint>,
 
-        /// This specifies that instead of a (hex encoded) PartiallySignedTransaction
-        /// the result should be a (hex encoded) "simple" transaction.
+        /// This specifies that instead of a (hex-encoded) PartiallySignedTransaction
+        /// the result should be a (hex-encoded) "simple" transaction.
         ///
         /// Producing a "simple" transaction will result in a shorter hex string, but you won't
         /// be able to use it with account-sign-raw-transaction in the cold wallet mode, which
@@ -1118,13 +1135,17 @@ pub enum WalletCommand {
     #[clap(name = "order-create")]
     CreateOrder {
         /// The currency you are asking for - a token id or "coin" for coins.
-        ask_currency: String,
+        ask_currency: CliCurrency,
+
         /// The asked amount.
         ask_amount: DecimalAmount,
+
         /// The currency you will be giving - a token id or "coin" for coins.
-        give_currency: String,
+        give_currency: CliCurrency,
+
         /// The given amount.
         give_amount: DecimalAmount,
+
         /// The address (key) that can authorize the conclusion and freezing of the order.
         conclude_address: String,
     },
@@ -1189,11 +1210,11 @@ pub enum WalletCommand {
     ListActiveOrders {
         /// Filter orders by the specified "asked" currency - pass a token id or "coin" for coins.
         #[arg(long = "ask-currency")]
-        ask_currency: Option<String>,
+        ask_currency: Option<CliCurrency>,
 
         /// Filter orders by the specified "given" currency - pass a token id or "coin" for coins.
         #[arg(long = "give-currency")]
-        give_currency: Option<String>,
+        give_currency: Option<CliCurrency>,
     },
 }
 

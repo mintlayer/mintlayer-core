@@ -25,7 +25,7 @@ use common::{
     address::{Address, RpcAddress},
     chain::{
         config::checkpoints_data::print_block_heights_ids_as_checkpoints_data, tokens::TokenId,
-        ChainConfig, Currency, Destination, SignedTransaction, TxOutput, UtxoOutPoint,
+        ChainConfig, Destination, RpcCurrency, SignedTransaction,
     },
     primitives::{Idable as _, H256},
     text_summary::TextSummary,
@@ -41,7 +41,7 @@ use utils::{
     sorted::Sorted as _,
 };
 use wallet::version::get_version;
-use wallet_controller::types::{GenericTokenTransfer, WalletExtraInfo};
+use wallet_controller::types::WalletExtraInfo;
 use wallet_rpc_client::wallet_rpc_traits::{PartialOrSignedTx, WalletInterface};
 use wallet_rpc_lib::types::{
     Balances, ComposedTransaction, ControllerConfig, HardwareWalletType, MnemonicInfo,
@@ -54,8 +54,7 @@ use wallet_types::partially_signed_transaction::PartiallySignedTransaction;
 use crate::{
     errors::WalletCliCommandError,
     helper_types::{
-        active_order_infos_header, format_token_name, parse_currency, parse_generic_token_transfer,
-        parse_rpc_currency, token_ticker_from_rpc_token_info,
+        active_order_infos_header, format_token_name, token_ticker_from_rpc_token_info, CliCurrency,
     },
     CreateWalletDeviceSelectMenu, ManageableWalletCommand, OpenWalletDeviceSelectMenu,
     OpenWalletSubCommand, WalletManagementCommand,
@@ -66,7 +65,7 @@ use self::local_state::WalletWithState;
 use super::{
     helper_types::{
         format_active_order_info, format_delegation_info, format_own_order_info, format_pool_info,
-        parse_coin_output, parse_token_supply, parse_utxo_outpoint, CliForceReduce, CliUtxoState,
+        CliForceReduceLookaheadSize, CliUtxoState,
     },
     ColdWalletCommand, ConsoleCommand, WalletCommand,
 };
@@ -465,7 +464,7 @@ where
                 i_know_what_i_am_doing,
             } => {
                 let force_reduce = match i_know_what_i_am_doing {
-                    Some(CliForceReduce::IKnowWhatIAmDoing) => true,
+                    Some(CliForceReduceLookaheadSize::IKnowWhatIAmDoing) => true,
                     None => false,
                 };
 
@@ -1139,21 +1138,17 @@ where
                 utxos,
                 only_transaction,
             } => {
-                let outputs: Vec<TxOutput> = outputs
-                    .iter()
-                    .map(|input| parse_coin_output(input, chain_config))
-                    .collect::<Result<Vec<_>, WalletCliCommandError<N>>>()?;
+                let outputs = outputs
+                    .into_iter()
+                    .map(|output| output.to_coin_tx_output(chain_config))
+                    .collect::<Result<Vec<_>, _>>()?;
 
-                let input_utxos: Vec<UtxoOutPoint> = utxos
-                    .iter()
-                    .map(|s| parse_utxo_outpoint(s))
-                    .collect::<Result<Vec<_>, WalletCliCommandError<N>>>(
-                )?;
+                let utxos = utxos.into_iter().map(Into::into).collect();
 
                 let ComposedTransaction { hex, fees } = self
                     .non_empty_wallet()
                     .await?
-                    .compose_transaction(input_utxos, outputs, None, only_transaction)
+                    .compose_transaction(utxos, outputs, None, only_transaction)
                     .await?;
                 let mut output = format!("The hex encoded transaction is:\n{hex}\n");
 
@@ -1178,7 +1173,7 @@ where
                 token_supply,
                 is_freezable,
             } => {
-                let token_supply = parse_token_supply(&token_supply, number_of_decimals)?;
+                let token_supply = token_supply.to_fully_parsed(number_of_decimals)?;
 
                 let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
                 let new_token = wallet
@@ -1464,14 +1459,10 @@ where
                 amount,
                 utxos,
             } => {
-                let input_utxos: Vec<UtxoOutPoint> = utxos
-                    .iter()
-                    .map(|s| parse_utxo_outpoint(s))
-                    .collect::<Result<Vec<_>, WalletCliCommandError<N>>>(
-                )?;
+                let utxos = utxos.into_iter().map(Into::into).collect();
                 let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
                 let new_tx = wallet
-                    .send_coins(selected_account, address, amount, input_utxos, self.config)
+                    .send_coins(selected_account, address, amount, utxos, self.config)
                     .await?;
                 Ok(Self::new_tx_command(new_tx, chain_config))
             }
@@ -1527,14 +1518,13 @@ where
                 utxo,
                 change_address,
             } => {
-                let selected_input = parse_utxo_outpoint(&utxo)?;
                 let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
                 let ComposedTransaction { hex, fees } = wallet
                     .transaction_from_cold_input(
                         selected_account,
                         address,
                         amount,
-                        selected_input,
+                        utxo.into(),
                         change_address,
                         self.config,
                     )
@@ -1670,10 +1660,10 @@ where
                 fee_change_address,
                 outputs,
             } => {
-                let outputs: Vec<GenericTokenTransfer> = outputs
+                let outputs = outputs
                     .into_iter()
-                    .map(|input| parse_generic_token_transfer(&input, chain_config))
-                    .collect::<Result<Vec<_>, WalletCliCommandError<N>>>()?;
+                    .map(|ouput| ouput.to_fully_parsed(chain_config))
+                    .collect::<Result<Vec<_>, _>>()?;
 
                 let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
                 let result = wallet
@@ -2020,16 +2010,19 @@ where
             } => {
                 let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
 
-                let parse_token_id = |curency_str: String| -> Result<_, WalletCliCommandError<N>> {
-                    let parsed_currency = parse_currency(&curency_str, chain_config)?;
-                    match parsed_currency {
-                        Currency::Coin => Ok(None),
-                        Currency::Token(_) => Ok(Some(curency_str)),
-                    }
-                };
+                let parse_token_id =
+                    |currency: &CliCurrency| -> Result<_, WalletCliCommandError<N>> {
+                        let parsed_currency = currency
+                            .to_fully_parsed(chain_config)?
+                            .to_rpc_currency(chain_config)?;
+                        match parsed_currency {
+                            RpcCurrency::Coin => Ok(None),
+                            RpcCurrency::Token(token_id) => Ok(Some(token_id.into_string())),
+                        }
+                    };
 
-                let ask_token_id = parse_token_id(ask_currency)?;
-                let give_token_id = parse_token_id(give_currency)?;
+                let ask_token_id = parse_token_id(&ask_currency)?;
+                let give_token_id = parse_token_id(&give_currency)?;
                 let new_tx = wallet
                     .create_order(
                         selected_account,
@@ -2142,20 +2135,20 @@ where
     async fn list_all_active_orders<N: NodeInterface>(
         &mut self,
         chain_config: &ChainConfig,
-        ask_currency: Option<String>,
-        give_currency: Option<String>,
+        ask_currency: Option<CliCurrency>,
+        give_currency: Option<CliCurrency>,
     ) -> Result<ConsoleCommand, WalletCliCommandError<N>>
     where
         WalletCliCommandError<N>: From<E>,
     {
         let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
 
-        let ask_currency = ask_currency
-            .map(|ask_currency| parse_rpc_currency(&ask_currency, chain_config))
-            .transpose()?;
-        let give_currency = give_currency
-            .map(|give_currency| parse_rpc_currency(&give_currency, chain_config))
-            .transpose()?;
+        let parse_currency = |currency: CliCurrency| -> Result<_, WalletCliCommandError<N>> {
+            Ok(currency.to_fully_parsed(chain_config)?.to_rpc_currency(chain_config)?)
+        };
+
+        let ask_currency = ask_currency.map(parse_currency).transpose()?;
+        let give_currency = give_currency.map(parse_currency).transpose()?;
 
         let order_infos = wallet
             .list_all_active_orders(selected_account, ask_currency, give_currency)
