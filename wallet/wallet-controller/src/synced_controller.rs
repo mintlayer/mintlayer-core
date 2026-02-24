@@ -1231,6 +1231,8 @@ where
         let ask_value = convert_value(ask_value).await?;
         let give_value = convert_value(give_value).await?;
 
+        // TODO: check whether the tokens, if any, are usable (i.e. non-frozen).
+
         self.create_and_send_tx_with_id(
             async move |current_fee_rate: FeeRate,
                         consolidate_fee_rate: FeeRate,
@@ -1260,6 +1262,8 @@ where
         let order_info = fetch_order_info(&self.rpc_client, order_id).await?;
         let tx_additional_info =
             self.additional_info_for_order_update_tx(order_id, &order_info).await?;
+
+        // TODO: check whether the tokens, if any, are usable (i.e. non-frozen).
 
         self.create_and_send_tx(
             async move |current_fee_rate: FeeRate,
@@ -1305,6 +1309,8 @@ where
         let fill_amount_in_ask_currency = fill_amount_in_ask_currency
             .to_amount(ask_currency_decimals)
             .ok_or(ControllerError::InvalidCoinAmount)?;
+
+        // TODO: check whether the tokens, if any, are usable (i.e. non-frozen).
 
         self.create_and_send_tx(
             async move |current_fee_rate: FeeRate,
