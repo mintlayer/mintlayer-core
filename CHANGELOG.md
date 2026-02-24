@@ -12,7 +12,7 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 ## [Unreleased]
 
 ### Added
-  - Node RPC: new method added - `chainstate_tokens_info`, `chainstate_orders_info_by_currencies`.
+  - Node RPC: new methods added - `chainstate_tokens_info`, `chainstate_orders_info_by_currencies`.
 
   - Wallet RPC:
     - new methods added: `node_get_tokens_info`, `order_list_own`, `order_list_all_active`.
@@ -29,6 +29,17 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
     - Added support for Ledger hardware wallets (beta).
     - Now the wallet subscribes to events from the Mempool to include not yet confirmed transactions
       relevant to this wallet.
+
+  - Node:
+    - new options added:
+      - `node-daemon`:
+        - `--import-bootstrap-file` - import a bootstrap file on start (previously bootstrapping
+          was only available via node RPC).
+
+      `node-daemon` and `node-gui`:
+        - `--enable-db-reckless-mode-in-ibd` - this enables the "reckless" mode of the chainstate
+          database during initial block download or bootstrapping, which significantly increases
+          its speed at the cost of a potential db corruption if the system crashes in the meantime.
 
 ### Changed
   - Wallet RPC:
@@ -48,8 +59,16 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
     - Documentation-only changes:
       - Certain parameters that were designated as "string" are now designated as "bech32 string".
 
+  - Node:
+    - The now redundant option `min_max_bootstrap_import_buffer_sizes` was removed from chainstate config.
+    - The option `--clean-data` is now a top-level option, i.e. instead of writing
+      `node-daemon testnet --clean-data` you have to write `node-daemon --clean-data testnet`.
+
+  - Node bootstrapping:
+    - The format of the bootstrap file was changed and the legacy format is no longer supported.
+
 ### Fixed
-  - p2p: when a peer sends a message that can't be decoded, it will now be discouraged (which is what
+  - P2p: when a peer sends a message that can't be decoded, it will now be discouraged (which is what
     is normally done for misbehaving peers) and the node won't try connecting to it again.\
     Also, the peer will be sent an appropriate `WillDisconnect` message prior to disconnection.
 
@@ -65,6 +84,17 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
       - Parameters and/or returned values having the "plain" `Destination` type were incorrectly
         designated as "bech32 string", while in reality they are "hexified destination".
+
+  - Node bootstrapping:
+    - Fixed a bug where importing a bootstrap file would truncate the file to zero length
+      instead of actually importing it.
+
+    - Importing a bootstrap file will no longer fail if some of the blocks already exist in the
+      chainstate.
+
+    - Bootstrapping can now be interrupted via Ctrl-C.
+
+    - The speed of the import was improved.
 
   - General
     - Fixed a bug that could lead to indefinite stalling of the node during initial sync when there

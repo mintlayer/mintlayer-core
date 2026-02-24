@@ -393,6 +393,7 @@ pub fn start_chainstate_with_config(
         DefaultTransactionVerificationStrategy::new(),
         None,
         Default::default(),
+        None,
     )
     .unwrap();
     start_chainstate(chainstate)

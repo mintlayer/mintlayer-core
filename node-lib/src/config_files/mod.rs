@@ -148,8 +148,8 @@ fn chainstate_config(
 
     let ChainstateConfigFile {
         max_db_commit_attempts,
+        enable_db_reckless_mode_in_ibd,
         max_orphan_blocks,
-        min_max_bootstrap_import_buffer_sizes,
         max_tip_age,
         enable_heavy_checks,
         allow_checkpoints_mismatch,
@@ -157,6 +157,8 @@ fn chainstate_config(
 
     let storage_backend = options.storage_backend.clone().unwrap_or(storage_backend);
     let max_db_commit_attempts = options.max_db_commit_attempts.or(max_db_commit_attempts);
+    let enable_db_reckless_mode_in_ibd =
+        options.enable_db_reckless_mode_in_ibd.or(enable_db_reckless_mode_in_ibd);
     let max_orphan_blocks = options.max_orphan_blocks.or(max_orphan_blocks);
     let max_tip_age = options.max_tip_age.or(max_tip_age);
     let enable_heavy_checks = options.enable_chainstate_heavy_checks.or(enable_heavy_checks);
@@ -165,8 +167,8 @@ fn chainstate_config(
 
     let chainstate_config = ChainstateConfigFile {
         max_db_commit_attempts,
+        enable_db_reckless_mode_in_ibd,
         max_orphan_blocks,
-        min_max_bootstrap_import_buffer_sizes,
         max_tip_age,
         enable_heavy_checks,
         allow_checkpoints_mismatch,

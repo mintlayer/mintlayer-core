@@ -7,7 +7,7 @@ rust-version.workspace = true
 
 [dependencies]
 accounting = { path = "../accounting" }
-chainstate-storage = { path = "./storage", features = ["mock"] }
+chainstate-storage = { path = "./storage", features = ["lmdb", "mock"] }
 chainstate-types = { path = "./types" }
 common = { path = "../common" }
 consensus = { path = "../consensus" }
@@ -40,6 +40,7 @@ parity-scale-codec.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 static_assertions.workspace = true
+strum.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true

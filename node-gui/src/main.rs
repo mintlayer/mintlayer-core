@@ -37,7 +37,7 @@ use node_gui_backend::{
     node_initialize, BackendControls, BackendSender, InitNetwork, NodeInitializationOutcome,
     WalletMode,
 };
-use node_lib::CLEAN_DATA_OPTION_LONG_NAME;
+use node_lib::{NodeType, CLEAN_DATA_OPTION_LONG_NAME};
 
 const COLD_WALLET_TOOLTIP_TEXT: &str =
     "Start the wallet in Cold mode without connecting to the network or any nodes. The Cold mode is made to run the wallet on an air-gapped machine without internet connection for storage of keys of high-value. For example, pool decommission keys.";
@@ -53,7 +53,7 @@ const INITIAL_MAIN_WINDOW_HEIGHT: f32 = 768.0;
 pub fn main() -> iced::Result {
     utils::rust_backtrace::enable();
 
-    let initial_opts = node_lib::Options::from_args(std::env::args_os());
+    let initial_opts = node_lib::Options::from_args(std::env::args_os(), NodeType::NodeGui);
 
     iced::application(title, update, view)
         .executor::<executor::Default>()
@@ -196,9 +196,15 @@ fn update(state: &mut GuiState, message: Message) -> Task<Message> {
                         command: command.clone(),
                     };
 
-                    if resolved_options.clean_data_option_set() {
+                    if resolved_options.top_level.clean_data
+                        || resolved_options.top_level.import_bootstrap_file.is_some()
+                    {
                         // If "clean data" option was set, selecting the wallet mode makes no sense;
                         // since the option is ignored in the cold mode, we use the hot one.
+                        // Same applies to "import bootstrap file" - even though we don't support
+                        // bootstrapping in node-gui at this moment, we still need to show the
+                        // corresponding error, and asking for wallet mode before doing it makes
+                        // no sense either.
                         update_on_mode_selected(state, WalletMode::Hot, resolved_options)
                     } else {
                         *state = GuiState::SelectWalletMode { resolved_options };

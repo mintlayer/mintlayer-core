@@ -16,6 +16,7 @@
 #![allow(clippy::unwrap_used)]
 
 mod block_builder;
+mod blockchain_storage_trivial_implementor;
 mod framework;
 mod framework_builder;
 pub mod helpers;

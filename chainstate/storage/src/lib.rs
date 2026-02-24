@@ -48,7 +48,10 @@ use tokens_accounting::{
 };
 use utxo::{UtxosBlockUndo, UtxosStorageRead, UtxosStorageWrite};
 
-pub use internal::{ChainstateStorageVersion, Store};
+pub use internal::{
+    BlockchainStorage, BlockchainStorageBackend, BlockchainStorageBackendImpl,
+    ChainstateStorageVersion, Store,
+};
 
 /// Possibly failing result of blockchain storage query
 pub type Result<T> = chainstate_types::storage_result::Result<T>;
@@ -85,6 +88,9 @@ pub trait BlockchainStorageRead:
 
     /// Get block by its hash
     fn get_block(&self, id: &Id<Block>) -> crate::Result<Option<Block>>;
+
+    /// Get block by its hash, in its encoded form
+    fn get_encoded_block(&self, id: &Id<Block>) -> crate::Result<Option<Vec<u8>>>;
 
     /// Return true if the block exists in the db and false otherwise.
     /// This is cheaper than calling `get_block` and checking for `is_some`.
@@ -306,5 +312,3 @@ pub trait Transactional<'t> {
     /// Start a read-write transaction.
     fn transaction_rw<'s: 't>(&'s self, size: Option<usize>) -> Result<Self::TransactionRw>;
 }
-
-pub trait BlockchainStorage: for<'tx> Transactional<'tx> + Send {}

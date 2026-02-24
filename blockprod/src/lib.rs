@@ -272,8 +272,8 @@ mod tests {
             enable_heavy_checks: Some(false),
 
             max_db_commit_attempts: Default::default(),
+            enable_db_reckless_mode_in_ibd: Default::default(),
             max_orphan_blocks: Default::default(),
-            min_max_bootstrap_import_buffer_sizes: Default::default(),
             allow_checkpoints_mismatch: Default::default(),
         };
 
@@ -286,6 +286,7 @@ mod tests {
             DefaultTransactionVerificationStrategy::new(),
             None,
             time_getter.clone(),
+            None,
         )
         .expect("Error initializing chainstate");
 

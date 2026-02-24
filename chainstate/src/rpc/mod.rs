@@ -17,13 +17,7 @@
 
 mod types;
 
-use std::{
-    collections::BTreeMap,
-    convert::Infallible,
-    io::{Read, Write},
-    num::NonZeroUsize,
-    sync::Arc,
-};
+use std::{collections::BTreeMap, convert::Infallible, num::NonZeroUsize, sync::Arc};
 
 use chainstate_types::BlockIndex;
 use common::{
@@ -41,8 +35,8 @@ use rpc::{subscription, RpcResult};
 use serialization::hex_encoded::HexEncoded;
 
 use crate::{
-    chainstate_interface::ChainstateInterface, Block, BlockSource, ChainInfo, ChainstateError,
-    GenBlock,
+    chainstate_interface::ChainstateInterface, export_bootstrap_file, import_bootstrap_file, Block,
+    BlockSource, ChainInfo, ChainstateError, GenBlock,
 };
 
 use self::types::{block::RpcBlock, event::RpcEvent};
@@ -204,13 +198,13 @@ trait ChainstateRpc {
     #[method(name = "export_bootstrap_file")]
     async fn export_bootstrap_file(
         &self,
-        file_path: &std::path::Path,
+        file_path: std::path::PathBuf,
         include_stale_blocks: bool,
     ) -> RpcResult<()>;
 
     /// Imports a bootstrap file's blocks to this node
     #[method(name = "import_bootstrap_file")]
-    async fn import_bootstrap_file(&self, file_path: &std::path::Path) -> RpcResult<()>;
+    async fn import_bootstrap_file(&self, file_path: std::path::PathBuf) -> RpcResult<()>;
 
     /// Return generic information about the chain, including the current best block, best block height and more.
     #[method(name = "info")]
@@ -522,27 +516,17 @@ impl ChainstateRpcServer for super::ChainstateHandle {
 
     async fn export_bootstrap_file(
         &self,
-        file_path: &std::path::Path,
+        file_path: std::path::PathBuf,
         include_stale_blocks: bool,
     ) -> RpcResult<()> {
-        // TODO: test this function in functional tests
-        let file_obj: std::fs::File = rpc::handle_result(std::fs::File::create(file_path))?;
-        let writer: std::io::BufWriter<Box<dyn Write + Send>> =
-            std::io::BufWriter::new(Box::new(file_obj));
-
         rpc::handle_result(
-            self.call(move |this| this.export_bootstrap_stream(writer, include_stale_blocks))
+            self.call(move |this| export_bootstrap_file(this, &file_path, include_stale_blocks))
                 .await,
         )
     }
 
-    async fn import_bootstrap_file(&self, file_path: &std::path::Path) -> RpcResult<()> {
-        // TODO: test this function in functional tests
-        let file_obj: std::fs::File = rpc::handle_result(std::fs::File::create(file_path))?;
-        let reader: std::io::BufReader<Box<dyn Read + Send>> =
-            std::io::BufReader::new(Box::new(file_obj));
-
-        rpc::handle_result(self.call_mut(move |this| this.import_bootstrap_stream(reader)).await)
+    async fn import_bootstrap_file(&self, file_path: std::path::PathBuf) -> RpcResult<()> {
+        rpc::handle_result(self.call_mut(move |this| import_bootstrap_file(this, &file_path)).await)
     }
 
     async fn info(&self) -> RpcResult<ChainInfo> {
@@ -589,6 +573,7 @@ mod test {
                 DefaultTransactionVerificationStrategy::new(),
                 None,
                 Default::default(),
+                None,
             )
             .unwrap(),
         );

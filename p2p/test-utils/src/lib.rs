@@ -58,6 +58,7 @@ pub fn start_subsystems(
         DefaultTransactionVerificationStrategy::new(),
         None,
         time_getter.clone(),
+        None,
     )
     .unwrap();
     let mempool_config = MempoolConfig::new();

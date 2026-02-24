@@ -1126,6 +1126,7 @@ fn mainnet_initialization() {
         DefaultTransactionVerificationStrategy::new(),
         None,
         Default::default(),
+        None,
     )
     .unwrap();
 }

@@ -600,6 +600,7 @@ impl TestNodeBuilder {
                 DefaultTransactionVerificationStrategy::new(),
                 None,
                 time_getter.clone(),
+                None,
             )
             .unwrap()
         });

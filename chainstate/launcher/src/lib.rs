@@ -20,9 +20,12 @@ mod storage_compatibility;
 
 use std::sync::Arc;
 
+use tokio::sync::watch;
+
 use chainstate::InitializationError;
-use chainstate_storage::Transactional;
+use chainstate_storage::{BlockchainStorage, BlockchainStorageBackend, Transactional};
 use storage_lmdb::resize_callback::MapResizeCallback;
+use utils::set_flag::SetFlag;
 
 // Some useful reexports
 pub use chainstate::{
@@ -32,68 +35,116 @@ pub use chainstate::{
 pub use common::chain::ChainConfig;
 pub use config::{ChainstateLauncherConfig, StorageBackendConfig};
 
+pub use storage_compatibility::check_storage_compatibility;
+
 /// Subdirectory under `datadir` where LMDB chainstate database is placed
 pub const SUBDIRECTORY_LMDB: &str = "chainstate-lmdb";
 
-pub use storage_compatibility::check_storage_compatibility;
+pub type ChainstateMaker = Box<
+    dyn FnOnce(
+            /*shutdown_initiated_rx*/ Option<watch::Receiver<SetFlag>>,
+        ) -> Result<ChainstateSubsystem, Error>
+        + Send,
+>;
 
-fn make_chainstate_and_storage_impl<B: storage::SharedBackend + 'static>(
-    storage_backend: B,
+/// Return a closure that will make the chainstate given the `shutdown_initiated_rx` parameter.
+///
+/// Note: the storage is created right away, so the corresponding errors (including compatibility
+/// check failures) will cause `create_chainstate_maker` itself to fail and not the returned maker.
+pub fn create_chainstate_maker(
+    datadir: &std::path::Path,
+    chain_config: Arc<ChainConfig>,
+    config: ChainstateLauncherConfig,
+) -> Result<ChainstateMaker, Error> {
+    let ChainstateLauncherConfig {
+        storage_backend,
+        chainstate_config,
+    } = config;
+
+    let maker: ChainstateMaker = match storage_backend {
+        StorageBackendConfig::Lmdb => {
+            let storage = create_lmdb_storage(datadir, &chain_config)?;
+
+            Box::new(|shutdown_initiated_rx| {
+                make_chainstate_impl(
+                    storage,
+                    chain_config,
+                    chainstate_config,
+                    shutdown_initiated_rx,
+                )
+            })
+        }
+        StorageBackendConfig::InMemory => {
+            let storage = create_inmemory_storage(&chain_config)?;
+
+            Box::new(|shutdown_initiated_rx| {
+                make_chainstate_impl(
+                    storage,
+                    chain_config,
+                    chainstate_config,
+                    shutdown_initiated_rx,
+                )
+            })
+        }
+    };
+
+    Ok(maker)
+}
+
+fn make_chainstate_impl(
+    storage: impl BlockchainStorage + Sync + 'static,
     chain_config: Arc<ChainConfig>,
     chainstate_config: ChainstateConfig,
+    shutdown_initiated_rx: Option<watch::Receiver<SetFlag>>,
 ) -> Result<ChainstateSubsystem, Error> {
-    let storage = chainstate_storage::Store::new(storage_backend, &chain_config)
-        .map_err(|e| Error::FailedToInitializeChainstate(e.into()))?;
-
-    let db_tx = storage
-        .transaction_ro()
-        .map_err(|e| Error::FailedToInitializeChainstate(e.into()))?;
-
-    check_storage_compatibility(&db_tx, chain_config.as_ref())
-        .map_err(InitializationError::StorageCompatibilityCheckError)?;
-    drop(db_tx);
-
-    let chainstate = chainstate::make_chainstate(
+    chainstate::make_chainstate(
         chain_config,
         chainstate_config,
         storage,
         DefaultTransactionVerificationStrategy::new(),
         None,
         Default::default(),
-    )?;
-    Ok(chainstate)
+        shutdown_initiated_rx,
+    )
 }
 
-/// Create chainstate together with its storage
-pub fn make_chainstate(
+fn create_lmdb_storage(
     datadir: &std::path::Path,
-    chain_config: Arc<ChainConfig>,
-    config: ChainstateLauncherConfig,
-) -> Result<ChainstateSubsystem, Error> {
-    let ChainstateLauncherConfig {
-        storage_backend,
-        chainstate_config,
-    } = config;
-
+    chain_config: &ChainConfig,
+) -> Result<impl BlockchainStorage, Error> {
     let lmdb_resize_callback = MapResizeCallback::new(Box::new(|resize_info| {
         logging::log::info!("Lmdb resize happened: {:?}", resize_info)
     }));
 
-    // There is some code duplication because `make_chainstate_and_storage_impl` is called with
-    // a different set of generic parameters in each case.
-    match storage_backend {
-        StorageBackendConfig::Lmdb => {
-            let storage = storage_lmdb::Lmdb::new(
-                datadir.join(SUBDIRECTORY_LMDB),
-                Default::default(),
-                Default::default(),
-                lmdb_resize_callback,
-            );
-            make_chainstate_and_storage_impl(storage, chain_config, chainstate_config)
-        }
-        StorageBackendConfig::InMemory => {
-            let storage = storage_inmemory::InMemory::new();
-            make_chainstate_and_storage_impl(storage, chain_config, chainstate_config)
-        }
-    }
+    let backend = storage_lmdb::Lmdb::new(
+        datadir.join(SUBDIRECTORY_LMDB),
+        Default::default(),
+        Default::default(),
+        lmdb_resize_callback,
+    );
+
+    create_storage(backend, chain_config)
+}
+
+fn create_inmemory_storage(chain_config: &ChainConfig) -> Result<impl BlockchainStorage, Error> {
+    create_storage(storage_inmemory::InMemory::new(), chain_config)
+}
+
+fn create_storage(
+    storage_backend: impl BlockchainStorageBackend + 'static,
+    chain_config: &ChainConfig,
+) -> Result<impl BlockchainStorage, Error> {
+    let storage = chainstate_storage::Store::new(storage_backend, chain_config)
+        .map_err(|e| Error::FailedToInitializeChainstate(e.into()))?;
+
+    let db_tx = storage
+        .transaction_ro()
+        .map_err(|e| Error::FailedToInitializeChainstate(e.into()))?;
+
+    check_storage_compatibility(&db_tx, chain_config)
+        .map_err(InitializationError::StorageCompatibilityCheckError)?;
+
+    drop(db_tx);
+
+    Ok(storage)
 }

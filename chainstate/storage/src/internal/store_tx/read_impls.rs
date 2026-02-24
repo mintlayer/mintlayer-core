@@ -119,6 +119,11 @@ impl<B: storage::SharedBackend> BlockchainStorageRead for super::StoreTxRo<'_, B
     }
 
     #[log_error]
+    fn get_encoded_block(&self, id: &Id<Block>) -> crate::Result<Option<Vec<u8>>> {
+        self.read_raw::<db::DBBlock, _, _>(id)
+    }
+
+    #[log_error]
     fn block_exists(&self, id: &Id<Block>) -> crate::Result<bool> {
         self.entry_exists::<db::DBBlock, _, _>(id)
     }
@@ -438,6 +443,11 @@ impl<B: storage::SharedBackend> BlockchainStorageRead for super::StoreTxRw<'_, B
     #[log_error]
     fn get_block(&self, id: &Id<Block>) -> crate::Result<Option<Block>> {
         self.read::<db::DBBlock, _, _>(id)
+    }
+
+    #[log_error]
+    fn get_encoded_block(&self, id: &Id<Block>) -> crate::Result<Option<Vec<u8>>> {
+        self.read_raw::<db::DBBlock, _, _>(id)
     }
 
     #[log_error]

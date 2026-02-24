@@ -39,6 +39,7 @@ criterion.workspace = true
 expect-test.workspace = true
 rand.workspace = true
 rstest.workspace = true
+strum.workspace = true
 
 [[bench]]
 name = "benches"

@@ -81,6 +81,7 @@ pub async fn start_subsystems(
         DefaultTransactionVerificationStrategy::new(),
         None,
         Default::default(),
+        None,
     )
     .unwrap();
 
