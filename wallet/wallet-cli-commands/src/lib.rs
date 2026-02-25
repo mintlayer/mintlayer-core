@@ -1220,7 +1220,7 @@ pub enum WalletCommand {
     },
 
     /// Create a transaction with an HTLC (Hashed TimeLock Contract) output without broadcasting it.
-    #[clap(name = "htlc-create-tx")]
+    #[clap(name = "htlc-create-transaction")]
     CreateHtlcTx {
         /// The currency to lock inside the HTLC - a token id or "coin" for coins.
         currency: CliCurrency,

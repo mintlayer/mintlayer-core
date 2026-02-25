@@ -23,12 +23,17 @@ use serialization::{CompactLen, Encode};
 
 use crate::chain::{
     classic_multisig::ClassicMultisigChallenge,
+    htlc::HtlcSecret,
     signature::{
         inputsig::{
+            authorize_hashed_timelock_contract_spend::{
+                AuthorizedHashedTimelockContractSpend, AuthorizedHashedTimelockContractSpendTag,
+            },
             authorize_pubkey_spend::AuthorizedPublicKeySpend,
             authorize_pubkeyhash_spend::AuthorizedPublicKeyHashSpend,
             classical_multisig::authorize_classical_multisig::AuthorizedClassicalMultisigSpend,
-            standard_signature::StandardInputSignature, InputWitness,
+            standard_signature::StandardInputSignature,
+            InputWitness,
         },
         sighash::sighashtype::SigHashType,
     },
@@ -51,10 +56,11 @@ pub enum SizeEstimationError {
 /// provided destination.
 pub fn input_signature_size(
     txo: &TxOutput,
+    htlc_spend_tag: Option<AuthorizedHashedTimelockContractSpendTag>,
     dest_info_provider: Option<&dyn DestinationInfoProvider>,
 ) -> Result<usize, SizeEstimationError> {
     get_tx_output_destination(txo).map_or(Ok(0), |dest| {
-        input_signature_size_from_destination(dest, dest_info_provider)
+        input_signature_size_from_destination(dest, htlc_spend_tag, dest_info_provider)
     })
 }
 
@@ -107,9 +113,7 @@ lazy_static::lazy_static! {
     static ref NO_SIGNATURE_SIZE: usize = {
         InputWitness::NoSignature(None).encoded_size()
     };
-}
 
-lazy_static::lazy_static! {
     static ref PUB_KEY_SIGNATURE_SIZE: usize = {
         let raw_signature =
             AuthorizedPublicKeySpend::new(BOGUS_KEY_PAIR_AND_SIGNATURE.2.clone()).encode();
@@ -119,9 +123,7 @@ lazy_static::lazy_static! {
         );
         InputWitness::Standard(standard).encoded_size()
     };
-}
 
-lazy_static::lazy_static! {
     static ref ADDRESS_SIGNATURE_SIZE: usize = {
         let raw_signature = AuthorizedPublicKeyHashSpend::new(
             BOGUS_KEY_PAIR_AND_SIGNATURE.1.clone(),
@@ -133,6 +135,34 @@ lazy_static::lazy_static! {
             raw_signature,
         );
         InputWitness::Standard(standard).encoded_size()
+    };
+
+    static ref HTLC_SPEND_SIGNATURE_OVERHEAD: usize = {
+        let pkh_spend_encoded = AuthorizedPublicKeyHashSpend::new(
+            BOGUS_KEY_PAIR_AND_SIGNATURE.1.clone(),
+            BOGUS_KEY_PAIR_AND_SIGNATURE.2.clone(),
+        )
+        .encode();
+        let pkh_spend_encoded_size = pkh_spend_encoded.len();
+
+        let htlc_spend = AuthorizedHashedTimelockContractSpend::Spend(HtlcSecret::new([0;_]), pkh_spend_encoded);
+        let htlc_spend_size = htlc_spend.encoded_size();
+
+        htlc_spend_size.checked_sub(pkh_spend_encoded_size).expect("HTLC spend size is known to be bigger")
+    };
+
+    static ref HTLC_REFUND_SIGNATURE_OVERHEAD: usize = {
+        let pkh_spend_encoded = AuthorizedPublicKeyHashSpend::new(
+            BOGUS_KEY_PAIR_AND_SIGNATURE.1.clone(),
+            BOGUS_KEY_PAIR_AND_SIGNATURE.2.clone(),
+        )
+        .encode();
+        let pkh_spend_encoded_size = pkh_spend_encoded.len();
+
+        let htlc_spend = AuthorizedHashedTimelockContractSpend::Refund(pkh_spend_encoded);
+        let htlc_spend_size = htlc_spend.encoded_size();
+
+        htlc_spend_size.checked_sub(pkh_spend_encoded_size).expect("HTLC spend size is known to be bigger")
     };
 }
 
@@ -177,21 +207,36 @@ pub trait DestinationInfoProvider {
 /// provided destination.
 pub fn input_signature_size_from_destination(
     destination: &Destination,
+    htlc_spend_tag: Option<AuthorizedHashedTimelockContractSpendTag>,
     dest_info_provider: Option<&dyn DestinationInfoProvider>,
 ) -> Result<usize, SizeEstimationError> {
     // Sizes calculated upfront
-    match destination {
-        Destination::PublicKeyHash(_) => Ok(*ADDRESS_SIGNATURE_SIZE),
-        Destination::PublicKey(_) => Ok(*PUB_KEY_SIGNATURE_SIZE),
-        Destination::AnyoneCanSpend => Ok(*NO_SIGNATURE_SIZE),
-        Destination::ScriptHash(_) => Err(SizeEstimationError::UnsupportedInputDestination(
-            destination.clone(),
-        )),
+    let size = match destination {
+        Destination::PublicKeyHash(_) => *ADDRESS_SIGNATURE_SIZE,
+        Destination::PublicKey(_) => *PUB_KEY_SIGNATURE_SIZE,
+        Destination::AnyoneCanSpend => *NO_SIGNATURE_SIZE,
+        Destination::ScriptHash(_) => {
+            return Err(SizeEstimationError::UnsupportedInputDestination(
+                destination.clone(),
+            ));
+        }
         Destination::ClassicMultisig(_) => dest_info_provider
             .and_then(|dest_info_provider| dest_info_provider.get_multisig_info(destination))
             .map(multisig_signature_size)
-            .ok_or_else(|| SizeEstimationError::UnsupportedInputDestination(destination.clone())),
-    }
+            .ok_or_else(|| SizeEstimationError::UnsupportedInputDestination(destination.clone()))?,
+    };
+
+    let adjusted_size = match htlc_spend_tag {
+        None => size,
+        Some(AuthorizedHashedTimelockContractSpendTag::Spend) => {
+            size + *HTLC_SPEND_SIGNATURE_OVERHEAD
+        }
+        Some(AuthorizedHashedTimelockContractSpendTag::Refund) => {
+            size + *HTLC_REFUND_SIGNATURE_OVERHEAD
+        }
+    };
+
+    Ok(adjusted_size)
 }
 
 /// Return the encoded size for a SignedTransaction also accounting for the compact encoding of the
@@ -241,12 +286,19 @@ pub fn inputs_encoded_size<'a>(inputs: impl IntoIterator<Item = &'a TxInput>) ->
 }
 
 pub fn input_signatures_size_from_destinations<'a>(
-    destinations: impl IntoIterator<Item = &'a Destination>,
+    destinations: impl IntoIterator<
+        Item = (
+            &'a Destination,
+            Option<AuthorizedHashedTimelockContractSpendTag>,
+        ),
+    >,
     dest_info_provider: Option<&dyn DestinationInfoProvider>,
 ) -> Result<usize, SizeEstimationError> {
     destinations
         .into_iter()
-        .map(|dest| input_signature_size_from_destination(dest, dest_info_provider))
+        .map(|(dest, htlc_spend_tag)| {
+            input_signature_size_from_destination(dest, htlc_spend_tag, dest_info_provider)
+        })
         .sum()
 }
 

@@ -292,7 +292,7 @@ class WalletCliController(WalletCliControllerBase):
         return [UtxoOutpoint(id=match["outpoint"]["source_id"]["content"]["tx_id"], index=int(match["outpoint"]["index"])) for match in output]
 
     # Same as list_multisig_utxos, but return a raw dict.
-    async def list_multisig_utxos_raw(self, utxo_type: str = '', with_locked: str = '', utxo_states: List[str] = []) -> List[UtxoOutpoint]:
+    async def list_multisig_utxos_raw(self, utxo_type: str = '', with_locked: str = '', utxo_states: List[str] = []) -> any:
         output = await self._write_command(f"standalone-multisig-utxos {utxo_type} {with_locked} {' '.join(utxo_states)}\n")
         return json.loads(output)
 
@@ -323,6 +323,14 @@ class WalletCliController(WalletCliControllerBase):
     async def send_to_address(self, address: str, amount: int | float | Decimal | str, selected_utxos: List[UtxoOutpoint] = []) -> str:
         return await self._write_command(f"address-send {address} {amount} {' '.join(map(str, selected_utxos))}\n")
 
+    async def send_to_address_return_tx_id(self, address: str, amount: int, selected_utxos: List[UtxoOutpoint] = []) -> str:
+        output = await self.send_to_address(address, amount, selected_utxos)
+
+        match = re.search(r".*The transaction was submitted successfully with ID:\n(.+)", output)
+        assert match is not None, f"match failed for {output}"
+
+        return match.group(1)
+
     async def compose_transaction(self, outputs: List[TxOutput], selected_utxos: List[UtxoOutpoint], only_transaction: bool = False) -> str:
         only_tx = "--only-transaction" if only_transaction else ""
         utxos = f"--utxos {' --utxos '.join(map(str, selected_utxos))}" if selected_utxos else ""
@@ -331,10 +339,15 @@ class WalletCliController(WalletCliControllerBase):
     async def send_tokens_to_address(self, token_id: str, address: str, amount: int | float | Decimal | str):
         return await self._write_command(f"token-send {token_id} {address} {amount}\n")
 
-    # Note: unlike send_tokens_to_address, this function behaves identically both for wallet_cli_controller and wallet_rpc_controller.
-    async def send_tokens_to_address_or_fail(self, token_id: str, address: str, amount: int | float | Decimal | str):
+    # Note: unlike send_tokens_to_address, this function behaves identically both for wallet_cli_controller and wallet_rpc_controller,
+    # namely it fails on error and returns the tx id on success.
+    async def send_tokens_to_address_return_tx_id(self, token_id: str, address: str, amount: int | float | Decimal | str) -> str:
         output = await self.send_tokens_to_address(token_id, address, amount)
-        assert_in("The transaction was submitted successfully", output)
+
+        match = re.search(r".*The transaction was submitted successfully with ID:\n(.+)", output)
+        assert match is not None, f"match failed for {output}"
+
+        return match.group(1)
 
     async def issue_new_token(self,
                               token_ticker: str,
@@ -594,6 +607,66 @@ class WalletCliController(WalletCliControllerBase):
 
         return (match.group(1), match.group(2), match.group(3))
 
+    # This function returns a dict similar to the one returned by its RPC counterpart, except for
+    # the "fees" item.
+    async def create_htlc_transaction(
+        self,
+        amount: int,
+        token_id: Optional[str],
+        secret_hash: str,
+        spend_address: str,
+        refund_address: str,
+        refund_lock_for_blocks: int
+    ) -> any:
+        currency = token_id if token_id is not None else "coin"
+        output = await self._write_command(
+            f"htlc-create-transaction {currency} {amount} {secret_hash} {spend_address} block_count({refund_lock_for_blocks}) {refund_address}\n")
+
+        match = re.search(
+            r".*Transaction id:\s*([^\n]+)\n.*The transaction was created and is ready to be submitted:\n(.+)",
+            output,
+            flags=re.DOTALL
+        )
+        assert match is not None, f"match failed for {output}"
+
+        return {
+            "tx_id": match.group(1),
+            "tx": match.group(2),
+        }
+
+    async def generate_htlc_secret(self) -> tuple[str, str]:
+        output = await self._write_command("htlc-generate-secret\n")
+
+        match = re.search(r"New HTLC secret: (.*)\nand its hash: (.*)", output)
+        assert match is not None, f"match failed for {output}"
+
+        return (match.group(1), match.group(2))
+
+    async def calc_htlc_secret_hash(self, secret: str) -> str:
+        output = await self._write_command(f"htlc-calc-secret-hash {secret}\n")
+
+        match = re.search(r"The hash of the provided secret is: (.*)", output)
+        assert match is not None, f"match failed for {output}"
+
+        return match.group(1)
+
+    async def spend_utxo_return_tx_id(
+        self,
+        utxo: UtxoOutpoint,
+        output_address: str,
+        htlc_secret: str | None = None,
+    ) -> str:
+        htlc_secret_part = "" if htlc_secret is None else htlc_secret
+        output = await self._write_command(f"utxo-spend {utxo} {output_address} {htlc_secret_part}\n")
+
+        if "Wallet error" in output:
+            raise Exception(f"Cannot spent UTXO: {output}")
+
+        match = re.search(r".*The transaction was submitted successfully with ID:\n(.+)", output)
+        assert match is not None, f"match failed for {output}"
+
+        return match.group(1)
+
     async def create_order(
         self,
         ask_token_id: Optional[str],
@@ -664,3 +737,6 @@ class WalletCliController(WalletCliControllerBase):
         assert_in("The list of active orders goes below", result[0])
         assert_in("WARNING: token tickers are not unique", result[1])
         return result[2:]
+
+    def is_cli(self) -> bool:
+        return True

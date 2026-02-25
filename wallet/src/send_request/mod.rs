@@ -255,6 +255,10 @@ impl SendRequest {
         &self.outputs
     }
 
+    pub fn htlc_secrets(&self) -> &[Option<HtlcSecret>] {
+        &self.htlc_secrets
+    }
+
     pub fn with_inputs_and_destinations(
         self,
         utxos: impl IntoIterator<Item = (TxInput, Destination)>,

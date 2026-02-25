@@ -181,6 +181,8 @@ BASE_SCRIPTS = [
     'wallet_orders_v1_rpc.py',
     'wallet_order_double_fill_with_same_dest_v0.py',
     'wallet_order_double_fill_with_same_dest_v1.py',
+    'wallet_utxo_spend.py',
+    'wallet_utxo_spend_rpc.py',
     'mempool_basic_reorg.py',
     'mempool_eviction.py',
     'mempool_ibd.py',
