@@ -127,8 +127,8 @@ class WalletTokensTransferFromMultisigAddr(BitcoinTestFramework):
         ms_addr_2_of_2 = await wallet.add_standalone_multisig_address_get_result(2, [pubkey_as_addr, another_pub_key_as_addr], None, True)
 
         for token, amount1, amount2 in tokens_amounts:
-            await wallet.send_tokens_to_address_or_fail(token, ms_addr_1_of_2, amount1)
-            await wallet.send_tokens_to_address_or_fail(token, ms_addr_2_of_2, amount2)
+            await wallet.send_tokens_to_address_return_tx_id(token, ms_addr_1_of_2, amount1)
+            await wallet.send_tokens_to_address_return_tx_id(token, ms_addr_2_of_2, amount2)
 
         self.generate_block()
         await self.sync_wallet(wallet)
