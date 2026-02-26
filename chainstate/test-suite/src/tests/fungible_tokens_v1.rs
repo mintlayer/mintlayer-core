@@ -30,7 +30,8 @@ use chainstate_test_framework::{
 };
 use common::{
     chain::{
-        make_token_id,
+        htlc::{HashedTimelockContract, HtlcSecret},
+        make_order_id, make_token_id,
         output_value::OutputValue,
         signature::{
             inputsig::{standard_signature::StandardInputSignature, InputWitness},
@@ -43,8 +44,8 @@ use common::{
             TokenIssuanceV1, TokenTotalSupply,
         },
         AccountCommand, AccountNonce, AccountType, Block, ChainstateUpgradeBuilder, Destination,
-        GenBlock, OrderData, OutPointSourceId, SignedTransaction, Transaction, TxInput, TxOutput,
-        UtxoOutPoint,
+        GenBlock, OrderAccountCommand, OrderData, OutPointSourceId, SignedTransaction, Transaction,
+        TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{amount::SignedAmount, Amount, BlockHeight, CoinOrTokenId, Id, Idable},
 };
@@ -4178,8 +4179,6 @@ fn token_issue_mint_and_data_deposit_not_enough_fee(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn check_freezable_supply(#[case] seed: Seed) {
-    use common::chain::htlc::{HashedTimelockContract, HtlcSecret};
-
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
@@ -4568,6 +4567,365 @@ fn check_freezable_supply(#[case] seed: Seed) {
                     ))
                     .build(),
             )
+            .build_and_process(&mut rng)
+            .unwrap();
+    });
+}
+
+// Check that orders that use a frozen token cannot be filled or concluded, but can be frozen.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn fill_freeze_conclude_order_with_frozen_token(
+    #[case] seed: Seed,
+    #[values(false, true)] freeze_orders: bool,
+) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+
+        let (token_id, issuance_block_id, issuance_tx, issuance, utxo_with_change) =
+            issue_token_from_genesis(
+                &mut rng,
+                &mut tf,
+                TokenTotalSupply::Lockable,
+                IsTokenFreezable::Yes,
+            );
+
+        // Mint some tokens
+        let amount_to_mint = Amount::from_atoms(rng.gen_range(100..1000));
+        let best_block_id = tf.best_block_id();
+        let (_, mint_tx_id) = mint_tokens_in_block(
+            &mut rng,
+            &mut tf,
+            best_block_id,
+            utxo_with_change,
+            token_id,
+            amount_to_mint,
+            true,
+        );
+        let utxo_with_tokens_change = UtxoOutPoint::new(mint_tx_id.into(), 0);
+        let utxo_with_change = UtxoOutPoint::new(mint_tx_id.into(), 1);
+        let change_amount = tf.coin_amount_from_utxo(&utxo_with_change);
+
+        // Check the token
+        check_fungible_token(
+            &tf,
+            &mut rng,
+            &token_id,
+            &ExpectedFungibleTokenData {
+                issuance: issuance.clone(),
+                issuance_tx: issuance_tx.clone(),
+                issuance_block_id,
+                circulating_supply: Some(amount_to_mint),
+                is_locked: false,
+                is_frozen: IsTokenFrozen::No(IsTokenFreezable::Yes),
+            },
+            true,
+        );
+
+        // Split the change utxo into 2
+        let change_split_tx = TransactionBuilder::new()
+            .add_input(utxo_with_change.into(), InputWitness::NoSignature(None))
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin((change_amount / 2).unwrap()),
+                Destination::AnyoneCanSpend,
+            ))
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin((change_amount / 2).unwrap()),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let change_split_tx_id = change_split_tx.transaction().get_id();
+        tf.make_block_builder()
+            .add_transaction(change_split_tx)
+            .build_and_process(&mut rng)
+            .unwrap();
+
+        let utxo_with_change1 = UtxoOutPoint::new(change_split_tx_id.into(), 0);
+        let utxo_with_change2 = UtxoOutPoint::new(change_split_tx_id.into(), 1);
+
+        let change_amount1 = tf.coin_amount_from_utxo(&utxo_with_change1);
+
+        // Create the orders
+
+        let order1_token_give_amount = (amount_to_mint / 2).unwrap();
+        let order1_coin_ask_amount = Amount::from_atoms(rng.gen_range(100..1000));
+
+        let token_remaining_amount = (amount_to_mint - order1_token_give_amount).unwrap();
+        let order1_data = OrderData::new(
+            Destination::AnyoneCanSpend,
+            OutputValue::Coin(order1_coin_ask_amount),
+            OutputValue::TokenV1(token_id, order1_token_give_amount),
+        );
+        let order1_creation_tx = TransactionBuilder::new()
+            .add_input(
+                utxo_with_tokens_change.into(),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::CreateOrder(Box::new(order1_data)))
+            .add_output(TxOutput::Transfer(
+                OutputValue::TokenV1(token_id, token_remaining_amount),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let order1_creation_tx_id = order1_creation_tx.transaction().get_id();
+        let order1_id = make_order_id(order1_creation_tx.inputs()).unwrap();
+        tf.make_block_builder()
+            .add_transaction(order1_creation_tx)
+            .build_and_process(&mut rng)
+            .unwrap();
+
+        let utxo_with_tokens_change = UtxoOutPoint::new(order1_creation_tx_id.into(), 1);
+
+        let order2_token_ask_amount = token_remaining_amount;
+        let order2_coin_give_amount = Amount::from_atoms(rng.gen_range(100..1000));
+
+        let order2_data = OrderData::new(
+            Destination::AnyoneCanSpend,
+            OutputValue::TokenV1(token_id, order2_token_ask_amount),
+            OutputValue::Coin(order2_coin_give_amount),
+        );
+        let order2_creation_tx = TransactionBuilder::new()
+            .add_input(utxo_with_change1.into(), InputWitness::NoSignature(None))
+            .add_output(TxOutput::CreateOrder(Box::new(order2_data)))
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin((change_amount1 - order2_coin_give_amount).unwrap()),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let order2_creation_tx_id = order2_creation_tx.transaction().get_id();
+
+        let order2_id = make_order_id(order2_creation_tx.inputs()).unwrap();
+        tf.make_block_builder()
+            .add_transaction(order2_creation_tx)
+            .build_and_process(&mut rng)
+            .unwrap();
+
+        let utxo_with_change1 = UtxoOutPoint::new(order2_creation_tx_id.into(), 1);
+        let change_amount1 = tf.coin_amount_from_utxo(&utxo_with_change1);
+
+        let token_freeze_fee =
+            tf.chainstate.get_chain_config().token_freeze_fee(BlockHeight::zero());
+
+        // Freeze the token
+        let token_freeze_tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_command(
+                    AccountNonce::new(1),
+                    AccountCommand::FreezeToken(token_id, IsTokenUnfreezable::Yes),
+                ),
+                InputWitness::NoSignature(None),
+            )
+            .add_input(utxo_with_change1.into(), InputWitness::NoSignature(None))
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin((change_amount1 - token_freeze_fee).unwrap()),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let token_freeze_tx_id = token_freeze_tx.transaction().get_id();
+
+        tf.make_block_builder()
+            .add_transaction(token_freeze_tx)
+            .build_and_process(&mut rng)
+            .unwrap();
+
+        let utxo_with_change1 = UtxoOutPoint::new(token_freeze_tx_id.into(), 0);
+
+        check_fungible_token(
+            &tf,
+            &mut rng,
+            &token_id,
+            &ExpectedFungibleTokenData {
+                issuance: issuance.clone(),
+                issuance_tx: issuance_tx.clone(),
+                issuance_block_id,
+                circulating_supply: Some(amount_to_mint),
+                is_locked: false,
+                is_frozen: IsTokenFrozen::Yes(IsTokenUnfreezable::Yes),
+            },
+            true,
+        );
+
+        // Try filling/concluding the orders, which should fail.
+        // Also optionally try freezing them, which should succeed.
+        // Note that the order fill/conclude txs don't have outputs: a) for simplicity (e.g. so that
+        // the conclude tx stays the same no matter whether the fill has succeeded or not),
+        // b) (in the case of a token output) to ensure that the tx is rejected not because of
+        // the output, but because of the order command itself.
+
+        // Try filling order1
+        let order1_fill_tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(
+                    order1_id,
+                    order1_coin_ask_amount,
+                )),
+                InputWitness::NoSignature(None),
+            )
+            .add_input(utxo_with_change1.into(), InputWitness::NoSignature(None))
+            .build();
+        let result = tf
+            .make_block_builder()
+            .add_transaction(order1_fill_tx.clone())
+            .build_and_process(&mut rng);
+        assert_eq!(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::AttemptToSpendFrozenToken(token_id)
+            ))
+        );
+
+        // Try concluding order1
+        let order1_conclude_tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder(order1_id)),
+                InputWitness::NoSignature(None),
+            )
+            .build();
+        let result = tf
+            .make_block_builder()
+            .add_transaction(order1_conclude_tx.clone())
+            .build_and_process(&mut rng);
+        assert_eq!(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::AttemptToSpendFrozenToken(token_id)
+            ))
+        );
+
+        // Try filling order2
+        let order2_fill_tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(
+                    order2_id,
+                    order2_token_ask_amount,
+                )),
+                InputWitness::NoSignature(None),
+            )
+            .add_input(
+                utxo_with_tokens_change.into(),
+                InputWitness::NoSignature(None),
+            )
+            .build();
+        let result = tf
+            .make_block_builder()
+            .add_transaction(order2_fill_tx.clone())
+            .build_and_process(&mut rng);
+        assert_eq!(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::AttemptToSpendFrozenToken(token_id)
+            ))
+        );
+
+        // Try concluding order2
+        let order2_conclude_tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder(order2_id)),
+                InputWitness::NoSignature(None),
+            )
+            .build();
+        let result = tf
+            .make_block_builder()
+            .add_transaction(order2_conclude_tx.clone())
+            .build_and_process(&mut rng);
+
+        assert_eq!(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::AttemptToSpendFrozenToken(token_id)
+            ))
+        );
+
+        // The orders can still be frozen.
+        if freeze_orders {
+            tf.make_block_builder()
+                .add_transaction(
+                    TransactionBuilder::new()
+                        .add_input(
+                            TxInput::OrderAccountCommand(OrderAccountCommand::FreezeOrder(
+                                order1_id,
+                            )),
+                            InputWitness::NoSignature(None),
+                        )
+                        .build(),
+                )
+                .build_and_process(&mut rng)
+                .unwrap();
+
+            tf.make_block_builder()
+                .add_transaction(
+                    TransactionBuilder::new()
+                        .add_input(
+                            TxInput::OrderAccountCommand(OrderAccountCommand::FreezeOrder(
+                                order2_id,
+                            )),
+                            InputWitness::NoSignature(None),
+                        )
+                        .build(),
+                )
+                .build_and_process(&mut rng)
+                .unwrap();
+        }
+
+        // Unfreeze the token
+        let unfreeze_tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_command(
+                    AccountNonce::new(2),
+                    AccountCommand::UnfreezeToken(token_id),
+                ),
+                InputWitness::NoSignature(None),
+            )
+            .add_input(utxo_with_change2.into(), InputWitness::NoSignature(None))
+            .build();
+        tf.make_block_builder()
+            .add_transaction(unfreeze_tx)
+            .build_and_process(&mut rng)
+            .unwrap();
+
+        // Check result
+        check_fungible_token(
+            &tf,
+            &mut rng,
+            &token_id,
+            &ExpectedFungibleTokenData {
+                issuance: issuance.clone(),
+                issuance_tx: issuance_tx.clone(),
+                issuance_block_id,
+                circulating_supply: Some(amount_to_mint),
+                is_locked: false,
+                is_frozen: IsTokenFrozen::No(IsTokenFreezable::Yes),
+            },
+            true,
+        );
+
+        // Now it should be possible to work with the orders.
+
+        if !freeze_orders {
+            // Fill order1
+            tf.make_block_builder()
+                .add_transaction(order1_fill_tx)
+                .build_and_process(&mut rng)
+                .unwrap();
+
+            // Fill order2
+            tf.make_block_builder()
+                .add_transaction(order2_fill_tx)
+                .build_and_process(&mut rng)
+                .unwrap();
+        }
+
+        // Conclude order1
+        tf.make_block_builder()
+            .add_transaction(order1_conclude_tx)
+            .build_and_process(&mut rng)
+            .unwrap();
+
+        // Conclude order2
+        tf.make_block_builder()
+            .add_transaction(order2_conclude_tx)
             .build_and_process(&mut rng)
             .unwrap();
     });

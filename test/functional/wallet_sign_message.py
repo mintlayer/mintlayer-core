@@ -64,7 +64,7 @@ class WalletSignMessage(BitcoinTestFramework):
                 output = await wallet.sign_challenge_hex(message, destination)
             else:
                 output = await wallet.sign_challenge_plain(message, destination)
-            assert_in("The generated hex encoded signature is", output)
+            assert_in("The generated hex-encoded signature is", output)
             signature = output.split('\n')[2]
 
             await wallet.close_wallet()

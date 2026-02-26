@@ -31,7 +31,7 @@ use common::{
         tokens::{RPCTokenInfo, TokenId},
         ChainConfig, Destination, TxOutput,
     },
-    primitives::{DecimalAmount, H256},
+    primitives::{amount::decimal::DecimalAmountWithIsSameComparison, DecimalAmount, H256},
 };
 use utils::ensure;
 use wallet::signer::trezor_signer::FoundDevice;
@@ -94,7 +94,7 @@ impl GenericCurrencyTransfer {
         let decimals = chain_config.coin_decimals();
         let output_val = OutputValue::Coin(self.amount.to_amount(decimals).ok_or(
             GenericCurrencyTransferToTxOutputConversionError::AmountNotConvertible(
-                self.amount,
+                self.amount.into(),
                 decimals,
             ),
         )?);
@@ -111,7 +111,7 @@ impl GenericCurrencyTransfer {
             token_info.token_id(),
             self.amount.to_amount(decimals).ok_or(
                 GenericCurrencyTransferToTxOutputConversionError::AmountNotConvertible(
-                    self.amount,
+                    self.amount.into(),
                     decimals,
                 ),
             )?,
@@ -159,10 +159,10 @@ impl GenericTokenTransfer {
     }
 }
 
-#[derive(thiserror::Error, Debug)]
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 pub enum GenericCurrencyTransferToTxOutputConversionError {
     #[error("Decimal amount {0} can't be converted to Amount with {1} decimals")]
-    AmountNotConvertible(DecimalAmount, u8),
+    AmountNotConvertible(DecimalAmountWithIsSameComparison, u8),
     #[error("Unexpected token id {actual} (expecting {expected})")]
     UnexpectedTokenId { expected: TokenId, actual: TokenId },
 }

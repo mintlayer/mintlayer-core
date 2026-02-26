@@ -21,26 +21,28 @@ use itertools::Itertools;
 
 use chainstate::rpc::RpcOutputValueOut;
 use common::{
-    address::{decode_address, Address, RpcAddress},
+    address::{decode_address, Address, AddressError, RpcAddress},
     chain::{
         tokens::{RPCTokenInfo, TokenId},
-        ChainConfig, Currency, Destination, OutPointSourceId, RpcCurrency, TxOutput, UtxoOutPoint,
+        ChainConfig, Currency, Destination, OrderId, OutPointSourceId, TxOutput, UtxoOutPoint,
     },
     primitives::{
-        amount::decimal::subtract_decimal_amounts_of_same_currency, DecimalAmount, Id, H256,
+        amount::decimal::{
+            subtract_decimal_amounts_of_same_currency, DecimalAmountWithIsSameComparison,
+        },
+        DecimalAmount, Id, H256,
     },
 };
-use wallet_controller::types::{GenericCurrencyTransfer, GenericTokenTransfer};
-use wallet_rpc_lib::types::{
-    ActiveOrderInfo, NodeInterface, OwnOrderInfo, PoolInfo, TokenTotalSupply,
+use utils::ensure;
+use wallet_controller::types::{
+    GenericCurrencyTransfer, GenericCurrencyTransferToTxOutputConversionError, GenericTokenTransfer,
 };
+use wallet_rpc_lib::types::{ActiveOrderInfo, OwnOrderInfo, PoolInfo, TokenTotalSupply};
 use wallet_types::{
     seed_phrase::StoreSeedPhrase,
     utxo_types::{UtxoState, UtxoType},
     with_locked::WithLocked,
 };
-
-use crate::errors::WalletCliCommandError;
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
 pub enum CliUtxoTypes {
@@ -121,11 +123,11 @@ pub fn format_pool_info(info: PoolInfo) -> String {
     )
 }
 
-pub fn format_own_order_info<N: NodeInterface>(
+pub fn format_own_order_info(
     order_info: &OwnOrderInfo,
     chain_config: &ChainConfig,
     token_infos: &BTreeMap<TokenId, RPCTokenInfo>,
-) -> Result<String, WalletCliCommandError<N>> {
+) -> Result<String, FormatError> {
     if let Some(existing_order_data) = &order_info.existing_order_data {
         // The order exists on chain
         let accumulated_ask_amount = subtract_decimal_amounts_of_same_currency(
@@ -133,7 +135,7 @@ pub fn format_own_order_info<N: NodeInterface>(
             &existing_order_data.ask_balance.decimal(),
         )
         .ok_or_else(|| {
-            WalletCliCommandError::OrderNegativeAccumulatedAskAmount(order_info.order_id.clone())
+            FormatError::OrderNegativeAccumulatedAskAmount(order_info.order_id.clone())
         })?;
         let status = if !existing_order_data.is_frozen
             && !order_info.is_marked_as_frozen_in_wallet
@@ -196,12 +198,12 @@ pub fn active_order_infos_header() -> &'static str {
     )
 }
 
-pub fn format_active_order_info<N: NodeInterface>(
+pub fn format_active_order_info(
     order_info: &ActiveOrderInfo,
     give_ask_price: &BigDecimal,
     chain_config: &ChainConfig,
     token_infos: &BTreeMap<TokenId, RPCTokenInfo>,
-) -> Result<String, WalletCliCommandError<N>> {
+) -> Result<String, FormatError> {
     // Note: we show what's given first because the orders are sorted by the given currency first
     // by the caller code.
     Ok(format!(
@@ -222,11 +224,11 @@ pub fn format_active_order_info<N: NodeInterface>(
     ))
 }
 
-pub fn format_asset_name<N: NodeInterface>(
+pub fn format_asset_name(
     value: &RpcOutputValueOut,
     chain_config: &ChainConfig,
     token_infos: &BTreeMap<TokenId, RPCTokenInfo>,
-) -> Result<String, WalletCliCommandError<N>> {
+) -> Result<String, FormatError> {
     let result = if let Some(token_id) = value.token_id() {
         format_token_name(token_id, chain_config, token_infos)?
     } else {
@@ -235,23 +237,23 @@ pub fn format_asset_name<N: NodeInterface>(
     Ok(result)
 }
 
-pub fn format_output_value<N: NodeInterface>(
+pub fn format_output_value(
     value: &RpcOutputValueOut,
     chain_config: &ChainConfig,
     token_infos: &BTreeMap<TokenId, RPCTokenInfo>,
-) -> Result<String, WalletCliCommandError<N>> {
+) -> Result<String, FormatError> {
     let asset_name = format_asset_name(value, chain_config, token_infos)?;
     Ok(format!("{} {}", value.amount().decimal(), asset_name))
 }
 
-pub fn format_token_name<N: NodeInterface>(
+pub fn format_token_name(
     token_id: &RpcAddress<TokenId>,
     chain_config: &ChainConfig,
     token_infos: &BTreeMap<TokenId, RPCTokenInfo>,
-) -> Result<String, WalletCliCommandError<N>> {
+) -> Result<String, FormatError> {
     let decoded_token_id = token_id
         .decode_object(chain_config)
-        .map_err(WalletCliCommandError::TokenIdDecodingError)?;
+        .map_err(FormatError::TokenIdDecodingError)?;
 
     let result = if let Some(token_ticker) =
         token_infos.get(&decoded_token_id).map(token_ticker_from_rpc_token_info)
@@ -316,12 +318,12 @@ impl From<CliStoreSeedPhrase> for StoreSeedPhrase {
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
-pub enum EnableOrDisable {
+pub enum CliEnableOrDisable {
     Enable,
     Disable,
 }
 
-impl EnableOrDisable {
+impl CliEnableOrDisable {
     pub fn is_enable(self) -> bool {
         match self {
             Self::Enable => true,
@@ -330,129 +332,165 @@ impl EnableOrDisable {
     }
 }
 
-/// Parses a string into UtxoOutPoint
-/// The string format is expected to be
-/// tx(H256,u32) or block(H256,u32)
-///
-/// e.g tx(000000000000000000059fa50103b9683e51e5aba83b8a34c9b98ce67d66136c,1)
-/// e.g block(000000000000000000059fa50103b9683e51e5aba83b8a34c9b98ce67d66136c,2)
-pub fn parse_utxo_outpoint<N: NodeInterface>(
-    input: &str,
-) -> Result<UtxoOutPoint, WalletCliCommandError<N>> {
-    let (name, mut args) = parse_funclike_expr(input).ok_or(
-        WalletCliCommandError::<N>::InvalidInput("Invalid input format".into()),
-    )?;
-
-    let (h256_str, output_index_str) = match (args.next(), args.next(), args.next()) {
-        (Some(h256_str), Some(output_index_str), None) => (h256_str, output_index_str),
-        (_, _, _) => {
-            return Err(WalletCliCommandError::<N>::InvalidInput(
-                "Invalid input format".into(),
-            ));
-        }
-    };
-
-    let h256 = H256::from_str(h256_str)
-        .map_err(|err| WalletCliCommandError::<N>::InvalidInput(err.to_string()))?;
-    let output_index = u32::from_str(output_index_str)
-        .map_err(|err| WalletCliCommandError::<N>::InvalidInput(err.to_string()))?;
-    let source_id = match name {
-        "tx" => OutPointSourceId::Transaction(Id::new(h256)),
-        "block" => OutPointSourceId::BlockReward(Id::new(h256)),
-        _ => {
-            return Err(WalletCliCommandError::<N>::InvalidInput(
-                "Invalid input: unknown ID type".into(),
-            ));
-        }
-    };
-
-    Ok(UtxoOutPoint::new(source_id, output_index))
+/// A UtxoOutPoint that can be parsed from strings of the form `tx(H256,u32)` or `block(H256,u32)`,
+/// e.g. `tx(000000000000000000059fa50103b9683e51e5aba83b8a34c9b98ce67d66136c,1)`,
+/// `block(000000000000000000059fa50103b9683e51e5aba83b8a34c9b98ce67d66136c,2)`
+#[derive(Debug, Clone)]
+pub struct CliUtxoOutPoint {
+    pub source_id: OutPointSourceId,
+    pub output_index: u32,
 }
 
-/// Parses a string into `GenericCurrencyTransfer`.
-/// The string format is expected to be `transfer(address,amount)`
-/// e.g `transfer(tmt1qy7y8ra99sgmt97lu2kn249yds23pnp7xsv62p77,10.1)`.
-pub fn parse_generic_currency_transfer<N: NodeInterface>(
-    input: &str,
-    chain_config: &ChainConfig,
-) -> Result<GenericCurrencyTransfer, WalletCliCommandError<N>> {
-    let (name, mut args) = parse_funclike_expr(input).ok_or(
-        WalletCliCommandError::<N>::InvalidInput("Invalid input format".into()),
-    )?;
+impl FromStr for CliUtxoOutPoint {
+    type Err = ParseError;
 
-    let (dest_str, amount_str) = match (args.next(), args.next(), args.next()) {
-        (Some(dest_str), Some(amount_str), None) => (dest_str, amount_str),
-        (_, _, _) => {
-            return Err(WalletCliCommandError::<N>::InvalidInput(
-                "Invalid input format".into(),
-            ));
-        }
-    };
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
+        let (name, mut args) = parse_funclike_expr(input).ok_or(ParseError::InvalidInputFormat)?;
 
-    let destination = parse_destination(chain_config, dest_str)?;
-    let amount = parse_decimal_amount(amount_str)?;
-    let output = match name {
-        "transfer" => GenericCurrencyTransfer {
-            amount,
-            destination,
-        },
-        _ => {
-            return Err(WalletCliCommandError::<N>::InvalidInput(
-                "Invalid input: unknown type".into(),
-            ));
-        }
-    };
-
-    Ok(output)
-}
-
-/// Parses a string into `GenericTokenTransfer`.
-/// The string format is expected to be `transfer(token_id,address,amount)`
-pub fn parse_generic_token_transfer<N: NodeInterface>(
-    input: &str,
-    chain_config: &ChainConfig,
-) -> Result<GenericTokenTransfer, WalletCliCommandError<N>> {
-    let (name, mut args) = parse_funclike_expr(input).ok_or(
-        WalletCliCommandError::<N>::InvalidInput("Invalid input format".into()),
-    )?;
-
-    let (token_id_str, dest_str, amount_str) =
-        match (args.next(), args.next(), args.next(), args.next()) {
-            (Some(dest_str), Some(amount_str), Some(token_id_str), None) => {
-                (dest_str, amount_str, token_id_str)
-            }
-            (_, _, _, _) => {
-                return Err(WalletCliCommandError::<N>::InvalidInput(
-                    "Invalid input format".into(),
-                ));
+        let (h256_str, output_index_str) = match (args.next(), args.next(), args.next()) {
+            (Some(h256_str), Some(output_index_str), None) => (h256_str, output_index_str),
+            (_, _, _) => {
+                return Err(ParseError::InvalidInputFormat);
             }
         };
 
-    let token_id = Address::from_string(chain_config, token_id_str)
-        .map_err(|err| {
-            WalletCliCommandError::<N>::InvalidInput(format!(
-                "Invalid token id '{token_id_str}': {err}"
-            ))
-        })?
-        .into_object();
+        let h256 =
+            H256::from_str(h256_str).map_err(|_| ParseError::InvalidHash(h256_str.to_owned()))?;
 
-    let destination = parse_destination(chain_config, dest_str)?;
-    let amount = parse_decimal_amount(amount_str)?;
-    let output = match name {
-        "transfer" => GenericTokenTransfer {
+        let output_index = u32::from_str(output_index_str)
+            .map_err(|_| ParseError::InvalidOutputIndex(output_index_str.to_owned()))?;
+
+        let source_id = if name.eq_ignore_ascii_case("tx") {
+            OutPointSourceId::Transaction(Id::new(h256))
+        } else if name.eq_ignore_ascii_case("block") {
+            OutPointSourceId::BlockReward(Id::new(h256))
+        } else {
+            return Err(ParseError::UnknownSourceIdType(name.to_owned()));
+        };
+
+        Ok(Self {
+            source_id,
+            output_index,
+        })
+    }
+}
+
+impl From<CliUtxoOutPoint> for UtxoOutPoint {
+    fn from(value: CliUtxoOutPoint) -> Self {
+        Self::new(value.source_id, value.output_index)
+    }
+}
+
+/// This represents a transfer of an amount of an unspecified currency and can be parsed
+/// from strings of the form `transfer(address,amount)`.
+#[derive(Debug, Clone)]
+pub struct CliUnspecifiedCurrencyTransfer {
+    pub amount: DecimalAmount,
+    pub destination: String,
+}
+
+impl FromStr for CliUnspecifiedCurrencyTransfer {
+    type Err = ParseError;
+
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
+        let (name, mut args) = parse_funclike_expr(input).ok_or(ParseError::InvalidInputFormat)?;
+
+        let (dest_str, amount_str) = match (args.next(), args.next(), args.next()) {
+            (Some(dest_str), Some(amount_str), None) => (dest_str, amount_str),
+            (_, _, _) => {
+                return Err(ParseError::InvalidInputFormat);
+            }
+        };
+
+        let amount = parse_decimal_amount(amount_str)?;
+
+        let result = if name.eq_ignore_ascii_case("transfer") {
+            Self {
+                amount,
+                destination: dest_str.to_owned(),
+            }
+        } else {
+            return Err(ParseError::UnknownAction(name.to_owned()));
+        };
+
+        Ok(result)
+    }
+}
+
+impl CliUnspecifiedCurrencyTransfer {
+    pub fn to_fully_parsed(
+        &self,
+        chain_config: &ChainConfig,
+    ) -> Result<GenericCurrencyTransfer, ParseError> {
+        Ok(GenericCurrencyTransfer {
+            amount: self.amount,
+            destination: parse_destination(chain_config, &self.destination)?,
+        })
+    }
+
+    pub fn to_coin_tx_output(&self, chain_config: &ChainConfig) -> Result<TxOutput, ParseError> {
+        Ok(self.to_fully_parsed(chain_config)?.into_coin_tx_output(chain_config)?)
+    }
+}
+
+/// This represents a transfer of an amount of a token and can be parsed
+/// from strings of the form `transfer(token_id,address,amount)`.
+#[derive(Debug, Clone)]
+pub struct CliTokenTransfer {
+    pub token_id: String,
+    pub amount: DecimalAmount,
+    pub destination: String,
+}
+
+impl FromStr for CliTokenTransfer {
+    type Err = ParseError;
+
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
+        let (name, mut args) = parse_funclike_expr(input).ok_or(ParseError::InvalidInputFormat)?;
+
+        let (token_id_str, dest_str, amount_str) =
+            match (args.next(), args.next(), args.next(), args.next()) {
+                (Some(dest_str), Some(amount_str), Some(token_id_str), None) => {
+                    (dest_str, amount_str, token_id_str)
+                }
+                (_, _, _, _) => {
+                    return Err(ParseError::InvalidInputFormat);
+                }
+            };
+
+        let amount = parse_decimal_amount(amount_str)?;
+
+        let result = if name.eq_ignore_ascii_case("transfer") {
+            Self {
+                token_id: token_id_str.to_owned(),
+                amount,
+                destination: dest_str.to_owned(),
+            }
+        } else {
+            return Err(ParseError::UnknownAction(name.to_owned()));
+        };
+
+        Ok(result)
+    }
+}
+
+impl CliTokenTransfer {
+    pub fn to_fully_parsed(
+        &self,
+        chain_config: &ChainConfig,
+    ) -> Result<GenericTokenTransfer, ParseError> {
+        let token_id = Address::from_string(chain_config, &self.token_id)
+            .map_err(|_| ParseError::InvalidTokenId(self.token_id.clone()))?
+            .into_object();
+
+        let destination = parse_destination(chain_config, &self.destination)?;
+
+        Ok(GenericTokenTransfer {
             token_id,
-            amount,
+            amount: self.amount,
             destination,
-        },
-
-        _ => {
-            return Err(WalletCliCommandError::<N>::InvalidInput(
-                "Invalid input: unknown type".into(),
-            ));
-        }
-    };
-
-    Ok(output)
+        })
+    }
 }
 
 /// Parse simple strings of the form "foo(x,y,z)".
@@ -492,96 +530,113 @@ fn pop_char_from_str(s: &str) -> (Option<char>, &str) {
     (last_ch, chars.as_str())
 }
 
-/// Same as `parse_generic_output`, but produce a concrete TxOutput that transfers coins.
-pub fn parse_coin_output<N: NodeInterface>(
-    input: &str,
-    chain_config: &ChainConfig,
-) -> Result<TxOutput, WalletCliCommandError<N>> {
-    parse_generic_currency_transfer(input, chain_config)?
-        .into_coin_tx_output(chain_config)
-        .map_err(WalletCliCommandError::<N>::InvalidTxOutput)
+/// A TokenTotalSupply that can be parsed from strings "unlimited", "lockable" and "fixed(amount)".
+#[derive(Debug, Clone)]
+pub enum CliTokenTotalSupply {
+    Unlimited,
+    Lockable,
+    Fixed(DecimalAmount),
 }
 
-/// Try to parse a total token supply from a string
-/// Valid values are "unlimited", "lockable" and "fixed(Amount)"
-pub fn parse_token_supply<N: NodeInterface>(
-    input: &str,
-    token_number_of_decimals: u8,
-) -> Result<TokenTotalSupply, WalletCliCommandError<N>> {
-    match input {
-        "unlimited" => Ok(TokenTotalSupply::Unlimited),
-        "lockable" => Ok(TokenTotalSupply::Lockable),
-        _ => parse_fixed_token_supply(input, token_number_of_decimals),
+impl FromStr for CliTokenTotalSupply {
+    type Err = ParseError;
+
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
+        if input.eq_ignore_ascii_case("unlimited") {
+            Ok(Self::Unlimited)
+        } else if input.eq_ignore_ascii_case("lockable") {
+            Ok(Self::Lockable)
+        } else {
+            let (name, mut args) =
+                parse_funclike_expr(input).ok_or(ParseError::InvalidInputFormat)?;
+
+            ensure!(
+                name.eq_ignore_ascii_case("fixed"),
+                ParseError::UnknownTokenSupplyType(name.to_owned())
+            );
+
+            let amount_str = match (args.next(), args.next()) {
+                (Some(amount_str), None) => amount_str,
+                (_, _) => {
+                    return Err(ParseError::InvalidInputFormat);
+                }
+            };
+
+            Ok(Self::Fixed(parse_decimal_amount(amount_str)?))
+        }
     }
 }
 
-/// Try to parse a fixed total token supply in the format of "fixed(Amount)"
-fn parse_fixed_token_supply<N: NodeInterface>(
-    input: &str,
-    token_number_of_decimals: u8,
-) -> Result<TokenTotalSupply, WalletCliCommandError<N>> {
-    if let Some(inner) = input.strip_prefix("fixed(").and_then(|str| str.strip_suffix(')')) {
-        Ok(TokenTotalSupply::Fixed(parse_token_amount(
-            token_number_of_decimals,
-            inner,
-        )?))
-    } else {
-        Err(WalletCliCommandError::<N>::InvalidInput(format!(
-            "Failed to parse token supply from '{input}'"
-        )))
-    }
-}
+impl CliTokenTotalSupply {
+    pub fn to_fully_parsed(
+        &self,
+        token_number_of_decimals: u8,
+    ) -> Result<TokenTotalSupply, ParseError> {
+        let result = match self {
+            Self::Unlimited => TokenTotalSupply::Unlimited,
+            Self::Lockable => TokenTotalSupply::Lockable,
+            Self::Fixed(amount) => {
+                // Note: even though `RpcAmountIn` can be constructed from `DecimalAmount` directly,
+                // we want to do the conversion to atoms early, to produce a nicer error message.
+                let amount = amount.to_amount(token_number_of_decimals).ok_or(
+                    ParseError::DecimalAmountNotConvertibleToAtoms((*amount).into()),
+                )?;
+                TokenTotalSupply::Fixed(amount.into())
+            }
+        };
 
-fn parse_token_amount<N: NodeInterface>(
-    token_number_of_decimals: u8,
-    value: &str,
-) -> Result<wallet_rpc_lib::types::RpcAmountIn, WalletCliCommandError<N>> {
-    let amount = common::primitives::Amount::from_fixedpoint_str(value, token_number_of_decimals)
-        .ok_or_else(|| WalletCliCommandError::<N>::InvalidInput(value.to_owned()))?;
-    Ok(amount.into())
+        Ok(result)
+    }
 }
 
 /// Parse a decimal amount
-pub fn parse_decimal_amount<N: NodeInterface>(
-    input: &str,
-) -> Result<DecimalAmount, WalletCliCommandError<N>> {
-    DecimalAmount::from_str(input).map_err(|_| {
-        WalletCliCommandError::InvalidInput(format!("Invalid decimal amount: '{input}'"))
-    })
+pub fn parse_decimal_amount(input: &str) -> Result<DecimalAmount, ParseError> {
+    DecimalAmount::from_str(input).map_err(|_| ParseError::InvalidDecimalAmount(input.to_owned()))
 }
 
 /// Parse a destination
-pub fn parse_destination<N: NodeInterface>(
+pub fn parse_destination(
     chain_config: &ChainConfig,
     input: &str,
-) -> Result<Destination, WalletCliCommandError<N>> {
-    decode_address(chain_config, input).map_err(|err| {
-        WalletCliCommandError::<N>::InvalidInput(format!("Invalid address '{input}': {err}"))
-    })
+) -> Result<Destination, ParseError> {
+    decode_address(chain_config, input)
+        .map_err(|_| ParseError::InvalidDestination(input.to_owned()))
 }
 
-/// Try parsing the passed input as coins (case-insensitive "coin" is accepted) or
-/// as a token id.
-pub fn parse_currency<N: NodeInterface>(
-    input: &str,
-    chain_config: &ChainConfig,
-) -> Result<Currency, WalletCliCommandError<N>> {
-    if input.eq_ignore_ascii_case("coin") {
-        Ok(Currency::Coin)
-    } else {
-        let token_id = decode_address::<TokenId>(chain_config, input).map_err(|_| {
-            WalletCliCommandError::InvalidInput(format!("Invalid currency: '{input}'"))
-        })?;
-        Ok(Currency::Token(token_id))
+#[derive(Debug, Clone)]
+pub enum CliCurrency {
+    Coin,
+    Token(String),
+}
+
+impl FromStr for CliCurrency {
+    type Err = ParseError;
+
+    /// Try parsing the passed input as coins (case-insensitive "coin" is accepted), otherwise
+    /// treat it as a token id.
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
+        if input.eq_ignore_ascii_case("coin") {
+            Ok(Self::Coin)
+        } else {
+            Ok(Self::Token(input.to_owned()))
+        }
     }
 }
 
-/// Same as `parse_currency`, but return `RpcCurrency`.
-pub fn parse_rpc_currency<N: NodeInterface>(
-    input: &str,
-    chain_config: &ChainConfig,
-) -> Result<RpcCurrency, WalletCliCommandError<N>> {
-    Ok(parse_currency(input, chain_config)?.to_rpc_currency(chain_config)?)
+impl CliCurrency {
+    pub fn to_fully_parsed(&self, chain_config: &ChainConfig) -> Result<Currency, ParseError> {
+        let result = match self {
+            Self::Coin => Currency::Coin,
+            Self::Token(token_id_str) => {
+                let token_id = decode_address::<TokenId>(chain_config, token_id_str)
+                    .map_err(|_| ParseError::InvalidCurrency(token_id_str.to_owned()))?;
+
+                Currency::Token(token_id)
+            }
+        };
+
+        Ok(result)
+    }
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -615,17 +670,17 @@ impl CliIsUnfreezable {
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
-pub enum CliForceReduce {
+pub enum CliForceReduceLookaheadSize {
     IKnowWhatIAmDoing,
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
-pub enum YesNo {
+pub enum CliYesNo {
     Yes,
     No,
 }
 
-impl YesNo {
+impl CliYesNo {
     pub fn to_bool(self) -> bool {
         match self {
             Self::Yes => true,
@@ -634,20 +689,73 @@ impl YesNo {
     }
 }
 
+#[derive(thiserror::Error, Clone, Debug)]
+pub enum FormatError {
+    #[error("Accumulated ask amount for order {0} is negative")]
+    OrderNegativeAccumulatedAskAmount(RpcAddress<OrderId>),
+
+    #[error("Error decoding token id: {0}")]
+    TokenIdDecodingError(AddressError),
+}
+
+#[derive(thiserror::Error, Clone, Debug, PartialEq, Eq)]
+pub enum ParseError {
+    #[error("Unknown source id type: {0}")]
+    UnknownSourceIdType(String),
+
+    #[error("Unknown action: {0}")]
+    UnknownAction(String),
+
+    #[error("Invalid input format")]
+    InvalidInputFormat,
+
+    #[error("Invalid token id: {0}")]
+    InvalidTokenId(String),
+
+    #[error("Invalid decimal amount: {0}")]
+    InvalidDecimalAmount(String),
+
+    #[error("Invalid destination: {0}")]
+    InvalidDestination(String),
+
+    #[error("Invalid hash: {0}")]
+    InvalidHash(String),
+
+    #[error("Invalid output index: {0}")]
+    InvalidOutputIndex(String),
+
+    #[error("Unknown token supply type: {0}")]
+    UnknownTokenSupplyType(String),
+
+    #[error("Invalid currency: {0}")]
+    InvalidCurrency(String),
+
+    #[error("Decimal amount cannot be converted to atoms: {0}")]
+    DecimalAmountNotConvertibleToAtoms(DecimalAmountWithIsSameComparison),
+
+    #[error("Address error: {0}")]
+    AddressError(#[from] AddressError),
+
+    #[error(transparent)]
+    GenericCurrencyTransferToTxOutputConversionError(
+        #[from] GenericCurrencyTransferToTxOutputConversionError,
+    ),
+}
+
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
 
     use common::{
         address::pubkeyhash::PublicKeyHash,
-        chain::{self, Destination},
+        chain::{self, tokens::TokenId, Destination},
     };
-    use node_comm::rpc_client::ColdWalletClient;
     use randomness::Rng;
     use test_utils::{
-        assert_matches,
+        assert_matches, assert_matches_return_val,
         random::{make_seedable_rng, Seed},
     };
+    use wallet_rpc_lib::types::RpcAmountIn;
 
     use super::*;
 
@@ -715,52 +823,60 @@ mod tests {
     #[trace]
     #[case(Seed::from_entropy())]
     fn test_parse_utxo_outpoint(#[case] seed: Seed) {
-        fn check(input: &str, is_tx: bool, idx: u32, hash: H256) {
-            let utxo_outpoint = parse_utxo_outpoint::<ColdWalletClient>(input).unwrap();
-
-            match utxo_outpoint.source_id() {
-                OutPointSourceId::Transaction(id) => {
-                    assert_eq!(id.to_hash(), hash);
-                    assert!(is_tx);
-                }
-                OutPointSourceId::BlockReward(id) => {
-                    assert_eq!(id.to_hash(), hash);
-                    assert!(!is_tx);
-                }
-            }
-
-            assert_eq!(utxo_outpoint.output_index(), idx);
-        }
-
         let mut rng = make_seedable_rng(seed);
 
         for _ in 0..10 {
             let h256 = H256::random_using(&mut rng);
             let idx = rng.gen::<u32>();
-            let (id, is_tx) = if rng.gen::<bool>() {
-                ("tx", true)
-            } else {
-                ("block", false)
-            };
-            check(&format!("{id}({h256:x},{idx})"), is_tx, idx, h256);
+
+            for tag in ["tx", "Tx", "tX"] {
+                let parsed_outpoint: UtxoOutPoint =
+                    CliUtxoOutPoint::from_str(&format!("{tag}({h256:x},{idx})")).unwrap().into();
+                assert_eq!(
+                    parsed_outpoint,
+                    UtxoOutPoint::new(OutPointSourceId::Transaction(h256.into()), idx)
+                );
+            }
+
+            for tag in ["block", "Block", "bLOck"] {
+                let parsed_outpoint: UtxoOutPoint =
+                    CliUtxoOutPoint::from_str(&format!("{tag}({h256:x},{idx})")).unwrap().into();
+                assert_eq!(
+                    parsed_outpoint,
+                    UtxoOutPoint::new(OutPointSourceId::BlockReward(h256.into()), idx)
+                );
+            }
+
+            let err = CliUtxoOutPoint::from_str(&format!("foo({h256:x},{idx})")).unwrap_err();
+            assert_eq!(err, ParseError::UnknownSourceIdType("foo".to_owned()));
+
+            let tag = if rng.gen_bool(0.5) { "tx" } else { "block" };
+            // Sanity check
+            CliUtxoOutPoint::from_str(&format!("{tag}({h256:x},{idx})")).unwrap();
+
+            let err = CliUtxoOutPoint::from_str(&format!("{tag} {h256:x},{idx})")).unwrap_err();
+            assert_eq!(err, ParseError::InvalidInputFormat);
+
+            let err = CliUtxoOutPoint::from_str(&format!("{tag}({h256:x},{idx}")).unwrap_err();
+            assert_eq!(err, ParseError::InvalidInputFormat);
+
+            let err = CliUtxoOutPoint::from_str(&format!("{tag} {h256:x},{idx}")).unwrap_err();
+            assert_eq!(err, ParseError::InvalidInputFormat);
+
+            let err = CliUtxoOutPoint::from_str(&format!("{tag}({h256:x})")).unwrap_err();
+            assert_eq!(err, ParseError::InvalidInputFormat);
+
+            let err = CliUtxoOutPoint::from_str(&format!("{tag}()")).unwrap_err();
+            assert_eq!(err, ParseError::InvalidInputFormat);
         }
     }
 
     #[rstest]
     #[trace]
     #[case(Seed::from_entropy())]
-    fn test_parse_generic_output(#[case] seed: Seed) {
+    fn test_parse_unspecified_currency_transfer(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let chain_config = chain::config::create_unit_test_config();
-
-        let parse_assert_error = |str_to_parse: &str| {
-            let err = parse_generic_token_transfer::<ColdWalletClient>(str_to_parse, &chain_config)
-                .unwrap_err();
-            assert_matches!(
-                err,
-                WalletCliCommandError::<ColdWalletClient>::InvalidInput(_)
-            );
-        };
 
         for _ in 0..10 {
             let pkh = PublicKeyHash::random_using(&mut rng);
@@ -769,45 +885,65 @@ mod tests {
                 rng.gen_range(0..=u128::MAX),
                 rng.gen_range(0..=u8::MAX),
             );
-            let GenericCurrencyTransfer {
-                amount: parsed_amount,
-                destination: parsed_dest,
-            } = parse_generic_currency_transfer::<ColdWalletClient>(
-                &format!("transfer({addr},{amount})"),
-                &chain_config,
-            )
-            .unwrap();
 
-            assert_eq!(parsed_amount.mantissa(), amount.mantissa());
-            assert_eq!(parsed_amount.decimals(), amount.decimals());
-            assert_eq!(parsed_dest, *addr.as_object());
+            for tag in ["transfer", "Transfer", "traNSfer"] {
+                let GenericCurrencyTransfer {
+                    amount: parsed_amount,
+                    destination: parsed_dest,
+                } = CliUnspecifiedCurrencyTransfer::from_str(&format!("{tag}({addr},{amount})"))
+                    .unwrap()
+                    .to_fully_parsed(&chain_config)
+                    .unwrap();
 
-            parse_assert_error(&format!("foo({addr},{amount})"));
-            parse_assert_error(&format!("transfer(foo,{amount})"));
-            parse_assert_error(&format!("transfer({addr},foo)"));
-            parse_assert_error(&format!("transfer {addr},{amount})"));
-            parse_assert_error(&format!("transfer({addr},{amount}"));
-            parse_assert_error(&format!("transfer {addr},{amount}"));
+                assert_eq!(parsed_amount.mantissa(), amount.mantissa());
+                assert_eq!(parsed_amount.decimals(), amount.decimals());
+                assert_eq!(parsed_dest, *addr.as_object());
+            }
+
+            let err = CliUnspecifiedCurrencyTransfer::from_str(&format!("foo({addr},{amount})"))
+                .unwrap_err();
+            assert_eq!(err, ParseError::UnknownAction("foo".to_owned()));
+
+            let err =
+                CliUnspecifiedCurrencyTransfer::from_str(&format!("transfer {addr},{amount})"))
+                    .unwrap_err();
+            assert_eq!(err, ParseError::InvalidInputFormat);
+
+            let err =
+                CliUnspecifiedCurrencyTransfer::from_str(&format!("transfer({addr},{amount}"))
+                    .unwrap_err();
+            assert_eq!(err, ParseError::InvalidInputFormat);
+
+            let err =
+                CliUnspecifiedCurrencyTransfer::from_str(&format!("transfer {addr},{amount}"))
+                    .unwrap_err();
+            assert_eq!(err, ParseError::InvalidInputFormat);
+
+            let err =
+                CliUnspecifiedCurrencyTransfer::from_str(&format!("transfer({addr})")).unwrap_err();
+            assert_eq!(err, ParseError::InvalidInputFormat);
+
+            let err = CliUnspecifiedCurrencyTransfer::from_str("transfer()").unwrap_err();
+            assert_eq!(err, ParseError::InvalidInputFormat);
+
+            let err = CliUnspecifiedCurrencyTransfer::from_str(&format!("transfer({addr},foo)"))
+                .unwrap_err();
+            assert_eq!(err, ParseError::InvalidDecimalAmount("foo".to_owned()));
+
+            let err = CliUnspecifiedCurrencyTransfer::from_str(&format!("transfer(foo,{amount})"))
+                .unwrap()
+                .to_fully_parsed(&chain_config)
+                .unwrap_err();
+            assert_eq!(err, ParseError::InvalidDestination("foo".to_owned()));
         }
     }
 
     #[rstest]
     #[trace]
     #[case(Seed::from_entropy())]
-    fn test_parse_generic_token_output(#[case] seed: Seed) {
-        use common::chain::tokens::TokenId;
-
+    fn test_parse_token_transfer(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let chain_config = chain::config::create_unit_test_config();
-
-        let parse_assert_error = |str_to_parse: &str| {
-            let err = parse_generic_token_transfer::<ColdWalletClient>(str_to_parse, &chain_config)
-                .unwrap_err();
-            assert_matches!(
-                err,
-                WalletCliCommandError::<ColdWalletClient>::InvalidInput(_)
-            );
-        };
 
         for _ in 0..10 {
             let token_id = TokenId::new(H256::random_using(&mut rng));
@@ -818,29 +954,169 @@ mod tests {
                 rng.gen_range(0..=u128::MAX),
                 rng.gen_range(0..=u8::MAX),
             );
-            let GenericTokenTransfer {
-                token_id: parsed_token_id,
-                amount: parsed_amount,
-                destination: parsed_dest,
-            } = parse_generic_token_transfer::<ColdWalletClient>(
-                &format!("transfer({token_id_as_addr},{addr},{amount})"),
-                &chain_config,
-            )
-            .unwrap();
 
-            assert_eq!(parsed_token_id, token_id);
+            for tag in ["transfer", "Transfer", "traNSfer"] {
+                let GenericTokenTransfer {
+                    token_id: parsed_token_id,
+                    amount: parsed_amount,
+                    destination: parsed_dest,
+                } = CliTokenTransfer::from_str(&format!(
+                    "{tag}({token_id_as_addr},{addr},{amount})"
+                ))
+                .unwrap()
+                .to_fully_parsed(&chain_config)
+                .unwrap();
 
-            assert_eq!(parsed_amount.mantissa(), amount.mantissa());
-            assert_eq!(parsed_amount.decimals(), amount.decimals());
-            assert_eq!(parsed_dest, *addr.as_object());
+                assert_eq!(parsed_token_id, token_id);
 
-            parse_assert_error(&format!("foo({token_id_as_addr},{addr},{amount})"));
-            parse_assert_error(&format!("transfer(foo,{addr},{amount})"));
-            parse_assert_error(&format!("transfer({token_id_as_addr},foo,{amount})"));
-            parse_assert_error(&format!("transfer({token_id_as_addr},{addr},foo)"));
-            parse_assert_error(&format!("transfer {token_id_as_addr},{addr},{amount})"));
-            parse_assert_error(&format!("transfer({token_id_as_addr},{addr},{amount}"));
-            parse_assert_error(&format!("transfer {token_id_as_addr},{addr},{amount}"));
+                assert_eq!(parsed_amount.mantissa(), amount.mantissa());
+                assert_eq!(parsed_amount.decimals(), amount.decimals());
+                assert_eq!(parsed_dest, *addr.as_object());
+            }
+
+            let err =
+                CliTokenTransfer::from_str(&format!("foo({token_id_as_addr},{addr},{amount})"))
+                    .unwrap_err();
+            assert_eq!(err, ParseError::UnknownAction("foo".to_owned()));
+
+            let err = CliTokenTransfer::from_str(&format!(
+                "transfer {token_id_as_addr},{addr},{amount})"
+            ))
+            .unwrap_err();
+            assert_eq!(err, ParseError::InvalidInputFormat);
+
+            let err =
+                CliTokenTransfer::from_str(&format!("transfer({token_id_as_addr},{addr},{amount}"))
+                    .unwrap_err();
+            assert_eq!(err, ParseError::InvalidInputFormat);
+
+            let err =
+                CliTokenTransfer::from_str(&format!("transfer {token_id_as_addr},{addr},{amount}"))
+                    .unwrap_err();
+            assert_eq!(err, ParseError::InvalidInputFormat);
+
+            let err = CliTokenTransfer::from_str(&format!("transfer({token_id_as_addr},{addr})"))
+                .unwrap_err();
+            assert_eq!(err, ParseError::InvalidInputFormat);
+
+            let err =
+                CliTokenTransfer::from_str(&format!("transfer({token_id_as_addr})")).unwrap_err();
+            assert_eq!(err, ParseError::InvalidInputFormat);
+
+            let err = CliTokenTransfer::from_str("transfer()").unwrap_err();
+            assert_eq!(err, ParseError::InvalidInputFormat);
+
+            let err =
+                CliTokenTransfer::from_str(&format!("transfer({token_id_as_addr},{addr},foo)"))
+                    .unwrap_err();
+            assert_eq!(err, ParseError::InvalidDecimalAmount("foo".to_owned()));
+
+            let err = CliTokenTransfer::from_str(&format!("transfer(foo,{addr},{amount})"))
+                .unwrap()
+                .to_fully_parsed(&chain_config)
+                .unwrap_err();
+            assert_eq!(err, ParseError::InvalidTokenId("foo".to_owned()));
+
+            let err =
+                CliTokenTransfer::from_str(&format!("transfer({token_id_as_addr},foo,{amount})"))
+                    .unwrap()
+                    .to_fully_parsed(&chain_config)
+                    .unwrap_err();
+            assert_eq!(err, ParseError::InvalidDestination("foo".to_owned()));
+        }
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn test_parse_token_total_supply(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+
+        for _ in 0..10 {
+            let token_number_of_decimals = rng.gen_range(0..20);
+
+            for tag in ["unlimited", "Unlimited", "unLImited"] {
+                let parsed_supply = CliTokenTotalSupply::from_str(tag)
+                    .unwrap()
+                    .to_fully_parsed(token_number_of_decimals)
+                    .unwrap();
+                assert_matches!(parsed_supply, TokenTotalSupply::Unlimited);
+            }
+
+            for tag in ["lockable", "Lockable", "locKAble"] {
+                let parsed_supply = CliTokenTotalSupply::from_str(tag)
+                    .unwrap()
+                    .to_fully_parsed(token_number_of_decimals)
+                    .unwrap();
+                assert_matches!(parsed_supply, TokenTotalSupply::Lockable);
+            }
+
+            let decimal_amount = DecimalAmount::from_uint_decimal(
+                rng.gen_range(0..=1_000_000_000_000),
+                rng.gen_range(0..=token_number_of_decimals),
+            );
+
+            for tag in ["fixed", "Fixed", "fIXed"] {
+                let parsed_supply =
+                    CliTokenTotalSupply::from_str(&format!("{tag}({decimal_amount})"))
+                        .unwrap()
+                        .to_fully_parsed(token_number_of_decimals)
+                        .unwrap();
+                let parsed_amount = assert_matches_return_val!(
+                    parsed_supply,
+                    TokenTotalSupply::Fixed(amount),
+                    amount
+                );
+                let expected_atoms = decimal_amount.to_amount(token_number_of_decimals).unwrap();
+                assert!(parsed_amount.is_same(&RpcAmountIn::from_atoms(expected_atoms)));
+            }
+
+            let err = CliTokenTotalSupply::from_str("foo").unwrap_err();
+            assert_eq!(err, ParseError::InvalidInputFormat);
+
+            let err = CliTokenTotalSupply::from_str("fixed").unwrap_err();
+            assert_eq!(err, ParseError::InvalidInputFormat);
+
+            let err = CliTokenTotalSupply::from_str(&format!("foo({decimal_amount})")).unwrap_err();
+            assert_eq!(err, ParseError::UnknownTokenSupplyType("foo".to_owned()));
+
+            let err = CliTokenTotalSupply::from_str("fixed()").unwrap_err();
+            assert_eq!(err, ParseError::InvalidDecimalAmount("".to_owned()));
+
+            let err =
+                CliTokenTotalSupply::from_str(&format!("fixed({decimal_amount},{decimal_amount})"))
+                    .unwrap_err();
+            assert_eq!(err, ParseError::InvalidInputFormat);
+
+            let err =
+                CliTokenTotalSupply::from_str(&format!("fixed {decimal_amount})")).unwrap_err();
+            assert_eq!(err, ParseError::InvalidInputFormat);
+
+            let err =
+                CliTokenTotalSupply::from_str(&format!("fixed({decimal_amount}")).unwrap_err();
+            assert_eq!(err, ParseError::InvalidInputFormat);
+
+            let decimal_amount_with_too_many_decimals = {
+                let mut mantissa = rng.gen_range(0..=1_000_000_000_000);
+                // Make sure that the number has indeed more decimals than `token_number_of_decimals`.
+                if mantissa % 10 == 0 {
+                    mantissa += rng.gen_range(1..=9);
+                }
+                DecimalAmount::from_uint_decimal(mantissa, token_number_of_decimals + 1)
+            };
+
+            let err = CliTokenTotalSupply::from_str(&format!(
+                "fixed({decimal_amount_with_too_many_decimals})",
+            ))
+            .unwrap()
+            .to_fully_parsed(token_number_of_decimals)
+            .unwrap_err();
+            assert_eq!(
+                err,
+                ParseError::DecimalAmountNotConvertibleToAtoms(
+                    decimal_amount_with_too_many_decimals.into()
+                )
+            );
         }
     }
 
@@ -848,18 +1124,24 @@ mod tests {
     fn test_parse_currency() {
         let chain_config = chain::config::create_unit_test_config();
 
-        let currency = parse_currency::<ColdWalletClient>("coin", &chain_config).unwrap();
+        let currency =
+            CliCurrency::from_str("coin").unwrap().to_fully_parsed(&chain_config).unwrap();
         assert_eq!(currency, Currency::Coin);
-        let currency = parse_currency::<ColdWalletClient>("cOiN", &chain_config).unwrap();
+        let currency =
+            CliCurrency::from_str("cOiN").unwrap().to_fully_parsed(&chain_config).unwrap();
         assert_eq!(currency, Currency::Coin);
 
-        let err = parse_currency::<ColdWalletClient>("coins", &chain_config).unwrap_err();
-        assert_matches!(err, WalletCliCommandError::InvalidInput(_));
+        let err = CliCurrency::from_str("coins")
+            .unwrap()
+            .to_fully_parsed(&chain_config)
+            .unwrap_err();
+        assert_eq!(err, ParseError::InvalidCurrency("coins".to_owned()));
 
-        let currency = parse_currency::<ColdWalletClient>(
+        let currency = CliCurrency::from_str(
             "rmltk1ktt2slkqdy607kzhueudqucqphjzl7kl506xf78f9w7v00ydythqzgwlyp",
-            &chain_config,
         )
+        .unwrap()
+        .to_fully_parsed(&chain_config)
         .unwrap();
         assert_eq!(
             currency,
@@ -869,11 +1151,11 @@ mod tests {
             ))
         );
 
-        let err = parse_currency::<ColdWalletClient>(
-            "rpool1zg7yccqqjlz38cyghxlxyp5lp36vwecu2g7gudrf58plzjm75tzq99fr6v",
-            &chain_config,
-        )
-        .unwrap_err();
-        assert_matches!(err, WalletCliCommandError::InvalidInput(_));
+        let bad_token_id = "rpool1zg7yccqqjlz38cyghxlxyp5lp36vwecu2g7gudrf58plzjm75tzq99fr6v";
+        let err = CliCurrency::from_str(bad_token_id)
+            .unwrap()
+            .to_fully_parsed(&chain_config)
+            .unwrap_err();
+        assert_eq!(err, ParseError::InvalidCurrency(bad_token_id.to_owned()));
     }
 }

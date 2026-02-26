@@ -122,7 +122,7 @@ pub enum RpcError<N: NodeInterface> {
     #[error("{0}")]
     SubmitError(#[from] SubmitError),
 
-    #[error("Invalid hex encoded transaction")]
+    #[error("Invalid raw transaction")]
     InvalidRawTransaction,
 
     #[error(
