@@ -1244,7 +1244,7 @@ mod tests {
             let tz_mins = rng.gen_range(0..60);
             let tz_positive = rng.gen_bool(0.5);
             let expected_time_with_tz = {
-                let offset = Duration::from_hours(tz_hours) + Duration::from_mins(tz_mins);
+                let offset = Duration::from_secs(tz_hours * 3600 + tz_mins * 60);
                 if tz_positive {
                     expected_time_utc - offset
                 } else {
