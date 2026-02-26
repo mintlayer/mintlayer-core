@@ -82,6 +82,9 @@ pub enum WalletRpcHandlesClientError<N: NodeInterface> {
 
     #[error(transparent)]
     ChainstateRpcTypeError(#[from] chainstate::rpc::RpcTypeError),
+
+    #[error("Invalid HTLC secret")]
+    InvalidHtlcSecret,
 }
 
 impl<N> WalletRpcHandlesClient<N>
@@ -1225,6 +1228,30 @@ where
     ) -> Result<Vec<ActiveOrderInfo>, Self::Error> {
         self.wallet_rpc
             .list_all_active_orders(account_index, ask_curency, give_curency)
+            .await
+            .map_err(WalletRpcHandlesClientError::WalletRpcError)
+    }
+
+    async fn spend_utxo(
+        &self,
+        account_index: U31,
+        utxo: UtxoOutPoint,
+        output_address: String,
+        htlc_secret: Option<String>,
+        config: ControllerConfig,
+    ) -> Result<RpcNewTransaction, Self::Error> {
+        self.wallet_rpc
+            .spend_utxo(
+                account_index,
+                utxo.into(),
+                output_address.into(),
+                htlc_secret
+                    .as_deref()
+                    .map(RpcHexString::from_str)
+                    .transpose()
+                    .map_err(|_| WalletRpcHandlesClientError::InvalidHtlcSecret)?,
+                config,
+            )
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }

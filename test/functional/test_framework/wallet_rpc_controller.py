@@ -321,13 +321,18 @@ class WalletRpcController(WalletCliControllerBase):
         self._write_command("address_send", [self.account, address, {'decimal': str(amount)}, selected_utxos, {'in_top_x_mb': 5}])
         return "The transaction was submitted successfully"
 
+    async def send_to_address_return_tx_id(self, address: str, amount: int, selected_utxos: List[UtxoOutpoint] = []) -> str:
+        result = self._write_command("address_send", [self.account, address, {'decimal': str(amount)}, selected_utxos, {'in_top_x_mb': 5}])
+        return result["result"]["tx_id"]
+
     async def send_tokens_to_address(self, token_id: str, address: str, amount: int | float | Decimal | str):
         return self._write_command("token_send", [self.account, token_id, address, {'decimal': str(amount)}, {'in_top_x_mb': 5}])['result']
 
-    # Note: unlike send_tokens_to_address, this function behaves identically both for wallet_cli_controller and wallet_rpc_controller.
-    async def send_tokens_to_address_or_fail(self, token_id: str, address: str, amount: int | float | Decimal | str):
-        # send_tokens_to_address already fails on error.
-        await self.send_tokens_to_address(token_id, address, amount)
+    # Note: unlike send_tokens_to_address, this function behaves identically both for wallet_cli_controller and wallet_rpc_controller,
+    # namely it fails on error and returns the tx id on success.
+    async def send_tokens_to_address_return_tx_id(self, token_id: str, address: str, amount: int | float | Decimal | str) -> str:
+        result = await self.send_tokens_to_address(token_id, address, amount)
+        return result["tx_id"]
 
     async def issue_new_token(self,
                               token_ticker: str,
@@ -386,16 +391,20 @@ class WalletRpcController(WalletCliControllerBase):
     async def change_token_metadata_uri(self, token_id: str, new_metadata_uri: str) -> NewTxResult:
         return self._write_command("token_change_metadata_uri", [self.account, token_id, new_metadata_uri, {'in_top_x_mb': 5}])['result']
 
-    async def issue_new_nft(self,
-                            destination_address: str,
-                            media_hash: str,
-                            name: str,
-                            description: str,
-                            ticker: str,
-                            creator: Optional[str] = '',
-                            icon_uri: Optional[str] = '',
-                            media_uri: Optional[str] = '',
-                            additional_metadata_uri: Optional[str] = ''):
+    # Returns (nft_id, tx_id, None) on success and (None, None, output) on failure (i.e. same as
+    # cli controller's issue_new_nft).
+    async def issue_new_nft(
+        self,
+        destination_address: str,
+        media_hash: str,
+        name: str,
+        description: str,
+        ticker: str,
+        creator: str | None = None,
+        icon_uri: str | None = None,
+        media_uri: str | None = None,
+        additional_metadata_uri: str | None = None
+    ):
         output = self._write_command("token_nft_issue_new", [
             self.account,
             destination_address,
@@ -410,8 +419,12 @@ class WalletRpcController(WalletCliControllerBase):
                 'additional_metadata_uri': additional_metadata_uri
             },
             {'in_top_x_mb': 5}
-            ])['result']
-        return output
+        ])
+
+        if output.get("result") is not None:
+            return output["result"]["token_id"], output["result"]["tx_id"], None
+        else:
+            return None, None, output["error"]["message"]
 
     async def create_stake_pool(self,
                                 amount: int,
@@ -651,6 +664,21 @@ class WalletRpcController(WalletCliControllerBase):
         result = self._write_command("create_htlc_transaction", params)
         return result['result']
 
+    async def spend_utxo_return_tx_id(
+        self,
+        utxo: UtxoOutpoint,
+        output_address: str,
+        htlc_secret: str | None = None,
+    ) -> str:
+        params = [self.account, to_json(utxo), output_address, htlc_secret, {'in_top_x_mb': 5}]
+        result = self._write_command("utxo_spend", params)
+
+        if result.get("error") is not None:
+            error_msg = result["error"]["message"]
+            raise Exception(f"Cannot spent UTXO: {error_msg}")
+
+        return result["result"]["tx_id"]
+
     async def create_order(
         self,
         ask_token_id: Optional[str],
@@ -721,6 +749,9 @@ class WalletRpcController(WalletCliControllerBase):
 
         result = self._write_command("order_list_all_active", params)
         return result['result']
+
+    def is_cli(self) -> bool:
+        return False
 
 
 def get_tx_submission_success_or_error(submission_result: dict) -> str:

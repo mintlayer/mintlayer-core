@@ -46,7 +46,7 @@ use wallet_types::partially_signed_transaction::{
 
 use crate::{runtime_wallet::RuntimeWallet, types::Balances, ControllerError};
 
-pub async fn fetch_token_info<T: NodeInterface>(
+pub async fn fetch_rpc_token_info<T: NodeInterface>(
     rpc_client: &T,
     token_id: TokenId,
 ) -> Result<RPCTokenInfo, ControllerError<T>> {
@@ -65,7 +65,7 @@ pub async fn fetch_token_infos_into<T: NodeInterface>(
     dest_info: &mut TokensAdditionalInfo,
 ) -> Result<(), ControllerError<T>> {
     for token_id in token_ids {
-        let token_info = fetch_token_info(rpc_client, *token_id).await?;
+        let token_info = fetch_rpc_token_info(rpc_client, *token_id).await?;
 
         dest_info.add_info(
             *token_id,
@@ -234,7 +234,7 @@ pub async fn into_balances<T: NodeInterface>(
                 Currency::Token(token_id) => token_id,
             };
 
-            fetch_token_info(rpc_client, token_id).await.map(|info| {
+            fetch_rpc_token_info(rpc_client, token_id).await.map(|info| {
                 let decimals = info.token_number_of_decimals();
                 let amount = RpcAmountOut::from_amount_no_padding(amount, decimals);
                 let token_id = RpcAddress::new(chain_config, token_id).expect("addressable");

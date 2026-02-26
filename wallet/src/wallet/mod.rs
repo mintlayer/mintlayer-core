@@ -24,7 +24,7 @@ use common::{
     chain::{
         block::timestamp::BlockTimestamp,
         classic_multisig::ClassicMultisigChallenge,
-        htlc::HashedTimelockContract,
+        htlc::{HashedTimelockContract, HtlcSecret, HtlcSecretHash},
         make_delegation_id, make_order_id, make_token_id,
         output_value::OutputValue,
         signature::{
@@ -35,7 +35,7 @@ use common::{
         AccountCommand, AccountOutPoint, Block, ChainConfig, Currency, DelegationId, Destination,
         GenBlock, IdCreationError, OrderAccountCommand, OrderId, OutPointSourceId, PoolId,
         RpcOrderInfo, SignedTransaction, SignedTransactionIntent, Transaction,
-        TransactionCreationError, TxInput, TxOutput, UtxoOutPoint,
+        TransactionCreationError, TxInput, TxOutput, TxOutputTag, UtxoOutPoint,
     },
     primitives::{
         id::{hash_encoded, WithId},
@@ -174,8 +174,8 @@ pub enum WalletError {
     TransactionSig(#[from] DestinationSigError),
     #[error("Delegation not found with id {0}")]
     DelegationNotFound(DelegationId),
-    #[error("Not enough UTXOs amount: {0:?}, required: {1:?}")]
-    NotEnoughUtxo(Amount, Amount),
+    #[error("Insufficient UTXO amount: {0:?}, required: {1:?}")]
+    InsufficientUtxoAmount(Amount, Amount),
     #[error("Token issuance error: {0}")]
     TokenIssuance(#[from] TokenIssuanceError),
     #[error("{0}")]
@@ -286,6 +286,24 @@ pub enum WalletError {
     IdCreationError(#[from] IdCreationError),
     #[error("Output cache inconsistency error: {0}")]
     OutputCacheInconsistencyError(#[from] OutputCacheInconsistencyError),
+
+    #[error("This UTXO type is not supported here: {0:?}")]
+    UnsupportedUtxoType(TxOutputTag),
+
+    #[error("This account doesn't have the keys necessary to sign the transaction")]
+    NoKeysToSignTx,
+
+    #[error("UTXO missing: {0:?}")]
+    UtxoMissing(UtxoOutPoint),
+
+    #[error("HTLC secret provided for non-HTLC UTXO")]
+    HtlcSecretProvidedForNonHtlcUtxo,
+
+    #[error("The provided HTLC secret doesn't match the hash (expected: {expected:x}, actual: {actual:x})")]
+    HtlcSecretDoesntMatchHash {
+        expected: HtlcSecretHash,
+        actual: HtlcSecretHash,
+    },
 }
 
 /// Result type used for the wallet
@@ -1215,11 +1233,11 @@ where
         .await
     }
 
-    async fn async_for_account_rw_unlocked_and_check_tx_custom_error<AddlData: Send>(
+    async fn async_for_account_rw_unlocked_and_check_tx_generic<AddlData: Send>(
         &mut self,
         account_index: U31,
         additional_info: TxAdditionalInfo,
-        f: impl FnOnce(
+        create_request: impl FnOnce(
             &mut Account<P::K>,
             &mut StoreTxRwUnlocked<B>,
         ) -> WalletResult<(SendRequest, AddlData)>,
@@ -1230,7 +1248,7 @@ where
 
         self.async_for_account_rw_unlocked(
             account_index,
-            f,
+            create_request,
             async move |request, key_chain, store, chain_config, mut signer| {
                 let (mut request, additional_data) = request?;
 
@@ -1291,12 +1309,15 @@ where
         &mut self,
         account_index: U31,
         additional_info: TxAdditionalInfo,
-        f: impl FnOnce(&mut Account<P::K>, &mut StoreTxRwUnlocked<B>) -> WalletResult<SendRequest>,
+        create_request: impl FnOnce(
+            &mut Account<P::K>,
+            &mut StoreTxRwUnlocked<B>,
+        ) -> WalletResult<SendRequest>,
     ) -> WalletResult<SignedTxWithFees> {
-        self.async_for_account_rw_unlocked_and_check_tx_custom_error(
+        self.async_for_account_rw_unlocked_and_check_tx_generic(
             account_index,
             additional_info,
-            |account, db_tx| Ok((f(account, db_tx)?, ())),
+            |account, db_tx| Ok((create_request(account, db_tx)?, ())),
             |err| err,
         )
         .await
@@ -1659,10 +1680,11 @@ where
         consolidate_fee_rate: FeeRate,
         additional_info: TxAdditionalInfo,
     ) -> WalletResult<SignedTxWithFees> {
+        let request = SendRequest::new().with_outputs(outputs);
         Ok(self
             .create_transaction_to_addresses_impl(
                 account_index,
-                outputs,
+                request,
                 inputs,
                 change_addresses,
                 current_fee_rate,
@@ -1688,10 +1710,11 @@ where
         consolidate_fee_rate: FeeRate,
         additional_info: TxAdditionalInfo,
     ) -> WalletResult<(SignedTxWithFees, SignedTransactionIntent)> {
+        let request = SendRequest::new().with_outputs(outputs);
         let (signed_tx, input_destinations) = self
             .create_transaction_to_addresses_impl(
                 account_index,
-                outputs,
+                request,
                 inputs,
                 change_addresses,
                 current_fee_rate,
@@ -1727,7 +1750,7 @@ where
     async fn create_transaction_to_addresses_impl<AddlData: Send>(
         &mut self,
         account_index: U31,
-        outputs: impl IntoIterator<Item = TxOutput>,
+        request: SendRequest,
         inputs: SelectedInputs,
         change_addresses: BTreeMap<Currency, Address<Destination>>,
         current_fee_rate: FeeRate,
@@ -1735,9 +1758,8 @@ where
         additional_data_getter: impl Fn(&SendRequest) -> AddlData,
         additional_info: TxAdditionalInfo,
     ) -> WalletResult<(SignedTxWithFees, AddlData)> {
-        let request = SendRequest::new().with_outputs(outputs);
         let latest_median_time = self.latest_median_time;
-        self.async_for_account_rw_unlocked_and_check_tx_custom_error(
+        self.async_for_account_rw_unlocked_and_check_tx_generic(
             account_index,
             additional_info,
             |account, db_tx| {
@@ -2209,7 +2231,7 @@ where
     ) -> WalletResult<SignedTxWithFees> {
         let additional_info =
             TxAdditionalInfo::new().with_pool_info(pool_id, PoolAdditionalInfo { staker_balance });
-        self.async_for_account_rw_unlocked_and_check_tx_custom_error(
+        self.async_for_account_rw_unlocked_and_check_tx_generic(
             account_index,
             additional_info,
             |account: &mut Account<<P as SignerProvider>::K>, db_tx| {
@@ -2432,6 +2454,38 @@ where
                     db_tx,
                     order_id,
                     order_info,
+                    latest_median_time,
+                    CurrentFeeRate {
+                        current_fee_rate,
+                        consolidate_fee_rate,
+                    },
+                )
+            },
+        )
+        .await
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub async fn create_spend_utxo_tx(
+        &mut self,
+        account_index: U31,
+        utxo_outpoint: UtxoOutPoint,
+        output_address: Destination,
+        htlc_secret: Option<HtlcSecret>,
+        current_fee_rate: FeeRate,
+        consolidate_fee_rate: FeeRate,
+        additional_info: TxAdditionalInfo,
+    ) -> WalletResult<SignedTxWithFees> {
+        let latest_median_time = self.latest_median_time;
+        self.async_for_account_rw_unlocked_and_check_tx(
+            account_index,
+            additional_info,
+            |account, db_tx| {
+                account.create_spend_utxo_tx(
+                    db_tx,
+                    utxo_outpoint,
+                    output_address,
+                    htlc_secret,
                     latest_median_time,
                     CurrentFeeRate {
                         current_fee_rate,

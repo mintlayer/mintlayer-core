@@ -653,6 +653,7 @@ pub fn extract_htlc_secret(
 /// and in the case of AccountCommand inputs which change a token it is the token's authority destination)
 /// and the outputs, estimate the transaction size.
 /// ScriptHash and ClassicMultisig destinations are not supported.
+/// Also, the function assumes that the input UTXOs are not HTLC.
 #[wasm_bindgen]
 pub fn estimate_transaction_size(
     inputs: &[u8],
@@ -673,7 +674,7 @@ pub fn estimate_transaction_size(
     for destination in input_utxos_destinations {
         let destination = parse_addressable(&chain_config, &destination)?;
         let signature_size =
-            input_signature_size_from_destination(&destination, Option::<&_>::None)
+            input_signature_size_from_destination(&destination, None, Option::<&_>::None)
                 .map_err(Error::TransactionSizeEstimationError)?;
 
         total_size += signature_size;

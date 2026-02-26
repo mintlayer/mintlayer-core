@@ -117,13 +117,13 @@ class WalletNfts(BitcoinTestFramework):
             # invalid ticker
             # > max len
             invalid_ticker = ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(random.randint(13, 20)))
-            nft_id, err = await wallet.issue_new_nft(address, "123456", "Name", "SomeNFT", invalid_ticker)
+            nft_id, _, err = await wallet.issue_new_nft(address, "123456", "Name", "SomeNFT", invalid_ticker)
             assert nft_id is None
             assert err is not None
             assert_in("Invalid ticker length", err)
             # non alphanumeric
             invalid_ticker = "asd" + random.choice(r"#$%&'()*+,-./:;<=>?@[]^_`{|}~")
-            nft_id, err = await wallet.issue_new_nft(address, "123456", "Name", "SomeNFT", invalid_ticker)
+            nft_id, _, err = await wallet.issue_new_nft(address, "123456", "Name", "SomeNFT", invalid_ticker)
             assert nft_id is None
             assert err is not None
             assert_in("Invalid character in token ticker", err)
@@ -132,13 +132,13 @@ class WalletNfts(BitcoinTestFramework):
             # > max len
             invalid_name = ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(random.randint(11, 20)))
             nft_ticker = "XXX"
-            nft_id, err = await wallet.issue_new_nft(address, "123456", invalid_name, "SomeNFT", nft_ticker)
+            nft_id, _, err = await wallet.issue_new_nft(address, "123456", invalid_name, "SomeNFT", nft_ticker)
             assert nft_id is None
             assert err is not None
             assert_in("Invalid name length", err)
             # non alphanumeric
             invalid_name = "asd" + random.choice(r"#$%&'()*+,-./:;<=>?@[]^_`{|}~")
-            nft_id, err = await wallet.issue_new_nft(address, "123456", invalid_name, "SomeNFT", nft_ticker)
+            nft_id, _, err = await wallet.issue_new_nft(address, "123456", invalid_name, "SomeNFT", nft_ticker)
             assert nft_id is None
             assert err is not None
             assert_in("Invalid character in token name", err)
@@ -146,13 +146,13 @@ class WalletNfts(BitcoinTestFramework):
             # invalid description
             # > max len
             invalid_desc = ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(random.randint(101, 200)))
-            nft_id, err = await wallet.issue_new_nft(address, "123456", "Name", invalid_desc, nft_ticker)
+            nft_id, _, err = await wallet.issue_new_nft(address, "123456", "Name", invalid_desc, nft_ticker)
             assert nft_id is None
             assert err is not None
             assert_in("Invalid description length", err)
 
             # issue a valid NFT
-            nft_id, err = await wallet.issue_new_nft(address, "123456", "Name", "SomeNFT", nft_ticker)
+            nft_id, _, err = await wallet.issue_new_nft(address, "123456", "Name", "SomeNFT", nft_ticker)
             assert err is None
             assert nft_id is not None
             self.log.info(f"new nft id: '{nft_id}'")

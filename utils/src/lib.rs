@@ -33,6 +33,7 @@ pub mod env_utils;
 pub mod eventhandler;
 pub mod exp_rand;
 pub mod graph_traversals;
+pub mod iter;
 pub mod log_utils;
 pub mod maybe_encrypted;
 pub mod newtype;

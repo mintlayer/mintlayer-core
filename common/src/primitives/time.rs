@@ -110,6 +110,9 @@ impl Time {
         self.time.saturating_sub(t.time)
     }
 
+    /// Convert this `Time` instance to `chrono::DateTime`.
+    ///
+    /// This may fail if the time is too far into the future.
     pub fn as_absolute_time(&self) -> Option<chrono::DateTime<chrono::Utc>> {
         TryInto::<i64>::try_into(self.time.as_secs()).ok().and_then(|secs| {
             // Note: chrono::DateTime supports time values up to about 262,000 years away
@@ -117,6 +120,19 @@ impl Time {
             // may still return None here.
             chrono::Utc.timestamp_opt(secs, self.time.subsec_nanos()).single()
         })
+    }
+
+    /// Create a new `Time` instance from `chrono::DateTime`.
+    ///
+    /// This will fail if the date-time is before the Unix epoch or if it doesn't represent
+    /// a whole number of seconds.
+    pub fn from_absolute_time(time: &chrono::DateTime<chrono::Utc>) -> Option<Self> {
+        if time.timestamp_subsec_nanos() != 0 {
+            return None;
+        }
+
+        let seconds: u64 = time.timestamp().try_into().ok()?;
+        Some(Self::from_secs_since_epoch(seconds))
     }
 }
 
@@ -173,7 +189,11 @@ impl Display for Time {
 
 #[cfg(test)]
 mod tests {
+    use rstest::rstest;
+
     use logging::log;
+    use randomness::Rng as _;
+    use test_utils::random::{make_seedable_rng, Seed};
 
     use super::*;
 
@@ -242,5 +262,41 @@ mod tests {
         assert_eq!(s, "Time(18446744073709551615.999999999s)");
         let s = format!("{t}");
         assert_eq!(s, "18446744073709551615.999999999s since Unix epoch");
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn from_to_absolute_time(#[case] seed: Seed) {
+        use chrono::prelude::*;
+
+        let mut rng = make_seedable_rng(seed);
+
+        for _ in 0..10 {
+            let year = rng.gen_range(1970..=3000);
+            let month = rng.gen_range(1..=12);
+            let days_in_month =
+                NaiveDate::from_ymd_opt(year, month, 1).unwrap().num_days_in_month();
+            let day = rng.gen_range(1..=days_in_month);
+            let hour = rng.gen_range(0..24);
+            let min = rng.gen_range(0..60);
+            let sec = rng.gen_range(0..60);
+            let abs_time = DateTime::from_naive_utc_and_offset(
+                NaiveDateTime::new(
+                    NaiveDate::from_ymd_opt(year, month, day.into()).unwrap(),
+                    NaiveTime::from_hms_opt(hour, min, sec).unwrap(),
+                ),
+                Utc,
+            );
+
+            let time = Time::from_absolute_time(&abs_time).unwrap();
+            let abs_time_from_conversion = time.as_absolute_time().unwrap();
+            assert_eq!(abs_time_from_conversion, abs_time);
+
+            // Only a whole number of seconds should be allowed.
+            let millis = rng.gen_range(1..1000);
+            let abs_time_with_millis = abs_time + Duration::from_millis(millis);
+            assert!(Time::from_absolute_time(&abs_time_with_millis).is_none());
+        }
     }
 }

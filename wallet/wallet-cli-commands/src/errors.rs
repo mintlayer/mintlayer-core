@@ -77,4 +77,10 @@ pub enum WalletCliCommandError<N: NodeInterface> {
 
     #[error(transparent)]
     ParseError(#[from] helper_types::ParseError),
+
+    #[error(transparent)]
+    HexEncodingError(#[from] hex::FromHexError),
+
+    #[error("Invalid HTLC secret")]
+    InvalidHtlcSecret,
 }

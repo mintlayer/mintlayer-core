@@ -19,7 +19,7 @@
 use hex::FromHex as _;
 
 use crypto::hash::{self, hash};
-use randomness::Rng;
+use randomness::{CryptoRng, Rng};
 use serialization::{Decode, Encode};
 
 use super::{timelock::OutputTimeLock, Destination};
@@ -47,7 +47,7 @@ impl HtlcSecret {
         Self { secret }
     }
 
-    pub fn new_from_rng(rng: &mut impl Rng) -> Self {
+    pub fn new_from_rng(rng: &mut (impl Rng + CryptoRng)) -> Self {
         let secret: [u8; HTLC_SECRET_SIZE] = std::array::from_fn(|_| rng.gen::<u8>());
         Self { secret }
     }
