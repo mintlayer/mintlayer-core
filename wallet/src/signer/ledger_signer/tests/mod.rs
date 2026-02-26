@@ -62,7 +62,7 @@ use crypto::key::{
 use logging::log;
 use randomness::make_true_rng;
 use serialization::hex::HexEncode;
-use speculos::{Button, ButtonAction, Device, Handle, TouchScreenElement};
+use speculos::{Device, Handle};
 use test_utils::random::{make_seedable_rng, Seed};
 use utils::env_utils::{bool_from_env, get_from_env};
 use wallet_storage::WalletStorageReadLocked;
@@ -95,29 +95,14 @@ async fn auto_confirmer(mut control_msg_rx: mpsc::Receiver<ControlMessage>, hand
     loop {
         tokio::select! {
             _ = sleep(Duration::from_millis(500)) => {
-                // Logic depends on whether we are using a touch screen or buttons
-                if handle.device().is_touch() {
-                    // TOUCH DEVICE STRATEGY
-                    // On Speculos, blindly tapping coordinates is safe.
-                    // 1. Try to go to the next page (Tap the "Next/Tap" zone)
-                    // 2. Try to confirm (Tap the "Confirm" zone)
+                if let Ok(events) = handle.current_screen_events().await {
+                    let to_sign = events.iter().any(|e| e.contains("Sign "));
 
-                    // Attempt to advance review
-                    let _ = handle.tap(TouchScreenElement::ReviewTap).await;
-                    sleep(Duration::from_millis(100)).await;
-
-                    // Attempt to confirm review
-                    let _ = handle.hold(TouchScreenElement::ReviewConfirm).await;
-                    sleep(Duration::from_millis(100)).await;
-                } else {
-                    // BUTTON DEVICE STRATEGY (Nano S/S+/X)
-                    // 1. Press Right to scroll
-                    // 2. Press Both to confirm
-                    let _ = handle.button(Button::Right, ButtonAction::PressAndRelease).await;
-                    sleep(Duration::from_millis(100)).await;
-                    let _ = handle.button(Button::Both, ButtonAction::PressAndRelease).await;
-                    sleep(Duration::from_millis(100)).await;
-                    let _ = handle.button(Button::Both, ButtonAction::PressAndRelease).await;
+                    if to_sign {
+                        let _ = handle.confirm().await;
+                    } else {
+                        let _ = handle.navigate_next().await;
+                    }
                 }
             }
             msg = control_msg_rx.recv() => {

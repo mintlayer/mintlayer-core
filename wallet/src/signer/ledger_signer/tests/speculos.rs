@@ -120,6 +120,22 @@ impl TouchScreenElement {
 }
 
 // -----------------------------------------------------------------
+// Screen Events
+// -----------------------------------------------------------------
+
+/// Response format for the /events endpoint
+#[derive(Debug, Deserialize)]
+struct EventsResponse {
+    events: Vec<Event>,
+}
+
+/// A single event inside the events array
+#[derive(Debug, Deserialize)]
+struct Event {
+    text: String,
+}
+
+// -----------------------------------------------------------------
 // RUNTIME HANDLE
 // -----------------------------------------------------------------
 
@@ -203,6 +219,43 @@ impl Handle {
         let (x, y) = element.position(self.device);
         self.finger(x, y, ButtonAction::PressAndRelease).await?;
         Ok(())
+    }
+
+    pub async fn navigate_next(&self) -> anyhow::Result<()> {
+        if self.device().is_touch() {
+            self.tap(TouchScreenElement::ReviewTap).await
+        } else {
+            self.button(Button::Right, ButtonAction::PressAndRelease).await
+        }
+    }
+
+    pub async fn confirm(&self) -> anyhow::Result<()> {
+        if self.device().is_touch() {
+            self.hold(TouchScreenElement::ReviewConfirm).await
+        } else {
+            self.button(Button::Both, ButtonAction::PressAndRelease).await
+        }
+    }
+
+    /// Fetch the current screen events from the emulator and extract their text
+    pub async fn current_screen_events(&self) -> anyhow::Result<Vec<String>> {
+        log::debug!("Fetching current screen events");
+
+        let r = Client::new()
+            .get(format!("http://{}/events", self.addr()))
+            .query(&[("currentscreenonly", "true")])
+            .send()
+            .await?;
+
+        if !r.status().is_success() {
+            anyhow::bail!("Events request failed: {}", r.status());
+        }
+
+        let response: EventsResponse = r.json().await?;
+
+        let texts = response.events.into_iter().map(|event| event.text).collect();
+
+        Ok(texts)
     }
 }
 
