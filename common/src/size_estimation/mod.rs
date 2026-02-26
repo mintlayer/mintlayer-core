@@ -23,7 +23,7 @@ use serialization::{CompactLen, Encode};
 
 use crate::chain::{
     classic_multisig::ClassicMultisigChallenge,
-    htlc::HtlcSecret,
+    htlc::{HtlcSecret, HTLC_SECRET_SIZE},
     signature::{
         inputsig::{
             authorize_hashed_timelock_contract_spend::{
@@ -145,7 +145,9 @@ lazy_static::lazy_static! {
         .encode();
         let pkh_spend_encoded_size = pkh_spend_encoded.len();
 
-        let htlc_spend = AuthorizedHashedTimelockContractSpend::Spend(HtlcSecret::new([0;_]), pkh_spend_encoded);
+        let htlc_spend = AuthorizedHashedTimelockContractSpend::Spend(
+            HtlcSecret::new([0; HTLC_SECRET_SIZE]), pkh_spend_encoded
+        );
         let htlc_spend_size = htlc_spend.encoded_size();
 
         htlc_spend_size.checked_sub(pkh_spend_encoded_size).expect("HTLC spend size is known to be bigger")
