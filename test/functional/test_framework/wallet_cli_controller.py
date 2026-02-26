@@ -391,24 +391,35 @@ class WalletCliController(WalletCliControllerBase):
     async def change_token_metadata_uri(self, token_id: str, new_metadata_uri: str) -> str:
         return await self._write_command(f"token-change-metadata-uri {token_id} {new_metadata_uri}\n")
 
-    async def issue_new_nft(self,
-                            destination_address: str,
-                            media_hash: str,
-                            name: str,
-                            description: str,
-                            ticker: str,
-                            creator: Optional[str] = '',
-                            icon_uri: Optional[str] = '',
-                            media_uri: Optional[str] = '',
-                            additional_metadata_uri: Optional[str] = ''):
-        output = await self._write_command(f'token-nft-issue-new {destination_address} "{media_hash}" "{name}" "{description}" "{ticker}" {creator} {icon_uri} {media_uri} {additional_metadata_uri}\n')
-        if output.startswith("A new NFT has been issued with ID"):
-            begin = output.find(':') + 2
-            end = output.find(' ', begin)
-            return output[begin:end], None
+    # Returns (nft_id, tx_id, None) on success and (None, None, output) on failure.
+    async def issue_new_nft(
+        self,
+        destination_address: str,
+        media_hash: str,
+        name: str,
+        description: str,
+        ticker: str,
+        creator: str | None = None,
+        icon_uri: str | None = None,
+        media_uri: str | None = None,
+        additional_metadata_uri: str | None = None
+    ) -> tuple[str | None, str | None, str | None]:
+        creator = "" if creator is None else creator
+        icon_uri = "" if icon_uri is None else icon_uri
+        media_uri = "" if media_uri is None else media_uri
+        additional_metadata_uri = "" if additional_metadata_uri is None else additional_metadata_uri
 
-        self.log.error(f"err: {output}")
-        return None, output
+        output = await self._write_command(
+            f'token-nft-issue-new {destination_address} "{media_hash}" "{name}" "{description}" "{ticker}" ' +
+            f'{creator} {icon_uri} {media_uri} {additional_metadata_uri}\n'
+        )
+
+        match = re.search(r"A new NFT has been issued with ID:\s+(\w+)\s+in tx:\s+(\w+)", output)
+
+        if match is not None:
+            return match.group(1), match.group(2), None
+        else:
+            return None, None, output
 
     async def create_stake_pool(self,
                                 amount: int,
@@ -637,7 +648,7 @@ class WalletCliController(WalletCliControllerBase):
     async def generate_htlc_secret(self) -> tuple[str, str]:
         output = await self._write_command("htlc-generate-secret\n")
 
-        match = re.search(r"New HTLC secret: (.*)\nand its hash: (.*)", output)
+        match = re.search(r"New HTLC secret:\s+(.*)\nand its hash:\s+(.*)", output)
         assert match is not None, f"match failed for {output}"
 
         return (match.group(1), match.group(2))
@@ -645,7 +656,7 @@ class WalletCliController(WalletCliControllerBase):
     async def calc_htlc_secret_hash(self, secret: str) -> str:
         output = await self._write_command(f"htlc-calc-secret-hash {secret}\n")
 
-        match = re.search(r"The hash of the provided secret is: (.*)", output)
+        match = re.search(r"The hash of the provided secret is:\s+(.*)", output)
         assert match is not None, f"match failed for {output}"
 
         return match.group(1)

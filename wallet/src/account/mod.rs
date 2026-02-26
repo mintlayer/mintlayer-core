@@ -694,7 +694,7 @@ impl<K: AccountKeyChains> Account<K> {
                 + inputs_encoded_size(inputs_with_destinations.clone().map(|(input, _)| input))
                 + input_signatures_size_from_destinations(
                     inputs_with_destinations
-                        .filter_map(|(_, dest_and_htlc_send_tag)| dest_and_htlc_send_tag),
+                        .filter_map(|(_, dest_and_htlc_spend_tag)| dest_and_htlc_spend_tag),
                     Some(self),
                 )?;
 
@@ -1248,6 +1248,8 @@ impl<K: AccountKeyChains> Account<K> {
 
         let tx_input = TxInput::Utxo(utxo_outpoint);
 
+        // When dealing with coin utxo we calculate the fee manually instead of using
+        // `select_inputs_for_send_request`, to avoid selecting redundant extra utxos for the fee.
         if let Some(coin_amount) = utxo_output_value.coin_amount() {
             let fee = self.calculate_tx_fee(
                 fee_rate.current_fee_rate,

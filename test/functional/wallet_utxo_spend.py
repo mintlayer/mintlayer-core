@@ -15,6 +15,14 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 """Wallet utxo spend test.
+
+Check spending of:
+- non-htlc coin utxo;
+- non-htlc fungible token utxo;
+- non-htlc nft utxo;
+- htlc coin utxo;
+- htlc fungible token utxo;
+- htlc nft utxo;
 """
 
 from scalecodec import ScaleBytes
@@ -98,6 +106,21 @@ class WalletUtxoSpend(BitcoinTestFramework):
             token_id, _, output = await wallet.issue_new_token("TKN", token_decimals, "http://uri", address)
             assert token_id is not None, f"Error issuing a token: {output}"
 
+            # Create a bunch of NFTs; nft1 and nft2 will be locked in the corresponding HTLCs,
+            # nft3 will be first transferred and then spent, and nft4 issuance utxo will be spent directly.
+
+            nft1_id, _, output = await wallet.issue_new_nft(address, "123456", "Name1", "Descr1", "NFTKN1")
+            assert nft1_id is not None, f"Error issuing an NFT: {output}"
+
+            nft2_id, _, output = await wallet.issue_new_nft(address, "234567", "Name2", "Descr2", "NFTKN2")
+            assert nft2_id is not None, f"Error issuing an NFT: {output}"
+
+            nft3_id, _, output = await wallet.issue_new_nft(address, "345678", "Name3", "Descr3", "NFTKN3")
+            assert nft3_id is not None, f"Error issuing an NFT: {output}"
+
+            nft4_id, nft4_issuance_tx_id, output = await wallet.issue_new_nft(address, "456789", "Name4", "Descr4", "NFTKN4")
+            assert nft4_id is not None, f"Error issuing an NFT: {output}"
+
             self.generate_block()
             assert_in("Success", await wallet.sync())
 
@@ -117,8 +140,8 @@ class WalletUtxoSpend(BitcoinTestFramework):
                 utxo: UtxoOutpoint,
                 output_address: str,
                 htlc_secret: str | None,
-                is_token: bool,
-                expected_amount: int
+                token_id: str | None,
+                expected_amount_atoms: int
             ):
                 output_address_as_pubkeyhash_hex = node.test_functions_address_to_destination(output_address)
 
@@ -136,7 +159,7 @@ class WalletUtxoSpend(BitcoinTestFramework):
                 tx_inputs = decoded_tx["transaction"]["inputs"]
                 tx_outputs = decoded_tx["transaction"]["outputs"]
 
-                if is_token:
+                if token_id is not None:
                     # When spending a token utxo, there should be a coin input to pay fees from.
                     assert_equal(len(tx_inputs), 2)
                     # A coin change output may not be present if the entire coin amount was spent
@@ -153,7 +176,7 @@ class WalletUtxoSpend(BitcoinTestFramework):
 
                 new_utxo_xfer = tx_outputs[0]["Transfer"]
 
-                if is_token:
+                if token_id is not None:
                     xfer_token_id_hex = new_utxo_xfer[0]["TokenV1"][0]
                     xfer_amount = new_utxo_xfer[0]["TokenV1"][1]
 
@@ -162,10 +185,9 @@ class WalletUtxoSpend(BitcoinTestFramework):
                     )
 
                     assert_equal(xfer_token_id, token_id)
-                    assert_equal(xfer_amount, expected_amount * atoms_per_token)
+                    assert_equal(xfer_amount, expected_amount_atoms)
                 else:
                     xfer_amount = new_utxo_xfer[0]["Coin"]
-                    expected_amount_atoms = expected_amount * ATOMS_PER_COIN
                     assert \
                         xfer_amount >= expected_amount_atoms - ATOMS_PER_COIN and xfer_amount <= expected_amount_atoms, \
                         f"Unexpected transfer amount {xfer_amount}, should be {expected_amount_atoms} or slightly less"
@@ -181,11 +203,17 @@ class WalletUtxoSpend(BitcoinTestFramework):
 
             xfer_amount = random.randint(100, 200)
             tx_id = await wallet.send_to_address_return_tx_id(address, xfer_amount)
-            await spend_utxo_check_tx(UtxoOutpoint(tx_id, 0), utxos_output_address, None, False, xfer_amount)
+            await spend_utxo_check_tx(UtxoOutpoint(tx_id, 0), utxos_output_address, None, None, xfer_amount * ATOMS_PER_COIN)
 
             xfer_amount = random.randint(100, 200)
             tx_id = await wallet.send_tokens_to_address_return_tx_id(token_id, address, xfer_amount)
-            await spend_utxo_check_tx(UtxoOutpoint(tx_id, 0), utxos_output_address, None, True, xfer_amount)
+            await spend_utxo_check_tx(UtxoOutpoint(tx_id, 0), utxos_output_address, None, token_id, xfer_amount * atoms_per_token)
+
+            tx_id = await wallet.send_tokens_to_address_return_tx_id(nft3_id, address, 1)
+            await spend_utxo_check_tx(UtxoOutpoint(tx_id, 0), utxos_output_address, None, nft3_id, 1)
+
+            # Here we spend the nft4 issuance utxo directly.
+            await spend_utxo_check_tx(UtxoOutpoint(nft4_issuance_tx_id, 0), utxos_output_address, None, nft4_id, 1)
 
             ############################################################################################################
             # Creeate and spend htlc utxos
@@ -218,10 +246,10 @@ class WalletUtxoSpend(BitcoinTestFramework):
             # but after `mempool_future_timelock_tolerance_blocks` blocks they can be included
             # in a block.
             async def create_htlc(amount: int, token_id: str | None):
-                # We'll be generating 3 blocks before attempting the refund - one that icnludes
+                # We'll be generating 4 blocks before attempting the refund - one that icnludes
                 # the htlcs creation and one in each call to spend_utxo_check_tx that spends
                 # an htlc from account 1.
-                htlc_refund_lock_for_blocks = 3 + mempool_future_timelock_tolerance_blocks
+                htlc_refund_lock_for_blocks = 4 + mempool_future_timelock_tolerance_blocks
 
                 (secret, secret_hash) = await make_htlc_secret()
                 result = await wallet.create_htlc_transaction(
@@ -249,6 +277,10 @@ class WalletUtxoSpend(BitcoinTestFramework):
             token_htlc2_amount = random.randint(100, 200)
             (token_htlc2_tx_id, token_htlc2_secret) = await create_htlc(token_htlc2_amount, token_id)
 
+            (nft_htlc1_tx_id, nft_htlc1_secret) = await create_htlc(1, nft1_id)
+
+            (nft_htlc2_tx_id, nft_htlc2_secret) = await create_htlc(1, nft2_id)
+
             self.generate_block()
             assert_in("Success", await wallet.sync())
 
@@ -257,7 +289,9 @@ class WalletUtxoSpend(BitcoinTestFramework):
                 (coin_htlc1_tx_id, coin_htlc1_secret),
                 (coin_htlc2_tx_id, coin_htlc2_secret),
                 (token_htlc1_tx_id, token_htlc1_secret),
-                (token_htlc2_tx_id, token_htlc2_secret)
+                (token_htlc2_tx_id, token_htlc2_secret),
+                (nft_htlc1_tx_id, nft_htlc1_secret),
+                (nft_htlc2_tx_id, nft_htlc2_secret)
             ]:
                 error = None
                 try:
@@ -276,7 +310,9 @@ class WalletUtxoSpend(BitcoinTestFramework):
                 coin_htlc1_tx_id,
                 coin_htlc2_tx_id,
                 token_htlc1_tx_id,
-                token_htlc2_tx_id
+                token_htlc2_tx_id,
+                nft_htlc1_tx_id,
+                nft_htlc2_tx_id
             ]:
                 error = None
                 try:
@@ -286,11 +322,13 @@ class WalletUtxoSpend(BitcoinTestFramework):
 
                 assert_in("This account doesn't have the keys necessary to sign the transaction", error)
 
-            # Spend coin_htlc2 and token_htlc2 from account 1
+            # Spend coin_htlc2, token_htlc2 and nft_htlc2 from account 1
             await spend_utxo_check_tx(
-                UtxoOutpoint(coin_htlc2_tx_id, 0), utxos_output_address, coin_htlc2_secret, False, coin_htlc2_amount)
+                UtxoOutpoint(coin_htlc2_tx_id, 0), utxos_output_address, coin_htlc2_secret, None, coin_htlc2_amount * ATOMS_PER_COIN)
             await spend_utxo_check_tx(
-                UtxoOutpoint(token_htlc2_tx_id, 0), utxos_output_address, token_htlc2_secret, True, token_htlc2_amount)
+                UtxoOutpoint(token_htlc2_tx_id, 0), utxos_output_address, token_htlc2_secret, token_id, token_htlc2_amount * atoms_per_token)
+            await spend_utxo_check_tx(
+                UtxoOutpoint(nft_htlc2_tx_id, 0), utxos_output_address, nft_htlc2_secret, nft2_id, 1)
 
             # Switch to account 0
             assert_in("Success", await wallet.select_account(0))
@@ -299,11 +337,12 @@ class WalletUtxoSpend(BitcoinTestFramework):
             tip_height = node.chainstate_best_block_height()
             mempool_effective_tip_height = tip_height + mempool_future_timelock_tolerance_blocks
 
-            # Try refunding coin_htlc1 and token_htlc1 from account 0, this should fail because the txs
+            # Try refunding coin_htlc1, token_htlc1 and nft_htlc1 from account 0, this should fail because the txs
             # can't be accepted by mempool yet.
             for tx_id in [
                 coin_htlc1_tx_id,
-                token_htlc1_tx_id
+                token_htlc1_tx_id,
+                nft_htlc1_tx_id
             ]:
                 error = None
                 try:
@@ -322,11 +361,13 @@ class WalletUtxoSpend(BitcoinTestFramework):
                 self.generate_block()
                 assert_in("Success", await wallet.sync())
 
-            # Refund coin_htlc1 and token_htlc1 from account 0, this time it should succeed.
+            # Refund coin_htlc1, token_htlc1 and nft_htlc1 from account 0, this time it should succeed.
             await spend_utxo_check_tx(
-                UtxoOutpoint(coin_htlc1_tx_id, 0), utxos_output_address, None, False, coin_htlc1_amount)
+                UtxoOutpoint(coin_htlc1_tx_id, 0), utxos_output_address, None, None, coin_htlc1_amount * ATOMS_PER_COIN)
             await spend_utxo_check_tx(
-                UtxoOutpoint(token_htlc1_tx_id, 0), utxos_output_address, None, True, token_htlc1_amount)
+                UtxoOutpoint(token_htlc1_tx_id, 0), utxos_output_address, None, token_id, token_htlc1_amount * atoms_per_token)
+            await spend_utxo_check_tx(
+                UtxoOutpoint(nft_htlc1_tx_id, 0), utxos_output_address, None, nft1_id, 1)
 
             self.generate_block()
             assert_in("Success", await wallet.sync())

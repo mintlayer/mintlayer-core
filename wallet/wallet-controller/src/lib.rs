@@ -209,8 +209,6 @@ pub enum ControllerError<N: NodeInterface> {
 
     #[error("The number of htlc secrets does not match the number of inputs")]
     InvalidHtlcSecretsCount,
-    // #[error("Utxo cannot be spent")]
-    // UtxoCannotBeSpent
 }
 
 #[derive(Clone, Copy)]
