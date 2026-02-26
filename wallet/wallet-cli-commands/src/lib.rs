@@ -1226,6 +1226,8 @@ pub enum WalletCommand {
         currency: CliCurrency,
 
         /// The amount to lock inside the HTLC.
+        ///
+        /// If the currency is an NFT, specify 1 here.
         amount: DecimalAmount,
 
         /// Hex-encoded hash of the HTLC secret.
@@ -1235,6 +1237,9 @@ pub enum WalletCommand {
         spend_address: String,
 
         /// The refund timelock.
+        ///
+        /// The format is one of: block_count(num), seconds(num), until_height(num) and until_time(RFC 3339 datetime),
+        /// e.g. block_count(720), seconds(86400), until_height(500000), until_time(2026-02-26T12:30:00Z).
         refund_timelock: CliOutputTimeLock,
 
         /// The address (key) that can refund the HTLC after the refund timelock expires.

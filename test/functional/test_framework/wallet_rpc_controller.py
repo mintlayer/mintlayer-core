@@ -391,16 +391,20 @@ class WalletRpcController(WalletCliControllerBase):
     async def change_token_metadata_uri(self, token_id: str, new_metadata_uri: str) -> NewTxResult:
         return self._write_command("token_change_metadata_uri", [self.account, token_id, new_metadata_uri, {'in_top_x_mb': 5}])['result']
 
-    async def issue_new_nft(self,
-                            destination_address: str,
-                            media_hash: str,
-                            name: str,
-                            description: str,
-                            ticker: str,
-                            creator: Optional[str] = '',
-                            icon_uri: Optional[str] = '',
-                            media_uri: Optional[str] = '',
-                            additional_metadata_uri: Optional[str] = ''):
+    # Returns (nft_id, tx_id, None) on success and (None, None, output) on failure (i.e. same as
+    # cli controller's issue_new_nft).
+    async def issue_new_nft(
+        self,
+        destination_address: str,
+        media_hash: str,
+        name: str,
+        description: str,
+        ticker: str,
+        creator: str | None = None,
+        icon_uri: str | None = None,
+        media_uri: str | None = None,
+        additional_metadata_uri: str | None = None
+    ):
         output = self._write_command("token_nft_issue_new", [
             self.account,
             destination_address,
@@ -415,8 +419,12 @@ class WalletRpcController(WalletCliControllerBase):
                 'additional_metadata_uri': additional_metadata_uri
             },
             {'in_top_x_mb': 5}
-            ])['result']
-        return output
+        ])
+
+        if output.get("result") is not None:
+            return output["result"]["token_id"], output["result"]["tx_id"], None
+        else:
+            return None, None, output["error"]["message"]
 
     async def create_stake_pool(self,
                                 amount: int,

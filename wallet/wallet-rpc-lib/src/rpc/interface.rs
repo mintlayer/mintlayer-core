@@ -886,7 +886,7 @@ trait WalletRpc {
 
     /// Spend the specified utxo, moving the corresponding funds (coins or tokens) to the specified
     /// address. If the utxo is an HTLC, specifying `htlc_secret` means that the HTLC will be spent,
-    /// and omitting it means that the HTLC wil be refunded.
+    /// and omitting it means that the HTLC will be refunded.
     #[method(name = "utxo_spend")]
     async fn spend_utxo(
         &self,
