@@ -121,4 +121,4 @@ pub enum Error {
 }
 
 /// Subscription method reply type
-pub type Reply = Result<(), jsonrpsee::core::StringError>;
+pub type Reply = Result<(), jsonrpsee::core::SubscriptionError>;

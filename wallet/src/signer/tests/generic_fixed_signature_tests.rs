@@ -519,7 +519,7 @@ pub fn test_fixed_signatures_generic2<MkS, S>(
     let account2_dest2 = new_dest_from_account(&mut account2, &mut db_tx, KeyPurpose::Change);
     let account2_pk2 = find_pub_key_for_pkh_dest(&account2_dest2, &account2).clone();
 
-    let utxos = vec![
+    let utxos = [
         TxOutput::Transfer(
             OutputValue::Coin(Amount::from_atoms(1000)),
             account1_dest4.clone(),

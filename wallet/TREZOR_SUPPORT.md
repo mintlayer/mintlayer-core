@@ -42,7 +42,7 @@ The Mintlayer firmware version determines the compatibility between the firmware
 
 | Mintlayer Core version | Required Mintlayer firmware version |
 | ---                    | ---                                 |
-| 1.1.0, 1.2.0           | 1.x.x                               |
+| 1.1.0, 1.2.x           | 1.x.x                               |
 
 Note: if you've built Core wallets directly from `master` instead of using a specific release,
 you'll probably won't be able to use a specific release for the firmware either.

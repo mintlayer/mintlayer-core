@@ -31,7 +31,8 @@ use std::{net::SocketAddr, path::PathBuf};
 use base64::Engine;
 use http::{header, HeaderValue};
 use jsonrpsee::{
-    http_client::{transport::HttpBackend, HttpClient, HttpClientBuilder},
+    core::middleware::RpcServiceBuilder,
+    http_client::{transport::HttpBackend, HttpClient, HttpClientBuilder, RpcService},
     server::{ServerBuilder, ServerHandle},
 };
 
@@ -109,7 +110,9 @@ impl Builder {
         };
 
         let mut module = jsonrpsee::RpcModule::new(());
-        module.register_method(method_list_name, move |_params, &()| method_names.clone())?;
+        module.register_method(method_list_name, move |_params, &(), _extensions| {
+            method_names.clone()
+        })?;
         Ok(module)
     }
 }
@@ -223,7 +226,7 @@ impl<T> MakeHeaderValue<T> for RpcAuthData {
     }
 }
 
-pub type RpcHttpClient = HttpClient<SetRequestHeader<HttpBackend, RpcAuthData>>;
+pub type RpcHttpClient = HttpClient<RpcService<SetRequestHeader<HttpBackend, RpcAuthData>>>;
 
 pub fn new_http_client(
     host: impl AsRef<str>,
@@ -234,7 +237,12 @@ pub fn new_http_client(
         rpc_auth,
     ));
 
-    HttpClientBuilder::default().set_http_middleware(middleware).build(host)
+    HttpClientBuilder::default()
+        // Note: by default (i.e. without calling `set_rpc_middleware`) `HttpClientBuilder` wraps
+        // the produced `RpcService` into `RpcLogger`, which we don't need.
+        .set_rpc_middleware(RpcServiceBuilder::default())
+        .set_http_middleware(middleware)
+        .build(host)
 }
 
 pub type RpcWsClient = jsonrpsee::ws_client::WsClient;

@@ -10,7 +10,8 @@ logging = { path = '../../logging' }
 storage-core = { path = '../core' }
 utils = { path = '../../utils' }
 
-lmdb-mintlayer = { git = 'https://github.com/mintlayer/lmdb-rs-mintlayer.git', tag = 'v0.16.2' }
+# Commit "Fix off_t overflow on Windows"
+lmdb-mintlayer = { git = 'https://github.com/mintlayer/lmdb-rs-mintlayer.git', rev = '88d9f2bd49399f75ca1baa1537b2387252f9b5db' }
 
 [dev-dependencies]
 rstest.workspace = true
