@@ -1147,6 +1147,31 @@ impl WalletInterface for ClientWalletRpc {
         .map_err(WalletRpcError::ResponseError)
     }
 
+    async fn spend_utxo(
+        &self,
+        account_index: U31,
+        utxo: UtxoOutPoint,
+        output_address: String,
+        htlc_secret: Option<String>,
+        config: ControllerConfig,
+    ) -> Result<RpcNewTransaction, Self::Error> {
+        let options = TransactionOptions::from_controller_config(&config);
+        WalletRpcClient::spend_utxo(
+            &self.http_client,
+            account_index.into(),
+            utxo.into(),
+            output_address.into(),
+            htlc_secret
+                .as_deref()
+                .map(RpcHexString::from_str)
+                .transpose()
+                .map_err(|_| WalletRpcError::InvalidHtlcSecret)?,
+            options,
+        )
+        .await
+        .map_err(WalletRpcError::ResponseError)
+    }
+
     async fn node_version(&self) -> Result<NodeVersion, Self::Error> {
         WalletRpcClient::node_version(&self.http_client)
             .await

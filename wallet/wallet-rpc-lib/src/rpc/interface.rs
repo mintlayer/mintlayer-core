@@ -884,6 +884,27 @@ trait WalletRpc {
         give_currency: Option<RpcCurrency>,
     ) -> rpc::RpcResult<Vec<ActiveOrderInfo>>;
 
+    /// Spend the specified utxo, moving the corresponding funds (coins or tokens) to the specified
+    /// address.
+    ///
+    /// If the utxo is an HTLC, specifying `htlc_secret` means that the HTLC will be spent,
+    /// and omitting it means that the HTLC will be refunded.
+    ///
+    /// When moving coins, the method will use the same utxo to pay the fees. When moving tokens,
+    /// extra coin inputs will be selected to pay the fees and extra coin outputs will be added
+    /// to pay back the change, with the change being sent to a newly generated change address.
+    ///
+    /// This method cannot be used to decommission a pool.
+    #[method(name = "utxo_spend")]
+    async fn spend_utxo(
+        &self,
+        account: AccountArg,
+        utxo: RpcUtxoOutpoint,
+        output_address: RpcAddress<Destination>,
+        htlc_secret: Option<RpcHexString>,
+        options: TransactionOptions,
+    ) -> rpc::RpcResult<RpcNewTransaction>;
+
     /// Obtain the node version
     #[method(name = "node_version")]
     async fn node_version(&self) -> rpc::RpcResult<NodeVersion>;

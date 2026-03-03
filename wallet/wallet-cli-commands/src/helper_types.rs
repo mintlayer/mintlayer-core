@@ -23,6 +23,8 @@ use chainstate::rpc::RpcOutputValueOut;
 use common::{
     address::{decode_address, Address, AddressError, RpcAddress},
     chain::{
+        block::timestamp::BlockTimestamp,
+        timelock::OutputTimeLock,
         tokens::{RPCTokenInfo, TokenId},
         ChainConfig, Currency, Destination, OrderId, OutPointSourceId, TxOutput, UtxoOutPoint,
     },
@@ -30,7 +32,8 @@ use common::{
         amount::decimal::{
             subtract_decimal_amounts_of_same_currency, DecimalAmountWithIsSameComparison,
         },
-        DecimalAmount, Id, H256,
+        time::Time,
+        BlockHeight, DecimalAmount, Id, H256,
     },
 };
 use utils::ensure;
@@ -589,6 +592,67 @@ impl CliTokenTotalSupply {
     }
 }
 
+/// An OutputTimeLock that can be parsed from strings of the form "block_count(num)", "seconds(num)",
+/// "until_height(num)" and "until_time(RFC 3339 datetime)".
+#[derive(Debug, Clone)]
+pub enum CliOutputTimeLock {
+    UntilHeight(BlockHeight),
+    UntilTime(BlockTimestamp),
+    ForBlockCount(u64),
+    ForSeconds(u64),
+}
+
+impl FromStr for CliOutputTimeLock {
+    type Err = ParseError;
+
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
+        let (lock_type, mut args) =
+            parse_funclike_expr(input).ok_or(ParseError::InvalidInputFormat)?;
+
+        let arg = match (args.next(), args.next()) {
+            (Some(arg), None) => arg,
+            (_, _) => {
+                return Err(ParseError::InvalidInputFormat);
+            }
+        };
+
+        let parse_u64 = |s: &str| -> Result<u64, _> {
+            s.parse().map_err(|_| ParseError::InvalidNumber(s.to_owned()))
+        };
+
+        let result = if lock_type.eq_ignore_ascii_case("block_count") {
+            Self::ForBlockCount(parse_u64(arg)?)
+        } else if lock_type.eq_ignore_ascii_case("seconds") {
+            Self::ForSeconds(parse_u64(arg)?)
+        } else if lock_type.eq_ignore_ascii_case("until_height") {
+            Self::UntilHeight(parse_u64(arg)?.into())
+        } else if lock_type.eq_ignore_ascii_case("until_time") {
+            let date_time = arg
+                .parse::<chrono::DateTime<chrono::Utc>>()
+                .map_err(|_| ParseError::InvalidTime(arg.to_owned()))?;
+            let time =
+                Time::from_absolute_time(&date_time).ok_or(ParseError::BadTime(date_time))?;
+
+            Self::UntilTime(BlockTimestamp::from_time(time))
+        } else {
+            return Err(ParseError::UnknownOutputTimeLockType(lock_type.to_owned()));
+        };
+
+        Ok(result)
+    }
+}
+
+impl From<CliOutputTimeLock> for OutputTimeLock {
+    fn from(value: CliOutputTimeLock) -> Self {
+        match value {
+            CliOutputTimeLock::UntilHeight(val) => OutputTimeLock::UntilHeight(val),
+            CliOutputTimeLock::UntilTime(val) => OutputTimeLock::UntilTime(val),
+            CliOutputTimeLock::ForBlockCount(val) => OutputTimeLock::ForBlockCount(val),
+            CliOutputTimeLock::ForSeconds(val) => OutputTimeLock::ForSeconds(val),
+        }
+    }
+}
+
 /// Parse a decimal amount
 pub fn parse_decimal_amount(input: &str) -> Result<DecimalAmount, ParseError> {
     DecimalAmount::from_str(input).map_err(|_| ParseError::InvalidDecimalAmount(input.to_owned()))
@@ -715,6 +779,9 @@ pub enum ParseError {
     #[error("Invalid decimal amount: {0}")]
     InvalidDecimalAmount(String),
 
+    #[error("Invalid number: {0}")]
+    InvalidNumber(String),
+
     #[error("Invalid destination: {0}")]
     InvalidDestination(String),
 
@@ -726,6 +793,15 @@ pub enum ParseError {
 
     #[error("Unknown token supply type: {0}")]
     UnknownTokenSupplyType(String),
+
+    #[error("Unknown output timelock type: {0}")]
+    UnknownOutputTimeLockType(String),
+
+    #[error("Invalid time: {0}")]
+    InvalidTime(String),
+
+    #[error("Bad time: {0}")]
+    BadTime(chrono::DateTime<chrono::Utc>),
 
     #[error("Invalid currency: {0}")]
     InvalidCurrency(String),
@@ -744,6 +820,8 @@ pub enum ParseError {
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use rstest::rstest;
 
     use common::{
@@ -1117,6 +1195,141 @@ mod tests {
                     decimal_amount_with_too_many_decimals.into()
                 )
             );
+        }
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn test_parse_output_timelock(#[case] seed: Seed) {
+        use chrono::prelude::*;
+
+        let mut rng = make_seedable_rng(seed);
+
+        for _ in 0..10 {
+            let u64_val = rng.gen::<u64>();
+
+            for tag in ["block_count", "Block_count", "blocK_Count"] {
+                let parsed_timelock: OutputTimeLock =
+                    CliOutputTimeLock::from_str(&format!("{tag}({u64_val})")).unwrap().into();
+                assert_eq!(parsed_timelock, OutputTimeLock::ForBlockCount(u64_val));
+            }
+
+            for tag in ["seconds", "Seconds", "secONds"] {
+                let parsed_timelock: OutputTimeLock =
+                    CliOutputTimeLock::from_str(&format!("{tag}({u64_val})")).unwrap().into();
+                assert_eq!(parsed_timelock, OutputTimeLock::ForSeconds(u64_val));
+            }
+
+            for tag in ["until_height", "Until_height", "until_HEight"] {
+                let parsed_timelock: OutputTimeLock =
+                    CliOutputTimeLock::from_str(&format!("{tag}({u64_val})")).unwrap().into();
+                assert_eq!(parsed_timelock, OutputTimeLock::UntilHeight(u64_val.into()));
+            }
+
+            let year = rng.gen_range(1970..=3000);
+            let month = rng.gen_range(1..=12);
+            let days_in_month =
+                NaiveDate::from_ymd_opt(year, month, 1).unwrap().num_days_in_month();
+            let day = rng.gen_range(1..=days_in_month);
+            let hour = rng.gen_range(0..24);
+            let min = rng.gen_range(0..60);
+            let sec = rng.gen_range(0..60);
+            let expected_time = NaiveDateTime::new(
+                NaiveDate::from_ymd_opt(year, month, day.into()).unwrap(),
+                NaiveTime::from_hms_opt(hour, min, sec).unwrap(),
+            );
+            let expected_time_utc = DateTime::from_naive_utc_and_offset(expected_time, Utc);
+            let tz_hours = rng.gen_range(0..24);
+            let tz_mins = rng.gen_range(0..60);
+            let tz_positive = rng.gen_bool(0.5);
+            let expected_time_with_tz = {
+                let offset = Duration::from_secs(tz_hours * 3600 + tz_mins * 60);
+                if tz_positive {
+                    expected_time_utc - offset
+                } else {
+                    expected_time_utc + offset
+                }
+            };
+            let datetime_base_str = format!("{year}-{month}-{day}T{hour}:{min}:{sec}");
+            let datetime_str_utc = format!("{datetime_base_str}Z");
+            let tz_plus_minus = if tz_positive { "+" } else { "-" };
+            let tz_str = format!("{tz_plus_minus}{tz_hours:02}:{tz_mins:02}");
+
+            for tag in ["until_time", "Until_time", "untIL_time"] {
+                let parsed_timelock: OutputTimeLock =
+                    CliOutputTimeLock::from_str(&format!("{tag}({datetime_str_utc})"))
+                        .unwrap()
+                        .into();
+
+                assert_eq!(
+                    parsed_timelock,
+                    OutputTimeLock::UntilTime(BlockTimestamp::from_time(
+                        Time::from_absolute_time(&expected_time_utc).unwrap()
+                    ))
+                );
+
+                let parsed_timelock: OutputTimeLock =
+                    CliOutputTimeLock::from_str(&format!("{tag}({datetime_base_str}{tz_str})"))
+                        .unwrap()
+                        .into();
+
+                assert_eq!(
+                    parsed_timelock,
+                    OutputTimeLock::UntilTime(BlockTimestamp::from_time(
+                        Time::from_absolute_time(&expected_time_with_tz).unwrap()
+                    ))
+                );
+            }
+
+            let sec_frac = rng.gen_range(1..1000);
+            let err = CliOutputTimeLock::from_str(&format!(
+                "until_time({datetime_base_str}.{sec_frac}Z)"
+            ))
+            .unwrap_err();
+            assert_matches!(err, ParseError::BadTime(_));
+
+            let err = CliOutputTimeLock::from_str("foo").unwrap_err();
+            assert_eq!(err, ParseError::InvalidInputFormat);
+
+            let err = CliOutputTimeLock::from_str(&format!("foo({u64_val})")).unwrap_err();
+            assert_eq!(err, ParseError::UnknownOutputTimeLockType("foo".to_owned()));
+
+            for (valid_tag, is_date) in [
+                ("block_count", false),
+                ("seconds", false),
+                ("until_height", false),
+                ("until_time", true),
+            ] {
+                let arg = if is_date {
+                    datetime_str_utc.clone()
+                } else {
+                    u64_val.to_string()
+                };
+
+                // Sanity check
+                CliOutputTimeLock::from_str(&format!("{valid_tag}({arg})")).unwrap();
+
+                let err = CliOutputTimeLock::from_str(valid_tag).unwrap_err();
+                assert_eq!(err, ParseError::InvalidInputFormat);
+
+                let err = CliOutputTimeLock::from_str(&format!("{valid_tag}()")).unwrap_err();
+                if is_date {
+                    assert_eq!(err, ParseError::InvalidTime("".to_owned()));
+                } else {
+                    assert_eq!(err, ParseError::InvalidNumber("".to_owned()));
+                };
+
+                let err =
+                    CliOutputTimeLock::from_str(&format!("{valid_tag}({arg},{arg})")).unwrap_err();
+                assert_eq!(err, ParseError::InvalidInputFormat);
+
+                let err = CliOutputTimeLock::from_str(&format!("{valid_tag}({arg}")).unwrap_err();
+                assert_eq!(err, ParseError::InvalidInputFormat);
+
+                let err = CliOutputTimeLock::from_str(&format!("{valid_tag} {arg})")).unwrap_err();
+                assert_eq!(err, ParseError::InvalidInputFormat);
+            }
         }
     }
 

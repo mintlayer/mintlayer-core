@@ -9818,6 +9818,7 @@ dependencies = [
  "blockprod",
  "chainstate",
  "chainstate-storage",
+ "chrono",
  "clap",
  "common",
  "consensus",
