@@ -29,7 +29,7 @@ use chainstate::{rpc::ChainstateRpcServer, ChainstateError, InitializationError}
 use chainstate_launcher::{ChainConfig, StorageBackendConfig};
 use common::chain::config::{assert_no_ignore_consensus_in_chain_config, ChainType};
 use logging::log;
-use mempool::rpc::MempoolRpcServer;
+use mempool::{rpc::MempoolRpcServer, MempoolInit};
 use p2p::{error::P2pError, rpc::P2pRpcServer};
 use rpc::rpc_creds::RpcCreds;
 use test_rpc_functions::{
@@ -47,8 +47,14 @@ use crate::{
 const LOCK_FILE_NAME: &str = ".lock";
 const DEFAULT_LOG_FILE_NAME: &str = "mintlayer.log";
 
+pub enum NodeType {
+    NodeDaemon,
+    NodeGui,
+}
+
 pub enum NodeSetupResult {
-    Node(Node),
+    RunNode(Node),
+    Bootstrap(Node, PathBuf),
     DataDirCleanedUp,
 }
 
@@ -85,21 +91,24 @@ async fn initialize(
     let mut manager = subsystem::Manager::new_with_config(manager_config);
 
     // Chainstate subsystem
-    let chainstate = chainstate_launcher::make_chainstate(
+    let chainstate_maker = chainstate_launcher::create_chainstate_maker(
         data_dir,
         Arc::clone(&chain_config),
         node_config.chainstate.unwrap_or_default().into(),
     )?;
-    let chainstate = manager.add_subsystem("chainstate", chainstate);
+    let chainstate = manager
+        .add_custom_subsystem("chainstate", async move |_, shutdown_initiated_rx| {
+            chainstate_maker(Some(shutdown_initiated_rx))
+        });
 
     // Mempool subsystem
-    let mempool = mempool::make_mempool(
+    let mempool_init = MempoolInit::new(
         Arc::clone(&chain_config),
         node_config.mempool.unwrap_or_default().into(),
         subsystem::Handle::clone(&chainstate),
         Default::default(),
     );
-    let mempool = manager.add_custom_subsystem("mempool", |handle| mempool.init(handle));
+    let mempool = manager.add_custom_subsystem("mempool", |handle, _| mempool_init.init(handle));
 
     // P2P subsystem
     let peerdb_storage = {
@@ -232,7 +241,6 @@ async fn initialize(
 
 /// Processes options and potentially runs the node.
 pub async fn setup(options: OptionsWithResolvedCommand) -> Result<NodeSetupResult> {
-    let run_options = options.command.run_options();
     let chain_config = options.command.create_chain_config()?;
 
     // Prepare data dir
@@ -246,18 +254,8 @@ pub async fn setup(options: OptionsWithResolvedCommand) -> Result<NodeSetupResul
     // Lock data dir
     let lock_file = lock_data_dir(&data_dir)?;
 
-    // Clean data dir if needed
-    if options.clean_data_option_set() {
-        clean_data_dir(
-            &data_dir,
-            std::slice::from_ref(&data_dir.join(LOCK_FILE_NAME).as_path()),
-        )?;
-        return Ok(NodeSetupResult::DataDirCleanedUp);
-    }
-
-    let main_log_writer_settings = logging::default_writer_settings();
-
     // Init logging
+    let main_log_writer_settings = logging::default_writer_settings();
     if options.log_to_file_option_set() {
         let log_file_name = std::env::current_exe().map_or_else(
             |_| DEFAULT_LOG_FILE_NAME.to_owned(),
@@ -291,7 +289,26 @@ pub async fn setup(options: OptionsWithResolvedCommand) -> Result<NodeSetupResul
         logging::init_logging_generic(main_log_writer_settings, logging::no_writer_settings());
     }
 
+    // Clean data dir if needed
+    if options.clean_data_option_set() {
+        clean_data_dir(
+            &data_dir,
+            std::slice::from_ref(&data_dir.join(LOCK_FILE_NAME).as_path()),
+        )?;
+
+        return Ok(NodeSetupResult::DataDirCleanedUp);
+    }
+
     logging::log::info!("Command line options: {options:?}");
+
+    let mut options = options;
+
+    if options.top_level.import_bootstrap_file.is_some() {
+        logging::log::info!("Disabling p2p networking due to bootstrapping");
+        options.command.run_options_mut().p2p_networking_enabled = Some(false);
+    }
+
+    let run_options = options.command.run_options();
 
     let (manager, controller) = start(
         &options.top_level.config_path(*chain_config.chain_type()),
@@ -301,11 +318,17 @@ pub async fn setup(options: OptionsWithResolvedCommand) -> Result<NodeSetupResul
     )
     .await?;
 
-    Ok(NodeSetupResult::Node(Node {
+    let node = Node {
         manager,
         controller,
         lock_file,
-    }))
+    };
+
+    if let Some(file_path) = &options.top_level.import_bootstrap_file {
+        Ok(NodeSetupResult::Bootstrap(node, file_path.clone()))
+    } else {
+        Ok(NodeSetupResult::RunNode(node))
+    }
 }
 
 /// Creates an exclusive lock file in the specified directory.

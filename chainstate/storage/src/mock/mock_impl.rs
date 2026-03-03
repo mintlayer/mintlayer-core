@@ -56,19 +56,20 @@ mockall::mock! {
         fn get_chain_type(&self) -> crate::Result<Option<String>>;
         fn get_best_block_id(&self) -> crate::Result<Option<Id<GenBlock>>>;
         fn get_block_index(&self, id: &Id<Block>) -> crate::Result<Option<BlockIndex>>;
-        fn get_block(&self, id: Id<Block>) -> crate::Result<Option<Block>>;
-        fn block_exists(&self, id: Id<Block>) -> crate::Result<bool>;
+        fn get_block(&self, id: &Id<Block>) -> crate::Result<Option<Block>>;
+        fn get_encoded_block(&self, id: &Id<Block>) -> crate::Result<Option<Vec<u8>>>;
+        fn block_exists(&self, id: &Id<Block>) -> crate::Result<bool>;
         fn get_block_reward(&self, block_index: &BlockIndex) -> crate::Result<Option<BlockReward>>;
-        fn get_block_header(&self, id: Id<Block>) -> crate::Result<Option<SignedBlockHeader>>;
+        fn get_block_header(&self, id: &Id<Block>) -> crate::Result<Option<SignedBlockHeader>>;
 
         fn get_min_height_with_allowed_reorg(&self) -> crate::Result<Option<BlockHeight>>;
 
         fn get_block_id_by_height(
             &self,
-            height: &BlockHeight,
+            height: BlockHeight,
         ) -> crate::Result<Option<Id<GenBlock>>>;
 
-        fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<UtxosBlockUndo>>;
+        fn get_undo_data(&self, id: &Id<Block>) -> crate::Result<Option<UtxosBlockUndo>>;
 
         fn get_token_aux_data(&self, token_id: &TokenId) -> crate::Result<Option<TokenAuxiliaryData>>;
 
@@ -76,12 +77,12 @@ mockall::mock! {
 
         fn get_tokens_accounting_undo(
             &self,
-            id: Id<Block>,
+            id: &Id<Block>,
         ) -> crate::Result<Option<accounting::BlockUndo<TokenAccountingUndo>>>;
 
         fn get_orders_accounting_undo(
             &self,
-            id: Id<Block>,
+            id: &Id<Block>,
         ) -> crate::Result<Option<accounting::BlockUndo<OrdersAccountingUndo>>>;
 
         fn get_block_tree_by_height(
@@ -89,7 +90,7 @@ mockall::mock! {
             start_from: BlockHeight,
         ) -> crate::Result<BTreeMap<BlockHeight, Vec<Id<Block>>>>;
 
-        fn get_pos_accounting_undo(&self, id: Id<Block>) -> crate::Result<Option<accounting::BlockUndo<PoSAccountingUndo>>>;
+        fn get_pos_accounting_undo(&self, id: &Id<Block>) -> crate::Result<Option<accounting::BlockUndo<PoSAccountingUndo>>>;
 
         fn get_accounting_epoch_delta(
             &self,
@@ -101,7 +102,7 @@ mockall::mock! {
             epoch_index: EpochIndex,
         ) -> crate::Result<Option<DeltaMergeUndo>>;
 
-        fn get_account_nonce_count(&self, account: AccountType) -> crate::Result<Option<AccountNonce>>;
+        fn get_account_nonce_count(&self, account: &AccountType) -> crate::Result<Option<AccountNonce>>;
 
         fn get_block_map_keys(&self) -> crate::Result<BTreeSet<Id<Block>>>;
         fn get_block_index_map(&self) -> crate::Result<BTreeMap<Id<Block>, BlockIndex>>;
@@ -173,30 +174,31 @@ mockall::mock! {
         fn get_order_data(&self, id: &OrderId) -> crate::Result<Option<OrderData>>;
         fn get_ask_balance(&self, id: &OrderId) -> crate::Result<Option<Amount>>;
         fn get_give_balance(&self, id: &OrderId) -> crate::Result<Option<Amount>>;
+        fn get_all_order_ids(&self) -> crate::Result<BTreeSet<OrderId>>;
     }
 
     impl crate::BlockchainStorageWrite for Store {
         fn set_storage_version(&mut self, version: ChainstateStorageVersion) -> crate::Result<()>;
-        fn set_magic_bytes(&mut self, bytes: &MagicBytes) -> crate::Result<()>;
+        fn set_magic_bytes(&mut self, bytes: MagicBytes) -> crate::Result<()>;
         fn set_chain_type(&mut self, chain: &str) -> crate::Result<()>;
         fn set_best_block_id(&mut self, id: &Id<GenBlock>) -> crate::Result<()>;
         fn set_block_index(&mut self, block_index: &BlockIndex) -> crate::Result<()>;
-        fn del_block_index(&mut self, block_id: Id<Block>) -> crate::Result<()>;
+        fn del_block_index(&mut self, block_id: &Id<Block>) -> crate::Result<()>;
         fn add_block(&mut self, block: &Block) -> crate::Result<()>;
-        fn del_block(&mut self, id: Id<Block>) -> crate::Result<()>;
+        fn del_block(&mut self, id: &Id<Block>) -> crate::Result<()>;
 
         fn set_min_height_with_allowed_reorg(&mut self, height: BlockHeight) -> crate::Result<()>;
 
         fn set_block_id_at_height(
             &mut self,
-            height: &BlockHeight,
+            height: BlockHeight,
             block_id: &Id<GenBlock>,
         ) -> crate::Result<()>;
 
-        fn del_block_id_at_height(&mut self, height: &BlockHeight) -> crate::Result<()>;
+        fn del_block_id_at_height(&mut self, height: BlockHeight) -> crate::Result<()>;
 
-        fn set_undo_data(&mut self, id: Id<Block>, undo: &UtxosBlockUndo) -> crate::Result<()>;
-        fn del_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
+        fn set_undo_data(&mut self, id: &Id<Block>, undo: &UtxosBlockUndo) -> crate::Result<()>;
+        fn del_undo_data(&mut self, id: &Id<Block>) -> crate::Result<()>;
 
         fn set_token_aux_data(&mut self, token_id: &TokenId, data: &TokenAuxiliaryData) -> crate::Result<()>;
         fn del_token_aux_data(&mut self, token_id: &TokenId) -> crate::Result<()>;
@@ -205,20 +207,20 @@ mockall::mock! {
 
         fn set_tokens_accounting_undo_data(
             &mut self,
-            id: Id<Block>,
+            id: &Id<Block>,
             undo: &accounting::BlockUndo<TokenAccountingUndo>,
         ) -> crate::Result<()>;
-        fn del_tokens_accounting_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
+        fn del_tokens_accounting_undo_data(&mut self, id: &Id<Block>) -> crate::Result<()>;
 
         fn set_orders_accounting_undo_data(
             &mut self,
-            id: Id<Block>,
+            id: &Id<Block>,
             undo: &accounting::BlockUndo<OrdersAccountingUndo>,
         ) -> crate::Result<()>;
-        fn del_orders_accounting_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
+        fn del_orders_accounting_undo_data(&mut self, id: &Id<Block>) -> crate::Result<()>;
 
-        fn set_pos_accounting_undo_data(&mut self, id: Id<Block>, undo: &accounting::BlockUndo<PoSAccountingUndo>) -> crate::Result<()>;
-        fn del_pos_accounting_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
+        fn set_pos_accounting_undo_data(&mut self, id: &Id<Block>, undo: &accounting::BlockUndo<PoSAccountingUndo>) -> crate::Result<()>;
+        fn del_pos_accounting_undo_data(&mut self, id: &Id<Block>) -> crate::Result<()>;
 
         fn set_accounting_epoch_delta(
             &mut self,
@@ -234,8 +236,8 @@ mockall::mock! {
         ) -> crate::Result<()>;
         fn del_accounting_epoch_undo_delta(&mut self, epoch_index: EpochIndex) -> crate::Result<()>;
 
-        fn set_account_nonce_count(&mut self, account: AccountType, nonce: AccountNonce) -> crate::Result<()>;
-        fn del_account_nonce_count(&mut self, account: AccountType) -> crate::Result<()>;
+        fn set_account_nonce_count(&mut self, account: &AccountType, nonce: AccountNonce) -> crate::Result<()>;
+        fn del_account_nonce_count(&mut self, account: &AccountType) -> crate::Result<()>;
     }
 
     impl EpochStorageWrite for Store {
@@ -348,7 +350,10 @@ mockall::mock! {
         fn transaction_rw<'st>(&'st self, size: Option<usize>) -> crate::Result<MockStoreTxRw> where 'st: 'tx;
     }
 
-    impl crate::BlockchainStorage for Store {}
+    impl crate::BlockchainStorage for Store {
+        fn set_reckless_mode(&self, set: bool) -> crate::Result<()>;
+        fn in_reckless_mode(&self) -> crate::Result<bool>;
+    }
 }
 
 mockall::mock! {
@@ -361,19 +366,20 @@ mockall::mock! {
         fn get_chain_type(&self) -> crate::Result<Option<String>>;
         fn get_best_block_id(&self) -> crate::Result<Option<Id<GenBlock>>>;
         fn get_block_index(&self, id: &Id<Block>) -> crate::Result<Option<BlockIndex>>;
-        fn get_block(&self, id: Id<Block>) -> crate::Result<Option<Block>>;
-        fn block_exists(&self, id: Id<Block>) -> crate::Result<bool>;
+        fn get_block(&self, id: &Id<Block>) -> crate::Result<Option<Block>>;
+        fn get_encoded_block(&self, id: &Id<Block>) -> crate::Result<Option<Vec<u8>>>;
+        fn block_exists(&self, id: &Id<Block>) -> crate::Result<bool>;
         fn get_block_reward(&self, block_index: &BlockIndex) -> crate::Result<Option<BlockReward>>;
-        fn get_block_header(&self, id: Id<Block>) -> crate::Result<Option<SignedBlockHeader>>;
+        fn get_block_header(&self, id: &Id<Block>) -> crate::Result<Option<SignedBlockHeader>>;
 
         fn get_min_height_with_allowed_reorg(&self) -> crate::Result<Option<BlockHeight>>;
 
         fn get_block_id_by_height(
             &self,
-            height: &BlockHeight,
+            height: BlockHeight,
         ) -> crate::Result<Option<Id<GenBlock>>>;
 
-        fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<UtxosBlockUndo>>;
+        fn get_undo_data(&self, id: &Id<Block>) -> crate::Result<Option<UtxosBlockUndo>>;
 
         fn get_token_aux_data(&self, token_id: &TokenId) -> crate::Result<Option<TokenAuxiliaryData>>;
         fn get_token_id(&self, tx_id: &Id<Transaction>) -> crate::Result<Option<TokenId>>;
@@ -382,11 +388,11 @@ mockall::mock! {
             start_from: BlockHeight,
         ) -> crate::Result<BTreeMap<BlockHeight, Vec<Id<Block>>>>;
 
-        fn get_tokens_accounting_undo(&self, id: Id<Block>) -> crate::Result<Option<accounting::BlockUndo<TokenAccountingUndo>>>;
+        fn get_tokens_accounting_undo(&self, id: &Id<Block>) -> crate::Result<Option<accounting::BlockUndo<TokenAccountingUndo>>>;
 
-        fn get_orders_accounting_undo(&self, id: Id<Block>) -> crate::Result<Option<accounting::BlockUndo<OrdersAccountingUndo>>>;
+        fn get_orders_accounting_undo(&self, id: &Id<Block>) -> crate::Result<Option<accounting::BlockUndo<OrdersAccountingUndo>>>;
 
-        fn get_pos_accounting_undo(&self, id: Id<Block>) -> crate::Result<Option<accounting::BlockUndo<PoSAccountingUndo>>>;
+        fn get_pos_accounting_undo(&self, id: &Id<Block>) -> crate::Result<Option<accounting::BlockUndo<PoSAccountingUndo>>>;
 
         fn get_accounting_epoch_delta(
             &self,
@@ -398,7 +404,7 @@ mockall::mock! {
             epoch_index: EpochIndex,
         ) -> crate::Result<Option<DeltaMergeUndo>>;
 
-        fn get_account_nonce_count(&self, account: AccountType) -> crate::Result<Option<AccountNonce>>;
+        fn get_account_nonce_count(&self, account: &AccountType) -> crate::Result<Option<AccountNonce>>;
 
         fn get_block_map_keys(&self) -> crate::Result<BTreeSet<Id<Block>>>;
         fn get_block_index_map(&self) -> crate::Result<BTreeMap<Id<Block>, BlockIndex>>;
@@ -470,12 +476,12 @@ mockall::mock! {
         fn get_order_data(&self, id: &OrderId) -> crate::Result<Option<OrderData>>;
         fn get_ask_balance(&self, id: &OrderId) -> crate::Result<Option<Amount>>;
         fn get_give_balance(&self, id: &OrderId) -> crate::Result<Option<Amount>>;
+        fn get_all_order_ids(&self) -> crate::Result<BTreeSet<OrderId>>;
     }
 
     impl crate::TransactionRo for StoreTxRo {
         fn close(self);
     }
-
 }
 
 mockall::mock! {
@@ -487,32 +493,33 @@ mockall::mock! {
         fn get_magic_bytes(&self) -> crate::Result<Option<MagicBytes>>;
         fn get_chain_type(&self) -> crate::Result<Option<String>>;
         fn get_best_block_id(&self) -> crate::Result<Option<Id<GenBlock>>>;
-        fn get_block(&self, id: Id<Block>) -> crate::Result<Option<Block>>;
-        fn block_exists(&self, id: Id<Block>) -> crate::Result<bool>;
+        fn get_block(&self, id: &Id<Block>) -> crate::Result<Option<Block>>;
+        fn get_encoded_block(&self, id: &Id<Block>) -> crate::Result<Option<Vec<u8>>>;
+        fn block_exists(&self, id: &Id<Block>) -> crate::Result<bool>;
         fn get_block_index(&self, id: &Id<Block>) -> crate::Result<Option<BlockIndex>>;
         fn get_block_reward(&self, block_index: &BlockIndex) -> crate::Result<Option<BlockReward>>;
-        fn get_block_header(&self, id: Id<Block>) -> crate::Result<Option<SignedBlockHeader>>;
+        fn get_block_header(&self, id: &Id<Block>) -> crate::Result<Option<SignedBlockHeader>>;
 
         fn get_min_height_with_allowed_reorg(&self) -> crate::Result<Option<BlockHeight>>;
 
         fn get_block_id_by_height(
             &self,
-            height: &BlockHeight,
+            height: BlockHeight,
         ) -> crate::Result<Option<Id<GenBlock>>>;
 
-        fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<UtxosBlockUndo>>;
+        fn get_undo_data(&self, id: &Id<Block>) -> crate::Result<Option<UtxosBlockUndo>>;
 
         fn get_token_aux_data(&self, token_id: &TokenId) -> crate::Result<Option<TokenAuxiliaryData>>;
         fn get_token_id(&self, tx_id: &Id<Transaction>) -> crate::Result<Option<TokenId>>;
-        fn get_tokens_accounting_undo(&self, id: Id<Block>) -> crate::Result<Option<accounting::BlockUndo<TokenAccountingUndo>>>;
+        fn get_tokens_accounting_undo(&self, id: &Id<Block>) -> crate::Result<Option<accounting::BlockUndo<TokenAccountingUndo>>>;
         fn get_block_tree_by_height(
             &self,
             start_from: BlockHeight,
         ) -> crate::Result<BTreeMap<BlockHeight, Vec<Id<Block>>>>;
 
-        fn get_pos_accounting_undo(&self, id: Id<Block>) -> crate::Result<Option<accounting::BlockUndo<PoSAccountingUndo>>>;
+        fn get_pos_accounting_undo(&self, id: &Id<Block>) -> crate::Result<Option<accounting::BlockUndo<PoSAccountingUndo>>>;
 
-        fn get_orders_accounting_undo(&self, id: Id<Block>) -> crate::Result<Option<accounting::BlockUndo<OrdersAccountingUndo>>>;
+        fn get_orders_accounting_undo(&self, id: &Id<Block>) -> crate::Result<Option<accounting::BlockUndo<OrdersAccountingUndo>>>;
 
         fn get_accounting_epoch_delta(
             &self,
@@ -524,7 +531,7 @@ mockall::mock! {
             epoch_index: EpochIndex,
         ) -> crate::Result<Option<DeltaMergeUndo>>;
 
-        fn get_account_nonce_count(&self, account: AccountType) -> crate::Result<Option<AccountNonce>>;
+        fn get_account_nonce_count(&self, account: &AccountType) -> crate::Result<Option<AccountNonce>>;
 
         fn get_block_map_keys(&self) -> crate::Result<BTreeSet<Id<Block>>>;
         fn get_block_index_map(&self) -> crate::Result<BTreeMap<Id<Block>, BlockIndex>>;
@@ -596,30 +603,31 @@ mockall::mock! {
         fn get_order_data(&self, id: &OrderId) -> crate::Result<Option<OrderData>>;
         fn get_ask_balance(&self, id: &OrderId) -> crate::Result<Option<Amount>>;
         fn get_give_balance(&self, id: &OrderId) -> crate::Result<Option<Amount>>;
+        fn get_all_order_ids(&self) -> crate::Result<BTreeSet<OrderId>>;
     }
 
     impl crate::BlockchainStorageWrite for StoreTxRw {
         fn set_storage_version(&mut self, version: ChainstateStorageVersion) -> crate::Result<()>;
-        fn set_magic_bytes(&mut self, bytes: &MagicBytes) -> crate::Result<()>;
+        fn set_magic_bytes(&mut self, bytes: MagicBytes) -> crate::Result<()>;
         fn set_chain_type(&mut self, chain: &str) -> crate::Result<()>;
         fn set_best_block_id(&mut self, id: &Id<GenBlock>) -> crate::Result<()>;
         fn set_block_index(&mut self, block_index: &BlockIndex) -> crate::Result<()>;
-        fn del_block_index(&mut self, block_id: Id<Block>) -> crate::Result<()>;
+        fn del_block_index(&mut self, block_id: &Id<Block>) -> crate::Result<()>;
         fn add_block(&mut self, block: &Block) -> crate::Result<()>;
-        fn del_block(&mut self, id: Id<Block>) -> crate::Result<()>;
+        fn del_block(&mut self, id: &Id<Block>) -> crate::Result<()>;
 
         fn set_min_height_with_allowed_reorg(&mut self, height: BlockHeight) -> crate::Result<()>;
 
         fn set_block_id_at_height(
             &mut self,
-            height: &BlockHeight,
+            height: BlockHeight,
             block_id: &Id<GenBlock>,
         ) -> crate::Result<()>;
 
-        fn set_undo_data(&mut self, id: Id<Block>, undo: &UtxosBlockUndo) -> crate::Result<()>;
-        fn del_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
+        fn set_undo_data(&mut self, id: &Id<Block>, undo: &UtxosBlockUndo) -> crate::Result<()>;
+        fn del_undo_data(&mut self, id: &Id<Block>) -> crate::Result<()>;
 
-        fn del_block_id_at_height(&mut self, height: &BlockHeight) -> crate::Result<()>;
+        fn del_block_id_at_height(&mut self, height: BlockHeight) -> crate::Result<()>;
         fn set_token_aux_data(&mut self, token_id: &TokenId, data: &TokenAuxiliaryData) -> crate::Result<()>;
         fn del_token_aux_data(&mut self, token_id: &TokenId) -> crate::Result<()>;
 
@@ -628,20 +636,20 @@ mockall::mock! {
 
         fn set_tokens_accounting_undo_data(
             &mut self,
-            id: Id<Block>,
+            id: &Id<Block>,
             undo: &accounting::BlockUndo<TokenAccountingUndo>,
         ) -> crate::Result<()>;
-        fn del_tokens_accounting_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
+        fn del_tokens_accounting_undo_data(&mut self, id: &Id<Block>) -> crate::Result<()>;
 
         fn set_orders_accounting_undo_data(
             &mut self,
-            id: Id<Block>,
+            id: &Id<Block>,
             undo: &accounting::BlockUndo<OrdersAccountingUndo>,
         ) -> crate::Result<()>;
-        fn del_orders_accounting_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
+        fn del_orders_accounting_undo_data(&mut self, id: &Id<Block>) -> crate::Result<()>;
 
-        fn set_pos_accounting_undo_data(&mut self, id: Id<Block>, undo: &accounting::BlockUndo<PoSAccountingUndo>) -> crate::Result<()>;
-        fn del_pos_accounting_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
+        fn set_pos_accounting_undo_data(&mut self, id: &Id<Block>, undo: &accounting::BlockUndo<PoSAccountingUndo>) -> crate::Result<()>;
+        fn del_pos_accounting_undo_data(&mut self, id: &Id<Block>) -> crate::Result<()>;
 
         fn set_accounting_epoch_delta(
             &mut self,
@@ -657,8 +665,8 @@ mockall::mock! {
         ) -> crate::Result<()>;
         fn del_accounting_epoch_undo_delta(&mut self, epoch_index: EpochIndex) -> crate::Result<()>;
 
-        fn set_account_nonce_count(&mut self, account: AccountType, nonce: AccountNonce) -> crate::Result<()>;
-        fn del_account_nonce_count(&mut self, account: AccountType) -> crate::Result<()>;
+        fn set_account_nonce_count(&mut self, account: &AccountType, nonce: AccountNonce) -> crate::Result<()>;
+        fn del_account_nonce_count(&mut self, account: &AccountType) -> crate::Result<()>;
     }
 
     impl EpochStorageWrite for StoreTxRw {

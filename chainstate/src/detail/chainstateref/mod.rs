@@ -76,7 +76,7 @@ pub use in_memory_reorg::InMemoryReorgError;
 
 pub struct ChainstateRef<'a, S, V> {
     chain_config: &'a ChainConfig,
-    _chainstate_config: &'a ChainstateConfig,
+    chainstate_config: &'a ChainstateConfig,
     tx_verification_strategy: &'a V,
     db_tx: S,
     time_getter: &'a TimeGetter,
@@ -141,7 +141,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     ) -> Self {
         ChainstateRef {
             chain_config,
-            _chainstate_config: chainstate_config,
+            chainstate_config,
             db_tx,
             tx_verification_strategy,
             time_getter,
@@ -157,7 +157,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     ) -> Self {
         ChainstateRef {
             chain_config,
-            _chainstate_config: chainstate_config,
+            chainstate_config,
             db_tx,
             tx_verification_strategy,
             time_getter,
@@ -251,7 +251,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     #[log_error]
     pub fn get_block_id_by_height(
         &self,
-        height: &BlockHeight,
+        height: BlockHeight,
     ) -> Result<Option<Id<GenBlock>>, PropertyQueryError> {
         self.db_tx.get_block_id_by_height(height).map_err(PropertyQueryError::from)
     }
@@ -259,26 +259,34 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     #[log_error]
     pub fn get_existing_block_id_by_height(
         &self,
-        height: &BlockHeight,
+        height: BlockHeight,
     ) -> Result<Id<GenBlock>, PropertyQueryError> {
         self.get_block_id_by_height(height)?
-            .ok_or(PropertyQueryError::BlockForHeightNotFound(*height))
+            .ok_or(PropertyQueryError::BlockForHeightNotFound(height))
     }
 
     #[log_error]
-    pub fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, PropertyQueryError> {
+    pub fn get_block(&self, block_id: &Id<Block>) -> Result<Option<Block>, PropertyQueryError> {
         self.db_tx.get_block(block_id).map_err(PropertyQueryError::from)
     }
 
     #[log_error]
-    pub fn block_exists(&self, block_id: Id<Block>) -> Result<bool, PropertyQueryError> {
+    pub fn get_encoded_block(
+        &self,
+        block_id: &Id<Block>,
+    ) -> Result<Option<Vec<u8>>, PropertyQueryError> {
+        self.db_tx.get_encoded_block(block_id).map_err(PropertyQueryError::from)
+    }
+
+    #[log_error]
+    pub fn block_exists(&self, block_id: &Id<Block>) -> Result<bool, PropertyQueryError> {
         self.db_tx.block_exists(block_id).map_err(PropertyQueryError::from)
     }
 
     #[log_error]
     pub fn get_block_header(
         &self,
-        block_id: Id<Block>,
+        block_id: &Id<Block>,
     ) -> Result<Option<SignedBlockHeader>, PropertyQueryError> {
         Ok(self.db_tx.get_block_header(block_id)?)
     }
@@ -361,6 +369,8 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         self.last_common_ancestor(block_index, &best_block_index)
     }
 
+    // Note: this function will return Some for NFTs only, because the data is only written
+    // for NFTs. This is decided by `token_issuance_cache::has_tokens_issuance_to_cache`.
     #[log_error]
     pub fn get_token_aux_data(
         &self,
@@ -369,8 +379,9 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         self.db_tx.get_token_aux_data(token_id).map_err(PropertyQueryError::from)
     }
 
+    // Note: same as get_token_aux_data, this only works for NFTs, for the same reason.
     #[log_error]
-    pub fn get_token_id(
+    pub fn get_token_id_from_issuance_tx(
         &self,
         tx_id: &Id<Transaction>,
     ) -> Result<Option<TokenId>, PropertyQueryError> {
@@ -380,7 +391,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     #[log_error]
     pub fn get_header_from_height(
         &self,
-        height: &BlockHeight,
+        height: BlockHeight,
     ) -> Result<Option<SignedBlockHeader>, PropertyQueryError> {
         let id = self.get_existing_block_id_by_height(height)?;
         let id = id
@@ -410,7 +421,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     #[log_error]
     pub fn get_account_nonce_count(
         &self,
-        account: AccountType,
+        account: &AccountType,
     ) -> Result<Option<AccountNonce>, PropertyQueryError> {
         self.db_tx.get_account_nonce_count(account).map_err(PropertyQueryError::from)
     }
@@ -427,7 +438,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         };
 
         if let Some(block_index) = self.get_block_index(&id)? {
-            let mainchain_block_id = self.get_block_id_by_height(&block_index.block_height())?;
+            let mainchain_block_id = self.get_block_id_by_height(block_index.block_height())?;
 
             // Note: this function may be called when the chain is still empty, so we don't unwrap
             // mainchain_block_id and wrap gen_id instead.
@@ -457,6 +468,34 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(result)
     }
 
+    fn enforce_checkpoint_impl(
+        &self,
+        height: BlockHeight,
+        expected: &Id<GenBlock>,
+        given: &Id<GenBlock>,
+    ) -> Result<(), CheckBlockError> {
+        if given != expected {
+            // Note: we only log the mismatch if we're going to ignore it (because if it's
+            // not ignored, we'll log the error anyway).
+            if self.chainstate_config.checkpoints_mismatch_allowed() {
+                log::warn!(
+                    "Checkpoint mismatch at height {}, expected: {:x}, actual: {:x}",
+                    height,
+                    expected,
+                    given,
+                );
+            } else {
+                return Err(CheckBlockError::CheckpointMismatch {
+                    height,
+                    expected: *expected,
+                    given: *given,
+                });
+            }
+        }
+
+        Ok(())
+    }
+
     // If the header height is at an exact checkpoint height, check that the block id matches the checkpoint id.
     // Return true if the header height is at an exact checkpoint height.
     fn enforce_exact_checkpoint_assuming_height(
@@ -464,15 +503,10 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         header: &SignedBlockHeader,
         header_height: BlockHeight,
     ) -> Result<bool, CheckBlockError> {
-        if let Some(e) = self.chain_config.height_checkpoints().checkpoint_at_height(&header_height)
+        if let Some(expected_id) =
+            self.chain_config.height_checkpoints().checkpoint_at_height(&header_height)
         {
-            let expected_id = Id::<Block>::new(e.to_hash());
-            if expected_id != header.get_id() {
-                return Err(CheckBlockError::CheckpointMismatch(
-                    expected_id,
-                    header.get_id(),
-                ));
-            }
+            self.enforce_checkpoint_impl(header_height, expected_id, &header.get_id().into())?;
             Ok(true)
         } else {
             Ok(false)
@@ -499,17 +533,13 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
 
         let parent_checkpoint_block_index =
             self.get_ancestor(&prev_block_index, expected_checkpoint_height)?;
-
         let parent_checkpoint_id = parent_checkpoint_block_index.block_id();
 
-        if parent_checkpoint_id != expected_checkpoint_id {
-            return Err(CheckBlockError::ParentCheckpointMismatch(
-                expected_checkpoint_height,
-                expected_checkpoint_id,
-                parent_checkpoint_id,
-            ));
-        }
-
+        self.enforce_checkpoint_impl(
+            expected_checkpoint_height,
+            &expected_checkpoint_id,
+            &parent_checkpoint_id,
+        )?;
         Ok(())
     }
 
@@ -564,11 +594,11 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         if common_ancestor_height < min_allowed_height {
             let tip_block_height = self.get_best_block_index()?.block_height();
 
-            return Err(CheckBlockError::AttemptedToAddBlockBeforeReorgLimit(
+            return Err(CheckBlockError::AttemptedToAddBlockBeforeReorgLimit {
                 common_ancestor_height,
                 tip_block_height,
                 min_allowed_height,
-            ));
+            });
         }
 
         Ok(())
@@ -599,8 +629,45 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(parent_block_index)
     }
 
+    /// This function is intended to be used in check_block and check_block_header.
+    ///
+    /// Return true if the block already exists in the chainstate and has an "ok" status
+    /// with the validation stage CheckBlockOk or later.
+    /// If it has a non-"ok" status, return an error.
+    /// If the block is new, or if its validation stage is below CheckBlockOk (i.e. it's Unchecked),
+    /// return false.
+    fn skip_check_block_because_block_exists_and_is_checked(
+        &self,
+        block_id: &Id<Block>,
+    ) -> Result<bool, CheckBlockError> {
+        if let Some(block_index) = self.get_block_index(block_id)? {
+            let status = block_index.status();
+
+            if status.is_ok() {
+                let checked = status.last_valid_stage() >= BlockValidationStage::CheckBlockOk;
+                Ok(checked)
+            } else {
+                Err(CheckBlockError::InvalidBlockAlreadyProcessed(*block_id))
+            }
+        } else {
+            Ok(false)
+        }
+    }
+
     #[log_error]
     pub fn check_block_header(&self, header: &SignedBlockHeader) -> Result<(), CheckBlockError> {
+        let header = WithId::new(header);
+        if self.skip_check_block_because_block_exists_and_is_checked(WithId::id(&header))? {
+            return Ok(());
+        }
+
+        self.check_block_header_impl(&header)
+    }
+
+    fn check_block_header_impl(
+        &self,
+        header: &WithId<&SignedBlockHeader>,
+    ) -> Result<(), CheckBlockError> {
         let parent_block_index = self.check_block_parent(header)?;
         self.check_header_size(header)?;
         self.enforce_checkpoints(header)?;
@@ -662,7 +729,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         ensure!(
             block_timestamp.as_duration_since_epoch() <= current_time_as_secs + max_future_offset,
             CheckBlockError::BlockFromTheFuture {
-                block_id: header.block_id(),
+                block_id: *WithId::id(header),
                 block_timestamp,
                 current_time
             },
@@ -828,12 +895,17 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         &self,
         block_index: &BlockIndex,
     ) -> Result<Option<Block>, chainstate_storage::Error> {
-        self.db_tx.get_block(*block_index.block_id())
+        self.db_tx.get_block(block_index.block_id())
     }
 
     #[log_error]
     pub fn check_block(&self, block: &WithId<Block>) -> Result<(), CheckBlockError> {
-        self.check_block_header(block.header())?;
+        let header_with_id = WithId::as_sub_obj(block);
+        if self.skip_check_block_because_block_exists_and_is_checked(WithId::id(&header_with_id))? {
+            return Ok(());
+        }
+
+        self.check_block_header_impl(&header_with_id)?;
 
         self.check_block_size(block).map_err(CheckBlockError::BlockSizeError)?;
 
@@ -894,7 +966,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         let id_from_height = |block_height: u64| -> Result<Id<Block>, PropertyQueryError> {
             let block_height: BlockHeight = block_height.into();
             let block_id = self
-                .get_block_id_by_height(&block_height)?
+                .get_block_id_by_height(block_height)?
                 .expect("Since block_height is >= best_height, this must exist");
             let block_id = block_id
                 .classify(self.chain_config)
@@ -1065,7 +1137,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         };
 
         let lowest_block_id = self
-            .get_existing_block_id_by_height(&min_height)
+            .get_existing_block_id_by_height(min_height)
             .map_err(BlockError::PropertyQueryError)?;
 
         self.disconnect_tip_in_memory_until(
@@ -1276,7 +1348,7 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
         self.connect_transactions(block_index, &block)?;
 
         self.db_tx.set_block_id_at_height(
-            &block_index.block_height(),
+            block_index.block_height(),
             &(*block_index.block_id()).into(),
         )?;
         self.db_tx.set_best_block_id(&(*block_index.block_id()).into())?;
@@ -1320,7 +1392,7 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
         self.disconnect_transactions(&block.into())?;
         self.db_tx.set_best_block_id(block_index.prev_block_id())?;
         // Disconnect block
-        self.db_tx.del_block_id_at_height(&block_index.block_height())?;
+        self.db_tx.del_block_id_at_height(block_index.block_height())?;
 
         let prev_block_index = self
             .get_previous_block_index(&block_index)
@@ -1351,7 +1423,7 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
 
     #[log_error]
     pub fn persist_block(&mut self, block: &WithId<Block>) -> Result<(), BlockError> {
-        if self.db_tx.block_exists(block.get_id()).map_err(BlockError::from)? {
+        if self.db_tx.block_exists(&block.get_id()).map_err(BlockError::from)? {
             return Err(BlockError::BlockAlreadyExists(block.get_id()));
         }
 
@@ -1386,7 +1458,7 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
                 "Trying to delete a block index for a persisted block {block_id}"
             );
 
-            self.db_tx.del_block_index(*block_id)?;
+            self.db_tx.del_block_index(block_id)?;
         }
         Ok(())
     }

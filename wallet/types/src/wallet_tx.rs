@@ -25,20 +25,27 @@ use common::chain::{
 use common::primitives::id::WithId;
 use common::primitives::{BlockHeight, Id, Idable};
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Decode, Encode, serde::Serialize)]
+#[derive(
+    Debug, PartialEq, Eq, Clone, Copy, Decode, Encode, serde::Serialize, strum::EnumDiscriminants,
+)]
+#[strum_discriminants(name(TxStateTag), derive(strum::EnumIter))]
 pub enum TxState {
     /// Confirmed transaction in a block
     #[codec(index = 0)]
-    Confirmed(BlockHeight, BlockTimestamp, u64),
+    Confirmed(
+        BlockHeight,
+        BlockTimestamp,
+        /*tx index inside the block*/ u64,
+    ),
     /// Unconfirmed transaction in the mempool
     #[codec(index = 1)]
-    InMempool(u64),
+    InMempool(/*unconfirmed tx counter*/ u64),
     /// Conflicted transaction with a confirmed block
     #[codec(index = 2)]
     Conflicted(Id<GenBlock>),
     /// Transaction that is not confirmed or conflicted and is not in the mempool.
     #[codec(index = 3)]
-    Inactive(u64),
+    Inactive(/*unconfirmed tx counter*/ u64),
     /// Transaction that is not confirmed or conflicted and is not in the mempool and marked as
     /// abandoned by the user
     #[codec(index = 4)]

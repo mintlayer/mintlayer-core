@@ -208,6 +208,7 @@ impl TestFrameworkBuilder {
                 DefaultTransactionVerificationStrategy::new(),
                 self.custom_orphan_error_hook,
                 time_getter.clone(),
+                None,
             ),
             TxVerificationStrategy::Disposable => chainstate::make_chainstate(
                 Arc::new(self.chain_config),
@@ -216,6 +217,7 @@ impl TestFrameworkBuilder {
                 DisposableTransactionVerificationStrategy::new(),
                 self.custom_orphan_error_hook,
                 time_getter.clone(),
+                None,
             ),
             TxVerificationStrategy::Randomized(seed) => chainstate::make_chainstate(
                 Arc::new(self.chain_config),
@@ -224,6 +226,7 @@ impl TestFrameworkBuilder {
                 RandomizedTransactionVerificationStrategy::new(seed),
                 self.custom_orphan_error_hook,
                 time_getter.clone(),
+                None,
             ),
         }?;
 

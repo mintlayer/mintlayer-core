@@ -16,10 +16,14 @@
 """ Module for mintlayer-specific utilities for testing """
 
 import hashlib
+import random
 import scalecodec
 import time
+from decimal import Decimal
+
 
 ATOMS_PER_COIN = 100_000_000_000
+COINS_NUM_DECIMALS = 11
 
 DEFAULT_INITIAL_MINT = 400_000_000 * ATOMS_PER_COIN
 MIN_POOL_PLEDGE = 40_000 * ATOMS_PER_COIN
@@ -96,7 +100,7 @@ def calc_block_id(block):
     # If block is already a header without signature, we keep the object as is (no 'header' field)
     while 'header' in block:
         block = block['header']
-    return hash_object(block_header_obj, tx)
+    return hash_object(block_header_obj, block)
 
 
 def make_tx(inputs, outputs, flags = 0):
@@ -163,3 +167,7 @@ def make_delegation_id(outpoint):
 
     # Truncate output to match Rust's split()
     return hex_to_dec_array(blake2b_hasher.hexdigest()[:64])
+
+def random_decimal_amount(min: int, max: int, num_decimals: int) -> Decimal:
+    atoms_per_unit = 10 ** num_decimals
+    return Decimal(random.randint(min * atoms_per_unit, max * atoms_per_unit)) / atoms_per_unit

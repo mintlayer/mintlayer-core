@@ -15,22 +15,35 @@
 
 use std::{collections::BTreeMap, iter, num::NonZeroUsize, time::Duration};
 
+use chainstate_storage::BlockchainStorage;
 use rstest::rstest;
 
-use chainstate::{BlockSource, ChainstateConfig, ChainstateError, CheckBlockError};
-use chainstate_test_framework::TestFramework;
-use chainstate_types::PropertyQueryError;
+use chainstate::{
+    BlockError, BlockSource, ChainstateConfig, ChainstateError, CheckBlockError,
+    CheckBlockTransactionsError,
+};
+use chainstate_test_framework::{TestFramework, TestFrameworkBuilder};
+use chainstate_types::{BlockStatus, BlockValidationStage, PropertyQueryError};
 use common::{
     chain::{
         self,
         block::{signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp},
-        GenBlock,
+        Block, GenBlock,
     },
     primitives::{BlockDistance, BlockHeight, Id, Idable, H256},
     Uint256,
 };
+use logging::log;
 use randomness::Rng;
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::{
+    assert_matches,
+    random::{make_seedable_rng, Seed},
+};
+use tx_verifier::CheckTransactionError;
+
+use crate::tests::helpers::{
+    block_creation_helpers::build_block_with_empty_tx, block_status_helpers::get_block_status,
+};
 
 #[rstest]
 #[trace]
@@ -79,7 +92,7 @@ fn get_locator(#[case] seed: Seed) {
             for (i, header) in locator.iter().skip(1).enumerate() {
                 let idx = height - BlockDistance::new(2i64.pow(i as u32));
                 let expected =
-                    btf.chainstate.get_block_id_from_height(&idx.unwrap()).unwrap().unwrap();
+                    btf.chainstate.get_block_id_from_height(idx.unwrap()).unwrap().unwrap();
                 assert_eq!(&expected, header);
             }
         }
@@ -113,12 +126,12 @@ fn get_locator_from_height(#[case] seed: Seed) {
             // Check the locator headers.
             assert_eq!(
                 &locator[0],
-                &btf.chainstate.get_block_id_from_height(&height.into()).unwrap().unwrap()
+                &btf.chainstate.get_block_id_from_height(height.into()).unwrap().unwrap()
             );
             for (i, header) in locator.iter().skip(1).enumerate() {
                 let idx = BlockHeight::from(height) - BlockDistance::new(2i64.pow(i as u32));
                 let expected =
-                    btf.chainstate.get_block_id_from_height(&idx.unwrap()).unwrap().unwrap();
+                    btf.chainstate.get_block_id_from_height(idx.unwrap()).unwrap().unwrap();
                 assert_eq!(&expected, header);
             }
         }
@@ -228,8 +241,8 @@ fn get_headers_branching_chains(#[case] seed: Seed) {
 
         let mut tf = TestFramework::builder(&mut rng)
             .with_chain_config(
-                common::chain::config::Builder::new(common::chain::config::ChainType::Regtest)
-                    .consensus_upgrades(common::chain::NetUpgrades::unit_tests())
+                chain::config::Builder::new(chain::config::ChainType::Regtest)
+                    .consensus_upgrades(chain::NetUpgrades::unit_tests())
                     .max_depth_for_reorg(BlockDistance::new(5000))
                     .build(),
             )
@@ -432,8 +445,8 @@ fn try_reorg_past_limit(#[case] seed: Seed) {
 
         let mut tf = TestFramework::builder(&mut rng)
             .with_chain_config(
-                common::chain::config::Builder::new(common::chain::config::ChainType::Regtest)
-                    .consensus_upgrades(common::chain::NetUpgrades::unit_tests())
+                chain::config::Builder::new(chain::config::ChainType::Regtest)
+                    .consensus_upgrades(chain::NetUpgrades::unit_tests())
                     .max_depth_for_reorg(BlockDistance::new(1))
                     .build(),
             )
@@ -444,12 +457,12 @@ fn try_reorg_past_limit(#[case] seed: Seed) {
         let res = tf.create_chain(&common_block_id, 1, &mut rng).unwrap_err();
         assert_eq!(
             res,
-            ChainstateError::ProcessBlockError(chainstate::BlockError::CheckBlockFailed(
-                chainstate::CheckBlockError::AttemptedToAddBlockBeforeReorgLimit(
-                    BlockHeight::new(0),
-                    BlockHeight::new(2),
-                    BlockHeight::new(1)
-                )
+            ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                CheckBlockError::AttemptedToAddBlockBeforeReorgLimit {
+                    common_ancestor_height: BlockHeight::new(0),
+                    tip_block_height: BlockHeight::new(2),
+                    min_allowed_height: BlockHeight::new(1),
+                }
             ))
         )
     });
@@ -458,14 +471,14 @@ fn try_reorg_past_limit(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn otry_reorg_past_limit_in_fork(#[case] seed: Seed) {
+fn try_reorg_past_limit_in_fork(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
 
         let mut tf = TestFramework::builder(&mut rng)
             .with_chain_config(
-                common::chain::config::Builder::new(common::chain::config::ChainType::Regtest)
-                    .consensus_upgrades(common::chain::NetUpgrades::unit_tests())
+                chain::config::Builder::new(chain::config::ChainType::Regtest)
+                    .consensus_upgrades(chain::NetUpgrades::unit_tests())
                     .max_depth_for_reorg(BlockDistance::new(2))
                     .build(),
             )
@@ -482,12 +495,12 @@ fn otry_reorg_past_limit_in_fork(#[case] seed: Seed) {
         let res = tf.create_chain(&fork_tip_id, 1, &mut rng).unwrap_err();
         assert_eq!(
             res,
-            ChainstateError::ProcessBlockError(chainstate::BlockError::CheckBlockFailed(
-                chainstate::CheckBlockError::AttemptedToAddBlockBeforeReorgLimit(
-                    BlockHeight::new(0),
-                    BlockHeight::new(3),
-                    BlockHeight::new(1)
-                )
+            ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                CheckBlockError::AttemptedToAddBlockBeforeReorgLimit {
+                    common_ancestor_height: BlockHeight::new(0),
+                    tip_block_height: BlockHeight::new(3),
+                    min_allowed_height: BlockHeight::new(1),
+                }
             ))
         )
     });
@@ -630,22 +643,29 @@ fn split_off_leading_known_headers(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn initial_block_download(#[case] seed: Seed) {
+fn initial_block_download(
+    #[case] seed: Seed,
+    #[values(None, Some(false), Some(true))] enable_db_reckless_mode_in_ibd: Option<bool>,
+    #[values(false, true)] recreate_chainstate: bool,
+) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng)
             .with_chainstate_config(ChainstateConfig {
                 max_db_commit_attempts: Default::default(),
+                enable_db_reckless_mode_in_ibd,
                 max_orphan_blocks: Default::default(),
-                min_max_bootstrap_import_buffer_sizes: Default::default(),
                 max_tip_age: Duration::from_secs(1).into(),
                 enable_heavy_checks: Some(true),
+                allow_checkpoints_mismatch: Default::default(),
             })
             .with_initial_time_since_genesis(2)
             .build();
+        let use_reckless_mode = enable_db_reckless_mode_in_ibd.unwrap_or(false);
 
         // We are two seconds after genesis timestamp, so in the IBD state
         assert!(tf.chainstate.is_initial_block_download());
+        assert_eq!(tf.storage.in_reckless_mode().unwrap(), use_reckless_mode);
 
         // Create a block with an "old" timestamp.
         let now = tf.current_time();
@@ -655,14 +675,25 @@ fn initial_block_download(#[case] seed: Seed) {
             .build_and_process(&mut rng)
             .unwrap();
         assert!(tf.chainstate.is_initial_block_download());
+        assert_eq!(tf.storage.in_reckless_mode().unwrap(), use_reckless_mode);
 
         // Create a block with fresh timestamp.
         tf.make_block_builder().build_and_process(&mut rng).unwrap();
         assert!(!tf.chainstate.is_initial_block_download());
+        assert!(!tf.storage.in_reckless_mode().unwrap());
 
         // Add one more block.
         tf.make_block_builder().build_and_process(&mut rng).unwrap();
         assert!(!tf.chainstate.is_initial_block_download());
+        assert!(!tf.storage.in_reckless_mode().unwrap());
+
+        if recreate_chainstate {
+            // Create a new framework from the existing one; this will re-create Chainstate re-using
+            // the storage. The resulting chainstate should not be in ibd.
+            tf = TestFrameworkBuilder::from_existing_framework(tf).build();
+            assert!(!tf.chainstate.is_initial_block_download());
+            assert!(!tf.storage.in_reckless_mode().unwrap());
+        }
 
         // Check that receiving an "old" block does not revert `is_initial_block_download` back
         tf.progress_time_seconds_since_epoch(5);
@@ -674,6 +705,7 @@ fn initial_block_download(#[case] seed: Seed) {
         tf.progress_time_seconds_since_epoch(10);
         tf.process_block(block, BlockSource::Local).unwrap();
         assert!(!tf.chainstate.is_initial_block_download());
+        assert!(!tf.storage.in_reckless_mode().unwrap());
     });
 }
 
@@ -695,8 +727,8 @@ fn header_check_for_orphan(#[case] seed: Seed) {
             .unwrap_err();
         assert_eq!(
             err,
-            ChainstateError::ProcessBlockError(chainstate::BlockError::CheckBlockFailed(
-                chainstate::CheckBlockError::ParentBlockMissing {
+            ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                CheckBlockError::ParentBlockMissing {
                     block_id: block.get_id(),
                     parent_block_id: block.prev_block_id(),
                 },
@@ -706,8 +738,8 @@ fn header_check_for_orphan(#[case] seed: Seed) {
         let err = tf.chainstate.preliminary_block_check(block.clone()).unwrap_err();
         assert_eq!(
             err,
-            ChainstateError::ProcessBlockError(chainstate::BlockError::CheckBlockFailed(
-                chainstate::CheckBlockError::ParentBlockMissing {
+            ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                CheckBlockError::ParentBlockMissing {
                     block_id: block.get_id(),
                     parent_block_id: block.prev_block_id(),
                 },
@@ -717,9 +749,7 @@ fn header_check_for_orphan(#[case] seed: Seed) {
         let err = tf.chainstate.process_block(block, BlockSource::Peer).unwrap_err();
         assert_eq!(
             err,
-            ChainstateError::ProcessBlockError(
-                chainstate::BlockError::PrevBlockNotFoundForNewBlock(block_id)
-            )
+            ChainstateError::ProcessBlockError(BlockError::PrevBlockNotFoundForNewBlock(block_id))
         );
     });
 }
@@ -744,7 +774,7 @@ fn headers_check_with_checkpoints(#[case] seed: Seed) {
                 .iter()
                 .map(|id| {
                     let id = tf.to_chain_block_id(id);
-                    tf.chainstate.get_block_header(id).unwrap().unwrap()
+                    tf.chainstate.get_block_header(&id).unwrap().unwrap()
                 })
                 .collect::<Vec<_>>();
             (parent_block, block_headers)
@@ -798,8 +828,9 @@ fn headers_check_with_checkpoints(#[case] seed: Seed) {
                 .enumerate()
                 .map(|(idx, header)| (BlockHeight::new(idx as u64 + 2), header.block_id().into()))
                 .collect::<BTreeMap<_, _>>();
+            let bad_checkpoint_height = BlockHeight::new(5);
             let good_block_id = Id::new(Uint256::from_u64(12345).into());
-            let bad_block_id = checkpoints.insert(BlockHeight::new(5), good_block_id).unwrap();
+            let bad_block_id = checkpoints.insert(bad_checkpoint_height, good_block_id).unwrap();
 
             let mut tf = TestFramework::builder(&mut rng)
                 .with_chain_config(
@@ -813,11 +844,12 @@ fn headers_check_with_checkpoints(#[case] seed: Seed) {
             let err = tf.chainstate.preliminary_headers_check(&block_headers).unwrap_err();
             assert_eq!(
                 err,
-                ChainstateError::ProcessBlockError(chainstate::BlockError::CheckBlockFailed(
-                    CheckBlockError::CheckpointMismatch(
-                        tf.to_chain_block_id(&good_block_id),
-                        tf.to_chain_block_id(&bad_block_id)
-                    )
+                ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                    CheckBlockError::CheckpointMismatch {
+                        height: bad_checkpoint_height,
+                        expected: good_block_id,
+                        given: bad_block_id
+                    }
                 ))
             );
         }
@@ -826,9 +858,10 @@ fn headers_check_with_checkpoints(#[case] seed: Seed) {
         {
             let good_block_id = Id::new(Uint256::from_u64(12345).into());
             let bad_block_id = block_headers[5].block_id().into();
+            let bad_checkpoint_height = BlockHeight::new(7);
             let checkpoints = [
                 (BlockHeight::new(3), block_headers[1].block_id().into()),
-                (BlockHeight::new(7), good_block_id),
+                (bad_checkpoint_height, good_block_id),
             ]
             .into_iter()
             .collect::<BTreeMap<_, _>>();
@@ -845,11 +878,12 @@ fn headers_check_with_checkpoints(#[case] seed: Seed) {
             let err = tf.chainstate.preliminary_headers_check(&block_headers).unwrap_err();
             assert_eq!(
                 err,
-                ChainstateError::ProcessBlockError(chainstate::BlockError::CheckBlockFailed(
-                    CheckBlockError::CheckpointMismatch(
-                        tf.to_chain_block_id(&good_block_id),
-                        tf.to_chain_block_id(&bad_block_id)
-                    )
+                ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                    CheckBlockError::CheckpointMismatch {
+                        height: bad_checkpoint_height,
+                        expected: good_block_id,
+                        given: bad_block_id
+                    }
                 ))
             );
         }
@@ -940,5 +974,271 @@ fn get_block_ids_as_checkpoints(#[case] seed: Seed) {
             )
             .unwrap();
         assert_eq!(result, []);
+    });
+}
+
+// Check that preliminary_block_check and preliminary_headers_check take into account whether
+// the block already exists:
+// 1) If the block has an "ok" status and the validation stage is CheckBlockOk or later, they succeed.
+//    Important special case: the block height is below the reorg limit.
+// 2) If the block has a non-"ok" status, they fail with a specific error.
+// For consistency, we'll be checking all combinations - ok/non-ok above/below the reorg limit.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn preliminary_checks_for_existing_block(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let max_reorg_limit: usize = rng.gen_range(10..20);
+
+        let mut tf = TestFramework::builder(&mut rng)
+            .with_chain_config(
+                chain::config::create_unit_test_config_builder()
+                    .max_depth_for_reorg(BlockDistance::new(max_reorg_limit as i64))
+                    .build(),
+            )
+            .build();
+        let genesis_id = tf.genesis().get_id().into();
+
+        // This will be the full chain length.
+        let chain_len = rng.gen_range(max_reorg_limit + 1..max_reorg_limit * 2);
+        // This is the lowest-height parent block, whose children will still be considered
+        // above the reorg limit after the full chain is constructed.
+        let first_parent_height_above_reorg_limit = chain_len - max_reorg_limit;
+        // The height of the parent block, whose children will be considered below the
+        // reorg limit (after the full chain is constructed).
+        let parent_height_below_reorg_limit =
+            rng.gen_range(0..first_parent_height_above_reorg_limit);
+
+        // Create the first part of the chain - until height_below_reorg_limit.
+        let parent_below_reorg_limit_id = if parent_height_below_reorg_limit != 0 {
+            tf.create_chain(&genesis_id, parent_height_below_reorg_limit, &mut rng).unwrap()
+        } else {
+            genesis_id
+        };
+        // Sanity check
+        assert_eq!(
+            tf.best_block_height(),
+            BlockHeight::new(parent_height_below_reorg_limit as u64)
+        );
+
+        let assert_empty_tx_error = |err: &ChainstateError| {
+            assert_matches!(
+                err,
+                ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                    CheckBlockError::CheckTransactionFailed(
+                        CheckBlockTransactionsError::CheckTransactionError(
+                            CheckTransactionError::EmptyInputsInTransaction(_)
+                        )
+                    )
+                ))
+            );
+        };
+
+        // Create a bad block at a height that will become below the reorg limit.
+        let bad_block_below_reorg_limit =
+            build_block_with_empty_tx(&mut rng, &mut tf, &parent_below_reorg_limit_id);
+        let bad_block_below_reorg_limit_id = bad_block_below_reorg_limit.get_id();
+        let err = tf
+            .process_block(bad_block_below_reorg_limit.clone(), BlockSource::Local)
+            .unwrap_err();
+        assert_empty_tx_error(&err);
+        // Sanity check
+        {
+            let status = get_block_status(&tf, &bad_block_below_reorg_limit_id);
+            assert!(!status.is_ok());
+        }
+
+        // Now create a good block at a height that will become below the reorg limit.
+        // We want it to be on a stale chain, so that its BlockValidationStage is not FullyChecked.
+
+        // So first we extend the mainchain.
+        let latest_mainchain_block_id =
+            tf.create_chain(&parent_below_reorg_limit_id, 1, &mut rng).unwrap();
+
+        // And now we can create the good stale block
+        let good_block_below_reorg_limit_id =
+            tf.create_chain(&parent_below_reorg_limit_id, 1, &mut rng).unwrap();
+        let good_block_below_reorg_limit_id =
+            tf.to_chain_block_id(&good_block_below_reorg_limit_id);
+        let good_block_below_reorg_limit = tf.block(good_block_below_reorg_limit_id);
+        // Some sanity checks
+        {
+            assert_eq!(tf.best_block_id(), latest_mainchain_block_id);
+
+            let status = tf.block_index(&good_block_below_reorg_limit_id).status();
+            assert!(status.is_ok());
+            assert_eq!(
+                status.last_valid_stage(),
+                BlockValidationStage::CheckBlockOk
+            );
+        }
+
+        // Create the rest of the chain
+        let latest_mainchain_block_id = tf
+            .create_chain(
+                &latest_mainchain_block_id,
+                // -1 because we've created an extra block above.
+                chain_len - parent_height_below_reorg_limit - 1,
+                &mut rng,
+            )
+            .unwrap();
+        // Sanity check
+        assert_eq!(tf.best_block_height(), BlockHeight::new(chain_len as u64));
+
+        // Expected error when adding a child on top of parent_below_reorg_limit.
+        let block_reorg_limit_error = ChainstateError::ProcessBlockError(
+            BlockError::CheckBlockFailed(CheckBlockError::AttemptedToAddBlockBeforeReorgLimit {
+                common_ancestor_height: BlockHeight::new(parent_height_below_reorg_limit as u64),
+                tip_block_height: BlockHeight::new(chain_len as u64),
+                min_allowed_height: BlockHeight::new(first_parent_height_above_reorg_limit as u64),
+            }),
+        );
+
+        // Sanity checks - parent_below_reorg_limit is indeed below the reorg limit,
+        // and first_parent_height_above_reorg_limit is above it
+        {
+            let err = tf.create_chain(&parent_below_reorg_limit_id, 1, &mut rng).unwrap_err();
+            assert_eq!(err, block_reorg_limit_error);
+
+            let first_parent_above_reorg_limit_id =
+                tf.block_id(first_parent_height_above_reorg_limit as u64);
+            tf.create_chain(&first_parent_above_reorg_limit_id, 1, &mut rng).unwrap();
+        }
+
+        // Note: the height is below the tip height, since we want to get a child of this block.
+        let parent_height_above_reorg_limit =
+            rng.gen_range(first_parent_height_above_reorg_limit..chain_len);
+        let parent_above_reorg_limit_id = tf.block_id(parent_height_above_reorg_limit as u64);
+
+        // Create a bad block at a height above the reorg limit.
+        let bad_block_above_reorg_limit =
+            build_block_with_empty_tx(&mut rng, &mut tf, &parent_above_reorg_limit_id);
+        let bad_block_above_reorg_limit_id = bad_block_above_reorg_limit.get_id();
+        let err = tf
+            .process_block(bad_block_above_reorg_limit.clone(), BlockSource::Local)
+            .unwrap_err();
+        assert_empty_tx_error(&err);
+        // Sanity check
+        {
+            let status = get_block_status(&tf, &bad_block_above_reorg_limit_id);
+            assert!(!status.is_ok());
+        }
+
+        // Create a good block at a height above the reorg limit.
+        let good_block_above_reorg_limit_id =
+            tf.create_chain(&parent_above_reorg_limit_id, 1, &mut rng).unwrap();
+        let good_block_above_reorg_limit_id =
+            tf.to_chain_block_id(&good_block_above_reorg_limit_id);
+        let good_block_above_reorg_limit = tf.block(good_block_above_reorg_limit_id);
+        // Some sanity checks
+        {
+            assert_eq!(tf.best_block_id(), latest_mainchain_block_id);
+
+            let status = tf.block_index(&good_block_above_reorg_limit_id).status();
+            assert!(status.is_ok());
+            assert_eq!(
+                status.last_valid_stage(),
+                BlockValidationStage::CheckBlockOk
+            );
+        }
+
+        // Currently our good blocks are at the CheckBlockOk validation stage.
+        // Optionally, force set it to FullyChecked, the expected results remain the same.
+        if rng.gen_bool(0.5) {
+            log::debug!("Resetting good block statuses to fully checked");
+
+            tf.set_block_status(
+                &good_block_below_reorg_limit_id,
+                BlockStatus::new_fully_checked(),
+            );
+            tf.set_block_status(
+                &good_block_above_reorg_limit_id,
+                BlockStatus::new_fully_checked(),
+            );
+        }
+
+        // Now we can actually do the checks
+
+        // Good block below the reorg limit
+        tf.chainstate
+            .preliminary_headers_check(std::slice::from_ref(good_block_below_reorg_limit.header()))
+            .unwrap();
+        let _: Block = tf.chainstate.preliminary_block_check(good_block_below_reorg_limit).unwrap();
+
+        // Good block above the reorg limit
+        tf.chainstate
+            .preliminary_headers_check(std::slice::from_ref(good_block_above_reorg_limit.header()))
+            .unwrap();
+        let _: Block = tf.chainstate.preliminary_block_check(good_block_above_reorg_limit).unwrap();
+
+        // Bad block below the reorg limit
+        let err = tf
+            .chainstate
+            .preliminary_headers_check(std::slice::from_ref(bad_block_below_reorg_limit.header()))
+            .unwrap_err();
+        assert_eq!(
+            err,
+            ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                CheckBlockError::InvalidBlockAlreadyProcessed(bad_block_below_reorg_limit_id)
+            ))
+        );
+        let err = tf
+            .chainstate
+            .preliminary_block_check(bad_block_below_reorg_limit.clone())
+            .unwrap_err();
+        assert_eq!(
+            err,
+            ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                CheckBlockError::InvalidBlockAlreadyProcessed(bad_block_below_reorg_limit_id)
+            ))
+        );
+
+        // Bad block above the reorg limit
+        let err = tf
+            .chainstate
+            .preliminary_headers_check(std::slice::from_ref(bad_block_above_reorg_limit.header()))
+            .unwrap_err();
+        assert_eq!(
+            err,
+            ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                CheckBlockError::InvalidBlockAlreadyProcessed(bad_block_above_reorg_limit_id)
+            ))
+        );
+        let err = tf
+            .chainstate
+            .preliminary_block_check(bad_block_above_reorg_limit.clone())
+            .unwrap_err();
+        assert_eq!(
+            err,
+            ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                CheckBlockError::InvalidBlockAlreadyProcessed(bad_block_above_reorg_limit_id)
+            ))
+        );
+
+        // Now reset the statuses of the bad blocks, so that they're now "ok" and "Unchecked".
+        // The preliminary_xxx_check functions should now do the actual check.
+
+        tf.set_block_status(&bad_block_below_reorg_limit_id, BlockStatus::new());
+        tf.set_block_status(&bad_block_above_reorg_limit_id, BlockStatus::new());
+
+        // Bad block below the reorg limit - this now produces the error about reorg limit violation.
+        let err = tf
+            .chainstate
+            .preliminary_headers_check(std::slice::from_ref(bad_block_below_reorg_limit.header()))
+            .unwrap_err();
+        assert_eq!(err, block_reorg_limit_error);
+        let err = tf.chainstate.preliminary_block_check(bad_block_below_reorg_limit).unwrap_err();
+        assert_eq!(err, block_reorg_limit_error);
+
+        // Bad block above the reorg limit - here preliminary_headers_check will succeed (because
+        // there is nothing wrong at the header level), and preliminary_block_check will fail
+        // with the error about block's empty tx.
+        tf.chainstate
+            .preliminary_headers_check(std::slice::from_ref(bad_block_above_reorg_limit.header()))
+            .unwrap();
+        assert_eq!(err, block_reorg_limit_error);
+        let err = tf.chainstate.preliminary_block_check(bad_block_above_reorg_limit).unwrap_err();
+        assert_empty_tx_error(&err);
     });
 }

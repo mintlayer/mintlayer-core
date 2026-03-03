@@ -23,6 +23,8 @@ probabilistic-collections.workspace = true
 qrcodegen.workspace = true
 slave-pool.workspace = true
 thiserror.workspace = true
+tokio = { workspace = true, default-features = false, features = ["macros", "rt", "sync", "tracing"] }
+tracing.workspace = true
 zeroize.workspace = true
 
 [dev-dependencies]
@@ -33,11 +35,12 @@ regex.workspace = true
 rstest.workspace = true
 static_assertions.workspace = true
 tempfile.workspace = true
-tracing.workspace = true
-tokio = { workspace = true, features = ["macros"] }
 
 [target.'cfg(loom)'.dependencies]
 loom.workspace = true
+
+[features]
+tokio-console = []
 
 [[bench]]
 name = "benches"

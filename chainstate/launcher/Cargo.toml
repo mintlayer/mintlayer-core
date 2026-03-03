@@ -15,3 +15,5 @@ storage-inmemory = { path = "../../storage/inmemory" }
 storage-lmdb = { path = "../../storage/lmdb" }
 subsystem = { path = "../../subsystem" }
 utils = { path = "../../utils" }
+
+tokio.workspace = true

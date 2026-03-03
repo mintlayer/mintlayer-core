@@ -61,13 +61,19 @@ impl From<&AccountCommand> for AccountType {
     }
 }
 
-impl From<OrderAccountCommand> for AccountType {
-    fn from(cmd: OrderAccountCommand) -> Self {
-        match cmd {
+impl OrderAccountCommand {
+    pub fn order_id(&self) -> &OrderId {
+        match self {
             OrderAccountCommand::FillOrder(order_id, _)
             | OrderAccountCommand::FreezeOrder(order_id)
-            | OrderAccountCommand::ConcludeOrder(order_id) => AccountType::Order(order_id),
+            | OrderAccountCommand::ConcludeOrder(order_id) => order_id,
         }
+    }
+}
+
+impl From<OrderAccountCommand> for AccountType {
+    fn from(cmd: OrderAccountCommand) -> Self {
+        AccountType::Order(*cmd.order_id())
     }
 }
 
@@ -85,7 +91,9 @@ impl From<OrderAccountCommand> for AccountType {
     Decode,
     serde::Serialize,
     serde::Deserialize,
+    strum::EnumDiscriminants,
 )]
+#[strum_discriminants(name(AccountSpendingTag), derive(strum::EnumIter))]
 pub enum AccountSpending {
     #[codec(index = 0)]
     DelegationBalance(DelegationId, Amount),
@@ -104,7 +112,9 @@ pub enum AccountSpending {
     Decode,
     serde::Serialize,
     serde::Deserialize,
+    strum::EnumDiscriminants,
 )]
+#[strum_discriminants(name(AccountCommandTag), derive(strum::EnumIter))]
 pub enum AccountCommand {
     // Create certain amount of tokens and add them to circulating supply
     #[codec(index = 0)]
@@ -203,7 +213,9 @@ impl AccountOutPoint {
     Decode,
     serde::Serialize,
     serde::Deserialize,
+    strum::EnumDiscriminants,
 )]
+#[strum_discriminants(name(OrderAccountCommandTag), derive(strum::EnumIter))]
 pub enum OrderAccountCommand {
     // Satisfy an order completely or partially.
     // The second element is the fill amount in the order's "ask" currency.

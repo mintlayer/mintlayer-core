@@ -13,28 +13,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
-use crate::tests::EventList;
-use chainstate::BlockError;
-use chainstate::BlockSource;
-use chainstate::ChainstateError;
-use chainstate::ChainstateEvent;
-use chainstate::ConnectTransactionError;
-use chainstate_test_framework::TestFramework;
-use common::chain::Block;
-use common::chain::GenBlock;
-use common::chain::Transaction;
-use common::chain::UtxoOutPoint;
-use common::primitives::BlockHeight;
-use common::primitives::Id;
-use common::primitives::Idable;
-use randomness::CryptoRng;
-use randomness::Rng;
 use rstest::rstest;
-use test_utils::random::make_seedable_rng;
-use test_utils::random::Seed;
+
+use chainstate::{
+    BlockError, BlockSource, ChainstateError, ChainstateEvent, ConnectTransactionError,
+};
+use chainstate_test_framework::TestFramework;
+use common::{
+    chain::{Block, GenBlock, Transaction, UtxoOutPoint},
+    primitives::{id::Idable, BlockHeight, Id},
+};
+use randomness::{CryptoRng, Rng};
+use test_utils::random::{make_seedable_rng, Seed};
+
+// TODO use EventList from helpers instead.
+type EventList = Arc<Mutex<Vec<(Id<GenBlock>, BlockHeight)>>>;
 
 // Produce `genesis -> a` chain, then a parallel `genesis -> b -> c` that should trigger a reorg.
 #[rstest]
@@ -397,8 +392,12 @@ fn subscribe_to_events(tf: &mut TestFramework, events: &EventList) {
     // Event handler
     let subscribe_func = Arc::new(
         move |chainstate_event: ChainstateEvent| match chainstate_event {
-            ChainstateEvent::NewTip(block_id, block_height) => {
-                events.lock().unwrap().push((block_id, block_height));
+            ChainstateEvent::NewTip {
+                id,
+                height,
+                is_initial_block_download: _,
+            } => {
+                events.lock().unwrap().push((id, height));
                 assert!(!events.lock().unwrap().is_empty());
             }
         },
@@ -440,7 +439,7 @@ fn check_block_at_height(
     expected_block_id: Option<&Id<Block>>,
 ) {
     if expected_block_id.is_some() {
-        let real_next_block_id = tf.chainstate.get_block_id_from_height(&block_height).unwrap();
+        let real_next_block_id = tf.chainstate.get_block_id_from_height(block_height).unwrap();
         let expected_block_id: Option<Id<GenBlock>> = expected_block_id.map(|id| (*id).into());
         assert_eq!(real_next_block_id, expected_block_id);
     }

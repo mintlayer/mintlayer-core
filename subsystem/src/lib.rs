@@ -37,9 +37,9 @@ mod calls;
 mod manager;
 mod subsystem;
 mod task;
-mod wrappers;
 
 pub mod error;
+pub mod wrappers;
 
 pub use crate::{
     calls::{blocking, CallResponse, CallResult, Handle, SubmitOnlyHandle},

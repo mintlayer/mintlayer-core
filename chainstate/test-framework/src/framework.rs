@@ -225,55 +225,52 @@ impl TestFramework {
     /// Create and process a given amount of blocks. Return the ids of the produced blocks.
     ///
     /// Each block contains a single transaction that spends a random amount from the previous
-    /// block outputs.
+    /// block outputs. The blocks will have identical timestamps.
     pub fn create_chain_return_ids(
         &mut self,
         parent_block: &Id<GenBlock>,
         blocks_count: usize,
         rng: &mut (impl Rng + CryptoRng),
     ) -> Result<Vec<Id<GenBlock>>, ChainstateError> {
-        let mut prev_block_id = *parent_block;
-        let result = || -> Result<Vec<Id<GenBlock>>, ChainstateError> {
-            let mut ids = Vec::with_capacity(blocks_count);
-            for _ in 0..blocks_count {
-                let block = self
-                    .make_block_builder()
-                    .add_test_transaction_with_parent(prev_block_id, rng)
-                    .with_parent(prev_block_id)
-                    .build(&mut *rng);
-                prev_block_id = block.get_id().into();
-                ids.push(prev_block_id);
-                self.do_process_block(block, BlockSource::Local)?;
-            }
-
-            Ok(ids)
-        }();
-
-        self.refresh_block_indices()?;
-        result
+        self.create_chain_return_ids_impl(parent_block, blocks_count, false, rng)
     }
 
     /// Create and process a given amount of blocks. Return the ids of the produced blocks.
     ///
     /// Each block contains a single transaction that spends a random amount from the previous
-    /// block outputs. Each block has an incremented timestamp
-    pub fn create_chain_return_ids_with_advancing_time(
+    /// block outputs. The blocks will have increasing timestamps.
+    pub fn create_chain_advancing_time_return_ids(
         &mut self,
         parent_block: &Id<GenBlock>,
         blocks_count: usize,
         rng: &mut (impl Rng + CryptoRng),
     ) -> Result<Vec<Id<GenBlock>>, ChainstateError> {
+        self.create_chain_return_ids_impl(parent_block, blocks_count, true, rng)
+    }
+
+    fn create_chain_return_ids_impl(
+        &mut self,
+        parent_block: &Id<GenBlock>,
+        blocks_count: usize,
+        advance_time: bool,
+        rng: &mut (impl Rng + CryptoRng),
+    ) -> Result<Vec<Id<GenBlock>>, ChainstateError> {
+        let target_block_time = self.chain_config().target_block_spacing();
+
         let mut prev_block_id = *parent_block;
         let result = || -> Result<Vec<Id<GenBlock>>, ChainstateError> {
             let mut ids = Vec::with_capacity(blocks_count);
-            let target_block_time = self.chain_config().target_block_spacing();
             for _ in 0..blocks_count {
-                self.progress_time_seconds_since_epoch(target_block_time.as_secs());
+                if advance_time {
+                    let seconds = rng.gen_range(1..target_block_time.as_secs() * 2);
+                    self.progress_time_seconds_since_epoch(seconds);
+                }
+
                 let block = self
                     .make_block_builder()
                     .add_test_transaction_with_parent(prev_block_id, rng)
                     .with_parent(prev_block_id)
-                    .build(rng);
+                    .build(&mut *rng);
                 prev_block_id = block.get_id().into();
                 ids.push(prev_block_id);
                 self.do_process_block(block, BlockSource::Local)?;
@@ -296,6 +293,12 @@ impl TestFramework {
         Ok(*self.create_chain_return_ids(parent_block, blocks_count, rng)?.last().unwrap())
     }
 
+    /// Create the given number of blocks via PoS.
+    ///
+    /// After each block the current time will be advanced by a "target_block_spacing" seconds
+    /// exactly.
+    /// Note: if all blocks have "target_block_spacing" seconds between them, their targets
+    /// will be identical.
     pub fn create_chain_pos(
         &mut self,
         rng: &mut (impl Rng + CryptoRng),
@@ -304,6 +307,52 @@ impl TestFramework {
         staking_pool: PoolId,
         staking_sk: &PrivateKey,
         staking_vrf_sk: &VRFPrivateKey,
+    ) -> Result<Id<GenBlock>, ChainstateError> {
+        self.create_chain_pos_impl(
+            rng,
+            parent_block,
+            blocks,
+            staking_pool,
+            staking_sk,
+            staking_vrf_sk,
+            false,
+        )
+    }
+
+    /// Create the given number of blocks via PoS.
+    ///
+    /// After each block the current time will be advanced by a random number of seconds
+    /// based on "target_block_spacing".
+    pub fn create_chain_pos_randomizing_time(
+        &mut self,
+        rng: &mut (impl Rng + CryptoRng),
+        parent_block: &Id<GenBlock>,
+        blocks: usize,
+        staking_pool: PoolId,
+        staking_sk: &PrivateKey,
+        staking_vrf_sk: &VRFPrivateKey,
+    ) -> Result<Id<GenBlock>, ChainstateError> {
+        self.create_chain_pos_impl(
+            rng,
+            parent_block,
+            blocks,
+            staking_pool,
+            staking_sk,
+            staking_vrf_sk,
+            true,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn create_chain_pos_impl(
+        &mut self,
+        rng: &mut (impl Rng + CryptoRng),
+        parent_block: &Id<GenBlock>,
+        blocks: usize,
+        staking_pool: PoolId,
+        staking_sk: &PrivateKey,
+        staking_vrf_sk: &VRFPrivateKey,
+        randomize_timediffs: bool,
     ) -> Result<Id<GenBlock>, ChainstateError> {
         let mut prev_block_id = *parent_block;
         let result = || -> Result<Id<GenBlock>, ChainstateError> {
@@ -314,6 +363,7 @@ impl TestFramework {
                     .with_stake_pool_id(staking_pool)
                     .with_stake_spending_key(staking_sk.clone())
                     .with_vrf_key(staking_vrf_sk.clone())
+                    .with_randomized_timediffs(randomize_timediffs)
                     .build(&mut *rng);
                 prev_block_id = block.get_id().into();
                 self.do_process_block(block, BlockSource::Local)?;
@@ -380,7 +430,7 @@ impl TestFramework {
     #[track_caller]
     pub fn block_id(&self, height: u64) -> Id<GenBlock> {
         self.chainstate
-            .get_block_id_from_height(&BlockHeight::from(height))
+            .get_block_id_from_height(BlockHeight::from(height))
             .unwrap()
             .unwrap()
     }
@@ -395,7 +445,7 @@ impl TestFramework {
                 outputs_from_genesis(self.chainstate.get_chain_config().genesis_block())
             }
             GenBlockId::Block(id) => {
-                outputs_from_block(&self.chainstate.get_block(id).unwrap().unwrap())
+                outputs_from_block(&self.chainstate.get_block(&id).unwrap().unwrap())
             }
         }
     }
@@ -404,7 +454,7 @@ impl TestFramework {
     #[track_caller]
     pub fn block_opt(&self, id: Id<Block>) -> Option<Block> {
         self.check_block_index_consistency(&id.into());
-        self.chainstate.get_block(id).unwrap()
+        self.chainstate.get_block(&id).unwrap()
     }
 
     /// Return a block given an id. Perform consistency checks.
@@ -452,10 +502,10 @@ impl TestFramework {
                         persisted_block_index_opt.as_ref(),
                         any_block_index_opt.as_ref(),
                     );
-                    assert!(self.chainstate.get_block(*id).unwrap().is_some());
+                    assert!(self.chainstate.get_block(id).unwrap().is_some());
                 } else {
                     assert_block_index_opt_identical_to(persisted_block_index_opt.as_ref(), None);
-                    assert!(self.chainstate.get_block(*id).unwrap().is_none());
+                    assert!(self.chainstate.get_block(id).unwrap().is_none());
                 }
 
                 let any_gen_block_index_opt2 =
@@ -543,8 +593,8 @@ impl TestFramework {
     pub fn purge_block(&mut self, block_id: &Id<Block>) {
         let mut tx_rw = self.storage.transaction_rw(None).unwrap();
 
-        tx_rw.del_block(*block_id).unwrap();
-        tx_rw.del_block_index(*block_id).unwrap();
+        tx_rw.del_block(block_id).unwrap();
+        tx_rw.del_block_index(block_id).unwrap();
         tx_rw.commit().unwrap();
     }
 

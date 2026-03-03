@@ -19,24 +19,35 @@ use std::{
     ffi::OsString,
     net::{IpAddr, SocketAddr},
     num::NonZeroU64,
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 
-use clap::{Args, Parser, Subcommand};
+use clap::{Args, CommandFactory, FromArgMatches, Parser, Subcommand};
 
 use chainstate_launcher::ChainConfig;
-use common::chain::config::{
-    regtest_options::{regtest_chain_config, ChainConfigOptions},
-    ChainType,
+use common::chain::{
+    self,
+    config::{
+        regtest_options::{regtest_chain_config_builder, ChainConfigOptions},
+        ChainType,
+    },
 };
 use utils::{
-    clap_utils, default_data_dir::default_data_dir_common, root_user::ForceRunAsRootOptions,
+    clap_utils, default_data_dir::default_data_dir_for_chain, root_user::ForceRunAsRootOptions,
 };
 use utils_networking::IpOrSocketAddress;
 
-use crate::config_files::{NodeTypeConfigFile, StorageBackendConfigFile};
+use crate::{
+    checkpoints_from_file::read_checkpoints_from_csv_file,
+    config_files::{NodeTypeConfigFile, StorageBackendConfigFile},
+    NodeType,
+};
 
 const CONFIG_NAME: &str = "config.toml";
+
+pub const CLEAN_DATA_OPTION_LONG_NAME: &str = "clean-data";
+pub const IMPORT_BOOTSTRAP_FILE_OPTION_LONG_NAME: &str = "import-bootstrap-file";
+pub const IMPORT_BOOTSTRAP_FILE_OPTION_ID: &str = "import_bootstrap_file";
 
 /// Mintlayer node executable
 // Note: this struct is shared between different node executables, namely, node-daemon and node-gui,
@@ -54,8 +65,26 @@ pub struct Options {
 
 impl Options {
     /// Constructs an instance by parsing the given arguments.
-    pub fn from_args<A: Into<OsString> + Clone>(args: impl IntoIterator<Item = A>) -> Self {
-        Parser::parse_from(args)
+    pub fn from_args<A: Into<OsString> + Clone>(
+        args: impl IntoIterator<Item = A>,
+        node_type: NodeType,
+    ) -> Self {
+        // Here we do the same that `Parser::parse_from` does, but also hide the bootstrapping
+        // option for node-gui.
+
+        let mut cmd = <Self as CommandFactory>::command();
+
+        match node_type {
+            NodeType::NodeDaemon => {}
+            NodeType::NodeGui => {
+                cmd = cmd.mut_arg(IMPORT_BOOTSTRAP_FILE_OPTION_ID, |arg| arg.hide(true));
+            }
+        }
+
+        let mut matches = cmd.try_get_matches_from_mut(args).unwrap_or_else(|err| err.exit());
+
+        <Self as FromArgMatches>::from_arg_matches_mut(&mut matches)
+            .unwrap_or_else(|err| err.format(&mut cmd).exit())
     }
 
     /// Returns a different representation of `self`, where `command` is no longer optional.
@@ -76,7 +105,7 @@ pub struct OptionsWithResolvedCommand {
 
 impl OptionsWithResolvedCommand {
     pub fn clean_data_option_set(&self) -> bool {
-        self.command.run_options().clean_data.unwrap_or(false)
+        self.top_level.clean_data
     }
 
     pub fn log_to_file_option_set(&self) -> bool {
@@ -106,6 +135,25 @@ pub struct TopLevelOptions {
     /// By default, the option is enabled for node-gui and disabled for node-daemon.
     #[clap(long, action = clap::ArgAction::Set)]
     pub log_to_file: Option<bool>,
+
+    /// If specified, the application will clean the data directory and exit immediately.
+    #[clap(
+        long = CLEAN_DATA_OPTION_LONG_NAME,
+        short,
+        action = clap::ArgAction::SetTrue,
+        default_value_t = false
+    )]
+    pub clean_data: bool,
+
+    /// Start the node with networking disabled, import blocks from the specified bootstrap file
+    /// and exit.
+    #[clap(
+        long = IMPORT_BOOTSTRAP_FILE_OPTION_LONG_NAME,
+        id = IMPORT_BOOTSTRAP_FILE_OPTION_ID,
+        value_name = "FILE",
+        conflicts_with("clean_data")
+    )]
+    pub import_bootstrap_file: Option<PathBuf>,
 }
 
 impl TopLevelOptions {
@@ -147,15 +195,25 @@ impl Command {
     }
 
     pub fn create_chain_config(&self) -> anyhow::Result<ChainConfig> {
-        let chain_config = match self {
-            Command::Mainnet(_) => common::chain::config::create_mainnet(),
-            Command::Testnet(_) => common::chain::config::create_testnet(),
-            Command::Regtest(regtest_options) => {
-                regtest_chain_config(&regtest_options.chain_config)?
+        let (mut chain_config_builder, run_options) = match self {
+            Command::Mainnet(run_options) => {
+                (chain::config::Builder::new(ChainType::Mainnet), run_options)
             }
+            Command::Testnet(run_options) => {
+                (chain::config::Builder::new(ChainType::Testnet), run_options)
+            }
+            Command::Regtest(regtest_options) => (
+                regtest_chain_config_builder(&regtest_options.chain_config)?,
+                &regtest_options.run_options,
+            ),
         };
 
-        Ok(chain_config)
+        if let Some(csv_file) = &run_options.custom_checkpoints_csv_file {
+            let checkpoints = read_checkpoints_from_csv_file(Path::new(csv_file))?;
+            chain_config_builder = chain_config_builder.checkpoints(checkpoints);
+        }
+
+        Ok(chain_config_builder.build())
     }
 
     pub fn chain_type(&self) -> ChainType {
@@ -177,10 +235,6 @@ pub struct RegtestOptions {
 
 #[derive(Args, Clone, Debug, Default)]
 pub struct RunOptions {
-    /// If specified, the application will clean the data directory and exit immediately.
-    #[clap(long, short, action = clap::ArgAction::SetTrue)]
-    pub clean_data: Option<bool>,
-
     /// Minimum number of connected peers to enable block production.
     #[clap(long, value_name = "COUNT")]
     pub blockprod_min_peers_to_produce_blocks: Option<usize>,
@@ -222,6 +276,22 @@ pub struct RunOptions {
     /// The number of maximum attempts to process a block.
     #[clap(long, value_name = "COUNT")]
     pub max_db_commit_attempts: Option<usize>,
+
+    /// Whether to switch to the "reckless" mode during the initial block download or bootstrapping.
+    ///
+    /// In the "reckless" mode the chainstate db contents is not synced to disk on each commit, which
+    /// increases performance at the cost of potential db corruption on a system crash.
+    ///
+    /// Once the initial block download or bootstrapping is complete, the node will automatically
+    /// switch to the normal mode of operation.
+    ///
+    /// Note: if a system crash does occur during syncing in the reckless mode and the chainstate
+    /// db gets corrupted, you will need to delete it manually and re-sync again.
+    /// Additionally, the corruption may not be detectable by the db engine, in which case you'll
+    /// end up having a malfunctioning node. Therefore, if you are using the reckless mode and
+    /// the system crashes in the process, always delete the db and re-sync, just in case.
+    #[clap(long, action = clap::ArgAction::SetTrue)]
+    pub enable_db_reckless_mode_in_ibd: Option<bool>,
 
     /// The maximum capacity of the orphan blocks pool in blocks.
     #[clap(long, value_name = "COUNT")]
@@ -302,6 +372,10 @@ pub struct RunOptions {
     #[arg(hide = true)]
     pub p2p_force_dns_query_if_no_global_addresses_known: Option<bool>,
 
+    /// If specified, this text will be sent to banned peers as part of the DisconnectionReason.
+    #[clap(long, hide = true)]
+    pub p2p_custom_disconnection_reason_for_banning: Option<String>,
+
     /// A maximum tip age in seconds.
     ///
     /// The initial block download is finished if the difference between the current time and the
@@ -343,8 +417,141 @@ pub struct RunOptions {
     /// Defaults to true for regtest and false in other cases.
     #[clap(long, value_name = "VAL")]
     pub enable_chainstate_heavy_checks: Option<bool>,
+
+    /// If true, blocks and block headers will not be rejected if checkpoints mismatch is detected.
+    #[clap(long, action = clap::ArgAction::SetTrue, hide = true)]
+    pub allow_checkpoints_mismatch: Option<bool>,
+
+    /// Path to a CSV file with custom checkpoints that must be used instead of the predefined ones.
+    #[clap(long, hide = true)]
+    pub custom_checkpoints_csv_file: Option<PathBuf>,
 }
 
 pub fn default_data_dir(chain_type: ChainType) -> PathBuf {
-    default_data_dir_common().join(chain_type.name())
+    default_data_dir_for_chain(chain_type.name())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{collections::BTreeMap, str::FromStr as _};
+
+    use rstest::rstest;
+
+    use common::{
+        chain::config::Checkpoints,
+        primitives::{BlockHeight, Id, Idable as _, H256},
+    };
+    use utils::concatln;
+
+    use super::*;
+
+    #[rstest]
+    fn checkpoints_from_csv(
+        #[values(ChainType::Mainnet, ChainType::Testnet, ChainType::Regtest)] chain_type: ChainType,
+    ) {
+        let (genesis_id, default_checkpoints) = {
+            let default_chain_config = chain::config::Builder::new(chain_type).build();
+
+            (
+                default_chain_config.genesis_block().get_id(),
+                default_chain_config.height_checkpoints().clone(),
+            )
+        };
+
+        let make_run_options = |custom_checkpoints_csv_file: Option<PathBuf>| RunOptions {
+            blockprod_min_peers_to_produce_blocks: Default::default(),
+            blockprod_skip_ibd_check: Default::default(),
+            blockprod_use_current_time_if_non_pos: Default::default(),
+            storage_backend: Default::default(),
+            node_type: Default::default(),
+            mock_time: Default::default(),
+            max_db_commit_attempts: Default::default(),
+            enable_db_reckless_mode_in_ibd: Default::default(),
+            max_orphan_blocks: Default::default(),
+            p2p_networking_enabled: Default::default(),
+            p2p_bind_addresses: Default::default(),
+            p2p_socks5_proxy: Default::default(),
+            p2p_disable_noise: Default::default(),
+            p2p_boot_nodes: Default::default(),
+            p2p_reserved_nodes: Default::default(),
+            p2p_whitelist_addr: Default::default(),
+            p2p_max_inbound_connections: Default::default(),
+            p2p_discouragement_threshold: Default::default(),
+            p2p_discouragement_duration: Default::default(),
+            p2p_outbound_connection_timeout: Default::default(),
+            p2p_ping_check_period: Default::default(),
+            p2p_ping_timeout: Default::default(),
+            p2p_sync_stalling_timeout: Default::default(),
+            p2p_max_clock_diff: Default::default(),
+            p2p_force_dns_query_if_no_global_addresses_known: Default::default(),
+            p2p_custom_disconnection_reason_for_banning: Default::default(),
+            max_tip_age: Default::default(),
+            rpc_bind_address: Default::default(),
+            rpc_enabled: Default::default(),
+            rpc_username: Default::default(),
+            rpc_password: Default::default(),
+            rpc_cookie_file: Default::default(),
+            min_tx_relay_fee_rate: Default::default(),
+            force_allow_run_as_root_outer: Default::default(),
+            enable_chainstate_heavy_checks: Default::default(),
+            allow_checkpoints_mismatch: Default::default(),
+            custom_checkpoints_csv_file,
+        };
+        let make_cmd = |run_options| match chain_type {
+            ChainType::Mainnet => Command::Mainnet(run_options),
+            ChainType::Testnet => Command::Testnet(run_options),
+            ChainType::Regtest => Command::Regtest(Box::new(RegtestOptions {
+                run_options,
+                chain_config: Default::default(),
+            })),
+            ChainType::Signet => panic!("Signet is not among possible chain types for this test"),
+        };
+
+        // Loaded checkpoints
+        {
+            let mk_id = |id_str| Id::new(H256::from_str(id_str).unwrap());
+            let data = concatln!(
+                "111, AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                "222, BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+                "333, CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC"
+            );
+
+            let expected_loaded_checkpoints = Checkpoints::new(
+                BTreeMap::from([
+                    (
+                        BlockHeight::new(111),
+                        mk_id("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"),
+                    ),
+                    (
+                        BlockHeight::new(222),
+                        mk_id("BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"),
+                    ),
+                    (
+                        BlockHeight::new(333),
+                        mk_id("CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC"),
+                    ),
+                ]),
+                genesis_id,
+            )
+            .unwrap();
+
+            let temp_file = tempfile::NamedTempFile::new().unwrap();
+            std::fs::write(temp_file.path(), data.as_bytes()).unwrap();
+
+            let run_options = make_run_options(Some(temp_file.path().to_path_buf()));
+            let cmd = make_cmd(run_options);
+            let chain_config = cmd.create_chain_config().unwrap();
+            assert_eq!(
+                chain_config.height_checkpoints(),
+                &expected_loaded_checkpoints
+            );
+        }
+
+        // Default checkpoints
+        {
+            let cmd = make_cmd(make_run_options(None));
+            let chain_config = cmd.create_chain_config().unwrap();
+            assert_eq!(chain_config.height_checkpoints(), &default_checkpoints);
+        }
+    }
 }

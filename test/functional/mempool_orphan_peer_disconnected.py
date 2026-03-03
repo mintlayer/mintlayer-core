@@ -23,7 +23,6 @@ Check that:
 
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.mintlayer import (make_tx, reward_input, tx_input)
-import scalecodec
 
 class MempoolOrphanFromDisconnectedPeerTest(BitcoinTestFramework):
 

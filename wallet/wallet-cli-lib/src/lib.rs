@@ -300,6 +300,13 @@ fn setup_events_and_repl<N: NodeInterface + Send + Sync + 'static>(
                         device_id: None,
                     }
                 }
+                #[cfg(feature = "ledger")]
+                wallet_rpc_lib::cmdline::CliHardwareWalletType::Ledger => {
+                    OpenWalletSubCommand::Ledger {
+                        wallet_path,
+                        encryption_password: args.wallet_password,
+                    }
+                }
             },
         };
 

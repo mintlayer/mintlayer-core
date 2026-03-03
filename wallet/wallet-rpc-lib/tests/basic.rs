@@ -15,13 +15,11 @@
 
 mod utils;
 
-use logging::log;
-use rstest::*;
-
 use common::{
     chain::{Block, Transaction, UtxoOutPoint},
     primitives::{Amount, BlockHeight, Id},
 };
+use logging::log;
 use utils::{
     make_seedable_rng, ClientT, JsonValue, Seed, Subscription, SubscriptionClientT, ACCOUNT0_ARG,
     ACCOUNT1_ARG,
@@ -33,6 +31,9 @@ use wallet_rpc_lib::{
     },
     TxState,
 };
+
+use rstest::*;
+use tokio::time::{timeout, Duration};
 
 #[rstest]
 #[trace]
@@ -60,7 +61,8 @@ async fn startup_shutdown(#[case] seed: Seed) {
 enum EventInfo {
     TxUpdated { id: Id<Transaction>, state: TxState },
     TxDropped { id: Id<Transaction> },
-    RewardAdded {},
+    RewardAdded,
+    NewBlock,
 }
 
 impl EventInfo {
@@ -79,7 +81,8 @@ impl EventInfo {
                 let id = serde_json::from_value(obj["tx_id"].clone()).unwrap();
                 EventInfo::TxDropped { id }
             }
-            "RewardAdded" => Self::RewardAdded {},
+            "RewardAdded" => Self::RewardAdded,
+            "NewBlock" => Self::NewBlock,
             _ => panic!("Unrecognized event"),
         }
     }
@@ -88,7 +91,7 @@ impl EventInfo {
         match self {
             EventInfo::TxUpdated { id, state: _ } => *id,
             EventInfo::TxDropped { id } => *id,
-            EventInfo::RewardAdded {} => panic!("Not a transaction event"),
+            EventInfo::RewardAdded | EventInfo::NewBlock => panic!("Not a transaction event"),
         }
     }
 }
@@ -214,20 +217,24 @@ async fn stake_and_send_coins_to_acct1(#[case] seed: Seed) {
 
     // Start staking on account 0 to hopefully create a block that contains our transaction
     let _: () = wallet_rpc.request("staking_start", [ACCOUNT0_ARG]).await.unwrap();
-
     tokio::time::sleep(std::time::Duration::from_millis(300)).await;
-    let evt3 = EventInfo::from_json(wallet_events.next().await.unwrap().unwrap());
-    assert_eq!(evt3, EventInfo::RewardAdded {});
 
-    let evt4 = EventInfo::from_json(wallet_events.next().await.unwrap().unwrap());
-    assert!(matches!(
-        evt4,
-        EventInfo::TxUpdated {
-            state: TxState::Confirmed { .. },
-            id: _,
-        }
-    ));
-    assert_eq!(evt4.tx_id(), evt1.tx_id());
+    let events = collect_until_confirmed(&mut wallet_events, evt1.tx_id(), Duration::from_secs(10))
+        .await
+        .unwrap();
+
+    // Must have reward added
+    assert!(events.iter().any(|e| matches!(e, EventInfo::RewardAdded)));
+
+    // Tx must be confirmed
+    assert!(events.iter().any(|e| {
+        matches!(
+            e,
+            EventInfo::TxUpdated { id, state }
+                if *id == evt1.tx_id() &&
+                   matches!(state, TxState::Confirmed { .. })
+        )
+    }));
 
     std::mem::drop(wallet_rpc);
     tf.stop().await;
@@ -252,4 +259,38 @@ async fn no_hexified_destination(#[case] seed: Seed) {
     assert!(!utxos_string.contains("Hexified"));
 
     tf.stop().await;
+}
+
+async fn collect_until_confirmed(
+    wallet_events: &mut Subscription<JsonValue>,
+    expected_tx_id: Id<Transaction>,
+    max_wait: Duration,
+) -> anyhow::Result<Vec<EventInfo>> {
+    let mut events = Vec::new();
+
+    timeout(max_wait, async {
+        while let Some(raw_evt) = wallet_events.next().await {
+            let raw_evt = raw_evt?;
+            let evt = EventInfo::from_json(raw_evt);
+
+            // store it
+            events.push(evt.clone());
+
+            // stop condition
+            if matches!(
+                evt,
+                EventInfo::TxUpdated { id, state }
+                    if id == expected_tx_id &&
+                       matches!(state, TxState::Confirmed { .. })
+            ) {
+                break;
+            }
+        }
+
+        Ok::<_, anyhow::Error>(())
+    })
+    .await
+    .map_err(|_| anyhow::anyhow!("Timed out waiting for confirmed tx"))??;
+
+    Ok(events)
 }

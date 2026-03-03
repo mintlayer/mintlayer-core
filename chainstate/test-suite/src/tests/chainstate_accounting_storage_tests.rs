@@ -149,7 +149,7 @@ fn store_pool_data_and_balance(#[case] seed: Seed) {
         // utxo is stored
         db_tx.get_utxo(&tx_utxo_outpoint).expect("ok").expect("some");
         assert_eq!(
-            db_tx.get_undo_data(block_id).expect("ok").expect("some").tx_undos().len(),
+            db_tx.get_undo_data(&block_id).expect("ok").expect("some").tx_undos().len(),
             1
         );
 

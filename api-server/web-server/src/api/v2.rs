@@ -39,7 +39,8 @@ use common::{
     chain::{
         block::timestamp::BlockTimestamp,
         tokens::{IsTokenFreezable, IsTokenFrozen, IsTokenUnfreezable, TokenId},
-        Block, ChainConfig, Destination, SignedTransaction, Transaction,
+        Block, ChainConfig, Destination, OutPointSourceId, SignedTransaction, Transaction,
+        UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Id, Idable, H256},
 };
@@ -97,7 +98,8 @@ pub fn routes<
     let router = router
         .route("/transaction", get(transactions))
         .route("/transaction/:id", get(transaction))
-        .route("/transaction/:id/merkle-path", get(transaction_merkle_path));
+        .route("/transaction/:id/merkle-path", get(transaction_merkle_path))
+        .route("/transaction/:id/output/:idx", get(transaction_output));
 
     let router = router
         .route("/address/:address", get(address))
@@ -124,6 +126,7 @@ pub fn routes<
     let router = router
         .route("/token", get(token_ids))
         .route("/token/:id", get(token))
+        .route("/token/:id/transactions", get(token_transactions))
         .route("/token/ticker/:ticker", get(token_ids_by_ticker))
         .route("/nft/:id", get(nft));
 
@@ -507,7 +510,7 @@ pub async fn transactions<T: ApiServerStorage>(
                 &state.chain_config,
                 tip_height,
                 tx.block_aux,
-                tx.global_tx_index,
+                tx.tx_global_index,
             )
         })
         .collect();
@@ -555,6 +558,51 @@ pub async fn transaction<T: ApiServerStorage>(
     obj.insert(
         "confirmations".into(),
         confirmations.map_or("".to_string(), |c| c.to_string()).into(),
+    );
+
+    Ok(Json(json))
+}
+
+pub async fn transaction_output<T: ApiServerStorage>(
+    Path((transaction_id, output_idx)): Path<(String, u32)>,
+    State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
+) -> Result<impl IntoResponse, ApiServerWebServerError> {
+    let transaction_id: Id<Transaction> = H256::from_str(&transaction_id)
+        .map_err(|_| {
+            ApiServerWebServerError::ClientError(
+                ApiServerWebServerClientError::InvalidTransactionId,
+            )
+        })?
+        .into();
+
+    let outpoint = UtxoOutPoint::new(OutPointSourceId::Transaction(transaction_id), output_idx);
+
+    let db_tx = state.db.transaction_ro().await.map_err(|e| {
+        logging::log::error!("internal error: {e}");
+        ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+    })?;
+
+    let utxo = db_tx
+        .get_utxo(outpoint)
+        .await
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?
+        .ok_or(ApiServerWebServerError::NotFound(
+            ApiServerWebServerNotFoundError::TransactionOutputNotFound,
+        ))?;
+
+    let mut json = txoutput_to_json(
+        utxo.output(),
+        &state.chain_config,
+        &TokenDecimals::Single(utxo.utxo_with_extra_info().token_decimals),
+    );
+    let obj = json.as_object_mut().expect("object");
+
+    obj.insert(
+        "spent_at_block_height".into(),
+        utxo.spent_at_block_height().map(BlockHeight::into_int).into(),
     );
 
     Ok(Json(json))
@@ -1336,11 +1384,7 @@ pub async fn token_ids_by_ticker<T: ApiServerStorage>(
             logging::log::error!("internal error: {e}");
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?
-        .get_token_ids_by_ticker(
-            offset_and_items.items,
-            offset_and_items.offset,
-            ticker.as_bytes(),
-        )
+        .get_token_ids_by_ticker(offset_and_items.items, offset_and_items.offset, &ticker)
         .await
         .map_err(|e| {
             logging::log::error!("internal error: {e}");
@@ -1355,6 +1399,44 @@ pub async fn token_ids_by_ticker<T: ApiServerStorage>(
         .collect();
 
     Ok(Json(serde_json::Value::Array(token_ids)))
+}
+
+pub async fn token_transactions<T: ApiServerStorage>(
+    Path(token_id): Path<String>,
+    Query(params): Query<BTreeMap<String, String>>,
+    State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
+) -> Result<impl IntoResponse, ApiServerWebServerError> {
+    let token_id = Address::from_string(&state.chain_config, token_id)
+        .map_err(|_| {
+            ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidTokenId)
+        })?
+        .into_object();
+    let offset_and_items = get_offset_and_items(&params)?;
+
+    let db_tx = state.db.transaction_ro().await.map_err(|e| {
+        logging::log::error!("internal error: {e}");
+        ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+    })?;
+
+    let txs = db_tx
+        .get_token_transactions(token_id, offset_and_items.items, offset_and_items.offset)
+        .await
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?;
+
+    let txs = txs
+        .into_iter()
+        .map(|tx| {
+            json!({
+                "tx_global_index": tx.tx_global_index,
+                "tx_id": tx.tx_id,
+            })
+        })
+        .collect();
+
+    Ok(Json(serde_json::Value::Array(txs)))
 }
 
 async fn collect_currency_decimals_for_orders(

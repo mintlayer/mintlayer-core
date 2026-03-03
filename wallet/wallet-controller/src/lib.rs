@@ -32,6 +32,7 @@ use blockprod::BlockProductionError;
 use chainstate::tx_verifier::{
     self, error::ScriptError, input_check::signature_only_check::SignatureOnlyVerifiable,
 };
+use futures::StreamExt;
 use futures::{never::Never, stream::FuturesOrdered, TryStreamExt};
 use helpers::{
     fetch_input_infos, fetch_token_info, fetch_utxo, fetch_utxo_extra_info, into_balances,
@@ -52,6 +53,7 @@ use types::{
     SeedWithPassPhrase, SignatureStats, TransactionToInspect, ValidatedSignatures, WalletInfo,
     WalletTypeArgsComputed,
 };
+use utils::set_flag::SetFlag;
 use wallet_storage::DefaultBackend;
 
 use read::ReadOnlyController;
@@ -68,7 +70,7 @@ use common::{
             DestinationSigError, Transactable,
         },
         tokens::{RPCTokenInfo, TokenId},
-        Block, ChainConfig, Destination, GenBlock, PoolId, SighashInputCommitmentVersion,
+        Block, ChainConfig, Currency, Destination, GenBlock, PoolId, SighashInputCommitmentVersion,
         SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{
@@ -80,12 +82,16 @@ use consensus::{GenerateBlockInputData, PoSTimestampSearchInputData};
 use crypto::{ephemeral_e2e::EndToEndPrivateKey, key::hdkd::u31::U31};
 use logging::log;
 use mempool::tx_accumulator::PackingStrategy;
-pub use node_comm::node_traits::{ConnectedPeer, NodeInterface, PeerId};
+pub use node_comm::node_traits::{
+    ConnectedPeer, MempoolEvent, MempoolEvents, NodeInterface, PeerId,
+};
 pub use node_comm::{
     handles_client::WalletHandlesClient, make_cold_wallet_rpc_client, make_rpc_client,
     rpc_client::NodeRpcClient,
 };
 use randomness::{make_pseudo_rng, make_true_rng, Rng};
+#[cfg(feature = "ledger")]
+use wallet::signer::ledger_signer::LedgerSignerProvider;
 #[cfg(feature = "trezor")]
 use wallet::signer::trezor_signer::TrezorSignerProvider;
 #[cfg(feature = "trezor")]
@@ -111,15 +117,15 @@ use wallet_types::{
     hw_data::HardwareWalletFullInfo,
     partially_signed_transaction::{
         make_sighash_input_commitments, PartiallySignedTransaction,
-        PartiallySignedTransactionError, SighashInputCommitmentCreationError, TxAdditionalInfo,
+        PartiallySignedTransactionError, PartiallySignedTransactionWalletExt as _,
+        PtxAdditionalInfo, SighashInputCommitmentCreationError,
     },
     signature_status::SignatureStatus,
     wallet_type::{WalletControllerMode, WalletType},
     with_locked::WithLocked,
-    Currency,
 };
 
-#[cfg(feature = "trezor")]
+#[cfg(any(feature = "trezor", feature = "ledger"))]
 use crate::types::WalletExtraInfo;
 
 // Note: the standard `Debug` macro is not smart enough and requires N to implement the `Debug`
@@ -202,6 +208,9 @@ pub struct Controller<T, W, B: storage::Backend + 'static> {
     staking_started: BTreeSet<U31>,
 
     wallet_events: W,
+
+    mempool_events: MempoolEvents,
+    finished_initial_sync: SetFlag,
 }
 
 impl<T, WalletEvents, B: storage::Backend> std::fmt::Debug for Controller<T, WalletEvents, B> {
@@ -219,7 +228,7 @@ impl<N, W, B> Controller<N, W, B>
 where
     N: NodeInterface + Clone + Send + Sync + 'static,
     W: WalletEvents,
-    B: storage::Backend + 'static,
+    B: storage::BackendWithSendableTransactions + 'static,
 {
     pub async fn new(
         chain_config: Arc<ChainConfig>,
@@ -227,12 +236,18 @@ where
         wallet: RuntimeWallet<B>,
         wallet_events: W,
     ) -> Result<Self, ControllerError<N>> {
+        let mempool_events = rpc_client
+            .mempool_subscribe_to_events()
+            .await
+            .map_err(ControllerError::NodeCallError)?;
         let mut controller = Self {
             chain_config,
             rpc_client,
             wallet,
             staking_started: BTreeSet::new(),
             wallet_events,
+            mempool_events,
+            finished_initial_sync: SetFlag::new(),
         };
 
         log::info!("Syncing the wallet...");
@@ -241,22 +256,28 @@ where
         Ok(controller)
     }
 
-    pub fn new_unsynced(
+    pub async fn new_unsynced(
         chain_config: Arc<ChainConfig>,
         rpc_client: N,
         wallet: RuntimeWallet<B>,
         wallet_events: W,
-    ) -> Self {
-        Self {
+    ) -> Result<Self, ControllerError<N>> {
+        let mempool_events = rpc_client
+            .mempool_subscribe_to_events()
+            .await
+            .map_err(ControllerError::NodeCallError)?;
+        Ok(Self {
             chain_config,
             rpc_client,
             wallet,
             staking_started: BTreeSet::new(),
             wallet_events,
-        }
+            mempool_events,
+            finished_initial_sync: SetFlag::new(),
+        })
     }
 
-    pub fn create_wallet(
+    pub async fn create_wallet(
         chain_config: Arc<ChainConfig>,
         file_path: impl AsRef<Path>,
         args: WalletTypeArgsComputed,
@@ -287,16 +308,18 @@ where
                     db,
                     best_block,
                     wallet_type,
-                    |db_tx| {
-                        Ok(SoftwareSignerProvider::new_from_mnemonic(
+                    async |db_tx| {
+                        SoftwareSignerProvider::new_from_mnemonic(
                             chain_config.clone(),
                             db_tx,
                             &mnemonic.to_string(),
                             passphrase_ref,
                             store_seed_phrase,
-                        )?)
+                        )
+                        .map_err(Into::into)
                     },
                 )
+                .await
                 .map_err(ControllerError::WalletError)
                 .map(|w| w.map_wallet(RuntimeWallet::Software))
             }
@@ -306,22 +329,35 @@ where
                 db,
                 best_block,
                 wallet_type,
-                |_db_tx| {
-                    Ok(TrezorSignerProvider::new(
+                async |_db_tx| {
+                    TrezorSignerProvider::new(
                         device_id.map(|device_id| SelectedDevice { device_id }),
                     )
-                    .map_err(SignerError::TrezorError)?)
+                    .map_err(SignerError::TrezorError)
+                    .map_err(Into::into)
                 },
             )
+            .await
             .map_err(ControllerError::WalletError)
             .map(|w| w.map_wallet(RuntimeWallet::Trezor)),
+            #[cfg(feature = "ledger")]
+            WalletTypeArgsComputed::Ledger => wallet::Wallet::create_new_wallet(
+                Arc::clone(&chain_config),
+                db,
+                best_block,
+                wallet_type,
+                async |_db_tx| LedgerSignerProvider::new().await.map_err(Into::into),
+            )
+            .await
+            .map_err(ControllerError::WalletError)
+            .map(|w| w.map_wallet(RuntimeWallet::Ledger)),
         };
 
         Self::delete_wallet_file_on_wallet_creation_failure(&res, file_path);
         res
     }
 
-    pub fn recover_wallet(
+    pub async fn recover_wallet(
         chain_config: Arc<ChainConfig>,
         file_path: impl AsRef<Path>,
         args: WalletTypeArgsComputed,
@@ -350,16 +386,18 @@ where
                     Arc::clone(&chain_config),
                     db,
                     wallet_type,
-                    |db_tx| {
-                        Ok(SoftwareSignerProvider::new_from_mnemonic(
+                    async |db_tx| {
+                        SoftwareSignerProvider::new_from_mnemonic(
                             chain_config.clone(),
                             db_tx,
                             &mnemonic.to_string(),
                             passphrase_ref,
                             store_seed_phrase,
-                        )?)
+                        )
+                        .map_err(Into::into)
                     },
                 )
+                .await
                 .map_err(ControllerError::WalletError)?;
                 Ok(wallet.map_wallet(RuntimeWallet::Software))
             }
@@ -369,15 +407,29 @@ where
                     Arc::clone(&chain_config),
                     db,
                     wallet_type,
-                    |_db_tx| {
-                        Ok(TrezorSignerProvider::new(
+                    async |_db_tx| {
+                        TrezorSignerProvider::new(
                             device_id.map(|device_id| SelectedDevice { device_id }),
                         )
-                        .map_err(SignerError::TrezorError)?)
+                        .map_err(SignerError::TrezorError)
+                        .map_err(Into::into)
                     },
                 )
+                .await
                 .map_err(ControllerError::WalletError)?;
                 Ok(wallet.map_wallet(RuntimeWallet::Trezor))
+            }
+            #[cfg(feature = "ledger")]
+            WalletTypeArgsComputed::Ledger => {
+                let wallet = wallet::Wallet::recover_wallet(
+                    Arc::clone(&chain_config),
+                    db,
+                    wallet_type,
+                    async |_db_tx| LedgerSignerProvider::new().await.map_err(Into::into),
+                )
+                .await
+                .map_err(ControllerError::WalletError)?;
+                Ok(wallet.map_wallet(RuntimeWallet::Ledger))
             }
         };
 
@@ -434,7 +486,7 @@ where
         Ok(())
     }
 
-    pub fn open_wallet(
+    pub async fn open_wallet(
         chain_config: Arc<ChainConfig>,
         file_path: impl AsRef<Path>,
         password: Option<String>,
@@ -463,8 +515,11 @@ where
                     |version| Self::make_backup_wallet_file(file_path.as_ref(), version),
                     current_controller_mode,
                     force_change_wallet_type,
-                    |db_tx| SoftwareSignerProvider::load_from_database(chain_config.clone(), db_tx),
+                    async |db_tx| {
+                        SoftwareSignerProvider::load_from_database(chain_config.clone(), &db_tx)
+                    },
                 )
+                .await
                 .map_err(ControllerError::WalletError)?;
                 Ok(wallet.map_wallet(RuntimeWallet::Software))
             }
@@ -477,16 +532,35 @@ where
                     |version| Self::make_backup_wallet_file(file_path.as_ref(), version),
                     current_controller_mode,
                     force_change_wallet_type,
-                    |db_tx| {
+                    async |db_tx| {
                         TrezorSignerProvider::load_from_database(
                             chain_config.clone(),
-                            db_tx,
+                            &db_tx,
                             device_id,
                         )
                     },
                 )
+                .await
                 .map_err(ControllerError::WalletError)?;
                 Ok(wallet.map_wallet(RuntimeWallet::Trezor))
+            }
+            #[cfg(feature = "ledger")]
+            WalletType::Ledger => {
+                let wallet = wallet::Wallet::load_wallet(
+                    Arc::clone(&chain_config),
+                    db,
+                    password,
+                    |version| Self::make_backup_wallet_file(file_path.as_ref(), version),
+                    current_controller_mode,
+                    force_change_wallet_type,
+                    async |mut db_tx| {
+                        LedgerSignerProvider::load_from_database(chain_config.clone(), &mut db_tx)
+                            .await
+                    },
+                )
+                .await
+                .map_err(ControllerError::WalletError)?;
+                Ok(wallet.map_wallet(RuntimeWallet::Ledger))
             }
         }
     }
@@ -499,7 +573,7 @@ where
     }
 
     /// Delete the seed phrase if stored in the database
-    pub fn delete_seed_phrase(&self) -> Result<Option<SeedWithPassPhrase>, ControllerError<N>> {
+    pub fn delete_seed_phrase(&mut self) -> Result<Option<SeedWithPassPhrase>, ControllerError<N>> {
         self.wallet
             .delete_seed_phrase()
             .map(|opt| opt.map(SeedWithPassPhrase::from_serializable_seed_phrase))
@@ -579,6 +653,11 @@ where
                     device_id: trezor_info.device_id,
                     firmware_version: trezor_info.firmware_version.to_string(),
                 },
+                #[cfg(feature = "ledger")]
+                HardwareWalletFullInfo::Ledger(ledger_data) => WalletExtraInfo::LedgerWallet {
+                    app_version: ledger_data.app_version.clone(),
+                    model: ledger_data.model.to_string(),
+                },
             },
             None => WalletExtraInfo::SoftwareWallet,
         };
@@ -588,13 +667,6 @@ where
             account_names,
             extra_info,
         }
-    }
-
-    pub async fn get_token_number_of_decimals(
-        &self,
-        token_id: TokenId,
-    ) -> Result<u8, ControllerError<N>> {
-        Ok(self.get_token_info(token_id).await?.token_number_of_decimals())
     }
 
     pub async fn get_token_info(
@@ -654,7 +726,7 @@ where
     ) -> Result<Block, ControllerError<N>> {
         let pools = self
             .wallet
-            .get_pool_ids(account_index, WalletPoolsFilter::Stake)
+            .get_pools(account_index, WalletPoolsFilter::Stake)
             .map_err(ControllerError::WalletError)?;
 
         let mut last_error = ControllerError::NoStakingPool;
@@ -746,11 +818,14 @@ where
             .map_err(|err| ControllerError::SearchForTimestampsFailed(err))
     }
 
-    pub fn create_account(
+    pub async fn create_account(
         &mut self,
         name: Option<String>,
     ) -> Result<(U31, Option<String>), ControllerError<N>> {
-        self.wallet.create_next_account(name).map_err(ControllerError::WalletError)
+        self.wallet
+            .create_next_account(name)
+            .await
+            .map_err(ControllerError::WalletError)
     }
 
     pub fn update_account_name(
@@ -834,6 +909,10 @@ where
             RuntimeWallet::Trezor(w) => {
                 sync::sync_once(&self.chain_config, &self.rpc_client, w, &self.wallet_events).await
             }
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => {
+                sync::sync_once(&self.chain_config, &self.rpc_client, w, &self.wallet_events).await
+            }
         }?;
 
         match res {
@@ -850,6 +929,11 @@ where
             }
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => {
+                sync::sync_once(&self.chain_config, &self.rpc_client, w, &self.wallet_events)
+                    .await?;
+            }
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => {
                 sync::sync_once(&self.chain_config, &self.rpc_client, w, &self.wallet_events)
                     .await?;
             }
@@ -1070,7 +1154,7 @@ where
                 (None, _) => SignatureStatus::NotSigned,
             })
             .collect();
-        let num_inputs = ptx.count_inputs();
+        let num_inputs = ptx.inputs_count();
         let total_signatures = signature_statuses
             .iter()
             .copied()
@@ -1196,27 +1280,27 @@ where
                 .collect::<Result<Vec<_>, WalletError>>()
                 .map_err(ControllerError::WalletError)?;
 
-            let (input_utxos, additional_infos) =
+            let (input_utxos, ptx_additional_info) =
                 self.fetch_utxos_extra_info(input_utxos).await?.into_iter().fold(
-                    (Vec::new(), TxAdditionalInfo::new()),
+                    (Vec::new(), PtxAdditionalInfo::new()),
                     |(mut input_utxos, additional_info), (x, y)| {
                         input_utxos.push(x);
                         (input_utxos, additional_info.join(y))
                     },
                 );
 
-            let additional_infos = self
+            let ptx_additional_info = self
                 .fetch_utxos_extra_info(tx.outputs().to_vec())
                 .await?
                 .into_iter()
-                .fold(additional_infos, |acc, (_, info)| acc.join(info));
-            let tx = PartiallySignedTransaction::new(
+                .fold(ptx_additional_info, |acc, (_, info)| acc.join(info));
+            let tx = PartiallySignedTransaction::new_for_wallet(
                 tx,
                 vec![None; num_inputs],
                 input_utxos.into_iter().map(Option::Some).collect(),
                 destinations.into_iter().map(Option::Some).collect(),
                 htlc_secrets,
-                additional_infos,
+                ptx_additional_info,
             )?;
 
             TransactionToSign::Partial(tx)
@@ -1303,7 +1387,7 @@ where
     async fn fetch_utxos_extra_info(
         &self,
         inputs: Vec<TxOutput>,
-    ) -> Result<Vec<(TxOutput, TxAdditionalInfo)>, ControllerError<N>> {
+    ) -> Result<Vec<(TxOutput, PtxAdditionalInfo)>, ControllerError<N>> {
         let tasks: FuturesOrdered<_> = inputs
             .into_iter()
             .map(|input| fetch_utxo_extra_info(&self.rpc_client, input))
@@ -1352,8 +1436,83 @@ where
                 }
             }
 
-            tokio::time::sleep(NORMAL_DELAY).await;
+            // after the first successful sync to the tip fetch all mempool transactions
+            if !self.finished_initial_sync.test() {
+                let txs = self.rpc_client.mempool_get_transactions().await;
 
+                match txs {
+                    Ok(txs) => {
+                        if let Err(err) =
+                            self.wallet.add_mempool_transactions(&txs, &self.wallet_events)
+                        {
+                            log::error!("Error adding mempool transactions: {err}");
+                        } else {
+                            self.finished_initial_sync.set();
+                        }
+                    }
+                    Err(err) => {
+                        log::error!("Failed to fetch all transactions from the mempool: {err}");
+                        tokio::time::sleep(ERROR_DELAY).await;
+                        continue;
+                    }
+                }
+            }
+
+            let mut delay = Box::pin(tokio::time::sleep(NORMAL_DELAY));
+
+            loop {
+                tokio::select! {
+                    _ = &mut delay => {
+                        break;
+                    }
+
+                    maybe_event = self.mempool_events.next() => {
+                        let event = match maybe_event {
+                            Some(e) => e,
+                            None => {
+                                log::error!("Mempool notifications channel is closed.");
+                                tokio::time::sleep(ERROR_DELAY).await;
+
+
+                                match self.rpc_client
+                                    .mempool_subscribe_to_events()
+                                    .await {
+                                    Ok(events) => {
+                                        self.mempool_events = events;
+                                    }
+                                    Err(err) => {
+                                        log::error!("Subscribing to mempool notifications failed with: {err}");
+                                    }
+                                }
+                                break
+                            }
+                        };
+
+                        match event {
+                            MempoolEvent::NewTransaction { tx_id } => {
+                                let transaction = self.rpc_client
+                                    .mempool_get_transaction(tx_id)
+                                    .await;
+
+                                match transaction {
+                                    Ok(Some(transaction)) => {
+                                        let txs = [transaction];
+                                        if let Err(err) = self.wallet.add_mempool_transactions(&txs, &self.wallet_events) {
+                                            log::error!("Tx {} failed to be added in the wallet because of an error: {err}", tx_id);
+                                        }
+                                    }
+                                    Ok(None) => {
+                                        log::warn!("Tx {} announced by mempool, but not found when fetched", tx_id);
+                                    }
+                                    Err(err) => {
+                                        log::error!("Error while fetching a transaction from mempool {err}");
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             self.rebroadcast_txs(&mut rebroadcast_txs_timer).await;
         }
     }

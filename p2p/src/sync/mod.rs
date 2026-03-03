@@ -30,16 +30,16 @@ use tokio::{
     sync::mpsc::{self, Receiver, UnboundedReceiver, UnboundedSender},
     task::JoinSet,
 };
+use tracing::Instrument;
 
 use common::{
-    chain::{config::ChainConfig, Block, Transaction},
+    chain::{config::ChainConfig, GenBlock, Transaction},
     primitives::Id,
     time_getter::TimeGetter,
 };
 use logging::log;
 use mempool::{event::TransactionProcessed, tx_origin::TxOrigin, MempoolHandle};
-use tracing::Instrument;
-use utils::{sync::Arc, tap_log::TapLog};
+use utils::{sync::Arc, tap_log::TapLog, tokio_spawn_in_join_set};
 
 use crate::{
     config::P2pConfig,
@@ -58,7 +58,7 @@ use self::chainstate_handle::ChainstateHandle;
 
 #[derive(Debug, Clone)]
 pub enum LocalEvent {
-    ChainstateNewTip(Id<Block>),
+    ChainstateNewTip(Id<GenBlock>),
     MempoolNewTx(Id<Transaction>),
 }
 
@@ -207,11 +207,13 @@ where
             self.time_getter.clone(),
         );
 
-        peer_tasks.spawn(
+        tokio_spawn_in_join_set(
+            &mut peer_tasks,
             async move {
                 mgr.run().await;
             }
             .in_current_span(),
+            &format!("Peer[id={peer_id}] block sync mgr"),
         );
 
         peer_local_event_senders.push(local_event_sender);
@@ -231,11 +233,13 @@ where
             self.observer.clone(),
         );
 
-        peer_tasks.spawn(
+        tokio_spawn_in_join_set(
+            &mut peer_tasks,
             async move {
                 mgr.run().await;
             }
             .in_current_span(),
+            &format!("Peer[id={peer_id}] tx sync mgr"),
         );
 
         peer_local_event_senders.push(local_event_sender);
@@ -269,7 +273,7 @@ where
     }
 
     /// Announces the header of a new block to peers.
-    async fn handle_new_tip(&mut self, block_id: Id<Block>) -> Result<()> {
+    async fn handle_new_tip(&mut self, block_id: Id<GenBlock>) -> Result<()> {
         self.peer_mgr_event_sender
             .send(PeerManagerEvent::NewChainstateTip(block_id))
             .map_err(|_| P2pError::ChannelClosed)?;
@@ -379,13 +383,17 @@ where
 /// Returns a receiver for the chainstate `NewTip` events.
 pub async fn subscribe_to_new_tip(
     chainstate_handle: &ChainstateHandle,
-) -> Result<UnboundedReceiver<Id<Block>>> {
+) -> Result<UnboundedReceiver<Id<GenBlock>>> {
     let (sender, receiver) = mpsc::unbounded_channel();
 
     let subscribe_func =
         Arc::new(
             move |chainstate_event: chainstate::ChainstateEvent| match chainstate_event {
-                chainstate::ChainstateEvent::NewTip(block_id, _) => {
+                chainstate::ChainstateEvent::NewTip {
+                    id: block_id,
+                    height: _,
+                    is_initial_block_download: _,
+                } => {
                     let _ = sender.send(block_id).log_err_pfx("The new tip receiver closed");
                 }
             },

@@ -156,7 +156,7 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for SignedTransaction {
                                 sig.raw_signature(),
                             )?;
                             match htlc_spend {
-                                AuthorizedHashedTimelockContractSpend::Secret(
+                                AuthorizedHashedTimelockContractSpend::Spend(
                                     secret,
                                     raw_signature,
                                 ) => WitnessScript::satisfied_conjunction([
@@ -174,7 +174,7 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for SignedTransaction {
                                         ),
                                     ),
                                 ]),
-                                AuthorizedHashedTimelockContractSpend::Multisig(raw_signature) => {
+                                AuthorizedHashedTimelockContractSpend::Refund(raw_signature) => {
                                     WitnessScript::satisfied_conjunction([
                                         WitnessScript::timelock(htlc.refund_timelock),
                                         WitnessScript::signature(
@@ -318,10 +318,10 @@ impl<C: InputInfoProvider> TranslateInput<C> for TimelockOnly {
                         let htlc_spend =
                             AuthorizedHashedTimelockContractSpend::from_data(sig.raw_signature())?;
                         match htlc_spend {
-                            AuthorizedHashedTimelockContractSpend::Secret(_, _) => {
+                            AuthorizedHashedTimelockContractSpend::Spend(_, _) => {
                                 Ok(WitnessScript::TRUE)
                             }
-                            AuthorizedHashedTimelockContractSpend::Multisig(_) => {
+                            AuthorizedHashedTimelockContractSpend::Refund(_) => {
                                 Ok(WitnessScript::timelock(htlc.refund_timelock))
                             }
                         }
@@ -397,7 +397,7 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for SignatureOnlyTx {
                                 sig.raw_signature(),
                             )?;
                             match htlc_spend {
-                                AuthorizedHashedTimelockContractSpend::Secret(_, raw_signature) => {
+                                AuthorizedHashedTimelockContractSpend::Spend(_, raw_signature) => {
                                     WitnessScript::signature(
                                         htlc.spend_key.clone(),
                                         EvaluatedInputWitness::Standard(
@@ -408,7 +408,7 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for SignatureOnlyTx {
                                         ),
                                     )
                                 }
-                                AuthorizedHashedTimelockContractSpend::Multisig(raw_signature) => {
+                                AuthorizedHashedTimelockContractSpend::Refund(raw_signature) => {
                                     WitnessScript::signature(
                                         htlc.refund_key.clone(),
                                         EvaluatedInputWitness::Standard(

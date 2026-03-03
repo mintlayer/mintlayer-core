@@ -17,9 +17,12 @@ use storage_failing::{Failing, FailureConfig};
 use storage_inmemory::InMemory;
 use test_utils::random::Seed;
 
+use crate::blockchain_storage_trivial_implementor::BlockchainStorageTrivialImplementor;
+
 pub use storage_failing::StorageError;
 
-pub type TestStore = chainstate_storage::Store<Failing<InMemory>>;
+pub type TestStore =
+    chainstate_storage::Store<BlockchainStorageTrivialImplementor<Failing<InMemory>>>;
 pub type ConfigBuilder = storage_failing::Builder<chainstate_storage::schema::Schema>;
 
 /// A builder for chainstate testing storage
@@ -47,7 +50,8 @@ impl Builder {
     /// Build the storage.
     pub fn build(self, seed: Seed) -> TestStore {
         let Self { inner, config } = self;
-        let backend = Failing::new(inner, config.build(), seed);
+        let backend =
+            BlockchainStorageTrivialImplementor::new(Failing::new(inner, config.build(), seed));
         TestStore::from_backend(backend).expect("backend creation to succeed")
     }
 

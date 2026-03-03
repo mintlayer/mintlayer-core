@@ -190,6 +190,7 @@ pub fn encode_input_for_change_token_metadata_uri(
 ///    instead of `encode_witness`).
 ///    Note that in orders v0 FillOrder inputs can technically have a signature, it's just not checked.
 ///    But in orders V1 we actually require that those inputs don't have signatures.
+///    Also, in orders V1 the provided destination is always ignored.
 #[wasm_bindgen]
 pub fn encode_input_for_fill_order(
     order_id: &str,

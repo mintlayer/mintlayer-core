@@ -15,7 +15,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-"""Wallet tokens change metadta uri test"""
+"""Wallet tokens change metadata uri test"""
 
 from wallet_tokens_change_metadata_uri import WalletTokens
 from test_framework.wallet_rpc_controller import WalletRpcController

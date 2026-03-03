@@ -15,6 +15,7 @@
 
 //! Types supporting the RPC interface
 
+use chainstate::rpc::RpcTypeError;
 use common::{
     address::{pubkeyhash::PublicKeyHash, Address, AddressError},
     chain::{
@@ -27,6 +28,7 @@ use common::{
         TxOutput, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, Idable},
+    TokenDecimalsProvider, TokenDecimalsUnavailableError,
 };
 use crypto::{
     key::{
@@ -120,11 +122,13 @@ pub enum RpcError<N: NodeInterface> {
     #[error("{0}")]
     SubmitError(#[from] SubmitError),
 
-    #[error("Invalid hex encoded transaction")]
+    #[error("Invalid raw transaction")]
     InvalidRawTransaction,
 
-    #[error("Invalid hex encoded partially signed transaction")]
-    InvalidPartialTransaction,
+    #[error(
+        "Expecting an unsigned or partially signed transaction, but a fully signed one was passed"
+    )]
+    UnexpectedFullySignedTransaction,
 
     #[error("{0}")]
     DestinationSigError(#[from] DestinationSigError),
@@ -169,6 +173,12 @@ pub enum RpcError<N: NodeInterface> {
 
     #[error("Wallet recovery requires mnemonic to be specified")]
     WalletRecoveryWithoutMnemonic,
+
+    #[error(transparent)]
+    ChainstateRpcTypeError(#[from] chainstate::rpc::RpcTypeError),
+
+    #[error(transparent)]
+    TokenDecimalsUnavailableError(#[from] TokenDecimalsUnavailableError),
 }
 
 impl<N: NodeInterface> From<RpcError<N>> for rpc::Error {
@@ -387,9 +397,10 @@ impl UtxoInfo {
         outpoint: UtxoOutPoint,
         output: TxOutput,
         chain_config: &ChainConfig,
-    ) -> Result<Self, AddressError> {
+        token_decimals_provider: &impl TokenDecimalsProvider,
+    ) -> Result<Self, RpcTypeError> {
         Ok(Self {
-            output: RpcTxOutput::new(chain_config, output)?,
+            output: RpcTxOutput::new(chain_config, token_decimals_provider, output)?,
             outpoint: RpcUtxoOutpoint::new(outpoint),
         })
     }
@@ -521,6 +532,45 @@ impl PoolInfo {
             cost_per_block,
         }
     }
+}
+
+/// Additional data for an already/still existing order.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
+pub struct ExistingOwnOrderData {
+    pub ask_balance: RpcAmountOut,
+    pub give_balance: RpcAmountOut,
+    pub creation_timestamp: BlockTimestamp,
+    pub is_frozen: bool,
+}
+
+/// This represents an order that is owned by the wallet.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
+pub struct OwnOrderInfo {
+    pub order_id: RpcAddress<OrderId>,
+
+    pub initially_asked: RpcOutputValueOut,
+    pub initially_given: RpcOutputValueOut,
+
+    /// If this is unset, the order creation tx hasn't been included in a block yet,
+    /// or the order has been concluded and the conclusion tx has been included in a block.
+    pub existing_order_data: Option<ExistingOwnOrderData>,
+
+    pub is_marked_as_frozen_in_wallet: bool,
+    pub is_marked_as_concluded_in_wallet: bool,
+}
+
+/// This represents an arbitrary order that is active - i.e. not concluded, not frozen.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
+pub struct ActiveOrderInfo {
+    pub order_id: RpcAddress<OrderId>,
+
+    pub initially_asked: RpcOutputValueOut,
+    pub initially_given: RpcOutputValueOut,
+
+    pub ask_balance: RpcAmountOut,
+    pub give_balance: RpcAmountOut,
+
+    pub is_own: bool,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
@@ -1034,13 +1084,18 @@ impl NewOrderTransaction {
             broadcasted: tx.broadcasted,
         }
     }
-}
 
-#[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
-#[serde(tag = "type", content = "content")]
-pub enum RpcCurrency {
-    Coin,
-    Token { token_id: RpcAddress<TokenId> },
+    pub fn into_order_id_and_new_tx(self) -> (RpcAddress<OrderId>, RpcNewTransaction) {
+        (
+            self.order_id,
+            RpcNewTransaction {
+                tx_id: self.tx_id,
+                tx: self.tx,
+                fees: self.fees,
+                broadcasted: self.broadcasted,
+            },
+        )
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
@@ -1048,6 +1103,8 @@ pub enum RpcCurrency {
 pub enum HardwareWalletType {
     #[cfg(feature = "trezor")]
     Trezor { device_id: Option<String> },
+    #[cfg(feature = "ledger")]
+    Ledger,
 }
 
 impl HardwareWalletType {
@@ -1091,6 +1148,8 @@ impl HardwareWalletType {
                     HardwareWalletType::Trezor { device_id } => {
                         Ok(WalletTypeArgs::Trezor { device_id })
                     }
+                    #[cfg(feature = "ledger")]
+                    HardwareWalletType::Ledger => Ok(WalletTypeArgs::Ledger),
                 }
             }
         }

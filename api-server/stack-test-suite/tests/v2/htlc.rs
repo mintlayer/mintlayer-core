@@ -23,8 +23,8 @@ use common::chain::{
         inputsig::{
             classical_multisig::authorize_classical_multisig::AuthorizedClassicalMultisigSpend,
             htlc::{
-                produce_classical_multisig_signature_for_htlc_input,
-                produce_uniparty_signature_for_htlc_input,
+                produce_classical_multisig_signature_for_htlc_refunding,
+                produce_uniparty_signature_for_htlc_spending,
             },
         },
         sighash::signature_hash,
@@ -88,8 +88,9 @@ async fn spend(#[case] seed: Seed) {
                     .build();
 
                 // Issue and mint some tokens to lock in htlc
+                let tokens_amount = Amount::from_atoms(100);
                 let issue_and_mint_result =
-                    helpers::issue_and_mint_tokens_from_genesis(&mut rng, &mut tf);
+                    helpers::issue_and_mint_tokens_from_genesis(tokens_amount, &mut rng, &mut tf);
 
                 // Create htlc
                 let (htlc, _) = create_htlc(&chain_config, &alice_pk, &bob_pk, secret.hash());
@@ -99,10 +100,7 @@ async fn spend(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Htlc(
-                        OutputValue::TokenV1(
-                            issue_and_mint_result.token_id,
-                            Amount::from_atoms(100),
-                        ),
+                        OutputValue::TokenV1(issue_and_mint_result.token_id, tokens_amount),
                         Box::new(htlc),
                     ))
                     .build();
@@ -118,17 +116,14 @@ async fn spend(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
-                        OutputValue::TokenV1(
-                            issue_and_mint_result.token_id,
-                            Amount::from_atoms(100),
-                        ),
+                        OutputValue::TokenV1(issue_and_mint_result.token_id, tokens_amount),
                         Destination::AnyoneCanSpend,
                     ))
                     .build()
                     .take_transaction();
                 let tx_2_id = tx2.get_id();
 
-                let input_sign = produce_uniparty_signature_for_htlc_input(
+                let input_sign = produce_uniparty_signature_for_htlc_spending(
                     &bob_sk,
                     SigHashType::all(),
                     Destination::PublicKeyHash((&PublicKey::from_private_key(&bob_sk)).into()),
@@ -310,7 +305,7 @@ async fn refund(#[case] seed: Seed) {
                     authorization
                 };
 
-                let input_sign = produce_classical_multisig_signature_for_htlc_input(
+                let input_sign = produce_classical_multisig_signature_for_htlc_refunding(
                     &chain_config,
                     &authorization,
                     SigHashType::all(),

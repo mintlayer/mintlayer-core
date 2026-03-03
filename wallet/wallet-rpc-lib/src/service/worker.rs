@@ -15,22 +15,20 @@
 
 use std::{ops::ControlFlow, path::PathBuf, sync::Arc};
 
-use common::chain::ChainConfig;
 use futures::{future::BoxFuture, never::Never};
 use tokio::{sync::mpsc, task::JoinHandle};
 
+use common::chain::ChainConfig;
 use logging::log;
+use utils::tokio_spawn;
 use utils_networking::broadcaster::Broadcaster;
 use wallet_controller::types::{
     CreatedWallet, OpenedWallet, WalletCreationOptions, WalletTypeArgs,
 };
 use wallet_controller::{ControllerError, NodeInterface};
-use wallet_types::scan_blockchain::ScanBlockchain;
-use wallet_types::wallet_type::WalletType;
+use wallet_types::{scan_blockchain::ScanBlockchain, wallet_type::WalletType};
 
-use crate::types::RpcError;
-
-use crate::Event;
+use crate::{types::RpcError, Event};
 
 use super::WalletServiceEvents;
 
@@ -172,7 +170,8 @@ where
             force_migrate_wallet_type,
             open_as_wallet_type,
             device_id,
-        )?;
+        )
+        .await?;
 
         let wallet = match wallet {
             wallet::wallet::WalletCreation::Wallet(w) => w,
@@ -197,6 +196,7 @@ where
                 wallet,
                 self.wallet_events.clone(),
             )
+            .await?
         };
         self.controller.replace(controller);
 
@@ -227,6 +227,7 @@ where
                 wallet_type,
                 options.overwrite_wallet_file,
             )
+            .await
         } else {
             WalletController::recover_wallet(
                 self.chain_config.clone(),
@@ -234,6 +235,7 @@ where
                 computed_args,
                 wallet_type,
             )
+            .await
         }
         .map_err(RpcError::Controller)?;
 
@@ -261,6 +263,8 @@ where
                 wallet,
                 self.wallet_events.clone(),
             )
+            .await
+            .map_err(RpcError::Controller)?
         };
 
         self.controller.replace(controller);
@@ -303,6 +307,6 @@ where
             wallet_events,
         );
 
-        tokio::spawn(worker.event_loop())
+        tokio_spawn(worker.event_loop(), "Wallet worker event loop")
     }
 }

@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     num::NonZeroUsize,
     ops::{Deref, DerefMut},
     sync::Arc,
@@ -26,8 +26,8 @@ use common::{
         block::{signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp, BlockReward},
         config::ChainConfig,
         tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
-        AccountNonce, AccountType, Block, DelegationId, GenBlock, OrderId, PoolId, RpcOrderInfo,
-        Transaction, TxInput, UtxoOutPoint,
+        AccountNonce, AccountType, Block, Currency, DelegationId, GenBlock, OrderId, PoolId,
+        RpcOrderInfo, Transaction, TxInput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -113,12 +113,12 @@ where
 
     fn get_block_id_from_height(
         &self,
-        height: &BlockHeight,
+        height: BlockHeight,
     ) -> Result<Option<Id<GenBlock>>, ChainstateError> {
         self.deref().get_block_id_from_height(height)
     }
 
-    fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, ChainstateError> {
+    fn get_block(&self, block_id: &Id<Block>) -> Result<Option<Block>, ChainstateError> {
         self.deref().get_block(block_id)
     }
 
@@ -271,14 +271,21 @@ where
 
     fn get_token_info_for_rpc(
         &self,
-        token_id: TokenId,
+        token_id: &TokenId,
     ) -> Result<Option<RPCTokenInfo>, ChainstateError> {
         self.deref().get_token_info_for_rpc(token_id)
     }
 
+    fn get_tokens_info_for_rpc(
+        &self,
+        token_ids: &BTreeSet<TokenId>,
+    ) -> Result<Vec<RPCTokenInfo>, ChainstateError> {
+        self.deref().get_tokens_info_for_rpc(token_ids)
+    }
+
     fn get_token_aux_data(
         &self,
-        token_id: TokenId,
+        token_id: &TokenId,
     ) -> Result<Option<TokenAuxiliaryData>, ChainstateError> {
         self.deref().get_token_aux_data(token_id)
     }
@@ -315,9 +322,9 @@ where
     fn export_bootstrap_stream<'a>(
         &self,
         writer: std::io::BufWriter<Box<dyn std::io::Write + Send + 'a>>,
-        include_orphans: bool,
+        include_stale_blocks: bool,
     ) -> Result<(), ChainstateError> {
-        self.deref().export_bootstrap_stream(writer, include_orphans)
+        self.deref().export_bootstrap_stream(writer, include_stale_blocks)
     }
 
     fn utxo(&self, outpoint: &UtxoOutPoint) -> Result<Option<Utxo>, ChainstateError> {
@@ -328,11 +335,11 @@ where
         self.deref().is_initial_block_download()
     }
 
-    fn stake_pool_exists(&self, pool_id: PoolId) -> Result<bool, ChainstateError> {
+    fn stake_pool_exists(&self, pool_id: &PoolId) -> Result<bool, ChainstateError> {
         self.deref().stake_pool_exists(pool_id)
     }
 
-    fn get_stake_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, ChainstateError> {
+    fn get_stake_pool_balance(&self, pool_id: &PoolId) -> Result<Option<Amount>, ChainstateError> {
         self.deref().get_stake_pool_balance(pool_id)
     }
 
@@ -346,35 +353,35 @@ where
             .get_stake_pool_balances_at_heights(pool_ids, min_height, max_height)
     }
 
-    fn get_stake_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, ChainstateError> {
+    fn get_stake_pool_data(&self, pool_id: &PoolId) -> Result<Option<PoolData>, ChainstateError> {
         self.deref().get_stake_pool_data(pool_id)
     }
 
     fn get_stake_pool_delegations_shares(
         &self,
-        pool_id: PoolId,
+        pool_id: &PoolId,
     ) -> Result<Option<BTreeMap<DelegationId, Amount>>, ChainstateError> {
         self.deref().get_stake_pool_delegations_shares(pool_id)
     }
 
     fn get_stake_delegation_balance(
         &self,
-        delegation_id: DelegationId,
+        delegation_id: &DelegationId,
     ) -> Result<Option<Amount>, ChainstateError> {
         self.deref().get_stake_delegation_balance(delegation_id)
     }
 
     fn get_stake_delegation_data(
         &self,
-        delegation_id: DelegationId,
+        delegation_id: &DelegationId,
     ) -> Result<Option<DelegationData>, ChainstateError> {
         self.deref().get_stake_delegation_data(delegation_id)
     }
 
     fn get_stake_pool_delegation_share(
         &self,
-        pool_id: PoolId,
-        delegation_id: DelegationId,
+        pool_id: &PoolId,
+        delegation_id: &DelegationId,
     ) -> Result<Option<Amount>, ChainstateError> {
         self.deref().get_stake_pool_delegation_share(pool_id, delegation_id)
     }
@@ -385,14 +392,14 @@ where
 
     fn get_block_header(
         &self,
-        block_id: Id<Block>,
+        block_id: &Id<Block>,
     ) -> Result<Option<SignedBlockHeader>, ChainstateError> {
         self.deref().get_block_header(block_id)
     }
 
     fn get_account_nonce_count(
         &self,
-        account: AccountType,
+        account: &AccountType,
     ) -> Result<Option<AccountNonce>, ChainstateError> {
         self.deref().get_account_nonce_count(account)
     }
@@ -425,28 +432,39 @@ where
 
     fn get_order_info_for_rpc(
         &self,
-        order_id: OrderId,
+        order_id: &OrderId,
     ) -> Result<Option<RpcOrderInfo>, ChainstateError> {
         self.deref().get_order_info_for_rpc(order_id)
+    }
+
+    fn get_all_order_ids(&self) -> Result<BTreeSet<OrderId>, ChainstateError> {
+        self.deref().get_all_order_ids()
+    }
+
+    fn get_orders_info_for_rpc_by_currencies(
+        &self,
+        ask_currency: Option<&Currency>,
+        give_currency: Option<&Currency>,
+    ) -> Result<BTreeMap<OrderId, RpcOrderInfo>, ChainstateError> {
+        self.deref().get_orders_info_for_rpc_by_currencies(ask_currency, give_currency)
     }
 }
 
 #[cfg(test)]
 mod tests {
-
     use std::sync::Arc;
 
     use chainstate_storage::inmemory::Store;
     use common::{
         chain::{config::create_unit_test_config, ChainConfig},
         primitives::BlockHeight,
+        time_getter::TimeGetter,
     };
 
     use crate::{
         chainstate_interface::ChainstateInterface, make_chainstate, ChainstateConfig,
         DefaultTransactionVerificationStrategy,
     };
-    use common::time_getter::TimeGetter;
 
     fn test_interface_ref<C: ChainstateInterface>(chainstate: &C, chain_config: &ChainConfig) {
         assert_eq!(
@@ -476,10 +494,11 @@ mod tests {
             let chain_config = Arc::new(create_unit_test_config());
             let chainstate_config = ChainstateConfig {
                 max_db_commit_attempts: 10.into(),
+                enable_db_reckless_mode_in_ibd: Default::default(),
                 max_orphan_blocks: 0.into(),
-                min_max_bootstrap_import_buffer_sizes: Default::default(),
                 max_tip_age: Default::default(),
                 enable_heavy_checks: Some(true),
+                allow_checkpoints_mismatch: Default::default(),
             };
             let chainstate_storage = Store::new_empty().unwrap();
 
@@ -490,6 +509,7 @@ mod tests {
                 DefaultTransactionVerificationStrategy::new(),
                 None,
                 TimeGetter::default(),
+                None,
             )
             .unwrap();
 

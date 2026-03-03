@@ -65,9 +65,9 @@ type PeerDbStoreTxRw<'st, B> = StorageTxRw<'st, B, Schema>;
 
 pub type PeerDbStorageImpl<B> = StorageImpl<B, Schema>;
 
-impl<B: storage::Backend + 'static> PeerDbStorage for PeerDbStorageImpl<B> {}
+impl<B: storage::SharedBackend + 'static> PeerDbStorage for PeerDbStorageImpl<B> {}
 
-impl<B: storage::Backend> PeerDbStorageWrite for PeerDbStoreTxRw<'_, B> {
+impl<B: storage::SharedBackend> PeerDbStorageWrite for PeerDbStoreTxRw<'_, B> {
     fn set_version(&mut self, version: StorageVersion) -> crate::Result<()> {
         Ok(self.storage().get_mut::<DBValue, _>().put(VALUE_ID_VERSION, version.encode())?)
     }
@@ -126,7 +126,7 @@ impl<B: storage::Backend> PeerDbStorageWrite for PeerDbStoreTxRw<'_, B> {
     }
 }
 
-impl<B: storage::Backend> PeerDbStorageRead for PeerDbStoreTxRo<'_, B> {
+impl<B: storage::SharedBackend> PeerDbStorageRead for PeerDbStoreTxRo<'_, B> {
     fn get_version(&self) -> crate::Result<Option<StorageVersion>> {
         let map = self.storage().get::<DBValue, _>();
         let vec_opt = map.get(VALUE_ID_VERSION)?.as_ref().map(Encoded::decode);

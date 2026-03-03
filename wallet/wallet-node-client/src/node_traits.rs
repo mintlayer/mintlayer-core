@@ -13,13 +13,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{num::NonZeroUsize, time::Duration};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    num::NonZeroUsize,
+    time::Duration,
+};
+
+use futures::stream::Stream;
 
 use chainstate::ChainInfo;
 use common::{
     chain::{
         tokens::{RPCTokenInfo, TokenId},
-        Block, DelegationId, Destination, GenBlock, OrderId, PoolId, RpcOrderInfo,
+        Block, Currency, DelegationId, Destination, GenBlock, OrderId, PoolId, RpcOrderInfo,
         SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{time::Time, Amount, BlockHeight, Id},
@@ -77,7 +83,16 @@ pub trait NodeInterface {
         delegation_id: DelegationId,
     ) -> Result<Option<Amount>, Self::Error>;
     async fn get_token_info(&self, token_id: TokenId) -> Result<Option<RPCTokenInfo>, Self::Error>;
+    async fn get_tokens_info(
+        &self,
+        token_ids: BTreeSet<TokenId>,
+    ) -> Result<Vec<RPCTokenInfo>, Self::Error>;
     async fn get_order_info(&self, order_id: OrderId) -> Result<Option<RpcOrderInfo>, Self::Error>;
+    async fn get_orders_info_by_currencies(
+        &self,
+        ask_currency: Option<Currency>,
+        give_currency: Option<Currency>,
+    ) -> Result<BTreeMap<OrderId, RpcOrderInfo>, Self::Error>;
     async fn blockprod_e2e_public_key(&self) -> Result<EndToEndPublicKey, Self::Error>;
     async fn generate_block(
         &self,
@@ -133,6 +148,18 @@ pub trait NodeInterface {
 
     async fn mempool_get_fee_rate(&self, in_top_x_mb: usize) -> Result<FeeRate, Self::Error>;
     async fn mempool_get_fee_rate_points(&self) -> Result<Vec<(usize, FeeRate)>, Self::Error>;
+    async fn mempool_get_transaction(
+        &self,
+        tx_id: Id<Transaction>,
+    ) -> Result<Option<SignedTransaction>, Self::Error>;
+    async fn mempool_get_transactions(&self) -> Result<Vec<SignedTransaction>, Self::Error>;
+    async fn mempool_subscribe_to_events(&self) -> Result<MempoolEvents, Self::Error>;
 
     async fn get_utxo(&self, outpoint: UtxoOutPoint) -> Result<Option<TxOutput>, Self::Error>;
+}
+
+pub type MempoolEvents = Box<dyn Stream<Item = MempoolEvent> + Sync + Send + Unpin>;
+
+pub enum MempoolEvent {
+    NewTransaction { tx_id: Id<Transaction> },
 }

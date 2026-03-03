@@ -31,13 +31,12 @@ Check that:
 """
 
 from test_framework.test_framework import BitcoinTestFramework
-from test_framework.mintlayer import (make_tx, reward_input, tx_input, ATOMS_PER_COIN)
+from test_framework.mintlayer import (make_tx, reward_input, ATOMS_PER_COIN)
 from test_framework.util import assert_in, assert_equal
-from test_framework.mintlayer import mintlayer_hash, block_input_data_obj
+from test_framework.mintlayer import block_input_data_obj
 from test_framework.wallet_cli_controller import DEFAULT_ACCOUNT_INDEX, WalletCliController
 
 import asyncio
-import sys
 import random
 
 class WalletTokens(BitcoinTestFramework):
@@ -70,8 +69,6 @@ class WalletTokens(BitcoinTestFramework):
         return block_id
 
     def run_test(self):
-        if 'win32' in sys.platform:
-            asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
         asyncio.run(self.async_test())
 
     async def async_test(self):
@@ -94,7 +91,10 @@ class WalletTokens(BitcoinTestFramework):
 
             # Submit a valid transaction
             output = {
-                    'Transfer': [ { 'Coin': 501 * ATOMS_PER_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': pub_key_bytes}}} } ],
+                'Transfer': [
+                    { 'Coin': 501 * ATOMS_PER_COIN },
+                    { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': pub_key_bytes}}} }
+                ],
             }
             encoded_tx, tx_id = make_tx([reward_input(tip_id)], [output], 0)
 
@@ -142,7 +142,7 @@ class WalletTokens(BitcoinTestFramework):
             assert_in("Success", await wallet.sync())
 
             assert_in("Coins amount: 350", await wallet.get_balance())
-            assert_in(f"{token_id} amount: 10000", await wallet.get_balance())
+            assert_in(f"{token_id} ({ticker}), amount: 10000", await wallet.get_balance())
 
             ## create a new account and send some tokens to it
             await wallet.create_new_account()
@@ -157,7 +157,7 @@ class WalletTokens(BitcoinTestFramework):
             assert_in("Success", await wallet.sync())
 
             ## check the new balance
-            assert_in(f"{token_id} amount: 9989.99", await wallet.get_balance())
+            assert_in(f"{token_id} ({ticker}), amount: 9989.99", await wallet.get_balance())
 
             assert_in("The transaction was submitted successfully", await wallet.freeze_token(token_id, 'unfreezable'))
 

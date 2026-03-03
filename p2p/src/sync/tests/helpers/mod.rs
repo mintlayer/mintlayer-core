@@ -45,14 +45,14 @@ use common::{
     time_getter::TimeGetter,
 };
 use logging::log;
-use mempool::{event::TransactionProcessed, MempoolConfig, MempoolHandle};
+use mempool::{event::TransactionProcessed, MempoolConfig, MempoolHandle, MempoolInit};
 use networking::transport::TcpTransportSocket;
 use p2p_test_utils::{expect_future_val, expect_no_recv, expect_recv, SHORT_TIMEOUT};
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
 use randomness::Rng;
 use subsystem::{ManagerJoinHandle, ShutdownTrigger};
 use test_utils::random::Seed;
-use utils::atomics::SeqCstAtomicBool;
+use utils::{atomics::SeqCstAtomicBool, tokio_spawn_in_current_tracing_span};
 use utils_networking::IpOrSocketAddress;
 
 use crate::{
@@ -85,7 +85,7 @@ pub struct TestNode {
     subsystem_manager_handle: ManagerJoinHandle,
     chainstate_handle: ChainstateHandle,
     mempool_handle: MempoolHandle,
-    new_tip_receiver: UnboundedReceiver<Id<Block>>,
+    new_tip_receiver: UnboundedReceiver<Id<GenBlock>>,
     tx_processed_receiver: UnboundedReceiver<TransactionProcessed>,
     sync_mgr_notification_receiver: UnboundedReceiver<SyncManagerNotification>,
     protocol_version: ProtocolVersion,
@@ -145,10 +145,13 @@ impl TestNode {
         let sync_manager_chainstate_handle = sync_manager.chainstate().clone();
 
         let (error_sender, error_receiver) = mpsc::unbounded_channel();
-        let sync_manager_handle = logging::spawn_in_current_span(async move {
-            let e = sync_manager.run().await.unwrap_err();
-            let _ = error_sender.send(e);
-        });
+        let sync_manager_handle = tokio_spawn_in_current_tracing_span(
+            async move {
+                let e = sync_manager.run().await.unwrap_err();
+                let _ = error_sender.send(e);
+            },
+            "",
+        );
 
         let new_tip_receiver = subscribe_to_new_tip(&sync_manager_chainstate_handle).await.unwrap();
         let tx_processed_receiver = subscribe_to_tx_processed(&mempool_handle).await.unwrap();
@@ -179,7 +182,7 @@ impl TestNode {
 
     pub async fn get_block(&self, block_id: Id<Block>) -> Option<Block> {
         self.chainstate_handle
-            .call(move |cs| cs.get_block(block_id))
+            .call(move |cs| cs.get_block(&block_id))
             .await
             .unwrap()
             .unwrap()
@@ -279,7 +282,7 @@ impl TestNode {
         expect_future_val!(future)
     }
 
-    pub async fn receive_new_tip_event(&mut self) -> Id<Block> {
+    pub async fn receive_new_tip_event(&mut self) -> Id<GenBlock> {
         expect_recv!(self.new_tip_receiver)
     }
 
@@ -597,6 +600,7 @@ impl TestNodeBuilder {
                 DefaultTransactionVerificationStrategy::new(),
                 None,
                 time_getter.clone(),
+                None,
             )
             .unwrap()
         });
@@ -605,13 +609,14 @@ impl TestNodeBuilder {
         }
         let chainstate = manager.add_subsystem("p2p-sync-test-chainstate", chainstate);
 
-        let mempool = mempool::make_mempool(
+        let mempool_init = MempoolInit::new(
             Arc::clone(&chain_config),
             mempool_config,
             chainstate.clone(),
             time_getter.clone(),
         );
-        let mempool = manager.add_custom_subsystem("p2p-sync-test-mempool", |h| mempool.init(h));
+        let mempool =
+            manager.add_custom_subsystem("p2p-sync-test-mempool", |h, _| mempool_init.init(h));
 
         let manager_handle = manager.main_in_task();
 
@@ -646,7 +651,7 @@ pub enum PeerManagerEventDesc {
         peer_id: PeerId,
         block_id: Id<Block>,
     },
-    NewChainstateTip(Id<Block>),
+    NewChainstateTip(Id<GenBlock>),
     NewValidTransactionReceived {
         peer_id: PeerId,
         txid: Id<Transaction>,
@@ -922,10 +927,10 @@ pub async fn make_new_top_blocks_return_headers(
                 .into_int()
                 .saturating_sub(start_distance_from_top);
             let start_block_id =
-                this.get_block_id_from_height(&start_height.into()).unwrap().unwrap();
+                this.get_block_id_from_height(start_height.into()).unwrap().unwrap();
             let mut last_block = match start_block_id.classify(this.get_chain_config()) {
                 common::chain::GenBlockId::Genesis(_) => None,
-                common::chain::GenBlockId::Block(id) => this.get_block(id).unwrap(),
+                common::chain::GenBlockId::Block(id) => this.get_block(&id).unwrap(),
             };
 
             for _ in 0..count {

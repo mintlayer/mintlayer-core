@@ -10,8 +10,8 @@ logging = { path = '../../logging' }
 storage-core = { path = '../core' }
 utils = { path = '../../utils' }
 
-# Commit "Fix off_t overflow on Windows"
-lmdb-mintlayer = { git = 'https://github.com/mintlayer/lmdb-rs-mintlayer.git', rev = '88d9f2bd49399f75ca1baa1537b2387252f9b5db' }
+# Commit "Merge pull request #27 from mintlayer/fix_2gb_failure_on_windows"
+lmdb-mintlayer = { git = 'https://github.com/mintlayer/lmdb-rs-mintlayer.git', rev = 'adc88b1f3781c6fc9c2ecc71fe9381a72adbc794' }
 
 [dev-dependencies]
 rstest.workspace = true

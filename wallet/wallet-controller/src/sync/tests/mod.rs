@@ -14,10 +14,15 @@
 // limitations under the License.
 
 use std::{
+    collections::BTreeSet,
     num::NonZeroUsize,
     sync::{Arc, Mutex},
     time::Duration,
 };
+
+use futures::executor::block_on;
+use rstest::rstest;
+use tokio::sync::mpsc;
 
 use blockprod::TimestampSearchData;
 use chainstate::ChainInfo;
@@ -25,25 +30,23 @@ use chainstate_test_framework::TestFramework;
 use common::{
     chain::{
         tokens::{RPCTokenInfo, TokenId},
-        DelegationId, Destination, OrderId, PoolId, RpcOrderInfo, SignedTransaction, Transaction,
+        Currency, DelegationId, Destination, OrderId, PoolId, RpcOrderInfo, SignedTransaction,
+        Transaction,
     },
     primitives::{time::Time, Amount},
 };
 use consensus::GenerateBlockInputData;
 use crypto::ephemeral_e2e::EndToEndPublicKey;
-use futures::executor::block_on;
 use logging::log;
 use mempool::{tx_accumulator::PackingStrategy, FeeRate};
 use mempool_types::tx_options::TxOptionsOverrides;
 use node_comm::{
-    node_traits::{ConnectedPeer, PeerId},
+    node_traits::{ConnectedPeer, MempoolEvents, PeerId},
     rpc_client::NodeRpcError,
 };
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
 use randomness::{seq::IteratorRandom, CryptoRng, Rng};
-use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
-use tokio::sync::mpsc;
 use utils_networking::IpOrSocketAddress;
 use wallet::wallet_events::WalletEventsNoOp;
 use wallet_types::{account_info::DEFAULT_ACCOUNT_INDEX, wallet_type::WalletControllerMode};
@@ -90,6 +93,7 @@ impl MockWallet {
     }
 }
 
+#[async_trait::async_trait]
 impl SyncingWallet for MockWallet {
     fn syncing_state(&self) -> WalletSyncingState {
         WalletSyncingState {
@@ -131,7 +135,7 @@ impl SyncingWallet for MockWallet {
                     ))
                     .await
             })
-            .unwrap();
+            .unwrap()
         }
 
         log::debug!(
@@ -143,7 +147,7 @@ impl SyncingWallet for MockWallet {
         Ok(())
     }
 
-    fn scan_blocks_for_unused_account(
+    async fn scan_blocks_for_unused_account(
         &mut self,
         common_block_height: BlockHeight,
         blocks: Vec<Block>,
@@ -163,12 +167,10 @@ impl SyncingWallet for MockWallet {
                 self.get_unused_acc_best_block_id()
             );
             self.next_unused_blocks.push(block.header().block_id());
-            block_on(async {
-                self.new_tip_tx
-                    .send((AccountType::UnusedAccount, block.header().block_id()))
-                    .await
-            })
-            .unwrap();
+            self.new_tip_tx
+                .send((AccountType::UnusedAccount, block.header().block_id()))
+                .await
+                .unwrap()
         }
 
         log::debug!(
@@ -213,7 +215,7 @@ impl NodeInterface for MockNode {
         unreachable!()
     }
     async fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, Self::Error> {
-        Ok(self.tf.lock().unwrap().chainstate.get_block(block_id).unwrap())
+        Ok(self.tf.lock().unwrap().chainstate.get_block(&block_id).unwrap())
     }
     async fn get_mainchain_blocks(
         &self,
@@ -249,7 +251,7 @@ impl NodeInterface for MockNode {
         &self,
         height: BlockHeight,
     ) -> Result<Option<Id<GenBlock>>, Self::Error> {
-        Ok(self.tf.lock().unwrap().chainstate.get_block_id_from_height(&height).unwrap())
+        Ok(self.tf.lock().unwrap().chainstate.get_block_id_from_height(height).unwrap())
     }
     async fn get_last_common_ancestor(
         &self,
@@ -297,10 +299,25 @@ impl NodeInterface for MockNode {
         unreachable!()
     }
 
+    async fn get_tokens_info(
+        &self,
+        _token_ids: BTreeSet<TokenId>,
+    ) -> Result<Vec<RPCTokenInfo>, Self::Error> {
+        unreachable!()
+    }
+
     async fn get_order_info(
         &self,
         _order_id: OrderId,
     ) -> Result<Option<RpcOrderInfo>, Self::Error> {
+        unreachable!()
+    }
+
+    async fn get_orders_info_by_currencies(
+        &self,
+        _ask_currency: Option<Currency>,
+        _give_currency: Option<Currency>,
+    ) -> Result<BTreeMap<OrderId, RpcOrderInfo>, Self::Error> {
         unreachable!()
     }
 
@@ -421,11 +438,26 @@ impl NodeInterface for MockNode {
             FeeRate::from_amount_per_kb(Amount::from_atoms(1)),
         )])
     }
+
+    async fn mempool_get_transaction(
+        &self,
+        _tx_id: Id<Transaction>,
+    ) -> Result<Option<SignedTransaction>, Self::Error> {
+        unreachable!()
+    }
+
+    async fn mempool_get_transactions(&self) -> Result<Vec<SignedTransaction>, Self::Error> {
+        unreachable!()
+    }
+
+    async fn mempool_subscribe_to_events(&self) -> Result<MempoolEvents, Self::Error> {
+        unreachable!()
+    }
 }
 
 fn create_chain(node: &MockNode, rng: &mut (impl Rng + CryptoRng), parent: u64, count: usize) {
     let mut tf = node.tf.lock().unwrap();
-    let parent_id = tf.chainstate.get_block_id_from_height(&parent.into()).unwrap().unwrap();
+    let parent_id = tf.chainstate.get_block_id_from_height(parent.into()).unwrap().unwrap();
     tf.create_chain(&parent_id, count, rng).unwrap();
 }
 

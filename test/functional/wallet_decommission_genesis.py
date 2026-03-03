@@ -38,7 +38,6 @@ from test_framework.util import assert_equal, assert_in
 from test_framework.wallet_cli_controller import DEFAULT_ACCOUNT_INDEX, WalletCliController
 
 import asyncio
-import sys
 import time
 
 GENESIS_POOL_ID = "123c4c600097c513e088b9be62069f0c74c7671c523c8e3469a1c3f14b7ea2c4"
@@ -161,8 +160,6 @@ class WalletDecommissionGenesis(BitcoinTestFramework):
         }
 
     def run_test(self):
-        if 'win32' in sys.platform:
-            asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
         asyncio.run(self.async_test())
 
     def setup_pool_and_transfer(self, transactions):

@@ -15,6 +15,8 @@
 
 use std::{net::SocketAddr, str::FromStr, sync::Arc};
 
+use tokio::task::JoinHandle;
+
 use blockprod::{test_blockprod_config, BlockProductionHandle};
 use chainstate::{
     make_chainstate, rpc::ChainstateRpcServer, ChainstateConfig, ChainstateHandle,
@@ -27,12 +29,11 @@ use common::{
     },
     primitives::{Idable, H256},
 };
-use mempool::{MempoolConfig, MempoolHandle};
+use mempool::{MempoolConfig, MempoolHandle, MempoolInit};
 use node_comm::{make_handles_client, make_rpc_client, node_traits::NodeInterface};
 use p2p::P2pHandle;
 use rpc::RpcAuthData;
 use subsystem::ShutdownTrigger;
-use tokio::task::JoinHandle;
 
 pub async fn start_subsystems(
     chain_config: Arc<ChainConfig>,
@@ -69,6 +70,7 @@ pub async fn start_subsystems(
         sync_stalling_timeout: Default::default(),
         peer_manager_config: Default::default(),
         protocol_config: Default::default(),
+        custom_disconnection_reason_for_banning: Default::default(),
     };
     let mempool_config = MempoolConfig::new();
 
@@ -79,18 +81,20 @@ pub async fn start_subsystems(
         DefaultTransactionVerificationStrategy::new(),
         None,
         Default::default(),
+        None,
     )
     .unwrap();
 
     let chainstate_handle = manager.add_subsystem("test-chainstate", chainstate);
 
-    let mempool = mempool::make_mempool(
+    let mempool_init = MempoolInit::new(
         Arc::clone(&chain_config),
         mempool_config,
         chainstate_handle.clone(),
         Default::default(),
     );
-    let mempool_handle = manager.add_custom_subsystem("test-mempool", |hdl| mempool.init(hdl));
+    let mempool_handle =
+        manager.add_custom_subsystem("test-mempool", |hdl, _| mempool_init.init(hdl));
 
     let peerdb_storage = p2p::test_helpers::peerdb_inmemory_store();
     let p2p_handle = p2p::make_p2p(

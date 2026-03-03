@@ -20,7 +20,7 @@ mod helper_types;
 pub use command_handler::CommandHandler;
 use dyn_clone::DynClone;
 pub use errors::WalletCliCommandError;
-use helper_types::YesNo;
+use helper_types::CliYesNo;
 use regex::Regex;
 use rpc::description::{Described, Module};
 use wallet_controller::types::WalletTypeArgs;
@@ -42,9 +42,13 @@ use p2p_types::{bannable_address::BannableAddress, PeerId};
 use serialization::hex_encoded::HexEncoded;
 use utils_networking::IpOrSocketAddress;
 
+use crate::helper_types::{
+    CliCurrency, CliTokenTotalSupply, CliUnspecifiedCurrencyTransfer, CliUtxoOutPoint,
+};
+
 use self::helper_types::{
-    CliForceReduce, CliIsFreezable, CliIsUnfreezable, CliStoreSeedPhrase, CliUtxoState,
-    CliUtxoTypes, CliWithLocked, EnableOrDisable,
+    CliEnableOrDisable, CliForceReduceLookaheadSize, CliIsFreezable, CliIsUnfreezable,
+    CliStoreSeedPhrase, CliTokenTransfer, CliUtxoState, CliUtxoTypes, CliWithLocked,
 };
 
 #[derive(Debug, Subcommand, Clone)]
@@ -94,6 +98,18 @@ pub enum CreateWalletSubCommand {
         #[arg(long)]
         device_id: Option<String>,
     },
+    /// (Beta) Create a wallet using a connected Ledger wallet.
+    ///
+    /// Only the public keys will be kept in the wallet file.
+    ///
+    /// Cannot specify a mnemonic or passphrase here, both are managed on the device.
+    /// Depending on its configuration, the passphrase may need to be entered manually
+    /// each time or may be applied automatically after unlocking with a secondary PIN.
+    #[command()]
+    Ledger {
+        /// File path of the wallet file
+        wallet_path: PathBuf,
+    },
 }
 
 impl CreateWalletSubCommand {
@@ -120,6 +136,8 @@ impl CreateWalletSubCommand {
                 wallet_path,
                 device_id,
             } => (wallet_path, WalletTypeArgs::Trezor { device_id }),
+
+            Self::Ledger { wallet_path } => (wallet_path, WalletTypeArgs::Ledger),
         }
     }
 }
@@ -169,6 +187,18 @@ pub enum RecoverWalletSubCommand {
         #[arg(long)]
         device_id: Option<String>,
     },
+    /// (Beta) Recover a wallet using a connected Ledger hardware wallet.
+    ///
+    /// Only the public keys will be kept in the wallet file.
+    ///
+    /// Cannot specify a mnemonic or passphrase here, both are managed on the device.
+    /// Depending on its configuration, the passphrase may need to be entered manually
+    /// each time or may be applied automatically after unlocking with a secondary PIN.
+    #[command()]
+    Ledger {
+        /// File path of the wallet file
+        wallet_path: PathBuf,
+    },
 }
 
 impl RecoverWalletSubCommand {
@@ -195,6 +225,8 @@ impl RecoverWalletSubCommand {
                 wallet_path,
                 device_id,
             } => (wallet_path, WalletTypeArgs::Trezor { device_id }),
+
+            Self::Ledger { wallet_path } => (wallet_path, WalletTypeArgs::Ledger),
         }
     }
 }
@@ -226,6 +258,15 @@ pub enum OpenWalletSubCommand {
         /// If not specified and if there are multiple devices connected, a choice will be presented.
         #[arg(long)]
         device_id: Option<String>,
+    },
+
+    /// (Beta) Open a wallet file that is connected to a Ledger hardware wallet.
+    #[command()]
+    Ledger {
+        /// File path of the wallet file
+        wallet_path: PathBuf,
+        /// The existing password, if the wallet is encrypted.
+        encryption_password: Option<String>,
     },
 }
 
@@ -312,7 +353,7 @@ pub enum ColdWalletCommand {
 
         /// Forces the reduction of lookahead size even below the last used address;
         /// this may cause the wallet to lose track of used addresses and its actual balance.
-        i_know_what_i_am_doing: Option<CliForceReduce>,
+        i_know_what_i_am_doing: Option<CliForceReduceLookaheadSize>,
     },
 
     /// Creates a QR code of the provided address
@@ -324,7 +365,7 @@ pub enum ColdWalletCommand {
     #[clap(name = "address-new")]
     NewAddress,
 
-    /// Reveal the public key behind the specified "public key hash" address as a hex encoded string.
+    /// Reveal the public key behind the specified "public key hash" address as a hex-encoded string.
     #[clap(name = "address-reveal-public-key-as-hex")]
     RevealPublicKeyHex {
         public_key_hash: String,
@@ -368,14 +409,14 @@ pub enum ColdWalletCommand {
 
     #[clap(name = "account-sign-raw-transaction")]
     SignRawTransaction {
-        /// Hex encoded transaction or PartiallySignedTransaction.
+        /// Hex-encoded transaction or PartiallySignedTransaction.
         transaction: String,
     },
 
     #[clap(name = "challenge-sign-hex")]
     #[clap(hide = true)]
     SignChallegeHex {
-        /// Hex encoded message to be signed
+        /// Hex-encoded message to be signed
         message: String,
         /// Address with whose private key to sign the challenge
         address: String,
@@ -392,9 +433,9 @@ pub enum ColdWalletCommand {
     #[clap(name = "challenge-verify-hex")]
     #[clap(hide = true)]
     VerifyChallengeHex {
-        /// The hex encoded message that was signed
+        /// The hex-encoded message that was signed
         message: String,
-        /// Hex encoded signed challenge
+        /// Hex-encoded signed challenge
         signed_challenge: String,
         /// Address with whose private key the challenge was signed with
         address: String,
@@ -404,7 +445,7 @@ pub enum ColdWalletCommand {
     VerifyChallenge {
         /// The message that was signed
         message: String,
-        /// Hex encoded signed challenge
+        /// Hex-encoded signed challenge
         signed_challenge: String,
         /// Address with whose private key the challenge was signed with
         address: String,
@@ -440,7 +481,7 @@ pub enum WalletCommand {
     #[clap(name = "config-broadcast")]
     ConfigBroadcast {
         #[arg(value_enum)]
-        broadcast: YesNo,
+        broadcast: CliYesNo,
     },
 
     #[clap(name = "account-create")]
@@ -502,7 +543,7 @@ pub enum WalletCommand {
 
     #[clap(name = "standalone-add-private-key-from-hex")]
     AddStandalonePrivateKey {
-        /// The new hex encoded standalone private key to be added to the selected account
+        /// The new hex-encoded standalone private key to be added to the selected account
         hex_private_key: HexEncoded<PrivateKey>,
 
         /// Optionally specify a label to the new address
@@ -556,7 +597,7 @@ pub enum WalletCommand {
         description: String,
         /// Ticker of the token
         ticker: String,
-        /// The owner, represented by a public key (hex encoded)
+        /// The owner, represented by a public key (hex-encoded)
         creator: Option<HexEncoded<PublicKey>>,
         /// URI for the icon of the NFT
         icon_uri: Option<String>,
@@ -570,14 +611,21 @@ pub enum WalletCommand {
     IssueNewToken {
         /// The ticker/symbol of the token created
         token_ticker: String,
+
         /// The maximum number of digits after the decimal points
         number_of_decimals: u8,
+
         /// URI for data related to the token (website, media, etc)
         metadata_uri: String,
+
         /// The address of the authority who will be able to manage this token
         authority_address: String,
+
         /// The total supply of this token
-        token_supply: String,
+        ///
+        /// Valid values are "unlimited", "lockable" and "fixed(amount)"
+        token_supply: CliTokenTotalSupply,
+
         /// Whether it's possible to centrally freeze this token for all users (due to migration requirements, for example)
         is_freezable: CliIsFreezable,
     },
@@ -660,6 +708,9 @@ pub enum WalletCommand {
     /// The utxos to pay fees from will be selected automatically; these will be normal, single-sig utxos.
     /// The optional "fee change address" specifies the destination for the change for the fee payment;
     /// If it's unset, the destination will be taken from one of existing single-sig utxos.
+    // TODO: as mentioned in another TODO for `TransactionCompose` below, we should have a more general
+    // `CliCurrencyTransfer`, which would allow to specify either token or coin transfers. Once it's implemented,
+    // it's better to generalize this command, so that it can perform coin transfers as well.
     #[clap(name = "token-make-tx-to-send-from-multisig-address")]
     #[clap(hide = true)]
     MakeTxToSendTokensFromMultisigAddress {
@@ -672,7 +723,7 @@ pub enum WalletCommand {
 
         /// The transaction outputs, in the format `transfer(token_id,address,amount)`
         /// e.g. transfer(tmltk1e7egscactagl7e3met67658hpl4vf9ux0ralaculjvnzhtc4qmsqv9y857,tmt1q8lhgxhycm8e6yk9zpnetdwtn03h73z70c3ha4l7,0.9)
-        outputs: Vec<String>,
+        outputs: Vec<CliTokenTransfer>,
     },
 
     #[clap(name = "address-send")]
@@ -685,8 +736,7 @@ pub enum WalletCommand {
         /// A utxo can be from a transaction output or a block reward output:
         /// e.g tx(000000000000000000059fa50103b9683e51e5aba83b8a34c9b98ce67d66136c,1) or
         /// block(000000000000000000059fa50103b9683e51e5aba83b8a34c9b98ce67d66136c,2)
-        #[arg(default_values_t = Vec::<String>::new())]
-        utxos: Vec<String>,
+        utxos: Vec<CliUtxoOutPoint>,
     },
 
     /// Sweep all spendable coins or tokens from the specified (or all) addresses to the given destination address.
@@ -724,7 +774,7 @@ pub enum WalletCommand {
         /// You can choose what utxo to spend. A utxo can be from a transaction output or a block reward output:
         /// e.g tx(000000000000000000059fa50103b9683e51e5aba83b8a34c9b98ce67d66136c,1) or
         /// block(000000000000000000059fa50103b9683e51e5aba83b8a34c9b98ce67d66136c,2)
-        utxo: String,
+        utxo: CliUtxoOutPoint,
         /// Optional change address; if not specified, it returns the change to the same address from the input.
         #[arg(long = "change")]
         change_address: Option<String>,
@@ -732,7 +782,7 @@ pub enum WalletCommand {
 
     #[clap(name = "transaction-inspect")]
     InspectTransaction {
-        /// Hex encoded transaction or PartiallySignedTransaction.
+        /// Hex-encoded transaction or PartiallySignedTransaction.
         transaction: String,
     },
 
@@ -863,7 +913,7 @@ pub enum WalletCommand {
 
     /// Enable or disable p2p networking in the node
     #[clap(name = "node-enable-p2p-networking")]
-    NodeEnableNetworking { enable: EnableOrDisable },
+    NodeEnableNetworking { enable: CliEnableOrDisable },
 
     #[clap(name = "node-connect-to-peer")]
     Connect { address: IpOrSocketAddress },
@@ -915,13 +965,13 @@ pub enum WalletCommand {
 
     #[clap(name = "node-submit-block")]
     SubmitBlock {
-        /// Hex encoded block
+        /// Hex-encoded block
         block: HexEncoded<Block>,
     },
 
     #[clap(name = "node-submit-transaction")]
     SubmitTransaction {
-        /// Hex encoded transaction.
+        /// Hex-encoded transaction.
         transaction: HexEncoded<SignedTransaction>,
         /// Do not store the transaction in the wallet
         #[arg(long = "do-not-store", default_value_t = false)]
@@ -981,7 +1031,7 @@ pub enum WalletCommand {
         /// of the next block.
         seconds_to_check_for_height: u64,
         /// This determines how "seconds_to_check_for_height" will be interpreted
-        check_all_timestamps_between_blocks: YesNo,
+        check_all_timestamps_between_blocks: CliYesNo,
     },
 
     /// Return mainchain block ids with heights in the given range using the given step.
@@ -994,28 +1044,36 @@ pub enum WalletCommand {
         /// The starting height; normally, this will be the last height mentioned in
         /// the corresponding CHECKPOINTS_DATA array.
         start_height: BlockHeight,
-        /// The end (exclusive) height; normally, this will be some large number, which
-        /// is definitely bigger than the current best block height, e.g. a million.
+        /// The end (exclusive) height. For simplicity, you can set it to some large number
+        /// that is bigger than the current best block height, e.g. a million, in which case
+        /// the command will print checkpoints until the maximum possible height.
+        /// Note however that the last checkpoint that you put into CHECKPOINTS_DATA should
+        /// be at least 1000 below the current tip, to ensure that reorgs below that checkpoint
+        /// are no longer possible.
         end_height: BlockHeight,
         /// The step; in our current CHECKPOINTS_DATA arrays we use 500 as the step.
         step: NonZeroUsize,
     },
 
+    // TODO: rework `CliUnspecifiedCurrencyTransfer` into a more general `CliCurrencyTransfer`,
+    // which would allow the user to say "transfer(token_id,addr,amount)" and "transfer(coin,addr,amount)"
+    // (while also supporting "transfer(addr,amount)" for backward compatibility).
+    // Then make `transaction-compose` support token transfers as well.
     #[clap(name = "transaction-compose")]
     TransactionCompose {
         /// The transaction outputs, in the format `transfer(address,amount)`
         /// e.g. transfer(tmt1q8lhgxhycm8e6yk9zpnetdwtn03h73z70c3ha4l7,0.9)
-        outputs: Vec<String>,
+        outputs: Vec<CliUnspecifiedCurrencyTransfer>,
         /// You can choose what utxos to spend (space separated as additional arguments).
         ///
         /// A utxo can be from a transaction output or a block reward output:
         /// e.g tx(000000000000000000059fa50103b9683e51e5aba83b8a34c9b98ce67d66136c,1) or
         /// block(000000000000000000059fa50103b9683e51e5aba83b8a34c9b98ce67d66136c,2)
-        #[arg(long = "utxos", default_values_t = Vec::<String>::new())]
-        utxos: Vec<String>,
+        #[arg(long = "utxos")]
+        utxos: Vec<CliUtxoOutPoint>,
 
-        /// This specifies that instead of a (hex encoded) PartiallySignedTransaction
-        /// the result should be a (hex encoded) "simple" transaction.
+        /// This specifies that instead of a (hex-encoded) PartiallySignedTransaction
+        /// the result should be a (hex-encoded) "simple" transaction.
         ///
         /// Producing a "simple" transaction will result in a shorter hex string, but you won't
         /// be able to use it with account-sign-raw-transaction in the cold wallet mode, which
@@ -1061,6 +1119,102 @@ pub enum WalletCommand {
     GetRawSignedTransaction {
         /// Transaction id, encoded in hex
         transaction_id: HexEncoded<Id<Transaction>>,
+    },
+
+    /// Create an order for exchanging an amount of one ("given") currency for a certain amount of
+    /// another ("asked") currency.
+    ///
+    /// Either of the currencies can be coins or tokens.
+    /// The ratio between the asked and given amounts determines the exchange rate.
+    ///
+    /// The entire given amount of the "given" currency will be locked inside the order, so that
+    /// it can be given away when the order is filled.
+    ///
+    /// The accumulated "ask" and the remaining "give" amounts can be withdrawn by concluding
+    /// the order.
+    #[clap(name = "order-create")]
+    CreateOrder {
+        /// The currency you are asking for - a token id or "coin" for coins.
+        ask_currency: CliCurrency,
+
+        /// The asked amount.
+        ask_amount: DecimalAmount,
+
+        /// The currency you will be giving - a token id or "coin" for coins.
+        give_currency: CliCurrency,
+
+        /// The given amount.
+        give_amount: DecimalAmount,
+
+        /// The address (key) that can authorize the conclusion and freezing of the order.
+        conclude_address: String,
+    },
+
+    /// Fill the specified order with the specified amount of the order's "asked" currency,
+    /// receiving the corresponding amount of the "given" currency.
+    #[clap(name = "order-fill")]
+    FillOrder {
+        /// The id of the order to fill.
+        order_id: String,
+
+        /// The amount of the "asked" currency to fill the order with.
+        amount: DecimalAmount,
+
+        /// The address where the corresponding amount of the order's "given" currency should be
+        /// transferred to.
+        /// If not specified, a new receive address will be generated for this purpose.
+        output_address: Option<String>,
+    },
+
+    /// Freeze the order.
+    ///
+    /// Once an order is frozen, it can no longer be filled. The only possible operation for
+    /// a frozen order is conclusion.
+    ///
+    /// Note that freezing an order is optional, you can conclude a non-frozen order too.
+    /// However it may not succeed if the order is still being actively filled. In such a case
+    /// you may want to freeze the order first, wait for the corresponding transaction to be
+    /// included in a block and then conclude the order.
+    ///
+    /// To be able to freeze an order, the order's conclude key must be owned by the selected
+    /// account.
+    #[clap(name = "order-freeze")]
+    FreezeOrder {
+        /// The id of the order to freeze.
+        order_id: String,
+    },
+
+    /// Conclude the order, withdrawing the accumulated "asked" and the remaining "given"
+    /// amounts.
+    ///
+    /// To be able to conclude an order, the order's conclude key must be owned by the selected
+    /// account.
+    #[clap(name = "order-conclude")]
+    ConcludeOrder {
+        /// The id of the order to conclude.
+        order_id: String,
+
+        /// The address where the accumulated "asked" amount and the remaining "given" amount
+        /// should be transferred to. If not specified, a new receive address will be generated
+        /// for this purpose.
+        output_address: Option<String>,
+    },
+
+    /// List orders whose conclude key is owned by the selected account.
+    #[clap(name = "order-list-own")]
+    ListOwnOrders,
+
+    /// List all active (i.e. not concluded and not frozen) orders, optionally filtering them
+    /// by the "asked" or "given" currency.
+    #[clap(name = "order-list-all-active")]
+    ListActiveOrders {
+        /// Filter orders by the specified "asked" currency - pass a token id or "coin" for coins.
+        #[arg(long = "ask-currency")]
+        ask_currency: Option<CliCurrency>,
+
+        /// Filter orders by the specified "given" currency - pass a token id or "coin" for coins.
+        #[arg(long = "give-currency")]
+        give_currency: Option<CliCurrency>,
     },
 }
 
@@ -1373,6 +1527,11 @@ mod tests {
     use rstest::rstest;
 
     use super::*;
+
+    #[ctor::ctor]
+    fn init() {
+        logging::init_logging();
+    }
 
     #[rstest]
     fn ensure_commands_have_description(

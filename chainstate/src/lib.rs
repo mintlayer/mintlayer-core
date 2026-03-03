@@ -19,7 +19,9 @@ mod interface;
 
 pub mod rpc;
 
-use std::sync::Arc;
+use std::{path::Path, sync::Arc};
+
+use tokio::sync::watch;
 
 use chainstate_interface::ChainstateInterface;
 use chainstate_interface_impl::ChainstateInterfaceImpl;
@@ -28,17 +30,18 @@ use common::{
     primitives::{BlockHeight, Id},
     time_getter::TimeGetter,
 };
-use detail::{bootstrap::BootstrapError, Chainstate};
-use interface::chainstate_interface_impl;
+use utils::set_flag::SetFlag;
+
+use crate::{detail::Chainstate, interface::chainstate_interface_impl};
 
 pub use crate::{
     config::{ChainstateConfig, MaxTipAge},
     detail::{
-        ban_score, block_invalidation::BlockInvalidatorError, calculate_median_time_past,
-        calculate_median_time_past_from_blocktimestamps, BlockError, BlockProcessingErrorClass,
-        BlockProcessingErrorClassification, BlockSource, ChainInfo, CheckBlockError,
-        CheckBlockTransactionsError, ConnectTransactionError, IOPolicyError, InitializationError,
-        Locator, NonZeroPoolBalances, OrphanCheckError, SpendStakeError,
+        ban_score, block_invalidation::BlockInvalidatorError, bootstrap::BootstrapError,
+        calculate_median_time_past, calculate_median_time_past_from_blocktimestamps, BlockError,
+        BlockProcessingErrorClass, BlockProcessingErrorClassification, BlockSource, ChainInfo,
+        CheckBlockError, CheckBlockTransactionsError, ConnectTransactionError, IOPolicyError,
+        InitializationError, Locator, NonZeroPoolBalances, OrphanCheckError, SpendStakeError,
         StorageCompatibilityCheckError, TokenIssuanceError, TokensError,
         TransactionVerifierStorageError, MEDIAN_TIME_SPAN,
     },
@@ -51,7 +54,11 @@ pub use tx_verifier;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum ChainstateEvent {
-    NewTip(Id<Block>, BlockHeight),
+    NewTip {
+        id: Id<GenBlock>,
+        height: BlockHeight,
+        is_initial_block_download: bool,
+    },
 }
 
 /// A struct that will be used to print ChainstateEvent when it becomes a part of tracing's span.
@@ -62,8 +69,15 @@ pub struct ChainstateEventTracingWrapper<'a>(pub &'a ChainstateEvent);
 impl std::fmt::Display for ChainstateEventTracingWrapper<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.0 {
-            ChainstateEvent::NewTip(id, height) => {
-                write!(f, "NewTip({id}, {height})")
+            ChainstateEvent::NewTip {
+                id: block_id,
+                height: block_height,
+                is_initial_block_download,
+            } => {
+                write!(
+                    f,
+                    "NewTip({block_id}, {block_height}, ibd={is_initial_block_download})"
+                )
             }
         }
     }
@@ -71,16 +85,26 @@ impl std::fmt::Display for ChainstateEventTracingWrapper<'_> {
 
 #[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 pub enum ChainstateError {
+    #[error("Block storage error: `{0}`")]
+    StorageError(#[from] chainstate_storage::Error),
+
     #[error("Initialization error: {0}")]
     FailedToInitializeChainstate(#[from] InitializationError),
+
     #[error("Block processing failed: `{0}`")]
     ProcessBlockError(#[from] BlockError),
+
     #[error("Property read error: `{0}`")]
     FailedToReadProperty(#[from] PropertyQueryError),
-    #[error("Block import error {0}")]
+
+    #[error("Bootstrap error {0}")]
     BootstrapError(#[from] BootstrapError),
+
     #[error("Error invoking block invalidator: {0}")]
     BlockInvalidatorError(#[from] BlockInvalidatorError),
+
+    #[error("I/O error: {0}")]
+    IoError(String),
 }
 
 pub type ChainstateSubsystem = Box<dyn ChainstateInterface>;
@@ -94,6 +118,7 @@ pub fn make_chainstate<S, V>(
     tx_verification_strategy: V,
     custom_orphan_error_hook: Option<Arc<detail::OrphanErrorHandler>>,
     time_getter: TimeGetter,
+    shutdown_initiated_rx: Option<watch::Receiver<SetFlag>>,
 ) -> Result<ChainstateSubsystem, ChainstateError>
 where
     S: chainstate_storage::BlockchainStorage + Sync + 'static,
@@ -106,7 +131,33 @@ where
         tx_verification_strategy,
         custom_orphan_error_hook,
         time_getter,
+        shutdown_initiated_rx,
     )?;
     let chainstate_interface = ChainstateInterfaceImpl::new(chainstate);
     Ok(Box::new(chainstate_interface))
+}
+
+pub fn export_bootstrap_file<CS: ChainstateInterface + ?Sized>(
+    chainsate: &CS,
+    file_path: &Path,
+    include_stale_blocks: bool,
+) -> Result<(), ChainstateError> {
+    let file_obj = std::fs::File::create(file_path)
+        .map_err(|err| ChainstateError::IoError(err.to_string()))?;
+    let writer: std::io::BufWriter<Box<dyn std::io::Write + Send>> =
+        std::io::BufWriter::new(Box::new(file_obj));
+
+    chainsate.export_bootstrap_stream(writer, include_stale_blocks)
+}
+
+pub fn import_bootstrap_file<CS: ChainstateInterface + ?Sized>(
+    chainsate: &mut CS,
+    file_path: &Path,
+) -> Result<(), ChainstateError> {
+    let file_obj =
+        std::fs::File::open(file_path).map_err(|err| ChainstateError::IoError(err.to_string()))?;
+    let reader: std::io::BufReader<Box<dyn std::io::Read + Send>> =
+        std::io::BufReader::new(Box::new(file_obj));
+
+    chainsate.import_bootstrap_stream(reader)
 }

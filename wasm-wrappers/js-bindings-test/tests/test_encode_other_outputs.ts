@@ -380,11 +380,11 @@ function issue_fungible_token_test() {
 }
 
 function issue_nft_test() {
-  const account_pubkey = make_default_account_privkey(
+  const account_privkey = make_default_account_privkey(
     MNEMONIC,
     Network.Testnet
   );
-  const receiving_privkey = make_receiving_address(account_pubkey, 0);
+  const receiving_privkey = make_receiving_address(account_privkey, 0);
   const receiving_pubkey = public_key_from_private_key(receiving_privkey);
 
   let encoded_nft = encode_output_issue_nft(

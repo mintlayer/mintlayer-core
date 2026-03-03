@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use storage_inmemory::InMemory;
+
 fn main() {
-    storage_backend_test_suite::main(storage_inmemory::InMemory::new).exit();
+    storage_backend_test_suite::main(InMemory::new, Some(InMemory::new)).exit();
 }

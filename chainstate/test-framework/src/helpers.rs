@@ -26,9 +26,9 @@ use common::{
     },
     primitives::{Amount, BlockHeight, Id, Idable},
 };
-use orders_accounting::OrdersAccountingDB;
+use orders_accounting::{OrdersAccountingDB, OrdersAccountingView as _};
 use randomness::{CryptoRng, Rng, SliceRandom as _};
-use test_utils::random_ascii_alphanumeric_string;
+use test_utils::{random_ascii_alphanumeric_string, token_utils::random_nft_issuance};
 
 use crate::{get_output_value, TestFramework, TransactionBuilder};
 
@@ -64,7 +64,7 @@ pub fn issue_and_mint_random_token_from_best_block(
         TokenIssuance::V1(issuance)
     };
 
-    let (token_id, _, utxo_with_change) =
+    let (token_id, _, _, utxo_with_change) =
         issue_token_from_block(rng, tf, best_block_id, utxo_to_pay_fee, issuance);
 
     let best_block_id = tf.best_block_id();
@@ -91,14 +91,14 @@ pub fn issue_token_from_block(
     parent_block_id: Id<GenBlock>,
     utxo_to_pay_fee: UtxoOutPoint,
     issuance: TokenIssuance,
-) -> (TokenId, Id<Block>, UtxoOutPoint) {
+) -> (
+    TokenId,
+    /*issuance_block_id*/ Id<Block>,
+    /*issuance_tx*/ Transaction,
+    /*change_outpoint*/ UtxoOutPoint,
+) {
     let token_issuance_fee = tf.chainstate.get_chain_config().fungible_token_issuance_fee();
-
-    let fee_utxo_coins =
-        get_output_value(tf.chainstate.utxo(&utxo_to_pay_fee).unwrap().unwrap().output())
-            .unwrap()
-            .coin_amount()
-            .unwrap();
+    let fee_utxo_coins = tf.coin_amount_from_utxo(&utxo_to_pay_fee);
 
     let tx = TransactionBuilder::new()
         .add_input(utxo_to_pay_fee.into(), InputWitness::NoSignature(None))
@@ -118,13 +118,64 @@ pub fn issue_token_from_block(
     let tx_id = tx.transaction().get_id();
     let block = tf
         .make_block_builder()
-        .add_transaction(tx)
+        .add_transaction(tx.clone())
         .with_parent(parent_block_id)
         .build(rng);
     let block_id = block.get_id();
     tf.process_block(block, BlockSource::Local).unwrap();
 
-    (token_id, block_id, UtxoOutPoint::new(tx_id.into(), 0))
+    (
+        token_id,
+        block_id,
+        tx.take_transaction(),
+        UtxoOutPoint::new(tx_id.into(), 0),
+    )
+}
+
+pub fn make_token_issuance(
+    rng: &mut impl Rng,
+    supply: TokenTotalSupply,
+    freezable: IsTokenFreezable,
+) -> TokenIssuance {
+    TokenIssuance::V1(TokenIssuanceV1 {
+        token_ticker: random_ascii_alphanumeric_string(rng, 1..5).as_bytes().to_vec(),
+        number_of_decimals: rng.gen_range(1..18),
+        metadata_uri: random_ascii_alphanumeric_string(rng, 1..1024).as_bytes().to_vec(),
+        total_supply: supply,
+        authority: Destination::AnyoneCanSpend,
+        is_freezable: freezable,
+    })
+}
+
+pub fn issue_token_from_genesis(
+    rng: &mut (impl Rng + CryptoRng),
+    tf: &mut TestFramework,
+    supply: TokenTotalSupply,
+    freezable: IsTokenFreezable,
+) -> (
+    TokenId,
+    /*issuance_block_id*/ Id<Block>,
+    /*issuance_tx*/ Transaction,
+    TokenIssuance,
+    /*change_outpoint*/ UtxoOutPoint,
+) {
+    let utxo_input_outpoint = UtxoOutPoint::new(tf.best_block_id().into(), 0);
+    let issuance = make_token_issuance(rng, supply, freezable);
+    let (token_id, issuance_block_id, issuance_tx, change_outpoint) = issue_token_from_block(
+        rng,
+        tf,
+        tf.genesis().get_id().into(),
+        utxo_input_outpoint,
+        issuance.clone(),
+    );
+
+    (
+        token_id,
+        issuance_block_id,
+        issuance_tx,
+        issuance,
+        change_outpoint,
+    )
 }
 
 pub fn mint_tokens_in_block(
@@ -141,7 +192,7 @@ pub fn mint_tokens_in_block(
 
     let nonce = BlockchainStorageRead::get_account_nonce_count(
         &tf.storage.transaction_ro().unwrap(),
-        AccountType::Token(token_id),
+        &AccountType::Token(token_id),
     )
     .unwrap()
     .map_or(AccountNonce::new(0), |n| n.increment().unwrap());
@@ -185,6 +236,46 @@ pub fn mint_tokens_in_block(
     (block_id, tx_id)
 }
 
+pub fn issue_random_nft_from_best_block(
+    rng: &mut (impl Rng + CryptoRng),
+    tf: &mut TestFramework,
+    utxo_to_pay_fee: UtxoOutPoint,
+) -> (
+    TokenId,
+    /*nft*/ UtxoOutPoint,
+    /*coins change*/ UtxoOutPoint,
+) {
+    let nft_issuance_fee = tf.chainstate.get_chain_config().nft_issuance_fee(BlockHeight::zero());
+    let fee_utxo_coins = tf.coin_amount_from_utxo(&utxo_to_pay_fee);
+
+    let nft_tx_first_input = TxInput::Utxo(utxo_to_pay_fee);
+    let nft_id = TokenId::from_tx_input(&nft_tx_first_input);
+    let nft_issuance = random_nft_issuance(tf.chain_config().as_ref(), rng);
+
+    let ntf_issuance_tx = TransactionBuilder::new()
+        .add_input(nft_tx_first_input, InputWitness::NoSignature(None))
+        .add_output(TxOutput::IssueNft(
+            nft_id,
+            Box::new(nft_issuance.clone().into()),
+            Destination::AnyoneCanSpend,
+        ))
+        .add_output(TxOutput::Transfer(
+            OutputValue::Coin((fee_utxo_coins - nft_issuance_fee).unwrap()),
+            Destination::AnyoneCanSpend,
+        ))
+        .build();
+    let nft_issuance_tx_id = ntf_issuance_tx.transaction().get_id();
+    let nft_utxo = UtxoOutPoint::new(nft_issuance_tx_id.into(), 0);
+    let change_utxo = UtxoOutPoint::new(nft_issuance_tx_id.into(), 1);
+
+    tf.make_block_builder()
+        .add_transaction(ntf_issuance_tx)
+        .build_and_process(rng)
+        .unwrap();
+
+    (nft_id, nft_utxo, change_utxo)
+}
+
 /// Given the fill amount in the "ask" currency, return the filled amount in the "give" currency.
 pub fn calculate_fill_order(
     tf: &TestFramework,
@@ -201,6 +292,30 @@ pub fn calculate_fill_order(
         orders_version,
     )
     .unwrap()
+}
+
+pub fn order_min_non_zero_fill_amount(
+    tf: &TestFramework,
+    order_id: &OrderId,
+    orders_version: OrdersVersion,
+) -> Amount {
+    match orders_version {
+        // Note: in orders v0 even direct zero fills are allowed.
+        // However, this function is supposed to only return non-zero amounts.
+        OrdersVersion::V0 => Amount::from_atoms(1),
+
+        // In orders v1, the fill amount must be big enough so that the filled amount is non-zero.
+        OrdersVersion::V1 => {
+            let db_tx = tf.storage.transaction_ro().unwrap();
+            let orders_db = OrdersAccountingDB::new(&db_tx);
+
+            let order_data = orders_db.get_order_data(order_id).unwrap().unwrap();
+            let original_ask = order_data.ask().amount().into_atoms();
+            let original_give = order_data.give().amount().into_atoms();
+
+            Amount::from_atoms(original_ask.div_ceil(original_give))
+        }
+    }
 }
 
 /// Split an u128 value into the specified number of "randomish" parts (the min part size is half

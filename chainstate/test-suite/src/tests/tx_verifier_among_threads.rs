@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeSet;
+
 use chainstate_test_framework::{TestFramework, TestStore};
 use common::chain::config::Builder as ConfigBuilder;
 use common::primitives::Amount;
@@ -138,6 +140,10 @@ impl OrdersAccountingView for EmptyOrdersAccountingView {
 
     fn get_give_balance(&self, _id: &OrderId) -> Result<Amount, Self::Error> {
         Ok(Amount::ZERO)
+    }
+
+    fn get_all_order_ids(&self) -> Result<BTreeSet<OrderId>, Self::Error> {
+        Ok(BTreeSet::new())
     }
 }
 

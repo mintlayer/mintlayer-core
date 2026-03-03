@@ -1,0 +1,41 @@
+// Copyright (c) 2021-2025 RBB S.r.l
+// opensource@mintlayer.org
+// SPDX-License-Identifier: MIT
+// Licensed under the MIT License;
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use std::collections::BTreeMap;
+
+use crate::chain::tokens::TokenId;
+
+#[derive(Clone, Copy, Debug)]
+pub struct TokenDecimals(pub u8);
+
+pub trait TokenDecimalsProvider {
+    fn get_token_decimals(
+        &self,
+        token_id: &TokenId,
+    ) -> Result<TokenDecimals, TokenDecimalsUnavailableError>;
+}
+
+impl TokenDecimalsProvider for BTreeMap<TokenId, TokenDecimals> {
+    fn get_token_decimals(
+        &self,
+        token_id: &TokenId,
+    ) -> Result<TokenDecimals, TokenDecimalsUnavailableError> {
+        self.get(token_id).copied().ok_or(TokenDecimalsUnavailableError(*token_id))
+    }
+}
+
+#[derive(thiserror::Error, Debug, Clone, Eq, PartialEq)]
+#[error("Token decimals unavailable for token {0:x}")]
+pub struct TokenDecimalsUnavailableError(TokenId);

@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use common::{chain::OrderId, primitives::Amount};
 
@@ -76,6 +76,10 @@ impl OrdersAccountingStorageRead for InMemoryOrdersAccounting {
 
     fn get_give_balance(&self, id: &OrderId) -> Result<Option<Amount>, Self::Error> {
         Ok(self.give_balances.get(id).cloned())
+    }
+
+    fn get_all_order_ids(&self) -> Result<BTreeSet<OrderId>, Self::Error> {
+        Ok(self.orders_data.keys().copied().collect())
     }
 }
 

@@ -317,13 +317,13 @@ impl BanScore for CheckBlockError {
             CheckBlockError::MerkleRootCalculationFailed(_, _) => 100,
             CheckBlockError::BlockRewardMaturityError(err) => err.ban_score(),
             CheckBlockError::PropertyQueryError(_) => 100,
-            CheckBlockError::CheckpointMismatch(_, _) => 100,
-            CheckBlockError::ParentCheckpointMismatch(_, _, _) => 100,
+            CheckBlockError::CheckpointMismatch { .. } => 100,
             CheckBlockError::GetAncestorError(_) => 100,
-            CheckBlockError::AttemptedToAddBlockBeforeReorgLimit(_, _, _) => 100,
+            CheckBlockError::AttemptedToAddBlockBeforeReorgLimit { .. } => 100,
             CheckBlockError::EpochSealError(err) => err.ban_score(),
             CheckBlockError::InvalidParent { .. } => 100,
             CheckBlockError::InMemoryReorgFailed(err) => err.ban_score(),
+            CheckBlockError::InvalidBlockAlreadyProcessed(_) => 100,
         }
     }
 }
@@ -568,11 +568,13 @@ impl BanScore for pos_accounting::Error {
 impl BanScore for ChainstateError {
     fn ban_score(&self) -> u32 {
         match self {
+            ChainstateError::StorageError(_) => 0,
             ChainstateError::FailedToInitializeChainstate(_) => 0,
             ChainstateError::ProcessBlockError(e) => e.ban_score(),
             ChainstateError::FailedToReadProperty(_) => 0,
             ChainstateError::BootstrapError(_) => 0,
             ChainstateError::BlockInvalidatorError(_) => 0,
+            ChainstateError::IoError(_) => 0,
         }
     }
 }

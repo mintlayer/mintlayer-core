@@ -25,7 +25,7 @@ use common::time_getter::TimeGetter;
 use logging::log;
 use networking::transport::{TransportListener, TransportSocket};
 use p2p_types::socket_address::SocketAddress;
-use utils::atomics::SeqCstAtomicBool;
+use utils::{atomics::SeqCstAtomicBool, tokio_spawn_in_tracing_span};
 
 use crate::{
     error::P2pError,
@@ -96,7 +96,7 @@ impl<T: TransportSocket> DefaultNetworkingService<T> {
             subscribers_receiver,
             protocol_version,
         );
-        let backend_task = logging::spawn_in_span(
+        let backend_task = tokio_spawn_in_tracing_span(
             async move {
                 match backend.run().await {
                     Ok(never) => match never {},
@@ -110,6 +110,7 @@ impl<T: TransportSocket> DefaultNetworkingService<T> {
                 }
             },
             tracing_span,
+            "P2p backend",
         );
 
         Ok((

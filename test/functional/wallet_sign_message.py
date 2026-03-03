@@ -25,11 +25,10 @@ Check that:
 
 from random import choice, randint
 from test_framework.test_framework import BitcoinTestFramework
-from test_framework.util import assert_equal, assert_in
+from test_framework.util import assert_in
 from test_framework.wallet_cli_controller import WalletCliController
 
 import asyncio
-import sys
 import string
 
 class WalletSignMessage(BitcoinTestFramework):
@@ -47,8 +46,6 @@ class WalletSignMessage(BitcoinTestFramework):
         self.sync_all(self.nodes[0:1])
 
     def run_test(self):
-        if 'win32' in sys.platform:
-            asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
         asyncio.run(self.async_test())
 
     async def async_test(self):
@@ -67,7 +64,7 @@ class WalletSignMessage(BitcoinTestFramework):
                 output = await wallet.sign_challenge_hex(message, destination)
             else:
                 output = await wallet.sign_challenge_plain(message, destination)
-            assert_in("The generated hex encoded signature is", output)
+            assert_in("The generated hex-encoded signature is", output)
             signature = output.split('\n')[2]
 
             await wallet.close_wallet()

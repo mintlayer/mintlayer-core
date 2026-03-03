@@ -194,7 +194,7 @@ pub trait WalletStorageWriteLocked: WalletStorageReadLocked {
         id: &AccountDerivationPathId,
         content: &ExtendedPublicKey,
     ) -> Result<()>;
-    fn det_public_key(&mut self, id: &AccountDerivationPathId) -> Result<()>;
+    fn del_public_key(&mut self, id: &AccountDerivationPathId) -> Result<()>;
     fn set_median_time(&mut self, median_time: BlockTimestamp) -> Result<()>;
     fn set_lookahead_size(&mut self, lookahead_size: u32) -> Result<()>;
     fn clear_public_keys(&mut self) -> Result<()>;
@@ -282,11 +282,14 @@ pub trait Transactional<'t> {
     fn transaction_ro_unlocked<'s: 't>(&'s self) -> Result<Self::TransactionRoUnlocked>;
 
     /// Start a read-write transaction.
-    fn transaction_rw<'s: 't>(&'s self, size: Option<usize>) -> Result<Self::TransactionRwLocked>;
+    fn transaction_rw<'s: 't>(
+        &'s mut self,
+        size: Option<usize>,
+    ) -> Result<Self::TransactionRwLocked>;
 
     /// Start a read-write transaction.
     fn transaction_rw_unlocked<'s: 't>(
-        &'s self,
+        &'s mut self,
         size: Option<usize>,
     ) -> Result<Self::TransactionRwUnlocked>;
 }

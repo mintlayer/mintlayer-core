@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::ops::Deref;
+use std::{collections::BTreeSet, ops::Deref};
 
 use common::{chain::OrderId, primitives::Amount};
 
@@ -26,6 +26,7 @@ pub trait OrdersAccountingView {
     fn get_order_data(&self, id: &OrderId) -> Result<Option<OrderData>, Self::Error>;
     fn get_ask_balance(&self, id: &OrderId) -> Result<Amount, Self::Error>;
     fn get_give_balance(&self, id: &OrderId) -> Result<Amount, Self::Error>;
+    fn get_all_order_ids(&self) -> Result<BTreeSet<OrderId>, Self::Error>;
 }
 
 pub trait FlushableOrdersAccountingView {
@@ -56,5 +57,9 @@ where
 
     fn get_give_balance(&self, id: &OrderId) -> Result<Amount, Self::Error> {
         self.deref().get_give_balance(id)
+    }
+
+    fn get_all_order_ids(&self) -> Result<BTreeSet<OrderId>, Self::Error> {
+        self.deref().get_all_order_ids()
     }
 }

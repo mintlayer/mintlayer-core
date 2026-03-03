@@ -35,7 +35,6 @@ from test_framework.messages import (
     msg_addr,
     msg_addrv2,
     msg_block,
-    MSG_BLOCK,
     msg_blocktxn,
     msg_cfcheckpt,
     msg_cfheaders,
@@ -62,12 +61,10 @@ from test_framework.messages import (
     msg_sendheaders,
     msg_tx,
     MSG_TX,
-    MSG_TYPE_MASK,
     msg_verack,
     msg_version,
     MSG_WTX,
     msg_wtxidrelay,
-    sha256,
 )
 from test_framework.util import (
     MAX_NODES,
@@ -76,6 +73,7 @@ from test_framework.util import (
 )
 from test_framework.mintlayer import (
     calc_tx_id,
+    calc_block_id,
 )
 
 logger = logging.getLogger("TestFramework.p2p")
@@ -599,9 +597,10 @@ class NetworkThread(threading.Thread):
 
         NetworkThread.listeners = {}
         NetworkThread.protos = {}
-        if sys.platform == 'win32':
-            asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-        NetworkThread.network_event_loop = asyncio.new_event_loop()
+        # Use SelectorEventLoop both on Unix (where it's the default) and on Windows
+        # (where ProactorEventLoop is the default). Without this, the tests may fail
+        # spuriously on Windows with the error "RuntimeError: Event loop is closed".
+        NetworkThread.network_event_loop = asyncio.SelectorEventLoop()
 
     def run(self):
         """Start the network thread."""
@@ -700,6 +699,12 @@ class P2PDataStore(P2PInterface):
         if not self.last_block_hash:
             self.send_message({'header_list': []})
             return
+
+        # Note: below goes some old code which at the time of writing this was compeltely broken,
+        # because `calc_block_id` wasn't imported. Chances are that it has other problems too.
+        # If you've hit this assertion when writing a new test, remove the assertion and check
+        # the code for correctness.
+        assert False, "Currently unreachable"
 
         locator = message['header_list_request']
 

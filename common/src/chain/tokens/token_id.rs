@@ -61,3 +61,7 @@ impl<'de> serde::Deserialize<'de> for TokenId {
         HexifiedAddress::<Self>::serde_deserialize(deserializer)
     }
 }
+
+impl rpc_description::HasValueHint for TokenId {
+    const HINT_SER: rpc_description::ValueHint = rpc_description::ValueHint::HEXIFIED_TOKEN_ID;
+}

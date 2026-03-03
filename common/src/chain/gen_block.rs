@@ -99,6 +99,10 @@ impl Id<GenBlock> {
     }
 }
 
+impl rpc_description::HasValueHint for Id<GenBlock> {
+    const HINT_SER: rpc_description::ValueHint = rpc_description::ValueHint::HEX_STRING;
+}
+
 /// Classified generalized block
 #[derive(Eq, PartialEq, Clone, Debug)]
 pub enum GenBlockId {

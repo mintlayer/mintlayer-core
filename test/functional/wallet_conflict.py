@@ -27,17 +27,13 @@ Check that:
 * put the freeze tx in a block, the transfer should be rejected and conflicting in the wallet
 """
 
-import json
-from scalecodec.base import ScaleBytes
 from test_framework.test_framework import BitcoinTestFramework
-from test_framework.mintlayer import (make_tx, reward_input, ATOMS_PER_COIN, signed_tx_obj)
+from test_framework.mintlayer import (make_tx, reward_input, ATOMS_PER_COIN)
 from test_framework.util import assert_in, assert_equal
-from test_framework.mintlayer import mintlayer_hash, block_input_data_obj
+from test_framework.mintlayer import block_input_data_obj
 from test_framework.wallet_cli_controller import WalletCliController, DEFAULT_ACCOUNT_INDEX
 
 import asyncio
-import sys
-import random
 
 
 class WalletConflictTransaction(BitcoinTestFramework):
@@ -70,8 +66,6 @@ class WalletConflictTransaction(BitcoinTestFramework):
         return block_id
 
     def run_test(self):
-        if 'win32' in sys.platform:
-            asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
         asyncio.run(self.async_test())
 
     async def async_test(self):
@@ -119,7 +113,8 @@ class WalletConflictTransaction(BitcoinTestFramework):
             assert_in(f"Coins amount: {coins_to_send * 2 + token_fee}", await wallet.get_balance())
 
             address = await wallet.new_address()
-            token_id, tx_id, err = await wallet.issue_new_token("XXX", 2, "http://uri", address)
+            token_ticker = "XXX"
+            token_id, tx_id, err = await wallet.issue_new_token(token_ticker, 2, "http://uri", address)
             assert token_id is not None
             assert tx_id is not None
             assert err is None
@@ -144,7 +139,7 @@ class WalletConflictTransaction(BitcoinTestFramework):
 
             # now send tokens from acc1 and freeze the tokens from default acc
             assert_in("Success", await wallet.select_account(1))
-            assert_in(f"{token_id} amount: {tokens_to_mint}", await wallet.get_balance())
+            assert_in(f"{token_id} ({token_ticker}), amount: {tokens_to_mint}", await wallet.get_balance())
             assert_in("The transaction was submitted successfully", await wallet.send_tokens_to_address(token_id, address, tokens_to_mint))
             transactions = node.mempool_transactions()
             assert_equal(len(transactions), 1)
@@ -160,7 +155,7 @@ class WalletConflictTransaction(BitcoinTestFramework):
             transactions.remove(transfer_tx)
             freeze_tx = transactions[0]
 
-            assert_equal(1, len(await wallet.list_pending_transactions()))
+            assert_equal(2, len(await wallet.list_pending_transactions()))
 
 
             # try to send tokens again should fail as the tokens are already sent
@@ -168,12 +163,15 @@ class WalletConflictTransaction(BitcoinTestFramework):
             assert_in("Coin selection error: No available UTXOs", await wallet.send_tokens_to_address(token_id, address, tokens_to_mint))
             # check that the mempool still has the transfer tx
             assert node.mempool_contains_tx(transfer_tx_id)
-            # abandon it from the wallet side so it is not rebroadcasted
-            assert_in("The transaction was marked as abandoned successfully", await wallet.abandon_transaction(transfer_tx_id))
+            assert_in("Cannot change a transaction's state from InMempool", await wallet.abandon_transaction(transfer_tx_id))
 
             # create a block with the freeze token transaction
             self.generate_block([freeze_tx])
             assert_in("Success", await wallet.sync())
+            self.log.info(f"transfer_tx_id = {transfer_tx_id}")
+
+            # abandon it from the wallet side so it is not rebroadcasted
+            assert_in("The transaction was marked as abandoned successfully", await wallet.abandon_transaction(transfer_tx_id))
 
             # after the token is frozen the transfer token tx should be evicted by the mempool as conflicting
             # wait until mempool evicts the conflicting tx
@@ -195,7 +193,7 @@ class WalletConflictTransaction(BitcoinTestFramework):
             assert_in("Success", await wallet.sync())
 
             assert_in("Success", await wallet.select_account(DEFAULT_ACCOUNT_INDEX))
-            assert_in(f"{token_id} amount: 10", await wallet.get_balance())
+            assert_in(f"{token_id} ({token_ticker}), amount: 10", await wallet.get_balance())
 
             # check we cannot abandon an already confirmed transaction
             assert_in("Success", await wallet.select_account(1))

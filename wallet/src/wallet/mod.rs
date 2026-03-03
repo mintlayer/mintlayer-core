@@ -13,86 +13,93 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::{BTreeMap, BTreeSet};
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
-use crate::account::{
-    transaction_list::TransactionList, CoinSelectionAlgo, CurrentFeeRate, DelegationData,
-    OrderData, PoolData, TxInfo, UnconfirmedTokenInfo, UtxoSelectorError,
+use common::{
+    address::{pubkeyhash::PublicKeyHash, Address, AddressError, RpcAddress},
+    chain::{
+        block::timestamp::BlockTimestamp,
+        classic_multisig::ClassicMultisigChallenge,
+        htlc::HashedTimelockContract,
+        make_delegation_id, make_order_id, make_token_id,
+        output_value::OutputValue,
+        signature::{
+            inputsig::arbitrary_message::{ArbitraryMessageSignature, SignArbitraryMessageError},
+            DestinationSigError,
+        },
+        tokens::{IsTokenUnfreezable, Metadata, RPCFungibleTokenInfo, TokenId, TokenIssuance},
+        AccountCommand, AccountOutPoint, Block, ChainConfig, Currency, DelegationId, Destination,
+        GenBlock, IdCreationError, OrderAccountCommand, OrderId, OutPointSourceId, PoolId,
+        RpcOrderInfo, SignedTransaction, SignedTransactionIntent, Transaction,
+        TransactionCreationError, TxInput, TxOutput, UtxoOutPoint,
+    },
+    primitives::{
+        id::{hash_encoded, WithId},
+        Amount, BlockHeight, Id, H256,
+    },
+    size_estimation::SizeEstimationError,
 };
-use crate::destination_getters::HtlcSpendingCondition;
-use crate::key_chain::{
-    make_account_path, make_path_to_vrf_key, AccountKeyChainImplSoftware, KeyChainError,
-    MasterKeyChain, LOOKAHEAD_SIZE, VRF_INDEX,
-};
-use crate::send_request::{
-    make_issue_token_outputs, IssueNftArguments, SelectedInputs, StakePoolCreationArguments,
-};
-#[cfg(feature = "trezor")]
-use crate::signer::trezor_signer::{FoundDevice, TrezorError};
-
-use crate::signer::{Signer, SignerError, SignerProvider};
-use crate::wallet_events::{WalletEvents, WalletEventsNoOp};
-use crate::{Account, SendRequest};
-pub use bip39::{Language, Mnemonic};
-use common::address::pubkeyhash::PublicKeyHash;
-use common::address::{Address, AddressError, RpcAddress};
-use common::chain::block::timestamp::BlockTimestamp;
-use common::chain::classic_multisig::ClassicMultisigChallenge;
-use common::chain::htlc::HashedTimelockContract;
-use common::chain::output_value::OutputValue;
-use common::chain::signature::inputsig::arbitrary_message::{
-    ArbitraryMessageSignature, SignArbitraryMessageError,
-};
-use common::chain::signature::DestinationSigError;
-use common::chain::tokens::{
-    IsTokenUnfreezable, Metadata, RPCFungibleTokenInfo, TokenId, TokenIssuance,
-};
-use common::chain::{
-    make_delegation_id, make_order_id, make_token_id, AccountCommand, AccountNonce,
-    AccountOutPoint, Block, ChainConfig, DelegationId, Destination, GenBlock, IdCreationError,
-    OrderAccountCommand, OrderId, OutPointSourceId, PoolId, RpcOrderInfo, SignedTransaction,
-    SignedTransactionIntent, Transaction, TransactionCreationError, TxInput, TxOutput,
-    UtxoOutPoint,
-};
-use common::primitives::id::{hash_encoded, WithId};
-use common::primitives::{Amount, BlockHeight, Id, H256};
-use common::size_estimation::SizeEstimationError;
 use consensus::PoSGenerateBlockInputData;
-use crypto::key::extended::ExtendedPublicKey;
-use crypto::key::hdkd::child_number::ChildNumber;
-use crypto::key::hdkd::derivable::Derivable;
-use crypto::key::hdkd::u31::U31;
-use crypto::key::{PrivateKey, PublicKey};
-use crypto::vrf::VRFPublicKey;
+use crypto::{
+    key::{
+        extended::ExtendedPublicKey,
+        hdkd::{child_number::ChildNumber, derivable::Derivable, u31::U31},
+        PrivateKey, PublicKey,
+    },
+    vrf::VRFPublicKey,
+};
 use mempool::FeeRate;
-use tx_verifier::error::TokenIssuanceError;
-use tx_verifier::{check_transaction, CheckTransactionError};
+use tx_verifier::{check_transaction, error::TokenIssuanceError, CheckTransactionError};
 use utils::{debug_panic_or_log, ensure};
-pub use wallet_storage::Error;
 use wallet_storage::{
     DefaultBackend, Store, StoreTxRo, StoreTxRw, StoreTxRwUnlocked, TransactionRoLocked,
     TransactionRwLocked, TransactionRwUnlocked, Transactional, WalletStorageReadLocked,
     WalletStorageReadUnlocked, WalletStorageWriteLocked, WalletStorageWriteUnlocked,
 };
-use wallet_types::account_info::{StandaloneAddressDetails, StandaloneAddresses};
-use wallet_types::chain_info::ChainInfo;
-use wallet_types::hw_data::HardwareWalletFullInfo;
-use wallet_types::partially_signed_transaction::{
-    PartiallySignedTransaction, PartiallySignedTransactionError, PoolAdditionalInfo,
-    TokenAdditionalInfo, TxAdditionalInfo,
-};
-use wallet_types::seed_phrase::SerializableSeedPhrase;
-use wallet_types::signature_status::SignatureStatus;
-use wallet_types::utxo_types::{UtxoStates, UtxoTypes};
-use wallet_types::wallet_tx::{TxData, TxState};
-use wallet_types::wallet_type::{WalletControllerMode, WalletType};
-use wallet_types::with_locked::WithLocked;
 use wallet_types::{
-    AccountId, AccountKeyPurposeId, BlockInfo, Currency, KeyPurpose, KeychainUsageState,
-    SignedTxWithFees,
+    account_info::{StandaloneAddressDetails, StandaloneAddresses},
+    chain_info::ChainInfo,
+    hw_data::HardwareWalletFullInfo,
+    partially_signed_transaction::{
+        PartiallySignedTransaction, PartiallySignedTransactionError, PoolAdditionalInfo,
+        PtxAdditionalInfo, TokenAdditionalInfo, TokensAdditionalInfo, TxAdditionalInfo,
+    },
+    seed_phrase::SerializableSeedPhrase,
+    signature_status::SignatureStatus,
+    utxo_types::{UtxoStates, UtxoTypes},
+    wallet_tx::{TxData, TxState},
+    wallet_type::{WalletControllerMode, WalletType},
+    with_locked::WithLocked,
+    AccountId, AccountKeyPurposeId, BlockInfo, KeyPurpose, KeychainUsageState, SignedTxWithFees,
 };
+
+#[cfg(feature = "trezor")]
+use crate::signer::trezor_signer::{FoundDevice, TrezorError};
+use crate::{
+    account::{
+        transaction_list::TransactionList, CoinSelectionAlgo, CurrentFeeRate, DelegationData,
+        OrderData, OutputCacheInconsistencyError, PoolData, TxInfo, UnconfirmedTokenInfo,
+        UtxoSelectorError,
+    },
+    destination_getters::HtlcSpendingCondition,
+    key_chain::{
+        make_account_path, make_path_to_vrf_key, AccountKeyChainImplSoftware, KeyChainError,
+        MasterKeyChain, LOOKAHEAD_SIZE, VRF_INDEX,
+    },
+    send_request::{
+        make_issue_token_outputs, IssueNftArguments, SelectedInputs, StakePoolCreationArguments,
+    },
+    signer::{Signer, SignerError, SignerProvider},
+    wallet_events::{WalletEvents, WalletEventsNoOp},
+    Account, SendRequest,
+};
+
+pub use bip39::{Language, Mnemonic};
+pub use wallet_storage::Error;
 
 pub const WALLET_VERSION_UNINITIALIZED: u32 = 0;
 pub const WALLET_VERSION_V1: u32 = 1;
@@ -111,6 +118,8 @@ pub enum WalletError {
     WalletNotInitialized,
     #[error("A {0} wallet is trying to open a {1} wallet file")]
     DifferentWalletType(WalletControllerMode, WalletType),
+    #[error("Trying to open a {0} wallet file as a software wallet")]
+    HardwareWalletOpenedAsSoftwareWallet(WalletType),
     #[error("The wallet belongs to a different chain than the one specified")]
     DifferentChainType,
     #[error("Unsupported wallet version: {0}, max supported version of this software is {CURRENT_WALLET_VERSION}")]
@@ -145,8 +154,6 @@ pub enum WalletError {
     OutputAmountOverflow,
     #[error("Fee amounts overflow")]
     FeeAmountOverflow,
-    #[error("Delegation with id: {0} with duplicate AccountNonce: {1}")]
-    InconsistentDelegationDuplicateNonce(DelegationId, AccountNonce),
     #[error("Inconsistent produce block from stake for pool id: {0}, missing CreateStakePool")]
     InconsistentProduceBlockFromStake(PoolId),
     #[error("Delegation nonce overflow for id: {0}")]
@@ -155,10 +162,6 @@ pub enum WalletError {
     TokenIssuanceNonceOverflow(TokenId),
     #[error("Order nonce overflow for id: {0}")]
     OrderNonceOverflow(OrderId),
-    #[error("Token with id: {0} with duplicate AccountNonce: {1}")]
-    InconsistentTokenIssuanceDuplicateNonce(TokenId, AccountNonce),
-    #[error("Order with id: {0} with duplicate AccountNonce: {1}")]
-    InconsistentOrderDuplicateNonce(OrderId, AccountNonce),
     #[error("Unknown token with Id {0}")]
     UnknownTokenId(TokenId),
     #[error("Unknown order with Id {0}")]
@@ -269,8 +272,8 @@ pub enum WalletError {
         "A VRF public key must be specified when creating a staking pool using a hardware wallet"
     )]
     VrfKeyMustBeProvided,
-    #[error("Cannot change a Trezor wallet type")]
-    CannotChangeTrezorWalletType,
+    #[error("Cannot change a {from} wallet type to {to}")]
+    CannotChangeWalletType { from: WalletType, to: WalletType },
     #[error("Missing additional data for Pool {0}")]
     MissingPoolAdditionalData(PoolId),
     #[error("Missing additional data for Token {0}")]
@@ -279,10 +282,10 @@ pub enum WalletError {
     MismatchedTokenAdditionalData(TokenId),
     #[error("Unsupported operation for a Hardware wallet")]
     UnsupportedHardwareWalletOperation,
-    #[error("Transaction from {0:?} is confirmed and among unconfirmed descendants")]
-    ConfirmedTxAmongUnconfirmedDescendants(OutPointSourceId),
     #[error("Id creation error: {0}")]
     IdCreationError(#[from] IdCreationError),
+    #[error("Output cache inconsistency error: {0}")]
+    OutputCacheInconsistencyError(#[from] OutputCacheInconsistencyError),
 }
 
 /// Result type used for the wallet
@@ -354,17 +357,17 @@ impl<W> WalletCreation<W> {
 
 impl<B, P> Wallet<B, P>
 where
-    B: storage::Backend + 'static,
+    B: storage::BackendWithSendableTransactions + 'static,
     P: SignerProvider,
 {
-    pub fn create_new_wallet<F: FnOnce(&mut StoreTxRwUnlocked<B>) -> WalletResult<P>>(
+    pub async fn create_new_wallet<F: AsyncFnOnce(&mut StoreTxRwUnlocked<B>) -> WalletResult<P>>(
         chain_config: Arc<ChainConfig>,
         db: Store<B>,
         best_block: (BlockHeight, Id<GenBlock>),
         wallet_type: WalletType,
         signer_provider: F,
     ) -> WalletResult<WalletCreation<Self>> {
-        let mut wallet = Self::new_wallet(chain_config, db, wallet_type, signer_provider)?;
+        let mut wallet = Self::new_wallet(chain_config, db, wallet_type, signer_provider).await?;
 
         if let WalletCreation::Wallet(ref mut w) = wallet {
             w.set_best_block(best_block.0, best_block.1)?;
@@ -373,18 +376,18 @@ where
         Ok(wallet)
     }
 
-    pub fn recover_wallet<F: FnOnce(&mut StoreTxRwUnlocked<B>) -> WalletResult<P>>(
+    pub async fn recover_wallet<F: AsyncFnOnce(&mut StoreTxRwUnlocked<B>) -> WalletResult<P>>(
         chain_config: Arc<ChainConfig>,
         db: Store<B>,
         wallet_type: WalletType,
         signer_provider: F,
     ) -> WalletResult<WalletCreation<Self>> {
-        Self::new_wallet(chain_config, db, wallet_type, signer_provider)
+        Self::new_wallet(chain_config, db, wallet_type, signer_provider).await
     }
 
-    fn new_wallet<F: FnOnce(&mut StoreTxRwUnlocked<B>) -> WalletResult<P>>(
+    async fn new_wallet<F: AsyncFnOnce(&mut StoreTxRwUnlocked<B>) -> WalletResult<P>>(
         chain_config: Arc<ChainConfig>,
-        db: Store<B>,
+        mut db: Store<B>,
         wallet_type: WalletType,
         signer_provider: F,
     ) -> WalletResult<WalletCreation<Self>> {
@@ -394,7 +397,7 @@ where
         db_tx.set_chain_info(&ChainInfo::new(chain_config.as_ref()))?;
         db_tx.set_lookahead_size(LOOKAHEAD_SIZE)?;
         db_tx.set_wallet_type(wallet_type)?;
-        let mut signer_provider = match signer_provider(&mut db_tx) {
+        let mut signer_provider = match signer_provider(&mut db_tx).await {
             Ok(x) => x,
             #[cfg(feature = "trezor")]
             Err(WalletError::SignerError(SignerError::TrezorError(
@@ -413,7 +416,8 @@ where
             &mut db_tx,
             None,
             &mut signer_provider,
-        )?;
+        )
+        .await?;
 
         let next_unused_account = Wallet::<B, P>::create_next_unused_account(
             U31::ONE,
@@ -421,7 +425,8 @@ where
             &mut db_tx,
             None,
             &mut signer_provider,
-        )?;
+        )
+        .await?;
 
         db_tx.commit()?;
 
@@ -441,8 +446,8 @@ where
     /// Migrate the wallet DB from version 1 to version 2
     /// * save the chain info in the DB based on the chain type specified by the user
     /// * reset transactions
-    fn migration_v2(
-        db: &Store<B>,
+    async fn migration_v2(
+        db: &mut Store<B>,
         chain_config: Arc<ChainConfig>,
         signer_provider: &mut P,
     ) -> WalletResult<()> {
@@ -455,7 +460,7 @@ where
         Self::reset_wallet_transactions(chain_config.clone(), &mut db_tx)?;
 
         // Create the next unused account
-        Self::migrate_next_unused_account(chain_config, &mut db_tx, signer_provider)?;
+        Self::migrate_next_unused_account(chain_config, &mut db_tx, signer_provider).await?;
 
         db_tx.set_storage_version(WALLET_VERSION_V2)?;
         db_tx.commit()?;
@@ -469,7 +474,7 @@ where
 
     /// Migrate the wallet DB from version 2 to version 3
     /// * reset transactions as now we store SignedTransaction instead of Transaction in WalletTx
-    fn migration_v3(db: &Store<B>, chain_config: Arc<ChainConfig>) -> WalletResult<()> {
+    fn migration_v3(db: &mut Store<B>, chain_config: Arc<ChainConfig>) -> WalletResult<()> {
         let mut db_tx = db.transaction_rw_unlocked(None)?;
         // reset wallet transaction as now we will need to rescan the blockchain to store the
         // correct order of the transactions to avoid bugs in loading them in the wrong order
@@ -487,7 +492,7 @@ where
 
     /// Migrate the wallet DB from version 3 to version 4
     /// * set lookahead_size in the DB
-    fn migration_v4(db: &Store<B>) -> WalletResult<()> {
+    fn migration_v4(db: &mut Store<B>) -> WalletResult<()> {
         let mut db_tx = db.transaction_rw_unlocked(None)?;
 
         db_tx.set_lookahead_size(LOOKAHEAD_SIZE)?;
@@ -504,7 +509,7 @@ where
     /// Migrate the wallet DB from version 4 to version 5
     /// * set vrf key_chain usage
     fn migration_v5(
-        db: &Store<B>,
+        db: &mut Store<B>,
         chain_config: Arc<ChainConfig>,
         signer_provider: &P,
     ) -> WalletResult<()> {
@@ -552,7 +557,7 @@ where
         Ok(())
     }
 
-    fn migration_v6(db: &Store<B>, _chain_config: Arc<ChainConfig>) -> WalletResult<()> {
+    fn migration_v6(db: &mut Store<B>, _chain_config: Arc<ChainConfig>) -> WalletResult<()> {
         let mut db_tx = db.transaction_rw(None)?;
         // nothing to do the seed phrase na passphrase are backwards compatible
         db_tx.set_storage_version(WALLET_VERSION_V6)?;
@@ -566,7 +571,7 @@ where
     }
 
     fn migration_v7(
-        db: &Store<B>,
+        db: &mut Store<B>,
         chain_config: Arc<ChainConfig>,
         controller_mode: WalletControllerMode,
     ) -> WalletResult<()> {
@@ -594,11 +599,11 @@ where
     }
 
     /// Check the wallet DB version and perform any migrations needed
-    fn check_and_migrate_db<
+    async fn check_and_migrate_db<
         F: Fn(u32) -> Result<(), WalletError>,
-        F2: FnOnce(&StoreTxRo<B>) -> WalletResult<P>,
+        F2: AsyncFnOnce(StoreTxRo<B>) -> WalletResult<P>,
     >(
-        db: &Store<B>,
+        db: &mut Store<B>,
         chain_config: Arc<ChainConfig>,
         pre_migration: F,
         controller_mode: WalletControllerMode,
@@ -609,7 +614,7 @@ where
             version != WALLET_VERSION_UNINITIALIZED,
             WalletError::WalletNotInitialized
         );
-        let mut signer_provider = signer_provider(&db.transaction_ro()?)?;
+        let mut signer_provider = signer_provider(db.transaction_ro()?).await?;
 
         loop {
             let version = db.transaction_ro()?.get_storage_version()?;
@@ -621,7 +626,7 @@ where
                 }
                 WALLET_VERSION_V1 => {
                     pre_migration(WALLET_VERSION_V1)?;
-                    Self::migration_v2(db, chain_config.clone(), &mut signer_provider)?;
+                    Self::migration_v2(db, chain_config.clone(), &mut signer_provider).await?;
                 }
                 WALLET_VERSION_V2 => {
                     pre_migration(WALLET_VERSION_V2)?;
@@ -671,7 +676,7 @@ where
         Ok(())
     }
 
-    fn migrate_cold_to_hot_wallet(db: &Store<B>) -> WalletResult<()> {
+    fn migrate_cold_to_hot_wallet(db: &mut Store<B>) -> WalletResult<()> {
         let mut db_tx = db.transaction_rw(None)?;
         db_tx.set_wallet_type(WalletType::Hot)?;
         db_tx.commit()?;
@@ -679,7 +684,7 @@ where
     }
 
     fn migrate_hot_to_cold_wallet(
-        db: &Store<B>,
+        db: &mut Store<B>,
         chain_config: Arc<ChainConfig>,
         signer_provider: &P,
     ) -> WalletResult<()> {
@@ -692,7 +697,7 @@ where
 
     fn force_migrate_wallet_type(
         wallet_type: WalletType,
-        db: &Store<B>,
+        db: &mut Store<B>,
         chain_config: Arc<ChainConfig>,
         signer_provider: &P,
     ) -> Result<(), WalletError> {
@@ -705,12 +710,32 @@ where
             #[cfg(feature = "trezor")]
             (WalletType::Cold | WalletType::Hot, WalletType::Trezor)
             | (WalletType::Trezor, WalletType::Hot | WalletType::Cold) => {
-                return Err(WalletError::CannotChangeTrezorWalletType)
+                return Err(WalletError::CannotChangeWalletType {
+                    from: current_wallet_type,
+                    to: wallet_type,
+                })
+            }
+            #[cfg(all(feature = "trezor", feature = "ledger"))]
+            (WalletType::Ledger, WalletType::Trezor) | (WalletType::Trezor, WalletType::Ledger) => {
+                return Err(WalletError::CannotChangeWalletType {
+                    from: current_wallet_type,
+                    to: wallet_type,
+                })
+            }
+            #[cfg(feature = "ledger")]
+            (WalletType::Cold | WalletType::Hot, WalletType::Ledger)
+            | (WalletType::Ledger, WalletType::Hot | WalletType::Cold) => {
+                return Err(WalletError::CannotChangeWalletType {
+                    from: current_wallet_type,
+                    to: wallet_type,
+                })
             }
             (WalletType::Cold, WalletType::Cold) => {}
             (WalletType::Hot, WalletType::Hot) => {}
             #[cfg(feature = "trezor")]
             (WalletType::Trezor, WalletType::Trezor) => {}
+            #[cfg(feature = "ledger")]
+            (WalletType::Ledger, WalletType::Ledger) => {}
         }
         Ok(())
     }
@@ -786,11 +811,11 @@ where
             .collect()
     }
 
-    fn migrate_next_unused_account(
+    async fn migrate_next_unused_account<T: WalletStorageWriteUnlocked + Send>(
         chain_config: Arc<ChainConfig>,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
+        db_tx: &mut T,
         signer_provider: &mut P,
-    ) -> Result<(), WalletError> {
+    ) -> WalletResult<()> {
         let accounts_info = db_tx.get_accounts_info()?;
         let mut accounts: BTreeMap<U31, Account<P::K>> = accounts_info
             .keys()
@@ -802,23 +827,27 @@ where
             .map(|account| (account.account_index(), account))
             .collect();
         let last_account = accounts.pop_last().ok_or(WalletError::WalletNotInitialized)?;
+
         let next_account_index = last_account
             .0
             .plus_one()
             .map_err(|_| WalletError::AbsoluteMaxNumAccountsExceeded(last_account.0))?;
+
         Wallet::<B, P>::create_next_unused_account(
             next_account_index,
             chain_config.clone(),
             db_tx,
             None,
             signer_provider,
-        )?;
+        )
+        .await?;
+
         Ok(())
     }
 
-    pub fn load_wallet<
+    pub async fn load_wallet<
         F: Fn(u32) -> WalletResult<()>,
-        F2: FnOnce(&StoreTxRo<B>) -> WalletResult<P>,
+        F2: AsyncFnOnce(StoreTxRo<B>) -> WalletResult<P>,
     >(
         chain_config: Arc<ChainConfig>,
         mut db: Store<B>,
@@ -833,12 +862,14 @@ where
         }
 
         let signer_provider = match Self::check_and_migrate_db(
-            &db,
+            &mut db,
             chain_config.clone(),
             pre_migration,
             controller_mode,
             signer_provider,
-        ) {
+        )
+        .await
+        {
             Ok(x) => x,
             #[cfg(feature = "trezor")]
             Err(WalletError::SignerError(SignerError::TrezorError(
@@ -850,7 +881,7 @@ where
         if force_change_wallet_type {
             Self::force_migrate_wallet_type(
                 controller_mode.into(),
-                &db,
+                &mut db,
                 chain_config.clone(),
                 &signer_provider,
             )?;
@@ -908,7 +939,7 @@ where
         self.db.transaction_ro_unlocked()?.get_seed_phrase().map_err(WalletError::from)
     }
 
-    pub fn delete_seed_phrase(&self) -> WalletResult<Option<SerializableSeedPhrase>> {
+    pub fn delete_seed_phrase(&mut self) -> WalletResult<Option<SerializableSeedPhrase>> {
         let mut tx = self.db.transaction_rw_unlocked(None)?;
         let seed_phrase = tx.del_seed_phrase().map_err(WalletError::from)?;
         tx.commit()?;
@@ -985,10 +1016,10 @@ where
         self.signer_provider.get_hardware_wallet_info()
     }
 
-    fn create_next_unused_account(
+    async fn create_next_unused_account<T: WalletStorageWriteUnlocked + Send>(
         next_account_index: U31,
         chain_config: Arc<ChainConfig>,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
+        db_tx: &mut T,
         name: Option<String>,
         signer_provider: &mut P,
     ) -> WalletResult<(U31, Account<P::K>)> {
@@ -997,19 +1028,16 @@ where
             WalletError::EmptyAccountName
         );
 
-        let account = signer_provider.make_new_account(
-            chain_config.clone(),
-            next_account_index,
-            name,
-            db_tx,
-        )?;
+        let account = signer_provider
+            .make_new_account(chain_config.clone(), next_account_index, name, db_tx)
+            .await?;
 
         Ok((next_account_index, account))
     }
 
     /// Promotes the unused account into the used accounts and creates a new unused account
     /// Returns the new index and optional name if provided
-    pub fn create_next_account(
+    pub async fn create_next_account(
         &mut self,
         name: Option<String>,
     ) -> WalletResult<(U31, Option<String>)> {
@@ -1039,7 +1067,8 @@ where
             &mut db_tx,
             None,
             &mut self.signer_provider,
-        )?;
+        )
+        .await?;
 
         self.next_unused_account.1.set_name(name.clone(), &mut db_tx)?;
         std::mem::swap(&mut self.next_unused_account, &mut next_unused_account);
@@ -1117,8 +1146,9 @@ where
             }
             Err(err) => {
                 db_tx.abort();
-                // In case of an error reload the keys in case the operation issued new ones and
-                // are saved in the cache but not in the DB
+                // In case of an error we should reload the keys, in the case that the operation has issued new ones;
+                // we do this to prevent exhausting the keys from many failed operations, and to
+                // keep the cache in sync with the DB, as the DB transaction will roll back.
                 let db_tx = self.db.transaction_ro()?;
                 account.reload_keys(&db_tx)?;
                 Err(err)
@@ -1126,7 +1156,66 @@ where
         }
     }
 
-    fn for_account_rw_unlocked_and_check_tx_generic<AddlData>(
+    async fn async_for_account_rw_unlocked<R, T>(
+        &mut self,
+        account_index: U31,
+        create_request: impl FnOnce(&mut Account<P::K>, &mut StoreTxRwUnlocked<B>) -> R,
+        sign_request: impl AsyncFnOnce(
+                R,
+                &P::K,
+                &mut StoreTxRwUnlocked<B>,
+                Arc<ChainConfig>,
+                <P as SignerProvider>::S,
+            ) -> WalletResult<T>
+            + Send,
+    ) -> WalletResult<T> {
+        let account = Self::get_account_mut(&mut self.accounts, account_index)?;
+        let mut db_tx = self.db.transaction_rw_unlocked(None)?;
+        let result = create_request(account, &mut db_tx);
+        let signer = self.signer_provider.provide(self.chain_config.clone(), account_index);
+        let config = self.chain_config.clone();
+        let result = sign_request(result, account.key_chain(), &mut db_tx, config, signer).await;
+
+        match result {
+            Ok(value) => {
+                // Abort the process if the DB transaction fails. See `for_account_rw` for more information.
+                db_tx.commit().expect("RW transaction commit failed unexpectedly");
+                Ok(value)
+            }
+            Err(err) => {
+                db_tx.abort();
+                // In case of an error we should reload the keys, in the case that the operation has issued new ones;
+                // we do this to prevent exhausting the keys from many failed operations, and to
+                // keep the cache in sync with the DB, as the DB transaction will roll back.
+                let db_tx = self.db.transaction_ro()?;
+                account.reload_keys(&db_tx)?;
+                Err(err)
+            }
+        }
+    }
+
+    async fn async_for_account_key_chain_rw_unlocked<T>(
+        &mut self,
+        account_index: U31,
+        f: impl AsyncFnOnce(
+                &P::K,
+                &mut StoreTxRwUnlocked<B>,
+                Arc<ChainConfig>,
+                <P as SignerProvider>::S,
+            ) -> WalletResult<T>
+            + Send,
+    ) -> WalletResult<T> {
+        self.async_for_account_rw_unlocked(
+            account_index,
+            |_, _| (),
+            async move |_, key_chain, db_tx, chain_config, signer| {
+                f(key_chain, db_tx, chain_config, signer).await
+            },
+        )
+        .await
+    }
+
+    async fn async_for_account_rw_unlocked_and_check_tx_custom_error<AddlData: Send>(
         &mut self,
         account_index: U31,
         additional_info: TxAdditionalInfo,
@@ -1134,26 +1223,33 @@ where
             &mut Account<P::K>,
             &mut StoreTxRwUnlocked<B>,
         ) -> WalletResult<(SendRequest, AddlData)>,
-        error_mapper: impl FnOnce(WalletError) -> WalletError,
+        error_mapper: impl FnOnce(WalletError) -> WalletError + Send,
     ) -> WalletResult<(SignedTxWithFees, AddlData)> {
         let (_, best_block_height) = self.get_best_block_for_account(account_index)?;
         let next_block_height = best_block_height.next_height();
 
-        self.for_account_rw_unlocked(
+        self.async_for_account_rw_unlocked(
             account_index,
-            |account, db_tx, chain_config, signer_provider| {
-                let (mut request, additional_data) = f(account, db_tx)?;
-                let fees = request.get_fees();
-                let ptx = request.into_partially_signed_tx(additional_info)?;
+            f,
+            async move |request, key_chain, store, chain_config, mut signer| {
+                let (mut request, additional_data) = request?;
 
-                let mut signer =
-                    signer_provider.provide(Arc::new(chain_config.clone()), account_index);
+                let fees = request.get_fees();
+                let ptx = request.into_partially_signed_tx(additional_info.ptx_additional_info)?;
+
                 let ptx = signer
-                    .sign_tx(ptx, account.key_chain(), db_tx, next_block_height)
+                    .sign_tx(
+                        ptx,
+                        &additional_info.tokens_additional_info,
+                        key_chain,
+                        store,
+                        next_block_height,
+                    )
+                    .await
                     .map(|(ptx, _, _)| ptx)?;
 
                 let input_commitments =
-                    ptx.make_sighash_input_commitments_at_height(chain_config, next_block_height)?;
+                    ptx.make_sighash_input_commitments_at_height(&chain_config, next_block_height)?;
 
                 let is_fully_signed =
                     ptx.destinations().iter().enumerate().zip(ptx.witnesses()).all(
@@ -1163,7 +1259,7 @@ where
                                 let input_utxo = ptx.input_utxos()[i].clone();
 
                                 tx_verifier::input_check::signature_only_check::verify_tx_signature(
-                                    chain_config,
+                                    &chain_config,
                                     destination,
                                     &ptx,
                                     &input_commitments,
@@ -1183,27 +1279,28 @@ where
 
                 let tx = ptx.into_signed_tx().map_err(|e| error_mapper(e.into()))?;
 
-                check_transaction(chain_config, next_block_height, &tx)?;
+                check_transaction(&chain_config, next_block_height, &tx)?;
                 let tx = SignedTxWithFees { tx, fees };
                 Ok((tx, additional_data))
             },
         )
+        .await
     }
 
-    fn for_account_rw_unlocked_and_check_tx_with_fees(
+    async fn async_for_account_rw_unlocked_and_check_tx(
         &mut self,
         account_index: U31,
         additional_info: TxAdditionalInfo,
         f: impl FnOnce(&mut Account<P::K>, &mut StoreTxRwUnlocked<B>) -> WalletResult<SendRequest>,
     ) -> WalletResult<SignedTxWithFees> {
-        Ok(self
-            .for_account_rw_unlocked_and_check_tx_generic(
-                account_index,
-                additional_info,
-                |account, db_tx| Ok((f(account, db_tx)?, ())),
-                |err| err,
-            )?
-            .0)
+        self.async_for_account_rw_unlocked_and_check_tx_custom_error(
+            account_index,
+            additional_info,
+            |account, db_tx| Ok((f(account, db_tx)?, ())),
+            |err| err,
+        )
+        .await
+        .map(|(tx, _)| tx)
     }
 
     fn get_account(&self, account_index: U31) -> WalletResult<&Account<P::K>> {
@@ -1353,13 +1450,16 @@ where
         })
     }
 
-    pub fn get_pool_ids(
+    pub fn get_pools(
         &self,
         account_index: U31,
         filter: WalletPoolsFilter,
     ) -> WalletResult<Vec<(PoolId, PoolData)>> {
-        let pool_ids = self.get_account(account_index)?.get_pool_ids(filter);
-        Ok(pool_ids)
+        Ok(self
+            .get_account(account_index)?
+            .get_pools(filter)
+            .map(|(id, data)| (*id, data.clone()))
+            .collect())
     }
 
     pub fn get_delegations(
@@ -1549,7 +1649,7 @@ where
     ///
     /// A `WalletResult` containing the signed transaction if successful, or an error indicating the reason for failure.
     #[allow(clippy::too_many_arguments)]
-    pub fn create_transaction_to_addresses(
+    pub async fn create_transaction_to_addresses(
         &mut self,
         account_index: U31,
         outputs: impl IntoIterator<Item = TxOutput>,
@@ -1569,14 +1669,15 @@ where
                 consolidate_fee_rate,
                 |_s| (),
                 additional_info,
-            )?
+            )
+            .await?
             .0)
     }
 
     /// Same as `create_transaction_to_addresses`, but it also allows to specify the "intent" for the transaction,
     /// which will be concatenated with the transaction id and signed with all the keys used to sign the transaction's inputs.
     #[allow(clippy::too_many_arguments)]
-    pub fn create_transaction_to_addresses_with_intent(
+    pub async fn create_transaction_to_addresses_with_intent(
         &mut self,
         account_index: U31,
         outputs: impl IntoIterator<Item = TxOutput>,
@@ -1587,38 +1688,43 @@ where
         consolidate_fee_rate: FeeRate,
         additional_info: TxAdditionalInfo,
     ) -> WalletResult<(SignedTxWithFees, SignedTransactionIntent)> {
-        let (signed_tx, input_destinations) = self.create_transaction_to_addresses_impl(
-            account_index,
-            outputs,
-            inputs,
-            change_addresses,
-            current_fee_rate,
-            consolidate_fee_rate,
-            |send_request| send_request.destinations().to_owned(),
-            additional_info,
-        )?;
+        let (signed_tx, input_destinations) = self
+            .create_transaction_to_addresses_impl(
+                account_index,
+                outputs,
+                inputs,
+                change_addresses,
+                current_fee_rate,
+                consolidate_fee_rate,
+                |send_request| send_request.destinations().to_owned(),
+                additional_info,
+            )
+            .await?;
 
-        let signed_intent = self.for_account_rw_unlocked(
-            account_index,
-            |account, db_tx, chain_config, signer_provider| {
-                let mut signer =
-                    signer_provider.provide(Arc::new(chain_config.clone()), account_index);
-
-                Ok(signer.sign_transaction_intent(
-                    signed_tx.tx.transaction(),
-                    &input_destinations,
-                    &intent,
-                    account.key_chain(),
-                    db_tx,
-                )?)
-            },
-        )?;
+        let transaction = signed_tx.transaction();
+        let signed_intent = self
+            .async_for_account_key_chain_rw_unlocked(
+                account_index,
+                async move |key_chain, store, _chain_config, mut signer| {
+                    signer
+                        .sign_transaction_intent(
+                            transaction,
+                            &input_destinations,
+                            &intent,
+                            key_chain,
+                            store,
+                        )
+                        .await
+                        .map_err(Into::into)
+                },
+            )
+            .await?;
 
         Ok((signed_tx, signed_intent))
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn create_transaction_to_addresses_impl<AddlData>(
+    async fn create_transaction_to_addresses_impl<AddlData: Send>(
         &mut self,
         account_index: U31,
         outputs: impl IntoIterator<Item = TxOutput>,
@@ -1631,27 +1737,30 @@ where
     ) -> WalletResult<(SignedTxWithFees, AddlData)> {
         let request = SendRequest::new().with_outputs(outputs);
         let latest_median_time = self.latest_median_time;
-        self.for_account_rw_unlocked_and_check_tx_generic(
+        self.async_for_account_rw_unlocked_and_check_tx_custom_error(
             account_index,
             additional_info,
             |account, db_tx| {
-                let send_request = account.process_send_request_and_sign(
-                    db_tx,
+                let request = account.select_inputs_for_send_request(
                     request,
                     inputs,
+                    None,
                     change_addresses,
+                    db_tx,
                     latest_median_time,
                     CurrentFeeRate {
                         current_fee_rate,
                         consolidate_fee_rate,
                     },
+                    None,
                 )?;
 
-                let additional_data = additional_data_getter(&send_request);
-                Ok((send_request, additional_data))
+                let additional_data = additional_data_getter(&request);
+                Ok((request, additional_data))
             },
             |err| err,
         )
+        .await
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1664,28 +1773,33 @@ where
         change_addresses: BTreeMap<Currency, Address<Destination>>,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
-        additional_info: TxAdditionalInfo,
+        ptx_additional_info: PtxAdditionalInfo,
     ) -> WalletResult<(PartiallySignedTransaction, BTreeMap<Currency, Amount>)> {
         let request = SendRequest::new().with_outputs(outputs);
         let latest_median_time = self.latest_median_time;
         self.for_account_rw(account_index, |account, db_tx| {
-            account.process_send_request(
-                db_tx,
+            let mut request = account.select_inputs_for_send_request(
                 request,
                 inputs,
                 selection_algo,
                 change_addresses,
+                db_tx,
                 latest_median_time,
                 CurrentFeeRate {
                     current_fee_rate,
                     consolidate_fee_rate,
                 },
-                additional_info,
-            )
+                None,
+            )?;
+
+            let fees = request.get_fees();
+            let ptx = request.into_partially_signed_tx(ptx_additional_info)?;
+
+            Ok((ptx, fees))
         })
     }
 
-    pub fn create_sweep_transaction(
+    pub async fn create_sweep_transaction(
         &mut self,
         account_index: U31,
         destination: Destination,
@@ -1700,14 +1814,15 @@ where
             &|_| None,
         )?;
 
-        self.for_account_rw_unlocked_and_check_tx_with_fees(
+        self.async_for_account_rw_unlocked_and_check_tx(
             account_index,
             additional_info,
             |account, _| account.sweep_addresses(destination, request, current_fee_rate),
         )
+        .await
     }
 
-    pub fn create_sweep_from_delegation_transaction(
+    pub async fn create_sweep_from_delegation_transaction(
         &mut self,
         account_index: U31,
         address: Address<Destination>,
@@ -1715,16 +1830,17 @@ where
         delegation_share: Amount,
         current_fee_rate: FeeRate,
     ) -> WalletResult<SignedTxWithFees> {
-        self.for_account_rw_unlocked_and_check_tx_with_fees(
+        self.async_for_account_rw_unlocked_and_check_tx(
             account_index,
             TxAdditionalInfo::new(),
             |account, _| {
                 account.sweep_delegation(address, delegation_id, delegation_share, current_fee_rate)
             },
         )
+        .await
     }
 
-    pub fn create_transaction_to_addresses_from_delegation(
+    pub async fn create_transaction_to_addresses_from_delegation(
         &mut self,
         account_index: U31,
         address: Address<Destination>,
@@ -1733,7 +1849,7 @@ where
         delegation_share: Amount,
         current_fee_rate: FeeRate,
     ) -> WalletResult<SignedTxWithFees> {
-        self.for_account_rw_unlocked_and_check_tx_with_fees(
+        self.async_for_account_rw_unlocked_and_check_tx(
             account_index,
             TxAdditionalInfo::new(),
             |account, _| {
@@ -1746,9 +1862,10 @@ where
                 )
             },
         )
+        .await
     }
 
-    pub fn mint_tokens(
+    pub async fn mint_tokens(
         &mut self,
         account_index: U31,
         token_info: &UnconfirmedTokenInfo,
@@ -1759,7 +1876,7 @@ where
     ) -> WalletResult<SignedTxWithFees> {
         let latest_median_time = self.latest_median_time;
         let additional_info = to_token_additional_info(token_info);
-        self.for_account_rw_unlocked_and_check_tx_with_fees(
+        self.async_for_account_rw_unlocked_and_check_tx(
             account_index,
             additional_info,
             |account, db_tx| {
@@ -1776,9 +1893,10 @@ where
                 )
             },
         )
+        .await
     }
 
-    pub fn unmint_tokens(
+    pub async fn unmint_tokens(
         &mut self,
         account_index: U31,
         token_info: &UnconfirmedTokenInfo,
@@ -1788,7 +1906,7 @@ where
     ) -> WalletResult<SignedTxWithFees> {
         let latest_median_time = self.latest_median_time;
         let additional_info = to_token_additional_info(token_info);
-        self.for_account_rw_unlocked_and_check_tx_with_fees(
+        self.async_for_account_rw_unlocked_and_check_tx(
             account_index,
             additional_info,
             |account, db_tx| {
@@ -1804,9 +1922,10 @@ where
                 )
             },
         )
+        .await
     }
 
-    pub fn lock_token_supply(
+    pub async fn lock_token_supply(
         &mut self,
         account_index: U31,
         token_info: &UnconfirmedTokenInfo,
@@ -1815,7 +1934,7 @@ where
     ) -> WalletResult<SignedTxWithFees> {
         let latest_median_time = self.latest_median_time;
         let additional_info = to_token_additional_info(token_info);
-        self.for_account_rw_unlocked_and_check_tx_with_fees(
+        self.async_for_account_rw_unlocked_and_check_tx(
             account_index,
             additional_info,
             |account, db_tx| {
@@ -1830,9 +1949,10 @@ where
                 )
             },
         )
+        .await
     }
 
-    pub fn freeze_token(
+    pub async fn freeze_token(
         &mut self,
         account_index: U31,
         token_info: &UnconfirmedTokenInfo,
@@ -1842,7 +1962,7 @@ where
     ) -> WalletResult<SignedTxWithFees> {
         let latest_median_time = self.latest_median_time;
         let additional_info = to_token_additional_info(token_info);
-        self.for_account_rw_unlocked_and_check_tx_with_fees(
+        self.async_for_account_rw_unlocked_and_check_tx(
             account_index,
             additional_info,
             |account, db_tx| {
@@ -1858,9 +1978,10 @@ where
                 )
             },
         )
+        .await
     }
 
-    pub fn unfreeze_token(
+    pub async fn unfreeze_token(
         &mut self,
         account_index: U31,
         token_info: &UnconfirmedTokenInfo,
@@ -1869,7 +1990,7 @@ where
     ) -> WalletResult<SignedTxWithFees> {
         let latest_median_time = self.latest_median_time;
         let additional_info = to_token_additional_info(token_info);
-        self.for_account_rw_unlocked_and_check_tx_with_fees(
+        self.async_for_account_rw_unlocked_and_check_tx(
             account_index,
             additional_info,
             |account, db_tx| {
@@ -1884,9 +2005,10 @@ where
                 )
             },
         )
+        .await
     }
 
-    pub fn change_token_authority(
+    pub async fn change_token_authority(
         &mut self,
         account_index: U31,
         token_info: &UnconfirmedTokenInfo,
@@ -1896,7 +2018,7 @@ where
     ) -> WalletResult<SignedTxWithFees> {
         let latest_median_time = self.latest_median_time;
         let additional_info = to_token_additional_info(token_info);
-        self.for_account_rw_unlocked_and_check_tx_with_fees(
+        self.async_for_account_rw_unlocked_and_check_tx(
             account_index,
             additional_info,
             |account, db_tx| {
@@ -1912,9 +2034,10 @@ where
                 )
             },
         )
+        .await
     }
 
-    pub fn change_token_metadata_uri(
+    pub async fn change_token_metadata_uri(
         &mut self,
         account_index: U31,
         token_info: &UnconfirmedTokenInfo,
@@ -1924,7 +2047,7 @@ where
     ) -> WalletResult<SignedTxWithFees> {
         let latest_median_time = self.latest_median_time;
         let additional_info = to_token_additional_info(token_info);
-        self.for_account_rw_unlocked_and_check_tx_with_fees(
+        self.async_for_account_rw_unlocked_and_check_tx(
             account_index,
             additional_info,
             |account, db_tx| {
@@ -1940,6 +2063,7 @@ where
                 )
             },
         )
+        .await
     }
 
     pub fn find_used_tokens(
@@ -1959,27 +2083,29 @@ where
         self.get_account(account_index)?.get_token_unconfirmed_info(token_info)
     }
 
-    pub fn create_delegation(
+    pub async fn create_delegation(
         &mut self,
         account_index: U31,
         outputs: Vec<TxOutput>,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
     ) -> WalletResult<(DelegationId, SignedTxWithFees)> {
-        let tx = self.create_transaction_to_addresses(
-            account_index,
-            outputs,
-            SelectedInputs::Utxos(vec![]),
-            BTreeMap::new(),
-            current_fee_rate,
-            consolidate_fee_rate,
-            TxAdditionalInfo::new(),
-        )?;
+        let tx = self
+            .create_transaction_to_addresses(
+                account_index,
+                outputs,
+                SelectedInputs::Utxos(vec![]),
+                BTreeMap::new(),
+                current_fee_rate,
+                consolidate_fee_rate,
+                TxAdditionalInfo::new(),
+            )
+            .await?;
         let delegation_id = make_delegation_id(tx.transaction().inputs())?;
         Ok((delegation_id, tx))
     }
 
-    pub fn issue_new_token(
+    pub async fn issue_new_token(
         &mut self,
         account_index: U31,
         token_issuance: TokenIssuance,
@@ -1988,15 +2114,17 @@ where
     ) -> WalletResult<(TokenId, SignedTxWithFees)> {
         let outputs = make_issue_token_outputs(token_issuance, self.chain_config.as_ref())?;
 
-        let tx = self.create_transaction_to_addresses(
-            account_index,
-            outputs,
-            SelectedInputs::Utxos(vec![]),
-            BTreeMap::new(),
-            current_fee_rate,
-            consolidate_fee_rate,
-            TxAdditionalInfo::new(),
-        )?;
+        let tx = self
+            .create_transaction_to_addresses(
+                account_index,
+                outputs,
+                SelectedInputs::Utxos(vec![]),
+                BTreeMap::new(),
+                current_fee_rate,
+                consolidate_fee_rate,
+                TxAdditionalInfo::new(),
+            )
+            .await?;
         let token_id = make_token_id(
             self.chain_config.as_ref(),
             self.get_best_block_for_account(account_index)?.1.next_height(),
@@ -2005,7 +2133,7 @@ where
         Ok((token_id, tx))
     }
 
-    pub fn issue_new_nft(
+    pub async fn issue_new_nft(
         &mut self,
         account_index: U31,
         address: Address<Destination>,
@@ -2016,24 +2144,26 @@ where
         let destination = address.into_object();
         let latest_median_time = self.latest_median_time;
 
-        let signed_transaction = self.for_account_rw_unlocked_and_check_tx_with_fees(
-            account_index,
-            TxAdditionalInfo::new(),
-            |account, db_tx| {
-                account.create_issue_nft_tx(
-                    db_tx,
-                    IssueNftArguments {
-                        metadata,
-                        destination,
-                    },
-                    latest_median_time,
-                    CurrentFeeRate {
-                        current_fee_rate,
-                        consolidate_fee_rate,
-                    },
-                )
-            },
-        )?;
+        let signed_transaction = self
+            .async_for_account_rw_unlocked_and_check_tx(
+                account_index,
+                TxAdditionalInfo::new(),
+                |account, db_tx| {
+                    account.create_issue_nft_tx(
+                        db_tx,
+                        IssueNftArguments {
+                            metadata,
+                            destination,
+                        },
+                        latest_median_time,
+                        CurrentFeeRate {
+                            current_fee_rate,
+                            consolidate_fee_rate,
+                        },
+                    )
+                },
+            )
+            .await?;
 
         let token_id = make_token_id(
             self.chain_config.as_ref(),
@@ -2043,7 +2173,7 @@ where
         Ok((token_id, signed_transaction))
     }
 
-    pub fn create_stake_pool_with_vrf_key(
+    pub async fn create_stake_pool_with_vrf_key(
         &mut self,
         account_index: U31,
         current_fee_rate: FeeRate,
@@ -2051,7 +2181,7 @@ where
         stake_pool_arguments: StakePoolCreationArguments,
     ) -> WalletResult<SignedTxWithFees> {
         let latest_median_time = self.latest_median_time;
-        self.for_account_rw_unlocked_and_check_tx_with_fees(
+        self.async_for_account_rw_unlocked_and_check_tx(
             account_index,
             TxAdditionalInfo::new(),
             |account, db_tx| {
@@ -2066,9 +2196,10 @@ where
                 )
             },
         )
+        .await
     }
 
-    pub fn decommission_stake_pool(
+    pub async fn decommission_stake_pool(
         &mut self,
         account_index: U31,
         pool_id: PoolId,
@@ -2078,28 +2209,27 @@ where
     ) -> WalletResult<SignedTxWithFees> {
         let additional_info =
             TxAdditionalInfo::new().with_pool_info(pool_id, PoolAdditionalInfo { staker_balance });
-        Ok(self
-            .for_account_rw_unlocked_and_check_tx_generic(
-                account_index,
-                additional_info,
-                |account, db_tx| {
-                    Ok((
-                        account.decommission_stake_pool(
-                            db_tx,
-                            pool_id,
-                            staker_balance,
-                            output_address,
-                            current_fee_rate,
-                        )?,
-                        (),
-                    ))
-                },
-                |_err| WalletError::PartiallySignedTransactionInDecommissionCommand,
-            )?
-            .0)
+        self.async_for_account_rw_unlocked_and_check_tx_custom_error(
+            account_index,
+            additional_info,
+            |account: &mut Account<<P as SignerProvider>::K>, db_tx| {
+                account
+                    .decommission_stake_pool(
+                        db_tx,
+                        pool_id,
+                        staker_balance,
+                        output_address,
+                        current_fee_rate,
+                    )
+                    .map(|r| (r, ()))
+            },
+            |_err| WalletError::PartiallySignedTransactionInDecommissionCommand,
+        )
+        .await
+        .map(|(tx, _)| tx)
     }
 
-    pub fn decommission_stake_pool_request(
+    pub async fn decommission_stake_pool_request(
         &mut self,
         account_index: U31,
         pool_id: PoolId,
@@ -2110,36 +2240,44 @@ where
         let (_, best_block_height) = self.get_best_block_for_account(account_index)?;
         let next_block_height = best_block_height.next_height();
 
-        let additional_info =
-            TxAdditionalInfo::new().with_pool_info(pool_id, PoolAdditionalInfo { staker_balance });
-        self.for_account_rw_unlocked(
+        let ptx_additional_info =
+            PtxAdditionalInfo::new().with_pool_info(pool_id, PoolAdditionalInfo { staker_balance });
+        self.async_for_account_rw_unlocked(
             account_index,
-            |account, db_tx, chain_config, signer_provider| {
-                let request = account.decommission_stake_pool_request(
+            |account, db_tx| {
+                account.decommission_stake_pool_request(
                     db_tx,
                     pool_id,
                     staker_balance,
                     output_address,
                     current_fee_rate,
-                )?;
+                )
+            },
+            async move |request, key_chain, store, _chain_config, mut signer| {
+                let ptx = request?.into_partially_signed_tx(ptx_additional_info)?;
 
-                let ptx = request.into_partially_signed_tx(additional_info)?;
-
-                let mut signer =
-                    signer_provider.provide(Arc::new(chain_config.clone()), account_index);
                 let ptx = signer
-                    .sign_tx(ptx, account.key_chain(), db_tx, next_block_height)
+                    .sign_tx(
+                        ptx,
+                        &TokensAdditionalInfo::new(),
+                        key_chain,
+                        store,
+                        next_block_height,
+                    )
+                    .await
                     .map(|(ptx, _, _)| ptx)?;
 
                 if ptx.all_signatures_available() {
                     return Err(WalletError::FullySignedTransactionInDecommissionReq);
                 }
+
                 Ok(ptx)
             },
         )
+        .await
     }
 
-    pub fn create_htlc_tx(
+    pub async fn create_htlc_tx(
         &mut self,
         account_index: U31,
         output_value: OutputValue,
@@ -2149,7 +2287,7 @@ where
         additional_info: TxAdditionalInfo,
     ) -> WalletResult<SignedTxWithFees> {
         let latest_median_time = self.latest_median_time;
-        self.for_account_rw_unlocked_and_check_tx_with_fees(
+        self.async_for_account_rw_unlocked_and_check_tx(
             account_index,
             additional_info,
             |account, db_tx| {
@@ -2165,18 +2303,18 @@ where
                 )
             },
         )
+        .await
     }
 
     pub fn get_orders(
         &self,
         account_index: U31,
     ) -> WalletResult<impl Iterator<Item = (&OrderId, &OrderData)>> {
-        let orders = self.get_account(account_index)?.get_orders();
-        Ok(orders)
+        Ok(self.get_account(account_index)?.get_orders())
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn create_order_tx(
+    pub async fn create_order_tx(
         &mut self,
         account_index: U31,
         ask_value: OutputValue,
@@ -2187,29 +2325,31 @@ where
         additional_info: TxAdditionalInfo,
     ) -> WalletResult<(OrderId, SignedTxWithFees)> {
         let latest_median_time = self.latest_median_time;
-        let tx = self.for_account_rw_unlocked_and_check_tx_with_fees(
-            account_index,
-            additional_info,
-            |account, db_tx| {
-                account.create_order_tx(
-                    db_tx,
-                    ask_value,
-                    give_value,
-                    conclude_key,
-                    latest_median_time,
-                    CurrentFeeRate {
-                        current_fee_rate,
-                        consolidate_fee_rate,
-                    },
-                )
-            },
-        )?;
+        let tx = self
+            .async_for_account_rw_unlocked_and_check_tx(
+                account_index,
+                additional_info,
+                |account, db_tx| {
+                    account.create_order_tx(
+                        db_tx,
+                        ask_value,
+                        give_value,
+                        conclude_key,
+                        latest_median_time,
+                        CurrentFeeRate {
+                            current_fee_rate,
+                            consolidate_fee_rate,
+                        },
+                    )
+                },
+            )
+            .await?;
         let order_id = make_order_id(tx.tx.inputs())?;
         Ok((order_id, tx))
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn create_conclude_order_tx(
+    pub async fn create_conclude_order_tx(
         &mut self,
         account_index: U31,
         order_id: OrderId,
@@ -2220,7 +2360,7 @@ where
         additional_info: TxAdditionalInfo,
     ) -> WalletResult<SignedTxWithFees> {
         let latest_median_time = self.latest_median_time;
-        self.for_account_rw_unlocked_and_check_tx_with_fees(
+        self.async_for_account_rw_unlocked_and_check_tx(
             account_index,
             additional_info,
             |account, db_tx| {
@@ -2237,10 +2377,11 @@ where
                 )
             },
         )
+        .await
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn create_fill_order_tx(
+    pub async fn create_fill_order_tx(
         &mut self,
         account_index: U31,
         order_id: OrderId,
@@ -2252,7 +2393,7 @@ where
         additional_info: TxAdditionalInfo,
     ) -> WalletResult<SignedTxWithFees> {
         let latest_median_time = self.latest_median_time;
-        self.for_account_rw_unlocked_and_check_tx_with_fees(
+        self.async_for_account_rw_unlocked_and_check_tx(
             account_index,
             additional_info,
             |account, db_tx| {
@@ -2270,9 +2411,10 @@ where
                 )
             },
         )
+        .await
     }
 
-    pub fn create_freeze_order_tx(
+    pub async fn create_freeze_order_tx(
         &mut self,
         account_index: U31,
         order_id: OrderId,
@@ -2282,7 +2424,7 @@ where
         additional_info: TxAdditionalInfo,
     ) -> WalletResult<SignedTxWithFees> {
         let latest_median_time = self.latest_median_time;
-        self.for_account_rw_unlocked_and_check_tx_with_fees(
+        self.async_for_account_rw_unlocked_and_check_tx(
             account_index,
             additional_info,
             |account, db_tx| {
@@ -2298,12 +2440,14 @@ where
                 )
             },
         )
+        .await
     }
 
-    pub fn sign_raw_transaction(
+    pub async fn sign_raw_transaction(
         &mut self,
         account_index: U31,
         ptx: PartiallySignedTransaction,
+        tokens_additional_info: &TokensAdditionalInfo,
     ) -> WalletResult<(
         PartiallySignedTransaction,
         Vec<SignatureStatus>,
@@ -2312,34 +2456,40 @@ where
         let (_, best_block_height) = self.get_best_block_for_account(account_index)?;
         let next_block_height = best_block_height.next_height();
 
-        self.for_account_rw_unlocked(
+        self.async_for_account_key_chain_rw_unlocked(
             account_index,
-            |account, db_tx, chain_config, signer_provider| {
-                let mut signer =
-                    signer_provider.provide(Arc::new(chain_config.clone()), account_index);
-
-                let res = signer.sign_tx(ptx, account.key_chain(), db_tx, next_block_height)?;
-                Ok(res)
+            async move |key_chain, store, _chain_config, mut signer| {
+                signer
+                    .sign_tx(
+                        ptx,
+                        tokens_additional_info,
+                        key_chain,
+                        store,
+                        next_block_height,
+                    )
+                    .await
+                    .map_err(Into::into)
             },
         )
+        .await
     }
 
-    pub fn sign_challenge(
+    pub async fn sign_challenge(
         &mut self,
         account_index: U31,
         challenge: &[u8],
         destination: &Destination,
     ) -> WalletResult<ArbitraryMessageSignature> {
-        self.for_account_rw_unlocked(
+        self.async_for_account_key_chain_rw_unlocked(
             account_index,
-            |account, db_tx, chain_config, signer_provider| {
-                let mut signer =
-                    signer_provider.provide(Arc::new(chain_config.clone()), account_index);
-                let msg =
-                    signer.sign_challenge(challenge, destination, account.key_chain(), db_tx)?;
-                Ok(msg)
+            async move |key_chain, store, _chain_config, mut signer| {
+                signer
+                    .sign_challenge(challenge, destination, key_chain, store)
+                    .await
+                    .map_err(Into::into)
             },
         )
+        .await
     }
 
     /// Returns the last scanned block hash and height for all accounts.
@@ -2397,7 +2547,7 @@ where
     /// If `common_block_height` is zero, only the genesis block is considered common.
     /// If a new transaction is recognized for the unused account, it is transferred to the used
     /// accounts and a new unused account is created.
-    pub fn scan_new_blocks_unused_account(
+    pub async fn scan_new_blocks_unused_account(
         &mut self,
         common_block_height: BlockHeight,
         blocks: Vec<Block>,
@@ -2415,7 +2565,7 @@ where
             db_tx.commit()?;
 
             if added_new_tx_in_unused_acc {
-                self.create_next_account(None)?;
+                self.create_next_account(None).await?;
             } else {
                 break;
             }
@@ -2449,10 +2599,8 @@ where
         Ok(())
     }
 
-    /// Rescan mempool for unconfirmed transactions and UTXOs
-    /// TODO: Currently we don't sync with the mempool
-    #[cfg(test)]
-    pub fn scan_mempool(
+    /// Adds unconfirmed transactions and UTXOs from the mempool
+    pub fn add_mempool_transactions(
         &mut self,
         transactions: &[SignedTransaction],
         wallet_events: &impl WalletEvents,
@@ -2521,7 +2669,7 @@ fn to_token_additional_info(token_info: &UnconfirmedTokenInfo) -> TxAdditionalIn
 
 impl<B, P> Wallet<B, P>
 where
-    B: storage::Backend + 'static,
+    B: storage::BackendWithSendableTransactions + 'static,
     P: SignerProvider<K = AccountKeyChainImplSoftware>,
 {
     pub fn get_vrf_key(
@@ -2549,7 +2697,7 @@ where
         Ok(account.get_legacy_vrf_public_key())
     }
 
-    pub fn create_stake_pool(
+    pub async fn create_stake_pool(
         &mut self,
         account_index: U31,
         current_fee_rate: FeeRate,
@@ -2557,7 +2705,7 @@ where
         stake_pool_arguments: StakePoolCreationArguments,
     ) -> WalletResult<SignedTxWithFees> {
         let latest_median_time = self.latest_median_time;
-        self.for_account_rw_unlocked_and_check_tx_with_fees(
+        self.async_for_account_rw_unlocked_and_check_tx(
             account_index,
             TxAdditionalInfo::new(),
             |account, db_tx| {
@@ -2572,6 +2720,7 @@ where
                 )
             },
         )
+        .await
     }
 
     pub fn get_pos_gen_block_data(

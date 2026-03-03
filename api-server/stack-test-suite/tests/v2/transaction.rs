@@ -191,20 +191,20 @@ async fn multiple_tx_in_same_block(#[case] seed: Seed) {
                 let transaction = signed_tx2.transaction();
 
                 let expected_transaction = json!({
-                "block_id": block_id.to_hash().encode_hex::<String>(),
-                "timestamp": block.timestamp().to_string(),
-                "confirmations": BlockHeight::new(0).to_string(),
-                "version_byte": transaction.version_byte(),
-                "is_replaceable": transaction.is_replaceable(),
-                "flags": transaction.flags(),
-                "inputs": transaction.inputs().iter().zip(utxos).map(|(inp, utxo)| json!({
-                    "input": tx_input_to_json(inp, &TokenDecimals::Single(None), &chain_config),
-                    "utxo": utxo.as_ref().map(|txo| txoutput_to_json(txo, &chain_config, &TokenDecimals::Single(None))),
+                    "block_id": block_id.to_hash().encode_hex::<String>(),
+                    "timestamp": block.timestamp().to_string(),
+                    "confirmations": BlockHeight::new(0).to_string(),
+                    "version_byte": transaction.version_byte(),
+                    "is_replaceable": transaction.is_replaceable(),
+                    "flags": transaction.flags(),
+                    "inputs": transaction.inputs().iter().zip(utxos).map(|(inp, utxo)| json!({
+                        "input": tx_input_to_json(inp, &TokenDecimals::Single(None), &chain_config),
+                        "utxo": utxo.as_ref().map(|txo| txoutput_to_json(txo, &chain_config, &TokenDecimals::Single(None))),
                     })).collect::<Vec<_>>(),
-                "outputs": transaction.outputs()
-                            .iter()
-                            .map(|out| txoutput_to_json(out, &chain_config, &TokenDecimals::Single(None)))
-                            .collect::<Vec<_>>(),
+                    "outputs": transaction.outputs()
+                        .iter()
+                        .map(|out| txoutput_to_json(out, &chain_config, &TokenDecimals::Single(None)))
+                        .collect::<Vec<_>>(),
                 });
 
                 _ = tx.send((
@@ -337,20 +337,20 @@ async fn ok(#[case] seed: Seed) {
                 });
 
                 let expected_transaction = json!({
-                "block_id": block_id.to_hash().encode_hex::<String>(),
-                "timestamp": block.timestamp().to_string(),
-                "confirmations": BlockHeight::new((n_blocks - block_height) as u64).to_string(),
-                "version_byte": transaction.version_byte(),
-                "is_replaceable": transaction.is_replaceable(),
-                "flags": transaction.flags(),
-                "inputs": transaction.inputs().iter().zip(utxos).map(|(inp, utxo)| json!({
-                    "input": tx_input_to_json(inp, &TokenDecimals::Single(None), &chain_config),
-                    "utxo": utxo.as_ref().map(|txo| txoutput_to_json(txo, &chain_config, &TokenDecimals::Single(None))),
+                    "block_id": block_id.to_hash().encode_hex::<String>(),
+                    "timestamp": block.timestamp().to_string(),
+                    "confirmations": BlockHeight::new((n_blocks - block_height) as u64).to_string(),
+                    "version_byte": transaction.version_byte(),
+                    "is_replaceable": transaction.is_replaceable(),
+                    "flags": transaction.flags(),
+                    "inputs": transaction.inputs().iter().zip(utxos).map(|(inp, utxo)| json!({
+                        "input": tx_input_to_json(inp, &TokenDecimals::Single(None), &chain_config),
+                        "utxo": utxo.as_ref().map(|txo| txoutput_to_json(txo, &chain_config, &TokenDecimals::Single(None))),
                     })).collect::<Vec<_>>(),
-                "outputs": transaction.outputs()
-                            .iter()
-                            .map(|out| txoutput_to_json(out, &chain_config, &TokenDecimals::Single(None)))
-                            .collect::<Vec<_>>(),
+                    "outputs": transaction.outputs()
+                        .iter()
+                        .map(|out| txoutput_to_json(out, &chain_config, &TokenDecimals::Single(None)))
+                        .collect::<Vec<_>>(),
                 });
 
                 _ = tx.send((

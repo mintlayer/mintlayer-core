@@ -31,7 +31,6 @@ from test_framework.mintlayer import block_input_data_obj
 from test_framework.wallet_cli_controller import WalletCliController
 
 import asyncio
-import sys
 import random
 
 
@@ -70,14 +69,14 @@ class WalletTxIntent(BitcoinTestFramework):
         assert_in("Success", await wallet.sync())
 
     def run_test(self):
-        if 'win32' in sys.platform:
-            asyncio.set_event_loop_policy(
-                asyncio.WindowsProactorEventLoopPolicy())
         asyncio.run(self.async_test())
 
     # Create a token and mint the specified amount of it spread across several utxos.
     # The resulting coin balance's integer part will equal coin_amount.
-    async def setup_currency(self, node, wallet, coin_amount, min_token_amount_per_utxo, max_token_amount_per_utxo, token_utxo_count):
+    async def setup_currency(
+        self, node, wallet, coin_amount, token_ticker, min_token_amount_per_utxo,
+        max_token_amount_per_utxo, token_utxo_count
+    ):
         pub_key_bytes = await wallet.new_public_key()
 
         tip_id = node.chainstate_best_block_id()
@@ -108,7 +107,7 @@ class WalletTxIntent(BitcoinTestFramework):
         self.log.debug(f'token_issuer_address = {token_issuer_address}')
 
         # Create the token.
-        token_id, tx_id, err = await wallet.issue_new_token('FOO', 5, "http://uri", token_issuer_address)
+        token_id, tx_id, err = await wallet.issue_new_token(token_ticker, 5, "http://uri", token_issuer_address)
         assert token_id is not None
         assert tx_id is not None
         assert err is None
@@ -154,8 +153,10 @@ class WalletTxIntent(BitcoinTestFramework):
             await wallet.create_wallet('test_wallet')
 
             coin_amount = random.randint(100, 200)
+            token_ticker = "FOO"
             token_utxos_count = random.randint(5, 10)
-            (token_id, token_amount) = await self.setup_currency(node, wallet, coin_amount, 50, 250, token_utxos_count)
+            (token_id, token_amount) = await self.setup_currency(
+                node, wallet, coin_amount, token_ticker, 50, 250, token_utxos_count)
 
             async def assert_balances(coin, token):
                 await self.sync_wallet(wallet)
@@ -163,7 +164,7 @@ class WalletTxIntent(BitcoinTestFramework):
                 assert_in(f"Coins amount: {coin}", balances)
 
                 if token:
-                    assert_in(f"Token: {token_id} amount: {token}", balances)
+                    assert_in(f"Token: {token_id} ({token_ticker}), amount: {token}", balances)
                 else:
                     assert_not_in(token_id, balances)
 

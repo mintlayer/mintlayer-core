@@ -16,6 +16,7 @@
 #  limitations under the License.
 
 from dataclasses import dataclass
+from decimal import Decimal
 import re
 
 
@@ -29,6 +30,23 @@ class UtxoOutpoint:
 
     def to_json(self):
         return { "source_id": { "type": "Transaction", "content": { "tx_id": self.id } }, "index": self.index }
+
+
+def to_json(obj):
+    if hasattr(obj, 'to_json'):
+        return obj.to_json()
+    else:
+        return obj
+
+
+# Note: the input is supposed to be a hex-encoded `crypto::key::PublicKey`, which is returned
+# e.g. by wallet's `reveal_public_key_as_hex`. It contains the public key itself, prefixed with
+# an extra zero byte (which corresponds to the SCALE-encoded enum variant `PublicKeyHolder::Secp256k1Schnorr`).
+# Also note that `wallet_xxx_controller.new_public_key` removes this prefix by default.
+def pub_key_hex_to_hexified_dest(pub_key_hex: str) -> str:
+    pub_key_hex = pub_key_hex.removeprefix("0x")
+    return f"HexifiedDestination{{0x02{pub_key_hex}}}"
+
 
 @dataclass
 class TokenTxOutput:
@@ -53,3 +71,11 @@ class WalletCliControllerBase:
         match = re.search(pattern, output)
         assert match is not None
         return match.group(1)
+
+    async def get_coins_balance(self, with_locked: str = "unlocked") -> Decimal:
+        balance_response = await self.get_balance(with_locked=with_locked)
+        match = re.search(r'Coins amount: (\d+(\.\d+)?)', balance_response)
+        assert match is not None
+
+        balance = Decimal(match.group(1))
+        return balance

@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use common::{
-    address::{AddressError, RpcAddress},
+    address::RpcAddress,
     chain::{
         tokens::{IsTokenUnfreezable, TokenId},
         AccountCommand, AccountSpending, ChainConfig, DelegationId, Destination,
@@ -23,6 +23,8 @@ use common::{
     primitives::amount::RpcAmountOut,
 };
 use rpc::types::RpcHexString;
+
+use super::RpcTypeError;
 
 #[derive(Debug, Clone, serde::Serialize, rpc_description::HasValueHint)]
 #[serde(tag = "type", content = "content")]
@@ -37,7 +39,7 @@ impl RpcAccountSpending {
     pub fn new(
         chain_config: &ChainConfig,
         spending: AccountSpending,
-    ) -> Result<Self, AddressError> {
+    ) -> Result<Self, RpcTypeError> {
         let result = match spending {
             AccountSpending::DelegationBalance(id, amount) => {
                 RpcAccountSpending::DelegationBalance {
@@ -89,7 +91,7 @@ pub enum RpcAccountCommand {
 }
 
 impl RpcAccountCommand {
-    pub fn new(chain_config: &ChainConfig, command: &AccountCommand) -> Result<Self, AddressError> {
+    pub fn new(chain_config: &ChainConfig, command: &AccountCommand) -> Result<Self, RpcTypeError> {
         let result = match command {
             AccountCommand::MintTokens(id, amount) => RpcAccountCommand::MintTokens {
                 token_id: RpcAddress::new(chain_config, *id)?,
@@ -155,7 +157,7 @@ impl RpcOrderAccountCommand {
     pub fn new(
         chain_config: &ChainConfig,
         command: &OrderAccountCommand,
-    ) -> Result<Self, AddressError> {
+    ) -> Result<Self, RpcTypeError> {
         let result = match command {
             OrderAccountCommand::ConcludeOrder(order_id) => RpcOrderAccountCommand::Conclude {
                 order_id: RpcAddress::new(chain_config, *order_id)?,

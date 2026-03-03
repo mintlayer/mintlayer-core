@@ -13,11 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use logging::log;
 use std::{
     convert::Infallible,
     time::{Duration, Instant},
 };
+
+use tokio::sync::watch;
+
+use logging::log;
+use utils::set_flag::SetFlag;
 
 struct Stopwatch {
     start: Instant,
@@ -26,7 +30,10 @@ struct Stopwatch {
 
 impl Stopwatch {
     #[allow(clippy::unused_async)]
-    async fn init(handle: subsystem::SubmitOnlyHandle<Self>) -> Result<Self, Infallible> {
+    async fn init(
+        handle: subsystem::SubmitOnlyHandle<Self>,
+        _shutdown_initiated_rx: watch::Receiver<SetFlag>,
+    ) -> Result<Self, Infallible> {
         let start = Instant::now();
         let tick_task = tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_millis(500));

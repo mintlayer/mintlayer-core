@@ -23,23 +23,15 @@ mod transaction;
 
 use std::collections::BTreeSet;
 
-pub use balances::Balances;
 use bip39::{Language, Mnemonic};
-pub use block_info::{BlockInfo, CreatedBlockInfo};
-pub use common::primitives::amount::RpcAmountOut;
+
 use common::{
     chain::{
         output_value::OutputValue,
         tokens::{RPCTokenInfo, TokenId},
         ChainConfig, Destination, TxOutput,
     },
-    primitives::{DecimalAmount, H256},
-};
-pub use seed_phrase::SeedWithPassPhrase;
-pub use standalone_key::AccountStandaloneKeyDetails;
-pub use transaction::{
-    InspectTransaction, NewTransaction, PreparedTransaction, SignatureStats, TransactionToInspect,
-    ValidatedSignatures,
+    primitives::{amount::decimal::DecimalAmountWithIsSameComparison, DecimalAmount, H256},
 };
 use utils::ensure;
 use wallet::signer::trezor_signer::FoundDevice;
@@ -51,6 +43,17 @@ use wallet_types::{
 
 use crate::mnemonic;
 
+pub use common::primitives::amount::RpcAmountOut;
+
+pub use balances::Balances;
+pub use block_info::{BlockInfo, CreatedBlockInfo};
+pub use seed_phrase::SeedWithPassPhrase;
+pub use standalone_key::AccountStandaloneKeyDetails;
+pub use transaction::{
+    InspectTransaction, NewTransaction, PreparedTransaction, SignatureStats, TransactionToInspect,
+    ValidatedSignatures,
+};
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, rpc_description::HasValueHint)]
 pub struct WalletInfo {
     pub wallet_id: H256,
@@ -58,20 +61,22 @@ pub struct WalletInfo {
     pub extra_info: WalletExtraInfo,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, rpc_description::HasValueHint)]
+#[serde(tag = "type", content = "content")]
 pub enum WalletExtraInfo {
     SoftwareWallet,
+    // Note: semver::Version is not serializable, so we can't use it here.
     #[cfg(feature = "trezor")]
     TrezorWallet {
         device_name: String,
         device_id: String,
-        // Note: semver::Version is not serializable, so we can't use it here.
         firmware_version: String,
     },
-}
-
-impl rpc_description::HasValueHint for WalletExtraInfo {
-    const HINT_SER: rpc_description::ValueHint = rpc_description::ValueHint::GENERIC_OBJECT;
+    #[cfg(feature = "ledger")]
+    LedgerWallet {
+        app_version: String,
+        model: String,
+    },
 }
 
 // A struct that represents sending a particular amount of unspecified currency.
@@ -89,7 +94,7 @@ impl GenericCurrencyTransfer {
         let decimals = chain_config.coin_decimals();
         let output_val = OutputValue::Coin(self.amount.to_amount(decimals).ok_or(
             GenericCurrencyTransferToTxOutputConversionError::AmountNotConvertible(
-                self.amount,
+                self.amount.into(),
                 decimals,
             ),
         )?);
@@ -106,7 +111,7 @@ impl GenericCurrencyTransfer {
             token_info.token_id(),
             self.amount.to_amount(decimals).ok_or(
                 GenericCurrencyTransferToTxOutputConversionError::AmountNotConvertible(
-                    self.amount,
+                    self.amount.into(),
                     decimals,
                 ),
             )?,
@@ -154,10 +159,10 @@ impl GenericTokenTransfer {
     }
 }
 
-#[derive(thiserror::Error, Debug)]
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 pub enum GenericCurrencyTransferToTxOutputConversionError {
     #[error("Decimal amount {0} can't be converted to Amount with {1} decimals")]
-    AmountNotConvertible(DecimalAmount, u8),
+    AmountNotConvertible(DecimalAmountWithIsSameComparison, u8),
     #[error("Unexpected token id {actual} (expecting {expected})")]
     UnexpectedTokenId { expected: TokenId, actual: TokenId },
 }
@@ -192,6 +197,8 @@ pub enum WalletTypeArgs {
     },
     #[cfg(feature = "trezor")]
     Trezor { device_id: Option<String> },
+    #[cfg(feature = "ledger")]
+    Ledger,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -212,6 +219,8 @@ impl WalletTypeArgs {
             } => controller_mode.into(),
             #[cfg(feature = "trezor")]
             Self::Trezor { device_id: _ } => WalletType::Trezor,
+            #[cfg(feature = "ledger")]
+            Self::Ledger => WalletType::Ledger,
         }
     }
 
@@ -254,6 +263,11 @@ impl WalletTypeArgs {
                 WalletTypeArgsComputed::Trezor { device_id },
                 CreatedWallet::UserProvidedMnemonic,
             )),
+            #[cfg(feature = "ledger")]
+            Self::Ledger => Ok((
+                WalletTypeArgsComputed::Ledger,
+                CreatedWallet::UserProvidedMnemonic,
+            )),
         }
     }
 }
@@ -266,6 +280,8 @@ pub enum WalletTypeArgsComputed {
     },
     #[cfg(feature = "trezor")]
     Trezor { device_id: Option<String> },
+    #[cfg(feature = "ledger")]
+    Ledger,
 }
 
 pub enum SweepFromAddresses {

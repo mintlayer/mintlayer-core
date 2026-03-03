@@ -17,9 +17,9 @@ use std::sync::Arc;
 
 use rstest::rstest;
 
-use super::helpers::{block_creation_helpers::*, block_status_helpers::*};
 use chainstate::{
-    BlockError, BlockInvalidatorError, BlockSource, ChainstateError, CheckBlockError,
+    BlockError, BlockInvalidatorError, BlockSource, ChainstateError, ChainstateEvent,
+    CheckBlockError,
 };
 use chainstate_test_framework::{storage::Builder as StorageBuilder, TestFramework};
 use chainstate_types::{BlockStatus, BlockValidationStage};
@@ -28,7 +28,7 @@ use common::{
         self,
         block::{consensus_data::PoWData, Block, ConsensusData},
     },
-    primitives::{BlockDistance, Id, Idable},
+    primitives::{BlockDistance, BlockHeight, Id, Idable},
     Uint256,
 };
 use randomness::{CryptoRng, Rng};
@@ -38,6 +38,8 @@ use test_utils::{
     random::{make_seedable_rng, Seed},
 };
 use utils::atomics::SeqCstAtomicU64;
+
+use super::helpers::{block_creation_helpers::*, block_status_helpers::*, EventList};
 
 mod storage_configs {
     use super::StorageBuilder;
@@ -97,6 +99,8 @@ fn test_stale_chain_invalidation(#[case] seed: Seed, #[case] sb: StorageBuilder)
             BlockValidationStage::CheckBlockOk,
         );
 
+        let events = EventList::subscribe_new(&mut tf);
+
         tf.chainstate.invalidate_block(&a0_id).unwrap();
 
         assert_eq!(tf.best_block_id(), m_tip_id);
@@ -113,6 +117,9 @@ fn test_stale_chain_invalidation(#[case] seed: Seed, #[case] sb: StorageBuilder)
             &[a0_id, a1_id, a2_id],
             BlockValidationStage::CheckBlockOk,
         );
+
+        tf.chainstate.wait_for_all_events();
+        assert_eq!(&events.take(), &[]);
     });
 }
 
@@ -138,15 +145,37 @@ fn test_basic_tip_invalidation(#[case] seed: Seed, #[case] sb: StorageBuilder) {
         assert_eq!(tf.best_block_id(), m1_id);
         assert_fully_valid_blocks(&tf, &[m0_id, m1_id]);
 
+        let events = EventList::subscribe_new(&mut tf);
+
         tf.chainstate.invalidate_block(&m1_id).unwrap();
 
         assert_eq!(tf.best_block_id(), m0_id);
         assert_fully_valid_blocks(&tf, &[m0_id]);
         assert_invalidated_blocks_at_stage(&tf, &[m1_id], BlockValidationStage::FullyChecked);
 
+        tf.chainstate.wait_for_all_events();
+        assert_eq!(
+            &events.take(),
+            &[ChainstateEvent::NewTip {
+                id: m0_id.into(),
+                height: BlockHeight::new(1),
+                is_initial_block_download: false
+            }]
+        );
+
         tf.chainstate.reset_block_failure_flags(&m1_id).unwrap();
         assert_eq!(tf.best_block_id(), m1_id);
         assert_fully_valid_blocks(&tf, &[m0_id, m1_id]);
+
+        tf.chainstate.wait_for_all_events();
+        assert_eq!(
+            &events.take(),
+            &[ChainstateEvent::NewTip {
+                id: m1_id.into(),
+                height: BlockHeight::new(2),
+                is_initial_block_download: false
+            }]
+        );
     });
 }
 
@@ -172,15 +201,37 @@ fn test_basic_parent_invalidation(#[case] seed: Seed, #[case] sb: StorageBuilder
         assert_eq!(tf.best_block_id(), m1_id);
         assert_fully_valid_blocks(&tf, &[m0_id, m1_id]);
 
+        let events = EventList::subscribe_new(&mut tf);
+
         tf.chainstate.invalidate_block(&m0_id).unwrap();
 
         assert_eq!(tf.best_block_id(), genesis_id);
         assert_invalidated_blocks_at_stage(&tf, &[m0_id], BlockValidationStage::FullyChecked);
         assert_blocks_with_bad_parent_at_stage(&tf, &[m1_id], BlockValidationStage::FullyChecked);
 
+        tf.chainstate.wait_for_all_events();
+        assert_eq!(
+            &events.take(),
+            &[ChainstateEvent::NewTip {
+                id: genesis_id.into(),
+                height: BlockHeight::new(0),
+                is_initial_block_download: false
+            }]
+        );
+
         tf.chainstate.reset_block_failure_flags(&m0_id).unwrap();
         assert_eq!(tf.best_block_id(), m1_id);
         assert_fully_valid_blocks(&tf, &[m0_id, m1_id]);
+
+        tf.chainstate.wait_for_all_events();
+        assert_eq!(
+            &events.take(),
+            &[ChainstateEvent::NewTip {
+                id: m1_id.into(),
+                height: BlockHeight::new(2),
+                is_initial_block_download: false
+            }]
+        );
     });
 }
 
@@ -313,6 +364,8 @@ fn complex_test_impl(mut tf: TestFramework, block_ids: &TestChainBlockIds) {
 
     let TestChainBlockIds { m, a, b, c, d, e } = block_ids;
 
+    let events = EventList::subscribe_new(&mut tf);
+
     {
         // Step 1 - invalidate m3.
         // This should first try to switch to the "e" chain, whose activation should fail,
@@ -349,6 +402,16 @@ fn complex_test_impl(mut tf: TestFramework, block_ids: &TestChainBlockIds) {
 
         // Check the min height for reorg and the best chain candidates.
         assert_eq!(tf.get_min_height_with_allowed_reorg(), 2.into());
+
+        tf.chainstate.wait_for_all_events();
+        assert_eq!(
+            &events.take(),
+            &[ChainstateEvent::NewTip {
+                id: d[2].into(),
+                height: BlockHeight::new(5),
+                is_initial_block_download: false
+            }]
+        );
     }
 
     {
@@ -385,6 +448,9 @@ fn complex_test_impl(mut tf: TestFramework, block_ids: &TestChainBlockIds) {
 
         // Check the min height for reorg and the best chain candidates.
         assert_eq!(tf.get_min_height_with_allowed_reorg(), 2.into());
+
+        tf.chainstate.wait_for_all_events();
+        assert_eq!(&events.take(), &[]);
     }
 
     {
@@ -396,6 +462,7 @@ fn complex_test_impl(mut tf: TestFramework, block_ids: &TestChainBlockIds) {
         assert_in_stale_chain(&tf, &c[2..]);
         assert_fully_valid_blocks(&tf, &c[..2]);
         assert_bad_blocks_at_stage(&tf, &c[2..], BlockValidationStage::Unchecked);
+        assert_eq!(tf.best_block_id(), c[1]);
 
         // "d" is now invalid
         assert_in_stale_chain(&tf, d);
@@ -422,6 +489,16 @@ fn complex_test_impl(mut tf: TestFramework, block_ids: &TestChainBlockIds) {
 
         // Check the min height for reorg and the best chain candidates.
         assert_eq!(tf.get_min_height_with_allowed_reorg(), 2.into());
+
+        tf.chainstate.wait_for_all_events();
+        assert_eq!(
+            &events.take(),
+            &[ChainstateEvent::NewTip {
+                id: c[1].into(),
+                height: BlockHeight::new(4),
+                is_initial_block_download: false
+            }]
+        );
     }
 
     {
@@ -433,6 +510,7 @@ fn complex_test_impl(mut tf: TestFramework, block_ids: &TestChainBlockIds) {
         assert_in_stale_chain(&tf, &b[1..]);
         assert_fully_valid_blocks(&tf, &b[..1]);
         assert_bad_blocks_at_stage(&tf, &b[1..], BlockValidationStage::Unchecked);
+        assert_eq!(tf.best_block_id(), b[0]);
 
         // The entire "c" is now invalid
         assert_in_stale_chain(&tf, c);
@@ -460,6 +538,16 @@ fn complex_test_impl(mut tf: TestFramework, block_ids: &TestChainBlockIds) {
 
         // Check the min height for reorg and the best chain candidates.
         assert_eq!(tf.get_min_height_with_allowed_reorg(), 2.into());
+
+        tf.chainstate.wait_for_all_events();
+        assert_eq!(
+            &events.take(),
+            &[ChainstateEvent::NewTip {
+                id: b[0].into(),
+                height: BlockHeight::new(3),
+                is_initial_block_download: false
+            }]
+        );
     }
 
     {
@@ -482,6 +570,7 @@ fn complex_test_impl(mut tf: TestFramework, block_ids: &TestChainBlockIds) {
         assert_in_stale_chain(&tf, &b[1..]);
         assert_fully_valid_blocks(&tf, &b[..1]);
         assert_bad_blocks_at_stage(&tf, &b[1..], BlockValidationStage::Unchecked);
+        assert_eq!(tf.best_block_id(), b[0]);
 
         assert_in_stale_chain(&tf, c);
         assert_invalidated_blocks_at_stage(&tf, &c[..1], FullyChecked);
@@ -504,6 +593,9 @@ fn complex_test_impl(mut tf: TestFramework, block_ids: &TestChainBlockIds) {
 
         // Check the min height for reorg and the best chain candidates.
         assert_eq!(tf.get_min_height_with_allowed_reorg(), 2.into());
+
+        tf.chainstate.wait_for_all_events();
+        assert_eq!(&events.take(), &[]);
     }
 
     {
@@ -523,6 +615,7 @@ fn complex_test_impl(mut tf: TestFramework, block_ids: &TestChainBlockIds) {
         assert_in_stale_chain(&tf, &b[1..]);
         assert_fully_valid_blocks(&tf, &b[..1]);
         assert_bad_blocks_at_stage(&tf, &b[1..], BlockValidationStage::Unchecked);
+        assert_eq!(tf.best_block_id(), b[0]);
 
         assert_in_stale_chain(&tf, c);
         assert_invalidated_blocks_at_stage(&tf, &c[..1], FullyChecked);
@@ -545,6 +638,9 @@ fn complex_test_impl(mut tf: TestFramework, block_ids: &TestChainBlockIds) {
 
         // Check the min height for reorg and the best chain candidates.
         assert_eq!(tf.get_min_height_with_allowed_reorg(), 2.into());
+
+        tf.chainstate.wait_for_all_events();
+        assert_eq!(&events.take(), &[]);
     }
 
     {
@@ -552,6 +648,9 @@ fn complex_test_impl(mut tf: TestFramework, block_ids: &TestChainBlockIds) {
         tf = tf.reload();
         assert_eq!(tf.get_min_height_with_allowed_reorg(), 2.into());
     }
+
+    // Resubscribe after reload.
+    let events = EventList::subscribe_new(&mut tf);
 
     {
         // Step 8 - reset the fail flags of m1 and its descendants.
@@ -589,6 +688,16 @@ fn complex_test_impl(mut tf: TestFramework, block_ids: &TestChainBlockIds) {
         // Check the min height for reorg and the best chain candidates.
         assert_eq!(tf.get_min_height_with_allowed_reorg(), 2.into());
         // Note that now b2 and c2 are among the candidates instead of b0 and c1.
+
+        tf.chainstate.wait_for_all_events();
+        assert_eq!(
+            &events.take(),
+            &[ChainstateEvent::NewTip {
+                id: m[6].into(),
+                height: BlockHeight::new(7),
+                is_initial_block_download: false
+            }]
+        );
     }
 }
 
@@ -653,6 +762,8 @@ fn test_tip_invalidation_with_no_better_candidates(#[case] seed: Seed, #[case] s
             tf.block_index(&m0_id).chain_trust()
         );
 
+        let events = EventList::subscribe_new(&mut tf);
+
         tf.chainstate.invalidate_block(&m1_id).unwrap();
 
         assert_eq!(tf.best_block_id(), m0_id);
@@ -660,11 +771,31 @@ fn test_tip_invalidation_with_no_better_candidates(#[case] seed: Seed, #[case] s
         assert_invalidated_blocks_at_stage(&tf, &[m1_id], BlockValidationStage::FullyChecked);
         assert_ok_blocks_at_stage(&tf, &[a0_id], BlockValidationStage::CheckBlockOk);
 
+        tf.chainstate.wait_for_all_events();
+        assert_eq!(
+            &events.take(),
+            &[ChainstateEvent::NewTip {
+                id: m0_id.into(),
+                height: BlockHeight::new(1),
+                is_initial_block_download: false
+            }]
+        );
+
         tf.chainstate.reset_block_failure_flags(&m1_id).unwrap();
 
         assert_eq!(tf.best_block_id(), m1_id);
         assert_fully_valid_blocks(&tf, &[m0_id, m1_id]);
         assert_ok_blocks_at_stage(&tf, &[a0_id], BlockValidationStage::CheckBlockOk);
+
+        tf.chainstate.wait_for_all_events();
+        assert_eq!(
+            &events.take(),
+            &[ChainstateEvent::NewTip {
+                id: m1_id.into(),
+                height: BlockHeight::new(2),
+                is_initial_block_download: false
+            }]
+        );
     });
 }
 
@@ -694,6 +825,8 @@ fn test_invalidation_with_reorg_to_chain_with_bad_tip1(#[case] seed: Seed) {
         let (a1_id, result) = process_block_with_empty_tx(&mut rng, &mut tf, &a0_id.into());
         assert!(result.is_err());
 
+        let events = EventList::subscribe_new(&mut tf);
+
         // Reset the fail flags of a1.
         tf.chainstate.reset_block_failure_flags(&a1_id).unwrap();
 
@@ -702,6 +835,9 @@ fn test_invalidation_with_reorg_to_chain_with_bad_tip1(#[case] seed: Seed) {
         assert_ok_blocks_at_stage(&tf, &[a0_id], BlockValidationStage::CheckBlockOk);
         // Resetting block status has removed the block index, because the block data itself was missing.
         assert_no_block_indices(&tf, &[a1_id]);
+
+        tf.chainstate.wait_for_all_events();
+        assert_eq!(&events.take(), &[]);
 
         // For completeness, invalidate m0 and check that the chain reorgs to a0.
 
@@ -713,6 +849,16 @@ fn test_invalidation_with_reorg_to_chain_with_bad_tip1(#[case] seed: Seed) {
         assert_no_block_indices(&tf, &[a1_id]);
         assert_invalidated_blocks_at_stage(&tf, &[m0_id], BlockValidationStage::FullyChecked);
         assert_blocks_with_bad_parent_at_stage(&tf, &[m1_id], BlockValidationStage::FullyChecked);
+
+        tf.chainstate.wait_for_all_events();
+        assert_eq!(
+            &events.take(),
+            &[ChainstateEvent::NewTip {
+                id: a0_id.into(),
+                height: BlockHeight::new(1),
+                is_initial_block_download: false
+            }]
+        );
     });
 }
 
@@ -749,6 +895,8 @@ fn test_invalidation_with_reorg_to_chain_with_bad_tip2(#[case] seed: Seed) {
         assert_fully_valid_blocks(&tf, &[m0_id, m1_id]);
         assert_ok_blocks_at_stage(&tf, &[a0_id, a1_id], BlockValidationStage::CheckBlockOk);
 
+        let events = EventList::subscribe_new(&mut tf);
+
         tf.chainstate.invalidate_block(&m0_id).unwrap();
 
         // a0 is now the best block, a1 is marked as bad.
@@ -757,6 +905,16 @@ fn test_invalidation_with_reorg_to_chain_with_bad_tip2(#[case] seed: Seed) {
         assert_bad_blocks_at_stage(&tf, &[a1_id], BlockValidationStage::CheckBlockOk);
         assert_invalidated_blocks_at_stage(&tf, &[m0_id], BlockValidationStage::FullyChecked);
         assert_blocks_with_bad_parent_at_stage(&tf, &[m1_id], BlockValidationStage::FullyChecked);
+
+        tf.chainstate.wait_for_all_events();
+        assert_eq!(
+            &events.take(),
+            &[ChainstateEvent::NewTip {
+                id: a0_id.into(),
+                height: BlockHeight::new(1),
+                is_initial_block_download: false
+            }]
+        );
     });
 }
 
@@ -821,12 +979,17 @@ fn test_invalidation_with_reorg_attempt_to_chain_with_lower_chain_trust(#[case] 
         assert!(a1_ct > a0_ct);
         assert!(a1_ct > m1_ct);
 
+        let events = EventList::subscribe_new(&mut tf);
+
         tf.chainstate.reset_block_failure_flags(&a1_id).unwrap();
 
         assert_eq!(tf.best_block_id(), m1_id);
         assert_fully_valid_blocks(&tf, &[m0_id, m1_id]);
         assert_ok_blocks_at_stage(&tf, &[a0_id], BlockValidationStage::CheckBlockOk);
         assert_no_block_indices(&tf, &[a1_id]);
+
+        tf.chainstate.wait_for_all_events();
+        assert_eq!(&events.take(), &[]);
     });
 }
 
@@ -878,6 +1041,8 @@ fn test_invalidation_with_reorg_to_chain_with_tip_far_in_the_future(#[case] seed
         assert_ok_blocks_at_stage(&tf, &[a0_id], BlockValidationStage::CheckBlockOk);
         assert_ok_blocks_at_stage(&tf, &[a1_id], BlockValidationStage::Unchecked);
 
+        let events = EventList::subscribe_new(&mut tf);
+
         tf.chainstate.invalidate_block(&m0_id).unwrap();
 
         // a0 is now the best block, a1 is still ok and unchecked.
@@ -886,6 +1051,16 @@ fn test_invalidation_with_reorg_to_chain_with_tip_far_in_the_future(#[case] seed
         assert_ok_blocks_at_stage(&tf, &[a1_id], BlockValidationStage::Unchecked);
         assert_invalidated_blocks_at_stage(&tf, &[m0_id], BlockValidationStage::FullyChecked);
         assert_blocks_with_bad_parent_at_stage(&tf, &[m1_id], BlockValidationStage::FullyChecked);
+
+        tf.chainstate.wait_for_all_events();
+        assert_eq!(
+            &events.take(),
+            &[ChainstateEvent::NewTip {
+                id: a0_id.into(),
+                height: BlockHeight::new(1),
+                is_initial_block_download: false
+            }]
+        );
     });
 }
 
@@ -928,12 +1103,17 @@ fn test_reset_bad_stale_tip_status_and_add_blocks(#[case] seed: Seed, #[case] sb
 
         assert_bad_blocks_at_stage(&tf, &[a1_id], BlockValidationStage::CheckBlockOk);
 
+        let events = EventList::subscribe_new(&mut tf);
+
         // Reset the fail flags of a1.
         tf.chainstate.reset_block_failure_flags(&a1_id).unwrap();
 
         assert_eq!(tf.best_block_id(), m2_id);
         assert_fully_valid_blocks(&tf, &[m0_id, m1_id, m2_id]);
         assert_ok_blocks_at_stage(&tf, &[a0_id, a1_id], BlockValidationStage::CheckBlockOk);
+
+        tf.chainstate.wait_for_all_events();
+        assert_eq!(&events.take(), &[]);
 
         let (a2_id, result) = process_block_spend_parent_reward(&mut tf, &a1_id.into(), &mut rng);
         assert!(result.is_ok());
@@ -946,6 +1126,9 @@ fn test_reset_bad_stale_tip_status_and_add_blocks(#[case] seed: Seed, #[case] sb
             &[a0_id, a1_id, a2_id],
             BlockValidationStage::CheckBlockOk,
         );
+
+        tf.chainstate.wait_for_all_events();
+        assert_eq!(&events.take(), &[]);
 
         let (a3_id, result) = process_block(&mut tf, &a2_id.into(), &mut rng);
         assert!(result.is_err());
@@ -962,5 +1145,8 @@ fn test_reset_bad_stale_tip_status_and_add_blocks(#[case] seed: Seed, #[case] sb
             &[a2_id, a3_id],
             BlockValidationStage::CheckBlockOk,
         );
+
+        tf.chainstate.wait_for_all_events();
+        assert_eq!(&events.take(), &[]);
     });
 }

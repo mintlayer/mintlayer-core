@@ -16,7 +16,6 @@
 pub mod amount;
 pub mod bech32_encoding;
 pub mod compact;
-pub mod error;
 pub mod height;
 pub mod id;
 pub mod per_thousand;

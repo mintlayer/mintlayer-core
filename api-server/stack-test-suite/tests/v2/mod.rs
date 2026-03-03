@@ -36,8 +36,10 @@ mod statistics;
 mod token;
 mod token_ids;
 mod token_ticker;
+mod token_transactions;
 mod transaction;
 mod transaction_merkle_path;
+mod transaction_output;
 mod transaction_submit;
 mod transactions;
 
@@ -81,6 +83,11 @@ use std::{
     sync::{Arc, RwLock},
 };
 use test_utils::random::{make_seedable_rng, Rng, Seed};
+
+#[ctor::ctor]
+fn init() {
+    logging::init_logging();
+}
 
 #[tokio::test]
 async fn chain_genesis() {

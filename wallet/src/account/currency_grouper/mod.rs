@@ -21,10 +21,9 @@ use crate::{
 use std::collections::BTreeMap;
 
 use common::{
-    chain::{output_value::OutputValue, ChainConfig, Destination, TxOutput},
+    chain::{output_value::OutputValue, ChainConfig, Currency, Destination, TxOutput},
     primitives::{Amount, BlockHeight},
 };
-use wallet_types::currency::Currency;
 
 use super::UtxoSelectorError;
 

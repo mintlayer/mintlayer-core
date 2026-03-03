@@ -341,7 +341,7 @@ def rpc_addr(n):
     return "127.0.0.1:" + str(rpc_port(n))
 
 def rpc_url(datadir, i, chain, rpchost):
-    rpc_u, rpc_p = get_auth_cookie(datadir, chain)
+    rpc_u, rpc_p = get_auth_cookie(datadir)
     print(rpc_u)
     print(rpc_p)
     host = '127.0.0.1'
@@ -359,76 +359,22 @@ def rpc_url(datadir, i, chain, rpchost):
 ################
 
 
-def initialize_datadir(dirname, n, chain, disable_autoconnect=True):
+def initialize_datadir(dirname, n):
     datadir = get_datadir_path(dirname, n)
     if not os.path.isdir(datadir):
         os.makedirs(datadir)
-    write_config(os.path.join(datadir, "bitcoin.conf"), n=n, chain=chain, disable_autoconnect=disable_autoconnect)
     os.makedirs(os.path.join(datadir, 'stderr'), exist_ok=True)
     os.makedirs(os.path.join(datadir, 'stdout'), exist_ok=True)
     return datadir
-
-
-def write_config(config_path, *, n, chain, extra_config="", disable_autoconnect=True):
-    # Translate chain subdirectory name to config name
-    if chain == 'testnet3':
-        chain_name_conf_arg = 'testnet'
-        chain_name_conf_section = 'test'
-    else:
-        chain_name_conf_arg = chain
-        chain_name_conf_section = chain
-    with open(config_path, 'w', encoding='utf8') as f:
-        if chain_name_conf_arg:
-            f.write("{}=1\n".format(chain_name_conf_arg))
-        if chain_name_conf_section:
-            f.write("[{}]\n".format(chain_name_conf_section))
-        f.write("port=" + str(p2p_port(n)) + "\n")
-        f.write("rpcport=" + str(rpc_port(n)) + "\n")
-        f.write("fallbackfee=0.0002\n")
-        f.write("server=1\n")
-        f.write("keypool=1\n")
-        f.write("discover=0\n")
-        f.write("dnsseed=0\n")
-        f.write("fixedseeds=0\n")
-        f.write("listenonion=0\n")
-        # Increase peertimeout to avoid disconnects while using mocktime.
-        # peertimeout is measured in mock time, so setting it large enough to
-        # cover any duration in mock time is sufficient. It can be overridden
-        # in tests.
-        f.write("peertimeout=999999999\n")
-        f.write("printtoconsole=0\n")
-        f.write("upnp=0\n")
-        f.write("natpmp=0\n")
-        f.write("shrinkdebugfile=0\n")
-        # To improve SQLite wallet performance so that the tests don't timeout, use -unsafesqlitesync
-        f.write("unsafesqlitesync=1\n")
-        if disable_autoconnect:
-            f.write("connect=0\n")
-        f.write(extra_config)
 
 
 def get_datadir_path(dirname, n):
     return os.path.join(dirname, "node" + str(n))
 
 
-def append_config(datadir, options):
-    with open(os.path.join(datadir, "bitcoin.conf"), 'a', encoding='utf8') as f:
-        for option in options:
-            f.write(option + "\n")
-
-
-def get_auth_cookie(datadir, chain):
+def get_auth_cookie(datadir):
     user = None
     password = None
-    if os.path.isfile(os.path.join(datadir, "bitcoin.conf")):
-        with open(os.path.join(datadir, "bitcoin.conf"), 'r', encoding='utf8') as f:
-            for line in f:
-                if line.startswith("rpcuser="):
-                    assert user is None  # Ensure that there is only one rpcuser line
-                    user = line.split("=")[1].strip("\n")
-                if line.startswith("rpcpassword="):
-                    assert password is None  # Ensure that there is only one rpcpassword line
-                    password = line.split("=")[1].strip("\n")
     try:
         with open(os.path.join(datadir, ".cookie"), 'r', encoding="ascii") as f:
             userpass = f.read()
@@ -443,10 +389,12 @@ def get_auth_cookie(datadir, chain):
 
 
 # If a cookie file exists in the given datadir, delete it.
-def delete_cookie_file(datadir, chain):
-    if os.path.isfile(os.path.join(datadir, chain, ".cookie")):
-        logger.debug("Deleting leftover cookie file")
-        os.remove(os.path.join(datadir, chain, ".cookie"))
+def delete_cookie_file(datadir):
+    cookie_file = os.path.join(datadir, ".cookie")
+
+    if os.path.isfile(cookie_file):
+        logger.debug(f"Deleting leftover cookie file {cookie_file}")
+        os.remove(cookie_file)
 
 
 def softfork_active(node, key):

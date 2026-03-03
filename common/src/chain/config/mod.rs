@@ -63,12 +63,10 @@ use super::{
     TokensFeeVersion,
 };
 
-use self::{
-    checkpoints::Checkpoints,
-    emission_schedule::{CoinUnit, DEFAULT_INITIAL_MINT},
-};
+use self::emission_schedule::{CoinUnit, DEFAULT_INITIAL_MINT};
 
 pub use builder::Builder;
+pub use checkpoints::Checkpoints;
 pub use emission_schedule::{EmissionSchedule, EmissionScheduleFn, EmissionScheduleTabular};
 
 const DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET_V1: Duration = Duration::from_secs(120);
@@ -156,7 +154,7 @@ impl ChainType {
         }
     }
 
-    const fn magic_bytes(&self) -> MagicBytes {
+    pub const fn magic_bytes(&self) -> MagicBytes {
         match self {
             ChainType::Mainnet => Self::MAINNET_MAGIC_BYTES,
             ChainType::Testnet => Self::TESTNET_MAGIC_BYTES,
@@ -197,11 +195,11 @@ impl ChainType {
         match self {
             ChainType::Mainnet => {
                 vec![
-                    "51.159.232.144:3031".parse().expect("Cannot fail"),
-                    "51.159.179.229:3031".parse().expect("Cannot fail"),
-                    "151.115.35.206:3031".parse().expect("Cannot fail"),
-                    "172.232.50.132:3031".parse().expect("Cannot fail"),
-                    "103.3.61.21:3031".parse().expect("Cannot fail"),
+                    "51.15.192.100:3031".parse().expect("Cannot fail"),
+                    "51.158.236.130:3031".parse().expect("Cannot fail"),
+                    "151.115.60.31:3031".parse().expect("Cannot fail"),
+                    "172.232.43.9:3031".parse().expect("Cannot fail"),
+                    "139.162.4.113:3031".parse().expect("Cannot fail"),
                 ]
             }
             ChainType::Testnet => {

@@ -17,15 +17,15 @@
 
 use crate::prelude::*;
 
-fn put_and_commit<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
-    let store = backend_fn().open(desc(1)).expect("db open to succeed");
+fn put_and_commit<B: Backend, F: BackendFactory<B>>(backend_factory: Arc<F>) {
+    let mut store = backend_factory.create().open(desc(1)).expect("db open to succeed");
 
-    // Create a transaction, modify storage and abort transaction
+    // Create a transaction, modify the storage and commit
     let mut dbtx = store.transaction_rw(None).unwrap();
     dbtx.put(MAPID.0, b"hello".to_vec(), b"world".to_vec()).unwrap();
     dbtx.commit().expect("commit to succeed");
 
-    // Check the modification did not happen
+    // Check the modification did happen
     let dbtx = store.transaction_ro().unwrap();
     assert_eq!(
         dbtx.get(MAPID.0, b"hello").unwrap().as_ref().map(|v| v.as_ref()).unwrap(),
@@ -34,8 +34,8 @@ fn put_and_commit<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
     drop(dbtx);
 }
 
-fn put_and_abort<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
-    let store = backend_fn().open(desc(1)).expect("db open to succeed");
+fn put_and_abort<B: Backend, F: BackendFactory<B>>(backend_factory: Arc<F>) {
+    let mut store = backend_factory.create().open(desc(1)).expect("db open to succeed");
 
     // Create a transaction, modify storage and abort transaction
     let mut dbtx = store.transaction_rw(None).unwrap();
@@ -48,8 +48,8 @@ fn put_and_abort<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
     drop(dbtx);
 }
 
-fn put_two_under_different_keys<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
-    let store = backend_fn().open(desc(1)).expect("db open to succeed");
+fn put_two_under_different_keys<B: Backend, F: BackendFactory<B>>(backend_factory: Arc<F>) {
+    let mut store = backend_factory.create().open(desc(1)).expect("db open to succeed");
 
     // Create a transaction, modify storage and commit
     let mut dbtx = store.transaction_rw(None).unwrap();
@@ -88,8 +88,8 @@ fn put_two_under_different_keys<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>)
     drop(dbtx);
 }
 
-fn put_twice_then_commit_read_last<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
-    let store = backend_fn().open(desc(1)).expect("db open to succeed");
+fn put_twice_then_commit_read_last<B: Backend, F: BackendFactory<B>>(backend_factory: Arc<F>) {
+    let mut store = backend_factory.create().open(desc(1)).expect("db open to succeed");
 
     let mut dbtx = store.transaction_rw(None).unwrap();
     dbtx.put(MAPID.0, b"hello".to_vec(), b"a".to_vec()).unwrap();
@@ -111,8 +111,8 @@ fn put_twice_then_commit_read_last<B: Backend, F: BackendFn<B>>(backend_fn: Arc<
     );
 }
 
-fn put_iterator_count_matches<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
-    let store = backend_fn().open(desc(1)).expect("db open to succeed");
+fn put_iterator_count_matches<B: Backend, F: BackendFactory<B>>(backend_factory: Arc<F>) {
+    let mut store = backend_factory.create().open(desc(1)).expect("db open to succeed");
 
     let mut dbtx = store.transaction_rw(None).unwrap();
     dbtx.put(MAPID.0, vec![0x00], vec![]).unwrap();
@@ -126,8 +126,8 @@ fn put_iterator_count_matches<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
     assert_eq!(dbtx.greater_equal_iter(MAPID.0, vec![]).unwrap().count(), 4);
 }
 
-fn put_and_iterate<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
-    let store = backend_fn().open(desc(1)).expect("db open to succeed");
+fn put_and_iterate<B: Backend, F: BackendFactory<B>>(backend_factory: Arc<F>) {
+    let mut store = backend_factory.create().open(desc(1)).expect("db open to succeed");
 
     // Populate the database with some values
     let mut dbtx = store.transaction_rw(None).unwrap();
@@ -202,8 +202,8 @@ fn check_greater_equal_iter<Tx: ReadOps>(dbtx: &Tx, key: Data, expected: &[(&str
     assert!(entries.eq(expected));
 }
 
-fn put_and_iterate_delete_some<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
-    let store = backend_fn().open(desc(1)).expect("db open to succeed");
+fn put_and_iterate_delete_some<B: Backend, F: BackendFactory<B>>(backend_factory: Arc<F>) {
+    let mut store = backend_factory.create().open(desc(1)).expect("db open to succeed");
 
     let expected_full_0 =
         [("aa", "0"), ("ab", "1"), ("ac", "2"), ("aca", "3"), ("acb", "4"), ("b", "5")];
@@ -292,7 +292,7 @@ fn put_and_iterate_delete_some<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) 
     drop(dbtx);
 }
 
-tests![
+common_tests![
     put_and_abort,
     put_and_commit,
     put_and_iterate_delete_some,

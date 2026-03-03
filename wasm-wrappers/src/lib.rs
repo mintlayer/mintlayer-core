@@ -43,6 +43,10 @@ use common::{
         config::{Builder, BIP44_PATH},
         htlc::HtlcSecret,
         make_delegation_id, make_order_id, make_pool_id, make_token_id,
+        partially_signed_transaction::{
+            make_sighash_input_commitments_at_height, PartiallySignedTransaction,
+            PartiallySignedTransactionConsistencyCheck,
+        },
         signature::{
             inputsig::{
                 arbitrary_message::{produce_message_challenge, ArbitraryMessageSignature},
@@ -52,7 +56,10 @@ use common::{
                 classical_multisig::authorize_classical_multisig::{
                     sign_classical_multisig_spending, AuthorizedClassicalMultisigSpend,
                 },
-                htlc::produce_uniparty_signature_for_htlc_input,
+                htlc::{
+                    produce_uniparty_signature_for_htlc_refunding,
+                    produce_uniparty_signature_for_htlc_spending,
+                },
                 standard_signature::StandardInputSignature,
                 InputWitness,
             },
@@ -78,17 +85,14 @@ use serialization::{json_encoded::JsonEncoded, Decode, DecodeAll, Encode};
 
 use crate::{
     error::Error,
-    sighash_input_commitments::{make_sighash_input_commitments, TxInputsAdditionalInfo},
-    types::TxAdditionalInfo,
-    types::{Amount, Network, SignatureHashType, SourceId},
-    utils::{decode_raw_array, extract_htlc_spend, parse_addressable},
+    types::{Amount, Network, SignatureHashType, SourceId, TxAdditionalInfo},
+    utils::{decode_raw_array, extract_htlc_spend, parse_addressable, to_ptx_additional_info},
 };
 
 mod encode_input;
 mod encode_output;
 mod error;
 mod internal;
-mod sighash_input_commitments;
 #[cfg(test)]
 mod tests;
 mod types;
@@ -636,9 +640,9 @@ pub fn extract_htlc_secret(
         extract_htlc_spend(tx.signatures().get(htlc_position).ok_or(Error::InvalidWitnessCount)?)?;
 
     match htlc_spend {
-        AuthorizedHashedTimelockContractSpend::Secret(secret, _) => Ok(secret.encode()),
-        AuthorizedHashedTimelockContractSpend::Multisig(_) => Err(Error::UnexpectedHtlcSpendType(
-            AuthorizedHashedTimelockContractSpendTag::Multisig,
+        AuthorizedHashedTimelockContractSpend::Spend(secret, _) => Ok(secret.encode()),
+        AuthorizedHashedTimelockContractSpend::Refund(_) => Err(Error::UnexpectedHtlcSpendType(
+            AuthorizedHashedTimelockContractSpendTag::Refund,
         )),
     }
 }
@@ -756,13 +760,12 @@ pub fn encode_witness(
     let input_utxos = decode_raw_array::<Option<TxOutput>>(input_utxos)
         .map_err(Error::InvalidInputUtxoEncoding)?;
 
-    let input_infos =
-        TxInputsAdditionalInfo::from_tx_additional_info(&chain_config, &additional_info)?;
+    let ptx_additional_info = to_ptx_additional_info(&chain_config, &additional_info)?;
 
-    let input_commitments = make_sighash_input_commitments(
+    let input_commitments = make_sighash_input_commitments_at_height(
         tx.inputs(),
         &input_utxos,
-        &input_infos,
+        &ptx_additional_info,
         &chain_config,
         BlockHeight::new(current_block_height),
     )?;
@@ -782,13 +785,14 @@ pub fn encode_witness(
     Ok(witness.encode())
 }
 
-/// Given a private key, inputs and an input number to sign, and the destination that owns that output (through the utxo),
-/// and a network type (mainnet, testnet, etc), and an htlc secret this function returns a witness to be used in a signed transaction, as bytes.
+/// Sign the specified HTLC input of the transaction and encode the signature as InputWitness.
+///
+/// This function must be used for HTLC spending.
 ///
 /// `input_utxos` and `additional_info` have the same format and requirements as in `encode_witness`.
 #[allow(clippy::too_many_arguments)]
 #[wasm_bindgen]
-pub fn encode_witness_htlc_secret(
+pub fn encode_witness_htlc_spend(
     sighashtype: SignatureHashType,
     private_key: &[u8],
     input_owner_destination: &str,
@@ -813,13 +817,12 @@ pub fn encode_witness_htlc_secret(
     let input_utxos = decode_raw_array::<Option<TxOutput>>(input_utxos)
         .map_err(Error::InvalidInputUtxoEncoding)?;
 
-    let input_infos =
-        TxInputsAdditionalInfo::from_tx_additional_info(&chain_config, &additional_info)?;
+    let ptx_additional_info = to_ptx_additional_info(&chain_config, &additional_info)?;
 
-    let input_commitments = make_sighash_input_commitments(
+    let input_commitments = make_sighash_input_commitments_at_height(
         tx.inputs(),
         &input_utxos,
-        &input_infos,
+        &ptx_additional_info,
         &chain_config,
         BlockHeight::new(current_block_height),
     )?;
@@ -827,7 +830,7 @@ pub fn encode_witness_htlc_secret(
     let secret =
         HtlcSecret::decode_all(&mut &secret[..]).map_err(Error::InvalidHtlcSecretEncoding)?;
 
-    let witness = produce_uniparty_signature_for_htlc_input(
+    let witness = produce_uniparty_signature_for_htlc_spending(
         &private_key,
         sighashtype.into(),
         destination,
@@ -885,16 +888,18 @@ pub fn multisig_challenge_to_address(
     Ok(address)
 }
 
-/// Given a private key, inputs and an input number to sign, and multisig challenge,
-/// and a network type (mainnet, testnet, etc), this function returns a witness to be used in a signed transaction, as bytes.
+/// Sign the specified HTLC input of the transaction and encode the signature as InputWitness.
 ///
-/// `key_index` parameter is an index of the public key in the challenge corresponding to the specified private key.
+/// This function must be used for HTLC refunding when the refund address is a multisig one.
+///
+/// `key_index` parameter is an index of the public key in the multisig challenge corresponding to
+/// the specified private key.
 /// `input_witness` parameter can be either empty or a result of previous calls to this function.
 ///
 /// `input_utxos` and `additional_info` have the same format and requirements as in `encode_witness`.
 #[allow(clippy::too_many_arguments)]
 #[wasm_bindgen]
-pub fn encode_witness_htlc_multisig(
+pub fn encode_witness_htlc_refund_multisig(
     sighashtype: SignatureHashType,
     private_key: &[u8],
     key_index: u8,
@@ -918,13 +923,12 @@ pub fn encode_witness_htlc_multisig(
     let input_utxos = decode_raw_array::<Option<TxOutput>>(input_utxos)
         .map_err(Error::InvalidInputUtxoEncoding)?;
 
-    let input_infos =
-        TxInputsAdditionalInfo::from_tx_additional_info(&chain_config, &additional_info)?;
+    let ptx_additional_info = to_ptx_additional_info(&chain_config, &additional_info)?;
 
-    let input_commitments = make_sighash_input_commitments(
+    let input_commitments = make_sighash_input_commitments_at_height(
         tx.inputs(),
         &input_utxos,
-        &input_infos,
+        &ptx_additional_info,
         &chain_config,
         BlockHeight::new(current_block_height),
     )?;
@@ -942,12 +946,12 @@ pub fn encode_witness_htlc_multisig(
         let (htlc_spend, _) = extract_htlc_spend(&input_witness)?;
 
         match htlc_spend {
-            AuthorizedHashedTimelockContractSpend::Secret(_, _) => {
+            AuthorizedHashedTimelockContractSpend::Spend(_, _) => {
                 return Err(Error::UnexpectedHtlcSpendType(
-                    AuthorizedHashedTimelockContractSpendTag::Secret,
+                    AuthorizedHashedTimelockContractSpendTag::Spend,
                 ));
             }
-            AuthorizedHashedTimelockContractSpend::Multisig(raw_signature) => {
+            AuthorizedHashedTimelockContractSpend::Refund(raw_signature) => {
                 AuthorizedClassicalMultisigSpend::from_data(&raw_signature)
                     .map_err(Error::MultisigSpendCreationError)?
             }
@@ -969,8 +973,64 @@ pub fn encode_witness_htlc_multisig(
     .take();
 
     let raw_signature =
-        AuthorizedHashedTimelockContractSpend::Multisig(authorization.encode()).encode();
+        AuthorizedHashedTimelockContractSpend::Refund(authorization.encode()).encode();
     let witness = InputWitness::Standard(StandardInputSignature::new(sighashtype, raw_signature));
+
+    Ok(witness.encode())
+}
+
+/// Sign the specified HTLC input of the transaction and encode the signature as InputWitness.
+///
+/// This function must be used for HTLC refunding when the refund address is a single-sig one.
+///
+/// `input_utxos` and `additional_info` have the same format and requirements as in `encode_witness`.
+#[allow(clippy::too_many_arguments)]
+#[wasm_bindgen]
+pub fn encode_witness_htlc_refund_single_sig(
+    sighashtype: SignatureHashType,
+    private_key: &[u8],
+    input_owner_destination: &str,
+    transaction: &[u8],
+    input_utxos: &[u8],
+    input_index: u32,
+    additional_info: TxAdditionalInfo,
+    current_block_height: u64,
+    network: Network,
+) -> Result<Vec<u8>, Error> {
+    let chain_config = Builder::new(network.into()).build();
+
+    let private_key =
+        PrivateKey::decode_all(&mut &private_key[..]).map_err(Error::InvalidPrivateKeyEncoding)?;
+
+    let destination = parse_addressable(&chain_config, input_owner_destination)?;
+
+    let tx = Transaction::decode_all(&mut &transaction[..])
+        .map_err(Error::InvalidTransactionEncoding)?;
+
+    let input_utxos = decode_raw_array::<Option<TxOutput>>(input_utxos)
+        .map_err(Error::InvalidInputUtxoEncoding)?;
+
+    let ptx_additional_info = to_ptx_additional_info(&chain_config, &additional_info)?;
+
+    let input_commitments = make_sighash_input_commitments_at_height(
+        tx.inputs(),
+        &input_utxos,
+        &ptx_additional_info,
+        &chain_config,
+        BlockHeight::new(current_block_height),
+    )?;
+
+    let witness = produce_uniparty_signature_for_htlc_refunding(
+        &private_key,
+        sighashtype.into(),
+        destination,
+        &tx,
+        &input_commitments,
+        input_index as usize,
+        &mut randomness::make_true_rng(),
+    )
+    .map(InputWitness::Standard)
+    .map_err(Error::InputSigningError)?;
 
     Ok(witness.encode())
 }
@@ -986,6 +1046,99 @@ pub fn encode_signed_transaction(transaction: &[u8], signatures: &[u8]) -> Resul
 
     let tx = SignedTransaction::new(tx, signatures).map_err(Error::TransactionCreationError)?;
     Ok(tx.encode())
+}
+
+/// Return a PartiallySignedTransaction object as bytes.
+///
+/// `transaction` is an encoded `Transaction` (which can be produced via `encode_transaction`).
+///
+/// `signatures`, `input_utxos`, `input_destinations` and `htlc_secrets` are encoded lists of
+/// optional objects of the corresponding type. To produce such a list, iterate over your
+/// original list of optional objects and then:
+/// 1) emit byte 0 if the current object is null;
+/// 2) otherwise emit byte 1 followed by the object in its encoded form.
+///
+/// Each individual object in each of the lists corresponds to the transaction input with the same
+/// index and its meaning is as follows:
+///   1) `signatures` - the signature for the input;
+///   2) `input_utxos`- the utxo for the input (if it's utxo-based);
+///   3) `input_destinations` - the destination (address) corresponding to the input; this determines
+///      the key(s) with which the input has to be signed. Note that for utxo-based inputs the
+///      corresponding destination can usually be extracted from the utxo itself (the exception
+///      being the `ProduceBlockFromStake` utxo, which doesn't contain the pool's decommission key).
+///      However, PartiallySignedTransaction requires that *all* input destinations are provided
+///      explicitly anyway.
+///   4) `htlc_secrets` - if the input is an HTLC one and if the transaction is spending the HTLC,
+///      this should be the HTLC secret. Otherwise it should be null.
+///
+///   The number of items in each list must be equal to the number of transaction inputs.
+///
+/// `additional_info` has the same meaning as in `encode_witness`.
+#[wasm_bindgen]
+pub fn encode_partially_signed_transaction(
+    transaction: &[u8],
+    signatures: &[u8],
+    input_utxos: &[u8],
+    input_destinations: &[u8],
+    htlc_secrets: &[u8],
+    additional_info: TxAdditionalInfo,
+    network: Network,
+) -> Result<Vec<u8>, Error> {
+    let chain_config = Builder::new(network.into()).build();
+
+    let signatures = decode_raw_array::<Option<InputWitness>>(signatures)
+        .map_err(Error::InvalidWitnessEncoding)?;
+
+    let tx = Transaction::decode_all(&mut &transaction[..])
+        .map_err(Error::InvalidTransactionEncoding)?;
+
+    let input_utxos = decode_raw_array::<Option<TxOutput>>(input_utxos)
+        .map_err(Error::InvalidInputUtxoEncoding)?;
+
+    let input_destinations = decode_raw_array::<Option<Destination>>(input_destinations)
+        .map_err(Error::InvalidDestinationEncoding)?;
+
+    let htlc_secrets = decode_raw_array::<Option<HtlcSecret>>(htlc_secrets)
+        .map_err(Error::InvalidHtlcSecretEncoding)?;
+
+    let ptx_additional_info = to_ptx_additional_info(&chain_config, &additional_info)?;
+
+    let tx = PartiallySignedTransaction::new(
+        tx,
+        signatures,
+        input_utxos,
+        input_destinations,
+        Some(htlc_secrets),
+        ptx_additional_info,
+        PartiallySignedTransactionConsistencyCheck::WithAdditionalInfo,
+    )
+    .map_err(Error::PartiallySignedTransactionCreationError)?;
+    Ok(tx.encode())
+}
+
+/// Decodes a partially signed transaction from its binary encoding into a JavaScript object.
+#[wasm_bindgen]
+pub fn decode_partially_signed_transaction_to_js(
+    transaction: &[u8],
+    network: Network,
+) -> Result<JsValue, Error> {
+    let chain_config = Builder::new(network.into()).build();
+    let ptx = PartiallySignedTransaction::decode_all(&mut &transaction[..])
+        .map_err(Error::InvalidTransactionEncoding)?;
+
+    let str = JsonEncoded::new(&ptx).to_string();
+    let str = dehexify_all_addresses(&chain_config, &str);
+
+    js_sys::JSON::parse(&str).map_err(Error::JsonParseError)
+}
+
+/// Convert the specified string address into a Destination object, encoded as bytes.
+#[wasm_bindgen]
+pub fn encode_destination(address: &str, network: Network) -> Result<Vec<u8>, Error> {
+    let chain_config = Builder::new(network.into()).build();
+    let destination = parse_addressable::<Destination>(&chain_config, address)?;
+
+    Ok(destination.encode())
 }
 
 /// Given a `Transaction` encoded in bytes (not a signed transaction, but a signed transaction is tolerated by ignoring the extra bytes, by choice)

@@ -13,10 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod store_tx;
-
+mod blockchain_storage;
 #[cfg(any(test, feature = "expensive-reads"))]
 mod expensive;
+mod store_tx;
+mod version;
 
 use std::collections::BTreeMap;
 
@@ -25,25 +26,26 @@ use common::{
     chain::{ChainConfig, DelegationId, PoolId},
     primitives::Amount,
 };
+use logging::log;
 use pos_accounting::{
     DelegationData, PoSAccountingStorageRead, PoSAccountingStorageWrite, PoolData,
 };
 use utils::log_error;
 
 use crate::{
-    schema::Schema, BlockchainStorage, BlockchainStorageRead, BlockchainStorageWrite,
-    TransactionRw, Transactional,
+    schema::Schema, BlockchainStorageRead, BlockchainStorageWrite, TransactionRw, Transactional,
 };
 
+pub use blockchain_storage::{
+    BlockchainStorage, BlockchainStorageBackend, BlockchainStorageBackendImpl,
+};
 pub use store_tx::{StoreTxRo, StoreTxRw};
-
-mod version;
 pub use version::ChainstateStorageVersion;
 
 /// Store for blockchain data, parametrized over the backend B
-pub struct Store<B: storage::Backend>(storage::Storage<B, Schema>);
+pub struct Store<B: storage::SharedBackend>(storage::Storage<B, Schema>);
 
-impl<B: storage::Backend> Store<B> {
+impl<B: storage::SharedBackend> Store<B> {
     /// Create a new chainstate storage
     #[log_error]
     pub fn new(backend: B, chain_config: &ChainConfig) -> crate::Result<Self> {
@@ -57,7 +59,7 @@ impl<B: storage::Backend> Store<B> {
         }
 
         if db_tx.get_magic_bytes()?.is_none() {
-            db_tx.set_magic_bytes(chain_config.magic_bytes())?;
+            db_tx.set_magic_bytes(*chain_config.magic_bytes())?;
         }
 
         if db_tx.get_chain_type()?.is_none() {
@@ -76,7 +78,7 @@ impl<B: storage::Backend> Store<B> {
     }
 }
 
-impl<B: Default + storage::Backend> Store<B> {
+impl<B: Default + storage::SharedBackend> Store<B> {
     /// Create a default storage (mostly for testing, may want to remove this later)
     #[log_error]
     pub fn new_empty() -> crate::Result<Self> {
@@ -84,16 +86,16 @@ impl<B: Default + storage::Backend> Store<B> {
     }
 }
 
-impl<B: storage::Backend> Clone for Store<B>
+impl<B: storage::SharedBackend> Clone for Store<B>
 where
-    B::Impl: Clone,
+    storage::Storage<B, Schema>: Clone,
 {
     fn clone(&self) -> Self {
         Self(self.0.clone())
     }
 }
 
-impl<'tx, B: storage::Backend + 'tx> Transactional<'tx> for Store<B> {
+impl<'tx, B: storage::SharedBackend + 'tx> Transactional<'tx> for Store<B> {
     type TransactionRo = StoreTxRo<'tx, B>;
     type TransactionRw = StoreTxRw<'tx, B>;
 
@@ -107,13 +109,26 @@ impl<'tx, B: storage::Backend + 'tx> Transactional<'tx> for Store<B> {
         &'st self,
         size: Option<usize>,
     ) -> crate::Result<Self::TransactionRw> {
-        self.0.transaction_rw(size).map_err(crate::Error::from).map(StoreTxRw::new)
+        <storage::Storage<_, _> as storage::StorageSharedWrite<_, _>>::transaction_rw(&self.0, size)
+            .map_err(crate::Error::from)
+            .map(StoreTxRw::new)
     }
 }
 
-impl<B: storage::Backend + 'static> BlockchainStorage for Store<B> {}
+impl<B: BlockchainStorageBackend + 'static> BlockchainStorage for Store<B> {
+    fn set_reckless_mode(&self, set: bool) -> crate::Result<()> {
+        let enabled = if set { "enabled" } else { "disabled" };
+        log::warn!("Blockchain storage reckless mode {enabled}");
 
-impl<B: storage::Backend> PoSAccountingStorageRead<TipStorageTag> for Store<B> {
+        self.0.backend_impl().set_reckless_mode(set)
+    }
+
+    fn in_reckless_mode(&self) -> crate::Result<bool> {
+        self.0.backend_impl().in_reckless_mode()
+    }
+}
+
+impl<B: storage::SharedBackend> PoSAccountingStorageRead<TipStorageTag> for Store<B> {
     type Error = crate::Error;
 
     #[log_error]
@@ -162,7 +177,7 @@ impl<B: storage::Backend> PoSAccountingStorageRead<TipStorageTag> for Store<B> {
     }
 }
 
-impl<B: storage::Backend> PoSAccountingStorageRead<SealedStorageTag> for Store<B> {
+impl<B: storage::SharedBackend> PoSAccountingStorageRead<SealedStorageTag> for Store<B> {
     type Error = crate::Error;
 
     #[log_error]
@@ -211,7 +226,7 @@ impl<B: storage::Backend> PoSAccountingStorageRead<SealedStorageTag> for Store<B
     }
 }
 
-impl<B: storage::Backend> PoSAccountingStorageWrite<TipStorageTag> for Store<B> {
+impl<B: storage::SharedBackend> PoSAccountingStorageWrite<TipStorageTag> for Store<B> {
     #[log_error]
     fn set_pool_balance(&mut self, pool_id: PoolId, amount: Amount) -> crate::Result<()> {
         let mut tx = self.transaction_rw(None)?;
@@ -322,7 +337,7 @@ impl<B: storage::Backend> PoSAccountingStorageWrite<TipStorageTag> for Store<B> 
     }
 }
 
-impl<B: storage::Backend> PoSAccountingStorageWrite<SealedStorageTag> for Store<B> {
+impl<B: storage::SharedBackend> PoSAccountingStorageWrite<SealedStorageTag> for Store<B> {
     #[log_error]
     fn set_pool_balance(&mut self, pool_id: PoolId, amount: Amount) -> crate::Result<()> {
         let mut tx = self.transaction_rw(None)?;

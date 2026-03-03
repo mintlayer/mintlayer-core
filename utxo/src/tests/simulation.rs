@@ -15,12 +15,18 @@
 
 use std::convert::Infallible;
 
-use super::test_helper::{create_utxo, empty_test_utxos_view, UnwrapInfallible};
-use crate::{ConsumedUtxoCache, FlushableUtxoView, UtxosCache, UtxosView};
+use rstest::rstest;
+
 use common::chain::UtxoOutPoint;
 use randomness::{CryptoRng, Rng};
-use rstest::rstest;
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::{
+    random::{make_seedable_rng, Seed},
+    UnwrapInfallible as _,
+};
+
+use crate::{ConsumedUtxoCache, FlushableUtxoView, UtxosCache, UtxosView};
+
+use super::test_helper::{create_utxo, empty_test_utxos_view};
 
 // This test creates an arbitrary long chain of caches.
 // Every new cache is populated with random utxo values which can be created/spend/removed.

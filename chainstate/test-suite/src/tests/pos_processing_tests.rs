@@ -1896,7 +1896,7 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
 
     // Process block_4 and spend some share including reward
     let delegation_balance =
-        tf.chainstate.get_stake_delegation_balance(delegation_id).unwrap().unwrap();
+        tf.chainstate.get_stake_delegation_balance(&delegation_id).unwrap().unwrap();
 
     // try overspend
     {

@@ -1,0 +1,2 @@
+# Need at least v3.11 to be able to use tomllib
+>=3.11

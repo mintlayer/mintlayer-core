@@ -8,18 +8,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
+    - name: Setup Python
+      uses: actions/setup-python@v6
       with:
-        python-version: '3.x'
+        python-version-file: './build-tools/.python-version'
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install toml
-        # Install any other dependencies your script might need
+    # - name: Install Python dependencies
+    #   run: |
+    #     python -m pip install --upgrade pip
+    #     pip install ...
+    #     # Install any other dependencies your script might need
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v2
@@ -41,7 +41,9 @@ jobs:
         fi
 
     - name: Build and Push Docker images
-      run: python build-tools/docker/build.py --push --docker-hub-user ${{ secrets.DOCKERHUB_USERNAME }} --version ${{ steps.version.outputs.VERSION }} --latest
+      run: |
+        python build-tools/docker/build.py --push --docker-hub-user ${{ secrets.DOCKERHUB_USERNAME }} \
+          --version ${{ steps.version.outputs.VERSION }} --latest
 
     env:
       DOCKER_BUILDKIT: 1

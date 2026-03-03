@@ -61,3 +61,7 @@ impl<'de> serde::Deserialize<'de> for DelegationId {
         HexifiedAddress::<Self>::serde_deserialize(deserializer)
     }
 }
+
+impl rpc_description::HasValueHint for DelegationId {
+    const HINT_SER: rpc_description::ValueHint = rpc_description::ValueHint::HEXIFIED_DELEGATION_ID;
+}

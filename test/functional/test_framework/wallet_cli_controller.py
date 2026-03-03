@@ -16,13 +16,14 @@
 #  limitations under the License.
 """A wrapper around a CLI wallet instance"""
 
+import asyncio
 import json
 import os
-import asyncio
 import re
 from dataclasses import dataclass
+from decimal import Decimal
 from tempfile import NamedTemporaryFile
-from typing import Optional, List, Tuple, Union
+from typing import Optional, List, Tuple
 
 from test_framework.util import assert_in
 from test_framework.wallet_controller_common import PartialSigInfo, TokenTxOutput, UtxoOutpoint, WalletCliControllerBase
@@ -249,15 +250,17 @@ class WalletCliController(WalletCliControllerBase):
         i_know_what_i_am_doing = "i-know-what-i-am-doing" if force_reduce else ""
         return await self._write_command(f"wallet-set-lookahead-size {size} {i_know_what_i_am_doing}\n")
 
-    async def new_public_key(self, address: Optional[str] = None) -> bytes:
+    async def new_public_key(self, address: Optional[str] = None, strip_encoded_enum_prefix: bool = True) -> bytes:
         if address is None:
             address = await self.new_address()
         public_key = await self._write_command(f"address-reveal-public-key-as-hex {address}\n")
-
         self.log.info(f'pub key output: {public_key}')
-        # remove the pub key enum value, the first one byte
-        pub_key_bytes = bytes.fromhex(public_key)[1:]
-        return pub_key_bytes
+
+        if strip_encoded_enum_prefix:
+            # Remove the first byte, which encodes the variant of PublicKeyHolder enum.
+            return bytes.fromhex(public_key)[1:]
+        else:
+            return bytes.fromhex(public_key)
 
     async def reveal_public_key_as_address(self, address: str) -> str:
         return await self._write_command(f"address-reveal-public-key-as-address {address}\n")
@@ -268,24 +271,30 @@ class WalletCliController(WalletCliControllerBase):
     async def new_address(self) -> str:
         return await self._write_command(f"address-new\n")
 
-    async def list_utxos(self, utxo_types: str = '', with_locked: str = '', utxo_states: List[str] = []) -> List[UtxoOutpoint]:
-        output = await self._write_command(f"account-utxos {utxo_types} {with_locked} {''.join(utxo_states)}\n")
+    # List UTXOs of the specified kind, returning a list of UtxoOutpoint's.
+    # By default, all unlocked UTXOs are returned (i.e. any type, any state).
+    async def list_utxos(self, utxo_type: str = '', with_locked: str = '', utxo_states: List[str] = []) -> List[UtxoOutpoint]:
+        output = await self.list_utxos_raw(utxo_type, with_locked, utxo_states)
+        return [UtxoOutpoint(id=match["outpoint"]["source_id"]["content"]["tx_id"], index=int(match["outpoint"]["index"])) for match in output]
 
-        j = json.loads(output)
-
-        return [UtxoOutpoint(id=match["outpoint"]["source_id"]["content"]["tx_id"], index=int(match["outpoint"]["index"])) for match in j]
-
-    # Note: probably this function should have been called `list_utxos` and the current `list_utxos` have a more specific name.
-    async def list_utxos_raw(self, utxo_types: str = '', with_locked: str = '', utxo_states: List[str] = []) -> List[UtxoOutpoint]:
-        output = await self._write_command(f"account-utxos {utxo_types} {with_locked} {''.join(utxo_states)}\n")
+    # Same as list_utxos, but return a raw dict.
+    async def list_utxos_raw(self, utxo_type: str = '', with_locked: str = '', utxo_states: List[str] = []) -> any:
+        output = await self._write_command(f"account-utxos {utxo_type} {with_locked} {' '.join(utxo_states)}\n")
         return json.loads(output)
 
-    async def list_multisig_utxos(self, utxo_types: str = '', with_locked: str = '', utxo_states: List[str] = []) -> List[UtxoOutpoint]:
-        output = await self._write_command(f"standalone-multisig-utxos {utxo_types} {with_locked} {''.join(utxo_states)}\n")
+    # List multisig UTXOs of the specified kind, returning a list of UtxoOutpoint's.
+    # By default, all unlocked and confirmed UTXOs are returned.
+    # Note: the accepted parameter values differ from ones accepted by this function's RPC counterpart.
+    # So, controller-agnostic tests should always call it without parameters.
+    # TODO: make the parameters compatible.
+    async def list_multisig_utxos(self, utxo_type: str = '', with_locked: str = '', utxo_states: List[str] = []) -> List[UtxoOutpoint]:
+        output = await self.list_multisig_utxos_raw(utxo_type, with_locked, utxo_states)
+        return [UtxoOutpoint(id=match["outpoint"]["source_id"]["content"]["tx_id"], index=int(match["outpoint"]["index"])) for match in output]
 
-        j = json.loads(output)
-
-        return [UtxoOutpoint(id=match["outpoint"]["source_id"]["content"]["tx_id"], index=int(match["outpoint"]["index"])) for match in j]
+    # Same as list_multisig_utxos, but return a raw dict.
+    async def list_multisig_utxos_raw(self, utxo_type: str = '', with_locked: str = '', utxo_states: List[str] = []) -> List[UtxoOutpoint]:
+        output = await self._write_command(f"standalone-multisig-utxos {utxo_type} {with_locked} {' '.join(utxo_states)}\n")
+        return json.loads(output)
 
     async def get_transaction(self, tx_id: str):
         out = await self._write_command(f"transaction-get {tx_id}\n")
@@ -311,7 +320,7 @@ class WalletCliController(WalletCliControllerBase):
     async def sweep_delegation(self, destination_address: str, delegation_id: str) -> str:
         return await self._write_command(f"staking-sweep-delegation {destination_address} {delegation_id}\n")
 
-    async def send_to_address(self, address: str, amount: Union[int, float, str], selected_utxos: List[UtxoOutpoint] = []) -> str:
+    async def send_to_address(self, address: str, amount: int | float | Decimal | str, selected_utxos: List[UtxoOutpoint] = []) -> str:
         return await self._write_command(f"address-send {address} {amount} {' '.join(map(str, selected_utxos))}\n")
 
     async def compose_transaction(self, outputs: List[TxOutput], selected_utxos: List[UtxoOutpoint], only_transaction: bool = False) -> str:
@@ -319,11 +328,11 @@ class WalletCliController(WalletCliControllerBase):
         utxos = f"--utxos {' --utxos '.join(map(str, selected_utxos))}" if selected_utxos else ""
         return await self._write_command(f"transaction-compose {' '.join(map(str, outputs))} {utxos} {only_tx}\n")
 
-    async def send_tokens_to_address(self, token_id: str, address: str, amount: Union[float, str]):
+    async def send_tokens_to_address(self, token_id: str, address: str, amount: int | float | Decimal | str):
         return await self._write_command(f"token-send {token_id} {address} {amount}\n")
 
     # Note: unlike send_tokens_to_address, this function behaves identically both for wallet_cli_controller and wallet_rpc_controller.
-    async def send_tokens_to_address_or_fail(self, token_id: str, address: str, amount: Union[float, str]):
+    async def send_tokens_to_address_or_fail(self, token_id: str, address: str, amount: int | float | Decimal | str):
         output = await self.send_tokens_to_address(token_id, address, amount)
         assert_in("The transaction was submitted successfully", output)
 
@@ -570,17 +579,88 @@ class WalletCliController(WalletCliControllerBase):
         return (tx, siginfo)
 
     async def make_tx_to_send_tokens_with_intent(
-            self, token_id: str, destination: str, amount: Union[float, str], intent: str):
+            self, token_id: str, destination: str, amount: int | float | Decimal | str, intent: str):
 
         output = await self._write_command(
             f"token-make-tx-to-send-with-intent {token_id} {destination} {amount} {intent}\n")
 
         pattern = (
-            r'The hex encoded transaction is:\n([0-9a-fA-F]+)\n\n'
+            r'The hex-encoded transaction is:\n([0-9a-fA-F]+)\n\n'
             r'The transaction id is:\n([0-9a-fA-F]+)\n\n'
-            r'The hex encoded signed transaction intent is:\n([0-9a-fA-F]+)'
+            r'The hex-encoded signed transaction intent is:\n([0-9a-fA-F]+)'
         )
         match = re.search(pattern, output)
         assert match is not None
 
         return (match.group(1), match.group(2), match.group(3))
+
+    async def create_order(
+        self,
+        ask_token_id: Optional[str],
+        ask_amount: int | float | Decimal | str,
+        give_token_id: Optional[str],
+        give_amount: int | float | Decimal | str,
+        conclude_address: str
+    ) -> str:
+        if ask_token_id is None:
+            ask_token_id = "coin"
+        if give_token_id is None:
+            give_token_id = "coin"
+
+        output = await self._write_command(
+            f"order-create {ask_token_id} {ask_amount} {give_token_id} {give_amount} {conclude_address}\n")
+
+        match = re.search("New order id: (.*)\n", output)
+        assert match is not None
+        return match.group(1)
+
+    async def fill_order(
+        self,
+        order_id: str,
+        fill_amount: int | float | Decimal | str,
+        output_address: Optional[str] = None
+    ) -> str:
+        if output_address is None:
+            output_address = ""
+
+        output = await self._write_command(f"order-fill {order_id} {fill_amount} {output_address}\n")
+        return output
+
+    async def freeze_order(self, order_id: str) -> str:
+        output = await self._write_command(f"order-freeze {order_id}\n")
+        return output
+
+    async def conclude_order(
+        self,
+        order_id: str,
+        output_address: Optional[str] = None
+    ) -> str:
+        if output_address is None:
+            output_address = ""
+
+        output = await self._write_command(f"order-conclude {order_id} {output_address}\n")
+        return output
+
+    # Note: the result of this function is incompatible with RPC controller's list_own_orders.
+    async def list_own_orders(self) -> List[str]:
+        output = await self._write_command(f"order-list-own\n")
+        return output.strip().split("\n")
+
+    # Note: the result of this function is incompatible with RPC controller's list_all_active_orders.
+    async def list_all_active_orders(self, ask_currency_filter: str | None, give_currency_filter: str | None):
+        if ask_currency_filter is None:
+            ask_currency_filter = ""
+        else:
+            ask_currency_filter = f"--ask-currency {ask_currency_filter}"
+
+        if give_currency_filter is None:
+            give_currency_filter = ""
+        else:
+            give_currency_filter = f"--give-currency {give_currency_filter}"
+
+        output = await self._write_command(f"order-list-all-active {ask_currency_filter} {give_currency_filter}\n")
+
+        result = output.split("\n")
+        assert_in("The list of active orders goes below", result[0])
+        assert_in("WARNING: token tickers are not unique", result[1])
+        return result[2:]

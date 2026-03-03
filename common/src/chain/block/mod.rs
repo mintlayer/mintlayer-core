@@ -37,8 +37,15 @@ use typename::TypeName;
 use utils::ensure;
 
 use crate::{
-    chain::block::{block_size::BlockSize, block_v1::BlockV1, timestamp::BlockTimestamp},
-    primitives::{id::WithId, Id, Idable, VersionTag, H256},
+    chain::{
+        block::{block_size::BlockSize, block_v1::BlockV1, timestamp::BlockTimestamp},
+        output_value::OutputValue,
+        output_values_holder::OutputValuesHolder,
+    },
+    primitives::{
+        id::{HasSubObjWithSameId, WithId},
+        Id, Idable, VersionTag, H256,
+    },
 };
 
 use self::{
@@ -212,6 +219,12 @@ impl Idable for Block {
     }
 }
 
+impl HasSubObjWithSameId<SignedBlockHeader> for Block {
+    fn get_sub_obj(&self) -> &SignedBlockHeader {
+        self.header()
+    }
+}
+
 impl PartialEq for WithId<Block> {
     fn eq(&self, other: &Self) -> bool {
         self.get_id() == other.get_id()
@@ -231,6 +244,17 @@ impl<'de> serde::Deserialize<'de> for Id<Block> {
 }
 
 impl Eq for WithId<Block> {}
+
+impl OutputValuesHolder for Block {
+    fn output_values_iter(&self) -> impl Iterator<Item = &OutputValue> {
+        // Note: there are no OutputValue's in the header
+        self.body().output_values_iter()
+    }
+}
+
+impl rpc_description::HasValueHint for Id<Block> {
+    const HINT_SER: rpc_description::ValueHint = rpc_description::ValueHint::HEX_STRING;
+}
 
 #[cfg(test)]
 mod tests {

@@ -6,7 +6,7 @@ To be used in CI.
 
 import argparse
 import pathlib
-import toml
+import tomllib
 
 
 ROOT_DIR = pathlib.Path(__file__).resolve().parent.parent.parent
@@ -16,7 +16,6 @@ ROOT_CARGO_TOML = ROOT_DIR.joinpath("Cargo.toml")
 def get_rust_version(workspace_settings):
     version = workspace_settings["package"]["rust-version"]
 
-    # Unfortunately, rust-init doesn't support completing the version on its own, so we just pad with whatever works
     if len(version.split('.')) == 2:
         version = version + '.0'
 
@@ -34,7 +33,9 @@ def main():
     mutex_group.add_argument('--trezor-repo-rev', action='store_true', help='extract Trezor repo revision')
     args = parser.parse_args()
 
-    cargo_toml_root = toml.load(ROOT_CARGO_TOML)
+    with open(ROOT_CARGO_TOML, "rb") as file:
+        cargo_toml_root = tomllib.load(file)
+
     workspace_settings = cargo_toml_root["workspace"]
 
     if args.rust_version:

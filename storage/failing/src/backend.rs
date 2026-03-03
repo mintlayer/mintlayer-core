@@ -66,6 +66,10 @@ impl<B: backend::Backend> backend::Backend for Failing<B> {
     }
 }
 
+impl<B: backend::SharedBackend> backend::SharedBackend for Failing<B> {
+    type ImplHelper = FailingImpl<B::Impl>;
+}
+
 pub struct FailingImpl<T> {
     inner: T,
     config: Arc<FailureConfig>,
@@ -84,14 +88,22 @@ impl<T> FailingImpl<T> {
     }
 
     fn make_rng(&self) -> TestRng {
-        TestRng::new(Seed(self.rng.lock().expect("lock poisoned").gen()))
+        Self::make_rng_impl(&self.rng)
     }
 
-    fn make_rw_tx_state(&self) -> RwTxState<'_> {
+    fn make_rng_impl(rng: &Mutex<TestRng>) -> TestRng {
+        TestRng::new(Seed(rng.lock().expect("lock poisoned").gen()))
+    }
+
+    fn make_rw_tx_state<'a>(
+        config: &'a FailureConfig,
+        rng: &Mutex<TestRng>,
+        total_failures: &'a AcqRelAtomicU32,
+    ) -> RwTxState<'a> {
         RwTxState {
-            config: &self.config,
-            rng: self.make_rng(),
-            total_failures: &self.total_failures,
+            config,
+            rng: Self::make_rng_impl(rng),
+            total_failures,
             transaction_failures: 0,
         }
     }
@@ -123,8 +135,17 @@ impl<T: backend::BackendImpl> backend::BackendImpl for FailingImpl<T> {
         self.inner.transaction_ro()
     }
 
+    fn transaction_rw(&mut self, size: Option<usize>) -> storage_core::Result<Self::TxRw<'_>> {
+        let mut state = Self::make_rw_tx_state(&self.config, &self.rng, &self.total_failures);
+        state.emit_error(self.config.error_generation_for_start_rw_tx())?;
+        let inner = self.inner.transaction_rw(size)?;
+        Ok(TxRw { inner, state })
+    }
+}
+
+impl<T: backend::SharedBackendImpl> backend::SharedBackendImpl for FailingImpl<T> {
     fn transaction_rw(&self, size: Option<usize>) -> storage_core::Result<Self::TxRw<'_>> {
-        let mut state = self.make_rw_tx_state();
+        let mut state = Self::make_rw_tx_state(&self.config, &self.rng, &self.total_failures);
         state.emit_error(self.config.error_generation_for_start_rw_tx())?;
         let inner = self.inner.transaction_rw(size)?;
         Ok(TxRw { inner, state })

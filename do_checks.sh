@@ -4,20 +4,19 @@ set -e
 
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 
-# Note: on GitHub's CI's "macos-latest", `which python` returns
-# `/Library/Frameworks/Python.framework/Versions/Current/bin/python`,
-# while `which python3` returns `/opt/homebrew/bin/python3` (as of October 2025).
-# Since we use `python3` in GitHub Actions to install packages (such as `toml`),
-# we have to try `python3` first here as well.
-PYTHON=$(which python3 || which python)
+PYTHON=$(which python || which python3)
 
 cd "$SCRIPT_DIR"
 
+echo "Running cargo fmt"
 cargo fmt --check -- --config newline_style=Unix
 
-# Install cargo deny first with: cargo install cargo-deny.
 # Note: "--allow duplicate" silences the warning "found x duplicate entries for crate y".
+echo "Running cargo deny"
 cargo deny check --allow duplicate --hide-inclusion-graph
+
+echo "Running cargo vet"
+cargo vet check --locked
 
 CLIPPY_VERSION_RESPONSE=$(cargo clippy --version)
 # Note: clippy version starts from 0, e.g. '0.1.90'
@@ -33,15 +32,27 @@ fi
 
 # Checks enabled everywhere, including tests, benchmarks.
 # Note:
-# 1) "uninlined_format_args" is about changing `format!("{}", x)` to `format!("{x}")`.
+# * "uninlined_format_args" is about changing `format!("{}", x)` to `format!("{x}")`.
 #   Most of the time this makes the code look better, but:
 #     * there are way too many places like this;
 #     * in some cases it may lead to uglier code; in particular, when the format string is already
 #       quite long.
 #   So we disable it for now.
-# 2) "manual_is_multiple_of" - starting from v1.90 clippy insists that `x % 2 == 0` should be
+# * "infallible_try_from" - starting from v1.89 (note that the documentation states that it was
+#   added in 1.88, but this doesn't seem to be true), clippy insists that the `Error` type inside
+#   `impl TryFrom` shouldn't be `std::convert::Infallible`. However, this is actually useful,
+#   e.g. if it's a conversion from an enum with a single variant to that variant's inner type
+#   (in such a case, implementing `From` can be seen as conceptually wrong, while using a "real"
+#   error type instead of `Infallible` can be seen as redundant).
+# * "manual_is_multiple_of" - starting from v1.90 clippy insists that `x % 2 == 0` should be
 #   replaced with `x.is_multiple_of(2)`, which is a questionable improvement.
+# * "let_and_return" is disabled because having `let` before returning can be useful at least
+#   as a potential place for a breakpoint.
+echo "Running clippy"
 EXTRA_ARGS=()
+if [[ $CLIPPY_VERSION -ge 1089 ]]; then
+    EXTRA_ARGS+=(-A clippy::infallible_try_from)
+fi
 if [[ $CLIPPY_VERSION -ge 1090 ]]; then
     EXTRA_ARGS+=(-A clippy::manual_is_multiple_of)
 fi
@@ -50,6 +61,7 @@ cargo clippy --all-features --workspace --all-targets -- \
     -A clippy::unnecessary_literal_unwrap \
     -A clippy::new_without_default \
     -A clippy::uninlined_format_args \
+    -A clippy::let-and-return \
     -D clippy::implicit_saturating_sub \
     -D clippy::implicit_clone \
     -D clippy::map_unwrap_or \
@@ -70,8 +82,9 @@ cargo clippy --all-features --workspace --lib --bins --examples -- \
     -D clippy::fallible_impl_from \
     -D clippy::string_slice
 
-# Install requirements with: pip install -r ./build-tools/codecheck/requirements.txt
+echo "Running codecheck.py"
 "$PYTHON" "build-tools/codecheck/codecheck.py"
 
 # Ensure that wasm documentation is up-to-date
+echo "Checking WASM documentation"
 cargo run -p wasm-doc-gen -- -o wasm-wrappers/WASM-API.md --check

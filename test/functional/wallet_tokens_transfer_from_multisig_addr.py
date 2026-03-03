@@ -19,12 +19,10 @@
 from test_framework.mintlayer import (block_input_data_obj, make_tx, reward_input, ATOMS_PER_COIN)
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.util import assert_in, assert_not_in, assert_equal
-from test_framework.wallet_cli_controller import (TokenTxOutput, WalletCliController, DEFAULT_ACCOUNT_INDEX)
+from test_framework.wallet_cli_controller import (TokenTxOutput, WalletCliController)
 
 import asyncio
 import random
-import string
-import sys
 from typing import List, Tuple
 
 
@@ -61,8 +59,6 @@ class WalletTokensTransferFromMultisigAddr(BitcoinTestFramework):
         assert_in("Success", await wallet.sync())
 
     def run_test(self):
-        if 'win32' in sys.platform:
-            asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
         asyncio.run(self.async_test())
 
     # Create 2 tokens called foo and bar and mint the specified amount of each.
@@ -76,7 +72,10 @@ class WalletTokensTransferFromMultisigAddr(BitcoinTestFramework):
         # This function will spend 2x100 coins on issuing tokens and 2x50 on minting;
         # also, a portion of a coin will be spent for the transaction fee.
         output = {
-            'Transfer': [ { 'Coin': (coin_amount + 301) * ATOMS_PER_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': pub_key_bytes}}} } ],
+            'Transfer': [
+                { 'Coin': (coin_amount + 301) * ATOMS_PER_COIN },
+                { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': pub_key_bytes}}} }
+            ],
         }
         encoded_tx, tx_id = make_tx([reward_input(tip_id)], [output], 0)
 
@@ -167,12 +166,12 @@ class WalletTokensTransferFromMultisigAddr(BitcoinTestFramework):
                 assert_in(f"Coins amount: {coin}", balances)
 
                 if foo:
-                    assert_in(f"Token: {token_foo_id} amount: {foo}", balances)
+                    assert_in(f"Token: {token_foo_id} (FOO), amount: {foo}", balances)
                 else:
                     assert_not_in(token_foo_id, balances)
 
                 if bar:
-                    assert_in(f"Token: {token_bar_id} amount: {bar}", balances)
+                    assert_in(f"Token: {token_bar_id} (BAR), amount: {bar}", balances)
                 else:
                     assert_not_in(token_bar_id, balances)
 

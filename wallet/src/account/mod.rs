@@ -18,85 +18,96 @@ mod output_cache;
 pub mod transaction_list;
 mod utxo_selector;
 
-use common::address::pubkeyhash::PublicKeyHash;
-use common::chain::block::timestamp::BlockTimestamp;
-use common::chain::classic_multisig::ClassicMultisigChallenge;
-use common::chain::htlc::HashedTimelockContract;
-use common::chain::{
-    AccountCommand, AccountOutPoint, AccountSpending, OrderAccountCommand, OrderId, OrdersVersion,
-    RpcOrderInfo,
+use std::{
+    cmp::Reverse,
+    collections::{btree_map::Entry, BTreeMap, BTreeSet},
+    ops::{Add, Sub},
+    sync::Arc,
 };
-use common::primitives::id::WithId;
-use common::primitives::{Idable, H256};
-use common::size_estimation::{
-    input_signature_size, input_signature_size_from_destination, outputs_encoded_size,
-    tx_size_with_num_inputs_and_outputs, DestinationInfoProvider,
+
+use itertools::{izip, Itertools};
+
+use common::{
+    address::{pubkeyhash::PublicKeyHash, Address, RpcAddress},
+    chain::{
+        block::timestamp::BlockTimestamp,
+        classic_multisig::ClassicMultisigChallenge,
+        htlc::HashedTimelockContract,
+        make_token_id,
+        output_value::{OutputValue, RpcOutputValue},
+        tokens::{
+            IsTokenUnfreezable, NftIssuance, NftIssuanceV0, RPCFungibleTokenInfo, TokenId,
+            TokenIssuance,
+        },
+        AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, Block, ChainConfig,
+        Currency, DelegationId, Destination, GenBlock, OrderAccountCommand, OrderId, OrdersVersion,
+        PoolId, RpcOrderInfo, SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
+    },
+    primitives::{
+        id::{Idable, WithId, H256},
+        Amount, BlockHeight, Id,
+    },
+    size_estimation::{
+        input_signature_size, input_signature_size_from_destination, outputs_encoded_size,
+        tx_size_with_num_inputs_and_outputs, DestinationInfoProvider,
+    },
+    Uint256,
 };
-use common::Uint256;
-use crypto::key::extended::ExtendedPublicKey;
-use crypto::key::hdkd::child_number::ChildNumber;
+use consensus::PoSGenerateBlockInputData;
+use crypto::{
+    key::{
+        extended::ExtendedPublicKey,
+        hdkd::{child_number::ChildNumber, u31::U31},
+        PrivateKey, PublicKey,
+    },
+    vrf::VRFPublicKey,
+};
 use mempool::FeeRate;
 use serialization::hex_encoded::HexEncoded;
 use utils::ensure;
-use utxo_selector::SelectionResult;
-pub use utxo_selector::UtxoSelectorError;
-use wallet_types::account_id::AccountPrefixedId;
-use wallet_types::account_info::{StandaloneAddressDetails, StandaloneAddresses};
-use wallet_types::partially_signed_transaction::{PartiallySignedTransaction, TxAdditionalInfo};
-use wallet_types::with_locked::WithLocked;
-
-use crate::account::utxo_selector::{select_coins, OutputGroup};
-use crate::destination_getters::{get_tx_output_destination, HtlcSpendingCondition};
-use crate::key_chain::{AccountKeyChains, KeyChainError, VRFAccountKeyChains};
-use crate::send_request::{
-    make_address_output, make_address_output_from_delegation, make_address_output_token,
-    make_decommission_stake_pool_output, make_mint_token_outputs, make_stake_output,
-    make_unmint_token_outputs, IssueNftArguments, SelectedInputs, StakePoolCreationArguments,
-    StakePoolCreationResolvedArguments,
-};
-use crate::wallet::WalletPoolsFilter;
-use crate::wallet_events::{WalletEvents, WalletEventsNoOp};
-use crate::{SendRequest, WalletError, WalletResult};
-use common::address::{Address, RpcAddress};
-use common::chain::output_value::{OutputValue, RpcOutputValue};
-use common::chain::tokens::{
-    IsTokenUnfreezable, NftIssuance, NftIssuanceV0, RPCFungibleTokenInfo, TokenId, TokenIssuance,
-};
-use common::chain::{
-    make_token_id, AccountNonce, Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId,
-    SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
-};
-use common::primitives::{Amount, BlockHeight, Id};
-use consensus::PoSGenerateBlockInputData;
-use crypto::key::hdkd::u31::U31;
-use crypto::key::{PrivateKey, PublicKey};
-use crypto::vrf::VRFPublicKey;
-use itertools::{izip, Itertools};
-use std::cmp::Reverse;
-use std::collections::btree_map::Entry;
-use std::collections::{BTreeMap, BTreeSet};
-use std::ops::{Add, Sub};
-use std::sync::Arc;
 use wallet_storage::{
     StoreTxRw, WalletStorageReadLocked, WalletStorageReadUnlocked, WalletStorageWriteLocked,
     WalletStorageWriteUnlocked,
 };
-use wallet_types::utxo_types::{get_utxo_type, UtxoState, UtxoStates, UtxoType, UtxoTypes};
-use wallet_types::wallet_tx::{BlockData, TxData, TxState};
 use wallet_types::{
-    AccountId, AccountInfo, AccountWalletCreatedTxId, AccountWalletTxId, BlockInfo, Currency,
-    KeyPurpose, KeychainUsageState, WalletTx,
+    account_id::AccountPrefixedId,
+    account_info::{StandaloneAddressDetails, StandaloneAddresses},
+    partially_signed_transaction::PartiallySignedTransaction,
+    utxo_types::{get_utxo_type, UtxoState, UtxoStates, UtxoType, UtxoTypes},
+    wallet_tx::{BlockData, TxData, TxState},
+    with_locked::WithLocked,
+    AccountId, AccountInfo, AccountWalletCreatedTxId, AccountWalletTxId, BlockInfo, KeyPurpose,
+    KeychainUsageState, WalletTx,
 };
 
-pub use self::output_cache::{
-    DelegationData, OrderData, OwnFungibleTokenInfo, PoolData, TxInfo, UnconfirmedTokenInfo,
-    UtxoWithTxOutput,
+use crate::{
+    account::utxo_selector::{select_coins, OutputGroup},
+    destination_getters::{get_tx_output_destination, HtlcSpendingCondition},
+    key_chain::{AccountKeyChains, KeyChainError, VRFAccountKeyChains},
+    send_request::{
+        make_address_output, make_address_output_from_delegation, make_address_output_token,
+        make_decommission_stake_pool_output, make_mint_token_outputs, make_stake_output,
+        make_unmint_token_outputs, IssueNftArguments, SelectedInputs, StakePoolCreationArguments,
+        StakePoolCreationResolvedArguments,
+    },
+    wallet::WalletPoolsFilter,
+    wallet_events::{WalletEvents, WalletEventsNoOp},
+    SendRequest, WalletError, WalletResult,
 };
-use self::output_cache::{OutputCache, TokenIssuanceData};
-use self::transaction_list::{get_transaction_list, TransactionList};
-use self::utxo_selector::PayFee;
 
-pub use self::utxo_selector::CoinSelectionAlgo;
+use self::{
+    output_cache::{OutputCache, TokenIssuanceData},
+    transaction_list::{get_transaction_list, TransactionList},
+    utxo_selector::{PayFee, SelectionResult},
+};
+
+pub use self::{
+    output_cache::{
+        DelegationData, OrderData, OutputCacheInconsistencyError, OwnFungibleTokenInfo, PoolData,
+        TxChanged, TxInfo, UnconfirmedTokenInfo, UtxoWithTxOutput,
+    },
+    utxo_selector::{CoinSelectionAlgo, UtxoSelectorError},
+};
 
 pub struct CurrentFeeRate {
     pub current_fee_rate: FeeRate,
@@ -201,7 +212,7 @@ impl<K: AccountKeyChains> Account<K> {
 
     // Note: the default selection algo depends on whether input_utxos are empty.
     #[allow(clippy::too_many_arguments)]
-    fn select_inputs_for_send_request(
+    pub fn select_inputs_for_send_request(
         &mut self,
         mut request: SendRequest,
         input_utxos: SelectedInputs,
@@ -660,60 +671,9 @@ impl<K: AccountKeyChains> Account<K> {
         Ok(req)
     }
 
-    #[allow(clippy::too_many_arguments)]
-    pub fn process_send_request(
-        &mut self,
-        db_tx: &mut impl WalletStorageWriteLocked,
-        request: SendRequest,
-        inputs: SelectedInputs,
-        selection_algo: Option<CoinSelectionAlgo>,
-        change_addresses: BTreeMap<Currency, Address<Destination>>,
-        median_time: BlockTimestamp,
-        fee_rate: CurrentFeeRate,
-        additional_info: TxAdditionalInfo,
-    ) -> WalletResult<(PartiallySignedTransaction, BTreeMap<Currency, Amount>)> {
-        let mut request = self.select_inputs_for_send_request(
-            request,
-            inputs,
-            selection_algo,
-            change_addresses,
-            db_tx,
-            median_time,
-            fee_rate,
-            None,
-        )?;
-
-        let fees = request.get_fees();
-        let ptx = request.into_partially_signed_tx(additional_info)?;
-
-        Ok((ptx, fees))
-    }
-
-    pub fn process_send_request_and_sign(
-        &mut self,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
-        request: SendRequest,
-        inputs: SelectedInputs,
-        change_addresses: BTreeMap<Currency, Address<Destination>>,
-        median_time: BlockTimestamp,
-        fee_rate: CurrentFeeRate,
-    ) -> WalletResult<SendRequest> {
-        self.select_inputs_for_send_request(
-            request,
-            inputs,
-            None,
-            change_addresses,
-            db_tx,
-            median_time,
-            fee_rate,
-            None,
-        )
-        // TODO: Randomize inputs and outputs
-    }
-
     fn decommission_stake_pool_impl(
         &mut self,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
+        db_tx: &mut impl WalletStorageWriteLocked,
         pool_id: PoolId,
         pool_balance: Amount,
         output_address: Option<Destination>,
@@ -777,7 +737,7 @@ impl<K: AccountKeyChains> Account<K> {
 
     pub fn decommission_stake_pool(
         &mut self,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
+        db_tx: &mut impl WalletStorageWriteLocked,
         pool_id: PoolId,
         pool_balance: Amount,
         output_address: Option<Destination>,
@@ -794,7 +754,7 @@ impl<K: AccountKeyChains> Account<K> {
 
     pub fn decommission_stake_pool_request(
         &mut self,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
+        db_tx: &mut impl WalletStorageWriteLocked,
         pool_id: PoolId,
         pool_balance: Amount,
         output_address: Option<Destination>,
@@ -884,25 +844,24 @@ impl<K: AccountKeyChains> Account<K> {
         Ok(req)
     }
 
-    pub fn get_pool_ids(&self, filter: WalletPoolsFilter) -> Vec<(PoolId, PoolData)> {
-        self.output_cache
-            .pool_ids()
-            .into_iter()
-            .filter(|(_, pool_data)| match filter {
-                WalletPoolsFilter::All => true,
-                WalletPoolsFilter::Decommission => {
-                    self.key_chain.has_private_key_for_destination(&pool_data.decommission_key)
-                }
-                WalletPoolsFilter::Stake => {
-                    self.key_chain.has_private_key_for_destination(&pool_data.stake_destination)
-                }
-            })
-            .collect()
+    pub fn get_pools(
+        &self,
+        filter: WalletPoolsFilter,
+    ) -> impl Iterator<Item = (&PoolId, &PoolData)> {
+        self.output_cache.pools_iter().filter(move |(_, pool_data)| match filter {
+            WalletPoolsFilter::All => true,
+            WalletPoolsFilter::Decommission => {
+                self.key_chain.has_private_key_for_destination(&pool_data.decommission_key)
+            }
+            WalletPoolsFilter::Stake => {
+                self.key_chain.has_private_key_for_destination(&pool_data.stake_destination)
+            }
+        })
     }
 
     pub fn get_delegations(&self) -> impl Iterator<Item = (&DelegationId, &DelegationData)> {
         self.output_cache
-            .delegation_ids()
+            .delegations_iter()
             .filter(|(_, data)| self.is_destination_mine(&data.destination))
     }
 
@@ -922,7 +881,7 @@ impl<K: AccountKeyChains> Account<K> {
 
     pub fn get_orders(&self) -> impl Iterator<Item = (&OrderId, &OrderData)> {
         self.output_cache
-            .orders()
+            .orders_iter()
             .filter(|(_, data)| self.is_destination_mine(&data.conclude_key))
     }
 
@@ -945,7 +904,7 @@ impl<K: AccountKeyChains> Account<K> {
 
     pub fn create_htlc_tx(
         &mut self,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
+        db_tx: &mut impl WalletStorageWriteLocked,
         output_value: OutputValue,
         htlc: HashedTimelockContract,
         median_time: BlockTimestamp,
@@ -968,7 +927,7 @@ impl<K: AccountKeyChains> Account<K> {
 
     pub fn create_order_tx(
         &mut self,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
+        db_tx: &mut impl WalletStorageWriteLocked,
         ask_value: OutputValue,
         give_value: OutputValue,
         conclude_address: Address<Destination>,
@@ -994,7 +953,7 @@ impl<K: AccountKeyChains> Account<K> {
 
     pub fn create_conclude_order_tx(
         &mut self,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
+        db_tx: &mut impl WalletStorageWriteLocked,
         order_id: OrderId,
         order_info: RpcOrderInfo,
         output_address: Option<Destination>,
@@ -1064,7 +1023,7 @@ impl<K: AccountKeyChains> Account<K> {
     #[allow(clippy::too_many_arguments)]
     pub fn create_fill_order_tx(
         &mut self,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
+        db_tx: &mut impl WalletStorageWriteLocked,
         order_id: OrderId,
         order_info: RpcOrderInfo,
         fill_amount_in_ask_currency: Amount,
@@ -1158,7 +1117,7 @@ impl<K: AccountKeyChains> Account<K> {
 
     pub fn create_freeze_order_tx(
         &mut self,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
+        db_tx: &mut impl WalletStorageWriteLocked,
         order_id: OrderId,
         order_info: RpcOrderInfo,
         median_time: BlockTimestamp,
@@ -1183,7 +1142,7 @@ impl<K: AccountKeyChains> Account<K> {
 
     pub fn create_issue_nft_tx(
         &mut self,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
+        db_tx: &mut impl WalletStorageWriteLocked,
         nft_issue_arguments: IssueNftArguments,
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
@@ -1248,7 +1207,7 @@ impl<K: AccountKeyChains> Account<K> {
 
     pub fn mint_tokens(
         &mut self,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
+        db_tx: &mut impl WalletStorageWriteLocked,
         token_info: &UnconfirmedTokenInfo,
         address: Address<Destination>,
         amount: Amount,
@@ -1264,7 +1223,7 @@ impl<K: AccountKeyChains> Account<K> {
         let tx_input = TxInput::AccountCommand(nonce, AccountCommand::MintTokens(token_id, amount));
         let authority = token_info.authority()?.clone();
 
-        self.change_token_supply_transaction(
+        self.make_change_token_transaction(
             authority,
             tx_input,
             outputs,
@@ -1276,7 +1235,7 @@ impl<K: AccountKeyChains> Account<K> {
 
     pub fn unmint_tokens(
         &mut self,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
+        db_tx: &mut impl WalletStorageWriteLocked,
         token_info: &UnconfirmedTokenInfo,
         amount: Amount,
         median_time: BlockTimestamp,
@@ -1291,7 +1250,7 @@ impl<K: AccountKeyChains> Account<K> {
         let tx_input = TxInput::AccountCommand(nonce, AccountCommand::UnmintTokens(token_id));
         let authority = token_info.authority()?.clone();
 
-        self.change_token_supply_transaction(
+        self.make_change_token_transaction(
             authority,
             tx_input,
             outputs,
@@ -1303,7 +1262,7 @@ impl<K: AccountKeyChains> Account<K> {
 
     pub fn lock_token_supply(
         &mut self,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
+        db_tx: &mut impl WalletStorageWriteLocked,
         token_info: &UnconfirmedTokenInfo,
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
@@ -1315,7 +1274,7 @@ impl<K: AccountKeyChains> Account<K> {
         let tx_input = TxInput::AccountCommand(nonce, AccountCommand::LockTokenSupply(token_id));
         let authority = token_info.authority()?.clone();
 
-        self.change_token_supply_transaction(
+        self.make_change_token_transaction(
             authority,
             tx_input,
             vec![],
@@ -1327,7 +1286,7 @@ impl<K: AccountKeyChains> Account<K> {
 
     pub fn freeze_token(
         &mut self,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
+        db_tx: &mut impl WalletStorageWriteLocked,
         token_info: &UnconfirmedTokenInfo,
         is_token_unfreezable: IsTokenUnfreezable,
         median_time: BlockTimestamp,
@@ -1342,7 +1301,7 @@ impl<K: AccountKeyChains> Account<K> {
         );
         let authority = token_info.authority()?.clone();
 
-        self.change_token_supply_transaction(
+        self.make_change_token_transaction(
             authority,
             tx_input,
             vec![],
@@ -1354,7 +1313,7 @@ impl<K: AccountKeyChains> Account<K> {
 
     pub fn unfreeze_token(
         &mut self,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
+        db_tx: &mut impl WalletStorageWriteLocked,
         token_info: &UnconfirmedTokenInfo,
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
@@ -1366,7 +1325,7 @@ impl<K: AccountKeyChains> Account<K> {
             TxInput::AccountCommand(nonce, AccountCommand::UnfreezeToken(token_info.token_id()));
         let authority = token_info.authority()?.clone();
 
-        self.change_token_supply_transaction(
+        self.make_change_token_transaction(
             authority,
             tx_input,
             vec![],
@@ -1378,7 +1337,7 @@ impl<K: AccountKeyChains> Account<K> {
 
     pub fn change_token_authority(
         &mut self,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
+        db_tx: &mut impl WalletStorageWriteLocked,
         token_info: &UnconfirmedTokenInfo,
         address: Address<Destination>,
         median_time: BlockTimestamp,
@@ -1393,7 +1352,7 @@ impl<K: AccountKeyChains> Account<K> {
         );
         let authority = token_info.authority()?.clone();
 
-        self.change_token_supply_transaction(
+        self.make_change_token_transaction(
             authority,
             tx_input,
             vec![],
@@ -1405,7 +1364,7 @@ impl<K: AccountKeyChains> Account<K> {
 
     pub fn change_token_metadata_uri(
         &mut self,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
+        db_tx: &mut impl WalletStorageWriteLocked,
         token_info: &UnconfirmedTokenInfo,
         metadata_uri: Vec<u8>,
         median_time: BlockTimestamp,
@@ -1418,7 +1377,7 @@ impl<K: AccountKeyChains> Account<K> {
         );
         let authority = token_info.authority()?.clone();
 
-        self.change_token_supply_transaction(
+        self.make_change_token_transaction(
             authority,
             tx_input,
             vec![],
@@ -1428,12 +1387,12 @@ impl<K: AccountKeyChains> Account<K> {
         )
     }
 
-    fn change_token_supply_transaction(
+    fn make_change_token_transaction(
         &mut self,
         authority: Destination,
         tx_input: TxInput,
         outputs: Vec<TxOutput>,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
+        db_tx: &mut impl WalletStorageWriteLocked,
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
     ) -> Result<SendRequest, WalletError> {
@@ -1455,7 +1414,7 @@ impl<K: AccountKeyChains> Account<K> {
 
     pub fn create_stake_pool_with_vrf_key(
         &mut self,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
+        db_tx: &mut impl WalletStorageWriteLocked,
         mut stake_pool_arguments: StakePoolCreationArguments,
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
@@ -1476,7 +1435,7 @@ impl<K: AccountKeyChains> Account<K> {
     fn create_stake_pool_impl(
         &mut self,
         stake_pool_arguments: StakePoolCreationArguments,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
+        db_tx: &mut impl WalletStorageWriteLocked,
         vrf_public_key: VRFPublicKey,
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
@@ -2090,14 +2049,16 @@ impl<K: AccountKeyChains> Account<K> {
         let relevant_outputs = self.mark_outputs_as_seen(db_tx, tx.outputs())?;
         if relevant_inputs || relevant_outputs {
             let id = AccountWalletTxId::new(self.get_account_id(), tx.id());
-            db_tx.set_transaction(&id, &tx)?;
-            wallet_events.set_transaction(self.account_index(), &tx);
-            self.output_cache.add_tx(
+            let changed = self.output_cache.add_tx(
                 &self.chain_config,
                 self.account_info.best_block_height(),
-                id.into_item_id(),
-                tx,
+                id.clone().into_item_id(),
+                tx.clone(),
             )?;
+            if changed == TxChanged::Yes {
+                db_tx.set_transaction(&id, &tx)?;
+                wallet_events.set_transaction(self.account_index(), &tx);
+            }
             Ok(true)
         } else {
             Ok(false)
@@ -2500,7 +2461,7 @@ impl<K: AccountKeyChains + VRFAccountKeyChains> Account<K> {
 
     pub fn create_stake_pool(
         &mut self,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
+        db_tx: &mut impl WalletStorageWriteLocked,
         mut stake_pool_arguments: StakePoolCreationArguments,
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,

@@ -17,10 +17,10 @@
 
 use crate::{
     schema::{self, HasDbMap, Schema},
-    Backend, TransactionRo,
+    TransactionRo,
 };
 use std::collections::BTreeMap;
-use storage_core::backend::ReadOps;
+use storage_core::{backend::ReadOps, Backend};
 
 pub use storage_core::Data;
 
@@ -176,7 +176,7 @@ mod test {
     #[test]
     fn basic_dump() {
         utils::concurrency::model(|| {
-            let storage = Storage::<_, TestSchema>::new(InMemory::new()).unwrap();
+            let mut storage = Storage::<_, TestSchema>::new(InMemory::new()).unwrap();
             let db1 = DbMapId::new::<Db0, _>();
             let db2 = DbMapId::new::<Db1, _>();
 

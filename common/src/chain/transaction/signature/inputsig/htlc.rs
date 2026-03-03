@@ -31,7 +31,10 @@ use super::{
 };
 
 #[allow(clippy::too_many_arguments)]
-pub fn produce_uniparty_signature_for_htlc_input<T: Signable, AuxP: SigAuxDataProvider + ?Sized>(
+pub fn produce_uniparty_signature_for_htlc_spending<
+    T: Signable,
+    AuxP: SigAuxDataProvider + ?Sized,
+>(
     private_key: &crypto::key::PrivateKey,
     sighash_type: SigHashType,
     outpoint_destination: Destination,
@@ -52,7 +55,7 @@ pub fn produce_uniparty_signature_for_htlc_input<T: Signable, AuxP: SigAuxDataPr
     )?;
 
     let sig_with_secret =
-        AuthorizedHashedTimelockContractSpend::Secret(htlc_secret, sig.raw_signature().to_owned());
+        AuthorizedHashedTimelockContractSpend::Spend(htlc_secret, sig.raw_signature().to_owned());
     let serialized_sig = sig_with_secret.encode();
 
     Ok(StandardInputSignature::new(
@@ -61,7 +64,7 @@ pub fn produce_uniparty_signature_for_htlc_input<T: Signable, AuxP: SigAuxDataPr
     ))
 }
 
-pub fn produce_classical_multisig_signature_for_htlc_input(
+pub fn produce_classical_multisig_signature_for_htlc_refunding(
     chain_config: &ChainConfig,
     authorization: &AuthorizedClassicalMultisigSpend,
     sighash_type: SigHashType,
@@ -79,10 +82,42 @@ pub fn produce_classical_multisig_signature_for_htlc_input(
     )?;
 
     let raw_signature =
-        AuthorizedHashedTimelockContractSpend::Multisig(sig.raw_signature().to_owned()).encode();
+        AuthorizedHashedTimelockContractSpend::Refund(sig.raw_signature().to_owned()).encode();
 
     Ok(StandardInputSignature::new(
         sig.sighash_type(),
         raw_signature,
+    ))
+}
+
+pub fn produce_uniparty_signature_for_htlc_refunding<
+    T: Signable,
+    AuxP: SigAuxDataProvider + ?Sized,
+>(
+    private_key: &crypto::key::PrivateKey,
+    sighash_type: SigHashType,
+    outpoint_destination: Destination,
+    tx: &T,
+    input_commitments: &[SighashInputCommitment],
+    input_num: usize,
+    sig_aux_data_provider: &mut AuxP,
+) -> Result<StandardInputSignature, DestinationSigError> {
+    let sig = StandardInputSignature::produce_uniparty_signature_for_input(
+        private_key,
+        sighash_type,
+        outpoint_destination,
+        tx,
+        input_commitments,
+        input_num,
+        sig_aux_data_provider,
+    )?;
+
+    let sig_with_secret =
+        AuthorizedHashedTimelockContractSpend::Refund(sig.raw_signature().to_owned());
+    let serialized_sig = sig_with_secret.encode();
+
+    Ok(StandardInputSignature::new(
+        sig.sighash_type(),
+        serialized_sig,
     ))
 }

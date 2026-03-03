@@ -42,15 +42,15 @@ fn test_storage_get_default_version_in_tx() {
 
 fn assert_block_exists<DbTx: BlockchainStorageRead>(db_tx: &DbTx, block: &Block) {
     assert_eq!(
-        db_tx.get_block(block.get_id()).unwrap().as_ref(),
+        db_tx.get_block(&block.get_id()).unwrap().as_ref(),
         Some(block)
     );
-    assert!(db_tx.block_exists(block.get_id()).unwrap());
+    assert!(db_tx.block_exists(&block.get_id()).unwrap());
 }
 
 fn assert_no_block<DbTx: BlockchainStorageRead>(db_tx: &DbTx, block_id: Id<Block>) {
-    assert_eq!(db_tx.get_block(block_id).unwrap().as_ref(), None);
-    assert!(!db_tx.block_exists(block_id).unwrap());
+    assert_eq!(db_tx.get_block(&block_id).unwrap().as_ref(), None);
+    assert!(!db_tx.block_exists(&block_id).unwrap());
 }
 
 #[test]
@@ -115,7 +115,7 @@ fn test_storage_manipulation() {
     assert_block_exists(&db_tx, &block0);
     assert_block_exists(&db_tx, &block1);
 
-    assert_eq!(db_tx.del_block(block1.get_id()), Ok(()));
+    assert_eq!(db_tx.del_block(&block1.get_id()), Ok(()));
     assert_block_exists(&db_tx, &block0);
     assert_no_block(&db_tx, block1.get_id());
 
@@ -368,15 +368,18 @@ fn undo_test(#[case] seed: Seed) {
     let store = TestStore::new_empty().unwrap();
 
     // store is empty, so no undo data should be found.
-    assert_eq!(store.transaction_ro().unwrap().get_undo_data(id0), Ok(None));
+    assert_eq!(
+        store.transaction_ro().unwrap().get_undo_data(&id0),
+        Ok(None)
+    );
 
     let mut db_tx = store.transaction_rw(None).unwrap();
     // add undo data and check if it is there
-    assert_eq!(db_tx.set_undo_data(id0, &block_undo0), Ok(()));
+    assert_eq!(db_tx.set_undo_data(&id0, &block_undo0), Ok(()));
     db_tx.commit().unwrap();
 
     assert_eq!(
-        store.transaction_ro().unwrap().get_undo_data(id0).unwrap().unwrap(),
+        store.transaction_ro().unwrap().get_undo_data(&id0).unwrap().unwrap(),
         block_undo0.clone()
     );
 
@@ -386,38 +389,44 @@ fn undo_test(#[case] seed: Seed) {
     // create id:
     let id1: Id<Block> = Id::new(H256::random_using(&mut rng));
 
-    assert_eq!(store.transaction_ro().unwrap().get_undo_data(id1), Ok(None));
+    assert_eq!(
+        store.transaction_ro().unwrap().get_undo_data(&id1),
+        Ok(None)
+    );
 
     let mut db_tx = store.transaction_rw(None).unwrap();
-    assert_eq!(db_tx.set_undo_data(id1, &block_undo1), Ok(()));
+    assert_eq!(db_tx.set_undo_data(&id1, &block_undo1), Ok(()));
     db_tx.commit().unwrap();
 
     assert_eq!(
-        store.transaction_ro().unwrap().get_undo_data(id1).unwrap().unwrap(),
+        store.transaction_ro().unwrap().get_undo_data(&id1).unwrap().unwrap(),
         block_undo1.clone()
     );
 
     assert_eq!(
-        store.transaction_ro().unwrap().get_undo_data(id0).unwrap().unwrap(),
+        store.transaction_ro().unwrap().get_undo_data(&id0).unwrap().unwrap(),
         block_undo0.clone()
     );
 
     let mut db_tx = store.transaction_rw(None).unwrap();
-    assert_eq!(db_tx.del_undo_data(id1), Ok(()));
+    assert_eq!(db_tx.del_undo_data(&id1), Ok(()));
     db_tx.commit().unwrap();
 
-    assert_eq!(store.transaction_ro().unwrap().get_undo_data(id1), Ok(None));
     assert_eq!(
-        store.transaction_ro().unwrap().get_undo_data(id0).unwrap().unwrap(),
+        store.transaction_ro().unwrap().get_undo_data(&id1),
+        Ok(None)
+    );
+    assert_eq!(
+        store.transaction_ro().unwrap().get_undo_data(&id0).unwrap().unwrap(),
         block_undo0.clone()
     );
 
     let mut db_tx = store.transaction_rw(None).unwrap();
-    assert_eq!(db_tx.set_undo_data(id1, &block_undo1), Ok(()));
+    assert_eq!(db_tx.set_undo_data(&id1, &block_undo1), Ok(()));
     db_tx.commit().unwrap();
 
     assert_eq!(
-        store.transaction_ro().unwrap().get_undo_data(id1).unwrap().unwrap(),
+        store.transaction_ro().unwrap().get_undo_data(&id1).unwrap().unwrap(),
         block_undo1
     );
 }

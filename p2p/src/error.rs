@@ -21,7 +21,7 @@ use common::{
     primitives::{time::Time, Id},
 };
 use mempool::error::{Error as MempoolError, MempoolBanScore};
-use networking::error::NetworkingError;
+use networking::error::{MessageCodecError, NetworkingError};
 use p2p_types::{services::Services, socket_address::SocketAddress, PeerId};
 use utils::try_as::TryAsRef;
 
@@ -219,7 +219,7 @@ impl From<ChainstateError> for P2pError {
 impl BanScore for P2pError {
     fn ban_score(&self) -> u32 {
         match self {
-            P2pError::NetworkingError(_) => 0,
+            P2pError::NetworkingError(err) => networking_error_ban_score(err),
             P2pError::ProtocolError(err) => err.ban_score(),
             P2pError::DialError(_) => 0,
             P2pError::ChannelClosed => 0,
@@ -239,6 +239,30 @@ impl BanScore for P2pError {
             P2pError::ConnectionValidationFailed(_) => 0,
             P2pError::SyncError(err) => err.ban_score(),
         }
+    }
+}
+
+// Note: we can't implement BanScore for NetworkingError here due to Rust's orphan rule.
+// We can't implement it in the networking crate either because BanScore is defined in chainstate,
+// which is not among networking's dependencies.
+// TODO: BanScore could be moved to a more generic crate, so that we could implement it in networking
+// too. On the other hand, BanScore is a p2p concept, so it's a bit strange that we implement it in
+// other crates. Perhaps all ban score definitions should be moved to p2p instead (also, while
+// doing so consider renaming the entities, changing "ban" to "discouragement").
+pub fn networking_error_ban_score(err: &NetworkingError) -> u32 {
+    match err {
+        NetworkingError::IoError(_) => 0,
+        NetworkingError::MessageCodecError(err) => message_codec_error_ban_score(err),
+        NetworkingError::NoiseHandshakeError(_) => 0,
+        NetworkingError::ProxyError(_) => 0,
+        NetworkingError::ChannelTransportError(_) => 0,
+    }
+}
+
+pub fn message_codec_error_ban_score(err: &MessageCodecError) -> u32 {
+    match err {
+        MessageCodecError::MessageTooLarge { .. } => 100,
+        MessageCodecError::InvalidEncodedData(_) => 100,
     }
 }
 

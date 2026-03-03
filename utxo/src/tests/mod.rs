@@ -17,18 +17,11 @@ mod simulation;
 mod simulation_with_undo;
 pub mod test_helper;
 
-use crate::{
-    flush_to_base,
-    tests::test_helper::{
-        create_tx_outputs, empty_test_utxos_view,
-        Presence::{self, *},
-        UnwrapInfallible,
-    },
-    utxo_entry::{IsDirty, IsFresh, UtxoEntry},
-    ConsumedUtxoCache,
-    Error::{self, *},
-    FlushableUtxoView, Utxo, UtxoSource, UtxosCache, UtxosTxUndo, UtxosView,
-};
+use std::{collections::BTreeMap, convert::Infallible};
+
+use itertools::Itertools;
+use rstest::rstest;
+
 use common::{
     chain::{
         block::{
@@ -44,11 +37,23 @@ use common::{
     primitives::{Amount, BlockHeight, Compact, Id, Idable, H256},
 };
 use crypto::vrf::VRFKeyKind;
-use itertools::Itertools;
 use randomness::{seq, CryptoRng, Rng};
-use rstest::rstest;
-use std::{collections::BTreeMap, convert::Infallible};
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::{
+    random::{make_seedable_rng, Seed},
+    UnwrapInfallible as _,
+};
+
+use crate::{
+    flush_to_base,
+    tests::test_helper::{
+        create_tx_outputs, empty_test_utxos_view,
+        Presence::{self, *},
+    },
+    utxo_entry::{IsDirty, IsFresh, UtxoEntry},
+    ConsumedUtxoCache,
+    Error::{self, *},
+    FlushableUtxoView, Utxo, UtxoSource, UtxosCache, UtxosTxUndo, UtxosView,
+};
 
 fn make_pool_id(rng: &mut impl Rng) -> PoolId {
     H256::random_using(rng).into()

@@ -81,7 +81,7 @@ where
 
 pub fn open_storage<Backend>(backend: Backend) -> crate::Result<DnsServerStorageImpl<Backend>>
 where
-    Backend: storage::Backend,
+    Backend: storage::SharedBackend,
 {
     let storage = DnsServerStorageImpl::new(backend)?;
     let version = storage.transaction_ro()?.get_version()?;

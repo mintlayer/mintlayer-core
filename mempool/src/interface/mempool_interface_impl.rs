@@ -45,7 +45,7 @@ pub struct MempoolInit {
 }
 
 impl MempoolInit {
-    fn new(
+    pub fn new(
         chain_config: Arc<ChainConfig>,
         mempool_config: MempoolConfig,
         chainstate_handle: chainstate::ChainstateHandle,
@@ -62,7 +62,7 @@ impl MempoolInit {
     pub async fn init(
         self,
         this: subsystem::SubmitOnlyHandle<dyn MempoolInterface>,
-    ) -> Result<Mempool, subsystem::error::CallError> {
+    ) -> Result<Mempool, Error> {
         log::info!("Starting mempool");
         let mempool = Mempool::new(
             self.chain_config,
@@ -70,7 +70,7 @@ impl MempoolInit {
             self.chainstate_handle,
             self.time_getter,
             StoreMemoryUsageEstimator,
-        );
+        )?;
 
         log::trace!("Subscribing to chainstate events");
         let subscribe_func = Arc::new(move |event: chainstate::ChainstateEvent| {
@@ -211,14 +211,4 @@ impl subsystem::Subsystem for Mempool {
     fn has_background_work(&self) -> bool {
         self.has_work()
     }
-}
-
-/// Mempool constructor
-pub fn make_mempool(
-    chain_config: Arc<ChainConfig>,
-    mempool_config: MempoolConfig,
-    chainstate_handle: chainstate::ChainstateHandle,
-    time_getter: TimeGetter,
-) -> MempoolInit {
-    MempoolInit::new(chain_config, mempool_config, chainstate_handle, time_getter)
 }

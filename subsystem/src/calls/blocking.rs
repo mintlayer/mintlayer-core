@@ -21,9 +21,9 @@ use utils::shallow_clone::ShallowClone;
 
 /// Blocking version of [Handle].
 ///
-/// This should be used sparingly as blocking calls induce non-trivial overhead. The call takes up
-/// a thread in the runtime thread pool. If there is not enough threads for all simultaneous
-/// blocking calls, a new one is spawned.
+/// The implementation is based on `tokio::task::block_in_place`, which hands off existing tasks
+/// from the current thread to another one (via `spawn_blocking`) and then runs the provided
+/// blocking closure on the current thread.
 pub struct BlockingHandle<T: ?Sized>(Handle<T>);
 
 impl<T: ?Sized> Clone for BlockingHandle<T> {

@@ -224,10 +224,10 @@ fn opt_spent_utxo_to_json(
                         .expect("proper signature");
 
                 match htlc_sig {
-                    AuthorizedHashedTimelockContractSpend::Secret(secret, _) => {
+                    AuthorizedHashedTimelockContractSpend::Spend(secret, _) => {
                         Some(to_json_string(secret.secret()))
                     }
-                    AuthorizedHashedTimelockContractSpend::Multisig(_) => None,
+                    AuthorizedHashedTimelockContractSpend::Refund(_) => None,
                 }
             } else {
                 None

@@ -236,10 +236,6 @@ impl<T> AsRef<[u8]> for Id<T> {
     }
 }
 
-impl<T> rpc_description::HasValueHint for Id<T> {
-    const HINT_SER: rpc_description::ValueHint = rpc_description::ValueHint::HEX_STRING;
-}
-
 /// a trait for objects that deserve having a unique id with implementations to how to ID them
 pub trait Idable {
     type Tag: TypeName;
@@ -251,6 +247,18 @@ impl<T: Idable> Idable for &T {
     fn get_id(&self) -> Id<Self::Tag> {
         (*self).get_id()
     }
+}
+
+/// Implementing this trait for some type `T` means that:
+/// 1) `T` has a sub-object of type `SubObj`.
+/// 2) Id of `SubObj` is the same as id of `T`.
+///
+/// Example: `Block` contains `SignedHeader` and the block id is the same as its header's.
+pub trait HasSubObjWithSameId<SubObj>: Idable
+where
+    SubObj: Idable<Tag = <Self as Idable>::Tag>,
+{
+    fn get_sub_obj(&self) -> &SubObj;
 }
 
 // we use a cropping stream (64 => 32) because

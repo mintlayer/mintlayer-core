@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use common::{
-    chain::Block,
+    chain::GenBlock,
     primitives::{BlockHeight, Id},
 };
 
@@ -23,13 +23,20 @@ use crate::ChainstateEvent;
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, rpc::description::HasValueHint)]
 #[serde(tag = "type", content = "content")]
 pub enum RpcEvent {
-    NewTip { id: Id<Block>, height: BlockHeight },
+    NewTip {
+        id: Id<GenBlock>,
+        height: BlockHeight,
+    },
 }
 
 impl RpcEvent {
     pub fn from_event(event: ChainstateEvent) -> Self {
         match event {
-            ChainstateEvent::NewTip(id, height) => Self::NewTip { id, height },
+            ChainstateEvent::NewTip {
+                id,
+                height,
+                is_initial_block_download: _,
+            } => Self::NewTip { id, height },
         }
     }
 }

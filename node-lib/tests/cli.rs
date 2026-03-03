@@ -98,6 +98,7 @@ fn read_config_override_values() {
     let blockprod_skip_ibd_check = true;
     let blockprod_use_current_time_if_non_pos = true;
     let max_db_commit_attempts = 1;
+    let enable_db_reckless_mode_in_ibd = true;
     let max_orphan_blocks = 2;
     let p2p_networking_enabled = false;
     let p2p_bind_addr = "127.0.0.1:44444".parse::<SocketAddr>().unwrap();
@@ -114,6 +115,7 @@ fn read_config_override_values() {
     let p2p_sync_stalling_timeout = NonZeroU64::new(37).unwrap();
     let p2p_max_clock_diff = 15;
     let p2p_force_dns_query_if_no_global_addresses_known = true;
+    let p2p_custom_disconnection_reason_for_banning = "foo".to_owned();
     let rpc_bind_address = "127.0.0.1:5432".parse().unwrap();
     let backend_type = StorageBackendConfigFile::InMemory;
     let node_type = NodeTypeConfigFile::FullNode;
@@ -123,6 +125,7 @@ fn read_config_override_values() {
     let rpc_cookie_file = "cookie_file";
     let min_tx_relay_fee_rate = 321;
     let enable_chainstate_heavy_checks = true;
+    let allow_checkpoints_mismatch = true;
 
     let options = RunOptions {
         blockprod_min_peers_to_produce_blocks: Some(blockprod_min_peers_to_produce_blocks),
@@ -132,6 +135,7 @@ fn read_config_override_values() {
         node_type: Some(node_type),
         mock_time: None,
         max_db_commit_attempts: Some(max_db_commit_attempts),
+        enable_db_reckless_mode_in_ibd: Some(enable_db_reckless_mode_in_ibd),
         max_orphan_blocks: Some(max_orphan_blocks),
         p2p_networking_enabled: Some(p2p_networking_enabled),
         p2p_bind_addresses: Some(vec![p2p_bind_addr]),
@@ -151,44 +155,59 @@ fn read_config_override_values() {
         p2p_force_dns_query_if_no_global_addresses_known: Some(
             p2p_force_dns_query_if_no_global_addresses_known,
         ),
+        p2p_custom_disconnection_reason_for_banning: (Some(
+            p2p_custom_disconnection_reason_for_banning.clone(),
+        )),
         max_tip_age: Some(max_tip_age),
         rpc_bind_address: Some(rpc_bind_address),
         rpc_enabled: Some(true),
         rpc_username: Some(rpc_username.to_owned()),
         rpc_password: Some(rpc_password.to_owned()),
         rpc_cookie_file: Some(rpc_cookie_file.to_owned()),
-        clean_data: Some(false),
         min_tx_relay_fee_rate: Some(min_tx_relay_fee_rate),
         force_allow_run_as_root_outer: Default::default(),
         enable_chainstate_heavy_checks: Some(enable_chainstate_heavy_checks),
+        allow_checkpoints_mismatch: Some(allow_checkpoints_mismatch),
+        // Note: there is no correspondence to this option inside NodeConfigFile;
+        // the contents of the csv file will become part of ChainConfig.
+        custom_checkpoints_csv_file: Some("foo.csv".to_owned().into()),
     };
     let config = NodeConfigFile::read(&chain_config, &config_path, &options).unwrap();
 
     assert_eq!(
-        config.blockprod.clone().unwrap().min_peers_to_produce_blocks,
+        config.blockprod.as_ref().unwrap().min_peers_to_produce_blocks,
         Some(blockprod_min_peers_to_produce_blocks),
     );
 
     assert_eq!(
-        config.blockprod.clone().unwrap().skip_ibd_check,
+        config.blockprod.as_ref().unwrap().skip_ibd_check,
         Some(blockprod_skip_ibd_check)
     );
 
     assert_eq!(
-        config.blockprod.clone().unwrap().use_current_time_if_non_pos,
+        config.blockprod.as_ref().unwrap().use_current_time_if_non_pos,
         Some(blockprod_use_current_time_if_non_pos)
     );
 
     assert_eq!(
-        config.chainstate.clone().unwrap().chainstate_config.max_db_commit_attempts,
+        config.chainstate.as_ref().unwrap().chainstate_config.max_db_commit_attempts,
         Some(max_db_commit_attempts)
     );
     assert_eq!(
-        config.chainstate.clone().unwrap().chainstate_config.max_orphan_blocks,
+        config
+            .chainstate
+            .as_ref()
+            .unwrap()
+            .chainstate_config
+            .enable_db_reckless_mode_in_ibd,
+        Some(enable_db_reckless_mode_in_ibd)
+    );
+    assert_eq!(
+        config.chainstate.as_ref().unwrap().chainstate_config.max_orphan_blocks,
         Some(max_orphan_blocks)
     );
     assert_eq!(
-        config.chainstate.clone().unwrap().chainstate_config.max_tip_age,
+        config.chainstate.as_ref().unwrap().chainstate_config.max_tip_age,
         Some(max_tip_age)
     );
 
@@ -198,70 +217,79 @@ fn read_config_override_values() {
     );
 
     assert_eq!(
-        config.chainstate.clone().unwrap().chainstate_config.enable_heavy_checks,
+        config.chainstate.as_ref().unwrap().chainstate_config.enable_heavy_checks,
         Some(enable_chainstate_heavy_checks)
     );
 
     assert_eq!(
-        config.p2p.clone().unwrap().networking_enabled,
+        config.chainstate.as_ref().unwrap().chainstate_config.allow_checkpoints_mismatch,
+        Some(allow_checkpoints_mismatch)
+    );
+
+    assert_eq!(
+        config.p2p.as_ref().unwrap().networking_enabled,
         Some(p2p_networking_enabled)
     );
     assert_eq!(
-        config.p2p.clone().unwrap().bind_addresses,
+        config.p2p.as_ref().unwrap().bind_addresses,
         Some(vec!(p2p_bind_addr))
     );
     assert_eq!(
-        config.p2p.clone().unwrap().socks5_proxy,
+        config.p2p.as_ref().unwrap().socks5_proxy,
         Some(p2p_socks5_proxy.to_owned())
     );
     assert_eq!(
-        config.p2p.clone().unwrap().disable_noise,
+        config.p2p.as_ref().unwrap().disable_noise,
         Some(p2p_disable_noise)
     );
     assert_eq!(
-        config.p2p.clone().unwrap().boot_nodes,
+        config.p2p.as_ref().unwrap().boot_nodes,
         Some(vec!(p2p_boot_node))
     );
     assert_eq!(
-        config.p2p.clone().unwrap().reserved_nodes,
+        config.p2p.as_ref().unwrap().reserved_nodes,
         Some(vec!(p2p_reserved_node))
     );
     assert_eq!(
-        config.p2p.clone().unwrap().max_inbound_connections,
+        config.p2p.as_ref().unwrap().max_inbound_connections,
         Some(p2p_max_inbound_connections)
     );
     assert_eq!(
-        config.p2p.clone().unwrap().discouragement_threshold,
+        config.p2p.as_ref().unwrap().discouragement_threshold,
         Some(p2p_discouragement_threshold)
     );
     assert_eq!(
-        config.p2p.clone().unwrap().discouragement_duration,
+        config.p2p.as_ref().unwrap().discouragement_duration,
         Some(p2p_discouragement_duration)
     );
     assert_eq!(
-        config.p2p.clone().unwrap().outbound_connection_timeout,
+        config.p2p.as_ref().unwrap().outbound_connection_timeout,
         Some(p2p_timeout)
     );
     assert_eq!(
-        config.p2p.clone().unwrap().ping_check_period,
+        config.p2p.as_ref().unwrap().ping_check_period,
         Some(p2p_ping_check_period)
     );
     assert_eq!(
-        config.p2p.clone().unwrap().ping_timeout,
+        config.p2p.as_ref().unwrap().ping_timeout,
         Some(p2p_ping_timeout)
     );
     assert_eq!(
-        config.p2p.clone().unwrap().sync_stalling_timeout,
+        config.p2p.as_ref().unwrap().sync_stalling_timeout,
         Some(p2p_sync_stalling_timeout)
     );
     assert_eq!(
-        config.p2p.clone().unwrap().max_clock_diff,
+        config.p2p.as_ref().unwrap().max_clock_diff,
         Some(p2p_max_clock_diff)
     );
-    assert_eq!(config.p2p.clone().unwrap().node_type, Some(node_type));
+    assert_eq!(config.p2p.as_ref().unwrap().node_type, Some(node_type));
     assert_eq!(
-        config.p2p.clone().unwrap().force_dns_query_if_no_global_addresses_known,
+        config.p2p.as_ref().unwrap().force_dns_query_if_no_global_addresses_known,
         Some(p2p_force_dns_query_if_no_global_addresses_known)
+    );
+    assert_eq!(
+        config.p2p.as_ref().unwrap().custom_disconnection_reason_for_banning,
+        Some(p2p_custom_disconnection_reason_for_banning)
     );
 
     assert_eq!(

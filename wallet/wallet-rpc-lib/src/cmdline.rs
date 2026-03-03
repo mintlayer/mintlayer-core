@@ -86,6 +86,8 @@ impl WalletRpcDaemonCommand {
 pub enum CliHardwareWalletType {
     #[cfg(feature = "trezor")]
     Trezor,
+    #[cfg(feature = "ledger")]
+    Ledger,
 }
 
 impl From<CliHardwareWalletType> for HardwareWalletType {
@@ -93,6 +95,8 @@ impl From<CliHardwareWalletType> for HardwareWalletType {
         match value {
             #[cfg(feature = "trezor")]
             CliHardwareWalletType::Trezor => Self::Trezor { device_id: None },
+            #[cfg(feature = "ledger")]
+            CliHardwareWalletType::Ledger => Self::Ledger,
         }
     }
 }

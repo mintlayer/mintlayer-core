@@ -17,16 +17,16 @@ use storage::schema::Schema;
 
 use super::{TransactionRo, TransactionRw, Transactional};
 
-pub struct StorageImpl<B: storage::Backend, Sch: Schema>(storage::Storage<B, Sch>);
+pub struct StorageImpl<B: storage::SharedBackend, Sch: Schema>(storage::Storage<B, Sch>);
 
-impl<B: storage::Backend, Sch: Schema> StorageImpl<B, Sch> {
+impl<B: storage::SharedBackend, Sch: Schema> StorageImpl<B, Sch> {
     pub fn new(storage: B) -> crate::Result<Self> {
         let store = storage::Storage::<_, Sch>::new(storage)?;
         Ok(Self(store))
     }
 }
 
-impl<'tx, B: storage::Backend + 'tx, Sch: Schema> Transactional<'tx> for StorageImpl<B, Sch> {
+impl<'tx, B: storage::SharedBackend + 'tx, Sch: Schema> Transactional<'tx> for StorageImpl<B, Sch> {
     type TransactionRo = StorageTxRo<'tx, B, Sch>;
     type TransactionRw = StorageTxRw<'tx, B, Sch>;
 
@@ -35,33 +35,38 @@ impl<'tx, B: storage::Backend + 'tx, Sch: Schema> Transactional<'tx> for Storage
     }
 
     fn transaction_rw<'st: 'tx>(&'st self) -> Result<Self::TransactionRw, storage::Error> {
-        self.0.transaction_rw(None).map(StorageTxRw)
+        <storage::Storage<_, _> as storage::StorageSharedWrite<_, _>>::transaction_rw(&self.0, None)
+            .map(StorageTxRw)
     }
 }
 
-pub struct StorageTxRo<'st, B: storage::Backend, Sch: Schema>(storage::TransactionRo<'st, B, Sch>);
+pub struct StorageTxRo<'st, B: storage::SharedBackend, Sch: Schema>(
+    storage::TransactionRo<'st, B, Sch>,
+);
 
-impl<'st, B: storage::Backend, Sch: Schema> StorageTxRo<'st, B, Sch> {
+impl<'st, B: storage::SharedBackend, Sch: Schema> StorageTxRo<'st, B, Sch> {
     pub fn storage(&self) -> &storage::TransactionRo<'st, B, Sch> {
         &self.0
     }
 }
 
-impl<B: storage::Backend, Sch: Schema> TransactionRo for StorageTxRo<'_, B, Sch> {
+impl<B: storage::SharedBackend, Sch: Schema> TransactionRo for StorageTxRo<'_, B, Sch> {
     fn close(self) {
         self.0.close()
     }
 }
 
-pub struct StorageTxRw<'st, B: storage::Backend, Sch: Schema>(storage::TransactionRw<'st, B, Sch>);
+pub struct StorageTxRw<'st, B: storage::SharedBackend, Sch: Schema>(
+    storage::TransactionRw<'st, B, Sch>,
+);
 
-impl<'st, B: storage::Backend, Sch: Schema> StorageTxRw<'st, B, Sch> {
+impl<'st, B: storage::SharedBackend, Sch: Schema> StorageTxRw<'st, B, Sch> {
     pub fn storage(&mut self) -> &mut storage::TransactionRw<'st, B, Sch> {
         &mut self.0
     }
 }
 
-impl<B: storage::Backend, Sch: Schema> TransactionRw for StorageTxRw<'_, B, Sch> {
+impl<B: storage::SharedBackend, Sch: Schema> TransactionRw for StorageTxRw<'_, B, Sch> {
     fn abort(self) {
         self.0.abort()
     }

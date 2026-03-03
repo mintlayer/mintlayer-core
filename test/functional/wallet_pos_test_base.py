@@ -28,7 +28,6 @@ from test_framework.test_framework import BitcoinTestFramework
 from test_framework.util import assert_equal
 
 import asyncio
-import sys
 import time
 
 
@@ -151,8 +150,6 @@ class WalletPOSTestBase(BitcoinTestFramework):
         }
 
     def run_test(self):
-        if 'win32' in sys.platform:
-            asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
         asyncio.run(self.async_test())
 
     def setup_pool_and_transfer(self, transactions):

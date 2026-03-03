@@ -24,6 +24,7 @@ use crate::{
     chain::{
         order::OrderData,
         output_value::OutputValue,
+        output_values_holder::OutputValuesHolder,
         tokens::{IsTokenFreezable, NftIssuance, TokenId, TokenIssuance, TokenTotalSupply},
         ChainConfig, DelegationId, PoolId,
     },
@@ -33,6 +34,7 @@ use crate::{
 use crypto::vrf::VRFPublicKey;
 use script::Script;
 use serialization::{Decode, DecodeAll, Encode};
+use smallvec::SmallVec;
 use strum::{EnumCount, EnumDiscriminants, EnumIter};
 
 use self::{htlc::HashedTimelockContract, stakelock::StakePoolData, timelock::OutputTimeLock};
@@ -40,6 +42,7 @@ use self::{htlc::HashedTimelockContract, stakelock::StakePoolData, timelock::Out
 pub mod classic_multisig;
 pub mod htlc;
 pub mod output_value;
+pub mod output_values_holder;
 pub mod stakelock;
 pub mod timelock;
 
@@ -73,7 +76,7 @@ impl<'de> serde::Deserialize<'de> for Destination {
 }
 
 impl rpc_description::HasValueHint for Destination {
-    const HINT_SER: rpc_description::ValueHint = rpc_description::ValueHint::BECH32_STRING;
+    const HINT_SER: rpc_description::ValueHint = rpc_description::ValueHint::HEXIFIED_DEST;
 }
 
 impl Addressable for Destination {
@@ -116,20 +119,24 @@ impl Addressable for Destination {
 )]
 #[strum_discriminants(name(TxOutputTag), derive(EnumIter))]
 pub enum TxOutput {
-    /// Transfer an output, giving the provided Destination the authority to spend it (no conditions).
+    /// Transfer an output value, giving the provided Destination the authority to spend it (no conditions).
     #[codec(index = 0)]
     Transfer(OutputValue, Destination),
-    /// Same as Transfer, but with the condition that an output can only be specified after some point in time.
+
+    /// Same as Transfer, but with the condition that the output can only be spent after some point in time.
     #[codec(index = 1)]
     LockThenTransfer(OutputValue, Destination, OutputTimeLock),
+
     /// Burn an amount (whether coin or token). The output is not spendable.
     #[codec(index = 2)]
     Burn(OutputValue),
+
     /// Output type that is used to create a stake pool. Can be spent in two ways:
-    /// 1. In a block header to create a block, authorized through staker destination.
-    /// 2. In a transaction to decommission a pool, authorized through the decommission_key.
+    /// 1. In a block header to create a block, authorized through the staker destination.
+    /// 2. In a transaction to decommission a pool, authorized through the decommission key.
     #[codec(index = 3)]
     CreateStakePool(PoolId, Box<StakePoolData>),
+
     /// Output type that represents spending of a stake pool output in a block reward
     /// in order to produce a block.
     /// Spending conditions are the same as CreateStakePool.
@@ -137,29 +144,36 @@ pub enum TxOutput {
     /// must be exactly the same as the staker destination specified in CreateStakePool.
     #[codec(index = 4)]
     ProduceBlockFromStake(Destination, PoolId),
+
     /// Create a delegation account to a specific pool, defined by its id.
     /// Takes the owner destination, which is the address authorized to withdraw from the delegation.
     /// After this output, an account is created, where delegating/sending coins to it will get them
     /// automatically staked by a pool.
     #[codec(index = 5)]
     CreateDelegationId(Destination, PoolId),
+
     /// Transfer an amount to a delegation that was created using CreateDelegationId. The amount delegated
     /// will be automatically staked by the pool that was specified in CreateDelegationId.
     #[codec(index = 6)]
     DelegateStaking(Amount, DelegationId),
-    /// Issues a token that doesn't exist. Once the issuance is done, an account is created,
-    /// from which minting tokens can be done. There are policies that govern what kind of minting is allowed.
+
+    /// Issues a new fungible token. Once the issuance is done, an account is created, from which
+    /// tokens minting can be done. There are policies that govern what kind of minting is allowed.
     #[codec(index = 7)]
     IssueFungibleToken(Box<TokenIssuance>),
-    /// Create an NFT. This output can be spent.
+
+    /// Issue an NFT. This output can be spent.
     #[codec(index = 8)]
     IssueNft(TokenId, Box<NftIssuance>, Destination),
+
     /// Deposit data into the blockchain. This output cannot be spent.
     #[codec(index = 9)]
     DataDeposit(Vec<u8>),
-    /// Transfer an output under Hashed TimeLock Contract.
+
+    /// Transfer an output value under Hashed TimeLock Contract.
     #[codec(index = 10)]
     Htlc(OutputValue, Box<HashedTimelockContract>),
+
     /// Creates an account with an order.
     /// An account contains 2 balances: the one that is "given" by creator and the one that is filled
     /// by takers.
@@ -368,4 +382,31 @@ impl TextSummary for TxOutput {
 
 impl rpc_description::HasValueHint for TxOutput {
     const HINT_SER: rpc_description::ValueHint = rpc_description::ValueHint::GENERIC_OBJECT;
+}
+
+impl OutputValuesHolder for TxOutput {
+    fn output_values_iter(&self) -> impl Iterator<Item = &OutputValue> {
+        // Use SmallVec to avoid allocations (we'll be producing at most 2 values here).
+        let mut values = SmallVec::<[_; 2]>::new();
+
+        match self {
+            TxOutput::Transfer(value, _)
+            | TxOutput::LockThenTransfer(value, _, _)
+            | TxOutput::Burn(value)
+            | TxOutput::Htlc(value, _) => values.push(value),
+            TxOutput::CreateOrder(order_data) => {
+                values.push(order_data.ask());
+                values.push(order_data.give())
+            }
+            TxOutput::CreateStakePool(_, _)
+            | TxOutput::ProduceBlockFromStake(_, _)
+            | TxOutput::CreateDelegationId(_, _)
+            | TxOutput::DelegateStaking(_, _)
+            | TxOutput::IssueFungibleToken(_)
+            | TxOutput::IssueNft(_, _, _)
+            | TxOutput::DataDeposit(_) => {}
+        }
+
+        values.into_iter()
+    }
 }

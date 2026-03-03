@@ -43,7 +43,7 @@ use test_utils::{
     random::{make_seedable_rng, Seed},
     BasicTestTimeGetter,
 };
-use utils::atomics::SeqCstAtomicBool;
+use utils::{atomics::SeqCstAtomicBool, tokio_spawn_in_current_tracing_span};
 use utils_networking::IpOrSocketAddress;
 
 use crate::{
@@ -196,7 +196,7 @@ where
 
     // run the first peer manager in the background and poll events from the peer manager
     // that tries to connect to the first manager
-    logging::spawn_in_current_span(async move { pm1.run().await });
+    tokio_spawn_in_current_tracing_span(async move { pm1.run().await }, "");
 
     let event = get_connectivity_event::<T>(&mut pm2.peer_connectivity_handle).await;
     match event {
@@ -309,11 +309,14 @@ where
 
     let addr = pm2.peer_connectivity_handle.local_addresses()[0];
 
-    logging::spawn_in_current_span(async move {
-        loop {
-            assert!(pm2.peer_connectivity_handle.poll_next().await.is_ok());
-        }
-    });
+    tokio_spawn_in_current_tracing_span(
+        async move {
+            loop {
+                assert!(pm2.peer_connectivity_handle.poll_next().await.is_ok());
+            }
+        },
+        "",
+    );
 
     // "discover" the other networking service
     pm1.peerdb.peer_discovered(addr);
@@ -662,7 +665,7 @@ where
 
     // run the first peer manager in the background and poll events from the peer manager
     // that tries to connect to the first manager
-    logging::spawn_in_current_span(async move { pm1.run().await });
+    tokio_spawn_in_current_tracing_span(async move { pm1.run().await }, "");
 
     let event = get_connectivity_event::<T>(&mut pm2.peer_connectivity_handle).await;
     if let Ok(net::types::ConnectivityEvent::ConnectionClosed { peer_id }) = event {
@@ -856,6 +859,7 @@ async fn connection_timeout_rpc_notified<T>(
         sync_stalling_timeout: Default::default(),
         peer_manager_config: Default::default(),
         protocol_config: Default::default(),
+        custom_disconnection_reason_for_banning: Default::default(),
     });
     let shutdown = Arc::new(SeqCstAtomicBool::new(false));
     let time_getter = TimeGetter::default();
@@ -887,13 +891,14 @@ async fn connection_timeout_rpc_notified<T>(
     )
     .unwrap();
 
-    logging::spawn_in_current_span(
+    tokio_spawn_in_current_tracing_span(
         // Rust 1.92 thinks that the unwrap call here is unreachable, even though the function
         // returns a normal error.
         #[allow(unreachable_code)]
         async move {
             peer_manager.run().await.unwrap();
         },
+        "",
     );
 
     let (response_sender, response_receiver) = oneshot_nofail::channel();
@@ -976,6 +981,7 @@ where
         sync_stalling_timeout: Default::default(),
         peer_manager_config: Default::default(),
         protocol_config: Default::default(),
+        custom_disconnection_reason_for_banning: Default::default(),
     });
     let (peer_mgr_event_sender, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
         A::make_transport(),
@@ -1020,6 +1026,7 @@ where
         sync_stalling_timeout: Default::default(),
         peer_manager_config: Default::default(),
         protocol_config: Default::default(),
+        custom_disconnection_reason_for_banning: Default::default(),
     });
     let (peer_mgr_event_sender, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
         A::make_transport(),
@@ -1129,6 +1136,7 @@ where
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
         protocol_config: Default::default(),
+        custom_disconnection_reason_for_banning: Default::default(),
     });
     let (peer_mgr_event_sender1, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
         A::make_transport(),
@@ -1173,6 +1181,7 @@ where
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
         protocol_config: Default::default(),
+        custom_disconnection_reason_for_banning: Default::default(),
     });
     let (peer_mgr_event_sender2, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
         A::make_transport(),
@@ -1204,6 +1213,7 @@ where
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
         protocol_config: Default::default(),
+        custom_disconnection_reason_for_banning: Default::default(),
     });
     let (peer_mgr_event_sender3, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
         A::make_transport(),
@@ -1333,6 +1343,7 @@ async fn discovered_node_2_groups() {
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
         protocol_config: Default::default(),
+        custom_disconnection_reason_for_banning: Default::default(),
     });
     let (peer_mgr_event_sender1, _shutdown_sender, _subscribers_sender) =
         run_peer_manager::<DefaultNetworkingService<MpscChannelTransport>>(
@@ -1378,6 +1389,7 @@ async fn discovered_node_2_groups() {
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
         protocol_config: Default::default(),
+        custom_disconnection_reason_for_banning: Default::default(),
     });
     let (peer_mgr_event_sender2, _shutdown_sender, _subscribers_sender) =
         run_peer_manager::<DefaultNetworkingService<MpscChannelTransport>>(
@@ -1410,6 +1422,7 @@ async fn discovered_node_2_groups() {
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
         protocol_config: Default::default(),
+        custom_disconnection_reason_for_banning: Default::default(),
     });
     let (peer_mgr_event_sender3, _shutdown_sender, _subscribers_sender) =
         run_peer_manager::<DefaultNetworkingService<MpscChannelTransport>>(
@@ -1500,6 +1513,7 @@ async fn discovered_node_separate_groups() {
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
         protocol_config: Default::default(),
+        custom_disconnection_reason_for_banning: Default::default(),
     });
     let (peer_mgr_event_sender1, _shutdown_sender, _subscribers_sender) =
         run_peer_manager::<DefaultNetworkingService<MpscChannelTransport>>(
@@ -1545,6 +1559,7 @@ async fn discovered_node_separate_groups() {
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
         protocol_config: Default::default(),
+        custom_disconnection_reason_for_banning: Default::default(),
     });
     let (peer_mgr_event_sender2, _shutdown_sender, _subscribers_sender) =
         run_peer_manager::<DefaultNetworkingService<MpscChannelTransport>>(
@@ -1577,6 +1592,7 @@ async fn discovered_node_separate_groups() {
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
         protocol_config: Default::default(),
+        custom_disconnection_reason_for_banning: Default::default(),
     });
     let (peer_mgr_event_sender3, _shutdown_sender, _subscribers_sender) =
         run_peer_manager::<DefaultNetworkingService<MpscChannelTransport>>(
@@ -1686,11 +1702,14 @@ async fn feeler_connections_test_impl(seed: Seed) {
     let peerdb_tried_addresses = tried_addr_table_as_set(&peer_mgr.peerdb);
     assert!(peerdb_tried_addresses.is_empty());
 
-    let peer_mgr_join_handle = logging::spawn_in_current_span(async move {
-        let mut peer_mgr = peer_mgr;
-        let _ = peer_mgr.run_internal(None).await;
-        peer_mgr
-    });
+    let peer_mgr_join_handle = tokio_spawn_in_current_tracing_span(
+        async move {
+            let mut peer_mgr = peer_mgr;
+            let _ = peer_mgr.run_internal(None).await;
+            peer_mgr
+        },
+        "",
+    );
 
     let mut successful_conn_addresses = BTreeSet::new();
     let mut unsuccessful_conn_addresses = BTreeSet::new();
@@ -1891,6 +1910,7 @@ mod feeler_connections_test_utils {
             user_agent: mintlayer_core_user_agent(),
             sync_stalling_timeout: Default::default(),
             protocol_config: Default::default(),
+            custom_disconnection_reason_for_banning: Default::default(),
         }
     }
 
@@ -1977,6 +1997,7 @@ async fn reject_connection_to_existing_ip(#[case] seed: Seed) {
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
         protocol_config: Default::default(),
+        custom_disconnection_reason_for_banning: Default::default(),
     });
 
     let time_getter = BasicTestTimeGetter::new();
@@ -2009,11 +2030,14 @@ async fn reject_connection_to_existing_ip(#[case] seed: Seed) {
         SocketAddress::new(socket_addr)
     };
 
-    let peer_mgr_join_handle = logging::spawn_in_current_span(async move {
-        let mut peer_mgr = peer_mgr;
-        let _ = peer_mgr.run_internal(None).await;
-        peer_mgr
-    });
+    let peer_mgr_join_handle = tokio_spawn_in_current_tracing_span(
+        async move {
+            let mut peer_mgr = peer_mgr;
+            let _ = peer_mgr.run_internal(None).await;
+            peer_mgr
+        },
+        "",
+    );
 
     // Accept an inbound connection.
     let peer1_id = inbound_block_relay_peer_accepted_by_backend(
@@ -2149,11 +2173,14 @@ async fn feeler_connection_to_ip_address_of_inbound_peer(#[case] seed: Seed) {
         SocketAddress::new(peer_addr)
     };
 
-    let peer_mgr_join_handle = logging::spawn_in_current_span(async move {
-        let mut peer_mgr = peer_mgr;
-        let _ = peer_mgr.run_internal(None).await;
-        peer_mgr
-    });
+    let peer_mgr_join_handle = tokio_spawn_in_current_tracing_span(
+        async move {
+            let mut peer_mgr = peer_mgr;
+            let _ = peer_mgr.run_internal(None).await;
+            peer_mgr
+        },
+        "",
+    );
 
     // Accept an inbound connection.
     let inbound_peer_id = inbound_block_relay_peer_accepted_by_backend(

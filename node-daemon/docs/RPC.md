@@ -317,7 +317,7 @@ Returns `None` (null) if the pool is not found.
 
 Parameters:
 ```
-{ "pool_address": string }
+{ "pool_address": bech32 string }
 ```
 
 Returns:
@@ -337,7 +337,7 @@ Returns `None` (null) if the pool is not found.
 
 Parameters:
 ```
-{ "pool_address": string }
+{ "pool_address": bech32 string }
 ```
 
 Returns:
@@ -356,7 +356,7 @@ Returns `None` (null) if the pool is not found.
 
 Parameters:
 ```
-{ "pool_address": string }
+{ "pool_address": bech32 string }
 ```
 
 Returns:
@@ -375,8 +375,8 @@ returns the amount of coins owned by that delegation in that pool.
 Parameters:
 ```
 {
-    "pool_address": string,
-    "delegation_address": string,
+    "pool_address": bech32 string,
+    "delegation_address": bech32 string,
 }
 ```
 
@@ -389,12 +389,12 @@ EITHER OF
 
 ### Method `chainstate_token_info`
 
-Get token information, given a token id, in address form.
+Get token information, given a token id in address form.
 
 
 Parameters:
 ```
-{ "token_id": string }
+{ "token_id": bech32 string }
 ```
 
 Returns:
@@ -403,7 +403,7 @@ EITHER OF
      1) {
             "type": "FungibleToken",
             "content": {
-                "token_id": hex string,
+                "token_id": hexified token id,
                 "token_ticker": {
                     "text": EITHER OF
                          1) string
@@ -435,13 +435,13 @@ EITHER OF
                             "type": "Frozen",
                             "content": { "unfreezable": bool },
                         },
-                "authority": bech32 string,
+                "authority": hexified destination,
             },
         }
      2) {
             "type": "NonFungibleToken",
             "content": {
-                "token_id": hex string,
+                "token_id": hexified token id,
                 "creation_tx_id": hex string,
                 "creation_block_id": hex string,
                 "metadata": {
@@ -497,6 +497,115 @@ EITHER OF
      3) null
 ```
 
+### Method `chainstate_tokens_info`
+
+Get tokens information, given multiple token ids in address form.
+
+
+Parameters:
+```
+{ "token_ids": [ bech32 string, .. ] }
+```
+
+Returns:
+```
+[ EITHER OF
+     1) {
+            "type": "FungibleToken",
+            "content": {
+                "token_id": hexified token id,
+                "token_ticker": {
+                    "text": EITHER OF
+                         1) string
+                         2) null,
+                    "hex": hex string,
+                },
+                "number_of_decimals": number,
+                "metadata_uri": {
+                    "text": EITHER OF
+                         1) string
+                         2) null,
+                    "hex": hex string,
+                },
+                "circulating_supply": { "atoms": number string },
+                "total_supply": EITHER OF
+                     1) {
+                            "type": "Fixed",
+                            "content": { "amount": { "atoms": number string } },
+                        }
+                     2) { "type": "Lockable" }
+                     3) { "type": "Unlimited" },
+                "is_locked": bool,
+                "frozen": EITHER OF
+                     1) {
+                            "type": "NotFrozen",
+                            "content": { "freezable": bool },
+                        }
+                     2) {
+                            "type": "Frozen",
+                            "content": { "unfreezable": bool },
+                        },
+                "authority": hexified destination,
+            },
+        }
+     2) {
+            "type": "NonFungibleToken",
+            "content": {
+                "token_id": hexified token id,
+                "creation_tx_id": hex string,
+                "creation_block_id": hex string,
+                "metadata": {
+                    "creator": EITHER OF
+                         1) hex string
+                         2) null,
+                    "name": {
+                        "text": EITHER OF
+                             1) string
+                             2) null,
+                        "hex": hex string,
+                    },
+                    "description": {
+                        "text": EITHER OF
+                             1) string
+                             2) null,
+                        "hex": hex string,
+                    },
+                    "ticker": {
+                        "text": EITHER OF
+                             1) string
+                             2) null,
+                        "hex": hex string,
+                    },
+                    "icon_uri": EITHER OF
+                         1) {
+                                "text": EITHER OF
+                                     1) string
+                                     2) null,
+                                "hex": hex string,
+                            }
+                         2) null,
+                    "additional_metadata_uri": EITHER OF
+                         1) {
+                                "text": EITHER OF
+                                     1) string
+                                     2) null,
+                                "hex": hex string,
+                            }
+                         2) null,
+                    "media_uri": EITHER OF
+                         1) {
+                                "text": EITHER OF
+                                     1) string
+                                     2) null,
+                                "hex": hex string,
+                            }
+                         2) null,
+                    "media_hash": hex string,
+                },
+            },
+        }, .. ]
+```
+
 ### Method `chainstate_order_info`
 
 Get order information, given an order id, in address form.
@@ -504,14 +613,14 @@ Get order information, given an order id, in address form.
 
 Parameters:
 ```
-{ "order_id": string }
+{ "order_id": bech32 string }
 ```
 
 Returns:
 ```
 EITHER OF
      1) {
-            "conclude_key": bech32 string,
+            "conclude_key": hexified destination,
             "initially_asked": EITHER OF
                  1) {
                         "type": "Coin",
@@ -520,7 +629,7 @@ EITHER OF
                  2) {
                         "type": "Token",
                         "content": {
-                            "id": hex string,
+                            "id": hexified token id,
                             "amount": { "atoms": number string },
                         },
                     },
@@ -532,17 +641,81 @@ EITHER OF
                  2) {
                         "type": "Token",
                         "content": {
-                            "id": hex string,
+                            "id": hexified token id,
                             "amount": { "atoms": number string },
                         },
                     },
-            "give_balance": { "atoms": number string },
             "ask_balance": { "atoms": number string },
+            "give_balance": { "atoms": number string },
             "nonce": EITHER OF
                  1) number
                  2) null,
+            "is_frozen": bool,
         }
      2) null
+```
+
+### Method `chainstate_orders_info_by_currencies`
+
+Return infos for all orders that match the given currencies. Passing None for a currency
+means "any currency".
+
+
+Parameters:
+```
+{
+    "ask_currency": EITHER OF
+         1) { "type": "Coin" }
+         2) {
+                "type": "Token",
+                "content": bech32 string,
+            }
+         3) null,
+    "give_currency": EITHER OF
+         1) { "type": "Coin" }
+         2) {
+                "type": "Token",
+                "content": bech32 string,
+            }
+         3) null,
+}
+```
+
+Returns:
+```
+{ hexified order id: {
+    "conclude_key": hexified destination,
+    "initially_asked": EITHER OF
+         1) {
+                "type": "Coin",
+                "content": { "amount": { "atoms": number string } },
+            }
+         2) {
+                "type": "Token",
+                "content": {
+                    "id": hexified token id,
+                    "amount": { "atoms": number string },
+                },
+            },
+    "initially_given": EITHER OF
+         1) {
+                "type": "Coin",
+                "content": { "amount": { "atoms": number string } },
+            }
+         2) {
+                "type": "Token",
+                "content": {
+                    "id": hexified token id,
+                    "amount": { "atoms": number string },
+                },
+            },
+    "ask_balance": { "atoms": number string },
+    "give_balance": { "atoms": number string },
+    "nonce": EITHER OF
+         1) number
+         2) null,
+    "is_frozen": bool,
+}, .. }
 ```
 
 ### Method `chainstate_export_bootstrap_file`
@@ -554,7 +727,7 @@ Parameters:
 ```
 {
     "file_path": string,
-    "include_orphans": bool,
+    "include_stale_blocks": bool,
 }
 ```
 
@@ -1089,6 +1262,9 @@ Returns:
     "ping_min": EITHER OF
          1) number
          2) null,
+    "last_tip_block_time": EITHER OF
+         1) number
+         2) null,
 }, .. ]
 ```
 
@@ -1281,7 +1457,7 @@ the parameters.
 Parameters:
 ```
 {
-    "pool_id": hex string,
+    "pool_id": hexified pool id,
     "min_height": number,
     "max_height": EITHER OF
          1) number

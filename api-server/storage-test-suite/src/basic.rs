@@ -27,8 +27,8 @@ use api_server_common::storage::{
         block_aux_data::{BlockAuxData, BlockWithExtraData},
         ApiServerStorage, ApiServerStorageError, ApiServerStorageRead, ApiServerStorageWrite,
         ApiServerTransactionRw, BlockInfo, CoinOrTokenStatistic, Delegation, FungibleTokenData,
-        LockedUtxo, Order, PoolDataWithExtraInfo, TransactionInfo, Transactional, TxAdditionalInfo,
-        Utxo, UtxoLock, UtxoWithExtraInfo,
+        LockedUtxo, Order, PoolDataWithExtraInfo, TokenTransaction, TransactionInfo, Transactional,
+        TxAdditionalInfo, Utxo, UtxoLock, UtxoWithExtraInfo,
     },
 };
 use crypto::{
@@ -112,22 +112,22 @@ where
     let block_id = {
         let mut test_framework = TestFramework::builder(&mut rng).build();
         let chain_config = test_framework.chain_config().clone();
+        let genesis_timestamp = chain_config.genesis_block().timestamp();
+        let genesis_id = chain_config.genesis_block_id();
+
         let mut db_tx = storage.transaction_rw().await.unwrap();
 
-        // should return genesis block id
-        let block_aux = db_tx.get_best_block().await.unwrap();
-        assert_eq!(block_aux.block_height(), BlockHeight::new(0));
-        assert_eq!(block_aux.block_id(), chain_config.genesis_block_id());
-        assert_eq!(
-            block_aux.block_timestamp(),
-            chain_config.genesis_block().timestamp()
-        );
+        // should return genesis block data
+        let best_block_data = db_tx.get_best_block().await.unwrap();
+        let expected_best_block_data =
+            BlockAuxData::new(genesis_id, BlockHeight::new(0), genesis_timestamp);
+        assert_eq!(best_block_data, expected_best_block_data);
 
         let timestamps = db_tx.get_latest_blocktimestamps().await.unwrap();
-        assert_eq!(timestamps, vec![chain_config.genesis_block().timestamp()]);
+        assert_eq!(timestamps, &[genesis_timestamp]);
 
         {
-            let random_block_id: Id<Block> = Id::<Block>::new(H256::random_using(&mut rng));
+            let random_block_id = Id::<Block>::random_using(&mut rng);
             let block = db_tx.get_block(random_block_id).await.unwrap();
             assert!(block.is_none());
         }
@@ -136,61 +136,251 @@ where
         let genesis_id = chain_config.genesis_block_id();
         let num_blocks = rng.gen_range(10..20);
         test_framework
-            .create_chain_return_ids_with_advancing_time(&genesis_id, num_blocks, &mut rng)
+            .create_chain_advancing_time_return_ids(&genesis_id, num_blocks, &mut rng)
             .unwrap();
 
-        let block_id1 =
-            test_framework.block_id(1).classify(&chain_config).chain_block_id().unwrap();
-        let block1 = test_framework.block(block_id1);
-        let block_height = BlockHeight::new(1);
-        let block_info1 = BlockInfo {
-            block: BlockWithExtraData {
-                block: block1.clone(),
-                tx_additional_infos: vec![],
-            },
-            height: Some(block_height),
-        };
+        let block1_height = BlockHeight::new(1);
+        let block1_id = test_framework
+            .block_id(block1_height.into_int())
+            .classify(&chain_config)
+            .chain_block_id()
+            .unwrap();
+        let block1 = test_framework.block(block1_id);
 
         {
-            let block_id = db_tx.get_block(block_id1).await.unwrap();
-            assert!(block_id.is_none());
+            let block1_timestamp = block1.timestamp();
 
-            let block_id = db_tx.get_main_chain_block_id(block_height).await.unwrap();
-            assert!(block_id.is_none());
+            let block2_height = BlockHeight::new(2);
+            let block2_id = test_framework
+                .block_id(block2_height.into_int())
+                .classify(&chain_config)
+                .chain_block_id()
+                .unwrap();
+            let block2 = test_framework.block(block2_id);
 
-            let block_with_extras = BlockWithExtraData {
-                block: block1.clone(),
-                tx_additional_infos: vec![],
-            };
+            let block2_timestamp = block2.timestamp();
+
+            // Sanity checks
+            {
+                assert!(block1_timestamp < block2_timestamp);
+
+                let block_info = db_tx.get_block(block1_id).await.unwrap();
+                assert!(block_info.is_none());
+                let block_info = db_tx.get_block(block2_id).await.unwrap();
+                assert!(block_info.is_none());
+
+                let block_id = db_tx.get_main_chain_block_id(block1_height).await.unwrap();
+                assert!(block_id.is_none());
+                let block_id = db_tx.get_main_chain_block_id(block2_height).await.unwrap();
+                assert!(block_id.is_none());
+
+                // The returned (0, 0) means that there are no blocks on the mainchain.
+                let heights_for_ts_range = db_tx
+                    .get_block_range_from_time_range((
+                        BlockTimestamp::from_int_seconds(0),
+                        BlockTimestamp::from_int_seconds(u32::MAX.into()),
+                    ))
+                    .await
+                    .unwrap();
+                assert_eq!(
+                    heights_for_ts_range,
+                    (BlockHeight::zero(), BlockHeight::zero())
+                );
+            }
+
+            // Set block1 as mainchain block
             db_tx
-                .set_mainchain_block(block_id1, block_height, &block_with_extras)
+                .set_mainchain_block(
+                    block1_id,
+                    block1_height,
+                    &BlockWithExtraData {
+                        block: block1.clone(),
+                        tx_additional_infos: vec![],
+                    },
+                )
                 .await
                 .unwrap();
 
-            let block = db_tx.get_block(block_id1).await.unwrap();
-            assert_eq!(block.unwrap(), block_info1);
+            // Do the checks
+            {
+                let block_info = db_tx.get_block(block1_id).await.unwrap();
+                let expected_block_info = BlockInfo {
+                    block: BlockWithExtraData {
+                        block: block1.clone(),
+                        tx_additional_infos: vec![],
+                    },
+                    height: Some(block1_height),
+                };
+                assert_eq!(block_info.unwrap(), expected_block_info);
 
-            let block_id = db_tx.get_main_chain_block_id(block_height).await.unwrap();
-            assert_eq!(block_id.unwrap(), block_id1);
+                let block_id = db_tx.get_main_chain_block_id(block1_height).await.unwrap();
+                assert_eq!(block_id.unwrap(), block1_id);
 
-            // delete the main chain block
+                let best_block_data = db_tx.get_best_block().await.unwrap();
+                let expected_best_block_data =
+                    BlockAuxData::new(block1_id.into(), block1_height, block1_timestamp);
+                assert_eq!(best_block_data, expected_best_block_data);
+
+                let latest_timestamps = db_tx.get_latest_blocktimestamps().await.unwrap();
+                assert_eq!(latest_timestamps, &[block1_timestamp, genesis_timestamp]);
+
+                let heights_for_ts_range = db_tx
+                    .get_block_range_from_time_range((genesis_timestamp, block1_timestamp))
+                    .await
+                    .unwrap();
+                assert_eq!(heights_for_ts_range, (block1_height, block1_height));
+            }
+
+            // Call set_mainchain_block again using the same block id, but different data.
+            // The call should not try being smart and instead update the data as requested.
             db_tx
-                .del_main_chain_blocks_above_height(block_height.prev_height().unwrap())
+                .set_mainchain_block(
+                    block1_id,
+                    block2_height,
+                    &BlockWithExtraData {
+                        block: block2.clone(),
+                        tx_additional_infos: vec![],
+                    },
+                )
                 .await
                 .unwrap();
-            // no main chain block on that height
-            let block_id = db_tx.get_main_chain_block_id(block_height).await.unwrap();
-            assert!(block_id.is_none());
-            // but the block is still there just not on main chain
-            let block_info1 = BlockInfo {
-                block: BlockWithExtraData {
-                    block: block1.clone(),
-                    tx_additional_infos: vec![],
-                },
-                height: None,
-            };
-            let block = db_tx.get_block(block_id1).await.unwrap();
-            assert_eq!(block.unwrap(), block_info1);
+
+            // Do the checks
+            {
+                let block_info = db_tx.get_block(block1_id).await.unwrap();
+                let expected_block_info = BlockInfo {
+                    block: BlockWithExtraData {
+                        block: block2.clone(),
+                        tx_additional_infos: vec![],
+                    },
+                    height: Some(block2_height),
+                };
+                assert_eq!(block_info.unwrap(), expected_block_info);
+
+                // No main chain block on block1_height
+                let block_id = db_tx.get_main_chain_block_id(block1_height).await.unwrap();
+                assert!(block_id.is_none());
+
+                // But there is one at block2_height, referring to block1_id.
+                let block_id = db_tx.get_main_chain_block_id(block2_height).await.unwrap();
+                assert_eq!(block_id.unwrap(), block1_id);
+
+                let best_block_data = db_tx.get_best_block().await.unwrap();
+                let expected_best_block_data =
+                    BlockAuxData::new(block1_id.into(), block2_height, block2_timestamp);
+                assert_eq!(best_block_data, expected_best_block_data);
+
+                let latest_timestamps = db_tx.get_latest_blocktimestamps().await.unwrap();
+                assert_eq!(latest_timestamps, &[block2_timestamp, genesis_timestamp]);
+
+                // When block1_timestamp is passed, (0, 0) is returned, meaning that no blocks
+                // were found in that range.
+                let heights_for_ts_range = db_tx
+                    .get_block_range_from_time_range((genesis_timestamp, block1_timestamp))
+                    .await
+                    .unwrap();
+                assert_eq!(
+                    heights_for_ts_range,
+                    (BlockHeight::zero(), BlockHeight::zero())
+                );
+
+                // When block2_timestamp is passed, this returns the non-genesis block height,
+                // which we've set to block2_height.
+                let heights_for_ts_range = db_tx
+                    .get_block_range_from_time_range((genesis_timestamp, block2_timestamp))
+                    .await
+                    .unwrap();
+                assert_eq!(heights_for_ts_range, (block2_height, block2_height));
+            }
+
+            // Delete the main chain block
+            db_tx
+                .del_main_chain_blocks_above_height(block1_height.prev_height().unwrap())
+                .await
+                .unwrap();
+
+            // Do the checks
+            {
+                // No main chain block on those heights
+                let block_id = db_tx.get_main_chain_block_id(block1_height).await.unwrap();
+                assert!(block_id.is_none());
+                let block_id = db_tx.get_main_chain_block_id(block2_height).await.unwrap();
+                assert!(block_id.is_none());
+
+                // But the block is still there just not on main chain
+                let block_info = db_tx.get_block(block1_id).await.unwrap();
+                let expected_block_info = BlockInfo {
+                    block: BlockWithExtraData {
+                        block: block2.clone(),
+                        tx_additional_infos: vec![],
+                    },
+                    height: None,
+                };
+                assert_eq!(block_info.unwrap(), expected_block_info);
+
+                // Genesis is now the best block
+                let best_block_data = db_tx.get_best_block().await.unwrap();
+                let expected_best_block_data =
+                    BlockAuxData::new(genesis_id, BlockHeight::new(0), genesis_timestamp);
+                assert_eq!(best_block_data, expected_best_block_data);
+
+                // Latest block timestamps only contain the genesis
+                let latest_timestamps = db_tx.get_latest_blocktimestamps().await.unwrap();
+                assert_eq!(latest_timestamps, &[genesis_timestamp]);
+
+                // No mainchain blocks are found by get_block_range_from_time_range either.
+                let heights_for_ts_range = db_tx
+                    .get_block_range_from_time_range((
+                        BlockTimestamp::from_int_seconds(0),
+                        BlockTimestamp::from_int_seconds(u32::MAX.into()),
+                    ))
+                    .await
+                    .unwrap();
+                assert_eq!(
+                    heights_for_ts_range,
+                    (BlockHeight::zero(), BlockHeight::zero())
+                );
+            }
+
+            // Now set block1 and block2 as mainchain blocks using the correct info, but in the
+            // reverse order - first block2, then block1. Check that block2 is the best block.
+            db_tx
+                .set_mainchain_block(
+                    block2_id,
+                    block2_height,
+                    &BlockWithExtraData {
+                        block: block2.clone(),
+                        tx_additional_infos: vec![],
+                    },
+                )
+                .await
+                .unwrap();
+
+            let expected_best_block_data =
+                BlockAuxData::new(block2_id.into(), block2_height, block2_timestamp);
+
+            let best_block_data = db_tx.get_best_block().await.unwrap();
+            assert_eq!(best_block_data, expected_best_block_data);
+
+            db_tx
+                .set_mainchain_block(
+                    block1_id,
+                    block1_height,
+                    &BlockWithExtraData {
+                        block: block1.clone(),
+                        tx_additional_infos: vec![],
+                    },
+                )
+                .await
+                .unwrap();
+            let best_block_aux_data = db_tx.get_best_block().await.unwrap();
+            assert_eq!(best_block_aux_data, expected_best_block_data);
+
+            // Delete the mainchain blocks again.
+            db_tx
+                .del_main_chain_blocks_above_height(block1_height.prev_height().unwrap())
+                .await
+                .unwrap();
         }
 
         {
@@ -255,7 +445,7 @@ where
 
             // delete the main chain block
             db_tx
-                .del_main_chain_blocks_above_height(block_height.prev_height().unwrap())
+                .del_main_chain_blocks_above_height(block1_height.prev_height().unwrap())
                 .await
                 .unwrap();
         }
@@ -265,7 +455,7 @@ where
         {
             // with read only tx reconfirm everything is the same after the commit
             let db_tx = storage.transaction_ro().await.unwrap();
-            let block_id = db_tx.get_main_chain_block_id(block_height).await.unwrap();
+            let block_id = db_tx.get_main_chain_block_id(block1_height).await.unwrap();
             assert!(block_id.is_none());
 
             let block_info1 = BlockInfo {
@@ -275,18 +465,18 @@ where
                 },
                 height: None,
             };
-            let block = db_tx.get_block(block_id1).await.unwrap();
+            let block = db_tx.get_block(block1_id).await.unwrap();
             assert_eq!(block.unwrap(), block_info1);
         }
 
-        block_id1
+        block1_id
     };
 
     // Test setting/getting transactions
     {
         let db_tx = storage.transaction_ro().await.unwrap();
 
-        let random_tx_id: Id<Transaction> = Id::<Transaction>::new(H256::random_using(&mut rng));
+        let random_tx_id = Id::<Transaction>::random_using(&mut rng);
         let tx = db_tx.get_transaction(random_tx_id).await.unwrap();
         assert!(tx.is_none());
 
@@ -294,9 +484,7 @@ where
         let tx1: SignedTransaction = TransactionBuilder::new()
             .add_input(
                 TxInput::Utxo(UtxoOutPoint::new(
-                    OutPointSourceId::Transaction(Id::<Transaction>::new(H256::random_using(
-                        &mut rng,
-                    ))),
+                    OutPointSourceId::Transaction(Id::<Transaction>::random_using(&mut rng)),
                     0,
                 )),
                 empty_witness(&mut rng),
@@ -328,7 +516,7 @@ where
                     token_decimals: BTreeMap::new(),
                 },
             };
-            let random_owning_block = Id::<Block>::new(H256::random_using(&mut rng));
+            let random_owning_block = Id::<Block>::random_using(&mut rng);
             let result = db_tx
                 .set_transaction(tx1.transaction().get_id(), 1, random_owning_block, &tx_info)
                 .await
@@ -402,7 +590,7 @@ where
                 .unwrap();
             assert_eq!(txs.len() as u64, take_txs);
             for (i, tx) in txs.iter().enumerate() {
-                assert_eq!(tx.global_tx_index, expected_last_tx_global_index - i as u64);
+                assert_eq!(tx.tx_global_index, expected_last_tx_global_index - i as u64);
             }
         }
 
@@ -413,7 +601,7 @@ where
     {
         let mut db_tx = storage.transaction_rw().await.unwrap();
 
-        let random_block_id: Id<Block> = Id::<Block>::new(H256::random_using(&mut rng));
+        let random_block_id = Id::<Block>::random_using(&mut rng);
         let random_block_timestamp = BlockTimestamp::from_int_seconds(rng.gen::<u64>());
         let block = db_tx.get_block_aux_data(random_block_id).await.unwrap();
         assert!(block.is_none());
@@ -461,7 +649,7 @@ where
 
         let mut db_tx = storage.transaction_rw().await.unwrap();
 
-        let random_tx_id: Id<Transaction> = Id::<Transaction>::new(H256::random_using(&mut rng));
+        let random_tx_id = Id::<Transaction>::random_using(&mut rng);
         let outpoint = UtxoOutPoint::new(
             OutPointSourceId::Transaction(random_tx_id),
             rng.gen::<u32>(),
@@ -471,7 +659,7 @@ where
             bob_destination.clone(),
         );
 
-        let utxo = Utxo::new(output.clone(), None, false);
+        let utxo = Utxo::new(output.clone(), None, None);
         let block_height = BlockHeight::new(rng.gen_range(1..100));
 
         // set one and get it
@@ -485,7 +673,7 @@ where
                 .set_locked_utxo_at_height(
                     outpoint.clone(),
                     locked_utxo,
-                    bob_address.as_str(),
+                    &[bob_address.as_str()],
                     block_height,
                 )
                 .await
@@ -528,7 +716,7 @@ where
                 .set_locked_utxo_at_height(
                     outpoint.clone(),
                     locked_utxo,
-                    bob_address.as_str(),
+                    &[bob_address.as_str()],
                     block_height,
                 )
                 .await
@@ -577,8 +765,7 @@ where
             let bob_address =
                 Address::<Destination>::new(&chain_config, bob_destination.clone()).unwrap();
 
-            let random_tx_id: Id<Transaction> =
-                Id::<Transaction>::new(H256::random_using(&mut rng));
+            let random_tx_id = Id::<Transaction>::random_using(&mut rng);
             let outpoint = UtxoOutPoint::new(
                 OutPointSourceId::Transaction(random_tx_id),
                 rng.gen::<u32>(),
@@ -598,39 +785,39 @@ where
                 .set_locked_utxo_at_height(
                     outpoint.clone(),
                     locked_utxo,
-                    bob_address.as_str(),
+                    &[bob_address.as_str()],
                     block_height,
                 )
                 .await
                 .unwrap();
 
             // set it as unlocked at next block height
-            let utxo = Utxo::new(output.clone(), None, false);
+            let utxo = Utxo::new(output.clone(), None, None);
             db_tx
                 .set_utxo_at_height(
                     outpoint.clone(),
                     utxo,
-                    bob_address.as_str(),
+                    &[bob_address.as_str()],
                     block_height.next_height(),
                 )
                 .await
                 .unwrap();
 
             // and set it as spent on the next block height
-            let spent_utxo = Utxo::new(output.clone(), None, true);
+            let next_block_height = block_height.next_height().next_height();
+            let spent_utxo = Utxo::new(output.clone(), None, Some(next_block_height));
             db_tx
                 .set_utxo_at_height(
                     outpoint.clone(),
                     spent_utxo,
-                    bob_address.as_str(),
-                    block_height.next_height().next_height(),
+                    &[bob_address.as_str()],
+                    next_block_height,
                 )
                 .await
                 .unwrap();
 
             // set another locked utxo
-            let random_tx_id: Id<Transaction> =
-                Id::<Transaction>::new(H256::random_using(&mut rng));
+            let random_tx_id = Id::<Transaction>::random_using(&mut rng);
             let locked_outpoint = UtxoOutPoint::new(
                 OutPointSourceId::Transaction(random_tx_id),
                 rng.gen::<u32>(),
@@ -649,7 +836,7 @@ where
                 .set_locked_utxo_at_height(
                     locked_outpoint.clone(),
                     locked_utxo,
-                    bob_address.as_str(),
+                    &[bob_address.as_str()],
                     block_height,
                 )
                 .await
@@ -668,7 +855,12 @@ where
         // set one and get it
         {
             db_tx
-                .set_utxo_at_height(outpoint.clone(), utxo, bob_address.as_str(), block_height)
+                .set_utxo_at_height(
+                    outpoint.clone(),
+                    utxo,
+                    &[bob_address.as_str()],
+                    block_height,
+                )
                 .await
                 .unwrap();
 
@@ -684,8 +876,7 @@ where
 
         // set another one and retrieve both
         {
-            let random_tx_id: Id<Transaction> =
-                Id::<Transaction>::new(H256::random_using(&mut rng));
+            let random_tx_id = Id::<Transaction>::random_using(&mut rng);
             let outpoint2 = UtxoOutPoint::new(
                 OutPointSourceId::Transaction(random_tx_id),
                 rng.gen::<u32>(),
@@ -695,13 +886,13 @@ where
                 bob_destination,
             );
 
-            let utxo = Utxo::new(output2.clone(), None, false);
+            let utxo = Utxo::new(output2.clone(), None, None);
             let block_height = BlockHeight::new(rng.gen_range(1..100));
             db_tx
                 .set_utxo_at_height(
                     outpoint2.clone(),
                     utxo.clone(),
-                    bob_address.as_str(),
+                    &[bob_address.as_str()],
                     block_height,
                 )
                 .await
@@ -723,10 +914,10 @@ where
             }
 
             // set the new one to spent in the same block
-            let utxo = Utxo::new(output2.clone(), None, true);
+            let utxo = Utxo::new(output2.clone(), None, Some(block_height));
             expected_utxos.remove(&outpoint2);
             db_tx
-                .set_utxo_at_height(outpoint2, utxo, bob_address.as_str(), block_height)
+                .set_utxo_at_height(outpoint2, utxo, &[bob_address.as_str()], block_height)
                 .await
                 .unwrap();
 
@@ -742,13 +933,164 @@ where
         db_tx.commit().await.unwrap();
     }
 
+    // Test token transactions
+    {
+        // Check geting token_transactions from same block height are sorted by tx_global_index
+        let mut db_tx = storage.transaction_rw().await.unwrap();
+        let random_token_id = TokenId::random_using(&mut rng);
+        let block_height = BlockHeight::new(100);
+
+        let token_transactions: Vec<_> = (0..10)
+            .map(|idx| {
+                let random_tx_id = Id::<Transaction>::random_using(&mut rng);
+                TokenTransaction {
+                    tx_global_index: idx,
+                    tx_id: random_tx_id,
+                }
+            })
+            .collect();
+
+        for tx in &token_transactions {
+            db_tx
+                .set_token_transaction_at_height(
+                    random_token_id,
+                    tx.tx_id,
+                    block_height,
+                    tx.tx_global_index,
+                )
+                .await
+                .unwrap();
+        }
+
+        let len = 5;
+        let global_idx = 10;
+        let token_txs =
+            db_tx.get_token_transactions(random_token_id, len, global_idx).await.unwrap();
+
+        let expected_txs: Vec<_> = token_transactions
+            .iter()
+            .rev()
+            .filter(|tx| tx.tx_global_index < global_idx)
+            .take(len as usize)
+            .cloned()
+            .collect();
+        assert_eq!(token_txs, expected_txs);
+
+        let len = 5;
+        let global_idx = 5;
+        let token_txs =
+            db_tx.get_token_transactions(random_token_id, len, global_idx).await.unwrap();
+
+        let expected_txs: Vec<_> = token_transactions
+            .iter()
+            .rev()
+            .filter(|tx| tx.tx_global_index < global_idx)
+            .take(len as usize)
+            .cloned()
+            .collect();
+        assert_eq!(token_txs, expected_txs);
+
+        // Set again the same txs, the tx_global_index should be updated
+        let updated_token_transactions: Vec<_> = token_transactions
+            .iter()
+            .map(|tx| {
+                let random_tx_id = tx.tx_id;
+                TokenTransaction {
+                    tx_global_index: tx.tx_global_index + 100, // shift indexes so they are clearly different
+                    tx_id: random_tx_id,
+                }
+            })
+            .collect();
+
+        for tx in &updated_token_transactions {
+            db_tx
+                .set_token_transaction_at_height(
+                    random_token_id,
+                    tx.tx_id,
+                    block_height,
+                    tx.tx_global_index,
+                )
+                .await
+                .unwrap();
+        }
+
+        let len = 5;
+        let global_idx = 200;
+        let token_txs =
+            db_tx.get_token_transactions(random_token_id, len, global_idx).await.unwrap();
+
+        let expected_txs: Vec<_> = updated_token_transactions
+            .iter()
+            .rev()
+            .filter(|tx| tx.tx_global_index < global_idx)
+            .take(len as usize)
+            .cloned()
+            .collect();
+
+        assert_eq!(token_txs, expected_txs);
+
+        let len = 5;
+        let global_idx = 105;
+        let token_txs =
+            db_tx.get_token_transactions(random_token_id, len, global_idx).await.unwrap();
+
+        let expected_txs: Vec<_> = updated_token_transactions
+            .iter()
+            .rev()
+            .filter(|tx| tx.tx_global_index < global_idx)
+            .take(len as usize)
+            .cloned()
+            .collect();
+
+        assert_eq!(token_txs, expected_txs);
+
+        drop(db_tx);
+
+        let mut db_tx = storage.transaction_rw().await.unwrap();
+        let random_token_id = TokenId::random_using(&mut rng);
+        let token_transactions: Vec<_> = (0..10)
+            .map(|idx| {
+                let random_tx_id = Id::<Transaction>::random_using(&mut rng);
+                let block_height = BlockHeight::new(idx);
+                (idx, random_tx_id, block_height)
+            })
+            .collect();
+
+        for (idx, tx_id, block_height) in &token_transactions {
+            db_tx
+                .set_token_transaction_at_height(random_token_id, *tx_id, *block_height, *idx)
+                .await
+                .unwrap();
+        }
+
+        let len = rng.gen_range(0..5);
+        let global_idx = rng.gen_range(5..=10);
+        let token_txs =
+            db_tx.get_token_transactions(random_token_id, len, global_idx).await.unwrap();
+        eprintln!("getting len: {len} < idx {global_idx}");
+        let expected_token_txs: Vec<_> = token_transactions
+            .iter()
+            .rev()
+            .filter_map(|(idx, tx_id, _)| {
+                let idx = *idx;
+                ((idx) < global_idx).then_some(TokenTransaction {
+                    tx_global_index: idx,
+                    tx_id: *tx_id,
+                })
+            })
+            .take(len as usize)
+            .collect();
+
+        assert_eq!(token_txs, expected_token_txs);
+    }
+
     // Test setting/getting pool data
     {
         let mut db_tx = storage.transaction_rw().await.unwrap();
 
         // test missing random pool data
         {
-            let random_pool_id = PoolId::new(H256::random_using(&mut rng));
+            let random_pool_id = PoolId::random_using(&mut rng);
             let pool_data = db_tx.get_pool_data(random_pool_id).await.unwrap();
             assert!(pool_data.is_none());
 
@@ -760,7 +1102,7 @@ where
         }
 
         {
-            let random_pool_id = PoolId::new(H256::random_using(&mut rng));
+            let random_pool_id = PoolId::random_using(&mut rng);
             let random_block_height = BlockHeight::new(rng.gen::<u32>() as u64);
             let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
             let amount_to_stake = Amount::from_atoms(rng.gen::<u128>());
@@ -791,7 +1133,7 @@ where
             assert_eq!(pool_data, random_pool_data);
 
             // insert a second pool data
-            let random_pool_id2 = PoolId::new(H256::random_using(&mut rng));
+            let random_pool_id2 = PoolId::random_using(&mut rng);
             let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
             let (_, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
             let amount_to_stake = {
@@ -966,15 +1308,15 @@ where
 
         // test missing random pool data
         {
-            let random_delegation_id = DelegationId::new(H256::random_using(&mut rng));
+            let random_delegation_id = DelegationId::random_using(&mut rng);
             let delegation_data = db_tx.get_delegation(random_delegation_id).await.unwrap();
             assert!(delegation_data.is_none());
         }
 
         {
             let (random_delegation_id, random_delegation_id2) = {
-                let id1 = DelegationId::new(H256::random_using(&mut rng));
-                let id2 = DelegationId::new(H256::random_using(&mut rng));
+                let id1 = DelegationId::random_using(&mut rng);
+                let id2 = DelegationId::random_using(&mut rng);
 
                 if id1 < id2 {
                     (id1, id2)
@@ -987,8 +1329,8 @@ where
             let random_block_height2 = BlockHeight::new(rng.gen_range(1..500) as u64);
 
             let (_, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
-            let random_pool_id = PoolId::new(H256::random_using(&mut rng));
-            let random_pool_id2 = PoolId::new(H256::random_using(&mut rng));
+            let random_pool_id = PoolId::random_using(&mut rng);
+            let random_pool_id2 = PoolId::random_using(&mut rng);
             let random_balance = Amount::from_atoms(rng.gen::<u128>());
             let random_balance2 = Amount::from_atoms(rng.gen::<u128>());
             let random_nonce = AccountNonce::new(rng.gen::<u64>());
@@ -1128,7 +1470,7 @@ where
     {
         let db_tx = storage.transaction_ro().await.unwrap();
 
-        let random_token_id = TokenId::new(H256::random_using(&mut rng));
+        let random_token_id = TokenId::random_using(&mut rng);
         let nft = db_tx.get_nft_token_issuance(random_token_id).await.unwrap();
         assert!(nft.is_none());
 
@@ -1230,7 +1572,7 @@ where
     {
         let db_tx = storage.transaction_ro().await.unwrap();
 
-        let random_token_id = TokenId::new(H256::random_using(&mut rng));
+        let random_token_id = TokenId::random_using(&mut rng);
         let token = db_tx.get_fungible_token_issuance(random_token_id).await.unwrap();
         assert!(token.is_none());
 
@@ -1374,9 +1716,9 @@ where
         let (_, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         let random_destination = Destination::PublicKeyHash(PublicKeyHash::from(&pk));
 
-        let token_ticker = "XXXX".as_bytes().to_vec();
+        let token_ticker = String::from("AB\\CD");
         let token_data = FungibleTokenData {
-            token_ticker: token_ticker.clone(),
+            token_ticker: token_ticker.as_bytes().to_vec().clone(),
             number_of_decimals: rng.gen_range(1..18),
             metadata_uri: "http://uri".as_bytes().to_vec(),
             circulating_supply: Amount::ZERO,
@@ -1388,19 +1730,19 @@ where
         };
 
         let block_height = BlockHeight::new(rng.gen_range(1..100));
-        let random_token_id1 = TokenId::new(H256::random_using(&mut rng));
+        let random_token_id1 = TokenId::random_using(&mut rng);
         db_tx
             .set_fungible_token_issuance(random_token_id1, block_height, token_data.clone())
             .await
             .unwrap();
 
-        let random_token_id2 = TokenId::new(H256::random_using(&mut rng));
+        let random_token_id2 = TokenId::random_using(&mut rng);
         db_tx
             .set_fungible_token_issuance(random_token_id2, block_height, token_data.clone())
             .await
             .unwrap();
 
-        let random_token_id3 = TokenId::new(H256::random_using(&mut rng));
+        let random_token_id3 = TokenId::random_using(&mut rng);
         db_tx
             .set_fungible_token_issuance(random_token_id3, block_height, token_data.clone())
             .await
@@ -1411,7 +1753,7 @@ where
                 creator: None,
                 name: "Name".as_bytes().to_vec(),
                 description: "SomeNFT".as_bytes().to_vec(),
-                ticker: token_ticker.clone(),
+                ticker: token_ticker.as_bytes().to_vec().clone(),
                 icon_uri: DataOrNoVec::from(None),
                 additional_metadata_uri: DataOrNoVec::from(None),
                 media_uri: DataOrNoVec::from(None),
@@ -1421,41 +1763,37 @@ where
 
         let (_, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         let random_owner = Destination::PublicKeyHash(PublicKeyHash::from(&pk));
-        let random_token_id4 = TokenId::new(H256::random_using(&mut rng));
+        let random_token_id4 = TokenId::random_using(&mut rng);
         db_tx
             .set_nft_token_issuance(random_token_id4, block_height, nft.clone(), &random_owner)
             .await
             .unwrap();
-        let random_token_id5 = TokenId::new(H256::random_using(&mut rng));
+        let random_token_id5 = TokenId::random_using(&mut rng);
         db_tx
             .set_nft_token_issuance(random_token_id5, block_height, nft.clone(), &random_owner)
             .await
             .unwrap();
-        let random_token_id6 = TokenId::new(H256::random_using(&mut rng));
+        let random_token_id6 = TokenId::random_using(&mut rng);
         db_tx
             .set_nft_token_issuance(random_token_id6, block_height, nft.clone(), &random_owner)
             .await
             .unwrap();
 
         // will return all token and nft ids
-        let ids = db_tx.get_token_ids(6, 0).await.unwrap();
-        assert!(ids.contains(&random_token_id1));
-        assert!(ids.contains(&random_token_id2));
-        assert!(ids.contains(&random_token_id3));
+        let all_ids = db_tx.get_token_ids(6, 0).await.unwrap();
+        assert!(all_ids.contains(&random_token_id1));
+        assert!(all_ids.contains(&random_token_id2));
+        assert!(all_ids.contains(&random_token_id3));
 
-        assert!(ids.contains(&random_token_id4));
-        assert!(ids.contains(&random_token_id5));
-        assert!(ids.contains(&random_token_id6));
+        assert!(all_ids.contains(&random_token_id4));
+        assert!(all_ids.contains(&random_token_id5));
+        assert!(all_ids.contains(&random_token_id6));
 
         // will return all token and nft ids
         let ids = db_tx.get_token_ids_by_ticker(6, 0, &token_ticker).await.unwrap();
-        assert!(ids.contains(&random_token_id1));
-        assert!(ids.contains(&random_token_id2));
-        assert!(ids.contains(&random_token_id3));
-
-        assert!(ids.contains(&random_token_id4));
-        assert!(ids.contains(&random_token_id5));
-        assert!(ids.contains(&random_token_id6));
+        for id in &all_ids {
+            assert!(ids.contains(id));
+        }
 
         // will return the tokens first
         let ids = db_tx.get_token_ids(3, 0).await.unwrap();
@@ -1481,15 +1819,41 @@ where
         assert!(ids.contains(&random_token_id5));
         assert!(ids.contains(&random_token_id6));
 
-        let ids = db_tx.get_token_ids_by_ticker(0, 6, "NOT_FOUND".as_bytes()).await.unwrap();
+        let ids = db_tx.get_token_ids_by_ticker(0, 6, "NOT_FOUND").await.unwrap();
         assert!(ids.is_empty());
+
+        // will return all token and nft ids for partial match
+        for partial_ticker in get_all_substrings(&token_ticker) {
+            let ids = db_tx.get_token_ids_by_ticker(6, 0, partial_ticker).await.unwrap();
+            for id in &all_ids {
+                assert!(ids.contains(id));
+            }
+
+            // check lowercase as well
+            let lowercase_partial_ticker = partial_ticker.to_ascii_lowercase();
+            let ids2 =
+                db_tx.get_token_ids_by_ticker(6, 0, &lowercase_partial_ticker).await.unwrap();
+            assert_eq!(ids, ids2);
+        }
+
+        // Try out patterns inside the ticker string, they should be escaped and not work
+        let ids = db_tx.get_token_ids_by_ticker(6, 0, "A%D").await.unwrap();
+        assert!(ids.is_empty());
+
+        let ids = db_tx.get_token_ids_by_ticker(6, 0, "A_").await.unwrap();
+        assert!(ids.is_empty());
+
+        for c in ['*', '+', '?'] {
+            let ids = db_tx.get_token_ids_by_ticker(6, 0, &format!("A{c}")).await.unwrap();
+            assert!(ids.is_empty());
+        }
     }
 
     // test coin and token statistics
     {
         let db_tx = storage.transaction_ro().await.unwrap();
 
-        let random_token_id = TokenId::new(H256::random_using(&mut rng));
+        let random_token_id = TokenId::random_using(&mut rng);
         let random_coin_or_token_id = CoinOrTokenId::TokenId(random_token_id);
         let random_statistic = match rng.gen_range(0..4) {
             0 => CoinOrTokenStatistic::CirculatingSupply,
@@ -1571,7 +1935,7 @@ async fn orders<'a, S: for<'b> Transactional<'b>>(
     let chain_config = common::chain::config::create_regtest();
     {
         let db_tx = storage.transaction_ro().await.unwrap();
-        let random_order_id = OrderId::new(H256::random_using(rng));
+        let random_order_id = OrderId::random_using(rng);
         let order = db_tx.get_order(random_order_id).await.unwrap();
         assert!(order.is_none());
 
@@ -1579,8 +1943,8 @@ async fn orders<'a, S: for<'b> Transactional<'b>>(
         assert!(orders.is_empty());
     }
 
-    let token1 = TokenId::new(H256::random_using(rng));
-    let token2 = TokenId::new(H256::random_using(rng));
+    let token1 = TokenId::random_using(rng);
+    let token2 = TokenId::random_using(rng);
 
     let (order1_id, order1) = random_order(
         rng,
@@ -1782,7 +2146,7 @@ fn random_order(
     ask_currency: CoinOrTokenId,
     give_currency: CoinOrTokenId,
 ) -> (OrderId, Order) {
-    let order_id = OrderId::new(H256::random_using(rng));
+    let order_id = OrderId::random_using(rng);
     let (_, pk) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
     let conclude_destination = Destination::PublicKeyHash(PublicKeyHash::from(&pk));
     let give_amount = Amount::from_atoms(rng.gen_range(1000..10000));
@@ -1814,4 +2178,14 @@ where
         make_test!(set_get, storage_maker),
     ]
     .into_iter()
+}
+
+fn get_all_substrings(s: &str) -> Vec<&str> {
+    let mut substrings = Vec::new();
+    for i in 0..s.len() {
+        for j in i..s.len() {
+            substrings.push(s.get(i..=j).unwrap());
+        }
+    }
+    substrings
 }

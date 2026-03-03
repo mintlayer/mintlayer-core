@@ -169,10 +169,12 @@ impl BlockProcessingErrorClassification for CheckBlockError {
             | CheckBlockError::ParentBlockMissing { .. }
             | CheckBlockError::BlockTimeOrderInvalid(_, _)
             | CheckBlockError::InvalidBlockRewardOutputType(_)
-            | CheckBlockError::CheckpointMismatch(_, _)
-            | CheckBlockError::ParentCheckpointMismatch(_, _, _)
-            | CheckBlockError::AttemptedToAddBlockBeforeReorgLimit(_, _, _)
-            | CheckBlockError::InvalidParent { .. } => BlockProcessingErrorClass::BadBlock,
+            | CheckBlockError::CheckpointMismatch { .. }
+            | CheckBlockError::AttemptedToAddBlockBeforeReorgLimit { .. }
+            | CheckBlockError::InvalidParent { .. }
+            | CheckBlockError::InvalidBlockAlreadyProcessed(_) => {
+                BlockProcessingErrorClass::BadBlock
+            }
 
             CheckBlockError::BlockFromTheFuture { .. } => {
                 BlockProcessingErrorClass::TemporarilyBadBlock
@@ -447,17 +449,15 @@ impl BlockProcessingErrorClassification for PropertyQueryError {
             | PropertyQueryError::GenesisHeaderRequested
             | PropertyQueryError::InvalidStartingBlockHeightForMainchainBlocks(_)
             | PropertyQueryError::InvalidBlockHeightRange { .. }
-            | PropertyQueryError::UnsupportedTokenV0InOrder(_) => {
-                BlockProcessingErrorClass::General
-            }
+            | PropertyQueryError::UnsupportedTokenV0InOrder(_)
+            | PropertyQueryError::TokenInfoMissing(_) => BlockProcessingErrorClass::General,
             // Note: these errors are strange - sometimes they don't look like General, judging
             // by the code that uses them. But other times some of them seem to just wrap storage
             // errors.
             // For now, since their p2p ban score is 0, let's consider them General.
             PropertyQueryError::StakePoolDataNotFound(_)
             | PropertyQueryError::StakerBalanceOverflow(_)
-            | PropertyQueryError::PoolBalanceNotFound(_)
-            | PropertyQueryError::OrderBalanceNotFound(_) => BlockProcessingErrorClass::General,
+            | PropertyQueryError::PoolBalanceNotFound(_) => BlockProcessingErrorClass::General,
 
             PropertyQueryError::StorageError(err) => err.classify(),
             PropertyQueryError::GetAncestorError(err) => err.classify(),

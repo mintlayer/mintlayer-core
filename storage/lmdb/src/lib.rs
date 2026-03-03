@@ -156,6 +156,11 @@ pub struct LmdbImpl {
 
     /// Schedule a database resize of the database map
     map_resize_scheduled: Arc<AtomicBool>,
+
+    /// If true, LMBD transactions will be created with `no_sync` parameter set to true,
+    /// which means that filesystem sync will not be performed on commit. This increases performance,
+    /// but the db may become corrupted if a system crash occurs before the data is flushed to disk.
+    no_sync_on_commit: Arc<AtomicBool>,
 }
 
 impl LmdbImpl {
@@ -209,6 +214,18 @@ impl LmdbImpl {
         }
         err
     }
+
+    pub fn set_no_sync_on_commit(&self, set: bool) {
+        self.no_sync_on_commit.store(set, Ordering::Release);
+    }
+
+    pub fn get_no_sync_on_commit(&self) -> bool {
+        self.no_sync_on_commit.load(Ordering::Acquire)
+    }
+
+    pub fn force_sync(&self) -> storage_core::Result<()> {
+        self.env.sync(true).or_else(error::process_with_err)
+    }
 }
 
 impl utils::shallow_clone::ShallowClone for LmdbImpl {
@@ -217,9 +234,11 @@ impl utils::shallow_clone::ShallowClone for LmdbImpl {
             env: self.env.shallow_clone(),
             dbs: self.dbs.shallow_clone(),
             map_resize_scheduled: self.map_resize_scheduled.shallow_clone(),
+            no_sync_on_commit: self.no_sync_on_commit.shallow_clone(),
         }
     }
 }
+
 impl backend::BackendImpl for LmdbImpl {
     type TxRo<'a> = DbTxRo<'a>;
 
@@ -229,9 +248,18 @@ impl backend::BackendImpl for LmdbImpl {
         self.start_transaction(lmdb::Environment::begin_ro_txn)
     }
 
+    fn transaction_rw(&mut self, size: Option<usize>) -> storage_core::Result<Self::TxRw<'_>> {
+        <Self as backend::SharedBackendImpl>::transaction_rw(self, size)
+    }
+}
+
+impl backend::SharedBackendImpl for LmdbImpl {
     fn transaction_rw(&self, size: Option<usize>) -> storage_core::Result<Self::TxRw<'_>> {
+        let no_sync_on_commit = self.no_sync_on_commit.load(Ordering::Acquire);
         self.resize_if_resize_scheduled();
-        self.start_transaction(|env| lmdb::Environment::begin_rw_txn(env, size))
+        self.start_transaction(|env| {
+            lmdb::Environment::begin_rw_txn_generic(env, size, no_sync_on_commit, false)
+        })
     }
 }
 
@@ -269,10 +297,30 @@ impl Lmdb {
         self
     }
 
-    fn open_db(env: &lmdb::Environment, desc: &DbMapDesc) -> storage_core::Result<lmdb::Database> {
+    /// Open the db only for reading.
+    pub fn make_read_only(mut self) -> Self {
+        self.flags |= lmdb::EnvironmentFlags::READ_ONLY;
+        self
+    }
+
+    fn is_read_only(&self) -> bool {
+        !(self.flags & lmdb::EnvironmentFlags::READ_ONLY).is_empty()
+    }
+
+    fn open_or_create_db(
+        env: &lmdb::Environment,
+        desc: &DbMapDesc,
+        open_only: bool,
+    ) -> storage_core::Result<lmdb::Database> {
         let name = Some(desc.name());
-        let flags = lmdb::DatabaseFlags::default();
-        env.create_db(name, flags).or_else(error::process_with_err)
+
+        if open_only {
+            env.open_db(name)
+        } else {
+            let flags = lmdb::DatabaseFlags::default();
+            env.create_db(name, flags)
+        }
+        .or_else(error::process_with_err)
     }
 }
 
@@ -280,8 +328,11 @@ impl backend::Backend for Lmdb {
     type Impl = LmdbImpl;
 
     fn open(self, desc: DbDesc) -> storage_core::Result<Self::Impl> {
-        // Attempt to create the storage directory
-        std::fs::create_dir_all(&self.path).map_err(error::process_io_error)?;
+        let read_only = self.is_read_only();
+        if !read_only {
+            // Attempt to create the storage directory
+            std::fs::create_dir_all(&self.path).map_err(error::process_io_error)?;
+        }
 
         let initial_map_size = self
             .initial_map_size
@@ -304,15 +355,22 @@ impl backend::Backend for Lmdb {
         .or_else(error::process_with_err)?;
 
         // Set up all the databases
-        let dbs = desc.db_maps().try_transform(|desc| Self::open_db(&environment, desc))?;
+        let dbs = desc
+            .db_maps()
+            .try_transform(|desc| Self::open_or_create_db(&environment, desc, read_only))?;
         let dbs = dbs.into();
 
         Ok(LmdbImpl {
             env: Arc::new(environment),
             dbs,
             map_resize_scheduled: Arc::new(AtomicBool::new(false)),
+            no_sync_on_commit: Arc::new(AtomicBool::new(false)),
         })
     }
+}
+
+impl backend::SharedBackend for Lmdb {
+    type ImplHelper = LmdbImpl;
 }
 
 #[cfg(test)]

@@ -28,6 +28,7 @@ use common::{
             EpochIndex,
         },
         output_value::OutputValue,
+        partially_signed_transaction::PartiallySignedTransaction,
         signature::inputsig::{
             arbitrary_message,
             authorize_hashed_timelock_contract_spend::AuthorizedHashedTimelockContractSpend,
@@ -45,7 +46,6 @@ use serialization::{
     hex_encoded::HexEncoded,
     Encode as _,
 };
-use wallet_types::partially_signed_transaction::PartiallySignedTransaction;
 
 use crate::{RpcTestFunctionsError, RpcTestFunctionsHandle};
 
@@ -528,10 +528,10 @@ impl RpcTestFunctionsRpcServer for super::RpcTestFunctionsHandle {
                     let htlc_spend: AuthorizedHashedTimelockContractSpend =
                         rpc::handle_result(htlc_spend_result)?;
                     match htlc_spend {
-                        AuthorizedHashedTimelockContractSpend::Secret(secret, _) => {
+                        AuthorizedHashedTimelockContractSpend::Spend(secret, _) => {
                             Ok(Some(secret.hex_encode()))
                         }
-                        AuthorizedHashedTimelockContractSpend::Multisig(_) => Ok(None),
+                        AuthorizedHashedTimelockContractSpend::Refund(_) => Ok(None),
                     }
                 }
             },

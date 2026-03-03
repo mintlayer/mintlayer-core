@@ -32,7 +32,6 @@ from test_framework.mintlayer import block_input_data_obj
 from test_framework.wallet_cli_controller import TxOutput, WalletCliController
 
 import asyncio
-import sys
 import random
 
 
@@ -68,8 +67,6 @@ class WalletSubmitTransaction(BitcoinTestFramework):
         return block_id
 
     def run_test(self):
-        if 'win32' in sys.platform:
-            asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
         asyncio.run(self.async_test())
 
     async def async_test(self):
@@ -106,7 +103,7 @@ class WalletSubmitTransaction(BitcoinTestFramework):
             assert_in("The transaction was submitted successfully", await wallet.submit_transaction(encoded_tx, not store_tx_in_wallet))
 
             if store_tx_in_wallet:
-                assert_in(f"Coins amount: {coins_to_send}", await wallet.get_balance(utxo_states=['inactive']))
+                assert_in(f"Coins amount: {coins_to_send}", await wallet.get_balance(utxo_states=['inactive', 'in-mempool']))
             else:
                 assert_in(f"Coins amount: 0", await wallet.get_balance(utxo_states=['inactive']))
 
@@ -198,7 +195,7 @@ class WalletSubmitTransaction(BitcoinTestFramework):
             coins_from_multisig = '0.1'
             outputs = [TxOutput(address, coins_from_multisig) ]
             output = await wallet.compose_transaction(outputs, utxos, True)
-            assert_in("The hex encoded transaction is", output)
+            assert_in("The hex-encoded transaction is", output)
             encoded_tx = output.split('\n')[1]
 
             # sign the transaction from N random wallets

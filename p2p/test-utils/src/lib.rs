@@ -34,7 +34,7 @@ use common::{
     time_getter::TimeGetter,
 };
 use logging::log;
-use mempool::{MempoolConfig, MempoolHandle};
+use mempool::{MempoolConfig, MempoolHandle, MempoolInit};
 use subsystem::{ManagerJoinHandle, ShutdownTrigger};
 use test_utils::random::{CryptoRng, Rng};
 
@@ -58,6 +58,7 @@ pub fn start_subsystems(
         DefaultTransactionVerificationStrategy::new(),
         None,
         time_getter.clone(),
+        None,
     )
     .unwrap();
     let mempool_config = MempoolConfig::new();
@@ -87,15 +88,16 @@ pub fn start_subsystems_generic(
 
     let chainstate = manager.add_subsystem("p2p-test-chainstate", chainstate);
 
-    let mempool = mempool::make_mempool(
+    let mempool_init = MempoolInit::new(
         chain_config,
         mempool_config,
         chainstate.clone(),
         time_getter,
     );
-    let mempool = manager.add_custom_subsystem("p2p-test-mempool", |handle| mempool.init(handle));
+    let mempool =
+        manager.add_custom_subsystem("p2p-test-mempool", |handle, _| mempool_init.init(handle));
 
-    let manager_handle = manager.main_in_task_in_span(tracing_span);
+    let manager_handle = manager.main_in_task_in_tracing_span(tracing_span);
 
     (chainstate, mempool, shutdown_trigger, manager_handle)
 }
@@ -120,8 +122,12 @@ pub fn create_n_blocks(
     blocks
 }
 
-/// A timeout for blocking calls.
-pub const LONG_TIMEOUT: Duration = Duration::from_secs(600);
+/// A timeout for long blocking calls, such as an entire async test.
+pub const LONG_TIMEOUT: Duration = Duration::from_secs(300);
+
+/// A timeout for medium-length blocking calls, such as a particular function call in a test.
+pub const MEDIUM_TIMEOUT: Duration = Duration::from_secs(60);
+
 /// A short timeout for events that shouldn't occur.
 pub const SHORT_TIMEOUT: Duration = Duration::from_millis(500);
 

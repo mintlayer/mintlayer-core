@@ -25,7 +25,8 @@ use common::{
             RPCFungibleTokenInfo, RPCIsTokenFrozen, RPCTokenTotalSupply, TokenCreator, TokenId,
             TokenTotalSupply,
         },
-        Block, ChainConfig, Destination, OrderId, SignedTransaction, Transaction, TxOutput,
+        Block, ChainConfig, Currency, Destination, OrderId, SignedTransaction, Transaction,
+        TxOutput,
     },
     primitives::{amount::RpcAmountOut, Amount, BlockHeight},
 };
@@ -36,7 +37,7 @@ use crypto::{
 use randomness::{CryptoRng, Rng};
 use test_utils::random::{gen_random_alnum_string, gen_random_bytes};
 use wallet::{signer::SignerProvider, wallet::test_helpers::scan_wallet, DefaultWallet, Wallet};
-use wallet_types::{account_info::DEFAULT_ACCOUNT_INDEX, Currency};
+use wallet_types::account_info::DEFAULT_ACCOUNT_INDEX;
 
 use crate::types::Balances;
 
@@ -162,7 +163,7 @@ pub fn tx_with_outputs(outputs: Vec<TxOutput>) -> SignedTransaction {
     SignedTransaction::new(Transaction::new(0, vec![], outputs).unwrap(), Vec::new()).unwrap()
 }
 
-pub fn create_block_scan_wallet<B, P>(
+pub async fn create_block_scan_wallet<B, P>(
     chain_config: &ChainConfig,
     wallet: &mut Wallet<B, P>,
     transactions: Vec<SignedTransaction>,
@@ -171,7 +172,7 @@ pub fn create_block_scan_wallet<B, P>(
     block_height: u64,
 ) -> Block
 where
-    B: storage::Backend + 'static,
+    B: storage::BackendWithSendableTransactions + 'static,
     P: SignerProvider,
 {
     let block = Block::new(
@@ -186,7 +187,7 @@ where
     )
     .unwrap();
 
-    scan_wallet(wallet, BlockHeight::new(block_height), vec![block.clone()]);
+    scan_wallet(wallet, BlockHeight::new(block_height), vec![block.clone()]).await;
     block
 }
 

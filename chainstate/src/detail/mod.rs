@@ -31,25 +31,22 @@ use std::{collections::VecDeque, sync::Arc};
 
 use itertools::Itertools;
 use thiserror::Error;
-use utils_networking::broadcaster;
+use tokio::sync::watch;
 
-use self::{
-    block_invalidation::BlockInvalidator,
-    orphan_blocks::{OrphanBlocksMut, OrphansProxy},
-    query::ChainstateQuery,
-    tx_verification_strategy::TransactionVerificationStrategy,
-};
-use crate::{BlockInvalidatorError, ChainstateConfig, ChainstateEvent};
 use chainstate_storage::{
     BlockchainStorage, BlockchainStorageRead, BlockchainStorageWrite, TransactionRw, Transactional,
 };
 use chainstate_types::{
     pos_randomness::PoSRandomness, BlockIndex, BlockStatus, BlockValidationStage, EpochData,
-    EpochStorageWrite, PropertyQueryError, SealedStorageTag, TipStorageTag,
+    EpochStorageWrite, GenBlockIndexRef, PropertyQueryError, SealedStorageTag, TipStorageTag,
 };
 use chainstateref::{ChainstateRef, ReorgError};
 use common::{
-    chain::{block::timestamp::BlockTimestamp, config::ChainConfig, Block, GenBlock, TxOutput},
+    chain::{
+        block::{timestamp::BlockTimestamp, ConsensusData},
+        config::ChainConfig,
+        Block, GenBlock, TxOutput,
+    },
     primitives::{id::WithId, BlockHeight, Compact, Id, Idable},
     time_getter::TimeGetter,
     Uint256,
@@ -62,13 +59,26 @@ use pos_accounting::{
 use tx_verifier::transaction_verifier;
 use utils::{
     const_value::ConstValue,
-    ensure,
+    debug_panic_or_log, ensure,
     eventhandler::{EventHandler, EventsController},
     log_error,
     set_flag::SetFlag,
     tap_log::TapLog,
 };
+use utils_networking::broadcaster;
 use utxo::UtxosDB;
+
+use crate::{
+    detail::bootstrap::import_bootstrap_stream, BlockInvalidatorError, BootstrapError,
+    ChainstateConfig, ChainstateError, ChainstateEvent,
+};
+
+use self::{
+    block_invalidation::BlockInvalidator,
+    orphan_blocks::{OrphanBlocksMut, OrphansProxy},
+    query::ChainstateQuery,
+    tx_verification_strategy::TransactionVerificationStrategy,
+};
 
 pub use self::{
     error::*, info::ChainInfo, median_time::calculate_median_time_past,
@@ -94,6 +104,10 @@ type ChainstateEventHandler = EventHandler<ChainstateEvent>;
 
 pub type OrphanErrorHandler = dyn Fn(&BlockError) + Send + Sync;
 
+/// A tracing target that forces full block ids to be printed in certain places where they're
+/// normally printed in the abbreviated form.
+pub const CHAINSTATE_TRACING_TARGET_VERBOSE_BLOCK_IDS: &str = "chainstate_verbose_block_ids";
+
 #[must_use]
 pub struct Chainstate<S, V> {
     chain_config: Arc<ChainConfig>,
@@ -106,6 +120,8 @@ pub struct Chainstate<S, V> {
     rpc_events: broadcaster::Broadcaster<ChainstateEvent>,
     time_getter: TimeGetter,
     is_initial_block_download_finished: SetFlag,
+    shutdown_initiated_rx: Option<watch::Receiver<SetFlag>>,
+    reckless_mode_counter: DbRecklessModeCounter,
 }
 
 #[derive(Copy, Clone, Eq, Debug, PartialEq)]
@@ -172,16 +188,11 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         tx_verification_strategy: V,
         custom_orphan_error_hook: Option<Arc<OrphanErrorHandler>>,
         time_getter: TimeGetter,
-    ) -> Result<Self, crate::ChainstateError> {
-        use crate::ChainstateError;
-
+        shutdown_initiated_rx: Option<watch::Receiver<SetFlag>>,
+    ) -> Result<Self, ChainstateError> {
         let best_block_id = {
-            let db_tx = chainstate_storage
-                .transaction_ro()
-                .map_err(|e| ChainstateError::FailedToInitializeChainstate(e.into()))?;
-            db_tx
-                .get_best_block_id()
-                .map_err(|e| ChainstateError::FailedToInitializeChainstate(e.into()))?
+            let db_tx = chainstate_storage.transaction_ro()?;
+            db_tx.get_best_block_id()?
         };
 
         let mut chainstate = Self::new_no_genesis(
@@ -191,19 +202,21 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             tx_verification_strategy,
             custom_orphan_error_hook,
             time_getter,
+            shutdown_initiated_rx,
         );
 
         if best_block_id.is_none() {
             chainstate.process_genesis().map_err(ChainstateError::ProcessBlockError)?;
         } else {
-            chainstate.check_genesis().map_err(crate::ChainstateError::from)?;
+            chainstate.check_genesis().map_err(ChainstateError::from)?;
         }
-
-        chainstate.update_initial_block_download_flag()?;
 
         chainstate
             .check_consistency()
             .map_err(|e| ChainstateError::FailedToInitializeChainstate(e.into()))?;
+
+        let best_block_index = chainstate.make_db_tx_ro()?.get_best_block_index()?;
+        chainstate.update_initial_block_download_flag(best_block_index.as_ref(), true)?;
 
         Ok(chainstate)
     }
@@ -215,6 +228,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         tx_verification_strategy: V,
         custom_orphan_error_hook: Option<Arc<OrphanErrorHandler>>,
         time_getter: TimeGetter,
+        shutdown_initiated_rx: Option<watch::Receiver<SetFlag>>,
     ) -> Self {
         let orphan_blocks = OrphansProxy::new(*chainstate_config.max_orphan_blocks);
         let subsystem_events = EventsController::new();
@@ -230,6 +244,8 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             rpc_events,
             time_getter,
             is_initial_block_download_finished: SetFlag::new(),
+            shutdown_initiated_rx,
+            reckless_mode_counter: DbRecklessModeCounter::new(),
         }
     }
 
@@ -245,10 +261,10 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
         // Look up the parent of block 1 to figure out the genesis ID according to storage
         let block1_id = dbtx
-            .get_block_id_by_height(&BlockHeight::new(1))?
+            .get_block_id_by_height(BlockHeight::new(1))?
             .ok_or(InitializationError::Block1Missing)?;
         let block1 = dbtx
-            .get_block(Id::new(block1_id.to_hash()))?
+            .get_block(&Id::new(block1_id.to_hash()))?
             .ok_or(InitializationError::Block1Missing)?;
         let stored_genesis_id = block1.prev_block_id();
 
@@ -261,15 +277,19 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         Ok(())
     }
 
-    fn broadcast_new_tip_event(&mut self, new_block_index: &Option<BlockIndex>) {
-        if let Some(new_block_index) = new_block_index {
-            let new_height = new_block_index.block_height();
-            let new_id = *new_block_index.block_id();
-            let event = ChainstateEvent::NewTip(new_id, new_height);
+    fn broadcast_new_tip_event(
+        &mut self,
+        best_block_index: GenBlockIndexRef<'_>,
+        is_initial_block_download: bool,
+    ) {
+        let event = ChainstateEvent::NewTip {
+            id: *best_block_index.block_id(),
+            height: best_block_index.block_height(),
+            is_initial_block_download,
+        };
 
-            self.rpc_events.broadcast(&event);
-            self.subsystem_events.broadcast(event);
-        }
+        self.rpc_events.broadcast(&event);
+        self.subsystem_events.broadcast(event);
     }
 
     /// Create a read-write transaction, call `main_action` on it and commit.
@@ -600,41 +620,41 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
     ) -> Result<Option<BlockIndex>, BlockError> {
         let block_id = block.get_id();
 
-        let result = self.attempt_to_process_block(block, block_source)?;
+        // If this is Some, it's the new best block index.
+        let best_block_index_after_process_block_opt =
+            self.attempt_to_process_block(block, block_source)?;
 
-        let new_block_index_after_orphans = self.process_orphans_of(&block_id)?;
+        // If this is Some, it's the new best block index.
+        let best_block_index_after_orphans_opt = self.process_orphans_of(&block_id)?;
 
-        let result = match new_block_index_after_orphans {
-            Some(result_from_orphan) => Some(result_from_orphan),
-            None => result,
-        };
+        let best_block_index_opt =
+            best_block_index_after_orphans_opt.or(best_block_index_after_process_block_opt);
 
-        self.broadcast_new_tip_event(&result);
+        if let Some(best_block_index) = &best_block_index_opt {
+            let best_block_index_ref = GenBlockIndexRef::Block(best_block_index);
+            self.update_initial_block_download_flag(best_block_index_ref, false)?;
+            self.broadcast_new_tip_event(best_block_index_ref, self.is_initial_block_download());
 
-        if let Some(ref bi) = result {
-            let compact_target = match bi.block_header().consensus_data() {
-                common::chain::block::ConsensusData::None => Compact::from(Uint256::ZERO),
-                common::chain::block::ConsensusData::PoW(data) => data.bits(),
-                common::chain::block::ConsensusData::PoS(data) => data.compact_target(),
+            let compact_target = match best_block_index.block_header().consensus_data() {
+                ConsensusData::None => Compact::from(Uint256::ZERO),
+                ConsensusData::PoW(data) => data.bits(),
+                ConsensusData::PoS(data) => data.compact_target(),
             };
 
             log::info!(
                 "NEW TIP in chainstate {:x} with height {}, timestamp: {} ({})",
-                bi.block_id(),
-                bi.block_height(),
-                bi.block_timestamp(),
-                bi.block_timestamp().into_time(),
+                best_block_index.block_id(),
+                best_block_index.block_height(),
+                best_block_index.block_timestamp(),
+                best_block_index.block_timestamp().into_time(),
             );
             log::debug!(
                 "Difficulty target of new tip: {:#x}",
                 TryInto::<common::Uint256>::try_into(compact_target).expect("valid target")
             );
-
-            self.update_initial_block_download_flag()
-                .map_err(BlockError::BestBlockIdQueryError)?;
         }
 
-        Ok(result)
+        Ok(best_block_index_opt)
     }
 
     /// returns the block index of the new tip
@@ -662,7 +682,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         let mut db_tx = self.chainstate_storage.transaction_rw(None).map_err(BlockError::from)?;
         db_tx.set_best_block_id(&genesis_id).map_err(BlockError::StorageError)?;
         db_tx
-            .set_block_id_at_height(&BlockHeight::zero(), &genesis_id)
+            .set_block_id_at_height(BlockHeight::zero(), &genesis_id)
             .map_err(BlockError::StorageError)?;
 
         db_tx
@@ -697,13 +717,58 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
     #[log_error]
     pub fn invalidate_block(&mut self, block_id: &Id<Block>) -> Result<(), BlockInvalidatorError> {
+        let prev_best_block_id = self
+            .make_db_tx_ro()?
+            .get_best_block_id()
+            .map_err(BlockInvalidatorError::BestBlockIdQueryError)?;
+
         let result = BlockInvalidator::new(self)
             .invalidate_block(block_id, block_invalidation::IsExplicit::Yes);
         // Note: we don't ignore the result of check_consistency even though we may already have
         // an error to return (if the checks are enabled but couldn't be done for some reason,
         // we don't want to miss this).
         self.check_consistency()?;
+
+        let new_best_block_index = self
+            .make_db_tx_ro()?
+            .get_best_block_index()
+            .map_err(BlockInvalidatorError::BestBlockIndexQueryError)?;
+
+        if new_best_block_index.block_id() != prev_best_block_id {
+            self.broadcast_new_tip_event(
+                new_best_block_index.as_ref(),
+                self.is_initial_block_download(),
+            );
+        }
+
         result
+    }
+
+    #[log_error]
+    pub fn reset_block_failure_flags(
+        &mut self,
+        block_id: &Id<Block>,
+    ) -> Result<(), BlockInvalidatorError> {
+        let prev_best_block_id = self
+            .make_db_tx_ro()?
+            .get_best_block_id()
+            .map_err(BlockInvalidatorError::BestBlockIdQueryError)?;
+
+        BlockInvalidator::new(self).reset_block_failure_flags(block_id)?;
+
+        let new_best_block_index = self
+            .make_db_tx_ro()?
+            .get_best_block_index()
+            .map_err(BlockInvalidatorError::BestBlockIndexQueryError)?;
+
+        if new_best_block_index.block_id() != prev_best_block_id {
+            self.broadcast_new_tip_event(
+                new_best_block_index.as_ref(),
+                self.is_initial_block_download(),
+            );
+        }
+
+        Ok(())
     }
 
     #[log_error]
@@ -765,19 +830,30 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
     /// Update `is_initial_block_download_finished` when tip changes (can only be set once)
     #[log_error]
-    fn update_initial_block_download_flag(&mut self) -> Result<(), PropertyQueryError> {
+    fn update_initial_block_download_flag(
+        &mut self,
+        best_block_index: GenBlockIndexRef<'_>,
+        initial_update: bool,
+    ) -> Result<(), chainstate_storage::Error> {
         if self.is_initial_block_download_finished.test() {
             return Ok(());
         }
 
-        // TODO: Add a check for importing and reindex.
+        let tip_timestamp = best_block_index.block_timestamp();
+        let is_fresh_block = self.is_fresh_block(&tip_timestamp);
 
-        // TODO: Add a check for the chain trust.
-
-        let tip_timestamp = self.query()?.get_best_block_index()?.block_timestamp();
-
-        if self.is_fresh_block(&tip_timestamp) {
+        if !is_fresh_block {
+            if initial_update {
+                self.reckless_mode_counter
+                    .inc(&self.chainstate_config, &self.chainstate_storage)?;
+            }
+        } else {
             self.is_initial_block_download_finished.set();
+
+            if !initial_update {
+                self.reckless_mode_counter
+                    .dec(&self.chainstate_config, &self.chainstate_storage)?;
+            }
         }
 
         Ok(())
@@ -814,6 +890,40 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             Ok(_) => Ok(()),
             Err(err) => (*err).into(),
         }
+    }
+
+    #[log_error]
+    pub fn import_bootstrap_stream<'a>(
+        &mut self,
+        mut reader: std::io::BufReader<Box<dyn std::io::Read + Send + 'a>>,
+    ) -> Result<(), BootstrapError> {
+        self.reckless_mode_counter
+            .inc(&self.chainstate_config, &self.chainstate_storage)?;
+
+        let chain_config = Arc::clone(&self.chain_config);
+        let mut block_processor = |block: WithId<Block>| -> Result<_, BootstrapError> {
+            // If chainstate is being shutdown, stop immediately.
+            // Note that we return an error instead of Ok(false) to avoid an interrupted import
+            // being treated as successful.
+            if self.shutdown_initiated_rx.as_ref().is_some_and(|rx| rx.borrow().test()) {
+                return Err(BootstrapError::Interrupted);
+            }
+
+            let block_exists = self.make_db_tx_ro()?.block_exists(&block.get_id())?;
+
+            if !block_exists {
+                self.process_block(block, BlockSource::Local)?;
+            }
+
+            Ok(true)
+        };
+
+        let result = import_bootstrap_stream(&chain_config, &mut reader, &mut block_processor);
+
+        self.reckless_mode_counter
+            .dec(&self.chainstate_config, &self.chainstate_storage)?;
+
+        result
     }
 }
 
@@ -879,6 +989,62 @@ where
     chainstate_ref
         .is_block_in_main_chain(block_id)
         .map_err(|err| BlockError::IsBlockInMainChainQueryError(*block_id, err))
+}
+
+/// A counter that enters the reckless db mode (if enabled) when going from 0 to 1 and exits it
+/// when going from 1 to 0, i.e. to exit the reckless mode one has to make as many decrements as
+/// there were increments.
+///
+/// The main purpose is to make sure the reckless mode stays enabled during bootstrapping for
+/// the entire duration (i.e. for fresh blocks too).
+///
+/// Note: it is assumed that inc/dec are only called during bootstrapping or ibd.
+struct DbRecklessModeCounter {
+    counter: u32,
+}
+
+impl DbRecklessModeCounter {
+    fn new() -> Self {
+        Self { counter: 0 }
+    }
+
+    fn inc<S: BlockchainStorage>(
+        &mut self,
+        config: &ChainstateConfig,
+        storage: &S,
+    ) -> Result<(), chainstate_storage::Error> {
+        if config.db_reckless_mode_in_ibd_enabled() {
+            if self.counter == 0 {
+                storage.set_reckless_mode(true)?;
+            }
+
+            self.counter = self.counter.checked_add(1).unwrap_or_else(|| {
+                debug_panic_or_log!("Reckless mode counter overflow");
+                self.counter
+            });
+        }
+
+        Ok(())
+    }
+
+    fn dec<S: BlockchainStorage>(
+        &mut self,
+        config: &ChainstateConfig,
+        storage: &S,
+    ) -> Result<(), chainstate_storage::Error> {
+        if config.db_reckless_mode_in_ibd_enabled() {
+            self.counter = self.counter.checked_sub(1).unwrap_or_else(|| {
+                debug_panic_or_log!("Reckless mode counter underflow");
+                self.counter
+            });
+
+            if self.counter == 0 {
+                storage.set_reckless_mode(false)?;
+            }
+        }
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]

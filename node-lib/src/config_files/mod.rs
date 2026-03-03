@@ -148,24 +148,30 @@ fn chainstate_config(
 
     let ChainstateConfigFile {
         max_db_commit_attempts,
+        enable_db_reckless_mode_in_ibd,
         max_orphan_blocks,
-        min_max_bootstrap_import_buffer_sizes,
         max_tip_age,
         enable_heavy_checks,
+        allow_checkpoints_mismatch,
     } = chainstate_config;
 
     let storage_backend = options.storage_backend.clone().unwrap_or(storage_backend);
     let max_db_commit_attempts = options.max_db_commit_attempts.or(max_db_commit_attempts);
+    let enable_db_reckless_mode_in_ibd =
+        options.enable_db_reckless_mode_in_ibd.or(enable_db_reckless_mode_in_ibd);
     let max_orphan_blocks = options.max_orphan_blocks.or(max_orphan_blocks);
     let max_tip_age = options.max_tip_age.or(max_tip_age);
     let enable_heavy_checks = options.enable_chainstate_heavy_checks.or(enable_heavy_checks);
+    let allow_checkpoints_mismatch =
+        options.allow_checkpoints_mismatch.or(allow_checkpoints_mismatch);
 
     let chainstate_config = ChainstateConfigFile {
         max_db_commit_attempts,
+        enable_db_reckless_mode_in_ibd,
         max_orphan_blocks,
-        min_max_bootstrap_import_buffer_sizes,
         max_tip_age,
         enable_heavy_checks,
+        allow_checkpoints_mismatch,
     };
     ChainstateLauncherConfigFile {
         storage_backend,
@@ -192,6 +198,7 @@ fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {
         sync_stalling_timeout,
         node_type,
         force_dns_query_if_no_global_addresses_known,
+        custom_disconnection_reason_for_banning,
     } = config;
 
     let networking_enabled = options.p2p_networking_enabled.or(networking_enabled);
@@ -215,6 +222,10 @@ fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {
     let force_dns_query_if_no_global_addresses_known = options
         .p2p_force_dns_query_if_no_global_addresses_known
         .or(force_dns_query_if_no_global_addresses_known);
+    let custom_disconnection_reason_for_banning = options
+        .p2p_custom_disconnection_reason_for_banning
+        .clone()
+        .or(custom_disconnection_reason_for_banning);
 
     P2pConfigFile {
         networking_enabled,
@@ -234,6 +245,7 @@ fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {
         sync_stalling_timeout,
         node_type,
         force_dns_query_if_no_global_addresses_known,
+        custom_disconnection_reason_for_banning,
     }
 }
 

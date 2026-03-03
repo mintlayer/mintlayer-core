@@ -60,6 +60,7 @@ impl<T: Clone> DataDelta<T> {
 
 /// `GetDataResult` is represented by 3 states instead of typical 2 states, because it is
 /// important to distinguish the case when data was explicitly deleted from the case when the data is just not there.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum GetDataResult<T> {
     Present(T),
     Deleted,

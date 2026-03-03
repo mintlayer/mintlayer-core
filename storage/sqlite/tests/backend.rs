@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use storage_backend_test_suite::prelude::BogusSharedBackend;
 use storage_sqlite::Sqlite;
 
 fn main() {
@@ -35,7 +36,10 @@ fn main() {
     };
 
     // Now run the tests
-    let result = storage_backend_test_suite::main(create_backend);
+    let result = storage_backend_test_suite::main(
+        create_backend,
+        None as Option<fn() -> BogusSharedBackend<Sqlite>>,
+    );
 
     // Remove the test directory unless there was a failure.
     // In case of failure, it is kept to give us the opportunity to inspect database contents.

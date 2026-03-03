@@ -20,9 +20,10 @@ use common::{
     address::dehexify::dehexify_all_addresses,
     chain::{
         block::timestamp::BlockTimestamp,
-        tokens::{IsTokenUnfreezable, TokenId},
-        Block, DelegationId, Destination, GenBlock, OrderId, PoolId, SignedTransaction,
-        SignedTransactionIntent, Transaction, TxOutput,
+        output_values_holder::collect_token_v1_ids_from_output_values_holders,
+        tokens::{IsTokenUnfreezable, RPCTokenInfo, TokenId},
+        Block, DelegationId, Destination, GenBlock, OrderId, PoolId, RpcCurrency,
+        SignedTransaction, SignedTransactionIntent, Transaction, TxOutput,
     },
     primitives::{time::Time, BlockHeight, Id, Idable},
 };
@@ -46,12 +47,13 @@ use wallet_types::{
 use crate::{
     rpc::{ColdWalletRpcServer, WalletEventsRpcServer, WalletRpc, WalletRpcServer},
     types::{
-        AccountArg, AddressInfo, AddressWithUsageInfo, Balances, ChainInfo, ComposedTransaction,
-        CreatedWallet, DelegationInfo, HardwareWalletType, HexEncoded, LegacyVrfPublicKeyInfo,
-        MaybeSignedTransaction, NewAccountInfo, NewDelegationTransaction, NewSubmittedTransaction,
-        NftMetadata, NodeVersion, OpenedWallet, PoolInfo, PublicKeyInfo, RpcAddress, RpcAmountIn,
-        RpcHexString, RpcInspectTransaction, RpcStandaloneAddresses, RpcUtxoOutpoint, RpcUtxoState,
-        RpcUtxoType, SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
+        AccountArg, ActiveOrderInfo, AddressInfo, AddressWithUsageInfo, Balances, ChainInfo,
+        ComposedTransaction, CreatedWallet, DelegationInfo, HardwareWalletType, HexEncoded,
+        LegacyVrfPublicKeyInfo, MaybeSignedTransaction, NewAccountInfo, NewDelegationTransaction,
+        NewSubmittedTransaction, NftMetadata, NodeVersion, OpenedWallet, OwnOrderInfo, PoolInfo,
+        PublicKeyInfo, RpcAddress, RpcAmountIn, RpcHexString, RpcInspectTransaction,
+        RpcStandaloneAddresses, RpcUtxoOutpoint, RpcUtxoState, RpcUtxoType,
+        SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
         StandaloneAddressWithDetails, TokenMetadata, TransactionOptions, TransactionRequestOptions,
         TxOptionsOverrides, UtxoInfo, VrfPublicKeyInfo,
     },
@@ -492,10 +494,15 @@ where
             )
             .await?;
 
+        let token_ids =
+            collect_token_v1_ids_from_output_values_holders(utxos.iter().map(|(_, output)| output));
+        let token_decimals = self.get_tokens_decimals(token_ids).await?;
+
         let result = utxos
             .into_iter()
             .map(|(utxo_outpoint, tx_ouput)| {
-                let result = UtxoInfo::new(utxo_outpoint, tx_ouput, &self.chain_config);
+                let result =
+                    UtxoInfo::new(utxo_outpoint, tx_ouput, &self.chain_config, &token_decimals);
                 rpc::handle_result(result)
             })
             .collect::<Result<Vec<_>, _>>();
@@ -513,10 +520,15 @@ where
             )
             .await?;
 
+        let token_ids =
+            collect_token_v1_ids_from_output_values_holders(utxos.iter().map(|(_, output)| output));
+        let token_decimals = self.get_tokens_decimals(token_ids).await?;
+
         let result = utxos
             .into_iter()
             .map(|(utxo_outpoint, tx_ouput)| {
-                let result = UtxoInfo::new(utxo_outpoint, tx_ouput, &self.chain_config);
+                let result =
+                    UtxoInfo::new(utxo_outpoint, tx_ouput, &self.chain_config, &token_decimals);
                 rpc::handle_result(result)
             })
             .collect::<Result<Vec<_>, _>>();
@@ -1115,6 +1127,22 @@ where
         )
     }
 
+    async fn list_own_orders(&self, account_arg: AccountArg) -> rpc::RpcResult<Vec<OwnOrderInfo>> {
+        rpc::handle_result(self.list_own_orders(account_arg.index::<N>()?).await)
+    }
+
+    async fn list_all_active_orders(
+        &self,
+        account_arg: AccountArg,
+        ask_currency: Option<RpcCurrency>,
+        give_currency: Option<RpcCurrency>,
+    ) -> rpc::RpcResult<Vec<ActiveOrderInfo>> {
+        rpc::handle_result(
+            self.list_all_active_orders(account_arg.index::<N>()?, ask_currency, give_currency)
+                .await,
+        )
+    }
+
     async fn stake_pool_balance(
         &self,
         pool_id: RpcAddress<PoolId>,
@@ -1364,5 +1392,12 @@ where
         rpc::handle_result(
             self.node_get_block_ids_as_checkpoints(start_height, end_height, step).await,
         )
+    }
+
+    async fn node_get_tokens_info(
+        &self,
+        token_ids: Vec<RpcAddress<TokenId>>,
+    ) -> rpc::RpcResult<Vec<RPCTokenInfo>> {
+        rpc::handle_result(self.node_get_tokens_info(token_ids).await)
     }
 }

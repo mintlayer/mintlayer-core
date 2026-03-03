@@ -32,7 +32,7 @@ const MNEMONIC: &str =
 #[case("030d1d07a8e45110d14f4e2c8623e8db556c11a90c0aac6be9a88f2464e446ee95")]
 fn check_mine_methods(#[case] public: &str) {
     let chain_config = Arc::new(create_mainnet());
-    let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
+    let mut db = Store::new(DefaultBackend::new_in_memory()).unwrap();
     let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
 
     let master_key_chain = MasterKeyChain::new_from_mnemonic(

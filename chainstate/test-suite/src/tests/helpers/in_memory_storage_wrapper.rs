@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use ::tx_verifier::transaction_verifier::storage::{
     TransactionVerifierStorageError, TransactionVerifierStorageRef,
@@ -87,7 +87,7 @@ impl TransactionVerifierStorageRef for InMemoryStorageWrapper {
         &self,
         tx_source: TransactionSource,
     ) -> Result<Option<CachedUtxosBlockUndo>, TransactionVerifierStorageError> {
-        match tx_source {
+        match &tx_source {
             TransactionSource::Chain(id) => {
                 let undo = self
                     .storage
@@ -118,7 +118,7 @@ impl TransactionVerifierStorageRef for InMemoryStorageWrapper {
         &self,
         tx_source: TransactionSource,
     ) -> Result<Option<CachedBlockUndo<PoSAccountingUndo>>, TransactionVerifierStorageError> {
-        match tx_source {
+        match &tx_source {
             TransactionSource::Chain(id) => {
                 let undo = self
                     .storage
@@ -139,7 +139,7 @@ impl TransactionVerifierStorageRef for InMemoryStorageWrapper {
         self.storage
             .transaction_ro()
             .unwrap()
-            .get_account_nonce_count(account)
+            .get_account_nonce_count(&account)
             .map_err(TransactionVerifierStorageError::from)
     }
 
@@ -147,7 +147,7 @@ impl TransactionVerifierStorageRef for InMemoryStorageWrapper {
         &self,
         tx_source: TransactionSource,
     ) -> Result<Option<CachedBlockUndo<TokenAccountingUndo>>, TransactionVerifierStorageError> {
-        match tx_source {
+        match &tx_source {
             TransactionSource::Chain(id) => {
                 let undo = self
                     .storage
@@ -166,7 +166,7 @@ impl TransactionVerifierStorageRef for InMemoryStorageWrapper {
         tx_source: TransactionSource,
     ) -> Result<Option<CachedBlockUndo<OrdersAccountingUndo>>, TransactionVerifierStorageError>
     {
-        match tx_source {
+        match &tx_source {
             TransactionSource::Chain(id) => {
                 let undo = self
                     .storage
@@ -267,5 +267,9 @@ impl OrdersAccountingStorageRead for InMemoryStorageWrapper {
 
     fn get_give_balance(&self, id: &OrderId) -> Result<Option<Amount>, Self::Error> {
         self.storage.transaction_ro().unwrap().get_give_balance(id)
+    }
+
+    fn get_all_order_ids(&self) -> Result<BTreeSet<OrderId>, Self::Error> {
+        self.storage.transaction_ro().unwrap().get_all_order_ids()
     }
 }

@@ -68,6 +68,8 @@ pub enum ApiServerStorageError {
     AddressableError,
     #[error("Block timestamp too high: {0}")]
     TimestampTooHigh(BlockTimestamp),
+    #[error("Tx global index too high: {0}")]
+    TxGlobalIndexTooHigh(u64),
     #[error("Id creation error: {0}")]
     IdCreationError(#[from] IdCreationError),
 }
@@ -419,21 +421,31 @@ impl LockedUtxo {
 #[derive(Debug, Clone, Encode, Decode)]
 pub struct Utxo {
     utxo: UtxoWithExtraInfo,
-    spent: bool,
+    spent_at_block_height: Option<BlockHeight>,
 }
 
 impl Utxo {
-    pub fn new_with_info(utxo: UtxoWithExtraInfo, spent: bool) -> Self {
-        Self { utxo, spent }
+    pub fn new_with_info(
+        utxo: UtxoWithExtraInfo,
+        spent_at_block_height: Option<BlockHeight>,
+    ) -> Self {
+        Self {
+            utxo,
+            spent_at_block_height,
+        }
     }
 
-    pub fn new(output: TxOutput, token_decimals: Option<u8>, spent: bool) -> Self {
+    pub fn new(
+        output: TxOutput,
+        token_decimals: Option<u8>,
+        spent_at_block_height: Option<BlockHeight>,
+    ) -> Self {
         Self {
             utxo: UtxoWithExtraInfo {
                 output,
                 token_decimals,
             },
-            spent,
+            spent_at_block_height,
         }
     }
 
@@ -449,8 +461,12 @@ impl Utxo {
         self.utxo.output
     }
 
+    pub fn spent_at_block_height(&self) -> Option<BlockHeight> {
+        self.spent_at_block_height
+    }
+
     pub fn spent(&self) -> bool {
-        self.spent
+        self.spent_at_block_height.is_some()
     }
 }
 
@@ -548,7 +564,7 @@ pub struct TransactionInfo {
 pub struct TransactionWithBlockInfo {
     pub tx_info: TransactionInfo,
     pub block_aux: BlockAuxData,
-    pub global_tx_index: u64,
+    pub tx_global_index: u64,
 }
 
 pub struct PoolBlockStats {
@@ -565,6 +581,12 @@ pub struct BlockInfo {
 pub struct AmountWithDecimals {
     pub amount: Amount,
     pub decimals: u8,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TokenTransaction {
+    pub tx_global_index: u64,
+    pub tx_id: Id<Transaction>,
 }
 
 #[async_trait::async_trait]
@@ -595,6 +617,16 @@ pub trait ApiServerStorageRead: Sync {
         address: &str,
     ) -> Result<Vec<Id<Transaction>>, ApiServerStorageError>;
 
+    /// Returns a page of transaction IDs that reference this `token_id`, limited to `len` entries
+    /// and with a `tx_global_index` older than the specified value.
+    /// The `tx_global_index` is not continuous for a specific `token_id`.
+    async fn get_token_transactions(
+        &self,
+        token_id: TokenId,
+        len: u32,
+        tx_global_index: u64,
+    ) -> Result<Vec<TokenTransaction>, ApiServerStorageError>;
+
     async fn get_best_block(&self) -> Result<BlockAuxData, ApiServerStorageError>;
 
     async fn get_latest_blocktimestamps(
@@ -611,6 +643,11 @@ pub trait ApiServerStorageRead: Sync {
         block_id: Id<Block>,
     ) -> Result<Option<BlockAuxData>, ApiServerStorageError>;
 
+    // Note:
+    // 1) The input time range is inclusive on both ends.
+    // 2) The returned heights won't include the genesis height normally.
+    // However, if there are no blocks on the mainchain in the specified time range (except genesis),
+    // the function will return (0, 0).
     async fn get_block_range_from_time_range(
         &self,
         time_range: (BlockTimestamp, BlockTimestamp),
@@ -735,7 +772,7 @@ pub trait ApiServerStorageRead: Sync {
         &self,
         len: u32,
         offset: u64,
-        ticker: &[u8],
+        ticker: &str,
     ) -> Result<Vec<TokenId>, ApiServerStorageError>;
 
     async fn get_statistic(
@@ -787,6 +824,11 @@ pub trait ApiServerStorageWrite: ApiServerStorageRead {
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError>;
 
+    async fn del_token_transactions_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError>;
+
     async fn set_address_balance_at_height(
         &mut self,
         address: &Address<Destination>,
@@ -808,6 +850,17 @@ pub trait ApiServerStorageWrite: ApiServerStorageRead {
         address: &str,
         transaction_ids: BTreeSet<Id<Transaction>>,
         block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError>;
+
+    /// Sets the `token_id`–`transaction_id` pair at the specified `block_height` along with the
+    /// `tx_global_index`.
+    /// If the pair already exists at that `block_height`, the `tx_global_index` is updated.
+    async fn set_token_transaction_at_height(
+        &mut self,
+        token_id: TokenId,
+        transaction_id: Id<Transaction>,
+        block_height: BlockHeight,
+        tx_global_index: u64,
     ) -> Result<(), ApiServerStorageError>;
 
     async fn set_mainchain_block(
@@ -864,7 +917,7 @@ pub trait ApiServerStorageWrite: ApiServerStorageRead {
         &mut self,
         outpoint: UtxoOutPoint,
         utxo: Utxo,
-        address: &str,
+        addresses: &[&str],
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError>;
 
@@ -872,7 +925,7 @@ pub trait ApiServerStorageWrite: ApiServerStorageRead {
         &mut self,
         outpoint: UtxoOutPoint,
         utxo: LockedUtxo,
-        address: &str,
+        addresses: &[&str],
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError>;
 

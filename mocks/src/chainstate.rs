@@ -13,7 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeMap, num::NonZeroUsize, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    num::NonZeroUsize,
+    sync::Arc,
+};
 
 use chainstate::{
     BlockSource, ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent, Locator,
@@ -26,8 +30,8 @@ use common::{
             GenBlock,
         },
         tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
-        AccountNonce, AccountType, ChainConfig, DelegationId, OrderId, PoolId, RpcOrderInfo,
-        TxInput, UtxoOutPoint,
+        AccountNonce, AccountType, ChainConfig, Currency, DelegationId, OrderId, PoolId,
+        RpcOrderInfo, TxInput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -63,15 +67,15 @@ mockall::mock! {
         ) -> Result<Option<BlockHeight>, ChainstateError>;
         fn get_block_id_from_height(
             &self,
-            height: &BlockHeight,
+            height: BlockHeight,
         ) -> Result<Option<Id<GenBlock>>, ChainstateError>;
-        fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, ChainstateError>;
+        fn get_block(&self, block_id: &Id<Block>) -> Result<Option<Block>, ChainstateError>;
         fn get_mainchain_blocks(
             &self,
             start_block_height: BlockHeight,
             max_count: usize,
         ) -> Result<Vec<Block>, ChainstateError>;
-        fn get_block_header(&self, block_id: Id<Block>) -> Result<Option<SignedBlockHeader>, ChainstateError>;
+        fn get_block_header(&self, block_id: &Id<Block>) -> Result<Option<SignedBlockHeader>, ChainstateError>;
         fn get_locator(&self) -> Result<Locator, ChainstateError>;
         fn get_locator_from_height(&self, height: BlockHeight) -> Result<Locator, ChainstateError>;
         fn get_block_ids_as_checkpoints(
@@ -138,10 +142,11 @@ mockall::mock! {
             block_index: &BlockIndex,
         ) -> Result<Option<BlockReward>, ChainstateError>;
         fn get_epoch_data(&self, epoch_index: u64) -> Result<Option<EpochData>, ChainstateError>;
-        fn get_token_info_for_rpc(&self, token_id: TokenId) -> Result<Option<RPCTokenInfo>, ChainstateError>;
+        fn get_token_info_for_rpc(&self, token_id: &TokenId) -> Result<Option<RPCTokenInfo>, ChainstateError>;
+        fn get_tokens_info_for_rpc(&self, token_ids: &BTreeSet<TokenId>) -> Result<Vec<RPCTokenInfo>, ChainstateError>;
         fn get_token_aux_data(
             &self,
-            token_id: TokenId,
+            token_id: &TokenId,
         ) -> Result<Option<TokenAuxiliaryData>, ChainstateError>;
         fn get_token_id_from_issuance_tx(
             &self,
@@ -165,46 +170,52 @@ mockall::mock! {
         fn export_bootstrap_stream<'a>(
             &'a self,
             writer: std::io::BufWriter<Box<dyn std::io::Write + Send + 'a>>,
-            include_orphans: bool,
+            include_stale_blocks: bool,
         ) -> Result<(), ChainstateError>;
         fn utxo(&self, outpoint: &UtxoOutPoint) -> Result<Option<Utxo>, ChainstateError>;
         fn is_initial_block_download(&self) -> bool;
-        fn stake_pool_exists(&self, pool_id: PoolId) -> Result<bool, ChainstateError>;
-        fn get_stake_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, ChainstateError>;
+        fn stake_pool_exists(&self, pool_id: &PoolId) -> Result<bool, ChainstateError>;
+        fn get_stake_pool_balance(&self, pool_id: &PoolId) -> Result<Option<Amount>, ChainstateError>;
         fn get_stake_pool_balances_at_heights(
             &self,
             pool_ids: &[PoolId],
             min_height: BlockHeight,
             max_height: BlockHeight,
         ) -> Result<BTreeMap<BlockHeight, BTreeMap<PoolId, chainstate::NonZeroPoolBalances>>, ChainstateError>;
-        fn get_stake_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, ChainstateError>;
+        fn get_stake_pool_data(&self, pool_id: &PoolId) -> Result<Option<PoolData>, ChainstateError>;
         fn get_stake_pool_delegations_shares(
             &self,
-            pool_id: PoolId,
+            pool_id: &PoolId,
         ) -> Result<Option<std::collections::BTreeMap<DelegationId, Amount>>, ChainstateError>;
         fn get_stake_delegation_balance(
             &self,
-            delegation_id: DelegationId,
+            delegation_id: &DelegationId,
         ) -> Result<Option<Amount>, ChainstateError>;
         fn get_stake_delegation_data(
             &self,
-            delegation_id: DelegationId,
+            delegation_id: &DelegationId,
         ) -> Result<Option<pos_accounting::DelegationData>, ChainstateError>;
         fn get_stake_pool_delegation_share(
             &self,
-            pool_id: PoolId,
-            delegation_id: DelegationId,
+            pool_id: &PoolId,
+            delegation_id: &DelegationId,
         ) -> Result<Option<Amount>, ChainstateError>;
         fn info(&self) -> Result<ChainInfo, ChainstateError>;
         fn get_account_nonce_count(
             &self,
-            account: AccountType,
+            account: &AccountType,
         ) -> Result<Option<AccountNonce>, ChainstateError>;
 
         fn get_order_data(&self, id: &OrderId) -> Result<Option<OrderData>, ChainstateError>;
         fn get_order_ask_balance(&self, id: &OrderId) -> Result<Option<Amount>, ChainstateError>;
         fn get_order_give_balance(&self, id: &OrderId) -> Result<Option<Amount>, ChainstateError>;
-        fn get_order_info_for_rpc(&self, id: OrderId) -> Result<Option<RpcOrderInfo>, ChainstateError>;
+        fn get_order_info_for_rpc(&self, id: &OrderId) -> Result<Option<RpcOrderInfo>, ChainstateError>;
+        fn get_all_order_ids(&self) -> Result<BTreeSet<OrderId>, ChainstateError>;
+        fn get_orders_info_for_rpc_by_currencies<'a>(
+            &self,
+            ask_currency: Option<&'a Currency>,
+            give_currency: Option<&'a Currency>,
+        ) -> Result<BTreeMap<OrderId, RpcOrderInfo>, ChainstateError>;
     }
 }
 

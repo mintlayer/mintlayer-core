@@ -40,6 +40,20 @@ impl OrderData {
         }
     }
 
+    pub fn new_generic(
+        conclude_key: Destination,
+        ask: OutputValue,
+        give: OutputValue,
+        is_frozen: bool,
+    ) -> Self {
+        Self {
+            conclude_key,
+            ask,
+            give,
+            is_frozen,
+        }
+    }
+
     pub fn conclude_key(&self) -> &Destination {
         &self.conclude_key
     }

@@ -107,7 +107,7 @@ impl LoadedStorage {
 
 pub fn open_storage<Backend>(backend: Backend) -> crate::Result<PeerDbStorageImpl<Backend>>
 where
-    Backend: storage::Backend,
+    Backend: storage::SharedBackend,
 {
     let storage = PeerDbStorageImpl::new(backend)?;
     let version = storage.transaction_ro()?.get_version()?;

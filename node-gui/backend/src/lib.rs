@@ -22,9 +22,9 @@ mod chainstate_event_handler;
 mod p2p_event_handler;
 mod wallet_events;
 
-use std::fmt::Debug;
-use std::sync::Arc;
+use std::{fmt::Debug, sync::Arc};
 
+use anyhow::anyhow;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
 use chainstate::ChainInfo;
@@ -35,6 +35,7 @@ use common::{
 };
 use logging::log;
 use node_lib::OptionsWithResolvedCommand;
+use utils::tokio_spawn;
 
 use crate::{chainstate_event_handler::ChainstateEventHandler, p2p_event_handler::P2pEventHandler};
 
@@ -142,7 +143,12 @@ pub async fn node_initialize(
         WalletMode::Hot => {
             let setup_result = node_lib::setup(opts).await?;
             let node = match setup_result {
-                node_lib::NodeSetupResult::Node(node) => node,
+                node_lib::NodeSetupResult::RunNode(node) => node,
+                node_lib::NodeSetupResult::Bootstrap(_, _) => {
+                    return Err(anyhow!(
+                        "Bootstrapping is not supported by node-gui, use node-daemon instead"
+                    ));
+                }
                 node_lib::NodeSetupResult::DataDirCleanedUp => {
                     return Ok(NodeInitializationOutcome::DataDirCleanedUp);
                 }
@@ -150,7 +156,8 @@ pub async fn node_initialize(
 
             let controller = node.controller().clone();
 
-            let manager_join_handle = tokio::spawn(async move { node.main().await });
+            let manager_join_handle =
+                tokio_spawn(async move { node.main().await }, "Node subsystem mgr");
 
             // Subscribe to chainstate before getting the current chain_info!
             let chainstate_event_handler =
@@ -172,16 +179,19 @@ pub async fn node_initialize(
                 manager_join_handle,
             );
 
-            tokio::spawn(async move {
-                backend_impl::run(
-                    backend,
-                    request_rx,
-                    wallet_updated_rx,
-                    chainstate_event_handler,
-                    p2p_event_handler,
-                )
-                .await;
-            });
+            tokio_spawn(
+                async move {
+                    backend_impl::run(
+                        backend,
+                        request_rx,
+                        wallet_updated_rx,
+                        chainstate_event_handler,
+                        p2p_event_handler,
+                    )
+                    .await;
+                },
+                "NodeGUI backend",
+            );
             (chain_config, chain_info)
         }
         WalletMode::Cold => spawn_cold_backend(
@@ -228,7 +238,7 @@ fn spawn_cold_backend(
         is_initial_block_download: false,
     };
 
-    let manager_join_handle = tokio::spawn(async move {});
+    let manager_join_handle = tokio_spawn(async move {}, "Fake node subsystem mgr");
 
     let backend = backend_impl::Backend::new_cold(
         chain_config.clone(),
@@ -238,9 +248,12 @@ fn spawn_cold_backend(
         manager_join_handle,
     );
 
-    tokio::spawn(async move {
-        backend_impl::run_cold(backend, request_rx, wallet_updated_rx).await;
-    });
+    tokio_spawn(
+        async move {
+            backend_impl::run_cold(backend, request_rx, wallet_updated_rx).await;
+        },
+        "NodeGUI cold backend",
+    );
 
     Ok((chain_config, chain_info))
 }
@@ -249,6 +262,8 @@ fn handle_options_in_cold_wallet_mode(
     options: OptionsWithResolvedCommand,
 ) -> anyhow::Result<ChainConfig> {
     if options.clean_data_option_set() {
+        // Note: actually at this moment we can't get here, because the "clean data" option
+        // is checked before the cold mode can be chosen.
         log::warn!("Ignoring clean-data option in cold wallet mode");
     }
 

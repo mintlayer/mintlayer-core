@@ -1,10 +1,10 @@
-import sys
-import toml
 import os
+import sys
+import tomllib
 
 def read_cargo_toml(file_path):
-    with open(file_path, "r") as cargo_toml_file:
-        cargo_toml = toml.load(cargo_toml_file)
+    with open(file_path, "rb") as cargo_toml_file:
+        cargo_toml = tomllib.load(cargo_toml_file)
     return cargo_toml
 
 def get_package_name(crate_dir):

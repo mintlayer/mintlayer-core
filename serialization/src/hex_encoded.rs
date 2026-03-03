@@ -17,7 +17,7 @@ use std::{fmt::Display, str::FromStr};
 
 use crate::hex::{HexDecode, HexEncode, HexError};
 
-/// Wrapper that serializes objects as hex encoded string for `serde`
+/// Wrapper that serializes objects as hex-encoded string for `serde`
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HexEncoded<T>(T);
 

@@ -333,7 +333,7 @@ async fn bad_orphan_does_not_block_good_one(#[case] seed: Seed) {
     mempool.add_transaction_test(tx1_bad).unwrap().assert_in_orphan_pool();
     mempool.add_transaction_test(tx1_good).unwrap().assert_in_orphan_pool();
 
-    assert_eq!(mempool.orphans.len(), 2);
+    assert_eq!(mempool.orphans_count(), 2);
 
     mempool
         .add_transaction_with_origin(tx0, LocalTxOrigin::Mempool.into())
@@ -401,50 +401,50 @@ async fn orphan_scheduling(#[case] seed: Seed) {
         .add_transaction_with_origin(tx3, gen_origin().into())
         .unwrap()
         .assert_in_orphan_pool();
-    assert_eq!(mempool.work_queue.total_len(), 0);
+    assert_eq!(mempool.work_queue_total_len(), 0);
 
     mempool
         .add_transaction_with_origin(tx2, gen_origin().into())
         .unwrap()
         .assert_in_orphan_pool();
-    assert_eq!(mempool.work_queue.total_len(), 0);
+    assert_eq!(mempool.work_queue_total_len(), 0);
 
     mempool
         .add_transaction_with_origin(tx0, gen_origin().into())
         .unwrap()
         .assert_in_mempool();
-    assert_eq!(mempool.work_queue.total_len(), 1);
+    assert_eq!(mempool.work_queue_total_len(), 1);
 
     // Handle the transaction from the queue, tx3 should be in the schedule queue afterwards
     mempool.perform_work_unit();
     assert!(mempool.contains_transaction(&tx2_id));
     assert!(mempool.contains_orphan_transaction(&tx3_id));
-    assert_eq!(mempool.work_queue.total_len(), 1);
+    assert_eq!(mempool.work_queue_total_len(), 1);
 
     // Check tx3, realize it's not ready yet
     mempool.perform_work_unit();
     assert!(mempool.contains_transaction(&tx2_id));
     assert!(mempool.contains_orphan_transaction(&tx3_id));
-    assert_eq!(mempool.work_queue.total_len(), 0);
+    assert_eq!(mempool.work_queue_total_len(), 0);
 
     // Submit tx4, should not really change much
     mempool
         .add_transaction_with_origin(tx4, gen_origin().into())
         .unwrap()
         .assert_in_orphan_pool();
-    assert_eq!(mempool.work_queue.total_len(), 0);
+    assert_eq!(mempool.work_queue_total_len(), 0);
 
     // Now submit tx1 which releases tx3 and tx4
     mempool
         .add_transaction_with_origin(tx1, gen_origin().into())
         .unwrap()
         .assert_in_mempool();
-    assert_eq!(mempool.work_queue.total_len(), 2);
+    assert_eq!(mempool.work_queue_total_len(), 2);
 
     // Process the remainder of the queue
     mempool.perform_work_unit();
     mempool.perform_work_unit();
-    assert_eq!(mempool.work_queue.total_len(), 0);
+    assert_eq!(mempool.work_queue_total_len(), 0);
 
     // Now all transactions should be in mempool
     for tx_id in [&tx0_id, &tx1_id, &tx2_id, &tx3_id, &tx4_id] {

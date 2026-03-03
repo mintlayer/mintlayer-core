@@ -23,9 +23,10 @@ use chainstate::rpc::RpcOutputValueIn;
 use common::{
     address::RpcAddress,
     chain::{
-        block::timestamp::BlockTimestamp, tokens::TokenId, Block, DelegationId, Destination,
-        GenBlock, OrderId, PoolId, SignedTransaction, SignedTransactionIntent, Transaction,
-        TxOutput,
+        block::timestamp::BlockTimestamp,
+        tokens::{RPCTokenInfo, TokenId},
+        Block, DelegationId, Destination, GenBlock, OrderId, PoolId, RpcCurrency,
+        SignedTransaction, SignedTransactionIntent, Transaction, TxOutput,
     },
     primitives::{BlockHeight, Id},
 };
@@ -42,15 +43,16 @@ use wallet_types::{
 };
 
 use crate::types::{
-    AccountArg, AccountExtendedPublicKey, AddressInfo, AddressWithUsageInfo, Balances, ChainInfo,
-    ComposedTransaction, CreatedWallet, DelegationInfo, HardwareWalletType, HexEncoded,
-    LegacyVrfPublicKeyInfo, MaybeSignedTransaction, NewAccountInfo, NewDelegationTransaction,
-    NewOrderTransaction, NewSubmittedTransaction, NewTokenTransaction, NftMetadata, NodeVersion,
-    OpenedWallet, PoolInfo, PublicKeyInfo, RpcAmountIn, RpcHashedTimelockContract,
-    RpcInspectTransaction, RpcNewTransaction, RpcPreparedTransaction, RpcStandaloneAddresses,
-    RpcUtxoOutpoint, RpcUtxoState, RpcUtxoType, SendTokensFromMultisigAddressResult,
-    StakePoolBalance, StakingStatus, StandaloneAddressWithDetails, TokenMetadata,
-    TransactionOptions, TransactionRequestOptions, TxOptionsOverrides, UtxoInfo, VrfPublicKeyInfo,
+    AccountArg, AccountExtendedPublicKey, ActiveOrderInfo, AddressInfo, AddressWithUsageInfo,
+    Balances, ChainInfo, ComposedTransaction, CreatedWallet, DelegationInfo, HardwareWalletType,
+    HexEncoded, LegacyVrfPublicKeyInfo, MaybeSignedTransaction, NewAccountInfo,
+    NewDelegationTransaction, NewOrderTransaction, NewSubmittedTransaction, NewTokenTransaction,
+    NftMetadata, NodeVersion, OpenedWallet, OwnOrderInfo, PoolInfo, PublicKeyInfo, RpcAmountIn,
+    RpcHashedTimelockContract, RpcInspectTransaction, RpcNewTransaction, RpcPreparedTransaction,
+    RpcStandaloneAddresses, RpcUtxoOutpoint, RpcUtxoState, RpcUtxoType,
+    SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
+    StandaloneAddressWithDetails, TokenMetadata, TransactionOptions, TransactionRequestOptions,
+    TxOptionsOverrides, UtxoInfo, VrfPublicKeyInfo,
 };
 
 #[rpc::rpc(server)]
@@ -261,7 +263,7 @@ trait ColdWalletRpc {
 
     /// Signs transaction inputs that are not yet signed.
     ///
-    /// The input is a hex encoded transaction or PartiallySignedTransaction. This format is
+    /// The input is a hex-encoded transaction or PartiallySignedTransaction. This format is
     /// automatically used in this wallet in functions such as staking-decommission-pool-request.
     ///
     /// Once all signatures are complete, the result can be broadcast to the network.
@@ -814,12 +816,12 @@ trait WalletRpc {
         options: TransactionRequestOptions,
     ) -> rpc::RpcResult<RpcPreparedTransaction>;
 
-    /// Create an order for exchanging "given" amount of an arbitrary currency (coins or tokens) for
-    /// an arbitrary amount of "asked" currency.
+    /// Create an order for exchanging an amount of one ("given") currency for a certain amount of
+    /// another ("asked") currency. Either of the currencies can be coins or tokens.
     ///
-    /// Conclude key is the key that can authorize a conclude order command, closing the order and withdrawing
-    /// all the remaining funds from it.
-    #[method(name = "create_order")]
+    /// Conclude key is the key that can authorize the conclude order command, closing the order
+    /// and withdrawing all the remaining funds from it.
+    #[method(name = "order_create")]
     async fn create_order(
         &self,
         account: AccountArg,
@@ -834,7 +836,8 @@ trait WalletRpc {
     /// This assumes that the conclude key is owned by the selected account in this wallet.
     ///
     /// Optionally, an output address can be provided where remaining funds from the order are transferred.
-    #[method(name = "conclude_order")]
+    /// If not specified, a new receive address will be generated for this purpose.
+    #[method(name = "order_conclude")]
     async fn conclude_order(
         &self,
         account: AccountArg,
@@ -846,7 +849,8 @@ trait WalletRpc {
     /// Fill order completely or partially given its id and an amount in the order's "asked" currency.
     ///
     /// Optionally, an output address can be provided where the exchanged funds from the order are transferred.
-    #[method(name = "fill_order")]
+    /// If not specified, a new receive address will be generated for this purpose.
+    #[method(name = "order_fill")]
     async fn fill_order(
         &self,
         account: AccountArg,
@@ -858,13 +862,27 @@ trait WalletRpc {
 
     /// Freeze an order given its id. This prevents an order from being filled.
     /// Only a conclude operation is allowed afterwards.
-    #[method(name = "freeze_order")]
+    #[method(name = "order_freeze")]
     async fn freeze_order(
         &self,
         account: AccountArg,
         order_id: RpcAddress<OrderId>,
         options: TransactionOptions,
     ) -> rpc::RpcResult<RpcNewTransaction>;
+
+    /// List orders whose conclude key is owned by the given account.
+    #[method(name = "order_list_own")]
+    async fn list_own_orders(&self, account: AccountArg) -> rpc::RpcResult<Vec<OwnOrderInfo>>;
+
+    /// List all active (i.e. non-concluded, non-frozen) orders whose currencies match the passed ones.
+    /// If a passed currency is None, any order will match.
+    #[method(name = "order_list_all_active")]
+    async fn list_all_active_orders(
+        &self,
+        account: AccountArg,
+        ask_currency: Option<RpcCurrency>,
+        give_currency: Option<RpcCurrency>,
+    ) -> rpc::RpcResult<Vec<ActiveOrderInfo>>;
 
     /// Obtain the node version
     #[method(name = "node_version")]
@@ -977,7 +995,7 @@ trait WalletRpc {
         transaction_id: Id<Transaction>,
     ) -> rpc::RpcResult<serde_json::Value>;
 
-    /// Get a transaction from the wallet, if present, as hex encoded raw transaction
+    /// Get a transaction from the wallet, if present, as hex-encoded raw transaction
     #[method(name = "transaction_get_raw")]
     async fn get_raw_transaction(
         &self,
@@ -985,7 +1003,7 @@ trait WalletRpc {
         transaction_id: Id<Transaction>,
     ) -> rpc::RpcResult<HexEncoded<Transaction>>;
 
-    /// Get a signed transaction from the wallet, if present, as hex encoded raw transaction
+    /// Get a signed transaction from the wallet, if present, as hex-encoded raw transaction
     #[method(name = "transaction_get_signed_raw")]
     async fn get_raw_signed_transaction(
         &self,
@@ -995,7 +1013,7 @@ trait WalletRpc {
 
     /// Compose a new transaction from the specified outputs and selected utxos.
     ///
-    /// The transaction is returned in a hex encoded form that can be passed to account-sign-raw-transaction.
+    /// The transaction is returned in a hex-encoded form that can be passed to account-sign-raw-transaction.
     ///
     /// The fees that will be paid by the transaction are also returned.
     #[method(name = "transaction_compose")]
@@ -1061,7 +1079,7 @@ trait WalletRpc {
         check_all_timestamps_between_blocks: bool,
     ) -> rpc::RpcResult<BTreeMap<BlockHeight, Vec<BlockTimestamp>>>;
 
-    /// Get a block by its id, represented as hex encoded bytes
+    /// Get a block by its id, represented as hex-encoded bytes
     #[method(name = "node_get_block")]
     async fn node_block(&self, block_id: Id<Block>) -> rpc::RpcResult<Option<HexEncoded<Block>>>;
 
@@ -1074,4 +1092,11 @@ trait WalletRpc {
         end_height: BlockHeight,
         step: NonZeroUsize,
     ) -> rpc::RpcResult<Vec<(BlockHeight, Id<GenBlock>)>>;
+
+    /// Return token infos for the given token ids.
+    #[method(name = "node_get_tokens_info")]
+    async fn node_get_tokens_info(
+        &self,
+        token_ids: Vec<RpcAddress<TokenId>>,
+    ) -> rpc::RpcResult<Vec<RPCTokenInfo>>;
 }

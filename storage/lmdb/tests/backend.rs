@@ -34,7 +34,7 @@ fn main() {
     };
 
     // Now run the tests
-    let result = storage_backend_test_suite::main(create_backend);
+    let result = storage_backend_test_suite::main(create_backend.clone(), Some(create_backend));
 
     // Remove the test directory unless there was a failure.
     // In case of failure, it is kept to give us the opportunity to inspect database contents.

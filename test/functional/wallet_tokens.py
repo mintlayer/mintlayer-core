@@ -28,16 +28,14 @@ Check that:
 """
 
 from test_framework.test_framework import BitcoinTestFramework
-from test_framework.mintlayer import (make_tx, reward_input, tx_input, ATOMS_PER_COIN)
+from test_framework.mintlayer import (make_tx, reward_input, ATOMS_PER_COIN)
 from test_framework.util import assert_in, assert_equal
-from test_framework.mintlayer import mintlayer_hash, block_input_data_obj
+from test_framework.mintlayer import block_input_data_obj
 from test_framework.wallet_cli_controller import DEFAULT_ACCOUNT_INDEX, WalletCliController
 
 import asyncio
-import sys
 import random
 import string
-import math
 
 class WalletTokens(BitcoinTestFramework):
 
@@ -69,8 +67,6 @@ class WalletTokens(BitcoinTestFramework):
         return block_id
 
     def run_test(self):
-        if 'win32' in sys.platform:
-            asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
         asyncio.run(self.async_test())
 
     async def async_test(self):
@@ -164,7 +160,7 @@ class WalletTokens(BitcoinTestFramework):
             assert_in("Success", await wallet.sync())
             assert_in("Coins amount: 50", await wallet.get_balance())
 
-            assert_in(f"{token_id} amount: {amount_to_mint}", await wallet.get_balance())
+            assert_in(f"{token_id} ({valid_ticker}), amount: {amount_to_mint}", await wallet.get_balance())
 
             ## create a new account and send some tokens to it
             await wallet.create_new_account()
@@ -188,7 +184,7 @@ class WalletTokens(BitcoinTestFramework):
             token_balance_decimals = 10**len(str(amount_to_send_decimals)) - amount_to_send_decimals
             num_zeroes = len(str(amount_to_send_decimals)) - len(str(token_balance_decimals))
             token_balance_str = f"{token_balance}.{'0'*num_zeroes}{token_balance_decimals}".rstrip('0').rstrip('.')
-            assert_in(f"{token_id} amount: {token_balance_str}", await wallet.get_balance())
+            assert_in(f"{token_id} ({valid_ticker}), amount: {token_balance_str}", await wallet.get_balance())
 
             ## try to issue a new token, should fail with not enough coins
             token_id, tx_id, err = await wallet.issue_new_token("XXX", 2, "http://uri", address)

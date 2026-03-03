@@ -28,15 +28,13 @@ Check that:
 * sign and submit the transaction
 """
 
-import json
 from test_framework.test_framework import BitcoinTestFramework
-from test_framework.mintlayer import (make_tx, reward_input, tx_input, ATOMS_PER_COIN)
+from test_framework.mintlayer import (make_tx, reward_input, ATOMS_PER_COIN)
 from test_framework.util import assert_in, assert_equal
-from test_framework.mintlayer import mintlayer_hash, block_input_data_obj
+from test_framework.mintlayer import block_input_data_obj
 from test_framework.wallet_cli_controller import DEFAULT_ACCOUNT_INDEX, TxOutput, WalletCliController
 
 import asyncio
-import sys
 import random
 
 
@@ -72,8 +70,6 @@ class WalletComposeTransaction(BitcoinTestFramework):
         return block_id
 
     def run_test(self):
-        if 'win32' in sys.platform:
-            asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
         asyncio.run(self.async_test())
 
     async def async_test(self):
@@ -146,7 +142,7 @@ class WalletComposeTransaction(BitcoinTestFramework):
 
             # compose a transaction with all our utxos and n outputs to the other acc and 1 as change
             output = await wallet.compose_transaction(outputs, utxos, True)
-            assert_in("The hex encoded transaction is", output)
+            assert_in("The hex-encoded transaction is", output)
             # check the fees include the 0.1 + any extra utxos
             assert_in(f"Coins amount: {((len(addresses) - (num_outputs + 1))*coins_to_send)}.1", output)
             encoded_tx = output.split('\n')[1]
@@ -162,7 +158,7 @@ class WalletComposeTransaction(BitcoinTestFramework):
             assert_in(f"Missing signatures: {len(utxos)}", output)
 
             output = await wallet.compose_transaction(outputs, utxos, False)
-            assert_in("The hex encoded transaction is", output)
+            assert_in("The hex-encoded transaction is", output)
             # check the fees include the 0.1 + any extra utxos
             assert_in(f"Coins amount: {((len(addresses) - (num_outputs + 1))*coins_to_send)}.1", output)
             encoded_ptx = output.split('\n')[1]
@@ -196,7 +192,7 @@ class WalletComposeTransaction(BitcoinTestFramework):
 
             assert_in("The transaction was submitted successfully", await wallet.submit_transaction(signed_tx))
 
-            utxos = await wallet.list_utxos('all', 'unlocked', ['inactive'])
+            utxos = await wallet.list_utxos('all', 'unlocked', ['inactive', 'in-mempool'])
             assert_equal(1, len(utxos))
 
             # try to compose and sign a transaction with an inactive utxo that is not in chainstate only in the wallet

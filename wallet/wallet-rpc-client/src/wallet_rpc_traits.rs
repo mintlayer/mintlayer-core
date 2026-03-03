@@ -18,8 +18,8 @@ use std::{collections::BTreeMap, num::NonZeroUsize, path::PathBuf};
 use chainstate::{rpc::RpcOutputValueIn, ChainInfo};
 use common::{
     chain::{
-        block::timestamp::BlockTimestamp, Block, GenBlock, SignedTransaction,
-        SignedTransactionIntent, Transaction, TxOutput, UtxoOutPoint,
+        block::timestamp::BlockTimestamp, tokens::RPCTokenInfo, Block, GenBlock, RpcCurrency,
+        SignedTransaction, SignedTransactionIntent, Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{BlockHeight, DecimalAmount, Id},
 };
@@ -35,14 +35,14 @@ use wallet_controller::{
     ConnectedPeer, ControllerConfig, UtxoState, UtxoType,
 };
 use wallet_rpc_lib::types::{
-    AccountExtendedPublicKey, AddressInfo, AddressWithUsageInfo, Balances, BlockInfo,
-    ComposedTransaction, CreatedWallet, DelegationInfo, HardwareWalletType, LegacyVrfPublicKeyInfo,
-    NewAccountInfo, NewDelegationTransaction, NewOrderTransaction, NewSubmittedTransaction,
-    NewTokenTransaction, NftMetadata, NodeVersion, OpenedWallet, PoolInfo, PublicKeyInfo,
-    RpcHashedTimelockContract, RpcInspectTransaction, RpcNewTransaction, RpcPreparedTransaction,
-    RpcSignatureStatus, RpcStandaloneAddresses, SendTokensFromMultisigAddressResult,
-    StakePoolBalance, StakingStatus, StandaloneAddressWithDetails, TokenMetadata,
-    TxOptionsOverrides, UtxoInfo, VrfPublicKeyInfo,
+    AccountExtendedPublicKey, ActiveOrderInfo, AddressInfo, AddressWithUsageInfo, Balances,
+    BlockInfo, ComposedTransaction, CreatedWallet, DelegationInfo, HardwareWalletType,
+    LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegationTransaction, NewOrderTransaction,
+    NewSubmittedTransaction, NewTokenTransaction, NftMetadata, NodeVersion, OpenedWallet,
+    OwnOrderInfo, PoolInfo, PublicKeyInfo, RpcHashedTimelockContract, RpcInspectTransaction,
+    RpcNewTransaction, RpcPreparedTransaction, RpcSignatureStatus, RpcStandaloneAddresses,
+    SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
+    StandaloneAddressWithDetails, TokenMetadata, TxOptionsOverrides, UtxoInfo, VrfPublicKeyInfo,
 };
 use wallet_types::{
     partially_signed_transaction::PartiallySignedTransaction, with_locked::WithLocked,
@@ -546,6 +546,15 @@ pub trait WalletInterface {
         config: ControllerConfig,
     ) -> Result<RpcNewTransaction, Self::Error>;
 
+    async fn list_own_orders(&self, account_index: U31) -> Result<Vec<OwnOrderInfo>, Self::Error>;
+
+    async fn list_all_active_orders(
+        &self,
+        account_index: U31,
+        ask_curency: Option<RpcCurrency>,
+        give_curency: Option<RpcCurrency>,
+    ) -> Result<Vec<ActiveOrderInfo>, Self::Error>;
+
     async fn node_version(&self) -> Result<NodeVersion, Self::Error>;
 
     async fn node_shutdown(&self) -> Result<(), Self::Error>;
@@ -669,6 +678,11 @@ pub trait WalletInterface {
         end_height: BlockHeight,
         step: NonZeroUsize,
     ) -> Result<Vec<(BlockHeight, Id<GenBlock>)>, Self::Error>;
+
+    async fn node_get_tokens_info(
+        &self,
+        token_ids: Vec<String>,
+    ) -> Result<Vec<RPCTokenInfo>, Self::Error>;
 }
 
 pub(crate) trait FromRpcInput {

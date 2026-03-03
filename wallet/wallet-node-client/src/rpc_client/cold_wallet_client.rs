@@ -13,14 +13,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{num::NonZeroUsize, time::Duration};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    num::NonZeroUsize,
+    time::Duration,
+};
 
 use blockprod::TimestampSearchData;
 use chainstate::ChainInfo;
 use common::{
     chain::{
         tokens::{RPCTokenInfo, TokenId},
-        Block, DelegationId, Destination, GenBlock, OrderId, PoolId, RpcOrderInfo,
+        Block, Currency, DelegationId, Destination, GenBlock, OrderId, PoolId, RpcOrderInfo,
         SignedTransaction, Transaction,
     },
     primitives::{time::Time, Amount, BlockHeight, Id},
@@ -35,7 +39,7 @@ use p2p::{
 use utils_networking::IpOrSocketAddress;
 use wallet_types::wallet_type::WalletControllerMode;
 
-use crate::node_traits::NodeInterface;
+use crate::node_traits::{MempoolEvents, NodeInterface};
 
 use super::ColdWalletClient;
 
@@ -141,10 +145,25 @@ impl NodeInterface for ColdWalletClient {
         Err(ColdWalletRpcError::NotAvailable)
     }
 
+    async fn get_tokens_info(
+        &self,
+        _token_ids: BTreeSet<TokenId>,
+    ) -> Result<Vec<RPCTokenInfo>, Self::Error> {
+        Err(ColdWalletRpcError::NotAvailable)
+    }
+
     async fn get_order_info(
         &self,
         _order_id: OrderId,
     ) -> Result<Option<RpcOrderInfo>, Self::Error> {
+        Err(ColdWalletRpcError::NotAvailable)
+    }
+
+    async fn get_orders_info_by_currencies(
+        &self,
+        _ask_currency: Option<Currency>,
+        _give_currency: Option<Currency>,
+    ) -> Result<BTreeMap<OrderId, RpcOrderInfo>, Self::Error> {
         Err(ColdWalletRpcError::NotAvailable)
     }
 
@@ -268,6 +287,21 @@ impl NodeInterface for ColdWalletClient {
     }
 
     async fn mempool_get_fee_rate_points(&self) -> Result<Vec<(usize, FeeRate)>, Self::Error> {
+        Err(ColdWalletRpcError::NotAvailable)
+    }
+
+    async fn mempool_subscribe_to_events(&self) -> Result<MempoolEvents, Self::Error> {
+        Ok(Box::new(futures::stream::empty()))
+    }
+
+    async fn mempool_get_transaction(
+        &self,
+        _tx_id: Id<Transaction>,
+    ) -> Result<Option<SignedTransaction>, Self::Error> {
+        Err(ColdWalletRpcError::NotAvailable)
+    }
+
+    async fn mempool_get_transactions(&self) -> Result<Vec<SignedTransaction>, Self::Error> {
         Err(ColdWalletRpcError::NotAvailable)
     }
 

@@ -18,10 +18,12 @@ pub mod chaintrust;
 pub mod config;
 pub mod gen_block;
 pub mod genesis;
+pub mod partially_signed_transaction;
 pub mod tokens;
 pub mod transaction;
 
 mod coin_unit;
+mod currency;
 mod make_id;
 mod order;
 mod pos;
@@ -34,6 +36,7 @@ pub use transaction::*;
 pub use block::Block;
 pub use coin_unit::CoinUnit;
 pub use config::ChainConfig;
+pub use currency::{Currency, RpcCurrency};
 pub use gen_block::{GenBlock, GenBlockId};
 pub use genesis::Genesis;
 pub use make_id::{

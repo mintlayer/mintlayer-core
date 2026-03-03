@@ -1,0 +1,39 @@
+[package]
+name = "chainstate-db-dumper"
+license.workspace = true
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[lib]
+name = "chainstate_db_dumper_lib"
+path = "src/dumper_lib/lib.rs"
+
+[dependencies]
+chainstate = { path = ".." }
+chainstate-launcher = { path = "../launcher" }
+chainstate-storage = { path = "../storage" }
+chainstate-types = { path = "../types" }
+common = { path = "../../common" }
+logging = { path = "../../logging" }
+storage-lmdb = { path = "../../storage/lmdb" }
+utils = { path = "../../utils" }
+
+anyhow.workspace = true
+clap.workspace = true
+itertools.workspace = true
+strum.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+crypto = { path = "../../crypto" }
+mocks = { path = "../../mocks" }
+test-utils = { path = "../../test-utils" }
+
+ctor.workspace = true
+hex.workspace = true
+rstest.workspace = true
+
+[[bin]]
+name = "chainstate-db-dumper"
+path = "src/dumper/main.rs"

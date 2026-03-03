@@ -13,13 +13,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{num::NonZeroUsize, sync::Arc, time::Duration};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    num::NonZeroUsize,
+    sync::Arc,
+    time::Duration,
+};
+
+use tokio::sync::{Mutex, MutexGuard};
 
 use chainstate::ChainInfo;
 use common::{
     chain::{
         tokens::{RPCTokenInfo, TokenId},
-        Block, DelegationId, Destination, GenBlock, OrderId, PoolId, RpcOrderInfo,
+        Block, Currency, DelegationId, Destination, GenBlock, OrderId, PoolId, RpcOrderInfo,
         SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{time::Time, Amount, BlockHeight, Id},
@@ -31,11 +38,10 @@ use p2p::{
     interface::types::ConnectedPeer,
     types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId},
 };
-use tokio::sync::{Mutex, MutexGuard};
 use utils_networking::IpOrSocketAddress;
 use wallet_types::wallet_type::WalletControllerMode;
 
-use crate::node_traits::{MockNodeInterface, NodeInterface};
+use crate::node_traits::{MempoolEvents, MockNodeInterface, NodeInterface};
 
 /// `Controller` requires the provided `impl NodeInterface` to also implement `Clone`.
 /// There is no way to make `MockNodeInterface` itself clonable, since `mockall::automock` doesn't
@@ -140,8 +146,26 @@ impl NodeInterface for ClonableMockNodeInterface {
         self.lock().await.get_token_info(token_id).await
     }
 
+    async fn get_tokens_info(
+        &self,
+        token_ids: BTreeSet<TokenId>,
+    ) -> Result<Vec<RPCTokenInfo>, Self::Error> {
+        self.lock().await.get_tokens_info(token_ids).await
+    }
+
     async fn get_order_info(&self, order_id: OrderId) -> Result<Option<RpcOrderInfo>, Self::Error> {
         self.lock().await.get_order_info(order_id).await
+    }
+
+    async fn get_orders_info_by_currencies(
+        &self,
+        ask_currency: Option<Currency>,
+        give_currency: Option<Currency>,
+    ) -> Result<BTreeMap<OrderId, RpcOrderInfo>, Self::Error> {
+        self.lock()
+            .await
+            .get_orders_info_by_currencies(ask_currency, give_currency)
+            .await
     }
 
     async fn blockprod_e2e_public_key(&self) -> Result<EndToEndPublicKey, Self::Error> {
@@ -289,6 +313,21 @@ impl NodeInterface for ClonableMockNodeInterface {
 
     async fn mempool_get_fee_rate_points(&self) -> Result<Vec<(usize, FeeRate)>, Self::Error> {
         self.lock().await.mempool_get_fee_rate_points().await
+    }
+
+    async fn mempool_get_transaction(
+        &self,
+        tx_id: Id<Transaction>,
+    ) -> Result<Option<SignedTransaction>, Self::Error> {
+        self.lock().await.mempool_get_transaction(tx_id).await
+    }
+
+    async fn mempool_get_transactions(&self) -> Result<Vec<SignedTransaction>, Self::Error> {
+        self.lock().await.mempool_get_transactions().await
+    }
+
+    async fn mempool_subscribe_to_events(&self) -> Result<MempoolEvents, Self::Error> {
+        self.lock().await.mempool_subscribe_to_events().await
     }
 
     async fn get_utxo(&self, outpoint: UtxoOutPoint) -> Result<Option<TxOutput>, Self::Error> {

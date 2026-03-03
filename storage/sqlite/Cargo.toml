@@ -12,11 +12,15 @@ utils = { path = '../../utils' }
 
 hex.workspace = true
 rusqlite = { workspace = true, features = ["bundled"] }
+static_assertions.workspace = true
 
 [dev-dependencies]
+storage = { path = ".." }
 storage-backend-test-suite = { path = "../backend-test-suite" }
 test-utils = { path = "../../test-utils" }
 utils = { path = '../../utils' }
+
+tempfile.workspace = true
 
 [[test]]
 name = "backend"

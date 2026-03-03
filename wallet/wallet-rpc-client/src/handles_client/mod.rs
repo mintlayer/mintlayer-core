@@ -17,10 +17,13 @@ use std::{collections::BTreeMap, fmt::Debug, num::NonZeroUsize, path::PathBuf, s
 
 use chainstate::{rpc::RpcOutputValueIn, ChainInfo};
 use common::{
-    address::{dehexify::dehexify_all_addresses, AddressError},
+    address::dehexify::dehexify_all_addresses,
     chain::{
-        block::timestamp::BlockTimestamp, tokens::IsTokenUnfreezable, Block, GenBlock,
-        SignedTransaction, SignedTransactionIntent, Transaction, TxOutput, UtxoOutPoint,
+        block::timestamp::BlockTimestamp,
+        output_values_holder::collect_token_v1_ids_from_output_values_holders,
+        tokens::{IsTokenUnfreezable, RPCTokenInfo},
+        Block, GenBlock, RpcCurrency, SignedTransaction, SignedTransactionIntent, Transaction,
+        TxOutput, UtxoOutPoint,
     },
     primitives::{BlockHeight, DecimalAmount, Id, Idable, H256},
 };
@@ -40,11 +43,11 @@ use wallet_controller::{
 };
 use wallet_rpc_lib::{
     types::{
-        AccountExtendedPublicKey, AddressInfo, AddressWithUsageInfo, Balances, BlockInfo,
-        ComposedTransaction, CreatedWallet, DelegationInfo, HardwareWalletType,
+        AccountExtendedPublicKey, ActiveOrderInfo, AddressInfo, AddressWithUsageInfo, Balances,
+        BlockInfo, ComposedTransaction, CreatedWallet, DelegationInfo, HardwareWalletType,
         LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegationTransaction, NewOrderTransaction,
         NewSubmittedTransaction, NewTokenTransaction, NftMetadata, NodeVersion, OpenedWallet,
-        PoolInfo, PublicKeyInfo, RpcHashedTimelockContract, RpcInspectTransaction,
+        OwnOrderInfo, PoolInfo, PublicKeyInfo, RpcHashedTimelockContract, RpcInspectTransaction,
         RpcNewTransaction, RpcPreparedTransaction, RpcStandaloneAddresses,
         SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
         StandaloneAddressWithDetails, TokenMetadata, TxOptionsOverrides, UtxoInfo,
@@ -78,7 +81,7 @@ pub enum WalletRpcHandlesClientError<N: NodeInterface> {
     HexEncodingError(#[from] hex::FromHexError),
 
     #[error(transparent)]
-    AddressError(#[from] AddressError),
+    ChainstateRpcTypeError(#[from] chainstate::rpc::RpcTypeError),
 }
 
 impl<N> WalletRpcHandlesClient<N>
@@ -422,13 +425,21 @@ where
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)?;
 
-        utxos
+        let token_ids =
+            collect_token_v1_ids_from_output_values_holders(utxos.iter().map(|(_, output)| output));
+        let token_decimals = self.wallet_rpc.get_tokens_decimals(token_ids).await?;
+
+        Ok(utxos
             .into_iter()
             .map(|(utxo_outpoint, tx_ouput)| {
-                UtxoInfo::new(utxo_outpoint, tx_ouput, self.wallet_rpc.chain_config())
+                UtxoInfo::new(
+                    utxo_outpoint,
+                    tx_ouput,
+                    self.wallet_rpc.chain_config(),
+                    &token_decimals,
+                )
             })
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(WalletRpcHandlesClientError::AddressError)
+            .collect::<Result<Vec<_>, _>>()?)
     }
 
     async fn get_utxos(
@@ -449,13 +460,21 @@ where
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)?;
 
-        utxos
+        let token_ids =
+            collect_token_v1_ids_from_output_values_holders(utxos.iter().map(|(_, output)| output));
+        let token_decimals = self.wallet_rpc.get_tokens_decimals(token_ids).await?;
+
+        Ok(utxos
             .into_iter()
             .map(|(utxo_outpoint, tx_ouput)| {
-                UtxoInfo::new(utxo_outpoint, tx_ouput, self.wallet_rpc.chain_config())
+                UtxoInfo::new(
+                    utxo_outpoint,
+                    tx_ouput,
+                    self.wallet_rpc.chain_config(),
+                    &token_decimals,
+                )
             })
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(WalletRpcHandlesClientError::AddressError)
+            .collect::<Result<Vec<_>, _>>()?)
     }
 
     async fn submit_raw_transaction(
@@ -1191,6 +1210,25 @@ where
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
 
+    async fn list_own_orders(&self, account_index: U31) -> Result<Vec<OwnOrderInfo>, Self::Error> {
+        self.wallet_rpc
+            .list_own_orders(account_index)
+            .await
+            .map_err(WalletRpcHandlesClientError::WalletRpcError)
+    }
+
+    async fn list_all_active_orders(
+        &self,
+        account_index: U31,
+        ask_curency: Option<RpcCurrency>,
+        give_curency: Option<RpcCurrency>,
+    ) -> Result<Vec<ActiveOrderInfo>, Self::Error> {
+        self.wallet_rpc
+            .list_all_active_orders(account_index, ask_curency, give_curency)
+            .await
+            .map_err(WalletRpcHandlesClientError::WalletRpcError)
+    }
+
     async fn node_version(&self) -> Result<NodeVersion, Self::Error> {
         self.wallet_rpc
             .node_version()
@@ -1408,7 +1446,7 @@ where
                     && cur_signatures.iter().all(|s| *s == SignatureStatus::FullySigned);
 
                 let tx = if is_fully_signed {
-                    PartialOrSignedTx::Signed(ptx.into_signed_tx().expect("already checked2"))
+                    PartialOrSignedTx::Signed(ptx.into_signed_tx().expect("already checked"))
                 } else {
                     PartialOrSignedTx::Partial(ptx)
                 };
@@ -1511,6 +1549,16 @@ where
     ) -> Result<Vec<(BlockHeight, Id<GenBlock>)>, Self::Error> {
         self.wallet_rpc
             .node_get_block_ids_as_checkpoints(start_height, end_height, step)
+            .await
+            .map_err(WalletRpcHandlesClientError::WalletRpcError)
+    }
+
+    async fn node_get_tokens_info(
+        &self,
+        token_ids: Vec<String>,
+    ) -> Result<Vec<RPCTokenInfo>, Self::Error> {
+        self.wallet_rpc
+            .node_get_tokens_info(token_ids.into_iter().map(Into::into))
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }

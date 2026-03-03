@@ -14,18 +14,22 @@
 // limitations under the License.
 
 use common::{
-    address::{AddressError, RpcAddress},
+    address::RpcAddress,
     chain::{
         htlc::HashedTimelockContract, output_value::OutputValue, stakelock::StakePoolData,
         timelock::OutputTimeLock, tokens::TokenId, ChainConfig, DelegationId, Destination, PoolId,
         TxOutput,
     },
     primitives::amount::{RpcAmountIn, RpcAmountOut},
+    TokenDecimalsProvider,
 };
 use crypto::vrf::VRFPublicKey;
 use rpc::types::RpcHexString;
 
-use super::token::{RpcNftIssuance, RpcTokenIssuance};
+use super::{
+    token::{RpcNftIssuance, RpcTokenIssuance},
+    RpcTypeError,
+};
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, rpc_description::HasValueHint)]
 #[serde(tag = "type", content = "content")]
@@ -52,18 +56,39 @@ pub enum RpcOutputValueOut {
 }
 
 impl RpcOutputValueOut {
-    pub fn new(chain_config: &ChainConfig, value: OutputValue) -> Result<Self, AddressError> {
+    pub fn new(
+        chain_config: &ChainConfig,
+        token_decimals_provider: &impl TokenDecimalsProvider,
+        value: OutputValue,
+    ) -> Result<Self, RpcTypeError> {
         let result = match value {
             OutputValue::Coin(amount) => RpcOutputValueOut::Coin {
                 amount: RpcAmountOut::from_amount(amount, chain_config.coin_decimals()),
             },
-            OutputValue::TokenV0(_) => unimplemented!(),
+            OutputValue::TokenV0(_) => return Err(RpcTypeError::TokenV0Encountered),
             OutputValue::TokenV1(token_id, amount) => RpcOutputValueOut::Token {
                 id: RpcAddress::new(chain_config, token_id)?,
-                amount: RpcAmountOut::from_amount(amount, chain_config.coin_decimals()),
+                amount: RpcAmountOut::from_amount(
+                    amount,
+                    token_decimals_provider.get_token_decimals(&token_id)?.0,
+                ),
             },
         };
         Ok(result)
+    }
+
+    pub fn amount(&self) -> &RpcAmountOut {
+        match self {
+            Self::Coin { amount } => amount,
+            Self::Token { id: _, amount } => amount,
+        }
+    }
+
+    pub fn token_id(&self) -> Option<&RpcAddress<TokenId>> {
+        match self {
+            Self::Coin { amount: _ } => None,
+            Self::Token { id, amount: _ } => Some(id),
+        }
     }
 }
 
@@ -78,7 +103,7 @@ pub struct RpcStakePoolData {
 }
 
 impl RpcStakePoolData {
-    fn new(chain_config: &ChainConfig, data: &StakePoolData) -> Result<Self, AddressError> {
+    fn new(chain_config: &ChainConfig, data: &StakePoolData) -> Result<Self, RpcTypeError> {
         let result = Self {
             pledge: RpcAmountOut::from_amount(data.pledge(), chain_config.coin_decimals()),
             staker: RpcAddress::new(chain_config, data.staker().clone())?,
@@ -106,7 +131,7 @@ impl RpcHashedTimelockContract {
     fn new(
         chain_config: &ChainConfig,
         htlc: &HashedTimelockContract,
-    ) -> Result<Self, AddressError> {
+    ) -> Result<Self, RpcTypeError> {
         let result = Self {
             secret_hash: RpcHexString::from_bytes(htlc.secret_hash.as_bytes().to_owned()),
             spend_key: RpcAddress::new(chain_config, htlc.spend_key.clone())?,
@@ -171,25 +196,29 @@ pub enum RpcTxOutput {
 }
 
 impl RpcTxOutput {
-    pub fn new(chain_config: &ChainConfig, output: TxOutput) -> Result<Self, AddressError> {
+    pub fn new(
+        chain_config: &ChainConfig,
+        token_decimals_provider: &impl TokenDecimalsProvider,
+        output: TxOutput,
+    ) -> Result<Self, RpcTypeError> {
         let result = match output {
             TxOutput::Transfer(value, destination) => RpcTxOutput::Transfer {
-                value: RpcOutputValueOut::new(chain_config, value)?,
+                value: RpcOutputValueOut::new(chain_config, token_decimals_provider, value)?,
                 destination: RpcAddress::new(chain_config, destination)?,
             },
             TxOutput::LockThenTransfer(value, destination, timelock) => {
                 RpcTxOutput::LockThenTransfer {
-                    value: RpcOutputValueOut::new(chain_config, value)?,
+                    value: RpcOutputValueOut::new(chain_config, token_decimals_provider, value)?,
                     destination: RpcAddress::new(chain_config, destination)?,
                     timelock,
                 }
             }
             TxOutput::Htlc(value, htlc) => RpcTxOutput::Htlc {
-                value: RpcOutputValueOut::new(chain_config, value)?,
+                value: RpcOutputValueOut::new(chain_config, token_decimals_provider, value)?,
                 htlc: RpcHashedTimelockContract::new(chain_config, &htlc)?,
             },
             TxOutput::Burn(value) => RpcTxOutput::Burn {
-                value: RpcOutputValueOut::new(chain_config, value)?,
+                value: RpcOutputValueOut::new(chain_config, token_decimals_provider, value)?,
             },
             TxOutput::CreateStakePool(id, data) => RpcTxOutput::CreateStakePool {
                 pool_id: RpcAddress::new(chain_config, id)?,
@@ -222,8 +251,16 @@ impl RpcTxOutput {
             },
             TxOutput::CreateOrder(data) => RpcTxOutput::CreateOrder {
                 authority: RpcAddress::new(chain_config, data.conclude_key().clone())?,
-                ask_value: RpcOutputValueOut::new(chain_config, data.ask().clone())?,
-                give_value: RpcOutputValueOut::new(chain_config, data.give().clone())?,
+                ask_value: RpcOutputValueOut::new(
+                    chain_config,
+                    token_decimals_provider,
+                    data.ask().clone(),
+                )?,
+                give_value: RpcOutputValueOut::new(
+                    chain_config,
+                    token_decimals_provider,
+                    data.give().clone(),
+                )?,
             },
         };
         Ok(result)

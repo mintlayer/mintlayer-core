@@ -112,7 +112,16 @@ BASE_SCRIPTS = [
 
     # vv Tests less than 2m vv
 
+    'wallet_order_list_all_active.py',
+
     # vv Tests less than 60s vv
+
+    'p2p_submit_orphan.py',
+    'wallet_cold_wallet_send_rpc.py',
+    'wallet_delegations.py',
+    'wallet_get_address_usage.py',
+    'wallet_high_fee.py',
+    'wallet_multisig_address.py',
 
     # vv Tests less than 30s vv
     'blockprod_generate_blocks_all_sources.py',
@@ -122,9 +131,9 @@ BASE_SCRIPTS = [
     'blockprod_generate_pow_blocks.py',
     'blockprod_ibd.py',
     'blockprod_ibd_genesis.py',
+    'node_bootstrapping.py',
     'example_test.py',
     'p2p_ping.py',
-    'p2p_submit_orphan.py',
     'p2p_syncing_test.py',
     'p2p_relay_transactions.py',
     'feature_db_reinit.py',
@@ -136,7 +145,6 @@ BASE_SCRIPTS = [
     'wallet_sign_message.py',
     'wallet_sign_message_rpc.py',
     'wallet_cold_wallet_send.py',
-    'wallet_cold_wallet_send_rpc.py',
     'wallet_create_pool_for_another_wallet.py',
     'wallet_create_pool_for_another_wallet_rpc.py',
     'wallet_tx_compose.py',
@@ -147,7 +155,8 @@ BASE_SCRIPTS = [
     'wallet_sweep_address.py',
     'wallet_sweep_delegation.py',
     'wallet_recover_accounts.py',
-    'wallet_get_address_usage.py',
+    'wallet_mempool_events.py',
+    'wallet_scan_mempool.py',
     'wallet_tokens.py',
     'wallet_tokens_freeze.py',
     'wallet_tokens_transfer_from_multisig_addr.py',
@@ -159,15 +168,17 @@ BASE_SCRIPTS = [
     'wallet_nfts.py',
     'wallet_decommission_genesis.py',
     'wallet_decommission_request.py',
-    'wallet_delegations.py',
     'wallet_delegations_rpc.py',
     'wallet_generate_addresses.py',
     'wallet_set_lookahead_size.py',
     'wallet_connect_to_rpc.py',
-    'wallet_multisig_address.py',
     'wallet_watch_address.py',
-    'wallet_orders_v0.py',
-    'wallet_orders_v1.py',
+    'wallet_order_list_own_cli.py',
+    'wallet_order_list_own_rpc.py',
+    'wallet_orders_v0_cli.py',
+    'wallet_orders_v1_cli.py',
+    'wallet_orders_v0_rpc.py',
+    'wallet_orders_v1_rpc.py',
     'wallet_order_double_fill_with_same_dest_v0.py',
     'wallet_order_double_fill_with_same_dest_v1.py',
     'mempool_basic_reorg.py',
@@ -178,9 +189,12 @@ BASE_SCRIPTS = [
     'mempool_submit_tx.py',
     'mempool_timelocked_tx.py',
     'mempool_feerate_points.py',
-    'wallet_high_fee.py',
     'wallet_htlc_spend.py',
-    'wallet_htlc_refund.py',
+    'wallet_htlc_refund_multisig.py',
+    'wallet_htlc_refund_single_sig.py',
+    'wallet_list_utxos.py',
+    'wallet_list_utxos_rpc.py',
+    'framework_tests.py',
 
     # Don't append tests at the end to avoid merge conflicts
     # Put them in a random line within the section that fits their approximate run-time
@@ -586,7 +600,7 @@ class TestResult():
 def check_script_prefixes():
     """Check that test scripts start with one of the allowed name prefixes."""
 
-    good_prefixes_re = re.compile("^(blockprod|example|feature|interface|mempool|p2p|rpc|wallet|tool)_")
+    good_prefixes_re = re.compile("^(blockprod|example|feature|framework|interface|mempool|node|p2p|rpc|wallet|tool)_")
     bad_script_names = [script for script in ALL_SCRIPTS if good_prefixes_re.match(script) is None]
 
     if bad_script_names:

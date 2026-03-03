@@ -159,7 +159,7 @@ where
         Ok(())
     }
 
-    async fn maybe_send_will_disconnect(
+    async fn maybe_send_will_disconnect_for_protocol_version(
         &mut self,
         reason: Option<DisconnectionReason>,
         peer_protocol_version: ProtocolVersion,
@@ -177,6 +177,26 @@ where
                     }))
                     .await?;
             }
+        }
+
+        Ok(())
+    }
+
+    async fn maybe_send_will_disconnect(
+        &mut self,
+        reason: Option<DisconnectionReason>,
+    ) -> crate::Result<()> {
+        if let Some(common_protocol_version) = self.common_protocol_version {
+            self.maybe_send_will_disconnect_for_protocol_version(
+                reason,
+                common_protocol_version.into(),
+            )
+            .await?;
+        } else {
+            // Getting here means that the handshake hasn't been completed yet.
+            log::debug!(
+                "self.common_protocol_version is not set when attempting to send WillDisconnect"
+            );
         }
 
         Ok(())
@@ -208,8 +228,8 @@ where
             )
         })();
 
-        self.maybe_send_will_disconnect(
-            DisconnectionReason::from_result(&result),
+        self.maybe_send_will_disconnect_for_protocol_version(
+            DisconnectionReason::from_result(&result, &self.p2p_config),
             peer_protocol_version,
         )
         .await?;
@@ -422,7 +442,7 @@ where
                         .await;
                     if let Err(send_error) = send_result {
                         log::error!(
-                            "Cannot send PeerEvent::MisbehavedOnHandshake to peer {}: {}",
+                            "Cannot send PeerEvent::MisbehavedOnHandshake for peer {}: {}",
                             self.peer_id,
                             send_error
                         );
@@ -459,14 +479,7 @@ where
                     BackendEvent::SendMessage(message) => self.socket.send(*message).await?,
                     BackendEvent::Disconnect {reason} => {
                         log::debug!("Disconnection requested for peer {}, the reason is {:?}", self.peer_id, reason);
-                        if let Some(common_protocol_version) = self.common_protocol_version {
-                            self.maybe_send_will_disconnect(reason, common_protocol_version.into()).await?;
-                        } else {
-                            // Getting here means that we've got a disconnection request when
-                            // the handshake hasn't been completed yet.
-                            log::debug!("self.common_protocol_version is not set when BackendEvent::Disconnect is received");
-                        }
-
+                        self.maybe_send_will_disconnect(reason).await?;
                         return Ok(());
                     },
                 },
@@ -482,7 +495,26 @@ where
                         ).await?;
                     }
                     Err(err) => {
-                        log::info!("Connection closed for peer {}, reason {err:?}", self.peer_id);
+                        log::info!("Connection closed for peer {}, reason: {err:?}", self.peer_id);
+
+                        let err = P2pError::NetworkingError(err);
+                        self.maybe_send_will_disconnect(DisconnectionReason::from_error(&err, &self.p2p_config)).await?;
+
+                        let ban_score = err.ban_score();
+                        if ban_score > 0 {
+                            let send_result = self
+                                .peer_event_sender
+                                .send(PeerEvent::Misbehaved { error: err })
+                                .await;
+                            if let Err(send_error) = send_result {
+                                log::error!(
+                                    "Cannot send PeerEvent::Misbehaved for peer {}: {}",
+                                    self.peer_id,
+                                    send_error
+                                );
+                            }
+                        }
+
                         return Ok(());
                     }
                 }
@@ -525,7 +557,7 @@ mod tests {
         assert_matches,
         mock_time_getter::{mocked_time_getter_milliseconds, mocked_time_getter_seconds},
     };
-    use utils::atomics::SeqCstAtomicU64;
+    use utils::{atomics::SeqCstAtomicU64, tokio_spawn_in_current_tracing_span};
 
     use super::*;
     use crate::{
@@ -599,10 +631,13 @@ mod tests {
             time_getter,
         );
 
-        let handle = logging::spawn_in_current_span(async move {
-            peer.handshake().await.unwrap();
-            peer
-        });
+        let handle = tokio_spawn_in_current_tracing_span(
+            async move {
+                peer.handshake().await.unwrap();
+                peer
+            },
+            "",
+        );
 
         let mut socket2 =
             BufferedTranscoder::new(socket2, Some(*p2p_config.protocol_config.max_message_size));
@@ -685,10 +720,13 @@ mod tests {
             time_getter,
         );
 
-        let handle = logging::spawn_in_current_span(async move {
-            peer.handshake().await.unwrap();
-            peer
-        });
+        let handle = tokio_spawn_in_current_tracing_span(
+            async move {
+                peer.handshake().await.unwrap();
+                peer
+            },
+            "",
+        );
 
         let mut socket2 =
             BufferedTranscoder::new(socket2, Some(*p2p_config.protocol_config.max_message_size));
@@ -766,7 +804,7 @@ mod tests {
             time_getter,
         );
 
-        let handle = logging::spawn_in_current_span(async move { peer.handshake().await });
+        let handle = tokio_spawn_in_current_tracing_span(async move { peer.handshake().await }, "");
 
         let mut socket2 =
             BufferedTranscoder::new(socket2, Some(*p2p_config.protocol_config.max_message_size));
@@ -834,7 +872,7 @@ mod tests {
             time_getter,
         );
 
-        let handle = logging::spawn_in_current_span(async move { peer.handshake().await });
+        let handle = tokio_spawn_in_current_tracing_span(async move { peer.handshake().await }, "");
 
         let mut socket2 =
             BufferedTranscoder::new(socket2, Some(*p2p_config.protocol_config.max_message_size));
@@ -955,7 +993,8 @@ mod tests {
             peer_time_getter,
         );
 
-        let handle = logging::spawn_in_current_span(async move { peer.run_handshake().await });
+        let handle =
+            tokio_spawn_in_current_tracing_span(async move { peer.run_handshake().await }, "");
 
         // Advance both peer clocks and tokio time by given delay in 200ms increments to simulate
         // the flow of time. Doing this in one step makes the test result sensitive to the runtime

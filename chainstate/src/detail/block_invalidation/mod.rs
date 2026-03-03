@@ -328,32 +328,46 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
 pub enum BlockInvalidatorError {
     #[error("Block storage error: {0}")]
     StorageError(#[from] chainstate_storage::Error),
+
     #[error("The block {0} is too deep to invalidate")]
     BlockTooDeepToInvalidate(Id<Block>),
+
     #[error("Error manipulating best chain candidates: {0}")]
     BestChainCandidatesError(#[from] BestChainCandidatesError),
+
     #[error("Error disconnecting blocks until block {disconnect_until}: {error}")]
     BlocksDisconnectionError {
         disconnect_until: Id<GenBlock>,
         error: Box<BlockError>,
     },
+
     #[error("Error updating block status for block {0}: {1}")]
     BlockStatusUpdateError(Id<Block>, Box<BlockError>),
+
     #[error("Generic error during reorg: {0}")]
     GenericReorgError(Box<BlockError>),
+
     #[error("Failed to commit to the DB after {0} attempts: {1}, context: {2}")]
     DbCommitError(usize, chainstate_storage::Error, DbCommittingContext),
 
     #[error("Failed to obtain best block index: {0}")]
     BlockIndicesForBranchQueryError(PropertyQueryError),
+
     #[error("Failed to determine if the block {0} is in mainchain: {1}")]
     IsBlockInMainChainQueryError(Id<GenBlock>, PropertyQueryError),
+
     #[error("Failed to obtain the minimum height with allowed reorgs: {0}")]
     MinHeightForReorgQueryError(PropertyQueryError),
+
     #[error("Failed to obtain best block index: {0}")]
     BestBlockIndexQueryError(PropertyQueryError),
+
+    #[error("Failed to obtain best block id: {0}")]
+    BestBlockIdQueryError(PropertyQueryError),
+
     #[error("Failed to obtain block index for block {0}: {1}")]
     BlockIndexQueryError(Id<GenBlock>, PropertyQueryError),
+
     #[error("Error deleting index for block {0}: {1}")]
     DelBlockIndexError(Id<Block>, BlockError),
 }

@@ -81,7 +81,7 @@ class PingPongTest(BitcoinTestFramework):
 
         self.log.info('Reply without ping')
         with self.nodes[0].assert_debug_log([
-                'unexpected ping response received from peer 1',
+            'Unexpected ping response received from peer 1',
         ]):
             no_pong_node.send_and_ping({
                 "ping_response": {
@@ -92,7 +92,7 @@ class PingPongTest(BitcoinTestFramework):
 
         self.log.info('Reply with wrong nonce does not cancel ping')
         assert 'ping_request' not in no_pong_node.last_message
-        with self.nodes[0].assert_debug_log(['wrong nonce in ping response from peer 1']):
+        with self.nodes[0].assert_debug_log(['Wrong nonce in ping response from peer 1']):
             # mock time PING_INTERVAL ahead to trigger node into sending a ping
             self.mock_forward(PING_INTERVAL)
             no_pong_node.wait_until(
@@ -120,7 +120,7 @@ class PingPongTest(BitcoinTestFramework):
         assert 'ping_request' not in no_pong_node.last_message
         self.mock_forward(PING_INTERVAL)
         no_pong_node.wait_until(lambda: 'ping_request' in no_pong_node.last_message)
-        with self.nodes[0].assert_debug_log(['ping check: dead peer detected: 1']):
+        with self.nodes[0].assert_debug_log(['Ping check: dead peer detected: 1']):
             self.mock_forward(TIMEOUT_INTERVAL)
         no_pong_node.wait_for_disconnect()
 

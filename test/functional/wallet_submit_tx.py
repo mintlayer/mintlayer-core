@@ -24,15 +24,13 @@ Check that:
 * check balance
 """
 
-import json
 from test_framework.test_framework import BitcoinTestFramework
-from test_framework.mintlayer import (make_tx, reward_input, tx_input, ATOMS_PER_COIN)
+from test_framework.mintlayer import (make_tx, reward_input, ATOMS_PER_COIN)
 from test_framework.util import assert_in, assert_equal
-from test_framework.mintlayer import mintlayer_hash, block_input_data_obj
+from test_framework.mintlayer import block_input_data_obj
 from test_framework.wallet_cli_controller import WalletCliController
 
 import asyncio
-import sys
 import random
 
 
@@ -68,8 +66,6 @@ class WalletSubmitTransaction(BitcoinTestFramework):
         return block_id
 
     def run_test(self):
-        if 'win32' in sys.platform:
-            asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
         asyncio.run(self.async_test())
 
     async def async_test(self):
@@ -107,7 +103,7 @@ class WalletSubmitTransaction(BitcoinTestFramework):
             assert_in("The transaction was submitted successfully", await wallet.submit_transaction(encoded_tx, not store_tx_in_wallet))
 
             if store_tx_in_wallet:
-                assert_in(f"Coins amount: {coins_to_send}", await wallet.get_balance(utxo_states=['inactive']))
+                assert_in(f"Coins amount: {coins_to_send}", await wallet.get_balance(utxo_states=['inactive', 'in-mempool']))
             else:
                 assert_in(f"Coins amount: 0", await wallet.get_balance(utxo_states=['inactive']))
 

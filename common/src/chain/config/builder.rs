@@ -82,7 +82,7 @@ const TESTNET_FORK_HEIGHT_4_ORDERS: BlockHeight = BlockHeight::new(325_180);
 // * switch to sighash input commitments v1;
 // * enable token id generation v1;
 // * prohibit updating the staker destination in ProduceBlockFromStake.
-const TESTNET_FORK_HEIGHT_5_ORDERS_V1: BlockHeight = BlockHeight::new(566060);
+const TESTNET_FORK_HEIGHT_5_ORDERS_V1: BlockHeight = BlockHeight::new(566_060);
 
 // The fork at which:
 // * txs with htlc and order outputs become valid;

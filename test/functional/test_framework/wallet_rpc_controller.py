@@ -16,23 +16,28 @@
 #  limitations under the License.
 """A wrapper around a RPC wallet instance"""
 
-import os
 import asyncio
+import base64
 import http.client
 import json
+import os
 from dataclasses import dataclass
-from tempfile import NamedTemporaryFile
-import base64
+from decimal import Decimal
 from operator import itemgetter
-
-from typing import Optional, List, Union, TypedDict
+from tempfile import NamedTemporaryFile
+from typing import Optional, List, TypedDict
 
 from test_framework.util import assert_in, rpc_port
-from test_framework.wallet_controller_common import PartialSigInfo, TokenTxOutput, UtxoOutpoint, WalletCliControllerBase
+from test_framework.wallet_controller_common import (
+    PartialSigInfo, TokenTxOutput, UtxoOutpoint, WalletCliControllerBase,
+    pub_key_hex_to_hexified_dest, to_json
+)
+
 
 ONE_MB = 2**20
 READ_TIMEOUT_SEC = 30
 DEFAULT_ACCOUNT_INDEX = 0
+
 
 @dataclass
 class TransferTxOutput:
@@ -40,16 +45,25 @@ class TransferTxOutput:
     pub_key_hex: str
     token_id: Optional[str]
 
+    # This produces a serialized TxOutput::Transfer, which is usable e.g. with compose_transaction.
     def to_json(self):
         if self.token_id:
-            return {'Transfer': [ { 'TokenV1': [f"0x{self.token_id}", {"atoms": str(self.atoms)}] }, f"HexifiedDestination{{0x02{self.pub_key_hex}}}" ]}
+            return {'Transfer': [
+                { 'TokenV1': [f"0x{self.token_id}", {"atoms": str(self.atoms)}] },
+                pub_key_hex_to_hexified_dest(self.pub_key_hex)
+            ]}
         else:
-            return {'Transfer': [ { 'Coin': {"atoms": str(self.atoms)} }, f"HexifiedDestination{{0x02{self.pub_key_hex}}}" ]}
+            return {'Transfer': [
+                { 'Coin': {"atoms": str(self.atoms)} },
+                pub_key_hex_to_hexified_dest(self.pub_key_hex)
+            ]}
+
 
 @dataclass
 class Balances:
     coins: str
     tokens: dict
+
 
 class NewTxResult(TypedDict):
     tx_id: str
@@ -57,16 +71,19 @@ class NewTxResult(TypedDict):
     fees: Balances
     broadcasted: bool
 
+
 @dataclass
 class PoolData:
     pool_id: str
     pledge: str
     balance: str
 
+
 @dataclass
 class DelegationData:
     delegation_id: str
     balance: str
+
 
 @dataclass
 class CreatedBlockInfo:
@@ -74,10 +91,12 @@ class CreatedBlockInfo:
     block_height: str
     pool_id: str
 
+
 @dataclass
 class AccountInfo:
     index: int
     name: Optional[str]
+
 
 class WalletRpcController(WalletCliControllerBase):
     def __init__(self, node, config, log, wallet_args: List[str] = [], chain_config_args: List[str] = []):
@@ -232,14 +251,16 @@ class WalletRpcController(WalletCliControllerBase):
         result = self._write_command("standalone_add_multisig", [self.account, min_required_signatures, pub_keys, label, no_rescan])
         return result['result']
 
-    async def new_public_key(self, address: Optional[str] = None) -> bytes:
+    async def new_public_key(self, address: Optional[str] = None, strip_encoded_enum_prefix: bool = True) -> bytes:
         if address is None:
             address = await self.new_address()
         public_key = self._write_command("address_reveal_public_key", [self.account, address])['result']['public_key_hex']
 
-        # remove the pub key enum value, the first one byte
-        pub_key_bytes = bytes.fromhex(public_key)[1:]
-        return pub_key_bytes
+        if strip_encoded_enum_prefix:
+            # Remove the first byte, which encodes the variant of PublicKeyHolder enum.
+            return bytes.fromhex(public_key)[1:]
+        else:
+            return bytes.fromhex(public_key)
 
     async def reveal_public_key_as_address(self, address: Optional[str] = None) -> str:
         return self._write_command("address_reveal_public_key", [self.account, address])['result']['public_key_address']
@@ -253,9 +274,42 @@ class WalletRpcController(WalletCliControllerBase):
     async def add_standalone_multisig_address(self, min_required_signatures: int, pub_keys: List[str], label: Optional[str] = None) -> str:
         return self._write_command("standalone_add_multisig", [self.account, min_required_signatures, pub_keys, label, None])['result']
 
-    async def list_utxos(self, utxo_types: str = '', with_locked: str = '', utxo_states: List[str] = []) -> List[UtxoOutpoint]:
-        outputs = self._write_command("account_utxos", [self.account, utxo_types, with_locked, ''.join(utxo_states)])['result']
-        return [UtxoOutpoint(id=match["outpoint"]["source_id"]["content"]['tx_id'], index=int(match["outpoint"]['index'])) for match in outputs]
+    # Return unlocked UTXOs with any type and any state, returning a list of UtxoOutpoint's.
+    # Note: unlike CLI controller's counterpart, this function doesn't accept the utxo_types/with_locked/utxo_states
+    # parameters. But both functions behave identically when no parameters are passed.
+    async def list_utxos(self) -> List[UtxoOutpoint]:
+        output = await self.list_utxos_raw()
+        return [UtxoOutpoint(id=match["outpoint"]["source_id"]["content"]['tx_id'], index=int(match["outpoint"]['index'])) for match in output]
+
+    # Same as list_utxos, but return a raw dict.
+    async def list_utxos_raw(self,) -> any:
+        return self._write_command("account_utxos", [self.account])['result']
+
+    # List multisig UTXOs of the specified kind, returning a list of UtxoOutpoint's.
+    # By default, all unlocked and confirmed UTXOs are returned.
+    # Note: the accepted parameter values differ from ones accepted by this function's CLI counterpart.
+    # So, controller-agnostic tests should always call it without parameters.
+    # TODO: make the parameters compatible.
+    async def list_multisig_utxos(self, utxo_type: str = '', with_locked: str = '', utxo_states: List[str] = []) -> List[UtxoOutpoint]:
+        output = await self.list_multisig_utxos_raw(utxo_type, with_locked, utxo_states)
+        return [UtxoOutpoint(id=match["outpoint"]["source_id"]["content"]["tx_id"], index=int(match["outpoint"]["index"])) for match in output]
+
+    # Same as list_multisig_utxos, but return a raw dict.
+    async def list_multisig_utxos_raw(self, utxo_type: str = '', with_locked: str = '', utxo_states: List[str] = []) -> List[UtxoOutpoint]:
+        if utxo_type == "":
+            utxo_types = []
+        else:
+            utxo_types = [utxo_type]
+
+        if with_locked == "":
+            with_locked = None
+
+        result = self._write_command(
+            "standalone_multisig_utxos",
+            {"account": self.account, "utxo_states": utxo_states, "utxo_types": utxo_types, "with_locked": with_locked }
+        )
+
+        return result['result']
 
     async def get_transaction(self, tx_id: str) -> str:
         return self._write_command("transaction_get", [self.account, tx_id])['result']
@@ -267,11 +321,11 @@ class WalletRpcController(WalletCliControllerBase):
         self._write_command("address_send", [self.account, address, {'decimal': str(amount)}, selected_utxos, {'in_top_x_mb': 5}])
         return "The transaction was submitted successfully"
 
-    async def send_tokens_to_address(self, token_id: str, address: str, amount: Union[float, str]):
+    async def send_tokens_to_address(self, token_id: str, address: str, amount: int | float | Decimal | str):
         return self._write_command("token_send", [self.account, token_id, address, {'decimal': str(amount)}, {'in_top_x_mb': 5}])['result']
 
     # Note: unlike send_tokens_to_address, this function behaves identically both for wallet_cli_controller and wallet_rpc_controller.
-    async def send_tokens_to_address_or_fail(self, token_id: str, address: str, amount: Union[float, str]):
+    async def send_tokens_to_address_or_fail(self, token_id: str, address: str, amount: int | float | Decimal | str):
         # send_tokens_to_address already fails on error.
         await self.send_tokens_to_address(token_id, address, amount)
 
@@ -306,7 +360,8 @@ class WalletRpcController(WalletCliControllerBase):
             return None, None, result['error']
 
     async def mint_tokens(self, token_id: str, address: str, amount: int) -> NewTxResult:
-        return self._write_command("token_mint", [self.account, token_id, address, {'decimal': str(amount)}, {'in_top_x_mb': 5}])['result']
+        result = self._write_command("token_mint", [self.account, token_id, address, {'decimal': str(amount)}, {'in_top_x_mb': 5}])
+        return result['result']
 
     # Note: unlike mint_tokens, this function behaves identically both for wallet_cli_controller and wallet_rpc_controller.
     async def mint_tokens_or_fail(self, token_id: str, address: str, amount: int):
@@ -450,10 +505,14 @@ class WalletRpcController(WalletCliControllerBase):
         if 'tokens' in result:
             for (hexified_token_id, balance) in result['tokens'].items():
                 token_id_as_addr = self.node.test_functions_dehexify_all_addresses(hexified_token_id)
-                tokens[token_id_as_addr] = balance['decimal']
+                token_info = self.node.chainstate_token_info(token_id_as_addr)
+                ticker = token_info["content"]["token_ticker"]["text"]
+
+                tokens[token_id_as_addr] = (ticker, balance['decimal'])
 
         # Mimic the output of wallet_cli_controller's 'get_balance'
-        return "\n".join([f"Coins amount: {coins}"] + [f"Token: {token} amount: {amount}" for token, amount in tokens.items()])
+        return "\n".join([f"Coins amount: {coins}"] + [f"Token: {token} ({ticker}), amount: {amount}"
+                                                       for token, (ticker, amount) in tokens.items()])
 
     async def new_vrf_public_key(self) -> str:
         result = self._write_command("staking_new_vrf_public_key", [self.account])
@@ -487,14 +546,14 @@ class WalletRpcController(WalletCliControllerBase):
     async def sign_challenge_plain(self, message: str, address: str) -> str:
         result = self._write_command('challenge_sign_plain', [self.account, message, address])
         if 'result' in result:
-            return f"The generated hex encoded signature is\n\n{result['result']}"
+            return f"The generated hex-encoded signature is\n\n{result['result']}"
         else:
             return result['error']['message']
 
     async def sign_challenge_hex(self, message: str, address: str) -> str:
         result =  self._write_command('challenge_sign_hex', [self.account, message, address])
         if 'result' in result:
-            return f"The generated hex encoded signature is\n\n{result['result']}"
+            return f"The generated hex-encoded signature is\n\n{result['result']}"
         else:
             return result['error']['message']
 
@@ -513,7 +572,7 @@ class WalletRpcController(WalletCliControllerBase):
             return result['error']['message']
 
     async def create_from_cold_address(self, address: str, amount: int, selected_utxo: UtxoOutpoint, change_address: Optional[str] = None) -> str:
-        utxo = selected_utxo.to_json()
+        utxo = to_json(selected_utxo)
         result = self._write_command("transaction_create_from_cold_input", [self.account, address, {'decimal': str(amount)}, utxo, change_address, {'in_top_x_mb': 5}])
         if 'result' in result:
             return f"Send transaction created\n\n{result['result']['hex']}"
@@ -564,36 +623,42 @@ class WalletRpcController(WalletCliControllerBase):
 
         return (result['transaction'], siginfo_to_return)
 
-    async def compose_transaction(self,
-                                  outputs: List[TransferTxOutput],
-                                  selected_utxos: List[UtxoOutpoint],
-                                  htlc_secrets: Optional[List[Optional[str]]] = None,
-                                  only_transaction: bool = False) -> str:
-        utxos = [utxo.to_json() for utxo in selected_utxos]
-        outputs = [output.to_json() for output in outputs]
-        print(outputs)
+    async def compose_transaction(
+        self,
+        outputs: List[TransferTxOutput],
+        selected_utxos: List[UtxoOutpoint],
+        htlc_secrets: Optional[List[Optional[str]]] = None,
+        only_transaction: bool = False
+    ) -> str:
+        utxos = [to_json(utxo) for utxo in selected_utxos]
+        outputs = [to_json(output) for output in outputs]
+        print(f"outputs = {outputs}")
+        print(f"selected_utxos = {selected_utxos}")
         result = self._write_command('transaction_compose', [utxos, outputs, htlc_secrets, only_transaction])
         return result
 
     async def create_htlc_transaction(self,
-                         amount: int,
-                         token_id: Optional[str],
-                         secret_hash: str,
-                         spend_address: str,
-                         refund_address: str,
-                         refund_lock_for_blocks: int) -> NewTxResult:
+        amount: int,
+        token_id: Optional[str],
+        secret_hash: str,
+        spend_address: str,
+        refund_address: str,
+        refund_lock_for_blocks: int
+    ) -> NewTxResult:
         timelock = { "type": "ForBlockCount", "content": refund_lock_for_blocks }
         htlc = { "secret_hash": secret_hash, "spend_address": spend_address, "refund_address": refund_address, "refund_timelock": timelock }
-        object = [self.account, {'decimal': str(amount)}, token_id, htlc, {'in_top_x_mb': 5}]
-        result = self._write_command("create_htlc_transaction", object)
+        params = [self.account, {'decimal': str(amount)}, token_id, htlc, {'in_top_x_mb': 5}]
+        result = self._write_command("create_htlc_transaction", params)
         return result['result']
 
-    async def create_order(self,
-                         ask_token_id: Optional[str],
-                         ask_amount: int,
-                         give_token_id: Optional[str],
-                         give_amount: int,
-                         conclude_address: str) -> str:
+    async def create_order(
+        self,
+        ask_token_id: Optional[str],
+        ask_amount: int | float | Decimal | str,
+        give_token_id: Optional[str],
+        give_amount: int | float | Decimal | str,
+        conclude_address: str
+    ) -> str:
         if ask_token_id is not None:
             ask = {"type": "Token", "content": {"id": ask_token_id, "amount": {'decimal': str(ask_amount)}}}
         else:
@@ -604,26 +669,67 @@ class WalletRpcController(WalletCliControllerBase):
         else:
             give = {"type": "Coin", "content": {"amount": {'decimal': str(give_amount)}}}
 
-        object = [self.account, ask, give, conclude_address, {'in_top_x_mb': 5}]
-        result = self._write_command("create_order", object)
-        return result
+        params = [self.account, ask, give, conclude_address, {'in_top_x_mb': 5}]
 
-    async def fill_order(self,
-                         order_id: str,
-                         fill_amount: int,
-                         output_address: Optional[str] = None) -> str:
-        object = [self.account, order_id, {'decimal': str(fill_amount)}, output_address, {'in_top_x_mb': 5}]
-        result = self._write_command("fill_order", object)
-        return result
+        result = self._write_command("order_create", params)
+        assert result['result']['tx_id'] is not None
+        order_id = result['result']['order_id']
+
+        return order_id
+
+    async def fill_order(
+        self,
+        order_id: str,
+        fill_amount: int | float | Decimal | str,
+        output_address: Optional[str] = None
+    ) -> str:
+        params = [self.account, order_id, {'decimal': str(fill_amount)}, output_address, {'in_top_x_mb': 5}]
+        result = self._write_command("order_fill", params)
+        return get_tx_submission_success_or_error(result)
 
     async def freeze_order(self, order_id: str) -> str:
-        object = [self.account, order_id, {'in_top_x_mb': 5}]
-        result = self._write_command("freeze_order", object)
-        return result
+        params = [self.account, order_id, {'in_top_x_mb': 5}]
+        result = self._write_command("order_freeze", params)
+        return get_tx_submission_success_or_error(result)
 
-    async def conclude_order(self,
-                         order_id: str,
-                         output_address: Optional[str] = None) -> str:
-        object = [self.account, order_id, output_address, {'in_top_x_mb': 5}]
-        result = self._write_command("conclude_order", object)
-        return result
+    async def conclude_order(
+        self,
+        order_id: str,
+        output_address: Optional[str] = None
+    ) -> str:
+        params = [self.account, order_id, output_address, {'in_top_x_mb': 5}]
+        result = self._write_command("order_conclude", params)
+        return get_tx_submission_success_or_error(result)
+
+    # Note: the result of this function is incompatible with CLI controller's list_own_orders.
+    async def list_own_orders(self) -> List[dict]:
+        params = [self.account, {'in_top_x_mb': 5}]
+        result = self._write_command("order_list_own", params)
+        return result['result']
+
+    # Note: the result of this function is incompatible with CLI controller's list_all_active_orders.
+    async def list_all_active_orders(self, ask_currency: str | None, give_currency: str | None):
+        def make_currency(currency):
+            if currency is None:
+                return None
+            elif currency == "coin":
+                return { "type": "Coin" }
+            else:
+                return { "type": "Token", "content": currency }
+
+        params = [self.account, make_currency(ask_currency), make_currency(give_currency), {'in_top_x_mb': 5}]
+
+        result = self._write_command("order_list_all_active", params)
+        return result['result']
+
+
+def get_tx_submission_success_or_error(submission_result: dict) -> str:
+    success_res = submission_result.get('result')
+    error_res = submission_result.get('error')
+    assert success_res is not None or error_res is not None
+
+    if success_res is not None:
+        assert success_res['tx_id'] is not None
+        return "The transaction was submitted successfully"
+    elif error_res is not None:
+        return error_res['message']

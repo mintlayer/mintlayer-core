@@ -13,14 +13,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{num::NonZeroUsize, time::Duration};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    num::NonZeroUsize,
+    time::Duration,
+};
+
+use futures::StreamExt;
 
 use blockprod::{BlockProductionError, BlockProductionHandle, TimestampSearchData};
 use chainstate::{BlockSource, ChainInfo, ChainstateError, ChainstateHandle};
 use common::{
     chain::{
         tokens::{RPCTokenInfo, TokenId},
-        Block, DelegationId, Destination, GenBlock, OrderId, PoolId, RpcOrderInfo,
+        Block, Currency, DelegationId, Destination, GenBlock, OrderId, PoolId, RpcOrderInfo,
         SignedTransaction, Transaction,
     },
     primitives::{time::Time, Amount, BlockHeight, Id},
@@ -28,7 +34,8 @@ use common::{
 use consensus::GenerateBlockInputData;
 use crypto::ephemeral_e2e::EndToEndPublicKey;
 use mempool::{
-    tx_accumulator::PackingStrategy, tx_options::TxOptionsOverrides, FeeRate, MempoolHandle,
+    event::MempoolEvent, tx_accumulator::PackingStrategy, tx_options::TxOptionsOverrides, FeeRate,
+    MempoolHandle,
 };
 use p2p::{
     error::P2pError,
@@ -40,7 +47,7 @@ use serialization::hex::HexError;
 use utils_networking::IpOrSocketAddress;
 use wallet_types::wallet_type::WalletControllerMode;
 
-use crate::node_traits::NodeInterface;
+use crate::node_traits::{MempoolEvents, NodeInterface};
 
 #[derive(Clone)]
 pub struct WalletHandlesClient {
@@ -118,7 +125,7 @@ impl NodeInterface for WalletHandlesClient {
     }
 
     async fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, Self::Error> {
-        let result = self.chainstate.call(move |this| this.get_block(block_id)).await??;
+        let result = self.chainstate.call(move |this| this.get_block(&block_id)).await??;
         Ok(result)
     }
 
@@ -158,7 +165,7 @@ impl NodeInterface for WalletHandlesClient {
     ) -> Result<Option<Id<GenBlock>>, Self::Error> {
         let result = self
             .chainstate
-            .call(move |this| this.get_block_id_from_height(&height))
+            .call(move |this| this.get_block_id_from_height(height))
             .await??;
         Ok(result)
     }
@@ -176,15 +183,17 @@ impl NodeInterface for WalletHandlesClient {
     }
 
     async fn get_stake_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Self::Error> {
-        let result =
-            self.chainstate.call(move |this| this.get_stake_pool_balance(pool_id)).await??;
+        let result = self
+            .chainstate
+            .call(move |this| this.get_stake_pool_balance(&pool_id))
+            .await??;
         Ok(result)
     }
 
     async fn get_staker_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Self::Error> {
         let result = self
             .chainstate
-            .call(move |this| this.get_stake_pool_data(pool_id))
+            .call(move |this| this.get_stake_pool_data(&pool_id))
             .await??
             .map(|data| data.staker_balance())
             .transpose()
@@ -202,7 +211,7 @@ impl NodeInterface for WalletHandlesClient {
     ) -> Result<Option<Destination>, Self::Error> {
         let result = self
             .chainstate
-            .call(move |this| this.get_stake_pool_data(pool_id))
+            .call(move |this| this.get_stake_pool_data(&pool_id))
             .await??
             .map(|data| data.decommission_destination().clone());
         Ok(result)
@@ -215,7 +224,7 @@ impl NodeInterface for WalletHandlesClient {
     ) -> Result<Option<Amount>, Self::Error> {
         let result = self
             .chainstate
-            .call(move |this| this.get_stake_pool_delegation_share(pool_id, delegation_id))
+            .call(move |this| this.get_stake_pool_delegation_share(&pool_id, &delegation_id))
             .await??;
         Ok(result)
     }
@@ -223,7 +232,18 @@ impl NodeInterface for WalletHandlesClient {
     async fn get_token_info(&self, token_id: TokenId) -> Result<Option<RPCTokenInfo>, Self::Error> {
         let result = self
             .chainstate
-            .call(move |this| this.get_token_info_for_rpc(token_id))
+            .call(move |this| this.get_token_info_for_rpc(&token_id))
+            .await??;
+        Ok(result)
+    }
+
+    async fn get_tokens_info(
+        &self,
+        token_ids: BTreeSet<TokenId>,
+    ) -> Result<Vec<RPCTokenInfo>, Self::Error> {
+        let result = self
+            .chainstate
+            .call(move |this| this.get_tokens_info_for_rpc(&token_ids))
             .await??;
         Ok(result)
     }
@@ -231,7 +251,24 @@ impl NodeInterface for WalletHandlesClient {
     async fn get_order_info(&self, order_id: OrderId) -> Result<Option<RpcOrderInfo>, Self::Error> {
         let result = self
             .chainstate
-            .call(move |this| this.get_order_info_for_rpc(order_id))
+            .call(move |this| this.get_order_info_for_rpc(&order_id))
+            .await??;
+        Ok(result)
+    }
+
+    async fn get_orders_info_by_currencies(
+        &self,
+        ask_currency: Option<Currency>,
+        give_currency: Option<Currency>,
+    ) -> Result<BTreeMap<OrderId, RpcOrderInfo>, Self::Error> {
+        let result = self
+            .chainstate
+            .call(move |this| {
+                this.get_orders_info_for_rpc_by_currencies(
+                    ask_currency.as_ref(),
+                    give_currency.as_ref(),
+                )
+            })
             .await??;
         Ok(result)
     }
@@ -418,6 +455,35 @@ impl NodeInterface for WalletHandlesClient {
         // MIN(1) + 9 = 10, to keep it as const
         const NUM_POINTS: NonZeroUsize = NonZeroUsize::MIN.saturating_add(9);
         let res = self.mempool.call(move |this| this.get_fee_rate_points(NUM_POINTS)).await??;
+        Ok(res)
+    }
+
+    async fn mempool_subscribe_to_events(&self) -> Result<MempoolEvents, Self::Error> {
+        let res = self.mempool.call_mut(move |this| this.subscribe_to_rpc_events()).await?;
+
+        let subscription =
+            res.into_stream().filter_map(|event| {
+                futures::future::ready(match event {
+                    MempoolEvent::NewTip { .. } => None,
+
+                    MempoolEvent::TransactionProcessed(tx) => tx.was_accepted().then_some(
+                        crate::node_traits::MempoolEvent::NewTransaction { tx_id: *tx.tx_id() },
+                    ),
+                })
+            });
+        Ok(Box::new(subscription))
+    }
+
+    async fn mempool_get_transaction(
+        &self,
+        tx_id: Id<Transaction>,
+    ) -> Result<Option<SignedTransaction>, Self::Error> {
+        let res = self.mempool.call(move |this| this.transaction(&tx_id)).await?;
+        Ok(res)
+    }
+
+    async fn mempool_get_transactions(&self) -> Result<Vec<SignedTransaction>, Self::Error> {
+        let res = self.mempool.call(move |this| this.get_all()).await?;
         Ok(res)
     }
 }

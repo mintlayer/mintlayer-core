@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use super::{
     accounting_undo_cache::CachedBlockUndo,
@@ -448,6 +448,10 @@ impl<C, S, U, A, T, O: OrdersAccountingView> OrdersAccountingStorageRead
 
     fn get_give_balance(&self, id: &OrderId) -> Result<Option<Amount>, Self::Error> {
         self.orders_accounting_cache.get_give_balance(id).map(Some)
+    }
+
+    fn get_all_order_ids(&self) -> Result<BTreeSet<OrderId>, Self::Error> {
+        self.orders_accounting_cache.get_all_order_ids()
     }
 }
 

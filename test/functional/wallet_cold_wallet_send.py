@@ -39,7 +39,6 @@ from test_framework.util import assert_equal, assert_greater_than_or_equal, asse
 from test_framework.wallet_cli_controller import UtxoOutpoint, WalletCliController
 
 import asyncio
-import sys
 
 def get_destination(dest):
     if 'Address' in dest:
@@ -90,8 +89,6 @@ class WalletColdSend(BitcoinTestFramework):
         return self.hex_to_dec_array(previous_block_id)
 
     def run_test(self):
-        if 'win32' in sys.platform:
-            asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
         asyncio.run(self.async_test())
 
     async def async_test(self):

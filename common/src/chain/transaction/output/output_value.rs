@@ -16,7 +16,10 @@
 use serialization::{Decode, Encode};
 
 use crate::{
-    chain::tokens::{NftIssuanceV0, TokenData, TokenId, TokenIssuanceV0, TokenTransfer},
+    chain::{
+        tokens::{NftIssuanceV0, TokenData, TokenId, TokenIssuanceV0, TokenTransfer},
+        Currency,
+    },
     primitives::Amount,
 };
 
@@ -31,7 +34,9 @@ use crate::{
     Decode,
     serde::Serialize,
     serde::Deserialize,
+    strum::EnumDiscriminants,
 )]
+#[strum_discriminants(name(OutputValueTag), derive(strum::EnumIter))]
 pub enum OutputValue {
     #[codec(index = 0)]
     Coin(Amount),
@@ -124,6 +129,7 @@ impl RpcOutputValue {
             }),
         }
     }
+
     pub fn amount(&self) -> Amount {
         match self {
             RpcOutputValue::Coin { amount } | RpcOutputValue::Token { id: _, amount } => *amount,
@@ -134,6 +140,23 @@ impl RpcOutputValue {
         match self {
             RpcOutputValue::Coin { amount: _ } => None,
             RpcOutputValue::Token { id, amount: _ } => Some(id),
+        }
+    }
+
+    pub fn currency(&self) -> Currency {
+        match self {
+            Self::Coin { amount: _ } => Currency::Coin,
+            Self::Token { id, amount: _ } => Currency::Token(*id),
+        }
+    }
+
+    pub fn with_amount(self, new_amount: Amount) -> Self {
+        match self {
+            Self::Coin { amount: _ } => Self::Coin { amount: new_amount },
+            Self::Token { id, amount: _ } => Self::Token {
+                id,
+                amount: new_amount,
+            },
         }
     }
 }

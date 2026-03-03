@@ -61,3 +61,7 @@ impl<'de> serde::Deserialize<'de> for OrderId {
         HexifiedAddress::<Self>::serde_deserialize(deserializer)
     }
 }
+
+impl rpc_description::HasValueHint for OrderId {
+    const HINT_SER: rpc_description::ValueHint = rpc_description::ValueHint::HEXIFIED_ORDER_ID;
+}

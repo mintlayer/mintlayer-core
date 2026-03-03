@@ -108,6 +108,7 @@ mod test {
                 DefaultTransactionVerificationStrategy::new(),
                 None,
                 Default::default(),
+                None,
             )
             .unwrap();
 
@@ -184,6 +185,7 @@ mod test {
                 DefaultTransactionVerificationStrategy::new(),
                 None,
                 time_getter,
+                None,
             )
             .unwrap();
 

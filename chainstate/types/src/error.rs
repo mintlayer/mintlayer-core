@@ -16,7 +16,7 @@
 use thiserror::Error;
 
 use common::{
-    chain::{Block, GenBlock, OrderId, PoolId},
+    chain::{tokens::TokenId, Block, GenBlock, OrderId, PoolId},
     primitives::{BlockHeight, Id},
 };
 
@@ -49,8 +49,6 @@ pub enum PropertyQueryError {
     StakerBalanceOverflow(PoolId),
     #[error("Balance of pool {0} not found")]
     PoolBalanceNotFound(PoolId),
-    #[error("Balance of order {0} not found")]
-    OrderBalanceNotFound(OrderId),
     #[error("Unsupported token V0 in order {0}")]
     UnsupportedTokenV0InOrder(OrderId),
     #[error("Invalid starting block height: {0}")]
@@ -60,6 +58,8 @@ pub enum PropertyQueryError {
         start: BlockHeight,
         end: BlockHeight,
     },
+    #[error("Token info missing for token {0:x}")]
+    TokenInfoMissing(TokenId),
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]

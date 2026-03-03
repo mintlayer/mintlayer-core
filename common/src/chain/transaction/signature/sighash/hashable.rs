@@ -113,8 +113,8 @@ impl SignatureHashableElement for SignatureHashableInputs<'_> {
                 {
                     // Commit the extra commitments
                     hash_encoded_to(&(self.input_commitments.len() as u32), stream);
-                    for input_info in self.input_commitments {
-                        hash_encoded_to(&input_info, stream);
+                    for input_commitment in self.input_commitments {
+                        hash_encoded_to(&input_commitment, stream);
                     }
                 }
             }

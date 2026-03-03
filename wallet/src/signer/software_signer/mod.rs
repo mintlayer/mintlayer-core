@@ -15,6 +15,7 @@
 
 use std::sync::{Arc, Mutex};
 
+use async_trait::async_trait;
 use itertools::Itertools;
 
 use common::{
@@ -31,8 +32,6 @@ use common::{
                     },
                     encode_decode_multisig_spend::{decode_multisig_spend, encode_multisig_spend},
                 },
-                htlc::produce_uniparty_signature_for_htlc_input,
-                standard_signature::StandardInputSignature,
                 InputWitness,
             },
             sighash::{
@@ -50,13 +49,17 @@ use crypto::key::{
     PredefinedSigAuxDataProvider, PrivateKey, SigAuxDataProvider,
 };
 use randomness::make_true_rng;
+use utils::ensure;
 use wallet_storage::{
-    StoreTxRwUnlocked, WalletStorageReadLocked, WalletStorageReadUnlocked,
-    WalletStorageWriteUnlocked,
+    WalletStorageReadLocked, WalletStorageReadUnlocked, WalletStorageWriteUnlocked,
 };
 use wallet_types::{
-    hw_data::HardwareWalletFullInfo, partially_signed_transaction::PartiallySignedTransaction,
-    seed_phrase::StoreSeedPhrase, signature_status::SignatureStatus, AccountId,
+    hw_data::HardwareWalletFullInfo,
+    partially_signed_transaction::{PartiallySignedTransaction, TokensAdditionalInfo},
+    seed_phrase::StoreSeedPhrase,
+    signature_status::SignatureStatus,
+    wallet_type::WalletType,
+    AccountId,
 };
 
 use crate::{
@@ -64,15 +67,16 @@ use crate::{
         make_account_path, AccountKeyChainImplSoftware, AccountKeyChains, FoundPubKey,
         MasterKeyChain,
     },
-    Account, WalletResult,
+    signer::utils::produce_uniparty_signature_for_input,
+    Account, WalletError, WalletResult,
 };
 
-use super::{Signer, SignerError, SignerProvider, SignerResult};
+use super::{utils::is_htlc_utxo, Signer, SignerError, SignerProvider, SignerResult};
 
 pub struct SoftwareSigner {
     chain_config: Arc<ChainConfig>,
     account_index: U31,
-    sig_aux_data_provider: Mutex<Box<dyn SigAuxDataProvider>>,
+    sig_aux_data_provider: Mutex<Box<dyn SigAuxDataProvider + Send>>,
 }
 
 impl SoftwareSigner {
@@ -98,7 +102,7 @@ impl SoftwareSigner {
     pub fn new_with_sig_aux_data_provider(
         chain_config: Arc<ChainConfig>,
         account_index: U31,
-        sig_aux_data_provider: Box<dyn SigAuxDataProvider>,
+        sig_aux_data_provider: Box<dyn SigAuxDataProvider + Send>,
     ) -> Self {
         Self {
             chain_config,
@@ -157,32 +161,18 @@ impl SoftwareSigner {
                 let sig = self
                     .get_private_key_for_destination(destination, key_chain, db_tx)?
                     .map(|private_key| {
-                        let sighash_type = SigHashType::all();
-                        match htlc_secret {
-                            Some(htlc_secret) => produce_uniparty_signature_for_htlc_input(
-                                &private_key,
-                                sighash_type,
-                                destination.clone(),
-                                tx,
-                                input_commitments,
-                                input_index,
-                                htlc_secret.clone(),
-                                self.sig_aux_data_provider.lock().expect("poisoned mutex").as_mut(),
-                            )
-                            .map(InputWitness::Standard)
-                            .map_err(SignerError::SigningError),
-                            None => StandardInputSignature::produce_uniparty_signature_for_input(
-                                &private_key,
-                                sighash_type,
-                                destination.clone(),
-                                tx,
-                                input_commitments,
-                                input_index,
-                                self.sig_aux_data_provider.lock().expect("poisoned mutex").as_mut(),
-                            )
-                            .map(InputWitness::Standard)
-                            .map_err(SignerError::SigningError),
-                        }
+                        let is_htlc_input = input_utxo.is_some_and(is_htlc_utxo);
+
+                        produce_uniparty_signature_for_input(
+                            is_htlc_input,
+                            htlc_secret.clone(),
+                            &private_key,
+                            destination.clone(),
+                            tx,
+                            input_commitments,
+                            input_index,
+                            self.sig_aux_data_provider.lock().expect("poisoned mutex").as_mut(),
+                        )
                     })
                     .transpose()?;
 
@@ -206,6 +196,8 @@ impl SoftwareSigner {
                         db_tx,
                     )?;
 
+                    // Note: this will check whether the utxo is an htlc one and produce
+                    // AuthorizedHashedTimelockContractSpend if it is.
                     let signature = encode_multisig_spend(&sig, input_utxo);
 
                     return Ok((Some(InputWitness::Standard(signature)), status));
@@ -285,12 +277,14 @@ impl SoftwareSigner {
     }
 }
 
+#[async_trait]
 impl Signer for SoftwareSigner {
-    fn sign_tx(
+    async fn sign_tx(
         &mut self,
         ptx: PartiallySignedTransaction,
-        key_chain: &impl AccountKeyChains,
-        db_tx: &impl WalletStorageReadUnlocked,
+        _tokens_additional_info: &TokensAdditionalInfo,
+        key_chain: &(impl AccountKeyChains + Sync),
+        db_tx: impl WalletStorageReadUnlocked + Send,
         block_height: BlockHeight,
     ) -> SignerResult<(
         PartiallySignedTransaction,
@@ -319,15 +313,15 @@ impl Signer for SoftwareSigner {
                         InputWitness::Standard(sig) => match destination {
                             Some(destination) => {
                                 let sig_verified =
-                                tx_verifier::input_check::signature_only_check::verify_tx_signature(
-                                    &self.chain_config,
-                                    destination,
-                                    &ptx,
-                                    &input_commitments,
-                                    i,
-                                    input_utxo.clone()
-                                )
-                                .is_ok();
+                                    tx_verifier::input_check::signature_only_check::verify_tx_signature(
+                                        &self.chain_config,
+                                        destination,
+                                        &ptx,
+                                        &input_commitments,
+                                        i,
+                                        input_utxo.clone()
+                                    )
+                                    .is_ok();
 
                                 if sig_verified {
                                     Ok((
@@ -347,7 +341,7 @@ impl Signer for SoftwareSigner {
                                             &input_commitments,
                                             sig_components,
                                             key_chain,
-                                            db_tx,
+                                            &db_tx,
                                         )?;
 
                                     let signature =
@@ -383,7 +377,7 @@ impl Signer for SoftwareSigner {
                                 &input_commitments,
                                 key_chain,
                                 htlc_secret,
-                                db_tx,
+                                &db_tx,
                             )?;
                             Ok((sig, SignatureStatus::NotSigned, status))
                         }
@@ -398,15 +392,15 @@ impl Signer for SoftwareSigner {
         Ok((ptx.with_witnesses(witnesses)?, prev_statuses, new_statuses))
     }
 
-    fn sign_challenge(
+    async fn sign_challenge(
         &mut self,
         message: &[u8],
         destination: &Destination,
-        key_chain: &impl AccountKeyChains,
-        db_tx: &impl WalletStorageReadUnlocked,
+        key_chain: &(impl AccountKeyChains + Sync),
+        db_tx: impl WalletStorageReadUnlocked + Send,
     ) -> SignerResult<ArbitraryMessageSignature> {
         let private_key = self
-            .get_private_key_for_destination(destination, key_chain, db_tx)?
+            .get_private_key_for_destination(destination, key_chain, &db_tx)?
             .ok_or(SignerError::DestinationNotFromThisWallet)?;
 
         let sig = ArbitraryMessageSignature::produce_uniparty_signature(
@@ -419,20 +413,20 @@ impl Signer for SoftwareSigner {
         Ok(sig)
     }
 
-    fn sign_transaction_intent(
+    async fn sign_transaction_intent(
         &mut self,
         transaction: &Transaction,
         input_destinations: &[Destination],
         intent: &str,
-        key_chain: &impl AccountKeyChains,
-        db_tx: &impl WalletStorageReadUnlocked,
+        key_chain: &(impl AccountKeyChains + Sync),
+        db_tx: impl WalletStorageReadUnlocked + Send,
     ) -> SignerResult<SignedTransactionIntent> {
         SignedTransactionIntent::produce_from_transaction(
             transaction,
             input_destinations,
             intent,
             |dest| {
-                self.get_private_key_for_destination(dest, key_chain, db_tx)?
+                self.get_private_key_for_destination(dest, key_chain, &db_tx)?
                     .ok_or(SignerError::DestinationNotFromThisWallet)
             },
             self.sig_aux_data_provider.lock().expect("poisoned mutex").as_mut(),
@@ -460,9 +454,9 @@ pub struct SoftwareSignerProvider {
 }
 
 impl SoftwareSignerProvider {
-    pub fn new_from_mnemonic<B: storage::Backend>(
+    pub fn new_from_mnemonic(
         chain_config: Arc<ChainConfig>,
-        db_tx: &mut StoreTxRwUnlocked<B>,
+        db_tx: &mut impl WalletStorageWriteUnlocked,
         mnemonic_str: &str,
         passphrase: Option<&str>,
         save_seed_phrase: StoreSeedPhrase,
@@ -482,11 +476,17 @@ impl SoftwareSignerProvider {
         chain_config: Arc<ChainConfig>,
         db_tx: &impl WalletStorageReadLocked,
     ) -> WalletResult<Self> {
+        let this_wallet_type = db_tx.get_wallet_type()?;
+        ensure!(
+            this_wallet_type == WalletType::Hot || this_wallet_type == WalletType::Cold,
+            WalletError::HardwareWalletOpenedAsSoftwareWallet(this_wallet_type)
+        );
         let master_key_chain = MasterKeyChain::new_from_existing_database(chain_config, db_tx)?;
         Ok(Self { master_key_chain })
     }
 }
 
+#[async_trait]
 impl SignerProvider for SoftwareSignerProvider {
     type S = SoftwareSigner;
     type K = AccountKeyChainImplSoftware;
@@ -495,12 +495,12 @@ impl SignerProvider for SoftwareSignerProvider {
         SoftwareSigner::new(chain_config, account_index)
     }
 
-    fn make_new_account(
+    async fn make_new_account<T: WalletStorageWriteUnlocked + Send>(
         &mut self,
         chain_config: Arc<ChainConfig>,
         next_account_index: U31,
         name: Option<String>,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
+        db_tx: &mut T,
     ) -> WalletResult<Account<AccountKeyChainImplSoftware>> {
         let lookahead_size = db_tx.get_lookahead_size()?;
         let account_key_chain = self.master_key_chain.create_account_key_chain(
