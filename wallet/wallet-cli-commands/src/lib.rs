@@ -1256,6 +1256,14 @@ pub enum WalletCommand {
 
     /// Spend the specified utxo, moving the corresponding funds (coins or tokens) to the specified
     /// address.
+    ///
+    /// Note that when moving coins, the command will use the same utxo to pays the fees, so the resulting transaction
+    /// will have exactly one input and one output. When moving tokens, on the other hand, extra coin inputs will
+    /// be selected to pay the fees, and extra coin outputs will be added to pay back the change, with the change being
+    /// sent to a newly generated change address.
+    ///
+    /// Also note that though pool decommissioning is technically a spending of a utxo, you can't decommission a pool
+    /// using this command. Use `staking-decommission-pool` for that purpose instead.
     #[clap(name = "utxo-spend")]
     SpendUtxo {
         /// The utxo to spend, e.g. tx(000000000000000000059fa50103b9683e51e5aba83b8a34c9b98ce67d66136c,1).
