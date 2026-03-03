@@ -96,7 +96,9 @@ async fn auto_confirmer(mut control_msg_rx: mpsc::Receiver<ControlMessage>, hand
         tokio::select! {
             _ = sleep(Duration::from_millis(500)) => {
                 if let Ok(events) = handle.current_screen_events().await {
-                    let to_sign = events.iter().any(|e| e.contains("Sign "));
+                    let to_sign = events.iter().any(|e|
+                        e.contains("Sign transaction") || e.contains("Sign message")
+                    );
 
                     if to_sign {
                         let _ = handle.confirm().await;

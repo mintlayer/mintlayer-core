@@ -170,14 +170,14 @@ impl Handle {
 
         log::debug!("Sending button request: {}:{}", button, action);
 
-        let r = Client::new()
+        let response = Client::new()
             .post(format!("http://{}/button/{}", self.addr(), button))
             .json(&ButtonPayload { action })
             .send()
             .await?;
 
-        if !r.status().is_success() {
-            anyhow::bail!("Button request failed: {}", r.status());
+        if !response.status().is_success() {
+            anyhow::bail!("Button request failed: {}", response.status());
         }
 
         Ok(())
@@ -194,14 +194,14 @@ impl Handle {
             delay: None,
         };
 
-        let r = Client::new()
+        let response = Client::new()
             .post(format!("http://{}/finger", self.addr()))
             .json(&payload)
             .send()
             .await?;
 
-        if !r.status().is_success() {
-            anyhow::bail!("Finger request failed: {}", r.status());
+        if !response.status().is_success() {
+            anyhow::bail!("Finger request failed: {}", response.status());
         }
 
         Ok(())
@@ -241,19 +241,19 @@ impl Handle {
     pub async fn current_screen_events(&self) -> anyhow::Result<Vec<String>> {
         log::debug!("Fetching current screen events");
 
-        let r = Client::new()
+        let response = Client::new()
             .get(format!("http://{}/events", self.addr()))
             .query(&[("currentscreenonly", "true")])
             .send()
             .await?;
 
-        if !r.status().is_success() {
-            anyhow::bail!("Events request failed: {}", r.status());
+        if !response.status().is_success() {
+            anyhow::bail!("Events request failed: {}", response.status());
         }
 
-        let response: EventsResponse = r.json().await?;
+        let parsed_response: EventsResponse = response.json().await?;
 
-        let texts = response.events.into_iter().map(|event| event.text).collect();
+        let texts = parsed_response.events.into_iter().map(|event| event.text).collect();
 
         Ok(texts)
     }
