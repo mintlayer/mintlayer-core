@@ -19,7 +19,7 @@ use common::{
     address::{pubkeyhash::PublicKeyHash, Address},
     chain::{
         classic_multisig::ClassicMultisigChallenge,
-        htlc::HashedTimelockContract,
+        htlc::{HashedTimelockContract, HtlcSecret},
         output_value::OutputValue,
         signature::inputsig::arbitrary_message::ArbitraryMessageSignature,
         tokens::{IsTokenUnfreezable, Metadata, RPCFungibleTokenInfo, TokenId, TokenIssuance},
@@ -1839,6 +1839,59 @@ where
             }
         };
         Ok(orders)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub async fn create_spend_utxo_tx(
+        &mut self,
+        account_index: U31,
+        utxo_outpoint: UtxoOutPoint,
+        output_address: Destination,
+        htlc_secret: Option<HtlcSecret>,
+        current_fee_rate: FeeRate,
+        consolidate_fee_rate: FeeRate,
+        additional_info: TxAdditionalInfo,
+    ) -> WalletResult<SignedTxWithFees> {
+        match self {
+            RuntimeWallet::Software(w) => {
+                w.create_spend_utxo_tx(
+                    account_index,
+                    utxo_outpoint,
+                    output_address,
+                    htlc_secret,
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                    additional_info,
+                )
+                .await
+            }
+            #[cfg(feature = "trezor")]
+            RuntimeWallet::Trezor(w) => {
+                w.create_spend_utxo_tx(
+                    account_index,
+                    utxo_outpoint,
+                    output_address,
+                    htlc_secret,
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                    additional_info,
+                )
+                .await
+            }
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => {
+                w.create_spend_utxo_tx(
+                    account_index,
+                    utxo_outpoint,
+                    output_address,
+                    htlc_secret,
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                    additional_info,
+                )
+                .await
+            }
+        }
     }
 
     pub async fn sign_raw_transaction(

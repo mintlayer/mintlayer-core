@@ -26,12 +26,18 @@ use crate::wallet_rpc_traits::WalletInterface;
 pub enum WalletRpcError {
     #[error("Initialization error: {0}")]
     InitializationError(Box<WalletRpcError>),
+
     #[error("Decoding error: {0}")]
     DecodingError(#[from] serialization::hex::HexError),
+
     #[error("Client creation error: {0}")]
     ClientCreationError(ClientError),
+
     #[error("Response error: {0}")]
     ResponseError(ClientError),
+
+    #[error("Invalid HTLC secret")]
+    InvalidHtlcSecret,
 }
 
 impl From<hex::FromHexError> for WalletRpcError {

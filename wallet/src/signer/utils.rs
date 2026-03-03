@@ -29,6 +29,7 @@ use common::chain::{
     Destination, Transaction, TxOutput,
 };
 use crypto::key::{PrivateKey, SigAuxDataProvider};
+use utils::debug_assert_or_log;
 
 use crate::signer::{SignerError, SignerResult};
 
@@ -86,7 +87,10 @@ pub fn produce_uniparty_signature_for_input<AuxP: SigAuxDataProvider + ?Sized>(
             ),
         }
     } else {
-        assert!(htlc_secret.is_none());
+        debug_assert_or_log!(
+            htlc_secret.is_none(),
+            "HTLC secret provided for non-HTLC input"
+        );
 
         StandardInputSignature::produce_uniparty_signature_for_input(
             private_key,

@@ -32,9 +32,10 @@ use common::{
     chain::{
         block::timestamp::BlockTimestamp,
         classic_multisig::ClassicMultisigChallenge,
-        htlc::HashedTimelockContract,
+        htlc::{HashedTimelockContract, HtlcSecret},
         make_token_id,
         output_value::{OutputValue, RpcOutputValue},
+        signature::inputsig::authorize_hashed_timelock_contract_spend::AuthorizedHashedTimelockContractSpendTag,
         tokens::{
             IsTokenUnfreezable, NftIssuance, NftIssuanceV0, RPCFungibleTokenInfo, TokenId,
             TokenIssuance,
@@ -48,7 +49,8 @@ use common::{
         Amount, BlockHeight, Id,
     },
     size_estimation::{
-        input_signature_size, input_signature_size_from_destination, outputs_encoded_size,
+        input_signature_size, input_signature_size_from_destination,
+        input_signatures_size_from_destinations, inputs_encoded_size, outputs_encoded_size,
         tx_size_with_num_inputs_and_outputs, DestinationInfoProvider,
     },
     Uint256,
@@ -64,7 +66,7 @@ use crypto::{
 };
 use mempool::FeeRate;
 use serialization::hex_encoded::HexEncoded;
-use utils::ensure;
+use utils::{ensure, iter::CloneableExactSizeIterator};
 use wallet_storage::{
     StoreTxRw, WalletStorageReadLocked, WalletStorageReadUnlocked, WalletStorageWriteLocked,
     WalletStorageWriteUnlocked,
@@ -109,6 +111,7 @@ pub use self::{
     utxo_selector::{CoinSelectionAlgo, UtxoSelectorError},
 };
 
+#[derive(Debug)]
 pub struct CurrentFeeRate {
     pub current_fee_rate: FeeRate,
     pub consolidate_fee_rate: FeeRate,
@@ -485,6 +488,7 @@ impl<K: AccountKeyChains> Account<K> {
         request.with_inputs(selected_inputs, &pool_data_getter)
     }
 
+    // Note: this function is supposed to be called for non-htlc utxos only.
     fn utxo_output_groups_by_currency(
         &self,
         fee_rates: CurrentFeeRate,
@@ -496,7 +500,7 @@ impl<K: AccountKeyChains> Account<K> {
                 let tx_input: TxInput = outpoint.into();
                 let input_size = serialization::Encode::encoded_size(&tx_input);
 
-                let inp_sig_size = input_signature_size(&txo, Some(self))?;
+                let inp_sig_size = input_signature_size(&txo, None, Some(self))?;
                 let weight = input_size + inp_sig_size;
 
                 let fee = fee_rates
@@ -582,10 +586,9 @@ impl<K: AccountKeyChains> Account<K> {
             .collect::<Vec<_>>();
 
         let coin_output = TxOutput::Transfer(
-            OutputValue::Coin(
-                (coin_input.amount - input_fees)
-                    .ok_or(WalletError::NotEnoughUtxo(coin_input.amount, input_fees))?,
-            ),
+            OutputValue::Coin((coin_input.amount - input_fees).ok_or(
+                WalletError::InsufficientUtxoAmount(coin_input.amount, input_fees),
+            )?),
             destination.clone(),
         );
 
@@ -599,10 +602,9 @@ impl<K: AccountKeyChains> Account<K> {
         outputs.pop();
 
         let coin_output = TxOutput::Transfer(
-            OutputValue::Coin(
-                (coin_input.amount - total_fee)
-                    .ok_or(WalletError::NotEnoughUtxo(coin_input.amount, input_fees))?,
-            ),
+            OutputValue::Coin((coin_input.amount - total_fee).ok_or(
+                WalletError::InsufficientUtxoAmount(coin_input.amount, input_fees),
+            )?),
             destination,
         );
         outputs.push(coin_output);
@@ -645,6 +647,7 @@ impl<K: AccountKeyChains> Account<K> {
                     + input_size
                     + input_signature_size_from_destination(
                         &delegation_data.destination,
+                        None,
                         Some(self),
                     )?,
             )
@@ -671,6 +674,36 @@ impl<K: AccountKeyChains> Account<K> {
         Ok(req)
     }
 
+    fn calculate_tx_fee<'a>(
+        &self,
+        current_fee_rate: FeeRate,
+        outputs: impl ExactSizeIterator<Item = &'a TxOutput>,
+        inputs_with_destinations: impl CloneableExactSizeIterator<
+            Item = (
+                &'a TxInput,
+                Option<(
+                    &'a Destination,
+                    Option<AuthorizedHashedTimelockContractSpendTag>,
+                )>,
+            ),
+        >,
+    ) -> WalletResult<Amount> {
+        let size =
+            tx_size_with_num_inputs_and_outputs(outputs.len(), inputs_with_destinations.len())?
+                + outputs_encoded_size(outputs)
+                + inputs_encoded_size(inputs_with_destinations.clone().map(|(input, _)| input))
+                + input_signatures_size_from_destinations(
+                    inputs_with_destinations
+                        .filter_map(|(_, dest_and_htlc_spend_tag)| dest_and_htlc_spend_tag),
+                    Some(self),
+                )?;
+
+        Ok(current_fee_rate
+            .compute_fee(size)
+            .map_err(|_| UtxoSelectorError::AmountArithmeticError)?
+            .into())
+    }
+
     fn decommission_stake_pool_impl(
         &mut self,
         db_tx: &mut impl WalletStorageWriteLocked,
@@ -689,41 +722,32 @@ impl<K: AccountKeyChains> Account<K> {
         let best_block_height = self.best_block().1;
         let tx_input = TxInput::Utxo(pool_data.utxo_outpoint.clone());
 
-        let network_fee: Amount = {
-            let output = make_decommission_stake_pool_output(
+        let network_fee = self.calculate_tx_fee(
+            current_fee_rate,
+            [make_decommission_stake_pool_output(
                 self.chain_config.as_ref(),
                 output_destination.clone(),
                 pool_balance,
                 best_block_height,
-            )?;
-            let outputs = vec![output];
-
-            current_fee_rate
-                .compute_fee(
-                    tx_size_with_num_inputs_and_outputs(outputs.len(), 1)?
-                        + outputs_encoded_size(outputs.as_slice())
-                        + input_signature_size_from_destination(
-                            &pool_data.decommission_key,
-                            Some(self),
-                        )?
-                        + serialization::Encode::encoded_size(&tx_input),
-                )
-                .map_err(|_| UtxoSelectorError::AmountArithmeticError)?
-                .into()
-        };
+            )?]
+            .iter(),
+            [(&tx_input, Some((&pool_data.decommission_key, None)))].into_iter(),
+        )?;
 
         let output = make_decommission_stake_pool_output(
             self.chain_config.as_ref(),
             output_destination,
-            (pool_balance - network_fee)
-                .ok_or(WalletError::NotEnoughUtxo(network_fee, pool_balance))?,
+            (pool_balance - network_fee).ok_or(WalletError::InsufficientUtxoAmount(
+                network_fee,
+                pool_balance,
+            ))?,
             best_block_height,
         )?;
 
         let input_utxo = self
             .output_cache
             .get_txo(&pool_data.utxo_outpoint)
-            .ok_or(WalletError::NoUtxos)?;
+            .ok_or(WalletError::UtxoMissing(pool_data.utxo_outpoint.clone()))?;
 
         let mut req = SendRequest::new()
             .with_inputs([(tx_input, input_utxo.clone(), None)], &|id| {
@@ -797,6 +821,7 @@ impl<K: AccountKeyChains> Account<K> {
                     + outputs_encoded_size(outputs.as_slice())
                     + input_signature_size_from_destination(
                         &delegation_data.destination,
+                        None,
                         Some(self),
                     )?,
             )
@@ -1138,6 +1163,136 @@ impl<K: AccountKeyChains> Account<K> {
             fee_rate,
             Some(BTreeMap::from_iter([(order_id, &order_info)])),
         )
+    }
+
+    pub fn create_spend_utxo_tx(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteLocked,
+        utxo_outpoint: UtxoOutPoint,
+        output_address: Destination,
+        htlc_secret: Option<HtlcSecret>,
+        median_time: BlockTimestamp,
+        fee_rate: CurrentFeeRate,
+    ) -> WalletResult<SendRequest> {
+        let utxo = self
+            .output_cache
+            .get_txo(&utxo_outpoint)
+            .ok_or_else(|| WalletError::UtxoMissing(utxo_outpoint.clone()))?
+            .clone();
+
+        let (utxo_output_value, utxo_destination, htlc_secret_hash) = match &utxo {
+            TxOutput::Transfer(output_value, dest)
+            | TxOutput::LockThenTransfer(output_value, dest, _) => {
+                (output_value.clone(), dest, None)
+            }
+            | TxOutput::Htlc(output_value, htlc) => {
+                let dest = match &htlc_secret {
+                    Some(_) => &htlc.spend_key,
+                    None => &htlc.refund_key,
+                };
+                (output_value.clone(), dest, Some(&htlc.secret_hash))
+            }
+            TxOutput::IssueNft(nft_id, _, dest) => (
+                OutputValue::TokenV1(*nft_id, Amount::from_atoms(1)),
+                dest,
+                None,
+            ),
+            TxOutput::Burn(_)
+            | TxOutput::CreateStakePool(_, _)
+            | TxOutput::ProduceBlockFromStake(_, _)
+            | TxOutput::CreateDelegationId(_, _)
+            | TxOutput::DelegateStaking(_, _)
+            | TxOutput::IssueFungibleToken(_)
+            | TxOutput::DataDeposit(_)
+            | TxOutput::CreateOrder(_) => {
+                return Err(WalletError::UnsupportedUtxoType((&utxo).into()));
+            }
+        };
+
+        // Check that the htlc secret is consistent with the utxo and determine the spend tag.
+        let htlc_spend_tag = match (htlc_secret.as_ref(), htlc_secret_hash) {
+            (None, None) => {
+                // Non-htlc utxo, no secret.
+                None
+            }
+            (None, Some(_)) => {
+                // Htlc utxo, no secret => we're refunding.
+                Some(AuthorizedHashedTimelockContractSpendTag::Refund)
+            }
+            (Some(_), None) => {
+                // Non-htlc utxo, but a secret was provided
+                return Err(WalletError::HtlcSecretProvidedForNonHtlcUtxo);
+            }
+            (Some(secret), Some(secret_hash)) => {
+                // Got htlc utxo and the secret => we're spending.
+                // Check that the hashes match.
+                let actual_secret_hash = secret.hash();
+                ensure!(
+                    &actual_secret_hash == secret_hash,
+                    WalletError::HtlcSecretDoesntMatchHash {
+                        actual: actual_secret_hash,
+                        expected: *secret_hash
+                    }
+                );
+
+                Some(AuthorizedHashedTimelockContractSpendTag::Spend)
+            }
+        };
+
+        // Check that the destination belongs to this account, to avoid a fairly cryptic error message
+        // "Failed to convert partially signed tx to signed".
+        ensure!(
+            self.is_destination_mine(utxo_destination),
+            WalletError::NoKeysToSignTx
+        );
+
+        let tx_input = TxInput::Utxo(utxo_outpoint);
+
+        // When dealing with coin utxo we calculate the fee manually instead of using
+        // `select_inputs_for_send_request`, to avoid selecting redundant extra utxos for the fee.
+        if let Some(coin_amount) = utxo_output_value.coin_amount() {
+            let fee = self.calculate_tx_fee(
+                fee_rate.current_fee_rate,
+                [TxOutput::Transfer(OutputValue::Coin(coin_amount), output_address.clone())].iter(),
+                [(&tx_input, Some((utxo_destination, htlc_spend_tag)))].into_iter(),
+            )?;
+
+            let transfer_amount =
+                (coin_amount - fee).ok_or(WalletError::InsufficientUtxoAmount(fee, coin_amount))?;
+
+            let output = TxOutput::Transfer(OutputValue::Coin(transfer_amount), output_address);
+
+            let mut request = SendRequest::new().with_outputs([output]).with_all_inputs_data([(
+                tx_input,
+                utxo_destination.clone(),
+                Some(utxo),
+                htlc_secret,
+            )]);
+
+            request.add_fee(Currency::Coin, fee)?;
+
+            Ok(request)
+        } else {
+            let output = TxOutput::Transfer(utxo_output_value.clone(), output_address);
+
+            let request = SendRequest::new().with_outputs([output]).with_all_inputs_data([(
+                tx_input,
+                utxo_destination.clone(),
+                Some(utxo),
+                htlc_secret,
+            )]);
+
+            self.select_inputs_for_send_request(
+                request,
+                SelectedInputs::Utxos(vec![]),
+                None,
+                BTreeMap::new(),
+                db_tx,
+                median_time,
+                fee_rate,
+                None,
+            )
+        }
     }
 
     pub fn create_issue_nft_tx(
@@ -2495,11 +2650,41 @@ fn group_preselected_inputs(
     let mut preselected_inputs = BTreeMap::new();
     let mut total_input_sizes = 0;
     let mut total_input_fees = Amount::ZERO;
-    for (input, destination, utxo) in
-        izip!(request.inputs(), request.destinations(), request.utxos())
-    {
+    for (input, destination, utxo, htlc_secret) in izip!(
+        request.inputs(),
+        request.destinations(),
+        request.utxos(),
+        request.htlc_secrets()
+    ) {
+        let htlc_spend_tag = if let Some(utxo) = utxo {
+            match utxo {
+                TxOutput::Htlc(_, _) => {
+                    if htlc_secret.is_some() {
+                        Some(AuthorizedHashedTimelockContractSpendTag::Spend)
+                    } else {
+                        Some(AuthorizedHashedTimelockContractSpendTag::Refund)
+                    }
+                }
+
+                TxOutput::Transfer(_, _)
+                | TxOutput::LockThenTransfer(_, _, _)
+                | TxOutput::Burn(_)
+                | TxOutput::CreateStakePool(_, _)
+                | TxOutput::ProduceBlockFromStake(_, _)
+                | TxOutput::CreateDelegationId(_, _)
+                | TxOutput::DelegateStaking(_, _)
+                | TxOutput::IssueFungibleToken(_)
+                | TxOutput::IssueNft(_, _, _)
+                | TxOutput::DataDeposit(_)
+                | TxOutput::CreateOrder(_) => None,
+            }
+        } else {
+            None
+        };
+
         let input_size = serialization::Encode::encoded_size(&input);
-        let inp_sig_size = input_signature_size_from_destination(destination, dest_info_provider)?;
+        let inp_sig_size =
+            input_signature_size_from_destination(destination, htlc_spend_tag, dest_info_provider)?;
         let total_input_size = input_size + inp_sig_size;
 
         let fee = current_fee_rate

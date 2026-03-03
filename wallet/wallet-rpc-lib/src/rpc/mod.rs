@@ -1924,6 +1924,40 @@ where
         Ok(result)
     }
 
+    pub async fn spend_utxo(
+        &self,
+        account_index: U31,
+        utxo: RpcUtxoOutpoint,
+        output_address: RpcAddress<Destination>,
+        htlc_secret: Option<RpcHexString>,
+        config: ControllerConfig,
+    ) -> WRpcResult<RpcNewTransaction, N> {
+        let utxo = utxo.into_outpoint();
+        let output_address = output_address
+            .decode_object(&self.chain_config)
+            .map_err(|_| RpcError::InvalidAddress)?;
+        let htlc_secret = htlc_secret
+            .map(|s| -> WRpcResult<_, N> {
+                Ok(HtlcSecret::new(
+                    s.into_bytes().try_into().map_err(|_| RpcError::InvalidHtlcSecret)?,
+                ))
+            })
+            .transpose()?;
+
+        self.wallet
+            .call_async(move |w| {
+                Box::pin(async move {
+                    w.synced_controller(account_index, config)
+                        .await?
+                        .spend_utxo(utxo, output_address, htlc_secret)
+                        .await
+                        .map_err(RpcError::Controller)
+                        .map(RpcNewTransaction::new)
+                })
+            })
+            .await?
+    }
+
     pub async fn compose_transaction(
         &self,
         inputs: Vec<RpcUtxoOutpoint>,
