@@ -186,6 +186,33 @@ impl std::fmt::Display for DecimalAmount {
     }
 }
 
+/// A wrapper for `DecimalAmount` that uses `is_same` to implement comparison.
+///
+/// This is mainly intended to be used in error types to make them comparable (which in turn
+/// is mostly useful in tests).
+#[derive(Clone, Copy, Debug)]
+pub struct DecimalAmountWithIsSameComparison(pub DecimalAmount);
+
+impl PartialEq for DecimalAmountWithIsSameComparison {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.is_same(&other.0)
+    }
+}
+
+impl Eq for DecimalAmountWithIsSameComparison {}
+
+impl std::fmt::Display for DecimalAmountWithIsSameComparison {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl From<DecimalAmount> for DecimalAmountWithIsSameComparison {
+    fn from(value: DecimalAmount) -> Self {
+        Self(value)
+    }
+}
+
 #[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 pub enum ParseError {
     #[error("Resulting number is too big")]

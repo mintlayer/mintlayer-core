@@ -263,7 +263,7 @@ trait ColdWalletRpc {
 
     /// Signs transaction inputs that are not yet signed.
     ///
-    /// The input is a hex encoded transaction or PartiallySignedTransaction. This format is
+    /// The input is a hex-encoded transaction or PartiallySignedTransaction. This format is
     /// automatically used in this wallet in functions such as staking-decommission-pool-request.
     ///
     /// Once all signatures are complete, the result can be broadcast to the network.
@@ -995,7 +995,7 @@ trait WalletRpc {
         transaction_id: Id<Transaction>,
     ) -> rpc::RpcResult<serde_json::Value>;
 
-    /// Get a transaction from the wallet, if present, as hex encoded raw transaction
+    /// Get a transaction from the wallet, if present, as hex-encoded raw transaction
     #[method(name = "transaction_get_raw")]
     async fn get_raw_transaction(
         &self,
@@ -1003,7 +1003,7 @@ trait WalletRpc {
         transaction_id: Id<Transaction>,
     ) -> rpc::RpcResult<HexEncoded<Transaction>>;
 
-    /// Get a signed transaction from the wallet, if present, as hex encoded raw transaction
+    /// Get a signed transaction from the wallet, if present, as hex-encoded raw transaction
     #[method(name = "transaction_get_signed_raw")]
     async fn get_raw_signed_transaction(
         &self,
@@ -1013,7 +1013,7 @@ trait WalletRpc {
 
     /// Compose a new transaction from the specified outputs and selected utxos.
     ///
-    /// The transaction is returned in a hex encoded form that can be passed to account-sign-raw-transaction.
+    /// The transaction is returned in a hex-encoded form that can be passed to account-sign-raw-transaction.
     ///
     /// The fees that will be paid by the transaction are also returned.
     #[method(name = "transaction_compose")]
@@ -1079,7 +1079,7 @@ trait WalletRpc {
         check_all_timestamps_between_blocks: bool,
     ) -> rpc::RpcResult<BTreeMap<BlockHeight, Vec<BlockTimestamp>>>;
 
-    /// Get a block by its id, represented as hex encoded bytes
+    /// Get a block by its id, represented as hex-encoded bytes
     #[method(name = "node_get_block")]
     async fn node_block(&self, block_id: Id<Block>) -> rpc::RpcResult<Option<HexEncoded<Block>>>;
 

@@ -195,7 +195,7 @@ class WalletSubmitTransaction(BitcoinTestFramework):
             coins_from_multisig = '0.1'
             outputs = [TxOutput(address, coins_from_multisig) ]
             output = await wallet.compose_transaction(outputs, utxos, True)
-            assert_in("The hex encoded transaction is", output)
+            assert_in("The hex-encoded transaction is", output)
             encoded_tx = output.split('\n')[1]
 
             # sign the transaction from N random wallets

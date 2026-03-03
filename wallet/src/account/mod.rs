@@ -18,85 +18,96 @@ mod output_cache;
 pub mod transaction_list;
 mod utxo_selector;
 
-use common::address::pubkeyhash::PublicKeyHash;
-use common::chain::block::timestamp::BlockTimestamp;
-use common::chain::classic_multisig::ClassicMultisigChallenge;
-use common::chain::htlc::HashedTimelockContract;
-use common::chain::{
-    AccountCommand, AccountOutPoint, AccountSpending, OrderAccountCommand, OrderId, OrdersVersion,
-    RpcOrderInfo,
+use std::{
+    cmp::Reverse,
+    collections::{btree_map::Entry, BTreeMap, BTreeSet},
+    ops::{Add, Sub},
+    sync::Arc,
 };
-use common::primitives::id::WithId;
-use common::primitives::{Idable, H256};
-use common::size_estimation::{
-    input_signature_size, input_signature_size_from_destination, outputs_encoded_size,
-    tx_size_with_num_inputs_and_outputs, DestinationInfoProvider,
+
+use itertools::{izip, Itertools};
+
+use common::{
+    address::{pubkeyhash::PublicKeyHash, Address, RpcAddress},
+    chain::{
+        block::timestamp::BlockTimestamp,
+        classic_multisig::ClassicMultisigChallenge,
+        htlc::HashedTimelockContract,
+        make_token_id,
+        output_value::{OutputValue, RpcOutputValue},
+        tokens::{
+            IsTokenUnfreezable, NftIssuance, NftIssuanceV0, RPCFungibleTokenInfo, TokenId,
+            TokenIssuance,
+        },
+        AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, Block, ChainConfig,
+        Currency, DelegationId, Destination, GenBlock, OrderAccountCommand, OrderId, OrdersVersion,
+        PoolId, RpcOrderInfo, SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
+    },
+    primitives::{
+        id::{Idable, WithId, H256},
+        Amount, BlockHeight, Id,
+    },
+    size_estimation::{
+        input_signature_size, input_signature_size_from_destination, outputs_encoded_size,
+        tx_size_with_num_inputs_and_outputs, DestinationInfoProvider,
+    },
+    Uint256,
 };
-use common::Uint256;
-use crypto::key::extended::ExtendedPublicKey;
-use crypto::key::hdkd::child_number::ChildNumber;
+use consensus::PoSGenerateBlockInputData;
+use crypto::{
+    key::{
+        extended::ExtendedPublicKey,
+        hdkd::{child_number::ChildNumber, u31::U31},
+        PrivateKey, PublicKey,
+    },
+    vrf::VRFPublicKey,
+};
 use mempool::FeeRate;
 use serialization::hex_encoded::HexEncoded;
 use utils::ensure;
-use utxo_selector::SelectionResult;
-pub use utxo_selector::UtxoSelectorError;
-use wallet_types::account_id::AccountPrefixedId;
-use wallet_types::account_info::{StandaloneAddressDetails, StandaloneAddresses};
-use wallet_types::partially_signed_transaction::{PartiallySignedTransaction, PtxAdditionalInfo};
-use wallet_types::with_locked::WithLocked;
-
-use crate::account::utxo_selector::{select_coins, OutputGroup};
-use crate::destination_getters::{get_tx_output_destination, HtlcSpendingCondition};
-use crate::key_chain::{AccountKeyChains, KeyChainError, VRFAccountKeyChains};
-use crate::send_request::{
-    make_address_output, make_address_output_from_delegation, make_address_output_token,
-    make_decommission_stake_pool_output, make_mint_token_outputs, make_stake_output,
-    make_unmint_token_outputs, IssueNftArguments, SelectedInputs, StakePoolCreationArguments,
-    StakePoolCreationResolvedArguments,
-};
-use crate::wallet::WalletPoolsFilter;
-use crate::wallet_events::{WalletEvents, WalletEventsNoOp};
-use crate::{SendRequest, WalletError, WalletResult};
-use common::address::{Address, RpcAddress};
-use common::chain::output_value::{OutputValue, RpcOutputValue};
-use common::chain::tokens::{
-    IsTokenUnfreezable, NftIssuance, NftIssuanceV0, RPCFungibleTokenInfo, TokenId, TokenIssuance,
-};
-use common::chain::{
-    make_token_id, AccountNonce, Block, ChainConfig, Currency, DelegationId, Destination, GenBlock,
-    PoolId, SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
-};
-use common::primitives::{Amount, BlockHeight, Id};
-use consensus::PoSGenerateBlockInputData;
-use crypto::key::hdkd::u31::U31;
-use crypto::key::{PrivateKey, PublicKey};
-use crypto::vrf::VRFPublicKey;
-use itertools::{izip, Itertools};
-use std::cmp::Reverse;
-use std::collections::btree_map::Entry;
-use std::collections::{BTreeMap, BTreeSet};
-use std::ops::{Add, Sub};
-use std::sync::Arc;
 use wallet_storage::{
     StoreTxRw, WalletStorageReadLocked, WalletStorageReadUnlocked, WalletStorageWriteLocked,
     WalletStorageWriteUnlocked,
 };
-use wallet_types::utxo_types::{get_utxo_type, UtxoState, UtxoStates, UtxoType, UtxoTypes};
-use wallet_types::wallet_tx::{BlockData, TxData, TxState};
 use wallet_types::{
+    account_id::AccountPrefixedId,
+    account_info::{StandaloneAddressDetails, StandaloneAddresses},
+    partially_signed_transaction::PartiallySignedTransaction,
+    utxo_types::{get_utxo_type, UtxoState, UtxoStates, UtxoType, UtxoTypes},
+    wallet_tx::{BlockData, TxData, TxState},
+    with_locked::WithLocked,
     AccountId, AccountInfo, AccountWalletCreatedTxId, AccountWalletTxId, BlockInfo, KeyPurpose,
     KeychainUsageState, WalletTx,
 };
 
-pub use self::output_cache::{
-    DelegationData, OrderData, OutputCacheInconsistencyError, OwnFungibleTokenInfo, PoolData,
-    TxChanged, TxInfo, UnconfirmedTokenInfo, UtxoWithTxOutput,
+use crate::{
+    account::utxo_selector::{select_coins, OutputGroup},
+    destination_getters::{get_tx_output_destination, HtlcSpendingCondition},
+    key_chain::{AccountKeyChains, KeyChainError, VRFAccountKeyChains},
+    send_request::{
+        make_address_output, make_address_output_from_delegation, make_address_output_token,
+        make_decommission_stake_pool_output, make_mint_token_outputs, make_stake_output,
+        make_unmint_token_outputs, IssueNftArguments, SelectedInputs, StakePoolCreationArguments,
+        StakePoolCreationResolvedArguments,
+    },
+    wallet::WalletPoolsFilter,
+    wallet_events::{WalletEvents, WalletEventsNoOp},
+    SendRequest, WalletError, WalletResult,
 };
-use self::output_cache::{OutputCache, TokenIssuanceData};
-use self::transaction_list::{get_transaction_list, TransactionList};
-use self::utxo_selector::PayFee;
 
-pub use self::utxo_selector::CoinSelectionAlgo;
+use self::{
+    output_cache::{OutputCache, TokenIssuanceData},
+    transaction_list::{get_transaction_list, TransactionList},
+    utxo_selector::{PayFee, SelectionResult},
+};
+
+pub use self::{
+    output_cache::{
+        DelegationData, OrderData, OutputCacheInconsistencyError, OwnFungibleTokenInfo, PoolData,
+        TxChanged, TxInfo, UnconfirmedTokenInfo, UtxoWithTxOutput,
+    },
+    utxo_selector::{CoinSelectionAlgo, UtxoSelectorError},
+};
 
 pub struct CurrentFeeRate {
     pub current_fee_rate: FeeRate,
@@ -201,7 +212,7 @@ impl<K: AccountKeyChains> Account<K> {
 
     // Note: the default selection algo depends on whether input_utxos are empty.
     #[allow(clippy::too_many_arguments)]
-    fn select_inputs_for_send_request(
+    pub fn select_inputs_for_send_request(
         &mut self,
         mut request: SendRequest,
         input_utxos: SelectedInputs,
@@ -658,57 +669,6 @@ impl<K: AccountKeyChains> Account<K> {
         req.add_fee(Currency::Coin, total_fee)?;
 
         Ok(req)
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    pub fn process_send_request(
-        &mut self,
-        db_tx: &mut impl WalletStorageWriteLocked,
-        request: SendRequest,
-        inputs: SelectedInputs,
-        selection_algo: Option<CoinSelectionAlgo>,
-        change_addresses: BTreeMap<Currency, Address<Destination>>,
-        median_time: BlockTimestamp,
-        fee_rate: CurrentFeeRate,
-        ptx_additional_info: PtxAdditionalInfo,
-    ) -> WalletResult<(PartiallySignedTransaction, BTreeMap<Currency, Amount>)> {
-        let mut request = self.select_inputs_for_send_request(
-            request,
-            inputs,
-            selection_algo,
-            change_addresses,
-            db_tx,
-            median_time,
-            fee_rate,
-            None,
-        )?;
-
-        let fees = request.get_fees();
-        let ptx = request.into_partially_signed_tx(ptx_additional_info)?;
-
-        Ok((ptx, fees))
-    }
-
-    pub fn process_send_request_and_sign(
-        &mut self,
-        db_tx: &mut impl WalletStorageWriteLocked,
-        request: SendRequest,
-        inputs: SelectedInputs,
-        change_addresses: BTreeMap<Currency, Address<Destination>>,
-        median_time: BlockTimestamp,
-        fee_rate: CurrentFeeRate,
-    ) -> WalletResult<SendRequest> {
-        self.select_inputs_for_send_request(
-            request,
-            inputs,
-            None,
-            change_addresses,
-            db_tx,
-            median_time,
-            fee_rate,
-            None,
-        )
-        // TODO: Randomize inputs and outputs
     }
 
     fn decommission_stake_pool_impl(
@@ -1263,7 +1223,7 @@ impl<K: AccountKeyChains> Account<K> {
         let tx_input = TxInput::AccountCommand(nonce, AccountCommand::MintTokens(token_id, amount));
         let authority = token_info.authority()?.clone();
 
-        self.change_token_supply_transaction(
+        self.make_change_token_transaction(
             authority,
             tx_input,
             outputs,
@@ -1290,7 +1250,7 @@ impl<K: AccountKeyChains> Account<K> {
         let tx_input = TxInput::AccountCommand(nonce, AccountCommand::UnmintTokens(token_id));
         let authority = token_info.authority()?.clone();
 
-        self.change_token_supply_transaction(
+        self.make_change_token_transaction(
             authority,
             tx_input,
             outputs,
@@ -1314,7 +1274,7 @@ impl<K: AccountKeyChains> Account<K> {
         let tx_input = TxInput::AccountCommand(nonce, AccountCommand::LockTokenSupply(token_id));
         let authority = token_info.authority()?.clone();
 
-        self.change_token_supply_transaction(
+        self.make_change_token_transaction(
             authority,
             tx_input,
             vec![],
@@ -1341,7 +1301,7 @@ impl<K: AccountKeyChains> Account<K> {
         );
         let authority = token_info.authority()?.clone();
 
-        self.change_token_supply_transaction(
+        self.make_change_token_transaction(
             authority,
             tx_input,
             vec![],
@@ -1365,7 +1325,7 @@ impl<K: AccountKeyChains> Account<K> {
             TxInput::AccountCommand(nonce, AccountCommand::UnfreezeToken(token_info.token_id()));
         let authority = token_info.authority()?.clone();
 
-        self.change_token_supply_transaction(
+        self.make_change_token_transaction(
             authority,
             tx_input,
             vec![],
@@ -1392,7 +1352,7 @@ impl<K: AccountKeyChains> Account<K> {
         );
         let authority = token_info.authority()?.clone();
 
-        self.change_token_supply_transaction(
+        self.make_change_token_transaction(
             authority,
             tx_input,
             vec![],
@@ -1417,7 +1377,7 @@ impl<K: AccountKeyChains> Account<K> {
         );
         let authority = token_info.authority()?.clone();
 
-        self.change_token_supply_transaction(
+        self.make_change_token_transaction(
             authority,
             tx_input,
             vec![],
@@ -1427,7 +1387,7 @@ impl<K: AccountKeyChains> Account<K> {
         )
     }
 
-    fn change_token_supply_transaction(
+    fn make_change_token_transaction(
         &mut self,
         authority: Destination,
         tx_input: TxInput,

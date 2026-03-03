@@ -142,7 +142,7 @@ class WalletComposeTransaction(BitcoinTestFramework):
 
             # compose a transaction with all our utxos and n outputs to the other acc and 1 as change
             output = await wallet.compose_transaction(outputs, utxos, True)
-            assert_in("The hex encoded transaction is", output)
+            assert_in("The hex-encoded transaction is", output)
             # check the fees include the 0.1 + any extra utxos
             assert_in(f"Coins amount: {((len(addresses) - (num_outputs + 1))*coins_to_send)}.1", output)
             encoded_tx = output.split('\n')[1]
@@ -158,7 +158,7 @@ class WalletComposeTransaction(BitcoinTestFramework):
             assert_in(f"Missing signatures: {len(utxos)}", output)
 
             output = await wallet.compose_transaction(outputs, utxos, False)
-            assert_in("The hex encoded transaction is", output)
+            assert_in("The hex-encoded transaction is", output)
             # check the fees include the 0.1 + any extra utxos
             assert_in(f"Coins amount: {((len(addresses) - (num_outputs + 1))*coins_to_send)}.1", output)
             encoded_ptx = output.split('\n')[1]

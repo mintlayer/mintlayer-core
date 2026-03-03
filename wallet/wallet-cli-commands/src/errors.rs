@@ -13,16 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::{
-    address::{AddressError, RpcAddress},
-    chain::OrderId,
-};
+use common::address::AddressError;
 use crypto::key::hdkd::u31::U31;
 use node_comm::node_traits::NodeInterface;
 use utils::qrcode::QrCodeError;
-use wallet_controller::types::GenericCurrencyTransferToTxOutputConversionError;
 use wallet_rpc_client::{handles_client::WalletRpcHandlesClientError, rpc_client::WalletRpcError};
 use wallet_rpc_lib::RpcError;
+
+use crate::helper_types;
 
 #[derive(thiserror::Error, derive_more::Debug)]
 pub enum WalletCliCommandError<N: NodeInterface> {
@@ -51,7 +49,7 @@ pub enum WalletCliCommandError<N: NodeInterface> {
     WalletRpcError(#[from] RpcError<N>),
 
     #[error("{0}")]
-    WalletHandlessRpcError(#[from] WalletRpcHandlesClientError<N>),
+    WalletHandlesRpcError(#[from] WalletRpcHandlesClientError<N>),
 
     #[error("{0}")]
     WalletClientRpcError(#[from] WalletRpcError),
@@ -65,18 +63,18 @@ pub enum WalletCliCommandError<N: NodeInterface> {
     #[error("The wallet has been closed between commands")]
     ExistingWalletWasClosed,
 
-    #[error("Invalid tx output: {0}")]
-    InvalidTxOutput(GenericCurrencyTransferToTxOutputConversionError),
-
     #[error("Invalid address in a newly created transaction")]
     InvalidAddressInNewlyCreatedTransaction,
 
     #[error("Error decoding token id: {0}")]
     TokenIdDecodingError(AddressError),
 
-    #[error("Accumulated ask amount for order {0} is negative")]
-    OrderNegativeAccumulatedAskAmount(RpcAddress<OrderId>),
-
     #[error("Address error: {0}")]
     AddressError(#[from] AddressError),
+
+    #[error(transparent)]
+    FormatError(#[from] helper_types::FormatError),
+
+    #[error(transparent)]
+    ParseError(#[from] helper_types::ParseError),
 }

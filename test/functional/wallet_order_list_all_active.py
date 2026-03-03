@@ -289,6 +289,7 @@ class WalletOrderListAllActive(WalletOrdersListingTestBase):
                 # Orders asking for and giving a specific asset
                 for filter1, filter2 in itertools.combinations(list(tokens_info.keys()) + [None], 2):
                     await rpc_check_orders_with_filters(filter1, filter2)
+                    await cli_check_orders_with_filters(filter1, filter2)
 
             ########################################################################################
             # Generate a block, the orders should exist now
@@ -321,7 +322,7 @@ class WalletOrderListAllActive(WalletOrdersListingTestBase):
             for order_id in random.sample(w1_order_ids, random.randint(0, len(w1_order_ids))):
                 await random_fill(wallet2, order_id, w2_address)
 
-            # Before the txs have been mined, ther expected values stay the same.
+            # Before the txs have been mined, the expected values stay the same.
             await check_all()
 
             # Generate a block
@@ -349,12 +350,14 @@ class WalletOrderListAllActive(WalletOrdersListingTestBase):
 
             async def freeze_order(wallet: WalletRpcController | WalletCliController, order_id: str):
                 self.log.info(f"Freezing order {order_id}")
-                await wallet.freeze_order(order_id)
+                result = await wallet.freeze_order(order_id)
+                assert_in("The transaction was submitted successfully", result)
                 inactive_order_ids.add(order_id)
 
             async def conclude_order(wallet: WalletRpcController | WalletCliController, order_id: str):
                 self.log.info(f"Concluding order {order_id}")
-                await wallet.conclude_order(order_id)
+                result = await wallet.conclude_order(order_id)
+                assert_in("The transaction was submitted successfully", result)
                 inactive_order_ids.add(order_id)
 
             # Freeze some orders in wallet1
