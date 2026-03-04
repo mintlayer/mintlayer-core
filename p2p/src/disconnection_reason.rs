@@ -13,8 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::{chain::config::MagicBytes, primitives::time::Time};
-
+use common::{
+    chain::config::MagicBytes,
+    primitives::{semver::SemVer, time::Time},
+};
 use networking::error::{MessageCodecError, NetworkingError};
 use p2p_types::services::Services;
 
@@ -108,6 +110,16 @@ pub enum DisconnectionReason {
     // Another possible reason for message decoding failure.
     #[display("Your message size {actual_size} exceeded the maximum size {max_size}")]
     MessageTooLarge { actual_size: usize, max_size: usize },
+
+    #[display(
+        "This node only accepts peers of version {} and higher, while your version is {}",
+        min_required_version,
+        peer_version
+    )]
+    PeerSoftwareVersionTooLow {
+        min_required_version: SemVer,
+        peer_version: SemVer,
+    },
 
     #[display("{_0}")]
     CustomMessage(String),
@@ -228,6 +240,13 @@ impl DisconnectionReason {
                     needed_services: *needed_services,
                 }),
                 ConnectionValidationError::NetworkingDisabled => Some(Self::NetworkingDisabled),
+                ConnectionValidationError::MinPeerSoftwareVersionNotSatisfied {
+                    min_version,
+                    actual_version,
+                } => Some(Self::PeerSoftwareVersionTooLow {
+                    min_required_version: *min_version,
+                    peer_version: *actual_version,
+                }),
             },
         }
     }

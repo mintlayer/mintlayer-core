@@ -66,8 +66,7 @@ pub enum AddressState {
     },
 }
 
-#[derive(Copy, Clone, Debug)]
-// Update `ALL_TRANSITIONS` if a new transition is added!
+#[derive(Copy, Clone, Debug, strum::EnumIter)]
 pub enum AddressStateTransitionTo {
     Connected,
     Disconnected,
@@ -75,15 +74,6 @@ pub enum AddressStateTransitionTo {
     SetReserved,
     UnsetReserved,
 }
-
-#[cfg(test)]
-pub const ALL_TRANSITIONS: [AddressStateTransitionTo; 5] = [
-    AddressStateTransitionTo::Connected,
-    AddressStateTransitionTo::Disconnected,
-    AddressStateTransitionTo::ConnectionFailed,
-    AddressStateTransitionTo::SetReserved,
-    AddressStateTransitionTo::UnsetReserved,
-];
 
 #[derive(Debug)]
 pub struct AddressData {

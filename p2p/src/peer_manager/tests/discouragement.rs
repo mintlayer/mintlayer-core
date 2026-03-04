@@ -205,6 +205,7 @@ async fn dont_reject_incoming_connection_from_discouraged_peer_if_limit_not_reac
         force_dns_query_if_no_global_addresses_known: Default::default(),
         allow_same_ip_connections: Default::default(),
         peerdb_config: Default::default(),
+        min_peer_software_version: Default::default(),
     }));
 
     let time_getter = BasicTestTimeGetter::new();
@@ -280,6 +281,7 @@ async fn reject_incoming_connection_from_discouraged_peer_if_limit_reached(#[cas
         force_dns_query_if_no_global_addresses_known: Default::default(),
         allow_same_ip_connections: Default::default(),
         peerdb_config: Default::default(),
+        min_peer_software_version: Default::default(),
     }));
 
     let time_getter = BasicTestTimeGetter::new();
@@ -401,6 +403,7 @@ async fn no_outgoing_connection_to_discouraged_peer(#[case] seed: Seed) {
         force_dns_query_if_no_global_addresses_known: Default::default(),
         allow_same_ip_connections: Default::default(),
         peerdb_config: Default::default(),
+        min_peer_software_version: Default::default(),
     }));
 
     let time_getter = BasicTestTimeGetter::new();

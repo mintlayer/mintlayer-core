@@ -18,7 +18,7 @@ use thiserror::Error;
 use chainstate::{ban_score::BanScore, ChainstateError};
 use common::{
     chain::{config::MagicBytes, Block, Transaction},
-    primitives::{time::Time, Id},
+    primitives::{semver::SemVer, time::Time, Id},
 };
 use mempool::error::{Error as MempoolError, MempoolBanScore};
 use networking::error::{MessageCodecError, NetworkingError};
@@ -139,6 +139,11 @@ pub enum ConnectionValidationError {
     },
     #[error("Networking disabled")]
     NetworkingDisabled,
+    #[error("Minimum peer software version not satisfied, min version = {min_version}, actual = {actual_version}")]
+    MinPeerSoftwareVersionNotSatisfied {
+        min_version: SemVer,
+        actual_version: SemVer,
+    },
 }
 
 #[derive(Error, Debug, Clone, PartialEq, Eq)]
@@ -236,7 +241,7 @@ impl BanScore for P2pError {
                 actual_version: _,
             } => 0,
             P2pError::MempoolError(err) => err.mempool_ban_score(),
-            P2pError::ConnectionValidationFailed(_) => 0,
+            P2pError::ConnectionValidationFailed(err) => err.ban_score(),
             P2pError::SyncError(err) => err.ban_score(),
         }
     }
@@ -296,6 +301,25 @@ impl BanScore for SyncError {
         match self {
             SyncError::BlockDataMissingInSendBlock(_) => 0,
             SyncError::BlockIndexMissingInSendBlock(_) => 0,
+        }
+    }
+}
+
+impl BanScore for ConnectionValidationError {
+    fn ban_score(&self) -> u32 {
+        match self {
+            // TODO: should UnsupportedProtocol and DifferentNetwork have 100 ban score instead?
+            ConnectionValidationError::UnsupportedProtocol { .. } => 0,
+            ConnectionValidationError::TimeDiff { .. } => 0,
+            ConnectionValidationError::DifferentNetwork { .. } => 0,
+            ConnectionValidationError::TooManyInboundPeersAndThisOneIsDiscouraged => 0,
+            ConnectionValidationError::TooManyInboundPeersAndCannotEvictAnyone => 0,
+            ConnectionValidationError::AddressBanned { .. } => 0,
+            ConnectionValidationError::AddressDiscouraged { .. } => 0,
+            ConnectionValidationError::NoCommonServices => 0,
+            ConnectionValidationError::InsufficientServices { .. } => 0,
+            ConnectionValidationError::NetworkingDisabled => 0,
+            ConnectionValidationError::MinPeerSoftwareVersionNotSatisfied { .. } => 100,
         }
     }
 }

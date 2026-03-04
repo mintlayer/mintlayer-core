@@ -13,12 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use rstest::rstest;
+use strum::IntoEnumIterator as _;
+
 use randomness::{
     distributions::{Distribution, WeightedIndex},
     rngs::StepRng,
     Rng,
 };
-use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 
 use super::*;
@@ -32,7 +34,8 @@ fn randomized(#[case] seed: Seed) {
     let started_at = Time::from_duration_since_epoch(Duration::ZERO);
 
     let weights = [100, 100, 100, 10, 10];
-    assert_eq!(weights.len(), ALL_TRANSITIONS.len());
+    let all_transitions = AddressStateTransitionTo::iter().collect::<Vec<_>>();
+    assert_eq!(weights.len(), all_transitions.len());
     let weights = WeightedIndex::new(weights).unwrap();
 
     for _ in 0..100 {
@@ -42,7 +45,7 @@ fn randomized(#[case] seed: Seed) {
         let mut address_data = AddressData::new(was_reachable, reserved, started_at);
 
         for _ in 0..1000 {
-            let transition = ALL_TRANSITIONS[weights.sample(&mut rng)];
+            let transition = all_transitions[weights.sample(&mut rng)];
 
             let is_valid_transition = match transition {
                 AddressStateTransitionTo::Connected => !address_data.is_connected(),
