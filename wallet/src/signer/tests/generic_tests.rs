@@ -91,7 +91,10 @@ pub fn sign_message_test_params(
         MessageToSign::Random,
         // Special case: an "overlong" utf-8 string (basically, the letter 'K' encoded with 2 bytes
         // instead of 1). Trezor firmware used to have troubles with this.
-        MessageToSign::Predefined(vec![193, 139])
+        MessageToSign::Predefined(vec![193, 139]),
+        // Special case: ASCII control characters not printable. Ledger was not handling it
+        // properly.
+        MessageToSign::Predefined(vec![0, 3])
     )]
     message_to_sign: MessageToSign,
 ) {
