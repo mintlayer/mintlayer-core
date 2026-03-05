@@ -101,6 +101,11 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
     - Fixed a bug that could lead to indefinite stalling of the node during initial sync when there
       are many peers and the host machine is slow.
 
+## [1.2.1] - 2026-02-28
+
+### Fixed
+  - Fixed a Windows-specific crash in `node-daemon` and `node-gui` that occurred when the chainstate DB reached 2 GB.
+
 ## [1.2.0] - 2025-10-27
 
 ### Changed
