@@ -161,23 +161,13 @@ pub async fn check_current_app<L: Exchange + Device + Send>(
     Ok(app_version)
 }
 
-pub async fn get_extended_public_key_raw<L: Exchange>(
-    ledger: &mut L,
-    coin_type: ledger_msg::CoinType,
-    derivation_path: &DerivationPath,
-) -> Result<Vec<u8>, LedgerMessagesError> {
-    let path = ledger_msg::Bip32Path(
-        derivation_path.as_slice().iter().map(|c| c.into_encoded_index()).collect(),
-    );
-    let req = ledger_msg::PublicKeyReq { coin_type, path };
-    let encoded_req = ledger_msg::encode(req);
-
+pub async fn ping<L: Exchange>(ledger: &mut L) -> Result<Vec<u8>, LedgerMessagesError> {
     let apdu = ledger_msg::Apdu::new_with_data(
-        ledger_msg::Ins::PUB_KEY,
-        ledger_msg::PubKeyP1::NoDisplayAddress.into(),
-        &encoded_req,
+        ledger_msg::Ins::PING,
+        ledger_msg::PingP1::Start.into(),
+        &[],
     )
-    .ok_or(LedgerMessagesError::DerivationPathTooLong)?;
+    .expect("empty message is always within the APDU limits");
 
     let mut msg_buf = Vec::with_capacity(apdu.bytes_count());
     apdu.write_bytes(&mut msg_buf);
