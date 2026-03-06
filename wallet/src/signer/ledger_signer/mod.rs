@@ -25,8 +25,8 @@ use crate::{
             StandaloneInput, StandaloneInputs,
         },
         ledger_signer::ledger_messages::{
-            check_current_app, get_extended_public_key, get_extended_public_key_raw,
-            sign_challenge, sign_tx, LedgerMessagesError,
+            check_current_app, get_extended_public_key, ping, sign_challenge, sign_tx,
+            LedgerMessagesError,
         },
         utils::{is_htlc_utxo, produce_uniparty_signature_for_input},
         Signer, SignerError, SignerProvider, SignerResult,
@@ -206,10 +206,8 @@ where
         let mut client = self.client.lock().await;
         // Try and wait around 50 * TIMEOUT_DUR for the screen to clear after a signing operation ends
         let mut num_tries = 50;
-        let derivation_path = make_account_path(&self.chain_config, key_chain.account_index());
-        let coin_type = to_ledger_chain_type(&self.chain_config);
         loop {
-            match get_extended_public_key_raw(&mut *client, coin_type, &derivation_path).await {
+            match ping(&mut *client).await {
                 Ok(_) => {
                     check_public_keys_against_key_chain(
                         db_tx,
