@@ -385,7 +385,8 @@ impl Builder {
             dns_seeds: chain_type.dns_seeds(),
             predefined_peer_addresses: chain_type.predefined_peer_addresses(),
             default_rpc_port: chain_type.default_rpc_port(),
-            software_version: SemVer::try_from(env!("CARGO_PKG_VERSION"))
+            software_version: env!("CARGO_PKG_VERSION")
+                .parse()
                 .expect("invalid CARGO_PKG_VERSION value"),
             max_block_header_size: super::MAX_BLOCK_HEADER_SIZE,
             max_block_size_with_standard_txs: super::MAX_BLOCK_TXS_SIZE,

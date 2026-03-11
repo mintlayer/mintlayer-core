@@ -1113,6 +1113,7 @@ where
         feeler_connections_interval: Default::default(),
         force_dns_query_if_no_global_addresses_known: Default::default(),
         peerdb_config: Default::default(),
+        min_peer_software_version: Default::default(),
     };
 
     // Start the first peer manager
@@ -1320,6 +1321,7 @@ async fn discovered_node_2_groups() {
         feeler_connections_interval: Default::default(),
         force_dns_query_if_no_global_addresses_known: Default::default(),
         peerdb_config: Default::default(),
+        min_peer_software_version: Default::default(),
     };
 
     // Start the first peer manager
@@ -1490,6 +1492,7 @@ async fn discovered_node_separate_groups() {
         feeler_connections_interval: Default::default(),
         force_dns_query_if_no_global_addresses_known: Default::default(),
         peerdb_config: Default::default(),
+        min_peer_software_version: Default::default(),
     };
 
     // Start the first peer manager
@@ -1890,6 +1893,7 @@ mod feeler_connections_test_utils {
                 main_loop_tick_interval: Default::default(),
                 force_dns_query_if_no_global_addresses_known: Default::default(),
                 allow_same_ip_connections: Default::default(),
+                min_peer_software_version: Default::default(),
             },
             // Disable pings to simplify the test.
             ping_check_period: Duration::ZERO.into(),
@@ -1976,6 +1980,7 @@ async fn reject_connection_to_existing_ip(#[case] seed: Seed) {
             force_dns_query_if_no_global_addresses_known: Default::default(),
             allow_same_ip_connections: Default::default(),
             peerdb_config: Default::default(),
+            min_peer_software_version: Default::default(),
         },
 
         // Disable pings so that they don't interfere with the testing logic.
@@ -2147,6 +2152,7 @@ async fn feeler_connection_to_ip_address_of_inbound_peer(#[case] seed: Seed) {
         force_dns_query_if_no_global_addresses_known: Default::default(),
         allow_same_ip_connections: Default::default(),
         peerdb_config: Default::default(),
+        min_peer_software_version: Default::default(),
     }));
 
     let time_getter = BasicTestTimeGetter::new();

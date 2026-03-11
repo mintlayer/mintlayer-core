@@ -262,7 +262,10 @@ where
         &self.chainstate
     }
 
-    // Note: the returned receiver will become readable only after the handshake is finished.
+    // Note:
+    // 1) This will initiate a connection of the type OutboundConnectType::Manual, for which peer
+    // score adjustments are ignored.
+    // 2) The returned receiver will become readable only after the handshake is finished.
     pub fn start_connecting(
         &self,
         address: SocketAddress,

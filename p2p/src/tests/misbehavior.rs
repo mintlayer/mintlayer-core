@@ -78,9 +78,9 @@ where
     let msg = msg_stream.recv().await.unwrap();
     assert_matches!(msg, Message::Handshake(HandshakeMessage::HelloAck { .. }));
 
-    // Check that the connection is still up and we can receive the next message (we don't care
-    // which one it is though).
-    let _msg = msg_stream.recv().await.unwrap();
+    // Check that the connection is still up and we can receive the next message.
+    let msg = msg_stream.recv().await.unwrap();
+    assert_matches!(msg, Message::HeaderListRequest(_));
 
     // Send an unexpected Hello
     msg_stream

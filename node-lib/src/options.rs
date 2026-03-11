@@ -25,12 +25,15 @@ use std::{
 use clap::{Args, CommandFactory, FromArgMatches, Parser, Subcommand};
 
 use chainstate_launcher::ChainConfig;
-use common::chain::{
-    self,
-    config::{
-        regtest_options::{regtest_chain_config_builder, ChainConfigOptions},
-        ChainType,
+use common::{
+    chain::{
+        self,
+        config::{
+            regtest_options::{regtest_chain_config_builder, ChainConfigOptions},
+            ChainType,
+        },
     },
+    primitives::semver::SemVer,
 };
 use utils::{
     clap_utils, default_data_dir::default_data_dir_for_chain, root_user::ForceRunAsRootOptions,
@@ -376,6 +379,12 @@ pub struct RunOptions {
     #[clap(long, hide = true)]
     pub p2p_custom_disconnection_reason_for_banning: Option<String>,
 
+    /// If the peer's user agent is MintlayerCore (which is always true at the moment),
+    /// the connection will be rejected and the peer discouraged if the peer's software version
+    /// is less than the one specified.
+    #[clap(long, hide = true)]
+    pub p2p_min_peer_software_version: Option<SemVer>,
+
     /// A maximum tip age in seconds.
     ///
     /// The initial block download is finished if the difference between the current time and the
@@ -485,6 +494,7 @@ mod tests {
             p2p_max_clock_diff: Default::default(),
             p2p_force_dns_query_if_no_global_addresses_known: Default::default(),
             p2p_custom_disconnection_reason_for_banning: Default::default(),
+            p2p_min_peer_software_version: Default::default(),
             max_tip_age: Default::default(),
             rpc_bind_address: Default::default(),
             rpc_enabled: Default::default(),

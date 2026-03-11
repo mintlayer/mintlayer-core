@@ -13,12 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use rstest::rstest;
+
 use randomness::{
     distributions::{Distribution, WeightedIndex},
     rngs::StepRng,
     Rng,
 };
-use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 
 use super::*;

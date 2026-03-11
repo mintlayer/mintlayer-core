@@ -29,6 +29,9 @@ pub trait P2pInterface: Send + Sync {
     async fn enable_networking(&mut self, enable: bool) -> crate::Result<()>;
 
     async fn connect(&mut self, addr: IpOrSocketAddress) -> crate::Result<()>;
+    // Note: at this moment this method will remove the peer address from the peerdb
+    // if the connection was outbound and keep it if the connection was inbound.
+    // TODO: revise this.
     async fn disconnect(&mut self, peer_id: PeerId) -> crate::Result<()>;
 
     async fn list_banned(&self) -> crate::Result<Vec<(BannableAddress, Time)>>;

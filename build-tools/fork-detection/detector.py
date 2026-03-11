@@ -144,6 +144,10 @@ class Handler():
             "--rpc-password", NODE_RPC_PWD,
             "--p2p-custom-disconnection-reason-for-banning", BAN_REASON_STRING
         ]
+
+        if args.min_peer_software_version is not None:
+            self.node_cmd += ["--p2p-min-peer-software-version", args.min_peer_software_version]
+
         log.info(f"Node run command: {self.node_cmd}")
 
     def run(self):
@@ -548,6 +552,11 @@ def main():
             "--notification-email-from",
             help=("The from address for the notification email. "
                   "If None, the --notification-email value will be used"),
+            default=None)
+        parser.add_argument(
+            "--min-peer-software-version",
+            help=("The minimum peer software version, e.g. '1.2.0'. "
+                  "Peers with versions below this one will be rejected and discouraged"),
             default=None)
         args = parser.parse_args()
 
