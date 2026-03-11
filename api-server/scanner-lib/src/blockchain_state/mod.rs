@@ -25,7 +25,7 @@ use api_server_common::storage::storage_api::{
     block_aux_data::{BlockAuxData, BlockWithExtraData},
     ApiServerStorage, ApiServerStorageError, ApiServerStorageRead, ApiServerStorageWrite,
     ApiServerTransactionRw, CoinOrTokenStatistic, Delegation, FungibleTokenData, LockedUtxo, Order,
-    PoolDataWithExtraInfo, TransactionInfo, TxAdditionalInfo, Utxo, UtxoLock,
+    PoolDataWithExtraInfo, TransactionInfo, TxAdditionalInfo, Utxo, UtxoLock, UtxoSpent,
 };
 use chainstate::{
     calculate_median_time_past_from_blocktimestamps,
@@ -66,6 +66,8 @@ mod pos_adapter;
 pub enum BlockchainStateError {
     #[error("Unexpected storage error: {0}")]
     StorageError(#[from] ApiServerStorageError),
+    #[error("Token decimals not found for token id: {0}")]
+    TokenDecimalsNotFound(TokenId),
 }
 
 pub struct BlockchainState<S: ApiServerStorage> {
@@ -109,10 +111,14 @@ impl<S: ApiServerStorage> BlockchainState<S> {
 impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState<S> {
     type Error = BlockchainStateError;
 
-    async fn best_block(&self) -> Result<(BlockHeight, Id<GenBlock>), Self::Error> {
+    async fn best_block(&self) -> Result<(BlockHeight, Id<GenBlock>, BlockTimestamp), Self::Error> {
         let db_tx = self.storage.transaction_ro().await.expect("Unable to connect to database");
         let best_block = db_tx.get_best_block().await.expect("Unable to get best block");
-        Ok((best_block.block_height(), best_block.block_id()))
+        Ok((
+            best_block.block_height(),
+            best_block.block_id(),
+            best_block.block_timestamp(),
+        ))
     }
 
     async fn scan_blocks(
@@ -242,6 +248,459 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
 
         Ok(())
     }
+
+    async fn add_mempool_tx(&mut self, transaction: &SignedTransaction) -> Result<(), Self::Error> {
+        let (best_block_height, _, best_block_timestamp) = self.best_block().await?;
+        let next_block_height = best_block_height.next_height();
+
+        let mut db_tx = self.storage.transaction_rw().await.expect("Unable to connect to database");
+        let (_previous_median_time, new_median_time) =
+            previous_and_new_median_time(&mut db_tx, best_block_timestamp).await?;
+        let tx_id = transaction.transaction().get_id();
+
+        // Calculate fee and collect token infos
+        let tx_additional_info = calculate_mempool_tx_fee_and_collect_token_info(
+            &self.chain_config,
+            &mut db_tx,
+            transaction.transaction(),
+            next_block_height,
+        )
+        .await?;
+
+        let tx_info = TransactionInfo {
+            tx: transaction.clone(),
+            additional_info: tx_additional_info,
+        };
+
+        // Insert transaction info to mempool tables
+        db_tx
+            .set_mempool_transaction(tx_id, &tx_info)
+            .await
+            .map_err(BlockchainStateError::StorageError)?;
+
+        let mut address_transactions: BTreeMap<Address<Destination>, BTreeSet<Id<Transaction>>> =
+            BTreeMap::new();
+        let mut transaction_tokens: BTreeSet<TokenId> = BTreeSet::new();
+        let token_decimals = tx_info.additional_info.token_decimals;
+
+        // Process Inputs
+        for (input, sig) in transaction.transaction().inputs().iter().zip(transaction.signatures())
+        {
+            match input {
+                TxInput::Utxo(outpoint) => {
+                    let utxo = fetch_mempool_utxo(input, &db_tx)
+                        .await?
+                        .expect("UTXO must exist for valid mempool tx")
+                        .into_spent_in_mempool();
+
+                    // Mark UTXO as spent in mempool
+                    db_tx
+                        .set_mempool_utxo(outpoint.clone(), utxo.clone(), true, &[])
+                        .await
+                        .map_err(BlockchainStateError::StorageError)?;
+
+                    let decimals = utxo
+                        .utxo_with_extra_info()
+                        .token_decimals
+                        .unwrap_or_else(|| self.chain_config.coin_decimals());
+                    match utxo.into_output() {
+                        TxOutput::IssueNft(token_id, _, destination) => {
+                            let address =
+                                Address::<Destination>::new(&self.chain_config, destination)
+                                    .expect("Unable to encode destination");
+                            address_transactions.entry(address.clone()).or_default().insert(tx_id);
+                            decrease_mempool_balance(
+                                &mut db_tx,
+                                address.as_str(),
+                                &Amount::from_atoms(1),
+                                CoinOrTokenId::TokenId(token_id),
+                                decimals,
+                            )
+                            .await;
+                            transaction_tokens.insert(token_id);
+                        }
+                        TxOutput::Htlc(output_value, htlc) => {
+                            let address = if let InputWitness::Standard(sig) = sig {
+                                let htlc_sig = AuthorizedHashedTimelockContractSpend::decode_all(
+                                    &mut sig.raw_signature(),
+                                )
+                                .expect("proper signature");
+                                let dest = match htlc_sig {
+                                    AuthorizedHashedTimelockContractSpend::Spend(_, _) => {
+                                        htlc.spend_key
+                                    }
+                                    AuthorizedHashedTimelockContractSpend::Refund(_) => {
+                                        htlc.refund_key
+                                    }
+                                };
+                                Address::<Destination>::new(&self.chain_config, dest)
+                                    .expect("Unable to encode destination")
+                            } else {
+                                panic!("Empty signature for htlc")
+                            };
+                            address_transactions.entry(address.clone()).or_default().insert(tx_id);
+
+                            if let OutputValue::TokenV1(token_id, _) = output_value {
+                                transaction_tokens.insert(token_id);
+                            }
+                        }
+                        TxOutput::LockThenTransfer(output_value, destination, _)
+                        | TxOutput::Transfer(output_value, destination) => {
+                            let address =
+                                Address::<Destination>::new(&self.chain_config, destination)
+                                    .expect("Unable to encode destination");
+                            address_transactions.entry(address.clone()).or_default().insert(tx_id);
+
+                            match output_value {
+                                OutputValue::Coin(amount) => {
+                                    decrease_mempool_balance(
+                                        &mut db_tx,
+                                        address.as_str(),
+                                        &amount,
+                                        CoinOrTokenId::Coin,
+                                        decimals,
+                                    )
+                                    .await;
+                                }
+                                OutputValue::TokenV0(_) => {}
+                                OutputValue::TokenV1(token_id, amount) => {
+                                    decrease_mempool_balance(
+                                        &mut db_tx,
+                                        address.as_str(),
+                                        &amount,
+                                        CoinOrTokenId::TokenId(token_id),
+                                        decimals,
+                                    )
+                                    .await;
+                                    transaction_tokens.insert(token_id);
+                                }
+                            }
+                        }
+                        TxOutput::ProduceBlockFromStake(_, pool_id)
+                        | TxOutput::CreateStakePool(pool_id, _) => {
+                            let pool_data = db_tx
+                                .get_pool_data(pool_id)
+                                .await?
+                                .expect("pool data should exist")
+                                .decommission_pool();
+
+                            let address = Address::<Destination>::new(
+                                &self.chain_config,
+                                pool_data.decommission_destination().clone(),
+                            )
+                            .expect("Unable to encode destination");
+
+                            address_transactions.entry(address).or_default().insert(tx_id);
+                        }
+                        TxOutput::CreateDelegationId(_, _)
+                        | TxOutput::DelegateStaking(_, _)
+                        | TxOutput::Burn(_)
+                        | TxOutput::IssueFungibleToken(_)
+                        | TxOutput::CreateOrder(_)
+                        | TxOutput::DataDeposit(_) => {}
+                    }
+                }
+                TxInput::AccountCommand(_, cmd) => {
+                    // Collect tokens tracking for account commands
+                    match cmd {
+                        AccountCommand::MintTokens(token_id, _)
+                        | AccountCommand::UnmintTokens(token_id)
+                        | AccountCommand::FreezeToken(token_id, _)
+                        | AccountCommand::UnfreezeToken(token_id)
+                        | AccountCommand::LockTokenSupply(token_id)
+                        | AccountCommand::ChangeTokenAuthority(token_id, _)
+                        | AccountCommand::ChangeTokenMetadataUri(token_id, _) => {
+                            transaction_tokens.insert(*token_id);
+                        }
+                        AccountCommand::ConcludeOrder(order_id)
+                        | AccountCommand::FillOrder(order_id, _, _) => {
+                            let order =
+                                db_tx.get_mempool_order(*order_id).await?.expect("must exist");
+                            if let Some(id) = order.ask_currency.token_id() {
+                                transaction_tokens.insert(id);
+                            }
+                            if let Some(id) = order.give_currency.token_id() {
+                                transaction_tokens.insert(id);
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        // Process Outputs
+        for (idx, output) in transaction.transaction().outputs().iter().enumerate() {
+            let outpoint = UtxoOutPoint::new(OutPointSourceId::Transaction(tx_id), idx as u32);
+            let mut token_decimals_opt = None;
+
+            match output {
+                TxOutput::Burn(value) => {
+                    if let OutputValue::TokenV1(token_id, _) = value {
+                        transaction_tokens.insert(*token_id);
+                    }
+                }
+                TxOutput::IssueFungibleToken(issuance) => {
+                    let token_id = make_token_id(
+                        &self.chain_config,
+                        next_block_height,
+                        transaction.transaction().inputs(),
+                    )
+                    .expect("Valid TX from mempool");
+                    transaction_tokens.insert(token_id);
+
+                    let issuance_data = match issuance.as_ref() {
+                        TokenIssuance::V1(iss) => FungibleTokenData {
+                            token_ticker: iss.token_ticker.clone(),
+                            number_of_decimals: iss.number_of_decimals,
+                            metadata_uri: iss.metadata_uri.clone(),
+                            circulating_supply: Amount::ZERO,
+                            total_supply: iss.total_supply,
+                            is_locked: false,
+                            frozen: IsTokenFrozen::No(iss.is_freezable),
+                            authority: iss.authority.clone(),
+                            next_nonce: AccountNonce::new(0),
+                        },
+                    };
+                    db_tx
+                        .set_mempool_fungible_token_issuance(token_id, issuance_data)
+                        .await
+                        .map_err(BlockchainStateError::StorageError)?;
+                }
+                TxOutput::IssueNft(token_id, issuance, destination) => {
+                    let address =
+                        Address::<Destination>::new(&self.chain_config, destination.clone())
+                            .expect("Unable to encode destination");
+                    address_transactions.entry(address.clone()).or_default().insert(tx_id);
+                    transaction_tokens.insert(*token_id);
+                    let decimals = 0;
+                    token_decimals_opt = Some(decimals);
+                    increase_mempool_balance(
+                        &mut db_tx,
+                        address.as_str(),
+                        &Amount::from_atoms(1),
+                        CoinOrTokenId::TokenId(*token_id),
+                        decimals,
+                    )
+                    .await;
+                    db_tx
+                        .set_mempool_nft_issuance(*token_id, issuance.as_ref().clone(), destination)
+                        .await
+                        .map_err(BlockchainStateError::StorageError)?;
+                }
+                TxOutput::LockThenTransfer(output_value, destination, lock) => {
+                    let address =
+                        Address::<Destination>::new(&self.chain_config, destination.clone())
+                            .expect("Unable to encode destination");
+
+                    address_transactions.entry(address.clone()).or_default().insert(tx_id);
+                    let outpoint =
+                        UtxoOutPoint::new(OutPointSourceId::Transaction(tx_id), idx as u32);
+
+                    let already_unlocked = tx_verifier::timelock_check::check_timelock(
+                        &best_block_height,
+                        &best_block_timestamp,
+                        lock,
+                        &best_block_height,
+                        &new_median_time,
+                        &outpoint,
+                    )
+                    .is_ok();
+
+                    token_decimals_opt = match output_value {
+                        OutputValue::Coin(amount) => {
+                            if already_unlocked {
+                                increase_mempool_balance(
+                                    &mut db_tx,
+                                    address.as_str(),
+                                    amount,
+                                    CoinOrTokenId::Coin,
+                                    self.chain_config.coin_decimals(),
+                                )
+                                .await;
+                            } else {
+                                increase_mempool_locked_address_balance(
+                                    &mut db_tx,
+                                    address.as_str(),
+                                    amount,
+                                    CoinOrTokenId::Coin,
+                                    self.chain_config.coin_decimals(),
+                                )
+                                .await;
+                            }
+                            None
+                        }
+                        OutputValue::TokenV0(_) => None,
+                        OutputValue::TokenV1(token_id, amount) => {
+                            transaction_tokens.insert(*token_id);
+                            let decimals = *token_decimals
+                                .get(token_id)
+                                .ok_or(BlockchainStateError::TokenDecimalsNotFound(*token_id))?;
+                            if already_unlocked {
+                                increase_mempool_balance(
+                                    &mut db_tx,
+                                    address.as_str(),
+                                    amount,
+                                    CoinOrTokenId::TokenId(*token_id),
+                                    decimals,
+                                )
+                                .await;
+                            } else {
+                                increase_mempool_locked_address_balance(
+                                    &mut db_tx,
+                                    address.as_str(),
+                                    amount,
+                                    CoinOrTokenId::TokenId(*token_id),
+                                    decimals,
+                                )
+                                .await;
+                            }
+                            Some(decimals)
+                        }
+                    };
+                }
+                TxOutput::Transfer(output_value, destination) => {
+                    let address =
+                        Address::<Destination>::new(&self.chain_config, destination.clone())
+                            .expect("Unable to encode destination");
+                    address_transactions.entry(address.clone()).or_default().insert(tx_id);
+
+                    match output_value {
+                        OutputValue::Coin(amount) => {
+                            increase_mempool_balance(
+                                &mut db_tx,
+                                address.as_str(),
+                                amount,
+                                CoinOrTokenId::Coin,
+                                self.chain_config.coin_decimals(),
+                            )
+                            .await;
+                        }
+                        OutputValue::TokenV0(_) => {}
+                        OutputValue::TokenV1(token_id, amount) => {
+                            transaction_tokens.insert(*token_id);
+                            let decimals = *token_decimals
+                                .get(token_id)
+                                .ok_or(BlockchainStateError::TokenDecimalsNotFound(*token_id))?;
+                            token_decimals_opt = Some(decimals);
+                            increase_mempool_balance(
+                                &mut db_tx,
+                                address.as_str(),
+                                amount,
+                                CoinOrTokenId::TokenId(*token_id),
+                                decimals,
+                            )
+                            .await;
+                        }
+                    }
+                }
+                TxOutput::Htlc(output_value, htlc) => {
+                    let spend_address =
+                        Address::<Destination>::new(&self.chain_config, htlc.spend_key.clone())
+                            .expect("Unable to encode destination");
+                    address_transactions.entry(spend_address.clone()).or_default().insert(tx_id);
+
+                    let refund_address =
+                        Address::<Destination>::new(&self.chain_config, htlc.refund_key.clone())
+                            .expect("Unable to encode destination");
+                    address_transactions.entry(refund_address.clone()).or_default().insert(tx_id);
+
+                    if let OutputValue::TokenV1(token_id, _) = output_value {
+                        transaction_tokens.insert(*token_id);
+                        let decimals = *token_decimals
+                            .get(token_id)
+                            .ok_or(BlockchainStateError::TokenDecimalsNotFound(*token_id))?;
+                        token_decimals_opt = Some(decimals);
+                    }
+                }
+                TxOutput::CreateOrder(order_data) => {
+                    let insert_token = |v: &OutputValue, tokens: &mut BTreeSet<TokenId>| {
+                        if let OutputValue::TokenV1(id, _) = v {
+                            tokens.insert(*id);
+                        }
+                    };
+                    insert_token(order_data.ask(), &mut transaction_tokens);
+                    insert_token(order_data.give(), &mut transaction_tokens);
+
+                    let mut amount_and_currency = |v: &OutputValue| match v {
+                        OutputValue::Coin(amount) => (CoinOrTokenId::Coin, *amount),
+                        OutputValue::TokenV1(id, amount) => {
+                            transaction_tokens.insert(*id);
+                            (CoinOrTokenId::TokenId(*id), *amount)
+                        }
+                        OutputValue::TokenV0(_) => panic!("unsupported token"),
+                    };
+
+                    let (ask_currency, ask_balance) = amount_and_currency(order_data.ask());
+                    let (give_currency, give_balance) = amount_and_currency(order_data.give());
+
+                    let order_id = make_order_id(transaction.transaction().inputs())
+                        .expect("Valid TX from mempool");
+                    let order = Order {
+                        creation_block_height: None,
+                        conclude_destination: order_data.conclude_key().clone(),
+                        initially_asked: ask_balance,
+                        initially_given: give_balance,
+                        ask_balance,
+                        ask_currency,
+                        give_balance,
+                        give_currency,
+                        is_frozen: false,
+                        next_nonce: AccountNonce::new(0),
+                    };
+
+                    db_tx
+                        .set_mempool_order(order_id, &order)
+                        .await
+                        .map_err(BlockchainStateError::StorageError)?;
+                }
+                TxOutput::CreateStakePool(_id, pool_data) => {
+                    let address =
+                        Address::<Destination>::new(&self.chain_config, pool_data.staker().clone())
+                            .expect("Unable to encode destination");
+                    address_transactions.entry(address.clone()).or_default().insert(tx_id);
+                }
+                TxOutput::ProduceBlockFromStake(_, _) => {}
+                TxOutput::CreateDelegationId(_, _) => {}
+                TxOutput::DelegateStaking(_, _) => {}
+                TxOutput::DataDeposit(_) => {}
+            }
+
+            // Save new UTXO as unspent in mempool
+            let utxo = Utxo::new(output.clone(), token_decimals_opt, None);
+            let addresses = get_tx_output_destination(output)
+                .into_iter()
+                .map(|d| {
+                    Address::<Destination>::new(&self.chain_config, d.clone())
+                        .expect("Unable to encode destination")
+                })
+                .collect::<Vec<_>>();
+            let addresses_refs: Vec<&str> = addresses.iter().map(|s| s.as_str()).collect();
+
+            db_tx
+                .set_mempool_utxo(outpoint, utxo, false, &addresses_refs)
+                .await
+                .map_err(BlockchainStateError::StorageError)?;
+        }
+
+        for (address, transactions) in address_transactions {
+            for t in transactions {
+                db_tx
+                    .set_mempool_address_transaction(address.as_str(), t)
+                    .await
+                    .map_err(BlockchainStateError::StorageError)?;
+            }
+        }
+        for token_id in transaction_tokens {
+            db_tx
+                .set_mempool_token_transaction(token_id, tx_id)
+                .await
+                .map_err(BlockchainStateError::StorageError)?;
+        }
+
+        db_tx.commit().await.expect("Unable to commit transaction");
+        Ok(())
+    }
 }
 
 // Find locked UTXOs that are unlocked at this height or time and update address balances
@@ -304,14 +763,16 @@ async fn update_locked_amounts_for_current_block<T: ApiServerStorageWrite>(
             _ => panic!("locked utxo not lock then transfer output"),
         }
 
-        if let Some(destination) = get_tx_output_destination(&locked_utxo.output) {
-            let address = Address::<Destination>::new(chain_config, destination.clone())
-                .expect("Unable to encode destination");
-            let utxo = Utxo::new_with_info(locked_utxo, None);
-            db_tx
-                .set_utxo_at_height(outpoint, utxo, &[address.as_str()], block_height)
-                .await?;
-        }
+        let addresses = get_tx_output_destination(&locked_utxo.output)
+            .into_iter()
+            .map(|d| {
+                Address::<Destination>::new(chain_config, d.clone())
+                    .expect("Unable to encode destination")
+            })
+            .collect::<Vec<_>>();
+        let addresses_refs: Vec<&str> = addresses.iter().map(|s| s.as_str()).collect();
+        let utxo = Utxo::new_with_info(locked_utxo, None);
+        db_tx.set_utxo_at_height(outpoint, utxo, &addresses_refs, block_height).await?;
     }
 
     Ok(())
@@ -363,6 +824,8 @@ async fn disconnect_tables_above_height<T: ApiServerStorageWrite>(
     db_tx.del_statistics_above_height(block_height).await?;
 
     db_tx.del_orders_above_height(block_height).await?;
+
+    db_tx.clear_mempool_data().await?;
 
     Ok(())
 }
@@ -686,6 +1149,19 @@ async fn token_decimals<T: ApiServerStorageRead>(
         *decimals
     } else {
         db_tx.get_token_num_decimals(token_id).await?.expect("must be present")
+    };
+    Ok((token_id, decimals))
+}
+
+async fn mempool_token_decimals<T: ApiServerStorageRead>(
+    token_id: TokenId,
+    new_tokens: &BTreeMap<TokenId, u8>,
+    db_tx: &T,
+) -> Result<(TokenId, u8), ApiServerStorageError> {
+    let decimals = if let Some(decimals) = new_tokens.get(&token_id) {
+        *decimals
+    } else {
+        db_tx.get_mempool_token_num_decimals(token_id).await?.expect("must be present")
     };
     Ok((token_id, decimals))
 }
@@ -1992,7 +2468,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                 let (give_currency, give_balance) = amount_and_currency(order_data.give());
 
                 let order = Order {
-                    creation_block_height: block_height,
+                    creation_block_height: Some(block_height),
                     conclude_destination: order_data.conclude_key().clone(),
                     initially_asked: ask_balance,
                     initially_given: give_balance,
@@ -2185,31 +2661,262 @@ async fn set_utxo<T: ApiServerStorageWrite>(
     let utxo = Utxo::new(
         output.clone(),
         token_decimals,
-        spent.then_some(block_height),
+        spent.then_some(UtxoSpent::AtBlockHeight(block_height)),
     );
-    if let Some(destination) = get_tx_output_destination(output) {
-        let address = Address::<Destination>::new(chain_config, destination.clone())
-            .expect("Unable to encode destination");
-        db_tx
-            .set_utxo_at_height(outpoint, utxo, &[address.as_str()], block_height)
-            .await
-            .expect("Unable to set utxo");
-    }
+    let addresses = get_tx_output_destination(output)
+        .into_iter()
+        .map(|d| {
+            Address::<Destination>::new(chain_config, d.clone())
+                .expect("Unable to encode destination")
+        })
+        .collect::<Vec<_>>();
+    let addresses_refs: Vec<&str> = addresses.iter().map(|s| s.as_str()).collect();
+    db_tx
+        .set_utxo_at_height(outpoint, utxo, &addresses_refs, block_height)
+        .await
+        .expect("Unable to set utxo");
 }
 
-fn get_tx_output_destination(txo: &TxOutput) -> Option<&Destination> {
+fn get_tx_output_destination(txo: &TxOutput) -> Vec<&Destination> {
     match txo {
         TxOutput::Transfer(_, d)
         | TxOutput::LockThenTransfer(_, d, _)
         | TxOutput::CreateDelegationId(d, _)
         | TxOutput::IssueNft(_, _, d)
-        | TxOutput::ProduceBlockFromStake(d, _) => Some(d),
-        TxOutput::CreateStakePool(_, data) => Some(data.decommission_key()),
-        TxOutput::Htlc(_, htlc) => Some(&htlc.spend_key),
+        | TxOutput::ProduceBlockFromStake(d, _) => vec![d],
+        TxOutput::CreateStakePool(_, data) => vec![data.decommission_key()],
+        TxOutput::Htlc(_, htlc) => vec![&htlc.spend_key, &htlc.refund_key],
         TxOutput::IssueFungibleToken(_)
         | TxOutput::Burn(_)
         | TxOutput::DelegateStaking(_, _)
         | TxOutput::DataDeposit(_)
-        | TxOutput::CreateOrder(_) => None,
+        | TxOutput::CreateOrder(_) => vec![],
     }
+}
+
+async fn calculate_mempool_tx_fee_and_collect_token_info<
+    T: ApiServerStorageWrite + ApiServerStorageRead,
+>(
+    chain_config: &ChainConfig,
+    db_tx: &mut T,
+    tx: &Transaction,
+    block_height: BlockHeight,
+) -> Result<TxAdditionalInfo, ApiServerStorageError> {
+    let fee = mempool_tx_fees(chain_config, block_height, tx, db_tx).await?;
+
+    let new_tokens = tx
+        .outputs()
+        .iter()
+        .filter_map(|out| match out {
+            TxOutput::IssueNft(token_id, _, _) => Some(Ok((*token_id, 0))),
+            TxOutput::IssueFungibleToken(data) => Some(
+                make_token_id(chain_config, block_height, tx.inputs()).map(|token_id| {
+                    match data.as_ref() {
+                        TokenIssuance::V1(data) => (token_id, data.number_of_decimals),
+                    }
+                }),
+            ),
+            _ => None,
+        })
+        .collect::<Result<BTreeMap<_, _>, _>>()?;
+
+    let input_tasks: FuturesOrdered<_> =
+        tx.inputs().iter().map(|input| fetch_mempool_utxo(input, db_tx)).collect();
+    let input_utxos: Vec<Option<Utxo>> = input_tasks.try_collect().await?;
+    let input_utxos: Vec<Option<TxOutput>> = input_utxos
+        .into_iter()
+        .map(|utxo| utxo.map(|utxo| utxo.into_output()))
+        .collect();
+
+    let token_ids = {
+        let mut token_ids = BTreeSet::new();
+        for (inp, utxo) in tx.inputs().iter().zip(input_utxos.iter()) {
+            match inp {
+                TxInput::Utxo(_) => {
+                    token_ids.extend(get_referenced_token_ids_ignore_issuance(
+                        utxo.as_ref().expect("must be present"),
+                    ));
+                }
+                TxInput::Account(_) => {}
+                TxInput::AccountCommand(_, cmd) => match cmd {
+                    AccountCommand::MintTokens(token_id, _)
+                    | AccountCommand::FreezeToken(token_id, _)
+                    | AccountCommand::UnmintTokens(token_id)
+                    | AccountCommand::UnfreezeToken(token_id)
+                    | AccountCommand::LockTokenSupply(token_id)
+                    | AccountCommand::ChangeTokenMetadataUri(token_id, _)
+                    | AccountCommand::ChangeTokenAuthority(token_id, _) => {
+                        token_ids.insert(*token_id);
+                    }
+                    AccountCommand::ConcludeOrder(order_id)
+                    | AccountCommand::FillOrder(order_id, _, _) => {
+                        let order = db_tx.get_order(*order_id).await?.expect("must exist");
+                        if let Some(id) = order.ask_currency.token_id() {
+                            token_ids.insert(id);
+                        }
+                        if let Some(id) = order.give_currency.token_id() {
+                            token_ids.insert(id);
+                        }
+                    }
+                },
+                TxInput::OrderAccountCommand(cmd) => match cmd {
+                    OrderAccountCommand::FillOrder(order_id, _)
+                    | OrderAccountCommand::FreezeOrder(order_id)
+                    | OrderAccountCommand::ConcludeOrder(order_id) => {
+                        let order = db_tx.get_order(*order_id).await?.expect("must exist");
+                        if let Some(id) = order.ask_currency.token_id() {
+                            token_ids.insert(id);
+                        }
+                        if let Some(id) = order.give_currency.token_id() {
+                            token_ids.insert(id);
+                        }
+                    }
+                },
+            };
+        }
+
+        tx.outputs().iter().map(get_referenced_token_ids_ignore_issuance).fold(
+            token_ids,
+            |mut token_ids_acc, tokens_iter| {
+                token_ids_acc.extend(tokens_iter);
+                token_ids_acc
+            },
+        )
+    };
+
+    let token_tasks: FuturesOrdered<_> = token_ids
+        .iter()
+        .map(|token_id| mempool_token_decimals(*token_id, &new_tokens, db_tx))
+        .collect();
+    let token_decimals: BTreeMap<TokenId, u8> = token_tasks.try_collect().await?;
+
+    let tx_aditional_infos = TxAdditionalInfo {
+        fee: fee.map_into_block_fees(chain_config, block_height).expect("no overflow").0,
+        input_utxos,
+        token_decimals,
+    };
+
+    Ok(tx_aditional_infos)
+}
+
+async fn fetch_mempool_utxo<T: ApiServerStorageRead>(
+    input: &TxInput,
+    db_tx: &T,
+) -> Result<Option<Utxo>, ApiServerStorageError> {
+    match input {
+        TxInput::Utxo(outpoint) => {
+            // Uses your DB's new fallback logic
+            let utxo = db_tx.get_utxo_mempool_fallback(outpoint).await?;
+            Ok(utxo)
+        }
+        TxInput::Account(_) | TxInput::AccountCommand(_, _) | TxInput::OrderAccountCommand(_) => {
+            Ok(None)
+        }
+    }
+}
+
+async fn mempool_tx_fees<T: ApiServerStorageRead>(
+    chain_config: &ChainConfig,
+    block_height: BlockHeight,
+    tx: &Transaction,
+    db_tx: &T,
+) -> Result<AccumulatedFee, ApiServerStorageError> {
+    let mut inputs_utxos = Vec::with_capacity(tx.inputs().len());
+    for input in tx.inputs() {
+        inputs_utxos.push(fetch_mempool_utxo(input, db_tx).await?.map(|utxo| utxo.into_output()));
+    }
+
+    let pools = prefetch_pool_data(&inputs_utxos, db_tx).await?;
+    let pos_accounting_adapter = PoSAccountingAdapterToCheckFees { pools };
+    let tokens_view = StubTokensAccounting;
+    let orders_store = prefetch_orders(tx.inputs(), db_tx).await?;
+    let orders_db = orders_accounting::OrdersAccountingDB::new(&orders_store);
+
+    let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
+        chain_config,
+        block_height,
+        &orders_db,
+        &pos_accounting_adapter,
+        &tokens_view,
+        tx.inputs(),
+        &inputs_utxos,
+    )
+    .expect("valid mempool block");
+
+    let outputs_accumulator =
+        ConstrainedValueAccumulator::from_outputs(chain_config, block_height, tx.outputs())
+            .expect("valid mempool block");
+
+    let consumed_accumulator = inputs_accumulator
+        .satisfy_with(outputs_accumulator)
+        .expect("valid mempool block");
+    Ok(consumed_accumulator)
+}
+
+async fn increase_mempool_balance<T: ApiServerStorageWrite + ApiServerStorageRead>(
+    db_tx: &mut T,
+    address: &str,
+    amount: &Amount,
+    coin_or_token_id: CoinOrTokenId,
+    decimals: u8,
+) {
+    let balance = db_tx
+        .get_mempool_address_balance(address, coin_or_token_id)
+        .await
+        .expect("Unable to get mempool balance")
+        .unwrap_or(Amount::ZERO);
+
+    let new_balance = (balance + *amount).expect("Balance should not overflow");
+    db_tx
+        .set_mempool_address_balance(address, coin_or_token_id, new_balance, decimals)
+        .await
+        .expect("Unable to update mempool balance");
+}
+
+async fn increase_mempool_locked_address_balance<
+    T: ApiServerStorageWrite + ApiServerStorageRead,
+>(
+    db_tx: &mut T,
+    address: &str,
+    amount: &Amount,
+    coin_or_token_id: CoinOrTokenId,
+    decimals: u8,
+) {
+    let balance = db_tx
+        .get_mempool_locked_address_balance(address, coin_or_token_id)
+        .await
+        .expect("Unable to get mempool locked balance")
+        .unwrap_or(Amount::ZERO);
+
+    let new_balance = (balance + *amount).expect("Balance should not overflow");
+    db_tx
+        .set_mempool_locked_address_balance(address, coin_or_token_id, new_balance, decimals)
+        .await
+        .expect("Unable to update mempool locked balance");
+}
+
+async fn decrease_mempool_balance<T: ApiServerStorageWrite + ApiServerStorageRead>(
+    db_tx: &mut T,
+    address: &str,
+    amount: &Amount,
+    coin_or_token_id: CoinOrTokenId,
+    decimals: u8,
+) {
+    let current_balance = db_tx
+        .get_mempool_address_balance(address, coin_or_token_id)
+        .await
+        .expect("Unable to get mempool balance")
+        .unwrap_or(Amount::ZERO);
+
+    let new_amount = current_balance.sub(*amount).unwrap_or_else(|| {
+        panic!(
+            "Balance should not underflow {:?} {:?} {:?}",
+            coin_or_token_id, current_balance, *amount
+        )
+    });
+
+    db_tx
+        .set_mempool_address_balance(address, coin_or_token_id, new_amount, decimals)
+        .await
+        .expect("Unable to update mempool balance");
 }
