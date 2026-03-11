@@ -15,13 +15,22 @@
 
 use std::sync::Arc;
 
+use rstest::rstest;
+
 use chainstate::ChainstateConfig;
-use networking::test_helpers::{
-    TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
+use networking::{
+    test_helpers::{
+        TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
+    },
+    transport::{BufferedTranscoder, TransportListener, TransportSocket},
 };
-use networking::transport::{BufferedTranscoder, TransportListener, TransportSocket};
 use p2p_test_utils::run_with_timeout;
-use test_utils::{assert_matches, BasicTestTimeGetter};
+use randomness::Rng as _;
+use test_utils::{
+    assert_matches,
+    random::{make_seedable_rng, Seed},
+    BasicTestTimeGetter,
+};
 
 use crate::{
     net::default_backend::types::{HandshakeMessage, Message, P2pTimestamp},
@@ -30,11 +39,13 @@ use crate::{
     tests::helpers::TestNode,
 };
 
-async fn unsupported_version_outgoing<TTM>()
+async fn unsupported_version_outgoing<TTM>(seed: Seed)
 where
     TTM: TestTransportMaker,
     TTM::Transport: TransportSocket,
 {
+    let mut rng = make_seedable_rng(seed);
+
     let time_getter = BasicTestTimeGetter::new();
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
     let p2p_config = Arc::new(test_p2p_config());
@@ -49,6 +60,7 @@ where
         TTM::make_address().into(),
         TEST_PROTOCOL_VERSION.into(),
         None,
+        make_seedable_rng(rng.gen()),
     )
     .await;
 
@@ -100,29 +112,40 @@ where
     );
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn unsupported_version_outgoing_tcp() {
-    run_with_timeout(unsupported_version_outgoing::<TestTransportTcp>()).await;
+async fn unsupported_version_outgoing_tcp(#[case] seed: Seed) {
+    run_with_timeout(unsupported_version_outgoing::<TestTransportTcp>(seed)).await;
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn unsupported_version_outgoing_channels() {
-    run_with_timeout(unsupported_version_outgoing::<TestTransportChannel>()).await;
+async fn unsupported_version_outgoing_channels(#[case] seed: Seed) {
+    run_with_timeout(unsupported_version_outgoing::<TestTransportChannel>(seed)).await;
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn unsupported_version_outgoing_noise() {
-    run_with_timeout(unsupported_version_outgoing::<TestTransportNoise>()).await;
+async fn unsupported_version_outgoing_noise(#[case] seed: Seed) {
+    run_with_timeout(unsupported_version_outgoing::<TestTransportNoise>(seed)).await;
 }
 
-async fn unsupported_version_incoming<TTM>()
+async fn unsupported_version_incoming<TTM>(seed: Seed)
 where
     TTM: TestTransportMaker,
     TTM::Transport: TransportSocket,
 {
+    let mut rng = make_seedable_rng(seed);
+
     let time_getter = BasicTestTimeGetter::new();
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
     let p2p_config = Arc::new(test_p2p_config());
@@ -137,6 +160,7 @@ where
         TTM::make_address().into(),
         TEST_PROTOCOL_VERSION.into(),
         None,
+        make_seedable_rng(rng.gen()),
     )
     .await;
 
@@ -177,31 +201,42 @@ where
     );
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn unsupported_version_incoming_tcp() {
-    run_with_timeout(unsupported_version_incoming::<TestTransportTcp>()).await;
+async fn unsupported_version_incoming_tcp(#[case] seed: Seed) {
+    run_with_timeout(unsupported_version_incoming::<TestTransportTcp>(seed)).await;
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn unsupported_version_incoming_channels() {
-    run_with_timeout(unsupported_version_incoming::<TestTransportChannel>()).await;
+async fn unsupported_version_incoming_channels(#[case] seed: Seed) {
+    run_with_timeout(unsupported_version_incoming::<TestTransportChannel>(seed)).await;
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn unsupported_version_incoming_noise() {
-    run_with_timeout(unsupported_version_incoming::<TestTransportNoise>()).await;
+async fn unsupported_version_incoming_noise(#[case] seed: Seed) {
+    run_with_timeout(unsupported_version_incoming::<TestTransportNoise>(seed)).await;
 }
 
 // Here we have a peer with an unsupported version and a normal peer connected at the same time.
 // The unsupported peer should be disconnected, while the normal one should remain connected.
-async fn unsupported_version_two_peers<TTM>()
+async fn unsupported_version_two_peers<TTM>(seed: Seed)
 where
     TTM: TestTransportMaker,
     TTM::Transport: TransportSocket,
 {
+    let mut rng = make_seedable_rng(seed);
+
     let time_getter = BasicTestTimeGetter::new();
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
     let p2p_config = Arc::new(test_p2p_config());
@@ -216,6 +251,7 @@ where
         TTM::make_address().into(),
         TEST_PROTOCOL_VERSION.into(),
         None,
+        make_seedable_rng(rng.gen()),
     )
     .await;
 
@@ -285,20 +321,29 @@ where
     test_node.join().await;
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn unsupported_version_two_peers_tcp() {
-    run_with_timeout(unsupported_version_two_peers::<TestTransportTcp>()).await;
+async fn unsupported_version_two_peers_tcp(#[case] seed: Seed) {
+    run_with_timeout(unsupported_version_two_peers::<TestTransportTcp>(seed)).await;
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn unsupported_version_two_peers_channels() {
-    run_with_timeout(unsupported_version_two_peers::<TestTransportChannel>()).await;
+async fn unsupported_version_two_peers_channels(#[case] seed: Seed) {
+    run_with_timeout(unsupported_version_two_peers::<TestTransportChannel>(seed)).await;
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn unsupported_version_two_peers_noise() {
-    run_with_timeout(unsupported_version_two_peers::<TestTransportNoise>()).await;
+async fn unsupported_version_two_peers_noise(#[case] seed: Seed) {
+    run_with_timeout(unsupported_version_two_peers::<TestTransportNoise>(seed)).await;
 }

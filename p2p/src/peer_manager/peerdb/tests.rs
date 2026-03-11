@@ -79,6 +79,7 @@ fn ban_peer(#[case] seed: Seed) {
         })),
         time_getter.get_time_getter(),
         db_store,
+        &mut rng,
     )
     .unwrap();
 
@@ -139,6 +140,7 @@ fn unban_peer_manually(#[case] seed: Seed) {
         })),
         time_getter.get_time_getter(),
         db_store,
+        &mut rng,
     )
     .unwrap();
 
@@ -186,6 +188,7 @@ fn ban_peer_twice(#[case] seed: Seed) {
         })),
         time_getter.get_time_getter(),
         db_store,
+        &mut rng,
     )
     .unwrap();
 
@@ -234,6 +237,7 @@ fn ban_for_max_duration(#[case] seed: Seed) {
         Arc::new(test_p2p_config()),
         time_getter.get_time_getter(),
         db_store,
+        &mut rng,
     )
     .unwrap();
 
@@ -275,6 +279,7 @@ fn discourage_peer(#[case] seed: Seed) {
         })),
         time_getter.get_time_getter(),
         db_store,
+        &mut rng,
     )
     .unwrap();
 
@@ -335,6 +340,7 @@ fn undiscourage_peer_manually(#[case] seed: Seed) {
         })),
         time_getter.get_time_getter(),
         db_store,
+        &mut rng,
     )
     .unwrap();
 
@@ -384,6 +390,7 @@ fn discourage_peer_twice(#[case] seed: Seed) {
         })),
         time_getter.get_time_getter(),
         db_store,
+        &mut rng,
     )
     .unwrap();
 
@@ -452,6 +459,7 @@ fn discourage_for_max_duration(#[case] seed: Seed) {
         })),
         time_getter.get_time_getter(),
         db_store,
+        &mut rng,
     )
     .unwrap();
 
@@ -488,17 +496,18 @@ fn connected_unreachable(#[case] seed: Seed) {
         p2p_config,
         time_getter.get_time_getter(),
         db_store,
+        &mut rng,
     )
     .unwrap();
 
     let address = TestAddressMaker::new_random_address(&mut rng).into();
     peerdb.peer_discovered(address);
-    peerdb.report_outbound_failure(address);
+    peerdb.report_outbound_failure(address, &mut rng);
     assert!(peerdb.addresses.get(&address).unwrap().is_unreachable());
 
     // User requests connection to the currently unreachable node via RPC and connection succeeds.
     // PeerDb should process that normally.
-    peerdb.outbound_peer_connected(address);
+    peerdb.outbound_peer_connected(address, &mut rng);
     assert!(peerdb.addresses.get(&address).unwrap().is_connected());
 
     assert_addr_consistency(&peerdb);
@@ -520,6 +529,7 @@ fn connected_unknown(#[case] seed: Seed) {
         p2p_config,
         time_getter.get_time_getter(),
         db_store,
+        &mut rng,
     )
     .unwrap();
 
@@ -527,7 +537,7 @@ fn connected_unknown(#[case] seed: Seed) {
 
     // User requests connection to some unknown node via RPC and connection succeeds.
     // PeerDb should process that normally.
-    peerdb.outbound_peer_connected(address);
+    peerdb.outbound_peer_connected(address, &mut rng);
     assert!(peerdb.addresses.get(&address).unwrap().is_connected());
 
     assert_addr_consistency(&peerdb);
@@ -550,6 +560,7 @@ fn anchor_peers(#[case] seed: Seed) {
         Arc::clone(&p2p_config),
         time_getter.get_time_getter(),
         db_store,
+        &mut rng,
     )
     .unwrap();
 
@@ -573,6 +584,7 @@ fn anchor_peers(#[case] seed: Seed) {
         Arc::clone(&p2p_config),
         time_getter.get_time_getter(),
         peerdb.storage,
+        &mut rng,
     )
     .unwrap();
     assert_eq!(*peerdb.anchors(), anchors);
@@ -585,6 +597,7 @@ fn anchor_peers(#[case] seed: Seed) {
         Arc::clone(&p2p_config),
         time_getter.get_time_getter(),
         peerdb.storage,
+        &mut rng,
     )
     .unwrap();
     assert_eq!(*peerdb.anchors(), anchors);
@@ -608,7 +621,7 @@ fn remove_addr(#[case] seed: Seed) {
         addr_tables_bucket_size: 10.into(),
         new_addr_table_bucket_count: 10.into(),
         tried_addr_table_bucket_count: 10.into(),
-        salt: Some(Salt::new_random_with_rng(&mut rng)),
+        salt: Some(Salt::new_random(&mut rng)),
     }));
 
     let mut peerdb = PeerDb::new(
@@ -616,6 +629,7 @@ fn remove_addr(#[case] seed: Seed) {
         Arc::clone(&p2p_config),
         time_getter.get_time_getter(),
         db_store,
+        &mut rng,
     )
     .unwrap();
 
@@ -630,15 +644,15 @@ fn remove_addr(#[case] seed: Seed) {
 
     // Reserved addresses are often treated differently, so mark two of the to-remove addresses
     // as reserved.
-    peerdb.add_reserved_node(*new_addrs_to_remove.first().unwrap());
-    peerdb.add_reserved_node(*tried_addrs_to_remove.first().unwrap());
+    peerdb.add_reserved_node(*new_addrs_to_remove.first().unwrap(), &mut rng);
+    peerdb.add_reserved_node(*tried_addrs_to_remove.first().unwrap(), &mut rng);
 
     for addr in &new_addrs {
         peerdb.peer_discovered(*addr);
     }
 
     for addr in &tried_addrs {
-        peerdb.outbound_peer_connected(*addr);
+        peerdb.outbound_peer_connected(*addr, &mut rng);
     }
 
     for addr in new_addrs_to_remove.iter().chain(tried_addrs_to_remove.iter()) {
@@ -669,7 +683,7 @@ fn remove_unreachable(#[case] seed: Seed) {
         addr_tables_bucket_size: 10.into(),
         new_addr_table_bucket_count: 10.into(),
         tried_addr_table_bucket_count: 10.into(),
-        salt: Some(Salt::new_random_with_rng(&mut rng)),
+        salt: Some(Salt::new_random(&mut rng)),
     }));
 
     let mut peerdb = PeerDb::new(
@@ -677,6 +691,7 @@ fn remove_unreachable(#[case] seed: Seed) {
         Arc::clone(&p2p_config),
         time_getter.get_time_getter(),
         db_store,
+        &mut rng,
     )
     .unwrap();
 
@@ -692,7 +707,7 @@ fn remove_unreachable(#[case] seed: Seed) {
     }
 
     for addr in &tried_addrs {
-        peerdb.outbound_peer_connected(*addr);
+        peerdb.outbound_peer_connected(*addr, &mut rng);
     }
 
     assert_eq!(new_addr_table(&peerdb).addr_count(), addr_count);
@@ -704,12 +719,12 @@ fn remove_unreachable(#[case] seed: Seed) {
         split_in_two_sets(&tried_addrs, &mut rng);
 
     for addr in &new_addrs_unreachable {
-        peerdb.report_outbound_failure(*addr);
+        peerdb.report_outbound_failure(*addr, &mut rng);
     }
 
     for addr in &tried_addrs_unreachable {
-        peerdb.outbound_peer_disconnected(*addr);
-        peerdb.report_outbound_failure(*addr);
+        peerdb.outbound_peer_disconnected(*addr, &mut rng);
+        peerdb.report_outbound_failure(*addr, &mut rng);
     }
 
     assert_addr_consistency(&peerdb);
@@ -729,7 +744,7 @@ fn remove_unreachable(#[case] seed: Seed) {
     // Call report_outbound_failure until the fail count reaches the limit.
     for addr in &tried_addrs_unreachable {
         for _ in 0..PURGE_REACHABLE_FAIL_COUNT - 1 {
-            peerdb.report_outbound_failure(*addr);
+            peerdb.report_outbound_failure(*addr, &mut rng);
         }
     }
 
@@ -765,7 +780,7 @@ fn new_addr_count_limit(#[case] seed: Seed, #[values(true, false)] use_reserved_
         addr_tables_bucket_size: bucket_size.into(),
         new_addr_table_bucket_count: bucket_count.into(),
         tried_addr_table_bucket_count: bucket_count.into(),
-        salt: Some(Salt::new_random_with_rng(&mut rng)),
+        salt: Some(Salt::new_random(&mut rng)),
     }));
 
     let mut peerdb = PeerDb::new(
@@ -773,6 +788,7 @@ fn new_addr_count_limit(#[case] seed: Seed, #[values(true, false)] use_reserved_
         Arc::clone(&p2p_config),
         time_getter.get_time_getter(),
         db_store,
+        &mut rng,
     )
     .unwrap();
 
@@ -783,13 +799,13 @@ fn new_addr_count_limit(#[case] seed: Seed, #[values(true, false)] use_reserved_
         let addr = make_random_address(&mut rng);
 
         if use_reserved_nodes && i % 3 == 0 {
-            peerdb.add_reserved_node(addr);
+            peerdb.add_reserved_node(addr, &mut rng);
         }
 
         peerdb.peer_discovered(addr);
 
         if use_reserved_nodes && i % 3 == 1 {
-            peerdb.add_reserved_node(addr);
+            peerdb.add_reserved_node(addr, &mut rng);
         }
 
         let new_addr_count = new_addr_table(&peerdb).addr_count();
@@ -824,7 +840,7 @@ fn tried_addr_count_limit(#[case] seed: Seed, #[values(true, false)] use_reserve
         addr_tables_bucket_size: bucket_size.into(),
         new_addr_table_bucket_count: bucket_count.into(),
         tried_addr_table_bucket_count: bucket_count.into(),
-        salt: Some(Salt::new_random_with_rng(&mut rng)),
+        salt: Some(Salt::new_random(&mut rng)),
     }));
 
     let mut peerdb = PeerDb::new(
@@ -832,6 +848,7 @@ fn tried_addr_count_limit(#[case] seed: Seed, #[values(true, false)] use_reserve
         Arc::clone(&p2p_config),
         time_getter.get_time_getter(),
         db_store,
+        &mut rng,
     )
     .unwrap();
 
@@ -842,13 +859,13 @@ fn tried_addr_count_limit(#[case] seed: Seed, #[values(true, false)] use_reserve
         let addr = make_random_address(&mut rng);
 
         if use_reserved_nodes && i % 3 == 0 {
-            peerdb.add_reserved_node(addr);
+            peerdb.add_reserved_node(addr, &mut rng);
         }
 
-        peerdb.outbound_peer_connected(addr);
+        peerdb.outbound_peer_connected(addr, &mut rng);
 
         if use_reserved_nodes && i % 3 == 1 {
-            peerdb.add_reserved_node(addr);
+            peerdb.add_reserved_node(addr, &mut rng);
         }
 
         let tried_addr_count = tried_addr_table(&peerdb).addr_count();
@@ -888,7 +905,7 @@ fn new_tried_addr_selection_frequency() {
                 addr_tables_bucket_size: bucket_size.into(),
                 new_addr_table_bucket_count: bucket_count.into(),
                 tried_addr_table_bucket_count: bucket_count.into(),
-                salt: Some(Salt::new_random_with_rng(&mut rng)),
+                salt: Some(Salt::new_random(&mut rng)),
             }));
 
             let mut peerdb = PeerDb::new(
@@ -896,6 +913,7 @@ fn new_tried_addr_selection_frequency() {
                 Arc::clone(&p2p_config),
                 time_getter.get_time_getter(),
                 db_store,
+                &mut rng,
             )
             .unwrap();
             // We'll be adding lots of addresses and the checks will cause a huge slowdown.
@@ -916,10 +934,10 @@ fn new_tried_addr_selection_frequency() {
                 peerdb.peer_discovered(addr);
             }
             for addr in tried_addrs {
-                peerdb.outbound_peer_connected(addr);
+                peerdb.outbound_peer_connected(addr, &mut rng);
                 // Mark the address as disconnected, otherwise it won't be selected by
                 // select_non_reserved_outbound_addresses.
-                peerdb.outbound_peer_disconnected(addr);
+                peerdb.outbound_peer_disconnected(addr, &mut rng);
             }
 
             // Advance time, so that previously connected addresses can be selected again.
@@ -929,7 +947,7 @@ fn new_tried_addr_selection_frequency() {
             let mut total_selected_tried_addrs = 0;
             for _ in 0..100 {
                 let count_to_select = rng.gen_range(count_to_select_range.clone());
-                let selected_addrs = peerdb.select_non_reserved_outbound_addresses_with_rng(
+                let selected_addrs = peerdb.select_non_reserved_outbound_addresses(
                     &empty_addr_groups_set,
                     &|_| true,
                     count_to_select,

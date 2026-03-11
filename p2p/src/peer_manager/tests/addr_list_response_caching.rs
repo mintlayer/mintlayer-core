@@ -22,11 +22,12 @@ use common::{
     chain::{self, ChainConfig},
     primitives::user_agent::mintlayer_core_user_agent,
 };
-use networking::test_helpers::TestAddressMaker;
-use networking::{transport::TcpTransportSocket, types::ConnectionDirection};
+use networking::{
+    test_helpers::TestAddressMaker, transport::TcpTransportSocket, types::ConnectionDirection,
+};
 use p2p_test_utils::expect_recv;
 use p2p_types::peer_address::PeerAddress;
-use randomness::Rng;
+use randomness::{Rng, RngCore};
 use test_utils::{
     assert_matches_return_val,
     random::{make_seedable_rng, Seed},
@@ -77,8 +78,12 @@ async fn basic_test(#[case] seed: Seed) {
     let p2p_config = Arc::new(make_p2p_config());
     let time_getter = BasicTestTimeGetter::new();
 
-    let (mut peer_mgr, mut cmd_receiver) =
-        setup_peer_mgr(&chain_config, &p2p_config, &time_getter, &mut rng);
+    let (mut peer_mgr, mut cmd_receiver) = setup_peer_mgr(
+        &chain_config,
+        &p2p_config,
+        &time_getter,
+        make_seedable_rng(rng.gen()),
+    );
 
     let peer1_address = TestAddressMaker::new_random_address(&mut rng);
     let (peer1_id, peer1_info) = make_new_peer(&chain_config);
@@ -271,11 +276,13 @@ fn setup_peer_mgr(
     chain_config: &Arc<ChainConfig>,
     p2p_config: &Arc<P2pConfig>,
     time_getter: &BasicTestTimeGetter,
-    rng: &mut impl Rng,
+    mut rng: impl RngCore + Send + 'static,
 ) -> (
     PeerManager<TestNetworkingService, impl PeerDbStorage>,
     UnboundedReceiver<Command>,
 ) {
+    let mut another_rng = make_seedable_rng(rng.gen());
+
     let (mut peer_mgr, _conn_event_sender, _peer_mgr_event_sender, cmd_receiver, _) =
         make_standalone_peer_manager(
             Arc::clone(chain_config),
@@ -284,12 +291,13 @@ fn setup_peer_mgr(
             // establish real connections, it doesn't really matter.
             vec![],
             time_getter.get_time_getter(),
+            rng,
         );
 
     let addresses_in_db = make_non_colliding_addresses(
         &[peer_mgr.peerdb.address_tables().new_addr_table()],
         *p2p_config.protocol_config.max_addr_list_response_address_count * 10,
-        rng,
+        &mut another_rng,
     );
 
     for address in addresses_in_db {

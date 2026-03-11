@@ -31,8 +31,14 @@ pub fn peer_db(c: &mut Criterion) {
     let db_store = peerdb_inmemory_store();
     let chain_config = create_unit_test_config();
     let p2p_config = Arc::new(test_p2p_config());
-    let mut peerdb =
-        PeerDb::<_>::new(&chain_config, p2p_config, Default::default(), db_store).unwrap();
+    let mut peerdb = PeerDb::<_>::new(
+        &chain_config,
+        p2p_config,
+        Default::default(),
+        db_store,
+        &mut rng,
+    )
+    .unwrap();
 
     for _ in 0..100000 {
         peerdb.peer_discovered(TestAddressMaker::new_random_address(&mut rng).into());
@@ -54,7 +60,12 @@ pub fn peer_db(c: &mut Criterion) {
 
     c.bench_function("PeerDb", |b| {
         b.iter(|| {
-            peerdb.select_non_reserved_outbound_addresses(&outbound_addr_groups, &|_| true, 11)
+            peerdb.select_non_reserved_outbound_addresses(
+                &outbound_addr_groups,
+                &|_| true,
+                11,
+                &mut rng,
+            )
         })
     });
 }

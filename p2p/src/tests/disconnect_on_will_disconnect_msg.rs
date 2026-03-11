@@ -15,13 +15,22 @@
 
 use std::{sync::Arc, time::Duration};
 
+use rstest::rstest;
+
 use chainstate::{ChainstateConfig, Locator};
-use networking::test_helpers::{
-    TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
+use networking::{
+    test_helpers::{
+        TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
+    },
+    transport::{BufferedTranscoder, TransportSocket},
 };
-use networking::transport::{BufferedTranscoder, TransportSocket};
 use p2p_test_utils::run_with_timeout;
-use test_utils::{assert_matches, BasicTestTimeGetter};
+use randomness::Rng as _;
+use test_utils::{
+    assert_matches,
+    random::{make_seedable_rng, Seed},
+    BasicTestTimeGetter,
+};
 
 use crate::{
     message::{HeaderList, HeaderListRequest, WillDisconnectMessage},
@@ -35,11 +44,13 @@ use crate::{
 const TEST_PROTOCOL_VERSION: SupportedProtocolVersion = SupportedProtocolVersion::V3;
 
 // Check that the node will also initiate disconnection when it receives the WillDisconnect message.
-async fn disconnect_on_will_disconnect_msg<TTM>()
+async fn disconnect_on_will_disconnect_msg<TTM>(seed: Seed)
 where
     TTM: TestTransportMaker,
     TTM::Transport: TransportSocket,
 {
+    let mut rng = make_seedable_rng(seed);
+
     let time_getter = BasicTestTimeGetter::new();
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
     let p2p_config = Arc::new(test_p2p_config());
@@ -54,6 +65,7 @@ where
         TTM::make_address().into(),
         TEST_PROTOCOL_VERSION.into(),
         None,
+        make_seedable_rng(rng.gen()),
     )
     .await;
 
@@ -112,20 +124,35 @@ where
     test_node.join().await;
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn disconnect_on_will_disconnect_msg_tcp() {
-    run_with_timeout(disconnect_on_will_disconnect_msg::<TestTransportTcp>()).await;
+async fn disconnect_on_will_disconnect_msg_tcp(#[case] seed: Seed) {
+    run_with_timeout(disconnect_on_will_disconnect_msg::<TestTransportTcp>(seed)).await;
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn disconnect_on_will_disconnect_msg_channels() {
-    run_with_timeout(disconnect_on_will_disconnect_msg::<TestTransportChannel>()).await;
+async fn disconnect_on_will_disconnect_msg_channels(#[case] seed: Seed) {
+    run_with_timeout(disconnect_on_will_disconnect_msg::<TestTransportChannel>(
+        seed,
+    ))
+    .await;
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn disconnect_on_will_disconnect_msg_noise() {
-    run_with_timeout(disconnect_on_will_disconnect_msg::<TestTransportNoise>()).await;
+async fn disconnect_on_will_disconnect_msg_noise(#[case] seed: Seed) {
+    run_with_timeout(disconnect_on_will_disconnect_msg::<TestTransportNoise>(
+        seed,
+    ))
+    .await;
 }

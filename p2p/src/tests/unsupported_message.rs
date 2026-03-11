@@ -22,10 +22,11 @@ use networking::{
     transport::{BufferedTranscoder, TransportSocket as _},
 };
 use p2p_test_utils::run_with_timeout;
+use randomness::Rng as _;
 use serialization::{Decode, Encode};
 use test_utils::{
     assert_matches, assert_matches_return_val,
-    random::{gen_random_bytes, Seed},
+    random::{gen_random_bytes, make_seedable_rng, Seed},
     BasicTestTimeGetter,
 };
 
@@ -59,7 +60,7 @@ async fn unsupported_message(#[case] seed: Seed, #[values(false, true)] make_msg
 async fn unsupported_message_impl(seed: Seed, make_msg_too_big: bool) {
     type Transport = <TestTransportChannel as TestTransportMaker>::Transport;
 
-    let mut rng = test_utils::random::make_seedable_rng(seed);
+    let mut rng = make_seedable_rng(seed);
     let time_getter = BasicTestTimeGetter::new();
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
     let max_message_size = 1024;
@@ -84,6 +85,7 @@ async fn unsupported_message_impl(seed: Seed, make_msg_too_big: bool) {
         TestTransportChannel::make_address().into(),
         TEST_PROTOCOL_VERSION.into(),
         None,
+        make_seedable_rng(rng.gen()),
     )
     .await;
 

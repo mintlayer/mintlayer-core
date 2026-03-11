@@ -15,13 +15,22 @@
 
 use std::sync::Arc;
 
+use rstest::rstest;
+
 use chainstate::ChainstateConfig;
-use networking::test_helpers::{
-    TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
+use networking::{
+    test_helpers::{
+        TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
+    },
+    transport::{BufferedTranscoder, TransportListener, TransportSocket},
 };
-use networking::transport::{BufferedTranscoder, TransportListener, TransportSocket};
 use p2p_test_utils::run_with_timeout;
-use test_utils::{assert_matches, BasicTestTimeGetter};
+use randomness::Rng as _;
+use test_utils::{
+    assert_matches,
+    random::{make_seedable_rng, Seed},
+    BasicTestTimeGetter,
+};
 
 use crate::{
     disconnection_reason::DisconnectionReason,
@@ -34,11 +43,13 @@ use crate::{
 
 // Simulate a self-connection by sending the same nonce in Hello.
 // Check that the WillDisconnect message is sent if the protocol version is big enough.
-async fn same_handshake_nonce<TTM>()
+async fn same_handshake_nonce<TTM>(seed: Seed)
 where
     TTM: TestTransportMaker,
     TTM::Transport: TransportSocket,
 {
+    let mut rng = make_seedable_rng(seed);
+
     for protocol_version in [SupportedProtocolVersion::V2, SupportedProtocolVersion::V3] {
         let time_getter = BasicTestTimeGetter::new();
         let chain_config = Arc::new(common::chain::config::create_unit_test_config());
@@ -54,6 +65,7 @@ where
             TTM::make_address().into(),
             protocol_version.into(),
             None,
+            make_seedable_rng(rng.gen()),
         )
         .await;
 
@@ -129,20 +141,29 @@ where
     }
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn same_handshake_nonce_tcp() {
-    run_with_timeout(same_handshake_nonce::<TestTransportTcp>()).await;
+async fn same_handshake_nonce_tcp(#[case] seed: Seed) {
+    run_with_timeout(same_handshake_nonce::<TestTransportTcp>(seed)).await;
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn same_handshake_nonce_channels() {
-    run_with_timeout(same_handshake_nonce::<TestTransportChannel>()).await;
+async fn same_handshake_nonce_channels(#[case] seed: Seed) {
+    run_with_timeout(same_handshake_nonce::<TestTransportChannel>(seed)).await;
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn same_handshake_nonce_noise() {
-    run_with_timeout(same_handshake_nonce::<TestTransportNoise>()).await;
+async fn same_handshake_nonce_noise(#[case] seed: Seed) {
+    run_with_timeout(same_handshake_nonce::<TestTransportNoise>(seed)).await;
 }

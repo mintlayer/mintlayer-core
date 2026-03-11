@@ -103,6 +103,7 @@ where
             A::make_transport(),
             A::make_address().into(),
             Arc::clone(&config),
+            make_seedable_rng(rng.gen()),
         )
         .await;
 
@@ -166,12 +167,14 @@ async fn validate_invalid_connection_noise(#[case] seed: Seed) {
     .await;
 }
 
-async fn inbound_connection_invalid_magic<A, T>()
+async fn inbound_connection_invalid_magic<A, T>(seed: Seed)
 where
     A: TestTransportMaker<Transport = T::Transport>,
     T: NetworkingService + std::fmt::Debug + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
+    let mut rng = make_seedable_rng(seed);
+
     let addr1 = A::make_address().into();
     let addr2 = A::make_address().into();
 
@@ -179,12 +182,14 @@ where
         A::make_transport(),
         addr1,
         Arc::new(config::create_unit_test_config()),
+        make_seedable_rng(rng.gen()),
     )
     .await;
     let (mut pm2, _shutdown_sender, _subscribers_sender) = make_peer_manager::<T>(
         A::make_transport(),
         addr2,
         Arc::new(config::Builder::test_chain().magic_bytes(MagicBytes::new([1, 2, 3, 4])).build()),
+        make_seedable_rng(rng.gen()),
     )
     .await;
 
@@ -206,38 +211,48 @@ where
     }
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn inbound_connection_invalid_magic_tcp() {
+async fn inbound_connection_invalid_magic_tcp(#[case] seed: Seed) {
     inbound_connection_invalid_magic::<
         TestTransportTcp,
         DefaultNetworkingService<TcpTransportSocket>,
-    >()
+    >(seed)
     .await;
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn inbound_connection_invalid_magic_channels() {
+async fn inbound_connection_invalid_magic_channels(#[case] seed: Seed) {
     inbound_connection_invalid_magic::<
         TestTransportChannel,
         DefaultNetworkingService<MpscChannelTransport>,
-    >()
+    >(seed)
     .await;
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn inbound_connection_invalid_magic_noise() {
+async fn inbound_connection_invalid_magic_noise(#[case] seed: Seed) {
     inbound_connection_invalid_magic::<
         TestTransportNoise,
         DefaultNetworkingService<NoiseTcpTransport>,
-    >()
+    >(seed)
     .await;
 }
 
 // try to connect to an address that no one listening on and verify it fails
 async fn test_peer_manager_connect<T>(
+    seed: Seed,
     transport: T::Transport,
     bind_addr: SocketAddress,
     remote_addr: SocketAddress,
@@ -245,9 +260,11 @@ async fn test_peer_manager_connect<T>(
     T: NetworkingService + std::fmt::Debug + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
+    let mut rng = make_seedable_rng(seed);
+
     let config = Arc::new(config::create_unit_test_config());
     let (mut peer_manager, _shutdown_sender, _subscribers_sender) =
-        make_peer_manager::<T>(transport, bind_addr, config).await;
+        make_peer_manager::<T>(transport, bind_addr, config, make_seedable_rng(rng.gen())).await;
 
     peer_manager.try_connect(remote_addr, None, PeerRole::OutboundManual).unwrap();
 
@@ -260,14 +277,18 @@ async fn test_peer_manager_connect<T>(
     ));
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn test_peer_manager_connect_tcp() {
+async fn test_peer_manager_connect_tcp(#[case] seed: Seed) {
     let transport = TestTransportTcp::make_transport();
     let bind_addr = TestTransportTcp::make_address().into();
     let remote_addr: SocketAddress = "[::1]:1".parse().unwrap();
 
     test_peer_manager_connect::<DefaultNetworkingService<TcpTransportSocket>>(
+        seed,
         transport,
         bind_addr,
         remote_addr,
@@ -275,14 +296,18 @@ async fn test_peer_manager_connect_tcp() {
     .await;
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn test_peer_manager_connect_tcp_noise() {
+async fn test_peer_manager_connect_tcp_noise(#[case] seed: Seed) {
     let transport = TestTransportNoise::make_transport();
     let bind_addr = TestTransportTcp::make_address().into();
     let remote_addr: SocketAddress = "[::1]:1".parse().unwrap();
 
     test_peer_manager_connect::<DefaultNetworkingService<NoiseTcpTransport>>(
+        seed,
         transport,
         bind_addr,
         remote_addr,
@@ -292,20 +317,32 @@ async fn test_peer_manager_connect_tcp_noise() {
 
 // verify that the auto-connect functionality works if the number of active connections
 // is below the desired threshold and there are idle peers in the peerdb
-async fn test_auto_connect<A, T>()
+async fn test_auto_connect<A, T>(seed: Seed)
 where
     A: TestTransportMaker<Transport = T::Transport>,
     T: NetworkingService + std::fmt::Debug + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
+    let mut rng = make_seedable_rng(seed);
+
     let addr1 = A::make_address().into();
     let addr2 = A::make_address().into();
 
     let config = Arc::new(config::create_unit_test_config());
-    let (mut pm1, _shutdown_sender, _subscribers_sender) =
-        make_peer_manager::<T>(A::make_transport(), addr1, Arc::clone(&config)).await;
-    let (mut pm2, _shutdown_sender, _subscribers_sender) =
-        make_peer_manager::<T>(A::make_transport(), addr2, config).await;
+    let (mut pm1, _shutdown_sender, _subscribers_sender) = make_peer_manager::<T>(
+        A::make_transport(),
+        addr1,
+        Arc::clone(&config),
+        make_seedable_rng(rng.gen()),
+    )
+    .await;
+    let (mut pm2, _shutdown_sender, _subscribers_sender) = make_peer_manager::<T>(
+        A::make_transport(),
+        addr2,
+        config,
+        make_seedable_rng(rng.gen()),
+    )
+    .await;
 
     let addr = pm2.peer_connectivity_handle.local_addresses()[0];
 
@@ -329,39 +366,61 @@ where
     ));
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn test_auto_connect_tcp() {
-    test_auto_connect::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>().await;
+async fn test_auto_connect_tcp(#[case] seed: Seed) {
+    test_auto_connect::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>(seed).await;
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn test_auto_connect_channels() {
-    test_auto_connect::<TestTransportChannel, DefaultNetworkingService<MpscChannelTransport>>()
+async fn test_auto_connect_channels(#[case] seed: Seed) {
+    test_auto_connect::<TestTransportChannel, DefaultNetworkingService<MpscChannelTransport>>(seed)
         .await;
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn test_auto_connect_noise() {
-    test_auto_connect::<TestTransportNoise, DefaultNetworkingService<NoiseTcpTransport>>().await;
+async fn test_auto_connect_noise(#[case] seed: Seed) {
+    test_auto_connect::<TestTransportNoise, DefaultNetworkingService<NoiseTcpTransport>>(seed)
+        .await;
 }
 
-async fn connect_outbound_same_network<A, T>()
+async fn connect_outbound_same_network<A, T>(seed: Seed)
 where
     A: TestTransportMaker<Transport = T::Transport>,
     T: NetworkingService + std::fmt::Debug + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
+    let mut rng = make_seedable_rng(seed);
+
     let addr1 = A::make_address().into();
     let addr2 = A::make_address().into();
 
     let config = Arc::new(config::create_unit_test_config());
-    let (mut pm1, _shutdown_sender, _subscribers_sender) =
-        make_peer_manager::<T>(A::make_transport(), addr1, Arc::clone(&config)).await;
-    let (mut pm2, _shutdown_sender, _subscribers_sender) =
-        make_peer_manager::<T>(A::make_transport(), addr2, config).await;
+    let (mut pm1, _shutdown_sender, _subscribers_sender) = make_peer_manager::<T>(
+        A::make_transport(),
+        addr1,
+        Arc::clone(&config),
+        make_seedable_rng(rng.gen()),
+    )
+    .await;
+    let (mut pm2, _shutdown_sender, _subscribers_sender) = make_peer_manager::<T>(
+        A::make_transport(),
+        addr2,
+        config,
+        make_seedable_rng(rng.gen()),
+    )
+    .await;
 
     connect_services::<T>(
         &mut pm1.peer_connectivity_handle,
@@ -370,44 +429,61 @@ where
     .await;
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn connect_outbound_same_network_tcp() {
-    connect_outbound_same_network::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>().await;
+async fn connect_outbound_same_network_tcp(#[case] seed: Seed) {
+    connect_outbound_same_network::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>(seed).await;
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn connect_outbound_same_network_channels() {
+async fn connect_outbound_same_network_channels(#[case] seed: Seed) {
     connect_outbound_same_network::<
         TestTransportChannel,
         DefaultNetworkingService<MpscChannelTransport>,
-    >()
+    >(seed)
     .await;
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn connect_outbound_same_network_noise() {
-    connect_outbound_same_network::<TestTransportNoise, DefaultNetworkingService<NoiseTcpTransport>>().await;
+async fn connect_outbound_same_network_noise(#[case] seed: Seed) {
+    connect_outbound_same_network::<TestTransportNoise, DefaultNetworkingService<NoiseTcpTransport>>(seed).await;
 }
 
-async fn connect_outbound_different_network<A, T>()
+async fn connect_outbound_different_network<A, T>(seed: Seed)
 where
     A: TestTransportMaker<Transport = T::Transport>,
     T: NetworkingService + std::fmt::Debug + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
+    let mut rng = make_seedable_rng(seed);
+
     let addr1 = A::make_address().into();
     let addr2 = A::make_address().into();
 
     let config = Arc::new(config::create_unit_test_config());
-    let (mut pm1, _shutdown_sender, _subscribers_sender) =
-        make_peer_manager::<T>(A::make_transport(), addr1, Arc::clone(&config)).await;
+    let (mut pm1, _shutdown_sender, _subscribers_sender) = make_peer_manager::<T>(
+        A::make_transport(),
+        addr1,
+        Arc::clone(&config),
+        make_seedable_rng(rng.gen()),
+    )
+    .await;
     let (mut pm2, _shutdown_sender, _subscribers_sender) = make_peer_manager::<T>(
         A::make_transport(),
         addr2,
         Arc::new(config::Builder::test_chain().magic_bytes(MagicBytes::new([1, 2, 3, 4])).build()),
+        make_seedable_rng(rng.gen()),
     )
     .await;
 
@@ -419,50 +495,71 @@ where
     assert_ne!(peer_info.network, *config.magic_bytes());
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn connect_outbound_different_network_tcp() {
+async fn connect_outbound_different_network_tcp(#[case] seed: Seed) {
     connect_outbound_different_network::<
         TestTransportTcp,
         DefaultNetworkingService<TcpTransportSocket>,
-    >()
+    >(seed)
     .await;
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn connect_outbound_different_network_channels() {
+async fn connect_outbound_different_network_channels(#[case] seed: Seed) {
     connect_outbound_different_network::<
         TestTransportChannel,
         DefaultNetworkingService<MpscChannelTransport>,
-    >()
+    >(seed)
     .await;
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn connect_outbound_different_network_noise() {
+async fn connect_outbound_different_network_noise(#[case] seed: Seed) {
     connect_outbound_different_network::<
         TestTransportNoise,
         DefaultNetworkingService<NoiseTcpTransport>,
-    >()
+    >(seed)
     .await;
 }
 
-async fn connect_inbound_same_network<A, T>()
+async fn connect_inbound_same_network<A, T>(seed: Seed)
 where
     A: TestTransportMaker<Transport = T::Transport>,
     T: NetworkingService + std::fmt::Debug + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
+    let mut rng = make_seedable_rng(seed);
+
     let addr1 = A::make_address().into();
     let addr2 = A::make_address().into();
 
     let config = Arc::new(config::create_unit_test_config());
-    let (mut pm1, _shutdown_sender, _subscribers_sender) =
-        make_peer_manager::<T>(A::make_transport(), addr1, Arc::clone(&config)).await;
-    let (mut pm2, _shutdown_sender, _subscribers_sender) =
-        make_peer_manager::<T>(A::make_transport(), addr2, config).await;
+    let (mut pm1, _shutdown_sender, _subscribers_sender) = make_peer_manager::<T>(
+        A::make_transport(),
+        addr1,
+        Arc::clone(&config),
+        make_seedable_rng(rng.gen()),
+    )
+    .await;
+    let (mut pm2, _shutdown_sender, _subscribers_sender) = make_peer_manager::<T>(
+        A::make_transport(),
+        addr2,
+        config,
+        make_seedable_rng(rng.gen()),
+    )
+    .await;
 
     let (address, peer_info, _) = connect_services::<T>(
         &mut pm1.peer_connectivity_handle,
@@ -479,36 +576,48 @@ where
     .unwrap();
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn connect_inbound_same_network_tcp() {
+async fn connect_inbound_same_network_tcp(#[case] seed: Seed) {
     connect_inbound_same_network::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>(
+        seed,
     )
     .await;
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn connect_inbound_same_network_channel() {
+async fn connect_inbound_same_network_channel(#[case] seed: Seed) {
     connect_inbound_same_network::<
         TestTransportChannel,
         DefaultNetworkingService<MpscChannelTransport>,
-    >()
+    >(seed)
     .await;
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn connect_inbound_same_network_noise() {
-    connect_inbound_same_network::<TestTransportNoise, DefaultNetworkingService<NoiseTcpTransport>>().await;
+async fn connect_inbound_same_network_noise(#[case] seed: Seed) {
+    connect_inbound_same_network::<TestTransportNoise, DefaultNetworkingService<NoiseTcpTransport>>(seed).await;
 }
 
-async fn connect_inbound_different_network<A, T>()
+async fn connect_inbound_different_network<A, T>(seed: Seed)
 where
     A: TestTransportMaker<Transport = T::Transport>,
     T: NetworkingService + std::fmt::Debug + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
+    let mut rng = make_seedable_rng(seed);
+
     let addr1 = A::make_address().into();
     let addr2 = A::make_address().into();
 
@@ -516,12 +625,14 @@ where
         A::make_transport(),
         addr1,
         Arc::new(config::create_unit_test_config()),
+        make_seedable_rng(rng.gen()),
     )
     .await;
     let (mut pm2, _shutdown_sender, _subscribers_sender) = make_peer_manager::<T>(
         A::make_transport(),
         addr2,
         Arc::new(config::Builder::test_chain().magic_bytes(MagicBytes::new([1, 2, 3, 4])).build()),
+        make_seedable_rng(rng.gen()),
     )
     .await;
 
@@ -548,42 +659,53 @@ where
     );
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn connect_inbound_different_network_tcp() {
+async fn connect_inbound_different_network_tcp(#[case] seed: Seed) {
     connect_inbound_different_network::<
         TestTransportTcp,
         DefaultNetworkingService<TcpTransportSocket>,
-    >()
+    >(seed)
     .await;
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn connect_inbound_different_network_channels() {
+async fn connect_inbound_different_network_channels(#[case] seed: Seed) {
     connect_inbound_different_network::<
         TestTransportChannel,
         DefaultNetworkingService<MpscChannelTransport>,
-    >()
+    >(seed)
     .await;
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn connect_inbound_different_network_noise() {
+async fn connect_inbound_different_network_noise(#[case] seed: Seed) {
     connect_inbound_different_network::<
         TestTransportNoise,
         DefaultNetworkingService<NoiseTcpTransport>,
-    >()
+    >(seed)
     .await;
 }
 
-async fn remote_closes_connection<A, T>()
+async fn remote_closes_connection<A, T>(seed: Seed)
 where
     A: TestTransportMaker<Transport = T::Transport>,
     T: NetworkingService + std::fmt::Debug + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
+    let mut rng = make_seedable_rng(seed);
+
     let addr1 = A::make_address().into();
     let addr2 = A::make_address().into();
 
@@ -591,12 +713,14 @@ where
         A::make_transport(),
         addr1,
         Arc::new(config::create_unit_test_config()),
+        make_seedable_rng(rng.gen()),
     )
     .await;
     let (mut pm2, _shutdown_sender, _subscribers_sender) = make_peer_manager::<T>(
         A::make_transport(),
         addr2,
         Arc::new(config::create_unit_test_config()),
+        make_seedable_rng(rng.gen()),
     )
     .await;
 
@@ -616,40 +740,65 @@ where
     ));
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn remote_closes_connection_tcp() {
-    remote_closes_connection::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>()
-        .await;
+async fn remote_closes_connection_tcp(#[case] seed: Seed) {
+    remote_closes_connection::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>(
+        seed,
+    )
+    .await;
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn remote_closes_connection_channels() {
-    remote_closes_connection::<TestTransportChannel, DefaultNetworkingService<MpscChannelTransport>>().await;
+async fn remote_closes_connection_channels(#[case] seed: Seed) {
+    remote_closes_connection::<TestTransportChannel, DefaultNetworkingService<MpscChannelTransport>>(seed).await;
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn remote_closes_connection_noise() {
-    remote_closes_connection::<TestTransportNoise, DefaultNetworkingService<NoiseTcpTransport>>()
-        .await;
+async fn remote_closes_connection_noise(#[case] seed: Seed) {
+    remote_closes_connection::<TestTransportNoise, DefaultNetworkingService<NoiseTcpTransport>>(
+        seed,
+    )
+    .await;
 }
 
-async fn inbound_connection_too_many_peers<A, T>(peers: Vec<(SocketAddress, PeerInfo)>)
+async fn inbound_connection_too_many_peers<A, T>(seed: Seed, peers: Vec<(SocketAddress, PeerInfo)>)
 where
     A: TestTransportMaker<Transport = T::Transport>,
     T: NetworkingService + std::fmt::Debug + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
+    let mut rng = make_seedable_rng(seed);
+
     let addr1 = A::make_address().into();
     let addr2 = A::make_address().into();
 
     let config = Arc::new(config::create_unit_test_config());
-    let (mut pm1, _shutdown_sender, _subscribers_sender) =
-        make_peer_manager::<T>(A::make_transport(), addr1, Arc::clone(&config)).await;
-    let (mut pm2, _shutdown_sender, _subscribers_sender) =
-        make_peer_manager::<T>(A::make_transport(), addr2, Arc::clone(&config)).await;
+    let (mut pm1, _shutdown_sender, _subscribers_sender) = make_peer_manager::<T>(
+        A::make_transport(),
+        addr1,
+        Arc::clone(&config),
+        make_seedable_rng(rng.gen()),
+    )
+    .await;
+    let (mut pm2, _shutdown_sender, _subscribers_sender) = make_peer_manager::<T>(
+        A::make_transport(),
+        addr2,
+        Arc::clone(&config),
+        make_seedable_rng(rng.gen()),
+    )
+    .await;
 
     for peer in peers.into_iter() {
         pm1.try_accept_connection(peer.0, addr2, PeerRole::Inbound, peer.1, None)
@@ -675,9 +824,12 @@ where
     }
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn inbound_connection_too_many_peers_tcp() {
+async fn inbound_connection_too_many_peers_tcp(#[case] seed: Seed) {
     let config = Arc::new(config::create_unit_test_config());
     let peers = (0..*MaxInboundConnections::default())
         .map(|index| {
@@ -698,13 +850,16 @@ async fn inbound_connection_too_many_peers_tcp() {
     inbound_connection_too_many_peers::<
         TestTransportTcp,
         DefaultNetworkingService<TcpTransportSocket>,
-    >(peers)
+    >(seed, peers)
     .await;
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn inbound_connection_too_many_peers_channels() {
+async fn inbound_connection_too_many_peers_channels(#[case] seed: Seed) {
     let config = Arc::new(config::create_unit_test_config());
     let peers = (0..*MaxInboundConnections::default())
         .map(|index| {
@@ -725,13 +880,16 @@ async fn inbound_connection_too_many_peers_channels() {
     inbound_connection_too_many_peers::<
         TestTransportChannel,
         DefaultNetworkingService<MpscChannelTransport>,
-    >(peers)
+    >(seed, peers)
     .await;
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn inbound_connection_too_many_peers_noise() {
+async fn inbound_connection_too_many_peers_noise(#[case] seed: Seed) {
     let config = Arc::new(config::create_unit_test_config());
     let peers = (0..*MaxInboundConnections::default())
         .map(|index| {
@@ -752,7 +910,7 @@ async fn inbound_connection_too_many_peers_noise() {
     inbound_connection_too_many_peers::<
         TestTransportNoise,
         DefaultNetworkingService<NoiseTcpTransport>,
-    >(peers)
+    >(seed, peers)
     .await;
 }
 
@@ -831,6 +989,7 @@ async fn connection_timeout_noise() {
 
 // try to establish a new connection through RPC and verify that it is notified of the timeout
 async fn connection_timeout_rpc_notified<T>(
+    seed: Seed,
     transport: T::Transport,
     addr1: SocketAddress,
     addr2: SocketAddress,
@@ -838,6 +997,8 @@ async fn connection_timeout_rpc_notified<T>(
     T: NetworkingService + std::fmt::Debug + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
+    let mut rng = make_seedable_rng(seed);
+
     let config = Arc::new(config::create_unit_test_config());
     let p2p_config = Arc::new(P2pConfig {
         outbound_connection_timeout: Duration::from_secs(1).into(),
@@ -888,6 +1049,7 @@ async fn connection_timeout_rpc_notified<T>(
         peer_mgr_event_receiver,
         time_getter,
         peerdb_inmemory_store(),
+        make_seedable_rng(rng.gen()),
     )
     .unwrap();
 
@@ -918,10 +1080,14 @@ async fn connection_timeout_rpc_notified<T>(
 // Address is reserved for "TEST-NET-2" documentation and examples. See: https://en.wikipedia.org/wiki/Reserved_IP_addresses
 const GUARANTEED_TIMEOUT_ADDRESS: &str = "198.51.100.2:1";
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn connection_timeout_rpc_notified_tcp() {
+async fn connection_timeout_rpc_notified_tcp(#[case] seed: Seed) {
     connection_timeout_rpc_notified::<DefaultNetworkingService<TcpTransportSocket>>(
+        seed,
         TestTransportTcp::make_transport(),
         TestTransportTcp::make_address().into(),
         GUARANTEED_TIMEOUT_ADDRESS.parse().unwrap(),
@@ -929,10 +1095,14 @@ async fn connection_timeout_rpc_notified_tcp() {
     .await;
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn connection_timeout_rpc_notified_channels() {
+async fn connection_timeout_rpc_notified_channels(#[case] seed: Seed) {
     connection_timeout_rpc_notified::<DefaultNetworkingService<MpscChannelTransport>>(
+        seed,
         TestTransportChannel::make_transport(),
         TestTransportChannel::make_address().into(),
         GUARANTEED_TIMEOUT_ADDRESS.parse().unwrap(),
@@ -940,10 +1110,14 @@ async fn connection_timeout_rpc_notified_channels() {
     .await;
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn connection_timeout_rpc_notified_noise() {
+async fn connection_timeout_rpc_notified_noise(#[case] seed: Seed) {
     connection_timeout_rpc_notified::<DefaultNetworkingService<NoiseTcpTransport>>(
+        seed,
         TestTransportNoise::make_transport(),
         TestTransportNoise::make_address().into(),
         GUARANTEED_TIMEOUT_ADDRESS.parse().unwrap(),
@@ -952,12 +1126,14 @@ async fn connection_timeout_rpc_notified_noise() {
 }
 
 // verify that peer connection is made when valid reserved_node parameter is used
-async fn connection_reserved_node<A, T>()
+async fn connection_reserved_node<A, T>(seed: Seed)
 where
     A: TestTransportMaker<Transport = T::Transport>,
     T: NetworkingService + std::fmt::Debug + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
+    let mut rng = make_seedable_rng(seed);
+
     let time_getter = BasicTestTimeGetter::new();
     let chain_config = Arc::new(config::create_unit_test_config());
 
@@ -989,6 +1165,7 @@ where
         Arc::clone(&chain_config),
         p2p_config_1,
         time_getter.get_time_getter(),
+        make_seedable_rng(rng.gen()),
     )
     .await;
 
@@ -1034,6 +1211,7 @@ where
         Arc::clone(&chain_config),
         p2p_config_2,
         time_getter.get_time_getter(),
+        make_seedable_rng(rng.gen()),
     )
     .await;
 
@@ -1059,38 +1237,52 @@ where
     }
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn connection_reserved_node_tcp() {
-    connection_reserved_node::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>()
-        .await;
+async fn connection_reserved_node_tcp(#[case] seed: Seed) {
+    connection_reserved_node::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>(
+        seed,
+    )
+    .await;
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn connection_reserved_node_noise() {
-    connection_reserved_node::<TestTransportNoise, DefaultNetworkingService<NoiseTcpTransport>>()
-        .await;
+async fn connection_reserved_node_noise(#[case] seed: Seed) {
+    connection_reserved_node::<TestTransportNoise, DefaultNetworkingService<NoiseTcpTransport>>(
+        seed,
+    )
+    .await;
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn connection_reserved_node_channel() {
-    connection_reserved_node::<TestTransportChannel, DefaultNetworkingService<MpscChannelTransport>>()
+async fn connection_reserved_node_channel(#[case] seed: Seed) {
+    connection_reserved_node::<TestTransportChannel, DefaultNetworkingService<MpscChannelTransport>>(seed)
         .await;
 }
 
 // Verify that peers announce own addresses and are discovered by other peers.
 // All listening addresses are discovered and multiple connections are made.
 // All peers are in the same address group
-async fn discovered_node_same_address_group<A, T>()
+async fn discovered_node_same_address_group<A, T>(seed: Seed)
 where
     A: TestTransportMaker<Transport = T::Transport>,
     T: NetworkingService + std::fmt::Debug + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
-    let chain_config = Arc::new(config::create_unit_test_config());
+    let mut rng = make_seedable_rng(seed);
 
+    let chain_config = Arc::new(config::create_unit_test_config());
     let time_getter = BasicTestTimeGetter::new();
 
     let peer_manager_config = PeerManagerConfig {
@@ -1145,6 +1337,7 @@ where
         Arc::clone(&chain_config),
         p2p_config_1,
         time_getter.get_time_getter(),
+        make_seedable_rng(rng.gen()),
     )
     .await;
 
@@ -1190,6 +1383,7 @@ where
         Arc::clone(&chain_config),
         p2p_config_2,
         time_getter.get_time_getter(),
+        make_seedable_rng(rng.gen()),
     )
     .await;
 
@@ -1222,6 +1416,7 @@ where
         Arc::clone(&chain_config),
         p2p_config_3,
         time_getter.get_time_getter(),
+        make_seedable_rng(rng.gen()),
     )
     .await;
 
@@ -1263,41 +1458,55 @@ where
     }
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn discovered_node_tcp() {
+async fn discovered_node_tcp(#[case] seed: Seed) {
     discovered_node_same_address_group::<
         TestTransportTcp,
         DefaultNetworkingService<TcpTransportSocket>,
-    >()
+    >(seed)
     .await;
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn discovered_node_noise() {
+async fn discovered_node_noise(#[case] seed: Seed) {
     discovered_node_same_address_group::<
         TestTransportNoise,
         DefaultNetworkingService<NoiseTcpTransport>,
-    >()
+    >(seed)
     .await;
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn discovered_node_channel() {
+async fn discovered_node_channel(#[case] seed: Seed) {
     discovered_node_same_address_group::<
         TestTransportChannel,
         DefaultNetworkingService<MpscChannelTransport>,
-    >()
+    >(seed)
     .await;
 }
 
 // Create 3 peers and make one of them a reserved node.
 // Put reserved node in a separate address group.
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn discovered_node_2_groups() {
+async fn discovered_node_2_groups(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
     let chain_config = Arc::new(config::create_unit_test_config());
     let time_getter = BasicTestTimeGetter::new();
 
@@ -1354,6 +1563,7 @@ async fn discovered_node_2_groups() {
             Arc::clone(&chain_config),
             p2p_config_1,
             time_getter.get_time_getter(),
+            make_seedable_rng(rng.gen()),
         )
         .await;
 
@@ -1400,6 +1610,7 @@ async fn discovered_node_2_groups() {
             Arc::clone(&chain_config),
             p2p_config_2,
             time_getter.get_time_getter(),
+            make_seedable_rng(rng.gen()),
         )
         .await;
 
@@ -1433,6 +1644,7 @@ async fn discovered_node_2_groups() {
             Arc::clone(&chain_config),
             p2p_config_3,
             time_getter.get_time_getter(),
+            make_seedable_rng(rng.gen()),
         )
         .await;
 
@@ -1466,9 +1678,14 @@ async fn discovered_node_2_groups() {
     }
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn discovered_node_separate_groups() {
+async fn discovered_node_separate_groups(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
     let chain_config = Arc::new(config::create_unit_test_config());
     let time_getter = BasicTestTimeGetter::new();
 
@@ -1525,6 +1742,7 @@ async fn discovered_node_separate_groups() {
             Arc::clone(&chain_config),
             p2p_config_1,
             time_getter.get_time_getter(),
+            make_seedable_rng(rng.gen()),
         )
         .await;
 
@@ -1571,6 +1789,7 @@ async fn discovered_node_separate_groups() {
             Arc::clone(&chain_config),
             p2p_config_2,
             time_getter.get_time_getter(),
+            make_seedable_rng(rng.gen()),
         )
         .await;
 
@@ -1604,6 +1823,7 @@ async fn discovered_node_separate_groups() {
             Arc::clone(&chain_config),
             p2p_config_3,
             time_getter.get_time_getter(),
+            make_seedable_rng(rng.gen()),
         )
         .await;
 
@@ -1684,6 +1904,7 @@ async fn feeler_connections_test_impl(seed: Seed) {
         peer_mgr_event_receiver,
         time_getter.get_time_getter(),
         peerdb_inmemory_store(),
+        make_seedable_rng(rng.gen()),
     )
     .unwrap();
 
@@ -1873,7 +2094,7 @@ mod feeler_connections_test_utils {
                 feeler_connections_interval: feeler_connections_interval.into(),
 
                 peerdb_config: PeerDbConfig {
-                    salt: Some(Salt::new_random_with_rng(rng)),
+                    salt: Some(Salt::new_random(rng)),
 
                     new_addr_table_bucket_count: Default::default(),
                     tried_addr_table_bucket_count: Default::default(),
@@ -2019,6 +2240,7 @@ async fn reject_connection_to_existing_ip(#[case] seed: Seed) {
         Arc::clone(&p2p_config),
         vec![bind_addr],
         time_getter.get_time_getter(),
+        make_seedable_rng(rng.gen()),
     );
 
     let peer_addrs = make_non_colliding_addresses_for_peer_db_in_distinct_addr_groups(
@@ -2169,6 +2391,7 @@ async fn feeler_connection_to_ip_address_of_inbound_peer(#[case] seed: Seed) {
         Arc::clone(&p2p_config),
         vec![bind_addr],
         time_getter.get_time_getter(),
+        make_seedable_rng(rng.gen()),
     );
 
     let peer_addr = TestAddressMaker::new_random_address(&mut rng);
