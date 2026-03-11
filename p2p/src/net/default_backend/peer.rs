@@ -31,7 +31,10 @@ use crate::{
     disconnection_reason::DisconnectionReason,
     error::{ConnectionValidationError, P2pError, PeerError, ProtocolError},
     message::{BlockSyncMessage, TransactionSyncMessage, WillDisconnectMessage},
-    net::default_backend::types::{BackendEvent, PeerEvent},
+    net::{
+        default_backend::types::{BackendEvent, PeerEvent},
+        types::PeerManagerMessageOrTag,
+    },
     protocol::{choose_common_protocol_version, ProtocolVersion, SupportedProtocolVersion},
     types::peer_id::PeerId,
 };
@@ -409,10 +412,28 @@ where
                     .await?;
             }
             CategorizedMessage::PeerManagerMessage(msg) => {
-                peer_event_sender.send(PeerEvent::MessageReceived { message: msg }).await?
+                peer_event_sender
+                    .send(PeerEvent::MessageReceived(
+                        PeerManagerMessageOrTag::PeerManagerMessage(msg),
+                    ))
+                    .await?
             }
-            CategorizedMessage::BlockSyncMessage(msg) => block_sync_msg_sender.send(msg).await?,
+            CategorizedMessage::BlockSyncMessage(msg) => {
+                peer_event_sender
+                    .send(PeerEvent::MessageReceived(
+                        PeerManagerMessageOrTag::BlockSyncMessage((&msg).into()),
+                    ))
+                    .await?;
+
+                block_sync_msg_sender.send(msg).await?
+            }
             CategorizedMessage::TransactionSyncMessage(msg) => {
+                peer_event_sender
+                    .send(PeerEvent::MessageReceived(
+                        PeerManagerMessageOrTag::TransactionSyncMessage((&msg).into()),
+                    ))
+                    .await?;
+
                 transaction_sync_msg_sender.send(msg).await?
             }
         }

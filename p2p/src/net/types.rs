@@ -26,7 +26,10 @@ use tokio::sync::mpsc::Receiver;
 
 use crate::{
     error::ConnectionValidationError,
-    message::{BlockSyncMessage, PeerManagerMessage, TransactionSyncMessage},
+    message::{
+        BlockSyncMessage, BlockSyncMessageTag, PeerManagerMessage, PeerManagerMessageTag,
+        TransactionSyncMessage, TransactionSyncMessageTag,
+    },
     protocol::SupportedProtocolVersion,
     types::{peer_address::PeerAddress, peer_id::PeerId},
     P2pError,
@@ -45,7 +48,7 @@ use self::services::Services;
     serde::Serialize,
     serde::Deserialize,
     rpc_description::HasValueHint,
-    enum_iterator::Sequence,
+    strum::EnumIter,
 )]
 pub enum PeerRole {
     Inbound,
@@ -57,25 +60,40 @@ pub enum PeerRole {
 }
 
 impl PeerRole {
-    pub fn is_outbound(&self) -> bool {
-        use PeerRole::*;
-
+    pub fn as_outbound(&self) -> Option<OutboundPeerRole> {
         match self {
-            Inbound => false,
-            OutboundFullRelay | OutboundBlockRelay | OutboundReserved | OutboundManual | Feeler => {
-                true
-            }
+            Self::Inbound => None,
+            Self::OutboundFullRelay => Some(OutboundPeerRole::OutboundFullRelay),
+            Self::OutboundBlockRelay => Some(OutboundPeerRole::OutboundBlockRelay),
+            Self::OutboundReserved => Some(OutboundPeerRole::OutboundReserved),
+            Self::OutboundManual => Some(OutboundPeerRole::OutboundManual),
+            Self::Feeler => Some(OutboundPeerRole::Feeler),
         }
+    }
+
+    pub fn is_outbound(&self) -> bool {
+        self.as_outbound().is_some()
     }
 
     pub fn is_outbound_manual(&self) -> bool {
-        use PeerRole::*;
-
         match self {
-            OutboundManual => true,
-            Inbound | OutboundFullRelay | OutboundBlockRelay | OutboundReserved | Feeler => false,
+            Self::OutboundManual => true,
+            Self::Inbound
+            | Self::OutboundFullRelay
+            | Self::OutboundBlockRelay
+            | Self::OutboundReserved
+            | Self::Feeler => false,
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, strum::EnumIter)]
+pub enum OutboundPeerRole {
+    OutboundFullRelay,
+    OutboundBlockRelay,
+    OutboundReserved,
+    OutboundManual,
+    Feeler,
 }
 
 /// Peer information learned during handshaking
@@ -142,13 +160,19 @@ impl Display for PeerInfo {
     }
 }
 
-/// Connectivity-related events received from the network
+/// Events available via the `ConnectivityService` trait (normally implemented by `NetworkingService::ConnectivityHandle`).
+///
+/// Note: `PeerManager` is the main consumer of these events.
 #[derive(Debug)]
 pub enum ConnectivityEvent {
+    /// A message received from a peer.
+    ///
+    /// Note that only a message tag is present here for block and transaction sync messages.
     Message {
         peer_id: PeerId,
-        message: PeerManagerMessage,
+        message: PeerManagerMessageOrTag,
     },
+
     /// Outbound connection accepted
     OutboundAccepted {
         /// Peer address
@@ -224,7 +248,44 @@ pub enum ConnectivityEvent {
     },
 }
 
-/// Syncing-related events (sent from the backend)
+/// Either a full `PeerManagerMessage` or, if it's a sync message, the corresponding tag.
+#[derive(Debug, Clone)]
+pub enum PeerManagerMessageOrTag {
+    PeerManagerMessage(PeerManagerMessage),
+    BlockSyncMessage(BlockSyncMessageTag),
+    TransactionSyncMessage(TransactionSyncMessageTag),
+}
+
+impl From<PeerManagerMessage> for PeerManagerMessageOrTag {
+    fn from(value: PeerManagerMessage) -> Self {
+        Self::PeerManagerMessage(value)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConnectivityEventMessageTag {
+    PeerManagerMessage(PeerManagerMessageTag),
+    BlockSyncMessage(BlockSyncMessageTag),
+    TransactionSyncMessage(TransactionSyncMessageTag),
+}
+
+impl From<&'_ PeerManagerMessageOrTag> for ConnectivityEventMessageTag {
+    fn from(value: &'_ PeerManagerMessageOrTag) -> Self {
+        match value {
+            PeerManagerMessageOrTag::PeerManagerMessage(msg) => {
+                Self::PeerManagerMessage(msg.into())
+            }
+            PeerManagerMessageOrTag::BlockSyncMessage(tag) => Self::BlockSyncMessage(*tag),
+            PeerManagerMessageOrTag::TransactionSyncMessage(tag) => {
+                Self::TransactionSyncMessage(*tag)
+            }
+        }
+    }
+}
+
+/// Events obtainable via the `SyncingEventReceiver` trait (normally implemented by `NetworkingService::SyncingEventReceiver`).
+///
+/// Note: `SyncManager` is the consumer of these events.
 #[derive(Debug)]
 pub enum SyncingEvent {
     /// Peer connected

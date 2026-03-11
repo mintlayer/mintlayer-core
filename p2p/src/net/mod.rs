@@ -115,18 +115,17 @@ where
         reason: Option<DisconnectionReason>,
     ) -> crate::Result<()>;
 
-    /// Sends a message to the given peer.
-    fn send_message(&mut self, peer: PeerId, message: PeerManagerMessage) -> crate::Result<()>;
+    /// Sends a peer manager message to the given peer.
+    fn send_peer_manager_message(
+        &mut self,
+        peer: PeerId,
+        message: PeerManagerMessage,
+    ) -> crate::Result<()>;
 
     /// Return the socket addresses of the network service provider
     fn local_addresses(&self) -> &[SocketAddress];
 
     /// Poll events from the network service provider
-    ///
-    /// There are three types of events that can be received:
-    /// - incoming peer connections
-    /// - new discovered peers
-    /// - peer expiration events
     async fn poll_next(&mut self) -> crate::Result<types::ConnectivityEvent>;
 }
 

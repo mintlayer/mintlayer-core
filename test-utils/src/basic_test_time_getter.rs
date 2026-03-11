@@ -46,6 +46,18 @@ impl BasicTestTimeGetter {
         self.current_time_millis.fetch_add(duration.as_millis() as u64);
     }
 
+    // Same as advance_time, except that if the passed duration's precision is not representable by
+    // the time getter (i.e. it's sub-millisecond), this function will round it up, ensuring that
+    // the resulting time is always bigger than the initial time plus duration.
+    pub fn advance_time_rounded_up(&self, duration: Duration) {
+        let mut millis = duration.as_millis() as u64;
+        if duration.subsec_nanos() % 1_000_000 != 0 {
+            millis += 1;
+        }
+
+        self.current_time_millis.fetch_add(millis);
+    }
+
     pub fn is_same_instance(&self, other: &BasicTestTimeGetter) -> bool {
         Arc::ptr_eq(&self.current_time_millis, &other.current_time_millis)
     }

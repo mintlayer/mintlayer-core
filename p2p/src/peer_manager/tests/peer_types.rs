@@ -16,6 +16,7 @@
 use std::sync::Arc;
 
 use rstest::rstest;
+use strum::IntoEnumIterator as _;
 
 use common::{chain::config, primitives::user_agent::mintlayer_core_user_agent};
 use networking::transport::TcpTransportSocket;
@@ -108,7 +109,7 @@ fn validate_services(#[case] seed: Seed) {
             let services = Services::from_u64(services);
 
             // List all peer roles
-            for peer_role in enum_iterator::all::<PeerRole>() {
+            for peer_role in PeerRole::iter() {
                 let peer_id_1 = PeerId::new();
                 let peer_info = PeerInfo {
                     peer_id: peer_id_1,

@@ -34,6 +34,7 @@ use crate::{
         types::{ConnectivityEvent, PeerInfo},
     },
     peer_manager::PeerManagerInterface,
+    peer_manager_event::PeerDisconnectionDbAction,
     test_helpers::TEST_PROTOCOL_VERSION,
     tests::helpers::PeerManagerNotification,
     utils::oneshot_nofail,
@@ -173,17 +174,13 @@ pub fn outbound_block_relay_peer_accepted_by_backend(
     bind_address: SocketAddress,
     chain_config: &ChainConfig,
 ) -> PeerId {
-    let peer_id = PeerId::new();
-    conn_event_sender
-        .send(ConnectivityEvent::OutboundAccepted {
-            peer_address,
-            bind_address,
-            peer_info: make_block_relay_peer_info(peer_id, chain_config),
-            node_address_as_seen_by_peer: None,
-        })
-        .unwrap();
-
-    peer_id
+    outbound_peer_accepted_by_backend(
+        conn_event_sender,
+        peer_address,
+        bind_address,
+        chain_config,
+        false,
+    )
 }
 
 /// Send a ConnectivityEvent simulating a connection being accepted by the backend.
@@ -193,17 +190,45 @@ pub fn outbound_full_relay_peer_accepted_by_backend(
     bind_address: SocketAddress,
     chain_config: &ChainConfig,
 ) -> PeerId {
+    outbound_peer_accepted_by_backend(
+        conn_event_sender,
+        peer_address,
+        bind_address,
+        chain_config,
+        true,
+    )
+}
+
+pub fn outbound_peer_accepted_by_backend(
+    conn_event_sender: &mpsc::UnboundedSender<ConnectivityEvent>,
+    peer_address: SocketAddress,
+    bind_address: SocketAddress,
+    chain_config: &ChainConfig,
+    is_full_relay: bool,
+) -> PeerId {
     let peer_id = PeerId::new();
+    let peer_info = if is_full_relay {
+        make_full_relay_peer_info(peer_id, chain_config)
+    } else {
+        make_block_relay_peer_info(peer_id, chain_config)
+    };
     conn_event_sender
         .send(ConnectivityEvent::OutboundAccepted {
             peer_address,
             bind_address,
-            peer_info: make_full_relay_peer_info(peer_id, chain_config),
+            peer_info,
             node_address_as_seen_by_peer: None,
         })
         .unwrap();
 
     peer_id
+}
+
+pub fn connection_closed(
+    conn_event_sender: &mpsc::UnboundedSender<ConnectivityEvent>,
+    peer_id: PeerId,
+) {
+    conn_event_sender.send(ConnectivityEvent::ConnectionClosed { peer_id }).unwrap();
 }
 
 pub async fn wait_for_heartbeat(
@@ -274,6 +299,25 @@ pub fn start_manually_connecting(
     result_receiver
 }
 
+pub fn disconnect_manually(
+    peer_mgr_event_sender: &mpsc::UnboundedSender<PeerManagerEvent>,
+    peer_id: PeerId,
+    peerdb_action: PeerDisconnectionDbAction,
+) -> oneshot_nofail::Receiver<crate::Result<()>> {
+    let (result_sender, result_receiver) = oneshot_nofail::channel();
+
+    peer_mgr_event_sender
+        .send(PeerManagerEvent::Disconnect(
+            peer_id,
+            peerdb_action,
+            None,
+            result_sender,
+        ))
+        .unwrap();
+
+    result_receiver
+}
+
 pub async fn adjust_peer_score(
     peer_mgr_event_sender: &mpsc::UnboundedSender<PeerManagerEvent>,
     peer_id: PeerId,
@@ -302,6 +346,22 @@ pub async fn ban_peer_manually(
 
     peer_mgr_event_sender
         .send(PeerManagerEvent::Ban(peer_addr, duration, result_sender))
+        .unwrap();
+
+    result_receiver.await.unwrap().unwrap();
+}
+
+pub async fn add_reserved_peer(
+    peer_mgr_event_sender: &mpsc::UnboundedSender<PeerManagerEvent>,
+    peer_addr: SocketAddress,
+) {
+    let (result_sender, result_receiver) = oneshot_nofail::channel();
+
+    peer_mgr_event_sender
+        .send(PeerManagerEvent::AddReserved(
+            IpOrSocketAddress::Socket(peer_addr.socket_addr()),
+            result_sender,
+        ))
         .unwrap();
 
     result_receiver.await.unwrap().unwrap();

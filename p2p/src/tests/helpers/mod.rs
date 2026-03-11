@@ -30,7 +30,8 @@ use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress
 use test_utils::BasicTestTimeGetter;
 
 use crate::{
-    net::types::{PeerInfo, PeerRole},
+    error::P2pError,
+    net::types::{ConnectivityEventMessageTag, PeerInfo, PeerRole},
     peer_manager::{self, dns_seed::DnsSeed},
 };
 
@@ -60,6 +61,17 @@ pub enum PeerManagerNotification {
     ConnectionAccepted {
         address: SocketAddress,
         peer_role: PeerRole,
+    },
+    OutboundError {
+        address: SocketAddress,
+        error: P2pError,
+    },
+    ConnectionClosed {
+        peer_id: PeerId,
+    },
+    MessageReceived {
+        peer_id: PeerId,
+        message_tag: ConnectivityEventMessageTag,
     },
 }
 
@@ -102,6 +114,21 @@ impl peer_manager::Observer for PeerManagerObserver {
 
     fn on_connection_accepted(&mut self, address: SocketAddress, peer_role: PeerRole) {
         self.send_notification(PeerManagerNotification::ConnectionAccepted { address, peer_role });
+    }
+
+    fn outbound_error(&mut self, address: SocketAddress, error: P2pError) {
+        self.send_notification(PeerManagerNotification::OutboundError { address, error });
+    }
+
+    fn connection_closed(&mut self, peer_id: PeerId) {
+        self.send_notification(PeerManagerNotification::ConnectionClosed { peer_id });
+    }
+
+    fn message_received(&mut self, peer_id: PeerId, message_tag: ConnectivityEventMessageTag) {
+        self.send_notification(PeerManagerNotification::MessageReceived {
+            peer_id,
+            message_tag,
+        });
     }
 }
 

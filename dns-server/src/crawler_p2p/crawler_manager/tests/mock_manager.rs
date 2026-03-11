@@ -132,7 +132,8 @@ impl MockStateRef {
                 peer_id,
                 message: PeerManagerMessage::AnnounceAddrRequest(AnnounceAddrRequest {
                     address: announced_ip.as_peer_address(),
-                }),
+                })
+                .into(),
             })
             .unwrap();
     }
@@ -271,7 +272,11 @@ impl ConnectivityService<MockNetworkingService> for MockConnectivityHandle {
         Ok(())
     }
 
-    fn send_message(&mut self, _peer_id: PeerId, _request: PeerManagerMessage) -> p2p::Result<()> {
+    fn send_peer_manager_message(
+        &mut self,
+        _peer_id: PeerId,
+        _request: PeerManagerMessage,
+    ) -> p2p::Result<()> {
         Ok(())
     }
 

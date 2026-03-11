@@ -44,13 +44,14 @@ use crate::{
     config::P2pConfig,
     disconnection_reason::DisconnectionReason,
     error::{DialError, P2pError, PeerError},
-    message::PeerManagerMessage,
     net::{
         default_backend::{
             peer,
             types::{BackendEvent, Command, PeerEvent},
         },
-        types::{services::Services, ConnectivityEvent, PeerInfo, SyncingEvent},
+        types::{
+            services::Services, ConnectivityEvent, PeerInfo, PeerManagerMessageOrTag, SyncingEvent,
+        },
     },
     protocol::{ProtocolVersion, SupportedProtocolVersion},
     types::{peer_address::PeerAddress, peer_id::PeerId},
@@ -613,7 +614,7 @@ where
                 Ok(())
             }
 
-            PeerEvent::MessageReceived { message } => {
+            PeerEvent::MessageReceived(message) => {
                 if self.networking_enabled {
                     self.handle_message(peer_id, message)?;
                 }
@@ -696,7 +697,7 @@ where
     fn handle_message(
         &mut self,
         peer_id: PeerId,
-        message: PeerManagerMessage,
+        message: PeerManagerMessageOrTag,
     ) -> crate::Result<()> {
         // Do not process remaining messages if the peer has been forcibly disconnected (for example, after being banned).
         // Without this check, the backend might send messages to the sync and peer managers after sending the disconnect notification.
