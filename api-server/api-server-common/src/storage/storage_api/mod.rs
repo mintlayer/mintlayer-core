@@ -248,7 +248,7 @@ impl PoolDataWithExtraInfo {
 
 #[derive(Debug, Eq, PartialEq, Clone, Encode, Decode)]
 pub struct Order {
-    pub creation_block_height: BlockHeight,
+    pub creation_block_height: Option<BlockHeight>,
     pub conclude_destination: Destination,
 
     pub give_currency: CoinOrTokenId,
@@ -418,34 +418,30 @@ impl LockedUtxo {
     }
 }
 
+#[derive(Debug, Clone, Copy, Encode, Decode)]
+pub enum UtxoSpent {
+    AtBlockHeight(BlockHeight),
+    InMempool,
+}
+
 #[derive(Debug, Clone, Encode, Decode)]
 pub struct Utxo {
     utxo: UtxoWithExtraInfo,
-    spent_at_block_height: Option<BlockHeight>,
+    spent: Option<UtxoSpent>,
 }
 
 impl Utxo {
-    pub fn new_with_info(
-        utxo: UtxoWithExtraInfo,
-        spent_at_block_height: Option<BlockHeight>,
-    ) -> Self {
-        Self {
-            utxo,
-            spent_at_block_height,
-        }
+    pub fn new_with_info(utxo: UtxoWithExtraInfo, spent: Option<UtxoSpent>) -> Self {
+        Self { utxo, spent }
     }
 
-    pub fn new(
-        output: TxOutput,
-        token_decimals: Option<u8>,
-        spent_at_block_height: Option<BlockHeight>,
-    ) -> Self {
+    pub fn new(output: TxOutput, token_decimals: Option<u8>, spent: Option<UtxoSpent>) -> Self {
         Self {
             utxo: UtxoWithExtraInfo {
                 output,
                 token_decimals,
             },
-            spent_at_block_height,
+            spent,
         }
     }
 
@@ -462,11 +458,19 @@ impl Utxo {
     }
 
     pub fn spent_at_block_height(&self) -> Option<BlockHeight> {
-        self.spent_at_block_height
+        match self.spent {
+            Some(UtxoSpent::AtBlockHeight(height)) => Some(height),
+            Some(UtxoSpent::InMempool) | None => None,
+        }
     }
 
     pub fn spent(&self) -> bool {
-        self.spent_at_block_height.is_some()
+        self.spent.is_some()
+    }
+
+    pub fn into_spent_in_mempool(mut self) -> Self {
+        self.spent = Some(UtxoSpent::InMempool);
+        self
     }
 }
 
@@ -800,6 +804,59 @@ pub trait ApiServerStorageRead: Sync {
         len: u32,
         offset: u64,
     ) -> Result<Vec<(OrderId, Order)>, ApiServerStorageError>;
+
+    async fn get_mempool_address_transactions(
+        &self,
+        address: &str,
+    ) -> Result<Vec<Id<Transaction>>, ApiServerStorageError>;
+
+    async fn get_mempool_address_balances(
+        &self,
+        address: &str,
+    ) -> Result<BTreeMap<CoinOrTokenId, AmountWithDecimals>, ApiServerStorageError>;
+
+    async fn get_utxo_mempool_fallback(
+        &self,
+        outpoint: &UtxoOutPoint,
+    ) -> Result<Option<Utxo>, ApiServerStorageError>;
+
+    async fn get_mempool_address_balance(
+        &self,
+        address: &str,
+        coin_or_token_id: CoinOrTokenId,
+    ) -> Result<Option<Amount>, ApiServerStorageError>;
+
+    async fn get_mempool_locked_address_balance(
+        &self,
+        address: &str,
+        coin_or_token_id: CoinOrTokenId,
+    ) -> Result<Option<Amount>, ApiServerStorageError>;
+
+    async fn get_mempool_address_all_utxos(
+        &self,
+        address: &str,
+    ) -> Result<Vec<(UtxoOutPoint, UtxoWithExtraInfo)>, ApiServerStorageError>;
+
+    async fn get_mempool_transaction(
+        &self,
+        transaction_id: Id<Transaction>,
+    ) -> Result<Option<TransactionInfo>, ApiServerStorageError>;
+
+    async fn get_mempool_transactions(
+        &self,
+        len: u32,
+        offset: u64,
+    ) -> Result<Vec<TransactionInfo>, ApiServerStorageError>;
+
+    async fn get_mempool_token_num_decimals(
+        &self,
+        token_id: TokenId,
+    ) -> Result<Option<u8>, ApiServerStorageError>;
+
+    async fn get_mempool_order(
+        &self,
+        order_id: OrderId,
+    ) -> Result<Option<Order>, ApiServerStorageError>;
 }
 
 #[async_trait::async_trait]
@@ -1000,6 +1057,69 @@ pub trait ApiServerStorageWrite: ApiServerStorageRead {
         &mut self,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError>;
+
+    async fn set_mempool_transaction(
+        &mut self,
+        transaction_id: Id<Transaction>,
+        transaction: &TransactionInfo,
+    ) -> Result<(), ApiServerStorageError>;
+
+    async fn set_mempool_utxo(
+        &mut self,
+        outpoint: UtxoOutPoint,
+        utxo: Utxo,
+        spent: bool,
+        addresses: &[&str],
+    ) -> Result<(), ApiServerStorageError>;
+
+    async fn set_mempool_address_balance(
+        &mut self,
+        address: &str,
+        coin_or_token_id: CoinOrTokenId,
+        amount: Amount,
+        decimals: u8,
+    ) -> Result<(), ApiServerStorageError>;
+
+    async fn set_mempool_locked_address_balance(
+        &mut self,
+        address: &str,
+        coin_or_token_id: CoinOrTokenId,
+        amount: Amount,
+        decimals: u8,
+    ) -> Result<(), ApiServerStorageError>;
+
+    async fn set_mempool_address_transaction(
+        &mut self,
+        address: &str,
+        transaction_id: Id<Transaction>,
+    ) -> Result<(), ApiServerStorageError>;
+
+    async fn set_mempool_token_transaction(
+        &mut self,
+        token_id: TokenId,
+        transaction_id: Id<Transaction>,
+    ) -> Result<(), ApiServerStorageError>;
+
+    async fn set_mempool_fungible_token_issuance(
+        &mut self,
+        token_id: TokenId,
+        issuance: FungibleTokenData,
+    ) -> Result<(), ApiServerStorageError>;
+
+    async fn set_mempool_nft_issuance(
+        &mut self,
+        token_id: TokenId,
+        issuance: NftIssuance,
+        owner: &Destination,
+    ) -> Result<(), ApiServerStorageError>;
+
+    async fn set_mempool_order(
+        &mut self,
+        order_id: OrderId,
+        order: &Order,
+    ) -> Result<(), ApiServerStorageError>;
+
+    async fn clear_mempool_data(&mut self) -> Result<(), ApiServerStorageError>;
 }
 
 #[async_trait::async_trait]

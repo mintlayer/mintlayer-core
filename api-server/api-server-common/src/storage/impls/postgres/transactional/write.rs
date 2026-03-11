@@ -403,6 +403,120 @@ impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'_> {
 
         Ok(())
     }
+
+    async fn set_mempool_transaction(
+        &mut self,
+        transaction_id: Id<Transaction>,
+        transaction: &TransactionInfo,
+    ) -> Result<(), ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        conn.set_mempool_transaction(transaction_id, transaction).await?;
+
+        Ok(())
+    }
+
+    async fn set_mempool_utxo(
+        &mut self,
+        outpoint: UtxoOutPoint,
+        utxo: Utxo,
+        spent: bool,
+        addresses: &[&str],
+    ) -> Result<(), ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        conn.set_mempool_utxo(outpoint, utxo, spent, addresses).await?;
+
+        Ok(())
+    }
+
+    async fn set_mempool_address_balance(
+        &mut self,
+        address: &str,
+        coin_or_token_id: CoinOrTokenId,
+        amount: Amount,
+        decimals: u8,
+    ) -> Result<(), ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        conn.set_mempool_address_balance(address, coin_or_token_id, amount, decimals)
+            .await?;
+
+        Ok(())
+    }
+
+    async fn set_mempool_locked_address_balance(
+        &mut self,
+        address: &str,
+        coin_or_token_id: CoinOrTokenId,
+        amount: Amount,
+        decimals: u8,
+    ) -> Result<(), ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        conn.set_mempool_locked_address_balance(address, coin_or_token_id, amount, decimals)
+            .await?;
+
+        Ok(())
+    }
+
+    async fn set_mempool_address_transaction(
+        &mut self,
+        address: &str,
+        transaction_id: Id<Transaction>,
+    ) -> Result<(), ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        conn.set_mempool_address_transaction(address, transaction_id).await?;
+
+        Ok(())
+    }
+
+    async fn set_mempool_token_transaction(
+        &mut self,
+        token_id: TokenId,
+        transaction_id: Id<Transaction>,
+    ) -> Result<(), ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        conn.set_mempool_token_transaction(token_id, transaction_id).await?;
+
+        Ok(())
+    }
+
+    async fn set_mempool_fungible_token_issuance(
+        &mut self,
+        token_id: TokenId,
+        issuance: FungibleTokenData,
+    ) -> Result<(), ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        conn.set_mempool_fungible_token_issuance(token_id, issuance, &self.chain_config)
+            .await?;
+
+        Ok(())
+    }
+
+    async fn set_mempool_nft_issuance(
+        &mut self,
+        token_id: TokenId,
+        issuance: NftIssuance,
+        owner: &Destination,
+    ) -> Result<(), ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        conn.set_mempool_nft_issuance(token_id, issuance, owner).await?;
+
+        Ok(())
+    }
+
+    async fn set_mempool_order(
+        &mut self,
+        order_id: OrderId,
+        order: &Order,
+    ) -> Result<(), ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        conn.set_mempool_order(order_id, order, &self.chain_config).await?;
+
+        Ok(())
+    }
+
+    async fn clear_mempool_data(&mut self) -> Result<(), ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        conn.clear_mempool_data().await
+    }
 }
 
 #[async_trait::async_trait]
@@ -653,7 +767,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
         &self,
         outpoint: UtxoOutPoint,
     ) -> Result<Option<Utxo>, ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_utxo(outpoint).await?;
 
         Ok(res)
@@ -810,6 +924,109 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
     ) -> Result<Vec<(OrderId, Order)>, ApiServerStorageError> {
         let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_orders_for_trading_pair(pair, len, offset, &self.chain_config).await?;
+
+        Ok(res)
+    }
+
+    async fn get_utxo_mempool_fallback(
+        &self,
+        outpoint: &UtxoOutPoint,
+    ) -> Result<Option<Utxo>, ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_utxo_mempool_fallback(outpoint).await?;
+
+        Ok(res)
+    }
+
+    async fn get_mempool_address_balance(
+        &self,
+        address: &str,
+        coin_or_token_id: CoinOrTokenId,
+    ) -> Result<Option<Amount>, ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_mempool_address_balance(address, coin_or_token_id).await?;
+
+        Ok(res)
+    }
+
+    async fn get_mempool_transaction(
+        &self,
+        transaction_id: Id<Transaction>,
+    ) -> Result<Option<TransactionInfo>, ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_mempool_transaction(transaction_id).await?;
+
+        Ok(res)
+    }
+
+    async fn get_mempool_transactions(
+        &self,
+        len: u32,
+        offset: u64,
+    ) -> Result<Vec<TransactionInfo>, ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_mempool_transactions(len, offset).await?;
+
+        Ok(res)
+    }
+
+    async fn get_mempool_address_transactions(
+        &self,
+        address: &str,
+    ) -> Result<Vec<Id<Transaction>>, ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_mempool_address_transactions(address).await?;
+
+        Ok(res)
+    }
+
+    async fn get_mempool_address_balances(
+        &self,
+        address: &str,
+    ) -> Result<BTreeMap<CoinOrTokenId, AmountWithDecimals>, ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_mempool_address_balances(address).await?;
+
+        Ok(res)
+    }
+
+    async fn get_mempool_locked_address_balance(
+        &self,
+        address: &str,
+        coin_or_token_id: CoinOrTokenId,
+    ) -> Result<Option<Amount>, ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_mempool_locked_address_balance(address, coin_or_token_id).await?;
+
+        Ok(res)
+    }
+
+    async fn get_mempool_address_all_utxos(
+        &self,
+        address: &str,
+    ) -> Result<Vec<(UtxoOutPoint, UtxoWithExtraInfo)>, ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_mempool_address_all_utxos(address).await?;
+
+        Ok(res)
+    }
+
+    async fn get_mempool_token_num_decimals(
+        &self,
+        token_id: TokenId,
+    ) -> Result<Option<u8>, ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_mempool_token_num_decimals(token_id).await?;
+
+        Ok(res)
+    }
+
+    async fn get_mempool_order(
+        &self,
+        order_id: OrderId,
+    ) -> Result<Option<Order>, ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_mempool_order(order_id, &self.chain_config).await?;
 
         Ok(res)
     }

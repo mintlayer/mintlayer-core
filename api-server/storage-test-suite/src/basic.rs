@@ -28,7 +28,7 @@ use api_server_common::storage::{
         ApiServerStorage, ApiServerStorageError, ApiServerStorageRead, ApiServerStorageWrite,
         ApiServerTransactionRw, BlockInfo, CoinOrTokenStatistic, Delegation, FungibleTokenData,
         LockedUtxo, Order, PoolDataWithExtraInfo, TokenTransaction, TransactionInfo, Transactional,
-        TxAdditionalInfo, Utxo, UtxoLock, UtxoWithExtraInfo,
+        TxAdditionalInfo, Utxo, UtxoLock, UtxoSpent, UtxoWithExtraInfo,
     },
 };
 use crypto::{
@@ -805,7 +805,11 @@ where
 
             // and set it as spent on the next block height
             let next_block_height = block_height.next_height().next_height();
-            let spent_utxo = Utxo::new(output.clone(), None, Some(next_block_height));
+            let spent_utxo = Utxo::new(
+                output.clone(),
+                None,
+                Some(UtxoSpent::AtBlockHeight(next_block_height)),
+            );
             db_tx
                 .set_utxo_at_height(
                     outpoint.clone(),
@@ -914,7 +918,11 @@ where
             }
 
             // set the new one to spent in the same block
-            let utxo = Utxo::new(output2.clone(), None, Some(block_height));
+            let utxo = Utxo::new(
+                output2.clone(),
+                None,
+                Some(UtxoSpent::AtBlockHeight(block_height)),
+            );
             expected_utxos.remove(&outpoint2);
             db_tx
                 .set_utxo_at_height(outpoint2, utxo, &[bob_address.as_str()], block_height)
@@ -2167,7 +2175,7 @@ fn random_order(
     let give_amount = Amount::from_atoms(rng.gen_range(1000..10000));
     let ask_amount = Amount::from_atoms(rng.gen_range(1000..10000));
     let order = Order {
-        creation_block_height: creation_height,
+        creation_block_height: Some(creation_height),
         conclude_destination,
         give_currency,
         initially_given: give_amount,
