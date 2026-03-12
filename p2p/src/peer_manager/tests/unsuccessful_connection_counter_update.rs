@@ -286,7 +286,9 @@ async fn auto_connection_fails_peer_state_becomes_disconnected(
 //    Keep peer address's `was_reachable` field at false.
 // 3) Advance the time so that the corresponding connection would be attempted; make the
 //    connection fail; check that the peer address state is now `Unreachable`.
-// 4) Check that no further connection attempts are made.
+// 4) Optionally, accept an inbound connection from the peer address; expect that it doesn't
+//    affect the current address state.
+// 5) Check that no further connection attempts are made.
 #[tracing::instrument(skip(seed))]
 #[rstest]
 #[trace]
@@ -510,7 +512,6 @@ async fn manual_connection_fails(#[case] seed: Seed, #[values(false, true)] make
 
     if make_reachable {
         let peer_discovery_time = time_getter.get_time_getter().get_time();
-
         discover_peer(&peer_mgr_event_sender, peer_address, true).await;
 
         let peer_addr_state =
@@ -609,7 +610,7 @@ async fn manual_connection_fails(#[case] seed: Seed, #[values(false, true)] make
 //    Make the connection succeed and close it immediately; check that `connections_without_activity_count`
 //    has been incremented.
 // 3) Occasionally, make a successful incoming or manual outgoing connection without peer activity, or an unsuccessful
-//    manual outgoing one. Expect that this doesn't affect `connections_without_activity_count`.
+//    manual outgoing connection. Expect that this doesn't affect `connections_without_activity_count`.
 // 4) On the final iteration make the peer actually send a message. Check that `connections_without_activity_count` has
 //    been reset to zero.
 // Note that feeler connections are not checked in this test because once a feeler connection succeeds, it won't
@@ -765,7 +766,7 @@ async fn auto_connection_without_peer_activity(
 
         // An inbound or manual connection without peer activity shouldn't affect connections_without_activity_count.
         // Same for a failed outbound connection.
-        let extra_outboun_connection_failed = match rng.gen_range(0..4) {
+        let extra_outbound_connection_failed = match rng.gen_range(0..4) {
             0 => {
                 log::debug!("Accepting an extra inbound connection");
 
@@ -816,7 +817,7 @@ async fn auto_connection_without_peer_activity(
         };
 
         let expected_connections_without_activity_count = if is_last_iteration { 0 } else { i + 1 };
-        let expected_fail_count = if extra_outboun_connection_failed {
+        let expected_fail_count = if extra_outbound_connection_failed {
             1
         } else {
             0

@@ -48,7 +48,7 @@ impl BasicTestTimeGetter {
 
     // Same as advance_time, except that if the passed duration's precision is not representable by
     // the time getter (i.e. it's sub-millisecond), this function will round it up, ensuring that
-    // the resulting time is always bigger than the initial time plus duration.
+    // the resulting time is always greater-or-equal than the initial time plus the duration.
     pub fn advance_time_rounded_up(&self, duration: Duration) {
         let mut millis = duration.as_millis() as u64;
         if duration.subsec_nanos() % 1_000_000 != 0 {

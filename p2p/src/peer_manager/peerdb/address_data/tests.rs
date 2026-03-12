@@ -53,7 +53,7 @@ fn randomized(#[case] seed: Seed) {
                 AddressStateTransitionToTag::Connected => AddressStateTransitionTo::Connected {
                     peer_role: OutboundPeerRole::iter().choose(&mut rng).unwrap(),
                 },
-                AddressStateTransitionToTag::HasActivity => AddressStateTransitionTo::HasActivity,
+                AddressStateTransitionToTag::HadActivity => AddressStateTransitionTo::HadActivity,
                 AddressStateTransitionToTag::Disconnected => AddressStateTransitionTo::Disconnected,
                 AddressStateTransitionToTag::ConnectionFailed => {
                     AddressStateTransitionTo::ConnectionFailed
@@ -68,7 +68,7 @@ fn randomized(#[case] seed: Seed) {
                 AddressStateTransitionTo::Connected { peer_role: _ } => {
                     !address_data.is_connected()
                 }
-                AddressStateTransitionTo::HasActivity => address_data.is_connected(),
+                AddressStateTransitionTo::HadActivity => address_data.is_connected(),
                 AddressStateTransitionTo::Disconnected => address_data.is_connected(),
                 AddressStateTransitionTo::ConnectionFailed => !address_data.is_connected(),
                 AddressStateTransitionTo::SetReserved => true,

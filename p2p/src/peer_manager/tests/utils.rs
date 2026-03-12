@@ -34,7 +34,6 @@ use crate::{
         types::{ConnectivityEvent, PeerInfo},
     },
     peer_manager::PeerManagerInterface,
-    peer_manager_event::PeerDisconnectionDbAction,
     test_helpers::TEST_PROTOCOL_VERSION,
     tests::helpers::PeerManagerNotification,
     utils::oneshot_nofail,
@@ -294,25 +293,6 @@ pub fn start_manually_connecting(
     let addr = IpOrSocketAddress::new_socket_address(addr.socket_addr());
     peer_mgr_event_sender
         .send(PeerManagerEvent::Connect(addr, result_sender))
-        .unwrap();
-
-    result_receiver
-}
-
-pub fn disconnect_manually(
-    peer_mgr_event_sender: &mpsc::UnboundedSender<PeerManagerEvent>,
-    peer_id: PeerId,
-    peerdb_action: PeerDisconnectionDbAction,
-) -> oneshot_nofail::Receiver<crate::Result<()>> {
-    let (result_sender, result_receiver) = oneshot_nofail::channel();
-
-    peer_mgr_event_sender
-        .send(PeerManagerEvent::Disconnect(
-            peer_id,
-            peerdb_action,
-            None,
-            result_sender,
-        ))
         .unwrap();
 
     result_receiver

@@ -62,10 +62,10 @@ impl PeerRole {
     pub fn as_outbound(&self) -> Option<OutboundPeerRole> {
         match self {
             Self::Inbound => None,
-            Self::OutboundFullRelay => Some(OutboundPeerRole::OutboundFullRelay),
-            Self::OutboundBlockRelay => Some(OutboundPeerRole::OutboundBlockRelay),
-            Self::OutboundReserved => Some(OutboundPeerRole::OutboundReserved),
-            Self::OutboundManual => Some(OutboundPeerRole::OutboundManual),
+            Self::OutboundFullRelay => Some(OutboundPeerRole::FullRelay),
+            Self::OutboundBlockRelay => Some(OutboundPeerRole::BlockRelay),
+            Self::OutboundReserved => Some(OutboundPeerRole::Reserved),
+            Self::OutboundManual => Some(OutboundPeerRole::Manual),
             Self::Feeler => Some(OutboundPeerRole::Feeler),
         }
     }
@@ -88,11 +88,33 @@ impl PeerRole {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, strum::EnumIter)]
 pub enum OutboundPeerRole {
-    OutboundFullRelay,
-    OutboundBlockRelay,
-    OutboundReserved,
-    OutboundManual,
+    FullRelay,
+    BlockRelay,
+    Reserved,
+    Manual,
     Feeler,
+}
+
+impl OutboundPeerRole {
+    /// Return true if for this connection type some message exchange is expected (besides
+    /// the handshake and WillDisconnect), i.e. the node is supposed to send at least one message
+    /// and get back a response.
+    ///
+    /// This is used by peerdb's AddressData to determine whether the "no activity" counter
+    /// should be increased after a connection with no peer activity.
+    pub fn is_message_exchange_expected(&self) -> bool {
+        match self {
+            Self::FullRelay | Self::BlockRelay | Self::Reserved | Self::Manual => true,
+            Self::Feeler => false,
+        }
+    }
+
+    pub fn is_manual(&self) -> bool {
+        match self {
+            Self::Manual => true,
+            | Self::FullRelay | Self::BlockRelay | Self::Reserved | Self::Feeler => false,
+        }
+    }
 }
 
 /// Peer information learned during handshaking

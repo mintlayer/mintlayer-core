@@ -425,8 +425,8 @@ impl<S: PeerDbStorage> PeerDb<S> {
     }
 
     /// Report that the peer has sent us a message other than the one indicating an intent to disconnect.
-    pub fn outbound_peer_has_activity(&mut self, address: SocketAddress, rng: &mut impl Rng) {
-        self.change_address_state(address, AddressStateTransitionTo::HasActivity, rng);
+    pub fn outbound_peer_had_activity(&mut self, address: SocketAddress, rng: &mut impl Rng) {
+        self.change_address_state(address, AddressStateTransitionTo::HadActivity, rng);
     }
 
     pub fn remove_address(&mut self, address: &SocketAddress) {

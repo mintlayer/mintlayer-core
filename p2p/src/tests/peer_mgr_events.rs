@@ -65,7 +65,7 @@ enum TestParamForFirstSyncMessageReceivedMustBeSent {
 // is sent to the peer manager.
 // 1) Send a random message from the peer.
 // 2) If the sent message was a sync one, expect that `PeerManagerNotification::MessageReceived` is emitted with
-// message equal to `PeerManagerMessageExtTag::FirstSyncMessageReceived`. If the sent message was not a sync one,
+// the message equal to `PeerManagerMessageExtTag::FirstSyncMessageReceived`. If the sent message was not a sync one,
 // expect that no such notification is emitted.
 #[tracing::instrument(skip(seed))]
 #[rstest]
@@ -233,7 +233,7 @@ async fn first_sync_message_received_must_be_sent(
 
 // Check that `PeerManagerMessageExt::FirstSyncMessageReceived` will be sent only once even if
 // many sync messages are received from the peer.
-// 1) Send a few HeaderListRequest and/or NewTransaction (legit messages that a peer can send
+// 1) Send a few `HeaderListRequest` and/or `NewTransaction` messages (i.e. some legit messages that a peer can send
 // in any number).
 // 2) Expect that only one `PeerManagerNotification::MessageReceived` with `PeerManagerMessageExtTag::FirstSyncMessageReceived`
 // is produced.

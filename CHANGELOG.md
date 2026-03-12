@@ -68,6 +68,10 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
   - Node bootstrapping:
     - The format of the bootstrap file was changed and the legacy format is no longer supported.
 
+  - P2p:
+    - The logic of initiating new outbound connections has been improved to prevent the node from
+      constantly attempting to re-establish a connection with a peer that has banned it.
+
 ### Fixed
   - P2p: when a peer sends a message that can't be decoded, it will now be discouraged (which is what
     is normally done for misbehaving peers) and the node won't try connecting to it again.\

@@ -1552,6 +1552,7 @@ where
             );
             if let Some(address) = address_opt {
                 log::debug!("Need to establish a feeler connection to address {address}");
+
                 self.connect(address, OutboundConnectType::Feeler);
                 self.next_feeler_connection_time = Self::choose_next_feeler_connection_time(
                     &self.p2p_config,
@@ -1581,7 +1582,7 @@ where
         // just in case, so that if things go horribly wrong, only the debug build will panic.
         if let Some(peer) = self.peers.get(&peer_id) {
             if !is_disconnection_message && peer.peer_role.is_outbound() {
-                self.peerdb.outbound_peer_has_activity(
+                self.peerdb.outbound_peer_had_activity(
                     peer.peer_address,
                     Self::lock_rng(&self.rng).deref_mut(),
                 );

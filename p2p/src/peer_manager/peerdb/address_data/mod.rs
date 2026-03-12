@@ -81,7 +81,7 @@ pub enum AddressState {
 #[strum_discriminants(name(AddressStateTransitionToTag), derive(strum::EnumIter))]
 pub enum AddressStateTransitionTo {
     Connected { peer_role: OutboundPeerRole },
-    HasActivity,
+    HadActivity,
     Disconnected,
     ConnectionFailed,
     SetReserved,
@@ -239,7 +239,7 @@ impl AddressData {
                 }
             },
 
-            AddressStateTransitionTo::HasActivity => match self.state {
+            AddressStateTransitionTo::HadActivity => match self.state {
                 AddressState::Connected {
                     had_activity: _,
                     peer_role,
@@ -253,13 +253,13 @@ impl AddressData {
                     was_reachable: _,
                 } => {
                     debug_panic_or_log!(
-                        "Unexpected address state transition: Disconnected -> HasActivity"
+                        "Unexpected address state transition: Disconnected -> HadActivity"
                     );
                     self.state.clone()
                 }
                 AddressState::Unreachable { erase_after: _ } => {
                     debug_panic_or_log!(
-                        "Unexpected address state transition: Unreachable -> HasActivity"
+                        "Unexpected address state transition: Unreachable -> HadActivity"
                     );
                     self.state.clone()
                 }
@@ -273,19 +273,20 @@ impl AddressData {
                     if had_activity {
                         self.connections_without_activity_count = 0;
                     } else {
-                        // We don't increase the counter for:
-                        // 1) feeler connections (because it gets disconnected immediately, so the peer may
-                        // not have the chance to send us anything);
-                        // 2) manual connections;
-                        let is_regular_auto_connection = match peer_role {
-                            OutboundPeerRole::OutboundFullRelay
-                            | OutboundPeerRole::OutboundBlockRelay
-                            | OutboundPeerRole::OutboundReserved => true,
-
-                            OutboundPeerRole::Feeler | OutboundPeerRole::OutboundManual => false,
-                        };
-
-                        if is_regular_auto_connection {
+                        // Note:
+                        // 1) We don't increase the counter for manual connections.
+                        // 2) Since `is_message_exchange_expected` doesn't know the actual services
+                        //    that the peer provides, it's technically possible to punish an
+                        //    "innocent" peer here, e.g. when the connection type is supposed to involve
+                        //    block exchange, but the peer's actual services don't include Blocks.
+                        //    However:
+                        //    a) The worst punishment it can get is that the next connection will be
+                        //       postponed for (roughly) MAX_DELAY_REACHABLE, which is currently 1 hour.
+                        //    b) Such a peer will be rather useless anyway.
+                        //    c) The connection has to be short enough, so that even a single PingRequest message
+                        //       (which requires a response) could not be sent.
+                        //    So it's not a big deal.
+                        if peer_role.is_message_exchange_expected() && !peer_role.is_manual() {
                             self.connections_without_activity_count += 1;
                         }
                     }

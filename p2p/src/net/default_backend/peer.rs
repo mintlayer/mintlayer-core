@@ -424,8 +424,6 @@ where
                     .await?
             }
             CategorizedMessage::BlockSyncMessage(msg) => {
-                block_sync_msg_sender.send(msg).await?;
-
                 if !self.sync_message_received {
                     self.peer_event_sender
                         .send(PeerEvent::MessageReceived(
@@ -434,10 +432,10 @@ where
                         .await?;
                     self.sync_message_received = true;
                 }
+
+                block_sync_msg_sender.send(msg).await?;
             }
             CategorizedMessage::TransactionSyncMessage(msg) => {
-                transaction_sync_msg_sender.send(msg).await?;
-
                 if !self.sync_message_received {
                     self.peer_event_sender
                         .send(PeerEvent::MessageReceived(
@@ -446,6 +444,8 @@ where
                         .await?;
                     self.sync_message_received = true;
                 }
+
+                transaction_sync_msg_sender.send(msg).await?;
             }
         }
 
