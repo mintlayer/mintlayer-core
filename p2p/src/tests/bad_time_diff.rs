@@ -15,14 +15,23 @@
 
 use std::{sync::Arc, time::Duration};
 
+use rstest::rstest;
+
 use chainstate::ChainstateConfig;
 use common::primitives::{time::Time, user_agent::mintlayer_core_user_agent};
-use networking::test_helpers::{
-    TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
+use networking::{
+    test_helpers::{
+        TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
+    },
+    transport::{BufferedTranscoder, TransportListener, TransportSocket},
 };
-use networking::transport::{BufferedTranscoder, TransportListener, TransportSocket};
 use p2p_test_utils::run_with_timeout;
-use test_utils::{assert_matches, BasicTestTimeGetter};
+use randomness::Rng as _;
+use test_utils::{
+    assert_matches,
+    random::{make_seedable_rng, Seed},
+    BasicTestTimeGetter,
+};
 
 use crate::{
     config::P2pConfig,
@@ -36,11 +45,13 @@ use crate::{
 // Check that a handshake is rejected if the time difference between the peers is too big.
 // Also check that the WillDisconnect message is sent if the protocol version is big enough.
 
-async fn bad_time_diff_outgoing<TTM>()
+async fn bad_time_diff_outgoing<TTM>(seed: Seed)
 where
     TTM: TestTransportMaker,
     TTM::Transport: TransportSocket,
 {
+    let mut rng = make_seedable_rng(seed);
+
     for protocol_version in [SupportedProtocolVersion::V2, SupportedProtocolVersion::V3] {
         let time_getter = BasicTestTimeGetter::new();
         let chain_config = Arc::new(common::chain::config::create_unit_test_config());
@@ -78,6 +89,7 @@ where
             TTM::make_address().into(),
             protocol_version.into(),
             None,
+            make_seedable_rng(rng.gen()),
         )
         .await;
 
@@ -143,29 +155,40 @@ where
     }
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn bad_time_diff_outgoing_tcp() {
-    run_with_timeout(bad_time_diff_outgoing::<TestTransportTcp>()).await;
+async fn bad_time_diff_outgoing_tcp(#[case] seed: Seed) {
+    run_with_timeout(bad_time_diff_outgoing::<TestTransportTcp>(seed)).await;
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn bad_time_diff_outgoing_channels() {
-    run_with_timeout(bad_time_diff_outgoing::<TestTransportChannel>()).await;
+async fn bad_time_diff_outgoing_channels(#[case] seed: Seed) {
+    run_with_timeout(bad_time_diff_outgoing::<TestTransportChannel>(seed)).await;
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn bad_time_diff_outgoing_noise() {
-    run_with_timeout(bad_time_diff_outgoing::<TestTransportNoise>()).await;
+async fn bad_time_diff_outgoing_noise(#[case] seed: Seed) {
+    run_with_timeout(bad_time_diff_outgoing::<TestTransportNoise>(seed)).await;
 }
 
-async fn bad_time_diff_incoming<TTM>()
+async fn bad_time_diff_incoming<TTM>(seed: Seed)
 where
     TTM: TestTransportMaker,
     TTM::Transport: TransportSocket,
 {
+    let mut rng = make_seedable_rng(seed);
+
     for protocol_version in [SupportedProtocolVersion::V2, SupportedProtocolVersion::V3] {
         let time_getter = BasicTestTimeGetter::new();
         let chain_config = Arc::new(common::chain::config::create_unit_test_config());
@@ -203,6 +226,7 @@ where
             TTM::make_address().into(),
             protocol_version.into(),
             None,
+            make_seedable_rng(rng.gen()),
         )
         .await;
 
@@ -258,20 +282,29 @@ where
     }
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn bad_time_diff_incoming_tcp() {
-    run_with_timeout(bad_time_diff_incoming::<TestTransportTcp>()).await;
+async fn bad_time_diff_incoming_tcp(#[case] seed: Seed) {
+    run_with_timeout(bad_time_diff_incoming::<TestTransportTcp>(seed)).await;
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn bad_time_diff_incoming_channels() {
-    run_with_timeout(bad_time_diff_incoming::<TestTransportChannel>()).await;
+async fn bad_time_diff_incoming_channels(#[case] seed: Seed) {
+    run_with_timeout(bad_time_diff_incoming::<TestTransportChannel>(seed)).await;
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn bad_time_diff_incoming_noise() {
-    run_with_timeout(bad_time_diff_incoming::<TestTransportNoise>()).await;
+async fn bad_time_diff_incoming_noise(#[case] seed: Seed) {
+    run_with_timeout(bad_time_diff_incoming::<TestTransportNoise>(seed)).await;
 }

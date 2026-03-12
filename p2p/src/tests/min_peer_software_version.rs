@@ -29,7 +29,12 @@ use networking::{
 };
 use p2p_test_utils::run_with_timeout;
 use p2p_types::socket_address::SocketAddress;
-use test_utils::{assert_matches, BasicTestTimeGetter};
+use randomness::Rng as _;
+use test_utils::{
+    assert_matches,
+    random::{make_seedable_rng, Seed},
+    BasicTestTimeGetter,
+};
 
 use crate::{
     config::P2pConfig,
@@ -146,11 +151,15 @@ fn make_p2p_config(test_params: &TestParams) -> P2pConfig {
     }
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
 #[rstest_reuse::apply(test_params_list)]
 #[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn outbound_manual_connection(test_params: TestParams) {
+async fn outbound_manual_connection(#[case] seed: Seed, test_params: TestParams) {
+    let mut rng = make_seedable_rng(seed);
+
     run_with_timeout(async {
         let time_getter = BasicTestTimeGetter::new();
         let chain_config = Arc::new(common::chain::config::create_unit_test_config());
@@ -166,6 +175,7 @@ async fn outbound_manual_connection(test_params: TestParams) {
             TestTransportChannel::make_address().into(),
             TEST_PROTOCOL_VERSION.into(),
             None,
+            make_seedable_rng(rng.gen()),
         )
         .await;
 
@@ -255,11 +265,15 @@ async fn outbound_manual_connection(test_params: TestParams) {
     .await;
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
 #[rstest_reuse::apply(test_params_list)]
 #[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn outbound_auto_connection(test_params: TestParams) {
+async fn outbound_auto_connection(#[case] seed: Seed, test_params: TestParams) {
+    let mut rng = make_seedable_rng(seed);
+
     run_with_timeout(async {
         let time_getter = BasicTestTimeGetter::new();
         let chain_config = Arc::new(common::chain::config::create_unit_test_config());
@@ -275,6 +289,7 @@ async fn outbound_auto_connection(test_params: TestParams) {
             TestTransportChannel::make_address().into(),
             TEST_PROTOCOL_VERSION.into(),
             None,
+            make_seedable_rng(rng.gen()),
         )
         .await;
 
@@ -369,11 +384,15 @@ async fn outbound_auto_connection(test_params: TestParams) {
     .await;
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
 #[rstest_reuse::apply(test_params_list)]
 #[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn inbound_connection(test_params: TestParams) {
+async fn inbound_connection(#[case] seed: Seed, test_params: TestParams) {
+    let mut rng = make_seedable_rng(seed);
+
     run_with_timeout(async {
         let time_getter = BasicTestTimeGetter::new();
         let chain_config = Arc::new(common::chain::config::create_unit_test_config());
@@ -389,6 +408,7 @@ async fn inbound_connection(test_params: TestParams) {
             TestTransportChannel::make_address().into(),
             TEST_PROTOCOL_VERSION.into(),
             None,
+            make_seedable_rng(rng.gen()),
         )
         .await;
 

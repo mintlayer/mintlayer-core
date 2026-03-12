@@ -57,6 +57,7 @@ use networking::transport::{
     TcpTransportSocket,
 };
 use peer_manager::peerdb::storage::PeerDbStorage;
+use randomness::make_true_rng;
 use types::socket_address::SocketAddress;
 
 use crate::{
@@ -155,6 +156,8 @@ where
             peer_mgr_event_receiver,
             time_getter.clone(),
             peerdb_storage,
+            // Note: a "true" rng is not really needed here, but `make_pseudo_rng`'s result is not `Send`.
+            make_true_rng(),
         )?;
         let shutdown_ = Arc::clone(&shutdown);
         let peer_manager_task = tokio_spawn_in_current_tracing_span(

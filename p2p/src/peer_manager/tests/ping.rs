@@ -15,11 +15,20 @@
 
 use std::{sync::Arc, time::Duration};
 
+use rstest::rstest;
+
 use common::{chain::config, primitives::user_agent::mintlayer_core_user_agent};
-use networking::test_helpers::{TestTransportMaker, TestTransportTcp};
-use networking::transport::TcpTransportSocket;
+use networking::{
+    test_helpers::{TestTransportMaker, TestTransportTcp},
+    transport::TcpTransportSocket,
+};
 use p2p_test_utils::expect_recv;
-use test_utils::{assert_matches, assert_matches_return_val, BasicTestTimeGetter};
+use randomness::Rng as _;
+use test_utils::{
+    assert_matches, assert_matches_return_val,
+    random::{make_seedable_rng, Seed},
+    BasicTestTimeGetter,
+};
 use utils::tokio_spawn_in_current_tracing_span;
 
 use crate::{
@@ -39,10 +48,15 @@ use crate::{
     PeerManagerEvent,
 };
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn ping_timeout() {
+async fn ping_timeout(#[case] seed: Seed) {
     type TestNetworkingService = DefaultNetworkingService<TcpTransportSocket>;
+
+    let mut rng = make_seedable_rng(seed);
 
     let chain_config = Arc::new(config::create_unit_test_config());
     let p2p_config: Arc<P2pConfig> = Arc::new(P2pConfig {
@@ -90,6 +104,7 @@ async fn ping_timeout() {
         peer_mgr_event_receiver,
         time_getter.get_time_getter(),
         peerdb_inmemory_store(),
+        make_seedable_rng(rng.gen()),
     )
     .unwrap();
 
@@ -139,6 +154,7 @@ async fn ping_timeout() {
             PeerManagerMessage::PingResponse(PingResponse { nonce }),
             &conn_event_sender,
             &mut cmd_receiver,
+            &mut rng,
         )
         .await;
     }

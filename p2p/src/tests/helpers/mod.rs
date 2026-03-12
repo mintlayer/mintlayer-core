@@ -21,6 +21,7 @@ use std::{
 };
 
 use async_trait::async_trait;
+use randomness::RngCore;
 use tokio::sync::mpsc::UnboundedSender;
 
 use logging::log;
@@ -157,7 +158,7 @@ impl TestDnsSeed {
 
 #[async_trait]
 impl DnsSeed for TestDnsSeed {
-    async fn obtain_addresses(&self) -> Vec<SocketAddress> {
+    async fn obtain_addresses(&self, _rng: &mut (dyn RngCore + Send)) -> Vec<SocketAddress> {
         self.addresses.lock().unwrap().clone()
     }
 }

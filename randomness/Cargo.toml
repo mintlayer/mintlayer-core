@@ -9,3 +9,6 @@ license.workspace = true
 
 [dependencies]
 rand.workspace = true
+
+[dev-dependencies]
+static_assertions.workspace = true

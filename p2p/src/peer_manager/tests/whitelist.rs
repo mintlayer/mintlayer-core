@@ -15,19 +15,19 @@
 
 use std::{net::IpAddr, sync::Arc, time::Duration};
 
-use p2p_types::socket_address::SocketAddress;
 use rstest::rstest;
 
 use common::{chain::config, primitives::user_agent::mintlayer_core_user_agent};
-use networking::test_helpers::{
-    TestAddressMaker, TestTransportChannel, TestTransportMaker, TestTransportNoise,
-    TestTransportTcp,
-};
 use networking::{
+    test_helpers::{
+        TestAddressMaker, TestTransportChannel, TestTransportMaker, TestTransportNoise,
+        TestTransportTcp,
+    },
     transport::{MpscChannelTransport, NoiseTcpTransport, TcpTransportSocket},
     types::ConnectionDirection,
 };
-use p2p_types::bannable_address::BannableAddress;
+use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
+use randomness::Rng as _;
 use test_utils::{
     random::{make_seedable_rng, Seed},
     BasicTestTimeGetter,
@@ -78,12 +78,14 @@ fn p2p_config_with_whitelisted(whitelisted_addresses: Vec<IpAddr>) -> P2pConfig 
     }
 }
 
-async fn no_automatic_ban_for_whitelisted<A, T>()
+async fn no_automatic_ban_for_whitelisted<A, T>(seed: Seed)
 where
     A: TestTransportMaker<Transport = T::Transport>,
     T: NetworkingService + std::fmt::Debug + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
+    let mut rng = make_seedable_rng(seed);
+
     let addr1: SocketAddress = A::make_address().into();
     let addr2 = A::make_address().into();
 
@@ -96,6 +98,7 @@ where
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
         Default::default(),
+        make_seedable_rng(rng.gen()),
     )
     .await;
 
@@ -105,6 +108,7 @@ where
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
         Default::default(),
+        make_seedable_rng(rng.gen()),
     )
     .await;
 
@@ -129,50 +133,66 @@ where
     assert!(!pm2.peerdb.is_address_banned(&addr1.as_bannable()));
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn no_automatic_ban_for_whitelisted_tcp() {
+async fn no_automatic_ban_for_whitelisted_tcp(#[case] seed: Seed) {
     no_automatic_ban_for_whitelisted::<
         TestTransportTcp,
         DefaultNetworkingService<TcpTransportSocket>,
-    >()
+    >(seed)
     .await;
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn no_automatic_ban_for_whitelisted_channels() {
+async fn no_automatic_ban_for_whitelisted_channels(#[case] seed: Seed) {
     no_automatic_ban_for_whitelisted::<
         TestTransportChannel,
         DefaultNetworkingService<MpscChannelTransport>,
-    >()
+    >(seed)
     .await;
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn no_automatic_ban_for_whitelisted_noise() {
+async fn no_automatic_ban_for_whitelisted_noise(#[case] seed: Seed) {
     no_automatic_ban_for_whitelisted::<
         TestTransportNoise,
         DefaultNetworkingService<NoiseTcpTransport>,
-    >()
+    >(seed)
     .await;
 }
 
 // if an address was banned it won't be unbanned automatically if whitelisted
-async fn no_automatic_unban_for_whitelisted<A, T>()
+async fn no_automatic_unban_for_whitelisted<A, T>(seed: Seed)
 where
     A: TestTransportMaker<Transport = T::Transport>,
     T: NetworkingService + std::fmt::Debug + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
+    let mut rng = make_seedable_rng(seed);
+
     let addr1 = A::make_address().into();
     let addr2: SocketAddress = A::make_address().into();
 
     let chain_config = Arc::new(config::create_unit_test_config());
 
-    let (mut pm1, _shutdown_sender, _subscribers_sender) =
-        make_peer_manager::<T>(A::make_transport(), addr1, Arc::clone(&chain_config)).await;
+    let (mut pm1, _shutdown_sender, _subscribers_sender) = make_peer_manager::<T>(
+        A::make_transport(),
+        addr1,
+        Arc::clone(&chain_config),
+        make_seedable_rng(rng.gen()),
+    )
+    .await;
 
     let p2p_config = Arc::new(p2p_config_with_whitelisted(vec![
         addr1.ip_addr(),
@@ -206,7 +226,7 @@ where
 
         let mut tx = db.transaction_rw().unwrap();
         tx.set_version(CURRENT_STORAGE_VERSION).unwrap();
-        tx.set_salt(Salt::new_random()).unwrap();
+        tx.set_salt(Salt::new_random(&mut rng)).unwrap();
         tx.add_banned_address(&BannableAddress::new(addr1.ip_addr()), ban_until)
             .unwrap();
         tx.commit().unwrap();
@@ -221,6 +241,7 @@ where
         peer_receiver,
         time_getter.get_time_getter(),
         db,
+        make_seedable_rng(rng.gen()),
     )
     .unwrap();
 
@@ -242,33 +263,42 @@ where
     assert!(pm2.is_whitelisted_node(PeerRole::Inbound, &addr1));
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn no_automatic_unban_for_whitelisted_tcp() {
+async fn no_automatic_unban_for_whitelisted_tcp(#[case] seed: Seed) {
     no_automatic_unban_for_whitelisted::<
         TestTransportTcp,
         DefaultNetworkingService<TcpTransportSocket>,
-    >()
+    >(seed)
     .await;
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn no_automatic_unban_for_whitelisted_channels() {
+async fn no_automatic_unban_for_whitelisted_channels(#[case] seed: Seed) {
     no_automatic_unban_for_whitelisted::<
         TestTransportChannel,
         DefaultNetworkingService<MpscChannelTransport>,
-    >()
+    >(seed)
     .await;
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn no_automatic_unban_for_whitelisted_noise() {
+async fn no_automatic_unban_for_whitelisted_noise(#[case] seed: Seed) {
     no_automatic_unban_for_whitelisted::<
         TestTransportNoise,
         DefaultNetworkingService<NoiseTcpTransport>,
-    >()
+    >(seed)
     .await;
 }
 
@@ -279,6 +309,7 @@ async fn no_automatic_unban_for_whitelisted_noise() {
 fn manual_ban_overrides_whitelisting(#[case] seed: Seed) {
     type TestNetworkingService = DefaultNetworkingService<TcpTransportSocket>;
     let mut rng = make_seedable_rng(seed);
+
     let address_1: SocketAddress = TestAddressMaker::new_random_address(&mut rng).into();
     let address_2 = TestAddressMaker::new_random_address(&mut rng).into();
 
@@ -302,6 +333,7 @@ fn manual_ban_overrides_whitelisting(#[case] seed: Seed) {
         peer_receiver,
         time_getter.get_time_getter(),
         peerdb_inmemory_store(),
+        make_seedable_rng(rng.gen()),
     )
     .unwrap();
 

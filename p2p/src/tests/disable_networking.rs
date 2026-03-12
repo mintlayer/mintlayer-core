@@ -15,11 +15,17 @@
 
 use std::{collections::BTreeSet, sync::Arc, time::Duration};
 
+use rstest::rstest;
+
 use chainstate::ChainstateConfig;
 use logging::log;
 use networking::test_helpers::{TestTransportChannel, TestTransportMaker};
 use p2p_test_utils::run_with_timeout;
-use test_utils::BasicTestTimeGetter;
+use randomness::Rng as _;
+use test_utils::{
+    random::{make_seedable_rng, Seed},
+    BasicTestTimeGetter,
+};
 
 use crate::{
     error::{DialError, P2pError},
@@ -33,14 +39,19 @@ use crate::{
     },
 };
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn disable_networking() {
-    run_with_timeout(disable_networking_impl()).await;
+async fn disable_networking(#[case] seed: Seed) {
+    run_with_timeout(disable_networking_impl(seed)).await;
 }
 
-async fn disable_networking_impl() {
+async fn disable_networking_impl(seed: Seed) {
     type Transport = <TestTransportChannel as TestTransportMaker>::Transport;
+
+    let mut rng = make_seedable_rng(seed);
 
     let time_getter = BasicTestTimeGetter::new();
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
@@ -58,6 +69,7 @@ async fn disable_networking_impl() {
         TestTransportChannel::make_address().into(),
         TEST_PROTOCOL_VERSION.into(),
         Some("test_node"),
+        make_seedable_rng(rng.gen()),
     )
     .await;
 
@@ -71,6 +83,7 @@ async fn disable_networking_impl() {
         TestTransportChannel::make_address().into(),
         TEST_PROTOCOL_VERSION.into(),
         Some("other_node1"),
+        make_seedable_rng(rng.gen()),
     )
     .await;
 
@@ -84,6 +97,7 @@ async fn disable_networking_impl() {
         TestTransportChannel::make_address().into(),
         TEST_PROTOCOL_VERSION.into(),
         Some("other_node2"),
+        make_seedable_rng(rng.gen()),
     )
     .await;
 
