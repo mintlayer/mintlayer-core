@@ -329,6 +329,7 @@ async fn no_outgoing_connection_to_banned_peer(#[case] seed: Seed) {
         force_dns_query_if_no_global_addresses_known: Default::default(),
         allow_same_ip_connections: Default::default(),
         peerdb_config: Default::default(),
+        min_peer_software_version: Default::default(),
     }));
 
     let time_getter = BasicTestTimeGetter::new();

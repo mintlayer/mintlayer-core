@@ -26,11 +26,12 @@ use test_utils::{assert_matches, BasicTestTimeGetter};
 use crate::{
     message::HeaderList,
     net::default_backend::types::{HandshakeMessage, Message},
+    peer_manager,
     test_helpers::{test_p2p_config, TEST_PROTOCOL_VERSION},
     tests::helpers::TestNode,
 };
 
-async fn incorrect_handshake_outgoing<TTM>()
+async fn incorrect_handshake_outgoing_manual<TTM>()
 where
     TTM: TestTransportMaker,
     TTM::Transport: TransportSocket,
@@ -97,20 +98,102 @@ where
 
 #[tracing::instrument]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn incorrect_handshake_outgoing_tcp() {
-    run_with_timeout(incorrect_handshake_outgoing::<TestTransportTcp>()).await;
+async fn incorrect_handshake_outgoing_manual_tcp() {
+    run_with_timeout(incorrect_handshake_outgoing_manual::<TestTransportTcp>()).await;
 }
 
 #[tracing::instrument]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn incorrect_handshake_outgoing_channels() {
-    run_with_timeout(incorrect_handshake_outgoing::<TestTransportChannel>()).await;
+async fn incorrect_handshake_outgoing_manual_channels() {
+    run_with_timeout(incorrect_handshake_outgoing_manual::<TestTransportChannel>()).await;
 }
 
 #[tracing::instrument]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn incorrect_handshake_outgoing_noise() {
-    run_with_timeout(incorrect_handshake_outgoing::<TestTransportNoise>()).await;
+async fn incorrect_handshake_outgoing_manual_noise() {
+    run_with_timeout(incorrect_handshake_outgoing_manual::<TestTransportNoise>()).await;
+}
+
+async fn incorrect_handshake_outgoing_auto<TTM>()
+where
+    TTM: TestTransportMaker,
+    TTM::Transport: TransportSocket,
+{
+    let time_getter = BasicTestTimeGetter::new();
+    let chain_config = Arc::new(common::chain::config::create_unit_test_config());
+    let p2p_config = Arc::new(test_p2p_config());
+
+    let mut test_node = TestNode::<TTM::Transport>::start(
+        true,
+        time_getter.clone(),
+        Arc::clone(&chain_config),
+        ChainstateConfig::new(),
+        Arc::clone(&p2p_config),
+        TTM::make_transport(),
+        TTM::make_address().into(),
+        TEST_PROTOCOL_VERSION.into(),
+        None,
+    )
+    .await;
+
+    let transport = TTM::make_transport();
+    let mut listener = transport.bind(vec![TTM::make_address()]).await.unwrap();
+
+    let address = listener.local_addresses().unwrap()[0].into();
+
+    test_node.discover_peer(address).await;
+    // Advance time to allow a heartbeat to happen, where the new connection will be attempted.
+    time_getter.advance_time(peer_manager::HEARTBEAT_INTERVAL_MAX);
+
+    let (stream, _) = listener.accept().await.unwrap();
+
+    let mut msg_stream =
+        BufferedTranscoder::new(stream, Some(*p2p_config.protocol_config.max_message_size));
+
+    let msg = msg_stream.recv().await.unwrap();
+    assert_matches!(msg, Message::Handshake(HandshakeMessage::Hello { .. }));
+
+    // Send some other message instead of HelloAck.
+    msg_stream.send(Message::HeaderList(HeaderList::new(Vec::new()))).await.unwrap();
+
+    // The connection should be closed.
+    msg_stream.recv().await.unwrap_err();
+
+    // Unlike incorrect_handshake_outgoing_manual, here the peer score will be adjusted and
+    // the peer discouraged.
+
+    // This is mainly needed to ensure that the corresponding event reaches peer manager before
+    // we end the test.
+    test_node.wait_for_ban_score_adjustment().await;
+
+    // The peer address should be discouraged.
+    let test_node_remnants = test_node.join().await;
+    // TODO: check the actual address instead of the count, same in other places.
+    assert!(test_node_remnants.peer_mgr.peerdb().list_discouraged().count() > 0);
+
+    // For consistency, check that we don't ban automatically.
+    assert_eq!(
+        test_node_remnants.peer_mgr.peerdb().list_banned().count(),
+        0
+    );
+}
+
+#[tracing::instrument]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn incorrect_handshake_outgoing_auto_tcp() {
+    run_with_timeout(incorrect_handshake_outgoing_auto::<TestTransportTcp>()).await;
+}
+
+#[tracing::instrument]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn incorrect_handshake_outgoing_auto_channels() {
+    run_with_timeout(incorrect_handshake_outgoing_auto::<TestTransportChannel>()).await;
+}
+
+#[tracing::instrument]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn incorrect_handshake_outgoing_auto_noise() {
+    run_with_timeout(incorrect_handshake_outgoing_auto::<TestTransportNoise>()).await;
 }
 
 async fn incorrect_handshake_incoming<TTM>()

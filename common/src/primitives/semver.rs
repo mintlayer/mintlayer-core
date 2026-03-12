@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::str::FromStr;
+
 use serde::Serialize;
 use serialization::{Decode, Encode};
 
@@ -33,16 +35,10 @@ impl SemVer {
     }
 }
 
-impl From<SemVer> for String {
-    fn from(v: SemVer) -> String {
-        format!("{}.{}.{}", v.major, v.minor, v.patch)
-    }
-}
+impl FromStr for SemVer {
+    type Err = &'static str;
 
-impl TryFrom<&str> for SemVer {
-    type Error = &'static str;
-
-    fn try_from(v: &str) -> Result<SemVer, Self::Error> {
+    fn from_str(v: &str) -> Result<SemVer, Self::Err> {
         let split_version = v.split('.').collect::<Vec<_>>();
         if split_version.len() != 3 {
             return Err("Invalid version. Number of components is wrong.");
@@ -61,17 +57,19 @@ impl TryFrom<&str> for SemVer {
     }
 }
 
-impl TryFrom<String> for SemVer {
-    type Error = &'static str;
-
-    fn try_from(v: String) -> Result<SemVer, Self::Error> {
-        Self::try_from(v.as_str())
-    }
-}
-
 impl std::fmt::Display for SemVer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}.{}.{}", self.major, self.minor, self.patch)
+    }
+}
+
+// TODO: this is redundant, but it's still used inside a macro in `regtest_chain_config_builder`.
+// Refactor the macro and remove this.
+impl TryFrom<String> for SemVer {
+    type Error = <SemVer as FromStr>::Err;
+
+    fn try_from(v: String) -> Result<SemVer, Self::Error> {
+        Self::from_str(v.as_str())
     }
 }
 
@@ -84,84 +82,90 @@ mod tests {
     #[test]
     fn vertest_string() {
         let version = SemVer::new(1, 2, 3);
-        assert_eq!(String::from(version), "1.2.3");
+        assert_eq!(version.to_string(), "1.2.3");
 
         let version = SemVer::new(0xff, 0xff, 0xff);
-        assert_eq!(String::from(version), "255.255.255");
+        assert_eq!(version.to_string(), "255.255.255");
 
         let version = SemVer::new(0xff, 0xff, 0xffff);
-        assert_eq!(String::from(version), "255.255.65535");
+        assert_eq!(version.to_string(), "255.255.65535");
 
         let version = SemVer::new(1, 2, 0x500);
-        assert_eq!(String::from(version), "1.2.1280");
+        assert_eq!(version.to_string(), "1.2.1280");
 
         assert_eq!(
-            SemVer::try_from(" "),
+            SemVer::from_str(" "),
             Err("Invalid version. Number of components is wrong.")
         );
 
         assert_eq!(
-            SemVer::try_from(""),
+            SemVer::from_str(""),
             Err("Invalid version. Number of components is wrong.")
         );
 
         assert_eq!(
-            SemVer::try_from("1.2"),
+            SemVer::from_str("1.2"),
             Err("Invalid version. Number of components is wrong.")
         );
 
         assert_eq!(
-            SemVer::try_from("1"),
+            SemVer::from_str("1"),
             Err("Invalid version. Number of components is wrong.")
         );
 
         let version = "hello";
         assert_eq!(
-            SemVer::try_from(version),
+            SemVer::from_str(version),
             Err("Invalid version. Number of components is wrong.")
         );
         assert_eq!(
-            SemVer::try_from(version),
+            SemVer::from_str(version),
             Err("Invalid version. Number of components is wrong.")
         );
 
-        let version = "1.2.3".to_string();
-        assert_eq!(SemVer::try_from(version.clone()), Ok(SemVer::new(1, 2, 3)));
-        assert_eq!(SemVer::try_from(version), Ok(SemVer::new(1, 2, 3)));
+        let version = "1.2.3";
+        assert_eq!(SemVer::from_str(version), Ok(SemVer::new(1, 2, 3)));
+        assert_eq!(
+            SemVer::try_from(version.to_owned()),
+            Ok(SemVer::new(1, 2, 3))
+        );
 
         let version = "255.255.255";
-        assert_eq!(SemVer::try_from(version), Ok(SemVer::new(255, 255, 255)));
-        assert_eq!(SemVer::try_from(version), Ok(SemVer::new(255, 255, 255)));
-
-        let version = "255.255.65535".to_string();
+        assert_eq!(SemVer::from_str(version), Ok(SemVer::new(255, 255, 255)));
         assert_eq!(
-            SemVer::try_from(version.clone()),
+            SemVer::try_from(version.to_owned()),
+            Ok(SemVer::new(255, 255, 255))
+        );
+
+        let version = "255.255.65535";
+        assert_eq!(SemVer::from_str(version), Ok(SemVer::new(255, 255, 65535)));
+        assert_eq!(
+            SemVer::try_from(version.to_owned()),
             Ok(SemVer::new(255, 255, 65535))
         );
-        assert_eq!(SemVer::try_from(version), Ok(SemVer::new(255, 255, 65535)));
 
         let version = "255.255.65536";
         assert_eq!(
-            SemVer::try_from(version),
+            SemVer::from_str(version),
             Err("Parsing SemVer component to integer failed")
         );
         assert_eq!(
-            SemVer::try_from(version.to_string()),
-            Err("Parsing SemVer component to integer failed")
-        );
-
-        assert_eq!(
-            SemVer::try_from("1.2.a"),
+            SemVer::try_from(version.to_owned()),
             Err("Parsing SemVer component to integer failed")
         );
 
         assert_eq!(
-            SemVer::try_from("1.2."),
+            SemVer::from_str("1.2.a"),
             Err("Parsing SemVer component to integer failed")
         );
 
         assert_eq!(
-            SemVer::try_from("1..3"),
+            SemVer::from_str("1.2."),
+            Err("Parsing SemVer component to integer failed")
+        );
+
+        assert_eq!(
+            SemVer::from_str("1..3"),
             Err("Parsing SemVer component to integer failed")
         );
     }

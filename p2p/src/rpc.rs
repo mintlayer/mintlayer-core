@@ -33,12 +33,14 @@ trait P2pRpc {
 
     /// Attempt to connect to a remote node (just once).
     ///
-    /// For persistent connections see `add_reserved_node` should be used.
-    /// Keep in mind that `add_reserved_node` works completely differently.
+    /// For persistent connections consider using `add_reserved_node`.
     #[method(name = "connect")]
     async fn connect(&self, addr: IpOrSocketAddress) -> RpcResult<()>;
 
-    /// Disconnect peer, given its id.
+    /// Disconnect a peer given its id.
+    ///
+    /// If it was an outbound connection, the peer address will be removed from the peer database,
+    /// and if the connection was inbound, the address will be kept.
     #[method(name = "disconnect")]
     async fn disconnect(&self, peer_id: PeerId) -> RpcResult<()>;
 

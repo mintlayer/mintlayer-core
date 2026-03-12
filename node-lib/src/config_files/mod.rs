@@ -199,6 +199,7 @@ fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {
         node_type,
         force_dns_query_if_no_global_addresses_known,
         custom_disconnection_reason_for_banning,
+        min_peer_software_version,
     } = config;
 
     let networking_enabled = options.p2p_networking_enabled.or(networking_enabled);
@@ -226,6 +227,8 @@ fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {
         .p2p_custom_disconnection_reason_for_banning
         .clone()
         .or(custom_disconnection_reason_for_banning);
+    let min_peer_software_version =
+        options.p2p_min_peer_software_version.or(min_peer_software_version);
 
     P2pConfigFile {
         networking_enabled,
@@ -246,6 +249,7 @@ fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {
         node_type,
         force_dns_query_if_no_global_addresses_known,
         custom_disconnection_reason_for_banning,
+        min_peer_software_version,
     }
 }
 

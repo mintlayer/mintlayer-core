@@ -31,23 +31,25 @@ Each attempt's directory has the following structure:
 - `node_log.txt` - the node's log.
 
 Some notes:
-* Currently the script requires Python 3.13 to run, though we may lift this requirement later.
-* The script can send an email when it detects an issue using the local SMTP server
+- Currently the script requires Python 3.13 to run, though we may lift this requirement later.
+- The script can send an email when it detects an issue using the local SMTP server
   (if you're on Linux, google for an SMTP Postfix tutorial to set it up).
-* Even if the script finds a problem (e.g. a checkpoint mismatch), you're still likely
+- Even if the script finds a problem (e.g. a checkpoint mismatch), you're still likely
   to end up being on the correct chain. To download the actual fork for further investigation
   you can initiate a separate full sync while using the node's option `--custom-checkpoints-csv-file`
   to override the correct checkpoints with the wrong ones.
-* Once the fork has been downloaded, you'll want to examine the contents of its chainstate db.
+- Once the fork has been downloaded, you'll want to examine the contents of its chainstate db.
   Currently we have the `chainstate-db-dumper` tool that can dump certain info about blocks
   to a CSV file (the most interesting part of it being the ids of pools that continue producing
   blocks on that fork).
-* Once the fork has been investigated you can "permanently" ban the peers that have been sending it
+- Once the fork has been investigated you can "permanently" ban the peers that have been sending it
   to you, to prevent it from being reported again and again. To do so, you can add their ip
   addresses to `permabanned_peers.txt` (one address per line, '#' starts a comment) in the script's
   working directory (it doesn't exist by default, so you'll have to create it first).
   Note that the file is checked on every iteration, so you can update it while the script is already
   running and it will come into effect when the next iteration starts.
-* The script is likely to fail if a networking error occurs, e.g. if it can't query the API server.
+- The script is likely to fail if a networking error occurs, e.g. if it can't query the API server.
   So, run it in a loop in a shell script (with some delay after each run, to prevent it from spamming
   you with warning emails).
+- If you expect a split to already exist due to a hard fork (in which case reporting it would be useless),
+  use the `--min-peer-software-version` option to reject all nodes that have not been upgraded.

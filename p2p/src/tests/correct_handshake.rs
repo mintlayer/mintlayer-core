@@ -85,9 +85,9 @@ where
     let connect_result = connect_result_receiver.await.unwrap();
     assert!(connect_result.is_ok());
 
-    // Check that the connection is still up and we can receive the next message (we don't care
-    // which one it is though).
-    let _msg = msg_stream.recv().await.unwrap();
+    // Check that the connection is still up and we can receive the next message.
+    let msg = msg_stream.recv().await.unwrap();
+    assert_matches!(msg, Message::AddrListRequest(_));
 
     // This is mainly needed to ensure that the corresponding events, if any, reach
     // peer manager before we end the test.
@@ -169,9 +169,9 @@ where
     let msg = msg_stream.recv().await.unwrap();
     assert_matches!(msg, Message::Handshake(HandshakeMessage::HelloAck { .. }));
 
-    // Check that the connection is still up and we can receive the next message (we don't care
-    // which one it is though).
-    let _msg = msg_stream.recv().await.unwrap();
+    // Check that the connection is still up and we can receive the next message.
+    let msg = msg_stream.recv().await.unwrap();
+    assert_matches!(msg, Message::HeaderListRequest(_));
 
     // This is mainly needed to ensure that the corresponding events, if any, reach
     // peer manager before we end the test.

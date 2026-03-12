@@ -15,6 +15,7 @@
 
 use std::time::Duration;
 
+use common::primitives::semver::SemVer;
 use utils::make_config_setting;
 
 use super::{
@@ -125,6 +126,10 @@ pub struct PeerManagerConfig {
 
     /// Peer db configuration.
     pub peerdb_config: PeerDbConfig,
+
+    /// If this node's and the peer's user agent is the same, the connection will be rejected and
+    /// the peer discouraged if the peer's software version is less than the one specified.
+    pub min_peer_software_version: Option<SemVer>,
 }
 
 impl PeerManagerConfig {
