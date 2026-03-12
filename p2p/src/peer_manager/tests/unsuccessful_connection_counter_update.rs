@@ -44,12 +44,9 @@ use crate::{
     config::P2pConfig,
     disconnection_reason::DisconnectionReason,
     error::{DialError, P2pError},
-    message::BlockSyncMessageTag,
     net::{
         default_backend::types::{Command, Message},
-        types::{
-            ConnectivityEvent, ConnectivityEventMessageTag, PeerManagerMessageOrTag, PeerRole,
-        },
+        types::{ConnectivityEvent, PeerManagerMessageExt, PeerManagerMessageExtTag, PeerRole},
     },
     peer_manager::{
         self,
@@ -745,9 +742,7 @@ async fn auto_connection_without_peer_activity(
             conn_event_sender
                 .send(ConnectivityEvent::Message {
                     peer_id,
-                    message: PeerManagerMessageOrTag::BlockSyncMessage(
-                        BlockSyncMessageTag::HeaderListRequest,
-                    ),
+                    message: PeerManagerMessageExt::FirstSyncMessageReceived,
                 })
                 .unwrap();
 
@@ -756,9 +751,7 @@ async fn auto_connection_without_peer_activity(
                 peer_mgr_notification,
                 PeerManagerNotification::MessageReceived {
                     peer_id,
-                    message_tag: ConnectivityEventMessageTag::BlockSyncMessage(
-                        BlockSyncMessageTag::HeaderListRequest
-                    )
+                    message_tag: PeerManagerMessageExtTag::FirstSyncMessageReceived
                 }
             );
         }

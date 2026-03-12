@@ -34,7 +34,7 @@ use p2p::{
         PingResponse,
     },
     net::{
-        types::{ConnectivityEvent, PeerManagerMessageOrTag, SyncingEvent},
+        types::{ConnectivityEvent, PeerManagerMessageExt, SyncingEvent},
         ConnectivityService, NetworkingService, SyncingEventReceiver,
     },
     peer_manager::{
@@ -211,12 +211,11 @@ where
     fn handle_conn_message(
         &mut self,
         peer_id: PeerId,
-        message: PeerManagerMessageOrTag,
+        message: PeerManagerMessageExt,
     ) -> p2p::Result<()> {
         let peer_mgr_message = match message {
-            PeerManagerMessageOrTag::PeerManagerMessage(message) => message,
-            PeerManagerMessageOrTag::BlockSyncMessage(_)
-            | PeerManagerMessageOrTag::TransactionSyncMessage(_) => {
+            PeerManagerMessageExt::PeerManagerMessage(message) => message,
+            PeerManagerMessageExt::FirstSyncMessageReceived => {
                 // Ignored
                 return Ok(());
             }

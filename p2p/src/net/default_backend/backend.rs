@@ -50,7 +50,7 @@ use crate::{
             types::{BackendEvent, Command, PeerEvent},
         },
         types::{
-            services::Services, ConnectivityEvent, PeerInfo, PeerManagerMessageOrTag, SyncingEvent,
+            services::Services, ConnectivityEvent, PeerInfo, PeerManagerMessageExt, SyncingEvent,
         },
     },
     protocol::{ProtocolVersion, SupportedProtocolVersion},
@@ -697,7 +697,7 @@ where
     fn handle_message(
         &mut self,
         peer_id: PeerId,
-        message: PeerManagerMessageOrTag,
+        message: PeerManagerMessageExt,
     ) -> crate::Result<()> {
         // Do not process remaining messages if the peer has been forcibly disconnected (for example, after being banned).
         // Without this check, the backend might send messages to the sync and peer managers after sending the disconnect notification.

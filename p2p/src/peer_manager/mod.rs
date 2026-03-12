@@ -63,8 +63,7 @@ use crate::{
     net::{
         types::{
             services::{Service, Services},
-            ConnectivityEvent, ConnectivityEventMessageTag, PeerInfo, PeerManagerMessageOrTag,
-            PeerRole,
+            ConnectivityEvent, PeerInfo, PeerManagerMessageExt, PeerManagerMessageExtTag, PeerRole,
         },
         ConnectivityService, NetworkingService,
     },
@@ -1563,9 +1562,9 @@ where
         }
     }
 
-    fn handle_incoming_message(&mut self, peer_id: PeerId, message: PeerManagerMessageOrTag) {
+    fn handle_incoming_message(&mut self, peer_id: PeerId, message: PeerManagerMessageExt) {
         let is_disconnection_message = match &message {
-            PeerManagerMessageOrTag::PeerManagerMessage(msg) => match msg {
+            PeerManagerMessageExt::PeerManagerMessage(msg) => match msg {
                 PeerManagerMessage::WillDisconnect(_) => true,
 
                 PeerManagerMessage::AddrListRequest(_)
@@ -1574,8 +1573,7 @@ where
                 | PeerManagerMessage::AddrListResponse(_)
                 | PeerManagerMessage::PingResponse(_) => false,
             },
-            PeerManagerMessageOrTag::BlockSyncMessage(_)
-            | PeerManagerMessageOrTag::TransactionSyncMessage(_) => false,
+            PeerManagerMessageExt::FirstSyncMessageReceived => false,
         };
 
         // Note: `PeerContext` must always exist when an incoming message arrives, and the individual
@@ -1595,10 +1593,10 @@ where
             return;
         }
 
-        let message_tag: ConnectivityEventMessageTag = (&message).into();
+        let message_tag: PeerManagerMessageExtTag = (&message).into();
 
         match message {
-            PeerManagerMessageOrTag::PeerManagerMessage(msg) => match msg {
+            PeerManagerMessageExt::PeerManagerMessage(msg) => match msg {
                 PeerManagerMessage::AddrListRequest(_) => {
                     self.handle_addr_list_request(peer_id);
                 }
@@ -1618,8 +1616,7 @@ where
                     self.handle_will_disconnect_messgae(peer_id, msg);
                 }
             },
-            PeerManagerMessageOrTag::BlockSyncMessage(_)
-            | PeerManagerMessageOrTag::TransactionSyncMessage(_) => {}
+            PeerManagerMessageExt::FirstSyncMessageReceived => {}
         };
 
         if let Some(o) = self.observer.as_mut() {
@@ -2481,7 +2478,7 @@ pub trait Observer {
 
     // This will be called after `ConnectivityEvent::Message` has been handled by
     // the peer manager.
-    fn message_received(&mut self, peer_id: PeerId, message_tag: ConnectivityEventMessageTag);
+    fn message_received(&mut self, peer_id: PeerId, message_tag: PeerManagerMessageExtTag);
 }
 
 pub trait PeerManagerInterface {

@@ -320,6 +320,12 @@ where
         self.peer_mgr_notification_receiver.try_recv().ok()
     }
 
+    pub fn peer_mgr_notification_receiver(
+        &mut self,
+    ) -> &mut mpsc::UnboundedReceiver<PeerManagerNotification> {
+        &mut self.peer_mgr_notification_receiver
+    }
+
     pub async fn get_peers_info(&self) -> TestPeersInfo {
         query_peer_manager(&self.peer_mgr_event_sender, |peer_mgr| {
             TestPeersInfo::from_peer_mgr_peer_contexts(peer_mgr.peers())

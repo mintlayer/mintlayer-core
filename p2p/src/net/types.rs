@@ -27,8 +27,7 @@ use tokio::sync::mpsc::Receiver;
 use crate::{
     error::ConnectionValidationError,
     message::{
-        BlockSyncMessage, BlockSyncMessageTag, PeerManagerMessage, PeerManagerMessageTag,
-        TransactionSyncMessage, TransactionSyncMessageTag,
+        BlockSyncMessage, PeerManagerMessage, PeerManagerMessageTag, TransactionSyncMessage,
     },
     protocol::SupportedProtocolVersion,
     types::{peer_address::PeerAddress, peer_id::PeerId},
@@ -166,11 +165,9 @@ impl Display for PeerInfo {
 #[derive(Debug)]
 pub enum ConnectivityEvent {
     /// A message received from a peer.
-    ///
-    /// Note that only a message tag is present here for block and transaction sync messages.
     Message {
         peer_id: PeerId,
-        message: PeerManagerMessageOrTag,
+        message: PeerManagerMessageExt,
     },
 
     /// Outbound connection accepted
@@ -248,37 +245,34 @@ pub enum ConnectivityEvent {
     },
 }
 
-/// Either a full `PeerManagerMessage` or, if it's a sync message, the corresponding tag.
-#[derive(Debug, Clone)]
-pub enum PeerManagerMessageOrTag {
+#[derive(Debug)]
+pub enum PeerManagerMessageExt {
+    // The complete PeerManagerMessage
     PeerManagerMessage(PeerManagerMessage),
-    BlockSyncMessage(BlockSyncMessageTag),
-    TransactionSyncMessage(TransactionSyncMessageTag),
+
+    // An indicator that the first sync message (i.e. BlockSyncMessage or TransactionSyncMessage)
+    // has been received from the peer.
+    FirstSyncMessageReceived,
 }
 
-impl From<PeerManagerMessage> for PeerManagerMessageOrTag {
+impl From<PeerManagerMessage> for PeerManagerMessageExt {
     fn from(value: PeerManagerMessage) -> Self {
         Self::PeerManagerMessage(value)
     }
 }
 
+/// Tag type for `PeerManagerMessageExt`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ConnectivityEventMessageTag {
+pub enum PeerManagerMessageExtTag {
     PeerManagerMessage(PeerManagerMessageTag),
-    BlockSyncMessage(BlockSyncMessageTag),
-    TransactionSyncMessage(TransactionSyncMessageTag),
+    FirstSyncMessageReceived,
 }
 
-impl From<&'_ PeerManagerMessageOrTag> for ConnectivityEventMessageTag {
-    fn from(value: &'_ PeerManagerMessageOrTag) -> Self {
+impl From<&'_ PeerManagerMessageExt> for PeerManagerMessageExtTag {
+    fn from(value: &'_ PeerManagerMessageExt) -> Self {
         match value {
-            PeerManagerMessageOrTag::PeerManagerMessage(msg) => {
-                Self::PeerManagerMessage(msg.into())
-            }
-            PeerManagerMessageOrTag::BlockSyncMessage(tag) => Self::BlockSyncMessage(*tag),
-            PeerManagerMessageOrTag::TransactionSyncMessage(tag) => {
-                Self::TransactionSyncMessage(*tag)
-            }
+            PeerManagerMessageExt::PeerManagerMessage(msg) => Self::PeerManagerMessage(msg.into()),
+            PeerManagerMessageExt::FirstSyncMessageReceived => Self::FirstSyncMessageReceived,
         }
     }
 }

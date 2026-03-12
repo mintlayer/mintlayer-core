@@ -26,7 +26,7 @@ use serialization::{Decode, Encode};
 use crate::types::peer_address::PeerAddress;
 
 #[derive(Debug, Clone, PartialEq, Eq, strum::EnumDiscriminants)]
-#[strum_discriminants(name(BlockSyncMessageTag))]
+#[strum_discriminants(name(BlockSyncMessageTag), derive(strum::EnumIter))]
 pub enum BlockSyncMessage {
     HeaderListRequest(HeaderListRequest),
     BlockListRequest(BlockListRequest),
@@ -42,7 +42,7 @@ pub enum BlockSyncMessage {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, strum::EnumDiscriminants)]
-#[strum_discriminants(name(TransactionSyncMessageTag))]
+#[strum_discriminants(name(TransactionSyncMessageTag), derive(strum::EnumIter))]
 pub enum TransactionSyncMessage {
     NewTransaction(Id<Transaction>),
     TransactionRequest(Id<Transaction>),
@@ -50,7 +50,7 @@ pub enum TransactionSyncMessage {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, strum::EnumDiscriminants)]
-#[strum_discriminants(name(PeerManagerMessageTag))]
+#[strum_discriminants(name(PeerManagerMessageTag), derive(strum::EnumIter))]
 pub enum PeerManagerMessage {
     AddrListRequest(AddrListRequest),
     AnnounceAddrRequest(AnnounceAddrRequest),

@@ -33,7 +33,7 @@ use crate::{
     message::{BlockSyncMessage, TransactionSyncMessage, WillDisconnectMessage},
     net::{
         default_backend::types::{BackendEvent, PeerEvent},
-        types::PeerManagerMessageOrTag,
+        types::PeerManagerMessageExt,
     },
     protocol::{choose_common_protocol_version, ProtocolVersion, SupportedProtocolVersion},
     types::peer_id::PeerId,
@@ -83,6 +83,10 @@ pub struct Peer<T: TransportSocket> {
 
     /// Time getter
     time_getter: TimeGetter,
+
+    /// Will be set to true once at least one BlockSyncMessage or TransactionSyncMessage has been
+    /// received from the peer.
+    sync_message_received: bool,
 }
 
 impl<T> Peer<T>
@@ -115,6 +119,7 @@ where
             node_protocol_version,
             time_getter,
             common_protocol_version: None,
+            sync_message_received: false,
         }
     }
 
@@ -393,17 +398,17 @@ where
     // Note: the channels used by this function to propagate messages to other parts of p2p
     // must be bounded; this is important to prevent DoS attacks.
     async fn handle_socket_msg(
+        &mut self,
         peer_id: PeerId,
         msg: Message,
-        peer_event_sender: &mut mpsc::Sender<PeerEvent>,
-        block_sync_msg_sender: &mut mpsc::Sender<BlockSyncMessage>,
-        transaction_sync_msg_sender: &mut mpsc::Sender<TransactionSyncMessage>,
+        block_sync_msg_sender: &mpsc::Sender<BlockSyncMessage>,
+        transaction_sync_msg_sender: &mpsc::Sender<TransactionSyncMessage>,
     ) -> crate::Result<()> {
         match msg.categorize() {
             CategorizedMessage::Handshake(_) => {
                 log::error!("Peer {peer_id} sent unexpected handshake message");
 
-                peer_event_sender
+                self.peer_event_sender
                     .send(PeerEvent::Misbehaved {
                         error: P2pError::ProtocolError(ProtocolError::UnexpectedMessage(
                             "Unexpected handshake message".to_owned(),
@@ -412,29 +417,35 @@ where
                     .await?;
             }
             CategorizedMessage::PeerManagerMessage(msg) => {
-                peer_event_sender
+                self.peer_event_sender
                     .send(PeerEvent::MessageReceived(
-                        PeerManagerMessageOrTag::PeerManagerMessage(msg),
+                        PeerManagerMessageExt::PeerManagerMessage(msg),
                     ))
                     .await?
             }
             CategorizedMessage::BlockSyncMessage(msg) => {
-                peer_event_sender
-                    .send(PeerEvent::MessageReceived(
-                        PeerManagerMessageOrTag::BlockSyncMessage((&msg).into()),
-                    ))
-                    .await?;
+                block_sync_msg_sender.send(msg).await?;
 
-                block_sync_msg_sender.send(msg).await?
+                if !self.sync_message_received {
+                    self.peer_event_sender
+                        .send(PeerEvent::MessageReceived(
+                            PeerManagerMessageExt::FirstSyncMessageReceived,
+                        ))
+                        .await?;
+                    self.sync_message_received = true;
+                }
             }
             CategorizedMessage::TransactionSyncMessage(msg) => {
-                peer_event_sender
-                    .send(PeerEvent::MessageReceived(
-                        PeerManagerMessageOrTag::TransactionSyncMessage((&msg).into()),
-                    ))
-                    .await?;
+                transaction_sync_msg_sender.send(msg).await?;
 
-                transaction_sync_msg_sender.send(msg).await?
+                if !self.sync_message_received {
+                    self.peer_event_sender
+                        .send(PeerEvent::MessageReceived(
+                            PeerManagerMessageExt::FirstSyncMessageReceived,
+                        ))
+                        .await?;
+                    self.sync_message_received = true;
+                }
             }
         }
 
@@ -507,12 +518,11 @@ where
                 event = self.socket.recv(), if sync_msg_senders_opt.is_some() => match event {
                     Ok(message) => {
                         let sync_msg_senders = sync_msg_senders_opt.as_mut().expect("sync_msg_senders_opt is some");
-                        Self::handle_socket_msg(
+                        self.handle_socket_msg(
                             self.peer_id,
                             message,
-                            &mut self.peer_event_sender,
-                            &mut sync_msg_senders.0,
-                            &mut sync_msg_senders.1,
+                            &sync_msg_senders.0,
+                            &sync_msg_senders.1,
                         ).await?;
                     }
                     Err(err) => {

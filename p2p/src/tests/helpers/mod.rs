@@ -31,7 +31,7 @@ use test_utils::BasicTestTimeGetter;
 
 use crate::{
     error::P2pError,
-    net::types::{ConnectivityEventMessageTag, PeerInfo, PeerRole},
+    net::types::{PeerInfo, PeerManagerMessageExtTag, PeerRole},
     peer_manager::{self, dns_seed::DnsSeed},
 };
 
@@ -71,7 +71,7 @@ pub enum PeerManagerNotification {
     },
     MessageReceived {
         peer_id: PeerId,
-        message_tag: ConnectivityEventMessageTag,
+        message_tag: PeerManagerMessageExtTag,
     },
 }
 
@@ -124,7 +124,7 @@ impl peer_manager::Observer for PeerManagerObserver {
         self.send_notification(PeerManagerNotification::ConnectionClosed { peer_id });
     }
 
-    fn message_received(&mut self, peer_id: PeerId, message_tag: ConnectivityEventMessageTag) {
+    fn message_received(&mut self, peer_id: PeerId, message_tag: PeerManagerMessageExtTag) {
         self.send_notification(PeerManagerNotification::MessageReceived {
             peer_id,
             message_tag,
