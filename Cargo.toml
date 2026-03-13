@@ -6,11 +6,6 @@ repository = "https://github.com/mintlayer/mintlayer-core"
 readme = "README.md"
 license = "MIT"
 version = "1.2.1"
-authors = [
-  "Samer Afach <samer.afach@mintlayer.org>",
-  "Ben Marsh <benjamin.marsh@mintlayer.org>",
-  "Enrico Rubboli <enrico.rubboli@mintlayer.org>",
-]
 edition = "2021"
 
 [workspace]
