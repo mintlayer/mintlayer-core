@@ -45,7 +45,10 @@ use logging::log;
 use networking::types::ConnectionDirection;
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, IsGlobalIp};
 use randomness::{seq::IteratorRandom, BoxedRngMutexWrapper, Rng, RngCore};
-use utils::{bloom_filters::rolling_bloom_filter::RollingBloomFilter, ensure, set_flag::SetFlag};
+use utils::{
+    bloom_filters::rolling_bloom_filter::RollingBloomFilter, debug_panic_or_log, ensure,
+    set_flag::SetFlag,
+};
 use utils_networking::IpOrSocketAddress;
 
 use crate::{
@@ -60,7 +63,7 @@ use crate::{
     net::{
         types::{
             services::{Service, Services},
-            ConnectivityEvent, PeerInfo, PeerRole,
+            ConnectivityEvent, PeerInfo, PeerManagerMessageExt, PeerManagerMessageExtTag, PeerRole,
         },
         ConnectivityService, NetworkingService,
     },
@@ -1126,9 +1129,12 @@ where
         let old_value = self.peers.insert(peer_id, peer);
         assert!(old_value.is_none());
 
-        if peer_role.is_outbound() {
-            self.peerdb
-                .outbound_peer_connected(peer_address, Self::lock_rng(&self.rng).deref_mut());
+        if let Some(outbound_peer_role) = peer_role.as_outbound() {
+            self.peerdb.outbound_peer_connected(
+                peer_address,
+                outbound_peer_role,
+                Self::lock_rng(&self.rng).deref_mut(),
+            );
         }
 
         if peer_role == PeerRole::OutboundBlockRelay {
@@ -1265,8 +1271,12 @@ where
             | OutboundConnectType::Reserved
             | OutboundConnectType::Feeler => {}
             OutboundConnectType::Manual { response_sender } => {
-                response_sender.send(Err(error));
+                response_sender.send(Err(error.clone()));
             }
+        }
+
+        if let Some(o) = self.observer.as_mut() {
+            o.outbound_error(address, error)
         }
     }
 
@@ -1310,6 +1320,10 @@ where
             }
 
             self.subscribed_to_peer_addresses.remove(&peer_id);
+
+            if let Some(o) = self.observer.as_mut() {
+                o.connection_closed(peer_id)
+            }
         }
     }
 
@@ -1320,7 +1334,7 @@ where
     ) {
         // `send_message` should not fail, but even if it does, the error can be ignored
         // because sending messages over the network does not guarantee that they will be received
-        let res = peer_connectivity_handle.send_message(peer_id, message);
+        let res = peer_connectivity_handle.send_peer_manager_message(peer_id, message);
         if let Err(err) = res {
             log::error!("send_message failed unexpectedly: {err:?}");
         }
@@ -1537,6 +1551,8 @@ where
                 Self::lock_rng(&self.rng).deref_mut(),
             );
             if let Some(address) = address_opt {
+                log::debug!("Need to establish a feeler connection to address {address}");
+
                 self.connect(address, OutboundConnectType::Feeler);
                 self.next_feeler_connection_time = Self::choose_next_feeler_connection_time(
                     &self.p2p_config,
@@ -1547,20 +1563,65 @@ where
         }
     }
 
-    fn handle_incoming_message(&mut self, peer: PeerId, message: PeerManagerMessage) {
+    fn handle_incoming_message(&mut self, peer_id: PeerId, message: PeerManagerMessageExt) {
+        let is_disconnection_message = match &message {
+            PeerManagerMessageExt::PeerManagerMessage(msg) => match msg {
+                PeerManagerMessage::WillDisconnect(_) => true,
+
+                PeerManagerMessage::AddrListRequest(_)
+                | PeerManagerMessage::AnnounceAddrRequest(_)
+                | PeerManagerMessage::PingRequest(_)
+                | PeerManagerMessage::AddrListResponse(_)
+                | PeerManagerMessage::PingResponse(_) => false,
+            },
+            PeerManagerMessageExt::FirstSyncMessageReceived => false,
+        };
+
+        // Note: `PeerContext` must always exist when an incoming message arrives, and the individual
+        // "handle_" methods called below `expect` on this fact. Here we do an explicit check
+        // just in case, so that if things go horribly wrong, only the debug build will panic.
+        if let Some(peer) = self.peers.get(&peer_id) {
+            if !is_disconnection_message && peer.peer_role.is_outbound() {
+                self.peerdb.outbound_peer_had_activity(
+                    peer.peer_address,
+                    Self::lock_rng(&self.rng).deref_mut(),
+                );
+            }
+        } else {
+            debug_panic_or_log!(
+                "Peer context for {peer_id} not found when handling incoming message {message:?}"
+            );
+            return;
+        }
+
+        let message_tag: PeerManagerMessageExtTag = (&message).into();
+
         match message {
-            PeerManagerMessage::AddrListRequest(_) => self.handle_addr_list_request(peer),
-            PeerManagerMessage::AnnounceAddrRequest(r) => {
-                self.handle_announce_addr_request(peer, r.address)
-            }
-            PeerManagerMessage::PingRequest(r) => self.handle_ping_request(peer, r.nonce),
-            PeerManagerMessage::AddrListResponse(r) => {
-                self.handle_addr_list_response(peer, r.addresses)
-            }
-            PeerManagerMessage::PingResponse(r) => self.handle_ping_response(peer, r.nonce),
-            PeerManagerMessage::WillDisconnect(msg) => {
-                self.handle_will_disconnect_messgae(peer, msg)
-            }
+            PeerManagerMessageExt::PeerManagerMessage(msg) => match msg {
+                PeerManagerMessage::AddrListRequest(_) => {
+                    self.handle_addr_list_request(peer_id);
+                }
+                PeerManagerMessage::AnnounceAddrRequest(msg) => {
+                    self.handle_announce_addr_request(peer_id, msg.address);
+                }
+                PeerManagerMessage::PingRequest(msg) => {
+                    self.handle_ping_request(peer_id, msg.nonce);
+                }
+                PeerManagerMessage::AddrListResponse(msg) => {
+                    self.handle_addr_list_response(peer_id, msg.addresses);
+                }
+                PeerManagerMessage::PingResponse(msg) => {
+                    self.handle_ping_response(peer_id, msg.nonce);
+                }
+                PeerManagerMessage::WillDisconnect(msg) => {
+                    self.handle_will_disconnect_messgae(peer_id, msg);
+                }
+            },
+            PeerManagerMessageExt::FirstSyncMessageReceived => {}
+        };
+
+        if let Some(o) = self.observer.as_mut() {
+            o.message_received(peer_id, message_tag)
         }
     }
 
@@ -2397,12 +2458,28 @@ where
 
 pub trait Observer {
     fn on_peer_ban_score_adjustment(&mut self, address: SocketAddress, new_score: u32);
+
     fn on_peer_ban(&mut self, address: BannableAddress);
+
     fn on_peer_discouragement(&mut self, address: BannableAddress);
+
     // This will be called at the end of "heartbeat" function.
     fn on_heartbeat(&mut self);
+
     // This will be called for both incoming and outgoing connections.
     fn on_connection_accepted(&mut self, address: SocketAddress, peer_role: PeerRole);
+
+    // This will be called after `ConnectivityEvent::ConnectionError` has been handled by
+    // the peer manager.
+    fn outbound_error(&mut self, address: SocketAddress, error: P2pError);
+
+    // This will be called after `ConnectivityEvent::ConnectionClosed` has been handled by
+    // the peer manager.
+    fn connection_closed(&mut self, peer_id: PeerId);
+
+    // This will be called after `ConnectivityEvent::Message` has been handled by
+    // the peer manager.
+    fn message_received(&mut self, peer_id: PeerId, message_tag: PeerManagerMessageExtTag);
 }
 
 pub trait PeerManagerInterface {
@@ -2417,6 +2494,9 @@ pub trait PeerManagerInterface {
 
     #[cfg(test)]
     fn peer_db_mut(&mut self) -> &mut dyn peerdb::PeerDbInterface;
+
+    #[cfg(test)]
+    fn next_feeler_connection_time(&self) -> Time;
 }
 
 impl<T, S> PeerManagerInterface for PeerManager<T, S>
@@ -2443,6 +2523,11 @@ where
     #[cfg(test)]
     fn peer_db_mut(&mut self) -> &mut dyn peerdb::PeerDbInterface {
         &mut self.peerdb
+    }
+
+    #[cfg(test)]
+    fn next_feeler_connection_time(&self) -> Time {
+        self.next_feeler_connection_time
     }
 }
 

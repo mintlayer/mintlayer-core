@@ -43,7 +43,7 @@ use logging::log;
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
 use randomness::{seq::IteratorRandom, Rng, SliceRandom};
 
-use crate::config::P2pConfig;
+use crate::{config::P2pConfig, net::types::OutboundPeerRole};
 
 use self::{
     address_data::{AddressData, AddressStateTransitionTo},
@@ -404,16 +404,29 @@ impl<S: PeerDbStorage> PeerDb<S> {
 
     /// Mark peer as connected
     ///
-    /// After `PeerManager` has established either an inbound or an outbound connection,
-    /// it informs the `PeerDb` about it.
-    pub fn outbound_peer_connected(&mut self, address: SocketAddress, rng: &mut impl Rng) {
-        self.change_address_state(address, AddressStateTransitionTo::Connected, rng);
+    /// After `PeerManager` has established an outbound connection, it informs `PeerDb` about it.
+    pub fn outbound_peer_connected(
+        &mut self,
+        address: SocketAddress,
+        peer_role: OutboundPeerRole,
+        rng: &mut impl Rng,
+    ) {
+        self.change_address_state(
+            address,
+            AddressStateTransitionTo::Connected { peer_role },
+            rng,
+        );
         self.move_addr_to_tried(&address);
     }
 
     /// Handle peer disconnect event with unspecified reason
     pub fn outbound_peer_disconnected(&mut self, address: SocketAddress, rng: &mut impl Rng) {
         self.change_address_state(address, AddressStateTransitionTo::Disconnected, rng);
+    }
+
+    /// Report that the peer has sent us a message other than the one indicating an intent to disconnect.
+    pub fn outbound_peer_had_activity(&mut self, address: SocketAddress, rng: &mut impl Rng) {
+        self.change_address_state(address, AddressStateTransitionTo::HadActivity, rng);
     }
 
     pub fn remove_address(&mut self, address: &SocketAddress) {
@@ -658,6 +671,9 @@ pub trait PeerDbInterface {
     fn is_address_discouraged(&self, address: &BannableAddress) -> bool;
 
     fn peer_discovered(&mut self, address: SocketAddress);
+
+    fn address_data(&self, address: &SocketAddress) -> Option<&AddressData>;
+    fn address_data_mut(&mut self, address: &SocketAddress) -> Option<&mut AddressData>;
 }
 
 impl<S: PeerDbStorage> PeerDbInterface for PeerDb<S> {
@@ -671,6 +687,14 @@ impl<S: PeerDbStorage> PeerDbInterface for PeerDb<S> {
 
     fn peer_discovered(&mut self, address: SocketAddress) {
         self.peer_discovered(address);
+    }
+
+    fn address_data(&self, address: &SocketAddress) -> Option<&AddressData> {
+        self.addresses.get(address)
+    }
+
+    fn address_data_mut(&mut self, address: &SocketAddress) -> Option<&mut AddressData> {
+        self.addresses.get_mut(address)
     }
 }
 

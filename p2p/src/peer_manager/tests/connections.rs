@@ -70,7 +70,7 @@ use crate::{
         tests::{
             get_connected_peers, make_peer_manager, make_standalone_peer_manager, run_peer_manager,
             utils::{
-                expect_cmd_connect_to, expect_cmd_connect_to_one_of,
+                connection_closed, expect_cmd_connect_to, expect_cmd_connect_to_one_of,
                 inbound_block_relay_peer_accepted_by_backend, make_full_relay_peer_info,
                 mutate_peer_manager, outbound_full_relay_peer_accepted_by_backend,
                 query_peer_manager, recv_command_advance_time, start_manually_connecting,
@@ -2037,11 +2037,7 @@ async fn feeler_connections_test_impl(seed: Seed) {
                 }
             );
 
-            conn_event_sender
-                .send(ConnectivityEvent::ConnectionClosed {
-                    peer_id: cur_peer_id,
-                })
-                .unwrap();
+            connection_closed(&conn_event_sender, cur_peer_id);
 
             successful_conn_addresses.insert(addr);
             had_successful_feelers = true;

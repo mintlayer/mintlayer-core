@@ -136,7 +136,11 @@ where
         Ok(self.cmd_sender.send(types::Command::Disconnect { peer_id, reason })?)
     }
 
-    fn send_message(&mut self, peer_id: PeerId, message: PeerManagerMessage) -> crate::Result<()> {
+    fn send_peer_manager_message(
+        &mut self,
+        peer_id: PeerId,
+        message: PeerManagerMessage,
+    ) -> crate::Result<()> {
         Ok(self.cmd_sender.send(types::Command::SendMessage {
             peer_id,
             message: message.into(),

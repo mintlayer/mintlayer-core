@@ -17,6 +17,9 @@ use std::time::Duration;
 
 use common::primitives::time::Time;
 use randomness::Rng;
+use utils::debug_panic_or_log;
+
+use crate::net::types::OutboundPeerRole;
 
 /// Maximum delay between reconnection attempts to reserved nodes
 const MAX_DELAY_RESERVED: Duration = Duration::from_secs(360);
@@ -43,9 +46,17 @@ pub const PURGE_REACHABLE_FAIL_COUNT: u32 =
 /// -ln(0.0000000000000035527136788) which is about 33.
 const MAX_DELAY_FACTOR: u32 = 30;
 
+// Note: AddressState/AddressData only track outbound connections, so if an inbound connection exists
+// from a given address, its AddressState may still be Disconnected or even Unreachable.
 #[derive(Debug, Clone)]
 pub enum AddressState {
-    Connected {},
+    Connected {
+        /// Whether the peer has shown some activity (i.e. sent us any message except for WillDisconnect)
+        /// during this connection.
+        had_activity: bool,
+
+        peer_role: OutboundPeerRole,
+    },
 
     Disconnected {
         /// Whether the address was reachable at least once.
@@ -66,30 +77,26 @@ pub enum AddressState {
     },
 }
 
-#[derive(Copy, Clone, Debug)]
-// Update `ALL_TRANSITIONS` if a new transition is added!
+#[derive(Copy, Clone, Debug, strum::EnumDiscriminants)]
+#[strum_discriminants(name(AddressStateTransitionToTag), derive(strum::EnumIter))]
 pub enum AddressStateTransitionTo {
-    Connected,
+    Connected { peer_role: OutboundPeerRole },
+    HadActivity,
     Disconnected,
     ConnectionFailed,
     SetReserved,
     UnsetReserved,
 }
 
-#[cfg(test)]
-pub const ALL_TRANSITIONS: [AddressStateTransitionTo; 5] = [
-    AddressStateTransitionTo::Connected,
-    AddressStateTransitionTo::Disconnected,
-    AddressStateTransitionTo::ConnectionFailed,
-    AddressStateTransitionTo::SetReserved,
-    AddressStateTransitionTo::UnsetReserved,
-];
-
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct AddressData {
     state: AddressState,
 
     reserved: bool,
+
+    /// The number of consecutive successful completed connections during which the peer had no activity
+    /// (i.e. hadn't sent us any message except for WillDisconnect).
+    connections_without_activity_count: u32,
 }
 
 impl AddressData {
@@ -101,6 +108,7 @@ impl AddressData {
                 next_connect_after: now,
             },
             reserved,
+            connections_without_activity_count: 0,
         }
     }
 
@@ -108,14 +116,26 @@ impl AddressData {
         &self.state
     }
 
+    #[cfg(test)]
+    pub fn state_mut(&mut self) -> &mut AddressState {
+        &mut self.state
+    }
+
     pub fn reserved(&self) -> bool {
         self.reserved
+    }
+
+    pub fn connections_without_activity_count(&self) -> u32 {
+        self.connections_without_activity_count
     }
 
     /// Returns true when it is time to attempt a new outbound connection
     pub fn connect_now(&self, now: Time) -> bool {
         match self.state {
-            AddressState::Connected {} => false,
+            AddressState::Connected {
+                had_activity: _,
+                peer_role: _,
+            } => false,
 
             // Once a peer is disconnected by the RPC command, it should remain disconnected
             // (at least until the RPC requests to connect). Otherwise, users may be surprised
@@ -133,7 +153,10 @@ impl AddressData {
     /// Returns true if the address should be kept in memory
     pub fn retain(&self, now: Time) -> bool {
         match self.state {
-            AddressState::Connected {} => true,
+            AddressState::Connected {
+                had_activity: _,
+                peer_role: _,
+            } => true,
             AddressState::Disconnected {
                 was_reachable: _,
                 fail_count: _,
@@ -151,7 +174,7 @@ impl AddressData {
         matches!(self.state, AddressState::Unreachable { .. })
     }
 
-    fn next_connect_delay(fail_count: u32, reserved: bool) -> Duration {
+    fn next_connect_delay(effective_fail_count: u32, reserved: bool) -> Duration {
         let max_delay = if reserved {
             MAX_DELAY_RESERVED
         } else {
@@ -160,14 +183,25 @@ impl AddressData {
 
         // 10, 20, 40, 80... seconds
         std::cmp::min(
-            Duration::from_secs(10).saturating_mul(2u32.saturating_pow(fail_count)),
+            Duration::from_secs(10).saturating_mul(2u32.saturating_pow(effective_fail_count)),
             max_delay,
         )
     }
 
-    fn next_connect_time(now: Time, fail_count: u32, reserved: bool, rng: &mut impl Rng) -> Time {
+    fn next_connect_time(
+        now: Time,
+        fail_count: u32,
+        connections_without_activity_count: u32,
+        reserved: bool,
+        rng: &mut impl Rng,
+    ) -> Time {
+        // Note: fail_count is reset whenever any successful outbound connection is made, but
+        // connections_without_activity_count is not reset when an outbound connection fails,
+        // so it's possible for both of them to be non-zero.
+        let effective_fail_count = std::cmp::max(fail_count, connections_without_activity_count);
+
         let factor = utils::exp_rand::exponential_rand(rng).clamp(0.0, MAX_DELAY_FACTOR as f64);
-        let offset = Self::next_connect_delay(fail_count, reserved).mul_f64(factor);
+        let offset = Self::next_connect_delay(effective_fail_count, reserved).mul_f64(factor);
         (now + offset).expect("Unexpected time addition overflow")
     }
 
@@ -178,35 +212,125 @@ impl AddressData {
         rng: &mut impl Rng,
     ) {
         self.state = match transition {
-            AddressStateTransitionTo::Connected => match self.state {
-                AddressState::Connected {} => unreachable!(),
+            AddressStateTransitionTo::Connected { peer_role } => match self.state {
+                AddressState::Connected {
+                    had_activity: _,
+                    peer_role: _,
+                } => {
+                    debug_panic_or_log!(
+                        "Unexpected address state transition: Connected -> Connected"
+                    );
+                    self.state.clone()
+                }
                 AddressState::Disconnected {
                     fail_count: _,
                     next_connect_after: _,
                     was_reachable: _,
-                } => AddressState::Connected {},
+                } => AddressState::Connected {
+                    had_activity: false,
+                    peer_role,
+                },
                 AddressState::Unreachable { erase_after: _ } => {
                     // Connection to an `Unreachable` node may be requested by RPC at any moment
-                    AddressState::Connected {}
+                    AddressState::Connected {
+                        had_activity: false,
+                        peer_role,
+                    }
                 }
             },
 
-            AddressStateTransitionTo::Disconnected => match self.state {
-                AddressState::Connected {} => AddressState::Disconnected {
-                    fail_count: 0,
-                    next_connect_after: Self::next_connect_time(now, 0, self.reserved, rng),
-                    was_reachable: true,
+            AddressStateTransitionTo::HadActivity => match self.state {
+                AddressState::Connected {
+                    had_activity: _,
+                    peer_role,
+                } => AddressState::Connected {
+                    had_activity: true,
+                    peer_role,
                 },
                 AddressState::Disconnected {
                     fail_count: _,
                     next_connect_after: _,
                     was_reachable: _,
-                } => unreachable!(),
-                AddressState::Unreachable { erase_after: _ } => unreachable!(),
+                } => {
+                    debug_panic_or_log!(
+                        "Unexpected address state transition: Disconnected -> HadActivity"
+                    );
+                    self.state.clone()
+                }
+                AddressState::Unreachable { erase_after: _ } => {
+                    debug_panic_or_log!(
+                        "Unexpected address state transition: Unreachable -> HadActivity"
+                    );
+                    self.state.clone()
+                }
+            },
+
+            AddressStateTransitionTo::Disconnected => match self.state {
+                AddressState::Connected {
+                    had_activity,
+                    peer_role,
+                } => {
+                    if had_activity {
+                        self.connections_without_activity_count = 0;
+                    } else {
+                        // Note:
+                        // 1) We don't increase the counter for manual connections.
+                        // 2) Since `is_message_exchange_expected` doesn't know the actual services
+                        //    that the peer provides, it's technically possible to punish an
+                        //    "innocent" peer here, e.g. when the connection type is supposed to involve
+                        //    block exchange, but the peer's actual services don't include Blocks.
+                        //    However:
+                        //    a) The worst punishment it can get is that the next connection will be
+                        //       postponed for (roughly) MAX_DELAY_REACHABLE, which is currently 1 hour.
+                        //    b) Such a peer will be rather useless anyway.
+                        //    c) The connection has to be short enough, so that even a single PingRequest message
+                        //       (which requires a response) could not be sent.
+                        //    So it's not a big deal.
+                        if peer_role.is_message_exchange_expected() && !peer_role.is_manual() {
+                            self.connections_without_activity_count += 1;
+                        }
+                    }
+
+                    AddressState::Disconnected {
+                        fail_count: 0,
+                        next_connect_after: Self::next_connect_time(
+                            now,
+                            0,
+                            self.connections_without_activity_count,
+                            self.reserved,
+                            rng,
+                        ),
+                        was_reachable: true,
+                    }
+                }
+                AddressState::Disconnected {
+                    fail_count: _,
+                    next_connect_after: _,
+                    was_reachable: _,
+                } => {
+                    debug_panic_or_log!(
+                        "Unexpected address state transition: Disconnected -> Disconnected"
+                    );
+                    self.state.clone()
+                }
+                AddressState::Unreachable { erase_after: _ } => {
+                    debug_panic_or_log!(
+                        "Unexpected address state transition: Unreachable -> Disconnected"
+                    );
+                    self.state.clone()
+                }
             },
 
             AddressStateTransitionTo::ConnectionFailed => match self.state {
-                AddressState::Connected {} => unreachable!(),
+                AddressState::Connected {
+                    had_activity: _,
+                    peer_role: _,
+                } => {
+                    debug_panic_or_log!(
+                        "Unexpected address state transition: Connected -> ConnectionFailed"
+                    );
+                    self.state.clone()
+                }
                 AddressState::Disconnected {
                     fail_count,
                     next_connect_after: _,
@@ -218,6 +342,7 @@ impl AddressData {
                             next_connect_after: Self::next_connect_time(
                                 now,
                                 fail_count + 1,
+                                self.connections_without_activity_count,
                                 self.reserved,
                                 rng,
                             ),
@@ -236,6 +361,7 @@ impl AddressData {
                             next_connect_after: Self::next_connect_time(
                                 now,
                                 fail_count + 1,
+                                self.connections_without_activity_count,
                                 self.reserved,
                                 rng,
                             ),
@@ -254,7 +380,13 @@ impl AddressData {
 
                 // Change to Disconnected if currently Unreachable
                 match self.state {
-                    AddressState::Connected {} => AddressState::Connected {},
+                    AddressState::Connected {
+                        had_activity,
+                        peer_role,
+                    } => AddressState::Connected {
+                        had_activity,
+                        peer_role,
+                    },
                     AddressState::Disconnected {
                         was_reachable,
                         fail_count,
@@ -265,6 +397,7 @@ impl AddressData {
                         next_connect_after: Self::next_connect_time(
                             now,
                             fail_count,
+                            self.connections_without_activity_count,
                             self.reserved,
                             rng,
                         ),
@@ -272,7 +405,13 @@ impl AddressData {
                     // Reserved nodes should not be in the `Unreachable` state
                     AddressState::Unreachable { erase_after: _ } => AddressState::Disconnected {
                         fail_count: 0,
-                        next_connect_after: Self::next_connect_time(now, 0, self.reserved, rng),
+                        next_connect_after: Self::next_connect_time(
+                            now,
+                            0,
+                            self.connections_without_activity_count,
+                            self.reserved,
+                            rng,
+                        ),
                         was_reachable: false,
                     },
                 }
@@ -283,7 +422,13 @@ impl AddressData {
 
                 // Do not change the state
                 match self.state {
-                    AddressState::Connected {} => AddressState::Connected {},
+                    AddressState::Connected {
+                        had_activity,
+                        peer_role,
+                    } => AddressState::Connected {
+                        had_activity,
+                        peer_role,
+                    },
                     AddressState::Disconnected {
                         was_reachable,
                         fail_count,

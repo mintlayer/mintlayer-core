@@ -21,6 +21,7 @@ mod discouragement;
 mod eviction;
 mod peer_types;
 mod ping;
+mod unsuccessful_connection_counter_update;
 pub mod utils;
 mod whitelist;
 
@@ -245,13 +246,18 @@ async fn send_and_sync(
     cmd_receiver: &mut UnboundedReceiver<Command>,
     rng: &mut impl Rng,
 ) {
-    conn_event_sender.send(ConnectivityEvent::Message { peer_id, message }).unwrap();
+    conn_event_sender
+        .send(ConnectivityEvent::Message {
+            peer_id,
+            message: message.into(),
+        })
+        .unwrap();
 
     let sent_nonce = rng.gen();
     conn_event_sender
         .send(ConnectivityEvent::Message {
             peer_id,
-            message: PeerManagerMessage::PingRequest(PingRequest { nonce: sent_nonce }),
+            message: PeerManagerMessage::PingRequest(PingRequest { nonce: sent_nonce }).into(),
         })
         .unwrap();
 
@@ -266,7 +272,7 @@ async fn send_and_sync(
     conn_event_sender
         .send(ConnectivityEvent::Message {
             peer_id,
-            message: PeerManagerMessage::PingResponse(PingResponse { nonce }),
+            message: PeerManagerMessage::PingResponse(PingResponse { nonce }).into(),
         })
         .unwrap();
     assert_eq!(nonce, sent_nonce);

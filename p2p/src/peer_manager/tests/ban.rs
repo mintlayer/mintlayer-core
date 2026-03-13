@@ -478,7 +478,8 @@ async fn banned_address_is_not_announced(#[case] seed: Seed) {
             peer_id: peer1_id,
             message: PeerManagerMessage::AnnounceAddrRequest(AnnounceAddrRequest {
                 address: banned_addr.as_peer_address(),
-            }),
+            })
+            .into(),
         })
         .unwrap();
 
@@ -490,7 +491,8 @@ async fn banned_address_is_not_announced(#[case] seed: Seed) {
             peer_id: peer1_id,
             message: PeerManagerMessage::AnnounceAddrRequest(AnnounceAddrRequest {
                 address: normal_addr.as_peer_address(),
-            }),
+            })
+            .into(),
         })
         .unwrap();
 
@@ -595,7 +597,7 @@ async fn banned_address_not_in_addr_response(#[case] seed: Seed) {
     conn_event_sender
         .send(ConnectivityEvent::Message {
             peer_id,
-            message: PeerManagerMessage::AddrListRequest(AddrListRequest {}),
+            message: PeerManagerMessage::AddrListRequest(AddrListRequest {}).into(),
         })
         .unwrap();
 
