@@ -1,3 +1,18 @@
+// Copyright (c) 2022-2026 RBB S.r.l
+// opensource@mintlayer.org
+// SPDX-License-Identifier: MIT
+// Licensed under the MIT License;
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 // Copyright (c) 2022 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
@@ -13,7 +28,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::time::Duration;
+use std::{
+    net::{Ipv4Addr, SocketAddr, SocketAddrV4},
+    time::Duration,
+};
 
 use futures::FutureExt;
 
@@ -90,28 +108,27 @@ where
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
     let p2p_config = Arc::new(test_p2p_config());
     let (peer_event_sender, mut peer_event_receiver) = mpsc::channel(TEST_CHAN_BUF_SIZE);
-    let (_backend_event_sender, backend_event_receiver) = mpsc::unbounded_channel();
     let cur_time = Arc::new(SeqCstAtomicU64::new(123456));
     let time_getter = mocked_time_getter_seconds(cur_time);
     let peer_id = PeerId::new();
 
-    let mut peer = Peer::<T>::new(
+    let (mut socket1_reader, mut socket1_writer) =
+        new_message_stream(socket1, Some(*p2p_config.protocol_config.max_message_size));
+    let handshake_handler = HandshakeHandler::new(
         peer_id,
+        SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0)).into(),
         ConnectionInfo::Inbound,
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
-        socket1,
-        peer_event_sender,
-        backend_event_receiver,
         TEST_PROTOCOL_VERSION.into(),
         time_getter,
-    )
-    .unwrap();
+    );
 
     let handle = tokio_spawn_in_current_tracing_span(
         async move {
-            peer.handshake().await.unwrap();
-            peer
+            handshake_handler
+                .run_handshake(&peer_event_sender, &mut socket1_reader, &mut socket1_writer)
+                .await
         },
         "",
     );
@@ -147,7 +164,9 @@ where
     )
     .await;
     expect_sync_event(&mut peer_event_receiver).await;
-    let _peer = handle.await.unwrap();
+
+    let common_protocol_version = handle.await.unwrap().unwrap();
+    assert_eq!(common_protocol_version.0, TEST_PROTOCOL_VERSION);
 }
 
 #[tracing::instrument]
@@ -177,31 +196,30 @@ where
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
     let p2p_config = Arc::new(test_p2p_config());
     let (peer_event_sender, mut peer_event_receiver) = mpsc::channel(TEST_CHAN_BUF_SIZE);
-    let (_backend_event_sender, backend_event_receiver) = mpsc::unbounded_channel();
     let cur_time = Arc::new(SeqCstAtomicU64::new(123456));
     let time_getter = mocked_time_getter_seconds(cur_time);
     let peer_id = PeerId::new();
 
-    let mut peer = Peer::<T>::new(
+    let (mut socket1_reader, mut socket1_writer) =
+        new_message_stream(socket1, Some(*p2p_config.protocol_config.max_message_size));
+    let handshake_handler = HandshakeHandler::new(
         peer_id,
+        SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0)).into(),
         ConnectionInfo::Outbound {
             handshake_nonce: 1,
             local_services_override: None,
         },
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
-        socket1,
-        peer_event_sender,
-        backend_event_receiver,
         TEST_PROTOCOL_VERSION.into(),
         time_getter,
-    )
-    .unwrap();
+    );
 
     let handle = tokio_spawn_in_current_tracing_span(
         async move {
-            peer.handshake().await.unwrap();
-            peer
+            handshake_handler
+                .run_handshake(&peer_event_sender, &mut socket1_reader, &mut socket1_writer)
+                .await
         },
         "",
     );
@@ -235,7 +253,9 @@ where
         },
     )
     .await;
-    let _peer = handle.await.unwrap();
+
+    let common_protocol_version = handle.await.unwrap().unwrap();
+    assert_eq!(common_protocol_version.0, TEST_PROTOCOL_VERSION);
 }
 
 #[tracing::instrument]
@@ -265,26 +285,30 @@ where
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
     let p2p_config = Arc::new(test_p2p_config());
     let (peer_event_sender, mut peer_event_receiver) = mpsc::channel(TEST_CHAN_BUF_SIZE);
-    let (_backend_event_sender, backend_event_receiver) = mpsc::unbounded_channel();
     let cur_time = Arc::new(SeqCstAtomicU64::new(123456));
     let time_getter = mocked_time_getter_seconds(Arc::clone(&cur_time));
     let peer_id = PeerId::new();
 
-    let mut peer = Peer::<T>::new(
+    let (mut socket1_reader, mut socket1_writer) =
+        new_message_stream(socket1, Some(*p2p_config.protocol_config.max_message_size));
+    let handshake_handler = HandshakeHandler::new(
         peer_id,
+        SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0)).into(),
         ConnectionInfo::Inbound,
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
-        socket1,
-        peer_event_sender,
-        backend_event_receiver,
         TEST_PROTOCOL_VERSION.into(),
         time_getter,
-    )
-    .unwrap();
+    );
 
-    let handle = tokio_spawn_in_current_tracing_span(async move { peer.handshake().await }, "");
-
+    let handle = tokio_spawn_in_current_tracing_span(
+        async move {
+            handshake_handler
+                .run_handshake(&peer_event_sender, &mut socket1_reader, &mut socket1_writer)
+                .await
+        },
+        "",
+    );
     let (mut socket2_reader, mut socket2_writer) =
         new_message_stream(socket2, Some(*p2p_config.protocol_config.max_message_size));
     assert!(socket2_reader.recv().now_or_never().is_none());
@@ -304,7 +328,9 @@ where
 
     expect_some_peer_info_received_event(&mut peer_event_receiver).await;
     expect_sync_event(&mut peer_event_receiver).await;
-    assert_eq!(handle.await.unwrap(), Ok(()));
+
+    let common_protocol_version = handle.await.unwrap().unwrap();
+    assert_eq!(common_protocol_version.0, TEST_PROTOCOL_VERSION);
 }
 
 #[tracing::instrument]
@@ -334,25 +360,30 @@ where
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
     let p2p_config = Arc::new(test_p2p_config());
     let (peer_event_sender, _peer_event_receiver) = mpsc::channel(TEST_CHAN_BUF_SIZE);
-    let (_backend_event_sender, backend_event_receiver) = mpsc::unbounded_channel();
     let cur_time = Arc::new(SeqCstAtomicU64::new(123456));
     let time_getter = mocked_time_getter_seconds(cur_time);
     let peer_id = PeerId::new();
 
-    let mut peer = Peer::<T>::new(
+    let (mut socket1_reader, mut socket1_writer) =
+        new_message_stream(socket1, Some(*p2p_config.protocol_config.max_message_size));
+    let handshake_handler = HandshakeHandler::new(
         peer_id,
+        SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0)).into(),
         ConnectionInfo::Inbound,
         chain_config,
         Arc::clone(&p2p_config),
-        socket1,
-        peer_event_sender,
-        backend_event_receiver,
         TEST_PROTOCOL_VERSION.into(),
         time_getter,
-    )
-    .unwrap();
+    );
 
-    let handle = tokio_spawn_in_current_tracing_span(async move { peer.handshake().await }, "");
+    let handle = tokio_spawn_in_current_tracing_span(
+        async move {
+            handshake_handler
+                .run_handshake(&peer_event_sender, &mut socket1_reader, &mut socket1_writer)
+                .await
+        },
+        "",
+    );
 
     let (mut socket2_reader, mut socket2_writer) =
         new_message_stream(socket2, Some(*p2p_config.protocol_config.max_message_size));
@@ -455,26 +486,31 @@ async fn handshake_timestamp_verification(
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
     let p2p_config = Arc::new(test_p2p_config());
     let (peer_event_sender, _peer_event_receiver) = mpsc::channel(TEST_CHAN_BUF_SIZE);
-    let (_backend_event_sender, backend_event_receiver) = mpsc::unbounded_channel();
     let peer_id = PeerId::new();
 
-    let mut peer = Peer::<MpscChannelTransport>::new(
+    let (mut socket1_reader, mut socket1_writer) =
+        new_message_stream(socket1, Some(*p2p_config.protocol_config.max_message_size));
+    let handshake_handler = HandshakeHandler::new(
         peer_id,
+        SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0)).into(),
         ConnectionInfo::Outbound {
             handshake_nonce: 1,
             local_services_override: None,
         },
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
-        socket1,
-        peer_event_sender,
-        backend_event_receiver,
         TEST_PROTOCOL_VERSION.into(),
         peer_time_getter,
-    )
-    .unwrap();
+    );
 
-    let handle = tokio_spawn_in_current_tracing_span(async move { peer.run_handshake().await }, "");
+    let handle = tokio_spawn_in_current_tracing_span(
+        async move {
+            handshake_handler
+                .run_handshake(&peer_event_sender, &mut socket1_reader, &mut socket1_writer)
+                .await
+        },
+        "",
+    );
 
     // Advance both peer clocks and tokio time by given delay in 200ms increments to simulate
     // the flow of time. Doing this in one step makes the test result sensitive to the runtime
@@ -501,6 +537,6 @@ async fn handshake_timestamp_verification(
         }))
         .await;
 
-    let result = handle.await.unwrap();
+    let result = handle.await.unwrap().map(|_| ());
     result_check(result);
 }

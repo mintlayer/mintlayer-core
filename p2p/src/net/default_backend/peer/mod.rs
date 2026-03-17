@@ -13,18 +13,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod handshake_handler;
+#[cfg(test)]
+mod tests;
+
 use std::sync::Arc;
 
-use tokio::{
-    sync::{mpsc, oneshot},
-    time::timeout,
-};
+use tokio::sync::mpsc;
 
 use chainstate::ban_score::BanScore as _;
-use common::{chain::ChainConfig, primitives::time::Time, time_getter::TimeGetter};
+use common::{chain::ChainConfig, time_getter::TimeGetter};
 use logging::log;
 use networking::transport::{
-    new_message_stream, ConnectedSocketInfo, MessageReader, MessageWriter, TransportSocket,
+    new_message_stream, ConnectedSocketInfo, MessageReader, MessageWriter, PeerStream,
+    TransportSocket,
 };
 use p2p_types::{peer_address::PeerAddress, services::Services, socket_addr_ext::SocketAddrExt};
 use serialization::Encode as _;
@@ -32,20 +34,20 @@ use serialization::Encode as _;
 use crate::{
     config::P2pConfig,
     disconnection_reason::DisconnectionReason,
-    error::{ConnectionValidationError, P2pError, PeerError, ProtocolError},
+    error::{P2pError, ProtocolError},
     message::{BlockSyncMessage, TransactionSyncMessage, WillDisconnectMessage},
     net::{
-        default_backend::types::{BackendEvent, MessageTag, PeerEvent},
+        default_backend::{
+            peer::handshake_handler::HandshakeHandler,
+            types::{BackendEvent, MessageTag, PeerEvent},
+        },
         types::PeerManagerMessageExt,
     },
-    protocol::{choose_common_protocol_version, ProtocolVersion, SupportedProtocolVersion},
+    protocol::ProtocolVersion,
     types::peer_id::PeerId,
 };
 
-use super::types::{
-    can_send_will_disconnect, peer_event, CategorizedMessage, HandshakeMessage, HandshakeNonce,
-    Message, P2pTimestamp,
-};
+use super::types::{can_send_will_disconnect, CategorizedMessage, HandshakeNonce, Message};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConnectionInfo {
@@ -85,15 +87,8 @@ pub struct Peer<T: TransportSocket> {
     /// overridden for testing purposes.
     node_protocol_version: ProtocolVersion,
 
-    /// The chosen common protocol version; available only after the handshake has completed.
-    common_protocol_version: Option<SupportedProtocolVersion>,
-
     /// Time getter
     time_getter: TimeGetter,
-
-    /// Will be set to true once at least one BlockSyncMessage or TransactionSyncMessage has been
-    /// received from the peer.
-    sync_message_received: bool,
 }
 
 impl<T> Peer<T>
@@ -129,280 +124,7 @@ where
             backend_event_receiver,
             node_protocol_version,
             time_getter,
-            common_protocol_version: None,
-            sync_message_received: false,
         })
-    }
-
-    fn validate_peer_time(
-        p2p_config: &P2pConfig,
-        local_time_start: Time,
-        local_time_end: Time,
-        remote_time: P2pTimestamp,
-    ) -> crate::Result<()> {
-        // TODO: If the node's clock is wrong and we disconnect peers,
-        // it can be trivial to isolate the node by connecting malicious nodes
-        // with the same invalid clock (while honest nodes can't connect).
-        // After that, the node is open to all kinds of attacks.
-
-        // We do not know at what point exactly the peer recorded its timestamp. However, we do
-        // know it was somewhere between the request was initiated and the response was received.
-        // We give the peer some leeway when it comes to network latency so the acceptable time is
-        // in the interval [`init_time - tolerance`, `recv_time + tolerance`].
-        //
-        // Since the distance between `init_time` and `recv_time` is bounded by the handshake
-        // timeout, the effective max clock diff between a node and any of its peers is:
-        // ```tolerance + (recv_time - init_time) <= tolerance + handshake_timeout```
-        //
-        // The effective tolerance of clock diff between any two peers the node is connected to is
-        // given by the span of the acceptable time interval: `handshake_timeout + 2 * tolerance`.
-
-        let max_offset = *p2p_config.max_clock_diff;
-        // Note: in tests max_clock_diff can be very large, e.g. larger than local_time_start's
-        // duration since epoch, so use saturating subtraction here.
-        let accepted_peer_time_start = local_time_start.saturating_duration_sub(max_offset);
-        let accepted_peer_time_end = (local_time_end + max_offset)
-            .expect("Local time plus a small offset should not overflow");
-        let accepted_peer_time = accepted_peer_time_start..=accepted_peer_time_end;
-
-        let remote_time = Time::from_duration_since_epoch(remote_time.as_duration_since_epoch());
-
-        utils::ensure!(
-            accepted_peer_time.contains(&remote_time),
-            P2pError::ConnectionValidationFailed(ConnectionValidationError::TimeDiff {
-                remote_time,
-                accepted_peer_time
-            }),
-        );
-
-        Ok(())
-    }
-
-    async fn maybe_send_will_disconnect_for_protocol_version(
-        &mut self,
-        reason: Option<DisconnectionReason>,
-        peer_protocol_version: ProtocolVersion,
-    ) -> crate::Result<()> {
-        if can_send_will_disconnect(peer_protocol_version) {
-            if let Some(reason) = reason {
-                log::debug!(
-                    "Sending WillDisconnect to peer {}, reason: {:?}",
-                    self.peer_id,
-                    reason
-                );
-                self.socket_writer
-                    .send(Message::WillDisconnect(WillDisconnectMessage {
-                        reason: reason.to_string(),
-                    }))
-                    .await?;
-            }
-        }
-
-        Ok(())
-    }
-
-    async fn maybe_send_will_disconnect(
-        &mut self,
-        reason: Option<DisconnectionReason>,
-    ) -> crate::Result<()> {
-        if let Some(common_protocol_version) = self.common_protocol_version {
-            self.maybe_send_will_disconnect_for_protocol_version(
-                reason,
-                common_protocol_version.into(),
-            )
-            .await?;
-        } else {
-            // Getting here means that the handshake hasn't been completed yet.
-            log::debug!(
-                "self.common_protocol_version is not set when attempting to send WillDisconnect"
-            );
-        }
-
-        Ok(())
-    }
-
-    /// Validate peer handshake info after Hello or HelloAck message has been received.
-    /// Set self.common_protocol_version.
-    async fn validate_handshake(
-        &mut self,
-        handshake_init_time: Time,
-        remote_time: P2pTimestamp,
-        peer_protocol_version: ProtocolVersion,
-    ) -> crate::Result<()> {
-        let recv_time = self.time_getter.get_time();
-        let result = (|| {
-            Self::validate_peer_time(
-                &self.p2p_config,
-                handshake_init_time,
-                recv_time,
-                remote_time,
-            )?;
-
-            choose_common_protocol_version(peer_protocol_version, self.node_protocol_version).ok_or(
-                P2pError::ConnectionValidationFailed(
-                    ConnectionValidationError::UnsupportedProtocol {
-                        peer_protocol_version,
-                    },
-                ),
-            )
-        })();
-
-        self.maybe_send_will_disconnect_for_protocol_version(
-            DisconnectionReason::from_result(&result, &self.p2p_config),
-            peer_protocol_version,
-        )
-        .await?;
-
-        self.common_protocol_version = Some(result?);
-
-        Ok(())
-    }
-
-    async fn handshake(&mut self) -> crate::Result<()> {
-        let init_time = self.time_getter.get_time();
-
-        // Sending the remote socket address makes no sense and can leak private information when using a proxy
-        let peer_address_to_send = if self.p2p_config.socks5_proxy.is_some() {
-            None
-        } else {
-            Some(self.peer_address.clone())
-        };
-
-        match self.connection_info {
-            ConnectionInfo::Inbound => {
-                let Message::Handshake(HandshakeMessage::Hello {
-                    protocol_version: peer_protocol_version,
-                    network,
-                    services: remote_services,
-                    user_agent,
-                    software_version,
-                    receiver_address: node_address_as_seen_by_peer,
-                    current_time: remote_time,
-                    handshake_nonce,
-                }) = self.socket_reader.recv().await?
-                else {
-                    return Err(P2pError::ProtocolError(ProtocolError::HandshakeExpected));
-                };
-
-                self.validate_handshake(init_time, remote_time, peer_protocol_version).await?;
-                let common_protocol_version = self
-                    .common_protocol_version
-                    .expect("common_protocol_version must be set by validate_handshake");
-
-                let local_services: Services = (*self.p2p_config.node_type).into();
-                let common_services = local_services & remote_services;
-
-                // Note: we send `PeerInfoReceived` to `Backend` before sending `HelloAck`
-                // to the remote peer. `Backend` expects to receive `PeerInfoReceived` before
-                // the outgoing connection has a chance to complete the handshake; specifically,
-                // it relies on this fact when detecting self-connections.
-                // Also note that we wait for the confirmation from `Backend` before sending
-                // `HelloAck` to the peer. Without it a race is possible during self-connection
-                // detection (which we've experienced in production), where the "outbound" part
-                // of a self-connection may still be able to complete the handshake before the
-                // "inbound" `PeerInfoReceived` manages to reach `Backend`.
-
-                self.peer_event_sender
-                    .send(PeerEvent::PeerInfoReceived(peer_event::PeerInfo {
-                        protocol_version: common_protocol_version,
-                        network,
-                        common_services,
-                        user_agent,
-                        software_version,
-                        node_address_as_seen_by_peer,
-                        handshake_nonce,
-                    }))
-                    .await?;
-
-                // Sync with `Backend` to ensure that the sent `PeerInfoReceived` has already been
-                // processed by it before we complete the handshake.
-                let (event_received_confirmation_sender, event_received_confirmation_receiver) =
-                    oneshot::channel();
-                self.peer_event_sender
-                    .send(PeerEvent::Sync {
-                        event_received_confirmation_sender,
-                    })
-                    .await?;
-                let _ = event_received_confirmation_receiver.await;
-
-                self.socket_writer
-                    .send(Message::Handshake(HandshakeMessage::HelloAck {
-                        protocol_version: self.node_protocol_version,
-                        network: *self.chain_config.magic_bytes(),
-                        user_agent: self.p2p_config.user_agent.clone(),
-                        software_version: *self.chain_config.software_version(),
-                        services: (*self.p2p_config.node_type).into(),
-                        receiver_address: peer_address_to_send,
-                        current_time: P2pTimestamp::from_time(self.time_getter.get_time()),
-                    }))
-                    .await?;
-            }
-            ConnectionInfo::Outbound {
-                handshake_nonce,
-                local_services_override,
-            } => {
-                let local_services =
-                    local_services_override.unwrap_or_else(|| (*self.p2p_config.node_type).into());
-
-                self.socket_writer
-                    .send(Message::Handshake(HandshakeMessage::Hello {
-                        protocol_version: self.node_protocol_version,
-                        network: *self.chain_config.magic_bytes(),
-                        services: local_services,
-                        user_agent: self.p2p_config.user_agent.clone(),
-                        software_version: *self.chain_config.software_version(),
-                        receiver_address: peer_address_to_send,
-                        current_time: P2pTimestamp::from_time(init_time),
-                        handshake_nonce,
-                    }))
-                    .await?;
-
-                let hello_response = self.socket_reader.recv().await?;
-
-                let Message::Handshake(HandshakeMessage::HelloAck {
-                    protocol_version: peer_protocol_version,
-                    network,
-                    user_agent,
-                    software_version,
-                    services: remote_services,
-                    receiver_address: node_address_as_seen_by_peer,
-                    current_time: remote_time,
-                }) = hello_response
-                else {
-                    if let Message::WillDisconnect(msg) = hello_response {
-                        log::info!(
-                            "Peer {} is going to disconnect us with the reason: '{}'",
-                            self.peer_id,
-                            msg.reason
-                        );
-                        return Err(P2pError::PeerError(PeerError::PeerWillDisconnect));
-                    } else {
-                        return Err(P2pError::ProtocolError(ProtocolError::HandshakeExpected));
-                    }
-                };
-
-                self.validate_handshake(init_time, remote_time, peer_protocol_version).await?;
-                let common_protocol_version = self
-                    .common_protocol_version
-                    .expect("common_protocol_version must be set by validate_handshake");
-
-                let common_services = local_services & remote_services;
-
-                self.peer_event_sender
-                    .send(PeerEvent::PeerInfoReceived(peer_event::PeerInfo {
-                        protocol_version: common_protocol_version,
-                        network,
-                        common_services,
-                        user_agent,
-                        software_version,
-                        node_address_as_seen_by_peer,
-                        handshake_nonce,
-                    }))
-                    .await?;
-            }
-        }
-
-        Ok(())
     }
 
     // Note: the channels used by this function to propagate messages to other parts of p2p
@@ -463,59 +185,49 @@ where
         Ok(())
     }
 
-    async fn run_handshake(&mut self) -> crate::Result<()> {
-        // handshake with remote peer and send peer's info to backend
-        let handshake_timeout = *self.p2p_config.peer_handshake_timeout;
-        let handshake_res = timeout(handshake_timeout, self.handshake()).await;
+    async fn run_impl(self) -> crate::Result<()> {
+        let Self {
+            peer_id,
+            peer_address,
+            chain_config,
+            p2p_config,
+            connection_info,
+            mut socket_reader,
+            mut socket_writer,
+            peer_event_sender,
+            mut backend_event_receiver,
+            node_protocol_version,
+            time_getter,
+        } = self;
 
-        match handshake_res {
-            Ok(Ok(())) => {}
-            Ok(Err(err)) => {
-                let ban_score = err.ban_score();
-                log::debug!(
-                    "Handshake failed for peer {}: {err} (error ban score = {})",
-                    self.peer_id,
-                    ban_score
-                );
+        let handshake_handler = HandshakeHandler::new(
+            peer_id,
+            peer_address,
+            connection_info,
+            chain_config,
+            Arc::clone(&p2p_config),
+            node_protocol_version,
+            time_getter,
+        );
 
-                if ban_score > 0 {
-                    let send_result = self
-                        .peer_event_sender
-                        .send(PeerEvent::MisbehavedOnHandshake { error: err.clone() })
-                        .await;
-                    if let Err(send_error) = send_result {
-                        log::error!(
-                            "Cannot send PeerEvent::MisbehavedOnHandshake for peer {}: {}",
-                            self.peer_id,
-                            send_error
-                        );
-                    }
-                }
-
-                return Err(err);
-            }
-            Err(_) => {
-                log::debug!("handshake timeout for peer {}", self.peer_id);
-                return Err(P2pError::ProtocolError(ProtocolError::Unresponsive));
-            }
-        }
-
-        Ok(())
-    }
-
-    async fn run_impl(&mut self) -> crate::Result<()> {
         // Run the handshake sequence first
-        self.run_handshake().await?;
+        let common_protocol_version = handshake_handler
+            .run_handshake(&peer_event_sender, &mut socket_reader, &mut socket_writer)
+            .await?;
 
         // The channel to the sync manager peer task (set when the peer is accepted)
         let mut sync_msg_senders_opt = None;
+
+        // Will be set to true once at least one BlockSyncMessage or TransactionSyncMessage has been
+        // received from the peer.
+        let mut sync_message_received = false;
 
         loop {
             tokio::select! {
                 // Sending messages should have higher priority
                 biased;
 
-                event = self.backend_event_receiver.recv() => match event.ok_or(P2pError::ChannelClosed)? {
+                event = backend_event_receiver.recv() => match event.ok_or(P2pError::ChannelClosed)? {
                     BackendEvent::Accepted{ block_sync_msg_sender, transaction_sync_msg_sender } => {
                         sync_msg_senders_opt = Some((block_sync_msg_sender, transaction_sync_msg_sender));
                     },
@@ -523,36 +235,36 @@ where
                         let message_tag: MessageTag = (&*message).into();
                         log::debug!("Sending message with tag {message_tag:?} and encoded size {}", message.encoded_size());
 
-                        self.socket_writer.send(*message).await?;
-                    }
+                        socket_writer.send(*message).await?
+                    },
                     BackendEvent::Disconnect {reason} => {
-                        log::debug!("Disconnection requested for peer {}, the reason is {:?}", self.peer_id, reason);
-                        self.maybe_send_will_disconnect(reason).await?;
+                        log::debug!("Disconnection requested for peer {}, the reason is {:?}", peer_id, reason);
+                        maybe_send_will_disconnect(peer_id, reason, common_protocol_version.0.into(), &mut socket_writer).await?;
                         return Ok(());
                     },
                 },
-                event = self.socket_reader.recv(), if sync_msg_senders_opt.is_some() => match event {
+                event = socket_reader.recv(), if sync_msg_senders_opt.is_some() => match event {
                     Ok(message) => {
                         let sync_msg_senders = sync_msg_senders_opt.as_mut().expect("sync_msg_senders_opt is some");
                         Self::handle_socket_msg(
-                            self.peer_id,
+                            peer_id,
                             message,
-                            &self.peer_event_sender,
+                            &peer_event_sender,
                             &sync_msg_senders.0,
                             &sync_msg_senders.1,
-                            &mut self.sync_message_received
+                            &mut sync_message_received,
                         ).await?;
                     }
                     Err(err) => {
-                        log::info!("Connection closed for peer {}, reason: {err:?}", self.peer_id);
+                        log::info!("Connection closed for peer {}, reason {err:?}", peer_id);
 
                         let err = P2pError::NetworkingError(err);
-                        self.maybe_send_will_disconnect(DisconnectionReason::from_error(&err, &self.p2p_config)).await?;
+                        let disconnection_reason = DisconnectionReason::from_error(&err, &p2p_config);
+                        maybe_send_will_disconnect(peer_id, disconnection_reason, common_protocol_version.0.into(), &mut socket_writer).await?;
 
                         let ban_score = err.ban_score();
                         if ban_score > 0 {
-                            let send_result = self
-                                .peer_event_sender
+                            let send_result = peer_event_sender
                                 .send(PeerEvent::Misbehaved { error: err })
                                 .await;
                             if let Err(send_error) = send_result {
@@ -571,16 +283,18 @@ where
         }
     }
 
-    pub async fn run(mut self) -> crate::Result<()> {
+    pub async fn run(self) -> crate::Result<()> {
+        let peer_id = self.peer_id;
+        let peer_event_sender = self.peer_event_sender.clone();
         let run_result = self.run_impl().await;
-        let send_result = self.peer_event_sender.send(PeerEvent::ConnectionClosed).await;
+        let send_result = peer_event_sender.send(PeerEvent::ConnectionClosed).await;
 
         if let Err(send_error) = send_result {
             // Note: this situation is likely to happen if the connection is already closed,
             // so it's not really an error.
             log::debug!(
                 "Unable to send PeerEvent::ConnectionClosed to Backend for peer {}: {}",
-                self.peer_id,
+                peer_id,
                 send_error
             );
         }
@@ -589,5 +303,26 @@ where
     }
 }
 
-#[cfg(test)]
-mod tests;
+async fn maybe_send_will_disconnect<S: PeerStream>(
+    peer_id: PeerId,
+    reason: Option<DisconnectionReason>,
+    peer_protocol_version: ProtocolVersion,
+    socket_writer: &mut MessageWriter<S, Message>,
+) -> crate::Result<()> {
+    if can_send_will_disconnect(peer_protocol_version) {
+        if let Some(reason) = reason {
+            log::debug!(
+                "Sending WillDisconnect to peer {}, reason: {:?}",
+                peer_id,
+                reason
+            );
+            socket_writer
+                .send(Message::WillDisconnect(WillDisconnectMessage {
+                    reason: reason.to_string(),
+                }))
+                .await?;
+        }
+    }
+
+    Ok(())
+}
