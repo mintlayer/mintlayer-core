@@ -320,7 +320,7 @@ mod tests {
     use randomness::Rng;
     use test_utils::random::{gen_random_bytes, Seed};
 
-    use crate::transport::BufferedTranscoder;
+    use crate::transport::new_message_stream;
 
     use super::*;
 
@@ -346,11 +346,12 @@ mod tests {
         let message_size = rng.gen_range(128..1024);
 
         let message = gen_random_bytes(&mut rng, 1, message_size);
-        let mut peer_stream = BufferedTranscoder::new(peer_stream, Some(message.encoded_size()));
-        peer_stream.send(message.clone()).await.unwrap();
+        let (_, mut peer_stream_writer) =
+            new_message_stream(peer_stream, Some(message.encoded_size()));
+        peer_stream_writer.send(message.clone()).await.unwrap();
 
-        let mut server_stream =
-            BufferedTranscoder::<_, Vec<u8>>::new(server_stream, Some(message.encoded_size()));
-        assert_eq!(server_stream.recv().await.unwrap(), message);
+        let (mut server_stream_reader, _) =
+            new_message_stream::<_, Vec<u8>>(server_stream, Some(message.encoded_size()));
+        assert_eq!(server_stream_reader.recv().await.unwrap(), message);
     }
 }

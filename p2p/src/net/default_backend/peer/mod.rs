@@ -20,11 +20,13 @@ use tokio::{
     time::timeout,
 };
 
-use chainstate::ban_score::BanScore;
+use chainstate::ban_score::BanScore as _;
 use common::{chain::ChainConfig, primitives::time::Time, time_getter::TimeGetter};
 use logging::log;
-use networking::transport::{BufferedTranscoder, ConnectedSocketInfo, TransportSocket};
-use p2p_types::{services::Services, socket_addr_ext::SocketAddrExt};
+use networking::transport::{
+    new_message_stream, ConnectedSocketInfo, MessageReader, MessageWriter, TransportSocket,
+};
+use p2p_types::{peer_address::PeerAddress, services::Services, socket_addr_ext::SocketAddrExt};
 use serialization::Encode as _;
 
 use crate::{
@@ -58,6 +60,9 @@ pub struct Peer<T: TransportSocket> {
     /// Peer ID of the remote node
     peer_id: PeerId,
 
+    /// Peer's remote address
+    peer_address: PeerAddress,
+
     /// Chain config
     chain_config: Arc<ChainConfig>,
 
@@ -65,8 +70,9 @@ pub struct Peer<T: TransportSocket> {
 
     connection_info: ConnectionInfo,
 
-    /// Peer socket
-    socket: BufferedTranscoder<T::Stream, Message>,
+    /// Peer socket, split into reader and writer parts.
+    socket_reader: MessageReader<T::Stream, Message>,
+    socket_writer: MessageWriter<T::Stream, Message>,
 
     /// Channel sender for sending events to Backend
     peer_event_sender: mpsc::Sender<PeerEvent>,
@@ -105,23 +111,27 @@ where
         backend_event_receiver: mpsc::UnboundedReceiver<BackendEvent>,
         node_protocol_version: ProtocolVersion,
         time_getter: TimeGetter,
-    ) -> Self {
-        let socket =
-            BufferedTranscoder::new(socket, Some(*p2p_config.protocol_config.max_message_size));
+    ) -> crate::Result<Self> {
+        let peer_address = socket.remote_address()?.as_peer_address();
 
-        Self {
+        let (socket_reader, socket_writer) =
+            new_message_stream(socket, Some(*p2p_config.protocol_config.max_message_size));
+
+        Ok(Self {
             peer_id,
+            peer_address,
             connection_info,
             chain_config,
             p2p_config,
-            socket,
+            socket_reader,
+            socket_writer,
             peer_event_sender,
             backend_event_receiver,
             node_protocol_version,
             time_getter,
             common_protocol_version: None,
             sync_message_received: false,
-        }
+        })
     }
 
     fn validate_peer_time(
@@ -180,7 +190,7 @@ where
                     self.peer_id,
                     reason
                 );
-                self.socket
+                self.socket_writer
                     .send(Message::WillDisconnect(WillDisconnectMessage {
                         reason: reason.to_string(),
                     }))
@@ -250,13 +260,12 @@ where
 
     async fn handshake(&mut self) -> crate::Result<()> {
         let init_time = self.time_getter.get_time();
-        let peer_address = self.socket.inner_stream().remote_address()?;
 
         // Sending the remote socket address makes no sense and can leak private information when using a proxy
         let peer_address_to_send = if self.p2p_config.socks5_proxy.is_some() {
             None
         } else {
-            Some(peer_address.as_peer_address())
+            Some(self.peer_address.clone())
         };
 
         match self.connection_info {
@@ -270,7 +279,7 @@ where
                     receiver_address: node_address_as_seen_by_peer,
                     current_time: remote_time,
                     handshake_nonce,
-                }) = self.socket.recv().await?
+                }) = self.socket_reader.recv().await?
                 else {
                     return Err(P2pError::ProtocolError(ProtocolError::HandshakeExpected));
                 };
@@ -316,7 +325,7 @@ where
                     .await?;
                 let _ = event_received_confirmation_receiver.await;
 
-                self.socket
+                self.socket_writer
                     .send(Message::Handshake(HandshakeMessage::HelloAck {
                         protocol_version: self.node_protocol_version,
                         network: *self.chain_config.magic_bytes(),
@@ -335,7 +344,7 @@ where
                 let local_services =
                     local_services_override.unwrap_or_else(|| (*self.p2p_config.node_type).into());
 
-                self.socket
+                self.socket_writer
                     .send(Message::Handshake(HandshakeMessage::Hello {
                         protocol_version: self.node_protocol_version,
                         network: *self.chain_config.magic_bytes(),
@@ -348,7 +357,7 @@ where
                     }))
                     .await?;
 
-                let hello_response = self.socket.recv().await?;
+                let hello_response = self.socket_reader.recv().await?;
 
                 let Message::Handshake(HandshakeMessage::HelloAck {
                     protocol_version: peer_protocol_version,
@@ -399,17 +408,18 @@ where
     // Note: the channels used by this function to propagate messages to other parts of p2p
     // must be bounded; this is important to prevent DoS attacks.
     async fn handle_socket_msg(
-        &mut self,
         peer_id: PeerId,
         msg: Message,
+        peer_event_sender: &mpsc::Sender<PeerEvent>,
         block_sync_msg_sender: &mpsc::Sender<BlockSyncMessage>,
         transaction_sync_msg_sender: &mpsc::Sender<TransactionSyncMessage>,
+        sync_message_received: &mut bool,
     ) -> crate::Result<()> {
         match msg.categorize() {
             CategorizedMessage::Handshake(_) => {
                 log::error!("Peer {peer_id} sent unexpected handshake message");
 
-                self.peer_event_sender
+                peer_event_sender
                     .send(PeerEvent::Misbehaved {
                         error: P2pError::ProtocolError(ProtocolError::UnexpectedMessage(
                             "Unexpected handshake message".to_owned(),
@@ -418,32 +428,32 @@ where
                     .await?;
             }
             CategorizedMessage::PeerManagerMessage(msg) => {
-                self.peer_event_sender
+                peer_event_sender
                     .send(PeerEvent::MessageReceived(
                         PeerManagerMessageExt::PeerManagerMessage(msg),
                     ))
                     .await?
             }
             CategorizedMessage::BlockSyncMessage(msg) => {
-                if !self.sync_message_received {
-                    self.peer_event_sender
+                if !*sync_message_received {
+                    peer_event_sender
                         .send(PeerEvent::MessageReceived(
                             PeerManagerMessageExt::FirstSyncMessageReceived,
                         ))
                         .await?;
-                    self.sync_message_received = true;
+                    *sync_message_received = true;
                 }
 
                 block_sync_msg_sender.send(msg).await?;
             }
             CategorizedMessage::TransactionSyncMessage(msg) => {
-                if !self.sync_message_received {
-                    self.peer_event_sender
+                if !*sync_message_received {
+                    peer_event_sender
                         .send(PeerEvent::MessageReceived(
                             PeerManagerMessageExt::FirstSyncMessageReceived,
                         ))
                         .await?;
-                    self.sync_message_received = true;
+                    *sync_message_received = true;
                 }
 
                 transaction_sync_msg_sender.send(msg).await?;
@@ -513,7 +523,7 @@ where
                         let message_tag: MessageTag = (&*message).into();
                         log::debug!("Sending message with tag {message_tag:?} and encoded size {}", message.encoded_size());
 
-                        self.socket.send(*message).await?;
+                        self.socket_writer.send(*message).await?;
                     }
                     BackendEvent::Disconnect {reason} => {
                         log::debug!("Disconnection requested for peer {}, the reason is {:?}", self.peer_id, reason);
@@ -521,14 +531,16 @@ where
                         return Ok(());
                     },
                 },
-                event = self.socket.recv(), if sync_msg_senders_opt.is_some() => match event {
+                event = self.socket_reader.recv(), if sync_msg_senders_opt.is_some() => match event {
                     Ok(message) => {
                         let sync_msg_senders = sync_msg_senders_opt.as_mut().expect("sync_msg_senders_opt is some");
-                        self.handle_socket_msg(
+                        Self::handle_socket_msg(
                             self.peer_id,
                             message,
+                            &self.peer_event_sender,
                             &sync_msg_senders.0,
                             &sync_msg_senders.1,
+                            &mut self.sync_message_received
                         ).await?;
                     }
                     Err(err) => {

@@ -22,7 +22,7 @@ use networking::{
     test_helpers::{
         TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
     },
-    transport::{BufferedTranscoder, TransportListener, TransportSocket},
+    transport::{new_message_stream, TransportListener, TransportSocket},
 };
 use p2p_test_utils::run_with_timeout;
 use randomness::Rng as _;
@@ -72,14 +72,14 @@ where
 
     let (stream, _) = listener.accept().await.unwrap();
 
-    let mut msg_stream =
-        BufferedTranscoder::new(stream, Some(*p2p_config.protocol_config.max_message_size));
+    let (mut msg_reader, mut msg_writer) =
+        new_message_stream(stream, Some(*p2p_config.protocol_config.max_message_size));
 
-    let msg = msg_stream.recv().await.unwrap();
+    let msg = msg_reader.recv().await.unwrap();
     assert_matches!(msg, Message::Handshake(HandshakeMessage::Hello { .. }));
 
     // Send HelloAck with zero protocol version
-    msg_stream
+    msg_writer
         .send(Message::Handshake(HandshakeMessage::HelloAck {
             protocol_version: ProtocolVersion::new(0),
             network: *chain_config.magic_bytes(),
@@ -97,7 +97,7 @@ where
     assert!(connect_result.is_err());
 
     // The connection should be closed.
-    msg_stream.recv().await.unwrap_err();
+    msg_reader.recv().await.unwrap_err();
 
     // Note: no peer discouragement here, because peers are not discouraged during
     // "manual outbound" connections.
@@ -168,11 +168,11 @@ where
 
     let stream = transport.connect(test_node.local_address().socket_addr()).await.unwrap();
 
-    let mut msg_stream =
-        BufferedTranscoder::new(stream, Some(*p2p_config.protocol_config.max_message_size));
+    let (mut msg_reader, mut msg_writer) =
+        new_message_stream(stream, Some(*p2p_config.protocol_config.max_message_size));
 
     // Send Hello with zero protocol version
-    msg_stream
+    msg_writer
         .send(Message::Handshake(HandshakeMessage::Hello {
             protocol_version: ProtocolVersion::new(0),
             network: *chain_config.magic_bytes(),
@@ -187,7 +187,7 @@ where
         .unwrap();
 
     // The connection should be closed.
-    msg_stream.recv().await.unwrap_err();
+    msg_reader.recv().await.unwrap_err();
 
     // Note: no peer discouragement here, because the UnsupportedProtocol error has zero ban score.
     let test_node_remnants = test_node.join().await;
@@ -262,8 +262,8 @@ where
     let connect_result_receiver1 = test_node.start_connecting(address1);
 
     let (stream1, _) = listener1.accept().await.unwrap();
-    let mut msg_stream1 =
-        BufferedTranscoder::new(stream1, Some(*p2p_config.protocol_config.max_message_size));
+    let (mut msg_reader1, mut msg_writer1) =
+        new_message_stream(stream1, Some(*p2p_config.protocol_config.max_message_size));
 
     let transport2 = TTM::make_transport();
     let mut listener2 = transport2.bind(vec![TTM::make_address()]).await.unwrap();
@@ -272,14 +272,14 @@ where
     let connect_result_receiver2 = test_node.start_connecting(address2);
 
     let (stream2, _) = listener2.accept().await.unwrap();
-    let mut msg_stream2 =
-        BufferedTranscoder::new(stream2, Some(*p2p_config.protocol_config.max_message_size));
+    let (mut msg_reader2, mut msg_writer2) =
+        new_message_stream(stream2, Some(*p2p_config.protocol_config.max_message_size));
 
-    let msg = msg_stream2.recv().await.unwrap();
+    let msg = msg_reader2.recv().await.unwrap();
     assert_matches!(msg, Message::Handshake(HandshakeMessage::Hello { .. }));
 
     // Send normal HelloAck from peer 1
-    msg_stream1
+    msg_writer1
         .send(Message::Handshake(HandshakeMessage::HelloAck {
             protocol_version: TEST_PROTOCOL_VERSION.into(),
             network: *chain_config.magic_bytes(),
@@ -293,7 +293,7 @@ where
         .unwrap();
 
     // Send HelloAck with zero protocol version from peer 2
-    msg_stream2
+    msg_writer2
         .send(Message::Handshake(HandshakeMessage::HelloAck {
             protocol_version: ProtocolVersion::new(0),
             network: *chain_config.magic_bytes(),
@@ -311,12 +311,12 @@ where
     assert!(connect_result2.is_err());
 
     // The connection should be closed.
-    msg_stream2.recv().await.unwrap_err();
+    msg_reader2.recv().await.unwrap_err();
 
     // But connect_result1 should still be fine.
     let connect_result1 = connect_result_receiver1.await.unwrap();
     assert!(connect_result1.is_ok());
-    let _msg = msg_stream1.recv().await.unwrap();
+    let _msg = msg_reader1.recv().await.unwrap();
 
     test_node.join().await;
 }

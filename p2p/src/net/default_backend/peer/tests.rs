@@ -19,23 +19,30 @@ use futures::FutureExt;
 
 use chainstate::Locator;
 use common::chain::config::MagicBytes;
-use networking::test_helpers::{
-    get_two_connected_sockets, TestTransportChannel, TestTransportMaker, TestTransportNoise,
-    TestTransportTcp,
+use networking::{
+    test_helpers::{
+        get_two_connected_sockets, TestTransportChannel, TestTransportMaker, TestTransportNoise,
+        TestTransportTcp,
+    },
+    transport::{MpscChannelTransport, NoiseTcpTransport, TcpTransportSocket},
 };
-use networking::transport::{MpscChannelTransport, NoiseTcpTransport, TcpTransportSocket};
 use test_utils::{
     assert_matches,
     mock_time_getter::{mocked_time_getter_milliseconds, mocked_time_getter_seconds},
 };
 use utils::{atomics::SeqCstAtomicU64, tokio_spawn_in_current_tracing_span};
 
-use super::*;
 use crate::{
+    error::ConnectionValidationError,
     message::HeaderListRequest,
-    net::types::services::Service,
+    net::{
+        default_backend::types::{peer_event, HandshakeMessage, P2pTimestamp},
+        types::services::Service,
+    },
     test_helpers::{test_p2p_config, TEST_PROTOCOL_VERSION},
 };
+
+use super::*;
 
 const TEST_CHAN_BUF_SIZE: usize = 100;
 
@@ -86,10 +93,10 @@ where
     let (_backend_event_sender, backend_event_receiver) = mpsc::unbounded_channel();
     let cur_time = Arc::new(SeqCstAtomicU64::new(123456));
     let time_getter = mocked_time_getter_seconds(cur_time);
-    let peer_id2 = PeerId::new();
+    let peer_id = PeerId::new();
 
     let mut peer = Peer::<T>::new(
-        peer_id2,
+        peer_id,
         ConnectionInfo::Inbound,
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
@@ -98,7 +105,8 @@ where
         backend_event_receiver,
         TEST_PROTOCOL_VERSION.into(),
         time_getter,
-    );
+    )
+    .unwrap();
 
     let handle = tokio_spawn_in_current_tracing_span(
         async move {
@@ -108,10 +116,10 @@ where
         "",
     );
 
-    let mut socket2 =
-        BufferedTranscoder::new(socket2, Some(*p2p_config.protocol_config.max_message_size));
-    assert!(socket2.recv().now_or_never().is_none());
-    assert!(socket2
+    let (mut socket2_reader, mut socket2_writer) =
+        new_message_stream(socket2, Some(*p2p_config.protocol_config.max_message_size));
+    assert!(socket2_reader.recv().now_or_never().is_none());
+    assert!(socket2_writer
         .send(Message::Handshake(HandshakeMessage::Hello {
             protocol_version: TEST_PROTOCOL_VERSION.into(),
             software_version: *chain_config.software_version(),
@@ -172,10 +180,10 @@ where
     let (_backend_event_sender, backend_event_receiver) = mpsc::unbounded_channel();
     let cur_time = Arc::new(SeqCstAtomicU64::new(123456));
     let time_getter = mocked_time_getter_seconds(cur_time);
-    let peer_id3 = PeerId::new();
+    let peer_id = PeerId::new();
 
     let mut peer = Peer::<T>::new(
-        peer_id3,
+        peer_id,
         ConnectionInfo::Outbound {
             handshake_nonce: 1,
             local_services_override: None,
@@ -187,7 +195,8 @@ where
         backend_event_receiver,
         TEST_PROTOCOL_VERSION.into(),
         time_getter,
-    );
+    )
+    .unwrap();
 
     let handle = tokio_spawn_in_current_tracing_span(
         async move {
@@ -197,10 +206,10 @@ where
         "",
     );
 
-    let mut socket2 =
-        BufferedTranscoder::new(socket2, Some(*p2p_config.protocol_config.max_message_size));
-    socket2.recv().await.unwrap();
-    assert!(socket2
+    let (mut socket2_reader, mut socket2_writer) =
+        new_message_stream(socket2, Some(*p2p_config.protocol_config.max_message_size));
+    socket2_reader.recv().await.unwrap();
+    assert!(socket2_writer
         .send(Message::Handshake(HandshakeMessage::HelloAck {
             protocol_version: TEST_PROTOCOL_VERSION.into(),
             software_version: *chain_config.software_version(),
@@ -259,10 +268,10 @@ where
     let (_backend_event_sender, backend_event_receiver) = mpsc::unbounded_channel();
     let cur_time = Arc::new(SeqCstAtomicU64::new(123456));
     let time_getter = mocked_time_getter_seconds(Arc::clone(&cur_time));
-    let peer_id3 = PeerId::new();
+    let peer_id = PeerId::new();
 
     let mut peer = Peer::<T>::new(
-        peer_id3,
+        peer_id,
         ConnectionInfo::Inbound,
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
@@ -271,14 +280,15 @@ where
         backend_event_receiver,
         TEST_PROTOCOL_VERSION.into(),
         time_getter,
-    );
+    )
+    .unwrap();
 
     let handle = tokio_spawn_in_current_tracing_span(async move { peer.handshake().await }, "");
 
-    let mut socket2 =
-        BufferedTranscoder::new(socket2, Some(*p2p_config.protocol_config.max_message_size));
-    assert!(socket2.recv().now_or_never().is_none());
-    assert!(socket2
+    let (mut socket2_reader, mut socket2_writer) =
+        new_message_stream(socket2, Some(*p2p_config.protocol_config.max_message_size));
+    assert!(socket2_reader.recv().now_or_never().is_none());
+    assert!(socket2_writer
         .send(Message::Handshake(HandshakeMessage::Hello {
             protocol_version: TEST_PROTOCOL_VERSION.into(),
             software_version: *chain_config.software_version(),
@@ -327,10 +337,10 @@ where
     let (_backend_event_sender, backend_event_receiver) = mpsc::unbounded_channel();
     let cur_time = Arc::new(SeqCstAtomicU64::new(123456));
     let time_getter = mocked_time_getter_seconds(cur_time);
-    let peer_id2 = PeerId::new();
+    let peer_id = PeerId::new();
 
     let mut peer = Peer::<T>::new(
-        peer_id2,
+        peer_id,
         ConnectionInfo::Inbound,
         chain_config,
         Arc::clone(&p2p_config),
@@ -339,14 +349,15 @@ where
         backend_event_receiver,
         TEST_PROTOCOL_VERSION.into(),
         time_getter,
-    );
+    )
+    .unwrap();
 
     let handle = tokio_spawn_in_current_tracing_span(async move { peer.handshake().await }, "");
 
-    let mut socket2 =
-        BufferedTranscoder::new(socket2, Some(*p2p_config.protocol_config.max_message_size));
-    assert!(socket2.recv().now_or_never().is_none());
-    socket2
+    let (mut socket2_reader, mut socket2_writer) =
+        new_message_stream(socket2, Some(*p2p_config.protocol_config.max_message_size));
+    assert!(socket2_reader.recv().now_or_never().is_none());
+    socket2_writer
         .send(Message::HeaderListRequest(HeaderListRequest::new(
             Locator::new(vec![]),
         )))
@@ -443,12 +454,12 @@ async fn handshake_timestamp_verification(
         get_two_connected_sockets::<TestTransportChannel, MpscChannelTransport>().await;
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
     let p2p_config = Arc::new(test_p2p_config());
-    let (tx1, _rx1) = mpsc::channel(TEST_CHAN_BUF_SIZE);
-    let (_tx2, rx2) = mpsc::unbounded_channel();
-    let peer_id3 = PeerId::new();
+    let (peer_event_sender, _peer_event_receiver) = mpsc::channel(TEST_CHAN_BUF_SIZE);
+    let (_backend_event_sender, backend_event_receiver) = mpsc::unbounded_channel();
+    let peer_id = PeerId::new();
 
     let mut peer = Peer::<MpscChannelTransport>::new(
-        peer_id3,
+        peer_id,
         ConnectionInfo::Outbound {
             handshake_nonce: 1,
             local_services_override: None,
@@ -456,11 +467,12 @@ async fn handshake_timestamp_verification(
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
         socket1,
-        tx1,
-        rx2,
+        peer_event_sender,
+        backend_event_receiver,
         TEST_PROTOCOL_VERSION.into(),
         peer_time_getter,
-    );
+    )
+    .unwrap();
 
     let handle = tokio_spawn_in_current_tracing_span(async move { peer.run_handshake().await }, "");
 
@@ -474,10 +486,10 @@ async fn handshake_timestamp_verification(
         tokio::time::advance(Duration::from_millis(increment)).await;
     }
 
-    let mut socket2 =
-        BufferedTranscoder::new(socket2, Some(*p2p_config.protocol_config.max_message_size));
-    socket2.recv().await.unwrap();
-    let _ = socket2
+    let (mut socket2_reader, mut socket2_writer) =
+        new_message_stream(socket2, Some(*p2p_config.protocol_config.max_message_size));
+    socket2_reader.recv().await.unwrap();
+    let _ = socket2_writer
         .send(Message::Handshake(HandshakeMessage::HelloAck {
             protocol_version: TEST_PROTOCOL_VERSION.into(),
             software_version: *chain_config.software_version(),

@@ -22,7 +22,7 @@ use networking::{
     test_helpers::{
         TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
     },
-    transport::{BufferedTranscoder, TransportListener, TransportSocket},
+    transport::{new_message_stream, TransportListener, TransportSocket},
 };
 use p2p_test_utils::run_with_timeout;
 use randomness::Rng as _;
@@ -73,21 +73,21 @@ where
 
     let (stream, _) = listener.accept().await.unwrap();
 
-    let mut msg_stream =
-        BufferedTranscoder::new(stream, Some(*p2p_config.protocol_config.max_message_size));
+    let (mut msg_reader, mut msg_writer) =
+        new_message_stream(stream, Some(*p2p_config.protocol_config.max_message_size));
 
-    let msg = msg_stream.recv().await.unwrap();
+    let msg = msg_reader.recv().await.unwrap();
     assert_matches!(msg, Message::Handshake(HandshakeMessage::Hello { .. }));
 
     // Send some other message instead of HelloAck.
-    msg_stream.send(Message::HeaderList(HeaderList::new(Vec::new()))).await.unwrap();
+    msg_writer.send(Message::HeaderList(HeaderList::new(Vec::new()))).await.unwrap();
 
     // connect_result should indicate a failed connection
     let connect_result = connect_result_receiver.await.unwrap();
     assert!(connect_result.is_err());
 
     // The connection should be closed.
-    msg_stream.recv().await.unwrap_err();
+    msg_reader.recv().await.unwrap_err();
 
     // This is mainly needed to ensure that the corresponding events, if any, reach
     // peer manager before we end the test.
@@ -180,17 +180,17 @@ where
 
     let (stream, _) = listener.accept().await.unwrap();
 
-    let mut msg_stream =
-        BufferedTranscoder::new(stream, Some(*p2p_config.protocol_config.max_message_size));
+    let (mut msg_reader, mut msg_writer) =
+        new_message_stream(stream, Some(*p2p_config.protocol_config.max_message_size));
 
-    let msg = msg_stream.recv().await.unwrap();
+    let msg = msg_reader.recv().await.unwrap();
     assert_matches!(msg, Message::Handshake(HandshakeMessage::Hello { .. }));
 
     // Send some other message instead of HelloAck.
-    msg_stream.send(Message::HeaderList(HeaderList::new(Vec::new()))).await.unwrap();
+    msg_writer.send(Message::HeaderList(HeaderList::new(Vec::new()))).await.unwrap();
 
     // The connection should be closed.
-    msg_stream.recv().await.unwrap_err();
+    msg_reader.recv().await.unwrap_err();
 
     // Unlike incorrect_handshake_outgoing_manual, here the peer score will be adjusted and
     // the peer discouraged.
@@ -273,14 +273,14 @@ where
 
     let stream = transport.connect(test_node.local_address().socket_addr()).await.unwrap();
 
-    let mut msg_stream =
-        BufferedTranscoder::new(stream, Some(*p2p_config.protocol_config.max_message_size));
+    let (mut msg_reader, mut msg_writer) =
+        new_message_stream(stream, Some(*p2p_config.protocol_config.max_message_size));
 
     // Send some other message instead of Hello.
-    msg_stream.send(Message::HeaderList(HeaderList::new(Vec::new()))).await.unwrap();
+    msg_writer.send(Message::HeaderList(HeaderList::new(Vec::new()))).await.unwrap();
 
     // The connection should be closed.
-    msg_stream.recv().await.unwrap_err();
+    msg_reader.recv().await.unwrap_err();
 
     // This is mainly needed to ensure that the corresponding event reaches peer manager before
     // we end the test.

@@ -342,7 +342,7 @@ mod tests {
         primitives::{semver::SemVer, Id},
     };
     use networking::test_helpers::{get_two_connected_sockets, TestTransportChannel};
-    use networking::transport::{BufferedTranscoder, MpscChannelTransport};
+    use networking::transport::{new_message_stream, MpscChannelTransport};
     use p2p_types::services::Service;
     use randomness::Rng;
     use test_utils::random::Seed;
@@ -453,9 +453,9 @@ mod tests {
 
         let (socket1, socket2) =
             get_two_connected_sockets::<TestTransportChannel, MpscChannelTransport>().await;
-        let mut sender =
-            BufferedTranscoder::new(socket1, Some(*p2p_config.protocol_config.max_message_size));
-        let mut receiver = BufferedTranscoder::<_, Message>::new(
+        let (_, mut sender) =
+            new_message_stream(socket1, Some(*p2p_config.protocol_config.max_message_size));
+        let (mut receiver, _) = new_message_stream::<_, Message>(
             socket2,
             Some(*p2p_config.protocol_config.max_message_size),
         );
@@ -466,7 +466,6 @@ mod tests {
             assert_eq!(received_message, message);
         }
 
-        assert!(sender.is_empty());
         assert!(receiver.is_empty());
     }
 }

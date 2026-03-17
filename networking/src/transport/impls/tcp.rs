@@ -156,7 +156,7 @@ mod tests {
 
     use crate::{
         test_helpers::{TestTransportMaker, TestTransportTcp},
-        transport::BufferedTranscoder,
+        transport::new_message_stream,
     };
 
     use super::*;
@@ -178,12 +178,13 @@ mod tests {
         let peer_stream = peer_res.unwrap();
 
         let message = gen_random_bytes(&mut rng, 0, 1000);
-        let mut peer_stream = BufferedTranscoder::new(peer_stream, Some(message.encoded_size()));
-        peer_stream.send(message.clone()).await.unwrap();
+        let (_, mut peer_stream_writer) =
+            new_message_stream(peer_stream, Some(message.encoded_size()));
+        peer_stream_writer.send(message.clone()).await.unwrap();
 
-        let mut server_stream =
-            BufferedTranscoder::<_, Vec<u8>>::new(server_stream, Some(message.encoded_size()));
-        assert_eq!(server_stream.recv().await.unwrap(), message);
+        let (mut server_stream_reader, _) =
+            new_message_stream::<_, Vec<u8>>(server_stream, Some(message.encoded_size()));
+        assert_eq!(server_stream_reader.recv().await.unwrap(), message);
     }
 
     #[tracing::instrument(skip(seed))]
@@ -205,12 +206,12 @@ mod tests {
         let message_1 = gen_random_bytes(&mut rng, 0, 1000);
         let message_2 = gen_random_bytes(&mut rng, 0, 1000);
 
-        let mut peer_stream = BufferedTranscoder::new(peer_stream, None);
-        peer_stream.send(message_1.clone()).await.unwrap();
-        peer_stream.send(message_2.clone()).await.unwrap();
+        let (_, mut peer_stream_writer) = new_message_stream(peer_stream, None);
+        peer_stream_writer.send(message_1.clone()).await.unwrap();
+        peer_stream_writer.send(message_2.clone()).await.unwrap();
 
-        let mut server_stream = BufferedTranscoder::<_, Vec<u8>>::new(server_stream, None);
-        assert_eq!(server_stream.recv().await.unwrap(), message_1);
-        assert_eq!(server_stream.recv().await.unwrap(), message_2);
+        let (mut server_stream_reader, _) = new_message_stream::<_, Vec<u8>>(server_stream, None);
+        assert_eq!(server_stream_reader.recv().await.unwrap(), message_1);
+        assert_eq!(server_stream_reader.recv().await.unwrap(), message_2);
     }
 }

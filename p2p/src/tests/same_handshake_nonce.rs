@@ -22,7 +22,7 @@ use networking::{
     test_helpers::{
         TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
     },
-    transport::{BufferedTranscoder, TransportListener, TransportSocket},
+    transport::{new_message_stream, TransportListener, TransportSocket},
 };
 use p2p_test_utils::run_with_timeout;
 use randomness::Rng as _;
@@ -77,12 +77,12 @@ where
 
         let (outgoing_conn_stream, _) = listener.accept().await.unwrap();
 
-        let mut outgoing_conn_msg_stream = BufferedTranscoder::new(
+        let (mut outgoing_conn_msg_reader, _) = new_message_stream(
             outgoing_conn_stream,
             Some(*p2p_config.protocol_config.max_message_size),
         );
 
-        let msg = outgoing_conn_msg_stream.recv().await.unwrap();
+        let msg = outgoing_conn_msg_reader.recv().await.unwrap();
         let Message::Handshake(HandshakeMessage::Hello {
             protocol_version: _,
             network: _,
@@ -101,12 +101,12 @@ where
         let incoming_conn_stream =
             transport.connect(test_node.local_address().socket_addr()).await.unwrap();
 
-        let mut incoming_conn_msg_stream = BufferedTranscoder::new(
+        let (mut incoming_conn_msg_reader, mut incoming_conn_msg_writer) = new_message_stream(
             incoming_conn_stream,
             Some(*p2p_config.protocol_config.max_message_size),
         );
 
-        incoming_conn_msg_stream
+        incoming_conn_msg_writer
             .send(Message::Handshake(HandshakeMessage::Hello {
                 protocol_version: protocol_version.into(),
                 network: *chain_config.magic_bytes(),
@@ -120,12 +120,12 @@ where
             .await
             .unwrap();
 
-        let msg = incoming_conn_msg_stream.recv().await.unwrap();
+        let msg = incoming_conn_msg_reader.recv().await.unwrap();
         assert_matches!(msg, Message::Handshake(HandshakeMessage::HelloAck { .. }));
 
         if protocol_version >= SupportedProtocolVersion::V3 {
             // WillDisconnect should be sent.
-            let msg = incoming_conn_msg_stream.recv().await.unwrap();
+            let msg = incoming_conn_msg_reader.recv().await.unwrap();
             assert_eq!(
                 msg,
                 Message::WillDisconnect(WillDisconnectMessage {
@@ -135,7 +135,7 @@ where
         }
 
         // The connection should be closed.
-        incoming_conn_msg_stream.recv().await.unwrap_err();
+        incoming_conn_msg_reader.recv().await.unwrap_err();
 
         test_node.join().await;
     }

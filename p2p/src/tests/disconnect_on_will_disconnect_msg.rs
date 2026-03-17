@@ -22,7 +22,7 @@ use networking::{
     test_helpers::{
         TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
     },
-    transport::{BufferedTranscoder, TransportSocket},
+    transport::{new_message_stream, TransportSocket},
 };
 use p2p_test_utils::run_with_timeout;
 use randomness::Rng as _;
@@ -73,10 +73,10 @@ where
 
     let stream = transport.connect(test_node.local_address().socket_addr()).await.unwrap();
 
-    let mut msg_stream =
-        BufferedTranscoder::new(stream, Some(*p2p_config.protocol_config.max_message_size));
+    let (mut msg_reader, mut msg_writer) =
+        new_message_stream(stream, Some(*p2p_config.protocol_config.max_message_size));
 
-    msg_stream
+    msg_writer
         .send(Message::Handshake(HandshakeMessage::Hello {
             protocol_version: TEST_PROTOCOL_VERSION.into(),
             network: *chain_config.magic_bytes(),
@@ -90,15 +90,15 @@ where
         .await
         .unwrap();
 
-    let msg = msg_stream.recv().await.unwrap();
+    let msg = msg_reader.recv().await.unwrap();
     assert_matches!(msg, Message::Handshake(HandshakeMessage::HelloAck { .. }));
 
     // Handshake has completed successfully; the node requests for headers.
-    let msg = msg_stream.recv().await.unwrap();
+    let msg = msg_reader.recv().await.unwrap();
     assert_matches!(msg, Message::HeaderListRequest(HeaderListRequest { .. }));
 
     // The peer sends WillDisconnect, but then continues working as if nothing has happened.
-    msg_stream
+    msg_writer
         .send(Message::WillDisconnect(WillDisconnectMessage {
             reason: "foo".to_owned(),
         }))
@@ -108,18 +108,18 @@ where
     // The peer responds with a header list and sends its own header list request.
     // Note that we don't check results of subsequent send calls, because the connection may be
     // dropped by the node at any moment.
-    let _ = msg_stream.send(Message::HeaderList(HeaderList::new(vec![]))).await;
+    let _ = msg_writer.send(Message::HeaderList(HeaderList::new(vec![]))).await;
     // Note: if we send HeaderListRequest right away, there's a chance that the message will be
     // handled by the sync manager before the disconnection command reaches backend.
     std::thread::sleep(Duration::from_secs(1));
-    let _ = msg_stream
+    let _ = msg_writer
         .send(Message::HeaderListRequest(HeaderListRequest::new(
             Locator::new(vec![]),
         )))
         .await;
 
     // The node shouldn't respond with headers; instead, the connection should be closed.
-    msg_stream.recv().await.unwrap_err();
+    msg_reader.recv().await.unwrap_err();
 
     test_node.join().await;
 }

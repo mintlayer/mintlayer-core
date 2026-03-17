@@ -22,7 +22,7 @@ use networking::{
     test_helpers::{
         TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
     },
-    transport::{BufferedTranscoder, TransportListener, TransportSocket},
+    transport::{new_message_stream, TransportListener, TransportSocket},
 };
 use p2p_test_utils::run_with_timeout;
 use randomness::Rng as _;
@@ -75,13 +75,13 @@ where
 
     let (stream, _) = listener.accept().await.unwrap();
 
-    let mut msg_stream =
-        BufferedTranscoder::new(stream, Some(*p2p_config.protocol_config.max_message_size));
+    let (mut msg_reader, mut msg_writer) =
+        new_message_stream(stream, Some(*p2p_config.protocol_config.max_message_size));
 
-    let msg = msg_stream.recv().await.unwrap();
+    let msg = msg_reader.recv().await.unwrap();
     assert_matches!(msg, Message::Handshake(HandshakeMessage::Hello { .. }));
 
-    msg_stream
+    msg_writer
         .send(Message::Handshake(HandshakeMessage::HelloAck {
             protocol_version: TEST_PROTOCOL_VERSION.into(),
             network: *chain_config.magic_bytes(),
@@ -98,7 +98,7 @@ where
     assert!(connect_result.is_ok());
 
     // Check that the connection is still up and we can receive the next message.
-    let msg = msg_stream.recv().await.unwrap();
+    let msg = msg_reader.recv().await.unwrap();
     assert_matches!(msg, Message::AddrListRequest(_));
 
     // This is mainly needed to ensure that the corresponding events, if any, reach
@@ -173,10 +173,10 @@ where
 
     let stream = transport.connect(test_node.local_address().socket_addr()).await.unwrap();
 
-    let mut msg_stream =
-        BufferedTranscoder::new(stream, Some(*p2p_config.protocol_config.max_message_size));
+    let (mut msg_reader, mut msg_writer) =
+        new_message_stream(stream, Some(*p2p_config.protocol_config.max_message_size));
 
-    msg_stream
+    msg_writer
         .send(Message::Handshake(HandshakeMessage::Hello {
             protocol_version: TEST_PROTOCOL_VERSION.into(),
             network: *chain_config.magic_bytes(),
@@ -190,11 +190,11 @@ where
         .await
         .unwrap();
 
-    let msg = msg_stream.recv().await.unwrap();
+    let msg = msg_reader.recv().await.unwrap();
     assert_matches!(msg, Message::Handshake(HandshakeMessage::HelloAck { .. }));
 
     // Check that the connection is still up and we can receive the next message.
-    let msg = msg_stream.recv().await.unwrap();
+    let msg = msg_reader.recv().await.unwrap();
     assert_matches!(msg, Message::HeaderListRequest(_));
 
     // This is mainly needed to ensure that the corresponding events, if any, reach

@@ -23,7 +23,7 @@ use networking::{
     test_helpers::{
         TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
     },
-    transport::{BufferedTranscoder, TransportListener, TransportSocket},
+    transport::{new_message_stream, TransportListener, TransportSocket},
 };
 use p2p_test_utils::run_with_timeout;
 use randomness::Rng as _;
@@ -101,17 +101,17 @@ where
 
         let (stream, _) = listener.accept().await.unwrap();
 
-        let mut msg_stream =
-            BufferedTranscoder::new(stream, Some(*p2p_config.protocol_config.max_message_size));
+        let (mut msg_reader, mut msg_writer) =
+            new_message_stream(stream, Some(*p2p_config.protocol_config.max_message_size));
 
-        let msg = msg_stream.recv().await.unwrap();
+        let msg = msg_reader.recv().await.unwrap();
         assert_matches!(msg, Message::Handshake(HandshakeMessage::Hello { .. }));
 
         let cur_time = time_getter.get_time_getter().get_time();
         let peer_time =
             P2pTimestamp::from_time(cur_time.saturating_duration_add(Duration::from_secs(1000)));
 
-        msg_stream
+        msg_writer
             .send(Message::Handshake(HandshakeMessage::HelloAck {
                 protocol_version: protocol_version.into(),
                 network: *chain_config.magic_bytes(),
@@ -130,7 +130,7 @@ where
 
         if protocol_version >= SupportedProtocolVersion::V3 {
             // WillDisconnect should be sent.
-            let msg = msg_stream.recv().await.unwrap();
+            let msg = msg_reader.recv().await.unwrap();
             assert_eq!(
                 msg,
                 Message::WillDisconnect(WillDisconnectMessage {
@@ -149,7 +149,7 @@ where
         }
 
         // The connection should be closed.
-        msg_stream.recv().await.unwrap_err();
+        msg_reader.recv().await.unwrap_err();
 
         test_node.join().await;
     }
@@ -234,14 +234,14 @@ where
 
         let stream = transport.connect(test_node.local_address().socket_addr()).await.unwrap();
 
-        let mut msg_stream =
-            BufferedTranscoder::new(stream, Some(*p2p_config.protocol_config.max_message_size));
+        let (mut msg_reader, mut msg_writer) =
+            new_message_stream(stream, Some(*p2p_config.protocol_config.max_message_size));
 
         let cur_time = time_getter.get_time_getter().get_time();
         let peer_time =
             P2pTimestamp::from_time(cur_time.saturating_duration_add(Duration::from_secs(1000)));
 
-        msg_stream
+        msg_writer
             .send(Message::Handshake(HandshakeMessage::Hello {
                 protocol_version: protocol_version.into(),
                 network: *chain_config.magic_bytes(),
@@ -257,7 +257,7 @@ where
 
         if protocol_version >= SupportedProtocolVersion::V3 {
             // WillDisconnect should be sent.
-            let msg = msg_stream.recv().await.unwrap();
+            let msg = msg_reader.recv().await.unwrap();
             assert_eq!(
                 msg,
                 Message::WillDisconnect(WillDisconnectMessage {
@@ -276,7 +276,7 @@ where
         }
 
         // The connection should be closed.
-        msg_stream.recv().await.unwrap_err();
+        msg_reader.recv().await.unwrap_err();
 
         test_node.join().await;
     }

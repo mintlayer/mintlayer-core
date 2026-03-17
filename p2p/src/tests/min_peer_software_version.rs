@@ -25,7 +25,7 @@ use common::primitives::{
 };
 use networking::{
     test_helpers::{TestTransportChannel, TestTransportMaker},
-    transport::{BufferedTranscoder, ConnectedSocketInfo as _, TransportListener, TransportSocket},
+    transport::{new_message_stream, ConnectedSocketInfo as _, TransportListener, TransportSocket},
 };
 use p2p_test_utils::run_with_timeout;
 use p2p_types::socket_address::SocketAddress;
@@ -188,13 +188,13 @@ async fn outbound_manual_connection(#[case] seed: Seed, test_params: TestParams)
 
         let (stream, _) = listener.accept().await.unwrap();
 
-        let mut msg_stream =
-            BufferedTranscoder::new(stream, Some(*p2p_config.protocol_config.max_message_size));
+        let (mut msg_reader, mut msg_writer) =
+            new_message_stream(stream, Some(*p2p_config.protocol_config.max_message_size));
 
-        let msg = msg_stream.recv().await.unwrap();
+        let msg = msg_reader.recv().await.unwrap();
         assert_matches!(msg, Message::Handshake(HandshakeMessage::Hello { .. }));
 
-        msg_stream
+        msg_writer
             .send(Message::Handshake(HandshakeMessage::HelloAck {
                 protocol_version: TEST_PROTOCOL_VERSION.into(),
                 network: *chain_config.magic_bytes(),
@@ -215,7 +215,7 @@ async fn outbound_manual_connection(#[case] seed: Seed, test_params: TestParams)
             assert!(connect_result.is_ok());
 
             // Check that the connection is still up and we can receive the next message.
-            let msg = msg_stream.recv().await.unwrap();
+            let msg = msg_reader.recv().await.unwrap();
             assert_matches!(msg, Message::AddrListRequest(_));
 
             // This is mainly needed to ensure that the corresponding events, if any, reach
@@ -236,11 +236,11 @@ async fn outbound_manual_connection(#[case] seed: Seed, test_params: TestParams)
             assert!(connect_result.is_err());
 
             // The node should have sent WillDisconnect.
-            let msg = msg_stream.recv().await.unwrap();
+            let msg = msg_reader.recv().await.unwrap();
             assert_matches!(msg, Message::WillDisconnect(_));
 
             // Then the connection should have been closed.
-            msg_stream.recv().await.unwrap_err();
+            msg_reader.recv().await.unwrap_err();
 
             // This is mainly needed to ensure that the corresponding events, if any, reach
             // peer manager before we end the test.
@@ -304,13 +304,13 @@ async fn outbound_auto_connection(#[case] seed: Seed, test_params: TestParams) {
 
         let (stream, _) = listener.accept().await.unwrap();
 
-        let mut msg_stream =
-            BufferedTranscoder::new(stream, Some(*p2p_config.protocol_config.max_message_size));
+        let (mut msg_reader, mut msg_writer) =
+            new_message_stream(stream, Some(*p2p_config.protocol_config.max_message_size));
 
-        let msg = msg_stream.recv().await.unwrap();
+        let msg = msg_reader.recv().await.unwrap();
         assert_matches!(msg, Message::Handshake(HandshakeMessage::Hello { .. }));
 
-        msg_stream
+        msg_writer
             .send(Message::Handshake(HandshakeMessage::HelloAck {
                 protocol_version: TEST_PROTOCOL_VERSION.into(),
                 network: *chain_config.magic_bytes(),
@@ -325,7 +325,7 @@ async fn outbound_auto_connection(#[case] seed: Seed, test_params: TestParams) {
 
         let test_node_remnants = if test_params.accept {
             // Check that the connection is still up and we can receive the next message.
-            let msg = msg_stream.recv().await.unwrap();
+            let msg = msg_reader.recv().await.unwrap();
             assert_matches!(msg, Message::AddrListRequest(_));
 
             // This is mainly needed to ensure that the corresponding events, if any, reach
@@ -348,11 +348,11 @@ async fn outbound_auto_connection(#[case] seed: Seed, test_params: TestParams) {
         } else {
             // The node should have sent WillDisconnect.
 
-            let msg = msg_stream.recv().await.unwrap();
+            let msg = msg_reader.recv().await.unwrap();
             assert_matches!(msg, Message::WillDisconnect(_));
 
             // Then the connection should have been closed.
-            msg_stream.recv().await.unwrap_err();
+            msg_reader.recv().await.unwrap_err();
 
             // Unlike in the outbound manual connection case, here the peer score should be adjusted
             // and the peer discouraged.
@@ -417,10 +417,10 @@ async fn inbound_connection(#[case] seed: Seed, test_params: TestParams) {
         let stream = transport.connect(test_node.local_address().socket_addr()).await.unwrap();
         let peer_address = SocketAddress::new(stream.local_address().unwrap());
 
-        let mut msg_stream =
-            BufferedTranscoder::new(stream, Some(*p2p_config.protocol_config.max_message_size));
+        let (mut msg_reader, mut msg_writer) =
+            new_message_stream(stream, Some(*p2p_config.protocol_config.max_message_size));
 
-        msg_stream
+        msg_writer
             .send(Message::Handshake(HandshakeMessage::Hello {
                 protocol_version: TEST_PROTOCOL_VERSION.into(),
                 network: *chain_config.magic_bytes(),
@@ -434,12 +434,12 @@ async fn inbound_connection(#[case] seed: Seed, test_params: TestParams) {
             .await
             .unwrap();
 
-        let msg = msg_stream.recv().await.unwrap();
+        let msg = msg_reader.recv().await.unwrap();
         assert_matches!(msg, Message::Handshake(HandshakeMessage::HelloAck { .. }));
 
         let test_node_remnants = if test_params.accept {
             // Check that the connection is still up and we can receive the next message.
-            let msg = msg_stream.recv().await.unwrap();
+            let msg = msg_reader.recv().await.unwrap();
             assert_matches!(msg, Message::HeaderListRequest(_));
 
             // This is mainly needed to ensure that the corresponding events, if any, reach
@@ -461,11 +461,11 @@ async fn inbound_connection(#[case] seed: Seed, test_params: TestParams) {
             test_node_remnants
         } else {
             // The node should have sent WillDisconnect.
-            let msg = msg_stream.recv().await.unwrap();
+            let msg = msg_reader.recv().await.unwrap();
             assert_matches!(msg, Message::WillDisconnect(_));
 
             // Then the connection should have been closed.
-            msg_stream.recv().await.unwrap_err();
+            msg_reader.recv().await.unwrap_err();
 
             // Note: not using wait_for_ban_score_adjustment, because the score adjustment is
             // initiated in the peer manager directly in this case, so it should happen immediately.

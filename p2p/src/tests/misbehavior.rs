@@ -22,7 +22,7 @@ use networking::{
     test_helpers::{
         TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
     },
-    transport::{BufferedTranscoder, TransportSocket},
+    transport::{new_message_stream, TransportSocket},
 };
 use p2p_test_utils::run_with_timeout;
 use randomness::Rng as _;
@@ -69,11 +69,11 @@ where
 
     let stream = transport.connect(test_node.local_address().socket_addr()).await.unwrap();
 
-    let mut msg_stream =
-        BufferedTranscoder::new(stream, Some(*p2p_config.protocol_config.max_message_size));
+    let (mut msg_reader, mut msg_writer) =
+        new_message_stream(stream, Some(*p2p_config.protocol_config.max_message_size));
 
     // Send the normal Hello
-    msg_stream
+    msg_writer
         .send(Message::Handshake(HandshakeMessage::Hello {
             protocol_version: TEST_PROTOCOL_VERSION.into(),
             network: *chain_config.magic_bytes(),
@@ -87,15 +87,15 @@ where
         .await
         .unwrap();
 
-    let msg = msg_stream.recv().await.unwrap();
+    let msg = msg_reader.recv().await.unwrap();
     assert_matches!(msg, Message::Handshake(HandshakeMessage::HelloAck { .. }));
 
     // Check that the connection is still up and we can receive the next message.
-    let msg = msg_stream.recv().await.unwrap();
+    let msg = msg_reader.recv().await.unwrap();
     assert_matches!(msg, Message::HeaderListRequest(_));
 
     // Send an unexpected Hello
-    msg_stream
+    msg_writer
         .send(Message::Handshake(HandshakeMessage::Hello {
             protocol_version: TEST_PROTOCOL_VERSION.into(),
             network: *chain_config.magic_bytes(),

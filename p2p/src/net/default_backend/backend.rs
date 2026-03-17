@@ -403,7 +403,7 @@ where
             backend_event_receiver,
             self.node_protocol_version,
             self.time_getter.shallow_clone(),
-        );
+        )?;
         let shutdown = Arc::clone(&self.shutdown);
         let handle = tokio_spawn_in_current_tracing_span(
             async move {

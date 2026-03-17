@@ -36,7 +36,7 @@ use crate::{
     test_helpers::{TestTransportChannel, TestTransportMaker, TestTransportTcp},
     transport::{
         impls::stream_adapter::wrapped_transport::wrapped_listener::MAX_CONCURRENT_HANDSHAKES,
-        BufferedTranscoder, ChannelListener, IdentityStreamAdapter, MpscChannelTransport,
+        new_message_stream, ChannelListener, IdentityStreamAdapter, MpscChannelTransport,
         NoiseEncryptionAdapter, NoiseEncryptionAdapterMaker, PeerStream, TcpTransportSocket,
         TransportListener, TransportSocket,
     },
@@ -252,13 +252,13 @@ async fn send_2_reqs(#[case] seed: Seed) {
     let message_1 = gen_random_bytes(&mut rng, 0, 1000);
     let message_2 = gen_random_bytes(&mut rng, 0, 1000);
 
-    let mut peer_stream = BufferedTranscoder::<_, Vec<u8>>::new(peer_stream, None);
-    peer_stream.send(message_1.clone()).await.unwrap();
-    peer_stream.send(message_2.clone()).await.unwrap();
+    let (_, mut peer_stream_writer) = new_message_stream::<_, Vec<u8>>(peer_stream, None);
+    peer_stream_writer.send(message_1.clone()).await.unwrap();
+    peer_stream_writer.send(message_2.clone()).await.unwrap();
 
-    let mut server_stream = BufferedTranscoder::<_, Vec<u8>>::new(server_stream, None);
-    assert_eq!(server_stream.recv().await.unwrap(), message_1);
-    assert_eq!(server_stream.recv().await.unwrap(), message_2);
+    let (mut server_stream_reader, _) = new_message_stream::<_, Vec<u8>>(server_stream, None);
+    assert_eq!(server_stream_reader.recv().await.unwrap(), message_1);
+    assert_eq!(server_stream_reader.recv().await.unwrap(), message_2);
 }
 
 #[tracing::instrument]
