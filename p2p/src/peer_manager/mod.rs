@@ -695,7 +695,7 @@ where
 
         ensure!(
             !self.pending_outbound_connects.contains_key(&address),
-            P2pError::PeerError(PeerError::Pending(address.to_string())),
+            P2pError::PeerError(PeerError::ConnectionPending(address.to_string())),
         );
 
         self.maybe_reject_because_already_connected(&address, peer_role)?;
@@ -771,7 +771,7 @@ where
     ) -> crate::Result<()> {
         ensure!(
             !self.pending_disconnects.contains_key(&peer_id),
-            P2pError::PeerError(PeerError::Pending(peer_id.to_string())),
+            P2pError::PeerError(PeerError::DisconnectionPending(peer_id.to_string())),
         );
 
         ensure!(

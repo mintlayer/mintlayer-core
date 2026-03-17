@@ -181,7 +181,8 @@ pub enum HandshakeMessage {
     },
 }
 
-#[derive(Debug, Encode, Decode, PartialEq, Eq, Clone)]
+#[derive(Debug, Encode, Decode, PartialEq, Eq, Clone, strum::EnumDiscriminants)]
+#[strum_discriminants(name(MessageTag))]
 pub enum Message {
     #[codec(index = 0)]
     Handshake(HandshakeMessage),

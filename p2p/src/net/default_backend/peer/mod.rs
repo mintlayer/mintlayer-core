@@ -25,6 +25,7 @@ use common::{chain::ChainConfig, primitives::time::Time, time_getter::TimeGetter
 use logging::log;
 use networking::transport::{BufferedTranscoder, ConnectedSocketInfo, TransportSocket};
 use p2p_types::{services::Services, socket_addr_ext::SocketAddrExt};
+use serialization::Encode as _;
 
 use crate::{
     config::P2pConfig,
@@ -32,7 +33,7 @@ use crate::{
     error::{ConnectionValidationError, P2pError, PeerError, ProtocolError},
     message::{BlockSyncMessage, TransactionSyncMessage, WillDisconnectMessage},
     net::{
-        default_backend::types::{BackendEvent, PeerEvent},
+        default_backend::types::{BackendEvent, MessageTag, PeerEvent},
         types::PeerManagerMessageExt,
     },
     protocol::{choose_common_protocol_version, ProtocolVersion, SupportedProtocolVersion},
@@ -508,7 +509,12 @@ where
                     BackendEvent::Accepted{ block_sync_msg_sender, transaction_sync_msg_sender } => {
                         sync_msg_senders_opt = Some((block_sync_msg_sender, transaction_sync_msg_sender));
                     },
-                    BackendEvent::SendMessage(message) => self.socket.send(*message).await?,
+                    BackendEvent::SendMessage(message) => {
+                        let message_tag: MessageTag = (&*message).into();
+                        log::debug!("Sending message with tag {message_tag:?} and encoded size {}", message.encoded_size());
+
+                        self.socket.send(*message).await?;
+                    }
                     BackendEvent::Disconnect {reason} => {
                         log::debug!("Disconnection requested for peer {}, the reason is {:?}", self.peer_id, reason);
                         self.maybe_send_will_disconnect(reason).await?;
