@@ -79,6 +79,12 @@ impl TestTransportMaker for TestTransportChannel {
     }
 }
 
+impl TestTransportChannel {
+    pub fn make_transport_with_max_buf_size(max_buf_size: usize) -> MpscChannelTransport {
+        MpscChannelTransport::new().with_max_buf_size(max_buf_size)
+    }
+}
+
 pub struct TestTransportNoise {}
 
 impl TestTransportMaker for TestTransportNoise {

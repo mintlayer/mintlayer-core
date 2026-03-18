@@ -17,6 +17,7 @@
 //! via methods under #[cfg(test)],
 
 mod bad_time_diff;
+mod connection_lockup_when_socket_not_read;
 mod correct_handshake;
 mod disable_networking;
 mod disconnect_on_will_disconnect_msg;
