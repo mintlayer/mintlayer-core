@@ -110,12 +110,10 @@ where
     let (peer_event_sender, mut peer_event_receiver) = mpsc::channel(TEST_CHAN_BUF_SIZE);
     let cur_time = Arc::new(SeqCstAtomicU64::new(123456));
     let time_getter = mocked_time_getter_seconds(cur_time);
-    let peer_id = PeerId::new();
 
     let (mut socket1_reader, mut socket1_writer) =
         new_message_stream(socket1, Some(*p2p_config.protocol_config.max_message_size));
     let handshake_handler = HandshakeHandler::new(
-        peer_id,
         SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0)).into(),
         ConnectionInfo::Inbound,
         Arc::clone(&chain_config),
@@ -198,12 +196,10 @@ where
     let (peer_event_sender, mut peer_event_receiver) = mpsc::channel(TEST_CHAN_BUF_SIZE);
     let cur_time = Arc::new(SeqCstAtomicU64::new(123456));
     let time_getter = mocked_time_getter_seconds(cur_time);
-    let peer_id = PeerId::new();
 
     let (mut socket1_reader, mut socket1_writer) =
         new_message_stream(socket1, Some(*p2p_config.protocol_config.max_message_size));
     let handshake_handler = HandshakeHandler::new(
-        peer_id,
         SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0)).into(),
         ConnectionInfo::Outbound {
             handshake_nonce: 1,
@@ -287,12 +283,10 @@ where
     let (peer_event_sender, mut peer_event_receiver) = mpsc::channel(TEST_CHAN_BUF_SIZE);
     let cur_time = Arc::new(SeqCstAtomicU64::new(123456));
     let time_getter = mocked_time_getter_seconds(Arc::clone(&cur_time));
-    let peer_id = PeerId::new();
 
     let (mut socket1_reader, mut socket1_writer) =
         new_message_stream(socket1, Some(*p2p_config.protocol_config.max_message_size));
     let handshake_handler = HandshakeHandler::new(
-        peer_id,
         SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0)).into(),
         ConnectionInfo::Inbound,
         Arc::clone(&chain_config),
@@ -362,12 +356,10 @@ where
     let (peer_event_sender, _peer_event_receiver) = mpsc::channel(TEST_CHAN_BUF_SIZE);
     let cur_time = Arc::new(SeqCstAtomicU64::new(123456));
     let time_getter = mocked_time_getter_seconds(cur_time);
-    let peer_id = PeerId::new();
 
     let (mut socket1_reader, mut socket1_writer) =
         new_message_stream(socket1, Some(*p2p_config.protocol_config.max_message_size));
     let handshake_handler = HandshakeHandler::new(
-        peer_id,
         SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0)).into(),
         ConnectionInfo::Inbound,
         chain_config,
@@ -486,12 +478,10 @@ async fn handshake_timestamp_verification(
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
     let p2p_config = Arc::new(test_p2p_config());
     let (peer_event_sender, _peer_event_receiver) = mpsc::channel(TEST_CHAN_BUF_SIZE);
-    let peer_id = PeerId::new();
 
     let (mut socket1_reader, mut socket1_writer) =
         new_message_stream(socket1, Some(*p2p_config.protocol_config.max_message_size));
     let handshake_handler = HandshakeHandler::new(
-        peer_id,
         SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0)).into(),
         ConnectionInfo::Outbound {
             handshake_nonce: 1,

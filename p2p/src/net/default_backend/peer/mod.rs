@@ -39,7 +39,7 @@ use crate::{
     net::{
         default_backend::{
             peer::handshake_handler::HandshakeHandler,
-            types::{BackendEvent, MessageTag, PeerEvent},
+            types::{BackendEvent, MessageDebugLogSummary, PeerEvent},
         },
         types::PeerManagerMessageExt,
     },
@@ -130,16 +130,17 @@ where
     // Note: the channels used by this function to propagate messages to other parts of p2p
     // must be bounded; this is important to prevent DoS attacks.
     async fn handle_socket_msg(
-        peer_id: PeerId,
         msg: Message,
         peer_event_sender: &mpsc::Sender<PeerEvent>,
         block_sync_msg_sender: &mpsc::Sender<BlockSyncMessage>,
         transaction_sync_msg_sender: &mpsc::Sender<TransactionSyncMessage>,
         sync_message_received: &mut bool,
     ) -> crate::Result<()> {
+        log::debug!("Message received: {}", MessageDebugLogSummary(&msg));
+
         match msg.categorize() {
             CategorizedMessage::Handshake(_) => {
-                log::error!("Peer {peer_id} sent unexpected handshake message");
+                log::error!("Peer sent unexpected handshake message");
 
                 peer_event_sender
                     .send(PeerEvent::Misbehaved {
@@ -187,7 +188,7 @@ where
 
     async fn run_impl(self) -> crate::Result<()> {
         let Self {
-            peer_id,
+            peer_id: _,
             peer_address,
             chain_config,
             p2p_config,
@@ -201,7 +202,6 @@ where
         } = self;
 
         let handshake_handler = HandshakeHandler::new(
-            peer_id,
             peer_address,
             connection_info,
             chain_config,
@@ -232,14 +232,17 @@ where
                         sync_msg_senders_opt = Some((block_sync_msg_sender, transaction_sync_msg_sender));
                     },
                     BackendEvent::SendMessage(message) => {
-                        let message_tag: MessageTag = (&*message).into();
-                        log::debug!("Sending message with tag {message_tag:?} and encoded size {}", message.encoded_size());
+                        log::debug!(
+                            "Sending message {} with encoded size {}",
+                            MessageDebugLogSummary(&*message),
+                            message.encoded_size()
+                        );
 
                         socket_writer.send(*message).await?
                     },
                     BackendEvent::Disconnect {reason} => {
-                        log::debug!("Disconnection requested for peer {}, the reason is {:?}", peer_id, reason);
-                        maybe_send_will_disconnect(peer_id, reason, common_protocol_version.0.into(), &mut socket_writer).await?;
+                        log::debug!("Disconnection requested, the reason is {:?}", reason);
+                        maybe_send_will_disconnect(reason, common_protocol_version.0.into(), &mut socket_writer).await?;
                         return Ok(());
                     },
                 },
@@ -247,7 +250,6 @@ where
                     Ok(message) => {
                         let sync_msg_senders = sync_msg_senders_opt.as_mut().expect("sync_msg_senders_opt is some");
                         Self::handle_socket_msg(
-                            peer_id,
                             message,
                             &peer_event_sender,
                             &sync_msg_senders.0,
@@ -256,23 +258,19 @@ where
                         ).await?;
                     }
                     Err(err) => {
-                        log::info!("Connection closed for peer {}, reason {err:?}", peer_id);
+                        log::info!("Connection closed, reason: {err:?}");
 
                         let err = P2pError::NetworkingError(err);
                         let disconnection_reason = DisconnectionReason::from_error(&err, &p2p_config);
-                        maybe_send_will_disconnect(peer_id, disconnection_reason, common_protocol_version.0.into(), &mut socket_writer).await?;
+                        maybe_send_will_disconnect(disconnection_reason, common_protocol_version.0.into(), &mut socket_writer).await?;
 
                         let ban_score = err.ban_score();
                         if ban_score > 0 {
                             let send_result = peer_event_sender
                                 .send(PeerEvent::Misbehaved { error: err })
                                 .await;
-                            if let Err(send_error) = send_result {
-                                log::error!(
-                                    "Cannot send PeerEvent::Misbehaved for peer {}: {}",
-                                    self.peer_id,
-                                    send_error
-                                );
+                            if let Err(_) = send_result {
+                                log::warn!("Cannot send PeerEvent::Misbehaved");
                             }
                         }
 
@@ -283,20 +281,16 @@ where
         }
     }
 
+    #[tracing::instrument(skip_all, name = "", fields(peer_id = %self.peer_id), level = tracing::Level::ERROR)]
     pub async fn run(self) -> crate::Result<()> {
-        let peer_id = self.peer_id;
         let peer_event_sender = self.peer_event_sender.clone();
         let run_result = self.run_impl().await;
         let send_result = peer_event_sender.send(PeerEvent::ConnectionClosed).await;
 
-        if let Err(send_error) = send_result {
+        if let Err(_) = send_result {
             // Note: this situation is likely to happen if the connection is already closed,
             // so it's not really an error.
-            log::debug!(
-                "Unable to send PeerEvent::ConnectionClosed to Backend for peer {}: {}",
-                peer_id,
-                send_error
-            );
+            log::debug!("Unable to send PeerEvent::ConnectionClosed to Backend");
         }
 
         run_result
@@ -304,18 +298,13 @@ where
 }
 
 async fn maybe_send_will_disconnect<S: PeerStream>(
-    peer_id: PeerId,
     reason: Option<DisconnectionReason>,
     peer_protocol_version: ProtocolVersion,
     socket_writer: &mut MessageWriter<S, Message>,
 ) -> crate::Result<()> {
     if can_send_will_disconnect(peer_protocol_version) {
         if let Some(reason) = reason {
-            log::debug!(
-                "Sending WillDisconnect to peer {}, reason: {:?}",
-                peer_id,
-                reason
-            );
+            log::debug!("Sending WillDisconnect, reason: {:?}", reason);
             socket_writer
                 .send(Message::WillDisconnect(WillDisconnectMessage {
                     reason: reason.to_string(),

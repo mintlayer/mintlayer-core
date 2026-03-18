@@ -32,7 +32,6 @@ use crate::{
     error::{ConnectionValidationError, P2pError, PeerError, ProtocolError},
     net::default_backend::types::{peer_event, HandshakeMessage, Message, P2pTimestamp, PeerEvent},
     protocol::{choose_common_protocol_version, ProtocolVersion, SupportedProtocolVersion},
-    types::peer_id::PeerId,
 };
 
 use super::{maybe_send_will_disconnect, ConnectionInfo};
@@ -41,9 +40,6 @@ use super::{maybe_send_will_disconnect, ConnectionInfo};
 pub struct CommonProtocolVersion(pub SupportedProtocolVersion);
 
 pub struct HandshakeHandler {
-    /// Peer ID of the remote node
-    peer_id: PeerId,
-
     /// Peer's remote address
     peer_address: PeerAddress,
 
@@ -65,7 +61,6 @@ pub struct HandshakeHandler {
 
 impl HandshakeHandler {
     pub fn new(
-        peer_id: PeerId,
         peer_address: PeerAddress,
         connection_info: ConnectionInfo,
         chain_config: Arc<ChainConfig>,
@@ -74,7 +69,6 @@ impl HandshakeHandler {
         time_getter: TimeGetter,
     ) -> Self {
         Self {
-            peer_id,
             peer_address,
             connection_info,
             chain_config,
@@ -138,7 +132,6 @@ impl HandshakeHandler {
     ) -> crate::Result<CommonProtocolVersion> {
         let recv_time = self.time_getter.get_time();
         let result = (|| {
-            // FIXME why closure?
             Self::validate_peer_time(
                 &self.p2p_config,
                 handshake_init_time,
@@ -156,7 +149,6 @@ impl HandshakeHandler {
         })();
 
         maybe_send_will_disconnect(
-            self.peer_id,
             DisconnectionReason::from_result(&result, &self.p2p_config),
             peer_protocol_version,
             socket_writer,
@@ -290,8 +282,7 @@ impl HandshakeHandler {
                 else {
                     if let Message::WillDisconnect(msg) = hello_response {
                         log::info!(
-                            "Peer {} is going to disconnect us with the reason: '{}'",
-                            self.peer_id,
+                            "Peer is going to disconnect us with the reason: '{}'",
                             msg.reason
                         );
                         return Err(P2pError::PeerError(PeerError::PeerWillDisconnect));
@@ -348,29 +339,21 @@ impl HandshakeHandler {
             Ok(Ok(common_protocol_version)) => Ok(common_protocol_version),
             Ok(Err(err)) => {
                 let ban_score = err.ban_score();
-                log::debug!(
-                    "Handshake failed for peer {}: {err} (error ban score = {})",
-                    self.peer_id,
-                    ban_score
-                );
+                log::debug!("Handshake failed: {err} (error ban score = {ban_score})");
 
                 if ban_score > 0 {
                     let send_result = peer_event_sender
                         .send(PeerEvent::MisbehavedOnHandshake { error: err.clone() })
                         .await;
-                    if let Err(send_error) = send_result {
-                        log::error!(
-                            "Cannot send PeerEvent::MisbehavedOnHandshake for peer {}: {}",
-                            self.peer_id,
-                            send_error
-                        );
+                    if let Err(_) = send_result {
+                        log::error!("Cannot send PeerEvent::MisbehavedOnHandshake");
                     }
                 }
 
                 Err(err)
             }
             Err(_) => {
-                log::debug!("handshake timeout for peer {}", self.peer_id);
+                log::debug!("Handshake timed out");
                 Err(P2pError::ProtocolError(ProtocolError::Unresponsive))
             }
         }
