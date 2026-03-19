@@ -58,6 +58,8 @@ serde_test.workspace = true
 serial_test.workspace = true
 trezor-client.workspace = true
 
+num-bigint.workspace = true
+
 [features]
 expensive-verification = []
 dev = []                    # used by fixed-hash

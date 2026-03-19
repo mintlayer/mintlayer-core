@@ -32,6 +32,8 @@ use crate::storage::storage_api::{
 
 use super::ApiServerInMemoryStorageTransactionalRo;
 
+use num_bigint::BigUint;
+
 #[async_trait::async_trait]
 impl ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'_> {
     async fn is_initialized(&self) -> Result<bool, ApiServerStorageError> {
@@ -42,7 +44,7 @@ impl ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'_> {
         &self,
         address: &str,
         coin_or_token_id: CoinOrTokenId,
-    ) -> Result<Option<Amount>, ApiServerStorageError> {
+    ) -> Result<Option<BigUint>, ApiServerStorageError> {
         self.transaction.get_address_balance(address, coin_or_token_id)
     }
 
@@ -57,7 +59,7 @@ impl ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'_> {
         &self,
         address: &str,
         coin_or_token_id: CoinOrTokenId,
-    ) -> Result<Option<Amount>, ApiServerStorageError> {
+    ) -> Result<Option<BigUint>, ApiServerStorageError> {
         self.transaction.get_address_locked_balance(address, coin_or_token_id)
     }
 

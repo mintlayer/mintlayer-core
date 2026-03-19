@@ -13,26 +13,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{
-    api::json_helpers::{
-        self, amount_to_json, block_header_to_json, pool_data_to_json, to_tx_json_with_block_info,
-        tx_to_json, txoutput_to_json, utxo_outpoint_to_json, TokenDecimals,
-    },
-    error::{
-        ApiServerWebServerClientError, ApiServerWebServerError, ApiServerWebServerForbiddenError,
-        ApiServerWebServerNotFoundError, ApiServerWebServerServerError,
-    },
-    TxSubmitClient,
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    ops::Sub,
+    str::FromStr,
+    sync::Arc,
+    time::Duration,
 };
+
 use api_server_common::storage::storage_api::{
     block_aux_data::BlockAuxData, AmountWithDecimals, ApiServerStorage, ApiServerStorageRead,
     BlockInfo, CoinOrTokenStatistic, Order, TransactionInfo,
-};
-use axum::{
-    extract::{DefaultBodyLimit, Path, Query, State},
-    response::IntoResponse,
-    routing::{get, post},
-    Json, Router,
 };
 use common::{
     address::Address,
@@ -44,22 +35,34 @@ use common::{
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Id, Idable, H256},
 };
-use hex::ToHex;
-use serde::Deserialize;
-use serde_json::json;
 use serialization::hex_encoded::HexEncoded;
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    ops::Sub,
-    str::FromStr,
-    sync::Arc,
-    time::Duration,
-};
 use utils::ensure;
 
-use crate::ApiServerWebServerState;
+use crate::{
+    api::json_helpers::{
+        self, amount_to_json, biguint_to_json, block_header_to_json, pool_data_to_json,
+        to_tx_json_with_block_info, tx_to_json, txoutput_to_json, utxo_outpoint_to_json,
+        TokenDecimals,
+    },
+    error::{
+        ApiServerWebServerClientError, ApiServerWebServerError, ApiServerWebServerForbiddenError,
+        ApiServerWebServerNotFoundError, ApiServerWebServerServerError,
+    },
+    ApiServerWebServerState, TxSubmitClient,
+};
 
 use super::json_helpers::{nft_with_owner_to_json, to_json_string};
+
+use axum::{
+    extract::{DefaultBodyLimit, Path, Query, State},
+    response::IntoResponse,
+    routing::{get, post},
+    Json, Router,
+};
+use hex::ToHex;
+use num_bigint::BigUint;
+use serde::Deserialize;
+use serde_json::json;
 
 pub const API_VERSION: &str = "2.0.0";
 
@@ -714,11 +717,11 @@ pub async fn address<T: ApiServerStorage>(
             logging::log::error!("internal error: {e}");
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?
-        .unwrap_or(Amount::ZERO);
+        .unwrap_or(BigUint::ZERO);
 
     let mut tokens = Vec::with_capacity(address_balances.len());
     let mut coin_balance = AmountWithDecimals {
-        amount: Amount::ZERO,
+        amount: BigUint::ZERO,
         decimals: state.chain_config.coin_decimals(),
     };
 
@@ -730,15 +733,15 @@ pub async fn address<T: ApiServerStorage>(
             CoinOrTokenId::TokenId(token_id) => {
                 tokens.push(json!({
                     "token_id": Address::new(&state.chain_config, token_id).expect("no error").as_str(),
-                    "amount": amount_to_json(balance.amount, balance.decimals),
+                    "amount": biguint_to_json(balance.amount, balance.decimals),
                 }));
             }
         }
     }
 
     Ok(Json(json!({
-        "coin_balance": amount_to_json(coin_balance.amount, coin_balance.decimals),
-        "locked_coin_balance": amount_to_json(locked_coin_balance, state.chain_config.coin_decimals()),
+        "coin_balance": biguint_to_json(coin_balance.amount, coin_balance.decimals),
+        "locked_coin_balance": biguint_to_json(locked_coin_balance, state.chain_config.coin_decimals()),
         "transaction_history": transaction_history,
         "tokens": tokens
     })))

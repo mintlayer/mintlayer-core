@@ -22,6 +22,7 @@ bb8-postgres = "0.8"
 clap = { workspace = true, features = ["derive"] }
 futures = { workspace = true, default-features = false }
 itertools.workspace = true
+num-bigint.workspace = true
 parity-scale-codec.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }

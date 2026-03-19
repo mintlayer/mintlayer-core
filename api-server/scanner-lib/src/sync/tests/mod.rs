@@ -23,9 +23,6 @@ use std::{
     time::Duration,
 };
 
-use rstest::rstest;
-use tokio::sync::mpsc;
-
 use api_server_common::storage::{
     impls::in_memory::transactional::TransactionalApiServerInMemoryStorage,
     storage_api::{
@@ -77,6 +74,10 @@ use test_utils::random::{make_seedable_rng, Seed};
 use crate::blockchain_state::BlockchainState;
 
 use super::*;
+
+use num_bigint::BigUint;
+use rstest::rstest;
+use tokio::sync::mpsc;
 
 #[ctor::ctor]
 fn init() {
@@ -763,10 +764,10 @@ async fn reorg_locked_balance(#[case] seed: Seed) {
         .await
         .unwrap();
 
-    assert_eq!(locked_amount, Some(Amount::from_atoms(1 + 2 + 3 + 4)));
+    assert_eq!(locked_amount, Some(BigUint::from(1u32 + 2 + 3 + 4)));
 
     let balance = db_tx.get_address_balance(address.as_str(), CoinOrTokenId::Coin).await.unwrap();
-    assert_eq!(balance, Some(Amount::from_atoms(already_unlocked_coins)));
+    assert_eq!(balance, Some(BigUint::from(already_unlocked_coins)));
     // check there are only 2 available utxos
     let utxos = db_tx.get_address_available_utxos(address.as_str()).await.unwrap();
     assert_eq!(utxos.len(), already_unlocked_utxos);
@@ -789,12 +790,12 @@ async fn reorg_locked_balance(#[case] seed: Seed) {
         .await
         .unwrap();
 
-    assert_eq!(locked_amount, Some(Amount::from_atoms(3 + 4)));
+    assert_eq!(locked_amount, Some(BigUint::from(3u32 + 4)));
 
     let balance = db_tx.get_address_balance(address.as_str(), CoinOrTokenId::Coin).await.unwrap();
     assert_eq!(
         balance,
-        Some(Amount::from_atoms(1 + 2 + already_unlocked_coins))
+        Some(BigUint::from(1u32 + 2 + already_unlocked_coins))
     );
     // check all of the UTXOs are available
     let utxos = db_tx.get_address_available_utxos(address.as_str()).await.unwrap();
@@ -869,13 +870,13 @@ async fn reorg_locked_balance(#[case] seed: Seed) {
         .await
         .unwrap();
 
-    assert_eq!(locked_amount, Some(Amount::ZERO));
+    assert_eq!(locked_amount, Some(BigUint::ZERO));
 
     let balance = db_tx.get_address_balance(address.as_str(), CoinOrTokenId::Coin).await.unwrap();
 
     assert_eq!(
         balance,
-        Some(Amount::from_atoms(3 + 4 + already_unlocked_coins))
+        Some(BigUint::from(3u32 + 4 + already_unlocked_coins))
     );
     // check all of the UTXOs are available
     let utxos = db_tx.get_address_available_utxos(address.as_str()).await.unwrap();
@@ -950,11 +951,11 @@ async fn reorg_locked_balance(#[case] seed: Seed) {
         .await
         .unwrap();
 
-    assert_eq!(locked_amount, Some(Amount::ZERO));
+    assert_eq!(locked_amount, Some(BigUint::ZERO));
 
     let balance = db_tx.get_address_balance(address.as_str(), CoinOrTokenId::Coin).await.unwrap();
 
-    assert_eq!(balance, Some(Amount::from_atoms(already_unlocked_coins)));
+    assert_eq!(balance, Some(BigUint::from(already_unlocked_coins)));
     // check there are no utxos as all are spent
     let utxos = db_tx.get_address_available_utxos(address.as_str()).await.unwrap();
     assert_eq!(utxos.len(), already_unlocked_utxos);
@@ -971,12 +972,12 @@ async fn reorg_locked_balance(#[case] seed: Seed) {
         .await
         .unwrap();
 
-    assert_eq!(locked_amount, Some(Amount::ZERO));
+    assert_eq!(locked_amount, Some(BigUint::ZERO));
 
     let balance = db_tx.get_address_balance(address.as_str(), CoinOrTokenId::Coin).await.unwrap();
     assert_eq!(
         balance,
-        Some(Amount::from_atoms(3 + 4 + already_unlocked_coins))
+        Some(BigUint::from(3u32 + 4 + already_unlocked_coins))
     );
     // check all of the UTXOs are available
     let utxos = db_tx.get_address_available_utxos(address.as_str()).await.unwrap();
@@ -997,13 +998,13 @@ async fn reorg_locked_balance(#[case] seed: Seed) {
         .await
         .unwrap();
 
-    assert_eq!(locked_amount, Some(Amount::from_atoms(3 + 4)));
+    assert_eq!(locked_amount, Some(BigUint::from(3u32 + 4)));
 
     let balance = db_tx.get_address_balance(address.as_str(), CoinOrTokenId::Coin).await.unwrap();
 
     assert_eq!(
         balance,
-        Some(Amount::from_atoms(1 + 2 + already_unlocked_coins))
+        Some(BigUint::from(1u32 + 2 + already_unlocked_coins))
     );
     // check all of the UTXOs are available
     let utxos = db_tx.get_address_available_utxos(address.as_str()).await.unwrap();
@@ -1027,9 +1028,9 @@ async fn reorg_locked_balance(#[case] seed: Seed) {
         .await
         .unwrap();
 
-    assert_eq!(locked_amount, Some(Amount::from_atoms(1 + 2 + 3 + 4)));
+    assert_eq!(locked_amount, Some(BigUint::from(1u32 + 2 + 3 + 4)));
     let balance = db_tx.get_address_balance(address.as_str(), CoinOrTokenId::Coin).await.unwrap();
-    assert_eq!(balance, Some(Amount::from_atoms(already_unlocked_coins)));
+    assert_eq!(balance, Some(BigUint::from(already_unlocked_coins)));
     // check there are no available UTXOs as all are locked
     let utxos = db_tx.get_address_available_utxos(address.as_str()).await.unwrap();
     assert_eq!(utxos.len(), already_unlocked_utxos);
@@ -1094,10 +1095,10 @@ async fn sync_and_compare(
         .get_address_balance(address.as_str(), CoinOrTokenId::Coin)
         .await
         .unwrap()
-        .unwrap_or(Amount::ZERO);
+        .unwrap_or(BigUint::ZERO);
 
     // address balance is not updated
-    assert_eq!(balance, Amount::ZERO);
+    assert_eq!(balance, BigUint::ZERO);
 
     let node_delegations = tf
         .chainstate
@@ -1123,10 +1124,10 @@ async fn sync_and_compare(
             .get_address_balance(address.as_str(), CoinOrTokenId::Coin)
             .await
             .unwrap()
-            .unwrap_or(Amount::ZERO);
+            .unwrap_or(BigUint::ZERO);
 
         // address balance is not updated
-        assert_eq!(balance, Amount::ZERO);
+        assert_eq!(balance, BigUint::ZERO);
     }
 }
 
@@ -1247,14 +1248,14 @@ async fn check_all_destinations_are_tracked(#[case] seed: Seed) {
         let amount =
             db_tx.get_address_balance(address.as_str(), CoinOrTokenId::Coin).await.unwrap();
 
-        assert_eq!(amount, Some(Amount::from_atoms(1)));
+        assert_eq!(amount, Some(BigUint::from(1u32)));
 
         let locked_amount = db_tx
             .get_address_locked_balance(address.as_str(), CoinOrTokenId::Coin)
             .await
             .unwrap();
 
-        assert_eq!(locked_amount, Some(Amount::from_atoms(1)));
+        assert_eq!(locked_amount, Some(BigUint::from(1u32)));
 
         let utxos = db_tx.get_address_all_utxos(address.as_str()).await.unwrap();
         // check we have 2 utxos one locked and one unlocked

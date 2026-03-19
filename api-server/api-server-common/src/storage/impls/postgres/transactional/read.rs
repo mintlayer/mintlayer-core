@@ -13,10 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+
 use common::{
     chain::{
         block::timestamp::BlockTimestamp, tokens::TokenId, DelegationId, Destination, OrderId,
-        PoolId,
+        PoolId, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
 };
@@ -30,11 +32,10 @@ use crate::storage::{
         TransactionInfo, TransactionWithBlockInfo, Utxo, UtxoWithExtraInfo,
     },
 };
-use std::collections::BTreeMap;
-
-use common::chain::UtxoOutPoint;
 
 use super::{ApiServerPostgresTransactionalRo, CONN_ERR};
+
+use num_bigint::BigUint;
 
 #[async_trait::async_trait]
 impl ApiServerStorageRead for ApiServerPostgresTransactionalRo<'_> {
@@ -56,7 +57,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRo<'_> {
         &self,
         address: &str,
         coin_or_token_id: CoinOrTokenId,
-    ) -> Result<Option<Amount>, ApiServerStorageError> {
+    ) -> Result<Option<BigUint>, ApiServerStorageError> {
         let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_address_balance(address, coin_or_token_id).await?;
 
@@ -77,7 +78,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRo<'_> {
         &self,
         address: &str,
         coin_or_token_id: CoinOrTokenId,
-    ) -> Result<Option<Amount>, ApiServerStorageError> {
+    ) -> Result<Option<BigUint>, ApiServerStorageError> {
         let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_address_locked_balance(address, coin_or_token_id).await?;
 

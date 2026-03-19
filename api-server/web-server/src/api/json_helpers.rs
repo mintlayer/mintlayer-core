@@ -31,12 +31,14 @@ use common::{
         AccountCommand, AccountSpending, Block, ChainConfig, Destination, OrderAccountCommand,
         OrderId, OutPointSourceId, PoolId, SignedTransaction, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{Amount, BlockHeight, CoinOrTokenId, Idable},
+    primitives::{amount::decimal::fmt_decimal, Amount, BlockHeight, CoinOrTokenId, Idable},
     Uint256,
 };
-use hex::ToHex;
-use serde_json::json;
 use serialization::DecodeAll;
+
+use hex::ToHex;
+use num_bigint::BigUint;
+use serde_json::json;
 
 pub enum TokenDecimals<'a> {
     Map(&'a BTreeMap<TokenId, u8>),
@@ -62,6 +64,36 @@ pub fn amount_to_json(amount: Amount, number_of_decimals: u8) -> serde_json::Val
     json!({
         "decimal": amount.into_fixedpoint_str(number_of_decimals),
         "atoms": amount.into_atoms().to_string(),
+    })
+}
+
+struct BigIntDecimalNoPadding {
+    mantissa: BigUint,
+    decimals: u8,
+}
+
+impl BigIntDecimalNoPadding {
+    fn new(mut mantissa: BigUint, mut decimals: u8) -> Self {
+        let ten: BigUint = 10u32.into();
+        while decimals > 0 && &mantissa % &ten == BigUint::ZERO {
+            mantissa /= &ten;
+            decimals -= 1;
+        }
+        Self { mantissa, decimals }
+    }
+}
+
+impl std::fmt::Display for BigIntDecimalNoPadding {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        fmt_decimal(&self.mantissa, self.decimals, f)
+    }
+}
+
+pub fn biguint_to_json(amount: BigUint, number_of_decimals: u8) -> serde_json::Value {
+    let atoms_str = amount.to_string();
+    json!({
+        "decimal": BigIntDecimalNoPadding::new(amount, number_of_decimals).to_string(),
+        "atoms": atoms_str,
     })
 }
 

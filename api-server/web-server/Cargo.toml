@@ -27,6 +27,7 @@ clap = { workspace = true, features = ["derive"] }
 hex.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
+num-bigint.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true }
 tower-http = { workspace = true, features = ["cors"] }
