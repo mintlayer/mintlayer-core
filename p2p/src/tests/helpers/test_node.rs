@@ -36,7 +36,7 @@ use common::chain::ChainConfig;
 use mempool::MempoolConfig;
 use networking::transport::{TransportListener, TransportSocket};
 use p2p_test_utils::SHORT_TIMEOUT;
-use p2p_types::{p2p_event::P2pEventHandler, socket_address::SocketAddress};
+use p2p_types::{p2p_event::P2pEventHandler, socket_address::SocketAddress, PeerId};
 use randomness::RngCore;
 use storage_inmemory::InMemory;
 use subsystem::ShutdownTrigger;
@@ -46,20 +46,26 @@ use utils_networking::IpOrSocketAddress;
 use crate::{
     config::P2pConfig,
     error::P2pError,
-    net::{default_backend::DefaultNetworkingService, types::PeerRole, ConnectivityService},
+    net::{
+        default_backend::{types::MessageTag, DefaultNetworkingService},
+        types::PeerRole,
+        ConnectivityService,
+    },
     peer_manager::{
         peerdb::storage_impl::PeerDbStorageImpl,
         test_utils::{mutate_peer_manager, query_peer_manager},
         PeerManager,
     },
+    peer_manager_event::PeerDisconnectionDbAction,
     protocol::ProtocolVersion,
     sync::SyncManager,
     test_helpers::peerdb_inmemory_store,
+    tests::helpers::{BackendNotification, BackendObserverImpl},
     utils::oneshot_nofail,
     PeerManagerEvent,
 };
 
-use super::{PeerManagerNotification, PeerManagerObserver, TestDnsSeed, TestPeersInfo};
+use super::{PeerManagerNotification, PeerManagerObserverImpl, TestDnsSeed, TestPeersInfo};
 
 type PeerMgr<Transport> =
     PeerManager<DefaultNetworkingService<Transport>, PeerDbStorageImpl<InMemory>>;
@@ -81,6 +87,7 @@ where
     shutdown_trigger: ShutdownTrigger,
     subsystem_mgr_join_handle: subsystem::ManagerJoinHandle,
     peer_mgr_notification_receiver: mpsc::UnboundedReceiver<PeerManagerNotification>,
+    backend_notification_receiver: mpsc::UnboundedReceiver<BackendNotification>,
     chainstate: ChainstateHandle,
     dns_seed_addresses: Arc<Mutex<Vec<SocketAddress>>>,
 }
@@ -159,6 +166,10 @@ where
         let (backend_shutdown_sender, backend_shutdown_receiver) = oneshot::channel();
         let (subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
 
+        let (backend_notification_sender, backend_notification_receiver) =
+            mpsc::unbounded_channel();
+        let backend_observer = Arc::new(BackendObserverImpl::new(backend_notification_sender));
+
         let (conn_handle, messaging_handle, syncing_event_receiver, backend_join_handle) =
             DefaultNetworkingService::<Transport>::start_generic(
                 networking_enabled,
@@ -171,6 +182,7 @@ where
                 backend_shutdown_receiver,
                 subscribers_receiver,
                 protocol_version,
+                Some(backend_observer),
                 tracing_span.clone(),
             )
             .unwrap();
@@ -179,7 +191,8 @@ where
 
         let (peer_mgr_notification_sender, peer_mgr_notification_receiver) =
             mpsc::unbounded_channel();
-        let peer_mgr_observer = Box::new(PeerManagerObserver::new(peer_mgr_notification_sender));
+        let peer_mgr_observer =
+            Box::new(PeerManagerObserverImpl::new(peer_mgr_notification_sender));
         let dns_seed_addresses = Arc::new(Mutex::new(Vec::new()));
 
         let peer_mgr = PeerMgr::<Transport>::new_generic(
@@ -244,6 +257,7 @@ where
             shutdown_trigger,
             subsystem_mgr_join_handle,
             peer_mgr_notification_receiver,
+            backend_notification_receiver,
             chainstate,
             dns_seed_addresses,
         }
@@ -277,6 +291,23 @@ where
         self.peer_mgr_event_sender
             .send(PeerManagerEvent::Connect(
                 IpOrSocketAddress::Socket(address.socket_addr()),
+                result_sender,
+            ))
+            .unwrap();
+
+        result_receiver
+    }
+
+    pub fn start_disconnecting(
+        &self,
+        peer_id: PeerId,
+    ) -> oneshot_nofail::Receiver<Result<(), P2pError>> {
+        let (result_sender, result_receiver) = oneshot_nofail::channel();
+        self.peer_mgr_event_sender
+            .send(PeerManagerEvent::Disconnect(
+                peer_id,
+                PeerDisconnectionDbAction::Keep,
+                None,
                 result_sender,
             ))
             .unwrap();
@@ -324,6 +355,23 @@ where
         &mut self,
     ) -> &mut mpsc::UnboundedReceiver<PeerManagerNotification> {
         &mut self.peer_mgr_notification_receiver
+    }
+
+    pub async fn wait_for_next_backend_socket_write(
+        &mut self,
+        expected_peer_id: PeerId,
+        expected_message_tag: MessageTag,
+    ) {
+        loop {
+            if let BackendNotification::MessageWritten { peer_id, message } =
+                self.backend_notification_receiver.recv().await.unwrap()
+            {
+                let message_tag: MessageTag = (&message).into();
+                if peer_id == expected_peer_id && message_tag == expected_message_tag {
+                    break;
+                }
+            }
+        }
     }
 
     pub async fn get_peers_info(&self) -> TestPeersInfo {

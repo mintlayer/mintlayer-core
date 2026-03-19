@@ -203,7 +203,7 @@ where
     addr_list_response_cache: AddrListResponseCache,
 
     /// PeerManager's observer for use by tests.
-    observer: Option<Box<dyn Observer + Send>>,
+    observer: Option<Box<dyn PeerManagerObserver + Send>>,
 
     /// Normally, this will be DefaultDnsSeed, which performs the actual address lookup, but tests can
     /// substitute it with a mock implementation.
@@ -274,7 +274,7 @@ where
         peer_mgr_event_receiver: mpsc::UnboundedReceiver<PeerManagerEvent>,
         time_getter: TimeGetter,
         peerdb_storage: S,
-        observer: Option<Box<dyn Observer + Send>>,
+        observer: Option<Box<dyn PeerManagerObserver + Send>>,
         dns_seed: Box<dyn DnsSeed + Send>,
         mut rng: impl RngCore + Send + 'static,
     ) -> crate::Result<Self> {
@@ -1157,7 +1157,7 @@ where
         }
 
         if let Some(o) = self.observer.as_mut() {
-            o.on_connection_accepted(peer_address, peer_role)
+            o.on_connection_accepted(peer_address, peer_id, peer_role)
         }
 
         Ok(())
@@ -2455,7 +2455,7 @@ where
     }
 }
 
-pub trait Observer {
+pub trait PeerManagerObserver {
     fn on_peer_ban_score_adjustment(&mut self, address: SocketAddress, new_score: u32);
 
     fn on_peer_ban(&mut self, address: BannableAddress);
@@ -2466,7 +2466,12 @@ pub trait Observer {
     fn on_heartbeat(&mut self);
 
     // This will be called for both incoming and outgoing connections.
-    fn on_connection_accepted(&mut self, address: SocketAddress, peer_role: PeerRole);
+    fn on_connection_accepted(
+        &mut self,
+        address: SocketAddress,
+        peer_id: PeerId,
+        peer_role: PeerRole,
+    );
 
     // This will be called after `ConnectivityEvent::ConnectionError` has been handled by
     // the peer manager.

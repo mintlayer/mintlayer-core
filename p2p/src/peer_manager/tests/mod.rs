@@ -53,7 +53,7 @@ use crate::{
     },
     peer_manager::PeerManager,
     test_helpers::{peerdb_inmemory_store, test_p2p_config},
-    tests::helpers::{PeerManagerNotification, PeerManagerObserver},
+    tests::helpers::{PeerManagerNotification, PeerManagerObserverImpl},
     types::peer_id::PeerId,
     utils::oneshot_nofail,
     P2pConfig, P2pEventHandler, PeerManagerEvent,
@@ -173,7 +173,7 @@ pub fn make_standalone_peer_manager(
         conn_event_receiver,
     );
     let (peer_mgr_notification_sender, peer_mgr_notification_receiver) = mpsc::unbounded_channel();
-    let peer_mgr_observer = Box::new(PeerManagerObserver::new(peer_mgr_notification_sender));
+    let peer_mgr_observer = Box::new(PeerManagerObserverImpl::new(peer_mgr_notification_sender));
     let dns_seed = DefaultDnsSeed::new(Arc::clone(&chain_config), Arc::clone(&p2p_config));
 
     let peer_mgr = PeerManager::<TcpNetworkingService, _>::new_generic(

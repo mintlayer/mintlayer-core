@@ -1145,6 +1145,7 @@ async fn peer_accepted_by_peer_mgr(
         peer_mgr_notification,
         PeerManagerNotification::ConnectionAccepted {
             address: peer_address,
+            peer_id,
             peer_role
         }
     );

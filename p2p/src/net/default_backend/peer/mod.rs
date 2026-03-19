@@ -46,7 +46,7 @@ use crate::{
     net::{
         default_backend::{
             peer::handshake_handler::HandshakeHandler,
-            types::{BackendEvent, MessageDebugLogSummary, MessageTag, PeerEvent},
+            types::{BackendEvent, BackendObserver, MessageDebugLogSummary, MessageTag, PeerEvent},
         },
         types::PeerManagerMessageExt,
     },
@@ -96,6 +96,9 @@ pub struct Peer<T: TransportSocket> {
 
     /// Time getter
     time_getter: TimeGetter,
+
+    /// Observer object, used by tests.
+    observer: Option<Arc<dyn BackendObserver + Send + Sync>>,
 }
 
 impl<T> Peer<T>
@@ -113,6 +116,7 @@ where
         backend_event_receiver: mpsc::UnboundedReceiver<BackendEvent>,
         node_protocol_version: ProtocolVersion,
         time_getter: TimeGetter,
+        observer: Option<Arc<dyn BackendObserver + Send + Sync>>,
     ) -> crate::Result<Self> {
         let peer_address = socket.remote_address()?.as_peer_address();
 
@@ -131,6 +135,7 @@ where
             backend_event_receiver,
             node_protocol_version,
             time_getter,
+            observer,
         })
     }
 
@@ -206,6 +211,7 @@ where
             mut backend_event_receiver,
             node_protocol_version,
             time_getter,
+            observer,
         } = self;
 
         let handshake_handler = HandshakeHandler::new(
@@ -238,6 +244,7 @@ where
             socket_writer,
             writer_cmd_receiver,
             writer_event_sender,
+            observer.clone(),
         );
 
         // Note: if the outer Option is set, an explicit disconnection should be initiated via
@@ -288,6 +295,10 @@ where
                 }
                 event = socket_reader.recv(), if sync_msg_senders_opt.is_some() => match event {
                     Ok(message) => {
+                        if let Some(observer) = &observer {
+                            observer.on_message_read(peer_id, &message);
+                        }
+
                         let sync_msg_senders = sync_msg_senders_opt.as_mut().expect("sync_msg_senders_opt is some");
                         Self::handle_socket_msg(
                             message,
@@ -416,14 +427,17 @@ fn spawn_writer<S: PeerStream + 'static>(
     socket_writer: MessageWriter<S, Message>,
     cmd_receiver: mpsc::UnboundedReceiver<WriterCommand>,
     event_sender: mpsc::UnboundedSender<WriterEvent>,
+    observer: Option<Arc<dyn BackendObserver + Send + Sync>>,
 ) -> JoinHandle<()> {
     tokio_spawn_in_current_tracing_span(
         async move {
             let writer_result = writer_loop(
                 &p2p_config,
+                peer_id,
                 common_protocol_version,
                 socket_writer,
                 cmd_receiver,
+                observer,
             )
             .await;
 
@@ -437,9 +451,11 @@ fn spawn_writer<S: PeerStream + 'static>(
 
 async fn writer_loop<S: PeerStream>(
     p2p_config: &P2pConfig,
+    peer_id: PeerId,
     common_protocol_version: SupportedProtocolVersion,
     mut socket_writer: MessageWriter<S, Message>,
     mut cmd_receiver: mpsc::UnboundedReceiver<WriterCommand>,
+    observer: Option<Arc<dyn BackendObserver + Send + Sync>>,
 ) -> crate::Result<()> {
     while let Some(cmd) = cmd_receiver.recv().await {
         match cmd {
@@ -449,6 +465,10 @@ async fn writer_loop<S: PeerStream>(
                     MessageDebugLogSummary(&*message),
                     message.encoded_size()
                 );
+
+                if let Some(observer) = &observer {
+                    observer.on_message_write(peer_id, &message);
+                }
 
                 tokio::time::timeout(
                     *p2p_config.backend_timeouts.socket_write_timeout,

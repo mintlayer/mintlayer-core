@@ -47,7 +47,7 @@ use crate::{
     net::{
         default_backend::{
             peer,
-            types::{BackendEvent, Command, PeerEvent},
+            types::{BackendEvent, BackendObserver, Command, PeerEvent},
         },
         types::{
             services::Services, ConnectivityEvent, PeerInfo, PeerManagerMessageExt, SyncingEvent,
@@ -169,6 +169,9 @@ pub struct Backend<T: TransportSocket> {
     /// equal to default_networking_service::PREFERRED_PROTOCOL_VERSION, but it can be
     /// overridden for testing purposes.
     node_protocol_version: ProtocolVersion,
+
+    /// Observer object, used by tests.
+    observer: Option<Arc<dyn BackendObserver + Send + Sync>>,
 }
 
 impl<T> Backend<T>
@@ -190,6 +193,7 @@ where
         shutdown_receiver: oneshot::Receiver<()>,
         subscribers_receiver: mpsc::UnboundedReceiver<P2pEventHandler>,
         node_protocol_version: ProtocolVersion,
+        observer: Option<Arc<dyn BackendObserver + Send + Sync>>,
     ) -> Self {
         Self {
             networking_enabled,
@@ -210,6 +214,7 @@ where
             events_controller: EventsController::new(),
             subscribers_receiver,
             node_protocol_version,
+            observer,
         }
     }
 
@@ -403,6 +408,7 @@ where
             backend_event_receiver,
             self.node_protocol_version,
             self.time_getter.shallow_clone(),
+            self.observer.clone(),
         )?;
         let shutdown = Arc::clone(&self.shutdown);
         let handle = tokio_spawn_in_current_tracing_span(

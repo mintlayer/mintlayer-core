@@ -410,6 +410,15 @@ pub fn can_send_will_disconnect(peer_protocol_version: ProtocolVersion) -> bool 
     peer_protocol_version >= SupportedProtocolVersion::V3.into()
 }
 
+/// Backend observer, used by tests.
+pub trait BackendObserver {
+    /// Called before the message is written to the socket.
+    fn on_message_write(&self, peer_id: PeerId, msg: &Message);
+
+    /// Called after the message has been read from the socket.
+    fn on_message_read(&self, peer_id: PeerId, msg: &Message);
+}
+
 #[cfg(test)]
 mod tests {
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};

@@ -32,7 +32,7 @@ use p2p_test_utils::run_with_timeout;
 use randomness::Rng;
 use serialization::Encode as _;
 use test_utils::{
-    assert_matches,
+    assert_matches, assert_matches_return_val,
     random::{make_seedable_rng, Seed},
     BasicTestTimeGetter,
 };
@@ -41,7 +41,7 @@ use crate::{
     config::{BackendTimeoutsConfig, P2pConfig},
     message::{HeaderList, HeaderListRequest},
     net::{
-        default_backend::types::{HandshakeMessage, Message, P2pTimestamp},
+        default_backend::types::{HandshakeMessage, Message, MessageTag, P2pTimestamp},
         types::PeerManagerMessageExtTag,
     },
     sync::test_helpers::make_new_blocks,
@@ -242,16 +242,31 @@ async fn no_connection_lockup_when_socket_not_read(#[case] seed: Seed) {
     .await;
 }
 
-// Similar to the test above, here the peer also stops reading from the socket, but it doesn't do
-// any discourageable actions this time.
-// The expected result is that the connection should also be terminated.
-// This checks that there is a timeout on socket write attempts.
+#[derive(Debug)]
+enum TimeoutTestType {
+    SocketWrite,
+    Disconnect,
+}
+
+// Here the peer also stops reading from the socket, but doesn't do any discourageable actions.
+// Two cases exist:
+// 1) Socket write timeout is small, disconnection timeout is artificially large (just in case).
+//    The expected result is that the connection should be terminated, though not immediately.
+//    I.e. this checks that there is a timeout on socket write attempts.
+// 2) Disconnection timeout is small, socket write timeout is artificially large.
+//    We wait until the HeaderList message has been sent by the node and then initiate manual
+//    disconnection. The expected result is the same - the connection should be terminated,
+//    but not immediately.
+//    I.e. this checks that there is a timeout on disconnection attempts.
 #[tracing::instrument(skip(seed))]
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn timeout_when_socket_not_read(#[case] seed: Seed) {
+async fn timeout_when_socket_not_read(
+    #[case] seed: Seed,
+    #[values(TimeoutTestType::SocketWrite, TimeoutTestType::Disconnect)] test_type: TimeoutTestType,
+) {
     let mut rng = make_seedable_rng(seed);
 
     run_with_timeout(async {
@@ -259,18 +274,24 @@ async fn timeout_when_socket_not_read(#[case] seed: Seed) {
         let channel_max_buf_size = 1000;
         let node_headers_count = 100;
 
-        let socket_write_timeout = Duration::from_secs(3);
+        let timeout = Duration::from_secs(3);
+        let large_timeout = Duration::from_secs(3600);
         let no_disconnection_after = Duration::from_secs(1);
+
+        let (socket_write_timeout, disconnection_timeout) = match test_type {
+            TimeoutTestType::SocketWrite => (timeout, large_timeout),
+            TimeoutTestType::Disconnect => (large_timeout, timeout),
+        };
 
         let time_getter = BasicTestTimeGetter::new();
         let chain_config = Arc::new(chain::config::create_unit_test_config());
         let p2p_config = Arc::new(P2pConfig {
             backend_timeouts: BackendTimeoutsConfig {
                 socket_write_timeout: socket_write_timeout.into(),
+                disconnection_timeout: disconnection_timeout.into(),
 
                 outbound_connection_timeout: Default::default(),
                 peer_handshake_timeout: Default::default(),
-                disconnection_timeout: Default::default(),
             },
 
             bind_addresses: Default::default(),
@@ -382,9 +403,10 @@ async fn timeout_when_socket_not_read(#[case] seed: Seed) {
 
         log::debug!("Expecting PeerManagerNotification::ConnectionAccepted");
         let peer_mgr_notif = test_node.peer_mgr_notification_receiver().recv().await.unwrap();
-        assert_matches!(
+        let peer_id = assert_matches_return_val!(
             peer_mgr_notif,
-            PeerManagerNotification::ConnectionAccepted { .. }
+            PeerManagerNotification::ConnectionAccepted { peer_id, .. },
+            peer_id
         );
 
         log::debug!("Expecting PeerManagerNotification::FirstSyncMessageReceived");
@@ -396,6 +418,16 @@ async fn timeout_when_socket_not_read(#[case] seed: Seed) {
                 ..
             }
         );
+
+        let manual_disconnect_result_receiver = match test_type {
+            TimeoutTestType::SocketWrite => None,
+            TimeoutTestType::Disconnect => {
+                test_node
+                    .wait_for_next_backend_socket_write(peer_id, MessageTag::HeaderList)
+                    .await;
+                Some(test_node.start_disconnecting(peer_id))
+            }
+        };
 
         // Wait for a short period of time, there should be no disconnection.
         tokio::time::timeout(
@@ -412,6 +444,10 @@ async fn timeout_when_socket_not_read(#[case] seed: Seed) {
             peer_mgr_notif,
             PeerManagerNotification::ConnectionClosed { .. }
         );
+
+        if let Some(manual_disconnect_result_receiver) = manual_disconnect_result_receiver {
+            manual_disconnect_result_receiver.await.unwrap().unwrap();
+        }
 
         test_node.join().await;
     })
