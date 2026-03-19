@@ -107,6 +107,7 @@ const PEER_ADDRESS_RESEND_COUNT: usize = 2;
 const PEER_ADDRESSES_ROLLING_BLOOM_FILTER_SIZE: usize = 5000;
 const PEER_ADDRESSES_ROLLING_BLOOM_FPP: f64 = 0.001;
 
+#[derive(Debug)]
 enum OutboundConnectType {
     Automatic {
         block_relay_only: bool,
@@ -146,6 +147,7 @@ impl From<&OutboundConnectType> for PeerRole {
     }
 }
 
+#[derive(Debug)]
 struct PendingConnect {
     outbound_connect_type: OutboundConnectType,
 }
@@ -446,14 +448,14 @@ where
         }
     }
 
-    /// Adjust peer score
+    /// Adjust peer score.
     ///
     /// Discourage the peer if the score reaches the corresponding threshold.
     fn adjust_peer_score(
         &mut self,
         peer_id: PeerId,
         score: u32,
-        reason: &(impl std::fmt::Display + ?Sized),
+        adjustment_reason: &(impl std::fmt::Display + ?Sized),
     ) {
         let peer = match self.peers.get(&peer_id) {
             Some(peer) => peer,
@@ -465,7 +467,7 @@ where
                 "[peer id = {}] Ignoring peer score adjustment because the peer is whitelisted (adjustment: {}, reason: {})",
                 peer_id,
                 score,
-                reason
+                adjustment_reason
             );
             return;
         }
@@ -482,7 +484,7 @@ where
             peer_id,
             score,
             peer.score,
-            reason
+            adjustment_reason
         );
 
         if let Some(o) = self.observer.as_mut() {
@@ -495,53 +497,94 @@ where
         }
     }
 
-    /// Adjust peer score after a failed handshake.
+    /// Adjust peer score after a failed connection attempt; discourage the peer if the threshold
+    /// has been reached.
     ///
-    /// Note that currently intermediate scores are not stored in the peer db, so this call will
-    /// only make any effect if the passed score is bigger than the threshold.
+    /// Note:
+    /// 1. Since intermediate scores are not stored in the peer db, this function will only
+    ///    have any effect if the passed score is bigger than the threshold.
+    /// 2. When this function is called, it's likely that `PeerContext` hasn't even been created
+    ///    for the peer yet. One implication of this is that the call to `discourage` will not
+    ///    be able to disconnect the peer.
+    fn adjust_peer_score_on_failed_connection_attempt(
+        &mut self,
+        peer_address: SocketAddress,
+        peer_role: PeerRole,
+        failure_type: ConnectionFailureTypeForScoreAdjustment,
+        score: u32,
+        adjustment_reason: &(impl std::fmt::Display + ?Sized),
+    ) {
+        let context = match failure_type {
+            ConnectionFailureTypeForScoreAdjustment::FailedHandshake => "failed handshake",
+            ConnectionFailureTypeForScoreAdjustment::AcceptingConnectionFailed => {
+                "connection failure"
+            }
+        };
+
+        if score < *self.p2p_config.ban_config.discouragement_threshold {
+            log::info!(
+                concat!(
+                    "Ignoring peer score adjustment on {} for peer at address {} ",
+                    "because the adjustment is below the threshold and will not have any effect ",
+                    "(adjustment: {}, reason: {}, threshold: {})"
+                ),
+                context,
+                peer_address,
+                score,
+                adjustment_reason,
+                *self.p2p_config.ban_config.discouragement_threshold
+            );
+
+            return;
+        }
+
+        if self.is_whitelisted_node(peer_role, &peer_address) {
+            log::info!(
+                concat!(
+                    "Ignoring peer score adjustment on {} for peer at address {} ",
+                    "because the peer is whitelisted (adjustment: {}, reason: {})"
+                ),
+                context,
+                peer_address,
+                score,
+                adjustment_reason,
+            );
+        } else {
+            log::info!(
+                "Adjusting peer score of a peer at address {} by {} on {}, reason: {}",
+                peer_address,
+                score,
+                context,
+                adjustment_reason
+            );
+
+            if let Some(o) = self.observer.as_mut() {
+                o.on_peer_ban_score_adjustment(peer_address, score);
+            }
+
+            self.discourage(peer_address.as_bannable());
+        }
+    }
+
     fn adjust_peer_score_on_failed_handshake(
         &mut self,
         peer_address: SocketAddress,
         score: u32,
-        reason: &(impl std::fmt::Display + ?Sized),
+        adjustment_reason: &(impl std::fmt::Display + ?Sized),
     ) {
-        let whitelisted_node =
-            self.pending_outbound_connects
-                .get(&peer_address)
-                .is_some_and(|pending_connect| {
-                    self.is_whitelisted_node(
-                        (&pending_connect.outbound_connect_type).into(),
-                        &peer_address,
-                    )
-                });
-        if whitelisted_node {
-            log::info!(
-                concat!(
-                    "Ignoring peer score adjustment on failed handshake for peer at address {} ",
-                    "because the peer is whitelisted (adjustment: {}, reason: {})"
-                ),
-                peer_address,
-                score,
-                reason,
-            );
-            return;
-        }
-
-        log::info!(
-            "Adjusting peer score of a peer at address {} by {} on failed handshake, reason: {}",
+        let peer_role = self
+            .pending_outbound_connects
+            .get(&peer_address)
+            .map_or(PeerRole::Inbound, |pending_connect| {
+                (&pending_connect.outbound_connect_type).into()
+            });
+        self.adjust_peer_score_on_failed_connection_attempt(
             peer_address,
+            peer_role,
+            ConnectionFailureTypeForScoreAdjustment::FailedHandshake,
             score,
-            reason
+            adjustment_reason,
         );
-
-        if let Some(o) = self.observer.as_mut() {
-            o.on_peer_ban_score_adjustment(peer_address, score);
-        }
-
-        if score >= *self.p2p_config.ban_config.discouragement_threshold {
-            let address = peer_address.as_bannable();
-            self.discourage(address);
-        }
     }
 
     fn bannable_peers_for_addr(&self, address: BannableAddress) -> Vec<PeerId> {
@@ -582,6 +625,7 @@ where
         }
     }
 
+    /// Discourage the specified address and disconnect all corresponding peers.
     fn discourage(&mut self, address: BannableAddress) {
         let to_disconnect = self.bannable_peers_for_addr(address);
 
@@ -652,7 +696,7 @@ where
         Ok(())
     }
 
-    /// Initiate a new outbound connection or send an error via `response_sender` if it's not possible.
+    /// Initiate a new outbound connection.
     fn connect(&mut self, address: SocketAddress, outbound_connect_type: OutboundConnectType) {
         let block_relay_only = outbound_connect_type.block_relay_only();
 
@@ -719,8 +763,6 @@ where
     /// The decision to close the connection is made either by the user via RPC
     /// or by the [`PeerManager::heartbeat()`] function which has decided to cull
     /// this connection in favor of another potential connection.
-    ///
-    /// If the `response` channel is not empty, the peer is marked as disconnected by the user and no reconnect attempts are made.
     fn disconnect(
         &mut self,
         peer_id: PeerId,
@@ -795,6 +837,18 @@ where
             !info.common_services.is_empty(),
             P2pError::ConnectionValidationFailed(ConnectionValidationError::NoCommonServices),
         );
+
+        if let Some(min_version) = self.p2p_config.peer_manager_config.min_peer_software_version {
+            if info.user_agent == self.p2p_config.user_agent && info.software_version < min_version
+            {
+                return Err(P2pError::ConnectionValidationFailed(
+                    ConnectionValidationError::MinPeerSoftwareVersionNotSatisfied {
+                        min_version,
+                        actual_version: info.software_version,
+                    },
+                ));
+            }
+        }
 
         match peer_role {
             PeerRole::Inbound => {
@@ -1115,23 +1169,28 @@ where
         if let Err(accept_err) = &accept_res {
             log::debug!("Connection rejected for peer {peer_id}: {accept_err}");
 
+            self.adjust_peer_score_on_failed_connection_attempt(
+                peer_address,
+                peer_role,
+                ConnectionFailureTypeForScoreAdjustment::AcceptingConnectionFailed,
+                accept_err.ban_score(),
+                &accept_err,
+            );
+
             let disconnection_reason =
                 DisconnectionReason::from_error(accept_err, &self.p2p_config);
 
-            // Disconnect should always succeed unless the node is shutting down.
-            // But at this moment there is a possibility for backend to be shut down
-            // before peer manager, at least in tests, so we don't "expect" and log
-            // the error instead.
-            // TODO: investigate why peer manager can be shut down before the backend (it shouldn't
-            // be this way according to an earlier comment).
-            // TODO: we probably shouldn't use "log::error" if the error happened during
-            // shutdown. Probably, peer manager should accept the "shutdown" flag, like other
-            // p2p components do, and ignore/log::info the errors it it's set (this also applies
-            // to other places, search for "log::error" in this file).
+            // Disconnect the peer. Note that we can't call `self.disconnect` here because
+            // that function assumes that `PeerContext` has already been created, which is
+            // unlikely in the case when `try_accept_connection` has failed.
+            // Also note that we do the disconnection unconditionally, even if the peer has been
+            // discouraged. This is again due to the fact that `PeerContext` has likely not been
+            // created for the peer yet, in which case `discourage` couldn't have performed
+            // the disconnection.
             let disconnect_result =
                 self.peer_connectivity_handle.disconnect(peer_id, disconnection_reason);
             if let Err(err) = disconnect_result {
-                log::error!("Disconnect failed unexpectedly: {err:?}");
+                log::warn!("Disconnecting peer {peer_address} failed: {err}");
             }
 
             if peer_role.is_outbound() {
@@ -2336,6 +2395,12 @@ where
     fn peer_db_mut(&mut self) -> &mut dyn peerdb::PeerDbInterface {
         &mut self.peerdb
     }
+}
+
+#[derive(Copy, Clone, Debug)]
+enum ConnectionFailureTypeForScoreAdjustment {
+    FailedHandshake,
+    AcceptingConnectionFailed,
 }
 
 #[cfg(test)]

@@ -2837,7 +2837,12 @@ nothing
 
 ### Method `node_disconnect_peer`
 
-Disconnect a remote peer in the node
+Disconnect a remote peer in the node.
+
+Note that this will also cause the node to forget the peer address if the connection was
+an outbound one, which will effectively prevent the node from reconnecting to it until
+the address is re-discovered. For a more refined control over connections to a specific
+address, consider banning/unbanning it explicitly.
 
 
 Parameters:

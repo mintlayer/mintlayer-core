@@ -921,7 +921,12 @@ trait WalletRpc {
     #[method(name = "node_connect_to_peer")]
     async fn connect_to_peer(&self, address: String) -> rpc::RpcResult<()>;
 
-    /// Disconnect a remote peer in the node
+    /// Disconnect a remote peer in the node.
+    ///
+    /// Note that this will also cause the node to forget the peer address if the connection was
+    /// an outbound one, which will effectively prevent the node from reconnecting to it until
+    /// the address is re-discovered. For a more refined control over connections to a specific
+    /// address, consider banning/unbanning it explicitly.
     #[method(name = "node_disconnect_peer")]
     async fn disconnect_peer(&self, peer_id: u64) -> rpc::RpcResult<()>;
 

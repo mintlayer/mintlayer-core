@@ -21,6 +21,7 @@ mod correct_handshake;
 mod disable_networking;
 mod disconnect_on_will_disconnect_msg;
 mod incorrect_handshake;
+mod min_peer_software_version;
 mod misbehavior;
 mod peer_discovery_on_stale_tip;
 mod same_handshake_nonce;

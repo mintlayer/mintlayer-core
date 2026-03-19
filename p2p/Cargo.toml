@@ -39,6 +39,7 @@ once_cell.workspace = true
 parity-scale-codec.workspace = true
 serde.workspace = true
 siphasher.workspace = true
+strum.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time"] }
 tokio-stream.workspace = true
@@ -56,13 +57,14 @@ pos-accounting = { path = "../pos-accounting" }
 p2p-backend-test-suite = { path = "backend-test-suite" }
 p2p-test-utils = { path = "test-utils" }
 test-utils = { path = "../test-utils" }
-tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time", "test-util"] }
 
 bytes.workspace = true
 criterion.workspace = true
 ctor.workspace = true
 num.workspace = true
 rstest.workspace = true
+rstest_reuse.workspace = true
+tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time", "test-util"] }
 
 [[test]]
 name = "backend_tcp"

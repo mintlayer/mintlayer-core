@@ -20,9 +20,9 @@ use std::{
     time::Duration,
 };
 
-use common::primitives::user_agent::mintlayer_core_user_agent;
 use serde::{Deserialize, Serialize};
 
+use common::primitives::{semver::SemVer, user_agent::mintlayer_core_user_agent};
 use p2p::{
     ban_config::BanConfig,
     config::{NodeType, P2pConfig},
@@ -61,6 +61,7 @@ impl FromStr for NodeTypeConfigFile {
 
 /// The p2p subsystem configuration.
 #[must_use]
+#[serde_with::serde_as]
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct P2pConfigFile {
@@ -102,6 +103,11 @@ pub struct P2pConfigFile {
     pub force_dns_query_if_no_global_addresses_known: Option<bool>,
     /// If set, this text will be sent to banned peers as part of the DisconnectionReason.
     pub custom_disconnection_reason_for_banning: Option<String>,
+    /// If the peer's user agent is MintlayerCore (which is always true at the moment),
+    /// the connection will be rejected and the peer discouraged if the peer's software version
+    /// is less than the one specified.
+    #[serde_as(as = "Option<serde_with::DisplayFromStr>")]
+    pub min_peer_software_version: Option<SemVer>,
 }
 
 impl From<P2pConfigFile> for P2pConfig {
@@ -125,6 +131,7 @@ impl From<P2pConfigFile> for P2pConfig {
             node_type,
             force_dns_query_if_no_global_addresses_known,
             custom_disconnection_reason_for_banning,
+            min_peer_software_version,
         } = config_file;
 
         P2pConfig {
@@ -179,6 +186,8 @@ impl From<P2pConfigFile> for P2pConfig {
                 allow_same_ip_connections: Default::default(),
 
                 peerdb_config: Default::default(),
+
+                min_peer_software_version,
             },
             protocol_config: Default::default(),
             peer_handshake_timeout: Default::default(),

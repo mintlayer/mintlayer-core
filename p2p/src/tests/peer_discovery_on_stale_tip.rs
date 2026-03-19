@@ -122,8 +122,8 @@ async fn peer_discovery_on_stale_tip_impl(
         feeler_connections_interval: Default::default(),
         force_dns_query_if_no_global_addresses_known: Default::default(),
         allow_same_ip_connections: Default::default(),
-
         peerdb_config: Default::default(),
+        min_peer_software_version: Default::default(),
     };
     let p2p_config = Arc::new(make_p2p_config(peer_mgr_config));
 
@@ -313,6 +313,7 @@ async fn new_full_relay_connections_on_stale_tip_impl(seed: Seed) {
         force_dns_query_if_no_global_addresses_known: Default::default(),
         allow_same_ip_connections: Default::default(),
         peerdb_config: Default::default(),
+        min_peer_software_version: Default::default(),
     };
     let main_node_p2p_config = Arc::new(make_p2p_config(main_node_peer_mgr_config));
 
@@ -340,6 +341,7 @@ async fn new_full_relay_connections_on_stale_tip_impl(seed: Seed) {
         force_dns_query_if_no_global_addresses_known: Default::default(),
         allow_same_ip_connections: Default::default(),
         peerdb_config: Default::default(),
+        min_peer_software_version: Default::default(),
     };
     let extra_nodes_p2p_config = Arc::new(make_p2p_config(extra_nodes_peer_mgr_config));
 
