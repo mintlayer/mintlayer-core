@@ -289,7 +289,6 @@ where
         let now = time_getter.get_time();
         let next_feeler_connection_time =
             Self::choose_next_feeler_connection_time(&p2p_config, now, &mut rng);
-        assert!(!p2p_config.outbound_connection_timeout.is_zero());
         assert!(!p2p_config.ping_timeout.is_zero());
 
         let peer_eviction_random_state = peers_eviction::RandomState::new(&mut rng);

@@ -328,7 +328,7 @@ impl HandshakeHandler {
         socket_writer: &mut MessageWriter<S, Message>,
     ) -> crate::Result<CommonProtocolVersion> {
         // handshake with remote peer and send peer's info to backend
-        let handshake_timeout = *self.p2p_config.peer_handshake_timeout;
+        let handshake_timeout = *self.p2p_config.backend_timeouts.peer_handshake_timeout;
         let handshake_res = timeout(
             handshake_timeout,
             self.handshake_impl(peer_event_sender, socket_reader, socket_writer),

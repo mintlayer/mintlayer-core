@@ -76,10 +76,8 @@ async fn run(options: DnsServerRunOptions) -> anyhow::Result<Never> {
         // Note: this ban config (as well as any other settings related to the peer or sync manager)
         // won't have any effect on the dns server.
         ban_config: Default::default(),
-        outbound_connection_timeout: Default::default(),
         ping_check_period: Default::default(),
         ping_timeout: Default::default(),
-        peer_handshake_timeout: Default::default(),
         max_clock_diff: Default::default(),
         node_type: NodeType::DnsServer.into(),
         allow_discover_private_ips: Default::default(),
@@ -87,6 +85,7 @@ async fn run(options: DnsServerRunOptions) -> anyhow::Result<Never> {
         sync_stalling_timeout: Default::default(),
         peer_manager_config: Default::default(),
         protocol_config: Default::default(),
+        backend_timeouts: Default::default(),
         custom_disconnection_reason_for_banning: Default::default(),
     });
 

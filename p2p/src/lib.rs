@@ -338,7 +338,7 @@ pub fn make_p2p<S: PeerDbStorage + 'static>(
             //
             // For more details, see `Peer::handshake` and `P2pConfig`.
             assert_eq!(
-                *p2p_config.peer_handshake_timeout,
+                *p2p_config.backend_timeouts.peer_handshake_timeout,
                 Duration::from_secs(10),
                 "Handshake timeout changed"
             );

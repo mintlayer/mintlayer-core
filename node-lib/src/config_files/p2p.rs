@@ -25,7 +25,7 @@ use serde::{Deserialize, Serialize};
 use common::primitives::{semver::SemVer, user_agent::mintlayer_core_user_agent};
 use p2p::{
     ban_config::BanConfig,
-    config::{NodeType, P2pConfig},
+    config::{BackendTimeoutsConfig, NodeType, P2pConfig},
     peer_manager::config::PeerManagerConfig,
 };
 use utils_networking::IpOrSocketAddress;
@@ -146,9 +146,6 @@ impl From<P2pConfigFile> for P2pConfig {
                 discouragement_duration: discouragement_duration.map(Duration::from_secs).into(),
             },
             max_clock_diff: max_clock_diff.map(Duration::from_secs).into(),
-            outbound_connection_timeout: outbound_connection_timeout
-                .map(|t| Duration::from_secs(t.into()))
-                .into(),
             ping_check_period: ping_check_period.map(Duration::from_secs).into(),
             ping_timeout: ping_timeout.map(|t| Duration::from_secs(t.into())).into(),
             node_type: node_type.map(Into::into).into(),
@@ -189,8 +186,13 @@ impl From<P2pConfigFile> for P2pConfig {
 
                 min_peer_software_version,
             },
+            backend_timeouts: BackendTimeoutsConfig {
+                outbound_connection_timeout: outbound_connection_timeout
+                    .map(|t| Duration::from_secs(t.into()))
+                    .into(),
+                peer_handshake_timeout: Default::default(),
+            },
             protocol_config: Default::default(),
-            peer_handshake_timeout: Default::default(),
             custom_disconnection_reason_for_banning,
         }
     }
