@@ -13,13 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use rand::CryptoRng;
-use serialization::extras::non_empty_vec::DataOrNoVec;
 use std::{collections::BTreeMap, sync::Arc};
-
-use crate::helpers::make_trial;
-use crate::make_test;
-use pos_accounting::PoolData;
 
 use api_server_common::storage::{
     impls::CURRENT_STORAGE_VERSION,
@@ -31,12 +25,6 @@ use api_server_common::storage::{
         TxAdditionalInfo, Utxo, UtxoLock, UtxoWithExtraInfo,
     },
 };
-use crypto::{
-    key::{KeyKind, PrivateKey},
-    vrf::{VRFKeyKind, VRFPrivateKey},
-};
-use randomness::Rng;
-
 use chainstate_test_framework::{empty_witness, TestFramework, TransactionBuilder};
 use common::{
     address::{pubkeyhash::PublicKeyHash, Address},
@@ -52,8 +40,21 @@ use common::{
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, CoinOrTokenId, Id, Idable, H256},
 };
+use crypto::{
+    key::{KeyKind, PrivateKey},
+    vrf::{VRFKeyKind, VRFPrivateKey},
+};
+use pos_accounting::PoolData;
+use randomness::Rng;
+
+use crate::helpers::make_trial;
+use crate::make_test;
+
 use futures::Future;
 use libtest_mimic::Failed;
+use num_bigint::BigUint;
+use rand::CryptoRng;
+use serialization::extras::non_empty_vec::DataOrNoVec;
 use test_utils::{
     assert_matches,
     random::{make_seedable_rng, Seed},
@@ -1509,7 +1510,7 @@ where
         db_tx
             .set_address_balance_at_height(
                 &address,
-                Amount::ZERO,
+                BigUint::ZERO,
                 CoinOrTokenId::TokenId(random_token_id),
                 block_height.next_height(),
             )
@@ -1529,7 +1530,7 @@ where
         db_tx
             .set_address_balance_at_height(
                 &address2,
-                Amount::from_atoms(1),
+                BigUint::from(1u32),
                 CoinOrTokenId::TokenId(random_token_id),
                 block_height.next_height(),
             )
@@ -1540,7 +1541,7 @@ where
         assert_eq!(balances.len(), 1);
         let balance = balances.into_iter().next().unwrap();
         assert_eq!(balance.0, CoinOrTokenId::TokenId(random_token_id));
-        assert_eq!(balance.1.amount, Amount::from_atoms(1));
+        assert_eq!(balance.1.amount, BigUint::from(1u32));
         assert_eq!(balance.1.decimals, 0);
 
         let returned_nft = db_tx.get_nft_token_issuance(random_token_id).await.unwrap().unwrap();
@@ -1638,11 +1639,11 @@ where
         assert_eq!(returned_token, locked_token_data);
 
         let address = Address::new(&chain_config, random_destination.clone()).unwrap();
-        let random_amount = Amount::from_atoms(rng.gen_range(0..100_000));
+        let random_amount = BigUint::from(rng.gen_range(0..100_000) as u32);
         db_tx
             .set_address_balance_at_height(
                 &address,
-                random_amount,
+                random_amount.clone(),
                 CoinOrTokenId::TokenId(random_token_id),
                 block_height.next_height(),
             )

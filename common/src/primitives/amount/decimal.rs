@@ -169,20 +169,27 @@ impl std::str::FromStr for DecimalAmount {
 
 impl std::fmt::Display for DecimalAmount {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mantissa = self.mantissa;
-        let decimals = self.decimals as usize;
+        fmt_decimal(self.mantissa, self.decimals, f)
+    }
+}
 
-        if decimals > 0 {
-            // ceil(log10(u128::MAX)) + 1 for decimal point = 40
-            // This is not the maximum possible length, but a reasonable expectation of it.
-            let mut buffer = String::with_capacity(40);
-            write!(&mut buffer, "{mantissa:0>width$}", width = decimals + 1)?;
-            assert!(buffer.len() > decimals);
-            buffer.insert(buffer.len() - decimals, '.');
-            f.pad(&buffer)
-        } else {
-            mantissa.fmt(f)
-        }
+pub fn fmt_decimal<N: std::fmt::Display>(
+    mantissa: N,
+    decimals: u8,
+    f: &mut std::fmt::Formatter<'_>,
+) -> std::fmt::Result {
+    let decimals = decimals as usize;
+
+    if decimals > 0 {
+        // ceil(log10(u128::MAX)) + 1 for decimal point = 40
+        // This is not the maximum possible length, but a reasonable expectation of it.
+        let mut buffer = String::with_capacity(40);
+        write!(&mut buffer, "{mantissa:0>width$}", width = decimals + 1)?;
+        assert!(buffer.len() > decimals);
+        buffer.insert(buffer.len() - decimals, '.');
+        f.pad(&buffer)
+    } else {
+        mantissa.fmt(f)
     }
 }
 
