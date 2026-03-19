@@ -291,8 +291,8 @@ rev = "035789ec436d47b938e8a3d2085ffb2fbf6f0559"
 
 [workspace.dependencies.mintlayer-ledger-messages]
 git = "https://github.com/mintlayer/mintlayer-ledger-app"
-# The commit "Move StatusWord to messages crate"
-rev = "dbc41342564b2198037ed4ad41b4cf0c34617870"
+# The commit "Add Ping command"
+rev = "985e76c95105533436c144c19707556b7521f745"
 package = "messages"
 
 [workspace.dependencies.trezor-client]

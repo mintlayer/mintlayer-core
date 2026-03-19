@@ -39,9 +39,7 @@ use tokio::{
 
 use crate::signer::{
     ledger_signer::{
-        ledger_messages::{
-            check_current_app, get_extended_public_key, get_extended_public_key_raw,
-        },
+        ledger_messages::{check_current_app, get_extended_public_key, ping},
         LedgerError, LedgerFinder, LedgerSigner,
     },
     tests::{
@@ -142,9 +140,8 @@ impl LedgerFinder for DummyProvider {
 
 async fn wait_for_valid_reponse(device: &mut TcpDevice) {
     let mut tries = 0;
-    let derivation_path = DerivationPath::from_str("m/44h/19788h/0h").unwrap();
     loop {
-        match get_extended_public_key_raw(device, CoinType::Mainnet, &derivation_path).await {
+        match ping(device).await {
             Ok(_) => break,
             Err(_) => {
                 tries += 1;
